@@ -26,9 +26,19 @@ pub struct VoiceState {
     pub user_id: Uuid,
     pub self_mute: bool,
     pub self_deaf: bool,
+    pub self_video: bool,
+    pub self_stream: bool,
     /// Which socket owns this state; another tab joining replaces it.
     #[serde(skip)]
     pub session: u64,
+}
+
+impl VoiceState {
+    /// Same shape as a normal state update but with `channel_id: null`, meaning "left voice".
+    pub fn leave_payload(&self) -> Value {
+        json!({ "guild_id": self.guild_id, "channel_id": Value::Null, "user_id": self.user_id,
+                "self_mute": self.self_mute, "self_deaf": self.self_deaf, "self_video": self.self_video, "self_stream": self.self_stream })
+    }
 }
 
 /// Fan-out hub. One global broadcast channel; each socket task filters by target.
@@ -128,8 +138,7 @@ impl Hub {
         let victims: Vec<VoiceState> = self.voice.iter().filter(|v| pred(v)).map(|v| v.clone()).collect();
         for v in victims {
             self.voice.remove(&v.user_id);
-            self.emit_guild(v.guild_id, "VOICE_STATE_UPDATE",
-                serde_json::json!({ "guild_id": v.guild_id, "channel_id": Value::Null, "user_id": v.user_id, "self_mute": v.self_mute, "self_deaf": v.self_deaf }));
+            self.emit_guild(v.guild_id, "VOICE_STATE_UPDATE", v.leave_payload());
         }
     }
 

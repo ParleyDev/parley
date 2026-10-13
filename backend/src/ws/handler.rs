@@ -42,7 +42,7 @@ enum ClientOp {
     Typing { channel_id: Uuid },
     VoiceJoin { channel_id: Uuid },
     VoiceLeave,
-    VoiceState { self_mute: bool, self_deaf: bool },
+    VoiceState { self_mute: bool, self_deaf: bool, #[serde(default)] self_video: bool, #[serde(default)] self_stream: bool },
     /// WebRTC signaling relayed verbatim to one peer in the same voice channel.
     VoiceSignal { to: Uuid, data: Value },
 }
@@ -179,11 +179,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
 }
 
 fn emit_voice_leave(state: &AppState, prev: &VoiceState) {
-    state.hub.emit_guild(
-        prev.guild_id,
-        "VOICE_STATE_UPDATE",
-        json!({ "guild_id": prev.guild_id, "channel_id": Value::Null, "user_id": prev.user_id, "self_mute": prev.self_mute, "self_deaf": prev.self_deaf }),
-    );
+    state.hub.emit_guild(prev.guild_id, "VOICE_STATE_UPDATE", prev.leave_payload());
 }
 
 /// Keep the per-socket guild set in sync from the event stream itself.
@@ -222,7 +218,8 @@ async fn handle_client_op(
             let guild_id = channel.guild_id.unwrap();
             // Carry over mute/deaf prefs if moving between channels.
             let (self_mute, self_deaf) = state.hub.voice_state(user_id).map(|v| (v.self_mute, v.self_deaf)).unwrap_or((false, false));
-            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, session };
+            // Video/screen always start off in a new channel: the client re-attaches tracks after joining.
+            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, session };
             if let Some(prev) = state.hub.voice_join(vs.clone()) {
                 if prev.channel_id != channel_id || prev.guild_id != guild_id {
                     emit_voice_leave(state, &prev);
@@ -235,8 +232,8 @@ async fn handle_client_op(
                 emit_voice_leave(state, &prev);
             }
         }
-        ClientOp::VoiceState { self_mute, self_deaf } => {
-            if let Some(vs) = state.hub.voice_update(user_id, |v| { v.self_mute = self_mute; v.self_deaf = self_deaf; }) {
+        ClientOp::VoiceState { self_mute, self_deaf, self_video, self_stream } => {
+            if let Some(vs) = state.hub.voice_update(user_id, |v| { v.self_mute = self_mute; v.self_deaf = self_deaf; v.self_video = self_video; v.self_stream = self_stream; }) {
                 state.hub.emit_guild(vs.guild_id, "VOICE_STATE_UPDATE", json!(vs));
             }
         }

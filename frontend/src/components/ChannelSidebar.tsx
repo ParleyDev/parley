@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { ChevronDown, Hash, HeadphoneOff, LogOut, MicOff, Plus, Settings, Trash2, UserPlus, Volume2 } from 'lucide-react'
+import { ChevronDown, Hash, HeadphoneOff, LogOut, MicOff, Plus, Settings, Trash2, UserPlus, Video, Volume2 } from 'lucide-react'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 import { useState } from 'react'
@@ -127,6 +127,8 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
           <button key={p.user_id} onClick={() => openModal({ kind: 'profile', userId: p.user_id })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
             <span className={`rounded-full ${speaking[p.user_id] ? 'ring-2 ring-success' : ''}`}><Avatar user={u} size={22} /></span>
             <span className="truncate flex-1">{u.display_name}</span>
+            {p.self_stream && <span className="rounded bg-danger px-1 text-[9px] font-extrabold text-white">LIVE</span>}
+            {p.self_video && <Video size={14} className="text-text-2" />}
             {p.self_deaf ? <HeadphoneOff size={14} className="text-text-2" /> : p.self_mute ? <MicOff size={14} className="text-text-2" /> : null}
           </button>
         )

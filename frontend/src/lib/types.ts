@@ -73,6 +73,10 @@ export interface VoiceState {
   user_id: string
   self_mute: boolean
   self_deaf: boolean
+  self_video: boolean
+  self_stream: boolean
 }
+
+export interface RemoteMedia { camera: MediaStream | null; screen: MediaStream | null }
 
 export type PeerStatus = 'connecting' | 'connected' | 'failed'

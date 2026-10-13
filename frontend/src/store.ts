@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
-import type { Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, User, VoiceState } from './lib/types'
+import type { Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, RemoteMedia, User, VoiceState } from './lib/types'
 
 export type ModalKind =
   | { kind: 'createGuild' }
@@ -56,6 +56,9 @@ interface State {
   selfDeaf: boolean
   speaking: Record<string, true>
   peerStatus: Record<string, PeerStatus>
+  localCamera: MediaStream | null
+  localScreen: MediaStream | null
+  remoteMedia: Record<string, RemoteMedia>
   modal: ModalKind | null
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
 
@@ -90,6 +93,8 @@ interface State {
   setSelfVoiceFlags: (mute: boolean, deaf: boolean) => void
   setSpeaking: (userId: string, on: boolean) => void
   setPeerStatus: (userId: string, status: PeerStatus | null) => void
+  setLocalMedia: (m: { camera?: MediaStream | null; screen?: MediaStream | null }) => void
+  setRemoteMedia: (userId: string, kind: 'camera' | 'screen', stream: MediaStream | null) => void
   openModal: (m: ModalKind) => void
   closeModal: () => void
   pushToast: (text: string, kind?: 'info' | 'error') => void
@@ -132,6 +137,9 @@ export const useStore = create<State>((set, get) => ({
   selfDeaf: false,
   speaking: {},
   peerStatus: {},
+  localCamera: null,
+  localScreen: null,
+  remoteMedia: {},
   modal: null,
   toast: [],
 
@@ -144,7 +152,7 @@ export const useStore = create<State>((set, get) => ({
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], channels: {}, dms: {},
       members: {}, membersLoaded: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
-      voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {},
+      voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {},
     })
   },
 
@@ -328,7 +336,7 @@ export const useStore = create<State>((set, get) => ({
     if (!v.channel_id) delete speaking[v.user_id]
     return { voiceStates, speaking }
   }),
-  setMyVoice: (channelId, connecting = false) => set({ myVoiceChannelId: channelId, voiceConnecting: connecting, ...(channelId ? {} : { speaking: {}, peerStatus: {} }) }),
+  setMyVoice: (channelId, connecting = false) => set({ myVoiceChannelId: channelId, voiceConnecting: connecting, ...(channelId ? {} : { speaking: {}, peerStatus: {}, remoteMedia: {}, localCamera: null, localScreen: null }) }),
   setSelfVoiceFlags: (selfMute, selfDeaf) => set({ selfMute, selfDeaf }),
   setSpeaking: (userId, on) => set((s) => {
     if (!!s.speaking[userId] === on) return {}
@@ -339,8 +347,14 @@ export const useStore = create<State>((set, get) => ({
   setPeerStatus: (userId, status) => set((s) => {
     const peerStatus = { ...s.peerStatus }
     if (status) peerStatus[userId] = status; else delete peerStatus[userId]
-    return { peerStatus }
+    const remoteMedia = { ...s.remoteMedia }
+    if (!status) delete remoteMedia[userId]
+    return { peerStatus, remoteMedia }
   }),
+  setLocalMedia: (m) => set((s) => ({ localCamera: m.camera === undefined ? s.localCamera : m.camera, localScreen: m.screen === undefined ? s.localScreen : m.screen })),
+  setRemoteMedia: (userId, kind, stream) => set((s) => ({
+    remoteMedia: { ...s.remoteMedia, [userId]: { ...(s.remoteMedia[userId] ?? { camera: null, screen: null }), [kind]: stream } },
+  })),
   openModal: (modal) => set({ modal }),
   closeModal: () => set({ modal: null }),
   pushToast: (text, kind = 'info') => {
