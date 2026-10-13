@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
+import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, RemoteMedia, User, VoiceState } from './lib/types'
 
 export type ModalKind =
@@ -9,7 +10,7 @@ export type ModalKind =
   | { kind: 'invite'; guildId: string }
   | { kind: 'guildSettings'; guildId: string }
   | { kind: 'channelSettings'; channelId: string }
-  | { kind: 'userSettings' }
+  | { kind: 'userSettings'; tab?: 'account' | 'voice' }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string }
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string }
@@ -59,6 +60,12 @@ interface State {
   localCamera: MediaStream | null
   localScreen: MediaStream | null
   remoteMedia: Record<string, RemoteMedia>
+  voiceSettings: VoiceSettings
+  /** Local mic level in dBFS (-100..0), published while the mic is open. */
+  inputLevel: number
+  /** Whether the input gate is currently open (voice detected / PTT held). */
+  transmitting: boolean
+  pttHeld: boolean
   modal: ModalKind | null
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
 
@@ -95,6 +102,9 @@ interface State {
   setPeerStatus: (userId: string, status: PeerStatus | null) => void
   setLocalMedia: (m: { camera?: MediaStream | null; screen?: MediaStream | null }) => void
   setRemoteMedia: (userId: string, kind: 'camera' | 'screen', stream: MediaStream | null) => void
+  updateVoiceSettings: (patch: Partial<VoiceSettings>) => void
+  setInputLevel: (level: number, transmitting: boolean) => void
+  setPttHeld: (held: boolean) => void
   openModal: (m: ModalKind) => void
   closeModal: () => void
   pushToast: (text: string, kind?: 'info' | 'error') => void
@@ -140,6 +150,10 @@ export const useStore = create<State>((set, get) => ({
   localCamera: null,
   localScreen: null,
   remoteMedia: {},
+  voiceSettings: loadSettings(),
+  inputLevel: -100,
+  transmitting: false,
+  pttHeld: false,
   modal: null,
   toast: [],
 
@@ -351,6 +365,13 @@ export const useStore = create<State>((set, get) => ({
     if (!status) delete remoteMedia[userId]
     return { peerStatus, remoteMedia }
   }),
+  updateVoiceSettings: (patch) => set((s) => {
+    const voiceSettings = { ...s.voiceSettings, ...patch }
+    saveSettings(voiceSettings)
+    return { voiceSettings }
+  }),
+  setInputLevel: (inputLevel, transmitting) => set((s) => (s.inputLevel === inputLevel && s.transmitting === transmitting ? {} : { inputLevel, transmitting })),
+  setPttHeld: (pttHeld) => set((s) => (s.pttHeld === pttHeld ? {} : { pttHeld })),
   setLocalMedia: (m) => set((s) => ({ localCamera: m.camera === undefined ? s.localCamera : m.camera, localScreen: m.screen === undefined ? s.localScreen : m.screen })),
   setRemoteMedia: (userId, kind, stream) => set((s) => ({
     remoteMedia: { ...s.remoteMedia, [userId]: { ...(s.remoteMedia[userId] ?? { camera: null, screen: null }), [kind]: stream } },

@@ -24,6 +24,7 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 - Servers: create, rename, icon, delete, leave, kick (owner), invite links (`/invite/<code>`, optional max uses)
 - Channels: text and voice, topics, rename, delete, unread indicators
 - Voice & video: WebRTC mesh in voice channels (join from sidebar or channel view), mute / deafen, camera, screen share, speaking indicators, focus view for a tile, participant list, auto-rejoin after socket reconnect
+- Voice & Video settings (User Settings → Voice & Video): input / output / camera device pickers, input and output volume, mic test with level meter, voice activity or push-to-talk with a recordable key, automatic or manual input sensitivity, echo cancellation / noise suppression / auto gain toggles, camera preview. Settings persist in the browser and apply live mid-call.
 - Messages: real-time delivery, history with infinite scroll, edit, delete (author or owner), replies, reactions, markdown subset (bold, italic, strike, code, code blocks, quotes, links), typing indicators, read states, desktop notifications
 - Direct messages: search any user, 1:1 DM channels with presence
 - Live member list with online/offline grouping and user profile cards
@@ -77,6 +78,9 @@ Media is peer-to-peer mesh: each participant keeps one `RTCPeerConnection` per o
 - Default ICE config is Google's public STUN. Users behind symmetric NATs need a TURN server; set `ICE_SERVERS` to a JSON array of `RTCIceServer` objects, e.g.
   `ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]'`
 - Screen share captures video only (no system audio).
+- The microphone is routed through Web Audio (device → input gain → voice gate → outgoing track). Input volume and the voice-activity / push-to-talk gate therefore affect what peers hear, and switching input device never needs a renegotiation.
+- Output device selection uses `setSinkId`, available in Chromium browsers and recent Firefox; the picker is disabled elsewhere.
+- Push-to-talk only works while the browser tab has focus, since web pages cannot read global hotkeys.
 
 ## Not included
 

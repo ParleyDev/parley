@@ -1,6 +1,7 @@
 import { useStore } from '../store'
 import type { VoiceState } from './types'
 import { sendOp, type SignalData } from './ws'
+import { supportsSinkId, type VoiceSettings } from './settings'
 
 /**
  * Mesh WebRTC voice/video: every participant holds one RTCPeerConnection per other participant.
@@ -10,6 +11,10 @@ import { sendOp, type SignalData } from './ws'
  * Each connection carries three fixed transceivers negotiated once: [audio, camera, screen].
  * Turning camera/screen on or off swaps the sender track with replaceTrack(), so no renegotiation
  * is ever needed. Remote on/off state comes from VOICE_STATE_UPDATE flags.
+ *
+ * Microphone pipeline (Web Audio): device → inputGain (input volume) → gate (voice activity /
+ * push-to-talk) → destination. Peers receive the destination track, so swapping the input device
+ * or changing volume never needs a track replacement.
  */
 interface Peer {
   pc: RTCPeerConnection
@@ -18,22 +23,49 @@ interface Peer {
   stopMeter?: () => void
 }
 
-const CAMERA_CONSTRAINTS: MediaStreamConstraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }, audio: false }
 const CAMERA_MAX_BITRATE = 1_500_000
 const SCREEN_MAX_BITRATE = 3_000_000
+const AUTO_THRESHOLD_DB = -45
+const VAD_HOLD_MS = 400
+const GATE_INTERVAL_MS = 50
+
+type MicHolder = 'call' | 'test'
 
 class VoiceManager {
-  private mic: MediaStream | null = null
+  // mic pipeline
+  private raw: MediaStream | null = null       // device stream
+  private mic: MediaStream | null = null       // processed stream sent to peers
+  private ctx: AudioContext | null = null
+  private source: MediaStreamAudioSourceNode | null = null
+  private inputGain: GainNode | null = null
+  private gate: GainNode | null = null
+  private analyser: AnalyserNode | null = null
+  private dest: MediaStreamAudioDestinationNode | null = null
+  private gateTimer: ReturnType<typeof setInterval> | null = null
+  private lastVoiceAt = 0
+  private pttDown = false
+  private pttUpAt = 0
+  private holders = new Set<MicHolder>()
+  private testAudio: HTMLAudioElement | null = null
+  private acquiring: Promise<boolean> | null = null
+
   private camera: MediaStream | null = null
   private screen: MediaStream | null = null
   private peers = new Map<string, Peer>()
   private channelId: string | null = null
-  private audioCtx: AudioContext | null = null
-  private stopLocalMeter?: () => void
   private joining = false
   private muteBeforeDeaf = false
 
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('keydown', (e) => this.onKey(e, true), true)
+      window.addEventListener('keyup', (e) => this.onKey(e, false), true)
+      window.addEventListener('blur', () => { this.pttDown = false; useStore.getState().setPttHeld(false) })
+    }
+  }
+
   get currentChannel() { return this.channelId }
+  private get settings(): VoiceSettings { return useStore.getState().voiceSettings }
 
   // ---- public controls ----
 
@@ -43,22 +75,7 @@ class VoiceManager {
     if (this.channelId === channelId) return
     this.joining = true
     try {
-      if (!this.mic) {
-        if (!navigator.mediaDevices?.getUserMedia) {
-          s.pushToast(window.isSecureContext
-            ? 'This browser does not support microphone capture'
-            : `Microphone needs a secure context. Open the app over HTTPS (e.g. https://${location.hostname}:3443) or via localhost.`, 'error')
-          return
-        }
-        try {
-          this.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
-        } catch (e) {
-          s.pushToast(`Microphone unavailable: ${(e as Error).message}`, 'error')
-          return
-        }
-        this.applyMute(s.selfMute || s.selfDeaf)
-        this.stopLocalMeter = this.meter(this.mic, s.user!.id)
-      }
+      if (!(await this.acquireMic('call'))) return
       // Moving channels: tear down old peers; camera/screen stay on and re-attach to new peers.
       if (this.channelId) this.closeAllPeers()
       this.channelId = channelId
@@ -78,11 +95,9 @@ class VoiceManager {
     if (this.channelId) sendOp({ op: 'voice_leave' })
     this.channelId = null
     this.closeAllPeers()
-    this.stopLocalMeter?.(); this.stopLocalMeter = undefined
-    this.stopTracks(this.mic); this.mic = null
+    this.releaseMic('call')
     this.stopTracks(this.camera); this.camera = null
     this.stopTracks(this.screen); this.screen = null
-    this.audioCtx?.close().catch(() => {}); this.audioCtx = null
     s.setMyVoice(null)
   }
 
@@ -115,13 +130,10 @@ class VoiceManager {
       this.pushState()
       return
     }
-    try {
-      this.camera = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS)
-    } catch (e) {
-      s.pushToast(`Camera unavailable: ${(e as Error).message}`, 'error')
-      return
-    }
-    const track = this.camera.getVideoTracks()[0]
+    const stream = await this.openCamera()
+    if (!stream) return
+    this.camera = stream
+    const track = stream.getVideoTracks()[0]
     track.onended = () => { if (this.camera) this.toggleCamera() }
     this.peers.forEach((p) => this.replaceVideo(p.pc, 0, track))
     s.setLocalMedia({ camera: this.camera })
@@ -150,6 +162,71 @@ class VoiceManager {
     this.peers.forEach((p) => this.replaceVideo(p.pc, 1, track))
     s.setLocalMedia({ screen: this.screen })
     this.pushState()
+  }
+
+  // ---- settings ----
+
+  /** Called after the store's voiceSettings change; applies whatever changed live. */
+  async applySettings(prev: VoiceSettings) {
+    const cur = this.settings
+    if (this.inputGain) this.inputGain.gain.value = cur.inputVolume / 100
+    if (prev.outputDeviceId !== cur.outputDeviceId || prev.outputVolume !== cur.outputVolume) this.peers.forEach((p) => this.applyOutput(p.audio))
+    const micChanged = prev.inputDeviceId !== cur.inputDeviceId || prev.echoCancellation !== cur.echoCancellation
+      || prev.noiseSuppression !== cur.noiseSuppression || prev.autoGainControl !== cur.autoGainControl
+    if (micChanged && this.raw) await this.reopenMicDevice()
+    if (prev.cameraDeviceId !== cur.cameraDeviceId && this.camera) {
+      const stream = await this.openCamera()
+      if (stream) {
+        this.stopTracks(this.camera)
+        this.camera = stream
+        const track = stream.getVideoTracks()[0]
+        track.onended = () => { if (this.camera) this.toggleCamera() }
+        this.peers.forEach((p) => this.replaceVideo(p.pc, 0, track))
+        useStore.getState().setLocalMedia({ camera: stream })
+      }
+    }
+    if (prev.inputMode !== cur.inputMode) { this.pttDown = false; useStore.getState().setPttHeld(false) }
+  }
+
+  /** Opens the mic (if needed) and plays it back locally so the user can hear themselves. */
+  async startMicTest(): Promise<boolean> {
+    if (!(await this.acquireMic('test'))) return false
+    if (!this.testAudio) {
+      this.testAudio = document.createElement('audio')
+      this.testAudio.autoplay = true
+      document.body.appendChild(this.testAudio)
+    }
+    this.testAudio.srcObject = this.mic
+    this.applyOutput(this.testAudio)
+    this.testAudio.play().catch(() => {})
+    return true
+  }
+
+  stopMicTest() {
+    if (this.testAudio) { this.testAudio.srcObject = null; this.testAudio.remove(); this.testAudio = null }
+    this.releaseMic('test')
+  }
+
+  /** Keep the level meter running (without playback) while the settings panel is open. */
+  async startMeter(): Promise<boolean> { return this.acquireMic('test') }
+  stopMeter() { if (!this.testAudio) this.releaseMic('test') }
+
+  /** Camera stream for the settings preview, using the chosen device. Caller stops it. */
+  async openCamera(): Promise<MediaStream | null> {
+    const id = this.settings.cameraDeviceId
+    const video: MediaTrackConstraints = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }
+    if (id) video.deviceId = { exact: id }
+    try {
+      return await navigator.mediaDevices.getUserMedia({ video, audio: false })
+    } catch (e) {
+      if (id) {
+        // Chosen device vanished: fall back to default and forget the choice.
+        useStore.getState().updateVoiceSettings({ cameraDeviceId: '' })
+        try { return await navigator.mediaDevices.getUserMedia({ video: { ...video, deviceId: undefined }, audio: false }) } catch { /* fallthrough */ }
+      }
+      useStore.getState().pushToast(`Camera unavailable: ${(e as Error).message}`, 'error')
+      return null
+    }
   }
 
   // ---- events from the socket ----
@@ -215,7 +292,142 @@ class VoiceManager {
     if (this.channelId) useStore.getState().setMyVoice(this.channelId, true)
   }
 
-  // ---- internals ----
+  // ---- mic pipeline ----
+
+  private micConstraints(): MediaStreamConstraints {
+    const st = this.settings
+    const audio: MediaTrackConstraints = { echoCancellation: st.echoCancellation, noiseSuppression: st.noiseSuppression, autoGainControl: st.autoGainControl }
+    if (st.inputDeviceId) audio.deviceId = { exact: st.inputDeviceId }
+    return { audio, video: false }
+  }
+
+  private async getRawMic(): Promise<MediaStream | null> {
+    const s = useStore.getState()
+    if (!navigator.mediaDevices?.getUserMedia) {
+      s.pushToast(window.isSecureContext
+        ? 'This browser does not support microphone capture'
+        : `Microphone needs a secure context. Open the app over HTTPS (e.g. https://${location.hostname}:3443) or via localhost.`, 'error')
+      return null
+    }
+    try {
+      return await navigator.mediaDevices.getUserMedia(this.micConstraints())
+    } catch (e) {
+      if (this.settings.inputDeviceId) {
+        s.updateVoiceSettings({ inputDeviceId: '' })
+        try { return await navigator.mediaDevices.getUserMedia(this.micConstraints()) } catch { /* fallthrough */ }
+      }
+      s.pushToast(`Microphone unavailable: ${(e as Error).message}`, 'error')
+      return null
+    }
+  }
+
+  private acquireMic(holder: MicHolder): Promise<boolean> {
+    this.holders.add(holder)
+    if (this.mic) return Promise.resolve(true)
+    if (this.acquiring) return this.acquiring
+    this.acquiring = (async () => {
+      const raw = await this.getRawMic()
+      if (!raw) { this.holders.delete(holder); return false }
+      if (!this.holders.size) { this.stopTracks(raw); return false } // released while waiting
+      this.raw = raw
+      const ctx = (this.ctx ??= new AudioContext())
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+      this.inputGain = ctx.createGain(); this.inputGain.gain.value = this.settings.inputVolume / 100
+      this.gate = ctx.createGain(); this.gate.gain.value = 0
+      this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 1024
+      this.dest = ctx.createMediaStreamDestination()
+      this.source = ctx.createMediaStreamSource(raw)
+      this.source.connect(this.inputGain)
+      this.inputGain.connect(this.analyser)
+      this.inputGain.connect(this.gate)
+      this.gate.connect(this.dest)
+      this.mic = this.dest.stream
+      const s = useStore.getState()
+      this.applyMute(s.selfMute || s.selfDeaf)
+      this.startGate()
+      return true
+    })().finally(() => { this.acquiring = null })
+    return this.acquiring
+  }
+
+  private releaseMic(holder: MicHolder) {
+    this.holders.delete(holder)
+    if (this.holders.size) return
+    if (this.gateTimer) { clearInterval(this.gateTimer); this.gateTimer = null }
+    this.source?.disconnect(); this.inputGain?.disconnect(); this.gate?.disconnect(); this.analyser?.disconnect()
+    this.source = this.inputGain = this.gate = this.analyser = this.dest = null
+    this.stopTracks(this.raw); this.raw = null
+    this.stopTracks(this.mic); this.mic = null
+    this.ctx?.close().catch(() => {}); this.ctx = null
+    const s = useStore.getState()
+    s.setInputLevel(-100, false)
+    if (s.user) s.setSpeaking(s.user.id, false)
+  }
+
+  /** Swap the capture device under the running pipeline; the outgoing track is unchanged. */
+  private async reopenMicDevice() {
+    const raw = await this.getRawMic()
+    if (!raw || !this.ctx || !this.inputGain) { if (raw) this.stopTracks(raw); return }
+    this.source?.disconnect()
+    this.stopTracks(this.raw)
+    this.raw = raw
+    this.source = this.ctx.createMediaStreamSource(raw)
+    this.source.connect(this.inputGain)
+  }
+
+  private startGate() {
+    if (this.gateTimer) clearInterval(this.gateTimer)
+    const buf = new Float32Array(this.analyser!.fftSize)
+    this.gateTimer = setInterval(() => {
+      const analyser = this.analyser, gate = this.gate, ctx = this.ctx
+      if (!analyser || !gate || !ctx) return
+      analyser.getFloatTimeDomainData(buf)
+      let sum = 0
+      for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
+      const db = Math.max(-100, Math.min(0, 20 * Math.log10(Math.sqrt(sum / buf.length) || 1e-5)))
+      const st = this.settings
+      const s = useStore.getState()
+      const now = Date.now()
+      let open: boolean
+      if (st.inputMode === 'ptt') {
+        open = this.pttDown || now - this.pttUpAt < st.pttRelease
+      } else {
+        const threshold = st.autoSensitivity ? AUTO_THRESHOLD_DB : st.sensitivity
+        if (db >= threshold) this.lastVoiceAt = now
+        open = now - this.lastVoiceAt < VAD_HOLD_MS
+      }
+      gate.gain.setTargetAtTime(open ? 1 : 0, ctx.currentTime, 0.015)
+      const muted = s.selfMute || s.selfDeaf
+      s.setInputLevel(Math.round(db), open && !muted)
+      if (s.user) s.setSpeaking(s.user.id, open && !muted && db > -60)
+    }, GATE_INTERVAL_MS)
+  }
+
+  private onKey(e: KeyboardEvent, down: boolean) {
+    const st = this.settings
+    if (st.inputMode !== 'ptt' || e.code !== st.pttKey) return
+    const t = e.target as HTMLElement | null
+    const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+    const modifier = /^(Control|Shift|Alt|Meta)/.test(e.code)
+    if (typing && !modifier) return
+    if (!typing) e.preventDefault()
+    if (down && e.repeat) return
+    this.pttDown = down
+    if (!down) this.pttUpAt = Date.now()
+    useStore.getState().setPttHeld(down)
+  }
+
+  private applyOutput(el: HTMLAudioElement) {
+    const st = this.settings
+    el.volume = Math.max(0, Math.min(1, st.outputVolume / 100))
+    if (supportsSinkId) {
+      (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(st.outputDeviceId || '').catch(() => {
+        if (st.outputDeviceId) useStore.getState().updateVoiceSettings({ outputDeviceId: '' })
+      })
+    }
+  }
+
+  // ---- peers ----
 
   private pushState() {
     if (!this.channelId) return
@@ -243,6 +455,7 @@ class VoiceManager {
     audio.muted = s.selfDeaf
     audio.dataset.peer = userId
     document.body.appendChild(audio)
+    this.applyOutput(audio)
     const peer: Peer = { pc, audio, pendingCandidates: [] }
     this.peers.set(userId, peer)
     s.setPeerStatus(userId, 'connecting')
@@ -263,7 +476,7 @@ class VoiceManager {
         audio.srcObject = stream
         audio.play().catch(() => {})
         peer.stopMeter?.()
-        peer.stopMeter = this.meter(stream, userId)
+        peer.stopMeter = this.remoteMeter(stream, userId)
         return
       }
       const idx = this.videoTransceivers(pc).indexOf(e.transceiver)
@@ -330,11 +543,10 @@ class VoiceManager {
   private applyMute(muted: boolean) { this.mic?.getAudioTracks().forEach((t) => (t.enabled = !muted)) }
   private applyDeaf(deaf: boolean) { this.peers.forEach((p) => (p.audio.muted = deaf)) }
 
-  /** Simple RMS voice-activity meter → store.speaking. Returns a stop function. */
-  private meter(stream: MediaStream, userId: string): () => void {
+  /** RMS voice-activity meter for a remote stream → store.speaking. Returns a stop function. */
+  private remoteMeter(stream: MediaStream, userId: string): () => void {
     try {
-      this.audioCtx ??= new AudioContext()
-      const ctx = this.audioCtx
+      const ctx = (this.ctx ??= new AudioContext())
       if (ctx.state === 'suspended') ctx.resume().catch(() => {})
       const src = ctx.createMediaStreamSource(stream)
       const analyser = ctx.createAnalyser()
@@ -346,10 +558,8 @@ class VoiceManager {
         analyser.getByteTimeDomainData(buf)
         let sum = 0
         for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v }
-        const rms = Math.sqrt(sum / buf.length)
+        const loud = Math.sqrt(sum / buf.length) > 0.02
         const s = useStore.getState()
-        const muted = userId === s.user?.id && (s.selfMute || s.selfDeaf)
-        const loud = !muted && rms > 0.04
         const now = Date.now()
         if (loud) { quietSince = 0; s.setSpeaking(userId, true) }
         else if (s.speaking[userId]) { quietSince ||= now; if (now - quietSince > 250) s.setSpeaking(userId, false) }
@@ -362,3 +572,13 @@ class VoiceManager {
 }
 
 export const voice = new VoiceManager()
+
+// Apply setting changes live.
+let prevSettings = useStore.getState().voiceSettings
+useStore.subscribe((s) => {
+  if (s.voiceSettings !== prevSettings) {
+    const prev = prevSettings
+    prevSettings = s.voiceSettings
+    voice.applySettings(prev)
+  }
+})

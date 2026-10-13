@@ -1,41 +1,48 @@
-import { LogOut } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
-import Modal from '../Modal'
-import ImagePicker from './ImagePicker'
-import { api } from '../../lib/api'
+import { LogOut, Mic, User as UserIcon, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../../store'
-import type { PrivateUser } from '../../lib/types'
+import AccountTab from './settings/AccountTab'
+import VoiceVideoTab from './settings/VoiceVideoTab'
 
-export default function UserSettingsModal({ onClose }: { onClose: () => void }) {
-  const user = useStore((s) => s.user)
-  const setAuth = useStore((s) => s.setAuth)
-  const token = useStore((s) => s.token)
+type Tab = 'account' | 'voice'
+
+export default function UserSettingsModal({ onClose, tab: initial = 'account' }: { onClose: () => void; tab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initial)
   const logout = useStore((s) => s.logout)
-  const pushToast = useStore((s) => s.pushToast)
-  const [display, setDisplay] = useState(user?.display_name ?? '')
-  const [bio, setBio] = useState(user?.bio ?? '')
-  const [avatar, setAvatar] = useState<string | null>(user?.avatar_url ?? null)
-  const [busy, setBusy] = useState(false)
-  if (!user) return null
-  const submit = async (e: FormEvent) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const u = await api.patch<PrivateUser>('/users/@me', { display_name: display, bio, avatar_url: avatar ?? '' })
-      if (token) setAuth(token, u)
-      pushToast('Profile saved'); onClose()
-    } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
-  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const NavItem = ({ id, icon, label }: { id: Tab; icon: React.ReactNode; label: string }) => (
+    <button onClick={() => setTab(id)} className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-left ${tab === id ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>{icon}{label}</button>
+  )
+
   return (
-    <Modal title="My Account" onClose={onClose} width="max-w-lg"
-      footer={<><button className="btn-ghost text-danger mr-auto" onClick={() => { onClose(); logout() }}><LogOut size={16} /> Log Out</button><button className="btn-ghost" onClick={onClose}>Cancel</button><button form="user-settings" className="btn-primary" disabled={busy || !display.trim()}>Save Changes</button></>}>
-      <form id="user-settings" onSubmit={submit} className="space-y-4">
-        <div className="flex items-center gap-5 rounded-xl bg-bg-0/50 p-4">
-          <ImagePicker value={avatar} onChange={setAvatar} label={display} id={user.id} />
-          <div className="min-w-0"><div className="text-lg font-bold truncate">{display || user.display_name}</div><div className="text-sm text-text-2">@{user.username}</div><div className="text-xs text-text-2 mt-1">{user.email}</div></div>
+    <div className="fixed inset-0 z-50 bg-bg-1 flex pop" role="dialog" aria-modal>
+      <nav className="w-[232px] shrink-0 bg-bg-0/60 flex justify-end">
+        <div className="w-[200px] py-14 pr-2 space-y-0.5">
+          <h3 className="px-2.5 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">User Settings</h3>
+          <NavItem id="account" icon={<UserIcon size={16} />} label="My Account" />
+          <h3 className="px-2.5 mt-5 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">App Settings</h3>
+          <NavItem id="voice" icon={<Mic size={16} />} label="Voice & Video" />
+          <div className="h-px bg-line my-3 mx-2" />
+          <button onClick={() => { onClose(); logout() }} className="w-full flex items-center justify-between rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3">Log Out <LogOut size={16} /></button>
         </div>
-        <div><label className="label">Display name</label><input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} maxLength={32} required /></div>
-        <div><label className="label">About me</label><textarea className="input resize-none" rows={3} maxLength={190} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell people a bit about yourself" /><div className="text-right text-[11px] text-text-2">{bio.length}/190</div></div>
-      </form>
-    </Modal>
+      </nav>
+      <div className="flex-1 min-w-0 overflow-y-auto">
+        <div className="max-w-[740px] px-10 py-14 relative">
+          {tab === 'account' ? <AccountTab onClose={onClose} /> : <VoiceVideoTab />}
+        </div>
+      </div>
+      <div className="w-[60px] shrink-0 pt-14 pr-6 hidden md:block">
+        <button onClick={onClose} className="flex flex-col items-center gap-1 text-text-2 hover:text-text-0">
+          <span className="h-9 w-9 rounded-full border-2 border-text-2 flex items-center justify-center hover:border-text-0"><X size={18} /></span>
+          <span className="text-[11px] font-bold">ESC</span>
+        </button>
+      </div>
+      <button onClick={onClose} className="md:hidden absolute right-4 top-4 text-text-2 hover:text-text-0"><X size={22} /></button>
+    </div>
   )
 }

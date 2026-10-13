@@ -22,6 +22,8 @@ export default function UserPanel() {
   const connecting = useStore((s) => s.voiceConnecting)
   const voiceChannel = useStore((s) => (s.myVoiceChannelId ? s.channels[s.myVoiceChannelId] : undefined))
   const voiceGuild = useStore((s) => (voiceChannel?.guild_id ? s.guilds[voiceChannel.guild_id] : undefined))
+  const pttMode = useStore((s) => s.voiceSettings.inputMode === 'ptt')
+  const pttHeld = useStore((s) => s.pttHeld)
   if (!user) return null
 
   const setStatus = async (v: string) => {
@@ -38,6 +40,8 @@ export default function UserPanel() {
             <div className={`text-xs font-bold ${connecting ? 'text-warn' : 'text-success'}`}>{connecting ? 'Connecting…' : 'Voice Connected'}</div>
             <div className="text-[11px] text-text-2 truncate">{voiceChannel?.name ?? 'Voice'}{voiceGuild ? ` / ${voiceGuild.name}` : ''}</div>
           </div>
+          {pttMode && <span title="Push to talk" className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${pttHeld ? 'bg-success text-black' : 'bg-bg-3 text-text-2'}`}>PTT</span>}
+          <button title="Voice Settings" onClick={() => openModal({ kind: 'userSettings', tab: 'voice' })} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0"><Settings size={16} /></button>
           <button title="Disconnect" onClick={() => voice.leave()} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-danger"><PhoneOff size={18} /></button>
         </div>
       )}
