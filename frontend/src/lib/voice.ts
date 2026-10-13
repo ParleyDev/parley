@@ -31,6 +31,12 @@ class VoiceManager {
     this.joining = true
     try {
       if (!this.local) {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          s.pushToast(window.isSecureContext
+            ? 'This browser does not support microphone capture'
+            : `Microphone needs a secure context. Open the app over HTTPS (e.g. https://${location.hostname}:3443) or via localhost.`, 'error')
+          return
+        }
         try {
           this.local = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false })
         } catch (e) {

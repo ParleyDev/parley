@@ -32,8 +32,16 @@ services:
     build: ./frontend
     depends_on:
       - backend
+    environment:
+      # CN / SAN for the auto-generated self-signed cert (set to your LAN hostname or IP for fewer warnings)
+      TLS_HOSTNAME: ${TLS_HOSTNAME:-localhost}
+    volumes:
+      # Drop real cert.pem / key.pem here to replace the self-signed one
+      - certs:/etc/nginx/certs
     ports:
       - "${WEB_PORT:-3000}:80"
+      - "${WEB_TLS_PORT:-3443}:443"
 
 volumes:
   pgdata:
+  certs:

@@ -12,7 +12,7 @@ Open <http://localhost:3000>, register two accounts in two browsers, create a se
 
 | Service  | Port | Notes                                   |
 |----------|------|-----------------------------------------|
-| frontend | 3000 | nginx serving the SPA, proxies /api, /ws |
+| frontend | 3000 (HTTP), 3443 (HTTPS) | nginx serving the SPA, proxies /api, /ws |
 | backend  | 18080 | axum REST + WebSocket                   |
 | db       | —    | Postgres 16, volume `pgdata`            |
 
@@ -73,7 +73,7 @@ GET  /ws?token=<jwt>   (events: READY, MESSAGE_CREATE/UPDATE/DELETE, REACTION_AD
 
 Audio is peer-to-peer mesh: each participant keeps one `RTCPeerConnection` per other participant, so it suits small rooms (roughly up to 6-8 people). Signaling goes over the app WebSocket (`voice_join`, `voice_leave`, `voice_state`, `voice_signal` ops; `VOICE_STATE_UPDATE` / `VOICE_SIGNAL` events). The server only relays SDP/ICE between users in the same channel.
 
-- Browsers require a secure context for microphone access: `localhost` works, anything else needs HTTPS.
+- Browsers require a secure context for microphone access: `localhost` works over HTTP, anything else (LAN IP, hostname) needs HTTPS. The frontend container serves HTTPS on port 3443 with a self-signed certificate generated at first start (set `TLS_HOSTNAME=your-host` for a matching CN; accept the browser warning once). To use a real certificate, place `cert.pem` and `key.pem` in the `certs` volume (`/etc/nginx/certs` inside the container). Without HTTPS the client reports "Microphone needs a secure context".
 - Default ICE config is Google's public STUN. Users behind symmetric NATs need a TURN server; set `ICE_SERVERS` to a JSON array of `RTCIceServer` objects, e.g.
   `ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]'`
 - Video and screen share are not implemented.
