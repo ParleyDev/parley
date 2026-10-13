@@ -22,7 +22,8 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 
 - Accounts: register, log in (JWT), profile (display name, bio, avatar upload), presence status (online / idle / dnd / invisible)
 - Servers: create, rename, icon, delete, leave, kick (owner), invite links (`/invite/<code>`, optional max uses)
-- Channels: text and voice (voice is UI-only), topics, rename, delete, unread indicators
+- Channels: text and voice, topics, rename, delete, unread indicators
+- Voice: WebRTC mesh audio in voice channels (join from sidebar or channel view), mute / deafen, speaking indicators, participant list, auto-rejoin after socket reconnect
 - Messages: real-time delivery, history with infinite scroll, edit, delete (author or owner), replies, reactions, markdown subset (bold, italic, strike, code, code blocks, quotes, links), typing indicators, read states, desktop notifications
 - Direct messages: search any user, 1:1 DM channels with presence
 - Live member list with online/offline grouping and user profile cards
@@ -63,9 +64,20 @@ PATCH|DELETE /channels/:id/messages/:mid
 PUT|DELETE /channels/:id/messages/:mid/reactions/:emoji
 POST /channels/:id/typing   PUT /channels/:id/read {message_id}
 GET  /ws?token=<jwt>   (events: READY, MESSAGE_CREATE/UPDATE/DELETE, REACTION_ADD/REMOVE,
-      TYPING_START, PRESENCE_UPDATE, USER_UPDATE, GUILD_*, GUILD_MEMBER_*, CHANNEL_*, READ_STATE_UPDATE)
+      TYPING_START, PRESENCE_UPDATE, USER_UPDATE, GUILD_*, GUILD_MEMBER_*, CHANNEL_*, READ_STATE_UPDATE,
+      VOICE_STATE_UPDATE, VOICE_SIGNAL, VOICE_ERROR)
+      client ops: ping, typing, voice_join, voice_leave, voice_state, voice_signal
 ```
+
+## Voice (WebRTC)
+
+Audio is peer-to-peer mesh: each participant keeps one `RTCPeerConnection` per other participant, so it suits small rooms (roughly up to 6-8 people). Signaling goes over the app WebSocket (`voice_join`, `voice_leave`, `voice_state`, `voice_signal` ops; `VOICE_STATE_UPDATE` / `VOICE_SIGNAL` events). The server only relays SDP/ICE between users in the same channel.
+
+- Browsers require a secure context for microphone access: `localhost` works, anything else needs HTTPS.
+- Default ICE config is Google's public STUN. Users behind symmetric NATs need a TURN server; set `ICE_SERVERS` to a JSON array of `RTCIceServer` objects, e.g.
+  `ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]'`
+- Video and screen share are not implemented.
 
 ## Not included
 
-Voice/video (WebRTC), file attachments, roles/permissions beyond owner, friend requests, threads.
+Video / screen share, file attachments, roles/permissions beyond owner, friend requests, threads.

@@ -1,5 +1,6 @@
 import { useStore, type ReadyPayload } from '../store'
-import type { Channel, DmChannel, Guild, Member, Message, User } from './types'
+import type { Channel, DmChannel, Guild, Member, Message, User, VoiceState } from './types'
+import { voice } from './voice'
 
 type Ev =
   | { t: 'READY'; d: ReadyPayload }
@@ -19,6 +20,11 @@ type Ev =
   | { t: 'CHANNEL_CREATE' | 'CHANNEL_UPDATE'; d: Channel | DmChannel }
   | { t: 'CHANNEL_DELETE'; d: { id: string; guild_id: string } }
   | { t: 'READ_STATE_UPDATE'; d: { channel_id: string; last_read_msg: string } }
+  | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
+  | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
+  | { t: 'VOICE_ERROR'; d: { message: string } }
+
+export type SignalData = { type: 'offer' | 'answer'; sdp: string } | { type: 'candidate'; candidate: RTCIceCandidateInit | null }
 
 let socket: WebSocket | null = null
 let retry = 0
@@ -47,6 +53,7 @@ export function connectSocket() {
     if (pingTimer) clearInterval(pingTimer)
     socket = null
     useStore.getState().setConnected(false)
+    voice.onSocketLost()
     if (closedByUser) return
     const delay = Math.min(30000, 1000 * 2 ** retry++)
     reconnectTimer = setTimeout(async () => {
@@ -69,14 +76,20 @@ export function disconnectSocket() {
   socket = null
 }
 
+export function sendOp(payload: Record<string, unknown>): boolean {
+  if (socket?.readyState !== WebSocket.OPEN) return false
+  socket.send(JSON.stringify(payload))
+  return true
+}
+
 export function sendTyping(channelId: string) {
-  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ op: 'typing', channel_id: channelId }))
+  sendOp({ op: 'typing', channel_id: channelId })
 }
 
 function handle(ev: Ev) {
   const s = useStore.getState()
   switch (ev.t) {
-    case 'READY': s.applyReady(ev.d); break
+    case 'READY': s.applyReady(ev.d); voice.onReconnect(); break
     case 'RESYNC': socket?.close(); break
     case 'PONG': break
     case 'MESSAGE_CREATE': {
@@ -104,6 +117,9 @@ function handle(ev: Ev) {
     case 'CHANNEL_UPDATE': s.upsertChannel(ev.d); break
     case 'CHANNEL_DELETE': s.removeChannel(ev.d.id); break
     case 'READ_STATE_UPDATE': s.setReadState(ev.d.channel_id, ev.d.last_read_msg); break
+    case 'VOICE_STATE_UPDATE': s.applyVoiceState(ev.d); voice.onVoiceState(ev.d); break
+    case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
+    case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(); break
   }
 }
 

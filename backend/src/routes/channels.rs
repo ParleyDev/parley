@@ -128,6 +128,7 @@ async fn delete_channel(
         return Err(AppError::BadRequest("A server must keep at least one text channel".into()));
     }
     sqlx::query("DELETE FROM channels WHERE id = $1").bind(id).execute(&state.db).await?;
+    state.hub.voice_evict(|v| v.channel_id == id);
     state.hub.emit_guild(gid, "CHANNEL_DELETE", json!({ "id": id, "guild_id": gid }));
     Ok(StatusCode::NO_CONTENT)
 }

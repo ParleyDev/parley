@@ -20,6 +20,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-secret-change-me}
       BIND_ADDR: 0.0.0.0:8080
       RUST_LOG: ${RUST_LOG:-info}
+      # JSON array of RTCIceServer objects; add a TURN server for users behind strict NATs.
+      ICE_SERVERS: ${ICE_SERVERS:-[{"urls":"stun:stun.l.google.com:19302"}]}
     depends_on:
       db:
         condition: service_healthy

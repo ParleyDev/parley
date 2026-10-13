@@ -179,6 +179,7 @@ async fn delete_guild(
 ) -> AppResult<StatusCode> {
     require_owner(&state.db, id, uid).await?;
     // Emit before deleting so member set is still intact for fan-out.
+    state.hub.voice_evict(|v| v.guild_id == id);
     state.hub.emit_guild(id, "GUILD_DELETE", json!({ "id": id }));
     sqlx::query("DELETE FROM guilds WHERE id = $1").bind(id).execute(&state.db).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -300,6 +301,7 @@ async fn remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppRe
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("Member not found".into()));
     }
+    state.hub.voice_evict(|v| v.guild_id == guild_id && v.user_id == user_id);
     let payload = json!({ "guild_id": guild_id, "user_id": user_id });
     state.hub.emit_guild(guild_id, "GUILD_MEMBER_REMOVE", payload.clone());
     // The removed user no longer matches the guild target; notify them directly.

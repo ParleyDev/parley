@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
-import type { Channel, DmChannel, Guild, Member, Message, PrivateUser, ReadState, User } from './lib/types'
+import type { Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, User, VoiceState } from './lib/types'
 
 export type ModalKind =
   | { kind: 'createGuild' }
@@ -22,6 +22,8 @@ export interface ReadyPayload {
   online: string[]
   read_states: ReadState[]
   last_message_ids: { channel_id: string; message_id: string }[]
+  voice_states: VoiceState[]
+  ice_servers: RTCIceServer[]
 }
 
 interface State {
@@ -45,6 +47,15 @@ interface State {
   readStates: Record<string, string | null>
   lastMessageId: Record<string, string>
   activeChannelId: string | null
+  // voice
+  voiceStates: Record<string, VoiceState>
+  iceServers: RTCIceServer[]
+  myVoiceChannelId: string | null
+  voiceConnecting: boolean
+  selfMute: boolean
+  selfDeaf: boolean
+  speaking: Record<string, true>
+  peerStatus: Record<string, PeerStatus>
   modal: ModalKind | null
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
 
@@ -74,6 +85,11 @@ interface State {
   pruneTyping: () => void
   setReadState: (channelId: string, msgId: string | null) => void
   setActiveChannel: (id: string | null) => void
+  applyVoiceState: (v: VoiceState) => void
+  setMyVoice: (channelId: string | null, connecting?: boolean) => void
+  setSelfVoiceFlags: (mute: boolean, deaf: boolean) => void
+  setSpeaking: (userId: string, on: boolean) => void
+  setPeerStatus: (userId: string, status: PeerStatus | null) => void
   openModal: (m: ModalKind) => void
   closeModal: () => void
   pushToast: (text: string, kind?: 'info' | 'error') => void
@@ -108,6 +124,14 @@ export const useStore = create<State>((set, get) => ({
   readStates: {},
   lastMessageId: {},
   activeChannelId: null,
+  voiceStates: {},
+  iceServers: [],
+  myVoiceChannelId: null,
+  voiceConnecting: false,
+  selfMute: false,
+  selfDeaf: false,
+  speaking: {},
+  peerStatus: {},
   modal: null,
   toast: [],
 
@@ -120,6 +144,7 @@ export const useStore = create<State>((set, get) => ({
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], channels: {}, dms: {},
       members: {}, membersLoaded: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
+      voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {},
     })
   },
 
@@ -140,7 +165,10 @@ export const useStore = create<State>((set, get) => ({
     r.read_states.forEach((rs) => (readStates[rs.channel_id] = rs.last_read_msg))
     const lastMessageId: Record<string, string> = {}
     r.last_message_ids.forEach((l) => (lastMessageId[l.channel_id] = l.message_id))
+    const voiceStates: Record<string, VoiceState> = {}
+    r.voice_states.forEach((v) => (voiceStates[v.user_id] = v))
     set({
+      voiceStates, iceServers: r.ice_servers ?? [],
       user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, online, users, readStates, lastMessageId,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events.
@@ -162,7 +190,9 @@ export const useStore = create<State>((set, get) => ({
     Object.values(channels).forEach((c) => { if (c.guild_id === id) delete channels[c.id] })
     const members = { ...s.members }; delete members[id]
     const membersLoaded = { ...s.membersLoaded }; delete membersLoaded[id]
-    return { guilds, channels, members, membersLoaded, guildOrder: s.guildOrder.filter((g) => g !== id) }
+    const voiceStates = { ...s.voiceStates }
+    Object.values(voiceStates).forEach((v) => { if (v.guild_id === id) delete voiceStates[v.user_id] })
+    return { guilds, channels, members, membersLoaded, voiceStates, guildOrder: s.guildOrder.filter((g) => g !== id) }
   }),
   upsertChannel: (c) => set((s) => {
     if (c.guild_id === null && 'recipients' in c) {
@@ -291,6 +321,26 @@ export const useStore = create<State>((set, get) => ({
   }),
   setReadState: (channelId, msgId) => set((s) => ({ readStates: { ...s.readStates, [channelId]: msgId } })),
   setActiveChannel: (id) => set({ activeChannelId: id }),
+  applyVoiceState: (v) => set((s) => {
+    const voiceStates = { ...s.voiceStates }
+    if (v.channel_id) voiceStates[v.user_id] = v; else delete voiceStates[v.user_id]
+    const speaking = { ...s.speaking }
+    if (!v.channel_id) delete speaking[v.user_id]
+    return { voiceStates, speaking }
+  }),
+  setMyVoice: (channelId, connecting = false) => set({ myVoiceChannelId: channelId, voiceConnecting: connecting, ...(channelId ? {} : { speaking: {}, peerStatus: {} }) }),
+  setSelfVoiceFlags: (selfMute, selfDeaf) => set({ selfMute, selfDeaf }),
+  setSpeaking: (userId, on) => set((s) => {
+    if (!!s.speaking[userId] === on) return {}
+    const speaking = { ...s.speaking }
+    if (on) speaking[userId] = true; else delete speaking[userId]
+    return { speaking }
+  }),
+  setPeerStatus: (userId, status) => set((s) => {
+    const peerStatus = { ...s.peerStatus }
+    if (status) peerStatus[userId] = status; else delete peerStatus[userId]
+    return { peerStatus }
+  }),
   openModal: (modal) => set({ modal }),
   closeModal: () => set({ modal: null }),
   pushToast: (text, kind = 'info') => {
@@ -349,4 +399,8 @@ export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'cha
 
 export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'dms'>): number {
   return Object.keys(s.dms).filter((id) => isUnread(s, id)).length
+}
+
+export function voiceParticipants(s: Pick<State, 'voiceStates'>, channelId: string): VoiceState[] {
+  return Object.values(s.voiceStates).filter((v) => v.channel_id === channelId)
 }

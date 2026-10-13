@@ -4,6 +4,8 @@ pub struct Config {
     pub jwt_secret: String,
     pub bind_addr: String,
     pub cors_origins: Vec<String>,
+    /// JSON array of RTCIceServer objects handed to clients.
+    pub ice_servers: serde_json::Value,
 }
 
 impl Config {
@@ -20,6 +22,10 @@ impl Config {
             cors_origins: std::env::var("CORS_ORIGINS")
                 .map(|s| s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
                 .unwrap_or_default(),
+            ice_servers: std::env::var("ICE_SERVERS")
+                .ok()
+                .and_then(|s| serde_json::from_str(&s).map_err(|e| tracing::warn!("ICE_SERVERS is not valid JSON: {e}")).ok())
+                .unwrap_or_else(|| serde_json::json!([{ "urls": "stun:stun.l.google.com:19302" }])),
         }
     }
 }

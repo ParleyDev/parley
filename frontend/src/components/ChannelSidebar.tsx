@@ -1,7 +1,10 @@
-import { ChevronDown, Hash, LogOut, Plus, Settings, Trash2, UserPlus, Volume2 } from 'lucide-react'
+import { useShallow } from 'zustand/react/shallow'
+import { ChevronDown, Hash, HeadphoneOff, LogOut, MicOff, Plus, Settings, Trash2, UserPlus, Volume2 } from 'lucide-react'
+import { voice } from '../lib/voice'
+import Avatar from './Avatar'
 import { useState } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
-import { isUnread, useStore } from '../store'
+import { isUnread, useStore, voiceParticipants } from '../store'
 import UserPanel from './UserPanel'
 import { api } from '../lib/api'
 
@@ -21,7 +24,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const isOwner = user?.id === guild.owner_id
   const list = Object.values(channels).filter((c) => c.guild_id === guildId).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
   const text = list.filter((c) => c.kind === 'text')
-  const voice = list.filter((c) => c.kind === 'voice')
+  const voiceChannels = list.filter((c) => c.kind === 'voice')
 
   const leave = () => openModal({
     kind: 'confirm', title: `Leave '${guild.name}'`, body: `Are you sure you want to leave ${guild.name}? You won't be able to rejoin unless you are re-invited.`, danger: true, confirmLabel: 'Leave Server',
@@ -67,11 +70,15 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
               onSettings={() => openModal({ kind: 'channelSettings', channelId: c.id })} />
           ))}
         </Category>
-        {voice.length > 0 && (
+        {voiceChannels.length > 0 && (
           <Category label="Voice Channels" onAdd={() => openModal({ kind: 'createChannel', guildId })}>
-            {voice.map((c) => (
-              <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Volume2 size={18} />} name={c.name}
-                onSettings={() => openModal({ kind: 'channelSettings', channelId: c.id })} />
+            {voiceChannels.map((c) => (
+              <div key={c.id}>
+                <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={<Volume2 size={18} />} name={c.name}
+                  onClick={() => voice.join(c.id)}
+                  onSettings={() => openModal({ kind: 'channelSettings', channelId: c.id })} />
+                <VoiceParticipants channelId={c.id} />
+              </div>
             ))}
           </Category>
         )}
@@ -104,9 +111,33 @@ function Category({ label, onAdd, children }: { label: string; onAdd: () => void
   )
 }
 
-function ChannelRow({ to, icon, name, unread, onSettings }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; onSettings: () => void }) {
+function VoiceParticipants({ channelId }: { channelId: string }) {
+  const participants = useStore(useShallow((s) => voiceParticipants(s, channelId)))
+  const users = useStore((s) => s.users)
+  const me = useStore((s) => s.user)
+  const speaking = useStore((s) => s.speaking)
+  const openModal = useStore((s) => s.openModal)
+  if (!participants.length) return null
   return (
-    <NavLink to={to} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+    <div className="ml-7 mr-1 mb-1 space-y-0.5">
+      {participants.map((p) => {
+        const u = users[p.user_id] ?? (me?.id === p.user_id ? me : undefined)
+        if (!u) return null
+        return (
+          <button key={p.user_id} onClick={() => openModal({ kind: 'profile', userId: p.user_id })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
+            <span className={`rounded-full ${speaking[p.user_id] ? 'ring-2 ring-success' : ''}`}><Avatar user={u} size={22} /></span>
+            <span className="truncate flex-1">{u.display_name}</span>
+            {p.self_deaf ? <HeadphoneOff size={14} className="text-text-2" /> : p.self_mute ? <MicOff size={14} className="text-text-2" /> : null}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function ChannelRow({ to, icon, name, unread, onSettings, onClick }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; onSettings: () => void; onClick?: () => void }) {
+  return (
+    <NavLink to={to} onClick={onClick} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>

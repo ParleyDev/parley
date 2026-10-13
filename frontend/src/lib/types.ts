@@ -66,3 +66,13 @@ export interface Invite {
 }
 
 export interface ReadState { channel_id: string; last_read_msg: string | null }
+
+export interface VoiceState {
+  guild_id: string
+  channel_id: string | null
+  user_id: string
+  self_mute: boolean
+  self_deaf: boolean
+}
+
+export type PeerStatus = 'connecting' | 'connected' | 'failed'
