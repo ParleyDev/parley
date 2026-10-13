@@ -1,0 +1,118 @@
+import { useStore, type ReadyPayload } from '../store'
+import type { Channel, DmChannel, Guild, Member, Message, User } from './types'
+
+type Ev =
+  | { t: 'READY'; d: ReadyPayload }
+  | { t: 'RESYNC'; d: unknown }
+  | { t: 'PONG'; d: unknown }
+  | { t: 'MESSAGE_CREATE' | 'MESSAGE_UPDATE'; d: { message: Message; guild_id: string | null } }
+  | { t: 'MESSAGE_DELETE'; d: { id: string; channel_id: string } }
+  | { t: 'REACTION_ADD' | 'REACTION_REMOVE'; d: { message_id: string; channel_id: string; user_id: string; emoji: string } }
+  | { t: 'TYPING_START'; d: { channel_id: string; user_id: string } }
+  | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean } }
+  | { t: 'USER_UPDATE'; d: User }
+  | { t: 'GUILD_CREATE'; d: Guild & { channels: Channel[] } }
+  | { t: 'GUILD_UPDATE'; d: Guild }
+  | { t: 'GUILD_DELETE'; d: { id: string } }
+  | { t: 'GUILD_MEMBER_ADD'; d: Member }
+  | { t: 'GUILD_MEMBER_REMOVE'; d: { guild_id: string; user_id: string } }
+  | { t: 'CHANNEL_CREATE' | 'CHANNEL_UPDATE'; d: Channel | DmChannel }
+  | { t: 'CHANNEL_DELETE'; d: { id: string; guild_id: string } }
+  | { t: 'READ_STATE_UPDATE'; d: { channel_id: string; last_read_msg: string } }
+
+let socket: WebSocket | null = null
+let retry = 0
+let closedByUser = false
+let pingTimer: ReturnType<typeof setInterval> | null = null
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+export function connectSocket() {
+  const token = useStore.getState().token
+  if (!token || socket) return
+  closedByUser = false
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}`)
+  socket = ws
+
+  ws.onopen = () => {
+    retry = 0
+    pingTimer = setInterval(() => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ op: 'ping' })) }, 25000)
+  }
+  ws.onmessage = (e) => {
+    let ev: Ev
+    try { ev = JSON.parse(e.data) } catch { return }
+    handle(ev)
+  }
+  ws.onclose = () => {
+    if (pingTimer) clearInterval(pingTimer)
+    socket = null
+    useStore.getState().setConnected(false)
+    if (closedByUser) return
+    const delay = Math.min(30000, 1000 * 2 ** retry++)
+    reconnectTimer = setTimeout(async () => {
+      // A rejected upgrade closes with an opaque code; probe the API to tell "server down" from "token expired".
+      try {
+        const r = await fetch('/api/users/@me', { headers: { Authorization: `Bearer ${useStore.getState().token}` } })
+        if (r.status === 401) { useStore.getState().logout(); return }
+      } catch { /* network down: keep retrying */ }
+      connectSocket()
+    }, delay)
+  }
+  ws.onerror = () => { /* onclose will fire */ }
+}
+
+export function disconnectSocket() {
+  closedByUser = true
+  if (reconnectTimer) clearTimeout(reconnectTimer)
+  if (pingTimer) clearInterval(pingTimer)
+  socket?.close()
+  socket = null
+}
+
+export function sendTyping(channelId: string) {
+  if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ op: 'typing', channel_id: channelId }))
+}
+
+function handle(ev: Ev) {
+  const s = useStore.getState()
+  switch (ev.t) {
+    case 'READY': s.applyReady(ev.d); break
+    case 'RESYNC': socket?.close(); break
+    case 'PONG': break
+    case 'MESSAGE_CREATE': {
+      s.addMessage(ev.d.message)
+      const me = s.user?.id
+      if (ev.d.message.author.id !== me && document.visibilityState !== 'visible') notify(ev.d.message)
+      break
+    }
+    case 'MESSAGE_UPDATE': s.updateMessage(ev.d.message); break
+    case 'MESSAGE_DELETE': s.removeMessage(ev.d.channel_id, ev.d.id); break
+    case 'REACTION_ADD': s.applyReaction(ev.d.channel_id, ev.d.message_id, ev.d.emoji, ev.d.user_id, true); break
+    case 'REACTION_REMOVE': s.applyReaction(ev.d.channel_id, ev.d.message_id, ev.d.emoji, ev.d.user_id, false); break
+    case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id); break
+    case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online); break
+    case 'USER_UPDATE': s.upsertUser(ev.d); break
+    case 'GUILD_CREATE': s.upsertGuild(ev.d); break
+    case 'GUILD_UPDATE': s.upsertGuild(ev.d); break
+    case 'GUILD_DELETE': s.removeGuild(ev.d.id); break
+    case 'GUILD_MEMBER_ADD': s.upsertMember(ev.d); break
+    case 'GUILD_MEMBER_REMOVE':
+      if (ev.d.user_id === s.user?.id) s.removeGuild(ev.d.guild_id)
+      else s.removeMember(ev.d.guild_id, ev.d.user_id)
+      break
+    case 'CHANNEL_CREATE':
+    case 'CHANNEL_UPDATE': s.upsertChannel(ev.d); break
+    case 'CHANNEL_DELETE': s.removeChannel(ev.d.id); break
+    case 'READ_STATE_UPDATE': s.setReadState(ev.d.channel_id, ev.d.last_read_msg); break
+  }
+}
+
+function notify(m: Message) {
+  try {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(m.author.display_name, { body: m.content.slice(0, 120) })
+    }
+  } catch { /* ignore */ }
+}
+
+setInterval(() => useStore.getState().pruneTyping(), 2000)
