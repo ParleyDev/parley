@@ -59,6 +59,9 @@ export function searchEmoji(q: string, groups: EmojiGroup[], custom: Emoji[], li
     if (e.slug.startsWith(needle)) starts.push({ kind: 'unicode', emoji: e }); else if (e.slug.includes(needle)) contains.push({ kind: 'unicode', emoji: e })
     if (starts.length >= limit) break
   }
+  // Shorter shortcodes first among prefix matches (`:fi` → fire before firefighter); custom emoji keep their place.
+  const len = (r: (typeof out)[number]) => (r.kind === 'custom' ? 0 : r.emoji.slug.length)
+  starts.sort((a, b) => len(a) - len(b))
   out.push(...starts, ...contains)
   return out.slice(0, limit)
 }
