@@ -9,6 +9,7 @@ import { formatBytes, isImage, MAX_PER_MESSAGE, uploadFile, type UploadHandle } 
 import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
 import ExpressionPicker, { type PickerTab } from './ExpressionPicker'
+import ShortcodeSuggest, { shortcodeAt, useShortcodeSuggestions, type Suggestion } from './ShortcodeSuggest'
 
 
 interface Props { channel: Channel | DmChannel; reply: Message | null; onCancelReply: () => void; onSent: () => void }
@@ -27,6 +28,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const canAttach = canSend && (channel.guild_id === null || has(perms, P.ATTACH_FILES))
   const [value, setValue] = useState('')
   const [picker, setPicker] = useState<PickerTab | null>(null)
+  // `:shortcode` autocomplete: tracks the query at the caret, the highlighted row, and whether it was dismissed.
+  const [shortcode, setShortcode] = useState<{ start: number; query: string } | null>(null)
+  const [suggestIdx, setSuggestIdx] = useState(0)
+  const suggestions = useShortcodeSuggestions(shortcode?.query ?? null, channel.guild_id)
   const [pending, setPending] = useState<Pending[]>([])
   const [dragging, setDragging] = useState(false)
   const [sending, setSending] = useState(false)
@@ -119,14 +124,49 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     } finally { setSending(false) }
   }
 
+  /** Replace the `:query` being typed with the chosen emoji (plus a space) and restore the caret. */
+  const pickSuggestion = (sug: Suggestion) => {
+    const el = ref.current
+    const sc = shortcode
+    if (!el || !sc) return
+    const caret = el.selectionStart ?? value.length
+    const next = value.slice(0, sc.start) + sug.token + ' ' + value.slice(caret)
+    setValue(next); setShortcode(null); recordEmoji(sug.token)
+    requestAnimationFrame(() => { el.focus(); const pos = sc.start + sug.token.length + 1; el.setSelectionRange(pos, pos) })
+  }
+  const updateShortcode = (text: string, caret: number) => {
+    const sc = shortcodeAt(text, caret)
+    setShortcode((cur) => (sc?.start !== cur?.start || sc?.query !== cur?.query ? sc : cur))
+    if (!sc || sc.start !== shortcode?.start) setSuggestIdx(0)
+  }
+
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (shortcode && suggestions.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setSuggestIdx((i) => (i + (e.key === 'ArrowDown' ? 1 : suggestions.length - 1)) % suggestions.length); return }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickSuggestion(suggestions[suggestIdx] ?? suggestions[0]); return }
+      if (e.key === 'Escape') { e.preventDefault(); setShortcode(null); return }
+    }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); return }
     if (e.key === 'Escape' && reply) onCancelReply()
     const f = shortcutFormat(e)
     if (f && ref.current) { e.preventDefault(); setValue(toggleWrap(ref.current, f)) }
   }
   const onChange = (v: string) => {
+    const el = ref.current
+    const caret = el?.selectionStart ?? v.length
+    // Typing the closing colon of an exact shortcode (`:fire:`) swaps it for the emoji immediately.
+    if (v[caret - 1] === ':' && shortcode) {
+      const typed = v.slice(shortcode.start + 1, caret - 1)
+      const exact = suggestions.find((s) => s.label === `:${typed}:`)
+      if (exact && el) {
+        const next = v.slice(0, shortcode.start) + exact.token + ' ' + v.slice(caret)
+        setValue(next); setShortcode(null); recordEmoji(exact.token)
+        requestAnimationFrame(() => { const pos = shortcode.start + exact.token.length + 1; el.setSelectionRange(pos, pos) })
+        return
+      }
+    }
     setValue(v)
+    updateShortcode(v, caret)
     const now = Date.now()
     if (v && now - lastTyping.current > 4000) { lastTyping.current = now; sendTyping(channel.id) }
   }
@@ -176,6 +216,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         </div>
       )}
       <FormatToolbar textarea={ref} onChange={setValue} className="absolute -top-8 left-4 max-md:left-2 z-20" />
+      {shortcode && suggestions.length > 0 && (
+        <ShortcodeSuggest query={shortcode.query} items={suggestions} active={suggestIdx} onPick={pickSuggestion} onHover={setSuggestIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
+      )}
       <div className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition">
         {reply && (
           <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-xl">
@@ -203,6 +246,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
           <button className={`pb-1 ${canAttach ? 'text-text-2 hover:text-text-0' : 'text-text-2/40 cursor-not-allowed'}`} title={canAttach ? 'Upload a file' : 'No permission to attach files'} onClick={() => canAttach && fileRef.current?.click()}><PlusCircle size={22} /></button>
           <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={`Message ${name}`}
+            onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => setShortcode(null), 150)}
             className="flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />
           <div className="relative pb-1 flex items-center gap-2.5">
             <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title="GIF" data-gif-button><ImagePlay size={22} /></button>
