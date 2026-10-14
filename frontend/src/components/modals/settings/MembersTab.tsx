@@ -1,4 +1,5 @@
 import { Crown, Gavel, Search, UserMinus } from 'lucide-react'
+import { anchorOf } from '../../../lib/anchor'
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { myGuildPerms, useStore } from '../../../store'
@@ -49,7 +50,7 @@ export default function MembersTab({ guildId }: { guildId: string }) {
           const canTransfer = guild.owner_id === me.id && m.user_id !== me.id
           return (
             <div key={m.user_id} className="py-3 flex items-center gap-3">
-              <button onClick={() => openModal({ kind: 'profile', userId: m.user_id })}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={36} presence /></button>
+              <button onClick={(e) => openModal({ kind: 'profile', userId: m.user_id, anchor: anchorOf(e) })}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={36} presence /></button>
               <div className="min-w-0 w-48 max-md:w-32 shrink-0">
                 <div className="font-semibold truncate flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId}>{m.nickname ?? m.display_name}</StyledName>{isOwner && <Crown size={13} className="text-warn shrink-0" />}</div>
                 <div className="text-xs text-text-2 truncate">@{m.username}</div>

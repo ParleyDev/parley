@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import type { User } from '../lib/types'
-import { colorFor, renderMarkdown } from '../lib/format'
+import { colorFor, initials, renderMarkdown } from '../lib/format'
+import { APP_INITIAL, APP_NAME } from '../lib/brand'
 import Avatar from './Avatar'
 import { nameCss } from './StyledName'
-import type { CSSProperties } from 'react'
 
 export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> {
   banner_url?: string | null
@@ -33,49 +33,82 @@ export function contrastText(hex: string): string {
 
 interface Props {
   user: ProfileLike
-  /** Rendered next to the avatar (action buttons). */
+  /** Icon buttons rendered to the right of the avatar. */
   actions?: ReactNode
-  /** Extra rows inside the detail box (e.g. roles, joined date). */
+  /** Extra sections inside the detail box (e.g. roles). */
   children?: ReactNode
-  /** Shown under the name instead of @username, if set. */
+  /** Shown as the name instead of display_name (server nickname). */
   nameOverride?: string | null
   compact?: boolean
   /** Overrides the user's own name style (e.g. a role colour inside a server). */
   nameStyle?: CSSProperties
+  /** When opened inside a server: adds the server join date next to the app join date. */
+  server?: { name: string; icon_url: string | null; id: string; joined_at: string }
+  /** Rendered at the bottom of the card (the quick "Message @user" box). */
+  footer?: ReactNode
 }
 
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+
 /**
- * Discord-style profile card: banner (image or theme gradient), avatar, name, pronouns,
- * markdown "About me". The whole card is tinted with the user's theme colours.
+ * Discord-style profile popout: banner, overlapping avatar with status, name block, then a
+ * detail panel with About Me, Member Since (app + server), roles, and a footer slot.
+ * The whole card is tinted with the user's theme colours.
  */
-export default function ProfileCard({ user, actions, children, nameOverride, compact, nameStyle }: Props) {
+export default function ProfileCard({ user, actions, children, nameOverride, compact, nameStyle, server, footer }: Props) {
   const nameCssFinal = nameStyle ?? nameCss(user.name_primary, user.name_accent)
   const theme = themeBackground(user)
   const text = contrastText(user.theme_primary ?? colorFor(user.id))
-  const dim = text === '#fff' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.65)'
-  const panel = text === '#fff' ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.55)'
+  const light = text === '#fff'
+  const dim = light ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.65)'
+  const panel = light ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.55)'
+  const ring = user.theme_primary ?? colorFor(user.id)
+  const avatar = compact ? 64 : 80
   return (
-    <div className="overflow-hidden rounded-2xl" style={{ background: theme, color: text }}>
-      <div className={`${compact ? 'h-20' : 'h-28'} w-full bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: 'rgba(0,0,0,0.18)' }} />
-      <div className={`px-4 ${compact ? '-mt-8' : '-mt-10'} flex items-end justify-between`}>
-        <div className="rounded-full ring-[6px] bg-bg-1" style={{ ['--tw-ring-color' as string]: user.theme_primary ?? colorFor(user.id) }}><Avatar user={user} size={compact ? 64 : 80} presence /></div>
-        {actions && <div className="flex flex-wrap justify-end gap-2 pb-1 min-w-0 pl-3">{actions}</div>}
+    <div className="overflow-hidden rounded-2xl flex flex-col max-h-full" style={{ background: theme, color: text }} data-profile-card>
+      <div className={`${compact ? 'h-20' : 'h-[105px]'} w-full shrink-0 bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: 'rgba(0,0,0,0.18)' }} />
+      <div className={`px-4 ${compact ? '-mt-8' : '-mt-11'} flex items-end justify-between shrink-0`}>
+        <div className="rounded-full ring-[6px] bg-bg-1" style={{ ['--tw-ring-color' as string]: ring }}><Avatar user={user} size={avatar} presence /></div>
+        {actions && <div className="flex flex-wrap justify-end gap-1.5 pb-1 min-w-0 pl-3">{actions}</div>}
       </div>
-      <div className="px-4 pt-3 pb-4">
+      <div className="px-4 pt-2 shrink-0">
         <h2 className="text-xl font-bold leading-tight truncate"><span style={nameCssFinal}>{nameOverride ?? user.display_name}</span></h2>
-        <p className="text-sm truncate" style={{ color: dim }}>@{user.username}{user.pronouns ? <span> · {user.pronouns}</span> : null}</p>
-        <div className="mt-3 rounded-xl p-3 space-y-3 text-sm" style={{ background: panel }}>
+        <p className="text-sm truncate" style={{ color: dim }}>
+          {nameOverride && nameOverride !== user.display_name ? <span className="text-[15px]" style={{ color: text }}>{user.display_name} · </span> : null}
+          <span>{user.username}</span>{user.pronouns ? <span> · {user.pronouns}</span> : null}
+        </p>
+      </div>
+      <div className="px-4 pt-3 pb-4 min-h-0 overflow-y-auto">
+        <div className="rounded-xl p-3 space-y-3 text-sm" style={{ background: panel }}>
           {user.bio && (
-            <div>
-              <div className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>About me</div>
+            <section>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>About me</h3>
               <div className="msg-content whitespace-pre-wrap break-words leading-snug">{renderMarkdown(user.bio, { blocks: false })}</div>
-            </div>
+            </section>
           )}
-          <div className="flex gap-6 flex-wrap">
-            <div><div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: dim }}>Member since</div><p>{new Date(user.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</p></div>
-            {children}
-          </div>
+          <section>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Member since</h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1.5" title={APP_NAME}>
+                <span className="h-4 w-4 rounded-full bg-bg-0 text-text-0 text-[10px] font-bold flex items-center justify-center shrink-0" aria-hidden>{APP_INITIAL}</span>
+                <span>{fmtDate(user.created_at)}</span>
+              </span>
+              {server && (
+                <>
+                  <span className="h-1 w-1 rounded-full" style={{ background: dim }} aria-hidden />
+                  <span className="flex items-center gap-1.5" title={server.name} data-server-joined>
+                    {server.icon_url
+                      ? <img src={server.icon_url} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
+                      : <span className="h-4 w-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0" style={{ background: colorFor(server.id) }} aria-hidden>{initials(server.name)}</span>}
+                    <span>{fmtDate(server.joined_at)}</span>
+                  </span>
+                </>
+              )}
+            </div>
+          </section>
+          {children}
         </div>
+        {footer && <div className="mt-3">{footer}</div>}
       </div>
     </div>
   )

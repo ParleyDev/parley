@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
+import type { Anchor } from './lib/anchor'
 import type { Ban, Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, User, VoiceState } from './lib/types'
 import { channelPerms, guildPerms } from './lib/perms'
 
@@ -13,7 +14,7 @@ export type ModalKind =
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' }
   | { kind: 'newDm' }
-  | { kind: 'profile'; userId: string }
+  | { kind: 'profile'; userId: string; anchor?: Anchor }
   | { kind: 'image'; url: string; name: string }
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string }
   | { kind: 'ban'; guildId: string; userId: string }

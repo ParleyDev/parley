@@ -1,4 +1,5 @@
 import { Crown, X } from 'lucide-react'
+import { anchorOf } from '../lib/anchor'
 import { useStore } from '../store'
 import type { Member, Role } from '../lib/types'
 import { hoistRole, sortedRoles, EMPTY_ROLES } from '../lib/perms'
@@ -33,7 +34,7 @@ export default function MemberList({ guildId }: { guildId: string }) {
 
   const Row = ({ m, dim }: { m: Member; dim?: boolean }) => {
     return (
-      <button onClick={() => openModal({ kind: 'profile', userId: m.user_id })} className={`w-full flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3 text-left ${dim ? 'opacity-40 hover:opacity-100' : ''}`}>
+      <button onClick={(e) => openModal({ kind: 'profile', userId: m.user_id, anchor: anchorOf(e) })} className={`w-full flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3 text-left ${dim ? 'opacity-40 hover:opacity-100' : ''}`}>
         <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={32} presence />
         <StyledName userId={m.user_id} guildId={guildId} className="truncate text-[15px] font-medium text-text-1">{m.nickname ?? m.display_name}</StyledName>
         {guild?.owner_id === m.user_id && <Crown size={14} className="text-warn shrink-0" />}

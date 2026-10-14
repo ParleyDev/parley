@@ -1,4 +1,5 @@
 import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react'
+import { anchorOf } from '../lib/anchor'
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { isBlocked, myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
@@ -84,12 +85,12 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         {grouped ? (
           <div className="w-10 max-md:w-8 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
         ) : (
-          <button onClick={() => openModal({ kind: 'profile', userId: m.author.id })} className="shrink-0 mt-0.5"><Avatar user={m.author} size={40} /></button>
+          <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} className="shrink-0 mt-0.5"><Avatar user={m.author} size={40} /></button>
         )}
         <div className="min-w-0 flex-1">
           {!grouped && (
             <div className="flex items-baseline gap-2">
-              <button onClick={() => openModal({ kind: 'profile', userId: m.author.id })} className="font-semibold hover:underline"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
+              <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} className="font-semibold hover:underline"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
             </div>
           )}

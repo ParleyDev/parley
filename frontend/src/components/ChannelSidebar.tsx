@@ -1,4 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
+import { anchorOf } from '../lib/anchor'
 import { ChevronDown, Hash, HeadphoneOff, LogOut, MicOff, Plus, Settings, Trash2, UserPlus, Video, Volume2 } from 'lucide-react'
 import Avatar from './Avatar'
 import { useState } from 'react'
@@ -134,7 +135,7 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
         const u = users[p.user_id] ?? (me?.id === p.user_id ? me : undefined)
         if (!u) return null
         return (
-          <button key={p.user_id} onClick={() => openModal({ kind: 'profile', userId: p.user_id })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
+          <button key={p.user_id} onClick={(e) => openModal({ kind: 'profile', userId: p.user_id, anchor: anchorOf(e) })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
             <span className={`rounded-full ${speaking[p.user_id] ? 'ring-2 ring-success' : ''}`}><Avatar user={u} size={22} /></span>
             <StyledName userId={p.user_id} guildId={guildId} className="truncate flex-1">{members?.[p.user_id]?.nickname ?? u.display_name}</StyledName>
             {p.self_stream && <span className="rounded bg-danger px-1 text-[9px] font-extrabold text-white">LIVE</span>}

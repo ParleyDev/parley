@@ -34,7 +34,7 @@ export default function Modals() {
     case 'channelSettings': return <ChannelSettingsModal onClose={close} channelId={modal!.channelId} tab={modal!.tab} />
     case 'userSettings': return <UserSettingsModal onClose={close} tab={modal!.tab} />
     case 'newDm': return <NewDmModal onClose={close} />
-    case 'profile': return <ProfileModal onClose={close} userId={modal!.userId} />
+    case 'profile': return <ProfileModal onClose={close} userId={modal!.userId} anchor={modal!.anchor} />
     case 'confirm': return <ConfirmModal onClose={close} {...modal} />
     case 'image': return <ImageLightbox onClose={close} url={modal!.url} name={modal!.name} />
     case 'ban': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
