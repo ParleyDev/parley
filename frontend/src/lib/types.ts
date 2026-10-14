@@ -15,7 +15,23 @@ export interface User {
 }
 export interface PrivateUser extends User { email: string }
 /** GET /users/:id adds the servers you share with that user. */
-export interface UserProfile extends User { mutual_guilds?: Pick<Guild, 'id' | 'name' | 'icon_url'>[] }
+export interface UserProfile extends User {
+  mutual_guilds?: Pick<Guild, 'id' | 'name' | 'icon_url'>[]
+  mutual_friends?: Pick<User, 'id' | 'display_name' | 'avatar_url'>[]
+  review_count?: number
+}
+
+export interface Review {
+  id: string
+  target_id: string
+  author_id: string
+  content: string
+  created_at: string
+  updated_at: string
+  author_username: string
+  author_display_name: string
+  author_avatar_url: string | null
+}
 
 export interface Guild {
   id: string

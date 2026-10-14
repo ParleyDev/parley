@@ -218,6 +218,19 @@ impl MessageRow {
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
+pub struct Review {
+    pub id: Uuid,
+    pub target_id: Uuid,
+    pub author_id: Uuid,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub author_username: String,
+    pub author_display_name: String,
+    pub author_avatar_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
 pub struct Ban {
     pub guild_id: Uuid,
     pub user_id: Uuid,

@@ -4,14 +4,15 @@ import { matchPath, useLocation, useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
 import { api } from '../../lib/api'
 import { myGuildPerms, useStore } from '../../store'
-import type { DmChannel, UserProfile } from '../../lib/types'
+import type { DmChannel, Review, UserProfile } from '../../lib/types'
 import { has, highestPosition, P, EMPTY_ROLES } from '../../lib/perms'
 import type { Anchor } from '../../lib/anchor'
 import { colorRole, nameCss } from '../StyledName'
 import RolePicker from '../RolePicker'
 import ProfileCard, { contrastText } from '../ProfileCard'
 import ProfilePopout, { POPOUT_W } from '../ProfilePopout'
-import { colorFor, initials } from '../../lib/format'
+import { colorFor, initials, formatTime, renderMarkdown } from '../../lib/format'
+import Avatar from '../Avatar'
 
 const GAP = 8
 const PAD = 8
@@ -101,6 +102,7 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
     </>
   )
   const mutual = user.mutual_guilds ?? []
+  const friends = user.mutual_friends ?? []
   return (
     <Modal onClose={onClose} width="max-w-sm">
       <div className="-mx-6 -my-4">
@@ -110,6 +112,16 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
             <section className="w-full">
               <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">Roles</h3>
               <RolePicker guildId={inGuild} member={member} />
+            </section>
+          )}
+          {friends.length > 0 && (
+            <section data-mutual-friends>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">Mutual friends — {friends.length}</h3>
+              <ul className="space-y-1">
+                {friends.map((f) => (
+                  <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className="flex items-center gap-2 hover:underline text-left"><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={20} /><span className="truncate">{f.display_name}</span></button></li>
+                ))}
+              </ul>
             </section>
           )}
           {mutual.length > 0 && (
@@ -127,9 +139,60 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
               </ul>
             </section>
           )}
+          {!isMe && <Reviews userId={userId} light={light} />}
         </ProfileCard>
       </div>
     </Modal>
+  )
+}
+
+/** "User Reviews": short notes other users leave on a profile. One per author; author or profile owner can remove. */
+function Reviews({ userId, light }: { userId: string; light: boolean }) {
+  const me = useStore((s) => s.user)
+  const pushToast = useStore((s) => s.pushToast)
+  const [reviews, setReviews] = useState<Review[] | null>(null)
+  const [draft, setDraft] = useState('')
+  const [busy, setBusy] = useState(false)
+  useEffect(() => { api.get<Review[]>(`/users/${userId}/reviews`).then(setReviews).catch(() => setReviews([])) }, [userId])
+  const mine = reviews?.find((r) => r.author_id === me?.id)
+  const submit = async () => {
+    const content = draft.trim()
+    if (!content || busy) return
+    setBusy(true)
+    try {
+      const r = await api.put<Review>(`/users/${userId}/reviews`, { content })
+      setReviews((rs) => [r, ...(rs ?? []).filter((x) => x.author_id !== r.author_id)])
+      setDraft(''); pushToast(mine ? 'Review updated' : 'Review posted')
+    } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+  }
+  const remove = async (r: Review) => {
+    try { await api.delete(`/users/${userId}/reviews/${r.id}`); setReviews((rs) => (rs ?? []).filter((x) => x.id !== r.id)) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const field = light ? 'bg-black/35 border-white/15 text-white placeholder:text-white/60 focus:border-white/40' : 'bg-white/45 border-black/15 text-black placeholder:text-black/55 focus:border-black/40'
+  return (
+    <section data-reviews-list>
+      <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">User reviews{reviews ? ` — ${reviews.length}` : ''}</h3>
+      <div className="flex gap-2 mb-2">
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }} maxLength={500}
+          placeholder={mine ? 'Update your review' : 'Leave a review'} aria-label="Leave a review" data-review-input className={`flex-1 min-w-0 rounded-lg px-3 py-1.5 text-sm outline-none border transition ${field}`} />
+        <button onClick={submit} disabled={busy || !draft.trim()} className="btn-primary px-3! py-1.5">Post</button>
+      </div>
+      {reviews === null && <p className="opacity-70">Loading…</p>}
+      {reviews?.length === 0 && <p className="opacity-70">No reviews yet. Be the first!</p>}
+      <ul className="space-y-2">
+        {reviews?.map((r) => (
+          <li key={r.id} className="flex gap-2" data-review>
+            <Avatar user={{ id: r.author_id, display_name: r.author_display_name, avatar_url: r.author_avatar_url }} size={24} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline gap-2"><span className="font-semibold truncate">{r.author_display_name}</span><span className="text-[11px] opacity-70 shrink-0">{formatTime(r.created_at)}</span>
+                {(r.author_id === me?.id || userId === me?.id) && <button onClick={() => remove(r)} className="ml-auto text-[11px] opacity-70 hover:opacity-100 hover:underline" title="Delete review">Delete</button>}
+              </div>
+              <div className="msg-content whitespace-pre-wrap break-words leading-snug">{renderMarkdown(r.content, { blocks: false })}</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 

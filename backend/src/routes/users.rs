@@ -1,12 +1,14 @@
 use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
-    models::{PrivateUser, User},
+    models::{PrivateUser, Review, User},
+    routes::relationships::blocked_either_way,
     state::AppState,
 };
 use axum::{
     extract::{Path, Query, State},
-    routing::get,
+    http::StatusCode,
+    routing::{delete, get},
     Json, Router,
 };
 use serde::Deserialize;
@@ -20,6 +22,8 @@ pub fn router() -> Router<AppState> {
         .route("/users/@me", get(me).patch(update_me))
         .route("/users/search", get(search))
         .route("/users/:id", get(get_user))
+        .route("/users/:id/reviews", get(list_reviews).put(put_review))
+        .route("/users/:id/reviews/:rid", delete(delete_review))
 }
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent";
@@ -199,7 +203,102 @@ async fn get_user(
         .fetch_all(&state.db)
         .await?
     };
+    // Friends of both of us (relationship rows are symmetric for 'friend').
+    let friends: Vec<(Uuid, String, Option<String>)> = if me == id {
+        Vec::new()
+    } else {
+        sqlx::query_as(
+            "SELECT u.id, u.display_name, u.avatar_url FROM relationships a
+             JOIN relationships b ON b.target_id = a.target_id AND b.user_id = $2 AND b.kind = 'friend'
+             JOIN users u ON u.id = a.target_id
+             WHERE a.user_id = $1 AND a.kind = 'friend' AND a.target_id <> $2 ORDER BY u.display_name",
+        )
+        .bind(me)
+        .bind(id)
+        .fetch_all(&state.db)
+        .await?
+    };
+    let (review_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM user_reviews WHERE target_id = $1").bind(id).fetch_one(&state.db).await?;
     let mut v = json!(u);
-    v["mutual_guilds"] = serde_json::json!(mutual.into_iter().map(|(gid, name, icon)| serde_json::json!({ "id": gid, "name": name, "icon_url": icon })).collect::<Vec<_>>());
+    v["mutual_guilds"] = json!(mutual.into_iter().map(|(gid, name, icon)| json!({ "id": gid, "name": name, "icon_url": icon })).collect::<Vec<_>>());
+    v["mutual_friends"] = json!(friends.into_iter().map(|(fid, name, avatar)| json!({ "id": fid, "display_name": name, "avatar_url": avatar })).collect::<Vec<_>>());
+    v["review_count"] = json!(review_count);
     Ok(Json(v))
+}
+
+const REVIEW_COLS: &str = "r.id, r.target_id, r.author_id, r.content, r.created_at, r.updated_at, u.username AS author_username, u.display_name AS author_display_name, u.avatar_url AS author_avatar_url";
+
+async fn list_reviews(
+    State(state): State<AppState>,
+    AuthUser(_): AuthUser,
+    Path(id): Path<Uuid>,
+) -> AppResult<Json<Vec<Review>>> {
+    let rs = sqlx::query_as::<_, Review>(&format!(
+        "SELECT {REVIEW_COLS} FROM user_reviews r JOIN users u ON u.id = r.author_id WHERE r.target_id = $1 ORDER BY r.created_at DESC"
+    ))
+    .bind(id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(rs))
+}
+
+#[derive(Deserialize)]
+struct PutReview {
+    content: String,
+}
+
+/// Leave (or replace) your review on someone's profile. One per author per profile.
+async fn put_review(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<PutReview>,
+) -> AppResult<(StatusCode, Json<Review>)> {
+    if id == uid {
+        return Err(AppError::BadRequest("You cannot review yourself".into()));
+    }
+    let content = req.content.trim().to_string();
+    if content.is_empty() || content.chars().count() > 500 {
+        return Err(AppError::BadRequest("Reviews must be 1-500 characters".into()));
+    }
+    let exists: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    if exists.is_none() {
+        return Err(AppError::NotFound("User not found".into()));
+    }
+    if blocked_either_way(&state.db, uid, id).await? {
+        return Err(AppError::Forbidden);
+    }
+    let (rid,): (Uuid,) = sqlx::query_as(
+        "INSERT INTO user_reviews (id, target_id, author_id, content) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (target_id, author_id) DO UPDATE SET content = EXCLUDED.content, updated_at = now() RETURNING id",
+    )
+    .bind(Uuid::now_v7())
+    .bind(id)
+    .bind(uid)
+    .bind(&content)
+    .fetch_one(&state.db)
+    .await?;
+    let r = sqlx::query_as::<_, Review>(&format!("SELECT {REVIEW_COLS} FROM user_reviews r JOIN users u ON u.id = r.author_id WHERE r.id = $1"))
+        .bind(rid)
+        .fetch_one(&state.db)
+        .await?;
+    Ok((StatusCode::OK, Json(r)))
+}
+
+/// The author or the profile's owner may remove a review.
+async fn delete_review(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, rid)): Path<(Uuid, Uuid)>,
+) -> AppResult<StatusCode> {
+    let res = sqlx::query("DELETE FROM user_reviews WHERE id = $1 AND target_id = $2 AND (author_id = $3 OR target_id = $3)")
+        .bind(rid)
+        .bind(id)
+        .bind(uid)
+        .execute(&state.db)
+        .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound("Review not found".into()));
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
