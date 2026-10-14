@@ -59,7 +59,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
       <div className={`${compact ? 'h-20' : 'h-28'} w-full bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: 'rgba(0,0,0,0.18)' }} />
       <div className={`px-4 ${compact ? '-mt-8' : '-mt-10'} flex items-end justify-between`}>
         <div className="rounded-full ring-[6px] bg-bg-1" style={{ ['--tw-ring-color' as string]: user.theme_primary ?? colorFor(user.id) }}><Avatar user={user} size={compact ? 64 : 80} presence /></div>
-        {actions && <div className="flex gap-2 pb-1">{actions}</div>}
+        {actions && <div className="flex flex-wrap justify-end gap-2 pb-1 min-w-0 pl-3">{actions}</div>}
       </div>
       <div className="px-4 pt-3 pb-4">
         <h2 className="text-xl font-bold leading-tight truncate"><span style={nameCssFinal}>{nameOverride ?? user.display_name}</span></h2>

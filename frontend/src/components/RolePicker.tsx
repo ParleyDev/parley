@@ -1,5 +1,6 @@
 import { Check, Plus, X } from 'lucide-react'
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { api } from '../lib/api'
 import { myGuildPerms, useStore } from '../store'
 import type { Member } from '../lib/types'
@@ -14,6 +15,25 @@ export default function RolePicker({ guildId, member, compact }: { guildId: stri
   const myPerms = useStore((s) => myGuildPerms(s, guildId))
   const pushToast = useStore((s) => s.pushToast)
   const [open, setOpen] = useState(false)
+  // The popover is portalled to <body> with fixed coordinates so it escapes overflow-hidden
+  // ancestors (profile card, modal) and can flip upward when there is no room below.
+  const anchor = useRef<HTMLButtonElement>(null)
+  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number }>({ left: 0, top: 0 })
+  const place = () => {
+    const r = anchor.current?.getBoundingClientRect()
+    if (!r) return
+    const w = 224, h = 256, gap = 4, pad = 8
+    const left = Math.max(pad, Math.min(r.left, window.innerWidth - w - pad))
+    const below = window.innerHeight - r.bottom - gap
+    if (below >= Math.min(h, r.top)) setPos({ left, top: r.bottom + gap })
+    else setPos({ left, bottom: window.innerHeight - r.top + gap })
+  }
+  useLayoutEffect(() => {
+    if (!open) return
+    place()
+    window.addEventListener('resize', place); window.addEventListener('scroll', place, true)
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
+  }, [open])
   if (!guild || !me) return null
   const ctx = { guild, roles, member: myMember }
   // You may re-role someone only if you outrank them (or you are the owner), and only with roles below your own.
@@ -37,12 +57,12 @@ export default function RolePicker({ guildId, member, compact }: { guildId: stri
       ))}
       {mine.length === 0 && !canEdit && <span className="text-xs text-text-2">No roles</span>}
       {canEdit && assignable.length > 0 && (
-        <button onClick={() => setOpen((o) => !o)} className={`rounded-md border border-line bg-bg-3 text-text-1 hover:text-text-0 flex items-center justify-center ${compact ? 'h-4 w-5' : 'h-5 w-6'}`} title="Add role"><Plus size={12} /></button>
+        <button ref={anchor} onClick={() => setOpen((o) => !o)} className={`rounded-md border border-line bg-bg-3 text-text-1 hover:text-text-0 flex items-center justify-center ${compact ? 'h-4 w-5' : 'h-5 w-6'}`} title="Add role"><Plus size={12} /></button>
       )}
-      {open && (
+      {open && createPortal(
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="pop absolute left-0 top-full mt-1 z-40 w-56 max-h-64 overflow-y-auto rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5">
+          <div className="fixed inset-0 z-[60]" onClick={() => setOpen(false)} />
+          <div className="pop fixed z-[70] w-56 max-h-64 overflow-y-auto rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5 text-text-0" style={pos} data-role-picker>
             {assignable.map((r) => {
               const on = member.roles.includes(r.id)
               return (
@@ -54,7 +74,8 @@ export default function RolePicker({ guildId, member, compact }: { guildId: stri
               )
             })}
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </div>
   )
