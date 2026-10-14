@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
 import { myGuildPerms, useStore } from '../store'
-import type { DmChannel, Guild, Member, User } from '../lib/types'
+import type { DmChannel, Guild, Member, UserProfile } from '../lib/types'
 import { has, highestPosition, P, EMPTY_ROLES } from '../lib/perms'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import { QUICK_EMOJI } from '../lib/emoji'
@@ -14,7 +14,7 @@ import { nameCss, colorRole } from './StyledName'
 export const POPOUT_W = 300
 
 interface Props {
-  user: User & { mutual_guilds?: Pick<Guild, 'id' | 'name' | 'icon_url'>[] }
+  user: UserProfile
   /** Server the popout was opened in, if any. */
   guildId?: string
   onClose: () => void
@@ -93,6 +93,8 @@ export default function ProfilePopout({ user, guildId, onClose }: Props) {
     : null)
 
   const mutual = user.mutual_guilds ?? []
+  const friends = user.mutual_friends ?? []
+  const reviewCount = user.review_count ?? 0
   const inviteTargets = myGuilds.filter((g) => !mutual.some((m) => m.id === g.id))
   const nickname = member?.nickname ?? null
 
@@ -146,24 +148,41 @@ export default function ProfilePopout({ user, guildId, onClose }: Props) {
             <span style={nameStyle}>{nickname ?? user.display_name}</span>
             {guild?.owner_id === user.id && <Crown size={16} className="text-warn shrink-0" />}
           </h2>
-          <p className="text-sm leading-[18px] truncate">
-            {nickname && nickname !== user.display_name ? <span>{user.display_name} <span className="opacity-60">•</span> </span> : null}
-            <span>{user.username}</span>
-            {user.pronouns ? <span> <span className="opacity-60">•</span> {user.pronouns}</span> : null}
+          {/* Like Discord: "username • pronouns" wraps so long pronouns drop to their own line. */}
+          <p className="text-sm leading-[18px] flex flex-wrap gap-x-1 break-words">
+            {nickname && nickname !== user.display_name ? <><span>{user.display_name}</span><span className="opacity-60">•</span></> : null}
+            <span className="break-all">{user.username}</span>
+            {user.pronouns ? <><span className="opacity-60">•</span><span>{user.pronouns}</span></> : null}
           </p>
         </div>
+        {(friends.length > 0 || mutual.length > 0) && (
+          <button onClick={fullProfile} className="flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px] leading-4 text-[#b5bac1] hover:text-[#dbdee1]" data-mutual>
+            {friends.length > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="flex -space-x-2">{friends.slice(0, 3).map((f) => <span key={f.id} className="rounded-full ring-2 ring-[#232428]"><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={16} /></span>)}</span>
+                <span>{friends.length} Mutual Friend{friends.length === 1 ? '' : 's'}</span>
+              </span>
+            )}
+            {friends.length > 0 && mutual.length > 0 && <span className="opacity-60">•</span>}
+            {mutual.length > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="flex -space-x-2">{mutual.slice(0, 3).map((g) => <GuildDot key={g.id} g={g} ring />)}</span>
+                <span>{mutual.length} Mutual Server{mutual.length === 1 ? '' : 's'}</span>
+              </span>
+            )}
+          </button>
+        )}
         {user.bio && (
           <div>
-            <div ref={bioRef} className="msg-content text-sm leading-[18px] whitespace-pre-wrap break-words line-clamp-3" data-bio>{renderMarkdown(user.bio, { blocks: false })}</div>
-            {bioClamped && <button onClick={fullProfile} className="mt-1 text-xs text-[#dbdee1] hover:underline" data-view-full-bio>View Full Bio</button>}
+            <div ref={bioRef} className="msg-content text-sm leading-[18px] whitespace-pre-wrap break-words overflow-hidden max-h-[54px]" data-bio>{renderMarkdown(user.bio, { blocks: false })}</div>
+            {bioClamped && <div className="text-sm leading-[18px] text-[#b5bac1]" aria-hidden>…</div>}
+            {bioClamped && <button onClick={fullProfile} className="mt-3 block text-xs font-medium text-[#dbdee1] hover:underline" data-view-full-bio>View Full Bio</button>}
           </div>
         )}
-        {mutual.length > 0 && (
-          <button onClick={fullProfile} className="flex items-center gap-2 text-sm hover:underline" data-mutual>
-            <span className="flex -space-x-1.5">
-              {mutual.slice(0, 3).map((g) => <GuildDot key={g.id} g={g} ring />)}
-            </span>
-            <span>{mutual.length} Mutual Server{mutual.length === 1 ? '' : 's'}</span>
+        {!isMe && (
+          <button onClick={fullProfile} className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold text-left hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-reviews>
+            <span>User Reviews</span>
+            <span className="font-normal text-[#b5bac1]">{reviewCount === 0 ? 'No reviews yet' : `${reviewCount} review${reviewCount === 1 ? '' : 's'}`}</span>
           </button>
         )}
         {!isMe && rel !== 'blocked' && (
