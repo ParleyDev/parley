@@ -127,6 +127,7 @@ pub struct MessageRow {
     pub sticker_id: Option<Uuid>,
     pub sticker_name: Option<String>,
     pub sticker_animated: Option<bool>,
+    pub forwarded_from: Option<Uuid>,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -158,6 +159,8 @@ pub struct Message {
     pub reactions: Vec<Reaction>,
     pub attachments: Vec<Attachment>,
     pub sticker: Option<MessageSticker>,
+    /// Set when this message was forwarded from another (the original's id, which may since be deleted).
+    pub forwarded_from: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -221,6 +224,7 @@ impl MessageRow {
             created_at: self.created_at,
             edited_at: self.edited_at,
             pinned_at: self.pinned_at,
+            forwarded_from: self.forwarded_from,
             sticker: self.sticker_id.map(|id| MessageSticker {
                 id,
                 name: self.sticker_name.clone().unwrap_or_default(),

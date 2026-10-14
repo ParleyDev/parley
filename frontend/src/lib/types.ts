@@ -122,6 +122,7 @@ export interface Message {
   reactions: Reaction[]
   attachments: Attachment[]
   sticker?: MessageSticker | null
+  forwarded_from?: string | null
 }
 
 /** A server custom emoji; `url` serves the image, `id` doubles as the image id. */

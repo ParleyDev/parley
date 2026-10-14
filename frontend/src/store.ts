@@ -21,6 +21,7 @@ export type ModalKind =
   | { kind: 'ban'; guildId: string; userId: string }
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
   | { kind: 'customStatus' }
+  | { kind: 'forward'; message: Message }
 
 export interface ReadyPayload {
   user: PrivateUser
@@ -29,6 +30,7 @@ export interface ReadyPayload {
   roles: Role[]
   emojis?: Emoji[]
   stickers?: Sticker[]
+  bookmarks?: string[]
   me_members: Member[]
   dm_channels: DmChannel[]
   relationships?: Relationship[]
@@ -61,6 +63,8 @@ interface State {
   /** Custom emoji and stickers per server, sorted by name. */
   emojis: Record<string, Emoji[]>
   stickers: Record<string, Sticker[]>
+  /** Message ids the user has bookmarked. */
+  bookmarks: Record<string, true>
   messages: Record<string, Message[]>
   hasMore: Record<string, boolean>
   loadingMessages: Record<string, boolean>
@@ -107,6 +111,7 @@ interface State {
   upsertGuild: (g: Guild & { channels?: Channel[]; roles?: Role[]; emojis?: Emoji[]; stickers?: Sticker[] }) => void
   setGuildEmojis: (guildId: string, emojis: Emoji[]) => void
   setGuildStickers: (guildId: string, stickers: Sticker[]) => void
+  setBookmark: (messageId: string, on: boolean) => void
   upsertRelationship: (r: Relationship) => void
   removeRelationship: (userId: string) => void
   upsertRole: (r: Role) => void
@@ -184,6 +189,7 @@ export const useStore = create<State>((set, get) => ({
   roles: {},
   emojis: {},
   stickers: {},
+  bookmarks: {},
   messages: {},
   hasMore: {},
   loadingMessages: {},
@@ -222,7 +228,7 @@ export const useStore = create<State>((set, get) => ({
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], channels: {}, dms: {}, relationships: {},
-      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
+      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {},
     })
   },
@@ -259,9 +265,11 @@ export const useStore = create<State>((set, get) => ({
     // Seed our own member row per guild so permission checks work before the full member list loads.
     const members: Record<string, Record<string, Member>> = {}
     ;(r.me_members ?? []).forEach((m) => { members[m.guild_id] = { [m.user_id]: m } })
+    const bookmarks: Record<string, true> = {}
+    ;(r.bookmarks ?? []).forEach((id) => (bookmarks[id] = true))
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
-      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers,
+      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events.
       messages: {}, hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
@@ -281,6 +289,7 @@ export const useStore = create<State>((set, get) => ({
   }),
   setGuildEmojis: (guildId, emojis) => set((s) => ({ emojis: { ...s.emojis, [guildId]: emojis } })),
   setGuildStickers: (guildId, stickers) => set((s) => ({ stickers: { ...s.stickers, [guildId]: stickers } })),
+  setBookmark: (messageId, on) => set((s) => { const bookmarks = { ...s.bookmarks }; if (on) bookmarks[messageId] = true; else delete bookmarks[messageId]; return { bookmarks } }),
   upsertRelationship: (r) => set((s) => ({ relationships: { ...s.relationships, [r.user.id]: r }, users: { ...s.users, [r.user.id]: r.user } })),
   removeRelationship: (userId) => set((s) => { const relationships = { ...s.relationships }; delete relationships[userId]; return { relationships } }),
   upsertRole: (r) => set((s) => ({ roles: { ...s.roles, [r.guild_id]: { ...(s.roles[r.guild_id] ?? {}), [r.id]: r } } })),
