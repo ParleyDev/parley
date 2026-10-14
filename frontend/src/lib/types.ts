@@ -14,6 +14,8 @@ export interface User {
   name_accent: string | null
 }
 export interface PrivateUser extends User { email: string }
+/** GET /users/:id adds the servers you share with that user. */
+export interface UserProfile extends User { mutual_guilds?: Pick<Guild, 'id' | 'name' | 'icon_url'>[] }
 
 export interface Guild {
   id: string

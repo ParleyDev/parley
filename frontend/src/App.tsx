@@ -7,6 +7,7 @@ import AuthPage from './pages/Auth'
 import AppShell from './pages/AppShell'
 import InvitePage from './pages/Invite'
 import Toasts from './components/Toasts'
+import { useParams } from 'react-router-dom'
 
 export default function App() {
   const token = useStore((s) => s.token)
@@ -29,11 +30,20 @@ export default function App() {
           path="/channels/*"
           element={token ? (ready ? <AppShell /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />}
         />
+        <Route path="/users/:userId" element={token ? (ready ? <ProfileLink /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="*" element={<Navigate to={token ? '/channels/@me' : '/login'} replace />} />
       </Routes>
       <Toasts />
     </>
   )
+}
+
+/** /users/:id (the "Copy Profile Link" target): open the app with that profile showing. */
+function ProfileLink() {
+  const { userId = '' } = useParams()
+  const openModal = useStore((s) => s.openModal)
+  useEffect(() => { if (userId) openModal({ kind: 'profile', userId }) }, [userId, openModal])
+  return <Navigate to="/channels/@me" replace />
 }
 
 function Splash() {
