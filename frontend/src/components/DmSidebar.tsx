@@ -1,4 +1,6 @@
-import { Plus, Users } from 'lucide-react'
+import { MailCheck, Plus, Users } from 'lucide-react'
+import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
+import { useUserMenu } from './UserContextMenu'
 import { NavLink } from 'react-router-dom'
 import { isUnread, pendingCount, useStore } from '../store'
 import Avatar from './Avatar'
@@ -13,6 +15,14 @@ export default function DmSidebar() {
   const openModal = useStore((s) => s.openModal)
   const setMobilePane = useStore((s) => s.setMobilePane)
   const pending = useStore(pendingCount)
+  const markRead = useStore((s) => s.markRead)
+  const ctx = useContextMenu()
+  const userMenu = useUserMenu(null)
+  const dmMenu = (id: string, other: { id: string; display_name: string } | undefined, e: React.MouseEvent<HTMLElement>): MenuEntry[] => [
+    { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !isUnread({ readStates, lastMessageId }, id), onClick: () => markRead(id) },
+    'sep',
+    ...(other ? userMenu(other, e.currentTarget.getBoundingClientRect()) : []),
+  ]
   const list = Object.values(dms).sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at))
 
   return (
@@ -34,7 +44,7 @@ export default function DmSidebar() {
             const other = d.recipients[0] ? { ...d.recipients[0], ...users[d.recipients[0].id] } : undefined
             const unread = isUnread({ readStates, lastMessageId }, d.id)
             return (
-              <NavLink key={d.id} to={`/channels/@me/${d.id}`} onClick={() => setMobilePane('content')} className={({ isActive }) => `group flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+              <NavLink key={d.id} to={`/channels/@me/${d.id}`} onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, dmMenu(d.id, other, e))} data-dm-row={other?.id} className={({ isActive }) => `group flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
                 {other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
                 {other ? (
                   <span className="min-w-0 flex-1 leading-tight">
@@ -50,6 +60,7 @@ export default function DmSidebar() {
         </div>
       </div>
       <UserPanel />
+      {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
     </aside>
   )
 }

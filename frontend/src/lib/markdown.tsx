@@ -1,7 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 import hljs from 'highlight.js/lib/core'
-import { CUSTOM_TOKEN_SRC, customUrl, parseCustom } from './emoji'
+import { CUSTOM_TOKEN_SRC, PICTO_SRC, customUrl, parseCustom } from './emoji'
 import javascript from 'highlight.js/lib/languages/javascript'
 import typescript from 'highlight.js/lib/languages/typescript'
 import json from 'highlight.js/lib/languages/json'
@@ -144,6 +144,7 @@ const INLINE_SRC = [
   '\\[[^\\]\\n]+\\]\\(https?:\\/\\/[^\\s)]+\\)', // masked link
   '<https?:\\/\\/[^\\s>]+>',                    // bracketed link
   'https?:\\/\\/[^\\s<]+',                      // bare url
+  PICTO_SRC,                                    // unicode emoji (wrapped for the hover tooltip)
 ].join('|')
 
 export function renderInline(text: string): ReactNode[] {
@@ -151,7 +152,7 @@ export function renderInline(text: string): ReactNode[] {
   let last = 0
   let m: RegExpExecArray | null
   // Fresh regex per call: this recurses and a shared global regex's lastIndex would be clobbered.
-  const re = new RegExp(INLINE_SRC, 'g')
+  const re = new RegExp(INLINE_SRC, 'gu')
   let k = 0
   while ((m = re.exec(text))) {
     if (m.index > last) nodes.push(text.slice(last, m.index))
@@ -176,6 +177,8 @@ export function renderInline(text: string): ReactNode[] {
     } else if (t.startsWith('<')) {
       const url = t.slice(1, -1)
       nodes.push(<a key={k} href={url} target="_blank" rel="noopener noreferrer">{url}</a>)
+    } else if (!/^https?:/.test(t)) {
+      nodes.push(<span key={k} className="uemoji" data-emoji={t}>{t}</span>)
     } else {
       // Trailing punctuation is rarely part of a pasted URL.
       const trimmed = t.replace(/[.,;:!?'"]+$/, '').replace(/\)+$/, (p) => (t.includes('(') ? p : ''))

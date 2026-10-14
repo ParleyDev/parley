@@ -5,6 +5,8 @@ import type { Member, Role } from '../lib/types'
 import { hoistRole, sortedRoles, EMPTY_ROLES } from '../lib/perms'
 import StyledName from './StyledName'
 import Avatar from './Avatar'
+import ContextMenu, { useContextMenu } from './ContextMenu'
+import { useUserMenu } from './UserContextMenu'
 
 export default function MemberList({ guildId }: { guildId: string }) {
   const members = useStore((s) => s.members[guildId])
@@ -15,6 +17,8 @@ export default function MemberList({ guildId }: { guildId: string }) {
   const openModal = useStore((s) => s.openModal)
   const open = useStore((s) => s.membersOpen)
   const setOpen = useStore((s) => s.setMembersOpen)
+  const ctx = useContextMenu()
+  const userMenu = useUserMenu(guildId)
   const list = Object.values(members ?? {}).sort((a, b) => (a.nickname ?? a.display_name).localeCompare(b.nickname ?? b.display_name))
   const visible = (id: string) => online[id] && (users[id]?.status ?? '') !== 'invisible'
 
@@ -35,7 +39,7 @@ export default function MemberList({ guildId }: { guildId: string }) {
   const Row = ({ m, dim }: { m: Member; dim?: boolean }) => {
     const status = users[m.user_id]?.custom_status ?? m.custom_status ?? ''
     return (
-      <button onClick={(e) => openModal({ kind: 'profile', userId: m.user_id, anchor: anchorOf(e) })} className={`w-full flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3 text-left ${dim ? 'opacity-40 hover:opacity-100' : ''}`}>
+      <button onClick={(e) => openModal({ kind: 'profile', userId: m.user_id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu({ id: m.user_id, display_name: m.display_name, nickname: m.nickname }, e.currentTarget.getBoundingClientRect()))} data-member-row={m.user_id} className={`w-full flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3 text-left ${dim ? 'opacity-40 hover:opacity-100' : ''}`}>
         <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={32} presence />
         <span className="min-w-0 flex-1 leading-tight">
           <span className="flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId} className="truncate text-[15px] font-medium text-text-1">{m.nickname ?? m.display_name}</StyledName>{guild?.owner_id === m.user_id && <Crown size={14} className="text-warn shrink-0" />}</span>
@@ -58,6 +62,7 @@ export default function MemberList({ guildId }: { guildId: string }) {
           <div className="space-y-0.5">{g.members.map((m) => <Row key={m.user_id} m={m} dim={g.key === 'offline'} />)}</div>
         </div>
       ))}
+      {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
     </aside>
   )
 }

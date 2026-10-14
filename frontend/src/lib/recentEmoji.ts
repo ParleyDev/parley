@@ -1,7 +1,7 @@
 import { STORAGE_PREFIX } from './brand'
 
 const KEY = `${STORAGE_PREFIX}recentEmoji`
-const DEFAULT = ['❤️', '👍', '😂']
+const DEFAULT = ['❤️', '👍', '😂', '🔥', '👀', '🎉']
 
 function load(): Record<string, number> {
   try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} }
