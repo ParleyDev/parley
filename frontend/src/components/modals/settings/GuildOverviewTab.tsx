@@ -1,0 +1,39 @@
+import { useState, type FormEvent } from 'react'
+import ImagePicker from '../ImagePicker'
+import { api } from '../../../lib/api'
+import { useStore } from '../../../store'
+import type { Guild } from '../../../lib/types'
+
+export default function GuildOverviewTab({ guildId }: { guildId: string }) {
+  const guild = useStore((s) => s.guilds[guildId])
+  const upsertGuild = useStore((s) => s.upsertGuild)
+  const pushToast = useStore((s) => s.pushToast)
+  const [name, setName] = useState(guild?.name ?? '')
+  const [icon, setIcon] = useState<string | null>(guild?.icon_url ?? null)
+  const [busy, setBusy] = useState(false)
+  if (!guild) return null
+  const dirty = name !== guild.name || (icon ?? null) !== (guild.icon_url ?? null)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault(); setBusy(true)
+    try {
+      const g = await api.patch<Guild>(`/guilds/${guildId}`, { name, icon_url: icon ?? '' })
+      upsertGuild(g); pushToast('Server updated')
+    } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+  }
+  return (
+    <form onSubmit={submit} className="space-y-6">
+      <h1 className="text-xl font-bold">Server Overview</h1>
+      <div className="flex items-start gap-6 max-md:flex-col">
+        <ImagePicker value={icon} onChange={setIcon} label={name} id={guildId} />
+        <div className="flex-1 w-full"><label className="label">Server name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
+      </div>
+      {dirty && (
+        <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
+          <span className="text-sm flex-1">Careful — you have unsaved changes!</span>
+          <button type="button" className="btn-ghost" onClick={() => { setName(guild.name); setIcon(guild.icon_url) }}>Reset</button>
+          <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !name.trim()}>Save Changes</button>
+        </div>
+      )}
+    </form>
+  )
+}

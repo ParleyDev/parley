@@ -2,6 +2,8 @@ use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
     models::{Channel, Guild, Invite, Member},
+    perms,
+    routes::roles::{attach_roles, create_everyone},
     routes::users::validate_image,
     state::AppState,
 };
@@ -53,14 +55,16 @@ pub async fn require_owner(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppRes
 }
 
 pub async fn fetch_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Member> {
-    Ok(sqlx::query_as::<_, Member>(
+    let mut m = sqlx::query_as::<_, Member>(
         "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
     )
     .bind(guild_id)
     .bind(user_id)
     .fetch_one(db)
-    .await?)
+    .await?;
+    attach_roles(db, std::slice::from_mut(&mut m)).await?;
+    Ok(m)
 }
 
 async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Guild>>> {
@@ -107,6 +111,7 @@ async fn create_guild(
         .bind(uid)
         .execute(&mut *tx)
         .await?;
+    create_everyone(&mut tx, gid).await?;
     let channels = vec![
         sqlx::query_as::<_, Channel>(&format!(
             "INSERT INTO channels (id, guild_id, name, kind, position) VALUES ($1, $2, 'general', 'text', 0) RETURNING {CHANNEL_COLS}"
@@ -125,8 +130,9 @@ async fn create_guild(
     ];
     tx.commit().await?;
 
+    let roles = perms::list_roles(&state.db, gid).await?;
     let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "owner_id": guild.owner_id,
-        "created_at": guild.created_at, "channels": channels });
+        "created_at": guild.created_at, "channels": channels, "roles": roles });
     state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
     Ok((StatusCode::CREATED, Json(payload)))
 }
@@ -151,7 +157,8 @@ async fn update_guild(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateGuild>,
 ) -> AppResult<Json<Guild>> {
-    require_owner(&state.db, id, uid).await?;
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::MANAGE_GUILD)?;
     if let Some(n) = &req.name {
         if n.trim().is_empty() || n.len() > 100 {
             return Err(AppError::BadRequest("Server name must be 1-100 characters".into()));
@@ -191,13 +198,7 @@ async fn list_channels(
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<Vec<Channel>>> {
     require_member(&state.db, id, uid).await?;
-    let cs = sqlx::query_as::<_, Channel>(&format!(
-        "SELECT {CHANNEL_COLS} FROM channels WHERE guild_id = $1 ORDER BY position, created_at"
-    ))
-    .bind(id)
-    .fetch_all(&state.db)
-    .await?;
-    Ok(Json(cs))
+    Ok(Json(perms::visible_channels(&state.db, id, uid).await?))
 }
 
 #[derive(Deserialize)]
@@ -213,7 +214,8 @@ async fn create_channel(
     Path(id): Path<Uuid>,
     Json(req): Json<CreateChannel>,
 ) -> AppResult<(StatusCode, Json<Channel>)> {
-    require_member(&state.db, id, uid).await?;
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::MANAGE_CHANNELS)?;
     let kind = req.kind.unwrap_or_else(|| "text".into());
     if !["text", "voice"].contains(&kind.as_str()) {
         return Err(AppError::BadRequest("kind must be text or voice".into()));
@@ -234,7 +236,8 @@ async fn create_channel(
     .bind(pos)
     .fetch_one(&state.db)
     .await?;
-    state.hub.emit_guild(id, "CHANNEL_CREATE", json!(c));
+    let target = perms::channel_audience(&state.db, &c).await?;
+    state.hub.emit(target, "CHANNEL_CREATE", json!(c));
     Ok((StatusCode::CREATED, Json(c)))
 }
 
@@ -256,13 +259,14 @@ async fn list_members(
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<Vec<Member>>> {
     require_member(&state.db, id, uid).await?;
-    let ms = sqlx::query_as::<_, Member>(
+    let mut ms = sqlx::query_as::<_, Member>(
         "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 ORDER BY u.display_name",
     )
     .bind(id)
     .fetch_all(&state.db)
     .await?;
+    attach_roles(&state.db, &mut ms).await?;
     Ok(Json(ms))
 }
 
@@ -284,9 +288,13 @@ async fn kick_member(
     AuthUser(uid): AuthUser,
     Path((id, target)): Path<(Uuid, Uuid)>,
 ) -> AppResult<StatusCode> {
-    require_owner(&state.db, id, uid).await?;
+    let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::KICK_MEMBERS)?;
     if target == uid {
         return Err(AppError::BadRequest("Cannot kick yourself".into()));
+    }
+    if !ctx.outranks_member(uid, target) {
+        return Err(AppError::Forbidden);
     }
     remove_member(&state, id, target).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -301,6 +309,11 @@ async fn remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppRe
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("Member not found".into()));
     }
+    sqlx::query("DELETE FROM channel_overwrites WHERE target_kind = 'member' AND target_id = $1 AND channel_id IN (SELECT id FROM channels WHERE guild_id = $2)")
+        .bind(user_id)
+        .bind(guild_id)
+        .execute(&state.db)
+        .await?;
     state.hub.voice_evict(|v| v.guild_id == guild_id && v.user_id == user_id);
     let payload = json!({ "guild_id": guild_id, "user_id": user_id });
     state.hub.emit_guild(guild_id, "GUILD_MEMBER_REMOVE", payload.clone());
@@ -320,7 +333,8 @@ async fn create_invite(
     Path(id): Path<Uuid>,
     Json(req): Json<CreateInvite>,
 ) -> AppResult<(StatusCode, Json<Invite>)> {
-    require_member(&state.db, id, uid).await?;
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::CREATE_INVITE)?;
     let code: String = rand::thread_rng().sample_iter(&Alphanumeric).take(8).map(char::from).collect();
     let inv = sqlx::query_as::<_, Invite>(
         "INSERT INTO invites (code, guild_id, creator_id, max_uses) VALUES ($1, $2, $3, $4)
@@ -340,7 +354,8 @@ async fn list_invites(
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<Vec<Invite>>> {
-    require_member(&state.db, id, uid).await?;
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::MANAGE_GUILD)?;
     let invs = sqlx::query_as::<_, Invite>(
         "SELECT code, guild_id, creator_id, uses, max_uses, created_at FROM invites WHERE guild_id = $1 ORDER BY created_at DESC",
     )

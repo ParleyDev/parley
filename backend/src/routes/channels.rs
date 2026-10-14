@@ -2,7 +2,8 @@ use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
     models::{Channel, Message, MessageRow, Pagination, Reaction},
-    routes::guilds::{normalize_channel_name, require_member, CHANNEL_COLS},
+    perms::{self, has},
+    routes::guilds::{normalize_channel_name, CHANNEL_COLS},
     state::AppState,
     ws::hub::Target,
 };
@@ -26,18 +27,30 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/messages/:mid/reactions/:emoji", put(add_reaction).delete(remove_reaction))
         .route("/channels/:id/typing", post(typing))
         .route("/channels/:id/read", put(mark_read))
+        .route("/channels/:id/permissions/:target", put(set_overwrite).delete(delete_overwrite))
 }
 
 /// Verify the user can access the channel. Returns the channel.
 pub async fn require_channel(db: &PgPool, channel_id: Uuid, user_id: Uuid) -> AppResult<Channel> {
-    let c = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1"))
+    Ok(require_channel_perms(db, channel_id, user_id).await?.0)
+}
+
+/// Channel (with overwrites) plus the caller's effective permissions in it.
+/// Guild channels the caller cannot view are reported as not found. DMs grant everything to their members.
+pub async fn require_channel_perms(db: &PgPool, channel_id: Uuid, user_id: Uuid) -> AppResult<(Channel, u64)> {
+    let mut c = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1"))
         .bind(channel_id)
         .fetch_optional(db)
         .await?
         .ok_or_else(|| AppError::NotFound("Channel not found".into()))?;
     match c.guild_id {
-        Some(g) => {
-            require_member(db, g, user_id).await?;
+        Some(_) => {
+            perms::attach_overwrites(db, std::slice::from_mut(&mut c)).await?;
+            let (_, p) = perms::channel_perms(db, &c, user_id).await.map_err(|_| AppError::NotFound("Channel not found".into()))?;
+            if !has(p, perms::VIEW_CHANNEL) {
+                return Err(AppError::NotFound("Channel not found".into()));
+            }
+            Ok((c, p))
         }
         None => {
             let ok: Option<(bool,)> =
@@ -49,20 +62,14 @@ pub async fn require_channel(db: &PgPool, channel_id: Uuid, user_id: Uuid) -> Ap
             if ok.is_none() {
                 return Err(AppError::NotFound("Channel not found".into()));
             }
+            Ok((c, perms::ALL))
         }
     }
-    Ok(c)
-}
-
-/// Compute the fan-out target for events in this channel.
-pub async fn channel_target(db: &PgPool, channel_id: Uuid, user_id: Uuid) -> AppResult<Target> {
-    let c = require_channel(db, channel_id, user_id).await?;
-    target_for(db, &c).await
 }
 
 pub async fn target_for(db: &PgPool, c: &Channel) -> AppResult<Target> {
     match c.guild_id {
-        Some(g) => Ok(Target::Guild(g)),
+        Some(_) => perms::channel_audience(db, c).await,
         None => {
             let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT user_id FROM channel_members WHERE channel_id = $1")
                 .bind(c.id)
@@ -93,15 +100,16 @@ async fn update_channel(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateChannel>,
 ) -> AppResult<Json<Channel>> {
-    let c = require_channel(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     if c.guild_id.is_none() {
         return Err(AppError::BadRequest("Cannot edit DM channels".into()));
     }
+    perms::check(p, perms::MANAGE_CHANNELS)?;
     let name = match req.name {
         Some(n) => Some(normalize_channel_name(&n, &c.kind)?),
         None => None,
     };
-    let c = sqlx::query_as::<_, Channel>(&format!(
+    let mut updated = sqlx::query_as::<_, Channel>(&format!(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic) WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
@@ -109,8 +117,10 @@ async fn update_channel(
     .bind(req.topic.map(|t| t.chars().take(1024).collect::<String>()))
     .fetch_one(&state.db)
     .await?;
-    state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(c));
-    Ok(Json(c))
+    updated.overwrites = c.overwrites;
+    let target = perms::channel_audience(&state.db, &updated).await?;
+    state.hub.emit(target, "CHANNEL_UPDATE", json!(updated));
+    Ok(Json(updated))
 }
 
 async fn delete_channel(
@@ -118,8 +128,9 @@ async fn delete_channel(
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<StatusCode> {
-    let c = require_channel(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("Cannot delete DM channels".into()))?;
+    perms::check(p, perms::MANAGE_CHANNELS)?;
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM channels WHERE guild_id = $1 AND kind = 'text'")
         .bind(gid)
         .fetch_one(&state.db)
@@ -219,7 +230,8 @@ async fn create_message(
     Path(id): Path<Uuid>,
     Json(req): Json<CreateMessage>,
 ) -> AppResult<(StatusCode, Json<Message>)> {
-    let c = require_channel(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::SEND_MESSAGES)?;
     let content = req.content.trim_end().to_string();
     if content.trim().is_empty() || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
@@ -298,16 +310,10 @@ async fn delete_message(
     AuthUser(uid): AuthUser,
     Path((id, mid)): Path<(Uuid, Uuid)>,
 ) -> AppResult<StatusCode> {
-    let c = require_channel(&state.db, id, uid).await?;
-    // Author or guild owner may delete.
-    let is_owner = match c.guild_id {
-        Some(g) => {
-            let (owner,): (Uuid,) = sqlx::query_as("SELECT owner_id FROM guilds WHERE id = $1").bind(g).fetch_one(&state.db).await?;
-            owner == uid
-        }
-        None => false,
-    };
-    let res = if is_owner {
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    // Author, or anyone who may manage messages in this channel.
+    let moderator = c.guild_id.is_some() && has(p, perms::MANAGE_MESSAGES);
+    let res = if moderator {
         sqlx::query("DELETE FROM messages WHERE id = $1 AND channel_id = $2").bind(mid).bind(id)
     } else {
         sqlx::query("DELETE FROM messages WHERE id = $1 AND channel_id = $2 AND author_id = $3").bind(mid).bind(id).bind(uid)
@@ -331,7 +337,8 @@ async fn add_reaction(
     AuthUser(uid): AuthUser,
     Path((id, mid, emoji)): Path<(Uuid, Uuid, String)>,
 ) -> AppResult<StatusCode> {
-    let c = require_channel(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::ADD_REACTIONS)?;
     if !valid_emoji(&emoji) {
         return Err(AppError::BadRequest("Invalid emoji".into()));
     }
@@ -365,8 +372,89 @@ async fn typing(
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<StatusCode> {
-    let target = channel_target(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::SEND_MESSAGES)?;
+    let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "TYPING_START", json!({ "channel_id": id, "user_id": uid }));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct SetOverwrite {
+    kind: String,
+    allow: i64,
+    deny: i64,
+}
+
+/// Create or replace a permission overwrite for a role or member on a guild channel.
+async fn set_overwrite(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, target)): Path<(Uuid, Uuid)>,
+    Json(req): Json<SetOverwrite>,
+) -> AppResult<StatusCode> {
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("DM channels have no permissions".into()))?;
+    perms::check(p, perms::MANAGE_ROLES)?;
+    if !["role", "member"].contains(&req.kind.as_str()) {
+        return Err(AppError::BadRequest("kind must be role or member".into()));
+    }
+    let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
+    if req.kind == "role" {
+        let role = ctx.roles.get(&target).ok_or_else(|| AppError::NotFound("Role not found".into()))?;
+        if !ctx.outranks_role(uid, role) {
+            return Err(AppError::Forbidden);
+        }
+    } else if !ctx.is_member(target) {
+        return Err(AppError::NotFound("Member not found".into()));
+    }
+    let allow = (req.allow as u64) & perms::ALL;
+    let deny = (req.deny as u64) & perms::ALL & !allow;
+    // Only touch bits you hold here yourself (admins hold all).
+    let existing = c.overwrites.iter().find(|o| o.target_id == target);
+    let (old_allow, old_deny) = existing.map(|o| (o.allow as u64, o.deny as u64)).unwrap_or((0, 0));
+    if ((old_allow ^ allow) | (old_deny ^ deny)) & !p != 0 {
+        return Err(AppError::Forbidden);
+    }
+    let before = perms::visibility(&state.db, gid).await?;
+    sqlx::query(
+        "INSERT INTO channel_overwrites (channel_id, target_id, target_kind, allow, deny) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (channel_id, target_id) DO UPDATE SET target_kind = EXCLUDED.target_kind, allow = EXCLUDED.allow, deny = EXCLUDED.deny",
+    )
+    .bind(id)
+    .bind(target)
+    .bind(&req.kind)
+    .bind(allow as i64)
+    .bind(deny as i64)
+    .execute(&state.db)
+    .await?;
+    perms::resync_visibility(&state, gid, &before).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_overwrite(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, target)): Path<(Uuid, Uuid)>,
+) -> AppResult<StatusCode> {
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("DM channels have no permissions".into()))?;
+    perms::check(p, perms::MANAGE_ROLES)?;
+    let existing = c.overwrites.iter().find(|o| o.target_id == target).ok_or_else(|| AppError::NotFound("Overwrite not found".into()))?;
+    if ((existing.allow as u64) | (existing.deny as u64)) & !p != 0 {
+        return Err(AppError::Forbidden);
+    }
+    if existing.target_kind == "role" {
+        let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
+        if let Some(role) = ctx.roles.get(&target) {
+            if !ctx.outranks_role(uid, role) {
+                return Err(AppError::Forbidden);
+            }
+        }
+    }
+    let before = perms::visibility(&state.db, gid).await?;
+    sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_id = $2").bind(id).bind(target).execute(&state.db).await?;
+    perms::resync_visibility(&state, gid, &before).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

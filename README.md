@@ -21,7 +21,8 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 ## Features
 
 - Accounts: register, log in (JWT), profile (display name, bio, avatar upload), presence status (online / idle / dnd / invisible)
-- Servers: create, rename, icon, delete, leave, kick (owner), invite links (`/invite/<code>`, optional max uses)
+- Servers: create, rename, icon, delete, leave, kick, invite links (`/invite/<code>`, optional max uses)
+- Roles & permissions (Server Settings → Roles / Members): Discord-style roles with colour, hoisting and a permission bitfield; role hierarchy (you can only edit, assign or kick below your highest role); per-channel allow/deny overwrites for roles and members, private channels, and a "Private channel" switch when creating one. Permissions are enforced server-side and the UI hides what you can't do. See *Permissions* below.
 - Channels: text and voice, topics, rename, delete, unread indicators
 - Voice & video: WebRTC mesh in voice channels (clicking a voice channel opens it; you join with the Join Voice button, like Discord), mute / deafen, camera, screen share, speaking indicators, focus view for a tile, participant list, auto-rejoin after socket reconnect
 - Voice & Video settings (User Settings → Voice & Video): input / output / camera device pickers, input and output volume, mic test with level meter, voice activity or push-to-talk with a recordable key, automatic or manual input sensitivity, echo cancellation / noise suppression / auto gain toggles, camera preview. Settings persist in the browser and apply live mid-call.
@@ -84,6 +85,16 @@ Media is peer-to-peer mesh: each participant keeps one `RTCPeerConnection` per o
 - Output device selection uses `setSinkId`, available in Chromium browsers and recent Firefox; the picker is disabled elsewhere.
 - Push-to-talk only works while the browser tab has focus, since web pages cannot read global hotkeys.
 
+## Permissions
+
+Bits mirror Discord's values: Create Invite, Kick Members, Administrator, Manage Channels, Manage Server, Add Reactions, Video (camera/screen), View Channels, Send Messages, Manage Messages, Connect, Speak, Change Nickname, Manage Nicknames, Manage Roles. `GET /api/permissions` lists them.
+
+- Every server has an `@everyone` role whose id equals the server id. New servers give it invite, reactions, video, view, send, connect, speak and nickname.
+- Effective permissions = `@everyone` | member's roles; the owner and anyone with Administrator get everything. Channel overwrites then apply in order: `@everyone`, the member's roles (aggregated), the member. No View Channel means no permissions at all in that channel, and the server does not send that channel (or its messages, typing, voice states) to that user.
+- Hierarchy: a member may only create/edit/delete roles, assign roles, set overwrites or kick when the target role or member sits below their own highest role; the owner outranks all. A manager can only grant or revoke permission bits they themselves hold.
+- Voice: no Connect blocks joining (and evicts you if revoked mid-call), no Speak marks you `suppress`ed so your client keeps its mic gate closed (shown as "Muted by server"), no Video drops camera and screen share.
+- Endpoints: `GET/POST /guilds/:id/roles`, `PATCH/DELETE /guilds/:id/roles/:rid` (`position` reorders), `PATCH /guilds/:id/members/:uid` (`roles`, `nickname`), `PUT/DELETE /channels/:id/permissions/:target` (`{kind: role|member, allow, deny}`). Events: `ROLE_UPDATE`, `ROLE_DELETE`, `ROLES_SYNC`, `GUILD_MEMBER_UPDATE`, plus `CHANNEL_CREATE`/`CHANNEL_DELETE`/`CHANNEL_UPDATE` sent per user as visibility changes.
+
 ## Not included
 
-File attachments, roles/permissions beyond owner, friend requests, threads, an SFU for large calls.
+File attachments, bans, ownership transfer, friend requests, threads, an SFU for large calls.

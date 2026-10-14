@@ -1,4 +1,6 @@
-import { Hash, Volume2 } from 'lucide-react'
+import { Hash, Lock, Volume2 } from 'lucide-react'
+import { P } from '../../lib/perms'
+import { Toggle } from './SettingsShell'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
@@ -9,6 +11,9 @@ import type { Channel } from '../../lib/types'
 export default function CreateChannelModal({ onClose, guildId }: { onClose: () => void; guildId: string }) {
   const [name, setName] = useState('')
   const [kind, setKind] = useState<'text' | 'voice'>('text')
+  const [isPrivate, setPrivate] = useState(false)
+  const me = useStore((s) => s.user)
+  const guild = useStore((s) => s.guilds[guildId])
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const upsertChannel = useStore((s) => s.upsertChannel)
@@ -18,6 +23,10 @@ export default function CreateChannelModal({ onClose, guildId }: { onClose: () =
     e.preventDefault(); setBusy(true); setErr(null)
     try {
       const c = await api.post<Channel>(`/guilds/${guildId}/channels`, { name, kind })
+      if (isPrivate) {
+        await api.put(`/channels/${c.id}/permissions/${guildId}`, { kind: 'role', allow: 0, deny: P.VIEW_CHANNEL })
+        if (me && guild?.owner_id !== me.id) await api.put(`/channels/${c.id}/permissions/${me.id}`, { kind: 'member', allow: P.VIEW_CHANNEL, deny: 0 })
+      }
       upsertChannel(c); onClose(); navigate(`/channels/${guildId}/${c.id}`)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
@@ -45,6 +54,10 @@ export default function CreateChannelModal({ onClose, guildId }: { onClose: () =
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2">{kind === 'text' ? <Hash size={16} /> : <Volume2 size={16} />}</span>
             <input className="input pl-9" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="new-channel" maxLength={100} required />
           </div>
+        </div>
+        <div className="rounded-lg border border-line bg-bg-3 p-3">
+          <Toggle label="Private channel" checked={isPrivate} onChange={setPrivate} />
+          <p className="text-xs text-text-2 mt-1 flex items-center gap-1"><Lock size={12} /> Only you and roles you add in channel permissions will see it.</p>
         </div>
       </form>
     </Modal>

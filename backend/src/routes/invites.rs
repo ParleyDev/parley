@@ -1,8 +1,8 @@
 use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
-    models::{Channel, Guild},
-    routes::guilds::{fetch_member, CHANNEL_COLS, GUILD_COLS},
+    models::Guild,
+    routes::guilds::{fetch_member, GUILD_COLS},
     state::AppState,
 };
 use axum::{
@@ -71,16 +71,12 @@ async fn accept(
         .bind(gid)
         .fetch_one(&mut *tx)
         .await?;
-    let channels = sqlx::query_as::<_, Channel>(&format!(
-        "SELECT {CHANNEL_COLS} FROM channels WHERE guild_id = $1 ORDER BY position, created_at"
-    ))
-    .bind(gid)
-    .fetch_all(&mut *tx)
-    .await?;
     tx.commit().await?;
+    let channels = crate::perms::visible_channels(&state.db, gid, uid).await?;
 
+    let roles = crate::perms::list_roles(&state.db, gid).await?;
     let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "owner_id": guild.owner_id,
-        "created_at": guild.created_at, "channels": channels });
+        "created_at": guild.created_at, "channels": channels, "roles": roles });
     if inserted > 0 {
         state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
         if let Ok(member) = fetch_member(&state.db, gid, uid).await {

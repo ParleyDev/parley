@@ -1,15 +1,16 @@
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
-import type { Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, RemoteMedia, User, VoiceState } from './lib/types'
+import type { Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, RemoteMedia, Role, User, VoiceState } from './lib/types'
+import { channelPerms, guildPerms } from './lib/perms'
 
 export type ModalKind =
   | { kind: 'createGuild' }
   | { kind: 'joinGuild'; code?: string }
   | { kind: 'createChannel'; guildId: string }
   | { kind: 'invite'; guildId: string }
-  | { kind: 'guildSettings'; guildId: string }
-  | { kind: 'channelSettings'; channelId: string }
+  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' }
+  | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
   | { kind: 'userSettings'; tab?: 'account' | 'voice' }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string }
@@ -19,6 +20,8 @@ export interface ReadyPayload {
   user: PrivateUser
   guilds: Guild[]
   channels: Channel[]
+  roles: Role[]
+  me_members: Member[]
   dm_channels: DmChannel[]
   online: string[]
   read_states: ReadState[]
@@ -39,6 +42,8 @@ interface State {
   dms: Record<string, DmChannel>
   members: Record<string, Record<string, Member>>
   membersLoaded: Record<string, true>
+  /** guildId -> roleId -> role */
+  roles: Record<string, Record<string, Role>>
   messages: Record<string, Message[]>
   hasMore: Record<string, boolean>
   loadingMessages: Record<string, boolean>
@@ -80,7 +85,10 @@ interface State {
   applyReady: (r: ReadyPayload) => void
   setConnected: (c: boolean) => void
   // mutations
-  upsertGuild: (g: Guild & { channels?: Channel[] }) => void
+  upsertGuild: (g: Guild & { channels?: Channel[]; roles?: Role[] }) => void
+  upsertRole: (r: Role) => void
+  removeRole: (guildId: string, roleId: string) => void
+  setRoles: (guildId: string, roles: Role[]) => void
   removeGuild: (id: string) => void
   upsertChannel: (c: Channel | DmChannel) => void
   removeChannel: (id: string) => void
@@ -142,6 +150,7 @@ export const useStore = create<State>((set, get) => ({
   dms: {},
   members: {},
   membersLoaded: {},
+  roles: {},
   messages: {},
   hasMore: {},
   loadingMessages: {},
@@ -179,7 +188,7 @@ export const useStore = create<State>((set, get) => ({
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], channels: {}, dms: {},
-      members: {}, membersLoaded: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
+      members: {}, membersLoaded: {}, roles: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {},
     })
   },
@@ -203,32 +212,48 @@ export const useStore = create<State>((set, get) => ({
     r.last_message_ids.forEach((l) => (lastMessageId[l.channel_id] = l.message_id))
     const voiceStates: Record<string, VoiceState> = {}
     r.voice_states.forEach((v) => (voiceStates[v.user_id] = v))
+    const roles: Record<string, Record<string, Role>> = {}
+    ;(r.roles ?? []).forEach((role) => { (roles[role.guild_id] ??= {})[role.id] = role })
+    // Seed our own member row per guild so permission checks work before the full member list loads.
+    const members: Record<string, Record<string, Member>> = {}
+    ;(r.me_members ?? []).forEach((m) => { members[m.guild_id] = { [m.user_id]: m } })
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
-      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, online, users, readStates, lastMessageId,
+      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, online, users, readStates, lastMessageId, roles,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events.
-      messages: {}, hasMore: {}, members: {}, membersLoaded: {},
+      messages: {}, hasMore: {}, members, membersLoaded: {},
     })
   },
   setConnected: (connected) => set({ connected }),
 
   upsertGuild: (g) => set((s) => {
-    const { channels: gchannels, ...guild } = g
+    const { channels: gchannels, roles: groles, ...guild } = g
     const channels = { ...s.channels }
     gchannels?.forEach((c) => (channels[c.id] = c))
     const guildOrder = s.guildOrder.includes(guild.id) ? s.guildOrder : [...s.guildOrder, guild.id]
-    return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder }
+    const roles = groles ? { ...s.roles, [guild.id]: Object.fromEntries(groles.map((r) => [r.id, r])) } : s.roles
+    return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder, roles }
   }),
+  upsertRole: (r) => set((s) => ({ roles: { ...s.roles, [r.guild_id]: { ...(s.roles[r.guild_id] ?? {}), [r.id]: r } } })),
+  removeRole: (guildId, roleId) => set((s) => {
+    const g = { ...(s.roles[guildId] ?? {}) }; delete g[roleId]
+    // Members lose the role too.
+    const gm = s.members[guildId]
+    const members = gm ? { ...s.members, [guildId]: Object.fromEntries(Object.entries(gm).map(([id, m]) => [id, m.roles.includes(roleId) ? { ...m, roles: m.roles.filter((x) => x !== roleId) } : m])) } : s.members
+    return { roles: { ...s.roles, [guildId]: g }, members }
+  }),
+  setRoles: (guildId, list) => set((s) => ({ roles: { ...s.roles, [guildId]: Object.fromEntries(list.map((r) => [r.id, r])) } })),
   removeGuild: (id) => set((s) => {
     const guilds = { ...s.guilds }; delete guilds[id]
+    const roles = { ...s.roles }; delete roles[id]
     const channels = { ...s.channels }
     Object.values(channels).forEach((c) => { if (c.guild_id === id) delete channels[c.id] })
     const members = { ...s.members }; delete members[id]
     const membersLoaded = { ...s.membersLoaded }; delete membersLoaded[id]
     const voiceStates = { ...s.voiceStates }
     Object.values(voiceStates).forEach((v) => { if (v.guild_id === id) delete voiceStates[v.user_id] })
-    return { guilds, channels, members, membersLoaded, voiceStates, guildOrder: s.guildOrder.filter((g) => g !== id) }
+    return { guilds, channels, members, membersLoaded, voiceStates, roles, guildOrder: s.guildOrder.filter((g) => g !== id) }
   }),
   upsertChannel: (c) => set((s) => {
     if (c.guild_id === null && 'recipients' in c) {
@@ -455,3 +480,23 @@ export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'd
 export function voiceParticipants(s: Pick<State, 'voiceStates'>, channelId: string): VoiceState[] {
   return Object.values(s.voiceStates).filter((v) => v.channel_id === channelId)
 }
+
+type PermState = Pick<State, 'guilds' | 'roles' | 'members' | 'user' | 'channels'>
+
+/** My guild-wide permissions (0 when not a member or not loaded). */
+export function myGuildPerms(s: PermState, guildId: string): number {
+  const guild = s.guilds[guildId]
+  if (!guild || !s.user) return 0
+  return guildPerms({ guild, roles: s.roles[guildId] ?? {}, member: s.members[guildId]?.[s.user.id] }, s.user.id)
+}
+
+/** My permissions inside a channel. DMs grant everything. */
+export function myChannelPerms(s: PermState, channelId: string): number {
+  const c = s.channels[channelId]
+  if (!c) return s.user ? ALL_PERMS : 0
+  if (!c.guild_id) return ALL_PERMS
+  const guild = s.guilds[c.guild_id]
+  if (!guild || !s.user) return 0
+  return channelPerms({ guild, roles: s.roles[c.guild_id] ?? {}, member: s.members[c.guild_id]?.[s.user.id] }, s.user.id, c)
+}
+const ALL_PERMS = -1 >>> 1

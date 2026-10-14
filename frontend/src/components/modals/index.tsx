@@ -19,8 +19,8 @@ export default function Modals() {
     case 'joinGuild': return <JoinGuildModal onClose={close} code={modal.code} />
     case 'createChannel': return <CreateChannelModal onClose={close} guildId={modal.guildId} />
     case 'invite': return <InviteModal onClose={close} guildId={modal.guildId} />
-    case 'guildSettings': return <GuildSettingsModal onClose={close} guildId={modal.guildId} />
-    case 'channelSettings': return <ChannelSettingsModal onClose={close} channelId={modal.channelId} />
+    case 'guildSettings': return <GuildSettingsModal onClose={close} guildId={modal.guildId} tab={modal.tab} />
+    case 'channelSettings': return <ChannelSettingsModal onClose={close} channelId={modal.channelId} tab={modal.tab} />
     case 'userSettings': return <UserSettingsModal onClose={close} tab={modal.tab} />
     case 'newDm': return <NewDmModal onClose={close} />
     case 'profile': return <ProfileModal onClose={close} userId={modal.userId} />

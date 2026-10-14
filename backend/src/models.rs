@@ -44,6 +44,34 @@ pub struct Channel {
     pub topic: String,
     pub position: i32,
     pub created_at: DateTime<Utc>,
+    /// Permission overwrites; filled by `perms::attach_overwrites` for guild channels.
+    #[sqlx(skip)]
+    #[serde(default)]
+    pub overwrites: Vec<Overwrite>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Overwrite {
+    #[serde(skip)]
+    pub channel_id: Uuid,
+    #[serde(rename = "id")]
+    pub target_id: Uuid,
+    #[serde(rename = "kind")]
+    pub target_kind: String,
+    pub allow: i64,
+    pub deny: i64,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct Role {
+    pub id: Uuid,
+    pub guild_id: Uuid,
+    pub name: String,
+    pub color: Option<String>,
+    pub position: i32,
+    pub permissions: i64,
+    pub hoist: bool,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -56,6 +84,9 @@ pub struct Member {
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub status: String,
+    #[sqlx(skip)]
+    #[serde(default)]
+    pub roles: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

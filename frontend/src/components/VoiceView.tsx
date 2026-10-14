@@ -1,7 +1,8 @@
 import { useShallow } from 'zustand/react/shallow'
 import { Headphones, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, PhoneOff, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { isUnread, useStore, voiceParticipants } from '../store'
+import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
+import { has, P } from '../lib/perms'
 import type { Channel, User, VoiceState } from '../lib/types'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
@@ -27,6 +28,10 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const localScreen = useStore((s) => s.localScreen)
   const remoteMedia = useStore((s) => s.remoteMedia)
   const unread = useStore((s) => isUnread(s, channel.id))
+  const perms = useStore((s) => myChannelPerms(s, channel.id))
+  const canConnect = has(perms, P.CONNECT)
+  const canStream = has(perms, P.STREAM)
+  const suppressed = useStore((s) => !!(s.user && s.voiceStates[s.user.id]?.suppress))
   const [focused, setFocused] = useState<string | null>(null)
   const [chat, setChat] = useState(() => { try { return localStorage.getItem(CHAT_KEY) === '1' } catch { return false } })
   const inThis = myChannel === channel.id
@@ -103,6 +108,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         <MobileBack />
         <Volume2 size={22} className="text-text-2 shrink-0" /><span className="font-bold truncate">{channel.name}</span>
         <span className="text-xs text-text-2 whitespace-nowrap">{count} connected</span>
+        {inThis && suppressed && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase">Muted by server</span>}
         <span className="ml-auto flex items-center gap-1">{chatToggle}<MembersToggle /></span>
       </header>
 
@@ -139,13 +145,13 @@ export default function VoiceView({ channel }: { channel: Channel }) {
               <>
                 <Ctl label={selfMute ? 'Unmute' : 'Mute'} on={selfMute} onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={22} /> : <Mic size={22} />}</Ctl>
                 <Ctl label={selfDeaf ? 'Undeafen' : 'Deafen'} on={selfDeaf} onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={22} /> : <Headphones size={22} />}</Ctl>
-                <Ctl label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} accent onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>
-                <Ctl label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} accent onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={22} /> : <Monitor size={22} />}</Ctl>
+                {canStream && <Ctl label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} accent onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>}
+                {canStream && <Ctl label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} accent onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={22} /> : <Monitor size={22} />}</Ctl>}
                 <button onClick={() => voice.leave()} title="Disconnect" className="h-14 max-md:h-12 px-6 max-md:px-4 rounded-full bg-danger text-white font-semibold flex items-center gap-2 hover:bg-danger/80"><PhoneOff size={20} /><span className="max-md:hidden">Leave</span></button>
               </>
             ) : (
-              <button onClick={() => voice.join(channel.id)} disabled={connecting} className="h-14 max-md:h-12 px-8 rounded-full bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50">
-                <Volume2 size={20} /> {myChannel ? 'Switch to this channel' : 'Join Voice'}
+              <button onClick={() => voice.join(channel.id)} disabled={connecting || !canConnect} title={canConnect ? undefined : 'You do not have permission to connect'} className="h-14 max-md:h-12 px-8 rounded-full bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50">
+                <Volume2 size={20} /> {!canConnect ? 'No permission to connect' : myChannel ? 'Switch to this channel' : 'Join Voice'}
               </button>
             )}
           </div>

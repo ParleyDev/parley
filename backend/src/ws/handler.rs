@@ -1,7 +1,8 @@
 use crate::{
     auth::verify_token,
-    models::{Channel, Guild, PrivateUser},
-    routes::dms::list_dm_channels,
+    models::{Channel, Guild, Member, PrivateUser, Role},
+    perms::{self, has},
+    routes::{dms::list_dm_channels, roles::attach_roles},
     state::AppState,
     ws::hub::{Target, VoiceState},
 };
@@ -74,14 +75,26 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
     let guild_ids: Vec<Uuid> = guilds.iter().map(|g| g.id).collect();
     let mut my_guilds: HashSet<Uuid> = guild_ids.iter().copied().collect();
 
-    let channels = sqlx::query_as::<_, Channel>(
-        "SELECT id, guild_id, name, kind, topic, position, created_at FROM channels
-         WHERE guild_id = ANY($1) ORDER BY position, created_at",
-    )
-    .bind(&guild_ids)
-    .fetch_all(&state.db)
-    .await
-    .unwrap_or_default();
+    // Only channels this user may view, plus every guild's roles and the user's own member rows.
+    let mut channels: Vec<Channel> = Vec::new();
+    let mut roles: Vec<Role> = Vec::new();
+    let mut me_members: Vec<Member> = Vec::new();
+    for gid in &guild_ids {
+        channels.extend(perms::visible_channels(&state.db, *gid, user_id).await.unwrap_or_default());
+        roles.extend(perms::list_roles(&state.db, *gid).await.unwrap_or_default());
+        if let Ok(mut m) = sqlx::query_as::<_, Member>(
+            "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status
+             FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
+        )
+        .bind(gid)
+        .bind(user_id)
+        .fetch_one(&state.db)
+        .await
+        {
+            let _ = attach_roles(&state.db, std::slice::from_mut(&mut m)).await;
+            me_members.push(m);
+        }
+    }
 
     let dms = list_dm_channels(&state.db, user_id).await.unwrap_or_default();
 
@@ -114,6 +127,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
             "user": user,
             "guilds": guilds,
             "channels": channels,
+            "roles": roles,
+            "me_members": me_members,
             "dm_channels": dms,
             "online": online,
             "read_states": read_states.iter().map(|(c, m)| json!({"channel_id": c, "last_read_msg": m})).collect::<Vec<_>>(),
@@ -208,10 +223,10 @@ async fn handle_client_op(
 ) {
     match op {
         ClientOp::VoiceJoin { channel_id } => {
-            let channel = match crate::routes::channels::require_channel(&state.db, channel_id, user_id).await {
-                Ok(c) if c.kind == "voice" && c.guild_id.is_some() => c,
+            let (channel, p) = match crate::routes::channels::require_channel_perms(&state.db, channel_id, user_id).await {
+                Ok((c, p)) if c.kind == "voice" && c.guild_id.is_some() && has(p, perms::CONNECT) => (c, p),
                 _ => {
-                    let _ = tx.send(Message::Text(json!({"t":"VOICE_ERROR","d":{"message":"Not a voice channel you can access"}}).to_string())).await;
+                    let _ = tx.send(Message::Text(json!({"t":"VOICE_ERROR","d":{"message":"You don't have permission to join this voice channel"}}).to_string())).await;
                     return;
                 }
             };
@@ -219,13 +234,14 @@ async fn handle_client_op(
             // Carry over mute/deaf prefs if moving between channels.
             let (self_mute, self_deaf) = state.hub.voice_state(user_id).map(|v| (v.self_mute, v.self_deaf)).unwrap_or((false, false));
             // Video/screen always start off in a new channel: the client re-attaches tracks after joining.
-            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, session };
+            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress: !has(p, perms::SPEAK), session };
             if let Some(prev) = state.hub.voice_join(vs.clone()) {
                 if prev.channel_id != channel_id || prev.guild_id != guild_id {
                     emit_voice_leave(state, &prev);
                 }
             }
-            state.hub.emit_guild(guild_id, "VOICE_STATE_UPDATE", json!(vs));
+            let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Guild(guild_id));
+            state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
         }
         ClientOp::VoiceLeave => {
             if let Some(prev) = state.hub.voice_leave(user_id, None) {
@@ -233,8 +249,24 @@ async fn handle_client_op(
             }
         }
         ClientOp::VoiceState { self_mute, self_deaf, self_video, self_stream } => {
-            if let Some(vs) = state.hub.voice_update(user_id, |v| { v.self_mute = self_mute; v.self_deaf = self_deaf; v.self_video = self_video; v.self_stream = self_stream; }) {
-                state.hub.emit_guild(vs.guild_id, "VOICE_STATE_UPDATE", json!(vs));
+            let Some(cur) = state.hub.voice_state(user_id) else { return };
+            // Re-check channel permissions on every update so revoked STREAM/SPEAK take effect.
+            let (channel, p) = match crate::routes::channels::require_channel_perms(&state.db, cur.channel_id, user_id).await {
+                Ok(x) => x,
+                Err(_) => {
+                    if let Some(prev) = state.hub.voice_leave(user_id, None) { emit_voice_leave(state, &prev); }
+                    return;
+                }
+            };
+            let can_stream = has(p, perms::STREAM);
+            let suppress = !has(p, perms::SPEAK);
+            if let Some(vs) = state.hub.voice_update(user_id, |v| {
+                v.self_mute = self_mute; v.self_deaf = self_deaf;
+                v.self_video = self_video && can_stream; v.self_stream = self_stream && can_stream;
+                v.suppress = suppress;
+            }) {
+                let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Guild(vs.guild_id));
+                state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
             }
         }
         ClientOp::VoiceSignal { to, data } => {
@@ -247,8 +279,11 @@ async fn handle_client_op(
             let _ = tx.send(Message::Text(json!({"t":"PONG","d":{}}).to_string())).await;
         }
         ClientOp::Typing { channel_id } => {
-            if let Ok(target) = crate::routes::channels::channel_target(&state.db, channel_id, user_id).await {
-                state.hub.emit(target, "TYPING_START", json!({ "channel_id": channel_id, "user_id": user_id }));
+            if let Ok((c, p)) = crate::routes::channels::require_channel_perms(&state.db, channel_id, user_id).await {
+                if !has(p, perms::SEND_MESSAGES) { return; }
+                if let Ok(target) = crate::routes::channels::target_for(&state.db, &c).await {
+                    state.hub.emit(target, "TYPING_START", json!({ "channel_id": channel_id, "user_id": user_id }));
+                }
             }
         }
     }

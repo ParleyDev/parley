@@ -396,6 +396,8 @@ class VoiceManager {
         if (db >= threshold) this.lastVoiceAt = now
         open = now - this.lastVoiceAt < VAD_HOLD_MS
       }
+      // Server-side "suppress" (no SPEAK permission) keeps the gate shut regardless of input mode.
+      if (s.user && s.voiceStates[s.user.id]?.suppress) open = false
       gate.gain.setTargetAtTime(open ? 1 : 0, ctx.currentTime, 0.015)
       const muted = s.selfMute || s.selfDeaf
       s.setInputLevel(Math.round(db), open && !muted)

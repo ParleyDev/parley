@@ -2,6 +2,7 @@ mod auth;
 mod config;
 mod error;
 mod models;
+mod perms;
 mod routes;
 mod state;
 mod ws;

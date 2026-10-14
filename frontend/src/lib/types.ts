@@ -25,6 +25,20 @@ export interface Channel {
   topic: string
   position: number
   created_at: string
+  overwrites?: Overwrite[]
+}
+
+export interface Overwrite { id: string; kind: 'role' | 'member'; allow: number; deny: number }
+
+export interface Role {
+  id: string
+  guild_id: string
+  name: string
+  color: string | null
+  position: number
+  permissions: number
+  hoist: boolean
+  created_at: string
 }
 
 export interface DmChannel extends Channel {
@@ -41,6 +55,7 @@ export interface Member {
   display_name: string
   avatar_url: string | null
   status: string
+  roles: string[]
 }
 
 export interface Reaction { emoji: string; count: number; me: boolean }
@@ -75,6 +90,8 @@ export interface VoiceState {
   self_deaf: boolean
   self_video: boolean
   self_stream: boolean
+  /** Server says this member may not speak here; the client keeps its mic gate shut. */
+  suppress?: boolean
 }
 
 export interface RemoteMedia { camera: MediaStream | null; screen: MediaStream | null }

@@ -38,7 +38,7 @@ pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel
         .fetch_all(db)
         .await?;
         out.push(DmChannel {
-            channel: Channel { id, guild_id, name, kind, topic, position, created_at },
+            channel: Channel { id, guild_id, name, kind, topic, position, created_at, overwrites: vec![] },
             recipients,
             last_message_at: last,
         });

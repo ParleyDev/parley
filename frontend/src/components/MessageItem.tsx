@@ -1,6 +1,7 @@
 import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react'
 import { useState, type KeyboardEvent } from 'react'
-import { useStore } from '../store'
+import { myChannelPerms, useStore } from '../store'
+import { has, memberColor, P } from '../lib/perms'
 import type { Message } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
@@ -14,10 +15,11 @@ interface Props { message: Message; grouped: boolean; isOwn: boolean; onReply: (
 export default function MessageItem({ message: m, grouped, isOwn, onReply, replyTarget }: Props) {
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
-  const user = useStore((s) => s.user)
   const { guildId } = useParams()
-  const guild = useStore((s) => (guildId ? s.guilds[guildId] : undefined))
-  const canDelete = isOwn || guild?.owner_id === user?.id
+  const perms = useStore((s) => myChannelPerms(s, m.channel_id))
+  const canDelete = isOwn || has(perms, P.MANAGE_MESSAGES)
+  const canReact = has(perms, P.ADD_REACTIONS)
+  const authorColor = useStore((s) => (guildId ? memberColor(s.roles[guildId] ?? {}, s.members[guildId]?.[m.author.id]) : null))
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.content)
   const [picker, setPicker] = useState(false)
@@ -60,7 +62,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         <div className="min-w-0 flex-1">
           {!grouped && (
             <div className="flex items-baseline gap-2">
-              <button onClick={() => openModal({ kind: 'profile', userId: m.author.id })} className="font-semibold hover:underline">{m.author.display_name}</button>
+              <button onClick={() => openModal({ kind: 'profile', userId: m.author.id })} className="font-semibold hover:underline" style={{ color: authorColor ?? undefined }}>{m.author.display_name}</button>
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
             </div>
           )}
@@ -78,7 +80,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           {m.reactions.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">
               {m.reactions.map((r) => (
-                <button key={r.emoji} onClick={() => react(r.emoji, r.me)} className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-sm ${r.me ? 'border-accent bg-accent/20' : 'border-line bg-bg-3 hover:border-text-2'}`}>
+                <button key={r.emoji} disabled={!canReact && !r.me} onClick={() => react(r.emoji, r.me)} className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-sm ${r.me ? 'border-accent bg-accent/20' : 'border-line bg-bg-3 hover:border-text-2'}`}>
                   <span>{r.emoji}</span><span className="text-xs font-semibold text-text-1">{r.count}</span>
                 </button>
               ))}
@@ -89,7 +91,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
 
       {!editing && (
         <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
-          <div className="relative">
+          {canReact && <div className="relative">
             <Tool label="Add Reaction" onClick={() => setPicker((p) => !p)}><SmilePlus size={16} /></Tool>
             {picker && (
               <>
@@ -99,7 +101,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 </div>
               </>
             )}
-          </div>
+          </div>}
           <Tool label="Reply" onClick={onReply}><Reply size={16} /></Tool>
           {isOwn && <Tool label="Edit" onClick={() => { setDraft(m.content); setEditing(true) }}><Pencil size={16} /></Tool>}
           {canDelete && <Tool label="Delete" onClick={del} danger><Trash2 size={16} /></Tool>}

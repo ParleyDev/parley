@@ -11,7 +11,8 @@ export default function InviteModal({ onClose, guildId }: { onClose: () => void;
   const [err, setErr] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   useEffect(() => {
-    api.get<Invite[]>(`/guilds/${guildId}/invites`)
+    // Listing invites needs Manage Server; anyone with Create Invite can still mint a fresh one.
+    api.get<Invite[]>(`/guilds/${guildId}/invites`).catch(() => [] as Invite[])
       .then((list) => list.find((i) => i.max_uses === null) ?? api.post<Invite>(`/guilds/${guildId}/invites`, {}))
       .then(setInvite).catch((e) => setErr((e as Error).message))
   }, [guildId])

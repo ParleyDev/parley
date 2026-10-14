@@ -4,7 +4,9 @@ import { matchPath, useLocation, useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
 import Avatar from '../Avatar'
 import { api } from '../../lib/api'
-import { useStore } from '../../store'
+import { myGuildPerms, useStore } from '../../store'
+import { has, highestPosition, memberColor, P } from '../../lib/perms'
+import RolePicker from '../RolePicker'
 import type { DmChannel, User } from '../../lib/types'
 import { colorFor } from '../../lib/format'
 
@@ -21,6 +23,9 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
   const inGuild = guildId && guildId !== '@me' ? guildId : undefined
   const guild = useStore((s) => (inGuild ? s.guilds[inGuild] : undefined))
   const member = useStore((s) => (inGuild ? s.members[inGuild]?.[userId] : undefined))
+  const myMember = useStore((s) => (inGuild && me ? s.members[inGuild]?.[me.id] : undefined))
+  const roles = useStore((s) => (inGuild ? s.roles[inGuild] : undefined) ?? {})
+  const myPerms = useStore((s) => (inGuild ? myGuildPerms(s, inGuild) : 0))
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(cached ?? null)
   useEffect(() => { api.get<User>(`/users/${userId}`).then(setUser).catch(() => {}) }, [userId])
@@ -34,6 +39,9 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
     action: async () => { try { await api.delete(`/guilds/${inGuild}/members/${userId}`); removeMember(inGuild!, userId) } catch (e) { pushToast((e as Error).message, 'error') } },
   })
   const joined = member ? new Date(member.joined_at) : null
+  const ctx = guild ? { guild, roles, member: myMember } : null
+  const canKick = !!(guild && ctx && me && !isMe && has(myPerms, P.KICK_MEMBERS) && guild.owner_id !== userId && (guild.owner_id === me.id || highestPosition(ctx, me.id) > highestPosition({ ...ctx, member }, userId)))
+  const nameColor = memberColor(roles, member)
   return (
     <Modal onClose={onClose} width="max-w-sm">
       <div className="-mx-6 -mt-4">
@@ -42,13 +50,14 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
           <div className="rounded-full ring-[6px] ring-bg-1 bg-bg-1"><Avatar user={user} size={80} presence /></div>
           <div className="flex gap-2 pb-1">
             {!isMe && <button onClick={dm} className="btn-primary py-1.5"><MessageSquare size={16} /> Message</button>}
-            {!isMe && guild && guild.owner_id === me?.id && <button onClick={kick} className="btn-danger py-1.5" title="Kick"><UserMinus size={16} /></button>}
+            {canKick && <button onClick={kick} className="btn-danger py-1.5" title="Kick"><UserMinus size={16} /></button>}
           </div>
         </div>
         <div className="px-5 pt-3 pb-2">
-          <h2 className="text-xl font-bold leading-tight">{member?.nickname ?? user.display_name}</h2>
+          <h2 className="text-xl font-bold leading-tight" style={{ color: nameColor ?? undefined }}>{member?.nickname ?? user.display_name}</h2>
           <p className="text-sm text-text-1">@{user.username} <span className="text-text-2">· {online ? 'Online' : 'Offline'}</span></p>
           <div className="mt-4 rounded-xl bg-bg-0/50 p-3 space-y-3">
+            {inGuild && member && <div><div className="label">Roles</div><RolePicker guildId={inGuild} member={member} /></div>}
             {user.bio && <div><div className="label">About me</div><p className="text-sm whitespace-pre-wrap">{user.bio}</p></div>}
             <div className="flex gap-6">
               <div><div className="label">Member since</div><p className="text-sm">{new Date(user.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</p></div>

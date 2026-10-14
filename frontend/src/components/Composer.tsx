@@ -1,6 +1,7 @@
 import { PlusCircle, SendHorizontal, Smile, X } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { useStore } from '../store'
+import { myChannelPerms, useStore } from '../store'
+import { has, P } from '../lib/perms'
 import { sendTyping } from '../lib/ws'
 import type { Channel, DmChannel, Message } from '../lib/types'
 
@@ -13,6 +14,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const pushToast = useStore((s) => s.pushToast)
   const typing = useStore((s) => s.typing[channel.id])
   const users = useStore((s) => s.users)
+  const canSend = useStore((s) => has(myChannelPerms(s, channel.id), P.SEND_MESSAGES))
   const [value, setValue] = useState('')
   const [emoji, setEmoji] = useState(false)
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -47,6 +49,15 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   }
 
   const typers = Object.keys(typing ?? {}).map((id) => users[id]?.display_name ?? 'Someone')
+
+  if (!canSend) {
+    return (
+      <div className="shrink-0 px-4 pb-6 pt-1 max-md:px-2 max-md:pb-2">
+        <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2">You do not have permission to send messages in this channel.</div>
+        <div className="h-5" />
+      </div>
+    )
+  }
 
   return (
     <div className="shrink-0 px-4 pb-6 pt-1 max-md:px-2 max-md:pb-2">

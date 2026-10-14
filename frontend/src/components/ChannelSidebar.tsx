@@ -3,7 +3,8 @@ import { ChevronDown, Hash, HeadphoneOff, LogOut, MicOff, Plus, Settings, Trash2
 import Avatar from './Avatar'
 import { useState } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
-import { isUnread, useStore, voiceParticipants } from '../store'
+import { isUnread, myChannelPerms, myGuildPerms, useStore, voiceParticipants } from '../store'
+import { has, memberColor, P } from '../lib/perms'
 import UserPanel from './UserPanel'
 import { api } from '../lib/api'
 
@@ -20,8 +21,14 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const navigate = useNavigate()
   const { channelId } = useParams()
   const [menu, setMenu] = useState(false)
+  const perms = useStore((s) => myGuildPerms(s, guildId))
+  const chanPerms = useStore(useShallow((s) => Object.fromEntries(Object.values(s.channels).filter((c) => c.guild_id === guildId).map((c) => [c.id, myChannelPerms(s, c.id)])) as Record<string, number>))
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
+  const canInvite = has(perms, P.CREATE_INVITE)
+  const canManageGuild = has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_ROLES)
+  const canCreate = has(perms, P.MANAGE_CHANNELS)
+  const canEditChannel = (id: string) => has(chanPerms[id] ?? 0, P.MANAGE_CHANNELS) || has(chanPerms[id] ?? 0, P.MANAGE_ROLES)
   const list = Object.values(channels).filter((c) => c.guild_id === guildId).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
   const text = list.filter((c) => c.kind === 'text')
   const voiceChannels = list.filter((c) => c.kind === 'voice')
@@ -50,9 +57,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
           <>
             <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
             <div className="pop absolute left-2 right-2 top-full mt-1 z-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5 text-sm" onClick={() => setMenu(false)}>
-              <MenuItem icon={<UserPlus size={16} />} onClick={() => openModal({ kind: 'invite', guildId })} accent>Invite People</MenuItem>
-              {isOwner && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>Server Settings</MenuItem>}
-              <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>Create Channel</MenuItem>
+              {canInvite && <MenuItem icon={<UserPlus size={16} />} onClick={() => openModal({ kind: 'invite', guildId })} accent>Invite People</MenuItem>}
+              {canManageGuild && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>Server Settings</MenuItem>}
+              {canCreate && <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>Create Channel</MenuItem>}
               <div className="h-px bg-line my-1" />
               {isOwner
                 ? <MenuItem icon={<Trash2 size={16} />} onClick={del} danger>Delete Server</MenuItem>
@@ -63,20 +70,20 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pt-3 space-y-4">
-        <Category label="Text Channels" onAdd={() => openModal({ kind: 'createChannel', guildId })}>
+        <Category label="Text Channels" onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId }) : undefined}>
           {text.map((c) => (
             <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Hash size={18} />} name={c.name}
               unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)} onClick={() => setMobilePane('content')}
-              onSettings={() => openModal({ kind: 'channelSettings', channelId: c.id })} />
+              onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
           ))}
         </Category>
         {voiceChannels.length > 0 && (
-          <Category label="Voice Channels" onAdd={() => openModal({ kind: 'createChannel', guildId })}>
+          <Category label="Voice Channels" onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId }) : undefined}>
             {voiceChannels.map((c) => (
               <div key={c.id}>
                 <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={<Volume2 size={18} />} name={c.name}
                   unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)} onClick={() => setMobilePane('content')}
-                  onSettings={() => openModal({ kind: 'channelSettings', channelId: c.id })} />
+                  onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
                 <VoiceParticipants channelId={c.id} />
               </div>
             ))}
@@ -96,7 +103,7 @@ function MenuItem({ children, icon, onClick, danger, accent }: { children: React
   )
 }
 
-function Category({ label, onAdd, children }: { label: string; onAdd: () => void; children: React.ReactNode }) {
+function Category({ label, onAdd, children }: { label: string; onAdd?: () => void; children: React.ReactNode }) {
   const [open, setOpen] = useState(true)
   return (
     <div>
@@ -104,7 +111,7 @@ function Category({ label, onAdd, children }: { label: string; onAdd: () => void
         <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-0.5 py-1 pl-0.5">
           <ChevronDown size={12} className={`transition ${open ? '' : '-rotate-90'}`} />{label}
         </button>
-        <button onClick={onAdd} title="Create Channel" className="opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0"><Plus size={16} /></button>
+        {onAdd && <button onClick={onAdd} title="Create Channel" className="opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0"><Plus size={16} /></button>}
       </div>
       {open && <div className="mt-0.5 space-y-0.5">{children}</div>}
     </div>
@@ -117,6 +124,9 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
   const me = useStore((s) => s.user)
   const speaking = useStore((s) => s.speaking)
   const openModal = useStore((s) => s.openModal)
+  const guildId = useStore((s) => s.channels[channelId]?.guild_id ?? '')
+  const roles = useStore((s) => s.roles[guildId] ?? {})
+  const members = useStore((s) => s.members[guildId])
   if (!participants.length) return null
   return (
     <div className="ml-7 mr-1 mb-1 space-y-0.5">
@@ -126,7 +136,7 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
         return (
           <button key={p.user_id} onClick={() => openModal({ kind: 'profile', userId: p.user_id })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
             <span className={`rounded-full ${speaking[p.user_id] ? 'ring-2 ring-success' : ''}`}><Avatar user={u} size={22} /></span>
-            <span className="truncate flex-1">{u.display_name}</span>
+            <span className="truncate flex-1" style={{ color: memberColor(roles, members?.[p.user_id]) ?? undefined }}>{members?.[p.user_id]?.nickname ?? u.display_name}</span>
             {p.self_stream && <span className="rounded bg-danger px-1 text-[9px] font-extrabold text-white">LIVE</span>}
             {p.self_video && <Video size={14} className="text-text-2" />}
             {p.self_deaf ? <HeadphoneOff size={14} className="text-text-2" /> : p.self_mute ? <MicOff size={14} className="text-text-2" /> : null}
@@ -137,13 +147,13 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
   )
 }
 
-function ChannelRow({ to, icon, name, unread, onSettings, onClick }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; onSettings: () => void; onClick?: () => void }) {
+function ChannelRow({ to, icon, name, unread, onSettings, onClick }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; onSettings?: () => void; onClick?: () => void }) {
   return (
     <NavLink to={to} onClick={onClick} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>
-      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 text-text-2 hover:text-text-0" title="Edit Channel"><Settings size={14} /></button>
+      {onSettings && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 text-text-2 hover:text-text-0" title="Edit Channel"><Settings size={14} /></button>}
     </NavLink>
   )
 }

@@ -1,31 +1,50 @@
-import { useState, type FormEvent } from 'react'
-import Modal from '../Modal'
-import ImagePicker from './ImagePicker'
+import { Shield, SlidersHorizontal, Trash2, Users } from 'lucide-react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { myGuildPerms, useStore } from '../../store'
 import { api } from '../../lib/api'
-import { useStore } from '../../store'
-import type { Guild } from '../../lib/types'
+import { has, P } from '../../lib/perms'
+import SettingsShell from './SettingsShell'
+import GuildOverviewTab from './settings/GuildOverviewTab'
+import RolesTab from './settings/RolesTab'
+import MembersTab from './settings/MembersTab'
 
-export default function GuildSettingsModal({ onClose, guildId }: { onClose: () => void; guildId: string }) {
+type Tab = 'overview' | 'roles' | 'members'
+
+export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'overview' }: { onClose: () => void; guildId: string; tab?: Tab }) {
   const guild = useStore((s) => s.guilds[guildId])
-  const upsertGuild = useStore((s) => s.upsertGuild)
+  const user = useStore((s) => s.user)
+  const perms = useStore((s) => myGuildPerms(s, guildId))
+  const openModal = useStore((s) => s.openModal)
+  const removeGuild = useStore((s) => s.removeGuild)
   const pushToast = useStore((s) => s.pushToast)
-  const [name, setName] = useState(guild?.name ?? '')
-  const [icon, setIcon] = useState<string | null>(guild?.icon_url ?? null)
-  const [busy, setBusy] = useState(false)
+  const navigate = useNavigate()
+  const canOverview = has(perms, P.MANAGE_GUILD)
+  const [tab, setTab] = useState<Tab>(initial === 'overview' && !canOverview ? 'roles' : initial)
   if (!guild) return null
-  const submit = async (e: FormEvent) => {
-    e.preventDefault(); setBusy(true)
-    try {
-      const g = await api.patch<Guild>(`/guilds/${guildId}`, { name, icon_url: icon ?? '' })
-      upsertGuild(g); pushToast('Server updated'); onClose()
-    } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
-  }
+  const isOwner = guild.owner_id === user?.id
+
+  const del = () => openModal({
+    kind: 'confirm', title: `Delete '${guild.name}'`, body: `Are you sure you want to delete ${guild.name}? This cannot be undone.`, danger: true, confirmLabel: 'Delete Server',
+    action: async () => {
+      try { await api.delete(`/guilds/${guildId}`); removeGuild(guildId); navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
+    },
+  })
+
+  const items: { id: Tab; label: string; icon: React.ReactNode }[] = []
+  if (canOverview) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> })
+  items.push({ id: 'roles', label: 'Roles', icon: <Shield size={16} /> })
+  items.push({ id: 'members', label: 'Members', icon: <Users size={16} /> })
+
   return (
-    <Modal title="Server Overview" onClose={onClose} footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button form="guild-settings" className="btn-primary" disabled={busy || !name.trim()}>Save Changes</button></>}>
-      <form id="guild-settings" onSubmit={submit} className="space-y-4">
-        <ImagePicker value={icon} onChange={setIcon} label={name} id={guildId} />
-        <div><label className="label">Server name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
-      </form>
-    </Modal>
+    <SettingsShell<Tab>
+      tab={tab} onTab={setTab} onClose={onClose} wide={tab !== 'overview'}
+      sections={[{ title: guild.name, items }]}
+      footer={isOwner ? <button onClick={del} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Server"><span className="max-md:hidden">Delete Server</span><Trash2 size={16} /></button> : undefined}
+    >
+      {tab === 'overview' && canOverview && <GuildOverviewTab guildId={guildId} />}
+      {tab === 'roles' && <RolesTab guildId={guildId} />}
+      {tab === 'members' && <MembersTab guildId={guildId} />}
+    </SettingsShell>
   )
 }
