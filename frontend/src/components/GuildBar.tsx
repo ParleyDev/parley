@@ -1,7 +1,7 @@
 import { APP_INITIAL } from '../lib/brand'
 import { Compass, Plus } from 'lucide-react'
 import { NavLink, useParams } from 'react-router-dom'
-import { dmUnreadCount, guildUnread, useStore } from '../store'
+import { dmUnreadCount, guildUnread, pendingCount, useStore } from '../store'
 import { colorFor, initials } from '../lib/format'
 
 export default function GuildBar() {
@@ -13,7 +13,8 @@ export default function GuildBar() {
   const dms = useStore((s) => s.dms)
   const openModal = useStore((s) => s.openModal)
   const { guildId } = useParams()
-  const dmUnread = dmUnreadCount({ readStates, lastMessageId, dms })
+  const pending = useStore(pendingCount)
+  const dmUnread = dmUnreadCount({ readStates, lastMessageId, dms }) + pending
 
   return (
     <nav className="w-[72px] shrink-0 bg-bg-0 flex flex-col items-center py-3 gap-2 overflow-y-auto">

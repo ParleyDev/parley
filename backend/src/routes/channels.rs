@@ -246,6 +246,15 @@ async fn create_message(
     if !req.attachment_ids.is_empty() && c.guild_id.is_some() {
         perms::check(p, perms::ATTACH_FILES)?;
     }
+    if c.guild_id.is_none() {
+        // DMs: either side blocking the other closes the channel to new messages.
+        let others: Vec<(Uuid,)> = sqlx::query_as("SELECT user_id FROM channel_members WHERE channel_id = $1 AND user_id <> $2").bind(id).bind(uid).fetch_all(&state.db).await?;
+        for (other,) in others {
+            if crate::routes::relationships::blocked_either_way(&state.db, uid, other).await? {
+                return Err(AppError::Forbidden);
+            }
+        }
+    }
     if let Some(r) = req.reply_to {
         let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM messages WHERE id = $1 AND channel_id = $2")
             .bind(r)

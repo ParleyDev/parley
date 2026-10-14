@@ -216,6 +216,14 @@ pub struct DmChannel {
     pub last_message_at: Option<DateTime<Utc>>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct Relationship {
+    /// friend | outgoing | incoming | blocked
+    pub kind: String,
+    pub user: User,
+    pub created_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct Pagination {
     pub before: Option<Uuid>,

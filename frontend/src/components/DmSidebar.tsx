@@ -1,6 +1,6 @@
 import { Plus, Users } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
-import { isUnread, useStore } from '../store'
+import { isUnread, pendingCount, useStore } from '../store'
 import Avatar from './Avatar'
 import UserPanel from './UserPanel'
 
@@ -10,6 +10,7 @@ export default function DmSidebar() {
   const lastMessageId = useStore((s) => s.lastMessageId)
   const openModal = useStore((s) => s.openModal)
   const setMobilePane = useStore((s) => s.setMobilePane)
+  const pending = useStore(pendingCount)
   const list = Object.values(dms).sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at))
 
   return (
@@ -20,6 +21,7 @@ export default function DmSidebar() {
       <div className="flex-1 overflow-y-auto px-2 pt-2">
         <NavLink to="/channels/@me" end onClick={() => setMobilePane('content')} className={({ isActive }) => `flex items-center gap-3 rounded-md px-2 py-2 text-[15px] font-medium ${isActive ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>
           <Users size={20} /> Friends
+          {pending > 0 && <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center">{pending}</span>}
         </NavLink>
         <div className="mt-4 mb-1 flex items-center justify-between px-2 text-[11px] font-bold uppercase tracking-wider text-text-2">
           <span>Direct Messages</span>

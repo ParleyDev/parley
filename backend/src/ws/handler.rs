@@ -97,6 +97,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
     }
 
     let dms = list_dm_channels(&state.db, user_id).await.unwrap_or_default();
+    let relationships = crate::routes::relationships::list_for(&state.db, user_id).await.unwrap_or_default();
 
     let read_states: Vec<(Uuid, Option<Uuid>)> =
         sqlx::query_as("SELECT channel_id, last_read_msg FROM read_states WHERE user_id = $1")
@@ -130,6 +131,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
             "roles": roles,
             "me_members": me_members,
             "dm_channels": dms,
+            "relationships": relationships,
             "online": online,
             "read_states": read_states.iter().map(|(c, m)| json!({"channel_id": c, "last_read_msg": m})).collect::<Vec<_>>(),
             "last_message_ids": last_ids.iter().map(|(c, m)| json!({"channel_id": c, "message_id": m})).collect::<Vec<_>>(),

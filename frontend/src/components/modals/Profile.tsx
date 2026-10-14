@@ -1,4 +1,4 @@
-import { MessageSquare, UserMinus } from 'lucide-react'
+import { Ban, Check, MessageSquare, UserMinus, UserPlus, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { matchPath, useLocation, useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
@@ -12,6 +12,7 @@ import { colorFor } from '../../lib/format'
 
 export default function ProfileModal({ onClose, userId }: { onClose: () => void; userId: string }) {
   const cached = useStore((s) => s.users[userId])
+  const rel = useStore((s) => s.relationships[userId]?.kind)
   const me = useStore((s) => s.user)
   const online = useStore((s) => !!s.online[userId])
   const upsertChannel = useStore((s) => s.upsertChannel)
@@ -39,6 +40,11 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
     action: async () => { try { await api.delete(`/guilds/${inGuild}/members/${userId}`); removeMember(inGuild!, userId) } catch (e) { pushToast((e as Error).message, 'error') } },
   })
   const joined = member ? new Date(member.joined_at) : null
+  const relAct = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
+  const addFriend = () => relAct(() => api.post('/users/@me/relationships', { user_id: userId }))
+  const acceptFriend = () => relAct(() => api.put(`/users/@me/relationships/${userId}`))
+  const removeRel = () => relAct(() => api.delete(`/users/@me/relationships/${userId}`))
+  const blockUser = () => openModal({ kind: 'confirm', title: `Block ${user.display_name}`, body: `${user.display_name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.`, danger: true, confirmLabel: 'Block', action: () => relAct(() => api.put(`/users/@me/relationships/${userId}/block`)) })
   const ctx = guild ? { guild, roles, member: myMember } : null
   const canKick = !!(guild && ctx && me && !isMe && has(myPerms, P.KICK_MEMBERS) && guild.owner_id !== userId && (guild.owner_id === me.id || highestPosition(ctx, me.id) > highestPosition({ ...ctx, member }, userId)))
   const nameColor = memberColor(roles, member)
@@ -49,7 +55,13 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
         <div className="px-5 -mt-10 flex items-end justify-between">
           <div className="rounded-full ring-[6px] ring-bg-1 bg-bg-1"><Avatar user={user} size={80} presence /></div>
           <div className="flex gap-2 pb-1">
-            {!isMe && <button onClick={dm} className="btn-primary py-1.5"><MessageSquare size={16} /> Message</button>}
+            {!isMe && rel !== 'blocked' && <button onClick={dm} className="btn-primary py-1.5"><MessageSquare size={16} /> Message</button>}
+            {!isMe && !rel && <button onClick={addFriend} className="btn-primary bg-success hover:bg-success/80 text-black py-1.5" title="Add Friend"><UserPlus size={16} /></button>}
+            {!isMe && rel === 'incoming' && <button onClick={acceptFriend} className="btn-primary bg-success hover:bg-success/80 text-black py-1.5" title="Accept Friend Request"><Check size={16} /> Accept</button>}
+            {!isMe && rel === 'outgoing' && <button onClick={removeRel} className="btn-ghost py-1.5 border border-line" title="Cancel Friend Request"><X size={16} /> Pending</button>}
+            {!isMe && rel === 'friend' && <button onClick={removeRel} className="btn-ghost py-1.5 border border-line" title="Remove Friend"><Check size={16} /> Friends</button>}
+            {!isMe && rel === 'blocked' && <button onClick={removeRel} className="btn-ghost py-1.5 border border-line" title="Unblock"><Ban size={16} /> Unblock</button>}
+            {!isMe && rel !== 'blocked' && <button onClick={blockUser} className="btn-ghost py-1.5 text-text-2 hover:text-danger" title="Block"><Ban size={16} /></button>}
             {canKick && <button onClick={kick} className="btn-danger py-1.5" title="Kick"><UserMinus size={16} /></button>}
           </div>
         </div>

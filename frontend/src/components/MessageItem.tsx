@@ -1,6 +1,6 @@
 import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react'
 import { useState, type KeyboardEvent } from 'react'
-import { myChannelPerms, useStore } from '../store'
+import { isBlocked, myChannelPerms, useStore } from '../store'
 import { has, memberColor, P } from '../lib/perms'
 import type { Message } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
@@ -26,6 +26,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const [picker, setPicker] = useState(false)
   // Phones have no hover: tapping the message body toggles the action bar.
   const [tapped, setTapped] = useState(false)
+  const blocked = useStore((s) => isBlocked(s, m.author.id))
+  const [revealed, setRevealed] = useState(false)
 
   const saveEdit = async () => {
     const c = draft.trim()
@@ -47,6 +49,16 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     try { has ? await api.delete(path) : await api.put(path) } catch (e) { pushToast((e as Error).message, 'error') }
   }
 
+  if (blocked && !revealed) {
+    return (
+      <div className="px-4 max-md:px-3 py-1 flex items-center gap-2 text-xs text-text-2">
+        <span className="flex-1 border-t border-line" />
+        <span>1 blocked message</span>
+        <button onClick={() => setRevealed(true)} className="text-sky-400 hover:underline">Show message</button>
+        <span className="flex-1 border-t border-line" />
+      </div>
+    )
+  }
   return (
     <div onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {replyTarget !== null && m.reply_to && (

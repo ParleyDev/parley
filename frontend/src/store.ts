@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
-import type { Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, RemoteMedia, Role, User, VoiceState } from './lib/types'
+import type { Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, User, VoiceState } from './lib/types'
 import { channelPerms, guildPerms } from './lib/perms'
 
 export type ModalKind =
@@ -24,6 +24,7 @@ export interface ReadyPayload {
   roles: Role[]
   me_members: Member[]
   dm_channels: DmChannel[]
+  relationships?: Relationship[]
   online: string[]
   read_states: ReadState[]
   last_message_ids: { channel_id: string; message_id: string }[]
@@ -41,6 +42,8 @@ interface State {
   guildOrder: string[]
   channels: Record<string, Channel>
   dms: Record<string, DmChannel>
+  /** Friends, pending requests and blocks keyed by the other user's id. */
+  relationships: Record<string, Relationship>
   members: Record<string, Record<string, Member>>
   membersLoaded: Record<string, true>
   /** guildId -> roleId -> role */
@@ -87,6 +90,8 @@ interface State {
   setConnected: (c: boolean) => void
   // mutations
   upsertGuild: (g: Guild & { channels?: Channel[]; roles?: Role[] }) => void
+  upsertRelationship: (r: Relationship) => void
+  removeRelationship: (userId: string) => void
   upsertRole: (r: Role) => void
   removeRole: (guildId: string, roleId: string) => void
   setRoles: (guildId: string, roles: Role[]) => void
@@ -149,6 +154,7 @@ export const useStore = create<State>((set, get) => ({
   guildOrder: [],
   channels: {},
   dms: {},
+  relationships: {},
   members: {},
   membersLoaded: {},
   roles: {},
@@ -188,7 +194,7 @@ export const useStore = create<State>((set, get) => ({
   logout: () => {
     setToken(null)
     set({
-      token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], channels: {}, dms: {},
+      token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], channels: {}, dms: {}, relationships: {},
       members: {}, membersLoaded: {}, roles: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {},
     })
@@ -205,6 +211,8 @@ export const useStore = create<State>((set, get) => ({
       dms[d.id] = d
       d.recipients.forEach((u) => (users[u.id] = u))
     })
+    const relationships: Record<string, Relationship> = {}
+    ;(r.relationships ?? []).forEach((rel) => { relationships[rel.user.id] = rel; users[rel.user.id] = rel.user })
     const online: Record<string, true> = {}
     r.online.forEach((id) => (online[id] = true))
     const readStates: Record<string, string | null> = {}
@@ -220,7 +228,7 @@ export const useStore = create<State>((set, get) => ({
     ;(r.me_members ?? []).forEach((m) => { members[m.guild_id] = { [m.user_id]: m } })
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
-      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, online, users, readStates, lastMessageId, roles,
+      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events.
       messages: {}, hasMore: {}, members, membersLoaded: {},
@@ -236,6 +244,8 @@ export const useStore = create<State>((set, get) => ({
     const roles = groles ? { ...s.roles, [guild.id]: Object.fromEntries(groles.map((r) => [r.id, r])) } : s.roles
     return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder, roles }
   }),
+  upsertRelationship: (r) => set((s) => ({ relationships: { ...s.relationships, [r.user.id]: r }, users: { ...s.users, [r.user.id]: r.user } })),
+  removeRelationship: (userId) => set((s) => { const relationships = { ...s.relationships }; delete relationships[userId]; return { relationships } }),
   upsertRole: (r) => set((s) => ({ roles: { ...s.roles, [r.guild_id]: { ...(s.roles[r.guild_id] ?? {}), [r.id]: r } } })),
   removeRole: (guildId, roleId) => set((s) => {
     const g = { ...(s.roles[guildId] ?? {}) }; delete g[roleId]
@@ -365,7 +375,8 @@ export const useStore = create<State>((set, get) => ({
       }
     }
     const user = s.user && s.user.id === u.id ? { ...s.user, ...u } : s.user
-    return { users: { ...s.users, [u.id]: u }, members, dms, messages, user }
+    const relationships = s.relationships[u.id] ? { ...s.relationships, [u.id]: { ...s.relationships[u.id], user: u } } : s.relationships
+    return { users: { ...s.users, [u.id]: u }, members, dms, messages, user, relationships }
   }),
   setTyping: (channelId, userId) => set((s) => ({
     typing: { ...s.typing, [channelId]: { ...(s.typing[channelId] ?? {}), [userId]: Date.now() } },
@@ -476,6 +487,15 @@ export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'cha
 
 export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'dms'>): number {
   return Object.keys(s.dms).filter((id) => isUnread(s, id)).length
+}
+
+/** Incoming friend requests awaiting my answer. */
+export function pendingCount(s: Pick<State, 'relationships'>): number {
+  return Object.values(s.relationships).filter((r) => r.kind === 'incoming').length
+}
+
+export function isBlocked(s: Pick<State, 'relationships'>, userId: string): boolean {
+  return s.relationships[userId]?.kind === 'blocked'
 }
 
 export function voiceParticipants(s: Pick<State, 'voiceStates'>, channelId: string): VoiceState[] {

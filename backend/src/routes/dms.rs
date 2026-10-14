@@ -69,6 +69,9 @@ async fn open_dm(
         .await?
         .ok_or_else(|| AppError::NotFound("User not found".into()))?;
 
+    if crate::routes::relationships::blocked_either_way(&state.db, uid, req.recipient_id).await? {
+        return Err(AppError::Forbidden);
+    }
     // Find an existing 1:1 DM between the two users.
     let existing: Option<(Uuid,)> = sqlx::query_as(
         "SELECT c.id FROM channels c

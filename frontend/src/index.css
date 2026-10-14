@@ -34,9 +34,12 @@ body {
 *::-webkit-scrollbar-thumb { background: #2c2f3b; border-radius: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
 
-.input {
-  @apply w-full rounded-lg bg-bg-0/60 border border-line px-3 py-2 text-sm text-text-0 placeholder:text-text-2
-         outline-none focus:border-accent/70 focus:ring-2 focus:ring-accent/20 transition;
+/* In the components layer so per-element utilities (e.g. pl-9) can override it. */
+@layer components {
+  .input {
+    @apply w-full rounded-lg bg-bg-0/60 border border-line px-3 py-2 text-sm text-text-0 placeholder:text-text-2
+           outline-none focus:border-accent/70 focus:ring-2 focus:ring-accent/20 transition;
+  }
 }
 @utility btn {
   @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition

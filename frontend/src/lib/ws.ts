@@ -1,5 +1,5 @@
 import { useStore, type ReadyPayload } from '../store'
-import type { Channel, DmChannel, Guild, Member, Message, Role, User, VoiceState } from './types'
+import type { Channel, DmChannel, Guild, Member, Message, Relationship, Role, User, VoiceState } from './types'
 import { voice } from './voice'
 
 type Ev =
@@ -17,6 +17,8 @@ type Ev =
   | { t: 'ROLE_UPDATE'; d: { guild_id: string; role: Role } }
   | { t: 'ROLE_DELETE'; d: { guild_id: string; id: string } }
   | { t: 'ROLES_SYNC'; d: { guild_id: string; roles: Role[] } }
+  | { t: 'RELATIONSHIP_ADD'; d: Relationship }
+  | { t: 'RELATIONSHIP_REMOVE'; d: { user_id: string } }
   | { t: 'GUILD_UPDATE'; d: Guild }
   | { t: 'GUILD_DELETE'; d: { id: string } }
   | { t: 'GUILD_MEMBER_ADD'; d: Member }
@@ -99,7 +101,7 @@ function handle(ev: Ev) {
     case 'MESSAGE_CREATE': {
       s.addMessage(ev.d.message)
       const me = s.user?.id
-      if (ev.d.message.author.id !== me && document.visibilityState !== 'visible') notify(ev.d.message)
+      if (ev.d.message.author.id !== me && document.visibilityState !== 'visible' && s.relationships[ev.d.message.author.id]?.kind !== 'blocked') notify(ev.d.message)
       break
     }
     case 'MESSAGE_UPDATE': s.updateMessage(ev.d.message); break
@@ -117,6 +119,13 @@ function handle(ev: Ev) {
     case 'ROLE_UPDATE': s.upsertRole(ev.d.role); break
     case 'ROLE_DELETE': s.removeRole(ev.d.guild_id, ev.d.id); break
     case 'ROLES_SYNC': s.setRoles(ev.d.guild_id, ev.d.roles); break
+    case 'RELATIONSHIP_ADD': {
+      const prev = s.relationships[ev.d.user.id]?.kind
+      s.upsertRelationship(ev.d)
+      if (ev.d.kind === 'incoming' && prev !== 'incoming') s.pushToast(`${ev.d.user.display_name} sent you a friend request`)
+      break
+    }
+    case 'RELATIONSHIP_REMOVE': s.removeRelationship(ev.d.user_id); break
     case 'GUILD_MEMBER_REMOVE':
       if (ev.d.user_id === s.user?.id) s.removeGuild(ev.d.guild_id)
       else s.removeMember(ev.d.guild_id, ev.d.user_id)

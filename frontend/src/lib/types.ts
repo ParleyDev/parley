@@ -105,6 +105,9 @@ export interface VoiceState {
   suppress?: boolean
 }
 
+export type RelationshipKind = 'friend' | 'outgoing' | 'incoming' | 'blocked'
+export interface Relationship { kind: RelationshipKind; user: User; created_at: string }
+
 export interface RemoteMedia { camera: MediaStream | null; screen: MediaStream | null }
 
 export type PeerStatus = 'connecting' | 'connected' | 'failed'

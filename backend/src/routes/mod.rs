@@ -4,6 +4,7 @@ pub mod channels;
 pub mod dms;
 pub mod guilds;
 pub mod invites;
+pub mod relationships;
 pub mod roles;
 pub mod users;
 
@@ -17,6 +18,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(guilds::router())
         .merge(invites::router())
         .merge(roles::router())
+        .merge(relationships::router())
         .merge(channels::router())
         .merge(dms::router())
         .merge(attachments::router())
