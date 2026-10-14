@@ -132,7 +132,7 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
           {groups && results && (
             results.length === 0 ? <div className="py-10 text-center text-sm text-text-2">No emoji found</div> : (
               <div className="grid grid-cols-[repeat(auto-fill,2.5rem)] gap-0.5 pt-1">
-                {results.map((r) => r.kind === 'custom' ? cell(customToken(r.emoji), `:${r.emoji.name}:`, `c-${r.emoji.id}`) : cell(r.emoji.emoji, `:${r.emoji.slug}:`, `u-${r.emoji.emoji}`))}
+                {results.map((r) => r.kind === 'custom' ? cell(customToken(r.emoji), `:${r.emoji.name}:`, `c-${r.emoji.id}`) : cell(r.emoji.emoji, `:${r.name}:`, `u-${r.emoji.emoji}`))}
               </div>
             )
           )}
