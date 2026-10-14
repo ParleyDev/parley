@@ -356,14 +356,16 @@ export const useStore = create<State>((set, get) => ({
     const list = s.messages[m.channel_id]
     const users = { ...s.users, [m.author.id]: { ...s.users[m.author.id], ...m.author, bio: s.users[m.author.id]?.bio ?? '', status: s.users[m.author.id]?.status ?? '' } }
     const lastMessageId = { ...s.lastMessageId, [m.channel_id]: m.id }
+    // Your own messages (sent, forwarded, from any device) never count as unread for you.
+    const readStates = m.author.id === s.user?.id ? { ...s.readStates, [m.channel_id]: m.id } : s.readStates
     const typing = { ...s.typing }
     if (typing[m.channel_id]?.[m.author.id]) {
       typing[m.channel_id] = { ...typing[m.channel_id] }; delete typing[m.channel_id][m.author.id]
     }
     const dms = s.dms[m.channel_id] ? { ...s.dms, [m.channel_id]: { ...s.dms[m.channel_id], last_message_at: m.created_at } } : s.dms
-    if (!list) return { users, lastMessageId, typing, dms }
-    if (list.some((x) => x.id === m.id)) return { users, lastMessageId, typing, dms }
-    return { messages: { ...s.messages, [m.channel_id]: [...list, m] }, users, lastMessageId, typing, dms }
+    if (!list) return { users, lastMessageId, readStates, typing, dms }
+    if (list.some((x) => x.id === m.id)) return { users, lastMessageId, readStates, typing, dms }
+    return { messages: { ...s.messages, [m.channel_id]: [...list, m] }, users, lastMessageId, readStates, typing, dms }
   }),
   updateMessage: (m) => set((s) => {
     const list = s.messages[m.channel_id]
