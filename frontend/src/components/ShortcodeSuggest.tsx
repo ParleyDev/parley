@@ -24,7 +24,7 @@ export function useShortcodeSuggestions(query: string | null, guildId: string | 
   }))
   return useMemo(() => {
     if (query === null || !groups) return []
-    return searchEmoji(query, groups, custom, limit).map((r) => r.kind === 'custom' ? { token: customToken(r.emoji), label: `:${r.emoji.name}:` } : { token: r.emoji.emoji, label: `:${r.emoji.slug}:` })
+    return searchEmoji(query, groups, custom, limit).map((r) => r.kind === 'custom' ? { token: customToken(r.emoji), label: `:${r.emoji.name}:` } : { token: r.emoji.emoji, label: `:${r.name}:` })
   }, [query, groups, custom, limit])
 }
 

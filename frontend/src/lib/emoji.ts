@@ -3,8 +3,8 @@ import type { Emoji } from './types'
 /** The quick-pick grid used by the composer and the profile popout's message box. */
 export const QUICK_EMOJI = ['😀', '😂', '😍', '🔥', '👍', '🎉', '😢', '🤔', '👀', '❤️', '🚀', '✨', '💯', '🙏', '😎', '🥳']
 
-/** A unicode emoji with its searchable shortcode. */
-export interface UnicodeEmoji { emoji: string; slug: string }
+/** A unicode emoji with its CLDR shortcode plus Discord/GitHub-style aliases (`smile`, `joy`, `+1`…). */
+export interface UnicodeEmoji { emoji: string; slug: string; aliases: string[] }
 export interface EmojiGroup { name: string; emojis: UnicodeEmoji[] }
 
 let groupsPromise: Promise<EmojiGroup[]> | null = null
@@ -13,9 +13,10 @@ let groupsCache: EmojiGroup[] | null = null
 /** The full unicode set (≈1,900 emoji in 9 groups), loaded on first use as its own chunk. */
 export function loadEmojiGroups(): Promise<EmojiGroup[]> {
   if (!groupsPromise) {
-    groupsPromise = import('../data/emoji.json').then((m) => {
+    groupsPromise = Promise.all([import('../data/emoji.json'), import('../data/emojiAliases.json')]).then(([m, a]) => {
       const raw = (m.default ?? m) as { n: string; e: [string, string][] }[]
-      groupsCache = raw.map((g) => ({ name: g.n, emojis: g.e.map(([emoji, slug]) => ({ emoji, slug })) }))
+      const aliases = (a.default ?? a) as Record<string, string[]>
+      groupsCache = raw.map((g) => ({ name: g.n, emojis: g.e.map(([emoji, slug]) => ({ emoji, slug, aliases: aliases[emoji] ?? [] })) }))
       return groupsCache
     })
   }
@@ -45,23 +46,27 @@ export function isJumbo(content: string): boolean {
   return n > 0 && n <= 30
 }
 
-/** Search unicode + custom emoji by shortcode. */
-export function searchEmoji(q: string, groups: EmojiGroup[], custom: Emoji[], limit = 60): { kind: 'unicode'; emoji: UnicodeEmoji }[] | ({ kind: 'custom'; emoji: Emoji } | { kind: 'unicode'; emoji: UnicodeEmoji })[] {
+export type EmojiMatch = { kind: 'custom'; emoji: Emoji; name: string } | { kind: 'unicode'; emoji: UnicodeEmoji; name: string }
+
+/** Search unicode + custom emoji by shortcode; `name` is the shortcode (slug or alias) that matched. */
+export function searchEmoji(q: string, groups: EmojiGroup[], custom: Emoji[], limit = 60): EmojiMatch[] {
   const needle = q.trim().toLowerCase().replace(/^:|:$/g, '').replace(/\s+/g, '_')
   if (!needle) return []
-  const out: ({ kind: 'custom'; emoji: Emoji } | { kind: 'unicode'; emoji: UnicodeEmoji })[] = []
-  const starts: typeof out = [], contains: typeof out = []
+  const starts: EmojiMatch[] = [], contains: EmojiMatch[] = []
   for (const e of custom) {
     const n = e.name.toLowerCase()
-    if (n.startsWith(needle)) starts.push({ kind: 'custom', emoji: e }); else if (n.includes(needle)) contains.push({ kind: 'custom', emoji: e })
+    if (n.startsWith(needle)) starts.push({ kind: 'custom', emoji: e, name: e.name }); else if (n.includes(needle)) contains.push({ kind: 'custom', emoji: e, name: e.name })
   }
-  for (const g of groups) for (const e of g.emojis) {
-    if (e.slug.startsWith(needle)) starts.push({ kind: 'unicode', emoji: e }); else if (e.slug.includes(needle)) contains.push({ kind: 'unicode', emoji: e })
-    if (starts.length >= limit) break
+  outer: for (const g of groups) for (const e of g.emojis) {
+    // Prefer the slug, then any alias, as the name shown for the match.
+    const names = [e.slug, ...e.aliases]
+    const pre = names.find((n) => n.startsWith(needle))
+    if (pre) starts.push({ kind: 'unicode', emoji: e, name: pre })
+    else { const sub = names.find((n) => n.includes(needle)); if (sub) contains.push({ kind: 'unicode', emoji: e, name: sub }) }
+    if (starts.length >= limit) break outer
   }
-  // Shorter shortcodes first among prefix matches (`:fi` → fire before firefighter); custom emoji keep their place.
-  const len = (r: (typeof out)[number]) => (r.kind === 'custom' ? 0 : r.emoji.slug.length)
-  starts.sort((a, b) => len(a) - len(b))
-  out.push(...starts, ...contains)
-  return out.slice(0, limit)
+  // Exact name first, then shorter shortcodes (`:fi` → fire before firefighter); custom emoji keep their place.
+  const rank = (r: EmojiMatch) => (r.kind === 'custom' ? 0 : r.name === needle ? 1 : 1 + r.name.length)
+  starts.sort((a, b) => rank(a) - rank(b))
+  return [...starts, ...contains].slice(0, limit)
 }
