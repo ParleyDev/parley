@@ -23,6 +23,9 @@ services:
       # JSON array of RTCIceServer objects; add a TURN server for users behind strict NATs.
       ICE_SERVERS: ${ICE_SERVERS:-[{"urls":"stun:stun.l.google.com:19302"}]}
       UPLOAD_DIR: /data/uploads
+      # GIF picker: set one of these (Tenor is preferred). Without a key the GIF tab explains how to enable it.
+      TENOR_API_KEY: ${TENOR_API_KEY:-}
+      GIPHY_API_KEY: ${GIPHY_API_KEY:-}
     volumes:
       - uploads:/data/uploads
     depends_on:

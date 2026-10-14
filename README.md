@@ -18,6 +18,8 @@ Open <http://localhost:3000>, register two accounts in two browsers, create a se
 
 Set a real secret in production: `JWT_SECRET=... docker compose up`. Override host ports with `WEB_PORT=8081` (frontend, default 3000) and `API_PORT=...` (backend, default 18080).
 
+The GIF picker needs a provider key: `TENOR_API_KEY=...` (preferred, free from Google Cloud → Tenor API) or `GIPHY_API_KEY=...`. Without one the GIF tab says so; everything else works.
+
 ## Features
 
 - Accounts: register, log in (JWT), presence status (online / idle / dnd / invisible)
@@ -26,7 +28,10 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 - Custom status: "Set a custom status" from your user panel (emoji + text, 128 chars) shows under your name in DM lists, member lists, DM headers and as a bubble on your profile card.
 - Pinned messages: pin from a message's "⋯" menu (Manage Messages in servers, anyone in a DM); the pin button in the header lists them with Jump and Unpin. Message search (header box, Enter) lists matches with Jump. The hover bar also offers your three most-used reactions, and the "⋯" menu has Copy Text, Copy Message ID and Delete.
 - Spoiler attachments: mark a pending upload as a spoiler (eye icon); it is blurred with a SPOILER badge until clicked. Discord's `SPOILER_` filename convention is used, so uploads from Discord render the same way.
-- Profiles (User Settings → Profiles, with live preview): avatar and banner uploads (resized in the browser), pronouns, a theme colour with optional second colour for a gradient that tints the whole profile card, an About Me that supports inline markdown (bold, italic, underline, strike, code, spoilers, quotes, links), and a name colour with optional gradient that styles your name in chat, DMs and lists
+- Expression picker (GIF / Stickers / Emoji tabs from the composer's three buttons): the emoji tab has search, a category rail (Frequently Used, each server's custom emoji, then the nine unicode groups ≈1,900 emoji) and a `:name:` preview; picks insert at the caret. Add Reaction on a message opens the same picker, so any emoji (custom included) can be a reaction, and the hover bar keeps offering your three most-used. A message that is only emoji renders them jumbo.
+- Custom emoji and stickers per server (Server Settings → Emoji / Stickers, Manage Server): up to 100 emoji (PNG/JPEG/GIF/WebP ≤ 512 KB, names 2–32 `[A-Za-z0-9_]`, inline rename, live updates) and 60 stickers (≤ 1 MB, name/description/tags). Emoji appear in text as `<:name:id>` / `<a:name:id>` and are usable in any server you belong to; a sticker sends as its own message (`sticker_id`) and renders at 160 px.
+- GIFs: the GIF tab shows categories, trending, local favourites (star a GIF) and search via a backend proxy to Tenor/GIPHY, so the key never reaches the browser. Picking one sends its URL; a message that is just a link to an image/GIF renders as an inline embed instead of a bare link.
+- Profiles (User Settings → Profiles, with live preview): avatar and banner uploads (still images are resized in the browser; GIF, APNG and animated WebP are uploaded as-is and stay animated, up to 8 MB), pronouns, a theme colour with optional second colour for a gradient that tints the whole profile card, an About Me that supports inline markdown (bold, italic, underline, strike, code, spoilers, quotes, links), and a name colour with optional gradient that styles your name in chat, DMs and lists
 - Servers: create, rename, icon, delete, leave, kick, ban (with reason; Server Settings → Bans lists and revokes them, banned users can't accept invites), transfer ownership (owner only, from Server Settings; the new owner gets full control and the old owner keeps only their roles), invite links (`/invite/<code>`, optional max uses)
 - Roles & permissions (Server Settings → Roles / Members): Discord-style roles with colour (solid or two-colour gradient, applied to member names in chat and lists; the highest coloured role wins over a user's own name style), hoisting and a permission bitfield; role hierarchy (you can only edit, assign or kick below your highest role); per-channel allow/deny overwrites for roles and members, private channels, and a "Private channel" switch when creating one. Permissions are enforced server-side and the UI hides what you can't do. See *Permissions* below.
 - Channels: text and voice, topics, rename, delete, unread indicators
@@ -84,15 +89,19 @@ GET   /guilds   POST /guilds   GET|PATCH|DELETE /guilds/:id
 GET|POST /guilds/:id/channels   GET /guilds/:id/members
 DELETE /guilds/:id/members/@me   DELETE /guilds/:id/members/:uid
 GET /guilds/:id/bans   PUT|DELETE /guilds/:id/bans/:uid {reason}   POST /guilds/:id/owner {user_id}
+GET|POST(multipart name+file) /guilds/:id/emojis   PATCH|DELETE /guilds/:id/emojis/:eid
+GET|POST(multipart name+description+tags+file) /guilds/:id/stickers   PATCH|DELETE /guilds/:id/stickers/:sid
+POST /images?kind=avatar|banner|icon (multipart file → {url, animated})   GET /images/:id
+GET /gifs/search?q=&pos=   GET /gifs/trending?pos=   GET /gifs/categories
 GET|POST /guilds/:id/invites   GET|POST /invites/:code
 GET|PATCH|DELETE /channels/:id
-GET|POST /channels/:id/messages?before=&limit=   GET /channels/:id/search?q=
+GET|POST /channels/:id/messages?before=&limit= {content, reply_to, attachment_ids, sticker_id}   GET /channels/:id/search?q=
 GET /channels/:id/pins   PUT|DELETE /channels/:id/pins/:mid
 PATCH|DELETE /channels/:id/messages/:mid
 PUT|DELETE /channels/:id/messages/:mid/reactions/:emoji
 POST /channels/:id/typing   PUT /channels/:id/read {message_id}
 GET  /ws?token=<jwt>   (events: READY, MESSAGE_CREATE/UPDATE/DELETE, REACTION_ADD/REMOVE,
-      TYPING_START, PRESENCE_UPDATE, USER_UPDATE, GUILD_*, GUILD_MEMBER_*, GUILD_BAN_ADD/REMOVE, CHANNEL_*, READ_STATE_UPDATE,
+      TYPING_START, PRESENCE_UPDATE, USER_UPDATE, GUILD_*, GUILD_MEMBER_*, GUILD_BAN_ADD/REMOVE, GUILD_EMOJIS_UPDATE, GUILD_STICKERS_UPDATE, CHANNEL_*, READ_STATE_UPDATE,
       VOICE_STATE_UPDATE, VOICE_SIGNAL, VOICE_ERROR)
       client ops: ping, typing, voice_join, voice_leave, voice_state, voice_signal
 ```
@@ -141,6 +150,8 @@ Composer and message editor: **Ctrl/⌘+B / I / U / E** (bold, italic, underline
 ## Attachments
 
 Files are uploaded first (`POST /api/channels/:id/attachments`, multipart field `file`) and then referenced by `attachment_ids` in `POST /api/channels/:id/messages`; a message may have empty content if it has attachments. Uploads that are never attached are swept after an hour. Files live on disk under `UPLOAD_DIR` (the `uploads` volume in compose) and metadata in the `attachments` table; deleting a message deletes its files.
+
+Profile images (avatars, banners, server icons) and the files behind custom emoji and stickers go through `POST /api/images` into the `images` table and the same upload directory, served at `/api/images/<uuid-v4>` with an immutable cache header; a custom emoji or sticker shares its id with its image, so `<:name:id>` resolves without a lookup. Replacing an avatar deletes the old file; unreferenced images are swept after an hour. Data-URL avatars from older clients are still accepted.
 
 The content type is sniffed from magic bytes, not trusted from the client. Only known image/video/audio/PDF/text types are served `inline`; everything else is `Content-Disposition: attachment` with `nosniff` and a restrictive CSP, so an uploaded HTML or SVG file can never run in the app's origin. Files are served without authentication at `/api/attachments/<uuid-v4>/<name>` so `<img>` tags work, relying on the unguessable id (Discord-CDN style); put the API behind HTTPS if that matters to you.
 

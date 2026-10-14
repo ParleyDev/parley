@@ -1,5 +1,5 @@
 import { useStore, type ReadyPayload } from '../store'
-import type { Ban, Channel, DmChannel, Guild, Member, Message, Relationship, Role, User, VoiceState } from './types'
+import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Relationship, Role, Sticker, User, VoiceState } from './types'
 import { voice } from './voice'
 
 type Ev =
@@ -20,6 +20,8 @@ type Ev =
   | { t: 'RELATIONSHIP_ADD'; d: Relationship }
   | { t: 'RELATIONSHIP_REMOVE'; d: { user_id: string } }
   | { t: 'GUILD_UPDATE'; d: Guild }
+  | { t: 'GUILD_EMOJIS_UPDATE'; d: { guild_id: string; emojis: Emoji[] } }
+  | { t: 'GUILD_STICKERS_UPDATE'; d: { guild_id: string; stickers: Sticker[] } }
   | { t: 'GUILD_DELETE'; d: { id: string } }
   | { t: 'GUILD_MEMBER_ADD'; d: Member }
   | { t: 'GUILD_MEMBER_REMOVE'; d: { guild_id: string; user_id: string } }
@@ -115,6 +117,8 @@ function handle(ev: Ev) {
     case 'USER_UPDATE': s.upsertUser(ev.d); break
     case 'GUILD_CREATE': s.upsertGuild(ev.d); break
     case 'GUILD_UPDATE': s.upsertGuild(ev.d); break
+    case 'GUILD_EMOJIS_UPDATE': s.setGuildEmojis(ev.d.guild_id, ev.d.emojis); break
+    case 'GUILD_STICKERS_UPDATE': s.setGuildStickers(ev.d.guild_id, ev.d.stickers); break
     case 'GUILD_DELETE': s.removeGuild(ev.d.id); break
     case 'GUILD_MEMBER_ADD': s.upsertMember(ev.d); break
     case 'GUILD_MEMBER_UPDATE': s.upsertMember(ev.d); break

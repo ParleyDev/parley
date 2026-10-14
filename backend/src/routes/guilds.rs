@@ -168,6 +168,7 @@ async fn update_guild(
         }
     }
     validate_image(&req.icon_url)?;
+    let before: (Option<String>,) = sqlx::query_as("SELECT icon_url FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await?;
     let g = sqlx::query_as::<_, Guild>(&format!(
         "UPDATE guilds SET name = COALESCE($2, name),
            icon_url = CASE WHEN $3::text IS NULL THEN icon_url WHEN $3 = '' THEN NULL ELSE $3 END
@@ -178,6 +179,7 @@ async fn update_guild(
     .bind(req.icon_url)
     .fetch_one(&state.db)
     .await?;
+    crate::routes::images::release_replaced(&state, before.0.as_deref(), g.icon_url.as_deref()).await;
     state.hub.emit_guild(id, "GUILD_UPDATE", json!(g));
     Ok(Json(g))
 }

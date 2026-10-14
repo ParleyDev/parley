@@ -27,6 +27,7 @@ base64 = "0.22"
 infer = "0.16"
 imagesize = "0.13"
 tokio-util = { version = "0.7", features = ["io"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [profile.release]
 opt-level = 3

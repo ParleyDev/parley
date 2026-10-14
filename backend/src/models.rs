@@ -124,6 +124,18 @@ pub struct MessageRow {
     pub username: String,
     pub display_name: String,
     pub avatar_url: Option<String>,
+    pub sticker_id: Option<Uuid>,
+    pub sticker_name: Option<String>,
+    pub sticker_animated: Option<bool>,
+}
+
+/// The sticker attached to a message (at most one, like Discord).
+#[derive(Debug, Clone, Serialize)]
+pub struct MessageSticker {
+    pub id: Uuid,
+    pub name: String,
+    pub animated: bool,
+    pub url: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -145,6 +157,7 @@ pub struct Message {
     pub pinned_at: Option<DateTime<Utc>>,
     pub reactions: Vec<Reaction>,
     pub attachments: Vec<Attachment>,
+    pub sticker: Option<MessageSticker>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -208,6 +221,12 @@ impl MessageRow {
             created_at: self.created_at,
             edited_at: self.edited_at,
             pinned_at: self.pinned_at,
+            sticker: self.sticker_id.map(|id| MessageSticker {
+                id,
+                name: self.sticker_name.clone().unwrap_or_default(),
+                animated: self.sticker_animated.unwrap_or(false),
+                url: crate::routes::images::image_url(id),
+            }),
             author: User {
                 id: self.author_id,
                 username: self.username,

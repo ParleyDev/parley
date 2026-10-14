@@ -64,8 +64,8 @@ pub fn validate_image_max(url: &Option<String>, max: usize) -> AppResult<()> {
         if u.len() > max {
             return Err(AppError::BadRequest(format!("Image too large (max {}KB)", max / 1024)));
         }
-        if !u.is_empty() && !(u.starts_with("data:image/") || u.starts_with("https://") || u.starts_with("http://")) {
-            return Err(AppError::BadRequest("Image must be a data URL or http(s) URL".into()));
+        if !u.is_empty() && !(u.starts_with("data:image/") || u.starts_with("https://") || u.starts_with("http://") || crate::routes::images::image_id(u).is_some()) {
+            return Err(AppError::BadRequest("Image must be an uploaded image, a data URL or an http(s) URL".into()));
         }
     }
     Ok(())
@@ -109,6 +109,7 @@ async fn update_me(
         }
     }
     validate_image(&req.avatar_url)?;
+    let before: (Option<String>, Option<String>) = sqlx::query_as("SELECT avatar_url, banner_url FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
 
     let u = sqlx::query_as::<_, PrivateUser>(
         &format!("UPDATE users SET
@@ -140,6 +141,8 @@ async fn update_me(
     .bind(req.custom_status.as_ref().map(|c| c.trim().chars().take(128).collect::<String>()))
     .fetch_one(&state.db)
     .await?;
+    crate::routes::images::release_replaced(&state, before.0.as_deref(), u.avatar_url.as_deref()).await;
+    crate::routes::images::release_replaced(&state, before.1.as_deref(), u.banner_url.as_deref()).await;
 
     let public = User {
         id: u.id,

@@ -9,12 +9,13 @@ import type { Message } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
 import Attachments from './Attachments'
+import Emoji from './Emoji'
+import ExpressionPicker from './ExpressionPicker'
+import { isJumbo } from '../lib/emoji'
 import { api } from '../lib/api'
 import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
 import { useParams } from 'react-router-dom'
-
-const QUICK = ['👍', '❤️', '😂', '🔥', '👀', '🎉']
 
 interface Props { message: Message; grouped: boolean; isOwn: boolean; onReply: () => void; replyTarget: Message | null }
 
@@ -31,16 +32,11 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.content)
   const editRef = useRef<HTMLTextAreaElement>(null)
-  const [picker, setPicker] = useState(false)
-  // The picker opens upward (over older messages) so it is never clipped by the bottom of the
-  // scrolling list; only when the message sits right under the header does it open downward.
+  // The full emoji picker is portalled beside the hover bar so the scrolling list never clips it.
+  const [picker, setPicker] = useState<DOMRect | null>(null)
   const [pickerUp, setPickerUp] = useState(true)
   const pickerAnchor = useRef<HTMLDivElement>(null)
-  const togglePicker = () => {
-    const top = pickerAnchor.current?.getBoundingClientRect().top ?? 999
-    setPickerUp(top > 140)
-    setPicker((p) => !p)
-  }
+  const togglePicker = () => setPicker((p) => (p ? null : pickerAnchor.current?.getBoundingClientRect() ?? null))
   // Phones have no hover: tapping the message body toggles the action bar.
   const [tapped, setTapped] = useState(false)
   const blocked = useStore((s) => isBlocked(s, m.author.id))
@@ -67,11 +63,13 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
   const copy = async (label: string, text: string) => { try { await navigator.clipboard.writeText(text); pushToast(`${label} copied`) } catch { pushToast('Clipboard unavailable', 'error') } }
   const react = async (emoji: string, has: boolean) => {
-    setPicker(false)
+    setPicker(null)
     const path = `/channels/${m.channel_id}/messages/${m.id}/reactions/${encodeURIComponent(emoji)}`
     if (!has) recordEmoji(emoji)
     try { has ? await api.delete(path) : await api.put(path) } catch (e) { pushToast((e as Error).message, 'error') }
   }
+
+  const media = soleMediaUrl(m.content)
 
   if (blocked && !revealed) {
     return (
@@ -94,12 +92,12 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         {grouped ? (
           <div className="w-10 max-md:w-8 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
         ) : (
-          <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} className="shrink-0 mt-0.5"><Avatar user={m.author} size={40} /></button>
+          <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} className="shrink-0 self-start" data-msg-avatar><Avatar user={m.author} size={40} /></button>
         )}
         <div className="min-w-0 flex-1">
           {!grouped && (
-            <div className="flex items-baseline gap-2">
-              <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} className="font-semibold hover:underline"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
+            <div className="flex items-baseline gap-2 leading-[1.375rem] h-[1.375rem]" data-msg-header>
+              <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} className="font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
             </div>
           )}
@@ -111,11 +109,15 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
             </div>
           ) : (
             <>
-              {(m.content || m.edited_at) && (
-                <div className="msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap">
+              {(m.content || m.edited_at) && !media && (
+                <div className={`msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap ${isJumbo(m.content) ? 'jumbo' : ''}`}>
                   {renderMarkdown(m.content)}
                   {m.edited_at && <span className="ml-1 text-[10px] text-text-2">(edited)</span>}
                 </div>
+              )}
+              {media && <MediaEmbed url={media} />}
+              {m.sticker && (
+                <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
               <Attachments items={m.attachments ?? []} />
             </>
@@ -123,8 +125,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           {m.reactions.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">
               {m.reactions.map((r) => (
-                <button key={r.emoji} disabled={!canReact && !r.me} onClick={() => react(r.emoji, r.me)} className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-sm ${r.me ? 'border-accent bg-accent/20' : 'border-line bg-bg-3 hover:border-text-2'}`}>
-                  <span>{r.emoji}</span><span className="text-xs font-semibold text-text-1">{r.count}</span>
+                <button key={r.emoji} disabled={!canReact && !r.me} onClick={() => react(r.emoji, r.me)} data-reaction={r.emoji} className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-sm ${r.me ? 'border-accent bg-accent/20' : 'border-line bg-bg-3 hover:border-text-2'}`}>
+                  <Emoji value={r.emoji} size={20} /><span className="text-xs font-semibold text-text-1">{r.count}</span>
                 </button>
               ))}
             </div>
@@ -135,16 +137,12 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       {!editing && (
         <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
           {m.pinned_at && <span className="h-8 px-1.5 flex items-center text-text-2" title="Pinned"><Pin size={13} /></span>}
-          {canReact && frequent.map((e) => <button key={e} title={`React with ${e}`} onClick={() => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} className="h-8 w-8 flex items-center justify-center text-base hover:bg-bg-3 first:rounded-l-lg" data-quick-react>{e}</button>)}
+          {canReact && frequent.map((e) => <button key={e} title={`React with ${e}`} onClick={() => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} className="h-8 w-8 flex items-center justify-center text-base hover:bg-bg-3 first:rounded-l-lg" data-quick-react><Emoji value={e} size={20} /></button>)}
           {canReact && <div className="relative" ref={pickerAnchor}>
             <Tool label="Add Reaction" onClick={togglePicker}><SmilePlus size={16} /></Tool>
             {picker && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setPicker(false)} />
-                <div className={`pop absolute right-0 z-40 flex gap-1 rounded-lg bg-bg-0 border border-line p-1 shadow-2xl ${pickerUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
-                  {QUICK.map((e) => <button key={e} onClick={() => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} className="h-8 w-8 rounded-md text-lg hover:bg-bg-3">{e}</button>)}
-                </div>
-              </>
+              <ExpressionPicker tabs={['emoji']} anchor={picker} guildId={guildId ?? null} onClose={() => setPicker(null)}
+                onEmoji={(e) => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} />
             )}
           </div>}
           <Tool label="Reply" onClick={onReply}><Reply size={16} /></Tool>
@@ -175,4 +173,24 @@ function MenuBtn({ children, icon, onClick, danger }: { children: React.ReactNod
 
 function Tool({ children, label, onClick, danger }: { children: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
   return <button title={label} onClick={onClick} className={`h-8 w-8 flex items-center justify-center hover:bg-bg-3 first:rounded-l-lg last:rounded-r-lg ${danger ? 'text-danger' : 'text-text-1 hover:text-text-0'}`}>{children}</button>
+}
+
+/** A message that is nothing but a link to an image/GIF (e.g. from the GIF picker) renders as the image. */
+const MEDIA_HOSTS = /^https?:\/\/(media\.tenor\.com|c\.tenor\.com|media[0-9]*\.giphy\.com|i\.giphy\.com|i\.imgur\.com)\//i
+function soleMediaUrl(content: string): string | null {
+  const t = content.trim()
+  if (!t || /\s/.test(t) || !/^https?:\/\//i.test(t)) return null
+  const path = t.split(/[?#]/)[0]
+  return /\.(gif|png|jpe?g|webp|avif)$/i.test(path) || MEDIA_HOSTS.test(t) ? t : null
+}
+
+function MediaEmbed({ url }: { url: string }) {
+  const openModal = useStore((s) => s.openModal)
+  const [failed, setFailed] = useState(false)
+  if (failed) return <a href={url} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all">{url}</a>
+  return (
+    <button onClick={() => openModal({ kind: 'image', url, name: url.split('/').pop() ?? 'image' })} className="mt-1 block overflow-hidden rounded-lg bg-bg-0/40 border border-line hover:border-text-2 max-w-full" title={url} data-media-embed>
+      <img src={url} alt="" loading="lazy" onError={() => setFailed(true)} className="block max-h-[300px] max-w-[400px] object-contain" />
+    </button>
+  )
 }

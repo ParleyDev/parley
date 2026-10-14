@@ -3,7 +3,8 @@ import { useRef, useState } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import type { PrivateUser } from '../../../lib/types'
-import { colorFor, resizeImage } from '../../../lib/format'
+import { colorFor } from '../../../lib/format'
+import { prepareImage, uploadImage } from '../../../lib/upload'
 import ImagePicker from '../ImagePicker'
 import ProfileCard from '../../ProfileCard'
 import { Toggle } from '../SettingsShell'
@@ -49,7 +50,7 @@ export default function ProfilesTab() {
   }
   const pickBanner = async (f: File | undefined) => {
     if (!f) return
-    try { setBanner(await resizeImage(f, 1200, 480, 900 * 1024)) } catch (e) { pushToast((e as Error).message, 'error') }
+    try { setBanner((await uploadImage('banner', await prepareImage(f, 1200, 480))).url) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const base = primary ?? colorFor(user.id)
 
@@ -62,7 +63,8 @@ export default function ProfilesTab() {
           <div><label className="label">Pronouns</label><input className="input" value={pronouns} onChange={(e) => setPronouns(e.target.value)} maxLength={40} placeholder="Add your pronouns" /></div>
           <div>
             <label className="label">Avatar</label>
-            <ImagePicker value={avatar} onChange={setAvatar} label={display} id={user.id} />
+            <ImagePicker value={avatar} onChange={setAvatar} label={display} id={user.id} kind="avatar" />
+            <p className="text-xs text-text-2 mt-1">PNG, JPEG, GIF or WebP up to 8 MB. Animated GIF, APNG and WebP stay animated.</p>
           </div>
           <div>
             <label className="label">Profile banner</label>
@@ -71,10 +73,10 @@ export default function ProfilesTab() {
                 {banner ? <img src={banner} alt="" className="h-full w-full object-cover" /> : <span className="text-xs text-text-2">Upload banner</span>}
                 <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white"><Camera size={22} /></span>
               </button>
-              <input ref={bannerRef} type="file" accept="image/*" className="hidden" onChange={(e) => { pickBanner(e.target.files?.[0]); e.target.value = '' }} />
+              <input ref={bannerRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/apng" className="hidden" onChange={(e) => { pickBanner(e.target.files?.[0]); e.target.value = '' }} data-banner-input />
               {banner && <button type="button" onClick={() => setBanner(null)} className="text-text-2 hover:text-danger" title="Remove banner"><Trash2 size={18} /></button>}
             </div>
-            <p className="text-xs text-text-2 mt-1">Without a banner the card shows your theme colour. Images are resized to 1200×480.</p>
+            <p className="text-xs text-text-2 mt-1">Without a banner the card shows your theme colour. Still images are resized to 1200×480; animated ones are kept as uploaded.</p>
           </div>
           <div className="space-y-4 rounded-xl bg-bg-0/40 border border-line p-4">
             <ColorField label="Theme colour" value={primary} onChange={setPrimary} allowClear base={base} />

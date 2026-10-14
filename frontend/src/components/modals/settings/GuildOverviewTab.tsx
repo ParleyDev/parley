@@ -28,7 +28,7 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
     <form onSubmit={submit} className="space-y-6">
       <h1 className="text-xl font-bold">Server Overview</h1>
       <div className="flex items-start gap-6 max-md:flex-col">
-        <ImagePicker value={icon} onChange={setIcon} label={name} id={guildId} />
+        <ImagePicker value={icon} onChange={setIcon} label={name} id={guildId} kind="icon" />
         <div className="flex-1 w-full"><label className="label">Server name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
       </div>
       <div className="rounded-xl bg-bg-0/50 border border-line p-4">

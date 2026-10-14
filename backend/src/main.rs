@@ -53,7 +53,8 @@ async fn main() -> anyhow::Result<()> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
-    tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep));
+    tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep.clone()));
+    tokio::spawn(routes::images::sweep_orphans(state_for_sweep));
     let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
     tracing::info!("listening on {}", config.bind_addr);
     axum::serve(listener, app).await?;

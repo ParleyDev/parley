@@ -96,6 +96,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
         }
     }
 
+    let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &guild_ids).await.unwrap_or_default();
+    let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &guild_ids).await.unwrap_or_default();
     let dms = list_dm_channels(&state.db, user_id).await.unwrap_or_default();
     let relationships = crate::routes::relationships::list_for(&state.db, user_id).await.unwrap_or_default();
 
@@ -130,6 +132,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
             "guilds": guilds,
             "channels": channels,
             "roles": roles,
+            "emojis": emojis,
+            "stickers": stickers,
             "me_members": me_members,
             "dm_channels": dms,
             "relationships": relationships,
