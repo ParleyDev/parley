@@ -53,7 +53,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
 
     // --- Build READY payload ---
     let user = match sqlx::query_as::<_, PrivateUser>(
-        "SELECT id, username, display_name, email, avatar_url, bio, status, created_at FROM users WHERE id = $1",
+        &format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::PRIVATE_USER_COLS),
     )
     .bind(user_id)
     .fetch_one(&state.db)

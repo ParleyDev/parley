@@ -11,7 +11,7 @@ export type ModalKind =
   | { kind: 'invite'; guildId: string }
   | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
-  | { kind: 'userSettings'; tab?: 'account' | 'voice' }
+  | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string }
   | { kind: 'image'; url: string; name: string }
@@ -284,7 +284,8 @@ export const useStore = create<State>((set, get) => ({
     const users = { ...s.users }
     ms.forEach((m) => {
       map[m.user_id] = m
-      users[m.user_id] = { id: m.user_id, username: m.username, display_name: m.display_name, avatar_url: m.avatar_url, bio: '', status: m.status, created_at: m.joined_at }
+      const prev = users[m.user_id] as User | undefined
+      users[m.user_id] = { id: m.user_id, username: m.username, display_name: m.display_name, avatar_url: m.avatar_url, status: m.status, bio: prev?.bio ?? '', created_at: prev?.created_at ?? m.joined_at, banner_url: prev?.banner_url ?? null, theme_primary: prev?.theme_primary ?? null, theme_accent: prev?.theme_accent ?? null, pronouns: prev?.pronouns ?? '' }
     })
     return { members: { ...s.members, [guildId]: map }, membersLoaded: { ...s.membersLoaded, [guildId]: true }, users }
   }),

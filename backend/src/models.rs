@@ -12,6 +12,10 @@ pub struct User {
     pub bio: String,
     pub status: String,
     pub created_at: DateTime<Utc>,
+    pub banner_url: Option<String>,
+    pub theme_primary: Option<String>,
+    pub theme_accent: Option<String>,
+    pub pronouns: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -24,6 +28,10 @@ pub struct PrivateUser {
     pub bio: String,
     pub status: String,
     pub created_at: DateTime<Utc>,
+    pub banner_url: Option<String>,
+    pub theme_primary: Option<String>,
+    pub theme_accent: Option<String>,
+    pub pronouns: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -191,6 +199,10 @@ impl MessageRow {
                 bio: String::new(),
                 status: String::new(),
                 created_at: self.created_at,
+                banner_url: None,
+                theme_primary: None,
+                theme_accent: None,
+                pronouns: String::new(),
             },
             reactions,
             attachments,

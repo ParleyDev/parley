@@ -27,23 +27,23 @@ pub fn router() -> Router<AppState> {
         .route("/users/@me/relationships/:id/block", put(block))
 }
 
-const REL_SELECT: &str = "SELECT r.kind, r.created_at, u.id, u.username, u.display_name, u.avatar_url, u.bio, u.status, u.created_at AS user_created_at
-    FROM relationships r JOIN users u ON u.id = r.target_id";
+#[derive(sqlx::FromRow)]
+struct RelRow {
+    kind: String,
+    rel_created_at: chrono::DateTime<chrono::Utc>,
+    #[sqlx(flatten)]
+    user: User,
+}
 
 pub async fn list_for(db: &PgPool, uid: Uuid) -> AppResult<Vec<Relationship>> {
-    let rows: Vec<(String, chrono::DateTime<chrono::Utc>, Uuid, String, String, Option<String>, String, String, chrono::DateTime<chrono::Utc>)> =
-        sqlx::query_as(&format!("{REL_SELECT} WHERE r.user_id = $1 ORDER BY u.display_name"))
-            .bind(uid)
-            .fetch_all(db)
-            .await?;
-    Ok(rows
-        .into_iter()
-        .map(|(kind, created_at, id, username, display_name, avatar_url, bio, status, user_created_at)| Relationship {
-            kind,
-            created_at,
-            user: User { id, username, display_name, avatar_url, bio, status, created_at: user_created_at },
-        })
-        .collect())
+    let rows: Vec<RelRow> = sqlx::query_as(&format!(
+        "SELECT r.kind, r.created_at AS rel_created_at, {} FROM relationships r JOIN users u ON u.id = r.target_id WHERE r.user_id = $1 ORDER BY u.display_name",
+        USER_COLS.split(", ").map(|c| format!("u.{c}")).collect::<Vec<_>>().join(", ")
+    ))
+    .bind(uid)
+    .fetch_all(db)
+    .await?;
+    Ok(rows.into_iter().map(|r| Relationship { kind: r.kind, created_at: r.rel_created_at, user: r.user }).collect())
 }
 
 async fn one(db: &PgPool, uid: Uuid, target: Uuid) -> AppResult<Relationship> {

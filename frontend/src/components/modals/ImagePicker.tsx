@@ -1,6 +1,6 @@
 import { Camera } from 'lucide-react'
 import { useRef } from 'react'
-import { colorFor, initials, readFileAsDataUrl } from '../../lib/format'
+import { colorFor, initials, resizeImage } from '../../lib/format'
 import { useStore } from '../../store'
 
 interface Props { value: string | null; onChange: (v: string | null) => void; label: string; id: string; round?: boolean }
@@ -10,7 +10,7 @@ export default function ImagePicker({ value, onChange, label, id, round = true }
   const pushToast = useStore((s) => s.pushToast)
   const pick = async (f: File | undefined) => {
     if (!f) return
-    try { onChange(await readFileAsDataUrl(f)) } catch (e) { pushToast((e as Error).message, 'error') }
+    try { onChange(await resizeImage(f, 512, 512, 380 * 1024)) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   return (
     <div className="flex flex-col items-center gap-2">

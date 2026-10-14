@@ -20,7 +20,8 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 
 ## Features
 
-- Accounts: register, log in (JWT), profile (display name, bio, avatar upload), presence status (online / idle / dnd / invisible)
+- Accounts: register, log in (JWT), presence status (online / idle / dnd / invisible)
+- Profiles (User Settings → Profiles, with live preview): avatar and banner uploads (resized in the browser), pronouns, a theme colour with optional second colour for a gradient that tints the whole profile card, and an About Me that supports the same markdown as messages (bold, italic, underline, strike, code, quotes, links)
 - Servers: create, rename, icon, delete, leave, kick, invite links (`/invite/<code>`, optional max uses)
 - Roles & permissions (Server Settings → Roles / Members): Discord-style roles with colour, hoisting and a permission bitfield; role hierarchy (you can only edit, assign or kick below your highest role); per-channel allow/deny overwrites for roles and members, private channels, and a "Private channel" switch when creating one. Permissions are enforced server-side and the UI hides what you can't do. See *Permissions* below.
 - Channels: text and voice, topics, rename, delete, unread indicators

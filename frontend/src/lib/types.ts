@@ -6,6 +6,10 @@ export interface User {
   bio: string
   status: string
   created_at: string
+  banner_url: string | null
+  theme_primary: string | null
+  theme_accent: string | null
+  pronouns: string
 }
 export interface PrivateUser extends User { email: string }
 

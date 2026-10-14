@@ -61,7 +61,7 @@ async fn register(State(state): State<AppState>, Json(req): Json<RegisterReq>) -
     let user = sqlx::query_as::<_, PrivateUser>(
         "INSERT INTO users (id, username, display_name, email, password_hash)
          VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, username, display_name, email, avatar_url, bio, status, created_at",
+         RETURNING id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns",
     )
     .bind(id)
     .bind(&username)
@@ -93,7 +93,7 @@ async fn login(State(state): State<AppState>, Json(req): Json<LoginReq>) -> AppR
         return Err(AppError::BadRequest("Invalid credentials".into()));
     }
     let user = sqlx::query_as::<_, PrivateUser>(
-        "SELECT id, username, display_name, email, avatar_url, bio, status, created_at FROM users WHERE id = $1",
+        "SELECT id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns FROM users WHERE id = $1",
     )
     .bind(id)
     .fetch_one(&state.db)

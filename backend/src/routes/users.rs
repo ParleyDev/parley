@@ -22,11 +22,12 @@ pub fn router() -> Router<AppState> {
         .route("/users/:id", get(get_user))
 }
 
-pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at";
+pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns";
 
 async fn me(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<PrivateUser>> {
     let u = sqlx::query_as::<_, PrivateUser>(
-        "SELECT id, username, display_name, email, avatar_url, bio, status, created_at FROM users WHERE id = $1",
+        &format!("SELECT {PRIVATE_USER_COLS} FROM users WHERE id = $1"),
     )
     .bind(uid)
     .fetch_one(&state.db)
@@ -40,12 +41,21 @@ struct UpdateMe {
     bio: Option<String>,
     avatar_url: Option<String>,
     status: Option<String>,
+    /// Empty string clears, like avatar_url.
+    banner_url: Option<String>,
+    theme_primary: Option<String>,
+    theme_accent: Option<String>,
+    pronouns: Option<String>,
 }
 
 pub fn validate_image(url: &Option<String>) -> AppResult<()> {
+    validate_image_max(url, MAX_IMAGE_DATA_URL)
+}
+
+pub fn validate_image_max(url: &Option<String>, max: usize) -> AppResult<()> {
     if let Some(u) = url {
-        if u.len() > MAX_IMAGE_DATA_URL {
-            return Err(AppError::BadRequest("Image too large (max 512KB)".into()));
+        if u.len() > max {
+            return Err(AppError::BadRequest(format!("Image too large (max {}KB)", max / 1024)));
         }
         if !u.is_empty() && !(u.starts_with("data:image/") || u.starts_with("https://") || u.starts_with("http://")) {
             return Err(AppError::BadRequest("Image must be a data URL or http(s) URL".into()));
@@ -65,10 +75,22 @@ async fn update_me(
         }
     }
     if let Some(b) = &req.bio {
-        if b.len() > 190 {
-            return Err(AppError::BadRequest("Bio must be at most 190 characters".into()));
+        if b.chars().count() > 400 {
+            return Err(AppError::BadRequest("Bio must be at most 400 characters".into()));
         }
     }
+    if let Some(p) = &req.pronouns {
+        if p.chars().count() > 40 {
+            return Err(AppError::BadRequest("Pronouns must be at most 40 characters".into()));
+        }
+    }
+    for c in [&req.theme_primary, &req.theme_accent].into_iter().flatten() {
+        let ok = c.is_empty() || (c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit()));
+        if !ok {
+            return Err(AppError::BadRequest("Theme colours must be #rrggbb".into()));
+        }
+    }
+    validate_image_max(&req.banner_url, 1024 * 1024)?;
     if let Some(s) = &req.status {
         if !["online", "idle", "dnd", "invisible"].contains(&s.as_str()) {
             return Err(AppError::BadRequest("Invalid status".into()));
@@ -77,19 +99,27 @@ async fn update_me(
     validate_image(&req.avatar_url)?;
 
     let u = sqlx::query_as::<_, PrivateUser>(
-        "UPDATE users SET
+        &format!("UPDATE users SET
             display_name = COALESCE($2, display_name),
             bio = COALESCE($3, bio),
             avatar_url = CASE WHEN $4::text IS NULL THEN avatar_url WHEN $4 = '' THEN NULL ELSE $4 END,
-            status = COALESCE($5, status)
+            status = COALESCE($5, status),
+            banner_url = CASE WHEN $6::text IS NULL THEN banner_url WHEN $6 = '' THEN NULL ELSE $6 END,
+            theme_primary = CASE WHEN $7::text IS NULL THEN theme_primary WHEN $7 = '' THEN NULL ELSE $7 END,
+            theme_accent = CASE WHEN $8::text IS NULL THEN theme_accent WHEN $8 = '' THEN NULL ELSE $8 END,
+            pronouns = COALESCE($9, pronouns)
          WHERE id = $1
-         RETURNING id, username, display_name, email, avatar_url, bio, status, created_at",
+         RETURNING {PRIVATE_USER_COLS}"),
     )
     .bind(uid)
     .bind(req.display_name.map(|d| d.trim().to_string()))
-    .bind(req.bio)
+    .bind(req.bio.map(|b| b.trim_end().to_string()))
     .bind(req.avatar_url)
     .bind(req.status)
+    .bind(req.banner_url)
+    .bind(req.theme_primary)
+    .bind(req.theme_accent)
+    .bind(req.pronouns.map(|p| p.trim().to_string()))
     .fetch_one(&state.db)
     .await?;
 
@@ -101,6 +131,10 @@ async fn update_me(
         bio: u.bio.clone(),
         status: u.status.clone(),
         created_at: u.created_at,
+        banner_url: u.banner_url.clone(),
+        theme_primary: u.theme_primary.clone(),
+        theme_accent: u.theme_accent.clone(),
+        pronouns: u.pronouns.clone(),
     };
     state.hub.emit_all("USER_UPDATE", json!(public));
     Ok(Json(u))
