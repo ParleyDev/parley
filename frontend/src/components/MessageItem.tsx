@@ -1,4 +1,5 @@
-import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react'
+import { Copy, Hash, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from 'lucide-react'
+import { frequentEmoji, recordEmoji } from '../lib/recentEmoji'
 import { anchorOf } from '../lib/anchor'
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { isBlocked, myChannelPerms, useStore } from '../store'
@@ -24,6 +25,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const perms = useStore((s) => myChannelPerms(s, m.channel_id))
   const canDelete = isOwn || has(perms, P.MANAGE_MESSAGES)
   const canReact = has(perms, P.ADD_REACTIONS)
+  const canPin = m.channel_id && (guildId === undefined || has(perms, P.MANAGE_MESSAGES))
+  const [more, setMore] = useState(false)
+  const frequent = frequentEmoji(3)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.content)
   const editRef = useRef<HTMLTextAreaElement>(null)
@@ -58,15 +62,20 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     kind: 'confirm', title: 'Delete Message', body: 'Are you sure you want to delete this message?', danger: true, confirmLabel: 'Delete',
     action: async () => { try { await api.delete(`/channels/${m.channel_id}/messages/${m.id}`) } catch (e) { pushToast((e as Error).message, 'error') } },
   })
+  const togglePin = async () => {
+    try { m.pinned_at ? await api.delete(`/channels/${m.channel_id}/pins/${m.id}`) : await api.put(`/channels/${m.channel_id}/pins/${m.id}`) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const copy = async (label: string, text: string) => { try { await navigator.clipboard.writeText(text); pushToast(`${label} copied`) } catch { pushToast('Clipboard unavailable', 'error') } }
   const react = async (emoji: string, has: boolean) => {
     setPicker(false)
     const path = `/channels/${m.channel_id}/messages/${m.id}/reactions/${encodeURIComponent(emoji)}`
+    if (!has) recordEmoji(emoji)
     try { has ? await api.delete(path) : await api.put(path) } catch (e) { pushToast((e as Error).message, 'error') }
   }
 
   if (blocked && !revealed) {
     return (
-      <div className="px-4 max-md:px-3 py-1 flex items-center gap-2 text-xs text-text-2">
+      <div className="px-4 max-md:px-3 py-1 flex items-center gap-2 text-xs text-text-2" data-msg-id={m.id}>
         <span className="flex-1 border-t border-line" />
         <span>1 blocked message</span>
         <button onClick={() => setRevealed(true)} className="text-sky-400 hover:underline">Show message</button>
@@ -75,7 +84,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     )
   }
   return (
-    <div onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div data-msg-id={m.id} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {replyTarget !== null && m.reply_to && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md">{replyTarget.content || (replyTarget.attachments?.length ? '📎 Attachment' : '')}</span></>) : <i>Original message was deleted</i>}
@@ -125,6 +134,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
 
       {!editing && (
         <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
+          {m.pinned_at && <span className="h-8 px-1.5 flex items-center text-text-2" title="Pinned"><Pin size={13} /></span>}
+          {canReact && frequent.map((e) => <button key={e} title={`React with ${e}`} onClick={() => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} className="h-8 w-8 flex items-center justify-center text-base hover:bg-bg-3 first:rounded-l-lg" data-quick-react>{e}</button>)}
           {canReact && <div className="relative" ref={pickerAnchor}>
             <Tool label="Add Reaction" onClick={togglePicker}><SmilePlus size={16} /></Tool>
             {picker && (
@@ -138,11 +149,28 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           </div>}
           <Tool label="Reply" onClick={onReply}><Reply size={16} /></Tool>
           {isOwn && <Tool label="Edit" onClick={() => { setDraft(m.content); setEditing(true) }}><Pencil size={16} /></Tool>}
-          {canDelete && <Tool label="Delete" onClick={del} danger><Trash2 size={16} /></Tool>}
+          <div className="relative">
+            <Tool label="More" onClick={() => { const top = pickerAnchor.current?.getBoundingClientRect().top ?? 999; setPickerUp(top > 220); setMore((o) => !o) }}><MoreHorizontal size={16} /></Tool>
+            {more && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setMore(false)} />
+                <div className={`pop absolute right-0 z-40 min-w-[190px] rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1.5 ${pickerUp ? 'bottom-full mb-1' : 'top-full mt-1'}`} role="menu" data-msg-menu>
+                  {canPin && <MenuBtn onClick={() => { setMore(false); togglePin() }} icon={m.pinned_at ? <PinOff size={16} /> : <Pin size={16} />}>{m.pinned_at ? 'Unpin Message' : 'Pin Message'}</MenuBtn>}
+                  <MenuBtn onClick={() => { setMore(false); copy('Text', m.content) }} icon={<Copy size={16} />}>Copy Text</MenuBtn>
+                  <MenuBtn onClick={() => { setMore(false); copy('Message ID', m.id) }} icon={<Hash size={16} />}>Copy Message ID</MenuBtn>
+                  {canDelete && <><div className="my-1 h-px bg-white/10" /><MenuBtn danger onClick={() => { setMore(false); del() }} icon={<Trash2 size={16} />}>Delete Message</MenuBtn></>}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
   )
+}
+
+function MenuBtn({ children, icon, onClick, danger }: { children: React.ReactNode; icon: React.ReactNode; onClick: () => void; danger?: boolean }) {
+  return <button type="button" role="menuitem" onClick={onClick} className={`w-full flex items-center gap-2 rounded px-2 py-1.5 text-sm font-medium text-left ${danger ? 'text-[#f23f43] hover:bg-[#f23f43] hover:text-white' : 'text-[#dbdee1] hover:bg-accent hover:text-white'}`}>{icon}{children}</button>
 }
 
 function Tool({ children, label, onClick, danger }: { children: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {

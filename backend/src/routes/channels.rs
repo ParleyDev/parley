@@ -26,6 +26,9 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/messages", get(list_messages).post(create_message))
         .route("/channels/:id/messages/:mid", axum::routing::patch(edit_message).delete(delete_message))
         .route("/channels/:id/messages/:mid/reactions/:emoji", put(add_reaction).delete(remove_reaction))
+        .route("/channels/:id/pins", get(list_pins))
+        .route("/channels/:id/pins/:mid", put(pin_message).delete(unpin_message))
+        .route("/channels/:id/search", get(search_messages))
         .route("/channels/:id/typing", post(typing))
         .route("/channels/:id/read", put(mark_read))
         .route("/channels/:id/permissions/:target", put(set_overwrite).delete(delete_overwrite))
@@ -145,7 +148,7 @@ async fn delete_channel(
     Ok(StatusCode::NO_CONTENT)
 }
 
-const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at,
+const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
     u.username, u.display_name, u.avatar_url FROM messages m JOIN users u ON u.id = m.author_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
@@ -500,4 +503,96 @@ async fn mark_read(
     .bind(uid).bind(id).bind(req.message_id).execute(&state.db).await?;
     state.hub.emit_users(vec![uid], "READ_STATE_UPDATE", json!({ "channel_id": id, "last_read_msg": req.message_id }));
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Hydrate rows into messages (oldest first when `rows` is newest-first).
+async fn hydrate(db: &PgPool, rows: Vec<MessageRow>, me: Uuid, reverse: bool) -> AppResult<Vec<Message>> {
+    let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
+    let mut reactions = reactions_for(db, &ids, me).await?;
+    let mut atts = attachments_for(db, &ids).await?;
+    let it = rows.into_iter().map(|r| {
+        let rx = reactions.remove(&r.id).unwrap_or_default();
+        let at = atts.remove(&r.id).unwrap_or_default();
+        r.into_message(rx, at)
+    });
+    Ok(if reverse { it.rev().collect() } else { it.collect() })
+}
+
+async fn list_pins(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path(id): Path<Uuid>,
+) -> AppResult<Json<Vec<Message>>> {
+    require_channel(&state.db, id, uid).await?;
+    let rows = sqlx::query_as::<_, MessageRow>(&format!(
+        "{MESSAGE_SELECT} WHERE m.channel_id = $1 AND m.pinned_at IS NOT NULL ORDER BY m.pinned_at DESC LIMIT 50"
+    ))
+    .bind(id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(hydrate(&state.db, rows, uid, false).await?))
+}
+
+/// Pinning needs Manage Messages in a server; anyone in a DM may pin.
+async fn set_pinned(state: &AppState, id: Uuid, mid: Uuid, uid: Uuid, pinned: bool) -> AppResult<Json<Message>> {
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    if c.guild_id.is_some() && !has(p, perms::MANAGE_MESSAGES) {
+        return Err(AppError::Forbidden);
+    }
+    let res = sqlx::query(if pinned {
+        "UPDATE messages SET pinned_at = now() WHERE id = $1 AND channel_id = $2 AND pinned_at IS NULL"
+    } else {
+        "UPDATE messages SET pinned_at = NULL WHERE id = $1 AND channel_id = $2 AND pinned_at IS NOT NULL"
+    })
+    .bind(mid)
+    .bind(id)
+    .execute(&state.db)
+    .await?;
+    if res.rows_affected() == 0 {
+        // Either the message is missing or already in the requested state; report which.
+        let exists: Option<(bool,)> = sqlx::query_as("SELECT true FROM messages WHERE id = $1 AND channel_id = $2").bind(mid).bind(id).fetch_optional(&state.db).await?;
+        if exists.is_none() {
+            return Err(AppError::NotFound("Message not found".into()));
+        }
+    }
+    let msg = fetch_message(&state.db, mid, uid).await?;
+    let target = target_for(&state.db, &c).await?;
+    state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    Ok(Json(msg))
+}
+
+async fn pin_message(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, mid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Message>> {
+    set_pinned(&state, id, mid, uid, true).await
+}
+
+async fn unpin_message(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, mid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Message>> {
+    set_pinned(&state, id, mid, uid, false).await
+}
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    q: String,
+}
+
+/// Case-insensitive substring search over a channel's messages, newest first.
+async fn search_messages(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path(id): Path<Uuid>,
+    Query(q): Query<SearchQuery>,
+) -> AppResult<Json<Vec<Message>>> {
+    require_channel(&state.db, id, uid).await?;
+    let needle = q.q.trim();
+    if needle.is_empty() {
+        return Ok(Json(Vec::new()));
+    }
+    let pattern = format!("%{}%", needle.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+    let rows = sqlx::query_as::<_, MessageRow>(&format!(
+        "{MESSAGE_SELECT} WHERE m.channel_id = $1 AND m.content ILIKE $2 ORDER BY m.id DESC LIMIT 25"
+    ))
+    .bind(id)
+    .bind(pattern)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(hydrate(&state.db, rows, uid, false).await?))
 }

@@ -1,4 +1,4 @@
-import { Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Settings, Signal } from 'lucide-react'
+import { Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Settings, Signal, Smile } from 'lucide-react'
 import { voice } from '../lib/voice'
 import { useState } from 'react'
 import { useStore } from '../store'
@@ -23,6 +23,7 @@ export default function UserPanel() {
   const connecting = useStore((s) => s.voiceConnecting)
   const voiceChannel = useStore((s) => (s.myVoiceChannelId ? s.channels[s.myVoiceChannelId] : undefined))
   const voiceGuild = useStore((s) => (voiceChannel?.guild_id ? s.guilds[voiceChannel.guild_id] : undefined))
+  const voiceDm = useStore((s) => (s.myVoiceChannelId ? s.dms[s.myVoiceChannelId]?.recipients[0]?.display_name : undefined))
   const pttMode = useStore((s) => s.voiceSettings.inputMode === 'ptt')
   const pttHeld = useStore((s) => s.pttHeld)
   if (!user) return null
@@ -39,7 +40,7 @@ export default function UserPanel() {
           <Signal size={16} className={connecting ? 'text-warn' : 'text-success'} />
           <div className="min-w-0 flex-1">
             <div className={`text-xs font-bold ${connecting ? 'text-warn' : 'text-success'}`}>{connecting ? 'Connecting…' : 'Voice Connected'}</div>
-            <div className="text-[11px] text-text-2 truncate">{voiceChannel?.name ?? 'Voice'}{voiceGuild ? ` / ${voiceGuild.name}` : ''}</div>
+            <div className="text-[11px] text-text-2 truncate">{voiceDm ? `${voiceDm} / Direct Message` : `${voiceChannel?.name ?? 'Voice'}${voiceGuild ? ` / ${voiceGuild.name}` : ''}`}</div>
           </div>
           {pttMode && <span title="Push to talk" className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${pttHeld ? 'bg-success text-black' : 'bg-bg-3 text-text-2'}`}>PTT</span>}
           <button title="Voice Settings" onClick={() => openModal({ kind: 'userSettings', tab: 'voice' })} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0"><Settings size={16} /></button>
@@ -51,7 +52,7 @@ export default function UserPanel() {
         <Avatar user={user} size={32} presence />
         <div className="min-w-0">
           <div className="text-sm font-semibold truncate leading-tight"><StyledName userId={user.id}>{user.display_name}</StyledName></div>
-          <div className="text-[11px] text-text-2 truncate leading-tight">{STATUSES.find((s) => s.v === user.status)?.label ?? 'Online'}</div>
+          <div className="text-[11px] text-text-2 truncate leading-tight" data-panel-status>{user.custom_status || (STATUSES.find((s) => s.v === user.status)?.label ?? 'Online')}</div>
         </div>
       </button>
       <IconBtn label={muted ? 'Unmute' : 'Mute'} onClick={() => voice.setMute(!muted)} active={muted}>{muted ? <MicOff size={18} /> : <Mic size={18} />}</IconBtn>
@@ -66,6 +67,8 @@ export default function UserPanel() {
               <Avatar user={user} size={40} presence />
               <div className="min-w-0"><div className="font-bold truncate">{user.display_name}</div><div className="text-xs text-text-2 truncate">@{user.username}</div></div>
             </div>
+            <div className="h-px bg-line my-1" />
+            <button onClick={() => { setOpen(false); openModal({ kind: 'customStatus' }) }} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-1 hover:bg-accent hover:text-white" data-set-status><Smile size={14} /> {user.custom_status ? 'Edit custom status' : 'Set a custom status'}</button>
             <div className="h-px bg-line my-1" />
             {STATUSES.map((s) => (
               <button key={s.v} onClick={() => setStatus(s.v)} className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-white ${user.status === s.v ? 'text-text-0' : 'text-text-1'}`}>

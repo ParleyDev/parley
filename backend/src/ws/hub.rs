@@ -21,7 +21,8 @@ pub struct Event {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct VoiceState {
-    pub guild_id: Uuid,
+    /// None for a DM call.
+    pub guild_id: Option<Uuid>,
     pub channel_id: Uuid,
     pub user_id: Uuid,
     pub self_mute: bool,
@@ -33,6 +34,9 @@ pub struct VoiceState {
     /// Which socket owns this state; another tab joining replaces it.
     #[serde(skip)]
     pub session: u64,
+    /// DM calls only: who hears about this state (the DM's members).
+    #[serde(skip)]
+    pub peers: Vec<Uuid>,
 }
 
 impl VoiceState {
@@ -140,13 +144,27 @@ impl Hub {
         let victims: Vec<VoiceState> = self.voice.iter().filter(|v| pred(v)).map(|v| v.clone()).collect();
         for v in victims {
             self.voice.remove(&v.user_id);
-            self.emit_guild(v.guild_id, "VOICE_STATE_UPDATE", v.leave_payload());
+            self.emit_voice(&v, v.leave_payload());
         }
+    }
+
+    /// Fan a voice payload out to the right audience: the guild, or a DM's members.
+    pub fn emit_voice(&self, v: &VoiceState, payload: Value) {
+        match v.guild_id {
+            Some(g) => self.emit_guild(g, "VOICE_STATE_UPDATE", payload),
+            None => self.emit_users(v.peers.clone(), "VOICE_STATE_UPDATE", payload),
+        }
+    }
+
+    /// Voice states in a set of channels (DM calls for READY).
+    pub fn voice_states_for_channels(&self, channels: &[Uuid]) -> Vec<VoiceState> {
+        let set: HashMap<Uuid, ()> = channels.iter().map(|c| (*c, ())).collect();
+        self.voice.iter().filter(|v| set.contains_key(&v.channel_id)).map(|v| v.clone()).collect()
     }
 
     /// Voice states across a set of guilds, grouped for READY.
     pub fn voice_states_for_guilds(&self, guilds: &[Uuid]) -> Vec<VoiceState> {
         let set: HashMap<Uuid, ()> = guilds.iter().map(|g| (*g, ())).collect();
-        self.voice.iter().filter(|v| set.contains_key(&v.guild_id)).map(|v| v.clone()).collect()
+        self.voice.iter().filter(|v| v.guild_id.map(|g| set.contains_key(&g)).unwrap_or(false)).map(|v| v.clone()).collect()
     }
 }

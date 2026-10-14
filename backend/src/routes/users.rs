@@ -26,8 +26,8 @@ pub fn router() -> Router<AppState> {
         .route("/users/:id/reviews/:rid", delete(delete_review))
 }
 
-pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent";
+pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status";
 
 async fn me(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<PrivateUser>> {
     let u = sqlx::query_as::<_, PrivateUser>(
@@ -52,6 +52,7 @@ struct UpdateMe {
     pronouns: Option<String>,
     name_primary: Option<String>,
     name_accent: Option<String>,
+    custom_status: Option<String>,
 }
 
 pub fn validate_image(url: &Option<String>) -> AppResult<()> {
@@ -85,6 +86,11 @@ async fn update_me(
             return Err(AppError::BadRequest("Bio must be at most 400 characters".into()));
         }
     }
+    if let Some(c) = &req.custom_status {
+        if c.chars().count() > 128 {
+            return Err(AppError::BadRequest("Custom status must be at most 128 characters".into()));
+        }
+    }
     if let Some(p) = &req.pronouns {
         if p.chars().count() > 40 {
             return Err(AppError::BadRequest("Pronouns must be at most 40 characters".into()));
@@ -114,6 +120,7 @@ async fn update_me(
             theme_primary = CASE WHEN $7::text IS NULL THEN theme_primary WHEN $7 = '' THEN NULL ELSE $7 END,
             theme_accent = CASE WHEN $8::text IS NULL THEN theme_accent WHEN $8 = '' THEN NULL ELSE $8 END,
             pronouns = COALESCE($9, pronouns),
+            custom_status = COALESCE($12, custom_status),
             name_primary = CASE WHEN $10::text IS NULL THEN name_primary WHEN $10 = '' THEN NULL ELSE $10 END,
             name_accent = CASE WHEN $11::text IS NULL THEN name_accent WHEN $11 = '' THEN NULL ELSE $11 END
          WHERE id = $1
@@ -130,6 +137,7 @@ async fn update_me(
     .bind(req.pronouns.map(|p| p.trim().to_string()))
     .bind(req.name_primary)
     .bind(req.name_accent)
+    .bind(req.custom_status.as_ref().map(|c| c.trim().chars().take(128).collect::<String>()))
     .fetch_one(&state.db)
     .await?;
 
@@ -140,6 +148,7 @@ async fn update_me(
         avatar_url: u.avatar_url.clone(),
         bio: u.bio.clone(),
         status: u.status.clone(),
+        custom_status: u.custom_status.clone(),
         created_at: u.created_at,
         banner_url: u.banner_url.clone(),
         theme_primary: u.theme_primary.clone(),

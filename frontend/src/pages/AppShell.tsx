@@ -10,6 +10,7 @@ import HomeView from '../components/HomeView'
 import VoiceView from '../components/VoiceView'
 import Modals from '../components/modals'
 import ErrorBoundary from '../components/ErrorBoundary'
+import IncomingCall from '../components/IncomingCall'
 
 /**
  * Two route trees share the URL: one picks the sidebar, one picks the main content.
@@ -45,6 +46,7 @@ export default function AppShell() {
       </Routes>
       </ErrorBoundary>
       <Modals />
+      <IncomingCall />
     </div>
   )
 }

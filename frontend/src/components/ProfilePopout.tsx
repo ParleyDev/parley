@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Clock, Crown, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { Check, ChevronRight, Clock, Crown, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
@@ -18,6 +18,8 @@ interface Props {
   /** Server the popout was opened in, if any. */
   guildId?: string
   onClose: () => void
+  /** 'panel': the DM side panel — no message box, adds Member Since and a View Full Profile button. */
+  variant?: 'popout' | 'panel'
 }
 
 /**
@@ -25,7 +27,8 @@ interface Props {
  * "username • pronouns", a clamped bio with "View Full Bio", mutual servers, and a
  * "Message @user" box. Everything else lives in the full profile ("View Full Profile").
  */
-export default function ProfilePopout({ user, guildId, onClose }: Props) {
+export default function ProfilePopout({ user, guildId, onClose, variant = 'popout' }: Props) {
+  const panel = variant === 'panel'
   const me = useStore((s) => s.user)
   const rel = useStore((s) => s.relationships[user.id]?.kind)
   const guild = useStore((s) => (guildId ? s.guilds[guildId] : undefined))
@@ -45,6 +48,7 @@ export default function ProfilePopout({ user, guildId, onClose }: Props) {
   const [sending, setSending] = useState(false)
   const [emoji, setEmoji] = useState(false)
   const [menu, setMenu] = useState(false)
+  const [friendMenu, setFriendMenu] = useState(false)
   const [bioClamped, setBioClamped] = useState(false)
   const bioRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -87,7 +91,8 @@ export default function ProfilePopout({ user, guildId, onClose }: Props) {
   const block = () => { onClose(); openModal({ kind: 'confirm', title: `Block ${user.display_name}`, body: `${user.display_name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.`, danger: true, confirmLabel: 'Block', action: () => act(() => api.put(`/users/@me/relationships/${user.id}/block`)) }) }
 
   const friendBtn = !isMe && (
-    rel === undefined ? { title: 'Add Friend', icon: <UserPlus size={18} />, fn: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }
+    rel === 'friend' ? { title: 'Friend', icon: <UserCheck size={18} />, fn: () => setFriendMenu((m) => !m) }
+    : rel === undefined ? { title: 'Add Friend', icon: <UserPlus size={18} />, fn: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }
     : rel === 'incoming' ? { title: 'Accept Friend Request', icon: <Check size={18} />, fn: () => act(() => api.put(`/users/@me/relationships/${user.id}`)) }
     : rel === 'outgoing' ? { title: 'Cancel Friend Request', icon: <Clock size={18} />, fn: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }
     : null)
@@ -133,10 +138,20 @@ export default function ProfilePopout({ user, guildId, onClose }: Props) {
       {/* Banner with overlaid buttons */}
       <div className="relative h-[105px] rounded-t-lg bg-cover bg-center" style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }}>
         <div className="absolute right-3 top-3 flex gap-2">
-          {friendBtn && <button onClick={friendBtn.fn} title={friendBtn.title} aria-label={friendBtn.title} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center">{friendBtn.icon}</button>}
-          <button onClick={() => setMenu((m) => !m)} title="More" aria-label="More" aria-expanded={menu} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center"><MoreHorizontal size={18} /></button>
+          {friendBtn && (
+            <div className="relative">
+              <button onClick={friendBtn.fn} title={friendBtn.title} aria-label={friendBtn.title} aria-expanded={rel === 'friend' ? friendMenu : undefined} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center" data-friend-badge={rel === 'friend' ? '' : undefined}>{friendBtn.icon}</button>
+              {friendMenu && <Menu items={[{ label: 'Remove Friend', danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }]} onClose={() => setFriendMenu(false)} className="top-[calc(100%+4px)] right-0" />}
+            </div>
+          )}
+          <div className="relative">
+            <button onClick={() => setMenu((m) => !m)} title="More" aria-label="More" aria-expanded={menu} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center"><MoreHorizontal size={18} /></button>
+            {menu && <Menu items={menuItems} onClose={() => setMenu(false)} className="top-0 left-[calc(100%+8px)]" />}
+          </div>
         </div>
-        {menu && <Menu items={menuItems} onClose={() => setMenu(false)} />}
+        {user.custom_status && (
+          <div className="absolute left-[104px] bottom-[-14px] max-w-[180px] rounded-xl px-3 py-1.5 text-sm shadow-lg truncate" style={{ background: themed ? '#1a1527' : '#232428' }} data-custom-status title={user.custom_status}>{user.custom_status}</div>
+        )}
       </div>
       {/* Avatar */}
       <div className="px-4 -mt-[42px]">
@@ -185,7 +200,13 @@ export default function ProfilePopout({ user, guildId, onClose }: Props) {
             <span className="font-normal text-[#b5bac1]">{reviewCount === 0 ? 'No reviews yet' : `${reviewCount} review${reviewCount === 1 ? '' : 's'}`}</span>
           </button>
         )}
-        {!isMe && rel !== 'blocked' && (
+        {panel && (
+          <div>
+            <h3 className="text-xs font-bold mb-1">Member Since</h3>
+            <p className="text-sm text-[#b5bac1]">{new Date(user.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+          </div>
+        )}
+        {!panel && !isMe && rel !== 'blocked' && (
           <div className="relative">
             <input ref={inputRef} value={quick} onChange={(e) => setQuick(e.target.value)} onKeyDown={onQuickKey} disabled={sending} maxLength={2000}
               placeholder={`Message @${nickname ?? user.display_name}`} aria-label={`Message @${user.username}`} data-quick-message
@@ -203,6 +224,7 @@ export default function ProfilePopout({ user, guildId, onClose }: Props) {
           </div>
         )}
         {rel === 'blocked' && <div className="flex items-center gap-2 text-sm text-text-2"><UserX size={16} /> You blocked this user.</div>}
+        {panel && <button onClick={fullProfile} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-view-full-profile>View Full Profile</button>}
       </div>
     </div>
   )
@@ -219,7 +241,7 @@ type MenuItem = { label: string; icon?: ReactNode; danger?: boolean; onClick?: (
 type MenuEntry = MenuItem | 'sep'
 
 /** Discord-style context menu: opens to the right of the "…" button (left if no room), submenus fly out sideways. */
-function Menu({ items, onClose }: { items: MenuEntry[]; onClose: () => void }) {
+function Menu({ items, onClose, className = '' }: { items: MenuEntry[]; onClose: () => void; className?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [flip, setFlip] = useState(false)
   useLayoutEffect(() => { const r = ref.current?.getBoundingClientRect(); if (r && r.right > window.innerWidth - 8) setFlip(true) }, [])
@@ -231,7 +253,7 @@ function Menu({ items, onClose }: { items: MenuEntry[]; onClose: () => void }) {
   return (
     <>
       <div className="fixed inset-0 z-[60]" onMouseDown={(e) => { e.stopPropagation(); onClose() }} />
-      <div ref={ref} role="menu" data-profile-menu className={`pop absolute top-3 z-[70] min-w-[190px] rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1.5 ${flip ? 'right-[calc(100%-44px)]' : 'left-[calc(100%+4px)]'}`}>
+      <div ref={ref} role="menu" data-profile-menu className={`pop absolute z-[70] min-w-[190px] rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1.5 ${flip ? 'top-0 right-[calc(100%+8px)] left-auto' : className}`}>
         {items.map((it, i) => it === 'sep'
           ? <div key={i} className="my-1 h-px bg-white/10" />
           : <MenuRow key={i} item={it} onClose={onClose} flip={flip} />)}

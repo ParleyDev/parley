@@ -18,6 +18,9 @@ pub struct User {
     pub pronouns: String,
     pub name_primary: Option<String>,
     pub name_accent: Option<String>,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub custom_status: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -36,6 +39,9 @@ pub struct PrivateUser {
     pub pronouns: String,
     pub name_primary: Option<String>,
     pub name_accent: Option<String>,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub custom_status: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -97,6 +103,9 @@ pub struct Member {
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub status: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub custom_status: String,
     #[sqlx(skip)]
     #[serde(default)]
     pub roles: Vec<Uuid>,
@@ -111,6 +120,7 @@ pub struct MessageRow {
     pub reply_to: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub edited_at: Option<DateTime<Utc>>,
+    pub pinned_at: Option<DateTime<Utc>>,
     pub username: String,
     pub display_name: String,
     pub avatar_url: Option<String>,
@@ -132,6 +142,7 @@ pub struct Message {
     pub reply_to: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub edited_at: Option<DateTime<Utc>>,
+    pub pinned_at: Option<DateTime<Utc>>,
     pub reactions: Vec<Reaction>,
     pub attachments: Vec<Attachment>,
 }
@@ -196,11 +207,13 @@ impl MessageRow {
             content: self.content,
             created_at: self.created_at,
             edited_at: self.edited_at,
+            pinned_at: self.pinned_at,
             author: User {
                 id: self.author_id,
                 username: self.username,
                 display_name: self.display_name,
                 avatar_url: self.avatar_url,
+                custom_status: String::new(),
                 bio: String::new(),
                 status: String::new(),
                 created_at: self.created_at,

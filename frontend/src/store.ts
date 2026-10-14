@@ -1,3 +1,4 @@
+import { STORAGE_PREFIX } from './lib/brand'
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
@@ -19,6 +20,7 @@ export type ModalKind =
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string }
   | { kind: 'ban'; guildId: string; userId: string }
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
+  | { kind: 'customStatus' }
 
 export interface ReadyPayload {
   user: PrivateUser
@@ -67,6 +69,8 @@ interface State {
   mobilePane: 'nav' | 'content'
   /** Member list visible (desktop sidebar / mobile overlay). */
   membersOpen: boolean
+  /** DM view: the recipient's profile panel on the right (desktop). */
+  dmProfileOpen: boolean
   // voice
   voiceStates: Record<string, VoiceState>
   iceServers: RTCIceServer[]
@@ -124,6 +128,7 @@ interface State {
   setActiveChannel: (id: string | null) => void
   setMobilePane: (p: 'nav' | 'content') => void
   setMembersOpen: (open: boolean) => void
+  setDmProfileOpen: (open: boolean) => void
   applyVoiceState: (v: VoiceState) => void
   setMyVoice: (channelId: string | null, connecting?: boolean) => void
   setSelfVoiceFlags: (mute: boolean, deaf: boolean) => void
@@ -181,6 +186,7 @@ export const useStore = create<State>((set, get) => ({
   activeChannelId: null,
   mobilePane: initialPane(),
   membersOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
+  dmProfileOpen: (() => { try { return localStorage.getItem(STORAGE_PREFIX + 'dmProfile') !== '0' } catch { return true } })(),
   voiceStates: {},
   iceServers: [],
   myVoiceChannelId: null,
@@ -297,7 +303,7 @@ export const useStore = create<State>((set, get) => ({
     ms.forEach((m) => {
       map[m.user_id] = m
       const prev = users[m.user_id] as User | undefined
-      users[m.user_id] = { id: m.user_id, username: m.username, display_name: m.display_name, avatar_url: m.avatar_url, status: m.status, bio: prev?.bio ?? '', created_at: prev?.created_at ?? m.joined_at, banner_url: prev?.banner_url ?? null, theme_primary: prev?.theme_primary ?? null, theme_accent: prev?.theme_accent ?? null, pronouns: prev?.pronouns ?? '', name_primary: prev?.name_primary ?? null, name_accent: prev?.name_accent ?? null }
+      users[m.user_id] = { id: m.user_id, username: m.username, display_name: m.display_name, avatar_url: m.avatar_url, status: m.status, bio: prev?.bio ?? '', created_at: prev?.created_at ?? m.joined_at, banner_url: prev?.banner_url ?? null, theme_primary: prev?.theme_primary ?? null, theme_accent: prev?.theme_accent ?? null, pronouns: prev?.pronouns ?? '', name_primary: prev?.name_primary ?? null, name_accent: prev?.name_accent ?? null, custom_status: m.custom_status ?? prev?.custom_status ?? '' }
     })
     return { members: { ...s.members, [guildId]: map }, membersLoaded: { ...s.membersLoaded, [guildId]: true }, users }
   }),
@@ -417,6 +423,7 @@ export const useStore = create<State>((set, get) => ({
   setActiveChannel: (id) => set({ activeChannelId: id }),
   setMobilePane: (mobilePane) => set({ mobilePane }),
   setMembersOpen: (membersOpen) => set({ membersOpen }),
+  setDmProfileOpen: (open) => { try { localStorage.setItem(STORAGE_PREFIX + 'dmProfile', open ? '1' : '0') } catch { /* ignore */ } set({ dmProfileOpen: open }) },
   applyVoiceState: (v) => set((s) => {
     const voiceStates = { ...s.voiceStates }
     if (v.channel_id) voiceStates[v.user_id] = v; else delete voiceStates[v.user_id]
