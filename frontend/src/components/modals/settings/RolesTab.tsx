@@ -3,13 +3,13 @@ import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { myGuildPerms, useStore } from '../../../store'
 import type { Role } from '../../../lib/types'
-import { canManageRole, has, P, PERMS, ROLE_COLORS, sortedRoles } from '../../../lib/perms'
+import { canManageRole, has, P, PERMS, ROLE_COLORS, sortedRoles, EMPTY_ROLES } from '../../../lib/perms'
 import { Toggle } from '../SettingsShell'
 import { nameCss } from '../../StyledName'
 
 export default function RolesTab({ guildId }: { guildId: string }) {
   const guild = useStore((s) => s.guilds[guildId])
-  const roles = useStore((s) => s.roles[guildId] ?? {})
+  const roles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   const me = useStore((s) => s.user)
   const member = useStore((s) => (me ? s.members[guildId]?.[me.id] : undefined))
   const myPerms = useStore((s) => myGuildPerms(s, guildId))

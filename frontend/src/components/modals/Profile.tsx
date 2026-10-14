@@ -5,7 +5,7 @@ import Modal from '../Modal'
 import { api } from '../../lib/api'
 import { myGuildPerms, useStore } from '../../store'
 import type { DmChannel, User } from '../../lib/types'
-import { has, highestPosition, P } from '../../lib/perms'
+import { has, highestPosition, P, EMPTY_ROLES } from '../../lib/perms'
 import { colorRole, nameCss } from '../StyledName'
 import RolePicker from '../RolePicker'
 import ProfileCard, { contrastText } from '../ProfileCard'
@@ -25,7 +25,7 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
   const guild = useStore((s) => (inGuild ? s.guilds[inGuild] : undefined))
   const member = useStore((s) => (inGuild ? s.members[inGuild]?.[userId] : undefined))
   const myMember = useStore((s) => (inGuild && me ? s.members[inGuild]?.[me.id] : undefined))
-  const roles = useStore((s) => (inGuild ? s.roles[inGuild] : undefined) ?? {})
+  const roles = useStore((s) => (inGuild ? s.roles[inGuild] : undefined) ?? EMPTY_ROLES)
   const myPerms = useStore((s) => (inGuild ? myGuildPerms(s, inGuild) : 0))
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(cached ?? null)

@@ -9,6 +9,7 @@ import MemberList from '../components/MemberList'
 import HomeView from '../components/HomeView'
 import VoiceView from '../components/VoiceView'
 import Modals from '../components/modals'
+import ErrorBoundary from '../components/ErrorBoundary'
 
 /**
  * Two route trees share the URL: one picks the sidebar, one picks the main content.
@@ -34,6 +35,7 @@ export default function AppShell() {
           <Route path="*" element={null} />
         </Routes>
       </div>
+      <ErrorBoundary>
       <Routes>
         <Route path="@me" element={<HomeView />} />
         <Route path="@me/:channelId" element={<DmChat />} />
@@ -41,6 +43,7 @@ export default function AppShell() {
         <Route path=":guildId/:channelId" element={<GuildMain />} />
         <Route path="*" element={<Navigate to="/channels/@me" replace />} />
       </Routes>
+      </ErrorBoundary>
       <Modals />
     </div>
   )

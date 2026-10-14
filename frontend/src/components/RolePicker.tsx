@@ -3,12 +3,12 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import { myGuildPerms, useStore } from '../store'
 import type { Member } from '../lib/types'
-import { canManageRole, has, highestPosition, P, sortedRoles } from '../lib/perms'
+import { canManageRole, has, highestPosition, P, sortedRoles, EMPTY_ROLES } from '../lib/perms'
 
 /** Role chips for a member plus (if allowed) a popover to add/remove roles below your own highest. */
 export default function RolePicker({ guildId, member, compact }: { guildId: string; member: Member; compact?: boolean }) {
   const guild = useStore((s) => s.guilds[guildId])
-  const roles = useStore((s) => s.roles[guildId] ?? {})
+  const roles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   const me = useStore((s) => s.user)
   const myMember = useStore((s) => (me ? s.members[guildId]?.[me.id] : undefined))
   const myPerms = useStore((s) => myGuildPerms(s, guildId))

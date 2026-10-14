@@ -2,7 +2,7 @@ import { Check, Minus, Plus, Shield, Trash2, User as UserIcon, X } from 'lucide-
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { myChannelPerms, useStore } from '../../../store'
-import { canManageRole, has, P, PERMS, sortedRoles } from '../../../lib/perms'
+import { canManageRole, has, P, PERMS, sortedRoles, EMPTY_ROLES } from '../../../lib/perms'
 import Avatar from '../../Avatar'
 import { Toggle } from '../SettingsShell'
 
@@ -12,7 +12,7 @@ export default function ChannelPermissionsTab({ channelId }: { channelId: string
   const channel = useStore((s) => s.channels[channelId])
   const guildId = channel?.guild_id ?? ''
   const guild = useStore((s) => s.guilds[guildId])
-  const roles = useStore((s) => s.roles[guildId] ?? {})
+  const roles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   const members = useStore((s) => s.members[guildId])
   const loaded = useStore((s) => !!s.membersLoaded[guildId])
   const loadMembers = useStore((s) => s.loadMembers)

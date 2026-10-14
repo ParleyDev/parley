@@ -45,6 +45,9 @@ export const PERMS: PermInfo[] = [
   { key: 'ADMINISTRATOR', label: 'Administrator', desc: 'Members with this permission have every permission and bypass all channel restrictions. This is a dangerous permission to grant.', group: 'General' },
 ]
 
+/** Stable empty map so zustand selectors never return a fresh object (which re-renders forever). */
+export const EMPTY_ROLES: Record<string, Role> = {}
+
 export const has = (perms: number, bit: number) => (perms & bit) === bit
 
 interface Ctx { guild: Guild; roles: Record<string, Role>; member: Member | undefined }

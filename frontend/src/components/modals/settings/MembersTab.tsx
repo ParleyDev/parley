@@ -2,7 +2,7 @@ import { Crown, Search, UserMinus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { myGuildPerms, useStore } from '../../../store'
-import { has, highestPosition, P } from '../../../lib/perms'
+import { has, highestPosition, P, EMPTY_ROLES } from '../../../lib/perms'
 import StyledName from '../../StyledName'
 import Avatar from '../../Avatar'
 import RolePicker from '../../RolePicker'
@@ -12,7 +12,7 @@ export default function MembersTab({ guildId }: { guildId: string }) {
   const members = useStore((s) => s.members[guildId])
   const loaded = useStore((s) => !!s.membersLoaded[guildId])
   const loadMembers = useStore((s) => s.loadMembers)
-  const roles = useStore((s) => s.roles[guildId] ?? {})
+  const roles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   const me = useStore((s) => s.user)
   const myPerms = useStore((s) => myGuildPerms(s, guildId))
   const openModal = useStore((s) => s.openModal)

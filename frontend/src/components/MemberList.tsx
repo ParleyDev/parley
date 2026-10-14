@@ -1,7 +1,7 @@
 import { Crown, X } from 'lucide-react'
 import { useStore } from '../store'
 import type { Member, Role } from '../lib/types'
-import { hoistRole, sortedRoles } from '../lib/perms'
+import { hoistRole, sortedRoles, EMPTY_ROLES } from '../lib/perms'
 import StyledName from './StyledName'
 import Avatar from './Avatar'
 
@@ -10,7 +10,7 @@ export default function MemberList({ guildId }: { guildId: string }) {
   const online = useStore((s) => s.online)
   const users = useStore((s) => s.users)
   const guild = useStore((s) => s.guilds[guildId])
-  const roles = useStore((s) => s.roles[guildId] ?? {})
+  const roles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   const openModal = useStore((s) => s.openModal)
   const open = useStore((s) => s.membersOpen)
   const setOpen = useStore((s) => s.setMembersOpen)
