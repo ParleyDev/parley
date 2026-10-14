@@ -33,11 +33,14 @@ export default function MemberList({ guildId }: { guildId: string }) {
   const sections = [...groups.filter((g) => g.members.length), onlineGroup, offlineGroup].filter((g) => g.members.length)
 
   const Row = ({ m, dim }: { m: Member; dim?: boolean }) => {
+    const status = users[m.user_id]?.custom_status ?? m.custom_status ?? ''
     return (
       <button onClick={(e) => openModal({ kind: 'profile', userId: m.user_id, anchor: anchorOf(e) })} className={`w-full flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3 text-left ${dim ? 'opacity-40 hover:opacity-100' : ''}`}>
         <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={32} presence />
-        <StyledName userId={m.user_id} guildId={guildId} className="truncate text-[15px] font-medium text-text-1">{m.nickname ?? m.display_name}</StyledName>
-        {guild?.owner_id === m.user_id && <Crown size={14} className="text-warn shrink-0" />}
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId} className="truncate text-[15px] font-medium text-text-1">{m.nickname ?? m.display_name}</StyledName>{guild?.owner_id === m.user_id && <Crown size={14} className="text-warn shrink-0" />}</span>
+          {status && <span className="block truncate text-xs text-text-2" data-member-status>{status}</span>}
+        </span>
       </button>
     )
   }

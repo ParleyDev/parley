@@ -86,6 +86,8 @@ body {
 .msg-content pre code { @apply bg-transparent p-0; }
 .msg-content blockquote { @apply border-l-4 border-bg-4 pl-3 text-text-1; }
 
+@keyframes msg-flash { from { background: rgba(109,93,252,0.35) } to { background: transparent } }
+.msg-flash { animation: msg-flash 1.8s ease-out both; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
 .fade-in { animation: fade-in .15s ease-out both; }
 @keyframes pop { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: none } }

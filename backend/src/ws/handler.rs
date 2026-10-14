@@ -83,7 +83,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
         channels.extend(perms::visible_channels(&state.db, *gid, user_id).await.unwrap_or_default());
         roles.extend(perms::list_roles(&state.db, *gid).await.unwrap_or_default());
         if let Ok(mut m) = sqlx::query_as::<_, Member>(
-            "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status
+            "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status
              FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
         )
         .bind(gid)
@@ -119,7 +119,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
     let mut events = state.hub.subscribe();
     let first = state.hub.connect(user_id);
     let online = state.hub.online_users();
-    let voice_states = state.hub.voice_states_for_guilds(&guild_ids);
+    let mut voice_states = state.hub.voice_states_for_guilds(&guild_ids);
+    voice_states.extend(state.hub.voice_states_for_channels(&dms.iter().map(|d| d.channel.id).collect::<Vec<_>>()));
     let session = state.hub.next_session();
 
     let ready = json!({
@@ -196,7 +197,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
 }
 
 fn emit_voice_leave(state: &AppState, prev: &VoiceState) {
-    state.hub.emit_guild(prev.guild_id, "VOICE_STATE_UPDATE", prev.leave_payload());
+    state.hub.emit_voice(prev, prev.leave_payload());
 }
 
 /// Keep the per-socket guild set in sync from the event stream itself.
@@ -225,25 +226,34 @@ async fn handle_client_op(
 ) {
     match op {
         ClientOp::VoiceJoin { channel_id } => {
+            // Guild voice channels need CONNECT; a DM channel is a 1:1/group call for its members.
             let (channel, p) = match crate::routes::channels::require_channel_perms(&state.db, channel_id, user_id).await {
-                Ok((c, p)) if c.kind == "voice" && c.guild_id.is_some() && has(p, perms::CONNECT) => (c, p),
+                Ok((c, p)) if c.guild_id.is_none() || (c.kind == "voice" && has(p, perms::CONNECT)) => (c, p),
                 _ => {
                     let _ = tx.send(Message::Text(json!({"t":"VOICE_ERROR","d":{"message":"You don't have permission to join this voice channel"}}).to_string())).await;
                     return;
                 }
             };
-            let guild_id = channel.guild_id.unwrap();
+            let guild_id = channel.guild_id;
+            let peers: Vec<Uuid> = if guild_id.is_none() {
+                sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM channel_members WHERE channel_id = $1").bind(channel_id).fetch_all(&state.db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default()
+            } else { Vec::new() };
             // Carry over mute/deaf prefs if moving between channels.
             let (self_mute, self_deaf) = state.hub.voice_state(user_id).map(|v| (v.self_mute, v.self_deaf)).unwrap_or((false, false));
             // Video/screen always start off in a new channel: the client re-attaches tracks after joining.
-            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress: !has(p, perms::SPEAK), session };
+            let suppress = guild_id.is_some() && !has(p, perms::SPEAK);
+            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, session, peers };
             if let Some(prev) = state.hub.voice_join(vs.clone()) {
                 if prev.channel_id != channel_id || prev.guild_id != guild_id {
                     emit_voice_leave(state, &prev);
                 }
             }
-            let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Guild(guild_id));
-            state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
+            if guild_id.is_some() {
+                let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Users(vec![user_id]));
+                state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
+            } else {
+                state.hub.emit_voice(&vs, json!(vs));
+            }
         }
         ClientOp::VoiceLeave => {
             if let Some(prev) = state.hub.voice_leave(user_id, None) {
@@ -260,15 +270,19 @@ async fn handle_client_op(
                     return;
                 }
             };
-            let can_stream = has(p, perms::STREAM);
-            let suppress = !has(p, perms::SPEAK);
+            let can_stream = channel.guild_id.is_none() || has(p, perms::STREAM);
+            let suppress = channel.guild_id.is_some() && !has(p, perms::SPEAK);
             if let Some(vs) = state.hub.voice_update(user_id, |v| {
                 v.self_mute = self_mute; v.self_deaf = self_deaf;
                 v.self_video = self_video && can_stream; v.self_stream = self_stream && can_stream;
                 v.suppress = suppress;
             }) {
-                let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Guild(vs.guild_id));
-                state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
+                if channel.guild_id.is_some() {
+                    let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Users(vec![user_id]));
+                    state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
+                } else {
+                    state.hub.emit_voice(&vs, json!(vs));
+                }
             }
         }
         ClientOp::VoiceSignal { to, data } => {

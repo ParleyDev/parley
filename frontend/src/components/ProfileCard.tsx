@@ -13,6 +13,7 @@ export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_nam
   status?: string
   name_primary?: string | null
   name_accent?: string | null
+  custom_status?: string
 }
 
 /** CSS background for a profile: the user's theme (solid or gradient) or a generated colour. */
@@ -73,6 +74,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
       </div>
       <div className="px-4 pt-2 shrink-0">
         <h2 className="text-xl font-bold leading-tight truncate"><span style={nameCssFinal}>{nameOverride ?? user.display_name}</span></h2>
+        {user.custom_status && <p className="text-sm truncate mb-0.5" data-custom-status>{user.custom_status}</p>}
         <p className="text-sm truncate" style={{ color: dim }}>
           {nameOverride && nameOverride !== user.display_name ? <span className="text-[15px]" style={{ color: text }}>{user.display_name} · </span> : null}
           <span>{user.username}</span>{user.pronouns ? <span> · {user.pronouns}</span> : null}

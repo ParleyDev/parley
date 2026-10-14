@@ -12,6 +12,7 @@ import ConfirmModal from './Confirm'
 import ImageLightbox from './ImageLightbox'
 import BanMemberModal from './BanMember'
 import TransferOwnershipModal from './TransferOwnership'
+import CustomStatusModal from './CustomStatus'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
@@ -39,6 +40,7 @@ export default function Modals() {
     case 'image': return <ImageLightbox onClose={close} url={modal!.url} name={modal!.name} />
     case 'ban': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'transferOwnership': return <TransferOwnershipModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
+    case 'customStatus': return <CustomStatusModal onClose={close} />
   }
   }
 }

@@ -1,17 +1,40 @@
 import { Download, FileText } from 'lucide-react'
+import { useState } from 'react'
 import { useStore } from '../store'
 import type { Attachment } from '../lib/types'
 import { formatBytes, isAudio, isImage, isVideo } from '../lib/upload'
 
 const MAX_W = 400, MAX_H = 300
 
-/** Renders a message's attachments: images inline (click for lightbox), video/audio players, file cards. */
+export const isSpoiler = (a: Pick<Attachment, 'filename'>) => a.filename.startsWith('SPOILER_')
+export const displayName = (a: Pick<Attachment, 'filename'>) => a.filename.replace(/^SPOILER_/, '')
+
+/** Renders a message's attachments: images inline (click for lightbox), video/audio players, file cards. Spoilers stay blurred until clicked. */
 export default function Attachments({ items }: { items: Attachment[] }) {
-  const openModal = useStore((s) => s.openModal)
   if (!items.length) return null
   return (
     <div className="mt-1 flex flex-wrap gap-2">
-      {items.map((a) => {
+      {items.map((a) => <Spoilered key={a.id} a={a}><One a={{ ...a, filename: displayName(a) }} /></Spoilered>)}
+    </div>
+  )
+}
+
+function Spoilered({ a, children }: { a: Attachment; children: React.ReactNode }) {
+  const [shown, setShown] = useState(false)
+  if (!isSpoiler(a) || shown) return <>{children}</>
+  return (
+    <div className="relative overflow-hidden rounded-lg cursor-pointer" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShown(true) }} data-spoiler-attachment>
+      <div className="pointer-events-none blur-xl brightness-50 select-none" aria-hidden>{children}</div>
+      <span className="absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-black/70 px-3 py-1 text-xs font-extrabold tracking-wider text-white">SPOILER</span></span>
+    </div>
+  )
+}
+
+function One({ a }: { a: Attachment }) {
+  const openModal = useStore((s) => s.openModal)
+  return (
+    <>
+      {[a].map((a) => {
         if (isImage(a.content_type)) {
           // Size the box from the known dimensions so the chat doesn't jump while loading.
           const w = a.width ?? MAX_W, h = a.height ?? MAX_H
@@ -44,6 +67,6 @@ export default function Attachments({ items }: { items: Attachment[] }) {
           </a>
         )
       })}
-    </div>
+    </>
   )
 }

@@ -1,4 +1,5 @@
-import { FileText, PlusCircle, SendHorizontal, Smile, X } from 'lucide-react'
+import { Eye, EyeOff, FileText, PlusCircle, SendHorizontal, Smile, X } from 'lucide-react'
+import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { myChannelPerms, useStore } from '../store'
 import { sendTyping } from '../lib/ws'
@@ -66,6 +67,19 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     })
     ref.current?.focus()
   }
+  // Spoilers are a filename convention (SPOILER_…), so toggling re-uploads under the new name.
+  const toggleSpoiler = (key: number) => setPending((ps) => ps.map((p) => {
+    if (p.key !== key) return p
+    p.handle?.abort()
+    const spoiler = !p.file.name.startsWith('SPOILER_')
+    const file = new File([p.file], spoiler ? `SPOILER_${p.file.name}` : p.file.name.replace(/^SPOILER_/, ''), { type: p.file.type })
+    const next: Pending = { ...p, file, progress: 0, done: null, error: null, handle: null }
+    next.handle = uploadFile(channel.id, file, (f) => setPending((cur) => cur.map((x) => (x.key === key ? { ...x, progress: f } : x))))
+    next.handle.promise
+      .then((att) => setPending((cur) => cur.map((x) => (x.key === key ? { ...x, done: att, progress: 1 } : x))))
+      .catch((e: Error) => setPending((cur) => cur.map((x) => (x.key === key ? { ...x, error: e.message } : x))))
+    return next
+  }))
   const removePending = (key: number) => setPending((ps) => {
     const p = ps.find((x) => x.key === key)
     if (p) { p.handle?.abort(); if (p.preview) URL.revokeObjectURL(p.preview) }
@@ -155,10 +169,11 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             {pending.map((p) => (
               <div key={p.key} className={`relative w-40 shrink-0 rounded-lg border bg-bg-2 p-2 ${p.error ? 'border-danger' : 'border-line'}`} data-pending>
                 <button onClick={() => removePending(p.key)} className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-bg-1 border border-line text-text-2 hover:text-danger flex items-center justify-center" title="Remove"><X size={12} /></button>
+                <button onClick={() => toggleSpoiler(p.key)} className={`absolute left-1 top-1 z-10 h-6 w-6 rounded-md flex items-center justify-center ${p.file.name.startsWith('SPOILER_') ? 'bg-accent text-white' : 'bg-bg-1/80 text-text-2 hover:text-text-0'}`} title={p.file.name.startsWith('SPOILER_') ? 'Unmark as spoiler' : 'Mark as spoiler'} data-spoiler-toggle>{p.file.name.startsWith('SPOILER_') ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                 <div className="h-24 flex items-center justify-center overflow-hidden rounded bg-bg-0/40">
-                  {p.preview ? <img src={p.preview} alt="" className="h-full w-full object-contain" /> : <FileText size={36} className="text-text-2" />}
+                  {p.preview ? <img src={p.preview} alt="" className={`h-full w-full object-contain ${p.file.name.startsWith('SPOILER_') ? 'blur-md brightness-50' : ''}`} /> : <FileText size={36} className="text-text-2" />}
                 </div>
-                <div className="mt-1.5 text-xs truncate" title={p.file.name}>{p.file.name}</div>
+                <div className="mt-1.5 text-xs truncate" title={p.file.name}>{p.file.name.replace(/^SPOILER_/, '')}</div>
                 <div className="text-[10px] text-text-2">{p.error ? <span className="text-danger">{p.error}</span> : p.done ? formatBytes(p.file.size) : `Uploading… ${Math.round(p.progress * 100)}%`}</div>
                 {!p.done && !p.error && <div className="mt-1 h-1 rounded bg-bg-4 overflow-hidden"><div className="h-full bg-accent transition-[width]" style={{ width: `${Math.round(p.progress * 100)}%` }} /></div>}
               </div>
@@ -176,7 +191,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setEmoji(false)} />
                 <div className="pop absolute bottom-full right-0 mb-3 z-40 grid grid-cols-[repeat(8,2rem)] gap-1 rounded-xl bg-bg-0 border border-line p-2 shadow-2xl">
-                  {QUICK_EMOJI.map((e) => <button key={e} onClick={() => { setValue((v) => v + e); setEmoji(false); ref.current?.focus() }} className="h-8 w-8 rounded-md text-xl hover:bg-bg-3">{e}</button>)}
+                  {QUICK_EMOJI.map((e) => <button key={e} onClick={() => { setValue((v) => v + e); recordEmoji(e); setEmoji(false); ref.current?.focus() }} className="h-8 w-8 rounded-md text-xl hover:bg-bg-3">{e}</button>)}
                 </div>
               </>
             )}

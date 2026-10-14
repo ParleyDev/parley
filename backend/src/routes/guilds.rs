@@ -59,7 +59,7 @@ pub async fn require_owner(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppRes
 
 pub async fn fetch_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Member> {
     let mut m = sqlx::query_as::<_, Member>(
-        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status
+        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
     )
     .bind(guild_id)
@@ -189,7 +189,7 @@ async fn delete_guild(
 ) -> AppResult<StatusCode> {
     require_owner(&state.db, id, uid).await?;
     // Emit before deleting so member set is still intact for fan-out.
-    state.hub.voice_evict(|v| v.guild_id == id);
+    state.hub.voice_evict(|v| v.guild_id == Some(id));
     state.hub.emit_guild(id, "GUILD_DELETE", json!({ "id": id }));
     sqlx::query("DELETE FROM guilds WHERE id = $1").bind(id).execute(&state.db).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -263,7 +263,7 @@ async fn list_members(
 ) -> AppResult<Json<Vec<Member>>> {
     require_member(&state.db, id, uid).await?;
     let mut ms = sqlx::query_as::<_, Member>(
-        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status
+        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 ORDER BY u.display_name",
     )
     .bind(id)
@@ -326,7 +326,7 @@ async fn try_remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> A
         .bind(guild_id)
         .execute(&state.db)
         .await?;
-    state.hub.voice_evict(|v| v.guild_id == guild_id && v.user_id == user_id);
+    state.hub.voice_evict(|v| v.guild_id == Some(guild_id) && v.user_id == user_id);
     let payload = json!({ "guild_id": guild_id, "user_id": user_id });
     state.hub.emit_guild(guild_id, "GUILD_MEMBER_REMOVE", payload.clone());
     // The removed user no longer matches the guild target; notify them directly.

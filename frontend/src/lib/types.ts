@@ -12,6 +12,8 @@ export interface User {
   pronouns: string
   name_primary: string | null
   name_accent: string | null
+  /** Free-text status line, e.g. "😂 doing things". */
+  custom_status: string
 }
 export interface PrivateUser extends User { email: string }
 /** GET /users/:id adds the servers you share with that user. */
@@ -80,6 +82,7 @@ export interface Member {
   display_name: string
   avatar_url: string | null
   status: string
+  custom_status?: string
   roles: string[]
 }
 
@@ -115,6 +118,7 @@ export interface Message {
   reply_to: string | null
   created_at: string
   edited_at: string | null
+  pinned_at: string | null
   reactions: Reaction[]
   attachments: Attachment[]
 }
@@ -131,7 +135,8 @@ export interface Invite {
 export interface ReadState { channel_id: string; last_read_msg: string | null }
 
 export interface VoiceState {
-  guild_id: string
+  /** null for a DM call */
+  guild_id: string | null
   channel_id: string | null
   user_id: string
   self_mute: boolean
