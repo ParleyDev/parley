@@ -110,12 +110,13 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
 
     let mut all_channel_ids: Vec<Uuid> = channels.iter().map(|c| c.id).collect();
     all_channel_ids.extend(dms.iter().map(|d| d.channel.id));
+    // Postgres has no max(uuid); DISTINCT ON picks the newest (v7 ids sort by time) per channel.
     let last_ids: Vec<(Uuid, Uuid)> =
-        sqlx::query_as("SELECT channel_id, MAX(id) FROM messages WHERE channel_id = ANY($1) GROUP BY channel_id")
+        sqlx::query_as("SELECT DISTINCT ON (channel_id) channel_id, id FROM messages WHERE channel_id = ANY($1) ORDER BY channel_id, id DESC")
             .bind(&all_channel_ids)
             .fetch_all(&state.db)
             .await
-            .unwrap_or_default();
+            .unwrap_or_else(|e| { tracing::error!(error = ?e, "last message ids"); Vec::new() });
 
     // Subscribe BEFORE announcing presence so we don't miss events.
     let mut events = state.hub.subscribe();

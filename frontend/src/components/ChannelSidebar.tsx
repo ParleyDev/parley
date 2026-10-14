@@ -1,6 +1,8 @@
 import { useShallow } from 'zustand/react/shallow'
 import { anchorOf } from '../lib/anchor'
-import { ChevronDown, Hash, HeadphoneOff, LogOut, MicOff, Plus, Settings, Trash2, UserPlus, Video, Volume2 } from 'lucide-react'
+import { ChevronDown, Copy, Hash, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Plus, Settings, Trash2, UserPlus, Video, Volume2 } from 'lucide-react'
+import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
+import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
 import { useState } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
@@ -23,6 +25,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const navigate = useNavigate()
   const { channelId } = useParams()
   const [menu, setMenu] = useState(false)
+  const markRead = useStore((s) => s.markRead)
+  const ctx = useContextMenu()
+  const userMenu = useUserMenu(guildId)
   const perms = useStore((s) => myGuildPerms(s, guildId))
   const chanPerms = useStore(useShallow((s) => Object.fromEntries(Object.values(s.channels).filter((c) => c.guild_id === guildId).map((c) => [c.id, myChannelPerms(s, c.id)])) as Record<string, number>))
   if (!guild) return null
@@ -34,6 +39,21 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const list = Object.values(channels).filter((c) => c.guild_id === guildId).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
   const text = list.filter((c) => c.kind === 'text')
   const voiceChannels = list.filter((c) => c.kind === 'voice')
+  const copyText = async (label: string, t: string) => { try { await navigator.clipboard.writeText(t); pushToast(`${label} copied`) } catch { pushToast('Clipboard unavailable', 'error') } }
+  const channelMenu = (c: { id: string; name: string }): MenuEntry[] => {
+    const unread = isUnread({ readStates, lastMessageId }, c.id)
+    const canEdit = canEditChannel(c.id)
+    return [
+      { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !unread, onClick: () => markRead(c.id) },
+      'sep',
+      ...(canInvite ? [{ label: 'Invite People', icon: <UserPlus size={16} />, accent: true, onClick: () => openModal({ kind: 'invite', guildId }) }] : []),
+      { label: 'Copy Link', icon: <Link2 size={16} />, onClick: () => copyText('Link', `${location.origin}/channels/${guildId}/${c.id}`) },
+      ...(canEdit ? ['sep' as const, { label: 'Edit Channel', icon: <Settings size={16} />, onClick: () => openModal({ kind: 'channelSettings', channelId: c.id }) }] : []),
+      ...(canEdit && list.length > 1 ? [{ label: 'Delete Channel', icon: <Trash2 size={16} />, danger: true, onClick: () => openModal({ kind: 'confirm', title: `Delete '${c.name}'`, body: `Are you sure you want to delete #${c.name}? This cannot be undone.`, danger: true, confirmLabel: 'Delete Channel', action: async () => { try { await api.delete(`/channels/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } }) }] : []),
+      'sep',
+      { label: 'Copy Channel ID', icon: <Copy size={16} />, onClick: () => copyText('Channel ID', c.id) },
+    ]
+  }
 
   const leave = () => openModal({
     kind: 'confirm', title: `Leave '${guild.name}'`, body: `Are you sure you want to leave ${guild.name}? You won't be able to rejoin unless you are re-invited.`, danger: true, confirmLabel: 'Leave Server',
@@ -74,7 +94,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       <div className="flex-1 overflow-y-auto px-2 pt-3 space-y-4">
         <Category label="Text Channels" onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId }) : undefined}>
           {text.map((c) => (
-            <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Hash size={18} />} name={c.name}
+            <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Hash size={18} />} name={c.name} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
               unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)} onClick={() => setMobilePane('content')}
               onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
           ))}
@@ -83,16 +103,17 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
           <Category label="Voice Channels" onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId }) : undefined}>
             {voiceChannels.map((c) => (
               <div key={c.id}>
-                <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={<Volume2 size={18} />} name={c.name}
+                <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={<Volume2 size={18} />} name={c.name} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
                   unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)} onClick={() => setMobilePane('content')}
                   onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
-                <VoiceParticipants channelId={c.id} />
+                <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />
               </div>
             ))}
           </Category>
         )}
       </div>
       <UserPanel />
+      {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
     </aside>
   )
 }
@@ -120,7 +141,7 @@ function Category({ label, onAdd, children }: { label: string; onAdd?: () => voi
   )
 }
 
-function VoiceParticipants({ channelId }: { channelId: string }) {
+function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUserMenu: (e: React.MouseEvent<HTMLElement>, u: { id: string; display_name: string; nickname?: string | null }) => void }) {
   const participants = useStore(useShallow((s) => voiceParticipants(s, channelId)))
   const users = useStore((s) => s.users)
   const me = useStore((s) => s.user)
@@ -135,7 +156,7 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
         const u = users[p.user_id] ?? (me?.id === p.user_id ? me : undefined)
         if (!u) return null
         return (
-          <button key={p.user_id} onClick={(e) => openModal({ kind: 'profile', userId: p.user_id, anchor: anchorOf(e) })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
+          <button key={p.user_id} onClick={(e) => openModal({ kind: 'profile', userId: p.user_id, anchor: anchorOf(e) })} onContextMenu={(e) => onUserMenu(e, { id: u.id, display_name: u.display_name, nickname: members?.[p.user_id]?.nickname })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
             <span className={`rounded-full ${speaking[p.user_id] ? 'ring-2 ring-success' : ''}`}><Avatar user={u} size={22} /></span>
             <StyledName userId={p.user_id} guildId={guildId} className="truncate flex-1">{members?.[p.user_id]?.nickname ?? u.display_name}</StyledName>
             {p.self_stream && <span className="rounded bg-danger px-1 text-[9px] font-extrabold text-white">LIVE</span>}
@@ -148,9 +169,9 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
   )
 }
 
-function ChannelRow({ to, icon, name, unread, onSettings, onClick }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; onSettings?: () => void; onClick?: () => void }) {
+function ChannelRow({ to, icon, name, unread, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
   return (
-    <NavLink to={to} onClick={onClick} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+    <NavLink to={to} onClick={onClick} onContextMenu={onContextMenu} data-channel-row={name} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>

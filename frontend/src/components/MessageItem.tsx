@@ -1,7 +1,12 @@
-import { Copy, Hash, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from 'lucide-react'
+import { Copy, Hash, Link2, MailOpen, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2, Volume2 } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
+import { useUserMenu } from './UserContextMenu'
+import { useEmojiHover } from './EmojiHover'
+import { parseCustom, unicodeInfo } from '../lib/emoji'
 import { frequentEmoji, recordEmoji } from '../lib/recentEmoji'
 import { anchorOf } from '../lib/anchor'
-import { useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { isBlocked, myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
 import StyledName from './StyledName'
@@ -22,7 +27,11 @@ interface Props { message: Message; grouped: boolean; isOwn: boolean; onReply: (
 export default function MessageItem({ message: m, grouped, isOwn, onReply, replyTarget }: Props) {
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
+  const setReadState = useStore((s) => s.setReadState)
   const { guildId } = useParams()
+  const ctx = useContextMenu()
+  const userMenu = useUserMenu(guildId ?? null)
+  const emojiHover = useEmojiHover()
   const perms = useStore((s) => myChannelPerms(s, m.channel_id))
   const canDelete = isOwn || has(perms, P.MANAGE_MESSAGES)
   const canReact = has(perms, P.ADD_REACTIONS)
@@ -71,6 +80,40 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
 
   const media = soleMediaUrl(m.content)
 
+  /** Right-click menu (Discord layout): quick reactions, Add Reaction, Reply, Edit, Copy Text, Pin, Mark Unread, Copy Link, Speak, Delete, Copy ID. */
+  const contextItems = (e: React.MouseEvent): MenuEntry[] => {
+    const quick = frequentEmoji(4)
+    const anchorRect = new DOMRect(e.clientX, e.clientY, 0, 0)
+    const markUnread = async () => {
+      const list = useStore.getState().messages[m.channel_id] ?? []
+      const i = list.findIndex((x) => x.id === m.id)
+      const prev = i > 0 ? list[i - 1].id : null
+      setReadState(m.channel_id, prev)
+      try { if (prev) await api.put(`/channels/${m.channel_id}/read`, { message_id: prev }) } catch (err) { pushToast((err as Error).message, 'error') }
+    }
+    const link = `${location.origin}/channels/${guildId ?? '@me'}/${m.channel_id}?message=${m.id}`
+    return [
+      ...(canReact ? [{ node: (
+        <div className="flex items-center gap-1.5 px-1 py-1" data-quick-row>
+          {quick.map((q) => <button key={q} type="button" onClick={() => { ctx.close(); react(q, !!m.reactions.find((r) => r.emoji === q && r.me)) }} className="h-10 w-10 rounded-lg bg-[#2b2d31] hover:bg-[#3f4147] flex items-center justify-center" title={`React with ${q}`}><Emoji value={q} size={24} /></button>)}
+        </div>
+      ) }] : []),
+      ...(canReact ? [{ label: 'Add Reaction', icon: <SmilePlus size={16} />, onClick: () => setPicker(anchorRect) }] : []),
+      'sep' as const,
+      { label: 'Reply', icon: <Reply size={16} />, onClick: onReply },
+      ...(isOwn ? [{ label: 'Edit Message', icon: <Pencil size={16} />, onClick: () => { setDraft(m.content); setEditing(true) } }] : []),
+      'sep' as const,
+      { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => copy('Text', m.content) },
+      ...(canPin ? [{ label: m.pinned_at ? 'Unpin Message' : 'Pin Message', icon: m.pinned_at ? <PinOff size={16} /> : <Pin size={16} />, onClick: togglePin }] : []),
+      { label: 'Mark Unread', icon: <MailOpen size={16} />, onClick: markUnread },
+      { label: 'Copy Message Link', icon: <Link2 size={16} />, onClick: () => copy('Message link', link) },
+      ...(m.content && 'speechSynthesis' in window ? [{ label: 'Speak Message', icon: <Volume2 size={16} />, onClick: () => { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(`${m.author.display_name} said ${m.content}`)) } }] : []),
+      ...(canDelete ? ['sep' as const, { label: 'Delete Message', icon: <Trash2 size={16} />, danger: true, onClick: del }] : []),
+      'sep' as const,
+      { label: 'Copy Message ID', icon: <Hash size={16} />, onClick: () => copy('Message ID', m.id) },
+    ]
+  }
+
   if (blocked && !revealed) {
     return (
       <div className="px-4 max-md:px-3 py-1 flex items-center gap-2 text-xs text-text-2" data-msg-id={m.id}>
@@ -82,7 +125,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     )
   }
   return (
-    <div data-msg-id={m.id} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div data-msg-id={m.id} onContextMenu={(e) => { if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {replyTarget !== null && m.reply_to && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md">{replyTarget.content || (replyTarget.attachments?.length ? '📎 Attachment' : '')}</span></>) : <i>Original message was deleted</i>}
@@ -92,12 +135,12 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         {grouped ? (
           <div className="w-10 max-md:w-8 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
         ) : (
-          <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} className="shrink-0 self-start" data-msg-avatar><Avatar user={m.author} size={40} /></button>
+          <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} className="shrink-0 self-start" data-msg-avatar><Avatar user={m.author} size={40} /></button>
         )}
         <div className="min-w-0 flex-1">
           {!grouped && (
             <div className="flex items-baseline gap-2 leading-[1.375rem] h-[1.375rem]" data-msg-header>
-              <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} className="font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
+              <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
             </div>
           )}
@@ -110,7 +153,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           ) : (
             <>
               {(m.content || m.edited_at) && !media && (
-                <div className={`msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap ${isJumbo(m.content) ? 'jumbo' : ''}`}>
+                <div onMouseOver={emojiHover.onMouseOver} onMouseLeave={emojiHover.onMouseLeave} className={`msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap ${isJumbo(m.content) ? 'jumbo' : ''}`}>
                   {renderMarkdown(m.content)}
                   {m.edited_at && <span className="ml-1 text-[10px] text-text-2">(edited)</span>}
                 </div>
@@ -123,17 +166,21 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
             </>
           )}
           {m.reactions.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1">
-              {m.reactions.map((r) => (
-                <button key={r.emoji} disabled={!canReact && !r.me} onClick={() => react(r.emoji, r.me)} data-reaction={r.emoji} className={`flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-sm ${r.me ? 'border-accent bg-accent/20' : 'border-line bg-bg-3 hover:border-text-2'}`}>
-                  <Emoji value={r.emoji} size={20} /><span className="text-xs font-semibold text-text-1">{r.count}</span>
+            <div className="mt-1.5 flex flex-wrap gap-1" data-reactions>
+              {m.reactions.map((r) => <ReactionChip key={r.emoji} r={r} message={m} canReact={canReact} onToggle={() => react(r.emoji, r.me)} />)}
+              {canReact && (
+                <button type="button" onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())} title="Add Reaction" data-add-reaction-chip
+                  className="h-[26px] w-[34px] rounded-lg bg-[#2b2d31] border border-transparent text-text-2 hover:border-[#4e5058] hover:text-text-0 flex items-center justify-center">
+                  <SmilePlus size={16} />
                 </button>
-              ))}
+              )}
             </div>
           )}
         </div>
       </div>
 
+      {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} label="Message" />}
+      {emojiHover.tip}
       {!editing && (
         <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
           {m.pinned_at && <span className="h-8 px-1.5 flex items-center text-text-2" title="Pinned"><Pin size={13} /></span>}
@@ -192,5 +239,38 @@ function MediaEmbed({ url }: { url: string }) {
     <button onClick={() => openModal({ kind: 'image', url, name: url.split('/').pop() ?? 'image' })} className="mt-1 block overflow-hidden rounded-lg bg-bg-0/40 border border-line hover:border-text-2 max-w-full" title={url} data-media-embed>
       <img src={url} alt="" loading="lazy" onError={() => setFailed(true)} className="block max-h-[300px] max-w-[400px] object-contain" />
     </button>
+  )
+}
+
+/** Discord-style reaction chip: emoji + count, highlighted when it's yours; hovering lists who reacted. */
+function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: string; count: number; me: boolean }; message: Message; canReact: boolean; onToggle: () => void }) {
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const [who, setWho] = useState<{ id: string; display_name: string }[] | null>(null)
+  const me = useStore((s) => s.user)
+  useEffect(() => {
+    if (!rect) return
+    let live = true
+    api.get<{ id: string; display_name: string }[]>(`/channels/${m.channel_id}/messages/${m.id}/reactions/${encodeURIComponent(r.emoji)}`).then((u) => { if (live) setWho(u) }).catch(() => { if (live) setWho([]) })
+    return () => { live = false }
+  }, [rect, m.channel_id, m.id, r.emoji, r.count])
+  const c = parseCustom(r.emoji)
+  const name = c ? `:${c.name}:` : (() => { const i = unicodeInfo(r.emoji); return i ? `:${i.slug}:` : r.emoji })()
+  const names = (who ?? []).map((u) => (u.id === me?.id ? 'You' : u.display_name))
+  const text = names.length === 0 ? '' : names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : names.length === 3 ? `${names[0]}, ${names[1]}, and ${names[2]}` : `${names[0]}, ${names[1]}, and ${names.length - 2} others`
+  return (
+    <>
+      <button type="button" disabled={!canReact && !r.me} onClick={onToggle} data-reaction={r.emoji} onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => setRect(null)}
+        className={`h-[26px] flex items-center gap-1.5 rounded-lg border px-1.5 text-sm transition ${r.me ? 'border-accent bg-accent/15 hover:bg-accent/25' : 'border-transparent bg-[#2b2d31] hover:border-[#4e5058]'}`}>
+        <Emoji value={r.emoji} size={16} /><span className={`text-[13px] font-semibold ${r.me ? 'text-text-0' : 'text-text-1'}`}>{r.count}</span>
+      </button>
+      {rect && who && createPortal(
+        <div role="tooltip" data-reaction-tip className="pop pointer-events-none fixed z-[150] max-w-[280px] rounded-lg bg-[#111214] border border-white/5 shadow-2xl p-3 flex items-center gap-3 text-sm"
+          style={{ left: Math.min(Math.max(8, rect.left + rect.width / 2 - 140), window.innerWidth - 288), top: rect.top - 8, transform: 'translateY(-100%)' }}>
+          <Emoji value={r.emoji} size={40} />
+          <div className="min-w-0"><span className="font-semibold text-text-0">{text}</span> <span className="text-text-1">reacted with {name}</span></div>
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }

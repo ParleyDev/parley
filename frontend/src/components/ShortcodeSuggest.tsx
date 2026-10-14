@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { customToken, loadEmojiGroups, searchEmoji, type EmojiGroup } from '../lib/emoji'
+import { applyTone, customToken, getSkinTone, loadEmojiGroups, searchEmoji, type EmojiGroup } from '../lib/emoji'
 import { useStore } from '../store'
 import Emoji from './Emoji'
 
@@ -24,7 +24,8 @@ export function useShortcodeSuggestions(query: string | null, guildId: string | 
   }))
   return useMemo(() => {
     if (query === null || !groups) return []
-    return searchEmoji(query, groups, custom, limit).map((r) => r.kind === 'custom' ? { token: customToken(r.emoji), label: `:${r.emoji.name}:` } : { token: r.emoji.emoji, label: `:${r.name}:` })
+    const tone = getSkinTone()
+    return searchEmoji(query, groups, custom, limit).map((r) => r.kind === 'custom' ? { token: customToken(r.emoji), label: `:${r.emoji.name}:` } : { token: r.emoji.tone ? applyTone(r.emoji.emoji, tone) : r.emoji.emoji, label: `:${r.name}:` })
   }, [query, groups, custom, limit])
 }
 

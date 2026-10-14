@@ -25,7 +25,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id", get(get_channel).patch(update_channel).delete(delete_channel))
         .route("/channels/:id/messages", get(list_messages).post(create_message))
         .route("/channels/:id/messages/:mid", axum::routing::patch(edit_message).delete(delete_message))
-        .route("/channels/:id/messages/:mid/reactions/:emoji", put(add_reaction).delete(remove_reaction))
+        .route("/channels/:id/messages/:mid/reactions/:emoji", get(list_reactors).put(add_reaction).delete(remove_reaction))
         .route("/channels/:id/pins", get(list_pins))
         .route("/channels/:id/pins/:mid", put(pin_message).delete(unpin_message))
         .route("/channels/:id/search", get(search_messages))
@@ -395,6 +395,24 @@ async fn add_reaction(
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "REACTION_ADD", json!({ "message_id": mid, "channel_id": id, "user_id": uid, "emoji": emoji }));
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Who reacted with one emoji (for the reaction tooltip), oldest first, capped at 100.
+async fn list_reactors(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, mid, emoji)): Path<(Uuid, Uuid, String)>,
+) -> AppResult<Json<Vec<serde_json::Value>>> {
+    require_channel(&state.db, id, uid).await?;
+    let rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT u.id, u.display_name, u.avatar_url FROM reactions r JOIN users u ON u.id = r.user_id
+         WHERE r.message_id = $1 AND r.emoji = $2 ORDER BY r.ctid LIMIT 100",
+    )
+    .bind(mid)
+    .bind(&emoji)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(rows.into_iter().map(|(id, name, avatar)| json!({ "id": id, "display_name": name, "avatar_url": avatar })).collect()))
 }
 
 async fn remove_reaction(
