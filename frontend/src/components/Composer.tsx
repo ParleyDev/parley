@@ -1,4 +1,4 @@
-import { Eye, EyeOff, FileText, PlusCircle, SendHorizontal, Smile, X } from 'lucide-react'
+import { Eye, EyeOff, FileText, ImagePlay, PlusCircle, SendHorizontal, Smile, Sticker, X } from 'lucide-react'
 import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { myChannelPerms, useStore } from '../store'
@@ -8,7 +8,7 @@ import { has, P } from '../lib/perms'
 import { formatBytes, isImage, MAX_PER_MESSAGE, uploadFile, type UploadHandle } from '../lib/upload'
 import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
-import { QUICK_EMOJI } from '../lib/emoji'
+import ExpressionPicker, { type PickerTab } from './ExpressionPicker'
 
 
 interface Props { channel: Channel | DmChannel; reply: Message | null; onCancelReply: () => void; onSent: () => void }
@@ -26,7 +26,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const canSend = has(perms, P.SEND_MESSAGES)
   const canAttach = canSend && (channel.guild_id === null || has(perms, P.ATTACH_FILES))
   const [value, setValue] = useState('')
-  const [emoji, setEmoji] = useState(false)
+  const [picker, setPicker] = useState<PickerTab | null>(null)
   const [pending, setPending] = useState<Pending[]>([])
   const [dragging, setDragging] = useState(false)
   const [sending, setSending] = useState(false)
@@ -137,6 +137,25 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
 
   const typers = Object.keys(typing ?? {}).map((id) => users[id]?.display_name ?? 'Someone')
 
+  /** Insert text at the caret (emoji picks), keeping focus in the textarea. */
+  const insert = (text: string) => {
+    const el = ref.current
+    if (!el) { setValue((v) => v + text); return }
+    const start = el.selectionStart ?? value.length, end = el.selectionEnd ?? value.length
+    const pad = start > 0 && !/\s$/.test(value.slice(0, start)) ? ' ' : ''
+    const next = value.slice(0, start) + pad + text + ' ' + value.slice(end)
+    setValue(next)
+    requestAnimationFrame(() => { el.focus(); const pos = start + pad.length + text.length + 1; el.setSelectionRange(pos, pos) })
+  }
+  const sendSticker = async (st: { id: string; name: string }) => {
+    setSending(true)
+    try { await sendMessage(channel.id, '', reply?.id, [], st.id); onCancelReply(); onSent() } catch (e) { pushToast((e as Error).message, 'error') } finally { setSending(false) }
+  }
+  const sendGif = async (g: { url: string }) => {
+    setSending(true)
+    try { await sendMessage(channel.id, g.url, reply?.id); onCancelReply(); onSent() } catch (e) { pushToast((e as Error).message, 'error') } finally { setSending(false) }
+  }
+
   if (!canSend) {
     return (
       <div className="shrink-0 px-4 pb-6 pt-1 max-md:px-2 max-md:pb-2">
@@ -185,15 +204,13 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           <button className={`pb-1 ${canAttach ? 'text-text-2 hover:text-text-0' : 'text-text-2/40 cursor-not-allowed'}`} title={canAttach ? 'Upload a file' : 'No permission to attach files'} onClick={() => canAttach && fileRef.current?.click()}><PlusCircle size={22} /></button>
           <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={`Message ${name}`}
             className="flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />
-          <div className="relative pb-1">
-            <button className="text-text-2 hover:text-warn" onClick={() => setEmoji((e) => !e)} title="Emoji"><Smile size={22} /></button>
-            {emoji && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setEmoji(false)} />
-                <div className="pop absolute bottom-full right-0 mb-3 z-40 grid grid-cols-[repeat(8,2rem)] gap-1 rounded-xl bg-bg-0 border border-line p-2 shadow-2xl">
-                  {QUICK_EMOJI.map((e) => <button key={e} onClick={() => { setValue((v) => v + e); recordEmoji(e); setEmoji(false); ref.current?.focus() }} className="h-8 w-8 rounded-md text-xl hover:bg-bg-3">{e}</button>)}
-                </div>
-              </>
+          <div className="relative pb-1 flex items-center gap-2.5">
+            <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title="GIF" data-gif-button><ImagePlay size={22} /></button>
+            <button className={`${picker === 'sticker' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'sticker' ? null : 'sticker'))} title="Sticker" data-sticker-button><Sticker size={22} /></button>
+            <button className={`${picker === 'emoji' ? 'text-warn' : 'text-text-2 hover:text-warn'}`} onClick={() => setPicker((p) => (p === 'emoji' ? null : 'emoji'))} title="Emoji" data-emoji-button><Smile size={22} /></button>
+            {picker && (
+              <ExpressionPicker initial={picker} guildId={channel.guild_id} className="bottom-full right-0 mb-3" onClose={() => setPicker(null)}
+                onEmoji={(t) => { insert(t); recordEmoji(t) }} onSticker={sendSticker} onGif={sendGif} />
             )}
           </div>
           <button onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-1 hover:text-accent-hover" title="Send"><SendHorizontal size={22} /></button>

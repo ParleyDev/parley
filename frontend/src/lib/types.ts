@@ -121,7 +121,40 @@ export interface Message {
   pinned_at: string | null
   reactions: Reaction[]
   attachments: Attachment[]
+  sticker?: MessageSticker | null
 }
+
+/** A server custom emoji; `url` serves the image, `id` doubles as the image id. */
+export interface Emoji {
+  id: string
+  guild_id: string
+  name: string
+  animated: boolean
+  creator_id: string | null
+  created_at: string
+  url: string
+}
+
+export interface Sticker {
+  id: string
+  guild_id: string
+  name: string
+  description: string
+  tags: string
+  animated: boolean
+  creator_id: string | null
+  created_at: string
+  url: string
+}
+
+export interface MessageSticker { id: string; name: string; animated: boolean; url: string }
+
+/** An uploaded avatar/banner/icon (`POST /images`). */
+export interface UploadedImage { id: string; kind: string; content_type: string; size: number; width: number | null; height: number | null; animated: boolean; url: string }
+
+export interface Gif { id: string; title: string; url: string; preview: string; width: number; height: number }
+export interface GifPage { results: Gif[]; next: string | null; provider: string }
+export interface GifCategory { name: string; image: string }
 
 export interface Invite {
   code: string

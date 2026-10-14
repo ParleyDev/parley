@@ -79,8 +79,10 @@ async fn accept(
     let channels = crate::perms::visible_channels(&state.db, gid, uid).await?;
 
     let roles = crate::perms::list_roles(&state.db, gid).await?;
+    let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &[gid]).await?;
+    let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &[gid]).await?;
     let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "owner_id": guild.owner_id,
-        "created_at": guild.created_at, "channels": channels, "roles": roles });
+        "created_at": guild.created_at, "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers });
     if inserted > 0 {
         state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
         if let Ok(member) = fetch_member(&state.db, gid, uid).await {

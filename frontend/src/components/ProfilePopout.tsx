@@ -7,7 +7,7 @@ import { myGuildPerms, useStore } from '../store'
 import type { DmChannel, Guild, Member, UserProfile } from '../lib/types'
 import { has, highestPosition, P, EMPTY_ROLES } from '../lib/perms'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
-import { QUICK_EMOJI } from '../lib/emoji'
+import ExpressionPicker from './ExpressionPicker'
 import Avatar from './Avatar'
 import { nameCss, colorRole } from './StyledName'
 
@@ -46,7 +46,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const navigate = useNavigate()
   const [quick, setQuick] = useState('')
   const [sending, setSending] = useState(false)
-  const [emoji, setEmoji] = useState(false)
+  const [emoji, setEmoji] = useState<DOMRect | null>(null)
   const [menu, setMenu] = useState(false)
   const [friendMenu, setFriendMenu] = useState(false)
   const [bioClamped, setBioClamped] = useState(false)
@@ -212,14 +212,10 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
               placeholder={`Message @${nickname ?? user.display_name}`} aria-label={`Message @${user.username}`} data-quick-message
               className="w-full h-11 rounded-lg pl-3 pr-10 text-sm text-[#dbdee1] placeholder:text-[#87898c] outline-none border border-transparent focus:border-white/15"
               style={{ background: themed ? 'rgba(0,0,0,0.4)' : '#1e1f22' }} />
-            <button type="button" onClick={() => setEmoji((e) => !e)} title="Emoji" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#b5bac1] hover:text-[#dbdee1]"><Smile size={20} /></button>
+            <button type="button" onClick={(e) => setEmoji((cur) => (cur ? null : e.currentTarget.getBoundingClientRect()))} title="Emoji" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#b5bac1] hover:text-[#dbdee1]"><Smile size={20} /></button>
             {emoji && (
-              <>
-                <div className="fixed inset-0 z-[60]" onClick={() => setEmoji(false)} />
-                <div className="pop absolute bottom-full right-0 mb-2 z-[70] grid grid-cols-[repeat(8,2rem)] gap-1 rounded-xl bg-bg-0 border border-line p-2 shadow-2xl">
-                  {QUICK_EMOJI.map((e) => <button key={e} onClick={() => { setQuick((v) => v + e); setEmoji(false); inputRef.current?.focus() }} className="h-8 w-8 rounded-md text-xl hover:bg-bg-3">{e}</button>)}
-                </div>
-              </>
+              <ExpressionPicker tabs={['emoji']} anchor={emoji} onClose={() => { setEmoji(null); inputRef.current?.focus() }}
+                onEmoji={(t) => setQuick((v) => (v && !/\s$/.test(v) ? v + ' ' : v) + t + ' ')} />
             )}
           </div>
         )}

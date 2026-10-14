@@ -2,6 +2,9 @@ pub mod attachments;
 pub mod auth;
 pub mod channels;
 pub mod dms;
+pub mod expressions;
+pub mod gifs;
+pub mod images;
 pub mod guilds;
 pub mod invites;
 pub mod relationships;
@@ -22,4 +25,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(channels::router())
         .merge(dms::router())
         .merge(attachments::router())
+        .merge(images::router())
+        .merge(expressions::router())
+        .merge(gifs::router())
 }

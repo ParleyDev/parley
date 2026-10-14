@@ -149,7 +149,8 @@ async fn delete_channel(
 }
 
 const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
-    u.username, u.display_name, u.avatar_url FROM messages m JOIN users u ON u.id = m.author_id";
+    u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated
+    FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
     let mut map: HashMap<Uuid, Vec<Reaction>> = HashMap::new();
@@ -232,6 +233,7 @@ struct CreateMessage {
     reply_to: Option<Uuid>,
     #[serde(default)]
     attachment_ids: Vec<Uuid>,
+    sticker_id: Option<Uuid>,
 }
 
 async fn create_message(
@@ -243,8 +245,13 @@ async fn create_message(
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
     let content = req.content.trim_end().to_string();
-    if (content.trim().is_empty() && req.attachment_ids.is_empty()) || content.chars().count() > 2000 {
+    if (content.trim().is_empty() && req.attachment_ids.is_empty() && req.sticker_id.is_none()) || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
+    }
+    if let Some(sid) = req.sticker_id {
+        if !crate::routes::expressions::sendable_sticker(&state.db, sid, uid).await? {
+            return Err(AppError::BadRequest("Unknown sticker".into()));
+        }
     }
     if !req.attachment_ids.is_empty() && c.guild_id.is_some() {
         perms::check(p, perms::ATTACH_FILES)?;
@@ -270,12 +277,13 @@ async fn create_message(
     }
     let mid = Uuid::now_v7();
     let mut tx = state.db.begin().await?;
-    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to) VALUES ($1, $2, $3, $4, $5)")
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id) VALUES ($1, $2, $3, $4, $5, $6)")
         .bind(mid)
         .bind(id)
         .bind(uid)
         .bind(&content)
         .bind(req.reply_to)
+        .bind(req.sticker_id)
         .execute(&mut *tx)
         .await?;
     link(&mut tx, mid, id, uid, &req.attachment_ids).await?;
@@ -354,7 +362,11 @@ async fn delete_message(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// A unicode emoji (short, no letters/digits) or a custom `<:name:id>` token.
 fn valid_emoji(e: &str) -> bool {
+    if crate::routes::expressions::parse_custom_emoji(e).is_some() {
+        return true;
+    }
     !e.is_empty() && e.chars().count() <= 8 && !e.chars().any(|c| c.is_ascii_alphanumeric() || c.is_whitespace())
 }
 
@@ -367,6 +379,11 @@ async fn add_reaction(
     perms::check(p, perms::ADD_REACTIONS)?;
     if !valid_emoji(&emoji) {
         return Err(AppError::BadRequest("Invalid emoji".into()));
+    }
+    if let Some((_, _, eid)) = crate::routes::expressions::parse_custom_emoji(&emoji) {
+        if !crate::routes::expressions::usable_emoji(&state.db, eid, uid).await? {
+            return Err(AppError::BadRequest("Unknown emoji".into()));
+        }
     }
     let exists: Option<(bool,)> = sqlx::query_as("SELECT true FROM messages WHERE id = $1 AND channel_id = $2")
         .bind(mid).bind(id).fetch_optional(&state.db).await?;

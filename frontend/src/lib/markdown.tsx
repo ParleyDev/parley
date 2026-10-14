@@ -1,6 +1,7 @@
 import { Fragment, useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 import hljs from 'highlight.js/lib/core'
+import { CUSTOM_TOKEN_SRC, customUrl, parseCustom } from './emoji'
 import javascript from 'highlight.js/lib/languages/javascript'
 import typescript from 'highlight.js/lib/languages/typescript'
 import json from 'highlight.js/lib/languages/json'
@@ -133,6 +134,7 @@ const INLINE_SRC = [
   '\\\\[\\\\`*_~|#>\\-\\[\\]()<]',             // escape
   '``[^\\n]+?``|`[^`\\n]+`',                    // code (double backtick may contain single ones)
   '\\|\\|[\\s\\S]+?\\|\\|',                     // spoiler
+  CUSTOM_TOKEN_SRC,                             // custom emoji <:name:id>
   '\\*\\*\\*(?=\\S)[\\s\\S]+?(?<=\\S)\\*\\*\\*', // bold italic
   '\\*\\*(?=\\S)[\\s\\S]+?(?<=\\S)\\*\\*',      // bold
   '__(?=\\S)[\\s\\S]+?(?<=\\S)__',              // underline
@@ -159,6 +161,10 @@ export function renderInline(text: string): ReactNode[] {
     else if (t.startsWith('``')) nodes.push(<code key={k}>{t.slice(2, -2)}</code>)
     else if (t.startsWith('`')) nodes.push(<code key={k}>{t.slice(1, -1)}</code>)
     else if (t.startsWith('||')) nodes.push(<Spoiler key={k}>{renderInline(t.slice(2, -2))}</Spoiler>)
+    else if (t.startsWith('<:') || t.startsWith('<a:')) {
+      const c = parseCustom(t)!
+      nodes.push(<img key={k} src={customUrl(c.id)} alt={`:${c.name}:`} title={`:${c.name}:`} className="emoji" draggable={false} data-custom-emoji={c.name} />)
+    }
     else if (t.startsWith('***')) nodes.push(<strong key={k}><em>{renderInline(t.slice(3, -3))}</em></strong>)
     else if (t.startsWith('**')) nodes.push(<strong key={k}>{renderInline(t.slice(2, -2))}</strong>)
     else if (t.startsWith('__')) nodes.push(<u key={k}>{renderInline(t.slice(2, -2))}</u>)

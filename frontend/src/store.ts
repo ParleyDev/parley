@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
-import type { Ban, Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, User, VoiceState } from './lib/types'
+import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sticker, User, VoiceState } from './lib/types'
 import { channelPerms, guildPerms } from './lib/perms'
 
 export type ModalKind =
@@ -11,7 +11,7 @@ export type ModalKind =
   | { kind: 'joinGuild'; code?: string }
   | { kind: 'createChannel'; guildId: string }
   | { kind: 'invite'; guildId: string }
-  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' | 'bans' }
+  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' | 'bans' | 'emoji' | 'stickers' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' }
   | { kind: 'newDm' }
@@ -27,6 +27,8 @@ export interface ReadyPayload {
   guilds: Guild[]
   channels: Channel[]
   roles: Role[]
+  emojis?: Emoji[]
+  stickers?: Sticker[]
   me_members: Member[]
   dm_channels: DmChannel[]
   relationships?: Relationship[]
@@ -56,6 +58,9 @@ interface State {
   bansLoaded: Record<string, true>
   /** guildId -> roleId -> role */
   roles: Record<string, Record<string, Role>>
+  /** Custom emoji and stickers per server, sorted by name. */
+  emojis: Record<string, Emoji[]>
+  stickers: Record<string, Sticker[]>
   messages: Record<string, Message[]>
   hasMore: Record<string, boolean>
   loadingMessages: Record<string, boolean>
@@ -99,7 +104,9 @@ interface State {
   applyReady: (r: ReadyPayload) => void
   setConnected: (c: boolean) => void
   // mutations
-  upsertGuild: (g: Guild & { channels?: Channel[]; roles?: Role[] }) => void
+  upsertGuild: (g: Guild & { channels?: Channel[]; roles?: Role[]; emojis?: Emoji[]; stickers?: Sticker[] }) => void
+  setGuildEmojis: (guildId: string, emojis: Emoji[]) => void
+  setGuildStickers: (guildId: string, stickers: Sticker[]) => void
   upsertRelationship: (r: Relationship) => void
   removeRelationship: (userId: string) => void
   upsertRole: (r: Role) => void
@@ -148,7 +155,7 @@ interface State {
   loadMessages: (channelId: string, before?: string) => Promise<void>
   loadMembers: (guildId: string) => Promise<void>
   loadBans: (guildId: string) => Promise<void>
-  sendMessage: (channelId: string, content: string, replyTo?: string | null, attachmentIds?: string[]) => Promise<void>
+  sendMessage: (channelId: string, content: string, replyTo?: string | null, attachmentIds?: string[], stickerId?: string | null) => Promise<void>
   markRead: (channelId: string) => Promise<void>
 }
 
@@ -175,6 +182,8 @@ export const useStore = create<State>((set, get) => ({
   bans: {},
   bansLoaded: {},
   roles: {},
+  emojis: {},
+  stickers: {},
   messages: {},
   hasMore: {},
   loadingMessages: {},
@@ -213,7 +222,7 @@ export const useStore = create<State>((set, get) => ({
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], channels: {}, dms: {}, relationships: {},
-      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
+      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {},
     })
   },
@@ -241,12 +250,18 @@ export const useStore = create<State>((set, get) => ({
     r.voice_states.forEach((v) => (voiceStates[v.user_id] = v))
     const roles: Record<string, Record<string, Role>> = {}
     ;(r.roles ?? []).forEach((role) => { (roles[role.guild_id] ??= {})[role.id] = role })
+    const emojis: Record<string, Emoji[]> = {}
+    r.guilds.forEach((g) => (emojis[g.id] = []))
+    ;(r.emojis ?? []).forEach((e) => (emojis[e.guild_id] ??= []).push(e))
+    const stickers: Record<string, Sticker[]> = {}
+    r.guilds.forEach((g) => (stickers[g.id] = []))
+    ;(r.stickers ?? []).forEach((st) => (stickers[st.guild_id] ??= []).push(st))
     // Seed our own member row per guild so permission checks work before the full member list loads.
     const members: Record<string, Record<string, Member>> = {}
     ;(r.me_members ?? []).forEach((m) => { members[m.guild_id] = { [m.user_id]: m } })
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
-      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles,
+      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events.
       messages: {}, hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
@@ -255,13 +270,17 @@ export const useStore = create<State>((set, get) => ({
   setConnected: (connected) => set({ connected }),
 
   upsertGuild: (g) => set((s) => {
-    const { channels: gchannels, roles: groles, ...guild } = g
+    const { channels: gchannels, roles: groles, emojis: gemojis, stickers: gstickers, ...guild } = g
     const channels = { ...s.channels }
     gchannels?.forEach((c) => (channels[c.id] = c))
     const guildOrder = s.guildOrder.includes(guild.id) ? s.guildOrder : [...s.guildOrder, guild.id]
     const roles = groles ? { ...s.roles, [guild.id]: Object.fromEntries(groles.map((r) => [r.id, r])) } : s.roles
-    return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder, roles }
+    const emojis = gemojis || !s.emojis[guild.id] ? { ...s.emojis, [guild.id]: gemojis ?? [] } : s.emojis
+    const stickers = gstickers || !s.stickers[guild.id] ? { ...s.stickers, [guild.id]: gstickers ?? [] } : s.stickers
+    return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder, roles, emojis, stickers }
   }),
+  setGuildEmojis: (guildId, emojis) => set((s) => ({ emojis: { ...s.emojis, [guildId]: emojis } })),
+  setGuildStickers: (guildId, stickers) => set((s) => ({ stickers: { ...s.stickers, [guildId]: stickers } })),
   upsertRelationship: (r) => set((s) => ({ relationships: { ...s.relationships, [r.user.id]: r }, users: { ...s.users, [r.user.id]: r.user } })),
   removeRelationship: (userId) => set((s) => { const relationships = { ...s.relationships }; delete relationships[userId]; return { relationships } }),
   upsertRole: (r) => set((s) => ({ roles: { ...s.roles, [r.guild_id]: { ...(s.roles[r.guild_id] ?? {}), [r.id]: r } } })),
@@ -276,13 +295,15 @@ export const useStore = create<State>((set, get) => ({
   removeGuild: (id) => set((s) => {
     const guilds = { ...s.guilds }; delete guilds[id]
     const roles = { ...s.roles }; delete roles[id]
+    const emojis = { ...s.emojis }; delete emojis[id]
+    const stickers = { ...s.stickers }; delete stickers[id]
     const channels = { ...s.channels }
     Object.values(channels).forEach((c) => { if (c.guild_id === id) delete channels[c.id] })
     const members = { ...s.members }; delete members[id]
     const membersLoaded = { ...s.membersLoaded }; delete membersLoaded[id]
     const voiceStates = { ...s.voiceStates }
     Object.values(voiceStates).forEach((v) => { if (v.guild_id === id) delete voiceStates[v.user_id] })
-    return { guilds, channels, members, membersLoaded, voiceStates, roles, guildOrder: s.guildOrder.filter((g) => g !== id) }
+    return { guilds, channels, members, membersLoaded, voiceStates, roles, emojis, stickers, guildOrder: s.guildOrder.filter((g) => g !== id) }
   }),
   upsertChannel: (c) => set((s) => {
     if (c.guild_id === null && 'recipients' in c) {
@@ -493,8 +514,8 @@ export const useStore = create<State>((set, get) => ({
       get().setBans(guildId, bs)
     } catch { /* ignore */ }
   },
-  sendMessage: async (channelId, content, replyTo, attachmentIds = []) => {
-    const m = await api.post<Message>(`/channels/${channelId}/messages`, { content, reply_to: replyTo ?? null, attachment_ids: attachmentIds })
+  sendMessage: async (channelId, content, replyTo, attachmentIds = [], stickerId = null) => {
+    const m = await api.post<Message>(`/channels/${channelId}/messages`, { content, reply_to: replyTo ?? null, attachment_ids: attachmentIds, sticker_id: stickerId })
     get().addMessage(m)
     get().setReadState(channelId, m.id)
   },
