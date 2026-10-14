@@ -22,8 +22,8 @@ pub fn router() -> Router<AppState> {
         .route("/users/:id", get(get_user))
 }
 
-pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns";
+pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent";
 
 async fn me(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<PrivateUser>> {
     let u = sqlx::query_as::<_, PrivateUser>(
@@ -46,6 +46,8 @@ struct UpdateMe {
     theme_primary: Option<String>,
     theme_accent: Option<String>,
     pronouns: Option<String>,
+    name_primary: Option<String>,
+    name_accent: Option<String>,
 }
 
 pub fn validate_image(url: &Option<String>) -> AppResult<()> {
@@ -84,7 +86,7 @@ async fn update_me(
             return Err(AppError::BadRequest("Pronouns must be at most 40 characters".into()));
         }
     }
-    for c in [&req.theme_primary, &req.theme_accent].into_iter().flatten() {
+    for c in [&req.theme_primary, &req.theme_accent, &req.name_primary, &req.name_accent].into_iter().flatten() {
         let ok = c.is_empty() || (c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit()));
         if !ok {
             return Err(AppError::BadRequest("Theme colours must be #rrggbb".into()));
@@ -107,7 +109,9 @@ async fn update_me(
             banner_url = CASE WHEN $6::text IS NULL THEN banner_url WHEN $6 = '' THEN NULL ELSE $6 END,
             theme_primary = CASE WHEN $7::text IS NULL THEN theme_primary WHEN $7 = '' THEN NULL ELSE $7 END,
             theme_accent = CASE WHEN $8::text IS NULL THEN theme_accent WHEN $8 = '' THEN NULL ELSE $8 END,
-            pronouns = COALESCE($9, pronouns)
+            pronouns = COALESCE($9, pronouns),
+            name_primary = CASE WHEN $10::text IS NULL THEN name_primary WHEN $10 = '' THEN NULL ELSE $10 END,
+            name_accent = CASE WHEN $11::text IS NULL THEN name_accent WHEN $11 = '' THEN NULL ELSE $11 END
          WHERE id = $1
          RETURNING {PRIVATE_USER_COLS}"),
     )
@@ -120,6 +124,8 @@ async fn update_me(
     .bind(req.theme_primary)
     .bind(req.theme_accent)
     .bind(req.pronouns.map(|p| p.trim().to_string()))
+    .bind(req.name_primary)
+    .bind(req.name_accent)
     .fetch_one(&state.db)
     .await?;
 
@@ -135,6 +141,8 @@ async fn update_me(
         theme_primary: u.theme_primary.clone(),
         theme_accent: u.theme_accent.clone(),
         pronouns: u.pronouns.clone(),
+        name_primary: u.name_primary.clone(),
+        name_accent: u.name_accent.clone(),
     };
     state.hub.emit_all("USER_UPDATE", json!(public));
     Ok(Json(u))

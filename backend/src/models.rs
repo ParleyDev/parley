@@ -16,6 +16,8 @@ pub struct User {
     pub theme_primary: Option<String>,
     pub theme_accent: Option<String>,
     pub pronouns: String,
+    pub name_primary: Option<String>,
+    pub name_accent: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -32,6 +34,8 @@ pub struct PrivateUser {
     pub theme_primary: Option<String>,
     pub theme_accent: Option<String>,
     pub pronouns: String,
+    pub name_primary: Option<String>,
+    pub name_accent: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -76,6 +80,7 @@ pub struct Role {
     pub guild_id: Uuid,
     pub name: String,
     pub color: Option<String>,
+    pub color_accent: Option<String>,
     pub position: i32,
     pub permissions: i64,
     pub hoist: bool,
@@ -203,6 +208,8 @@ impl MessageRow {
                 theme_primary: None,
                 theme_accent: None,
                 pronouns: String::new(),
+                name_primary: None,
+                name_accent: None,
             },
             reactions,
             attachments,

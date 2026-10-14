@@ -2,7 +2,8 @@ import { Crown, Search, UserMinus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { myGuildPerms, useStore } from '../../../store'
-import { has, highestPosition, memberColor, P } from '../../../lib/perms'
+import { has, highestPosition, P } from '../../../lib/perms'
+import StyledName from '../../StyledName'
 import Avatar from '../../Avatar'
 import RolePicker from '../../RolePicker'
 
@@ -41,14 +42,13 @@ export default function MembersTab({ guildId }: { guildId: string }) {
       </div>
       <div className="divide-y divide-line">
         {list.map((m) => {
-          const color = memberColor(roles, m)
           const isOwner = guild.owner_id === m.user_id
           const canKick = has(myPerms, P.KICK_MEMBERS) && m.user_id !== me.id && !isOwner && (guild.owner_id === me.id || highestPosition(ctx, me.id) > highestPosition({ ...ctx, member: m }, m.user_id))
           return (
             <div key={m.user_id} className="py-3 flex items-center gap-3">
               <button onClick={() => openModal({ kind: 'profile', userId: m.user_id })}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={36} presence /></button>
               <div className="min-w-0 w-48 max-md:w-32 shrink-0">
-                <div className="font-semibold truncate flex items-center gap-1" style={{ color: color ?? undefined }}>{m.nickname ?? m.display_name}{isOwner && <Crown size={13} className="text-warn shrink-0" />}</div>
+                <div className="font-semibold truncate flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId}>{m.nickname ?? m.display_name}</StyledName>{isOwner && <Crown size={13} className="text-warn shrink-0" />}</div>
                 <div className="text-xs text-text-2 truncate">@{m.username}</div>
               </div>
               <div className="flex-1 min-w-0"><RolePicker guildId={guildId} member={m} compact /></div>

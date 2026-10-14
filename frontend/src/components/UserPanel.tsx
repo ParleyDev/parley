@@ -3,6 +3,7 @@ import { voice } from '../lib/voice'
 import { useState } from 'react'
 import { useStore } from '../store'
 import Avatar from './Avatar'
+import StyledName from './StyledName'
 import { api } from '../lib/api'
 
 const STATUSES: { v: string; label: string; color: string }[] = [
@@ -49,7 +50,7 @@ export default function UserPanel() {
       <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 flex-1 rounded-md px-1 py-1 hover:bg-bg-3 text-left">
         <Avatar user={user} size={32} presence />
         <div className="min-w-0">
-          <div className="text-sm font-semibold truncate leading-tight">{user.display_name}</div>
+          <div className="text-sm font-semibold truncate leading-tight"><StyledName userId={user.id}>{user.display_name}</StyledName></div>
           <div className="text-[11px] text-text-2 truncate leading-tight">{STATUSES.find((s) => s.v === user.status)?.label ?? 'Online'}</div>
         </div>
       </button>

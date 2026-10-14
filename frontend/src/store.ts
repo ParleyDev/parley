@@ -285,7 +285,7 @@ export const useStore = create<State>((set, get) => ({
     ms.forEach((m) => {
       map[m.user_id] = m
       const prev = users[m.user_id] as User | undefined
-      users[m.user_id] = { id: m.user_id, username: m.username, display_name: m.display_name, avatar_url: m.avatar_url, status: m.status, bio: prev?.bio ?? '', created_at: prev?.created_at ?? m.joined_at, banner_url: prev?.banner_url ?? null, theme_primary: prev?.theme_primary ?? null, theme_accent: prev?.theme_accent ?? null, pronouns: prev?.pronouns ?? '' }
+      users[m.user_id] = { id: m.user_id, username: m.username, display_name: m.display_name, avatar_url: m.avatar_url, status: m.status, bio: prev?.bio ?? '', created_at: prev?.created_at ?? m.joined_at, banner_url: prev?.banner_url ?? null, theme_primary: prev?.theme_primary ?? null, theme_accent: prev?.theme_accent ?? null, pronouns: prev?.pronouns ?? '', name_primary: prev?.name_primary ?? null, name_accent: prev?.name_accent ?? null }
     })
     return { members: { ...s.members, [guildId]: map }, membersLoaded: { ...s.membersLoaded, [guildId]: true }, users }
   }),

@@ -8,6 +8,7 @@ import ImagePicker from '../ImagePicker'
 import ProfileCard from '../../ProfileCard'
 import { Toggle } from '../SettingsShell'
 import { ROLE_COLORS } from '../../../lib/perms'
+import { nameCss } from '../../StyledName'
 
 const MAX_BIO = 400
 
@@ -24,6 +25,8 @@ export default function ProfilesTab() {
   const [banner, setBanner] = useState<string | null>(user?.banner_url ?? null)
   const [primary, setPrimary] = useState<string | null>(user?.theme_primary ?? null)
   const [accent, setAccent] = useState<string | null>(user?.theme_accent ?? null)
+  const [namePrimary, setNamePrimary] = useState<string | null>(user?.name_primary ?? null)
+  const [nameAccent, setNameAccent] = useState<string | null>(user?.name_accent ?? null)
   const [busy, setBusy] = useState(false)
   const bannerRef = useRef<HTMLInputElement>(null)
   if (!user) return null
@@ -31,12 +34,14 @@ export default function ProfilesTab() {
   const dirty = display !== user.display_name || pronouns !== (user.pronouns ?? '') || bio !== user.bio
     || (avatar ?? null) !== (user.avatar_url ?? null) || (banner ?? null) !== (user.banner_url ?? null)
     || (primary ?? null) !== (user.theme_primary ?? null) || (accent ?? null) !== (user.theme_accent ?? null)
-  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null) }
+    || (namePrimary ?? null) !== (user.name_primary ?? null) || (nameAccent ?? null) !== (user.name_accent ?? null)
+  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setNamePrimary(user.name_primary ?? null); setNameAccent(user.name_accent ?? null) }
   const save = async () => {
     setBusy(true)
     try {
       const u = await api.patch<PrivateUser>('/users/@me', {
         display_name: display, pronouns, bio, avatar_url: avatar ?? '', banner_url: banner ?? '', theme_primary: primary ?? '', theme_accent: accent ?? '',
+        name_primary: namePrimary ?? '', name_accent: namePrimary ? (nameAccent ?? '') : '',
       })
       if (token) setAuth(token, u)
       pushToast('Profile saved')
@@ -76,6 +81,13 @@ export default function ProfilesTab() {
             <Toggle label="Gradient (add a second colour)" checked={accent !== null} onChange={(v) => setAccent(v ? (accent ?? '#6d5dfc') : null)} />
             {accent !== null && <ColorField label="Second colour" value={accent} onChange={(v) => setAccent(v ?? '#6d5dfc')} allowClear={false} base={base} />}
           </div>
+          <div className="space-y-4 rounded-xl bg-bg-0/40 border border-line p-4">
+            <div className="text-sm text-text-2">How your name appears in chat, DMs and lists. Inside a server a coloured role takes over.</div>
+            <ColorField label="Name colour" value={namePrimary} onChange={(v) => { setNamePrimary(v); if (!v) setNameAccent(null) }} allowClear base="#f2f3f7" />
+            {namePrimary && <Toggle label="Gradient name (add a second colour)" checked={nameAccent !== null} onChange={(v) => setNameAccent(v ? (nameAccent ?? '#6d5dfc') : null)} />}
+            {namePrimary && nameAccent !== null && <ColorField label="Second colour" value={nameAccent} onChange={(v) => setNameAccent(v ?? '#6d5dfc')} allowClear={false} base="#6d5dfc" />}
+            <div className="text-sm">Preview: <span className="text-[15px] font-semibold" style={nameCss(namePrimary, nameAccent)}>{display || user.display_name}</span> <span className="text-text-2 text-xs">Today at 9:41 AM</span></div>
+          </div>
           <div>
             <label className="label">About me</label>
             <textarea className="input resize-none font-mono text-[13px]" rows={5} maxLength={MAX_BIO} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell people a bit about yourself" />
@@ -84,7 +96,7 @@ export default function ProfilesTab() {
         </div>
         <div className="w-[340px] max-lg:w-full shrink-0">
           <div className="label">Preview</div>
-          <ProfileCard user={{ ...user, display_name: display || user.display_name, pronouns, bio, avatar_url: avatar, banner_url: banner, theme_primary: primary, theme_accent: accent }} />
+          <ProfileCard user={{ ...user, display_name: display || user.display_name, pronouns, bio, avatar_url: avatar, banner_url: banner, theme_primary: primary, theme_accent: accent, name_primary: namePrimary, name_accent: nameAccent }} />
         </div>
       </div>
       {dirty && (

@@ -5,6 +5,7 @@ import { myGuildPerms, useStore } from '../../../store'
 import type { Role } from '../../../lib/types'
 import { canManageRole, has, P, PERMS, ROLE_COLORS, sortedRoles } from '../../../lib/perms'
 import { Toggle } from '../SettingsShell'
+import { nameCss } from '../../StyledName'
 
 export default function RolesTab({ guildId }: { guildId: string }) {
   const guild = useStore((s) => s.guilds[guildId])
@@ -22,11 +23,11 @@ export default function RolesTab({ guildId }: { guildId: string }) {
   const editable = !!(canManage && role && ctx && me && canManageRole(ctx, me.id, role))
 
   // Draft state for the selected role.
-  const [draft, setDraft] = useState<Pick<Role, 'name' | 'color' | 'permissions' | 'hoist'> | null>(null)
-  useEffect(() => { setDraft(role ? { name: role.name, color: role.color, permissions: role.permissions, hoist: role.hoist } : null) }, [role?.id, role?.name, role?.color, role?.permissions, role?.hoist]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [draft, setDraft] = useState<Pick<Role, 'name' | 'color' | 'color_accent' | 'permissions' | 'hoist'> | null>(null)
+  useEffect(() => { setDraft(role ? { name: role.name, color: role.color, color_accent: role.color_accent, permissions: role.permissions, hoist: role.hoist } : null) }, [role?.id, role?.name, role?.color, role?.color_accent, role?.permissions, role?.hoist]) // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState(false)
   if (!guild || !ctx) return null
-  const dirty = !!(role && draft && (draft.name !== role.name || draft.color !== role.color || draft.permissions !== role.permissions || draft.hoist !== role.hoist))
+  const dirty = !!(role && draft && (draft.name !== role.name || draft.color !== role.color || draft.color_accent !== role.color_accent || draft.permissions !== role.permissions || draft.hoist !== role.hoist))
 
   const create = async () => {
     try {
@@ -38,7 +39,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
     if (!role || !draft) return
     setBusy(true)
     try {
-      const body: Record<string, unknown> = { permissions: draft.permissions, hoist: draft.hoist, color: draft.color }
+      const body: Record<string, unknown> = { permissions: draft.permissions, hoist: draft.hoist, color: draft.color, color_accent: draft.color ? draft.color_accent : null }
       if (role.id !== guildId) body.name = draft.name
       await api.patch(`/guilds/${guildId}/roles/${role.id}`, body)
       pushToast('Role saved')
@@ -68,8 +69,8 @@ export default function RolesTab({ guildId }: { guildId: string }) {
               const mine = canManage && me && canManageRole(ctx, me.id, r) && r.id !== guildId
               return (
                 <div key={r.id} className={`group flex items-center gap-2 rounded-md pl-2 pr-1 py-1.5 cursor-pointer ${selected === r.id ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3'}`} onClick={() => setSelected(r.id)}>
-                  <span className="h-3 w-3 rounded-full shrink-0" style={{ background: r.color ?? '#7d8394' }} />
-                  <span className="truncate flex-1 text-sm font-medium">{r.name}</span>
+                  <span className="h-3 w-3 rounded-full shrink-0" style={{ background: r.color ? (r.color_accent ? `linear-gradient(90deg, ${r.color}, ${r.color_accent})` : r.color) : '#7d8394' }} />
+                  <span className="truncate flex-1 text-sm font-medium" style={nameCss(r.color, r.color_accent)}>{r.name}</span>
                   {mine && (
                     <span className="flex opacity-0 group-hover:opacity-100 max-md:opacity-100">
                       <button title="Move up" disabled={r.position >= maxPos} onClick={(e) => { e.stopPropagation(); move(r, 1) }} className="h-6 w-6 rounded flex items-center justify-center hover:bg-bg-2 disabled:opacity-30"><ChevronUp size={14} /></button>
@@ -98,12 +99,27 @@ export default function RolesTab({ guildId }: { guildId: string }) {
                 <div>
                   <label className="label">Role color</label>
                   <div className="flex flex-wrap gap-1.5">
-                    <button type="button" disabled={!editable} onClick={() => setDraft({ ...draft, color: null })} className={`h-8 w-8 rounded-md border-2 bg-bg-4 text-[10px] font-bold ${draft.color === null ? 'border-white' : 'border-transparent'}`} title="Default">Aa</button>
+                    <button type="button" disabled={!editable} onClick={() => setDraft({ ...draft, color: null, color_accent: null })} className={`h-8 w-8 rounded-md border-2 bg-bg-4 text-[10px] font-bold ${draft.color === null ? 'border-white' : 'border-transparent'}`} title="Default">Aa</button>
+                    <label className="relative h-8 w-12 rounded-md border border-line overflow-hidden cursor-pointer" style={{ background: draft.color ?? '#7d8394' }} title="Custom colour"><input type="color" value={draft.color ?? '#7d8394'} disabled={!editable} onChange={(e) => setDraft({ ...draft, color: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" /></label>
                     {ROLE_COLORS.map((c) => (
                       <button key={c} type="button" disabled={!editable} onClick={() => setDraft({ ...draft, color: c })} className={`h-8 w-8 rounded-md border-2 ${draft.color === c ? 'border-white' : 'border-transparent'}`} style={{ background: c }} title={c} />
                     ))}
                   </div>
                 </div>
+                {draft.color && (
+                  <div className="space-y-3">
+                    <Toggle label="Gradient name (add a second colour)" checked={draft.color_accent !== null} disabled={!editable} onChange={(v) => setDraft({ ...draft, color_accent: v ? (draft.color_accent ?? '#6d5dfc') : null })} />
+                    {draft.color_accent !== null && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {ROLE_COLORS.map((c) => (
+                          <button key={c} type="button" disabled={!editable} onClick={() => setDraft({ ...draft, color_accent: c })} className={`h-8 w-8 rounded-md border-2 ${draft.color_accent === c ? 'border-white' : 'border-transparent'}`} style={{ background: c }} title={c} />
+                        ))}
+                        <label className="relative h-8 w-12 rounded-md border border-line overflow-hidden cursor-pointer" style={{ background: draft.color_accent }} title="Custom colour"><input type="color" value={draft.color_accent} disabled={!editable} onChange={(e) => setDraft({ ...draft, color_accent: e.target.value })} className="absolute inset-0 opacity-0 cursor-pointer" /></label>
+                      </div>
+                    )}
+                    <div className="text-sm text-text-2">Preview: <span className="font-semibold" style={nameCss(draft.color, draft.color_accent)}>{draft.name || 'role name'}</span></div>
+                  </div>
+                )}
                 <Toggle label="Display role members separately from online members" checked={draft.hoist} disabled={!editable} onChange={(v) => setDraft({ ...draft, hoist: v })} />
               </div>
             )}
@@ -132,7 +148,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
             {dirty && (
               <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
                 <span className="text-sm flex-1">Careful — you have unsaved changes!</span>
-                <button type="button" className="btn-ghost" onClick={() => setDraft({ name: role.name, color: role.color, permissions: role.permissions, hoist: role.hoist })}>Reset</button>
+                <button type="button" className="btn-ghost" onClick={() => setDraft({ name: role.name, color: role.color, color_accent: role.color_accent, permissions: role.permissions, hoist: role.hoist })}>Reset</button>
                 <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !draft.name.trim()} onClick={save}>Save Changes</button>
               </div>
             )}

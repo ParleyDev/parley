@@ -4,7 +4,8 @@ import Avatar from './Avatar'
 import { useState } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { isUnread, myChannelPerms, myGuildPerms, useStore, voiceParticipants } from '../store'
-import { has, memberColor, P } from '../lib/perms'
+import { has, P } from '../lib/perms'
+import StyledName from './StyledName'
 import UserPanel from './UserPanel'
 import { api } from '../lib/api'
 
@@ -125,7 +126,6 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
   const speaking = useStore((s) => s.speaking)
   const openModal = useStore((s) => s.openModal)
   const guildId = useStore((s) => s.channels[channelId]?.guild_id ?? '')
-  const roles = useStore((s) => s.roles[guildId] ?? {})
   const members = useStore((s) => s.members[guildId])
   if (!participants.length) return null
   return (
@@ -136,7 +136,7 @@ function VoiceParticipants({ channelId }: { channelId: string }) {
         return (
           <button key={p.user_id} onClick={() => openModal({ kind: 'profile', userId: p.user_id })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
             <span className={`rounded-full ${speaking[p.user_id] ? 'ring-2 ring-success' : ''}`}><Avatar user={u} size={22} /></span>
-            <span className="truncate flex-1" style={{ color: memberColor(roles, members?.[p.user_id]) ?? undefined }}>{members?.[p.user_id]?.nickname ?? u.display_name}</span>
+            <StyledName userId={p.user_id} guildId={guildId} className="truncate flex-1">{members?.[p.user_id]?.nickname ?? u.display_name}</StyledName>
             {p.self_stream && <span className="rounded bg-danger px-1 text-[9px] font-extrabold text-white">LIVE</span>}
             {p.self_video && <Video size={14} className="text-text-2" />}
             {p.self_deaf ? <HeadphoneOff size={14} className="text-text-2" /> : p.self_mute ? <MicOff size={14} className="text-text-2" /> : null}

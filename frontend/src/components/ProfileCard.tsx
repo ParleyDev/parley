@@ -2,6 +2,8 @@ import type { ReactNode } from 'react'
 import type { User } from '../lib/types'
 import { colorFor, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
+import { nameCss } from './StyledName'
+import type { CSSProperties } from 'react'
 
 export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> {
   banner_url?: string | null
@@ -9,6 +11,8 @@ export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_nam
   theme_accent?: string | null
   pronouns?: string
   status?: string
+  name_primary?: string | null
+  name_accent?: string | null
 }
 
 /** CSS background for a profile: the user's theme (solid or gradient) or a generated colour. */
@@ -36,13 +40,16 @@ interface Props {
   /** Shown under the name instead of @username, if set. */
   nameOverride?: string | null
   compact?: boolean
+  /** Overrides the user's own name style (e.g. a role colour inside a server). */
+  nameStyle?: CSSProperties
 }
 
 /**
  * Discord-style profile card: banner (image or theme gradient), avatar, name, pronouns,
  * markdown "About me". The whole card is tinted with the user's theme colours.
  */
-export default function ProfileCard({ user, actions, children, nameOverride, compact }: Props) {
+export default function ProfileCard({ user, actions, children, nameOverride, compact, nameStyle }: Props) {
+  const nameCssFinal = nameStyle ?? nameCss(user.name_primary, user.name_accent)
   const theme = themeBackground(user)
   const text = contrastText(user.theme_primary ?? colorFor(user.id))
   const dim = text === '#fff' ? 'rgba(255,255,255,0.75)' : 'rgba(0,0,0,0.65)'
@@ -55,7 +62,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
         {actions && <div className="flex gap-2 pb-1">{actions}</div>}
       </div>
       <div className="px-4 pt-3 pb-4">
-        <h2 className="text-xl font-bold leading-tight truncate">{nameOverride ?? user.display_name}</h2>
+        <h2 className="text-xl font-bold leading-tight truncate"><span style={nameCssFinal}>{nameOverride ?? user.display_name}</span></h2>
         <p className="text-sm truncate" style={{ color: dim }}>@{user.username}{user.pronouns ? <span> · {user.pronouns}</span> : null}</p>
         <div className="mt-3 rounded-xl p-3 space-y-3 text-sm" style={{ background: panel }}>
           {user.bio && (

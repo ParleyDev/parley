@@ -10,6 +10,8 @@ export interface User {
   theme_primary: string | null
   theme_accent: string | null
   pronouns: string
+  name_primary: string | null
+  name_accent: string | null
 }
 export interface PrivateUser extends User { email: string }
 
@@ -39,6 +41,7 @@ export interface Role {
   guild_id: string
   name: string
   color: string | null
+  color_accent: string | null
   position: number
   permissions: number
   hoist: boolean

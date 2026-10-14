@@ -1,7 +1,8 @@
 import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react'
 import { useState, type KeyboardEvent } from 'react'
 import { isBlocked, myChannelPerms, useStore } from '../store'
-import { has, memberColor, P } from '../lib/perms'
+import { has, P } from '../lib/perms'
+import StyledName from './StyledName'
 import type { Message } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
@@ -20,7 +21,6 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const perms = useStore((s) => myChannelPerms(s, m.channel_id))
   const canDelete = isOwn || has(perms, P.MANAGE_MESSAGES)
   const canReact = has(perms, P.ADD_REACTIONS)
-  const authorColor = useStore((s) => (guildId ? memberColor(s.roles[guildId] ?? {}, s.members[guildId]?.[m.author.id]) : null))
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.content)
   const [picker, setPicker] = useState(false)
@@ -75,7 +75,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         <div className="min-w-0 flex-1">
           {!grouped && (
             <div className="flex items-baseline gap-2">
-              <button onClick={() => openModal({ kind: 'profile', userId: m.author.id })} className="font-semibold hover:underline" style={{ color: authorColor ?? undefined }}>{m.author.display_name}</button>
+              <button onClick={() => openModal({ kind: 'profile', userId: m.author.id })} className="font-semibold hover:underline"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
             </div>
           )}

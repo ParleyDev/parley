@@ -64,6 +64,7 @@ fn check_bits_delta(actor_perms: u64, old: u64, new: u64) -> AppResult<()> {
 struct CreateRole {
     name: String,
     color: Option<String>,
+    color_accent: Option<String>,
     permissions: Option<i64>,
     hoist: Option<bool>,
 }
@@ -78,6 +79,7 @@ async fn create_role(
     perms::check(p, perms::MANAGE_ROLES)?;
     let name = validate_name(&req.name)?;
     validate_color(&req.color)?;
+    validate_color(&req.color_accent)?;
     let permissions = (req.permissions.unwrap_or(0) as u64) & perms::ALL;
     check_bits_delta(p, 0, permissions)?;
 
@@ -88,7 +90,7 @@ async fn create_role(
         .execute(&mut *tx)
         .await?;
     let role = sqlx::query_as::<_, Role>(&format!(
-        "INSERT INTO roles (id, guild_id, name, color, position, permissions, hoist) VALUES ($1, $2, $3, $4, 1, $5, $6) RETURNING {ROLE_COLS}"
+        "INSERT INTO roles (id, guild_id, name, color, color_accent, position, permissions, hoist) VALUES ($1, $2, $3, $4, $7, 1, $5, $6) RETURNING {ROLE_COLS}"
     ))
     .bind(Uuid::now_v7())
     .bind(id)
@@ -96,6 +98,7 @@ async fn create_role(
     .bind(&req.color)
     .bind(permissions as i64)
     .bind(req.hoist.unwrap_or(false))
+    .bind(&req.color_accent)
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -109,6 +112,8 @@ struct UpdateRole {
     name: Option<String>,
     #[serde(default, deserialize_with = "deserialize_nullable")]
     color: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_nullable")]
+    color_accent: Option<Option<String>>,
     permissions: Option<i64>,
     hoist: Option<bool>,
     position: Option<i32>,
@@ -140,6 +145,9 @@ async fn update_role(
     if let Some(c) = &req.color {
         validate_color(c)?;
     }
+    if let Some(c) = &req.color_accent {
+        validate_color(c)?;
+    }
     let permissions = match req.permissions {
         Some(np) => {
             let np = (np as u64) & perms::ALL;
@@ -159,7 +167,8 @@ async fn update_role(
     }
     let role = sqlx::query_as::<_, Role>(&format!(
         "UPDATE roles SET name = COALESCE($2, name), color = CASE WHEN $3 THEN $4 ELSE color END,
-            permissions = COALESCE($5, permissions), hoist = COALESCE($6, hoist)
+            permissions = COALESCE($5, permissions), hoist = COALESCE($6, hoist),
+            color_accent = CASE WHEN $7 THEN $8 ELSE color_accent END
          WHERE id = $1 RETURNING {ROLE_COLS}"
     ))
     .bind(rid)
@@ -168,6 +177,8 @@ async fn update_role(
     .bind(req.color.clone().flatten())
     .bind(permissions)
     .bind(req.hoist)
+    .bind(req.color_accent.is_some())
+    .bind(req.color_accent.clone().flatten())
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;

@@ -30,7 +30,7 @@ export default function RolePicker({ guildId, member, compact }: { guildId: stri
     <div className="flex flex-wrap items-center gap-1 relative">
       {mine.map((r) => (
         <span key={r.id} className={`flex items-center gap-1 rounded-md border border-line bg-bg-3 pl-1.5 pr-1.5 ${compact ? 'text-[11px] py-0' : 'text-xs py-0.5'}`}>
-          <span className="h-2.5 w-2.5 rounded-full" style={{ background: r.color ?? '#7d8394' }} />
+          <span className="h-2.5 w-2.5 rounded-full" style={{ background: r.color ? (r.color_accent ? `linear-gradient(90deg, ${r.color}, ${r.color_accent})` : r.color) : '#7d8394' }} />
           {r.name}
           {canEdit && assignable.some((a) => a.id === r.id) && <button onClick={() => setRoles(member.roles.filter((x) => x !== r.id))} className="text-text-2 hover:text-text-0" title="Remove role"><X size={11} /></button>}
         </span>
@@ -48,7 +48,7 @@ export default function RolePicker({ guildId, member, compact }: { guildId: stri
               return (
                 <button key={r.id} onClick={() => setRoles(on ? member.roles.filter((x) => x !== r.id) : [...member.roles, r.id])} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-bg-3 text-left">
                   <span className={`h-4 w-4 rounded border flex items-center justify-center ${on ? 'bg-accent border-accent' : 'border-text-2'}`}>{on && <Check size={12} />}</span>
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: r.color ?? '#7d8394' }} />
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: r.color ? (r.color_accent ? `linear-gradient(90deg, ${r.color}, ${r.color_accent})` : r.color) : '#7d8394' }} />
                   <span className="truncate">{r.name}</span>
                 </button>
               )

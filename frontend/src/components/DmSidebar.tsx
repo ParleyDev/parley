@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { isUnread, pendingCount, useStore } from '../store'
 import Avatar from './Avatar'
 import UserPanel from './UserPanel'
+import StyledName from './StyledName'
 
 export default function DmSidebar() {
   const dms = useStore((s) => s.dms)
@@ -34,7 +35,7 @@ export default function DmSidebar() {
             return (
               <NavLink key={d.id} to={`/channels/@me/${d.id}`} onClick={() => setMobilePane('content')} className={({ isActive }) => `group flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
                 {other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
-                <span className={`truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{other?.display_name ?? 'Unknown'}</span>
+                {other ? <StyledName userId={other.id} className={`truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{other.display_name}</StyledName> : <span className="truncate text-[15px]">Unknown</span>}
                 {unread && <span className="ml-auto h-2 w-2 rounded-full bg-white" />}
               </NavLink>
             )

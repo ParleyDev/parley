@@ -5,7 +5,8 @@ import Modal from '../Modal'
 import { api } from '../../lib/api'
 import { myGuildPerms, useStore } from '../../store'
 import type { DmChannel, User } from '../../lib/types'
-import { has, highestPosition, memberColor, P } from '../../lib/perms'
+import { has, highestPosition, P } from '../../lib/perms'
+import { colorRole, nameCss } from '../StyledName'
 import RolePicker from '../RolePicker'
 import ProfileCard, { contrastText } from '../ProfileCard'
 import { colorFor } from '../../lib/format'
@@ -43,7 +44,8 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
   const joined = member ? new Date(member.joined_at) : null
   const ctx = guild ? { guild, roles, member: myMember } : null
   const canKick = !!(guild && ctx && me && !isMe && has(myPerms, P.KICK_MEMBERS) && guild.owner_id !== userId && (guild.owner_id === me.id || highestPosition(ctx, me.id) > highestPosition({ ...ctx, member }, userId)))
-  const nameColor = memberColor(roles, member)
+  const roleForName = colorRole(roles, member)
+  const roleNameStyle = roleForName ? nameCss(roleForName.color, roleForName.color_accent) : undefined
   const relAct = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
   const addFriend = () => relAct(() => api.post('/users/@me/relationships', { user_id: userId }))
   const acceptFriend = () => relAct(() => api.put(`/users/@me/relationships/${userId}`))
@@ -68,8 +70,7 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
   return (
     <Modal onClose={onClose} width="max-w-sm">
       <div className="-mx-6 -mt-4 -mb-4">
-        <ProfileCard user={user} actions={actions} nameOverride={member?.nickname ? member.nickname : null}>
-          {nameColor && null}
+        <ProfileCard user={user} actions={actions} nameOverride={member?.nickname ? member.nickname : null} nameStyle={roleNameStyle}>
           {joined && <div><div className="text-[11px] font-bold uppercase tracking-wider opacity-70">Joined server</div><p>{joined.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</p></div>}
           {inGuild && member && <div className="w-full"><div className="text-[11px] font-bold uppercase tracking-wider opacity-70 mb-1">Roles</div><RolePicker guildId={inGuild} member={member} /></div>}
         </ProfileCard>
