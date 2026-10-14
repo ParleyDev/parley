@@ -174,15 +174,32 @@ async fn search(
     Ok(Json(users))
 }
 
+/// A public profile plus the servers the requester shares with that user (for the popout).
 async fn get_user(
     State(state): State<AppState>,
-    AuthUser(_): AuthUser,
+    AuthUser(me): AuthUser,
     Path(id): Path<Uuid>,
-) -> AppResult<Json<User>> {
+) -> AppResult<Json<serde_json::Value>> {
     let u = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1"))
         .bind(id)
         .fetch_optional(&state.db)
         .await?
         .ok_or_else(|| AppError::NotFound("User not found".into()))?;
-    Ok(Json(u))
+    let mutual: Vec<(Uuid, String, Option<String>)> = if me == id {
+        Vec::new()
+    } else {
+        sqlx::query_as(
+            "SELECT g.id, g.name, g.icon_url FROM guilds g
+             JOIN guild_members a ON a.guild_id = g.id AND a.user_id = $1
+             JOIN guild_members b ON b.guild_id = g.id AND b.user_id = $2
+             ORDER BY a.joined_at",
+        )
+        .bind(me)
+        .bind(id)
+        .fetch_all(&state.db)
+        .await?
+    };
+    let mut v = json!(u);
+    v["mutual_guilds"] = serde_json::json!(mutual.into_iter().map(|(gid, name, icon)| serde_json::json!({ "id": gid, "name": name, "icon_url": icon })).collect::<Vec<_>>());
+    Ok(Json(v))
 }

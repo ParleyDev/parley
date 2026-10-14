@@ -7,8 +7,8 @@ import { has, P } from '../lib/perms'
 import { formatBytes, isImage, MAX_PER_MESSAGE, uploadFile, type UploadHandle } from '../lib/upload'
 import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
+import { QUICK_EMOJI } from '../lib/emoji'
 
-const QUICK_EMOJI = ['😀', '😂', '😍', '🔥', '👍', '🎉', '😢', '🤔', '👀', '❤️', '🚀', '✨', '💯', '🙏', '😎', '🥳']
 
 interface Props { channel: Channel | DmChannel; reply: Message | null; onCancelReply: () => void; onSent: () => void }
 
