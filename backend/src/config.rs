@@ -13,7 +13,7 @@ impl Config {
         let _ = dotenvy::dotenv();
         Self {
             database_url: std::env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "postgres://y99:y99@localhost:5432/y99".into()),
+                .unwrap_or_else(|_| "postgres://parley:parley@localhost:5432/parley".into()),
             jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| {
                 tracing::warn!("JWT_SECRET not set; using insecure default");
                 "dev-insecure-secret-change-me".into()

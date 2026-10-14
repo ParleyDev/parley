@@ -1,3 +1,4 @@
+import { APP_INITIAL } from '../lib/brand'
 import { Compass, Plus } from 'lucide-react'
 import { NavLink, useParams } from 'react-router-dom'
 import { dmUnreadCount, guildUnread, useStore } from '../store'
@@ -20,7 +21,7 @@ export default function GuildBar() {
         {({ isActive }) => (
           <Pill active={isActive} unread={dmUnread > 0}>
             <div className={`h-12 w-12 flex items-center justify-center transition-all duration-200 ${isActive ? 'rounded-2xl bg-accent' : 'rounded-3xl bg-bg-3 group-hover:rounded-2xl group-hover:bg-accent'}`}>
-              <span className="font-extrabold text-white text-lg">Y</span>
+              <span className="font-extrabold text-white text-lg">{APP_INITIAL}</span>
             </div>
             {dmUnread > 0 && <span className="absolute -bottom-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center ring-[3px] ring-bg-0">{dmUnread}</span>}
             <Tip>Direct Messages</Tip>

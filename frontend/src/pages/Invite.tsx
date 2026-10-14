@@ -1,3 +1,4 @@
+import { APP_NAME } from '../lib/brand'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -36,7 +37,7 @@ export default function InvitePage() {
           <>
             <h1 className="text-xl font-bold mb-2">Invite invalid</h1>
             <p className="text-text-2 text-sm mb-6">{err}</p>
-            <button className="btn-primary w-full" onClick={() => navigate('/channels/@me')}>Continue to Y99</button>
+            <button className="btn-primary w-full" onClick={() => navigate('/channels/@me')}>Continue to {APP_NAME}</button>
           </>
         ) : !p ? (
           <p className="text-text-2">Loading…</p>

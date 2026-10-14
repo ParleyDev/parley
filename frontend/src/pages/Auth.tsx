@@ -1,3 +1,4 @@
+import { APP_INITIAL } from '../lib/brand'
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -39,7 +40,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
       <div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-sky-500/15 blur-[120px]" />
       <form onSubmit={submit} className="pop relative w-full max-w-md rounded-2xl bg-bg-1/90 backdrop-blur border border-line p-8 shadow-2xl">
         <div className="flex items-center gap-3 mb-6">
-          <div className="h-10 w-10 rounded-xl bg-accent flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-accent/30">Y</div>
+          <div className="h-10 w-10 rounded-xl bg-accent flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-accent/30">{APP_INITIAL}</div>
           <div>
             <h1 className="text-xl font-bold leading-tight">{mode === 'login' ? 'Welcome back!' : 'Create an account'}</h1>
             <p className="text-sm text-text-2">{mode === 'login' ? "We're so excited to see you again!" : 'Join the conversation.'}</p>

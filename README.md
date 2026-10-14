@@ -1,4 +1,4 @@
-# Y99 — a Discord-style chat app
+# Parley — a Discord-style chat app
 
 Rust backend (axum + sqlx/Postgres + WebSockets) and a React/Vite/Tailwind frontend, packaged with Docker Compose.
 
@@ -31,6 +31,20 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 - Messages: real-time delivery, history with infinite scroll, edit, delete (author or owner), replies, reactions, markdown subset (bold, italic, strike, code, code blocks, quotes, links), typing indicators, read states, desktop notifications
 - Direct messages: search any user, 1:1 DM channels with presence
 - Live member list with online/offline grouping and user profile cards
+
+### Upgrading from the Y99-era checkout
+
+The Postgres role and database were renamed `y99` → `parley`. An existing `pgdata` volume keeps the old names, so either reset it (`docker compose down -v`, loses data) or rename in place before starting the new compose file:
+
+```sh
+docker compose stop backend
+docker compose exec db psql -U y99 -d postgres -c "ALTER DATABASE y99 RENAME TO parley;" -c "CREATE USER tmp_admin SUPERUSER PASSWORD 'tmp';"
+docker compose exec db psql -U tmp_admin -d postgres -c "ALTER USER y99 RENAME TO parley;" -c "ALTER USER parley PASSWORD 'parley';"
+docker compose exec db psql -U parley -d parley -c "DROP USER tmp_admin;"
+docker compose up -d --build
+```
+
+Browser sessions carry over: the client migrates the old `y99.token` storage key on first load.
 
 ## Development
 

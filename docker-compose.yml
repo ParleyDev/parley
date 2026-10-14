@@ -2,13 +2,13 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: y99
-      POSTGRES_PASSWORD: y99
-      POSTGRES_DB: y99
+      POSTGRES_USER: parley
+      POSTGRES_PASSWORD: parley
+      POSTGRES_DB: parley
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U y99 -d y99"]
+      test: ["CMD-SHELL", "pg_isready -U parley -d parley"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -16,7 +16,7 @@ services:
   backend:
     build: ./backend
     environment:
-      DATABASE_URL: postgres://y99:y99@db:5432/y99
+      DATABASE_URL: postgres://parley:parley@db:5432/parley
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-secret-change-me}
       BIND_ADDR: 0.0.0.0:8080
       RUST_LOG: ${RUST_LOG:-info}

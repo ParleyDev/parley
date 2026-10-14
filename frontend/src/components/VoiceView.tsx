@@ -1,3 +1,4 @@
+import { STORAGE_PREFIX } from '../lib/brand'
 import { useShallow } from 'zustand/react/shallow'
 import { Headphones, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, PhoneOff, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -12,7 +13,7 @@ import { MembersToggle, MobileBack } from './HeaderBits'
 
 type Tile = { key: string; userId: string; kind: 'camera' | 'screen'; user: User | undefined; state: VoiceState; stream: MediaStream | null; isMe: boolean }
 
-const CHAT_KEY = 'y99.voiceChat'
+const CHAT_KEY = `${STORAGE_PREFIX}voiceChat`
 
 export default function VoiceView({ channel }: { channel: Channel }) {
   const participants = useStore(useShallow((s) => voiceParticipants(s, channel.id)))

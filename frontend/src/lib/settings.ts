@@ -1,3 +1,4 @@
+import { STORAGE_PREFIX } from './brand'
 export interface VoiceSettings {
   inputDeviceId: string            // '' = system default
   outputDeviceId: string
@@ -30,7 +31,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   autoGainControl: true,
 }
 
-const KEY = 'y99.voiceSettings'
+const KEY = `${STORAGE_PREFIX}voiceSettings`
 
 export function loadSettings(): VoiceSettings {
   try {

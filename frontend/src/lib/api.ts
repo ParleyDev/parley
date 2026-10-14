@@ -1,3 +1,4 @@
+import { STORAGE_PREFIX } from './brand'
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -6,11 +7,20 @@ export class ApiError extends Error {
   }
 }
 
+const TOKEN_KEY = `${STORAGE_PREFIX}token`
+
 export function getToken(): string | null {
-  try { return localStorage.getItem('y99.token') } catch { return null }
+  try {
+    const t = localStorage.getItem(TOKEN_KEY)
+    if (t) return t
+    // One-time migration from the pre-rename key.
+    const old = localStorage.getItem('y99.token')
+    if (old) { localStorage.setItem(TOKEN_KEY, old); localStorage.removeItem('y99.token') }
+    return old
+  } catch { return null }
 }
 export function setToken(t: string | null) {
-  try { t ? localStorage.setItem('y99.token', t) : localStorage.removeItem('y99.token') } catch { /* ignore */ }
+  try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY) } catch { /* ignore */ }
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
