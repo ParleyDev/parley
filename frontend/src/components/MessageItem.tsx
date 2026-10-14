@@ -1,4 +1,4 @@
-import { Copy, Hash, Link2, MailOpen, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2, Volume2 } from 'lucide-react'
+import { Bookmark, BookmarkMinus, Copy, Forward, Hash, Link2, MailOpen, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2, Volume2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
@@ -28,6 +28,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const setReadState = useStore((s) => s.setReadState)
+  const bookmarked = useStore((s) => !!s.bookmarks[m.id])
+  const setBookmark = useStore((s) => s.setBookmark)
   const { guildId } = useParams()
   const ctx = useContextMenu()
   const userMenu = useUserMenu(guildId ?? null)
@@ -92,6 +94,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       try { if (prev) await api.put(`/channels/${m.channel_id}/read`, { message_id: prev }) } catch (err) { pushToast((err as Error).message, 'error') }
     }
     const link = `${location.origin}/channels/${guildId ?? '@me'}/${m.channel_id}?message=${m.id}`
+    const toggleBookmark = async () => {
+      try { bookmarked ? await api.delete(`/users/@me/bookmarks/${m.id}`) : await api.put(`/users/@me/bookmarks/${m.id}`); setBookmark(m.id, !bookmarked); pushToast(bookmarked ? 'Bookmark removed' : 'Message bookmarked') } catch (err) { pushToast((err as Error).message, 'error') }
+    }
     return [
       ...(canReact ? [{ node: (
         <div className="flex items-center gap-1.5 px-1 py-1" data-quick-row>
@@ -101,9 +106,11 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       ...(canReact ? [{ label: 'Add Reaction', icon: <SmilePlus size={16} />, onClick: () => setPicker(anchorRect) }] : []),
       'sep' as const,
       { label: 'Reply', icon: <Reply size={16} />, onClick: onReply },
+      { label: 'Forward', icon: <Forward size={16} />, onClick: () => openModal({ kind: 'forward', message: m }) },
       ...(isOwn ? [{ label: 'Edit Message', icon: <Pencil size={16} />, onClick: () => { setDraft(m.content); setEditing(true) } }] : []),
       'sep' as const,
       { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => copy('Text', m.content) },
+      bookmarked ? { label: 'Remove Bookmark', icon: <BookmarkMinus size={16} />, onClick: toggleBookmark } : { label: 'Bookmark Message', icon: <Bookmark size={16} />, onClick: toggleBookmark },
       ...(canPin ? [{ label: m.pinned_at ? 'Unpin Message' : 'Pin Message', icon: m.pinned_at ? <PinOff size={16} /> : <Pin size={16} />, onClick: togglePin }] : []),
       { label: 'Mark Unread', icon: <MailOpen size={16} />, onClick: markUnread },
       { label: 'Copy Message Link', icon: <Link2 size={16} />, onClick: () => copy('Message link', link) },
@@ -125,7 +132,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     )
   }
   return (
-    <div data-msg-id={m.id} onContextMenu={(e) => { if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div data-msg-id={m.id} onContextMenu={(e) => { if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {replyTarget !== null && m.reply_to && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md">{replyTarget.content || (replyTarget.attachments?.length ? '📎 Attachment' : '')}</span></>) : <i>Original message was deleted</i>}
@@ -152,8 +159,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
             </div>
           ) : (
             <>
+              {m.forwarded_from && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded><Forward size={13} /> Forwarded</div>}
               {(m.content || m.edited_at) && !media && (
-                <div onMouseOver={emojiHover.onMouseOver} onMouseLeave={emojiHover.onMouseLeave} className={`msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap ${isJumbo(m.content) ? 'jumbo' : ''}`}>
+                <div onClick={emojiHover.onClick} className={`msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap ${isJumbo(m.content) ? 'jumbo' : ''}`}>
                   {renderMarkdown(m.content)}
                   {m.edited_at && <span className="ml-1 text-[10px] text-text-2">(edited)</span>}
                 </div>
@@ -265,7 +273,7 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
       </button>
       {rect && who && createPortal(
         <div role="tooltip" data-reaction-tip className="pop pointer-events-none fixed z-[150] max-w-[280px] rounded-lg bg-[#111214] border border-white/5 shadow-2xl p-3 flex items-center gap-3 text-sm"
-          style={{ left: Math.min(Math.max(8, rect.left + rect.width / 2 - 140), window.innerWidth - 288), top: rect.top - 8, transform: 'translateY(-100%)' }}>
+          style={{ left: Math.min(Math.max(8, rect.left + rect.width / 2 - 140), window.innerWidth - 288), ...(rect.top > 120 ? { bottom: window.innerHeight - rect.top + 8 } : { top: rect.bottom + 8 }) }}>
           <Emoji value={r.emoji} size={40} />
           <div className="min-w-0"><span className="font-semibold text-text-0">{text}</span> <span className="text-text-1">reacted with {name}</span></div>
         </div>,

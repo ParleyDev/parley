@@ -26,6 +26,9 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/messages", get(list_messages).post(create_message))
         .route("/channels/:id/messages/:mid", axum::routing::patch(edit_message).delete(delete_message))
         .route("/channels/:id/messages/:mid/reactions/:emoji", get(list_reactors).put(add_reaction).delete(remove_reaction))
+        .route("/channels/:id/messages/:mid/forward", post(forward_message))
+        .route("/users/@me/bookmarks", get(list_bookmarks))
+        .route("/users/@me/bookmarks/:mid", put(add_bookmark).delete(remove_bookmark))
         .route("/channels/:id/pins", get(list_pins))
         .route("/channels/:id/pins/:mid", put(pin_message).delete(unpin_message))
         .route("/channels/:id/search", get(search_messages))
@@ -149,7 +152,7 @@ async fn delete_channel(
 }
 
 const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
-    u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated
+    u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
@@ -630,4 +633,122 @@ async fn search_messages(
     .fetch_all(&state.db)
     .await?;
     Ok(Json(hydrate(&state.db, rows, uid, false).await?))
+}
+
+#[derive(Deserialize)]
+struct ForwardReq {
+    channel_id: Uuid,
+}
+
+/// Copy a message (content, sticker, attachments) into another channel as a new message by the
+/// forwarder, marked with `forwarded_from`. Needs view on the source and send (+ attach) on the target.
+async fn forward_message(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, mid)): Path<(Uuid, Uuid)>,
+    Json(req): Json<ForwardReq>,
+) -> AppResult<(StatusCode, Json<Message>)> {
+    require_channel(&state.db, id, uid).await?;
+    let src = fetch_message(&state.db, mid, uid).await?;
+    if src.channel_id != id {
+        return Err(AppError::NotFound("Message not found".into()));
+    }
+    let (target_ch, p) = require_channel_perms(&state.db, req.channel_id, uid).await?;
+    perms::check(p, perms::SEND_MESSAGES)?;
+    if !src.attachments.is_empty() && target_ch.guild_id.is_some() {
+        perms::check(p, perms::ATTACH_FILES)?;
+    }
+    if target_ch.guild_id.is_none() {
+        let others: Vec<(Uuid,)> = sqlx::query_as("SELECT user_id FROM channel_members WHERE channel_id = $1 AND user_id <> $2").bind(req.channel_id).bind(uid).fetch_all(&state.db).await?;
+        for (other,) in others {
+            if crate::routes::relationships::blocked_either_way(&state.db, uid, other).await? {
+                return Err(AppError::Forbidden);
+            }
+        }
+    }
+    let new_id = Uuid::now_v7();
+    let mut tx = state.db.begin().await?;
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, sticker_id, forwarded_from) VALUES ($1, $2, $3, $4, $5, $6)")
+        .bind(new_id)
+        .bind(req.channel_id)
+        .bind(uid)
+        .bind(&src.content)
+        .bind(src.sticker.as_ref().map(|s| s.id))
+        .bind(mid)
+        .execute(&mut *tx)
+        .await?;
+    // Duplicate attachment rows and files so the copy survives deletion of the original.
+    for a in &src.attachments {
+        let aid = Uuid::new_v4();
+        let dir = &state.config.upload_dir;
+        tokio::fs::copy(dir.join(a.id.to_string()), dir.join(aid.to_string())).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+        sqlx::query(
+            "INSERT INTO attachments (id, message_id, uploader_id, channel_id, filename, content_type, size, width, height) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        )
+        .bind(aid)
+        .bind(new_id)
+        .bind(uid)
+        .bind(req.channel_id)
+        .bind(&a.filename)
+        .bind(&a.content_type)
+        .bind(a.size)
+        .bind(a.width)
+        .bind(a.height)
+        .execute(&mut *tx)
+        .await?;
+    }
+    tx.commit().await?;
+    sqlx::query(
+        "INSERT INTO read_states (user_id, channel_id, last_read_msg) VALUES ($1, $2, $3)
+         ON CONFLICT (user_id, channel_id) DO UPDATE SET last_read_msg = EXCLUDED.last_read_msg",
+    )
+    .bind(uid)
+    .bind(req.channel_id)
+    .bind(new_id)
+    .execute(&state.db)
+    .await?;
+    let msg = fetch_message(&state.db, new_id, uid).await?;
+    let target = target_for(&state.db, &target_ch).await?;
+    state.hub.emit(target, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": target_ch.guild_id }));
+    Ok((StatusCode::CREATED, Json(msg)))
+}
+
+/// Bookmarked messages the user can still see, newest bookmark first, with their channel's guild id.
+async fn list_bookmarks(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<serde_json::Value>>> {
+    let rows = sqlx::query_as::<_, MessageRow>(&format!(
+        "{MESSAGE_SELECT} JOIN bookmarks b ON b.message_id = m.id AND b.user_id = $1 ORDER BY b.created_at DESC LIMIT 200"
+    ))
+    .bind(uid)
+    .fetch_all(&state.db)
+    .await?;
+    let msgs = hydrate(&state.db, rows, uid, false).await?;
+    let mut out = Vec::with_capacity(msgs.len());
+    for m in msgs {
+        // Skip messages in channels the user can no longer view.
+        let Ok(c) = require_channel(&state.db, m.channel_id, uid).await else { continue };
+        let mut v = json!(m);
+        v["guild_id"] = json!(c.guild_id);
+        v["channel_name"] = json!(c.name);
+        out.push(v);
+    }
+    Ok(Json(out))
+}
+
+async fn add_bookmark(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(mid): Path<Uuid>) -> AppResult<StatusCode> {
+    let ch: Option<(Uuid,)> = sqlx::query_as("SELECT channel_id FROM messages WHERE id = $1").bind(mid).fetch_optional(&state.db).await?;
+    let (channel_id,) = ch.ok_or_else(|| AppError::NotFound("Message not found".into()))?;
+    require_channel(&state.db, channel_id, uid).await?;
+    sqlx::query("INSERT INTO bookmarks (user_id, message_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(uid).bind(mid).execute(&state.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn remove_bookmark(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(mid): Path<Uuid>) -> AppResult<StatusCode> {
+    sqlx::query("DELETE FROM bookmarks WHERE user_id = $1 AND message_id = $2").bind(uid).bind(mid).execute(&state.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Ids of the user's bookmarks, for READY.
+pub async fn bookmark_ids(db: &PgPool, uid: Uuid) -> AppResult<Vec<Uuid>> {
+    let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT message_id FROM bookmarks WHERE user_id = $1").bind(uid).fetch_all(db).await?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
 }

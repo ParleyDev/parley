@@ -104,3 +104,7 @@ body {
 .msg-content.jumbo { font-size: 3rem; line-height: 1.125; }
 .msg-content.jumbo .emoji { width: 3rem; height: 3rem; vertical-align: -0.5rem; }
 .msg-content.jumbo .emoji + .emoji { margin-left: 0.125rem; }
+
+/* Tailwind v4 resets buttons to the default cursor; clickable things get the hand. */
+button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[href], label[for], summary { cursor: pointer; }
+.msg-content .uemoji, .msg-content img.emoji { cursor: pointer; }

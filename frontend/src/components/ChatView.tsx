@@ -1,4 +1,5 @@
-import { CircleUserRound, Hash, Phone, Pin, PinOff, Search, Video, X } from 'lucide-react'
+import { Bookmark, BookmarkMinus, CircleUserRound, Hash, Phone, Pin, PinOff, Search, Video, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { Channel, DmChannel, Message } from '../lib/types'
 import { api } from '../lib/api'
@@ -21,6 +22,15 @@ export function jumpToMessage(id: string): boolean {
   return true
 }
 
+/** Close a header popover on Escape. */
+function useEscape(onClose: () => void) {
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+}
+
 export default function ChatView({ channel }: { channel: Channel | DmChannel }) {
   const isDm = channel.guild_id === null
   const users = useStore((s) => s.users)
@@ -31,6 +41,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const recipient = isDm ? (channel as DmChannel).recipients[0] : null
   const other = recipient ? { ...recipient, ...users[recipient.id] } : null
   const [pins, setPins] = useState(false)
+  const [bookmarks, setBookmarks] = useState(false)
   const [query, setQuery] = useState('')
   const [search, setSearch] = useState<string | null>(null)
   useEffect(() => { setPins(false); setSearch(null); setQuery('') }, [channel.id])
@@ -75,6 +86,10 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               <button onClick={() => setPins((p) => !p)} title="Pinned Messages" className={btn(pins)} data-pins-toggle><Pin size={20} /></button>
               {pins && <PinnedPanel channel={channel} onClose={() => setPins(false)} />}
             </span>
+            <span className="relative">
+              <button onClick={() => setBookmarks((b) => !b)} title="Bookmarks" className={btn(bookmarks)} data-bookmarks-toggle><Bookmark size={20} /></button>
+              {bookmarks && <BookmarksPanel channelId={channel.id} onClose={() => setBookmarks(false)} />}
+            </span>
             {isDm && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? 'Hide User Profile' : 'Show User Profile'} className={`${btn(dmProfileOpen)} max-md:hidden`} data-profile-toggle><CircleUserRound size={20} /></button>}
             {!isDm && <MembersToggle />}
             <span className="relative ml-1 max-md:hidden">
@@ -115,12 +130,53 @@ function MessageCard({ m, onJump, action }: { m: Message; onJump: () => void; ac
   )
 }
 
+type BookmarkedMessage = Message & { guild_id: string | null; channel_name: string }
+
+/** Every message the user bookmarked, across channels; Jump navigates when it lives elsewhere. */
+function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: () => void }) {
+  const [list, setList] = useState<BookmarkedMessage[] | null>(null)
+  const pushToast = useStore((s) => s.pushToast)
+  const setBookmark = useStore((s) => s.setBookmark)
+  const navigate = useNavigate()
+  useEscape(onClose)
+  useEffect(() => { api.get<BookmarkedMessage[]>('/users/@me/bookmarks').then(setList).catch(() => setList([])) }, [])
+  const remove = async (m: Message) => {
+    try { await api.delete(`/users/@me/bookmarks/${m.id}`); setBookmark(m.id, false); setList((l) => (l ?? []).filter((x) => x.id !== m.id)) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const jump = (m: BookmarkedMessage) => {
+    if (m.channel_id === channelId) { if (jumpToMessage(m.id)) onClose(); else pushToast('That message is not loaded in this view yet', 'error'); return }
+    onClose(); navigate(`/channels/${m.guild_id ?? '@me'}/${m.channel_id}`)
+    // Give the channel a moment to load, then flash the message if it is among the recent ones.
+    let tries = 0
+    const t = setInterval(() => { if (jumpToMessage(m.id) || ++tries > 20) clearInterval(t) }, 150)
+  }
+  return (
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <div className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl" data-bookmarks-panel>
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-line"><Bookmark size={16} className="text-text-2" /><span className="font-bold">Bookmarks</span><button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0"><X size={16} /></button></div>
+        <div className="overflow-y-auto p-3 space-y-2">
+          {list === null && <p className="text-sm text-text-2 p-3">Loading…</p>}
+          {list?.length === 0 && <div className="p-6 text-center text-sm text-text-2">No bookmarks yet.<br />Right-click a message and choose Bookmark Message.</div>}
+          {list?.map((m) => (
+            <div key={m.id}>
+              <div className="px-1 mb-0.5 text-[11px] text-text-2 truncate">{m.guild_id ? `#${m.channel_name}` : 'Direct Message'}</div>
+              <MessageCard m={m} onJump={() => jump(m)} action={<button onClick={() => remove(m)} title="Remove bookmark" className="rounded p-0.5 text-text-2 hover:text-danger" data-unbookmark><BookmarkMinus size={14} /></button>} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  )
+}
+
 function PinnedPanel({ channel, onClose }: { channel: Channel | DmChannel; onClose: () => void }) {
   const [pins, setPins] = useState<Message[] | null>(null)
   const perms = useStore((s) => myChannelPerms(s, channel.id))
   const pushToast = useStore((s) => s.pushToast)
   const canUnpin = channel.guild_id === null || has(perms, P.MANAGE_MESSAGES)
   const ref = useRef<HTMLDivElement>(null)
+  useEscape(onClose)
   useEffect(() => { api.get<Message[]>(`/channels/${channel.id}/pins`).then(setPins).catch(() => setPins([])) }, [channel.id])
   const unpin = async (m: Message) => {
     try { await api.delete(`/channels/${channel.id}/pins/${m.id}`); setPins((ps) => (ps ?? []).filter((x) => x.id !== m.id)) } catch (e) { pushToast((e as Error).message, 'error') }

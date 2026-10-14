@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, type ReactNode } from 'react'
+import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { customToken, loadEmojiGroups, parseCustom, unicodeInfo } from '../lib/emoji'
 import { useStore } from '../store'
@@ -7,12 +7,19 @@ import Emoji from './Emoji'
 interface Tip { rect: DOMRect; value: string; name: string; desc: string }
 
 /**
- * Hovering an emoji in a message (unicode `.uemoji` span or custom `img.emoji`) shows Discord's
- * detail tooltip: the emoji large, its `:name:` and where it comes from. Attach the handlers to
- * the message content container; render `tip` once.
+ * Clicking (or tapping) an emoji in a message (unicode `.uemoji` span or custom `img.emoji`) opens
+ * Discord's detail popup: the emoji large, its `:name:` and where it comes from. Attach `onClick`
+ * to the message content container; render `tip` once. Clicking anywhere else closes it.
  */
 export function useEmojiHover() {
   const [tip, setTip] = useState<Tip | null>(null)
+  useEffect(() => {
+    if (!tip) return
+    // Mousedown on an emoji is left to the click handler so a second click toggles instead of reopening.
+    const close = (e: Event) => { if (e.type === 'mousedown' && (e.target as HTMLElement | null)?.closest?.('.uemoji, img.emoji')) return; setTip(null) }
+    window.addEventListener('mousedown', close, true); window.addEventListener('keydown', close, true); window.addEventListener('scroll', close, true)
+    return () => { window.removeEventListener('mousedown', close, true); window.removeEventListener('keydown', close, true); window.removeEventListener('scroll', close, true) }
+  }, [tip])
   const guilds = useStore((s) => s.guilds)
   const emojis = useStore((s) => s.emojis)
   const show = (el: HTMLElement) => {
@@ -30,22 +37,25 @@ export function useEmojiHover() {
     const render = () => { const info = unicodeInfo(value); setTip({ rect, value, name: info ? `:${info.slug}:` : '', desc: 'A default emoji. You can use this emoji everywhere.' }) }
     if (unicodeInfo(value) || !value) render(); else loadEmojiGroups().then(render)
   }
-  const onMouseOver = (e: MouseEvent) => {
+  const onClick = (e: MouseEvent) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>('.uemoji, img.emoji')
-    if (el) show(el); else if (tip) setTip(null)
+    if (!el) return
+    e.stopPropagation()
+    if (tip && tip.rect.left === el.getBoundingClientRect().left && tip.rect.top === el.getBoundingClientRect().top) setTip(null); else show(el)
   }
-  const onMouseLeave = () => setTip(null)
   const node: ReactNode = tip ? createPortal(<EmojiTipBox tip={tip} />, document.body) : null
-  return { onMouseOver, onMouseLeave, tip: node }
+  return { onClick, tip: node }
 }
 
 function EmojiTipBox({ tip }: { tip: Tip }) {
   const c = parseCustom(tip.value)
   const custom = c ? (document.querySelector<HTMLImageElement>(`img.emoji[data-custom-emoji="${c.name}"]`)?.src ?? '') : ''
-  const top = tip.rect.top - 8
+  // Anchored by its bottom edge so it sits above the emoji whatever its height; flips below near the top.
+  const above = tip.rect.top > 120
   const left = Math.min(Math.max(8, tip.rect.left + tip.rect.width / 2 - 150), window.innerWidth - 308)
+  const pos = above ? { bottom: window.innerHeight - tip.rect.top + 8 } : { top: tip.rect.bottom + 8 }
   return (
-    <div role="tooltip" data-emoji-tip className="pop pointer-events-none fixed z-[150] w-[300px] rounded-lg bg-[#111214] border border-white/5 shadow-2xl p-3 flex items-start gap-3" style={{ left, top, transform: 'translateY(-100%)' }}>
+    <div role="tooltip" data-emoji-tip className="pop fixed z-[150] w-[300px] rounded-lg bg-[#111214] border border-white/5 shadow-2xl p-3 flex items-start gap-3" style={{ left, ...pos }} onMouseDown={(e) => e.stopPropagation()}>
       {c ? <img src={custom} alt="" className="h-12 w-12 object-contain shrink-0" /> : <Emoji value={tip.value} size={48} />}
       <div className="min-w-0 text-sm">
         {tip.name && <div className="font-bold truncate" data-emoji-tip-name>{tip.name}</div>}
