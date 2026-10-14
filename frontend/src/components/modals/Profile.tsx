@@ -56,18 +56,18 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
   const blockUser = () => openModal({ kind: 'confirm', title: `Block ${user.display_name}`, body: `${user.display_name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.`, danger: true, confirmLabel: 'Block', action: () => relAct(() => api.put(`/users/@me/relationships/${userId}/block`)) })
 
   const text = contrastText(user.theme_primary ?? colorFor(user.id))
-  const ghost = `btn py-1.5 border ${text === '#fff' ? 'border-white/30 bg-black/30 text-white hover:bg-black/50' : 'border-black/20 bg-white/40 text-black hover:bg-white/60'}`
+  const ghost = `btn px-3! py-1.5 border ${text === '#fff' ? 'border-white/30 bg-black/30 text-white hover:bg-black/50' : 'border-black/20 bg-white/40 text-black hover:bg-white/60'}`
   const actions = !isMe && (
     <>
-      {rel !== 'blocked' && <button onClick={dm} className="btn-primary py-1.5" title="Message"><MessageSquare size={16} /></button>}
-      {!rel && <button onClick={addFriend} className="btn-primary bg-success hover:bg-success/80 text-black py-1.5" title="Add Friend"><UserPlus size={16} /></button>}
-      {rel === 'incoming' && <button onClick={acceptFriend} className="btn-primary bg-success hover:bg-success/80 text-black py-1.5" title="Accept Friend Request"><Check size={16} /> Accept</button>}
+      {rel !== 'blocked' && <button onClick={dm} className="btn-primary px-3! py-1.5" title="Message"><MessageSquare size={16} /></button>}
+      {!rel && <button onClick={addFriend} className="btn-primary bg-success hover:bg-success/80 text-black px-3! py-1.5" title="Add Friend"><UserPlus size={16} /></button>}
+      {rel === 'incoming' && <button onClick={acceptFriend} className="btn-primary bg-success hover:bg-success/80 text-black px-3! py-1.5" title="Accept Friend Request"><Check size={16} /> Accept</button>}
       {rel === 'outgoing' && <button onClick={removeRel} className={ghost} title="Cancel Friend Request"><X size={16} /> Pending</button>}
       {rel === 'friend' && <button onClick={removeRel} className={ghost} title="Remove Friend"><Check size={16} /> Friends</button>}
       {rel === 'blocked' && <button onClick={removeRel} className={ghost} title="Unblock"><Ban size={16} /> Unblock</button>}
       {rel !== 'blocked' && <button onClick={blockUser} className={ghost} title="Block"><Ban size={16} /></button>}
-      {canKick && <button onClick={kick} className="btn-danger py-1.5" title="Kick"><UserMinus size={16} /></button>}
-      {canBan && <button onClick={ban} className="btn-danger py-1.5" title="Ban"><Gavel size={16} /></button>}
+      {canKick && <button onClick={kick} className="btn-danger px-3! py-1.5" title="Kick"><UserMinus size={16} /></button>}
+      {canBan && <button onClick={ban} className="btn-danger px-3! py-1.5" title="Ban"><Gavel size={16} /></button>}
     </>
   )
 

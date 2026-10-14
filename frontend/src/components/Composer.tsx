@@ -5,6 +5,8 @@ import { sendTyping } from '../lib/ws'
 import type { Attachment, Channel, DmChannel, Message } from '../lib/types'
 import { has, P } from '../lib/perms'
 import { formatBytes, isImage, MAX_PER_MESSAGE, uploadFile, type UploadHandle } from '../lib/upload'
+import { shortcutFormat, toggleWrap } from '../lib/editor'
+import FormatToolbar from './FormatToolbar'
 
 const QUICK_EMOJI = ['😀', '😂', '😍', '🔥', '👍', '🎉', '😢', '🤔', '👀', '❤️', '🚀', '✨', '💯', '🙏', '😎', '🥳']
 
@@ -104,8 +106,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   }
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit() }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); return }
     if (e.key === 'Escape' && reply) onCancelReply()
+    const f = shortcutFormat(e)
+    if (f && ref.current) { e.preventDefault(); setValue(toggleWrap(ref.current, f)) }
   }
   const onChange = (v: string) => {
     setValue(v)
@@ -138,6 +142,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           </div>
         </div>
       )}
+      <FormatToolbar textarea={ref} onChange={setValue} className="absolute -top-8 left-4 max-md:left-2 z-20" />
       <div className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition">
         {reply && (
           <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-xl">

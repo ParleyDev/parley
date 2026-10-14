@@ -68,7 +68,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
           {user.bio && (
             <div>
               <div className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>About me</div>
-              <div className="msg-content whitespace-pre-wrap break-words leading-snug">{renderMarkdown(user.bio)}</div>
+              <div className="msg-content whitespace-pre-wrap break-words leading-snug">{renderMarkdown(user.bio, { blocks: false })}</div>
             </div>
           )}
           <div className="flex gap-6 flex-wrap">

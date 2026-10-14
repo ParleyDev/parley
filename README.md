@@ -21,7 +21,7 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 ## Features
 
 - Accounts: register, log in (JWT), presence status (online / idle / dnd / invisible)
-- Profiles (User Settings → Profiles, with live preview): avatar and banner uploads (resized in the browser), pronouns, a theme colour with optional second colour for a gradient that tints the whole profile card, an About Me that supports the same markdown as messages (bold, italic, underline, strike, code, quotes, links), and a name colour with optional gradient that styles your name in chat, DMs and lists
+- Profiles (User Settings → Profiles, with live preview): avatar and banner uploads (resized in the browser), pronouns, a theme colour with optional second colour for a gradient that tints the whole profile card, an About Me that supports inline markdown (bold, italic, underline, strike, code, spoilers, quotes, links), and a name colour with optional gradient that styles your name in chat, DMs and lists
 - Servers: create, rename, icon, delete, leave, kick, ban (with reason; Server Settings → Bans lists and revokes them, banned users can't accept invites), transfer ownership (owner only, from Server Settings; the new owner gets full control and the old owner keeps only their roles), invite links (`/invite/<code>`, optional max uses)
 - Roles & permissions (Server Settings → Roles / Members): Discord-style roles with colour (solid or two-colour gradient, applied to member names in chat and lists; the highest coloured role wins over a user's own name style), hoisting and a permission bitfield; role hierarchy (you can only edit, assign or kick below your highest role); per-channel allow/deny overwrites for roles and members, private channels, and a "Private channel" switch when creating one. Permissions are enforced server-side and the UI hides what you can't do. See *Permissions* below.
 - Channels: text and voice, topics, rename, delete, unread indicators
@@ -29,7 +29,7 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 - Voice & Video settings (User Settings → Voice & Video): input / output / camera device pickers, input and output volume, mic test with level meter, voice activity or push-to-talk with a recordable key, automatic or manual input sensitivity, echo cancellation / noise suppression / auto gain toggles, camera preview. Settings persist in the browser and apply live mid-call.
 - Voice channel chat: every voice channel has its own persistent text chat (the chat icon in the voice header), with unread markers on the channel row and the toggle
 - Responsive layout: phones get one pane at a time (channel list ↔ chat / voice stage, member list as a sheet, voice chat as an overlay) with a back button in every header; tablets and desktops get the side-by-side layout
-- Messages: real-time delivery, history with infinite scroll, edit, delete (author or owner), replies, reactions, markdown subset (bold, italic, strike, code, code blocks, quotes, links), typing indicators, read states, desktop notifications
+- Messages: real-time delivery, history with infinite scroll, edit, delete (author or owner), replies, reactions, Discord-style markdown (see *Markdown* below), typing indicators, read states, desktop notifications
 - Attachments: upload up to 10 files (25 MB each) per message via the + button, drag and drop anywhere, or paste from the clipboard. Images render inline with a lightbox, mp4/webm and audio get players, everything else is a download card. Gated by the Attach Files permission.
 - Friends: send requests by username (or from any profile), accept / ignore / cancel, friends list with Online / All / Pending / Blocked tabs and a pending badge, mutual requests auto-accept. Blocking removes the friendship, hides the block from the other side, stops DMs both ways and collapses their messages in servers ("1 blocked message — Show").
 - Direct messages: search any user, 1:1 DM channels with presence
@@ -112,6 +112,25 @@ Bits mirror Discord's values: Create Invite, Kick Members, Ban Members, Administ
 - Hierarchy: a member may only create/edit/delete roles, assign roles, set overwrites, kick or ban when the target role or member sits below their own highest role; the owner outranks all and can never be kicked or banned (transfer ownership first). A manager can only grant or revoke permission bits they themselves hold.
 - Voice: no Connect blocks joining (and evicts you if revoked mid-call), no Speak marks you `suppress`ed so your client keeps its mic gate closed (shown as "Muted by server"), no Video drops camera and screen share.
 - Endpoints: `GET/POST /guilds/:id/roles`, `PATCH/DELETE /guilds/:id/roles/:rid` (`position` reorders), `PATCH /guilds/:id/members/:uid` (`roles`, `nickname`), `PUT/DELETE /channels/:id/permissions/:target` (`{kind: role|member, allow, deny}`). Events: `ROLE_UPDATE`, `ROLE_DELETE`, `ROLES_SYNC`, `GUILD_MEMBER_UPDATE`, plus `CHANNEL_CREATE`/`CHANNEL_DELETE`/`CHANNEL_UPDATE` sent per user as visibility changes.
+
+## Markdown
+
+Messages and About Me render Discord-flavoured markdown, entirely client-side (the server stores plain text).
+
+| Syntax | Result |
+|---|---|
+| `**bold**` `*italic*` `_italic_` `***both***` `__underline__` `~~strike~~` | inline styles (nestable) |
+| `` `code` `` and ``` ``code with ` inside`` ``` | inline code |
+| ` ```lang ` … ` ``` ` | code block with a language label, copy button and syntax highlighting (JS/TS, JSON, shell, Python, Rust, Go, Java, C#, C/C++, CSS, HTML, SQL, YAML, Markdown, diff) |
+| `\|\|spoiler\|\|` | hidden until clicked |
+| `[text](https://…)`, `<https://…>`, bare URLs | links (http/https only, open in a new tab) |
+| `# H1` `## H2` `### H3` | headers (messages only) |
+| `-# text` | subtext |
+| `> line` (consecutive lines merge), `>>> rest of message` | block quotes |
+| `- item`, `* item`, `1. item`, two-space indent for one level of nesting | lists (messages only) |
+| `\*literal\*` | backslash escapes any marker |
+
+Composer and message editor: **Ctrl/⌘+B / I / U / E** (bold, italic, underline, code) and **Ctrl/⌘+Shift+S** (strike) wrap or unwrap the selection, and selecting text shows a small formatting bar with those plus spoiler.
 
 ## Attachments
 

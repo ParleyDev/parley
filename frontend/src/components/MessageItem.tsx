@@ -8,6 +8,8 @@ import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
 import Attachments from './Attachments'
 import { api } from '../lib/api'
+import { shortcutFormat, toggleWrap } from '../lib/editor'
+import FormatToolbar from './FormatToolbar'
 import { useParams } from 'react-router-dom'
 
 const QUICK = ['👍', '❤️', '😂', '🔥', '👀', '🎉']
@@ -23,6 +25,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const canReact = has(perms, P.ADD_REACTIONS)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.content)
+  const editRef = useRef<HTMLTextAreaElement>(null)
   const [picker, setPicker] = useState(false)
   // The picker opens upward (over older messages) so it is never clipped by the bottom of the
   // scrolling list; only when the message sits right under the header does it open downward.
@@ -47,6 +50,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const onEditKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit() }
     if (e.key === 'Escape') { setEditing(false); setDraft(m.content) }
+    const f = shortcutFormat(e)
+    if (f && editRef.current) { e.preventDefault(); setDraft(toggleWrap(editRef.current, f)) }
   }
   const del = () => openModal({
     kind: 'confirm', title: 'Delete Message', body: 'Are you sure you want to delete this message?', danger: true, confirmLabel: 'Delete',
@@ -89,8 +94,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
             </div>
           )}
           {editing ? (
-            <div>
-              <textarea autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onEditKey} className="input mt-1 resize-none" rows={Math.min(8, draft.split('\n').length + 1)} />
+            <div className="relative">
+              <FormatToolbar textarea={editRef} onChange={setDraft} className="absolute -top-9 left-0 z-20" />
+              <textarea ref={editRef} autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onEditKey} className="input mt-1 resize-none" rows={Math.min(8, draft.split('\n').length + 1)} />
               <p className="text-[11px] text-text-2 mt-1">escape to <button className="text-sky-400 hover:underline" onClick={() => { setEditing(false); setDraft(m.content) }}>cancel</button> • enter to <button className="text-sky-400 hover:underline" onClick={saveEdit}>save</button></p>
             </div>
           ) : (

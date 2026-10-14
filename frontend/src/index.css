@@ -34,6 +34,36 @@ body {
 *::-webkit-scrollbar-thumb { background: #2c2f3b; border-radius: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
 
+/* Markdown in messages and bios */
+.msg-content h1 { @apply text-2xl font-bold leading-tight mt-2 mb-1; }
+.msg-content h2 { @apply text-xl font-bold leading-tight mt-2 mb-1; }
+.msg-content h3 { @apply text-lg font-bold leading-tight mt-1.5 mb-0.5; }
+.msg-content h1:first-child, .msg-content h2:first-child, .msg-content h3:first-child { @apply mt-0; }
+.msg-content .subtext { @apply block text-xs text-text-2; }
+.msg-content ul { @apply list-disc pl-6 my-0.5; }
+.msg-content ol { @apply list-decimal pl-6 my-0.5; }
+.msg-content li { @apply pl-0.5; }
+.msg-content li > ul, .msg-content li > ol { @apply my-0; }
+.msg-content blockquote blockquote { @apply mt-1; }
+.msg-content .spoiler { @apply rounded px-0.5 cursor-pointer select-none bg-bg-0 text-transparent; }
+.msg-content .spoiler:not(.open) * { color: transparent !important; }
+.msg-content .spoiler:not(.open) code { background: transparent; }
+.msg-content .spoiler.open { @apply bg-bg-0/40 text-inherit cursor-auto select-auto; }
+.msg-content .codeblock { @apply my-1 rounded-md bg-bg-0/70 border border-line overflow-hidden text-[13px] font-mono max-w-full; }
+.msg-content .codeblock-head { @apply flex items-center justify-between px-3 py-1 text-[11px] font-sans font-semibold uppercase tracking-wider text-text-2 border-b border-line bg-bg-0/40; }
+.msg-content .codeblock-copy { @apply flex items-center gap-1 normal-case tracking-normal font-medium text-text-2 hover:text-text-0; }
+.msg-content .codeblock pre { @apply m-0 rounded-none border-0 bg-transparent; }
+/* highlight.js tokens on our palette */
+.hljs-comment, .hljs-quote { color: #7d8394; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-section { color: #c792ea; }
+.hljs-string, .hljs-addition, .hljs-regexp { color: #c3e88d; }
+.hljs-number, .hljs-literal, .hljs-boolean { color: #f78c6c; }
+.hljs-title, .hljs-title.function_, .hljs-title.class_, .hljs-function { color: #82aaff; }
+.hljs-attr, .hljs-attribute, .hljs-built_in, .hljs-type, .hljs-selector-class, .hljs-selector-id { color: #ffcb6b; }
+.hljs-variable, .hljs-template-variable, .hljs-tag, .hljs-name, .hljs-deletion { color: #f07178; }
+.hljs-meta, .hljs-symbol, .hljs-bullet, .hljs-link, .hljs-punctuation { color: #89ddff; }
+.hljs-emphasis { font-style: italic; } .hljs-strong { font-weight: bold; }
+
 /* In the components layer so per-element utilities (e.g. pl-9) can override it. */
 @layer components {
   .input {

@@ -1,53 +1,6 @@
-import { createElement, Fragment, type ReactNode } from 'react'
 
 /** Minimal, XSS-safe markdown subset: code blocks, inline code, bold, italic, strike, links, quotes. */
-export function renderMarkdown(src: string): ReactNode {
-  const out: ReactNode[] = []
-  const parts = src.split(/(```[\s\S]*?```)/g)
-  parts.forEach((part, i) => {
-    if (part.startsWith('```') && part.endsWith('```')) {
-      let inner = part.slice(3, -3)
-      inner = inner.replace(/^[a-zA-Z0-9_-]*\n/, '')
-      out.push(createElement('pre', { key: i }, createElement('code', null, inner)))
-    } else if (part) {
-      const lines = part.split('\n')
-      lines.forEach((line, li) => {
-        if (li > 0) out.push(createElement('br', { key: `${i}-br-${li}` }))
-        if (line.startsWith('> ')) {
-          out.push(createElement('blockquote', { key: `${i}-${li}` }, renderInline(line.slice(2))))
-        } else {
-          out.push(createElement(Fragment, { key: `${i}-${li}` }, renderInline(line)))
-        }
-      })
-    }
-  })
-  return createElement(Fragment, null, ...out)
-}
-
-const INLINE_SRC = '(`[^`]+`|\\*\\*.+?\\*\\*|__[^_]+__|~~[^~]+~~|\\*[^*\\n]+\\*|_[^_\\n]+_|https?:\\/\\/[^\\s<]+)'
-
-function renderInline(text: string): ReactNode[] {
-  const nodes: ReactNode[] = []
-  let last = 0
-  let m: RegExpExecArray | null
-  // Fresh regex per call: this function recurses, and a shared global regex's lastIndex would be clobbered.
-  const INLINE = new RegExp(INLINE_SRC, 'g')
-  let k = 0
-  while ((m = INLINE.exec(text))) {
-    if (m.index > last) nodes.push(text.slice(last, m.index))
-    const t = m[0]
-    k++
-    if (t.startsWith('`')) nodes.push(createElement('code', { key: k }, t.slice(1, -1)))
-    else if (t.startsWith('**')) nodes.push(createElement('strong', { key: k }, renderInline(t.slice(2, -2))))
-    else if (t.startsWith('__')) nodes.push(createElement('u', { key: k }, renderInline(t.slice(2, -2))))
-    else if (t.startsWith('~~')) nodes.push(createElement('s', { key: k }, renderInline(t.slice(2, -2))))
-    else if (t.startsWith('*') || t.startsWith('_')) nodes.push(createElement('em', { key: k }, renderInline(t.slice(1, -1))))
-    else if (t.startsWith('http')) nodes.push(createElement('a', { key: k, href: t, target: '_blank', rel: 'noopener noreferrer' }, t))
-    last = m.index + t.length
-  }
-  if (last < text.length) nodes.push(text.slice(last))
-  return nodes
-}
+export { renderMarkdown } from './markdown'
 
 export function formatTime(iso: string): string {
   const d = new Date(iso)
