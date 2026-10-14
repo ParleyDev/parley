@@ -48,6 +48,10 @@ interface State {
   readStates: Record<string, string | null>
   lastMessageId: Record<string, string>
   activeChannelId: string | null
+  /** Mobile only: which pane is on screen. */
+  mobilePane: 'nav' | 'content'
+  /** Member list visible (desktop sidebar / mobile overlay). */
+  membersOpen: boolean
   // voice
   voiceStates: Record<string, VoiceState>
   iceServers: RTCIceServer[]
@@ -95,6 +99,8 @@ interface State {
   pruneTyping: () => void
   setReadState: (channelId: string, msgId: string | null) => void
   setActiveChannel: (id: string | null) => void
+  setMobilePane: (p: 'nav' | 'content') => void
+  setMembersOpen: (open: boolean) => void
   applyVoiceState: (v: VoiceState) => void
   setMyVoice: (channelId: string | null, connecting?: boolean) => void
   setSelfVoiceFlags: (mute: boolean, deaf: boolean) => void
@@ -119,6 +125,12 @@ interface State {
 
 let toastSeq = 1
 
+/** On first load, land on the content pane only if the URL already points at a channel. */
+function initialPane(): 'nav' | 'content' {
+  if (typeof window === 'undefined') return 'nav'
+  return /^\/channels\/[^/]+\/[^/]+/.test(window.location.pathname) ? 'content' : 'nav'
+}
+
 export const useStore = create<State>((set, get) => ({
   token: getToken(),
   user: null,
@@ -139,6 +151,8 @@ export const useStore = create<State>((set, get) => ({
   readStates: {},
   lastMessageId: {},
   activeChannelId: null,
+  mobilePane: initialPane(),
+  membersOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
   voiceStates: {},
   iceServers: [],
   myVoiceChannelId: null,
@@ -343,6 +357,8 @@ export const useStore = create<State>((set, get) => ({
   }),
   setReadState: (channelId, msgId) => set((s) => ({ readStates: { ...s.readStates, [channelId]: msgId } })),
   setActiveChannel: (id) => set({ activeChannelId: id }),
+  setMobilePane: (mobilePane) => set({ mobilePane }),
+  setMembersOpen: (membersOpen) => set({ membersOpen }),
   applyVoiceState: (v) => set((s) => {
     const voiceStates = { ...s.voiceStates }
     if (v.channel_id) voiceStates[v.user_id] = v; else delete voiceStates[v.user_id]
@@ -429,7 +445,7 @@ export function isUnread(s: Pick<State, 'readStates' | 'lastMessageId'>, channel
 }
 
 export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels'>, guildId: string): boolean {
-  return Object.values(s.channels).some((c) => c.guild_id === guildId && c.kind === 'text' && isUnread(s, c.id))
+  return Object.values(s.channels).some((c) => c.guild_id === guildId && isUnread(s, c.id))
 }
 
 export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'dms'>): number {

@@ -1,6 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
 import { ChevronDown, Hash, HeadphoneOff, LogOut, MicOff, Plus, Settings, Trash2, UserPlus, Video, Volume2 } from 'lucide-react'
-import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 import { useState } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
@@ -17,6 +16,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const removeGuild = useStore((s) => s.removeGuild)
+  const setMobilePane = useStore((s) => s.setMobilePane)
   const navigate = useNavigate()
   const { channelId } = useParams()
   const [menu, setMenu] = useState(false)
@@ -40,7 +40,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   })
 
   return (
-    <aside className="w-60 shrink-0 bg-bg-1 flex flex-col">
+    <aside className="w-60 max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="relative">
         <button onClick={() => setMenu((m) => !m)} className="h-12 w-full px-4 flex items-center justify-between font-bold border-b border-line hover:bg-bg-3 transition text-left">
           <span className="truncate">{guild.name}</span>
@@ -66,7 +66,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
         <Category label="Text Channels" onAdd={() => openModal({ kind: 'createChannel', guildId })}>
           {text.map((c) => (
             <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Hash size={18} />} name={c.name}
-              unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)}
+              unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)} onClick={() => setMobilePane('content')}
               onSettings={() => openModal({ kind: 'channelSettings', channelId: c.id })} />
           ))}
         </Category>
@@ -75,7 +75,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             {voiceChannels.map((c) => (
               <div key={c.id}>
                 <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={<Volume2 size={18} />} name={c.name}
-                  onClick={() => voice.join(c.id)}
+                  unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)} onClick={() => setMobilePane('content')}
                   onSettings={() => openModal({ kind: 'channelSettings', channelId: c.id })} />
                 <VoiceParticipants channelId={c.id} />
               </div>
@@ -104,7 +104,7 @@ function Category({ label, onAdd, children }: { label: string; onAdd: () => void
         <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-0.5 py-1 pl-0.5">
           <ChevronDown size={12} className={`transition ${open ? '' : '-rotate-90'}`} />{label}
         </button>
-        <button onClick={onAdd} title="Create Channel" className="opacity-0 group-hover:opacity-100 hover:text-text-0"><Plus size={16} /></button>
+        <button onClick={onAdd} title="Create Channel" className="opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0"><Plus size={16} /></button>
       </div>
       {open && <div className="mt-0.5 space-y-0.5">{children}</div>}
     </div>
@@ -143,7 +143,7 @@ function ChannelRow({ to, icon, name, unread, onSettings, onClick }: { to: strin
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>
-      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 text-text-2 hover:text-text-0" title="Edit Channel"><Settings size={14} /></button>
+      <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 text-text-2 hover:text-text-0" title="Edit Channel"><Settings size={14} /></button>
     </NavLink>
   )
 }

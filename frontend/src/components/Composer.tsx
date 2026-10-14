@@ -18,7 +18,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const ref = useRef<HTMLTextAreaElement>(null)
   const lastTyping = useRef(0)
   const isDm = channel.guild_id === null
-  const name = isDm ? `@${(channel as DmChannel).recipients[0]?.display_name ?? ''}` : `#${channel.name}`
+  const name = isDm ? `@${(channel as DmChannel).recipients[0]?.display_name ?? ''}` : (channel as Channel).kind === 'voice' ? channel.name : `#${channel.name}`
 
   useEffect(() => { ref.current?.focus() }, [channel.id, reply])
   useEffect(() => {
@@ -49,7 +49,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const typers = Object.keys(typing ?? {}).map((id) => users[id]?.display_name ?? 'Someone')
 
   return (
-    <div className="shrink-0 px-4 pb-6 pt-1">
+    <div className="shrink-0 px-4 pb-6 pt-1 max-md:px-2 max-md:pb-2">
       <div className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition">
         {reply && (
           <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-xl">

@@ -21,6 +21,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.content)
   const [picker, setPicker] = useState(false)
+  // Phones have no hover: tapping the message body toggles the action bar.
+  const [tapped, setTapped] = useState(false)
 
   const saveEdit = async () => {
     const c = draft.trim()
@@ -43,15 +45,15 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
 
   return (
-    <div className={`group relative px-4 hover:bg-bg-0/30 ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {replyTarget !== null && m.reply_to && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md">{replyTarget.content}</span></>) : <i>Original message was deleted</i>}
         </div>
       )}
-      <div className="flex gap-4">
+      <div className="flex gap-4 max-md:gap-3">
         {grouped ? (
-          <div className="w-10 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
+          <div className="w-10 max-md:w-8 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
         ) : (
           <button onClick={() => openModal({ kind: 'profile', userId: m.author.id })} className="shrink-0 mt-0.5"><Avatar user={m.author} size={40} /></button>
         )}
@@ -86,7 +88,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       </div>
 
       {!editing && (
-        <div className="absolute -top-3 right-4 hidden group-hover:flex items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible">
+        <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
           <div className="relative">
             <Tool label="Add Reaction" onClick={() => setPicker((p) => !p)}><SmilePlus size={16} /></Tool>
             {picker && (

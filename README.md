@@ -23,8 +23,10 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 - Accounts: register, log in (JWT), profile (display name, bio, avatar upload), presence status (online / idle / dnd / invisible)
 - Servers: create, rename, icon, delete, leave, kick (owner), invite links (`/invite/<code>`, optional max uses)
 - Channels: text and voice, topics, rename, delete, unread indicators
-- Voice & video: WebRTC mesh in voice channels (join from sidebar or channel view), mute / deafen, camera, screen share, speaking indicators, focus view for a tile, participant list, auto-rejoin after socket reconnect
+- Voice & video: WebRTC mesh in voice channels (clicking a voice channel opens it; you join with the Join Voice button, like Discord), mute / deafen, camera, screen share, speaking indicators, focus view for a tile, participant list, auto-rejoin after socket reconnect
 - Voice & Video settings (User Settings → Voice & Video): input / output / camera device pickers, input and output volume, mic test with level meter, voice activity or push-to-talk with a recordable key, automatic or manual input sensitivity, echo cancellation / noise suppression / auto gain toggles, camera preview. Settings persist in the browser and apply live mid-call.
+- Voice channel chat: every voice channel has its own persistent text chat (the chat icon in the voice header), with unread markers on the channel row and the toggle
+- Responsive layout: phones get one pane at a time (channel list ↔ chat / voice stage, member list as a sheet, voice chat as an overlay) with a back button in every header; tablets and desktops get the side-by-side layout
 - Messages: real-time delivery, history with infinite scroll, edit, delete (author or owner), replies, reactions, markdown subset (bold, italic, strike, code, code blocks, quotes, links), typing indicators, read states, desktop notifications
 - Direct messages: search any user, 1:1 DM channels with presence
 - Live member list with online/offline grouping and user profile cards

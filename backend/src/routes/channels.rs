@@ -220,9 +220,6 @@ async fn create_message(
     Json(req): Json<CreateMessage>,
 ) -> AppResult<(StatusCode, Json<Message>)> {
     let c = require_channel(&state.db, id, uid).await?;
-    if c.kind == "voice" {
-        return Err(AppError::BadRequest("Cannot send messages to a voice channel".into()));
-    }
     let content = req.content.trim_end().to_string();
     if content.trim().is_empty() || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));

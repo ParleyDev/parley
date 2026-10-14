@@ -19,9 +19,14 @@
 }
 
 html, body, #root { height: 100%; }
+@supports (height: 100dvh) { #root { height: 100dvh; } }
 body {
   @apply bg-bg-2 text-text-0 font-sans antialiased;
   overscroll-behavior: none;
+}
+/* iOS zooms into inputs smaller than 16px; keep them at 16px on phones. */
+@media (max-width: 767px) {
+  input, textarea, select { font-size: 16px !important; }
 }
 
 * { scrollbar-width: thin; scrollbar-color: #2c2f3b transparent; }

@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { useStore } from '../store'
 import type { DmChannel, User } from '../lib/types'
 import Avatar from './Avatar'
+import { MobileBack } from './HeaderBits'
 
 export default function HomeView() {
   const users = useStore((s) => s.users)
@@ -40,13 +41,14 @@ export default function HomeView() {
 
   return (
     <main className="flex-1 min-w-0 flex flex-col bg-bg-2">
-      <header className="h-12 shrink-0 px-4 flex items-center gap-2 border-b border-line">
+      <header className="h-12 shrink-0 px-4 max-md:px-2 flex items-center gap-2 border-b border-line">
+        <MobileBack />
         <MessageSquare size={22} className="text-text-2" /><span className="font-bold">Friends</span>
         <span className="mx-2 h-6 w-px bg-line" />
         <span className="text-sm text-text-1 rounded-md px-2 py-0.5 bg-bg-4">All</span>
         <button onClick={() => openModal({ kind: 'newDm' })} className="ml-2 text-sm text-text-1 rounded-md px-2 py-0.5 hover:bg-bg-3">New DM</button>
       </header>
-      <div className="p-6 max-w-3xl w-full mx-auto">
+      <div className="flex-1 min-h-0 p-6 max-md:p-3 max-w-3xl w-full mx-auto overflow-y-auto">
         <div className="relative mb-6">
           <input className="input pl-9 py-2.5" placeholder="Search people by username or display name" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />
