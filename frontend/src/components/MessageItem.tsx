@@ -1,5 +1,5 @@
 import { Pencil, Reply, SmilePlus, Trash2 } from 'lucide-react'
-import { useState, type KeyboardEvent } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { isBlocked, myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
 import StyledName from './StyledName'
@@ -24,6 +24,15 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.content)
   const [picker, setPicker] = useState(false)
+  // The picker opens upward (over older messages) so it is never clipped by the bottom of the
+  // scrolling list; only when the message sits right under the header does it open downward.
+  const [pickerUp, setPickerUp] = useState(true)
+  const pickerAnchor = useRef<HTMLDivElement>(null)
+  const togglePicker = () => {
+    const top = pickerAnchor.current?.getBoundingClientRect().top ?? 999
+    setPickerUp(top > 140)
+    setPicker((p) => !p)
+  }
   // Phones have no hover: tapping the message body toggles the action bar.
   const [tapped, setTapped] = useState(false)
   const blocked = useStore((s) => isBlocked(s, m.author.id))
@@ -109,12 +118,12 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
 
       {!editing && (
         <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
-          {canReact && <div className="relative">
-            <Tool label="Add Reaction" onClick={() => setPicker((p) => !p)}><SmilePlus size={16} /></Tool>
+          {canReact && <div className="relative" ref={pickerAnchor}>
+            <Tool label="Add Reaction" onClick={togglePicker}><SmilePlus size={16} /></Tool>
             {picker && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setPicker(false)} />
-                <div className="pop absolute right-0 top-full mt-1 z-40 flex gap-1 rounded-lg bg-bg-0 border border-line p-1 shadow-2xl">
+                <div className={`pop absolute right-0 z-40 flex gap-1 rounded-lg bg-bg-0 border border-line p-1 shadow-2xl ${pickerUp ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
                   {QUICK.map((e) => <button key={e} onClick={() => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} className="h-8 w-8 rounded-md text-lg hover:bg-bg-3">{e}</button>)}
                 </div>
               </>

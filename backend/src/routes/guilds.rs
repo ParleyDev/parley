@@ -1,7 +1,7 @@
 use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
-    models::{Channel, Guild, Invite, Member},
+    models::{Ban, Channel, Guild, Invite, Member},
     perms,
     routes::roles::{attach_roles, create_everyone},
     routes::users::validate_image,
@@ -10,7 +10,7 @@ use crate::{
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use rand::{distributions::Alphanumeric, Rng};
@@ -28,6 +28,9 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/members/@me", delete(leave_guild))
         .route("/guilds/:id/members/:uid", delete(kick_member))
         .route("/guilds/:id/invites", get(list_invites).post(create_invite))
+        .route("/guilds/:id/bans", get(list_bans))
+        .route("/guilds/:id/bans/:uid", put(ban_member).delete(unban_member))
+        .route("/guilds/:id/owner", post(transfer_ownership))
 }
 
 pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at";
@@ -301,13 +304,22 @@ async fn kick_member(
 }
 
 async fn remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppResult<()> {
+    if !try_remove_member(state, guild_id, user_id).await? {
+        return Err(AppError::NotFound("Member not found".into()));
+    }
+    Ok(())
+}
+
+/// Drop a member row (and their per-channel overwrites), evict them from voice and tell everyone.
+/// Returns false when they were not a member.
+async fn try_remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppResult<bool> {
     let res = sqlx::query("DELETE FROM guild_members WHERE guild_id = $1 AND user_id = $2")
         .bind(guild_id)
         .bind(user_id)
         .execute(&state.db)
         .await?;
     if res.rows_affected() == 0 {
-        return Err(AppError::NotFound("Member not found".into()));
+        return Ok(false);
     }
     sqlx::query("DELETE FROM channel_overwrites WHERE target_kind = 'member' AND target_id = $1 AND channel_id IN (SELECT id FROM channels WHERE guild_id = $2)")
         .bind(user_id)
@@ -319,7 +331,145 @@ async fn remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppRe
     state.hub.emit_guild(guild_id, "GUILD_MEMBER_REMOVE", payload.clone());
     // The removed user no longer matches the guild target; notify them directly.
     state.hub.emit_users(vec![user_id], "GUILD_MEMBER_REMOVE", payload);
-    Ok(())
+    Ok(true)
+}
+
+pub const BAN_COLS: &str = "b.guild_id, b.user_id, b.moderator_id, b.reason, b.created_at, u.username, u.display_name, u.avatar_url, mu.display_name AS moderator_name";
+
+pub async fn is_banned(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<bool> {
+    let row: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_bans WHERE guild_id = $1 AND user_id = $2")
+        .bind(guild_id)
+        .bind(user_id)
+        .fetch_optional(db)
+        .await?;
+    Ok(row.is_some())
+}
+
+async fn fetch_ban(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Ban> {
+    Ok(sqlx::query_as::<_, Ban>(&format!(
+        "SELECT {BAN_COLS} FROM guild_bans b JOIN users u ON u.id = b.user_id LEFT JOIN users mu ON mu.id = b.moderator_id WHERE b.guild_id = $1 AND b.user_id = $2"
+    ))
+    .bind(guild_id)
+    .bind(user_id)
+    .fetch_one(db)
+    .await?)
+}
+
+async fn list_bans(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path(id): Path<Uuid>,
+) -> AppResult<Json<Vec<Ban>>> {
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::BAN_MEMBERS)?;
+    let bans = sqlx::query_as::<_, Ban>(&format!(
+        "SELECT {BAN_COLS} FROM guild_bans b JOIN users u ON u.id = b.user_id LEFT JOIN users mu ON mu.id = b.moderator_id WHERE b.guild_id = $1 ORDER BY b.created_at DESC"
+    ))
+    .bind(id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(bans))
+}
+
+#[derive(Deserialize, Default)]
+struct BanReq {
+    reason: Option<String>,
+}
+
+/// Ban a user: they are removed (if a member) and can no longer accept invites. Like Discord, a
+/// user who is not currently a member can be banned pre-emptively. Owners cannot be banned and
+/// you must outrank the target.
+async fn ban_member(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, target)): Path<(Uuid, Uuid)>,
+    body: Option<Json<BanReq>>,
+) -> AppResult<(StatusCode, Json<Ban>)> {
+    let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::BAN_MEMBERS)?;
+    if target == uid {
+        return Err(AppError::BadRequest("You cannot ban yourself".into()));
+    }
+    if ctx.is_owner(target) {
+        return Err(AppError::BadRequest("The server owner cannot be banned".into()));
+    }
+    if ctx.is_member(target) && !ctx.outranks_member(uid, target) {
+        return Err(AppError::Forbidden);
+    }
+    let reason: String = body.and_then(|Json(b)| b.reason).unwrap_or_default().trim().chars().take(512).collect();
+    let inserted = sqlx::query(
+        "INSERT INTO guild_bans (guild_id, user_id, moderator_id, reason) SELECT $1, $2, $3, $4 WHERE EXISTS (SELECT 1 FROM users WHERE id = $2)
+         ON CONFLICT (guild_id, user_id) DO UPDATE SET moderator_id = EXCLUDED.moderator_id, reason = EXCLUDED.reason, created_at = now()",
+    )
+    .bind(id)
+    .bind(target)
+    .bind(uid)
+    .bind(&reason)
+    .execute(&state.db)
+    .await?
+    .rows_affected();
+    if inserted == 0 {
+        return Err(AppError::NotFound("User not found".into()));
+    }
+    try_remove_member(&state, id, target).await?;
+    let ban = fetch_ban(&state.db, id, target).await?;
+    state.hub.emit_guild(id, "GUILD_BAN_ADD", json!(ban));
+    Ok((StatusCode::CREATED, Json(ban)))
+}
+
+async fn unban_member(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, target)): Path<(Uuid, Uuid)>,
+) -> AppResult<StatusCode> {
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::BAN_MEMBERS)?;
+    let res = sqlx::query("DELETE FROM guild_bans WHERE guild_id = $1 AND user_id = $2")
+        .bind(id)
+        .bind(target)
+        .execute(&state.db)
+        .await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound("Ban not found".into()));
+    }
+    state.hub.emit_guild(id, "GUILD_BAN_REMOVE", json!({ "guild_id": id, "user_id": target }));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct TransferReq {
+    user_id: Uuid,
+}
+
+/// Hand the server to another member. Only the current owner may do this. The old owner keeps
+/// their roles but loses the implicit all-permissions, so channel visibility is re-synced.
+async fn transfer_ownership(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<TransferReq>,
+) -> AppResult<Json<Guild>> {
+    require_owner(&state.db, id, uid).await?;
+    if req.user_id == uid {
+        return Err(AppError::BadRequest("You already own this server".into()));
+    }
+    let member: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2")
+        .bind(id)
+        .bind(req.user_id)
+        .fetch_optional(&state.db)
+        .await?;
+    if member.is_none() {
+        return Err(AppError::BadRequest("The new owner must be a member of this server".into()));
+    }
+    let before = perms::visibility(&state.db, id).await?;
+    let g = sqlx::query_as::<_, Guild>(&format!("UPDATE guilds SET owner_id = $2 WHERE id = $1 RETURNING {GUILD_COLS}"))
+        .bind(id)
+        .bind(req.user_id)
+        .fetch_one(&state.db)
+        .await?;
+    state.hub.emit_guild(id, "GUILD_UPDATE", json!(g));
+    perms::resync_visibility(&state, id, &before).await?;
+    Ok(Json(g))
 }
 
 #[derive(Deserialize)]

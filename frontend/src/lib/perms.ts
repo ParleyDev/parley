@@ -4,6 +4,7 @@ import type { Channel, Guild, Member, Role } from './types'
 export const P = {
   CREATE_INVITE: 1 << 0,
   KICK_MEMBERS: 1 << 1,
+  BAN_MEMBERS: 1 << 2,
   ADMINISTRATOR: 1 << 3,
   MANAGE_CHANNELS: 1 << 4,
   MANAGE_GUILD: 1 << 5,
@@ -35,6 +36,7 @@ export const PERMS: PermInfo[] = [
   { key: 'CHANGE_NICKNAME', label: 'Change Nickname', desc: 'Allows members to change their own nickname.', group: 'Membership' },
   { key: 'MANAGE_NICKNAMES', label: 'Manage Nicknames', desc: 'Allows members to change the nicknames of other members.', group: 'Membership' },
   { key: 'KICK_MEMBERS', label: 'Kick Members', desc: 'Allows members to remove other members from this server. Kicked members can rejoin with a new invite.', group: 'Membership' },
+  { key: 'BAN_MEMBERS', label: 'Ban Members', desc: 'Allows members to permanently ban and unban other members from this server. Banned members cannot rejoin until unbanned.', group: 'Membership' },
   { key: 'SEND_MESSAGES', label: 'Send Messages', desc: 'Allows members to send messages in text channels and voice channel chats.', group: 'Text', channel: 'both' },
   { key: 'ATTACH_FILES', label: 'Attach Files', desc: 'Allows members to upload images and files.', group: 'Text', channel: 'both' },
   { key: 'ADD_REACTIONS', label: 'Add Reactions', desc: 'Allows members to add emoji reactions to messages.', group: 'Text', channel: 'both' },

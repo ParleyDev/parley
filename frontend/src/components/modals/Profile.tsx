@@ -1,4 +1,4 @@
-import { Ban, Check, MessageSquare, UserMinus, UserPlus, X } from 'lucide-react'
+import { Ban, Check, Gavel, MessageSquare, UserMinus, UserPlus, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { matchPath, useLocation, useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
@@ -43,7 +43,10 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
   })
   const joined = member ? new Date(member.joined_at) : null
   const ctx = guild ? { guild, roles, member: myMember } : null
-  const canKick = !!(guild && ctx && me && !isMe && has(myPerms, P.KICK_MEMBERS) && guild.owner_id !== userId && (guild.owner_id === me.id || highestPosition(ctx, me.id) > highestPosition({ ...ctx, member }, userId)))
+  const outranks = !!(guild && ctx && me && !isMe && member && guild.owner_id !== userId && (guild.owner_id === me.id || highestPosition(ctx, me.id) > highestPosition({ ...ctx, member }, userId)))
+  const canKick = outranks && has(myPerms, P.KICK_MEMBERS)
+  const canBan = outranks && has(myPerms, P.BAN_MEMBERS)
+  const ban = () => openModal({ kind: 'ban', guildId: inGuild!, userId })
   const roleForName = colorRole(roles, member)
   const roleNameStyle = roleForName ? nameCss(roleForName.color, roleForName.color_accent) : undefined
   const relAct = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
@@ -64,6 +67,7 @@ export default function ProfileModal({ onClose, userId }: { onClose: () => void;
       {rel === 'blocked' && <button onClick={removeRel} className={ghost} title="Unblock"><Ban size={16} /> Unblock</button>}
       {rel !== 'blocked' && <button onClick={blockUser} className={ghost} title="Block"><Ban size={16} /></button>}
       {canKick && <button onClick={kick} className="btn-danger py-1.5" title="Kick"><UserMinus size={16} /></button>}
+      {canBan && <button onClick={ban} className="btn-danger py-1.5" title="Ban"><Gavel size={16} /></button>}
     </>
   )
 

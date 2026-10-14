@@ -1,4 +1,4 @@
-import { Shield, SlidersHorizontal, Trash2, Users } from 'lucide-react'
+import { Crown, Gavel, Shield, SlidersHorizontal, Trash2, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { myGuildPerms, useStore } from '../../store'
@@ -8,8 +8,9 @@ import SettingsShell from './SettingsShell'
 import GuildOverviewTab from './settings/GuildOverviewTab'
 import RolesTab from './settings/RolesTab'
 import MembersTab from './settings/MembersTab'
+import BansTab from './settings/BansTab'
 
-type Tab = 'overview' | 'roles' | 'members'
+type Tab = 'overview' | 'roles' | 'members' | 'bans'
 
 export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'overview' }: { onClose: () => void; guildId: string; tab?: Tab }) {
   const guild = useStore((s) => s.guilds[guildId])
@@ -20,7 +21,8 @@ export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'o
   const pushToast = useStore((s) => s.pushToast)
   const navigate = useNavigate()
   const canOverview = has(perms, P.MANAGE_GUILD)
-  const [tab, setTab] = useState<Tab>(initial === 'overview' && !canOverview ? 'roles' : initial)
+  const canBans = has(perms, P.BAN_MEMBERS)
+  const [tab, setTab] = useState<Tab>((initial === 'overview' && !canOverview) || (initial === 'bans' && !canBans) ? 'roles' : initial)
   if (!guild) return null
   const isOwner = guild.owner_id === user?.id
 
@@ -35,16 +37,23 @@ export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'o
   if (canOverview) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> })
   items.push({ id: 'roles', label: 'Roles', icon: <Shield size={16} /> })
   items.push({ id: 'members', label: 'Members', icon: <Users size={16} /> })
+  if (canBans) items.push({ id: 'bans', label: 'Bans', icon: <Gavel size={16} /> })
 
   return (
     <SettingsShell<Tab>
       tab={tab} onTab={setTab} onClose={onClose} wide={tab !== 'overview'}
       sections={[{ title: guild.name, items }]}
-      footer={isOwner ? <button onClick={del} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Server"><span className="max-md:hidden">Delete Server</span><Trash2 size={16} /></button> : undefined}
+      footer={isOwner ? (
+        <div className="flex flex-col max-md:flex-row gap-0.5">
+          <button onClick={() => openModal({ kind: 'transferOwnership', guildId })} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-text-1 hover:bg-bg-3 hover:text-text-0 whitespace-nowrap" title="Transfer Ownership"><span className="max-md:hidden">Transfer Ownership</span><Crown size={16} /></button>
+          <button onClick={del} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Server"><span className="max-md:hidden">Delete Server</span><Trash2 size={16} /></button>
+        </div>
+      ) : undefined}
     >
       {tab === 'overview' && canOverview && <GuildOverviewTab guildId={guildId} />}
       {tab === 'roles' && <RolesTab guildId={guildId} />}
       {tab === 'members' && <MembersTab guildId={guildId} />}
+      {tab === 'bans' && canBans && <BansTab guildId={guildId} />}
     </SettingsShell>
   )
 }

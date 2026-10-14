@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
-import type { Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, User, VoiceState } from './lib/types'
+import type { Ban, Channel, DmChannel, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, User, VoiceState } from './lib/types'
 import { channelPerms, guildPerms } from './lib/perms'
 
 export type ModalKind =
@@ -9,13 +9,15 @@ export type ModalKind =
   | { kind: 'joinGuild'; code?: string }
   | { kind: 'createChannel'; guildId: string }
   | { kind: 'invite'; guildId: string }
-  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' }
+  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' | 'bans' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string }
   | { kind: 'image'; url: string; name: string }
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string }
+  | { kind: 'ban'; guildId: string; userId: string }
+  | { kind: 'transferOwnership'; guildId: string; userId?: string }
 
 export interface ReadyPayload {
   user: PrivateUser
@@ -46,6 +48,9 @@ interface State {
   relationships: Record<string, Relationship>
   members: Record<string, Record<string, Member>>
   membersLoaded: Record<string, true>
+  /** guildId -> userId -> ban (loaded on demand for moderators) */
+  bans: Record<string, Record<string, Ban>>
+  bansLoaded: Record<string, true>
   /** guildId -> roleId -> role */
   roles: Record<string, Record<string, Role>>
   messages: Record<string, Message[]>
@@ -101,6 +106,9 @@ interface State {
   setMembers: (guildId: string, m: Member[]) => void
   upsertMember: (m: Member) => void
   removeMember: (guildId: string, userId: string) => void
+  setBans: (guildId: string, bans: Ban[]) => void
+  upsertBan: (b: Ban) => void
+  removeBan: (guildId: string, userId: string) => void
   addMessage: (m: Message) => void
   updateMessage: (m: Message) => void
   removeMessage: (channelId: string, id: string) => void
@@ -133,6 +141,7 @@ interface State {
   // async actions
   loadMessages: (channelId: string, before?: string) => Promise<void>
   loadMembers: (guildId: string) => Promise<void>
+  loadBans: (guildId: string) => Promise<void>
   sendMessage: (channelId: string, content: string, replyTo?: string | null, attachmentIds?: string[]) => Promise<void>
   markRead: (channelId: string) => Promise<void>
 }
@@ -157,6 +166,8 @@ export const useStore = create<State>((set, get) => ({
   relationships: {},
   members: {},
   membersLoaded: {},
+  bans: {},
+  bansLoaded: {},
   roles: {},
   messages: {},
   hasMore: {},
@@ -195,7 +206,7 @@ export const useStore = create<State>((set, get) => ({
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], channels: {}, dms: {}, relationships: {},
-      members: {}, membersLoaded: {}, roles: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
+      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {},
     })
   },
@@ -231,7 +242,7 @@ export const useStore = create<State>((set, get) => ({
       user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events.
-      messages: {}, hasMore: {}, members, membersLoaded: {},
+      messages: {}, hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
     })
   },
   setConnected: (connected) => set({ connected }),
@@ -295,6 +306,14 @@ export const useStore = create<State>((set, get) => ({
   removeMember: (guildId, userId) => set((s) => {
     const g = { ...(s.members[guildId] ?? {}) }; delete g[userId]
     return { members: { ...s.members, [guildId]: g } }
+  }),
+  setBans: (guildId, bs) => set((s) => ({
+    bans: { ...s.bans, [guildId]: Object.fromEntries(bs.map((b) => [b.user_id, b])) }, bansLoaded: { ...s.bansLoaded, [guildId]: true },
+  })),
+  upsertBan: (b) => set((s) => ({ bans: { ...s.bans, [b.guild_id]: { ...(s.bans[b.guild_id] ?? {}), [b.user_id]: b } } })),
+  removeBan: (guildId, userId) => set((s) => {
+    const g = { ...(s.bans[guildId] ?? {}) }; delete g[userId]
+    return { bans: { ...s.bans, [guildId]: g } }
   }),
   addMessage: (m) => set((s) => {
     const list = s.messages[m.channel_id]
@@ -458,6 +477,12 @@ export const useStore = create<State>((set, get) => ({
     try {
       const ms = await api.get<Member[]>(`/guilds/${guildId}/members`)
       get().setMembers(guildId, ms)
+    } catch { /* ignore */ }
+  },
+  loadBans: async (guildId) => {
+    try {
+      const bs = await api.get<Ban[]>(`/guilds/${guildId}/bans`)
+      get().setBans(guildId, bs)
     } catch { /* ignore */ }
   },
   sendMessage: async (channelId, content, replyTo, attachmentIds = []) => {

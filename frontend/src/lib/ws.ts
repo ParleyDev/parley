@@ -1,5 +1,5 @@
 import { useStore, type ReadyPayload } from '../store'
-import type { Channel, DmChannel, Guild, Member, Message, Relationship, Role, User, VoiceState } from './types'
+import type { Ban, Channel, DmChannel, Guild, Member, Message, Relationship, Role, User, VoiceState } from './types'
 import { voice } from './voice'
 
 type Ev =
@@ -23,6 +23,8 @@ type Ev =
   | { t: 'GUILD_DELETE'; d: { id: string } }
   | { t: 'GUILD_MEMBER_ADD'; d: Member }
   | { t: 'GUILD_MEMBER_REMOVE'; d: { guild_id: string; user_id: string } }
+  | { t: 'GUILD_BAN_ADD'; d: Ban }
+  | { t: 'GUILD_BAN_REMOVE'; d: { guild_id: string; user_id: string } }
   | { t: 'CHANNEL_CREATE' | 'CHANNEL_UPDATE'; d: Channel | DmChannel }
   | { t: 'CHANNEL_DELETE'; d: { id: string; guild_id: string } }
   | { t: 'READ_STATE_UPDATE'; d: { channel_id: string; last_read_msg: string } }
@@ -116,6 +118,8 @@ function handle(ev: Ev) {
     case 'GUILD_DELETE': s.removeGuild(ev.d.id); break
     case 'GUILD_MEMBER_ADD': s.upsertMember(ev.d); break
     case 'GUILD_MEMBER_UPDATE': s.upsertMember(ev.d); break
+    case 'GUILD_BAN_ADD': s.upsertBan(ev.d); break
+    case 'GUILD_BAN_REMOVE': s.removeBan(ev.d.guild_id, ev.d.user_id); break
     case 'ROLE_UPDATE': s.upsertRole(ev.d.role); break
     case 'ROLE_DELETE': s.removeRole(ev.d.guild_id, ev.d.id); break
     case 'ROLES_SYNC': s.setRoles(ev.d.guild_id, ev.d.roles); break

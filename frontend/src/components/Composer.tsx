@@ -170,7 +170,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             {emoji && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setEmoji(false)} />
-                <div className="pop absolute bottom-full right-0 mb-3 z-40 grid grid-cols-8 gap-1 rounded-xl bg-bg-0 border border-line p-2 shadow-2xl">
+                <div className="pop absolute bottom-full right-0 mb-3 z-40 grid grid-cols-[repeat(8,2rem)] gap-1 rounded-xl bg-bg-0 border border-line p-2 shadow-2xl">
                   {QUICK_EMOJI.map((e) => <button key={e} onClick={() => { setValue((v) => v + e); setEmoji(false); ref.current?.focus() }} className="h-8 w-8 rounded-md text-xl hover:bg-bg-3">{e}</button>)}
                 </div>
               </>

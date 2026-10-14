@@ -6,7 +6,7 @@ import { useStore } from '../store'
 import type { Channel, Guild } from '../lib/types'
 import { colorFor, initials } from '../lib/format'
 
-interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number }; expired: boolean; already_member: boolean }
+interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number }; expired: boolean; already_member: boolean; banned: boolean }
 
 export default function InvitePage() {
   const { code = '' } = useParams()
@@ -51,6 +51,8 @@ export default function InvitePage() {
             <p className="text-text-2 text-sm mb-6">{p.guild.member_count} member{p.guild.member_count === 1 ? '' : 's'}</p>
             {p.already_member ? (
               <button className="btn-primary w-full" onClick={() => navigate(`/channels/${p.guild.id}`)}>Open server</button>
+            ) : p.banned ? (
+              <p className="text-danger text-sm">You are banned from this server.</p>
             ) : p.expired ? (
               <p className="text-danger text-sm">This invite has expired.</p>
             ) : (

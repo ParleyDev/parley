@@ -1,3 +1,4 @@
+import { Crown } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import ImagePicker from '../ImagePicker'
 import { api } from '../../../lib/api'
@@ -7,6 +8,9 @@ import type { Guild } from '../../../lib/types'
 export default function GuildOverviewTab({ guildId }: { guildId: string }) {
   const guild = useStore((s) => s.guilds[guildId])
   const upsertGuild = useStore((s) => s.upsertGuild)
+  const me = useStore((s) => s.user)
+  const openModal = useStore((s) => s.openModal)
+  const ownerMember = useStore((s) => (guild ? s.members[guildId]?.[guild.owner_id] : undefined))
   const pushToast = useStore((s) => s.pushToast)
   const [name, setName] = useState(guild?.name ?? '')
   const [icon, setIcon] = useState<string | null>(guild?.icon_url ?? null)
@@ -26,6 +30,13 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
       <div className="flex items-start gap-6 max-md:flex-col">
         <ImagePicker value={icon} onChange={setIcon} label={name} id={guildId} />
         <div className="flex-1 w-full"><label className="label">Server name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
+      </div>
+      <div className="rounded-xl bg-bg-0/50 border border-line p-4">
+        <div className="flex items-center gap-2 font-semibold"><Crown size={16} className="text-warn" /> Server owner</div>
+        <p className="text-sm text-text-2 mt-1">
+          {guild.owner_id === me?.id ? 'You own this server. Transferring ownership hands over full control, including deleting the server.' : `This server is owned by ${ownerMember ? (ownerMember.nickname ?? ownerMember.display_name) : 'another member'}.`}
+        </p>
+        {guild.owner_id === me?.id && <button type="button" className="btn-ghost mt-3" onClick={() => openModal({ kind: 'transferOwnership', guildId })}><Crown size={16} /> Transfer Ownership</button>}
       </div>
       {dirty && (
         <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">

@@ -22,7 +22,7 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 
 - Accounts: register, log in (JWT), presence status (online / idle / dnd / invisible)
 - Profiles (User Settings → Profiles, with live preview): avatar and banner uploads (resized in the browser), pronouns, a theme colour with optional second colour for a gradient that tints the whole profile card, an About Me that supports the same markdown as messages (bold, italic, underline, strike, code, quotes, links), and a name colour with optional gradient that styles your name in chat, DMs and lists
-- Servers: create, rename, icon, delete, leave, kick, invite links (`/invite/<code>`, optional max uses)
+- Servers: create, rename, icon, delete, leave, kick, ban (with reason; Server Settings → Bans lists and revokes them, banned users can't accept invites), transfer ownership (owner only, from Server Settings; the new owner gets full control and the old owner keeps only their roles), invite links (`/invite/<code>`, optional max uses)
 - Roles & permissions (Server Settings → Roles / Members): Discord-style roles with colour (solid or two-colour gradient, applied to member names in chat and lists; the highest coloured role wins over a user's own name style), hoisting and a permission bitfield; role hierarchy (you can only edit, assign or kick below your highest role); per-channel allow/deny overwrites for roles and members, private channels, and a "Private channel" switch when creating one. Permissions are enforced server-side and the UI hides what you can't do. See *Permissions* below.
 - Channels: text and voice, topics, rename, delete, unread indicators
 - Voice & video: WebRTC mesh in voice channels (clicking a voice channel opens it; you join with the Join Voice button, like Discord), mute / deafen, camera, screen share, speaking indicators, focus view for a tile, participant list, auto-rejoin after socket reconnect
@@ -78,6 +78,7 @@ GET   /users/@me/channels   POST /users/@me/channels {recipient_id}
 GET   /guilds   POST /guilds   GET|PATCH|DELETE /guilds/:id
 GET|POST /guilds/:id/channels   GET /guilds/:id/members
 DELETE /guilds/:id/members/@me   DELETE /guilds/:id/members/:uid
+GET /guilds/:id/bans   PUT|DELETE /guilds/:id/bans/:uid {reason}   POST /guilds/:id/owner {user_id}
 GET|POST /guilds/:id/invites   GET|POST /invites/:code
 GET|PATCH|DELETE /channels/:id
 GET|POST /channels/:id/messages?before=&limit=
@@ -85,7 +86,7 @@ PATCH|DELETE /channels/:id/messages/:mid
 PUT|DELETE /channels/:id/messages/:mid/reactions/:emoji
 POST /channels/:id/typing   PUT /channels/:id/read {message_id}
 GET  /ws?token=<jwt>   (events: READY, MESSAGE_CREATE/UPDATE/DELETE, REACTION_ADD/REMOVE,
-      TYPING_START, PRESENCE_UPDATE, USER_UPDATE, GUILD_*, GUILD_MEMBER_*, CHANNEL_*, READ_STATE_UPDATE,
+      TYPING_START, PRESENCE_UPDATE, USER_UPDATE, GUILD_*, GUILD_MEMBER_*, GUILD_BAN_ADD/REMOVE, CHANNEL_*, READ_STATE_UPDATE,
       VOICE_STATE_UPDATE, VOICE_SIGNAL, VOICE_ERROR)
       client ops: ping, typing, voice_join, voice_leave, voice_state, voice_signal
 ```
@@ -104,11 +105,11 @@ Media is peer-to-peer mesh: each participant keeps one `RTCPeerConnection` per o
 
 ## Permissions
 
-Bits mirror Discord's values: Create Invite, Kick Members, Administrator, Manage Channels, Manage Server, Add Reactions, Video (camera/screen), View Channels, Send Messages, Manage Messages, Connect, Speak, Change Nickname, Manage Nicknames, Manage Roles. `GET /api/permissions` lists them.
+Bits mirror Discord's values: Create Invite, Kick Members, Ban Members, Administrator, Manage Channels, Manage Server, Add Reactions, Video (camera/screen), View Channels, Send Messages, Manage Messages, Connect, Speak, Change Nickname, Manage Nicknames, Manage Roles. `GET /api/permissions` lists them.
 
 - Every server has an `@everyone` role whose id equals the server id. New servers give it invite, reactions, video, view, send, connect, speak and nickname.
 - Effective permissions = `@everyone` | member's roles; the owner and anyone with Administrator get everything. Channel overwrites then apply in order: `@everyone`, the member's roles (aggregated), the member. No View Channel means no permissions at all in that channel, and the server does not send that channel (or its messages, typing, voice states) to that user.
-- Hierarchy: a member may only create/edit/delete roles, assign roles, set overwrites or kick when the target role or member sits below their own highest role; the owner outranks all. A manager can only grant or revoke permission bits they themselves hold.
+- Hierarchy: a member may only create/edit/delete roles, assign roles, set overwrites, kick or ban when the target role or member sits below their own highest role; the owner outranks all and can never be kicked or banned (transfer ownership first). A manager can only grant or revoke permission bits they themselves hold.
 - Voice: no Connect blocks joining (and evicts you if revoked mid-call), no Speak marks you `suppress`ed so your client keeps its mic gate closed (shown as "Muted by server"), no Video drops camera and screen share.
 - Endpoints: `GET/POST /guilds/:id/roles`, `PATCH/DELETE /guilds/:id/roles/:rid` (`position` reorders), `PATCH /guilds/:id/members/:uid` (`roles`, `nickname`), `PUT/DELETE /channels/:id/permissions/:target` (`{kind: role|member, allow, deny}`). Events: `ROLE_UPDATE`, `ROLE_DELETE`, `ROLES_SYNC`, `GUILD_MEMBER_UPDATE`, plus `CHANNEL_CREATE`/`CHANNEL_DELETE`/`CHANNEL_UPDATE` sent per user as visibility changes.
 
@@ -120,4 +121,4 @@ The content type is sniffed from magic bytes, not trusted from the client. Only 
 
 ## Not included
 
-Bans, ownership transfer, threads, an SFU for large calls.
+Threads, an SFU for large calls, audit log, timeouts.

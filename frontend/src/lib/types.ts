@@ -65,6 +65,18 @@ export interface Member {
   roles: string[]
 }
 
+export interface Ban {
+  guild_id: string
+  user_id: string
+  moderator_id: string | null
+  moderator_name: string | null
+  reason: string
+  created_at: string
+  username: string
+  display_name: string
+  avatar_url: string | null
+}
+
 export interface Reaction { emoji: string; count: number; me: boolean }
 
 export interface Attachment {

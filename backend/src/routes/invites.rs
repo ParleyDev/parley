@@ -2,7 +2,7 @@ use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
     models::Guild,
-    routes::guilds::{fetch_member, GUILD_COLS},
+    routes::guilds::{fetch_member, is_banned, GUILD_COLS},
     state::AppState,
 };
 use axum::{
@@ -40,6 +40,7 @@ async fn preview(
         "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count },
         "expired": max.map(|m| uses >= m).unwrap_or(false),
         "already_member": already.is_some(),
+        "banned": is_banned(&state.db, gid, uid).await?,
     })))
 }
 
@@ -57,6 +58,9 @@ async fn accept(
     let (gid, uses, max) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
     if max.map(|m| uses >= m).unwrap_or(false) {
         return Err(AppError::BadRequest("Invite has reached its maximum uses".into()));
+    }
+    if is_banned(&state.db, gid, uid).await? {
+        return Err(AppError::BadRequest("You are banned from this server".into()));
     }
     let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
         .bind(gid)

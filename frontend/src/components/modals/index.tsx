@@ -10,6 +10,8 @@ import NewDmModal from './NewDm'
 import ProfileModal from './Profile'
 import ConfirmModal from './Confirm'
 import ImageLightbox from './ImageLightbox'
+import BanMemberModal from './BanMember'
+import TransferOwnershipModal from './TransferOwnership'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
@@ -35,6 +37,8 @@ export default function Modals() {
     case 'profile': return <ProfileModal onClose={close} userId={modal!.userId} />
     case 'confirm': return <ConfirmModal onClose={close} {...modal} />
     case 'image': return <ImageLightbox onClose={close} url={modal!.url} name={modal!.name} />
+    case 'ban': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
+    case 'transferOwnership': return <TransferOwnershipModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
   }
   }
 }

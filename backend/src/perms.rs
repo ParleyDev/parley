@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 pub const CREATE_INVITE: u64 = 1 << 0;
 pub const KICK_MEMBERS: u64 = 1 << 1;
+pub const BAN_MEMBERS: u64 = 1 << 2;
 pub const ADMINISTRATOR: u64 = 1 << 3;
 pub const MANAGE_CHANNELS: u64 = 1 << 4;
 pub const MANAGE_GUILD: u64 = 1 << 5;
@@ -33,6 +34,7 @@ pub const MANAGE_ROLES: u64 = 1 << 28;
 
 pub const ALL: u64 = CREATE_INVITE
     | KICK_MEMBERS
+    | BAN_MEMBERS
     | ADMINISTRATOR
     | MANAGE_CHANNELS
     | MANAGE_GUILD
@@ -328,6 +330,7 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
     vec![
         ("CREATE_INVITE", CREATE_INVITE),
         ("KICK_MEMBERS", KICK_MEMBERS),
+        ("BAN_MEMBERS", BAN_MEMBERS),
         ("ADMINISTRATOR", ADMINISTRATOR),
         ("MANAGE_CHANNELS", MANAGE_CHANNELS),
         ("MANAGE_GUILD", MANAGE_GUILD),
