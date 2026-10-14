@@ -5,6 +5,7 @@ import { has, memberColor, P } from '../lib/perms'
 import type { Message } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
+import Attachments from './Attachments'
 import { api } from '../lib/api'
 import { useParams } from 'react-router-dom'
 
@@ -50,7 +51,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     <div onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {replyTarget !== null && m.reply_to && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4">
-          {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md">{replyTarget.content}</span></>) : <i>Original message was deleted</i>}
+          {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md">{replyTarget.content || (replyTarget.attachments?.length ? '📎 Attachment' : '')}</span></>) : <i>Original message was deleted</i>}
         </div>
       )}
       <div className="flex gap-4 max-md:gap-3">
@@ -72,10 +73,15 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               <p className="text-[11px] text-text-2 mt-1">escape to <button className="text-sky-400 hover:underline" onClick={() => { setEditing(false); setDraft(m.content) }}>cancel</button> • enter to <button className="text-sky-400 hover:underline" onClick={saveEdit}>save</button></p>
             </div>
           ) : (
-            <div className="msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap">
-              {renderMarkdown(m.content)}
-              {m.edited_at && <span className="ml-1 text-[10px] text-text-2">(edited)</span>}
-            </div>
+            <>
+              {(m.content || m.edited_at) && (
+                <div className="msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap">
+                  {renderMarkdown(m.content)}
+                  {m.edited_at && <span className="ml-1 text-[10px] text-text-2">(edited)</span>}
+                </div>
+              )}
+              <Attachments items={m.attachments ?? []} />
+            </>
           )}
           {m.reactions.length > 0 && (
             <div className="mt-1 flex flex-wrap gap-1">

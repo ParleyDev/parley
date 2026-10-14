@@ -134,7 +134,8 @@ function handle(ev: Ev) {
 function notify(m: Message) {
   try {
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(m.author.display_name, { body: m.content.slice(0, 120) })
+      const body = m.content ? m.content.slice(0, 120) : m.attachments?.length ? `Sent ${m.attachments.length === 1 ? 'an attachment' : `${m.attachments.length} attachments`}` : ''
+      new Notification(m.author.display_name, { body })
     }
   } catch { /* ignore */ }
 }

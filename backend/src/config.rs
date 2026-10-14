@@ -6,6 +6,8 @@ pub struct Config {
     pub cors_origins: Vec<String>,
     /// JSON array of RTCIceServer objects handed to clients.
     pub ice_servers: serde_json::Value,
+    /// Where uploaded attachments are stored.
+    pub upload_dir: std::path::PathBuf,
 }
 
 impl Config {
@@ -26,6 +28,7 @@ impl Config {
                 .ok()
                 .and_then(|s| serde_json::from_str(&s).map_err(|e| tracing::warn!("ICE_SERVERS is not valid JSON: {e}")).ok())
                 .unwrap_or_else(|| serde_json::json!([{ "urls": "stun:stun.l.google.com:19302" }])),
+            upload_dir: std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into()).into(),
         }
     }
 }

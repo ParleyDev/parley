@@ -3,6 +3,7 @@ use crate::{
     error::{AppError, AppResult},
     models::{Channel, Message, MessageRow, Pagination, Reaction},
     perms::{self, has},
+    routes::attachments::{attachments_for, delete_files_for_message, link},
     routes::guilds::{normalize_channel_name, CHANNEL_COLS},
     state::AppState,
     ws::hub::Target,
@@ -173,7 +174,8 @@ pub async fn fetch_message(db: &PgPool, mid: Uuid, me: Uuid) -> AppResult<Messag
         .await?
         .ok_or_else(|| AppError::NotFound("Message not found".into()))?;
     let mut reactions = reactions_for(db, &[mid], me).await?;
-    Ok(row.into_message(reactions.remove(&mid).unwrap_or_default()))
+    let mut atts = attachments_for(db, &[mid]).await?;
+    Ok(row.into_message(reactions.remove(&mid).unwrap_or_default(), atts.remove(&mid).unwrap_or_default()))
 }
 
 async fn list_messages(
@@ -207,12 +209,14 @@ async fn list_messages(
     };
     let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
     let mut reactions = reactions_for(&state.db, &ids, uid).await?;
+    let mut atts = attachments_for(&state.db, &ids).await?;
     let msgs: Vec<Message> = rows
         .into_iter()
         .rev()
         .map(|r| {
             let rx = reactions.remove(&r.id).unwrap_or_default();
-            r.into_message(rx)
+            let at = atts.remove(&r.id).unwrap_or_default();
+            r.into_message(rx, at)
         })
         .collect();
     Ok(Json(msgs))
@@ -220,8 +224,11 @@ async fn list_messages(
 
 #[derive(Deserialize)]
 struct CreateMessage {
+    #[serde(default)]
     content: String,
     reply_to: Option<Uuid>,
+    #[serde(default)]
+    attachment_ids: Vec<Uuid>,
 }
 
 async fn create_message(
@@ -233,8 +240,11 @@ async fn create_message(
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
     let content = req.content.trim_end().to_string();
-    if content.trim().is_empty() || content.chars().count() > 2000 {
+    if (content.trim().is_empty() && req.attachment_ids.is_empty()) || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
+    }
+    if !req.attachment_ids.is_empty() && c.guild_id.is_some() {
+        perms::check(p, perms::ATTACH_FILES)?;
     }
     if let Some(r) = req.reply_to {
         let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM messages WHERE id = $1 AND channel_id = $2")
@@ -247,14 +257,17 @@ async fn create_message(
         }
     }
     let mid = Uuid::now_v7();
+    let mut tx = state.db.begin().await?;
     sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to) VALUES ($1, $2, $3, $4, $5)")
         .bind(mid)
         .bind(id)
         .bind(uid)
         .bind(&content)
         .bind(req.reply_to)
-        .execute(&state.db)
+        .execute(&mut *tx)
         .await?;
+    link(&mut tx, mid, id, uid, &req.attachment_ids).await?;
+    tx.commit().await?;
     // Author has implicitly read their own message.
     sqlx::query(
         "INSERT INTO read_states (user_id, channel_id, last_read_msg) VALUES ($1, $2, $3)
@@ -313,6 +326,7 @@ async fn delete_message(
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     // Author, or anyone who may manage messages in this channel.
     let moderator = c.guild_id.is_some() && has(p, perms::MANAGE_MESSAGES);
+    delete_files_for_message(&state, mid).await;
     let res = if moderator {
         sqlx::query("DELETE FROM messages WHERE id = $1 AND channel_id = $2").bind(mid).bind(id)
     } else {

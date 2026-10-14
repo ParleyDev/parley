@@ -24,6 +24,9 @@ futures = "0.3"
 dashmap = "6"
 validator = { version = "0.18", features = ["derive"] }
 base64 = "0.22"
+infer = "0.16"
+imagesize = "0.13"
+tokio-util = { version = "0.7", features = ["io"] }
 
 [profile.release]
 opt-level = 3

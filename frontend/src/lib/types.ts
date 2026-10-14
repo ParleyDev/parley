@@ -60,6 +60,16 @@ export interface Member {
 
 export interface Reaction { emoji: string; count: number; me: boolean }
 
+export interface Attachment {
+  id: string
+  filename: string
+  content_type: string
+  size: number
+  width: number | null
+  height: number | null
+  url: string
+}
+
 export interface Message {
   id: string
   channel_id: string
@@ -69,6 +79,7 @@ export interface Message {
   created_at: string
   edited_at: string | null
   reactions: Reaction[]
+  attachments: Attachment[]
 }
 
 export interface Invite {

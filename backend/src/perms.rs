@@ -24,6 +24,7 @@ pub const STREAM: u64 = 1 << 9;
 pub const VIEW_CHANNEL: u64 = 1 << 10;
 pub const SEND_MESSAGES: u64 = 1 << 11;
 pub const MANAGE_MESSAGES: u64 = 1 << 13;
+pub const ATTACH_FILES: u64 = 1 << 15;
 pub const CONNECT: u64 = 1 << 20;
 pub const SPEAK: u64 = 1 << 21;
 pub const CHANGE_NICKNAME: u64 = 1 << 26;
@@ -40,6 +41,7 @@ pub const ALL: u64 = CREATE_INVITE
     | VIEW_CHANNEL
     | SEND_MESSAGES
     | MANAGE_MESSAGES
+    | ATTACH_FILES
     | CONNECT
     | SPEAK
     | CHANGE_NICKNAME
@@ -48,7 +50,7 @@ pub const ALL: u64 = CREATE_INVITE
 
 /// What a fresh @everyone role gets (must match migration 0002).
 pub const DEFAULT_EVERYONE: u64 =
-    CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | CONNECT | SPEAK | CHANGE_NICKNAME;
+    CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | ATTACH_FILES | CONNECT | SPEAK | CHANGE_NICKNAME;
 
 pub fn has(perms: u64, bit: u64) -> bool {
     perms & bit == bit
@@ -334,6 +336,7 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
         ("VIEW_CHANNEL", VIEW_CHANNEL),
         ("SEND_MESSAGES", SEND_MESSAGES),
         ("MANAGE_MESSAGES", MANAGE_MESSAGES),
+        ("ATTACH_FILES", ATTACH_FILES),
         ("CONNECT", CONNECT),
         ("SPEAK", SPEAK),
         ("CHANGE_NICKNAME", CHANGE_NICKNAME),
@@ -347,6 +350,7 @@ mod tests {
     use super::*;
     #[test]
     fn default_matches_migration() {
-        assert_eq!(DEFAULT_EVERYONE, 70258241);
+        // 70258241 from migration 0002 plus ATTACH_FILES (32768) from 0003.
+        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768);
     }
 }

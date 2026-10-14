@@ -14,6 +14,7 @@ export type ModalKind =
   | { kind: 'userSettings'; tab?: 'account' | 'voice' }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string }
+  | { kind: 'image'; url: string; name: string }
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string }
 
 export interface ReadyPayload {
@@ -127,7 +128,7 @@ interface State {
   // async actions
   loadMessages: (channelId: string, before?: string) => Promise<void>
   loadMembers: (guildId: string) => Promise<void>
-  sendMessage: (channelId: string, content: string, replyTo?: string | null) => Promise<void>
+  sendMessage: (channelId: string, content: string, replyTo?: string | null, attachmentIds?: string[]) => Promise<void>
   markRead: (channelId: string) => Promise<void>
 }
 
@@ -447,8 +448,8 @@ export const useStore = create<State>((set, get) => ({
       get().setMembers(guildId, ms)
     } catch { /* ignore */ }
   },
-  sendMessage: async (channelId, content, replyTo) => {
-    const m = await api.post<Message>(`/channels/${channelId}/messages`, { content, reply_to: replyTo ?? null })
+  sendMessage: async (channelId, content, replyTo, attachmentIds = []) => {
+    const m = await api.post<Message>(`/channels/${channelId}/messages`, { content, reply_to: replyTo ?? null, attachment_ids: attachmentIds })
     get().addMessage(m)
     get().setReadState(channelId, m.id)
   },

@@ -120,10 +120,62 @@ pub struct Message {
     pub created_at: DateTime<Utc>,
     pub edited_at: Option<DateTime<Utc>>,
     pub reactions: Vec<Reaction>,
+    pub attachments: Vec<Attachment>,
+}
+
+#[derive(Debug, Clone, Serialize, FromRow)]
+#[allow(dead_code)]
+#[serde(into = "AttachmentJson")]
+pub struct Attachment {
+    pub id: Uuid,
+    pub message_id: Option<Uuid>,
+    pub uploader_id: Uuid,
+    pub channel_id: Uuid,
+    pub filename: String,
+    pub content_type: String,
+    pub size: i64,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Serialize)]
+pub struct AttachmentJson {
+    pub id: Uuid,
+    pub filename: String,
+    pub content_type: String,
+    pub size: i64,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub url: String,
+}
+
+impl From<Attachment> for AttachmentJson {
+    fn from(a: Attachment) -> Self {
+        let url = a.url();
+        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url }
+    }
+}
+
+impl Attachment {
+    pub fn url(&self) -> String {
+        format!("/api/attachments/{}/{}", self.id, urlencode(&self.filename))
+    }
+}
+
+fn urlencode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 impl MessageRow {
-    pub fn into_message(self, reactions: Vec<Reaction>) -> Message {
+    pub fn into_message(self, reactions: Vec<Reaction>, attachments: Vec<Attachment>) -> Message {
         Message {
             id: self.id,
             channel_id: self.channel_id,
@@ -141,6 +193,7 @@ impl MessageRow {
                 created_at: self.created_at,
             },
             reactions,
+            attachments,
         }
     }
 }

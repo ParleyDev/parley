@@ -9,6 +9,7 @@ import UserSettingsModal from './UserSettings'
 import NewDmModal from './NewDm'
 import ProfileModal from './Profile'
 import ConfirmModal from './Confirm'
+import ImageLightbox from './ImageLightbox'
 
 export default function Modals() {
   const modal = useStore((s) => s.modal)
@@ -25,5 +26,6 @@ export default function Modals() {
     case 'newDm': return <NewDmModal onClose={close} />
     case 'profile': return <ProfileModal onClose={close} userId={modal.userId} />
     case 'confirm': return <ConfirmModal onClose={close} {...modal} />
+    case 'image': return <ImageLightbox onClose={close} url={modal.url} name={modal.name} />
   }
 }

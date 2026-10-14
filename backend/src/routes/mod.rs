@@ -1,3 +1,4 @@
+pub mod attachments;
 pub mod auth;
 pub mod channels;
 pub mod dms;
@@ -18,4 +19,5 @@ pub fn api_router() -> Router<AppState> {
         .merge(roles::router())
         .merge(channels::router())
         .merge(dms::router())
+        .merge(attachments::router())
 }

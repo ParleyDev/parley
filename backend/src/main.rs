@@ -31,6 +31,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("migrations applied");
 
     let state = state::AppState { db, config: Arc::new(config.clone()), hub: Arc::new(ws::hub::Hub::new()) };
+    let state_for_sweep = state.clone();
 
     let cors = if config.cors_origins.is_empty() {
         CorsLayer::new().allow_origin(AllowOrigin::mirror_request())
@@ -52,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(TraceLayer::new_for_http())
         .with_state(state);
 
+    tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep));
     let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
     tracing::info!("listening on {}", config.bind_addr);
     axum::serve(listener, app).await?;
