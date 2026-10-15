@@ -200,15 +200,6 @@ pub async fn link(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, message_id: Uu
     Ok(())
 }
 
-/// Remove files for attachments of a message about to be deleted (rows cascade in the DB).
-pub async fn delete_files_for_message(state: &AppState, message_id: Uuid) {
-    if let Ok(ids) = sqlx::query_as::<_, (Uuid,)>("SELECT id FROM attachments WHERE message_id = $1").bind(message_id).fetch_all(&state.db).await {
-        for (id,) in ids {
-            let _ = tokio::fs::remove_file(state.config.upload_dir.join(id.to_string())).await;
-        }
-    }
-}
-
 /// Periodic sweep: uploads never attached to a message, and files whose rows are gone.
 pub async fn sweep_orphans(state: AppState) {
     loop {
