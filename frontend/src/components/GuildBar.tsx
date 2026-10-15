@@ -115,13 +115,13 @@ export default function GuildBar() {
     const ind = indicator(f.id)
     const label = f.name || members.map((g) => g.name).join(', ')
     return (
-      <div key={f.id} className={`relative rounded-2xl ${isOpen ? 'bg-bg-1/70 pb-1' : ''}`} data-folder={f.id} data-folder-open={isOpen ? 'true' : 'false'}>
+      <div key={f.id} className={`relative rounded-2xl transition-colors ${isOpen ? 'bg-bg-3 py-1 -my-1' : ''}`} data-folder={f.id} data-folder-open={isOpen ? 'true' : 'false'}>
         {ind === 'top' && <span className="absolute -top-1.5 left-2 right-2 h-0.5 rounded bg-white z-10" data-drop-line="before" />}
         {ind === 'bottom' && !isOpen && <span className="absolute -bottom-1.5 left-2 right-2 h-0.5 rounded bg-white z-10" data-drop-line="after" />}
         <div {...dragProps(f.id, (zone) => (zone === 'top' ? { type: 'before', id: f.id } : zone === 'bottom' ? { type: 'after', id: f.id } : { type: 'into', folderId: f.id }))}>
           <button type="button" onClick={() => toggleFolder(f.id)} onContextMenu={(e) => ctx.open(e, folderMenu(f))} className="group relative block" data-folder-tile title={undefined}>
             <Pill active={!isOpen && anyActive} unread={!isOpen && anyUnread} tip={label}>
-              <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${ind === 'mid' ? 'ring-2 ring-success' : ''}`} style={{ background: `${tint}33` }}>
+              <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${ind === 'mid' ? 'ring-2 ring-success' : ''} ${isOpen ? 'hover:bg-bg-4' : ''}`} style={{ background: isOpen ? undefined : `${tint}33` }}>
                 {isOpen ? <Folder size={24} style={{ color: tint }} /> : (
                   <div className="grid grid-cols-2 gap-1 p-1.5">
                     {members.slice(0, 4).map((g) => (
@@ -136,7 +136,7 @@ export default function GuildBar() {
           </button>
         </div>
         {isOpen && (
-          <div className="mt-2 flex flex-col items-center gap-2" data-folder-contents>
+          <div className="mt-2 flex flex-col items-center gap-2 pb-1" data-folder-contents>
             {members.map((g, i) => renderGuild(g, `${f.id}:${g.id}`, (zone) => ({ type: 'into', folderId: f.id, index: zone === 'top' ? i : i + 1 }), true))}
           </div>
         )}
