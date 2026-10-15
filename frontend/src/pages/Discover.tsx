@@ -1,4 +1,4 @@
-import { BadgeCheck, Check, Compass, Search, Server, ShieldCheck, X } from 'lucide-react'
+import { BadgeCheck, Check, ChevronDown, Compass, Search, Server, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import GuildBar from '../components/GuildBar'
@@ -54,21 +54,6 @@ function Browse() {
   const [list, setList] = useState<Listing[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { const t = setTimeout(() => setTerm(q.trim()), 300); return () => clearTimeout(t) }, [q])
-  // Fade the strip's edges only when the tabs really overflow (narrow windows); re-check on resize.
-  const stripRef = useRef<HTMLDivElement>(null)
-  const [overflow, setOverflow] = useState(false)
-  useEffect(() => {
-    const el = stripRef.current
-    if (!el) return
-    const check = () => setOverflow(el.scrollWidth > el.clientWidth + 1)
-    check()
-    // Tab widths change once the web font lands, which the ResizeObserver (strip size only) misses.
-    document.fonts?.ready.then(check)
-    const t = setTimeout(check, 400)
-    const ro = new ResizeObserver(check); ro.observe(el)
-    window.addEventListener('resize', check)
-    return () => { ro.disconnect(); clearTimeout(t); window.removeEventListener('resize', check) }
-  }, [])
   useEffect(() => {
     setList(null); setError(null)
     const params = new URLSearchParams()
@@ -76,20 +61,90 @@ function Browse() {
     if (term) params.set('q', term)
     api.get<Listing[]>(`/discover?${params}`).then(setList).catch((e: Error) => { setError(e.message); setList([]) })
   }, [category, term])
-  const tabs = [{ id: 'home', label: 'Home' }, ...CATEGORIES.filter((c) => c.id !== 'community'), { id: 'community', label: 'Community' }]
+  const tabs = useMemo(() => [{ id: 'home', label: 'Home' }, ...CATEGORIES.filter((c) => c.id !== 'community'), { id: 'community', label: 'Community' }], [])
+
+  // Priority nav: measure every tab (hidden copy), then on each bar resize decide how many fit.
+  // The search box collapses to an icon before any tab is moved into "More".
+  const barRef = useRef<HTMLDivElement>(null)
+  const measureRef = useRef<HTMLDivElement>(null)
+  const [visibleCount, setVisibleCount] = useState(tabs.length)
+  const [searchCompact, setSearchCompact] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const searchExpanded = !searchCompact || searchOpen || q.length > 0
+  const searchRef = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (searchOpen) searchRef.current?.focus() }, [searchOpen])
+  useEffect(() => {
+    const bar = barRef.current, meas = measureRef.current
+    if (!bar || !meas) return
+    const layout = () => {
+      const widths = Array.from(meas.querySelectorAll<HTMLElement>('[data-measure-tab]')).map((n) => n.offsetWidth + 2)
+      const more = (meas.querySelector<HTMLElement>('[data-measure-more]')?.offsetWidth ?? 80) + 2
+      const fixed = 22 + 8 + 32 // compass + its margin + bar padding slack
+      const total = bar.clientWidth - fixed
+      const fit = (searchW: number) => {
+        let used = 0, n = 0
+        for (const w of widths) { if (used + w > total - searchW) break; used += w; n++ }
+        return n
+      }
+      const full = 232 + 8, icon = 36 + 8
+      if (fit(full) === widths.length) { setSearchCompact(false); setVisibleCount(widths.length); return }
+      setSearchCompact(true)
+      const searchW = searchOpen || q.length > 0 ? full : icon
+      if (fit(searchW) === widths.length) { setVisibleCount(widths.length); return }
+      // Leave room for the More button.
+      let used = 0, n = 0
+      for (const w of widths) { if (used + w > total - searchW - more) break; used += w; n++ }
+      setVisibleCount(Math.max(0, n))
+    }
+    layout()
+    document.fonts?.ready.then(layout)
+    const ro = new ResizeObserver(layout); ro.observe(bar)
+    window.addEventListener('resize', layout)
+    return () => { ro.disconnect(); window.removeEventListener('resize', layout) }
+  }, [tabs, searchOpen, q])
+  const shown = tabs.slice(0, visibleCount), hidden = tabs.slice(visibleCount)
+  const activeHidden = hidden.some((t) => t.id === category)
+  const tabCls = (active: boolean) => `px-2.5 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${active ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`
+
   return (
     <div className="min-h-full flex flex-col">
-      <div className="sticky top-0 z-10 h-14 shrink-0 flex items-center gap-1 px-4 bg-bg-2/95 backdrop-blur border-b border-line" data-discover-tabs>
+      <div ref={barRef} className="sticky top-0 z-10 h-14 shrink-0 flex items-center px-4 bg-bg-2/95 backdrop-blur border-b border-line" data-discover-tabs data-nav-mode={hidden.length ? 'more' : searchCompact ? 'compact' : 'full'}>
         <Compass size={22} className="text-text-2 mr-2 shrink-0" />
-        {/* The tab strip scrolls sideways (no visible scrollbar) instead of pushing the search box out. */}
-        <div ref={stripRef} className={`flex-1 min-w-0 flex items-center gap-0.5 overflow-x-auto scrollbar-none h-full ${overflow ? 'fade-x' : ''}`} data-tab-strip={overflow ? 'overflow' : 'fits'}>
-          {tabs.map((t) => (
-            <button key={t.id} type="button" onClick={() => setCategory(t.id)} data-discover-tab={t.id} className={`px-2.5 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${category === t.id ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`}>{t.label}</button>
-          ))}
+        {/* Offscreen copy used only for measuring natural tab widths. */}
+        <div ref={measureRef} aria-hidden className="absolute -top-[999px] left-0 flex items-center gap-0.5 invisible pointer-events-none">
+          {tabs.map((t) => <span key={t.id} data-measure-tab className={tabCls(false)}>{t.label}</span>)}
+          <span data-measure-more className={tabCls(false)}>More ▾</span>
         </div>
-        <div className="ml-2 relative shrink-0 max-md:hidden">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-2" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" data-discover-search className="h-8 w-44 xl:w-56 rounded-md bg-bg-0 border border-line pl-8 pr-2 text-sm outline-none focus:border-accent/60" />
+        <div className="flex-1 min-w-0 flex items-center gap-0.5 h-full" data-tab-strip>
+          {shown.map((t) => <button key={t.id} type="button" onClick={() => setCategory(t.id)} data-discover-tab={t.id} className={tabCls(category === t.id)}>{t.label}</button>)}
+          {hidden.length > 0 && (
+            <div className="relative h-full flex items-center">
+              <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-haspopup="menu" aria-expanded={moreOpen} data-discover-more className={`${tabCls(activeHidden)} flex items-center gap-1`}>
+                More <ChevronDown size={14} className={`transition ${moreOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {moreOpen && (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setMoreOpen(false)} />
+                  <div role="menu" className="pop absolute left-0 top-full mt-1 z-30 min-w-[180px] rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1.5" data-discover-more-menu>
+                    {hidden.map((t) => (
+                      <button key={t.id} type="button" role="menuitem" onClick={() => { setCategory(t.id); setMoreOpen(false) }} data-discover-tab={t.id} className={`w-full flex items-center gap-2 rounded px-2 py-1.5 text-sm font-medium text-left ${category === t.id ? 'bg-accent text-white' : 'text-[#dbdee1] hover:bg-accent hover:text-white'}`}>{t.label}</button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="ml-2 relative shrink-0 max-md:hidden" data-search-mode={searchExpanded ? 'expanded' : 'icon'}>
+          {searchExpanded ? (
+            <>
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-2" />
+              <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} onBlur={() => { if (!q) setSearchOpen(false) }} onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); setSearchOpen(false) } }} placeholder="Search" data-discover-search className="h-8 w-[232px] rounded-md bg-bg-0 border border-line pl-8 pr-2 text-sm outline-none focus:border-accent/60" />
+            </>
+          ) : (
+            <button type="button" onClick={() => setSearchOpen(true)} title="Search" data-discover-search-button className="h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><Search size={18} /></button>
+          )}
         </div>
       </div>
       <div className="relative overflow-hidden px-10 py-16 max-md:px-5 max-md:py-10" style={{ background: 'linear-gradient(110deg, #1b1f6b 0%, #2a2f9b 45%, #1a3a8a 100%)' }} data-discover-hero>
