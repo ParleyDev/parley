@@ -26,6 +26,8 @@ services:
       # GIF picker: set one of these (Tenor is preferred). Without a key the GIF tab explains how to enable it.
       TENOR_API_KEY: ${TENOR_API_KEY:-}
       GIPHY_API_KEY: ${GIPHY_API_KEY:-}
+      # Comma-separated emails of Parley admins (they approve Discover submissions).
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     volumes:
       - uploads:/data/uploads
     depends_on:

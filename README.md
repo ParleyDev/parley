@@ -18,6 +18,8 @@ Open <http://localhost:3000>, register two accounts in two browsers, create a se
 
 Set a real secret in production: `JWT_SECRET=... docker compose up`. Override host ports with `WEB_PORT=8081` (frontend, default 3000) and `API_PORT=...` (backend, default 18080).
 
+Parley admins approve Discover submissions: set `ADMIN_EMAILS=a@b.c,d@e.f` (comma separated); those accounts get the admin flag when they next connect.
+
 The GIF picker needs a provider key: `TENOR_API_KEY=...` (preferred, free from Google Cloud → Tenor API) or `GIPHY_API_KEY=...`. Without one the GIF tab says so; everything else works.
 
 ## Features
@@ -25,6 +27,8 @@ The GIF picker needs a provider key: `TENOR_API_KEY=...` (preferred, free from G
 - Accounts: register, log in (JWT), presence status (online / idle / dnd / invisible)
 - Profile popout: clicking a user anywhere (chat, member list, voice, friends) opens Discord's compact 300px popout beside what you clicked (a bottom sheet on phones): banner with add-friend and "⋯" buttons, avatar with status, nickname, "display name • username • pronouns", a "N Mutual Friends • N Mutual Servers" row with stacked avatars, a three-line bio with View Full Bio, a "User Reviews" panel, and a "Message @user" box with an emoji picker that starts a DM straight from the card. The "⋯" menu has View Full Profile, Invite to Server (DMs an invite link), friend actions, Block, Kick/Ban (when you may), and Copy User Info (ID, profile link `/users/<id>`, avatar and banner links). View Full Profile opens the full card with Member Since (app and server), roles, mutual friends and servers, user reviews (one short note per author, replaceable; the author or the profile owner can delete it; `GET/PUT /users/:id/reviews`, `DELETE /users/:id/reviews/:rid`) and action buttons.
 - DMs, Discord-style: the header shows the recipient's custom status and has Start Voice Call / Start Video Call, Pinned Messages, a profile-panel toggle and a search box; the right-hand panel is the recipient's profile card (banner, friend badge, bio, mutual friends/servers, Member Since, View Full Profile). DM calls use the same WebRTC voice stack as servers (mic, deafen, camera, screen share); the other side gets an incoming-call banner with Join / Ignore.
+- Create Your Server: the + button opens Discord's two-step dialog (Create My Own, or a Gaming / Friends / Study Group / School Club / Local Community / Artists & Creators template that adds starter channels), with a "Have an invite already? Join a Server" link at the bottom.
+- Discover: the compass button opens a directory of servers that their owners submitted (Server Settings → Discovery: category, description, banner) and a Parley admin approved. Browse by category or search, see online/member counts, and join with one click. Admins (emails in `ADMIN_EMAILS`, persisted as `users.is_admin`) get a Review Queue with Approve / Reject and a note the owner sees. Edits to an approved listing stay live; rejected ones return to pending on resubmission; owners can withdraw at any time.
 - Group DMs: pick several friends from "Create a group DM" (or Add Friends from any DM or group) for a chat of up to 10. Groups have an owner (crown), an optional name and icon that any member can change (click the header name to rename), stacked-avatar icons, a members panel with remove (owner) and Leave, and work with calls, pins, search and forwarding like any DM. Only friends can be added; blocking someone does not close a group you share.
 - Returning to a server lands on the channel you last had open there (remembered per server in this browser), falling back to the first text channel.
 - Custom status: "Set a custom status" from your user panel (emoji + text, 128 chars) shows under your name in DM lists, member lists, DM headers and as a bubble on your profile card.
@@ -101,6 +105,8 @@ GET|POST(multipart name+description+tags+file) /guilds/:id/stickers   PATCH|DELE
 POST /images?kind=avatar|banner|icon (multipart file → {url, animated})   GET /images/:id
 GET /gifs/search?q=&pos=   GET /gifs/trending?pos=   GET /gifs/categories
 GET|POST /guilds/:id/invites   GET|POST /invites/:code
+GET /discover?category=&q=   POST /discover/:gid/join   GET|PUT|DELETE /guilds/:id/discovery {description, category, banner_url}
+GET /admin/discovery?status=   POST /admin/discovery/:gid/review {status, note}   (Parley admins)
 GET|PATCH|DELETE /channels/:id
 GET|POST /channels/:id/messages?before=&limit= {content, reply_to, attachment_ids, sticker_id}   GET /channels/:id/search?q=
 GET /channels/:id/pins   PUT|DELETE /channels/:id/pins/:mid

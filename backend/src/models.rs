@@ -42,6 +42,10 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
+    /// Parley admin: may review discovery submissions.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub is_admin: bool,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

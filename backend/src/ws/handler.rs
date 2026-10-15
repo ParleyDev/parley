@@ -52,7 +52,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
     let (mut tx, mut rx) = socket.split();
 
     // --- Build READY payload ---
-    let user = match sqlx::query_as::<_, PrivateUser>(
+    let mut user = match sqlx::query_as::<_, PrivateUser>(
         &format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::PRIVATE_USER_COLS),
     )
     .bind(user_id)
@@ -62,6 +62,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
         Ok(u) => u,
         Err(_) => return,
     };
+    if !user.is_admin && crate::routes::users::ensure_admin(&state, user_id).await.unwrap_or(false) {
+        user.is_admin = true;
+    }
 
     let guilds = sqlx::query_as::<_, Guild>(
         "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at FROM guilds g

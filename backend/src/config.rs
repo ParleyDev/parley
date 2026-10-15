@@ -11,6 +11,8 @@ pub struct Config {
     /// GIF picker providers; the first one set is used.
     pub tenor_api_key: Option<String>,
     pub giphy_api_key: Option<String>,
+    /// Emails that are Parley admins (comma separated); they may approve Discover submissions.
+    pub admin_emails: Vec<String>,
 }
 
 impl Config {
@@ -34,6 +36,7 @@ impl Config {
             upload_dir: std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into()).into(),
             tenor_api_key: std::env::var("TENOR_API_KEY").ok(),
             giphy_api_key: std::env::var("GIPHY_API_KEY").ok(),
+            admin_emails: std::env::var("ADMIN_EMAILS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
         }
     }
 }
