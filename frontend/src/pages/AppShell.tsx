@@ -11,6 +11,7 @@ import VoiceView from '../components/VoiceView'
 import Modals from '../components/modals'
 import ErrorBoundary from '../components/ErrorBoundary'
 import IncomingCall from '../components/IncomingCall'
+import UserPanel from '../components/UserPanel'
 
 /**
  * Two route trees share the URL: one picks the sidebar, one picks the main content.
@@ -28,13 +29,17 @@ export default function AppShell() {
       {!connected && (
         <div className="absolute top-0 inset-x-0 z-40 bg-warn text-black text-xs font-semibold text-center py-1">Reconnecting…</div>
       )}
-      <div className={`flex h-full shrink-0 max-md:absolute max-md:inset-0 max-md:z-20 ${pane === 'content' ? 'max-md:hidden' : ''}`}>
-        <GuildBar />
-        <Routes>
-          <Route path="@me/*" element={<DmSidebar />} />
-          <Route path=":guildId/*" element={<GuildSidebar />} />
-          <Route path="*" element={null} />
-        </Routes>
+      <div className={`flex flex-col h-full shrink-0 w-[344px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${pane === 'content' ? 'max-md:hidden' : ''}`}>
+        <div className="flex flex-1 min-h-0">
+          <GuildBar />
+          <Routes>
+            <Route path="@me/*" element={<DmSidebar />} />
+            <Route path=":guildId/*" element={<GuildSidebar />} />
+            <Route path="*" element={<div className="w-[272px] max-md:flex-1 bg-bg-1" />} />
+          </Routes>
+        </div>
+        {/* Discord's self card floats across the bottom of both the server column and the channel list. */}
+        <UserPanel />
       </div>
       <ErrorBoundary>
       <Routes>

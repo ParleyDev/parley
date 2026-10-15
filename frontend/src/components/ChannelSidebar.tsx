@@ -9,7 +9,6 @@ import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { isUnread, myChannelPerms, myGuildPerms, useStore, voiceParticipants } from '../store'
 import { has, P } from '../lib/perms'
 import StyledName from './StyledName'
-import UserPanel from './UserPanel'
 import { api } from '../lib/api'
 
 export default function ChannelSidebar({ guildId }: { guildId: string }) {
@@ -69,7 +68,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   })
 
   return (
-    <aside className="w-60 max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
+    <aside className="w-[272px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="relative">
         <button onClick={() => setMenu((m) => !m)} className="h-12 w-full px-4 flex items-center justify-between font-bold border-b border-line hover:bg-bg-3 transition text-left">
           <span className="truncate">{guild.name}</span>
@@ -112,7 +111,6 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
           </Category>
         )}
       </div>
-      <UserPanel />
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
     </aside>
   )
