@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react'
+import { Search, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
@@ -12,6 +12,7 @@ export default function NewDmModal({ onClose }: { onClose: () => void }) {
   const [results, setResults] = useState<User[]>([])
   const upsertChannel = useStore((s) => s.upsertChannel)
   const pushToast = useStore((s) => s.pushToast)
+  const openModal = useStore((s) => s.openModal)
   const navigate = useNavigate()
   useEffect(() => {
     if (!q.trim()) { setResults([]); return }
@@ -27,6 +28,10 @@ export default function NewDmModal({ onClose }: { onClose: () => void }) {
         <input className="input pl-9" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type the username of a friend" />
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />
       </div>
+      <button type="button" onClick={() => openModal({ kind: 'groupMembers' })} className="mt-3 w-full flex items-center gap-3 rounded-md px-2 py-2 hover:bg-bg-3 text-left" data-new-group>
+        <span className="h-8 w-8 rounded-full bg-bg-3 flex items-center justify-center text-text-1"><Users size={16} /></span>
+        <span><span className="block font-semibold">Create a group DM</span><span className="block text-xs text-text-2">Pick several friends to chat with together.</span></span>
+      </button>
       <div className="mt-3 max-h-72 overflow-y-auto -mx-2">
         {results.map((u) => (
           <button key={u.id} onClick={() => open(u)} className="w-full flex items-center gap-3 rounded-md px-2 py-2 hover:bg-bg-3 text-left">

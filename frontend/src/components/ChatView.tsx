@@ -1,4 +1,7 @@
-import { Bookmark, BookmarkMinus, CircleUserRound, Hash, Phone, Pin, PinOff, Search, Video, X } from 'lucide-react'
+import { Bookmark, BookmarkMinus, CircleUserRound, Crown, Hash, LogOut, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import GroupIcon from './GroupIcon'
+import { dmName, isGroup } from '../lib/dm'
+import { anchorOf } from '../lib/anchor'
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { Channel, DmChannel, Message } from '../lib/types'
@@ -38,8 +41,18 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const setDmProfileOpen = useStore((s) => s.setDmProfileOpen)
   const myVoice = useStore((s) => s.myVoiceChannelId)
   const pushToast = useStore((s) => s.pushToast)
-  const recipient = isDm ? (channel as DmChannel).recipients[0] : null
+  const group = isDm && isGroup(channel as DmChannel)
+  const recipient = isDm && !group ? (channel as DmChannel).recipients[0] : null
   const other = recipient ? { ...recipient, ...users[recipient.id] } : null
+  const openModal = useStore((s) => s.openModal)
+  const [renaming, setRenaming] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const saveName = async () => {
+    setRenaming(false)
+    const n = nameDraft.trim()
+    if (n === (channel.name ?? '')) return
+    try { await api.patch(`/channels/${channel.id}`, { name: n }) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
   const [pins, setPins] = useState(false)
   const [bookmarks, setBookmarks] = useState(false)
   const [query, setQuery] = useState('')
@@ -62,7 +75,18 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
       <main className="flex-1 min-w-0 flex flex-col bg-bg-2">
         <header className="h-12 shrink-0 px-4 max-md:px-2 flex items-center gap-2 border-b border-line shadow-sm">
           <MobileBack />
-          {isDm && other ? (
+          {group ? (
+            <>
+              <GroupIcon dm={channel as DmChannel} size={24} />
+              {renaming ? (
+                <input autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} onBlur={saveName} onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setRenaming(false) }} maxLength={100} placeholder="Group name" data-group-rename
+                  className="h-7 w-56 rounded-md bg-bg-0 border border-accent/60 px-2 text-sm font-bold outline-none" />
+              ) : (
+                <button onClick={() => { setNameDraft(channel.name ?? ''); setRenaming(true) }} title="Rename group" className="font-bold truncate hover:underline text-left" data-group-name>{dmName(channel as DmChannel, users)}</button>
+              )}
+              <span className="text-xs text-text-2 whitespace-nowrap max-md:hidden" data-group-count>{(channel as DmChannel).recipients.length + 1} members</span>
+            </>
+          ) : isDm && other ? (
             <>
               <Avatar user={other} size={24} presence />
               <span className="font-bold truncate">{other.display_name}</span>
@@ -90,7 +114,9 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               <button onClick={() => setBookmarks((b) => !b)} title="Bookmarks" className={btn(bookmarks)} data-bookmarks-toggle><Bookmark size={20} /></button>
               {bookmarks && <BookmarksPanel channelId={channel.id} onClose={() => setBookmarks(false)} />}
             </span>
-            {isDm && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? 'Hide User Profile' : 'Show User Profile'} className={`${btn(dmProfileOpen)} max-md:hidden`} data-profile-toggle><CircleUserRound size={20} /></button>}
+            {isDm && <button onClick={() => openModal({ kind: 'groupMembers', channelId: channel.id })} title={group ? 'Add Friends to Group' : 'Add Friends to DM'} className={btn(false)} data-add-to-group><UserPlus size={20} /></button>}
+            {isDm && !group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? 'Hide User Profile' : 'Show User Profile'} className={`${btn(dmProfileOpen)} max-md:hidden`} data-profile-toggle><CircleUserRound size={20} /></button>}
+            {group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? 'Hide Member List' : 'Show Member List'} className={`${btn(dmProfileOpen)} max-md:hidden`} data-group-members-toggle><Users size={20} /></button>}
             {!isDm && <MembersToggle />}
             <span className="relative ml-1 max-md:hidden">
               <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder={isDm && other ? `Search ${other.username}` : 'Search'} aria-label="Search messages" data-search-input
@@ -106,6 +132,8 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
         <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast('That message is not loaded in this view yet', 'error')} />
       ) : isDm && other && dmProfileOpen ? (
         <DmProfilePanel userId={other.id} />
+      ) : group && dmProfileOpen ? (
+        <GroupMembersPanel dm={channel as DmChannel} />
       ) : null}
     </>
   )
@@ -127,6 +155,41 @@ function MessageCard({ m, onJump, action }: { m: Message; onJump: () => void; ac
       <div className="msg-content text-sm whitespace-pre-wrap break-words line-clamp-4">{renderMarkdown(m.content)}</div>
       {m.attachments?.length > 0 && <div className="mt-1 text-xs text-text-2">📎 {m.attachments.map((a) => a.filename.replace(/^SPOILER_/, '')).join(', ')}</div>}
     </div>
+  )
+}
+
+/** Right-hand panel in a group DM: members with the owner's crown, remove (owner) and Leave. */
+function GroupMembersPanel({ dm }: { dm: DmChannel }) {
+  const me = useStore((s) => s.user)
+  const users = useStore((s) => s.users)
+  const openModal = useStore((s) => s.openModal)
+  const pushToast = useStore((s) => s.pushToast)
+  const isOwner = dm.owner_id === me?.id
+  const members = [...(me ? [me as unknown as typeof dm.recipients[number]] : []), ...dm.recipients].map((u) => users[u.id] ?? u)
+  const remove = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: `Remove ${u.display_name}`, body: `Remove ${u.display_name} from the group? They can be added back later.`, danger: true, confirmLabel: 'Remove',
+    action: async () => { try { await api.delete(`/channels/${dm.id}/recipients/${u.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
+  const leave = () => openModal({ kind: 'confirm', title: `Leave '${dmName(dm, users)}'`, body: 'You will stop receiving messages from this group unless someone adds you back.', danger: true, confirmLabel: 'Leave Group',
+    action: async () => { try { await api.delete(`/channels/${dm.id}/recipients/${me?.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
+  return (
+    <aside className="w-60 shrink-0 bg-bg-1 border-l border-line overflow-y-auto px-2 pt-4 max-md:hidden flex flex-col" data-group-members>
+      <h3 className="px-2 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">Members — {members.length}</h3>
+      <div className="space-y-0.5">
+        {members.map((u) => (
+          <div key={u.id} className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3" data-group-member={u.id}>
+            <button onClick={(e) => openModal({ kind: 'profile', userId: u.id, anchor: anchorOf(e) })} className="flex items-center gap-3 min-w-0 flex-1 text-left">
+              <Avatar user={u} size={32} presence />
+              <span className="truncate text-[15px] font-medium text-text-1">{u.display_name}</span>
+              {dm.owner_id === u.id && <span title="Group owner" className="shrink-0 flex"><Crown size={14} className="text-warn" /></span>}
+            </button>
+            {isOwner && u.id !== me?.id && <button onClick={() => remove(u)} title="Remove from group" className="opacity-0 group-hover:opacity-100 text-text-2 hover:text-danger" data-remove-member><X size={16} /></button>}
+          </div>
+        ))}
+      </div>
+      <div className="mt-auto p-2 space-y-1">
+        <button onClick={() => openModal({ kind: 'groupMembers', channelId: dm.id })} className="w-full btn-ghost justify-center"><UserPlus size={16} /> Add Friends</button>
+        <button onClick={leave} className="w-full btn-ghost justify-center text-danger" data-leave-group><LogOut size={16} /> Leave Group</button>
+      </div>
+    </aside>
   )
 }
 

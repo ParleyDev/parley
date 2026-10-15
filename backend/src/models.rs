@@ -62,6 +62,12 @@ pub struct Channel {
     pub topic: String,
     pub position: i32,
     pub created_at: DateTime<Utc>,
+    /// Group DMs only: who may add/remove members and rename.
+    #[sqlx(default)]
+    pub owner_id: Option<Uuid>,
+    /// Group DMs only: custom icon.
+    #[sqlx(default)]
+    pub icon_url: Option<String>,
     /// Permission overwrites; filled by `perms::attach_overwrites` for guild channels.
     #[sqlx(skip)]
     #[serde(default)]

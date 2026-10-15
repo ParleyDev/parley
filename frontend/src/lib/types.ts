@@ -47,7 +47,7 @@ export interface Channel {
   id: string
   guild_id: string | null
   name: string
-  kind: 'text' | 'voice' | 'dm' | 'group_dm'
+  kind: 'text' | 'voice' | 'dm' | 'group'
   topic: string
   position: number
   created_at: string
@@ -69,8 +69,12 @@ export interface Role {
 }
 
 export interface DmChannel extends Channel {
+  /** Everyone except you. */
   recipients: User[]
   last_message_at: string | null
+  /** Groups: who may remove members. */
+  owner_id: string | null
+  icon_url: string | null
 }
 
 export interface Member {

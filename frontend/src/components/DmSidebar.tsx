@@ -1,8 +1,12 @@
-import { MailCheck, Plus, Users } from 'lucide-react'
+import { LogOut, MailCheck, Plus, Users } from 'lucide-react'
+import GroupIcon from './GroupIcon'
+import { dmName, isGroup } from '../lib/dm'
+import { api } from '../lib/api'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { NavLink } from 'react-router-dom'
 import { isUnread, pendingCount, useStore } from '../store'
+import type { DmChannel } from '../lib/types'
 import Avatar from './Avatar'
 import StyledName from './StyledName'
 
@@ -17,10 +21,16 @@ export default function DmSidebar() {
   const markRead = useStore((s) => s.markRead)
   const ctx = useContextMenu()
   const userMenu = useUserMenu(null)
-  const dmMenu = (id: string, other: { id: string; display_name: string } | undefined, e: React.MouseEvent<HTMLElement>): MenuEntry[] => [
-    { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !isUnread({ readStates, lastMessageId }, id), onClick: () => markRead(id) },
+  const pushToast = useStore((s) => s.pushToast)
+  const me = useStore((s) => s.user)
+  const leave = (id: string, name: string) => openModal({ kind: 'confirm', title: `Leave '${name}'`, body: 'You will stop receiving messages from this group unless someone adds you back.', danger: true, confirmLabel: 'Leave Group',
+    action: async () => { try { await api.delete(`/channels/${id}/recipients/${me?.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
+  const dmMenu = (d: DmChannel, other: { id: string; display_name: string } | undefined, e: React.MouseEvent<HTMLElement>): MenuEntry[] => [
+    { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !isUnread({ readStates, lastMessageId }, d.id), onClick: () => markRead(d.id) },
     'sep',
-    ...(other ? userMenu(other, e.currentTarget.getBoundingClientRect()) : []),
+    ...(isGroup(d)
+      ? [{ label: 'Leave Group', icon: <LogOut size={16} />, danger: true, onClick: () => leave(d.id, dmName(d, users)) }]
+      : other ? userMenu(other, e.currentTarget.getBoundingClientRect()) : []),
   ]
   const list = Object.values(dms).sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at))
 
@@ -40,12 +50,18 @@ export default function DmSidebar() {
         </div>
         <div className="space-y-0.5">
           {list.map((d) => {
-            const other = d.recipients[0] ? { ...d.recipients[0], ...users[d.recipients[0].id] } : undefined
+            const group = isGroup(d)
+            const other = !group && d.recipients[0] ? { ...d.recipients[0], ...users[d.recipients[0].id] } : undefined
             const unread = isUnread({ readStates, lastMessageId }, d.id)
             return (
-              <NavLink key={d.id} to={`/channels/@me/${d.id}`} onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, dmMenu(d.id, other, e))} data-dm-row={other?.id} className={({ isActive }) => `group flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
-                {other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
-                {other ? (
+              <NavLink key={d.id} to={`/channels/@me/${d.id}`} onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, dmMenu(d, other, e))} data-dm-row={group ? d.id : other?.id} data-group-row={group ? d.id : undefined} className={({ isActive }) => `group flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+                {group ? <GroupIcon dm={d} size={32} /> : other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
+                {group ? (
+                  <span className="min-w-0 flex-1 leading-tight">
+                    <span className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{dmName(d, users)}</span>
+                    <span className="block truncate text-xs text-text-2">{d.recipients.length + 1} Members</span>
+                  </span>
+                ) : other ? (
                   <span className="min-w-0 flex-1 leading-tight">
                     <StyledName userId={other.id} className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{other.display_name}</StyledName>
                     {other.custom_status && <span className="block truncate text-xs text-text-2" data-dm-status>{other.custom_status}</span>}

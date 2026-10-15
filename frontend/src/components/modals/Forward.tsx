@@ -7,6 +7,7 @@ import type { Message } from '../../lib/types'
 import { myChannelPerms, useStore } from '../../store'
 import Avatar from '../Avatar'
 import Modal from '../Modal'
+import { dmName, isGroup } from '../../lib/dm'
 
 interface Target { id: string; label: string; sub: string; kind: 'channel' | 'dm'; avatar?: { id: string; display_name: string; avatar_url: string | null } }
 
@@ -31,6 +32,7 @@ export default function ForwardModal({ onClose, message: m }: { onClose: () => v
         .forEach((c) => out.push({ id: c.id, label: c.name, sub: g.name, kind: 'channel' }))
     }
     for (const d of Object.values(dms)) {
+      if (isGroup(d)) { out.push({ id: d.id, label: dmName(d, users), sub: `${d.recipients.length + 1} members`, kind: 'channel' }); continue }
       const r = d.recipients[0]; if (!r) continue
       const u = users[r.id] ?? r
       out.push({ id: d.id, label: u.display_name, sub: `@${u.username}`, kind: 'dm', avatar: { id: u.id, display_name: u.display_name, avatar_url: u.avatar_url } })

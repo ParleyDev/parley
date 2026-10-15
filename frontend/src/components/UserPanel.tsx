@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
 import { api } from '../lib/api'
 import { colorFor } from '../lib/format'
+import { dmName } from '../lib/dm'
 import Avatar from './Avatar'
 import StyledName from './StyledName'
 
@@ -30,7 +31,7 @@ export default function UserPanel() {
   const connecting = useStore((s) => s.voiceConnecting)
   const voiceChannel = useStore((s) => (s.myVoiceChannelId ? s.channels[s.myVoiceChannelId] : undefined))
   const voiceGuild = useStore((s) => (voiceChannel?.guild_id ? s.guilds[voiceChannel.guild_id] : undefined))
-  const voiceDm = useStore((s) => (s.myVoiceChannelId ? s.dms[s.myVoiceChannelId]?.recipients[0]?.display_name : undefined))
+  const voiceDm = useStore((s) => { const d = s.myVoiceChannelId ? s.dms[s.myVoiceChannelId] : undefined; return d ? dmName(d, s.users) : undefined })
   const pttMode = useStore((s) => s.voiceSettings.inputMode === 'ptt')
   const pttHeld = useStore((s) => s.pttHeld)
   if (!user) return null
