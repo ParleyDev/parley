@@ -2,6 +2,7 @@ import { Compass } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../../../lib/api'
 import { CATEGORIES, type Listing } from '../../../lib/discover'
+import type { Guild } from '../../../lib/types'
 import { useStore } from '../../../store'
 import ImagePicker from '../ImagePicker'
 
@@ -13,18 +14,21 @@ export default function DiscoveryTab({ guildId }: { guildId: string }) {
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
   const [listing, setListing] = useState<Listing | null | undefined>(undefined)
+  const upsertGuild = useStore((s) => s.upsertGuild)
   const [description, setDescription] = useState('')
   const [category, setCategory] = useState('community')
   const [banner, setBanner] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   useEffect(() => {
-    api.get<Listing | null>(`/guilds/${guildId}/discovery`).then((l) => { setListing(l); if (l) { setDescription(l.description); setCategory(l.category); setBanner(l.banner_url) } }).catch(() => setListing(null))
+    api.get<Listing | null>(`/guilds/${guildId}/discovery`).then((l) => { setListing(l); if (l) { setDescription(l.description); setCategory(l.category); setBanner(l.banner_url) } else setBanner(useStore.getState().guilds[guildId]?.banner_url ?? null) }).catch(() => setListing(null))
   }, [guildId])
   if (!guild) return null
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
     try {
       const l = await api.put<Listing>(`/guilds/${guildId}/discovery`, { description, category, banner_url: banner ?? '' })
+      // A banner chosen here also becomes the server banner (top of the channel list) when the server has none yet.
+      if (banner && !guild.banner_url) { try { upsertGuild(await api.patch<Guild>(`/guilds/${guildId}`, { banner_url: banner })) } catch { /* listing saved regardless */ } }
       setListing(l); pushToast(l.status === 'approved' ? 'Listing updated' : 'Submitted for review')
     } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
@@ -61,7 +65,7 @@ export default function DiscoveryTab({ guildId }: { guildId: string }) {
       </div>
       <div>
         <label className="label">Banner</label>
-        <div className="flex items-center gap-4"><ImagePicker value={banner} onChange={setBanner} label={guild.name} id={guildId} round={false} kind="banner" /><p className="text-xs text-text-2">Shown on your Discover card. Without one, a colour gradient is used.</p></div>
+        <div className="flex items-center gap-4"><ImagePicker value={banner} onChange={setBanner} label={guild.name} id={guildId} round={false} kind="banner" /><p className="text-xs text-text-2">Shown on your Discover card; it also becomes the server banner above the channel list if you haven't set one in Overview. Without one, a colour gradient is used.</p></div>
       </div>
       <div className="flex items-center gap-2">
         <button className="btn-primary" disabled={busy || description.trim().length < 10} data-discovery-submit>{busy ? 'Saving…' : status === 'approved' ? 'Update Listing' : status ? 'Resubmit' : 'Submit for Review'}</button>
