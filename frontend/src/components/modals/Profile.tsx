@@ -146,7 +146,7 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
   )
 }
 
-/** "User Reviews": short notes other users leave on a profile. One per author; author or profile owner can remove. On your own profile you read them but cannot post. */
+/** "User Reviews": short notes other users leave on a profile. One per author; only the author can remove theirs. On your own profile you read them but cannot post. */
 function Reviews({ userId, light, isMe }: { userId: string; light: boolean; isMe: boolean }) {
   const me = useStore((s) => s.user)
   const pushToast = useStore((s) => s.pushToast)
@@ -185,7 +185,7 @@ function Reviews({ userId, light, isMe }: { userId: string; light: boolean; isMe
             <Avatar user={{ id: r.author_id, display_name: r.author_display_name, avatar_url: r.author_avatar_url }} size={24} />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-2"><span className="font-semibold truncate">{r.author_display_name}</span><span className="text-[11px] opacity-70 shrink-0">{formatTime(r.created_at)}</span>
-                {(r.author_id === me?.id || userId === me?.id) && <button onClick={() => remove(r)} className="ml-auto text-[11px] opacity-70 hover:opacity-100 hover:underline" title="Delete review">Delete</button>}
+                {r.author_id === me?.id && <button onClick={() => remove(r)} className="ml-auto text-[11px] opacity-70 hover:opacity-100 hover:underline" title="Delete review">Delete</button>}
               </div>
               <div className="msg-content whitespace-pre-wrap break-words leading-snug">{renderMarkdown(r.content, { blocks: false })}</div>
             </div>
