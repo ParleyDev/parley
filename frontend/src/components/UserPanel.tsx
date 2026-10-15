@@ -1,4 +1,5 @@
-import { Check, ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Settings, Signal, Smile } from 'lucide-react'
+import { Check, ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Settings, ShieldCheck, Signal, Smile } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { voice } from '../lib/voice'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
@@ -24,6 +25,7 @@ export default function UserPanel() {
   const user = useStore((s) => s.user)
   const openModal = useStore((s) => s.openModal)
   const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
   const [devices, setDevices] = useState<'input' | 'output' | null>(null)
   const muted = useStore((s) => s.selfMute)
   const deaf = useStore((s) => s.selfDeaf)
@@ -84,6 +86,7 @@ export default function UserPanel() {
               </div>
               <div className="h-px bg-line my-1" />
               <button onClick={() => { setOpen(false); openModal({ kind: 'customStatus' }) }} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-1 hover:bg-accent hover:text-white" data-set-status><Smile size={14} /> {user.custom_status ? 'Edit custom status' : 'Set a custom status'}</button>
+              {user.is_admin && <button onClick={() => { setOpen(false); navigate('/admin') }} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-success hover:bg-accent hover:text-white" data-admin-console><ShieldCheck size={14} /> Admin Console</button>}
               <div className="h-px bg-line my-1" />
               {STATUSES.map((s) => (
                 <button key={s.v} onClick={() => setStatus(s.v)} className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-white ${user.status === s.v ? 'text-text-0' : 'text-text-1'}`}>

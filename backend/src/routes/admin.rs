@@ -1,0 +1,222 @@
+//! Root console for Parley admins (`users.is_admin`): instance stats, user and server
+//! management, and instance settings (registration on/off, sitewide announcement).
+
+use crate::{
+    auth::AuthUser,
+    error::{AppError, AppResult},
+    routes::users::require_admin,
+    state::AppState,
+};
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    routing::{delete, get},
+    Json, Router,
+};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use sqlx::{FromRow, PgPool};
+use uuid::Uuid;
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/instance", get(instance_public))
+        .route("/admin/stats", get(stats))
+        .route("/admin/users", get(list_users))
+        .route("/admin/users/:id", axum::routing::patch(patch_user).delete(delete_user))
+        .route("/admin/guilds", get(list_guilds))
+        .route("/admin/guilds/:id", delete(delete_guild))
+        .route("/admin/settings", get(get_settings).put(put_settings))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstanceSettings {
+    pub registration_enabled: bool,
+    pub announcement: String,
+}
+
+pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
+    let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new() };
+    for (k, v) in rows {
+        match k.as_str() {
+            "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
+            "announcement" => s.announcement = v.as_str().unwrap_or("").to_string(),
+            _ => {}
+        }
+    }
+    Ok(s)
+}
+
+/// Public (no auth): what the login page and the app banner need.
+async fn instance_public(State(state): State<AppState>) -> AppResult<Json<InstanceSettings>> {
+    Ok(Json(load_settings(&state.db).await?))
+}
+
+async fn stats(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
+    require_admin(&state, uid).await?;
+    let (users,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users").fetch_one(&state.db).await?;
+    let (admins,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE is_admin").fetch_one(&state.db).await?;
+    let (suspended,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE suspended_at IS NOT NULL").fetch_one(&state.db).await?;
+    let (guilds,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guilds").fetch_one(&state.db).await?;
+    let (messages,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages").fetch_one(&state.db).await?;
+    let (pending,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_discovery WHERE status = 'pending'").fetch_one(&state.db).await?;
+    let (approved,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_discovery WHERE status = 'approved'").fetch_one(&state.db).await?;
+    let (uploads,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0)::bigint FROM (SELECT size FROM attachments UNION ALL SELECT size FROM images) x").fetch_one(&state.db).await?;
+    Ok(Json(json!({
+        "users": users, "admins": admins, "suspended": suspended, "online": state.hub.online_users().len(),
+        "guilds": guilds, "messages": messages, "discovery_pending": pending, "discovery_approved": approved, "upload_bytes": uploads,
+    })))
+}
+
+#[derive(Deserialize)]
+struct ListQuery {
+    #[serde(default)]
+    q: String,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+struct AdminUser {
+    id: Uuid,
+    username: String,
+    display_name: String,
+    email: String,
+    created_at: DateTime<Utc>,
+    is_admin: bool,
+    suspended_at: Option<DateTime<Utc>>,
+    guild_count: i64,
+    #[sqlx(skip)]
+    online: bool,
+}
+
+fn pattern(q: &str) -> Option<String> {
+    let t = q.trim().replace('%', "\\%").replace('_', "\\_");
+    if t.is_empty() { None } else { Some(format!("%{t}%")) }
+}
+
+async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<ListQuery>) -> AppResult<Json<Vec<AdminUser>>> {
+    require_admin(&state, uid).await?;
+    let mut rows = sqlx::query_as::<_, AdminUser>(
+        "SELECT u.id, u.username, u.display_name, u.email, u.created_at, u.is_admin, u.suspended_at,
+                (SELECT COUNT(*) FROM guild_members m WHERE m.user_id = u.id) AS guild_count
+         FROM users u WHERE ($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR u.email ILIKE $1)
+         ORDER BY u.created_at DESC LIMIT 200",
+    )
+    .bind(pattern(&q.q))
+    .fetch_all(&state.db)
+    .await?;
+    let online = state.hub.online_users();
+    for r in &mut rows { r.online = online.contains(&r.id) }
+    Ok(Json(rows))
+}
+
+#[derive(Deserialize)]
+struct PatchUser {
+    is_admin: Option<bool>,
+    suspended: Option<bool>,
+}
+
+async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<PatchUser>) -> AppResult<Json<Value>> {
+    require_admin(&state, uid).await?;
+    let exists: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    if exists.is_none() {
+        return Err(AppError::NotFound("User not found".into()));
+    }
+    if let Some(admin) = req.is_admin {
+        if !admin {
+            if id == uid { return Err(AppError::BadRequest("You cannot remove your own admin rights".into())); }
+            let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE is_admin AND id <> $1").bind(id).fetch_one(&state.db).await?;
+            if n == 0 { return Err(AppError::BadRequest("At least one admin must remain".into())); }
+        }
+        sqlx::query("UPDATE users SET is_admin = $2 WHERE id = $1").bind(id).bind(admin).execute(&state.db).await?;
+    }
+    if let Some(suspended) = req.suspended {
+        if suspended && id == uid { return Err(AppError::BadRequest("You cannot suspend yourself".into())); }
+        sqlx::query("UPDATE users SET suspended_at = CASE WHEN $2 THEN COALESCE(suspended_at, now()) ELSE NULL END WHERE id = $1").bind(id).bind(suspended).execute(&state.db).await?;
+        if suspended {
+            // Their token stops working at once (the auth extractor checks suspension); tell open clients to log out.
+            state.hub.emit_users(vec![id], "SESSION_REVOKED", json!({ "reason": "Your account has been suspended." }));
+            state.hub.voice_evict(|v| v.user_id == id);
+        }
+    }
+    let row: (bool, Option<DateTime<Utc>>) = sqlx::query_as("SELECT is_admin, suspended_at FROM users WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+    Ok(Json(json!({ "id": id, "is_admin": row.0, "suspended_at": row.1 })))
+}
+
+/// Delete an account outright (their servers, messages and uploads go with it).
+async fn delete_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
+    require_admin(&state, uid).await?;
+    if id == uid {
+        return Err(AppError::BadRequest("You cannot delete your own account from here".into()));
+    }
+    let owned: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM guilds WHERE owner_id = $1").bind(id).fetch_all(&state.db).await?;
+    for (gid,) in &owned {
+        state.hub.voice_evict(|v| v.guild_id == Some(*gid));
+        state.hub.emit_guild(*gid, "GUILD_DELETE", json!({ "id": gid }));
+    }
+    state.hub.emit_users(vec![id], "SESSION_REVOKED", json!({ "reason": "Your account has been deleted." }));
+    state.hub.voice_evict(|v| v.user_id == id);
+    let res = sqlx::query("DELETE FROM users WHERE id = $1").bind(id).execute(&state.db).await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound("User not found".into()));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Serialize, FromRow)]
+struct AdminGuild {
+    id: Uuid,
+    name: String,
+    icon_url: Option<String>,
+    created_at: DateTime<Utc>,
+    owner_id: Uuid,
+    owner_username: String,
+    member_count: i64,
+    message_count: i64,
+    discovery_status: Option<String>,
+}
+
+async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<ListQuery>) -> AppResult<Json<Vec<AdminGuild>>> {
+    require_admin(&state, uid).await?;
+    let rows = sqlx::query_as::<_, AdminGuild>(
+        "SELECT g.id, g.name, g.icon_url, g.created_at, g.owner_id, u.username AS owner_username,
+                (SELECT COUNT(*) FROM guild_members m WHERE m.guild_id = g.id) AS member_count,
+                (SELECT COUNT(*) FROM messages ms JOIN channels c ON c.id = ms.channel_id WHERE c.guild_id = g.id) AS message_count,
+                d.status AS discovery_status
+         FROM guilds g JOIN users u ON u.id = g.owner_id LEFT JOIN guild_discovery d ON d.guild_id = g.id
+         WHERE ($1::text IS NULL OR g.name ILIKE $1 OR u.username ILIKE $1)
+         ORDER BY member_count DESC, g.created_at DESC LIMIT 200",
+    )
+    .bind(pattern(&q.q))
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(rows))
+}
+
+async fn delete_guild(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
+    require_admin(&state, uid).await?;
+    state.hub.voice_evict(|v| v.guild_id == Some(id));
+    state.hub.emit_guild(id, "GUILD_DELETE", json!({ "id": id }));
+    let res = sqlx::query("DELETE FROM guilds WHERE id = $1").bind(id).execute(&state.db).await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound("Server not found".into()));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_settings(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<InstanceSettings>> {
+    require_admin(&state, uid).await?;
+    Ok(Json(load_settings(&state.db).await?))
+}
+
+async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<InstanceSettings>) -> AppResult<Json<InstanceSettings>> {
+    require_admin(&state, uid).await?;
+    let announcement: String = req.announcement.trim().chars().take(300).collect();
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement))] {
+        sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
+    }
+    let s = load_settings(&state.db).await?;
+    state.hub.emit_all("INSTANCE_UPDATE", json!(s));
+    Ok(Json(s))
+}

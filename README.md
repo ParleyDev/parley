@@ -135,6 +135,18 @@ Media is peer-to-peer mesh: each participant keeps one `RTCPeerConnection` per o
 - Output device selection uses `setSinkId`, available in Chromium browsers and recent Firefox; the picker is disabled elsewhere.
 - Push-to-talk only works while the browser tab has focus, since web pages cannot read global hotkeys.
 
+## Admin console (root)
+
+Accounts listed in `ADMIN_EMAILS` (or flagged `users.is_admin`) get **Admin Console** in their self-card menu, at `/admin`:
+
+- **Overview** — users (online / admins / suspended), servers (in Discover / pending review), messages, upload volume.
+- **Users** — search by username, display name or email; make/remove admin, suspend/unsuspend, delete account. Suspension is immediate: existing tokens stop working, open clients are logged out, and login is refused with "This account has been suspended." You cannot demote or suspend yourself, and the last admin cannot be demoted.
+- **Servers** — every server with owner, member and message counts and Discover status; delete any server (members lose it live).
+- **Discovery Queue** — the review page described above.
+- **Instance Settings** — open/close registration (the register page closes and the login page hides its link) and a sitewide announcement banner shown at the top of the app for everyone, both applied live.
+
+Routes: `GET /instance` (public), `GET /admin/stats`, `GET /admin/users?q=`, `PATCH /admin/users/:id {is_admin?, suspended?}`, `DELETE /admin/users/:id`, `GET /admin/guilds?q=`, `DELETE /admin/guilds/:id`, `GET|PUT /admin/settings`.
+
 ## Permissions
 
 Bits mirror Discord's values: Create Invite, Kick Members, Ban Members, Administrator, Manage Channels, Manage Server, Add Reactions, Video (camera/screen), View Channels, Send Messages, Manage Messages, Connect, Speak, Change Nickname, Manage Nicknames, Manage Roles. `GET /api/permissions` lists them.

@@ -7,6 +7,8 @@ import AuthPage from './pages/Auth'
 import AppShell from './pages/AppShell'
 import InvitePage from './pages/Invite'
 import DiscoverPage from './pages/Discover'
+import AdminPage from './pages/Admin'
+import { api } from './lib/api'
 import Toasts from './components/Toasts'
 import { useParams } from 'react-router-dom'
 
@@ -20,6 +22,9 @@ export default function App() {
     else disconnectSocket()
     return () => disconnectSocket()
   }, [token])
+  const setInstance = useStore((s) => s.setInstance)
+  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string }>('/instance').then(setInstance).catch(() => {}) }, [setInstance])
+  const isAdmin = useStore((s) => !!s.user?.is_admin)
 
   return (
     <>
@@ -31,6 +36,7 @@ export default function App() {
           path="/channels/*"
           element={token ? (ready ? <AppShell /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />}
         />
+        <Route path="/admin/*" element={token ? (ready ? (isAdmin ? <AdminPage /> : <Navigate to="/channels/@me" replace />) : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/discover/*" element={token ? (ready ? <DiscoverPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/users/:userId" element={token ? (ready ? <ProfileLink /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="*" element={<Navigate to={token ? '/channels/@me' : '/login'} replace />} />

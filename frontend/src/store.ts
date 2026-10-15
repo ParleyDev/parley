@@ -105,6 +105,8 @@ interface State {
   transmitting: boolean
   pttHeld: boolean
   modal: ModalKind | null
+  /** Instance-wide settings from GET /instance (registration, announcement banner). */
+  instance: { registration_enabled: boolean; announcement: string }
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
 
   // auth
@@ -120,6 +122,7 @@ interface State {
   setBookmark: (messageId: string, on: boolean) => void
   /** Replace the server bar layout; `save` also PUTs it to the server. */
   setGuildLayout: (items: LayoutItem[], save?: boolean) => void
+  setInstance: (i: { registration_enabled: boolean; announcement: string }) => void
   upsertRelationship: (r: Relationship) => void
   removeRelationship: (userId: string) => void
   upsertRole: (r: Role) => void
@@ -188,6 +191,7 @@ export const useStore = create<State>((set, get) => ({
   guilds: {},
   guildOrder: [],
   guildLayout: [],
+  instance: { registration_enabled: true, announcement: '' },
   channels: {},
   dms: {},
   relationships: {},
@@ -300,6 +304,7 @@ export const useStore = create<State>((set, get) => ({
   }),
   setGuildEmojis: (guildId, emojis) => set((s) => ({ emojis: { ...s.emojis, [guildId]: emojis } })),
   setGuildStickers: (guildId, stickers) => set((s) => ({ stickers: { ...s.stickers, [guildId]: stickers } })),
+  setInstance: (instance) => set({ instance }),
   setGuildLayout: (items, save) => {
     const layout = reconcile(items, get().guildOrder)
     set({ guildLayout: layout })
