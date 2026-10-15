@@ -27,7 +27,26 @@ pub fn router() -> Router<AppState> {
 }
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, is_admin";
+
+/// Is this user a Parley admin? The `is_admin` flag, or an email listed in `ADMIN_EMAILS`
+/// (which is then persisted as the flag so the UI sees it too).
+pub async fn ensure_admin(state: &AppState, uid: Uuid) -> AppResult<bool> {
+    let row: Option<(bool, String)> = sqlx::query_as("SELECT is_admin, email FROM users WHERE id = $1").bind(uid).fetch_optional(&state.db).await?;
+    let Some((flag, email)) = row else { return Ok(false) };
+    if flag {
+        return Ok(true);
+    }
+    if state.config.admin_emails.iter().any(|e| e.eq_ignore_ascii_case(&email)) {
+        sqlx::query("UPDATE users SET is_admin = true WHERE id = $1").bind(uid).execute(&state.db).await?;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+pub async fn require_admin(state: &AppState, uid: Uuid) -> AppResult<()> {
+    if ensure_admin(state, uid).await? { Ok(()) } else { Err(AppError::Forbidden) }
+}
 
 async fn me(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<PrivateUser>> {
     let u = sqlx::query_as::<_, PrivateUser>(

@@ -6,6 +6,7 @@ import { connectSocket, disconnectSocket } from './lib/ws'
 import AuthPage from './pages/Auth'
 import AppShell from './pages/AppShell'
 import InvitePage from './pages/Invite'
+import DiscoverPage from './pages/Discover'
 import Toasts from './components/Toasts'
 import { useParams } from 'react-router-dom'
 
@@ -30,6 +31,7 @@ export default function App() {
           path="/channels/*"
           element={token ? (ready ? <AppShell /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />}
         />
+        <Route path="/discover/*" element={token ? (ready ? <DiscoverPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/users/:userId" element={token ? (ready ? <ProfileLink /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="*" element={<Navigate to={token ? '/channels/@me' : '/login'} replace />} />
       </Routes>

@@ -60,11 +60,13 @@ export default function GuildBar() {
           <div className="h-12 w-12 rounded-2xl bg-bg-3 text-success flex items-center justify-center transition-all duration-200 group-hover:bg-success group-hover:text-white"><Plus size={24} /></div>
         </Pill>
       </button>
-      <button onClick={() => openModal({ kind: 'joinGuild' })} className="group relative">
-        <Pill tip="Join a Server">
-          <div className="h-12 w-12 rounded-2xl bg-bg-3 text-success flex items-center justify-center transition-all duration-200 group-hover:bg-success group-hover:text-white"><Compass size={22} /></div>
-        </Pill>
-      </button>
+      <NavLink to="/discover" className="group relative" data-discover-link>
+        {({ isActive }) => (
+          <Pill active={isActive} tip="Discover">
+            <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${isActive ? 'bg-success text-white' : 'bg-bg-3 text-success group-hover:bg-success group-hover:text-white'}`}><Compass size={22} /></div>
+          </Pill>
+        )}
+      </NavLink>
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} label="Server" />}
     </nav>
   )

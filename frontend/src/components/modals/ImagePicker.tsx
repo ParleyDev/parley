@@ -4,7 +4,7 @@ import { colorFor, initials } from '../../lib/format'
 import { prepareImage, uploadImage } from '../../lib/upload'
 import { useStore } from '../../store'
 
-interface Props { value: string | null; onChange: (v: string | null) => void; label: string; id: string; round?: boolean; kind?: 'avatar' | 'icon' }
+interface Props { value: string | null; onChange: (v: string | null) => void; label: string; id: string; round?: boolean; kind?: 'avatar' | 'icon' | 'banner' }
 
 /**
  * Avatar / server icon picker. Static images are shrunk to 512px client-side; GIF, APNG and
