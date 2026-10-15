@@ -33,7 +33,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/owner", post(transfer_ownership))
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url";
 pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -72,7 +72,7 @@ pub async fn fetch_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResu
 
 async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Guild>>> {
     let gs = sqlx::query_as::<_, Guild>(
-        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at FROM guilds g
+        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at, g.banner_url FROM guilds g
          JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at",
     )
     .bind(uid)
@@ -85,6 +85,7 @@ async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser) -> 
 struct CreateGuild {
     name: String,
     icon_url: Option<String>,
+    banner_url: Option<String>,
 }
 
 async fn create_guild(
@@ -101,12 +102,13 @@ async fn create_guild(
     let mut tx = state.db.begin().await?;
     let gid = Uuid::now_v7();
     let guild = sqlx::query_as::<_, Guild>(&format!(
-        "INSERT INTO guilds (id, name, icon_url, owner_id) VALUES ($1, $2, $3, $4) RETURNING {GUILD_COLS}"
+        "INSERT INTO guilds (id, name, icon_url, owner_id, banner_url) VALUES ($1, $2, $3, $4, $5) RETURNING {GUILD_COLS}"
     ))
     .bind(gid)
     .bind(&name)
     .bind(req.icon_url.filter(|s| !s.is_empty()))
     .bind(uid)
+    .bind(req.banner_url.filter(|s| !s.is_empty()))
     .fetch_one(&mut *tx)
     .await?;
     sqlx::query("INSERT INTO guild_members (guild_id, user_id) VALUES ($1, $2)")
@@ -134,7 +136,7 @@ async fn create_guild(
     tx.commit().await?;
 
     let roles = perms::list_roles(&state.db, gid).await?;
-    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "owner_id": guild.owner_id,
+    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id,
         "created_at": guild.created_at, "channels": channels, "roles": roles });
     state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
     Ok((StatusCode::CREATED, Json(payload)))
@@ -152,6 +154,8 @@ async fn get_guild(
 struct UpdateGuild {
     name: Option<String>,
     icon_url: Option<String>,
+    /// Empty string clears.
+    banner_url: Option<String>,
 }
 
 async fn update_guild(
@@ -168,18 +172,22 @@ async fn update_guild(
         }
     }
     validate_image(&req.icon_url)?;
-    let before: (Option<String>,) = sqlx::query_as("SELECT icon_url FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+    crate::routes::users::validate_image_max(&req.banner_url, 1024 * 1024)?;
+    let before: (Option<String>, Option<String>) = sqlx::query_as("SELECT icon_url, banner_url FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await?;
     let g = sqlx::query_as::<_, Guild>(&format!(
         "UPDATE guilds SET name = COALESCE($2, name),
-           icon_url = CASE WHEN $3::text IS NULL THEN icon_url WHEN $3 = '' THEN NULL ELSE $3 END
+           icon_url = CASE WHEN $3::text IS NULL THEN icon_url WHEN $3 = '' THEN NULL ELSE $3 END,
+           banner_url = CASE WHEN $4::text IS NULL THEN banner_url WHEN $4 = '' THEN NULL ELSE $4 END
          WHERE id = $1 RETURNING {GUILD_COLS}"
     ))
     .bind(id)
     .bind(req.name.map(|n| n.trim().to_string()))
     .bind(req.icon_url)
+    .bind(req.banner_url)
     .fetch_one(&state.db)
     .await?;
     crate::routes::images::release_replaced(&state, before.0.as_deref(), g.icon_url.as_deref()).await;
+    crate::routes::images::release_replaced(&state, before.1.as_deref(), g.banner_url.as_deref()).await;
     state.hub.emit_guild(id, "GUILD_UPDATE", json!(g));
     Ok(Json(g))
 }

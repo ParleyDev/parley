@@ -41,7 +41,13 @@ export interface Guild {
   icon_url: string | null
   owner_id: string
   created_at: string
+  banner_url?: string | null
 }
+
+/** One entry of the user's server bar: a server, or a folder of servers. */
+export type LayoutItem =
+  | { kind: 'guild'; id: string }
+  | { kind: 'folder'; id: string; name: string; color: string | null; guilds: string[] }
 
 export interface Channel {
   id: string

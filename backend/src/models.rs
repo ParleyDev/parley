@@ -55,6 +55,8 @@ pub struct Guild {
     pub icon_url: Option<String>,
     pub owner_id: Uuid,
     pub created_at: DateTime<Utc>,
+    #[sqlx(default)]
+    pub banner_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

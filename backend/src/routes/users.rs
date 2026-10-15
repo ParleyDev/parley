@@ -11,7 +11,7 @@ use axum::{
     routing::{delete, get},
     Json, Router,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -24,6 +24,49 @@ pub fn router() -> Router<AppState> {
         .route("/users/:id", get(get_user))
         .route("/users/:id/reviews", get(list_reviews).put(put_review))
         .route("/users/:id/reviews/:rid", delete(delete_review))
+        .route("/users/@me/guild-layout", get(get_layout).put(put_layout))
+}
+
+/// The server bar layout: an ordered list of `{"kind":"guild","id":…}` and
+/// `{"kind":"folder","id":…,"name":…,"color":…,"guilds":[…]}` entries. Stored as given (after
+/// light validation); the client reconciles it with the servers the user is actually in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum LayoutItem {
+    Guild { id: Uuid },
+    Folder { id: String, #[serde(default)] name: String, #[serde(default)] color: Option<String>, #[serde(default)] guilds: Vec<Uuid> },
+}
+
+async fn get_layout(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<serde_json::Value>> {
+    let (v,): (serde_json::Value,) = sqlx::query_as("SELECT guild_layout FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    Ok(Json(v))
+}
+
+async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(items): Json<Vec<LayoutItem>>) -> AppResult<Json<Vec<LayoutItem>>> {
+    if items.len() > 500 {
+        return Err(AppError::BadRequest("Layout too large".into()));
+    }
+    let mine: Vec<(Uuid,)> = sqlx::query_as("SELECT guild_id FROM guild_members WHERE user_id = $1").bind(uid).fetch_all(&state.db).await?;
+    let mine: std::collections::HashSet<Uuid> = mine.into_iter().map(|r| r.0).collect();
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for it in items {
+        match it {
+            LayoutItem::Guild { id } => {
+                if mine.contains(&id) && seen.insert(id) { out.push(LayoutItem::Guild { id }) }
+            }
+            LayoutItem::Folder { id, name, color, guilds } => {
+                if id.len() > 64 { return Err(AppError::BadRequest("Bad folder id".into())); }
+                if let Some(c) = &color {
+                    if !(c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit())) { return Err(AppError::BadRequest("Folder colours must be #rrggbb".into())); }
+                }
+                let guilds: Vec<Uuid> = guilds.into_iter().filter(|g| mine.contains(g) && seen.insert(*g)).collect();
+                out.push(LayoutItem::Folder { id, name: name.chars().take(100).collect(), color, guilds });
+            }
+        }
+    }
+    sqlx::query("UPDATE users SET guild_layout = $2 WHERE id = $1").bind(uid).bind(serde_json::to_value(&out).map_err(|e| AppError::Other(e.into()))?).execute(&state.db).await?;
+    Ok(Json(out))
 }
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status";
