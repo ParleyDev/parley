@@ -21,6 +21,8 @@ type Ev =
   | { t: 'RELATIONSHIP_REMOVE'; d: { user_id: string } }
   | { t: 'GUILD_UPDATE'; d: Guild }
   | { t: 'GUILD_EMOJIS_UPDATE'; d: { guild_id: string; emojis: Emoji[] } }
+  | { t: 'INSTANCE_UPDATE'; d: { registration_enabled: boolean; announcement: string } }
+  | { t: 'SESSION_REVOKED'; d: { reason: string } }
   | { t: 'GUILD_STICKERS_UPDATE'; d: { guild_id: string; stickers: Sticker[] } }
   | { t: 'GUILD_DELETE'; d: { id: string } }
   | { t: 'GUILD_MEMBER_ADD'; d: Member }
@@ -118,6 +120,8 @@ function handle(ev: Ev) {
     case 'GUILD_CREATE': s.upsertGuild(ev.d); break
     case 'GUILD_UPDATE': s.upsertGuild(ev.d); break
     case 'GUILD_EMOJIS_UPDATE': s.setGuildEmojis(ev.d.guild_id, ev.d.emojis); break
+    case 'INSTANCE_UPDATE': s.setInstance(ev.d); break
+    case 'SESSION_REVOKED': s.pushToast(ev.d.reason, 'error'); s.logout(); break
     case 'GUILD_STICKERS_UPDATE': s.setGuildStickers(ev.d.guild_id, ev.d.stickers); break
     case 'GUILD_DELETE': s.removeGuild(ev.d.id); break
     case 'GUILD_MEMBER_ADD': s.upsertMember(ev.d); break

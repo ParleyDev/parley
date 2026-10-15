@@ -1,5 +1,5 @@
 import { APP_INITIAL } from '../lib/brand'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useStore } from '../store'
@@ -13,6 +13,10 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [form, setForm] = useState({ login: '', email: '', username: '', display_name: '', password: '' })
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const registrationOpen = useStore((s) => s.instance.registration_enabled)
+  const setInstance = useStore((s) => s.setInstance)
+  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string }>('/instance').then(setInstance).catch(() => {}) }, [setInstance])
+  const closed = mode === 'register' && !registrationOpen
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -48,6 +52,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         </div>
 
         {err && <div className="mb-4 rounded-lg bg-danger/15 border border-danger/40 px-3 py-2 text-sm">{err}</div>}
+        {closed && <div className="mb-4 rounded-lg bg-warn/15 border border-warn/40 px-3 py-2 text-sm" data-registration-closed>Registration is closed on this Parley instance right now. If you already have an account, log in instead.</div>}
 
         <div className="space-y-4">
           {mode === 'login' ? (
@@ -62,11 +67,11 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           <div><label className="label">Password</label><input className="input" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={8} {...f('password')} /></div>
         </div>
 
-        <button className="btn-primary w-full mt-6 py-2.5" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Log In' : 'Continue'}</button>
+        <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || closed}>{busy ? 'Please wait…' : mode === 'login' ? 'Log In' : 'Continue'}</button>
 
         <p className="mt-4 text-sm text-text-2">
           {mode === 'login' ? (
-            <>Need an account? <Link to="/register" className="text-sky-400 hover:underline">Register</Link></>
+            registrationOpen ? <>Need an account? <Link to="/register" className="text-sky-400 hover:underline">Register</Link></> : <span data-registration-closed-note>Registration is currently closed.</span>
           ) : (
             <><Link to="/login" className="text-sky-400 hover:underline">Already have an account?</Link></>
           )}

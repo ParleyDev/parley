@@ -63,8 +63,12 @@ where
             .and_then(|v| v.to_str().ok())
             .ok_or(AppError::Unauthorized)?;
         let token = header.strip_prefix("Bearer ").ok_or(AppError::Unauthorized)?;
-        verify_token(&state.config.jwt_secret, token)
-            .map(AuthUser)
-            .ok_or(AppError::Unauthorized)
+        let uid = verify_token(&state.config.jwt_secret, token).ok_or(AppError::Unauthorized)?;
+        // Suspended or deleted accounts lose access immediately, token or not.
+        let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND suspended_at IS NULL")
+            .bind(uid)
+            .fetch_optional(&state.db)
+            .await?;
+        ok.map(|_| AuthUser(uid)).ok_or(AppError::Unauthorized)
     }
 }

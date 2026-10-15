@@ -29,6 +29,9 @@ fn valid_username(u: &str) -> bool {
 }
 
 async fn register(State(state): State<AppState>, Json(req): Json<RegisterReq>) -> AppResult<Json<Value>> {
+    if !crate::routes::admin::load_settings(&state.db).await?.registration_enabled {
+        return Err(AppError::Forbidden);
+    }
     let username = req.username.trim().to_lowercase();
     let email = req.email.trim().to_lowercase();
     if !valid_username(&username) {
@@ -91,6 +94,10 @@ async fn login(State(state): State<AppState>, Json(req): Json<LoginReq>) -> AppR
     let (id, hash) = row.ok_or_else(|| AppError::BadRequest("Invalid credentials".into()))?;
     if !verify_password(&req.password, &hash) {
         return Err(AppError::BadRequest("Invalid credentials".into()));
+    }
+    let suspended: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND suspended_at IS NOT NULL").bind(id).fetch_optional(&state.db).await?;
+    if suspended.is_some() {
+        return Err(AppError::BadRequest("This account has been suspended.".into()));
     }
     let user = sqlx::query_as::<_, PrivateUser>(
         "SELECT id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent FROM users WHERE id = $1",

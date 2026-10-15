@@ -22,6 +22,7 @@ import { lastChannel, rememberChannel } from '../lib/dm'
 export default function AppShell() {
   const connected = useStore((s) => s.connected)
   const pane = useStore((s) => s.mobilePane)
+  const announcement = useStore((s) => s.instance.announcement)
   useEffect(() => {
     try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission() } catch { /* ignore */ }
   }, [])
@@ -29,6 +30,9 @@ export default function AppShell() {
     <div className="h-full flex overflow-hidden relative">
       {!connected && (
         <div className="absolute top-0 inset-x-0 z-40 bg-warn text-black text-xs font-semibold text-center py-1">Reconnecting…</div>
+      )}
+      {announcement && connected && (
+        <div className="absolute top-0 inset-x-0 z-40 bg-accent text-white text-xs font-semibold text-center py-1 px-3 truncate" data-announcement>{announcement}</div>
       )}
       <div className={`flex flex-col h-full shrink-0 w-[344px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${pane === 'content' ? 'max-md:hidden' : ''}`}>
         <div className="flex flex-1 min-h-0">

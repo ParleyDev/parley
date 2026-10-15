@@ -30,10 +30,14 @@ pub async fn ws_upgrade(
     State(state): State<AppState>,
     Query(q): Query<WsQuery>,
 ) -> Response {
-    match verify_token(&state.config.jwt_secret, &q.token) {
-        Some(uid) => ws.on_upgrade(move |socket| handle_socket(socket, state, uid)),
-        None => (axum::http::StatusCode::UNAUTHORIZED, "invalid token").into_response(),
+    let Some(uid) = verify_token(&state.config.jwt_secret, &q.token) else {
+        return (axum::http::StatusCode::UNAUTHORIZED, "invalid token").into_response();
+    };
+    let active: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND suspended_at IS NULL").bind(uid).fetch_optional(&state.db).await.unwrap_or(None);
+    if active.is_none() {
+        return (axum::http::StatusCode::UNAUTHORIZED, "account suspended").into_response();
     }
+    ws.on_upgrade(move |socket| handle_socket(socket, state, uid))
 }
 
 #[derive(Deserialize)]
