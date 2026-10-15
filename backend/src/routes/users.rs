@@ -303,7 +303,8 @@ async fn delete_review(
     AuthUser(uid): AuthUser,
     Path((id, rid)): Path<(Uuid, Uuid)>,
 ) -> AppResult<StatusCode> {
-    let res = sqlx::query("DELETE FROM user_reviews WHERE id = $1 AND target_id = $2 AND (author_id = $3 OR target_id = $3)")
+    // Only the author may remove a review; the profile owner cannot curate what others wrote.
+    let res = sqlx::query("DELETE FROM user_reviews WHERE id = $1 AND target_id = $2 AND author_id = $3")
         .bind(rid)
         .bind(id)
         .bind(uid)
