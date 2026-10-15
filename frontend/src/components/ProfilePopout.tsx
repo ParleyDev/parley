@@ -194,12 +194,10 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             {bioClamped && <button onClick={fullProfile} className="mt-3 block text-xs font-medium text-[#dbdee1] hover:underline" data-view-full-bio>View Full Bio</button>}
           </div>
         )}
-        {!isMe && (
-          <button onClick={fullProfile} className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold text-left hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-reviews>
-            <span>User Reviews</span>
-            <span className="font-normal text-[#b5bac1]">{reviewCount === 0 ? 'No reviews yet' : `${reviewCount} review${reviewCount === 1 ? '' : 's'}`}</span>
-          </button>
-        )}
+        <button onClick={fullProfile} className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold text-left hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-reviews>
+          <span>User Reviews</span>
+          <span className="font-normal text-[#b5bac1]">{reviewCount === 0 ? 'No reviews yet' : `${reviewCount} review${reviewCount === 1 ? '' : 's'}`}</span>
+        </button>
         {panel && (
           <div>
             <h3 className="text-xs font-bold mb-1">Member Since</h3>

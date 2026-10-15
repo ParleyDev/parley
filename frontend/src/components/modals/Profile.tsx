@@ -139,15 +139,15 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
               </ul>
             </section>
           )}
-          {!isMe && <Reviews userId={userId} light={light} />}
+          <Reviews userId={userId} light={light} isMe={isMe} />
         </ProfileCard>
       </div>
     </Modal>
   )
 }
 
-/** "User Reviews": short notes other users leave on a profile. One per author; author or profile owner can remove. */
-function Reviews({ userId, light }: { userId: string; light: boolean }) {
+/** "User Reviews": short notes other users leave on a profile. One per author; author or profile owner can remove. On your own profile you read them but cannot post. */
+function Reviews({ userId, light, isMe }: { userId: string; light: boolean; isMe: boolean }) {
   const me = useStore((s) => s.user)
   const pushToast = useStore((s) => s.pushToast)
   const [reviews, setReviews] = useState<Review[] | null>(null)
@@ -172,13 +172,13 @@ function Reviews({ userId, light }: { userId: string; light: boolean }) {
   return (
     <section data-reviews-list>
       <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">User reviews{reviews ? ` — ${reviews.length}` : ''}</h3>
-      <div className="flex gap-2 mb-2">
+      {!isMe && <div className="flex gap-2 mb-2">
         <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }} maxLength={500}
           placeholder={mine ? 'Update your review' : 'Leave a review'} aria-label="Leave a review" data-review-input className={`flex-1 min-w-0 rounded-lg px-3 py-1.5 text-sm outline-none border transition ${field}`} />
         <button onClick={submit} disabled={busy || !draft.trim()} className="btn-primary px-3! py-1.5">Post</button>
-      </div>
+      </div>}
       {reviews === null && <p className="opacity-70">Loading…</p>}
-      {reviews?.length === 0 && <p className="opacity-70">No reviews yet. Be the first!</p>}
+      {reviews?.length === 0 && <p className="opacity-70">{isMe ? 'No one has reviewed you yet.' : 'No reviews yet. Be the first!'}</p>}
       <ul className="space-y-2">
         {reviews?.map((r) => (
           <li key={r.id} className="flex gap-2" data-review>
