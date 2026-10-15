@@ -35,7 +35,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const userMenu = useUserMenu(guildId ?? null)
   const emojiHover = useEmojiHover()
   const perms = useStore((s) => myChannelPerms(s, m.channel_id))
-  const canDelete = isOwn || has(perms, P.MANAGE_MESSAGES)
+  // Moderation only exists inside servers; in DMs and group chats you can delete just your own messages.
+  const canDelete = isOwn || (guildId !== undefined && has(perms, P.MANAGE_MESSAGES))
   const canReact = has(perms, P.ADD_REACTIONS)
   const canPin = m.channel_id && (guildId === undefined || has(perms, P.MANAGE_MESSAGES))
   const [more, setMore] = useState(false)

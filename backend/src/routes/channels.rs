@@ -3,7 +3,7 @@ use crate::{
     error::{AppError, AppResult},
     models::{Channel, Message, MessageRow, Pagination, Reaction},
     perms::{self, has},
-    routes::attachments::{attachments_for, delete_files_for_message, link},
+    routes::attachments::{attachments_for, link},
     routes::guilds::{normalize_channel_name, CHANNEL_COLS},
     state::AppState,
     ws::hub::Target,
@@ -349,7 +349,8 @@ async fn delete_message(
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     // Author, or anyone who may manage messages in this channel.
     let moderator = c.guild_id.is_some() && has(p, perms::MANAGE_MESSAGES);
-    delete_files_for_message(&state, mid).await;
+    // Collect attachment ids first; files are removed only after the row delete proves the caller may.
+    let files: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM attachments WHERE message_id = $1").bind(mid).fetch_all(&state.db).await?;
     let res = if moderator {
         sqlx::query("DELETE FROM messages WHERE id = $1 AND channel_id = $2").bind(mid).bind(id)
     } else {
@@ -359,6 +360,9 @@ async fn delete_message(
     .await?;
     if res.rows_affected() == 0 {
         return Err(AppError::Forbidden);
+    }
+    for (fid,) in files {
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await;
     }
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_DELETE", json!({ "id": mid, "channel_id": id, "guild_id": c.guild_id }));
