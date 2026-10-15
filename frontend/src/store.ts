@@ -3,7 +3,8 @@ import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
-import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sticker, User, VoiceState } from './lib/types'
+import type { Ban, Channel, DmChannel, Emoji, Guild, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sticker, User, VoiceState } from './lib/types'
+import { reconcile } from './lib/layout'
 import { channelPerms, guildPerms } from './lib/perms'
 
 export type ModalKind =
@@ -23,6 +24,7 @@ export type ModalKind =
   | { kind: 'customStatus' }
   | { kind: 'forward'; message: Message }
   | { kind: 'groupMembers'; channelId?: string; userIds?: string[] }
+  | { kind: 'folderSettings'; folderId: string }
 
 export interface ReadyPayload {
   user: PrivateUser
@@ -32,6 +34,7 @@ export interface ReadyPayload {
   emojis?: Emoji[]
   stickers?: Sticker[]
   bookmarks?: string[]
+  guild_layout?: LayoutItem[]
   me_members: Member[]
   dm_channels: DmChannel[]
   relationships?: Relationship[]
@@ -50,6 +53,8 @@ interface State {
 
   guilds: Record<string, Guild>
   guildOrder: string[]
+  /** The server bar: ordering and folders, per user, saved server-side. Always reconciled with `guildOrder`. */
+  guildLayout: LayoutItem[]
   channels: Record<string, Channel>
   dms: Record<string, DmChannel>
   /** Friends, pending requests and blocks keyed by the other user's id. */
@@ -113,6 +118,8 @@ interface State {
   setGuildEmojis: (guildId: string, emojis: Emoji[]) => void
   setGuildStickers: (guildId: string, stickers: Sticker[]) => void
   setBookmark: (messageId: string, on: boolean) => void
+  /** Replace the server bar layout; `save` also PUTs it to the server. */
+  setGuildLayout: (items: LayoutItem[], save?: boolean) => void
   upsertRelationship: (r: Relationship) => void
   removeRelationship: (userId: string) => void
   upsertRole: (r: Role) => void
@@ -180,6 +187,7 @@ export const useStore = create<State>((set, get) => ({
   connected: false,
   guilds: {},
   guildOrder: [],
+  guildLayout: [],
   channels: {},
   dms: {},
   relationships: {},
@@ -228,7 +236,7 @@ export const useStore = create<State>((set, get) => ({
   logout: () => {
     setToken(null)
     set({
-      token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], channels: {}, dms: {}, relationships: {},
+      token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], guildLayout: [], channels: {}, dms: {}, relationships: {},
       members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {},
     })
@@ -268,9 +276,10 @@ export const useStore = create<State>((set, get) => ({
     ;(r.me_members ?? []).forEach((m) => { members[m.guild_id] = { [m.user_id]: m } })
     const bookmarks: Record<string, true> = {}
     ;(r.bookmarks ?? []).forEach((id) => (bookmarks[id] = true))
+    const guildLayout = reconcile(r.guild_layout ?? [], r.guilds.map((g) => g.id))
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
-      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks,
+      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events.
       messages: {}, hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
@@ -286,10 +295,16 @@ export const useStore = create<State>((set, get) => ({
     const roles = groles ? { ...s.roles, [guild.id]: Object.fromEntries(groles.map((r) => [r.id, r])) } : s.roles
     const emojis = gemojis || !s.emojis[guild.id] ? { ...s.emojis, [guild.id]: gemojis ?? [] } : s.emojis
     const stickers = gstickers || !s.stickers[guild.id] ? { ...s.stickers, [guild.id]: gstickers ?? [] } : s.stickers
-    return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder, roles, emojis, stickers }
+    const guildLayout = reconcile(s.guildLayout, guildOrder)
+    return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder, roles, emojis, stickers, guildLayout }
   }),
   setGuildEmojis: (guildId, emojis) => set((s) => ({ emojis: { ...s.emojis, [guildId]: emojis } })),
   setGuildStickers: (guildId, stickers) => set((s) => ({ stickers: { ...s.stickers, [guildId]: stickers } })),
+  setGuildLayout: (items, save) => {
+    const layout = reconcile(items, get().guildOrder)
+    set({ guildLayout: layout })
+    if (save) api.put('/users/@me/guild-layout', layout).catch((e: Error) => get().pushToast(`Could not save server layout: ${e.message}`, 'error'))
+  },
   setBookmark: (messageId, on) => set((s) => { const bookmarks = { ...s.bookmarks }; if (on) bookmarks[messageId] = true; else delete bookmarks[messageId]; return { bookmarks } }),
   upsertRelationship: (r) => set((s) => ({ relationships: { ...s.relationships, [r.user.id]: r }, users: { ...s.users, [r.user.id]: r.user } })),
   removeRelationship: (userId) => set((s) => { const relationships = { ...s.relationships }; delete relationships[userId]; return { relationships } }),
@@ -313,7 +328,8 @@ export const useStore = create<State>((set, get) => ({
     const membersLoaded = { ...s.membersLoaded }; delete membersLoaded[id]
     const voiceStates = { ...s.voiceStates }
     Object.values(voiceStates).forEach((v) => { if (v.guild_id === id) delete voiceStates[v.user_id] })
-    return { guilds, channels, members, membersLoaded, voiceStates, roles, emojis, stickers, guildOrder: s.guildOrder.filter((g) => g !== id) }
+    const guildOrder = s.guildOrder.filter((g) => g !== id)
+    return { guilds, channels, members, membersLoaded, voiceStates, roles, emojis, stickers, guildOrder, guildLayout: reconcile(s.guildLayout, guildOrder) }
   }),
   upsertChannel: (c) => set((s) => {
     if (c.guild_id === null && 'recipients' in c) {

@@ -15,6 +15,7 @@ import TransferOwnershipModal from './TransferOwnership'
 import CustomStatusModal from './CustomStatus'
 import ForwardModal from './Forward'
 import GroupMembersModal from './GroupMembers'
+import FolderSettingsModal from './FolderSettings'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
@@ -45,6 +46,7 @@ export default function Modals() {
     case 'customStatus': return <CustomStatusModal onClose={close} />
     case 'forward': return <ForwardModal onClose={close} message={modal!.message} />
     case 'groupMembers': return <GroupMembersModal onClose={close} channelId={modal!.channelId} userIds={modal!.userIds} />
+    case 'folderSettings': return <FolderSettingsModal onClose={close} folderId={modal!.folderId} />
   }
   }
 }

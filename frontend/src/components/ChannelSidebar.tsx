@@ -70,10 +70,19 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   return (
     <aside className="w-[272px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="relative">
-        <button onClick={() => setMenu((m) => !m)} className="h-12 w-full px-4 flex items-center justify-between font-bold border-b border-line hover:bg-bg-3 transition text-left">
-          <span className="truncate">{guild.name}</span>
-          <ChevronDown size={18} className={`text-text-1 transition ${menu ? 'rotate-180' : ''}`} />
-        </button>
+        {guild.banner_url ? (
+          <div className="relative h-[135px] bg-cover bg-center" style={{ backgroundImage: `url(${guild.banner_url})` }} data-guild-banner>
+            <button onClick={() => setMenu((m) => !m)} className="absolute inset-x-0 top-0 h-12 px-4 flex items-center justify-between font-bold text-white text-left bg-gradient-to-b from-black/60 to-transparent hover:from-black/70 drop-shadow">
+              <span className="truncate">{guild.name}</span>
+              <ChevronDown size={18} className={`transition ${menu ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setMenu((m) => !m)} className="h-12 w-full px-4 flex items-center justify-between font-bold border-b border-line hover:bg-bg-3 transition text-left">
+            <span className="truncate">{guild.name}</span>
+            <ChevronDown size={18} className={`text-text-1 transition ${menu ? 'rotate-180' : ''}`} />
+          </button>
+        )}
         {menu && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />

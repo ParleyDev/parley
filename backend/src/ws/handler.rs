@@ -67,7 +67,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
     }
 
     let guilds = sqlx::query_as::<_, Guild>(
-        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at FROM guilds g
+        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at, g.banner_url FROM guilds g
          JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at",
     )
     .bind(user_id)
@@ -102,6 +102,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
     let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &guild_ids).await.unwrap_or_default();
     let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &guild_ids).await.unwrap_or_default();
     let bookmarks = crate::routes::channels::bookmark_ids(&state.db, user_id).await.unwrap_or_default();
+    let guild_layout: serde_json::Value = sqlx::query_as::<_, (serde_json::Value,)>("SELECT guild_layout FROM users WHERE id = $1").bind(user_id).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(serde_json::json!([]));
     let dms = list_dm_channels(&state.db, user_id).await.unwrap_or_default();
     let relationships = crate::routes::relationships::list_for(&state.db, user_id).await.unwrap_or_default();
 
@@ -140,6 +141,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
             "emojis": emojis,
             "stickers": stickers,
             "bookmarks": bookmarks,
+            "guild_layout": guild_layout,
             "me_members": me_members,
             "dm_channels": dms,
             "relationships": relationships,

@@ -53,7 +53,7 @@ pub struct Listing {
     pub joined: bool,
 }
 
-const LISTING_SELECT: &str = "SELECT d.guild_id, g.name, g.icon_url, d.description, d.category, d.banner_url, d.status, d.note, d.submitted_at, d.reviewed_at,
+const LISTING_SELECT: &str = "SELECT d.guild_id, g.name, g.icon_url, d.description, d.category, COALESCE(d.banner_url, g.banner_url) AS banner_url, d.status, d.note, d.submitted_at, d.reviewed_at,
     (SELECT COUNT(*) FROM guild_members m WHERE m.guild_id = d.guild_id) AS member_count
     FROM guild_discovery d JOIN guilds g ON g.id = d.guild_id";
 
@@ -117,7 +117,7 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
     let roles = perms::list_roles(&state.db, gid).await?;
     let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &[gid]).await?;
     let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &[gid]).await?;
-    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "owner_id": guild.owner_id,
+    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id,
         "created_at": guild.created_at, "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers });
     if inserted > 0 {
         state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
