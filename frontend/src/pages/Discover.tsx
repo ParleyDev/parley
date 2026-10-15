@@ -1,5 +1,5 @@
 import { BadgeCheck, Check, Compass, Search, Server, ShieldCheck, X } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 import GuildBar from '../components/GuildBar'
 import Modals from '../components/modals'
@@ -54,6 +54,21 @@ function Browse() {
   const [list, setList] = useState<Listing[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => { const t = setTimeout(() => setTerm(q.trim()), 300); return () => clearTimeout(t) }, [q])
+  // Fade the strip's edges only when the tabs really overflow (narrow windows); re-check on resize.
+  const stripRef = useRef<HTMLDivElement>(null)
+  const [overflow, setOverflow] = useState(false)
+  useEffect(() => {
+    const el = stripRef.current
+    if (!el) return
+    const check = () => setOverflow(el.scrollWidth > el.clientWidth + 1)
+    check()
+    // Tab widths change once the web font lands, which the ResizeObserver (strip size only) misses.
+    document.fonts?.ready.then(check)
+    const t = setTimeout(check, 400)
+    const ro = new ResizeObserver(check); ro.observe(el)
+    window.addEventListener('resize', check)
+    return () => { ro.disconnect(); clearTimeout(t); window.removeEventListener('resize', check) }
+  }, [])
   useEffect(() => {
     setList(null); setError(null)
     const params = new URLSearchParams()
@@ -66,14 +81,15 @@ function Browse() {
     <div className="min-h-full flex flex-col">
       <div className="sticky top-0 z-10 h-14 shrink-0 flex items-center gap-1 px-4 bg-bg-2/95 backdrop-blur border-b border-line" data-discover-tabs>
         <Compass size={22} className="text-text-2 mr-2 shrink-0" />
-        <div className="flex items-center gap-1 overflow-x-auto">
+        {/* The tab strip scrolls sideways (no visible scrollbar) instead of pushing the search box out. */}
+        <div ref={stripRef} className={`flex-1 min-w-0 flex items-center gap-0.5 overflow-x-auto scrollbar-none h-full ${overflow ? 'fade-x' : ''}`} data-tab-strip={overflow ? 'overflow' : 'fits'}>
           {tabs.map((t) => (
-            <button key={t.id} type="button" onClick={() => setCategory(t.id)} data-discover-tab={t.id} className={`px-3 py-2 text-[15px] font-semibold whitespace-nowrap border-b-2 -mb-px ${category === t.id ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`}>{t.label}</button>
+            <button key={t.id} type="button" onClick={() => setCategory(t.id)} data-discover-tab={t.id} className={`px-2.5 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${category === t.id ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`}>{t.label}</button>
           ))}
         </div>
-        <div className="ml-auto relative shrink-0 max-md:hidden">
+        <div className="ml-2 relative shrink-0 max-md:hidden">
           <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-2" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" data-discover-search className="h-8 w-56 rounded-md bg-bg-0 border border-line pl-8 pr-2 text-sm outline-none focus:border-accent/60" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" data-discover-search className="h-8 w-44 xl:w-56 rounded-md bg-bg-0 border border-line pl-8 pr-2 text-sm outline-none focus:border-accent/60" />
         </div>
       </div>
       <div className="relative overflow-hidden px-10 py-16 max-md:px-5 max-md:py-10" style={{ background: 'linear-gradient(110deg, #1b1f6b 0%, #2a2f9b 45%, #1a3a8a 100%)' }} data-discover-hero>
