@@ -10,6 +10,7 @@ import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
 import ExpressionPicker, { type PickerTab } from './ExpressionPicker'
 import ShortcodeSuggest, { shortcodeAt, useShortcodeSuggestions, type Suggestion } from './ShortcodeSuggest'
+import { dmName, isGroup } from '../lib/dm'
 
 
 interface Props { channel: Channel | DmChannel; reply: Message | null; onCancelReply: () => void; onSent: () => void }
@@ -39,7 +40,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const fileRef = useRef<HTMLInputElement>(null)
   const lastTyping = useRef(0)
   const isDm = channel.guild_id === null
-  const name = isDm ? `@${(channel as DmChannel).recipients[0]?.display_name ?? ''}` : (channel as Channel).kind === 'voice' ? channel.name : `#${channel.name}`
+  const name = isDm ? (isGroup(channel as DmChannel) ? dmName(channel as DmChannel, users) : `@${(channel as DmChannel).recipients[0]?.display_name ?? ''}`) : (channel as Channel).kind === 'voice' ? channel.name : `#${channel.name}`
 
   useEffect(() => { ref.current?.focus() }, [channel.id, reply])
   useEffect(() => {

@@ -22,6 +22,7 @@ export type ModalKind =
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
   | { kind: 'customStatus' }
   | { kind: 'forward'; message: Message }
+  | { kind: 'groupMembers'; channelId?: string; userIds?: string[] }
 
 export interface ReadyPayload {
   user: PrivateUser
@@ -324,8 +325,9 @@ export const useStore = create<State>((set, get) => ({
   }),
   removeChannel: (id) => set((s) => {
     const channels = { ...s.channels }; delete channels[id]
+    const dms = { ...s.dms }; delete dms[id]
     const messages = { ...s.messages }; delete messages[id]
-    return { channels, messages }
+    return { channels, dms, messages }
   }),
   setMembers: (guildId, ms) => set((s) => {
     const map: Record<string, Member> = {}

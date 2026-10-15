@@ -6,6 +6,8 @@ import { formatDateDivider, sameDay } from '../lib/format'
 import MessageItem from './MessageItem'
 import Composer from './Composer'
 import Avatar from './Avatar'
+import GroupIcon from './GroupIcon'
+import { dmName, isGroup } from '../lib/dm'
 
 /**
  * Message history + composer for any channel (text, DM, or a voice channel's chat).
@@ -104,11 +106,19 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
 
 function ChannelIntro({ channel }: { channel: Channel | DmChannel }) {
   const isDm = channel.guild_id === null
-  const other = isDm ? (channel as DmChannel).recipients[0] : null
+  const group = isDm && isGroup(channel as DmChannel)
+  const other = isDm && !group ? (channel as DmChannel).recipients[0] : null
   const isVoice = !isDm && (channel as Channel).kind === 'voice'
+  const users = useStore((s) => s.users)
   return (
     <div className="px-4 pt-12 pb-4 fade-in">
-      {other ? (
+      {group ? (
+        <>
+          <GroupIcon dm={channel as DmChannel} size={80} />
+          <h1 className="mt-3 text-3xl font-extrabold">{dmName(channel as DmChannel, users)}</h1>
+          <p className="mt-2 text-text-2 text-sm">Welcome to the beginning of the <b>{dmName(channel as DmChannel, users)}</b> group.</p>
+        </>
+      ) : other ? (
         <>
           <Avatar user={other} size={80} />
           <h1 className="mt-3 text-3xl font-extrabold">{other.display_name}</h1>

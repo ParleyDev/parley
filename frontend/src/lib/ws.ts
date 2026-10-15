@@ -28,7 +28,7 @@ type Ev =
   | { t: 'GUILD_BAN_ADD'; d: Ban }
   | { t: 'GUILD_BAN_REMOVE'; d: { guild_id: string; user_id: string } }
   | { t: 'CHANNEL_CREATE' | 'CHANNEL_UPDATE'; d: Channel | DmChannel }
-  | { t: 'CHANNEL_DELETE'; d: { id: string; guild_id: string } }
+  | { t: 'CHANNEL_DELETE'; d: { id: string; guild_id: string | null } }
   | { t: 'READ_STATE_UPDATE'; d: { channel_id: string; last_read_msg: string } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }

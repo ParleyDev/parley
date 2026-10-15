@@ -25,6 +25,8 @@ The GIF picker needs a provider key: `TENOR_API_KEY=...` (preferred, free from G
 - Accounts: register, log in (JWT), presence status (online / idle / dnd / invisible)
 - Profile popout: clicking a user anywhere (chat, member list, voice, friends) opens Discord's compact 300px popout beside what you clicked (a bottom sheet on phones): banner with add-friend and "⋯" buttons, avatar with status, nickname, "display name • username • pronouns", a "N Mutual Friends • N Mutual Servers" row with stacked avatars, a three-line bio with View Full Bio, a "User Reviews" panel, and a "Message @user" box with an emoji picker that starts a DM straight from the card. The "⋯" menu has View Full Profile, Invite to Server (DMs an invite link), friend actions, Block, Kick/Ban (when you may), and Copy User Info (ID, profile link `/users/<id>`, avatar and banner links). View Full Profile opens the full card with Member Since (app and server), roles, mutual friends and servers, user reviews (one short note per author, replaceable; the author or the profile owner can delete it; `GET/PUT /users/:id/reviews`, `DELETE /users/:id/reviews/:rid`) and action buttons.
 - DMs, Discord-style: the header shows the recipient's custom status and has Start Voice Call / Start Video Call, Pinned Messages, a profile-panel toggle and a search box; the right-hand panel is the recipient's profile card (banner, friend badge, bio, mutual friends/servers, Member Since, View Full Profile). DM calls use the same WebRTC voice stack as servers (mic, deafen, camera, screen share); the other side gets an incoming-call banner with Join / Ignore.
+- Group DMs: pick several friends from "Create a group DM" (or Add Friends from any DM or group) for a chat of up to 10. Groups have an owner (crown), an optional name and icon that any member can change (click the header name to rename), stacked-avatar icons, a members panel with remove (owner) and Leave, and work with calls, pins, search and forwarding like any DM. Only friends can be added; blocking someone does not close a group you share.
+- Returning to a server lands on the channel you last had open there (remembered per server in this browser), falling back to the first text channel.
 - Custom status: "Set a custom status" from your user panel (emoji + text, 128 chars) shows under your name in DM lists, member lists, DM headers and as a bubble on your profile card.
 - Pinned messages: pin from a message's "⋯" menu (Manage Messages in servers, anyone in a DM); the pin button in the header lists them with Jump and Unpin. Message search (header box, Enter) lists matches with Jump. The hover bar also offers your three most-used reactions, and the "⋯" menu has Copy Text, Copy Message ID and Delete.
 - Spoiler attachments: mark a pending upload as a spoiler (eye icon); it is blurred with a SPOILER badge until clicked. Discord's `SPOILER_` filename convention is used, so uploads from Discord render the same way.
@@ -88,7 +90,8 @@ All routes under `/api`, JSON, `Authorization: Bearer <jwt>` except auth.
 ```
 POST  /auth/register  /auth/login
 GET   /users/@me   PATCH /users/@me   GET /users/search?q=   GET /users/:id
-GET   /users/@me/channels   POST /users/@me/channels {recipient_id}
+GET   /users/@me/channels   POST /users/@me/channels {recipient_id} | {recipient_ids: [...], name?} (group)
+PUT|DELETE /channels/:id/recipients/:uid (add a friend / leave or, as owner, remove)   PATCH /channels/:id {name, icon_url} (groups: any member)
 GET   /guilds   POST /guilds   GET|PATCH|DELETE /guilds/:id
 GET|POST /guilds/:id/channels   GET /guilds/:id/members
 DELETE /guilds/:id/members/@me   DELETE /guilds/:id/members/:uid

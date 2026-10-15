@@ -14,6 +14,7 @@ import BanMemberModal from './BanMember'
 import TransferOwnershipModal from './TransferOwnership'
 import CustomStatusModal from './CustomStatus'
 import ForwardModal from './Forward'
+import GroupMembersModal from './GroupMembers'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
@@ -43,6 +44,7 @@ export default function Modals() {
     case 'transferOwnership': return <TransferOwnershipModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'customStatus': return <CustomStatusModal onClose={close} />
     case 'forward': return <ForwardModal onClose={close} message={modal!.message} />
+    case 'groupMembers': return <GroupMembersModal onClose={close} channelId={modal!.channelId} userIds={modal!.userIds} />
   }
   }
 }

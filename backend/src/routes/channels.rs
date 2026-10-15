@@ -99,6 +99,8 @@ async fn get_channel(
 struct UpdateChannel {
     name: Option<String>,
     topic: Option<String>,
+    /// Group DMs: empty string clears.
+    icon_url: Option<String>,
 }
 
 async fn update_channel(
@@ -109,7 +111,20 @@ async fn update_channel(
 ) -> AppResult<Json<Channel>> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     if c.guild_id.is_none() {
-        return Err(AppError::BadRequest("Cannot edit DM channels".into()));
+        // Group DMs: any member may rename or change the icon.
+        if c.kind != "group" {
+            return Err(AppError::BadRequest("Cannot edit DM channels".into()));
+        }
+        crate::routes::users::validate_image(&req.icon_url)?;
+        let name = req.name.map(|n| n.trim().chars().take(100).collect::<String>());
+        sqlx::query("UPDATE channels SET name = COALESCE($2, name), icon_url = CASE WHEN $3::text IS NULL THEN icon_url WHEN $3 = '' THEN NULL ELSE $3 END WHERE id = $1")
+            .bind(id)
+            .bind(name)
+            .bind(req.icon_url)
+            .execute(&state.db)
+            .await?;
+        crate::routes::dms::broadcast_group(&state, id).await?;
+        return Ok(Json(sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(id).fetch_one(&state.db).await?));
     }
     perms::check(p, perms::MANAGE_CHANNELS)?;
     let name = match req.name {
@@ -259,8 +274,8 @@ async fn create_message(
     if !req.attachment_ids.is_empty() && c.guild_id.is_some() {
         perms::check(p, perms::ATTACH_FILES)?;
     }
-    if c.guild_id.is_none() {
-        // DMs: either side blocking the other closes the channel to new messages.
+    if c.guild_id.is_none() && c.kind == "dm" {
+        // 1:1 DMs: either side blocking the other closes the channel to new messages. Groups stay open.
         let others: Vec<(Uuid,)> = sqlx::query_as("SELECT user_id FROM channel_members WHERE channel_id = $1 AND user_id <> $2").bind(id).bind(uid).fetch_all(&state.db).await?;
         for (other,) in others {
             if crate::routes::relationships::blocked_either_way(&state.db, uid, other).await? {

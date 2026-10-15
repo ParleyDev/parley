@@ -12,6 +12,7 @@ import Modals from '../components/modals'
 import ErrorBoundary from '../components/ErrorBoundary'
 import IncomingCall from '../components/IncomingCall'
 import UserPanel from '../components/UserPanel'
+import { lastChannel, rememberChannel } from '../lib/dm'
 
 /**
  * Two route trees share the URL: one picks the sidebar, one picks the main content.
@@ -71,17 +72,22 @@ function DmChat() {
   return <ChatView channel={dm} />
 }
 
+/** `/channels/:guildId` lands on the channel you last had open in that server, else its first text channel. */
 function GuildRedirect() {
   const { guildId = '' } = useParams()
-  const first = useStore((s) => Object.values(s.channels).filter((c) => c.guild_id === guildId && c.kind === 'text').sort((a, b) => a.position - b.position)[0])
+  const channels = useStore((s) => s.channels)
   const guild = useStore((s) => s.guilds[guildId])
   if (!guild) return <Navigate to="/channels/@me" replace />
-  if (!first) return <div className="flex-1 max-md:hidden" />
-  return <Navigate to={`/channels/${guildId}/${first.id}`} replace />
+  const remembered = lastChannel(guildId)
+  const target = (remembered && channels[remembered]?.guild_id === guildId ? channels[remembered] : undefined)
+    ?? Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'text').sort((a, b) => a.position - b.position)[0]
+  if (!target) return <div className="flex-1 max-md:hidden" />
+  return <Navigate to={`/channels/${guildId}/${target.id}`} replace />
 }
 
 function GuildMain() {
   const { guildId = '', channelId = '' } = useParams()
+  useEffect(() => { if (guildId && channelId) rememberChannel(guildId, channelId) }, [guildId, channelId])
   const guild = useStore((s) => s.guilds[guildId])
   const channel = useStore((s) => s.channels[channelId])
   const loadMembers = useStore((s) => s.loadMembers)
