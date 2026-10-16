@@ -86,3 +86,12 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 /** Directory with the committed test files (pic.png, fake.png, notes.txt). */
 export const FIX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
+
+// ---- cross-browser: E2E_BROWSER=chromium (default) | webkit | firefox -------------------------------
+import { chromium as _chromium, webkit as _webkit, firefox as _firefox, devices as _devices } from 'playwright'
+export const BROWSER = process.env.E2E_BROWSER ?? 'chromium'
+export const browserType = () => (BROWSER === 'webkit' ? _webkit : BROWSER === 'firefox' ? _firefox : _chromium)
+/** Launch the configured engine; Chromium-only flags (fake media devices) are dropped elsewhere. */
+export const launchBrowser = (opts = {}) => { const { args, ...rest } = opts; return browserType().launch(BROWSER === 'chromium' ? { args, ...rest } : rest) }
+/** A phone context descriptor: real iOS-like WebKit under E2E_BROWSER=webkit, emulated otherwise. */
+export const phone = () => ({ ..._devices['iPhone 13'], ...(BROWSER === 'chromium' ? {} : { defaultBrowserType: BROWSER }) })

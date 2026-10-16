@@ -61,11 +61,14 @@ jobs:
         working-directory: frontend
       - name: Run the suites
         run: npm run e2e
+        working-directory: frontend
+      - name: Mobile suites under WebKit (iOS engine)
+        run: npx playwright install --with-deps webkit && npm run e2e:webkit
+        working-directory: frontend
       - name: Backup smoke test (pg_dump + uploads tarball)
         run: |
           docker compose --profile backup run --rm backup once
           ls -lh backups/ && test -s backups/db-*.dump && test -s backups/uploads-*.tgz
-        working-directory: frontend
       - name: Backend logs
         if: failure()
         run: docker compose logs backend --tail 300
