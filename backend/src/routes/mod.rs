@@ -21,6 +21,7 @@ pub mod sessions;
 pub mod storage;
 pub mod threads;
 pub mod users;
+pub mod voice;
 
 use crate::state::AppState;
 use axum::Router;
@@ -38,6 +39,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(embeds::router())
         .merge(storage::router())
         .merge(threads::router())
+        .merge(voice::router())
         .merge(guilds::router())
         .merge(invites::router())
         .merge(roles::router())

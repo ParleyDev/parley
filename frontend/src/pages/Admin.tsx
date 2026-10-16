@@ -179,11 +179,14 @@ function SettingsPane() {
   const [reg, setReg] = useState(instance.registration_enabled)
   const [ann, setAnn] = useState(instance.announcement)
   const [reqVerify, setReqVerify] = useState(!!instance.require_email_verification)
+  const [lkUrl, setLkUrl] = useState('')
+  const [lkKey, setLkKey] = useState('')
+  const [lkSecret, setLkSecret] = useState('')
   const [busy, setBusy] = useState(false)
-  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean }>('/admin/settings').then((s) => { setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification) }).catch(() => {}) }, [])
+  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string }>('/admin/settings').then((s) => { setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification); setLkUrl(s.livekit_url ?? ''); setLkKey(s.livekit_api_key ?? ''); setLkSecret(s.livekit_api_secret ?? '') }).catch(() => {}) }, [])
   const save = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify }); setInstance(s); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
+    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify, livekit_url: lkUrl, livekit_api_key: lkKey, livekit_api_secret: lkSecret }); setInstance({ ...s, livekit_url: s.livekit_url }); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={save} className="max-w-xl space-y-6" data-admin-settings>
@@ -199,6 +202,15 @@ function SettingsPane() {
       <div>
         <label className="label">Announcement banner</label>
         <input className="input" value={ann} onChange={(e) => setAnn(e.target.value)} maxLength={300} placeholder="Shown at the top of the app for everyone; leave blank to hide" data-admin-announcement />
+      </div>
+      <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-voice>
+        <div><span className="block font-semibold">Voice: LiveKit SFU</span><span className="block text-sm text-text-2">Leave empty for peer-to-peer calls (fine up to about six people). Enter a LiveKit server to route all voice, video and screen share through it; the server mints join tokens from the channel permissions.</span></div>
+        <div><label className="label">LiveKit URL (what browsers connect to)</label><input className="input" value={lkUrl} onChange={(e) => setLkUrl(e.target.value)} placeholder="wss://livekit.example.com or ws://localhost:7880" data-admin-livekit-url /></div>
+        <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+          <div><label className="label">API key</label><input className="input" value={lkKey} onChange={(e) => setLkKey(e.target.value)} placeholder="devkey" autoComplete="off" data-admin-livekit-key /></div>
+          <div><label className="label">API secret</label><input className="input" type="password" value={lkSecret} onChange={(e) => setLkSecret(e.target.value)} placeholder="secret" autoComplete="new-password" data-admin-livekit-secret /></div>
+        </div>
+        <div className="text-xs text-text-2">Current mode: <b data-admin-voice-mode>{instance.voice_mode === 'sfu' ? 'SFU' : 'peer-to-peer mesh'}</b></div>
       </div>
       <button className="btn-primary" disabled={busy} data-admin-settings-save>{busy ? 'Saving…' : 'Save Settings'}</button>
     </form>

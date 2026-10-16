@@ -97,6 +97,18 @@ services:
     ports: !override
       - "${API_PORT2:-18081}:8080"
 
+  # Optional SFU for larger calls (profile "sfu"): a LiveKit server in dev mode (API key "devkey", secret
+  # "secret"). Point Admin Console -> Instance Settings -> Voice at ws://<host>:7880 with those credentials.
+  # For production run LiveKit with your own keys and TLS and enter them there instead.
+  livekit:
+    image: livekit/livekit-server:latest
+    profiles: ["sfu"]
+    command: --dev --bind 0.0.0.0 --node-ip ${LIVEKIT_NODE_IP:-127.0.0.1}
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+
   # Backups: `docker compose --profile backup run --rm backup once` for a single backup into ./backups, or
   # `docker compose --profile backup up -d` to keep one running daily (BACKUP_INTERVAL seconds, BACKUP_KEEP of each).
   # Restore drill: ops/restore.sh backups/db-<ts>.dump backups/uploads-<ts>.tgz (see README).

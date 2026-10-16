@@ -2,6 +2,8 @@ import { useStore } from '../store'
 import type { VoiceState } from './types'
 import { sendOp, type SignalData } from './ws'
 import { supportsSinkId, type VoiceSettings } from './settings'
+import { api } from './api'
+import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant } from 'livekit-client'
 
 /**
  * Mesh WebRTC voice/video: every participant holds one RTCPeerConnection per other participant.
@@ -56,6 +58,17 @@ class VoiceManager {
   private joining = false
   private muteBeforeDeaf = false
 
+  // SFU (LiveKit) transport, used instead of the mesh when the instance has a server configured.
+  private room: Room | null = null
+  private sfuAudio = new Map<string, HTMLAudioElement>()
+  private sfuMeters = new Map<string, () => void>()
+  private sfuCamera: LocalVideoTrack | null = null
+  private sfuScreen: LocalVideoTrack | null = null
+
+  /** Debug/test window: current transport and room state. */
+  get debug(): { mode: string; room: string | null; remote: number; channel: string | null } { return { mode: this.sfu ? 'sfu' : 'mesh', room: this.room ? String(this.room.state) : null, remote: this.room?.remoteParticipants.size ?? this.peers.size, channel: this.channelId } }
+  private get sfu(): boolean { return useStore.getState().instance.voice_mode === 'sfu' }
+
   constructor() {
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', (e) => this.onKey(e, true), true)
@@ -95,6 +108,7 @@ class VoiceManager {
     if (this.channelId) sendOp({ op: 'voice_leave' })
     this.channelId = null
     this.closeAllPeers()
+    this.disconnectSfu()
     this.releaseMic('call')
     this.stopTracks(this.camera); this.camera = null
     this.stopTracks(this.screen); this.screen = null
@@ -126,6 +140,7 @@ class VoiceManager {
     if (this.camera) {
       this.stopTracks(this.camera); this.camera = null
       this.peers.forEach((p) => this.replaceVideo(p.pc, 0, null))
+      await this.sfuUnpublish('camera')
       s.setLocalMedia({ camera: null })
       this.pushState()
       return
@@ -136,6 +151,7 @@ class VoiceManager {
     const track = stream.getVideoTracks()[0]
     track.onended = () => { if (this.camera) this.toggleCamera() }
     this.peers.forEach((p) => this.replaceVideo(p.pc, 0, track))
+    await this.sfuPublish('camera', track)
     s.setLocalMedia({ camera: this.camera })
     this.pushState()
   }
@@ -145,6 +161,7 @@ class VoiceManager {
     if (this.screen) {
       this.stopTracks(this.screen); this.screen = null
       this.peers.forEach((p) => this.replaceVideo(p.pc, 1, null))
+      await this.sfuUnpublish('screen')
       s.setLocalMedia({ screen: null })
       this.pushState()
       return
@@ -160,6 +177,7 @@ class VoiceManager {
     // Browser "Stop sharing" button ends the track.
     track.onended = () => { if (this.screen) this.toggleScreen() }
     this.peers.forEach((p) => this.replaceVideo(p.pc, 1, track))
+    await this.sfuPublish('screen', track)
     s.setLocalMedia({ screen: this.screen })
     this.pushState()
   }
@@ -170,7 +188,7 @@ class VoiceManager {
   async applySettings(prev: VoiceSettings) {
     const cur = this.settings
     if (this.inputGain) this.inputGain.gain.value = cur.inputVolume / 100
-    if (prev.outputDeviceId !== cur.outputDeviceId || prev.outputVolume !== cur.outputVolume) this.peers.forEach((p) => this.applyOutput(p.audio))
+    if (prev.outputDeviceId !== cur.outputDeviceId || prev.outputVolume !== cur.outputVolume) { this.peers.forEach((p) => this.applyOutput(p.audio)); this.sfuAudio.forEach((a) => this.applyOutput(a)) }
     const micChanged = prev.inputDeviceId !== cur.inputDeviceId || prev.echoCancellation !== cur.echoCancellation
       || prev.noiseSuppression !== cur.noiseSuppression || prev.autoGainControl !== cur.autoGainControl
     if (micChanged && this.raw) await this.reopenMicDevice()
@@ -239,10 +257,15 @@ class VoiceManager {
       if (v.channel_id === this.channelId) {
         const s = useStore.getState()
         if (s.voiceConnecting) {
-          // Server acknowledged our join: offer to everyone already here, then re-announce media flags.
+          // Server acknowledged our join: offer to everyone already here (mesh) or join the SFU room,
+          // then re-announce media flags.
           s.setMyVoice(this.channelId, false)
-          const others = Object.values(s.voiceStates).filter((o) => o.channel_id === this.channelId && o.user_id !== me)
-          others.forEach((o) => { if (!this.peers.has(o.user_id)) this.offerTo(o.user_id) })
+          if (this.sfu) {
+            this.connectSfu(this.channelId)
+          } else {
+            const others = Object.values(s.voiceStates).filter((o) => o.channel_id === this.channelId && o.user_id !== me)
+            others.forEach((o) => { if (!this.peers.has(o.user_id)) this.offerTo(o.user_id) })
+          }
           if (this.camera || this.screen || s.selfMute || s.selfDeaf) this.pushState()
         }
       } else if (v.channel_id === null) {
@@ -255,7 +278,7 @@ class VoiceManager {
   }
 
   async onSignal(from: string, channelId: string, data: SignalData) {
-    if (channelId !== this.channelId) return
+    if (channelId !== this.channelId || this.sfu) return
     const peer = this.peers.get(from) ?? this.createPeer(from, false)
     try {
       if (data.type === 'offer') {
@@ -543,7 +566,89 @@ class VoiceManager {
 
   private stopTracks(stream: MediaStream | null) { stream?.getTracks().forEach((t) => { t.onended = null; t.stop() }) }
   private applyMute(muted: boolean) { this.mic?.getAudioTracks().forEach((t) => (t.enabled = !muted)) }
-  private applyDeaf(deaf: boolean) { this.peers.forEach((p) => (p.audio.muted = deaf)) }
+  private applyDeaf(deaf: boolean) { this.peers.forEach((p) => (p.audio.muted = deaf)); this.sfuAudio.forEach((a) => (a.muted = deaf)) }
+
+  // ---- SFU (LiveKit) ----
+
+  private async connectSfu(channelId: string) {
+    const s = useStore.getState()
+    if (this.room) await this.disconnectSfu()
+    let grant: { url: string; token: string }
+    try { grant = await api.post<{ url: string; token: string }>('/voice/token', { channel_id: channelId }) } catch (e) { s.pushToast(`Voice server refused: ${(e as Error).message}`, 'error'); this.leave(); return }
+    const room = new Room({ adaptiveStream: true, dynacast: true })
+    this.room = room
+    room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => this.onSfuTrack(track, participant))
+    room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
+      if (track.kind === Track.Kind.Audio) { this.sfuAudio.get(participant.identity)?.remove(); this.sfuAudio.delete(participant.identity); this.sfuMeters.get(participant.identity)?.(); this.sfuMeters.delete(participant.identity) }
+      else useStore.getState().setRemoteMedia(participant.identity, track.source === Track.Source.ScreenShare ? 'screen' : 'camera', null)
+    })
+    room.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => useStore.getState().setPeerStatus(p.identity, 'connected'))
+    room.on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => { useStore.getState().setPeerStatus(p.identity, null); useStore.getState().setSpeaking(p.identity, false) })
+    room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+      const st = useStore.getState(); const me = st.user?.id
+      const ids = new Set(speakers.map((p) => p.identity))
+      room.remoteParticipants.forEach((p) => st.setSpeaking(p.identity, ids.has(p.identity)))
+      if (me && !ids.has(me) && st.speaking[me]) { /* own speaking comes from the local meter */ }
+    })
+    room.on(RoomEvent.Disconnected, () => { if (this.room === room) { this.room = null; if (this.channelId) useStore.getState().pushToast('Voice server connection lost', 'error') } })
+    try {
+      await room.connect(grant.url, grant.token)
+      room.remoteParticipants.forEach((p) => useStore.getState().setPeerStatus(p.identity, 'connected'))
+      const mic = this.mic?.getAudioTracks()[0]
+      if (mic) await room.localParticipant.publishTrack(new LocalAudioTrack(mic, undefined, false), { source: Track.Source.Microphone, dtx: true, red: true })
+      if (this.camera) await this.sfuPublish('camera', this.camera.getVideoTracks()[0])
+      if (this.screen) await this.sfuPublish('screen', this.screen.getVideoTracks()[0])
+    } catch (e) {
+      s.pushToast(`Could not join the voice server: ${(e as Error).message}`, 'error')
+      await this.disconnectSfu()
+      this.leave()
+    }
+  }
+
+  private onSfuTrack(track: RemoteTrack, participant: RemoteParticipant) {
+    const userId = participant.identity
+    const stream = new MediaStream([track.mediaStreamTrack])
+    if (track.kind === Track.Kind.Audio) {
+      const s = useStore.getState()
+      let el = this.sfuAudio.get(userId)
+      if (!el) { el = document.createElement('audio'); el.autoplay = true; el.dataset.peer = userId; document.body.appendChild(el); this.sfuAudio.set(userId, el) }
+      el.muted = s.selfDeaf
+      this.applyOutput(el)
+      el.srcObject = stream
+      el.play().catch(() => {})
+      this.sfuMeters.get(userId)?.()
+      this.sfuMeters.set(userId, this.remoteMeter(stream, userId))
+      s.setPeerStatus(userId, 'connected')
+      return
+    }
+    useStore.getState().setRemoteMedia(userId, track.source === Track.Source.ScreenShare ? 'screen' : 'camera', stream)
+  }
+
+  private async sfuPublish(kind: 'camera' | 'screen', track: MediaStreamTrack) {
+    if (!this.room) return
+    await this.sfuUnpublish(kind)
+    const local = new LocalVideoTrack(track, undefined, false)
+    try {
+      await this.room.localParticipant.publishTrack(local, { source: kind === 'screen' ? Track.Source.ScreenShare : Track.Source.Camera, simulcast: kind === 'camera', videoEncoding: { maxBitrate: kind === 'screen' ? SCREEN_MAX_BITRATE : CAMERA_MAX_BITRATE, maxFramerate: 30 } })
+      if (kind === 'screen') this.sfuScreen = local; else this.sfuCamera = local
+    } catch (e) { useStore.getState().pushToast(`Could not publish ${kind}: ${(e as Error).message}`, 'error') }
+  }
+
+  private async sfuUnpublish(kind: 'camera' | 'screen') {
+    const t = kind === 'screen' ? this.sfuScreen : this.sfuCamera
+    if (!t) return
+    if (kind === 'screen') this.sfuScreen = null; else this.sfuCamera = null
+    try { await this.room?.localParticipant.unpublishTrack(t, false) } catch { /* already gone */ }
+  }
+
+  private async disconnectSfu() {
+    const room = this.room
+    this.room = null
+    this.sfuCamera = null; this.sfuScreen = null
+    this.sfuAudio.forEach((a) => { a.srcObject = null; a.remove() }); this.sfuAudio.clear()
+    this.sfuMeters.forEach((stop) => stop()); this.sfuMeters.clear()
+    if (room) { try { await room.disconnect(false) } catch { /* ignore */ } }
+  }
 
   /** RMS voice-activity meter for a remote stream → store.speaking. Returns a stop function. */
   private remoteMeter(stream: MediaStream, userId: string): () => void {
@@ -574,6 +679,8 @@ class VoiceManager {
 }
 
 export const voice = new VoiceManager()
+declare global { interface Window { __parleyVoice?: () => { mode: string; room: string | null; remote: number; channel: string | null } } }
+if (typeof window !== 'undefined') window.__parleyVoice = () => voice.debug
 
 // Apply setting changes live.
 let prevSettings = useStore.getState().voiceSettings
