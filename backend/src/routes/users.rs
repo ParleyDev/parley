@@ -19,7 +19,7 @@ pub const MAX_IMAGE_DATA_URL: usize = 512 * 1024;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/users/@me", get(me).patch(update_me))
+        .route("/users/@me", get(me).patch(update_me).delete(delete_me))
         .route("/users/search", get(search))
         .route("/users/:id", get(get_user))
         .route("/users/:id/reviews", get(list_reviews).put(put_review))
@@ -221,6 +221,27 @@ pub fn validate_image_max(url: &Option<String>, max: usize) -> AppResult<()> {
         }
     }
     Ok(())
+}
+
+#[derive(Deserialize)]
+pub struct DeleteMeReq {
+    password: String,
+    #[serde(default)]
+    code: Option<String>,
+}
+
+/// Self-service account deletion: password (and 2FA code) required; the last admin cannot leave the instance adminless.
+async fn delete_me(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<DeleteMeReq>) -> AppResult<StatusCode> {
+    crate::routes::mfa::check_password_and_factor(&state, uid, &req.password, req.code.as_deref()).await?;
+    let (is_admin,): (bool,) = sqlx::query_as("SELECT is_admin FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    if is_admin {
+        let (others,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE is_admin AND id <> $1").bind(uid).fetch_one(&state.db).await?;
+        if others == 0 {
+            return Err(AppError::BadRequest("You are the only admin. Make someone else an admin before deleting your account.".into()));
+        }
+    }
+    crate::routes::admin::delete_account(&state, uid).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn update_me(

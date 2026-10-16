@@ -26,7 +26,7 @@ async fn me(state: &AppState, uid: Uuid) -> AppResult<PrivateUser> {
     Ok(sqlx::query_as::<_, PrivateUser>(&format!("SELECT {PRIVATE_USER_COLS} FROM users WHERE id = $1")).bind(uid).fetch_one(&state.db).await?)
 }
 
-async fn check_password(state: &AppState, uid: Uuid, password: &str) -> AppResult<()> {
+pub async fn check_password(state: &AppState, uid: Uuid, password: &str) -> AppResult<()> {
     let (hash,): (String,) = sqlx::query_as("SELECT password_hash FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
     if verify_password(password, &hash) { Ok(()) } else { Err(AppError::BadRequest("Incorrect password".into())) }
 }
@@ -112,6 +112,22 @@ async fn disable(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(re
     }
     clear_mfa(&state, uid).await?;
     Ok(Json(json!(me(&state, uid).await?)))
+}
+
+/// For destructive self-service actions: the password, plus a TOTP/backup code when 2FA is on.
+pub async fn check_password_and_factor(state: &AppState, uid: Uuid, password: &str, code: Option<&str>) -> AppResult<()> {
+    check_password(state, uid, password).await?;
+    let (secret, last_step): (Option<String>, i64) = sqlx::query_as("SELECT totp_secret, totp_last_step FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    if let Some(secret) = secret {
+        let code = code.unwrap_or("");
+        if code.trim().is_empty() {
+            return Err(AppError::BadRequest("Enter your two-factor code".into()));
+        }
+        if !check_second_factor(state, uid, &secret, last_step, code).await? {
+            return Err(AppError::BadRequest("Invalid code".into()));
+        }
+    }
+    Ok(())
 }
 
 pub async fn clear_mfa(state: &AppState, uid: Uuid) -> AppResult<()> {
