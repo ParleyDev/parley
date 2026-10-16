@@ -179,6 +179,13 @@ async fn delete_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
     if id == uid {
         return Err(AppError::BadRequest("You cannot delete your own account from here".into()));
     }
+    delete_account(&state, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Remove an account and everything hanging off it (servers they own, messages, uploads, sessions);
+/// members of their servers and their own open clients hear about it live.
+pub async fn delete_account(state: &AppState, id: Uuid) -> AppResult<()> {
     let owned: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM guilds WHERE owner_id = $1").bind(id).fetch_all(&state.db).await?;
     for (gid,) in &owned {
         state.hub.voice_evict(|v| v.guild_id == Some(*gid));
@@ -190,7 +197,7 @@ async fn delete_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("User not found".into()));
     }
-    Ok(StatusCode::NO_CONTENT)
+    Ok(())
 }
 
 #[derive(Debug, Serialize, FromRow)]
