@@ -1,4 +1,4 @@
-import { Lock, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { Lock, SlidersHorizontal, Tag, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -7,8 +7,9 @@ import type { Channel } from '../../lib/types'
 import { has, P } from '../../lib/perms'
 import SettingsShell from './SettingsShell'
 import ChannelPermissionsTab from './settings/ChannelPermissionsTab'
+import ForumTagsTab from './settings/ForumTagsTab'
 
-type Tab = 'overview' | 'permissions'
+type Tab = 'overview' | 'permissions' | 'tags'
 
 export default function ChannelSettingsModal({ onClose, channelId, tab: initial = 'overview' }: { onClose: () => void; channelId: string; tab?: Tab }) {
   const channel = useStore((s) => s.channels[channelId])
@@ -32,6 +33,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: initial 
 
   const items: { id: Tab; label: string; icon: React.ReactNode }[] = []
   if (canEdit) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> })
+  if (canEdit && channel.kind === 'forum') items.push({ id: 'tags', label: 'Tags', icon: <Tag size={16} /> })
   if (canPerms) items.push({ id: 'permissions', label: 'Permissions', icon: <Lock size={16} /> })
 
   return (
@@ -41,6 +43,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: initial 
       footer={canEdit ? <button onClick={del} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Channel"><span className="max-md:hidden">Delete Channel</span><Trash2 size={16} /></button> : undefined}
     >
       {tab === 'overview' && canEdit && <Overview channel={channel} />}
+      {tab === 'tags' && canEdit && <ForumTagsTab channelId={channelId} />}
       {tab === 'permissions' && canPerms && <ChannelPermissionsTab channelId={channelId} />}
     </SettingsShell>
   )

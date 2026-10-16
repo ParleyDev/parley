@@ -289,6 +289,9 @@ async fn create_message(
     if c.kind == "category" {
         return Err(AppError::BadRequest("Categories cannot hold messages".into()));
     }
+    if c.kind == "forum" {
+        return Err(AppError::BadRequest("Forum channels hold posts: create a post instead".into()));
+    }
     let content = req.content.trim_end().to_string();
     if (content.trim().is_empty() && req.attachment_ids.is_empty() && req.sticker_id.is_none() && req.poll.is_none()) || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));

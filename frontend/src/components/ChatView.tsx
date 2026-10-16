@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkMinus, CircleUserRound, Crown, Hash, LogOut, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { Bookmark, BookmarkMinus, CircleUserRound, Crown, Hash, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup } from '../lib/dm'
 import { anchorOf } from '../lib/anchor'
@@ -13,6 +13,7 @@ import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 import ChatPane from './ChatPane'
 import { ThreadPanel, ThreadsPanel } from './ThreadPanel'
+import ForumView from './ForumView'
 import DmCall from './DmCall'
 import DmProfilePanel from './DmProfilePanel'
 import { MembersToggle, MobileBack } from './HeaderBits'
@@ -100,7 +101,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
             </>
           ) : (
             <>
-              <Hash size={22} className="text-text-2 shrink-0" />
+              {channel.kind === 'forum' ? <MessageSquareText size={22} className="text-text-2 shrink-0" /> : <Hash size={22} className="text-text-2 shrink-0" />}
               <span className="font-bold truncate">{channel.name}</span>
               {channel.topic && <><span className="mx-2 h-6 w-px bg-line max-md:hidden" /><span className="text-sm text-text-2 truncate max-md:hidden">{channel.topic}</span></>}
             </>
@@ -138,7 +139,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
           </span>
         </header>
         {isDm && <DmCall channel={channel as DmChannel} />}
-        <ChatPane channel={channel} />
+        {channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : <ChatPane channel={channel} />}
       </main>
       {search !== null ? (
         <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast('That message is not loaded in this view yet', 'error')} />

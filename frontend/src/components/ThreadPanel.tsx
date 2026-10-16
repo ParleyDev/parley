@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, MessagesSquare, Plus, X } from 'lucide-react'
+import { Archive, ArchiveRestore, MessagesSquare, Pin, PinOff, Plus, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { Channel, Message, ThreadInfo } from '../lib/types'
@@ -24,6 +24,9 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
   if (!thread) return null
   const archived = !!info?.archived_at
   const canManage = info?.owner_id === me || has(perms, P.MANAGE_MESSAGES)
+  const parentKind = useStore((s) => (thread?.parent_id ? s.channels[thread.parent_id]?.kind : undefined))
+  const pinned = !!info?.pinned_at
+  const togglePin = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { pinned: !pinned })) } catch (e) { pushToast((e as Error).message, 'error') } }
   const toggle = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { archived: !archived })) } catch (e) { pushToast((e as Error).message, 'error') } }
   return (
     <aside className="w-[460px] shrink-0 bg-bg-1 border-l border-line flex flex-col max-md:w-full max-md:border-l-0" data-thread-panel={threadId} data-thread-archived={archived ? '1' : '0'}>
@@ -31,6 +34,7 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
         <MessagesSquare size={16} className="text-text-2 shrink-0" /><span className="font-bold truncate" data-thread-title>{thread.name}</span>
         {archived && <span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-2">ARCHIVED</span>}
         <span className="ml-auto flex items-center gap-1">
+          {parentKind === 'forum' && has(perms, P.MANAGE_MESSAGES) && <button onClick={togglePin} title={pinned ? 'Unpin post' : 'Pin post'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-pin>{pinned ? <PinOff size={16} /> : <Pin size={16} />}</button>}
           {canManage && <button onClick={toggle} title={archived ? 'Unarchive thread' : 'Archive thread'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-archive>{archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}</button>}
           <button onClick={onClose} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title="Close thread"><X size={18} /></button>
         </span>

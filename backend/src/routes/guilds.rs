@@ -254,8 +254,8 @@ async fn create_channel(
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::MANAGE_CHANNELS)?;
     let kind = req.kind.unwrap_or_else(|| "text".into());
-    if !["text", "voice", "category"].contains(&kind.as_str()) {
-        return Err(AppError::BadRequest("kind must be text, voice or category".into()));
+    if !["text", "voice", "category", "forum"].contains(&kind.as_str()) {
+        return Err(AppError::BadRequest("kind must be text, voice, forum or category".into()));
     }
     let name = normalize_channel_name(&req.name, &kind)?;
     let parent = check_parent(&state.db, id, &kind, req.parent_id).await?;
@@ -286,7 +286,7 @@ async fn create_channel(
 pub fn normalize_channel_name(raw: &str, kind: &str) -> AppResult<String> {
     let name = if kind == "category" {
         raw.trim().chars().take(100).collect::<String>()
-    } else if kind == "text" {
+    } else if kind == "text" || kind == "forum" {
         raw.trim().to_lowercase().chars().map(|c| if c.is_whitespace() { '-' } else { c }).collect::<String>()
     } else {
         raw.trim().to_string()
