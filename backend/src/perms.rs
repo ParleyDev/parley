@@ -354,9 +354,300 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
+
     #[test]
     fn default_matches_migration() {
-        // 70258241 from migration 0002 plus ATTACH_FILES (32768) from 0003.
-        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768);
+        // 70258241 from migration 0002, plus ATTACH_FILES (32768) from 0003 and MENTION_EVERYONE (131072) from 0018.
+        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768 + 131072);
+    }
+
+    #[test]
+    fn has_requires_every_bit() {
+        assert!(has(VIEW_CHANNEL | SEND_MESSAGES, VIEW_CHANNEL));
+        assert!(has(VIEW_CHANNEL | SEND_MESSAGES, VIEW_CHANNEL | SEND_MESSAGES));
+        assert!(!has(VIEW_CHANNEL, VIEW_CHANNEL | SEND_MESSAGES));
+        assert!(has(0, 0));
+        assert!(check(ALL, MANAGE_ROLES).is_ok());
+        assert!(matches!(check(DEFAULT_EVERYONE, MANAGE_ROLES), Err(AppError::Forbidden)));
+    }
+
+    #[test]
+    fn catalogue_covers_all() {
+        let mut bits = 0u64;
+        for (_, b) in catalogue() {
+            assert_eq!(b.count_ones(), 1, "each catalogue entry is a single bit");
+            assert_eq!(bits & b, 0, "no duplicate bits");
+            bits |= b;
+        }
+        assert_eq!(bits, ALL);
+    }
+
+    // ---- fixtures ----------------------------------------------------------
+
+    struct Fx {
+        ctx: GuildCtx,
+        owner: Uuid,
+        mod_role: Uuid,
+        vip_role: Uuid,
+        admin_role: Uuid,
+    }
+
+    fn role(gid: Uuid, position: i32, permissions: u64) -> Role {
+        Role {
+            id: Uuid::now_v7(),
+            guild_id: gid,
+            name: format!("r{position}"),
+            color: None,
+            color_accent: None,
+            position,
+            permissions: permissions as i64,
+            hoist: false,
+            created_at: Utc::now(),
+        }
+    }
+
+    fn fixture() -> Fx {
+        let gid = Uuid::now_v7();
+        let owner = Uuid::now_v7();
+        let guild = Guild { id: gid, name: "g".into(), icon_url: None, owner_id: owner, created_at: Utc::now(), banner_url: None };
+        let mut everyone = role(gid, 0, DEFAULT_EVERYONE);
+        everyone.id = gid; // @everyone shares the guild id
+        let mod_role = role(gid, 2, KICK_MEMBERS | MANAGE_MESSAGES);
+        let vip_role = role(gid, 1, STREAM);
+        let admin_role = role(gid, 3, ADMINISTRATOR);
+        let (m, v, a) = (mod_role.id, vip_role.id, admin_role.id);
+        let roles = [everyone, mod_role, vip_role, admin_role].into_iter().map(|r| (r.id, r)).collect();
+        let ctx = GuildCtx { guild, roles, member_roles: HashMap::new(), members: HashSet::from([owner]) };
+        Fx { ctx, owner, mod_role: m, vip_role: v, admin_role: a }
+    }
+
+    impl Fx {
+        fn member(&mut self, roles: &[Uuid]) -> Uuid {
+            let u = Uuid::now_v7();
+            self.ctx.members.insert(u);
+            if !roles.is_empty() {
+                self.ctx.member_roles.insert(u, roles.to_vec());
+            }
+            u
+        }
+    }
+
+    fn ow(channel: Uuid, kind: &str, target: Uuid, allow: u64, deny: u64) -> Overwrite {
+        Overwrite { channel_id: channel, target_id: target, target_kind: kind.into(), allow: allow as i64, deny: deny as i64 }
+    }
+
+    // ---- base permissions --------------------------------------------------
+
+    #[test]
+    fn non_member_has_no_base() {
+        let fx = fixture();
+        assert_eq!(fx.ctx.base(Uuid::now_v7()), None);
+        assert!(!fx.ctx.is_member(Uuid::now_v7()));
+    }
+
+    #[test]
+    fn owner_gets_everything() {
+        let fx = fixture();
+        assert_eq!(fx.ctx.base(fx.owner), Some(ALL));
+        assert_eq!(fx.ctx.highest(fx.owner), i32::MAX);
+    }
+
+    #[test]
+    fn plain_member_gets_everyone_role() {
+        let mut fx = fixture();
+        let u = fx.member(&[]);
+        assert_eq!(fx.ctx.base(u), Some(DEFAULT_EVERYONE));
+        assert_eq!(fx.ctx.highest(u), 0);
+    }
+
+    #[test]
+    fn roles_are_ored_onto_everyone() {
+        let mut fx = fixture();
+        let (m, v) = (fx.mod_role, fx.vip_role);
+        let u = fx.member(&[m, v]);
+        let p = fx.ctx.base(u).unwrap();
+        assert_eq!(p, DEFAULT_EVERYONE | KICK_MEMBERS | MANAGE_MESSAGES | STREAM);
+        assert!(!has(p, ADMINISTRATOR));
+        assert_eq!(fx.ctx.highest(u), 2, "highest position wins");
+    }
+
+    #[test]
+    fn unknown_role_ids_are_ignored() {
+        let mut fx = fixture();
+        let u = fx.member(&[Uuid::now_v7()]);
+        assert_eq!(fx.ctx.base(u), Some(DEFAULT_EVERYONE));
+        assert_eq!(fx.ctx.highest(u), 0);
+    }
+
+    #[test]
+    fn administrator_expands_to_all() {
+        let mut fx = fixture();
+        let a = fx.admin_role;
+        let u = fx.member(&[a]);
+        assert_eq!(fx.ctx.base(u), Some(ALL));
+    }
+
+    #[test]
+    fn stripped_everyone_role_leaves_nothing() {
+        let mut fx = fixture();
+        let gid = fx.ctx.guild.id;
+        fx.ctx.roles.get_mut(&gid).unwrap().permissions = 0;
+        let u = fx.member(&[]);
+        assert_eq!(fx.ctx.base(u), Some(0));
+    }
+
+    // ---- hierarchy ---------------------------------------------------------
+
+    #[test]
+    fn owner_outranks_everyone_and_is_untouchable() {
+        let mut fx = fixture();
+        let a = fx.admin_role;
+        let admin = fx.member(&[a]);
+        assert!(fx.ctx.outranks_member(fx.owner, admin));
+        assert!(!fx.ctx.outranks_member(admin, fx.owner));
+        assert!(!fx.ctx.outranks_member(fx.owner, fx.owner), "owner cannot act on themself");
+        let top = fx.ctx.roles[&a].clone();
+        assert!(fx.ctx.outranks_role(fx.owner, &top));
+    }
+
+    #[test]
+    fn member_outranks_only_strictly_lower() {
+        let mut fx = fixture();
+        let (m, v) = (fx.mod_role, fx.vip_role);
+        let moderator = fx.member(&[m]);
+        let vip = fx.member(&[v]);
+        let other_mod = fx.member(&[m]);
+        let plain = fx.member(&[]);
+        assert!(fx.ctx.outranks_member(moderator, vip));
+        assert!(fx.ctx.outranks_member(moderator, plain));
+        assert!(!fx.ctx.outranks_member(vip, moderator));
+        assert!(!fx.ctx.outranks_member(moderator, other_mod), "equal rank never outranks");
+        assert!(!fx.ctx.outranks_member(plain, plain));
+    }
+
+    #[test]
+    fn role_management_respects_position() {
+        let mut fx = fixture();
+        let (m, v, a) = (fx.mod_role, fx.vip_role, fx.admin_role);
+        let moderator = fx.member(&[m]);
+        let vip_role = fx.ctx.roles[&v].clone();
+        let mod_role = fx.ctx.roles[&m].clone();
+        let admin_role = fx.ctx.roles[&a].clone();
+        let everyone = fx.ctx.roles[&fx.ctx.guild.id].clone();
+        assert!(fx.ctx.outranks_role(moderator, &vip_role));
+        assert!(!fx.ctx.outranks_role(moderator, &mod_role), "cannot manage own highest role");
+        assert!(!fx.ctx.outranks_role(moderator, &admin_role));
+        assert!(fx.ctx.outranks_role(moderator, &everyone), "@everyone is always manageable");
+        let plain = fx.member(&[]);
+        assert!(fx.ctx.outranks_role(plain, &everyone));
+        assert!(!fx.ctx.outranks_role(plain, &vip_role));
+    }
+
+    // ---- channel overwrites ------------------------------------------------
+
+    #[test]
+    fn no_overwrites_keeps_base() {
+        let mut fx = fixture();
+        let u = fx.member(&[]);
+        assert_eq!(fx.ctx.in_channel(u, DEFAULT_EVERYONE, &[]), DEFAULT_EVERYONE);
+    }
+
+    #[test]
+    fn admin_bypasses_overwrites() {
+        let mut fx = fixture();
+        let a = fx.admin_role;
+        let u = fx.member(&[a]);
+        let ch = Uuid::now_v7();
+        let ows = [ow(ch, "role", fx.ctx.guild.id, 0, VIEW_CHANNEL), ow(ch, "member", u, 0, ALL)];
+        assert_eq!(fx.ctx.in_channel(u, ALL, &ows), ALL);
+        // owner goes through the same path with base == ALL
+        assert_eq!(fx.ctx.in_channel(fx.owner, ALL, &ows), ALL);
+    }
+
+    #[test]
+    fn losing_view_channel_zeroes_everything() {
+        let mut fx = fixture();
+        let u = fx.member(&[]);
+        let ch = Uuid::now_v7();
+        let ows = [ow(ch, "role", fx.ctx.guild.id, 0, VIEW_CHANNEL)];
+        assert_eq!(fx.ctx.in_channel(u, DEFAULT_EVERYONE, &ows), 0);
+    }
+
+    #[test]
+    fn everyone_overwrite_applies_to_all_members() {
+        let mut fx = fixture();
+        let u = fx.member(&[]);
+        let ch = Uuid::now_v7();
+        let ows = [ow(ch, "role", fx.ctx.guild.id, MANAGE_MESSAGES, SEND_MESSAGES)];
+        let p = fx.ctx.in_channel(u, DEFAULT_EVERYONE, &ows);
+        assert!(has(p, MANAGE_MESSAGES));
+        assert!(!has(p, SEND_MESSAGES));
+        assert!(has(p, VIEW_CHANNEL));
+    }
+
+    #[test]
+    fn role_overwrite_only_for_holders_and_beats_everyone() {
+        let mut fx = fixture();
+        let v = fx.vip_role;
+        let vip = fx.member(&[v]);
+        let plain = fx.member(&[]);
+        let ch = Uuid::now_v7();
+        // read-only channel: everyone loses SEND, vips get it back
+        let ows = [ow(ch, "role", fx.ctx.guild.id, 0, SEND_MESSAGES), ow(ch, "role", v, SEND_MESSAGES, 0)];
+        assert!(has(fx.ctx.in_channel(vip, fx.ctx.base(vip).unwrap(), &ows), SEND_MESSAGES));
+        assert!(!has(fx.ctx.in_channel(plain, fx.ctx.base(plain).unwrap(), &ows), SEND_MESSAGES));
+    }
+
+    #[test]
+    fn role_overwrites_aggregate_allow_over_deny() {
+        let mut fx = fixture();
+        let (m, v) = (fx.mod_role, fx.vip_role);
+        let u = fx.member(&[m, v]);
+        let ch = Uuid::now_v7();
+        // one role denies ATTACH_FILES, another allows it: allow wins (Discord semantics)
+        let ows = [ow(ch, "role", m, 0, ATTACH_FILES), ow(ch, "role", v, ATTACH_FILES, 0)];
+        let p = fx.ctx.in_channel(u, fx.ctx.base(u).unwrap(), &ows);
+        assert!(has(p, ATTACH_FILES));
+        // roles only deny -> gone
+        let ows = [ow(ch, "role", m, 0, ATTACH_FILES)];
+        assert!(!has(fx.ctx.in_channel(u, fx.ctx.base(u).unwrap(), &ows), ATTACH_FILES));
+    }
+
+    #[test]
+    fn member_overwrite_beats_roles() {
+        let mut fx = fixture();
+        let v = fx.vip_role;
+        let u = fx.member(&[v]);
+        let other = fx.member(&[v]);
+        let ch = Uuid::now_v7();
+        let ows = [ow(ch, "role", v, SEND_MESSAGES, 0), ow(ch, "member", u, 0, SEND_MESSAGES)];
+        assert!(!has(fx.ctx.in_channel(u, fx.ctx.base(u).unwrap(), &ows), SEND_MESSAGES));
+        assert!(has(fx.ctx.in_channel(other, fx.ctx.base(other).unwrap(), &ows), SEND_MESSAGES));
+        // member allow restores what the everyone overwrite removed
+        let ows = [ow(ch, "role", fx.ctx.guild.id, 0, VIEW_CHANNEL), ow(ch, "member", u, VIEW_CHANNEL, 0)];
+        assert!(has(fx.ctx.in_channel(u, fx.ctx.base(u).unwrap(), &ows), VIEW_CHANNEL));
+        assert_eq!(fx.ctx.in_channel(other, fx.ctx.base(other).unwrap(), &ows), 0);
+    }
+
+    #[test]
+    fn member_overwrite_for_someone_else_is_ignored() {
+        let mut fx = fixture();
+        let u = fx.member(&[]);
+        let ch = Uuid::now_v7();
+        let ows = [ow(ch, "member", Uuid::now_v7(), 0, VIEW_CHANNEL)];
+        assert_eq!(fx.ctx.in_channel(u, DEFAULT_EVERYONE, &ows), DEFAULT_EVERYONE);
+    }
+
+    #[test]
+    fn overwrites_cannot_grant_administrator_bypass() {
+        let mut fx = fixture();
+        let u = fx.member(&[]);
+        let ch = Uuid::now_v7();
+        // granting ADMINISTRATOR via overwrite sets the bit but does not expand to ALL
+        let ows = [ow(ch, "member", u, ADMINISTRATOR, 0)];
+        let p = fx.ctx.in_channel(u, DEFAULT_EVERYONE, &ows);
+        assert_eq!(p, DEFAULT_EVERYONE | ADMINISTRATOR);
+        assert!(!has(p, MANAGE_ROLES));
     }
 }
