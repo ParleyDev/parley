@@ -1,9 +1,8 @@
 import { Compass, Gavel, LayoutDashboard, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
-import GuildBar from '../components/GuildBar'
-import Modals from '../components/modals'
-import UserPanel from '../components/UserPanel'
+import SplitLayout, { useShowContent } from '../components/SplitLayout'
+import { MobileBack } from '../components/HeaderBits'
 import { api } from '../lib/api'
 import { formatBytes } from '../lib/upload'
 import { colorFor, initials } from '../lib/format'
@@ -12,34 +11,30 @@ import { useStore } from '../store'
 /** Root console for Parley admins: stats, users, servers, instance settings. */
 export default function AdminPage() {
   const item = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2.5 text-[15px] font-medium ${active ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`
+  const showContent = useShowContent()
   return (
-    <div className="h-full flex overflow-hidden relative" data-admin>
-      <div className="flex flex-col h-full shrink-0 w-[344px] max-md:w-auto">
-        <div className="flex flex-1 min-h-0">
-          <GuildBar />
+    <SplitLayout defaultPane="nav" testid={{ 'data-admin': '' }} sidebar={
           <aside className="w-[272px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
             <div className="h-12 px-4 flex items-center gap-2 font-bold text-lg border-b border-line"><ShieldCheck size={20} className="text-success" /> Admin Console</div>
             <nav className="p-2 space-y-0.5">
-              <NavLink to="/admin" end className={({ isActive }) => item(isActive)} data-admin-nav="overview"><LayoutDashboard size={20} /> Overview</NavLink>
-              <NavLink to="/admin/users" className={({ isActive }) => item(isActive)} data-admin-nav="users"><Users size={20} /> Users</NavLink>
-              <NavLink to="/admin/servers" className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> Servers</NavLink>
-              <NavLink to="/discover/review" className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> Discovery Queue</NavLink>
-              <NavLink to="/admin/settings" className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> Instance Settings</NavLink>
+              <NavLink to="/admin" end onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="overview"><LayoutDashboard size={20} /> Overview</NavLink>
+              <NavLink to="/admin/users" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="users"><Users size={20} /> Users</NavLink>
+              <NavLink to="/admin/servers" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> Servers</NavLink>
+              <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> Discovery Queue</NavLink>
+              <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> Instance Settings</NavLink>
             </nav>
           </aside>
-        </div>
-        <UserPanel />
-      </div>
-      <main className="flex-1 min-w-0 bg-bg-2 overflow-y-auto px-10 py-8 max-md:px-5">
+    }>
+      <div className="md:hidden h-12 shrink-0 px-2 flex items-center gap-1 border-b border-line"><MobileBack /><span className="font-bold">Admin Console</span></div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-10 py-8 max-md:px-4 max-md:py-5">
         <Routes>
           <Route index element={<Overview />} />
           <Route path="users" element={<UsersPane />} />
           <Route path="servers" element={<ServersPane />} />
           <Route path="settings" element={<SettingsPane />} />
         </Routes>
-      </main>
-      <Modals />
-    </div>
+      </div>
+    </SplitLayout>
   )
 }
 
@@ -103,9 +98,9 @@ function UsersPane() {
               {u.is_admin && <span className="rounded bg-success/20 text-success px-1.5 py-0.5 text-[10px] font-bold" data-badge="admin">ADMIN</span>}
               {u.suspended_at && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="suspended">SUSPENDED</span>}
             </div>
-            <div className="text-sm text-text-1 truncate">{u.email}</div>
-            <div className="text-sm text-text-1">{u.guild_count}</div>
-            <div className="text-xs text-text-2">{new Date(u.created_at).toLocaleDateString()}</div>
+            <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">Email: </span>{u.email}</div>
+            <div className="text-sm text-text-1"><span className="md:hidden text-text-2">Servers: </span>{u.guild_count}</div>
+            <div className="text-xs text-text-2"><span className="md:hidden">Joined: </span>{new Date(u.created_at).toLocaleDateString()}</div>
             <div className="flex items-center justify-end gap-1">
               {u.id !== me?.id && (
                 <>
@@ -148,10 +143,10 @@ function ServersPane() {
               <span className="h-8 w-8 rounded-xl overflow-hidden flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>{g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name)}</span>
               <span className="min-w-0"><span className="block truncate font-semibold">{g.name}</span><span className="block truncate text-xs text-text-2">{new Date(g.created_at).toLocaleDateString()}</span></span>
             </div>
-            <div className="text-sm text-text-1 truncate">@{g.owner_username}</div>
-            <div className="text-sm text-text-1">{g.member_count}</div>
-            <div className="text-sm text-text-1">{g.message_count.toLocaleString()}</div>
-            <div className="text-xs">{g.discovery_status ? <span className={`rounded px-1.5 py-0.5 font-bold uppercase ${g.discovery_status === 'approved' ? 'bg-success/20 text-success' : g.discovery_status === 'rejected' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{g.discovery_status}</span> : <span className="text-text-2">—</span>}</div>
+            <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">Owner: </span>@{g.owner_username}</div>
+            <div className="text-sm text-text-1"><span className="md:hidden text-text-2">Members: </span>{g.member_count}</div>
+            <div className="text-sm text-text-1"><span className="md:hidden text-text-2">Messages: </span>{g.message_count.toLocaleString()}</div>
+            <div className="text-xs"><span className="md:hidden text-text-2">Discover: </span>{g.discovery_status ? <span className={`rounded px-1.5 py-0.5 font-bold uppercase ${g.discovery_status === 'approved' ? 'bg-success/20 text-success' : g.discovery_status === 'rejected' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{g.discovery_status}</span> : <span className="text-text-2">—</span>}</div>
             <div className="flex justify-end"><Tool label="Delete server" onClick={() => del(g)} testid="delete-guild" danger><Gavel size={16} /></Tool></div>
           </div>
         ))}
