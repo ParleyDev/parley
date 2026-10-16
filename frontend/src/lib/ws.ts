@@ -3,8 +3,9 @@ import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, PrivateUser, Relationship, Role, Sticker, User, VoiceState } from './types'
 import { voice } from './voice'
 
-type Ev =
+type Ev = { s?: number } & (
   | { t: 'READY'; d: ReadyPayload }
+  | { t: 'RESUMED'; d: { replayed: number; from: number } }
   | { t: 'RESYNC'; d: unknown }
   | { t: 'PONG'; d: unknown }
   | { t: 'MESSAGE_CREATE' | 'MESSAGE_UPDATE'; d: { message: Message; guild_id: string | null } }
@@ -36,11 +37,15 @@ type Ev =
   | { t: 'READ_STATE_UPDATE'; d: { channel_id: string; last_read_msg: string } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
-  | { t: 'VOICE_ERROR'; d: { message: string } }
+  | { t: 'VOICE_ERROR'; d: { message: string } })
 
 export type SignalData = { type: 'offer' | 'answer'; sdp: string } | { type: 'candidate'; candidate: RTCIceCandidateInit | null }
 
 let socket: WebSocket | null = null
+/** Highest event sequence number seen; sent back on reconnect so the server can replay the gap. */
+let lastSeq = 0
+/** Debug counters (also handy for tests): how often we resumed vs. got a fresh READY. */
+export const wsStats = { resumed: 0, ready: 0, replayed: 0, /** Drop the socket as a network blip would (debugging/tests); it reconnects and resumes. */ drop: () => { socket?.close() } }
 let retry = 0
 let closedByUser = false
 let pingTimer: ReturnType<typeof setInterval> | null = null
@@ -51,7 +56,8 @@ export function connectSocket() {
   if (!token || socket) return
   closedByUser = false
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}`)
+  const resume = lastSeq > 0 && useStore.getState().ready ? `&seq=${lastSeq}` : ''
+  const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}${resume}`)
   socket = ws
 
   ws.onopen = () => {
@@ -61,6 +67,7 @@ export function connectSocket() {
   ws.onmessage = (e) => {
     let ev: Ev
     try { ev = JSON.parse(e.data) } catch { return }
+    if (typeof ev.s === 'number' && ev.s > lastSeq) lastSeq = ev.s
     handle(ev)
   }
   ws.onclose = () => {
@@ -103,8 +110,10 @@ export function sendTyping(channelId: string) {
 function handle(ev: Ev) {
   const s = useStore.getState()
   switch (ev.t) {
-    case 'READY': s.applyReady(ev.d); voice.onReconnect(); break
-    case 'RESYNC': socket?.close(); break
+    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); voice.onReconnect(); break
+    // The server replayed everything we missed; state is already current, no need to rebuild it.
+    case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); break
+    case 'RESYNC': lastSeq = 0; socket?.close(); break
     case 'PONG': break
     case 'MESSAGE_CREATE': {
       s.addMessage(ev.d.message)
@@ -168,3 +177,6 @@ function notify(m: Message) {
 }
 
 setInterval(() => useStore.getState().pruneTyping(), 2000)
+
+declare global { interface Window { __parleyWs?: typeof wsStats } }
+if (typeof window !== 'undefined') window.__parleyWs = wsStats

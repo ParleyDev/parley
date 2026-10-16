@@ -403,6 +403,8 @@ export const useStore = create<State>((set, get) => ({
   }),
   addMessage: (m) => set((s) => {
     const list = s.messages[m.channel_id]
+    // A replayed or re-delivered event must not count twice.
+    if (list?.some((x) => x.id === m.id)) return {}
     const users = { ...s.users, [m.author.id]: { ...s.users[m.author.id], ...m.author, bio: s.users[m.author.id]?.bio ?? '', status: s.users[m.author.id]?.status ?? '' } }
     const lastMessageId = { ...s.lastMessageId, [m.channel_id]: m.id }
     // Your own messages (sent, forwarded, from any device) never count as unread for you.
@@ -414,7 +416,6 @@ export const useStore = create<State>((set, get) => ({
     }
     const dms = s.dms[m.channel_id] ? { ...s.dms, [m.channel_id]: { ...s.dms[m.channel_id], last_message_at: m.created_at } } : s.dms
     if (!list) return { users, lastMessageId, readStates, mentionCounts, typing, dms }
-    if (list.some((x) => x.id === m.id)) return { users, lastMessageId, readStates, mentionCounts, typing, dms }
     return { messages: { ...s.messages, [m.channel_id]: [...list, m] }, users, lastMessageId, readStates, mentionCounts, typing, dms }
   }),
   updateMessage: (m) => set((s) => {

@@ -17,9 +17,14 @@ pub enum Target {
 
 #[derive(Debug, Clone)]
 pub struct Event {
+    /// Global, monotonic; also present in the payload as `s` so clients can resume from it.
+    pub seq: u64,
     pub target: Target,
     pub payload: Arc<Value>,
 }
+
+/// How many recent events are kept for `GET /ws?seq=` resumes.
+pub const REPLAY_BUFFER: usize = 4096;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct VoiceState {
@@ -57,6 +62,10 @@ pub struct Hub {
     /// user_id -> current voice channel
     voice: DashMap<Uuid, VoiceState>,
     session_seq: std::sync::atomic::AtomicU64,
+    /// Last assigned event sequence number.
+    seq: std::sync::atomic::AtomicU64,
+    /// Recent events, oldest first, for reconnecting clients to replay what they missed.
+    replay: std::sync::Mutex<std::collections::VecDeque<Event>>,
 }
 
 impl Default for Hub {
@@ -68,7 +77,35 @@ impl Default for Hub {
 impl Hub {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(4096);
-        Self { tx, online: DashMap::new(), voice: DashMap::new(), session_seq: std::sync::atomic::AtomicU64::new(1) }
+        Self {
+            tx,
+            online: DashMap::new(),
+            voice: DashMap::new(),
+            session_seq: std::sync::atomic::AtomicU64::new(1),
+            seq: std::sync::atomic::AtomicU64::new(0),
+            replay: std::sync::Mutex::new(std::collections::VecDeque::with_capacity(REPLAY_BUFFER)),
+        }
+    }
+
+    /// The newest sequence number handed out so far (0 before any event).
+    pub fn current_seq(&self) -> u64 {
+        self.seq.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Buffered events with seq > `after`, oldest first, or None when `after` is older than the buffer
+    /// (or from a different process lifetime) and a full READY is needed instead.
+    pub fn replay_after(&self, after: u64) -> Option<Vec<Event>> {
+        let buf = self.replay.lock().unwrap_or_else(|e| e.into_inner());
+        let current = self.current_seq();
+        if after > current {
+            return None;
+        }
+        let oldest = buf.front().map(|e| e.seq).unwrap_or(current + 1);
+        // Gap check: everything after `after` must still be buffered.
+        if after + 1 < oldest {
+            return None;
+        }
+        Some(buf.iter().filter(|e| e.seq > after).cloned().collect())
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<Event> {
@@ -76,8 +113,17 @@ impl Hub {
     }
 
     pub fn emit<T: Serialize>(&self, target: Target, t: &str, d: T) {
-        let payload = Arc::new(json!({ "t": t, "d": d }));
-        let _ = self.tx.send(Event { target, payload });
+        // Assign the sequence number and buffer the event under one lock so order and numbering agree.
+        let mut buf = self.replay.lock().unwrap_or_else(|e| e.into_inner());
+        let seq = self.seq.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+        let payload = Arc::new(json!({ "t": t, "d": d, "s": seq }));
+        let ev = Event { seq, target, payload };
+        if buf.len() >= REPLAY_BUFFER {
+            buf.pop_front();
+        }
+        buf.push_back(ev.clone());
+        drop(buf);
+        let _ = self.tx.send(ev);
     }
 
     pub fn emit_guild<T: Serialize>(&self, guild_id: Uuid, t: &str, d: T) {
