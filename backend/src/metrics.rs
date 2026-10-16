@@ -84,7 +84,7 @@ pub struct MetricsQuery {
     token: Option<String>,
 }
 
-pub fn render(state: &AppState) -> String {
+pub fn render(state: &AppState, online_users: u64) -> String {
     let mut out = String::with_capacity(4096);
     let line = |out: &mut String, s: &str| { out.push_str(s); out.push('\n'); };
     line(&mut out, "# HELP parley_http_requests_total HTTP requests by method and status class.");
@@ -112,7 +112,7 @@ pub fn render(state: &AppState) -> String {
         ("parley_uploads_total", "counter", "Attachment uploads accepted.", METRICS.uploads.load(Relaxed)),
         ("parley_upload_bytes_total", "counter", "Bytes of attachments accepted.", METRICS.upload_bytes.load(Relaxed)),
         ("parley_ws_connections", "gauge", "Open WebSocket connections.", state.hub.socket_count() as u64),
-        ("parley_online_users", "gauge", "Users with at least one open socket.", state.hub.online_users().len() as u64),
+        ("parley_online_users", "gauge", "Users with at least one open socket (any instance).", online_users),
         ("parley_voice_sessions", "gauge", "Users currently in a voice channel or call.", state.hub.voice_count() as u64),
         ("parley_ws_events_total", "counter", "Events broadcast through the hub.", state.hub.current_seq()),
         ("parley_db_pool_size", "gauge", "Open database connections.", state.db.size() as u64),
@@ -133,5 +133,6 @@ pub async fn endpoint(State(state): State<AppState>, headers: axum::http::Header
             return (StatusCode::UNAUTHORIZED, "metrics token required").into_response();
         }
     }
-    ([(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")], render(&state)).into_response()
+    let online = crate::ws::bus::online_users(&state.db).await.len() as u64;
+    ([(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")], render(&state, online)).into_response()
 }

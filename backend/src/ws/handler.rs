@@ -26,6 +26,8 @@ pub struct WsQuery {
     /// Last event sequence number the client saw; when the gap is still buffered the server replays it
     /// (RESUMED) instead of sending a fresh READY.
     seq: Option<u64>,
+    /// The instance that issued `seq` (from READY/RESUMED `i`); a resume against another instance is a READY.
+    instance: Option<Uuid>,
 }
 
 pub async fn ws_upgrade(
@@ -39,7 +41,13 @@ pub async fn ws_upgrade(
     if !check_session(&state, uid, sid).await.unwrap_or(false) {
         return (axum::http::StatusCode::UNAUTHORIZED, "session revoked or account suspended").into_response();
     }
-    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid, q.seq))
+    let resume = match (q.seq, q.instance) {
+        (Some(s), Some(i)) if i == state.hub.instance_id => Some(s),
+        (Some(_), Some(_)) => None,
+        (s, None) => s,
+        (None, _) => None,
+    };
+    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid, resume))
 }
 
 #[derive(Deserialize)]
@@ -73,16 +81,16 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             let my_guilds: HashSet<Uuid> = guild_ids.into_iter().collect();
             let relevant: Vec<_> = missed.into_iter().filter(|ev| matches_target(&ev.target, user_id, session_id, &my_guilds)).collect();
             let last = relevant.last().map(|e| e.seq).unwrap_or(after).max(after);
-            let first = state.hub.connect(user_id);
+            let first = crate::ws::bus::connect(&state, user_id).await;
             crate::metrics::METRICS.ws_resumes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let resumed = json!({ "t": "RESUMED", "d": { "replayed": relevant.len(), "from": after }, "s": state.hub.current_seq() });
+            let resumed = json!({ "t": "RESUMED", "d": { "replayed": relevant.len(), "from": after }, "s": state.hub.current_seq(), "i": state.hub.instance_id });
             if tx.send(Message::Text(resumed.to_string())).await.is_err() {
-                state.hub.disconnect(user_id);
+                crate::ws::bus::disconnect(&state, user_id).await;
                 return;
             }
             for ev in &relevant {
                 if tx.send(Message::Text(ev.payload.to_string())).await.is_err() {
-                    state.hub.disconnect(user_id);
+                    crate::ws::bus::disconnect(&state, user_id).await;
                     return;
                 }
             }
@@ -192,8 +200,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     // Subscribe BEFORE announcing presence so we don't miss events.
     let events = state.hub.subscribe();
     let seq_at_subscribe = state.hub.current_seq();
-    let first = state.hub.connect(user_id);
-    let online = state.hub.online_users();
+    let first = crate::ws::bus::connect(&state, user_id).await;
+    let online = crate::ws::bus::online_users(&state.db).await;
     let mut voice_states = state.hub.voice_states_for_guilds(&guild_ids);
     voice_states.extend(state.hub.voice_states_for_channels(&dms.iter().map(|d| d.channel.id).collect::<Vec<_>>()));
     let session = state.hub.next_session();
@@ -201,6 +209,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     let ready = json!({
         "t": "READY",
         "s": seq_at_subscribe,
+        "i": state.hub.instance_id,
         "d": {
             "user": user,
             "guilds": guilds,
@@ -223,7 +232,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
         }
     });
     if tx.send(Message::Text(ready.to_string())).await.is_err() {
-        state.hub.disconnect(user_id);
+        crate::ws::bus::disconnect(&state, user_id).await;
         return;
     }
     crate::metrics::METRICS.ws_connects.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -298,7 +307,7 @@ async fn run_loop(
     if let Some(prev) = state.hub.voice_leave(user_id, Some(session)) {
         emit_voice_leave(state, &prev);
     }
-    if state.hub.disconnect(user_id) {
+    if crate::ws::bus::disconnect(state, user_id).await {
         state.hub.emit_all("PRESENCE_UPDATE", json!({ "user_id": user_id, "online": false }));
     }
 }

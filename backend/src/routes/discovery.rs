@@ -61,7 +61,7 @@ const LISTING_SELECT: &str = "SELECT d.guild_id, g.name, g.icon_url, d.descripti
 
 /// Fill in live online counts and whether the caller is a member.
 async fn decorate(state: &AppState, uid: Uuid, mut rows: Vec<Listing>) -> AppResult<Vec<Listing>> {
-    let online = state.hub.online_users();
+    let online = crate::ws::bus::online_users(&state.db).await;
     for l in &mut rows {
         let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1 AND user_id = ANY($2)")
             .bind(l.guild_id)

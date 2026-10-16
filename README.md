@@ -98,6 +98,10 @@ bd ready                 # unblocked work, highest priority first
 bd show <id> / bd close <id>
 ```
 
+## Running more than one backend
+
+Backends are stateless apart from the websocket hub, and the hub is clustered over Postgres: every event an instance emits is also `NOTIFY`-ed on the `parley_events` channel (payloads over 7 KB go through `bus_outbox` by id) and every other instance injects it into its own broadcast, so members connected anywhere see the same messages, typing, reactions, channel and role changes. Presence lives in the `presence` table (one row per user and instance, refreshed by a 30 s heartbeat, rows stale after 90 s): `PRESENCE_UPDATE` fires only when a user's first socket anywhere opens or their last one closes, and online lists (READY, admin console, Discover counts, metrics) read the table. Resume with replay only works against the instance that numbered the client's last event (`READY`/`RESUMED` carry the instance id as `i`, the client sends it back); after a failover the client gets a fresh `READY`. Voice state is still per instance: route a user's websocket consistently (sticky sessions) and keep call participants on the same instance, or put a TURN/SFU in front. Try it locally with `docker compose --profile cluster up -d` (a second backend on port 18081 sharing the database and uploads); the `cluster` e2e suite starts it on demand and checks that events and presence cross instances.
+
 ## Observability
 
 - **Metrics**: `GET /metrics` on the backend port (18080, not proxied by nginx) in Prometheus text format: `parley_http_requests_total{method,class}`, a latency histogram `parley_http_request_duration_ms`, `parley_http_errors_5xx_total`, `parley_http_rate_limited_total`, `parley_messages_created_total`, `parley_uploads_total` / `parley_upload_bytes_total`, `parley_ws_connects_total` / `parley_ws_resumes_total`, gauges `parley_ws_connections`, `parley_online_users`, `parley_voice_sessions`, `parley_ws_events_total`, `parley_db_pool_size` / `parley_db_pool_idle`. Set `METRICS_TOKEN` to require `Authorization: Bearer <token>` (or `?token=`) — do that whenever the port is reachable beyond the host.
