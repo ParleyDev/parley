@@ -342,6 +342,7 @@ async fn create_message(
         crate::routes::polls::insert(&mut tx, mid, poll).await?;
     }
     tx.commit().await?;
+    crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     // Author has implicitly read their own message.
     sqlx::query(
         "INSERT INTO read_states (user_id, channel_id, last_read_msg) VALUES ($1, $2, $3)

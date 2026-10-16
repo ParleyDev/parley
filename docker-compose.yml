@@ -51,6 +51,12 @@ services:
       # Link previews never fetch private/loopback addresses. The compose network is pinned so the
       # host's gateway address is known; the e2e suites serve test pages there. Leave empty in production.
       EMBED_ALLOW_HOSTS: ${EMBED_ALLOW_HOSTS:-172.30.0.1}
+      # Observability: GET /metrics (Prometheus text) on the backend port, guarded by METRICS_TOKEN when set;
+      # LOG_FORMAT=json for structured logs; SENTRY_DSN enables error/panic reporting.
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
     volumes:
       - uploads:/data/uploads
     depends_on:

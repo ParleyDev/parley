@@ -81,6 +81,7 @@ pub async fn system_message(state: &AppState, channel_id: Uuid, actor: Uuid, kin
         .execute(&state.db)
         .await?;
     let msg = crate::routes::channels::fetch_message(&state.db, mid, actor).await?;
+    crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     state.hub.emit(crate::ws::hub::Target::Users(member_ids(&state.db, channel_id).await?), "MESSAGE_CREATE", json!({ "message": msg, "guild_id": null }));
     Ok(())
 }

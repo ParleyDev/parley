@@ -23,6 +23,12 @@ pub struct Config {
     pub embed_allow_hosts: Vec<String>,
     /// Default per-user storage quota for attachments + profile images; 0 = unlimited.
     pub upload_quota_bytes: i64,
+    /// Bearer / ?token= required for GET /metrics when set.
+    pub metrics_token: Option<String>,
+    /// "text" (default) or "json" structured logs.
+    pub log_format: String,
+    pub sentry_dsn: Option<String>,
+    pub sentry_environment: String,
 }
 
 impl Config {
@@ -50,6 +56,10 @@ impl Config {
             smtp_url: std::env::var("SMTP_URL").ok().filter(|s| !s.is_empty()),
             mail_from: std::env::var("MAIL_FROM").unwrap_or_else(|_| "Parley <no-reply@parley.local>".into()),
             app_url: std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".into()).trim_end_matches('/').to_string(),
+            metrics_token: std::env::var("METRICS_TOKEN").ok(),
+            log_format: std::env::var("LOG_FORMAT").unwrap_or_else(|_| "text".into()).to_lowercase(),
+            sentry_dsn: std::env::var("SENTRY_DSN").ok(),
+            sentry_environment: std::env::var("SENTRY_ENVIRONMENT").unwrap_or_else(|_| "production".into()),
             upload_quota_bytes: std::env::var("UPLOAD_QUOTA_BYTES").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(1024 * 1024 * 1024),
             embed_allow_hosts: std::env::var("EMBED_ALLOW_HOSTS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
             admin_emails: std::env::var("ADMIN_EMAILS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
