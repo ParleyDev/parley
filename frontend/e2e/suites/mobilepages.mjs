@@ -1,0 +1,54 @@
+import { chromium, devices } from 'playwright'
+import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track } from '../lib.mjs'
+let admin=await login('admin-e2e@x.io'); if(!admin.token) admin=await reg('admin','admin-e2e@x.io')
+const a=await reg('alice'), b=await reg('bob')
+const g=await call(a.token,'POST','/guilds',{name:`Mobile Land ${S}`}); const tc=g.channels.find(c=>c.kind==='text').id
+await call(a.token,'POST',`/channels/${tc}/messages`,{content:'hello mobile 🔥'})
+await call(a.token,'PUT',`/guilds/${g.id}/discovery`,{description:'Mobile preview testing server.',category:'community'}); await fetch(B+`/admin/discovery/${g.id}/review`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+admin.token},body:JSON.stringify({status:'approved'})})
+const browser=await chromium.launch(); const errors=[]
+const mk=async(tok)=>{ const ctx=await browser.newContext({ ...devices['iPhone 13'] }); const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),tok); return p }
+const fits=async(p)=>p.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth + 1)
+const vis=async(p,sel)=>{ const b=await p.locator(sel).first().boundingBox().catch(()=>null); return !!b && b.x>=0 && b.x+b.width<=p.viewportSize().width+1 && b.width>0 }
+
+console.log('-- Discover')
+const p=await mk(b.token)
+await p.goto(`${WEB}/discover`); await p.waitForTimeout(1200)
+ok('phone lands on the Discover content pane, full width, no sideways overflow', await vis(p,'[data-discover-hero]') && await fits(p) && await p.locator('[data-discover-servers]').isHidden())
+ok('hero, search icon and cards fit the phone width', await vis(p,'[data-discover-search-button], [data-discover-search]') && (await p.locator('[data-discover-hero] h1').boundingBox()).width <= 390)
+await p.screenshot({ path: 'm20-discover.png' })
+await p.locator('[data-discover-tabs] button[title="Channels"]').tap(); await p.waitForTimeout(400)
+ok('back button reveals the Discover sidebar pane', await p.locator('[data-discover-servers]').isVisible() && await p.locator('[data-discover-hero]').isHidden())
+await p.locator('[data-discover-servers]').tap(); await p.waitForTimeout(400)
+ok('tapping Servers returns to the content', await p.locator('[data-discover-hero]').isVisible())
+await p.fill('[data-discover-search]', `Mobile Land ${S}`).catch(async()=>{ await p.locator('[data-discover-search-button]').tap(); await p.fill('[data-discover-search]', `Mobile Land ${S}`) }); await p.waitForTimeout(900)
+await p.locator(`[data-server-card="${g.id}"]`).tap(); await p.waitForTimeout(1200)
+
+console.log('-- Preview')
+ok('preview opens on the messages pane with the join bar visible', p.url().includes(`/discover/${g.id}/`) && await vis(p,'[data-preview-bar]') && await vis(p,'[data-preview-join]') && await p.locator('.msg-content:has-text("hello mobile")').isVisible() && await fits(p))
+await p.screenshot({ path: 'm21-preview.png' })
+await p.locator('header button[title="Channels"]').tap(); await p.waitForTimeout(400)
+ok('back shows the preview channel list', await p.locator('[data-preview-channel="general"]').isVisible() && await p.locator('[data-preview-bar]').isHidden())
+await p.locator('[data-preview-channel="general"]').tap(); await p.waitForTimeout(500)
+ok('picking a channel returns to the messages', await p.locator('[data-preview-bar]').isVisible())
+
+console.log('-- Admin')
+const pad=await mk(admin.token); await pad.goto(`${WEB}/admin`); await pad.waitForTimeout(1200)
+ok('admin lands on the menu pane on a phone', await pad.locator('[data-admin-nav="users"]').isVisible() && await pad.locator('[data-admin-overview]').isHidden() && await fits(pad))
+await pad.locator('[data-admin-nav="users"]').tap(); await pad.waitForTimeout(700)
+ok('tapping Users shows the pane full width with a back button', await pad.locator('[data-admin-users]').isVisible() && await pad.locator('[data-admin-nav="users"]').isHidden() && await vis(pad,'[data-admin-user-search]') && await fits(pad))
+await pad.screenshot({ path: 'm22-admin-users.png' })
+await pad.locator('button[title="Channels"]').first().tap(); await pad.waitForTimeout(400)
+ok('back returns to the admin menu', await pad.locator('[data-admin-nav="users"]').isVisible())
+
+console.log('-- Tooltips on touch')
+const pt=await mk(a.token); await pt.goto(`${WEB}/channels/${g.id}/${tc}`); await pt.waitForTimeout(1200)
+ok('touch device reports no hover capability', (await pt.evaluate(()=>window.matchMedia('(hover: hover)').matches))===false)
+await pt.locator('button[title="Channels"]').first().tap().catch(()=>{}); await pt.waitForTimeout(400)
+await pt.locator(`[data-guild-icon="${g.id}"]`).dispatchEvent('mouseenter'); await pt.locator(`[data-guild-icon="${g.id}"]`).tap(); await pt.waitForTimeout(500)
+ok('tapping a server icon leaves no tooltip behind', await pt.locator('[data-guild-tip]').count()===0)
+await fetch(B+`/channels/${tc}/messages/${(await call(a.token,'GET',`/channels/${tc}/messages`))[0].id}/reactions/${encodeURIComponent('🔥')}`,{method:'PUT',headers:{Authorization:'Bearer '+a.token}})
+await pt.goto(`${WEB}/channels/${g.id}/${tc}`); await pt.waitForTimeout(1200)
+const chip=pt.locator('[data-reaction="🔥"]'); await chip.dispatchEvent('mouseenter'); await chip.tap(); await pt.waitForTimeout(500)
+ok('tapping a reaction toggles it without a stuck tooltip', await pt.locator('[data-reaction-tip]').count()===0)
+ok('no page errors', errors.length===0, errors.join(' | '))
+await browser.close(); await finish()

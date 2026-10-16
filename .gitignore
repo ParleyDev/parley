@@ -9,3 +9,4 @@ frontend/dist
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+frontend/e2e/out/
