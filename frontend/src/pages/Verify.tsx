@@ -16,8 +16,9 @@ export default function VerifyPage() {
   useEffect(() => {
     if (!token) { setState('bad'); setMsg('This link is missing its token.'); return }
     api.post<{ ok: boolean }>('/auth/verify', { token }).then(async () => {
-      setState('ok')
+      // Refresh the stored user before offering "Open Parley", so the app never shows a stale banner.
       if (jwt) { try { setAuth(jwt, await api.get('/users/@me')) } catch { /* refresh later */ } }
+      setState('ok')
     }).catch((e: Error) => { setState('bad'); setMsg(e.message) })
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
