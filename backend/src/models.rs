@@ -173,6 +173,28 @@ pub struct MessageSticker {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct PollOption {
+    pub id: Uuid,
+    pub text: String,
+    pub votes: i64,
+    /// The viewer voted for this option.
+    pub me: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Poll {
+    pub question: String,
+    pub multi: bool,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub closed_at: Option<DateTime<Utc>>,
+    /// Closed early or expired: no more votes, results are final.
+    pub closed: bool,
+    pub total_votes: i64,
+    pub voters: i64,
+    pub options: Vec<PollOption>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Reaction {
     pub emoji: String,
     pub count: i64,
@@ -198,6 +220,8 @@ pub struct Message {
     pub mention_roles: Vec<Uuid>,
     pub mention_everyone: bool,
     pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub poll: Option<Poll>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -266,6 +290,7 @@ impl MessageRow {
             mention_roles: self.mention_roles,
             mention_everyone: self.mention_everyone,
             kind: if self.kind.is_empty() { "default".into() } else { self.kind },
+            poll: None,
             sticker: self.sticker_id.map(|id| MessageSticker {
                 id,
                 name: self.sticker_name.clone().unwrap_or_default(),

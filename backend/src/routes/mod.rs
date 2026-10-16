@@ -11,6 +11,7 @@ pub mod guilds;
 pub mod invites;
 pub mod mfa;
 pub mod moderation;
+pub mod polls;
 pub mod relationships;
 pub mod reports;
 pub mod roles;
@@ -30,6 +31,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(search::router())
         .merge(reports::router())
         .merge(moderation::router())
+        .merge(polls::router())
         .merge(guilds::router())
         .merge(invites::router())
         .merge(roles::router())

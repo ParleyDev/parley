@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { isBlocked, mentionsMe, myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
 import { useAppearance } from '../lib/appearance'
+import PollCard from './PollCard'
 import StyledName from './StyledName'
 import type { Message } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
@@ -189,6 +190,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 </div>
               )}
               {media && <MediaEmbed url={media} />}
+              {m.poll && <PollCard m={m} poll={m.poll} />}
               {m.sticker && (
                 <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}

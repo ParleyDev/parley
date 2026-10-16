@@ -1,6 +1,6 @@
 import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
-import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, PrivateUser, Relationship, Role, Sticker, User, VoiceState } from './types'
+import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sticker, User, VoiceState } from './types'
 import { voice } from './voice'
 
 type Ev = { s?: number } & (
@@ -11,6 +11,7 @@ type Ev = { s?: number } & (
   | { t: 'MESSAGE_CREATE' | 'MESSAGE_UPDATE'; d: { message: Message; guild_id: string | null } }
   | { t: 'MESSAGE_DELETE'; d: { id: string; channel_id: string } }
   | { t: 'REACTION_ADD' | 'REACTION_REMOVE'; d: { message_id: string; channel_id: string; user_id: string; emoji: string } }
+  | { t: 'POLL_UPDATE'; d: { channel_id: string; message_id: string; poll: Poll } }
   | { t: 'TYPING_START'; d: { channel_id: string; user_id: string } }
   | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean } }
   | { t: 'USER_UPDATE'; d: User }
@@ -128,6 +129,7 @@ function handle(ev: Ev) {
     case 'MESSAGE_DELETE': s.removeMessage(ev.d.channel_id, ev.d.id); break
     case 'REACTION_ADD': s.applyReaction(ev.d.channel_id, ev.d.message_id, ev.d.emoji, ev.d.user_id, true); break
     case 'REACTION_REMOVE': s.applyReaction(ev.d.channel_id, ev.d.message_id, ev.d.emoji, ev.d.user_id, false); break
+    case 'POLL_UPDATE': s.applyPollUpdate(ev.d.channel_id, ev.d.message_id, ev.d.poll); break
     case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id); break
     case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online); break
     case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
