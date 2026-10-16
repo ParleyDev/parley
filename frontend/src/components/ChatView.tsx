@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkMinus, CircleUserRound, Crown, Hash, LogOut, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { Bookmark, BookmarkMinus, CircleUserRound, Crown, Hash, LogOut, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup } from '../lib/dm'
 import { anchorOf } from '../lib/anchor'
@@ -12,6 +12,7 @@ import { formatTime, renderMarkdown } from '../lib/format'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 import ChatPane from './ChatPane'
+import { ThreadPanel, ThreadsPanel } from './ThreadPanel'
 import DmCall from './DmCall'
 import DmProfilePanel from './DmProfilePanel'
 import { MembersToggle, MobileBack } from './HeaderBits'
@@ -56,8 +57,13 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const [pins, setPins] = useState(false)
   const [bookmarks, setBookmarks] = useState(false)
   const [query, setQuery] = useState('')
+  const [threads, setThreads] = useState(false)
+  const openThread = useStore((s) => s.openThread)
+  const setOpenThread = useStore((s) => s.setOpenThread)
+  const openThreadChannel = useStore((s) => (s.openThread ? s.channels[s.openThread] : undefined))
+  const threadHere = !!openThread && openThreadChannel?.parent_id === channel.id
   const [search, setSearch] = useState<string | null>(null)
-  useEffect(() => { setPins(false); setSearch(null); setQuery('') }, [channel.id])
+  useEffect(() => { setPins(false); setSearch(null); setQuery(''); setThreads(false) }, [channel.id])
 
   const startCall = async (video: boolean) => {
     if (myVoice === channel.id) return
@@ -106,6 +112,12 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
                 <button onClick={() => startCall(true)} title="Start Video Call" className={btn(false)} data-start-video><Video size={20} /></button>
               </>
             )}
+            {!isDm && channel.kind === 'text' && (
+              <span className="relative">
+                <button onClick={() => setThreads((t) => !t)} title="Threads" className={btn(threads)} data-threads-toggle><MessagesSquare size={20} /></button>
+                {threads && <ThreadsPanel channel={channel as Channel} onClose={() => setThreads(false)} />}
+              </span>
+            )}
             <span className="relative">
               <button onClick={() => setPins((p) => !p)} title="Pinned Messages" className={btn(pins)} data-pins-toggle><Pin size={20} /></button>
               {pins && <PinnedPanel channel={channel} onClose={() => setPins(false)} />}
@@ -130,6 +142,8 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
       </main>
       {search !== null ? (
         <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast('That message is not loaded in this view yet', 'error')} />
+      ) : threadHere ? (
+        <ThreadPanel threadId={openThread!} onClose={() => setOpenThread(null)} />
       ) : isDm && other && dmProfileOpen ? (
         <DmProfilePanel userId={other.id} />
       ) : group && dmProfileOpen ? (

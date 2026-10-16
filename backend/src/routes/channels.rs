@@ -356,6 +356,9 @@ async fn create_message(
     let msg = fetch_message(&state.db, mid, uid).await?;
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    if c.kind == "thread" {
+        crate::routes::threads::on_thread_message(&state, c.id).await?;
+    }
     Ok((StatusCode::CREATED, Json(msg)))
 }
 
@@ -668,12 +671,15 @@ pub async fn hydrate(db: &PgPool, rows: Vec<MessageRow>, me: Uuid, reverse: bool
     let mut reactions = reactions_for(db, &ids, me).await?;
     let mut atts = attachments_for(db, &ids).await?;
     let mut polls = crate::routes::polls::polls_for(db, &ids, me).await?;
+    let mut threads = crate::routes::threads::threads_for(db, &ids).await?;
     let it = rows.into_iter().map(|r| {
         let rx = reactions.remove(&r.id).unwrap_or_default();
         let at = atts.remove(&r.id).unwrap_or_default();
         let poll = polls.remove(&r.id);
+        let thread = threads.remove(&r.id);
         let mut m = r.into_message(rx, at);
         m.poll = poll;
+        m.thread = thread;
         m
     });
     Ok(if reverse { it.rev().collect() } else { it.collect() })

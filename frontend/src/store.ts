@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
-import type { Poll } from './lib/types'
+import type { Poll, ThreadInfo } from './lib/types'
 import type { Ban, Channel, DmChannel, Emoji, Guild, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sticker, User, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
@@ -27,6 +27,7 @@ export type ModalKind =
   | { kind: 'report'; messageId?: string; userId: string; name: string }
   | { kind: 'createPoll'; channelId: string }
   | { kind: 'editCategory'; channelId: string }
+  | { kind: 'createThread'; channelId: string; messageId?: string; suggested?: string }
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
   | { kind: 'customStatus' }
   | { kind: 'forward'; message: Message }
@@ -182,6 +183,12 @@ interface State {
   setInputLevel: (level: number, transmitting: boolean) => void
   setPttHeld: (held: boolean) => void
   openModal: (m: ModalKind) => void
+  /** Thread shown in the side panel (a channel of kind 'thread'), or null. */
+  openThread: string | null
+  setOpenThread: (id: string | null) => void
+  /** Thread metadata by id (from THREAD_UPDATE / list loads). */
+  threads: Record<string, ThreadInfo>
+  upsertThread: (t: ThreadInfo) => void
   closeModal: () => void
   pushToast: (text: string, kind?: 'info' | 'error') => void
   dismissToast: (id: number) => void
@@ -442,6 +449,10 @@ export const useStore = create<State>((set, get) => ({
     return { messages: { ...s.messages, [channelId]: merged }, hasMore: { ...s.hasMore, [channelId]: hasMore } }
   }),
   setLoadingMessages: (channelId, v) => set((s) => ({ loadingMessages: { ...s.loadingMessages, [channelId]: v } })),
+  openThread: null,
+  setOpenThread: (id) => set({ openThread: id }),
+  threads: {},
+  upsertThread: (t) => set((s) => ({ threads: { ...s.threads, [t.id]: t }, channels: s.channels[t.id] ? { ...s.channels, [t.id]: { ...s.channels[t.id], name: t.name } } : s.channels })),
   applyPollUpdate: (channelId, messageId, poll) => set((s) => {
     const list = s.messages[channelId]
     if (!list) return {}
@@ -632,7 +643,8 @@ export function showsMentions(s: Pick<State, 'channels' | 'dms' | 'notifSettings
 
 export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'>, guildId: string): boolean {
   if (mutedTarget(s.notifSettings, guildId)) return false
-  return Object.values(s.channels).some((c) => c.guild_id === guildId && showsUnread(s, c.id))
+  // Threads only badge the server when they mention you (see guildMentions), not for every reply.
+  return Object.values(s.channels).some((c) => c.guild_id === guildId && c.kind !== 'thread' && showsUnread(s, c.id))
 }
 
 export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'dms' | 'channels' | 'notifSettings'>): number {

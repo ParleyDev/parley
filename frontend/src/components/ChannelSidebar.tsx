@@ -45,7 +45,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const canEditChannel = (id: string) => has(chanPerms[id] ?? 0, P.MANAGE_CHANNELS) || has(chanPerms[id] ?? 0, P.MANAGE_ROLES)
   const all = Object.values(channels).filter((c) => c.guild_id === guildId).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
   const categories = all.filter((c) => c.kind === 'category')
-  const list = all.filter((c) => c.kind !== 'category')
+  const list = all.filter((c) => c.kind !== 'category' && c.kind !== 'thread')
   const catIds = new Set(categories.map((c) => c.id))
   const uncategorized = list.filter((c) => !c.parent_id || !catIds.has(c.parent_id))
   const childrenOf = (id: string) => list.filter((c) => c.parent_id === id)

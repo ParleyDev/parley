@@ -197,6 +197,16 @@ pub struct Poll {
     pub options: Vec<PollOption>,
 }
 
+/// Summary of the thread started from a message (shown as a card under it).
+#[derive(Debug, Clone, Serialize)]
+pub struct ThreadRef {
+    pub id: Uuid,
+    pub name: String,
+    pub message_count: i64,
+    pub archived: bool,
+    pub last_message_at: Option<DateTime<Utc>>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Reaction {
     pub emoji: String,
@@ -225,6 +235,8 @@ pub struct Message {
     pub kind: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub poll: Option<Poll>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread: Option<ThreadRef>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -300,6 +312,7 @@ impl MessageRow {
             mention_everyone: self.mention_everyone,
             kind: if self.kind.is_empty() { "default".into() } else { self.kind },
             poll: None,
+            thread: None,
             sticker: self.sticker_id.map(|id| MessageSticker {
                 id,
                 name: self.sticker_name.clone().unwrap_or_default(),

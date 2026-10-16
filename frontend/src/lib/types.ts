@@ -53,7 +53,7 @@ export interface Channel {
   id: string
   guild_id: string | null
   name: string
-  kind: 'text' | 'voice' | 'dm' | 'group' | 'category'
+  kind: 'text' | 'voice' | 'dm' | 'group' | 'category' | 'thread'
   topic: string
   position: number
   created_at: string
@@ -145,6 +145,8 @@ export interface Message {
   /** 'default', or a group-DM system notice kind (recipient_add, recipient_remove, recipient_leave, channel_name_change, channel_icon_change). */
   kind?: string
   poll?: Poll | null
+  /** Thread started from this message (card under it). */
+  thread?: ThreadRef | null
 }
 
 /** A server custom emoji; `url` serves the image, `id` doubles as the image id. */
@@ -169,6 +171,9 @@ export interface Sticker {
   created_at: string
   url: string
 }
+
+export interface ThreadRef { id: string; name: string; message_count: number; archived: boolean; last_message_at: string | null }
+export interface ThreadInfo { id: string; parent_id: string | null; guild_id: string | null; name: string; root_message_id: string | null; owner_id: string | null; owner_username: string | null; archived_at: string | null; created_at: string; message_count: number; last_message_at: string | null }
 
 export interface PollOption { id: string; text: string; votes: number; me: boolean }
 export interface Poll { question: string; multi: boolean; expires_at: string | null; closed_at: string | null; closed: boolean; total_votes: number; voters: number; options: PollOption[] }
