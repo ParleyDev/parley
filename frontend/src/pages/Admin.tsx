@@ -1,4 +1,4 @@
-import { Compass, Gavel, KeyRound, LayoutDashboard, LogOut, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
+import { Compass, Flag, Gavel, KeyRound, LayoutDashboard, LogOut, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -22,6 +22,7 @@ export default function AdminPage() {
               <NavLink to="/admin/servers" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> Servers</NavLink>
               <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> Discovery Queue</NavLink>
               <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> Instance Settings</NavLink>
+              <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> Reports</NavLink>
               <NavLink to="/admin/audit" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="audit"><ScrollText size={20} /> Audit Log</NavLink>
             </nav>
           </aside>
@@ -34,13 +35,14 @@ export default function AdminPage() {
           <Route path="servers" element={<ServersPane />} />
           <Route path="settings" element={<SettingsPane />} />
           <Route path="audit" element={<AuditPane />} />
+          <Route path="reports" element={<ReportsPane />} />
         </Routes>
       </div>
     </SplitLayout>
   )
 }
 
-interface Stats { users: number; admins: number; suspended: number; online: number; guilds: number; messages: number; discovery_pending: number; discovery_approved: number; upload_bytes: number }
+interface Stats { users: number; admins: number; suspended: number; online: number; guilds: number; messages: number; discovery_pending: number; discovery_approved: number; upload_bytes: number; reports_open?: number }
 
 function Overview() {
   const [s, setS] = useState<Stats | null>(null)
@@ -50,6 +52,7 @@ function Overview() {
     ['Servers', s.guilds.toLocaleString(), `${s.discovery_approved} in Discover · ${s.discovery_pending} pending review`],
     ['Messages', s.messages.toLocaleString(), 'across all servers and DMs'],
     ['Uploads', formatBytes(s.upload_bytes), 'attachments, avatars, emoji and stickers'],
+    ['Reports', String(s.reports_open ?? 0), 'open reports waiting for review'],
   ] : []
   return (
     <div data-admin-overview>
@@ -249,6 +252,60 @@ function AuditPane() {
         ))}
       </div>
       {!done && rows.length > 0 && <button type="button" className="btn-ghost mt-3" disabled={busy} onClick={() => load(rows[rows.length - 1].id)} data-admin-audit-more>Load more</button>}
+    </div>
+  )
+}
+
+interface Report { id: string; reporter_id: string | null; reporter_username: string | null; kind: 'message' | 'user'; target_user_id: string | null; target_username: string; message_id: string | null; channel_id: string | null; channel_name: string; guild_id: string | null; guild_name: string; content: string; reason: string; status: 'open' | 'resolved' | 'dismissed'; note: string; created_at: string; resolved_at: string | null; message_exists: boolean; target_suspended: boolean }
+
+function ReportsPane() {
+  const [status, setStatus] = useState<'open' | 'resolved' | 'dismissed' | 'all'>('open')
+  const [rows, setRows] = useState<Report[] | null>(null)
+  const pushToast = useStore((s) => s.pushToast)
+  const load = async () => { try { setRows(await api.get<Report[]>(`/admin/reports?status=${status}`)) } catch (e) { pushToast((e as Error).message, 'error') } }
+  useEffect(() => { setRows(null); load() }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
+  const act = async (fn: () => Promise<unknown>, done: string) => { try { await fn(); pushToast(done); await load() } catch (e) { pushToast((e as Error).message, 'error') } }
+  const setState = (r: Report, s: 'resolved' | 'dismissed' | 'open') => act(() => api.patch(`/admin/reports/${r.id}`, { status: s }), s === 'open' ? 'Report reopened' : `Report ${s}`)
+  return (
+    <div data-admin-reports>
+      <h1 className="text-2xl font-bold">Reports</h1>
+      <p className="text-sm text-text-2 mt-1">Messages and users reported by members. Resolve once handled, dismiss if nothing is wrong.</p>
+      <div className="mt-4 flex gap-1.5" data-admin-report-filters>
+        {(['open', 'resolved', 'dismissed', 'all'] as const).map((s) => <button key={s} type="button" onClick={() => setStatus(s)} className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${status === s ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-admin-report-filter={s}>{s}</button>)}
+      </div>
+      <div className="mt-4 space-y-3">
+        {rows === null && <p className="text-sm text-text-2">Loading…</p>}
+        {rows?.length === 0 && <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-text-2" data-admin-reports-empty>No {status === 'all' ? '' : status} reports.</div>}
+        {rows?.map((r) => (
+          <div key={r.id} className="rounded-xl border border-line bg-bg-1 p-4" data-admin-report={r.id} data-report-status={r.status} data-report-kind={r.kind}>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${r.status === 'open' ? 'bg-warn/20 text-warn' : r.status === 'resolved' ? 'bg-success/20 text-success' : 'bg-bg-3 text-text-2'}`}>{r.status}</span>
+              <span className="font-semibold">{r.kind === 'message' ? 'Message' : 'User'} report</span>
+              <span className="text-text-2">· @{r.reporter_username ?? 'deleted user'} reported <b className="text-text-0">@{r.target_username || 'unknown'}</b>{r.target_suspended && <span className="ml-1 rounded bg-danger/20 text-danger px-1 text-[10px] font-bold">SUSPENDED</span>}</span>
+              <span className="ml-auto text-xs text-text-2">{new Date(r.created_at).toLocaleString()}</span>
+            </div>
+            <div className="mt-2 text-sm"><span className="text-text-2">Reason: </span><span data-report-reason>{r.reason}</span></div>
+            {r.kind === 'message' && (
+              <div className="mt-2 rounded-lg bg-bg-0/60 border border-line p-3 text-sm" data-report-context>
+                <div className="text-xs text-text-2 mb-1">{r.guild_id ? `${r.guild_name} · #${r.channel_name}` : 'Direct message'}{!r.message_exists && <span className="ml-2 rounded bg-bg-3 px-1 text-[10px] font-bold">DELETED</span>}</div>
+                <div className="whitespace-pre-wrap break-words">{r.content || <i className="text-text-2">(no text)</i>}</div>
+              </div>
+            )}
+            {r.note && <div className="mt-2 text-xs text-text-2">Note: {r.note}</div>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {r.kind === 'message' && r.message_exists && <button type="button" className="btn-danger py-1 text-xs" onClick={() => act(() => api.delete(`/admin/messages/${r.message_id}`), 'Message deleted')} data-report-delete-message>Delete message</button>}
+              {r.target_user_id && !r.target_suspended && <button type="button" className="btn-danger py-1 text-xs" onClick={() => act(() => api.patch(`/admin/users/${r.target_user_id}`, { suspended: true }), `@${r.target_username} suspended`)} data-report-suspend>Suspend @{r.target_username}</button>}
+              {r.guild_id && r.channel_id && <a className="btn-ghost py-1 text-xs" href={`/channels/${r.guild_id}/${r.channel_id}?message=${r.message_id}`} target="_blank" rel="noreferrer">Open channel</a>}
+              {r.status === 'open' ? (
+                <>
+                  <button type="button" className="btn-primary py-1 text-xs" onClick={() => setState(r, 'resolved')} data-report-resolve>Resolve</button>
+                  <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setState(r, 'dismissed')} data-report-dismiss>Dismiss</button>
+                </>
+              ) : <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setState(r, 'open')} data-report-reopen>Reopen</button>}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
