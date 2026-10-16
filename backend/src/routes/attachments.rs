@@ -126,6 +126,8 @@ async fn upload(
     };
 
     let thumb_type = crate::routes::storage::make_thumbnail(path.clone(), &content_type, width, height).await;
+    crate::metrics::METRICS.uploads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    crate::metrics::METRICS.upload_bytes.fetch_add(size as u64, std::sync::atomic::Ordering::Relaxed);
     let att = sqlx::query_as::<_, Attachment>(&format!(
         "INSERT INTO attachments (id, uploader_id, channel_id, filename, content_type, size, width, height, thumb_type)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING {ATTACHMENT_COLS}"

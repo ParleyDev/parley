@@ -5,6 +5,7 @@ mod error;
 mod models;
 mod perms;
 mod mail;
+mod metrics;
 mod mfa;
 mod ratelimit;
 mod routes;
@@ -19,12 +20,22 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,tower_http=info,sqlx=warn".into()))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
     let config = config::Config::from_env();
+
+    // Optional Sentry: error-level tracing events and panics become Sentry events when SENTRY_DSN is set.
+    let _sentry = config.sentry_dsn.as_deref().filter(|d| !d.is_empty()).map(|dsn| {
+        sentry::init((dsn, sentry::ClientOptions { release: sentry::release_name!(), environment: Some(config.sentry_environment.clone().into()), ..Default::default() }))
+    });
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,tower_http=info,sqlx=warn".into());
+    let registry = tracing_subscriber::registry().with(filter).with(sentry::integrations::tracing::layer());
+    if config.log_format == "json" {
+        registry.with(tracing_subscriber::fmt::layer().json().flatten_event(true).with_current_span(false)).init();
+    } else {
+        registry.with(tracing_subscriber::fmt::layer()).init();
+    }
+    if _sentry.is_some() {
+        tracing::info!("sentry error reporting enabled");
+    }
 
     let db = PgPoolOptions::new()
         .max_connections(20)
@@ -50,11 +61,13 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
+        .route("/metrics", get(metrics::endpoint))
         .route("/ws", get(ws::handler::ws_upgrade))
         .nest("/api", routes::api_router())
         .layer(axum::extract::DefaultBodyLimit::max(2 * 1024 * 1024))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
+        .layer(axum::middleware::from_fn(metrics::track))
         .with_state(state);
 
     tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep.clone()));

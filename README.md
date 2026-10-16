@@ -96,6 +96,12 @@ bd ready                 # unblocked work, highest priority first
 bd show <id> / bd close <id>
 ```
 
+## Observability
+
+- **Metrics**: `GET /metrics` on the backend port (18080, not proxied by nginx) in Prometheus text format: `parley_http_requests_total{method,class}`, a latency histogram `parley_http_request_duration_ms`, `parley_http_errors_5xx_total`, `parley_http_rate_limited_total`, `parley_messages_created_total`, `parley_uploads_total` / `parley_upload_bytes_total`, `parley_ws_connects_total` / `parley_ws_resumes_total`, gauges `parley_ws_connections`, `parley_online_users`, `parley_voice_sessions`, `parley_ws_events_total`, `parley_db_pool_size` / `parley_db_pool_idle`. Set `METRICS_TOKEN` to require `Authorization: Bearer <token>` (or `?token=`) — do that whenever the port is reachable beyond the host.
+- **Logs**: `LOG_FORMAT=json` switches the backend to one JSON object per line (level, target, message, fields), ready for Loki / CloudWatch / Datadog; `RUST_LOG` filters as before.
+- **Error reporting**: `SENTRY_DSN=https://…` (plus `SENTRY_ENVIRONMENT`) sends every `error!`-level event (database and internal errors, failed audit writes) and any panic to Sentry with the release name baked in at build time. Unset, nothing is sent.
+
 ## Backups and restore
 
 `ops/backup.sh` (run by the `backup` compose profile from the official Postgres image) writes a compressed `pg_dump --format=custom` of the database and a `tar.gz` of the uploads volume into `./backups` (`BACKUP_DIR`), keeping the newest `BACKUP_KEEP` (default 7) of each:

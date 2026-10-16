@@ -74,6 +74,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             let relevant: Vec<_> = missed.into_iter().filter(|ev| matches_target(&ev.target, user_id, session_id, &my_guilds)).collect();
             let last = relevant.last().map(|e| e.seq).unwrap_or(after).max(after);
             let first = state.hub.connect(user_id);
+            crate::metrics::METRICS.ws_resumes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let resumed = json!({ "t": "RESUMED", "d": { "replayed": relevant.len(), "from": after }, "s": state.hub.current_seq() });
             if tx.send(Message::Text(resumed.to_string())).await.is_err() {
                 state.hub.disconnect(user_id);
@@ -225,6 +226,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
         state.hub.disconnect(user_id);
         return;
     }
+    crate::metrics::METRICS.ws_connects.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
     if first {
         state.hub.emit_all("PRESENCE_UPDATE", json!({ "user_id": user_id, "online": true }));

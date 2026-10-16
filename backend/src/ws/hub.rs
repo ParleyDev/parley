@@ -158,6 +158,15 @@ impl Hub {
         last
     }
 
+    /// Open sockets across all users.
+    pub fn socket_count(&self) -> usize {
+        self.online.iter().map(|e| *e.value()).sum()
+    }
+
+    pub fn voice_count(&self) -> usize {
+        self.voice.len()
+    }
+
     pub fn online_users(&self) -> Vec<Uuid> {
         self.online.iter().map(|e| *e.key()).collect()
     }
