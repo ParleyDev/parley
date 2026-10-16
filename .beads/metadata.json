@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "parley",
+  "project_id": "d2850c03-0267-4dfa-8bbe-329939362d02"
+}

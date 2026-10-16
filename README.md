@@ -71,6 +71,17 @@ docker compose up -d --build
 
 Browser sessions carry over: the client migrates the old `y99.token` storage key on first load.
 
+## Issue tracking (beads)
+
+Open work is tracked in-repo with [beads](https://github.com/steveyegge/beads) (`npm i -g @beads/bd`). Issues live in `.beads/` (Dolt-backed; `.beads/issues.jsonl` is the git-friendly export). Useful commands:
+
+```bash
+bd list -t epic          # the roadmap: Testing & CI, Accounts & security, Messaging, Servers, DMs, Voice, Profiles, Admin, Robustness, Operations
+bd children <epic-id>    # tasks under an epic
+bd ready                 # unblocked work, highest priority first
+bd show <id> / bd close <id>
+```
+
 ## Development
 
 Backend (needs Postgres; `docker compose up db` works):
