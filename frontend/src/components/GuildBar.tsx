@@ -10,6 +10,8 @@ import { api } from '../lib/api'
 import { dissolveFolder, moveGuild, newFolderId, nudge, removeFromFolder, type DropTarget } from '../lib/layout'
 import type { Guild, LayoutItem } from '../lib/types'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
+import { notifEntries } from './NotifMenu'
+import { mutedTarget } from '../lib/notify'
 
 type FolderItem = Extract<LayoutItem, { kind: 'folder' }>
 const OPEN_KEY = 'parley.folderOpen'
@@ -30,19 +32,21 @@ export default function GuildBar() {
   const readStates = useStore((s) => s.readStates)
   const lastMessageId = useStore((s) => s.lastMessageId)
   const dms = useStore((s) => s.dms)
+  const notifSettings = useStore((s) => s.notifSettings)
   const openModal = useStore((s) => s.openModal)
   const guildId = useMatch('/channels/:guildId/*')?.params.guildId
   const pending = useStore(pendingCount)
-  const dmUnread = dmUnreadCount({ readStates, lastMessageId, dms }) + pending
+  const dmUnread = dmUnreadCount({ readStates, lastMessageId, dms, channels, notifSettings }) + pending
   const ctx = useContextMenu()
   const guildMenu = useGuildMenu()
   const [open, setOpen] = useState<Record<string, boolean>>(loadOpen)
   const toggleFolder = (id: string) => setOpen((o) => { const n = { ...o, [id]: !o[id] }; try { localStorage.setItem(OPEN_KEY, JSON.stringify(n)) } catch { /* ignore */ } return n })
   const [drag, setDrag] = useState<string | null>(null)
   const [over, setOver] = useState<{ key: string; zone: 'top' | 'mid' | 'bottom' } | null>(null)
-  const unreadOf = (id: string) => guildId !== id && guildUnread({ readStates, lastMessageId, channels }, id)
+  const unreadOf = (id: string) => guildId !== id && guildUnread({ readStates, lastMessageId, channels, dms, notifSettings }, id)
   const mentionCounts = useStore((s) => s.mentionCounts)
-  const mentionsOf = (id: string) => guildMentions({ mentionCounts, channels }, id)
+  const mentionsOf = (id: string) => guildMentions({ mentionCounts, channels, dms, notifSettings }, id)
+  const mutedOf = (id: string) => mutedTarget(notifSettings, id)
 
   const zoneOf = (e: DragEvent<HTMLElement>): 'top' | 'mid' | 'bottom' => {
     const r = e.currentTarget.getBoundingClientRect(); const y = (e.clientY - r.top) / r.height
@@ -98,9 +102,9 @@ export default function GuildBar() {
         {ind === 'top' && <span className="absolute -top-1.5 left-2 right-2 h-0.5 rounded bg-white" data-drop-line="before" />}
         {ind === 'bottom' && <span className="absolute -bottom-1.5 left-2 right-2 h-0.5 rounded bg-white" data-drop-line="after" />}
         <NavLink to={`/channels/${g.id}`} className={`group relative block ${drag === g.id ? 'opacity-40' : ''}`} draggable onDragStart={startDrag(g.id)} onDragEnd={endDrag}
-          onContextMenu={(e) => ctx.open(e, [...guildMenu(g.id), ...layoutMenu(g.id)])} data-guild-icon={g.id} data-in-folder={inFolder ? 'true' : undefined}>
+          onContextMenu={(e) => ctx.open(e, [...guildMenu(g.id).slice(0, 2), ...notifEntries(g.id, 'Server', notifSettings, { suppress: true }), ...guildMenu(g.id).slice(2), ...layoutMenu(g.id)])} data-guild-icon={g.id} data-in-folder={inFolder ? 'true' : undefined} data-muted={mutedOf(g.id) ? 'true' : undefined}>
           <Pill active={active} unread={unreadOf(g.id)} tip={g.name}>
-            <div className={`h-12 w-12 overflow-hidden flex items-center justify-center text-white font-semibold transition-all duration-200 rounded-2xl ${active ? '' : 'group-hover:rounded-xl'} ${!active && !unreadOf(g.id) ? 'opacity-80 group-hover:opacity-100' : ''} ${ind === 'mid' && !inFolder ? 'ring-2 ring-success' : ''}`}
+            <div className={`h-12 w-12 overflow-hidden flex items-center justify-center text-white font-semibold transition-all duration-200 rounded-2xl ${active ? '' : 'group-hover:rounded-xl'} ${!active && !unreadOf(g.id) ? 'opacity-80 group-hover:opacity-100' : ''} ${mutedOf(g.id) ? 'opacity-50' : ''} ${ind === 'mid' && !inFolder ? 'ring-2 ring-success' : ''}`}
               style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>
               {g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" draggable={false} /> : initials(g.name)}
             </div>

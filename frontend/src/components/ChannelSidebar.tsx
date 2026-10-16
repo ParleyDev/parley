@@ -6,7 +6,10 @@ import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
 import { useState } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
-import { isUnread, myChannelPerms, myGuildPerms, useStore, voiceParticipants } from '../store'
+import { isUnread, myChannelPerms, myGuildPerms, showsMentions, showsUnread, useStore, voiceParticipants } from '../store'
+import { notifEntries } from './NotifMenu'
+import { mutedTarget } from '../lib/notify'
+import { BellOff } from 'lucide-react'
 import { has, P } from '../lib/perms'
 import StyledName from './StyledName'
 import { api } from '../lib/api'
@@ -26,6 +29,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const [menu, setMenu] = useState(false)
   const markRead = useStore((s) => s.markRead)
   const mentionCounts = useStore((s) => s.mentionCounts)
+  const notifSettings = useStore((s) => s.notifSettings)
+  const dms = useStore((s) => s.dms)
   const ctx = useContextMenu()
   const userMenu = useUserMenu(guildId)
   const perms = useStore((s) => myGuildPerms(s, guildId))
@@ -45,6 +50,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     const canEdit = canEditChannel(c.id)
     return [
       { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !unread, onClick: () => markRead(c.id) },
+      'sep',
+      ...notifEntries(c.id, 'Channel', notifSettings, { serverDefault: true }),
       'sep',
       ...(canInvite ? [{ label: 'Invite People', icon: <UserPlus size={16} />, accent: true, onClick: () => openModal({ kind: 'invite', guildId }) }] : []),
       { label: 'Copy Link', icon: <Link2 size={16} />, onClick: () => copyText('Link', `${location.origin}/channels/${guildId}/${c.id}`) },
@@ -89,6 +96,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
             <div className="pop absolute left-2 right-2 top-full mt-1 z-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5 text-sm" onClick={() => setMenu(false)}>
               {canInvite && <MenuItem icon={<UserPlus size={16} />} onClick={() => openModal({ kind: 'invite', guildId })} accent>Invite People</MenuItem>}
+              <MenuItem icon={<BellOff size={16} />} onClick={(e) => { setMenu(false); ctx.open(e as React.MouseEvent, notifEntries(guildId, 'Server', notifSettings, { suppress: true })) }}>{mutedTarget(notifSettings, guildId) ? 'Unmute / Notifications' : 'Mute / Notifications'}</MenuItem>
               {canManageGuild && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>Server Settings</MenuItem>}
               {canCreate && <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>Create Channel</MenuItem>}
               <div className="h-px bg-line my-1" />
@@ -103,8 +111,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       <div className="flex-1 overflow-y-auto px-2 pt-3 space-y-4">
         <Category label="Text Channels" onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId }) : undefined}>
           {text.map((c) => (
-            <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Hash size={18} />} name={c.name} mentions={mentionCounts[c.id] ?? 0} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
-              unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)} onClick={() => setMobilePane('content')}
+            <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Hash size={18} />} name={c.name} mentions={showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id)} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+              unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)} onClick={() => setMobilePane('content')}
               onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
           ))}
         </Category>
@@ -112,8 +120,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
           <Category label="Voice Channels" onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId }) : undefined}>
             {voiceChannels.map((c) => (
               <div key={c.id}>
-                <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={<Volume2 size={18} />} name={c.name} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
-                  unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)} onClick={() => setMobilePane('content')}
+                <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={<Volume2 size={18} />} name={c.name} muted={mutedTarget(notifSettings, c.id)} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+                  unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)} onClick={() => setMobilePane('content')}
                   onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
                 <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />
               </div>
@@ -126,7 +134,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   )
 }
 
-function MenuItem({ children, icon, onClick, danger, accent }: { children: React.ReactNode; icon: React.ReactNode; onClick: () => void; danger?: boolean; accent?: boolean }) {
+function MenuItem({ children, icon, onClick, danger, accent }: { children: React.ReactNode; icon: React.ReactNode; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; danger?: boolean; accent?: boolean }) {
   return (
     <button onClick={onClick} className={`w-full flex items-center justify-between rounded-md px-2.5 py-2 hover:bg-accent hover:text-white ${danger ? 'text-danger' : accent ? 'text-accent' : 'text-text-1'}`}>
       <span>{children}</span>{icon}
@@ -177,12 +185,13 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
   )
 }
 
-function ChannelRow({ to, icon, name, unread, mentions = 0, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; mentions?: number; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
+function ChannelRow({ to, icon, name, unread, mentions = 0, muted, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; mentions?: number; muted?: boolean; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
   return (
-    <NavLink to={to} onClick={onClick} onContextMenu={onContextMenu} data-channel-row={name} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+    <NavLink to={to} onClick={onClick} onContextMenu={onContextMenu} data-channel-row={name} data-muted={muted ? 'true' : undefined} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'} ${muted ? 'opacity-50' : ''}`}>
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>
+      {muted && <BellOff size={13} className="text-text-2 shrink-0" data-muted-icon />}
       {mentions > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center" data-mention-badge={mentions}>{mentions}</span>}
       {onSettings && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 text-text-2 hover:text-text-0" title="Edit Channel"><Settings size={14} /></button>}
     </NavLink>

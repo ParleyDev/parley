@@ -1,4 +1,9 @@
-import { B, S, reg, loginRaw, raw, ok, finish } from '../lib.mjs'
+import { B, S, reg, raw, ok, finish } from '../lib.mjs'
+
+// Failed logins are limited per client IP. nginx is not in front of the API here, so the backend
+// trusts X-Forwarded-For; use a private address unique to this run so other suites are not throttled.
+const ip = `10.77.${Math.floor(S / 256) % 256}.${S % 256}`
+const loginRaw = (login, password = 'wrong-password') => fetch(`${B}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': ip }, body: JSON.stringify({ login, password }) })
 
 // Limits as the backend sees them (compose defaults); override via env when running against other values.
 const [msgCount, msgSecs] = (process.env.RL_MESSAGES ?? '60/5').split('/').map(Number)
@@ -28,9 +33,7 @@ for (let i = 1; i <= failCount + 2; i++) {
   if (r.status === 429) { blockedAt = i; break }
 }
 ok(`wrong logins are throttled with 429 within ${failCount + 1} attempts (earlier failures from this IP count too)`, blockedAt !== null && blockedAt <= failCount + 1, String(blockedAt))
-const good = await loginRaw(`alice${S}`)
+const good = await loginRaw(`alice${S}`, 'password1')
 ok('even a correct login is held back while the failure bucket is exhausted', good.status === 429, String(good.status))
 
-// The failure bucket refills one token per (window/count) seconds; wait so cleanup's admin login is not throttled.
-await new Promise((r) => setTimeout(r, 13000))
 await finish()
