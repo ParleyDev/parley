@@ -53,7 +53,7 @@ export interface Channel {
   id: string
   guild_id: string | null
   name: string
-  kind: 'text' | 'voice' | 'dm' | 'group' | 'category' | 'thread'
+  kind: 'text' | 'voice' | 'dm' | 'group' | 'category' | 'thread' | 'forum'
   topic: string
   position: number
   created_at: string
@@ -173,7 +173,8 @@ export interface Sticker {
 }
 
 export interface ThreadRef { id: string; name: string; message_count: number; archived: boolean; last_message_at: string | null }
-export interface ThreadInfo { id: string; parent_id: string | null; guild_id: string | null; name: string; root_message_id: string | null; owner_id: string | null; owner_username: string | null; archived_at: string | null; created_at: string; message_count: number; last_message_at: string | null }
+export interface ThreadInfo { id: string; parent_id: string | null; guild_id: string | null; name: string; root_message_id: string | null; owner_id: string | null; owner_username: string | null; archived_at: string | null; pinned_at: string | null; created_at: string; message_count: number; last_message_at: string | null; tags: string[]; preview: string | null }
+export interface ForumTag { id: string; channel_id: string; name: string; emoji: string; position: number }
 
 export interface PollOption { id: string; text: string; votes: number; me: boolean }
 export interface Poll { question: string; multi: boolean; expires_at: string | null; closed_at: string | null; closed: boolean; total_votes: number; voters: number; options: PollOption[] }
