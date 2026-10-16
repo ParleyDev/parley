@@ -28,6 +28,16 @@ services:
       GIPHY_API_KEY: ${GIPHY_API_KEY:-}
       # Comma-separated emails of Parley admins (they approve Discover submissions).
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # Rate limits as count/seconds. Built-in defaults (register 20/60 per IP, login 30/60 per IP,
+      # failed logins 5/60 per IP, messages 10/5 per user, uploads 30/60, GIF proxy 60/60) suit
+      # production; the compose defaults below are looser so local development and the e2e suites
+      # (which register many accounts from one IP) are not throttled. Tighten them in .env.
+      RL_REGISTER: ${RL_REGISTER:-500/60}
+      RL_LOGIN: ${RL_LOGIN:-500/60}
+      RL_LOGIN_FAIL: ${RL_LOGIN_FAIL:-5/60}
+      RL_MESSAGES: ${RL_MESSAGES:-60/5}
+      RL_UPLOADS: ${RL_UPLOADS:-120/60}
+      RL_GIFS: ${RL_GIFS:-60/60}
     volumes:
       - uploads:/data/uploads
     depends_on:

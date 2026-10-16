@@ -2,7 +2,8 @@
 //! results come back in one normalised shape. Configure `TENOR_API_KEY` or `GIPHY_API_KEY`.
 
 use crate::{auth::AuthUser, error::{AppError, AppResult}, state::AppState};
-use axum::{extract::{Query, State}, routing::get, Json, Router};
+use axum::{extract::{Query, State}, middleware::from_fn, routing::get, Json, Router};
+use crate::ratelimit::rl_gifs;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -11,6 +12,7 @@ pub fn router() -> Router<AppState> {
         .route("/gifs/search", get(search))
         .route("/gifs/trending", get(trending))
         .route("/gifs/categories", get(categories))
+        .route_layer(from_fn(rl_gifs))
 }
 
 #[derive(Serialize)]

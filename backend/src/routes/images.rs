@@ -4,7 +4,8 @@
 //! GIF/APNG/WebP avatars stay animated instead of being flattened into a data URL.
 
 use crate::{auth::AuthUser, error::{AppError, AppResult}, state::AppState};
-use axum::{
+use crate::ratelimit::rl_uploads;
+use axum::{middleware::from_fn,
     body::Body,
     extract::{DefaultBodyLimit, Multipart, Path, Query, State},
     http::{header, HeaderValue, StatusCode},
@@ -25,7 +26,7 @@ const ORPHAN_TTL_SECS: f64 = 3600.0;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/images", post(upload).layer(DefaultBodyLimit::max(MAX_PROFILE_IMAGE + 64 * 1024)))
+        .route("/images", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(MAX_PROFILE_IMAGE + 64 * 1024)))
         .route("/images/:id", get(serve))
 }
 

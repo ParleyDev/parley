@@ -3,6 +3,7 @@ mod config;
 mod error;
 mod models;
 mod perms;
+mod ratelimit;
 mod routes;
 mod state;
 mod ws;
@@ -55,6 +56,7 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep.clone()));
     tokio::spawn(routes::images::sweep_orphans(state_for_sweep));
+    tokio::spawn(ratelimit::prune_loop());
     let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
     tracing::info!("listening on {}", config.bind_addr);
     axum::serve(listener, app).await?;

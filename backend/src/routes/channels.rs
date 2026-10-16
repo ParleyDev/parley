@@ -8,7 +8,8 @@ use crate::{
     state::AppState,
     ws::hub::Target,
 };
-use axum::{
+use crate::ratelimit::rl_messages;
+use axum::{middleware::from_fn,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{get, post, put},
@@ -23,7 +24,7 @@ use uuid::Uuid;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/channels/:id", get(get_channel).patch(update_channel).delete(delete_channel))
-        .route("/channels/:id/messages", get(list_messages).post(create_message))
+        .route("/channels/:id/messages", get(list_messages).post(create_message).route_layer(from_fn(rl_messages)))
         .route("/channels/:id/messages/:mid", axum::routing::patch(edit_message).delete(delete_message))
         .route("/channels/:id/messages/:mid/reactions/:emoji", get(list_reactors).put(add_reaction).delete(remove_reaction))
         .route("/channels/:id/messages/:mid/forward", post(forward_message))

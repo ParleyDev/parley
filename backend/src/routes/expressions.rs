@@ -9,7 +9,8 @@ use crate::{
     routes::{guilds::require_member, images::{delete_image, image_url, store_image, MAX_EMOJI, MAX_STICKER}},
     state::AppState,
 };
-use axum::{
+use crate::ratelimit::rl_uploads;
+use axum::{middleware::from_fn,
     extract::{DefaultBodyLimit, Multipart, Path, State},
     http::StatusCode,
     routing::{get, patch},
@@ -26,9 +27,9 @@ pub const MAX_STICKERS_PER_GUILD: i64 = 60;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/guilds/:id/emojis", get(list_emojis).post(create_emoji).layer(DefaultBodyLimit::max(MAX_EMOJI + 64 * 1024)))
+        .route("/guilds/:id/emojis", get(list_emojis).post(create_emoji).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(MAX_EMOJI + 64 * 1024)))
         .route("/guilds/:id/emojis/:eid", patch(update_emoji).delete(delete_emoji))
-        .route("/guilds/:id/stickers", get(list_stickers).post(create_sticker).layer(DefaultBodyLimit::max(MAX_STICKER + 64 * 1024)))
+        .route("/guilds/:id/stickers", get(list_stickers).post(create_sticker).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(MAX_STICKER + 64 * 1024)))
         .route("/guilds/:id/stickers/:sid", patch(update_sticker).delete(delete_sticker))
 }
 

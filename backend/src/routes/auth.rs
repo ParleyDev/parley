@@ -4,15 +4,16 @@ use crate::{
     models::PrivateUser,
     state::AppState,
 };
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{extract::State, http::HeaderMap, middleware::from_fn, routing::post, Json, Router};
+use crate::ratelimit::{client_ip, rl_login, rl_register, LIMITER};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/auth/register", post(register))
-        .route("/auth/login", post(login))
+        .route("/auth/register", post(register).route_layer(from_fn(rl_register)))
+        .route("/auth/login", post(login).route_layer(from_fn(rl_login)))
 }
 
 #[derive(Deserialize)]
@@ -84,15 +85,20 @@ struct LoginReq {
     password: String,
 }
 
-async fn login(State(state): State<AppState>, Json(req): Json<LoginReq>) -> AppResult<Json<Value>> {
+async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<LoginReq>) -> AppResult<Json<Value>> {
     let login = req.login.trim().to_lowercase();
     let row: Option<(Uuid, String)> =
         sqlx::query_as("SELECT id, password_hash FROM users WHERE username = $1 OR email = $1")
             .bind(&login)
             .fetch_optional(&state.db)
             .await?;
-    let (id, hash) = row.ok_or_else(|| AppError::BadRequest("Invalid credentials".into()))?;
+    // Wrong user or wrong password: both spend a login_fail token for this IP (brute-force guard).
+    let Some((id, hash)) = row else {
+        let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limits.login_fail);
+        return Err(AppError::BadRequest("Invalid credentials".into()));
+    };
     if !verify_password(&req.password, &hash) {
+        let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limits.login_fail);
         return Err(AppError::BadRequest("Invalid credentials".into()));
     }
     let suspended: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND suspended_at IS NOT NULL").bind(id).fetch_optional(&state.db).await?;
