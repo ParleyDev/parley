@@ -235,7 +235,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
 
   if (!canSend) {
     return (
-      <div className="shrink-0 px-4 pb-6 pt-1 max-md:px-2 max-md:pb-2">
+      <div className="shrink-0 px-4 pb-2 pt-1 max-md:px-2 max-md:pb-2">
         {timedOut
           ? <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-timed-out>You are timed out in this server until <b>{new Date(myMember!.timeout_until!).toLocaleString()}</b>. You can read, but not send messages, react or join voice.</div>
           : <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2">You do not have permission to send messages in this channel.</div>}
@@ -245,7 +245,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   }
 
   return (
-    <div className="shrink-0 px-4 pb-6 pt-1 max-md:px-2 max-md:pb-2 relative">
+    <div className="shrink-0 px-4 pb-2 pt-1 max-md:px-2 max-md:pb-2 relative">
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-accent/20 backdrop-blur-[2px]">
           <div className="rounded-2xl border-2 border-dashed border-accent bg-bg-1/90 px-10 py-8 text-center pop">

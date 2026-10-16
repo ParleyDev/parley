@@ -59,9 +59,22 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     const items = ordered.map((c, i) => ({ id: c.id, position: i, parent_id: c.parent_id }))
     try { await api.patch(`/guilds/${guildId}/channels/positions`, { items }) } catch (e) { pushToast((e as Error).message, 'error') }
   }
+  const persistCategoryOrder = async (orderedIds: string[]) => {
+    useStore.setState((s) => ({ channels: { ...s.channels, ...Object.fromEntries(orderedIds.map((id, i) => [id, { ...s.channels[id], position: i }])) } }))
+    try { await api.patch(`/guilds/${guildId}/channels/positions`, { items: orderedIds.map((id, i) => ({ id, position: i })) }) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  /** A dragged category lands before `beforeCat` (null = at the end). */
+  const dropCategory = (beforeCat: string | null) => {
+    if (!drag || drag === beforeCat) return
+    const ids = categories.map((c) => c.id).filter((id) => id !== drag)
+    const i = beforeCat ? ids.indexOf(beforeCat) : -1
+    ids.splice(i < 0 ? ids.length : i, 0, drag)
+    persistCategoryOrder(ids)
+  }
   const dropOn = (targetId: string | null, parent: string | null, where: 'before' | 'end') => {
     if (!drag || drag === targetId) return
-    const moving = channels[drag]; if (!moving || moving.kind === 'category') return
+    const moving = channels[drag]; if (!moving) return
+    if (moving.kind === 'category') { dropCategory(parent); return }
     const rest = list.filter((c) => c.id !== drag)
     const ordered: { id: string; parent_id: string | null }[] = []
     const groups: (string | null)[] = [null, ...categories.map((c) => c.id)]
@@ -86,8 +99,17 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); dropOn(c.id, c.parent_id && catIds.has(c.parent_id) ? c.parent_id : null, 'before'); setDrag(null); setOver(null) },
   } : {}
   const catDropProps = (catId: string | null) => canCreate ? {
-    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const key = `cat:${catId ?? 'none'}`; if (over !== key) setOver(key) },
-    onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); dropOn(null, catId, 'end'); setDrag(null); setOver(null) },
+    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag || drag === catId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const key = `cat:${catId ?? 'none'}`; if (over !== key) setOver(key) },
+    onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); e.stopPropagation(); dropOn(null, catId, 'end'); setDrag(null); setOver(null) },
+  } : {}
+  const catDragProps = (catId: string) => canCreate ? {
+    draggable: true,
+    onDragStart: (e: DragEvent<HTMLElement>) => { e.dataTransfer.setData('text/plain', catId); e.dataTransfer.effectAllowed = 'move'; setDrag(catId) },
+    onDragEnd: () => { setDrag(null); setOver(null) },
+  } : {}
+  const tailDropProps = canCreate ? {
+    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag || channels[drag]?.kind !== 'category') return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (over !== 'cat:end') setOver('cat:end') },
+    onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); e.stopPropagation(); dropCategory(null); setDrag(null); setOver(null) },
   } : {}
   const categoryMenu = (c: Channel): MenuEntry[] => [
     { label: collapsed[c.id] ? 'Expand Category' : 'Collapse Category', icon: <ChevronDown size={16} />, onClick: () => toggleCollapsed(c.id) },
@@ -172,12 +194,12 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
           {uncategorized.map(row)}
         </div>
         {categories.map((cat) => (
-          <Category key={cat.id} label={cat.name} open={!collapsed[cat.id]} onToggle={() => toggleCollapsed(cat.id)} highlight={over === `cat:${cat.id}`} dropProps={catDropProps(cat.id)} testid={cat.id}
+          <Category key={cat.id} label={cat.name} open={!collapsed[cat.id]} onToggle={() => toggleCollapsed(cat.id)} highlight={over === `cat:${cat.id}`} dragging={drag === cat.id} dropProps={catDropProps(cat.id)} dragProps={catDragProps(cat.id)} testid={cat.id}
             onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId, parentId: cat.id }) : undefined} onContextMenu={(e) => ctx.open(e, categoryMenu(cat))}>
             {childrenOf(cat.id).filter((c) => !collapsed[cat.id] || c.id === channelId || showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)).map(row)}
           </Category>
         ))}
-        {canCreate && <button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title="Create Channel" className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> Create channel or category</button>}
+        {canCreate && <div className={`rounded ${over === 'cat:end' ? 'ring-1 ring-accent' : ''}`} {...tailDropProps}><button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title="Create Channel" className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> Create channel or category</button></div>}
       </div>
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
     </aside>
@@ -192,10 +214,10 @@ function MenuItem({ children, icon, onClick, danger, accent }: { children: React
   )
 }
 
-function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, dropProps, testid, children }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; dropProps?: object; testid: string; children: React.ReactNode }) {
+function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, dragging, dropProps, dragProps, testid, children }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; dragging?: boolean; dropProps?: object; dragProps?: object; testid: string; children: React.ReactNode }) {
   return (
-    <div data-category={testid} data-category-open={open ? '1' : '0'} className={`rounded ${highlight ? 'ring-1 ring-accent' : ''}`} {...dropProps}>
-      <div className="group flex items-center justify-between pr-1 text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1" onContextMenu={onContextMenu}>
+    <div data-category={testid} data-category-open={open ? '1' : '0'} className={`rounded ${highlight ? 'ring-1 ring-accent' : ''} ${dragging ? 'opacity-40' : ''}`} {...dropProps}>
+      <div className="group flex items-center justify-between pr-1 text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1" onContextMenu={onContextMenu} data-category-header {...dragProps}>
         <button onClick={onToggle} className="flex items-center gap-0.5 py-1 pl-0.5 min-w-0" data-category-toggle>
           <ChevronDown size={12} className={`shrink-0 transition ${open ? '' : '-rotate-90'}`} /><span className="truncate">{label}</span>
         </button>

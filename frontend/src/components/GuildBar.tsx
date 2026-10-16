@@ -7,7 +7,7 @@ import { dmUnreadCount, guildMentions, guildUnread, isUnread, myGuildPerms, pend
 import { colorFor, initials } from '../lib/format'
 import { has, P } from '../lib/perms'
 import { api } from '../lib/api'
-import { dissolveFolder, moveGuild, newFolderId, nudge, removeFromFolder, type DropTarget } from '../lib/layout'
+import { dissolveFolder, moveGuild, moveItem, newFolderId, nudge, removeFromFolder, type DropTarget } from '../lib/layout'
 import type { Guild, LayoutItem } from '../lib/types'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { notifEntries } from './NotifMenu'
@@ -60,7 +60,7 @@ export default function GuildBar() {
       const id = drag ?? e.dataTransfer.getData('text/plain')
       const target = id ? resolve(zoneOf(e)) : null
       setDrag(null); setOver(null)
-      if (id && target) setLayout(moveGuild(layout, id, target), true)
+      if (id && target) setLayout(moveItem(layout, id, target), true)
     },
   })
   const startDrag = (id: string) => (e: DragEvent<HTMLElement>) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; setDrag(id) }
@@ -73,6 +73,8 @@ export default function GuildBar() {
     return [
       { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: unread.length === 0, onClick: () => unread.forEach((c) => markRead(c.id)) },
       'sep',
+      { label: 'Move Up', icon: <ArrowUp size={16} />, onClick: () => setLayout(nudge(layout, f.id, -1), true) },
+      { label: 'Move Down', icon: <ArrowDown size={16} />, onClick: () => setLayout(nudge(layout, f.id, 1), true) },
       { label: 'Folder Settings', icon: <Settings size={16} />, onClick: () => openModal({ kind: 'folderSettings', folderId: f.id }) },
       { label: 'Remove Folder', icon: <FolderMinus size={16} />, danger: true, onClick: () => setLayout(dissolveFolder(layout, f.id), true) },
     ]
@@ -104,7 +106,7 @@ export default function GuildBar() {
         <NavLink to={`/channels/${g.id}`} className={`group relative block ${drag === g.id ? 'opacity-40' : ''}`} draggable onDragStart={startDrag(g.id)} onDragEnd={endDrag}
           onContextMenu={(e) => ctx.open(e, [...guildMenu(g.id).slice(0, 2), ...notifEntries(g.id, 'Server', notifSettings, { suppress: true }), ...guildMenu(g.id).slice(2), ...layoutMenu(g.id)])} data-guild-icon={g.id} data-in-folder={inFolder ? 'true' : undefined} data-muted={mutedOf(g.id) ? 'true' : undefined}>
           <Pill active={active} unread={unreadOf(g.id)} tip={g.name}>
-            <div className={`h-12 w-12 overflow-hidden flex items-center justify-center text-white font-semibold transition-all duration-200 rounded-2xl ${active ? '' : 'group-hover:rounded-xl'} ${!active && !unreadOf(g.id) ? 'opacity-80 group-hover:opacity-100' : ''} ${mutedOf(g.id) ? 'opacity-50' : ''} ${ind === 'mid' && !inFolder ? 'ring-2 ring-success' : ''}`}
+            <div className={`${inFolder ? 'h-10 w-10 text-sm rounded-xl' : 'h-12 w-12 rounded-2xl'} overflow-hidden flex items-center justify-center text-white font-semibold transition-all duration-200 ${active ? '' : 'group-hover:rounded-xl'} ${!active && !unreadOf(g.id) ? 'opacity-80 group-hover:opacity-100' : ''} ${mutedOf(g.id) ? 'opacity-50' : ''} ${ind === 'mid' && !inFolder ? 'ring-2 ring-success' : ''}`}
               style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>
               {g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" draggable={false} /> : initials(g.name)}
             </div>
@@ -128,7 +130,7 @@ export default function GuildBar() {
         {ind === 'top' && <span className="absolute -top-1.5 left-2 right-2 h-0.5 rounded bg-white z-10" data-drop-line="before" />}
         {ind === 'bottom' && !isOpen && <span className="absolute -bottom-1.5 left-2 right-2 h-0.5 rounded bg-white z-10" data-drop-line="after" />}
         <div {...dragProps(f.id, (zone) => (zone === 'top' ? { type: 'before', id: f.id } : zone === 'bottom' ? { type: 'after', id: f.id } : { type: 'into', folderId: f.id }))}>
-          <button type="button" onClick={() => toggleFolder(f.id)} onContextMenu={(e) => ctx.open(e, folderMenu(f))} className="group relative block" data-folder-tile title={undefined}>
+          <button type="button" onClick={() => toggleFolder(f.id)} onContextMenu={(e) => ctx.open(e, folderMenu(f))} className={`group relative block ${drag === f.id ? 'opacity-40' : ''}`} data-folder-tile title={undefined} draggable onDragStart={startDrag(f.id)} onDragEnd={endDrag}>
             <Pill active={!isOpen && anyActive} unread={!isOpen && anyUnread} tip={label}>
               <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${ind === 'mid' ? 'ring-2 ring-success' : ''} ${isOpen ? 'hover:bg-bg-4' : ''}`} style={{ background: isOpen ? undefined : `${tint}33` }}>
                 {isOpen ? <Folder size={24} style={{ color: tint }} /> : (
@@ -145,7 +147,7 @@ export default function GuildBar() {
           </button>
         </div>
         {isOpen && (
-          <div className="mt-2 flex flex-col items-center gap-2 pb-1" data-folder-contents>
+          <div className="mt-2 flex flex-col items-center gap-2 pb-2 px-1" data-folder-contents>
             {members.map((g, i) => renderGuild(g, `${f.id}:${g.id}`, (zone) => ({ type: 'into', folderId: f.id, index: zone === 'top' ? i : i + 1 }), true))}
           </div>
         )}
