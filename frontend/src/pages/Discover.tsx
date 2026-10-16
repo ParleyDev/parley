@@ -1,9 +1,8 @@
 import { BadgeCheck, Check, ChevronDown, Compass, Search, Server, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
-import GuildBar from '../components/GuildBar'
-import Modals from '../components/modals'
-import UserPanel from '../components/UserPanel'
+import SplitLayout, { useShowContent } from '../components/SplitLayout'
+import { MobileBack } from '../components/HeaderBits'
 import { api } from '../lib/api'
 import { CATEGORIES, categoryLabel, type Listing } from '../lib/discover'
 import { colorFor, initials } from '../lib/format'
@@ -18,31 +17,26 @@ export default function DiscoverPage() {
   const [pending, setPending] = useState<number | null>(null)
   useEffect(() => { if (isAdmin) api.get<Listing[]>('/admin/discovery?status=pending').then((l) => setPending(l.length)).catch(() => {}) }, [isAdmin])
   const item = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2.5 text-[15px] font-medium ${active ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`
+  const showContent = useShowContent()
   return (
-    <div className="h-full flex overflow-hidden relative" data-discover>
-      <div className="flex flex-col h-full shrink-0 w-[344px] max-md:w-auto">
-        <div className="flex flex-1 min-h-0">
-          <GuildBar />
+    <SplitLayout defaultPane="content" testid={{ 'data-discover': '' }} sidebar={
           <aside className="w-[272px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
             <div className="h-12 px-4 flex items-center font-bold text-lg border-b border-line">Discover</div>
             <nav className="p-2 space-y-0.5">
-              <NavLink to="/discover" end className={({ isActive }) => item(isActive)} data-discover-servers><Server size={20} /> Servers</NavLink>
+              <NavLink to="/discover" end onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-servers><Server size={20} /> Servers</NavLink>
               {isAdmin && (
-                <NavLink to="/discover/review" className={({ isActive }) => item(isActive)} data-discover-review>
+                <NavLink to="/discover/review" onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-review>
                   <ShieldCheck size={20} /> Review Queue
                   {pending ? <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center" data-review-count>{pending}</span> : null}
                 </NavLink>
               )}
             </nav>
           </aside>
-        </div>
-        <UserPanel />
-      </div>
-      <main className="flex-1 min-w-0 bg-bg-2 overflow-y-auto">
+    }>
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {isReview && isAdmin ? <ReviewQueue onChange={(n) => setPending(n)} /> : <Browse />}
-      </main>
-      <Modals />
-    </div>
+      </div>
+    </SplitLayout>
   )
 }
 
@@ -108,8 +102,9 @@ function Browse() {
 
   return (
     <div className="min-h-full flex flex-col">
-      <div ref={barRef} className="sticky top-0 z-10 h-14 shrink-0 flex items-center px-4 bg-bg-2/95 backdrop-blur border-b border-line" data-discover-tabs data-nav-mode={hidden.length ? 'more' : searchCompact ? 'compact' : 'full'}>
-        <Compass size={22} className="text-text-2 mr-2 shrink-0" />
+      <div ref={barRef} className="sticky top-0 z-10 h-14 shrink-0 flex items-center px-4 max-md:px-2 bg-bg-2/95 backdrop-blur border-b border-line" data-discover-tabs data-nav-mode={hidden.length ? 'more' : searchCompact ? 'compact' : 'full'}>
+        <MobileBack />
+        <Compass size={22} className="text-text-2 mr-2 shrink-0 max-md:hidden" />
         {/* Offscreen copy used only for measuring natural tab widths. */}
         <div ref={measureRef} aria-hidden className="absolute -top-[999px] left-0 flex items-center gap-0.5 invisible pointer-events-none">
           {tabs.map((t) => <span key={t.id} data-measure-tab className={tabCls(false)}>{t.label}</span>)}
@@ -135,7 +130,7 @@ function Browse() {
             </div>
           )}
         </div>
-        <div className="ml-2 relative shrink-0 max-md:hidden" data-search-mode={searchExpanded ? 'expanded' : 'icon'}>
+        <div className="ml-2 relative shrink-0" data-search-mode={searchExpanded ? 'expanded' : 'icon'}>
           {searchExpanded ? (
             <>
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-2" />
@@ -220,8 +215,8 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
     try { await api.post(`/admin/discovery/${l.guild_id}/review`, { status: next, note: notes[l.guild_id] ?? '' }); pushToast(`${l.name} ${next}`); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
   return (
-    <div className="px-10 py-8 max-md:px-5" data-review-queue>
-      <h1 className="text-2xl font-bold">Discovery review</h1>
+    <div className="px-10 py-8 max-md:px-4" data-review-queue>
+      <div className="flex items-center gap-2"><MobileBack /><h1 className="text-2xl font-bold">Discovery review</h1></div>
       <p className="text-sm text-text-2 mt-1">Servers submitted for Discover. Approved servers are public to everyone on this Parley instance.</p>
       <div className="mt-4 flex gap-1 border-b border-line">
         {(['pending', 'approved', 'rejected'] as const).map((s) => <button key={s} type="button" onClick={() => setStatus(s)} data-review-tab={s} className={`px-3 py-2 text-sm font-semibold capitalize border-b-2 -mb-px ${status === s ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`}>{s}</button>)}

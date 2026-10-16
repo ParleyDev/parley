@@ -13,6 +13,8 @@ import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 
 type FolderItem = Extract<LayoutItem, { kind: 'folder' }>
 const OPEN_KEY = 'parley.folderOpen'
+/** Hover tooltips only make sense for pointers that can hover. */
+export const canHover = () => typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches
 const loadOpen = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}') } catch { return {} } }
 
 /**
@@ -223,8 +225,9 @@ export function useGuildMenu() {
  */
 function Pill({ active, unread, tip, children }: { active?: boolean; unread?: boolean; tip: string; children: ReactNode }) {
   const [rect, setRect] = useState<DOMRect | null>(null)
+  // Touch screens fire synthetic mouseenter on tap and never mouseleave, which would pin the tooltip.
   return (
-    <div className="relative flex items-center" onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => setRect(null)}>
+    <div className="relative flex items-center" onMouseEnter={(e) => { if (canHover()) setRect(e.currentTarget.getBoundingClientRect()) }} onMouseLeave={() => setRect(null)} onTouchStart={() => setRect(null)} onClick={() => setRect(null)}>
       <span data-pill={active ? 'active' : unread ? 'unread' : 'none'} className={`absolute -left-3 w-1 rounded-r-full bg-white transition-all duration-200 ${active ? 'h-10' : unread ? 'h-2 group-hover:h-5' : 'h-0 group-hover:h-5'}`} />
       {children}
       {rect && createPortal(

@@ -2,6 +2,7 @@ import { Bookmark, BookmarkMinus, Copy, Forward, Hash, Link2, MailOpen, MoreHori
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
+import { canHover } from './GuildBar'
 import { useEmojiHover } from './EmojiHover'
 import { parseCustom, unicodeInfo } from '../lib/emoji'
 import { frequentEmoji, recordEmoji } from '../lib/recentEmoji'
@@ -268,7 +269,7 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
   const text = names.length === 0 ? '' : names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : names.length === 3 ? `${names[0]}, ${names[1]}, and ${names[2]}` : `${names[0]}, ${names[1]}, and ${names.length - 2} others`
   return (
     <>
-      <button type="button" disabled={!canReact && !r.me} onClick={onToggle} data-reaction={r.emoji} onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())} onMouseLeave={() => setRect(null)}
+      <button type="button" disabled={!canReact && !r.me} onClick={() => { setRect(null); onToggle() }} data-reaction={r.emoji} onMouseEnter={(e) => { if (canHover()) setRect(e.currentTarget.getBoundingClientRect()) }} onMouseLeave={() => setRect(null)} onTouchStart={() => setRect(null)}
         className={`h-[26px] flex items-center gap-1.5 rounded-lg border px-1.5 text-sm transition ${r.me ? 'border-accent bg-accent/15 hover:bg-accent/25' : 'border-transparent bg-[#2b2d31] hover:border-[#4e5058]'}`}>
         <Emoji value={r.emoji} size={16} /><span className={`text-[13px] font-semibold ${r.me ? 'text-text-0' : 'text-text-1'}`}>{r.count}</span>
       </button>
