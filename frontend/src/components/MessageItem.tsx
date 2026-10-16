@@ -1,4 +1,4 @@
-import { ArrowLeftFromLine, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
+import { ArrowLeftFromLine, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
@@ -31,6 +31,8 @@ interface Props { message: Message; grouped: boolean; isOwn: boolean; onReply: (
 export default function MessageItem({ message: m, grouped, isOwn, onReply, replyTarget }: Props) {
   const openModal = useStore((s) => s.openModal)
   const compact = useAppearance().density === 'compact'
+  const setOpenThread = useStore((s) => s.setOpenThread)
+  const chanKind = useStore((s) => s.channels[m.channel_id]?.kind)
   const pushToast = useStore((s) => s.pushToast)
   const setReadState = useStore((s) => s.setReadState)
   const bookmarked = useStore((s) => !!s.bookmarks[m.id])
@@ -114,6 +116,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       ...(canReact ? [{ label: 'Add Reaction', icon: <SmilePlus size={16} />, onClick: () => setPicker(anchorRect) }] : []),
       'sep' as const,
       { label: 'Reply', icon: <Reply size={16} />, onClick: onReply },
+      ...(guildId && chanKind === 'text' && !m.thread && m.kind !== 'default' ? [] : guildId && chanKind === 'text' && !m.thread ? [{ label: 'Create Thread', icon: <MessagesSquare size={16} />, onClick: () => openModal({ kind: 'createThread', channelId: m.channel_id, messageId: m.id, suggested: m.content.replace(/\s+/g, ' ').trim().slice(0, 60) }) }] : []),
       { label: 'Forward', icon: <Forward size={16} />, onClick: () => openModal({ kind: 'forward', message: m }) },
       ...(isOwn ? [{ label: 'Edit Message', icon: <Pencil size={16} />, onClick: () => { setDraft(m.content); setEditing(true) } }] : []),
       'sep' as const,
@@ -194,6 +197,14 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               {media && <MediaEmbed url={media} />}
               {link && <LinkEmbed url={link} />}
               {m.poll && <PollCard m={m} poll={m.poll} />}
+              {m.thread && (
+                <button type="button" onClick={(e) => { e.stopPropagation(); setOpenThread(m.thread!.id) }} className="mt-1 flex max-w-[520px] items-center gap-2 rounded-lg border border-line bg-bg-1 px-3 py-2 text-left text-sm hover:border-text-2" data-thread-card={m.thread.id} data-thread-count={m.thread.message_count}>
+                  <MessagesSquare size={16} className="text-text-2 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate font-semibold">{m.thread.name}</span>
+                  <span className="text-xs text-text-2 shrink-0">{m.thread.message_count} message{m.thread.message_count === 1 ? '' : 's'}{m.thread.archived ? ' · archived' : ''}</span>
+                  <span className="text-xs text-sky-400 shrink-0">View Thread ›</span>
+                </button>
+              )}
               {m.sticker && (
                 <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}

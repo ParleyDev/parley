@@ -7,11 +7,15 @@ export interface Effective { level: 'all' | 'mentions' | 'nothing'; muted: boole
 const isMuted = (s?: NotifSetting) => !!s?.muted_until && new Date(s.muted_until).getTime() > Date.now()
 
 /** Channel setting overrides the server's; DMs default to all messages. */
-export function effective(settings: Record<string, NotifSetting>, channel: Pick<Channel | DmChannel, 'id' | 'guild_id'> | undefined): Effective {
+export function effective(settings: Record<string, NotifSetting>, channel: (Pick<Channel | DmChannel, 'id' | 'guild_id'> & { parent_id?: string | null; kind?: string }) | undefined): Effective {
   if (!channel) return { level: 'all', muted: false, suppressEveryone: false }
-  const ch = settings[channel.id], g = channel.guild_id ? settings[channel.guild_id] : undefined
+  // A thread without its own setting follows its parent channel, which follows the server.
+  const own = settings[channel.id]
+  const parent = channel.kind === 'thread' && channel.parent_id ? settings[channel.parent_id] : undefined
+  const ch = own?.level && own.level !== 'default' ? own : parent?.level && parent.level !== 'default' ? parent : own ?? parent
+  const g = channel.guild_id ? settings[channel.guild_id] : undefined
   const level = (ch?.level && ch.level !== 'default' ? ch.level : g?.level && g.level !== 'default' ? g.level : 'all') as Effective['level']
-  return { level, muted: isMuted(ch) || isMuted(g), suppressEveryone: !!(ch?.suppress_everyone || g?.suppress_everyone) }
+  return { level, muted: isMuted(own) || isMuted(parent) || isMuted(g), suppressEveryone: !!(own?.suppress_everyone || parent?.suppress_everyone || g?.suppress_everyone) }
 }
 
 export const mutedTarget = (settings: Record<string, NotifSetting>, id: string) => isMuted(settings[id])

@@ -110,7 +110,7 @@ async fn scope(db: &PgPool, uid: Uuid, guild_id: Option<Uuid>, channel_id: Optio
     let mut out = Vec::new();
     for (g,) in guilds {
         for c in perms::visible_channels(db, g, uid).await? {
-            if c.kind == "text" || c.kind == "voice" {
+            if c.kind == "text" || c.kind == "voice" || c.kind == "thread" {
                 out.push((c.id, Some(g), c.name));
             }
         }

@@ -16,6 +16,7 @@ import EditHistoryModal from './EditHistory'
 import ReportModal from './Report'
 import CreatePollModal from './CreatePoll'
 import EditCategoryModal from './EditCategory'
+import CreateThreadModal from './CreateThread'
 import TransferOwnershipModal from './TransferOwnership'
 import CustomStatusModal from './CustomStatus'
 import ForwardModal from './Forward'
@@ -52,6 +53,7 @@ export default function Modals() {
     case 'report': return <ReportModal onClose={close} messageId={modal!.messageId} userId={modal!.userId} name={modal!.name} />
     case 'createPoll': return <CreatePollModal onClose={close} channelId={modal!.channelId} />
     case 'editCategory': return <EditCategoryModal onClose={close} channelId={modal!.channelId} />
+    case 'createThread': return <CreateThreadModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} suggested={modal!.suggested} />
     case 'transferOwnership': return <TransferOwnershipModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'customStatus': return <CustomStatusModal onClose={close} />
     case 'forward': return <ForwardModal onClose={close} message={modal!.message} />
