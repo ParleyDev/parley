@@ -47,6 +47,13 @@ async fn main() -> anyhow::Result<()> {
 
     let state = state::AppState { db, config: Arc::new(config.clone()), hub: Arc::new(ws::hub::Hub::new()) };
     let state_for_sweep = state.clone();
+    // Cross-instance bus (Postgres LISTEN/NOTIFY) + shared presence: harmless on one instance, required for more.
+    let (bus_tx, bus_rx) = tokio::sync::mpsc::unbounded_channel();
+    state.hub.attach_bus(bus_tx);
+    tokio::spawn(ws::bus::publisher(state.clone(), bus_rx));
+    tokio::spawn(ws::bus::listener(state.clone()));
+    tokio::spawn(ws::bus::heartbeat(state.clone()));
+    tracing::info!(instance = %state.hub.instance_id, "instance id");
 
     let cors = if config.cors_origins.is_empty() {
         CorsLayer::new().allow_origin(AllowOrigin::mirror_request())

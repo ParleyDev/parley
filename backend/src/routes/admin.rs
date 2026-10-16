@@ -89,7 +89,7 @@ async fn stats(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppRes
     let (uploads,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0)::bigint FROM (SELECT size FROM attachments UNION ALL SELECT size FROM images) x").fetch_one(&state.db).await?;
     let (reports_open,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM reports WHERE status = 'open'").fetch_one(&state.db).await?;
     Ok(Json(json!({
-        "users": users, "admins": admins, "suspended": suspended, "online": state.hub.online_users().len(),
+        "users": users, "admins": admins, "suspended": suspended, "online": crate::ws::bus::online_users(&state.db).await.len(),
         "guilds": guilds, "messages": messages, "discovery_pending": pending, "discovery_approved": approved, "upload_bytes": uploads,
         "reports_open": reports_open,
     })))
@@ -132,7 +132,7 @@ async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Quer
     .bind(pattern(&q.q))
     .fetch_all(&state.db)
     .await?;
-    let online = state.hub.online_users();
+    let online = crate::ws::bus::online_users(&state.db).await;
     for r in &mut rows { r.online = online.contains(&r.id) }
     Ok(Json(rows))
 }

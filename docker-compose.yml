@@ -87,6 +87,16 @@ services:
       - "${WEB_PORT:-3000}:80"
       - "${WEB_TLS_PORT:-3443}:443"
 
+  # Second backend instance for testing horizontal scaling (profile "cluster"): same image, same DB and
+  # uploads, reachable on API_PORT2 (18081). Instances share events and presence through Postgres
+  # LISTEN/NOTIFY; put a load balancer in front for real deployments (voice needs sticky sessions).
+  backend2:
+    extends:
+      service: backend
+    profiles: ["cluster"]
+    ports: !override
+      - "${API_PORT2:-18081}:8080"
+
   # Backups: `docker compose --profile backup run --rm backup once` for a single backup into ./backups, or
   # `docker compose --profile backup up -d` to keep one running daily (BACKUP_INTERVAL seconds, BACKUP_KEEP of each).
   # Restore drill: ops/restore.sh backups/db-<ts>.dump backups/uploads-<ts>.tgz (see README).

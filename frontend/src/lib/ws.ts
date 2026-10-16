@@ -3,7 +3,7 @@ import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sticker, ThreadInfo, User, VoiceState } from './types'
 import { voice } from './voice'
 
-type Ev = { s?: number } & (
+type Ev = { s?: number; i?: string } & (
   | { t: 'READY'; d: ReadyPayload }
   | { t: 'RESUMED'; d: { replayed: number; from: number } }
   | { t: 'RESYNC'; d: unknown }
@@ -46,6 +46,8 @@ export type SignalData = { type: 'offer' | 'answer'; sdp: string } | { type: 'ca
 let socket: WebSocket | null = null
 /** Highest event sequence number seen; sent back on reconnect so the server can replay the gap. */
 let lastSeq = 0
+/** Backend instance that numbered lastSeq; a resume is only valid against the same one. */
+let instanceId: string | null = null
 /** Debug counters (also handy for tests): how often we resumed vs. got a fresh READY. */
 export const wsStats = { resumed: 0, ready: 0, replayed: 0, /** Drop the socket as a network blip would (debugging/tests); it reconnects and resumes. */ drop: () => { socket?.close() } }
 let retry = 0
@@ -58,7 +60,7 @@ export function connectSocket() {
   if (!token || socket) return
   closedByUser = false
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  const resume = lastSeq > 0 && useStore.getState().ready ? `&seq=${lastSeq}` : ''
+  const resume = lastSeq > 0 && useStore.getState().ready ? `&seq=${lastSeq}${instanceId ? `&instance=${instanceId}` : ''}` : ''
   const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}${resume}`)
   socket = ws
 
@@ -70,6 +72,7 @@ export function connectSocket() {
     let ev: Ev
     try { ev = JSON.parse(e.data) } catch { return }
     if (typeof ev.s === 'number' && ev.s > lastSeq) lastSeq = ev.s
+    if (typeof ev.i === 'string') instanceId = ev.i
     handle(ev)
   }
   ws.onclose = () => {
@@ -115,7 +118,7 @@ function handle(ev: Ev) {
     case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); voice.onReconnect(); break
     // The server replayed everything we missed; state is already current, no need to rebuild it.
     case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); break
-    case 'RESYNC': lastSeq = 0; socket?.close(); break
+    case 'RESYNC': lastSeq = 0; instanceId = null; socket?.close(); break
     case 'PONG': break
     case 'MESSAGE_CREATE': {
       s.addMessage(ev.d.message)

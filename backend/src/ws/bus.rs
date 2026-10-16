@@ -1,0 +1,132 @@
+//! Cross-instance event bus and shared presence on plain Postgres (LISTEN/NOTIFY), so several backends
+//! behind one load balancer see each other's events and who is online. Voice state stays per instance.
+
+use crate::{state::AppState, ws::hub::Target};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sqlx::{postgres::PgListener, PgPool};
+use std::sync::Arc;
+use uuid::Uuid;
+
+const CHANNEL: &str = "parley_events";
+/// NOTIFY payloads are capped at 8000 bytes; larger ones go through bus_outbox by id.
+const INLINE_MAX: usize = 7000;
+/// A presence row older than this (no heartbeat) belongs to a dead instance.
+pub const STALE_SECS: i64 = 90;
+
+#[derive(Serialize, Deserialize)]
+struct Frame {
+    origin: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    target: Option<Target>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    payload: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    r#ref: Option<Uuid>,
+}
+
+/// Publisher: drains the hub's outgoing queue into NOTIFY (or the outbox + NOTIFY for big payloads).
+pub async fn publisher(state: AppState, mut rx: tokio::sync::mpsc::UnboundedReceiver<(Target, Arc<Value>)>) {
+    let origin = state.hub.instance_id;
+    while let Some((target, payload)) = rx.recv().await {
+        let frame = serde_json::to_string(&Frame { origin, target: Some(target.clone()), payload: Some((*payload).clone()), r#ref: None }).unwrap_or_default();
+        let res = if frame.len() <= INLINE_MAX {
+            sqlx::query("SELECT pg_notify($1, $2)").bind(CHANNEL).bind(&frame).execute(&state.db).await.map(|_| ())
+        } else {
+            let id = Uuid::now_v7();
+            let stored = serde_json::json!({ "target": target, "payload": &*payload });
+            match sqlx::query("INSERT INTO bus_outbox (id, payload) VALUES ($1, $2)").bind(id).bind(stored).execute(&state.db).await {
+                Ok(_) => {
+                    let small = serde_json::to_string(&Frame { origin, target: None, payload: None, r#ref: Some(id) }).unwrap_or_default();
+                    sqlx::query("SELECT pg_notify($1, $2)").bind(CHANNEL).bind(&small).execute(&state.db).await.map(|_| ())
+                }
+                Err(e) => Err(e),
+            }
+        };
+        if let Err(e) = res {
+            tracing::warn!(error = %e, "bus publish failed");
+        }
+    }
+}
+
+/// Listener: injects other instances' events into the local hub. Reconnects forever.
+pub async fn listener(state: AppState) {
+    loop {
+        match run_listener(&state).await {
+            Ok(()) => {}
+            Err(e) => tracing::warn!(error = %e, "bus listener dropped; reconnecting"),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    }
+}
+
+async fn run_listener(state: &AppState) -> anyhow::Result<()> {
+    let mut l = PgListener::connect_with(&state.db).await?;
+    l.listen(CHANNEL).await?;
+    tracing::info!(instance = %state.hub.instance_id, "event bus connected");
+    loop {
+        let n = l.recv().await?;
+        let Ok(frame) = serde_json::from_str::<Frame>(n.payload()) else { continue };
+        if frame.origin == state.hub.instance_id {
+            continue;
+        }
+        let (target, payload) = match (frame.target, frame.payload, frame.r#ref) {
+            (Some(t), Some(p), _) => (t, p),
+            (_, _, Some(id)) => {
+                let row: Option<(Value,)> = sqlx::query_as("SELECT payload FROM bus_outbox WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+                let Some((v,)) = row else { continue };
+                let Ok(target) = serde_json::from_value::<Target>(v.get("target").cloned().unwrap_or(Value::Null)) else { continue };
+                (target, v.get("payload").cloned().unwrap_or(Value::Null))
+            }
+            _ => continue,
+        };
+        state.hub.inject(target, payload);
+    }
+}
+
+/// Keep this instance's presence rows fresh and tidy up after dead instances / old outbox rows.
+pub async fn heartbeat(state: AppState) {
+    let me = state.hub.instance_id;
+    // A restarted instance has no sockets yet: forget whatever its previous life left behind.
+    let _ = sqlx::query("DELETE FROM presence WHERE instance_id = $1").bind(me).execute(&state.db).await;
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+        let _ = sqlx::query("UPDATE presence SET updated_at = now() WHERE instance_id = $1").bind(me).execute(&state.db).await;
+        let _ = sqlx::query("DELETE FROM presence WHERE updated_at < now() - make_interval(secs => $1)").bind(STALE_SECS as f64 * 2.0).execute(&state.db).await;
+        let _ = sqlx::query("DELETE FROM bus_outbox WHERE created_at < now() - interval '5 minutes'").execute(&state.db).await;
+    }
+}
+
+/// Register a socket; true when the user was offline everywhere before (announce PRESENCE_UPDATE online).
+pub async fn connect(state: &AppState, user: Uuid) -> bool {
+    state.hub.connect(user);
+    let before = global_sockets(&state.db, user).await.unwrap_or(0);
+    let _ = sqlx::query("INSERT INTO presence (user_id, instance_id, sockets) VALUES ($1, $2, 1) ON CONFLICT (user_id, instance_id) DO UPDATE SET sockets = presence.sockets + 1, updated_at = now()")
+        .bind(user).bind(state.hub.instance_id).execute(&state.db).await;
+    before == 0
+}
+
+/// Drop a socket; true when the user is now offline everywhere.
+pub async fn disconnect(state: &AppState, user: Uuid) -> bool {
+    state.hub.disconnect(user);
+    let _ = sqlx::query("UPDATE presence SET sockets = GREATEST(sockets - 1, 0), updated_at = now() WHERE user_id = $1 AND instance_id = $2")
+        .bind(user).bind(state.hub.instance_id).execute(&state.db).await;
+    let _ = sqlx::query("DELETE FROM presence WHERE user_id = $1 AND instance_id = $2 AND sockets <= 0").bind(user).bind(state.hub.instance_id).execute(&state.db).await;
+    global_sockets(&state.db, user).await.unwrap_or(0) == 0
+}
+
+async fn global_sockets(db: &PgPool, user: Uuid) -> sqlx::Result<i64> {
+    let (n,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(sockets), 0)::bigint FROM presence WHERE user_id = $1 AND updated_at > now() - make_interval(secs => $2)")
+        .bind(user).bind(STALE_SECS as f64).fetch_one(db).await?;
+    Ok(n)
+}
+
+/// Everyone with a live socket on any instance.
+pub async fn online_users(db: &PgPool) -> Vec<Uuid> {
+    sqlx::query_as::<_, (Uuid,)>("SELECT DISTINCT user_id FROM presence WHERE sockets > 0 AND updated_at > now() - make_interval(secs => $1)")
+        .bind(STALE_SECS as f64)
+        .fetch_all(db)
+        .await
+        .map(|r| r.into_iter().map(|x| x.0).collect())
+        .unwrap_or_default()
+}

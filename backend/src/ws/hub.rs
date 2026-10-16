@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub enum Target {
     All,
     Guild(Uuid),
@@ -56,7 +56,12 @@ impl VoiceState {
 
 /// Fan-out hub. One global broadcast channel; each socket task filters by target.
 pub struct Hub {
+    /// This process; events carry it so other instances can tell their own echoes apart, and clients
+    /// only resume (replay) against the instance that numbered their last event.
+    pub instance_id: Uuid,
     tx: broadcast::Sender<Event>,
+    /// Outgoing copies for the cross-instance bus (see ws::bus); None until `attach_bus`.
+    bus: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<(Target, Arc<Value>)>>>,
     /// user_id -> number of open sockets
     online: DashMap<Uuid, usize>,
     /// user_id -> current voice channel
@@ -78,7 +83,9 @@ impl Hub {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(4096);
         Self {
+            instance_id: Uuid::now_v7(),
             tx,
+            bus: std::sync::Mutex::new(None),
             online: DashMap::new(),
             voice: DashMap::new(),
             session_seq: std::sync::atomic::AtomicU64::new(1),
@@ -112,18 +119,39 @@ impl Hub {
         self.tx.subscribe()
     }
 
+    /// Wire the outgoing side of the cross-instance bus.
+    pub fn attach_bus(&self, tx: tokio::sync::mpsc::UnboundedSender<(Target, Arc<Value>)>) {
+        *self.bus.lock().unwrap_or_else(|e| e.into_inner()) = Some(tx);
+    }
+
     pub fn emit<T: Serialize>(&self, target: Target, t: &str, d: T) {
-        // Assign the sequence number and buffer the event under one lock so order and numbering agree.
+        let ev = self.publish_local(target.clone(), json!({ "t": t, "d": d }));
+        if let Some(bus) = self.bus.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            let _ = bus.send((target, ev.payload));
+        }
+    }
+
+    /// An event that arrived from another instance: deliver locally, never re-publish.
+    pub fn inject(&self, target: Target, payload: Value) {
+        self.publish_local(target, payload);
+    }
+
+    /// Number the event, buffer it for resumes and broadcast to local sockets (all under one lock so
+    /// order and numbering agree).
+    fn publish_local(&self, target: Target, mut payload: Value) -> Event {
         let mut buf = self.replay.lock().unwrap_or_else(|e| e.into_inner());
         let seq = self.seq.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
-        let payload = Arc::new(json!({ "t": t, "d": d, "s": seq }));
-        let ev = Event { seq, target, payload };
+        if let Value::Object(m) = &mut payload {
+            m.insert("s".into(), json!(seq));
+        }
+        let ev = Event { seq, target, payload: Arc::new(payload) };
         if buf.len() >= REPLAY_BUFFER {
             buf.pop_front();
         }
         buf.push_back(ev.clone());
         drop(buf);
-        let _ = self.tx.send(ev);
+        let _ = self.tx.send(ev.clone());
+        ev
     }
 
     pub fn emit_guild<T: Serialize>(&self, guild_id: Uuid, t: &str, d: T) {
