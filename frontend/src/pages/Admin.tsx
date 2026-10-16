@@ -1,6 +1,6 @@
-import { Compass, Flag, Gavel, KeyRound, LayoutDashboard, LogOut, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
+import { Compass, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
-import { NavLink, Route, Routes } from 'react-router-dom'
+import { NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
 import { MobileBack } from '../components/HeaderBits'
 import { api } from '../lib/api'
@@ -22,6 +22,7 @@ export default function AdminPage() {
               <NavLink to="/admin/servers" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> Servers</NavLink>
               <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> Discovery Queue</NavLink>
               <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> Instance Settings</NavLink>
+              <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> Messages</NavLink>
               <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> Reports</NavLink>
               <NavLink to="/admin/audit" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="audit"><ScrollText size={20} /> Audit Log</NavLink>
             </nav>
@@ -36,6 +37,8 @@ export default function AdminPage() {
           <Route path="settings" element={<SettingsPane />} />
           <Route path="audit" element={<AuditPane />} />
           <Route path="reports" element={<ReportsPane />} />
+          <Route path="messages" element={<MessagesPane />} />
+          <Route path="users/:id" element={<UserContentPane />} />
         </Routes>
       </div>
     </SplitLayout>
@@ -82,6 +85,7 @@ function UsersPane() {
   const [list, setList] = useState<AdminUser[] | null>(null)
   const load = () => api.get<AdminUser[]>(`/admin/users?q=${encodeURIComponent(q.trim())}`).then(setList).catch((e: Error) => pushToast(e.message, 'error'))
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const navigate = useNavigate()
   const logoutAll = async (u: AdminUser) => {
     try { const r = await api.delete<{ revoked: number }>(`/admin/users/${u.id}/sessions`); pushToast(`@${u.username} logged out of ${r.revoked} device${r.revoked === 1 ? '' : 's'}`) } catch (e) { pushToast((e as Error).message, 'error') }
   }
@@ -116,6 +120,7 @@ function UsersPane() {
                 <>
                   <Tool label={u.is_admin ? 'Remove admin' : 'Make admin'} onClick={() => patch(u, { is_admin: !u.is_admin }, u.is_admin ? `@${u.username} is no longer an admin` : `@${u.username} is now an admin`)} testid="toggle-admin">{u.is_admin ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}</Tool>
                   <Tool label={u.suspended_at ? 'Unsuspend' : 'Suspend'} onClick={() => patch(u, { suspended: !u.suspended_at }, u.suspended_at ? `@${u.username} unsuspended` : `@${u.username} suspended`)} testid="toggle-suspend" danger={!u.suspended_at}>{u.suspended_at ? <UserCheck size={16} /> : <UserX size={16} />}</Tool>
+                  <Tool label="Messages and uploads" onClick={() => navigate(`/admin/users/${u.id}`)} testid="content"><FolderOpen size={16} /></Tool>
                   <Tool label="Log out of all devices" onClick={() => logoutAll(u)} testid="logout-all"><LogOut size={16} /></Tool>
                   {u.mfa_enabled && <Tool label="Clear two-factor auth" onClick={() => patch(u, { mfa: false }, `Two-factor authentication cleared for @${u.username}`)} testid="clear-mfa" danger><KeyRound size={16} /></Tool>}
                   <Tool label="Delete account" onClick={() => del(u)} testid="delete-user" danger><Trash2 size={16} /></Tool>
@@ -306,6 +311,100 @@ function ReportsPane() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+interface AdminHit { id: string; channel_id: string; content: string; created_at: string; author: { id: string; username: string; display_name: string }; attachments: { id: string; filename: string; url: string; size: number }[]; guild_id: string | null; guild_name: string; channel_name: string }
+
+function HitRow({ m, onDeleted }: { m: AdminHit; onDeleted: () => void }) {
+  const pushToast = useStore((s) => s.pushToast)
+  const del = async () => { try { await api.delete(`/admin/messages/${m.id}`); pushToast('Message deleted'); onDeleted() } catch (e) { pushToast((e as Error).message, 'error') } }
+  return (
+    <div className="px-3 py-2 border-t border-line first:border-t-0 text-sm" data-admin-msg={m.id}>
+      <div className="flex flex-wrap items-center gap-x-2 text-xs text-text-2">
+        <span className="font-semibold text-text-0">@{m.author.username}</span>
+        <span>{m.guild_id ? `${m.guild_name} · #${m.channel_name}` : 'Direct message'}</span>
+        <span title={m.created_at}>{new Date(m.created_at).toLocaleString()}</span>
+        <a className="text-sky-400 hover:underline" href={`/channels/${m.guild_id ?? '@me'}/${m.channel_id}?message=${m.id}`} target="_blank" rel="noreferrer">open</a>
+        <button type="button" onClick={del} className="ml-auto text-danger hover:underline" data-admin-msg-delete>Delete</button>
+      </div>
+      <div className="whitespace-pre-wrap break-words mt-0.5">{m.content || <i className="text-text-2">(no text)</i>}</div>
+      {m.attachments?.length > 0 && <div className="text-xs text-text-2 mt-0.5">📎 {m.attachments.map((a) => <a key={a.id} className="hover:underline mr-2" href={a.url} target="_blank" rel="noreferrer">{a.filename}</a>)}</div>}
+    </div>
+  )
+}
+
+function MessagesPane() {
+  const [q, setQ] = useState('')
+  const [rows, setRows] = useState<AdminHit[] | null>(null)
+  const load = async () => { if (!q.trim()) { setRows(null); return } try { setRows(await api.get<AdminHit[]>(`/admin/messages?q=${encodeURIComponent(q.trim())}`)) } catch { setRows([]) } }
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div data-admin-messages>
+      <h1 className="text-2xl font-bold">Messages</h1>
+      <p className="text-sm text-text-2 mt-1">Find any message on this instance by its words (prefix match) and delete it. Members of that channel see it disappear.</p>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search message text" data-admin-msg-search className="input mt-4 max-w-md" />
+      <div className="mt-4 rounded-xl border border-line bg-bg-1 overflow-hidden">
+        {rows === null && <p className="p-4 text-sm text-text-2">Type to search.</p>}
+        {rows?.length === 0 && <p className="p-4 text-sm text-text-2" data-admin-msg-empty>No messages match.</p>}
+        {rows?.map((m) => <HitRow key={m.id} m={m} onDeleted={load} />)}
+      </div>
+    </div>
+  )
+}
+
+interface UserContent { user: { id: string; username: string; display_name: string }; messages: AdminHit[]; uploads: { id: string; filename: string; content_type: string; size: number; url: string; message_id: string | null; created_at: string }[]; images: { id: string; kind: string; size: number; url: string; created_at: string }[]; totals: { messages: number; attachments: number; attachment_bytes: number; images: number; image_bytes: number } }
+
+function UserContentPane() {
+  const { id } = useParams()
+  const openModal = useStore((s) => s.openModal)
+  const pushToast = useStore((s) => s.pushToast)
+  const [data, setData] = useState<UserContent | null>(null)
+  const [tab, setTab] = useState<'messages' | 'uploads'>('messages')
+  const load = async () => { try { setData(await api.get<UserContent>(`/admin/users/${id}/content`)) } catch (e) { pushToast((e as Error).message, 'error') } }
+  useEffect(() => { load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (!data) return <p className="text-sm text-text-2">Loading…</p>
+  const { user, totals } = data
+  const purgeMessages = () => openModal({ kind: 'confirm', title: `Delete all messages by @${user.username}`, body: `This deletes all ${totals.messages.toLocaleString()} messages ${user.display_name} has ever sent, everywhere. This cannot be undone.`, danger: true, confirmLabel: 'Delete All Messages',
+    action: async () => { try { const r = await api.delete<{ deleted: number }>(`/admin/users/${user.id}/messages`); pushToast(`${r.deleted} messages deleted`); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
+  const purgeUploads = () => openModal({ kind: 'confirm', title: `Purge uploads by @${user.username}`, body: `Removes all ${totals.attachments} attachments (${formatBytes(totals.attachment_bytes)}) and their profile images. Their messages stay, without the files. This cannot be undone.`, danger: true, confirmLabel: 'Purge Uploads',
+    action: async () => { try { const r = await api.delete<{ attachments: number; images: number }>(`/admin/users/${user.id}/uploads`); pushToast(`${r.attachments} attachments and ${r.images} images removed`); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
+  return (
+    <div data-admin-user-content={user.id}>
+      <NavLink to="/admin/users" className="text-xs text-sky-400 hover:underline">← Users</NavLink>
+      <h1 className="text-2xl font-bold mt-1">{user.display_name} <span className="text-base font-normal text-text-2">@{user.username}</span></h1>
+      <p className="text-sm text-text-2 mt-1" data-admin-content-totals>{totals.messages.toLocaleString()} messages · {totals.attachments} attachments ({formatBytes(totals.attachment_bytes)}) · {totals.images} profile/expression images ({formatBytes(totals.image_bytes)})</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" className="btn-danger py-1 text-xs" onClick={purgeMessages} disabled={totals.messages === 0} data-admin-purge-messages>Delete all messages</button>
+        <button type="button" className="btn-danger py-1 text-xs" onClick={purgeUploads} disabled={totals.attachments === 0 && totals.images === 0} data-admin-purge-uploads>Purge uploads</button>
+      </div>
+      <div className="mt-5 flex gap-1.5">
+        {(['messages', 'uploads'] as const).map((t) => <button key={t} type="button" onClick={() => setTab(t)} className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${tab === t ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-admin-content-tab={t}>{t}</button>)}
+      </div>
+      {tab === 'messages' ? (
+        <div className="mt-3 rounded-xl border border-line bg-bg-1 overflow-hidden" data-admin-content-messages>
+          {data.messages.length === 0 && <p className="p-4 text-sm text-text-2">No messages.</p>}
+          {data.messages.map((m) => <HitRow key={m.id} m={m} onDeleted={load} />)}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-xl border border-line bg-bg-1 overflow-hidden" data-admin-content-uploads>
+          {data.uploads.length === 0 && data.images.length === 0 && <p className="p-4 text-sm text-text-2">No uploads.</p>}
+          {data.uploads.map((u) => (
+            <div key={u.id} className="px-3 py-2 border-t border-line first:border-t-0 text-sm flex items-center gap-3" data-admin-upload={u.id}>
+              <a className="text-sky-400 hover:underline truncate" href={u.url} target="_blank" rel="noreferrer">{u.filename}</a>
+              <span className="text-xs text-text-2">{u.content_type} · {formatBytes(u.size)} · {new Date(u.created_at).toLocaleString()}</span>
+            </div>
+          ))}
+          {data.images.map((i) => (
+            <div key={i.id} className="px-3 py-2 border-t border-line text-sm flex items-center gap-3" data-admin-image={i.id}>
+              <img src={i.url} alt="" className="h-8 w-8 rounded object-cover bg-bg-0" />
+              <span className="capitalize">{i.kind}</span>
+              <span className="text-xs text-text-2">{formatBytes(i.size)} · {new Date(i.created_at).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

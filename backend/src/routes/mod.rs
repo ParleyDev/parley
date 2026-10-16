@@ -10,6 +10,7 @@ pub mod images;
 pub mod guilds;
 pub mod invites;
 pub mod mfa;
+pub mod moderation;
 pub mod relationships;
 pub mod reports;
 pub mod roles;
@@ -28,6 +29,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(sessions::router())
         .merge(search::router())
         .merge(reports::router())
+        .merge(moderation::router())
         .merge(guilds::router())
         .merge(invites::router())
         .merge(roles::router())
