@@ -12,6 +12,10 @@ export const WEB = process.env.PARLEY_WEB ?? 'http://localhost:3000'
 export const S = Math.floor(Math.random() * 1e6)
 export const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? 'admin-e2e@x.io'
 export const PASSWORD = 'password1'
+// Per-IP rate limits would couple suites and runs together; the backend trusts X-Forwarded-For
+// (nginx sets it in front of the API), so every run presents its own private address.
+export const IP = `10.99.${Math.floor(S / 256) % 256}.${S % 256}`
+export const H = { 'Content-Type': 'application/json', 'X-Forwarded-For': IP }
 
 export let pass = 0, fail = 0
 const created = []
@@ -20,19 +24,19 @@ export const track = (u) => { if (u?.id) created.push(u.id); return u }
 
 export const reg = async (u, email) => {
   const mail = email ?? `${u}${S}@x.io`
-  const r = await fetch(`${B}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u + S, email: mail, password: PASSWORD, display_name: u[0].toUpperCase() + u.slice(1) }) })
+  const r = await fetch(`${B}/auth/register`, { method: 'POST', headers: H, body: JSON.stringify({ username: u + S, email: mail, password: PASSWORD, display_name: u[0].toUpperCase() + u.slice(1) }) })
   const j = await r.json().catch(() => ({}))
   if (j.user && mail !== ADMIN_EMAIL) track(j.user)
   return j
 }
-export const loginRaw = (login) => fetch(`${B}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ login, password: PASSWORD }) })
+export const loginRaw = (login) => fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login, password: PASSWORD }) })
 export const login = async (l) => (await loginRaw(l)).json().catch(() => ({}))
 /** JSON call; returns the parsed body (null when there is none). */
-export const call = async (t, m, p, b) => { const r = await fetch(B + p, { method: m, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: b ? JSON.stringify(b) : undefined }); return r.json().catch(() => null) }
+export const call = async (t, m, p, b) => { const r = await fetch(B + p, { method: m, headers: { ...H, Authorization: 'Bearer ' + t }, body: b ? JSON.stringify(b) : undefined }); return r.json().catch(() => null) }
 /** Raw call; returns the Response so status codes can be asserted. */
-export const raw = (t, m, p, b) => fetch(B + p, { method: m, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: b ? JSON.stringify(b) : undefined })
+export const raw = (t, m, p, b) => fetch(B + p, { method: m, headers: { ...H, Authorization: 'Bearer ' + t }, body: b ? JSON.stringify(b) : undefined })
 /** Multipart upload with extra text fields. */
-export const multi = async (t, p, file, fields = {}) => { const f = new FormData(); for (const [k, v] of Object.entries(fields)) f.append(k, v); f.append('file', new Blob([file.buffer], { type: file.mimeType }), file.name); return fetch(B + p, { method: 'POST', headers: { Authorization: 'Bearer ' + t }, body: f }) }
+export const multi = async (t, p, file, fields = {}) => { const f = new FormData(); for (const [k, v] of Object.entries(fields)) f.append(k, v); f.append('file', new Blob([file.buffer], { type: file.mimeType }), file.name); return fetch(B + p, { method: 'POST', headers: { Authorization: 'Bearer ' + t, 'X-Forwarded-For': IP }, body: f }) }
 
 export const ok = (n, c, x = '') => { if (c) { pass++; console.log('  ok  ', n) } else { fail++; console.log('  FAIL', n, x) } }
 
@@ -71,12 +75,12 @@ export const finish = async () => {
 
 // Older suites: register with a lowercase display name and get {status, body} from calls.
 export const regLower = async (u) => {
-  const r = await fetch(`${B}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u + S, email: `${u}${S}@x.io`, password: PASSWORD, display_name: u }) })
+  const r = await fetch(`${B}/auth/register`, { method: 'POST', headers: H, body: JSON.stringify({ username: u + S, email: `${u}${S}@x.io`, password: PASSWORD, display_name: u }) })
   const j = await r.json().catch(() => ({}))
   if (j.user) track(j.user)
   return j
 }
-export const callS = async (t, m, p, b) => { const r = await fetch(B + p, { method: m, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: b ? JSON.stringify(b) : undefined }); const txt = await r.text(); let j = null; try { j = JSON.parse(txt) } catch { /* not json */ } return { status: r.status, body: j } }
+export const callS = async (t, m, p, b) => { const r = await fetch(B + p, { method: m, headers: { ...H, Authorization: 'Bearer ' + t }, body: b ? JSON.stringify(b) : undefined }); const txt = await r.text(); let j = null; try { j = JSON.parse(txt) } catch { /* not json */ } return { status: r.status, body: j } }
 
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'

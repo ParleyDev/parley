@@ -5,7 +5,9 @@ import { api } from '../lib/api'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { NavLink } from 'react-router-dom'
-import { isUnread, pendingCount, useStore } from '../store'
+import { isUnread, pendingCount, showsUnread, useStore } from '../store'
+import { notifEntries } from './NotifMenu'
+import { mutedTarget } from '../lib/notify'
 import type { DmChannel } from '../lib/types'
 import Avatar from './Avatar'
 import StyledName from './StyledName'
@@ -19,6 +21,8 @@ export default function DmSidebar() {
   const setMobilePane = useStore((s) => s.setMobilePane)
   const pending = useStore(pendingCount)
   const markRead = useStore((s) => s.markRead)
+  const notifSettings = useStore((s) => s.notifSettings)
+  const channels = useStore((s) => s.channels)
   const ctx = useContextMenu()
   const userMenu = useUserMenu(null)
   const pushToast = useStore((s) => s.pushToast)
@@ -27,6 +31,8 @@ export default function DmSidebar() {
     action: async () => { try { await api.delete(`/channels/${id}/recipients/${me?.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
   const dmMenu = (d: DmChannel, other: { id: string; display_name: string } | undefined, e: React.MouseEvent<HTMLElement>): MenuEntry[] => [
     { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !isUnread({ readStates, lastMessageId }, d.id), onClick: () => markRead(d.id) },
+    'sep',
+    ...notifEntries(d.id, 'Conversation', notifSettings),
     'sep',
     ...(isGroup(d)
       ? [{ label: 'Leave Group', icon: <LogOut size={16} />, danger: true, onClick: () => leave(d.id, dmName(d, users)) }]
@@ -52,9 +58,10 @@ export default function DmSidebar() {
           {list.map((d) => {
             const group = isGroup(d)
             const other = !group && d.recipients[0] ? { ...d.recipients[0], ...users[d.recipients[0].id] } : undefined
-            const unread = isUnread({ readStates, lastMessageId }, d.id)
+            const unread = showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, d.id)
+            const muted = mutedTarget(notifSettings, d.id)
             return (
-              <NavLink key={d.id} to={`/channels/@me/${d.id}`} onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, dmMenu(d, other, e))} data-dm-row={group ? d.id : other?.id} data-group-row={group ? d.id : undefined} className={({ isActive }) => `group flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+              <NavLink key={d.id} to={`/channels/@me/${d.id}`} onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, dmMenu(d, other, e))} data-dm-row={group ? d.id : other?.id} data-group-row={group ? d.id : undefined} data-muted={muted ? 'true' : undefined} className={({ isActive }) => `group flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
                 {group ? <GroupIcon dm={d} size={32} /> : other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
                 {group ? (
                   <span className="min-w-0 flex-1 leading-tight">

@@ -1,11 +1,11 @@
 import { chromium } from 'playwright'
-import { B, WEB, S, reg, call, raw, loginRaw, ok, finish, adminToken } from '../lib.mjs'
+import { B, H, WEB, S, reg, call, raw, loginRaw, ok, finish, adminToken } from '../lib.mjs'
 
 const admin = await adminToken()
 const a = await reg('alice')
 const email = `alice${S}@x.io`
 const mailFor = async (to) => call(admin.token, 'GET', `/admin/mail?to=${encodeURIComponent(to)}`)
-const post = (p, b) => fetch(B + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) })
+const post = (p, b) => fetch(B + p, { method: 'POST', headers: H, body: JSON.stringify(b) })
 const tokenFrom = (m) => /reset\?token=([0-9a-f]{64})/.exec(m?.body ?? '')?.[1]
 
 console.log('-- API')

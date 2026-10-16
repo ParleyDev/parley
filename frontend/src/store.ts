@@ -5,6 +5,7 @@ import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
 import type { Ban, Channel, DmChannel, Emoji, Guild, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sticker, User, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
+import { effective, mutedTarget, type NotifSetting } from './lib/notify'
 import { channelPerms, guildPerms } from './lib/perms'
 
 export type ModalKind =
@@ -36,6 +37,7 @@ export interface ReadyPayload {
   bookmarks?: string[]
   guild_layout?: LayoutItem[]
   mention_counts?: { channel_id: string; count: number }[]
+  notification_settings?: NotifSetting[]
   me_members: Member[]
   dm_channels: DmChannel[]
   relationships?: Relationship[]
@@ -74,6 +76,8 @@ interface State {
   bookmarks: Record<string, true>
   /** Unread messages per channel that mention me (direct, role or @everyone). */
   mentionCounts: Record<string, number>
+  /** Per-server / per-channel notification settings, keyed by target id. */
+  notifSettings: Record<string, NotifSetting>
   messages: Record<string, Message[]>
   hasMore: Record<string, boolean>
   loadingMessages: Record<string, boolean>
@@ -126,6 +130,9 @@ interface State {
   /** Replace the server bar layout; `save` also PUTs it to the server. */
   setGuildLayout: (items: LayoutItem[], save?: boolean) => void
   setInstance: (i: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean }) => void
+  setNotifSetting: (s: NotifSetting & { deleted?: boolean }) => void
+  /** PUT a notification setting (level / mute / suppress) for a server, channel or DM. */
+  updateNotif: (target: string, body: { level?: string; mute_minutes?: number; unmute?: boolean; suppress_everyone?: boolean }) => Promise<void>
   upsertRelationship: (r: Relationship) => void
   removeRelationship: (userId: string) => void
   upsertRole: (r: Role) => void
@@ -207,6 +214,7 @@ export const useStore = create<State>((set, get) => ({
   stickers: {},
   bookmarks: {},
   mentionCounts: {},
+  notifSettings: {},
   messages: {},
   hasMore: {},
   loadingMessages: {},
@@ -245,7 +253,7 @@ export const useStore = create<State>((set, get) => ({
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], guildLayout: [], channels: {}, dms: {}, relationships: {},
-      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, mentionCounts: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
+      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, mentionCounts: {}, notifSettings: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {},
     })
   },
@@ -287,9 +295,11 @@ export const useStore = create<State>((set, get) => ({
     const guildLayout = reconcile(r.guild_layout ?? [], r.guilds.map((g) => g.id))
     const mentionCounts: Record<string, number> = {}
     ;(r.mention_counts ?? []).forEach((m) => (mentionCounts[m.channel_id] = m.count))
+    const notifSettings: Record<string, NotifSetting> = {}
+    ;(r.notification_settings ?? []).forEach((n) => (notifSettings[n.target_id] = n))
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
-      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts,
+      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events.
       messages: {}, hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
@@ -311,6 +321,10 @@ export const useStore = create<State>((set, get) => ({
   setGuildEmojis: (guildId, emojis) => set((s) => ({ emojis: { ...s.emojis, [guildId]: emojis } })),
   setGuildStickers: (guildId, stickers) => set((s) => ({ stickers: { ...s.stickers, [guildId]: stickers } })),
   setInstance: (instance) => set({ instance }),
+  setNotifSetting: (n) => set((s) => { const notifSettings = { ...s.notifSettings }; if (n.deleted) delete notifSettings[n.target_id]; else notifSettings[n.target_id] = n; return { notifSettings } }),
+  updateNotif: async (target, body) => {
+    try { const n = await api.put<NotifSetting>(`/users/@me/notification-settings/${target}`, body); get().setNotifSetting(n) } catch (e) { get().pushToast((e as Error).message, 'error') }
+  },
   setGuildLayout: (items, save) => {
     const layout = reconcile(items, get().guildOrder)
     set({ guildLayout: layout })
@@ -577,12 +591,25 @@ export function isUnread(s: Pick<State, 'readStates' | 'lastMessageId'>, channel
   return !read || read < last
 }
 
-export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels'>, guildId: string): boolean {
-  return Object.values(s.channels).some((c) => c.guild_id === guildId && isUnread(s, c.id))
+/** Unread AND allowed to show as such: not muted, and the level is "all messages". */
+export function showsUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'>, channelId: string): boolean {
+  if (!isUnread(s, channelId)) return false
+  const e = effective(s.notifSettings, s.channels[channelId] ?? s.dms[channelId])
+  return !e.muted && e.level === 'all'
 }
 
-export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'dms'>): number {
-  return Object.keys(s.dms).filter((id) => isUnread(s, id)).length
+/** Mention badges show unless the place is set to "nothing" (muted places still badge mentions, like Discord). */
+export function showsMentions(s: Pick<State, 'channels' | 'dms' | 'notifSettings'>, channelId: string): boolean {
+  return effective(s.notifSettings, s.channels[channelId] ?? s.dms[channelId]).level !== 'nothing'
+}
+
+export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'>, guildId: string): boolean {
+  if (mutedTarget(s.notifSettings, guildId)) return false
+  return Object.values(s.channels).some((c) => c.guild_id === guildId && showsUnread(s, c.id))
+}
+
+export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'dms' | 'channels' | 'notifSettings'>): number {
+  return Object.keys(s.dms).filter((id) => showsUnread(s, id)).length
 }
 
 /** Incoming friend requests awaiting my answer. */
@@ -619,16 +646,16 @@ export function myChannelPerms(s: PermState, channelId: string): number {
 const ALL_PERMS = -1 >>> 1
 
 /** Does this message mention the current user, one of their roles, or everyone? */
-export function mentionsMe(s: Pick<State, 'user' | 'members'>, m: Message): boolean {
+export function mentionsMe(s: Pick<State, 'user' | 'members' | 'notifSettings' | 'channels' | 'dms'>, m: Message): boolean {
   const me = s.user?.id
   if (!me) return false
-  if (m.mention_everyone) return true
+  if (m.mention_everyone && !effective(s.notifSettings, s.channels[m.channel_id] ?? s.dms[m.channel_id]).suppressEveryone) return true
   if (m.mentions?.includes(me)) return true
   if (m.mention_roles?.length) { for (const g of Object.values(s.members)) { const mine = g[me]?.roles ?? []; if (m.mention_roles.some((r) => mine.includes(r))) return true } }
   return false
 }
 
 /** Unread mentions summed over a server's channels. */
-export function guildMentions(s: Pick<State, 'mentionCounts' | 'channels'>, guildId: string): number {
-  return Object.entries(s.mentionCounts).reduce((n, [cid, c]) => (s.channels[cid]?.guild_id === guildId ? n + c : n), 0)
+export function guildMentions(s: Pick<State, 'mentionCounts' | 'channels' | 'dms' | 'notifSettings'>, guildId: string): number {
+  return Object.entries(s.mentionCounts).reduce((n, [cid, c]) => (s.channels[cid]?.guild_id === guildId && showsMentions(s, cid) ? n + c : n), 0)
 }

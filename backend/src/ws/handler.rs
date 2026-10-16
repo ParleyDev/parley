@@ -106,6 +106,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
     let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &guild_ids).await.unwrap_or_default();
     let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &guild_ids).await.unwrap_or_default();
     let bookmarks = crate::routes::channels::bookmark_ids(&state.db, user_id).await.unwrap_or_default();
+    let notification_settings = crate::routes::users::notif_settings_for(&state.db, user_id).await.unwrap_or_default();
     let dms = list_dm_channels(&state.db, user_id).await.unwrap_or_default();
     let relationships = crate::routes::relationships::list_for(&state.db, user_id).await.unwrap_or_default();
 
@@ -124,7 +125,12 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
         "SELECT m.channel_id, COUNT(*) FROM messages m
          LEFT JOIN read_states rs ON rs.channel_id = m.channel_id AND rs.user_id = $1
          WHERE m.channel_id = ANY($2) AND m.author_id <> $1 AND (rs.last_read_msg IS NULL OR m.id > rs.last_read_msg)
-           AND (m.mentions @> ARRAY[$1]::uuid[] OR m.mention_everyone OR m.mention_roles && $3::uuid[])
+           AND (m.mentions @> ARRAY[$1]::uuid[]
+                OR (m.mention_everyone AND NOT COALESCE(
+                      (SELECT suppress_everyone FROM notification_settings WHERE user_id = $1 AND target_id = m.channel_id),
+                      (SELECT ns.suppress_everyone FROM notification_settings ns JOIN channels c ON c.guild_id = ns.target_id WHERE ns.user_id = $1 AND c.id = m.channel_id),
+                      false))
+                OR m.mention_roles && $3::uuid[])
          GROUP BY m.channel_id",
     )
     .bind(user_id)
@@ -160,6 +166,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
             "emojis": emojis,
             "stickers": stickers,
             "bookmarks": bookmarks,
+            "notification_settings": notification_settings,
             "mention_counts": mention_counts.iter().map(|(c, n)| json!({"channel_id": c, "count": n})).collect::<Vec<_>>(),
             "guild_layout": guild_layout,
             "me_members": me_members,

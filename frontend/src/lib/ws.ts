@@ -1,4 +1,5 @@
-import { useStore, type ReadyPayload } from '../store'
+import { mentionsMe, useStore, type ReadyPayload } from '../store'
+import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, PrivateUser, Relationship, Role, Sticker, User, VoiceState } from './types'
 import { voice } from './voice'
 
@@ -23,6 +24,7 @@ type Ev =
   | { t: 'GUILD_EMOJIS_UPDATE'; d: { guild_id: string; emojis: Emoji[] } }
   | { t: 'INSTANCE_UPDATE'; d: { registration_enabled: boolean; announcement: string } }
   | { t: 'SESSION_REVOKED'; d: { reason: string } }
+  | { t: 'NOTIFICATION_SETTINGS_UPDATE'; d: NotifSetting & { deleted?: boolean } }
   | { t: 'GUILD_STICKERS_UPDATE'; d: { guild_id: string; stickers: Sticker[] } }
   | { t: 'GUILD_DELETE'; d: { id: string } }
   | { t: 'GUILD_MEMBER_ADD'; d: Member }
@@ -107,7 +109,10 @@ function handle(ev: Ev) {
     case 'MESSAGE_CREATE': {
       s.addMessage(ev.d.message)
       const me = s.user?.id
-      if (ev.d.message.author.id !== me && document.visibilityState !== 'visible' && s.relationships[ev.d.message.author.id]?.kind !== 'blocked') notify(ev.d.message)
+      if (ev.d.message.author.id !== me && document.visibilityState !== 'visible' && s.relationships[ev.d.message.author.id]?.kind !== 'blocked') {
+        const ch = s.channels[ev.d.message.channel_id] ?? s.dms[ev.d.message.channel_id]
+        if (shouldNotify(effective(s.notifSettings, ch), mentionsMe(s, ev.d.message), ev.d.message, !!ch && ch.guild_id === null)) notify(ev.d.message)
+      }
       break
     }
     case 'MESSAGE_UPDATE': s.updateMessage(ev.d.message); break
@@ -122,6 +127,7 @@ function handle(ev: Ev) {
     case 'GUILD_EMOJIS_UPDATE': s.setGuildEmojis(ev.d.guild_id, ev.d.emojis); break
     case 'INSTANCE_UPDATE': s.setInstance(ev.d); break
     case 'SESSION_REVOKED': s.pushToast(ev.d.reason, 'error'); s.logout(); break
+    case 'NOTIFICATION_SETTINGS_UPDATE': s.setNotifSetting(ev.d); break
     case 'GUILD_STICKERS_UPDATE': s.setGuildStickers(ev.d.guild_id, ev.d.stickers); break
     case 'GUILD_DELETE': s.removeGuild(ev.d.id); break
     case 'GUILD_MEMBER_ADD': s.upsertMember(ev.d); break

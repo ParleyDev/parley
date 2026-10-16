@@ -8,7 +8,7 @@ use crate::{
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::{delete, get},
+    routing::{delete, get, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -25,6 +25,87 @@ pub fn router() -> Router<AppState> {
         .route("/users/:id/reviews", get(list_reviews).put(put_review))
         .route("/users/:id/reviews/:rid", delete(delete_review))
         .route("/users/@me/guild-layout", get(get_layout).put(put_layout))
+        .route("/users/@me/notification-settings", get(list_notif))
+        .route("/users/@me/notification-settings/:target", put(put_notif).delete(delete_notif))
+}
+
+#[derive(Debug, Clone, Serialize, sqlx::FromRow)]
+pub struct NotifSetting {
+    pub target_id: Uuid,
+    pub level: String,
+    pub muted_until: Option<chrono::DateTime<chrono::Utc>>,
+    pub suppress_everyone: bool,
+}
+
+pub async fn notif_settings_for(db: &sqlx::PgPool, uid: Uuid) -> AppResult<Vec<NotifSetting>> {
+    Ok(sqlx::query_as::<_, NotifSetting>("SELECT target_id, level, muted_until, suppress_everyone FROM notification_settings WHERE user_id = $1").bind(uid).fetch_all(db).await?)
+}
+
+async fn list_notif(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<NotifSetting>>> {
+    Ok(Json(notif_settings_for(&state.db, uid).await?))
+}
+
+#[derive(Deserialize)]
+struct PutNotif {
+    level: Option<String>,
+    /// Minutes to mute for; 0 = forever; null/absent = leave as is. Use `unmute: true` to clear.
+    mute_minutes: Option<i64>,
+    #[serde(default)]
+    unmute: bool,
+    suppress_everyone: Option<bool>,
+}
+
+/// Upsert the setting for a server or channel the user can see.
+async fn put_notif(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(target): Path<Uuid>, Json(req): Json<PutNotif>) -> AppResult<Json<NotifSetting>> {
+    // The target must be one of my servers, one of its channels, or one of my DM channels.
+    let ok: Option<(bool,)> = sqlx::query_as(
+        "SELECT true WHERE EXISTS (SELECT 1 FROM guild_members WHERE guild_id = $1 AND user_id = $2)
+            OR EXISTS (SELECT 1 FROM channels c JOIN guild_members m ON m.guild_id = c.guild_id AND m.user_id = $2 WHERE c.id = $1)
+            OR EXISTS (SELECT 1 FROM channel_members WHERE channel_id = $1 AND user_id = $2)",
+    )
+    .bind(target)
+    .bind(uid)
+    .fetch_optional(&state.db)
+    .await?;
+    if ok.is_none() {
+        return Err(AppError::NotFound("Unknown server or channel".into()));
+    }
+    if let Some(l) = &req.level {
+        if !["default", "all", "mentions", "nothing"].contains(&l.as_str()) {
+            return Err(AppError::BadRequest("level must be default, all, mentions or nothing".into()));
+        }
+    }
+    let muted_until: Option<Option<chrono::DateTime<chrono::Utc>>> = if req.unmute {
+        Some(None)
+    } else {
+        req.mute_minutes.map(|m| Some(if m <= 0 { chrono::Utc::now() + chrono::Duration::days(365 * 100) } else { chrono::Utc::now() + chrono::Duration::minutes(m.min(60 * 24 * 365)) }))
+    };
+    sqlx::query(
+        "INSERT INTO notification_settings (user_id, target_id, level, muted_until, suppress_everyone)
+         VALUES ($1, $2, COALESCE($3, 'default'), $4, COALESCE($5, false))
+         ON CONFLICT (user_id, target_id) DO UPDATE SET
+           level = COALESCE($3, notification_settings.level),
+           muted_until = CASE WHEN $6 THEN $4 ELSE notification_settings.muted_until END,
+           suppress_everyone = COALESCE($5, notification_settings.suppress_everyone),
+           updated_at = now()",
+    )
+    .bind(uid)
+    .bind(target)
+    .bind(req.level.as_deref())
+    .bind(muted_until.clone().flatten())
+    .bind(req.suppress_everyone)
+    .bind(muted_until.is_some())
+    .execute(&state.db)
+    .await?;
+    let row = sqlx::query_as::<_, NotifSetting>("SELECT target_id, level, muted_until, suppress_everyone FROM notification_settings WHERE user_id = $1 AND target_id = $2").bind(uid).bind(target).fetch_one(&state.db).await?;
+    state.hub.emit_users(vec![uid], "NOTIFICATION_SETTINGS_UPDATE", json!(row));
+    Ok(Json(row))
+}
+
+async fn delete_notif(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(target): Path<Uuid>) -> AppResult<StatusCode> {
+    sqlx::query("DELETE FROM notification_settings WHERE user_id = $1 AND target_id = $2").bind(uid).bind(target).execute(&state.db).await?;
+    state.hub.emit_users(vec![uid], "NOTIFICATION_SETTINGS_UPDATE", json!({ "target_id": target, "level": "default", "muted_until": null, "suppress_everyone": false, "deleted": true }));
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// The server bar layout: an ordered list of `{"kind":"guild","id":…}` and

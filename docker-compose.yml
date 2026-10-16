@@ -38,7 +38,7 @@ services:
       RL_MESSAGES: ${RL_MESSAGES:-60/5}
       RL_UPLOADS: ${RL_UPLOADS:-120/60}
       RL_GIFS: ${RL_GIFS:-60/60}
-      RL_MAIL: ${RL_MAIL:-3/600}
+      RL_MAIL: ${RL_MAIL:-100/600}
       # Email: MAIL_MODE=smtp with SMTP_URL (smtp://user:pass@host:587?tls=required) sends real mail;
       # `log` (default) prints mails to the backend log; admins can always read the last ones via
       # GET /admin/mail. APP_URL is the public base used in emailed links.
