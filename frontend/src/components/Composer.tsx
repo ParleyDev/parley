@@ -254,6 +254,14 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           </div>
         </div>
       )}
+      <div className="absolute -top-5 left-5 right-5 h-5 text-xs text-text-1 flex items-center gap-1.5 pointer-events-none" data-typing-row>
+        {typers.length > 0 && (
+          <>
+            <span className="flex gap-0.5"><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /></span>
+            <span><b>{typers.slice(0, 3).join(', ')}</b> {typers.length > 3 ? 'and others are' : typers.length === 1 ? 'is' : 'are'} typing…</span>
+          </>
+        )}
+      </div>
       <FormatToolbar textarea={ref} onChange={setValue} className="absolute -top-8 left-4 max-md:left-2 z-20" />
       {mention && mentionItems.length > 0 && (
         <MentionSuggest items={mentionItems} active={mentionIdx} trigger={mention.trigger} query={mention.query} onPick={pickMention} onHover={setMentionIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
@@ -261,7 +269,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
       {shortcode && suggestions.length > 0 && !mention && (
         <ShortcodeSuggest query={shortcode.query} items={suggestions} active={suggestIdx} onPick={pickSuggestion} onHover={setSuggestIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
       )}
-      <div className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition">
+      <div className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition" data-composer-box>
         {reply && (
           <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-xl">
             <span>Replying to <b className="text-text-0">{reply.author.display_name}</b></span>
@@ -302,14 +310,6 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           </div>
           <button onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-1 hover:text-accent-hover" title="Send"><SendHorizontal size={22} /></button>
         </div>
-      </div>
-      <div className="h-5 px-1 pt-1 text-xs text-text-1 flex items-center gap-1.5">
-        {typers.length > 0 && (
-          <>
-            <span className="flex gap-0.5"><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /></span>
-            <span><b>{typers.slice(0, 3).join(', ')}</b> {typers.length > 3 ? 'and others are' : typers.length === 1 ? 'is' : 'are'} typing…</span>
-          </>
-        )}
       </div>
     </div>
   )
