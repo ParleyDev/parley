@@ -81,6 +81,29 @@ services:
       - "${WEB_PORT:-3000}:80"
       - "${WEB_TLS_PORT:-3443}:443"
 
+  # Backups: `docker compose --profile backup run --rm backup once` for a single backup into ./backups, or
+  # `docker compose --profile backup up -d` to keep one running daily (BACKUP_INTERVAL seconds, BACKUP_KEEP of each).
+  # Restore drill: ops/restore.sh backups/db-<ts>.dump backups/uploads-<ts>.tgz (see README).
+  backup:
+    image: postgres:16-alpine
+    profiles: ["backup"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: parley
+      PGPASSWORD: parley
+      PGDATABASE: parley
+      BACKUP_KEEP: ${BACKUP_KEEP:-7}
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-86400}
+    volumes:
+      - uploads:/data/uploads:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+      - ./ops/backup.sh:/ops/backup.sh:ro
+    entrypoint: ["/bin/sh", "/ops/backup.sh"]
+    command: ["loop"]
+
   # Real TLS from Let's Encrypt: `docker compose --profile letsencrypt up -d` with TLS_HOSTNAME=chat.example.com,
   # LETSENCRYPT_EMAIL=you@example.com and WEB_PORT=80 (the HTTP-01 challenge must reach port 80 on that name).
   # Issues on first start, renews twice a day; the frontend picks up renewals and reloads nginx by itself.

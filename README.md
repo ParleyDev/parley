@@ -96,6 +96,27 @@ bd ready                 # unblocked work, highest priority first
 bd show <id> / bd close <id>
 ```
 
+## Backups and restore
+
+`ops/backup.sh` (run by the `backup` compose profile from the official Postgres image) writes a compressed `pg_dump --format=custom` of the database and a `tar.gz` of the uploads volume into `./backups` (`BACKUP_DIR`), keeping the newest `BACKUP_KEEP` (default 7) of each:
+
+```bash
+docker compose --profile backup run --rm backup once      # one backup now (also before upgrades)
+docker compose --profile backup up -d                     # keep a backup container running: daily (BACKUP_INTERVAL=86400)
+ls -lh backups/                                           # db-<ts>.dump, uploads-<ts>.tgz
+```
+
+Copy `backups/` off the host (rsync, object storage, snapshots of that directory) — the retention here only bounds local disk. The dump is a plain `pg_restore` archive, so it can be inspected with `pg_restore --list`.
+
+Restore drill (practise it on a scratch checkout before you need it):
+
+```bash
+docker compose up -d                                      # fresh stack, migrations applied
+ops/restore.sh backups/db-<ts>.dump backups/uploads-<ts>.tgz
+```
+
+The script stops the backend, runs `pg_restore --clean --if-exists --no-owner` into the `parley` database (everything currently there is replaced), unpacks the uploads tarball over the `uploads` volume and starts the backend again. Check `docker compose ps`, `curl -fs localhost:18080/health`, log in and open an attachment. To restore just the database, omit the second argument; to restore into a different database for inspection: `docker compose exec -T db pg_restore -U parley -d parley_check --create < backups/db-<ts>.dump` after `createdb -U parley parley_check`.
+
 ## Development
 
 Backend (needs Postgres; `docker compose up db` works):
