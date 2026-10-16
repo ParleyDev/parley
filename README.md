@@ -187,6 +187,10 @@ Bits mirror Discord's values: Create Invite, Kick Members, Ban Members, Administ
 - Voice: no Connect blocks joining (and evicts you if revoked mid-call), no Speak marks you `suppress`ed so your client keeps its mic gate closed (shown as "Muted by server"), no Video drops camera and screen share.
 - Endpoints: `GET/POST /guilds/:id/roles`, `PATCH/DELETE /guilds/:id/roles/:rid` (`position` reorders), `PATCH /guilds/:id/members/:uid` (`roles`, `nickname`), `PUT/DELETE /channels/:id/permissions/:target` (`{kind: role|member, allow, deny}`). Events: `ROLE_UPDATE`, `ROLE_DELETE`, `ROLES_SYNC`, `GUILD_MEMBER_UPDATE`, plus `CHANNEL_CREATE`/`CHANNEL_DELETE`/`CHANNEL_UPDATE` sent per user as visibility changes.
 
+## Search
+
+The header search box (Enter) opens a results panel scoped to this channel, this server or everywhere you can read (DMs included). Free text uses a Postgres full-text index (`messages.search`, `simple` dictionary) with prefix matching on each word, and Discord-style filters are parsed out of the query: `from:user`, `mentions:user`, `in:channel`, `has:link|image|video|file|sticker`, `before:YYYY-MM-DD`, `after:YYYY-MM-DD`, `pinned:true`. `GET /search?q=&guild_id=&channel_id=&offset=` returns `{total, results}` (25 per page, each hit tagged with its `guild_id` and `channel_name`); `GET /channels/:id/search?q=` is the same engine fixed to one channel. Results only ever include channels the caller can view; an empty query (or one that is only punctuation) returns nothing. Jump opens the message's channel and flashes it when it is loaded.
+
 ## Edit history
 
 Editing a message stores the text it replaced in `message_revisions` (only when it actually changed). The "(edited)" marker is a button: it opens a modal with the original and every later version (rendered as markdown, with when each was replaced) and the current text. Anyone who can read the channel can view it: `GET /channels/:id/messages/:mid/history` returns revisions oldest first. Deleting the message drops its history.

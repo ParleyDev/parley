@@ -721,26 +721,15 @@ pub struct SearchQuery {
 }
 
 /// Case-insensitive substring search over a channel's messages, newest first.
+/// Per-channel search (the header box in a DM); same engine as `GET /search` with the channel fixed.
 async fn search_messages(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,
     Query(q): Query<SearchQuery>,
 ) -> AppResult<Json<Vec<Message>>> {
-    require_channel(&state.db, id, uid).await?;
-    let needle = q.q.trim();
-    if needle.is_empty() {
-        return Ok(Json(Vec::new()));
-    }
-    let pattern = format!("%{}%", needle.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
-    let rows = sqlx::query_as::<_, MessageRow>(&format!(
-        "{MESSAGE_SELECT} WHERE m.channel_id = $1 AND m.content ILIKE $2 ORDER BY m.id DESC LIMIT 25"
-    ))
-    .bind(id)
-    .bind(pattern)
-    .fetch_all(&state.db)
-    .await?;
-    Ok(Json(hydrate(&state.db, rows, uid, false).await?))
+    let params = crate::routes::search::SearchParams { q: q.q, guild_id: None, channel_id: Some(id), offset: 0 };
+    Ok(Json(crate::routes::search::run(&state, uid, &params).await?.results.into_iter().map(|h| h.message).collect()))
 }
 
 #[derive(Deserialize)]
