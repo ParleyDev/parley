@@ -53,10 +53,12 @@ export interface Channel {
   id: string
   guild_id: string | null
   name: string
-  kind: 'text' | 'voice' | 'dm' | 'group'
+  kind: 'text' | 'voice' | 'dm' | 'group' | 'category'
   topic: string
   position: number
   created_at: string
+  /** Guild channels: the category this channel sits under. */
+  parent_id?: string | null
   overwrites?: Overwrite[]
 }
 

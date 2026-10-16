@@ -125,6 +125,10 @@ fn deserialize_nullable<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option
     Ok(Some(Option::<String>::deserialize(d)?))
 }
 
+pub fn deserialize_nullable_uuid<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<Uuid>>, D::Error> {
+    Ok(Some(Option::<Uuid>::deserialize(d)?))
+}
+
 async fn update_role(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,

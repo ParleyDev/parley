@@ -215,9 +215,15 @@ pub const ROLE_COLS: &str = "id, guild_id, name, color, color_accent, position, 
 
 /// Fill `overwrites` on each channel in one query.
 pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResult<()> {
-    let ids: Vec<Uuid> = channels.iter().map(|c| c.id).collect();
+    let mut ids: Vec<Uuid> = channels.iter().map(|c| c.id).collect();
     if ids.is_empty() {
         return Ok(());
+    }
+    // Channels without their own overwrites inherit their category's, so load parents too.
+    for pid in channels.iter().filter_map(|c| c.parent_id) {
+        if !ids.contains(&pid) {
+            ids.push(pid);
+        }
     }
     let rows = sqlx::query_as::<_, Overwrite>(
         "SELECT channel_id, target_id, target_kind, allow, deny FROM channel_overwrites WHERE channel_id = ANY($1)",
@@ -230,7 +236,16 @@ pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResu
         by_channel.entry(o.channel_id).or_default().push(o);
     }
     for c in channels.iter_mut() {
-        c.overwrites = by_channel.remove(&c.id).unwrap_or_default();
+        let own = by_channel.get(&c.id).cloned().unwrap_or_default();
+        c.overwrites = if own.is_empty() {
+            match c.parent_id.and_then(|p| by_channel.get(&p)) {
+                // Re-key so the client treats them as this channel's effective overwrites.
+                Some(inherited) => inherited.iter().map(|o| Overwrite { channel_id: c.id, ..o.clone() }).collect(),
+                None => own,
+            }
+        } else {
+            own
+        };
     }
     Ok(())
 }

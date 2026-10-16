@@ -12,7 +12,7 @@ import { channelPerms, guildPerms } from './lib/perms'
 export type ModalKind =
   | { kind: 'createGuild' }
   | { kind: 'joinGuild'; code?: string }
-  | { kind: 'createChannel'; guildId: string }
+  | { kind: 'createChannel'; guildId: string; parentId?: string | null }
   | { kind: 'invite'; guildId: string }
   | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
@@ -26,6 +26,7 @@ export type ModalKind =
   | { kind: 'editHistory'; channelId: string; messageId: string }
   | { kind: 'report'; messageId?: string; userId: string; name: string }
   | { kind: 'createPoll'; channelId: string }
+  | { kind: 'editCategory'; channelId: string }
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
   | { kind: 'customStatus' }
   | { kind: 'forward'; message: Message }
