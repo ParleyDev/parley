@@ -1,0 +1,69 @@
+import { chromium } from 'playwright'
+import { B, H, WEB, S, PASSWORD, reg, call, callS, raw, ok, finish, adminToken } from '../lib.mjs'
+
+const admin = await adminToken()
+const a = await reg('alice')
+const email = `alice${S}@x.io`
+const loginAs = async (ua, ip) => { const r = await fetch(`${B}/auth/login`, { method: 'POST', headers: { ...H, 'User-Agent': ua, ...(ip ? { 'X-Forwarded-For': ip } : {}) }, body: JSON.stringify({ login: `alice${S}`, password: PASSWORD }) }); return (await r.json()).token }
+const status = async (t) => (await raw(t, 'GET', '/users/@me')).status
+
+console.log('-- API')
+const phone = await loginAs('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1', '203.0.113.9')
+const laptop = await loginAs('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36')
+let list = await call(a.token, 'GET', '/users/@me/sessions')
+ok('three logins are listed, newest first, with the caller flagged current', list.length === 3 && list.filter((s) => s.current).length === 1 && list[2].current === true)
+const mine = list.find((s) => s.current); const ph = list.find((s) => /iPhone/.test(s.user_agent)); const lp = list.find((s) => /Windows/.test(s.user_agent))
+ok('each session records its IP and user agent', ph?.ip === '203.0.113.9' && lp?.ip === H['X-Forwarded-For'] && !!mine.last_seen_at)
+let r = await raw(a.token, 'DELETE', `/users/@me/sessions/${ph.id}`); ok('log out one device', r.status === 204)
+ok('that token is dead at once; the others still work', await status(phone) === 401 && await status(laptop) === 200 && await status(a.token) === 200)
+r = await raw(a.token, 'DELETE', `/users/@me/sessions/${ph.id}`); ok('revoking it again is a 404', r.status === 404)
+const b = await reg('bob'); const bs = await call(b.token, 'GET', '/users/@me/sessions')
+r = await raw(a.token, 'DELETE', `/users/@me/sessions/${bs[0].id}`); ok('cannot touch another user\'s session', r.status === 404 && await status(b.token) === 200)
+const extra = await loginAs('curl/8.0')
+r = await callS(a.token, 'DELETE', '/users/@me/sessions'); ok('log out all other devices keeps only the caller', r.status === 200 && r.body.revoked === 2 && await status(laptop) === 401 && await status(extra) === 401 && await status(a.token) === 200)
+list = await call(a.token, 'GET', '/users/@me/sessions'); ok('only the current session remains', list.length === 1 && list[0].current)
+r = await raw(laptop, 'DELETE', '/users/@me/sessions'); ok('a revoked token cannot call anything', r.status === 401)
+const sock = await new Promise((res) => { const w = new WebSocket(`${B.replace(/^http/, 'ws').replace(/\/api$/, '')}/ws?token=${laptop}`); w.onopen = () => res('open'); w.onerror = () => res('refused'); w.onclose = () => res('refused') })
+ok('the websocket refuses a revoked session', sock === 'refused')
+
+console.log('-- logout, reset, admin')
+const t2 = await loginAs('curl/8.0')
+r = await raw(t2, 'POST', '/auth/logout'); ok('POST /auth/logout ends the calling session', r.status === 204 && await status(t2) === 401 && await status(a.token) === 200)
+const t3 = await loginAs('curl/8.0')
+await fetch(`${B}/auth/forgot`, { method: 'POST', headers: H, body: JSON.stringify({ email }) })
+const mail = (await call(admin.token, 'GET', `/admin/mail?to=${encodeURIComponent(email)}`)).find((m) => /Reset/.test(m.subject))
+const tok = /reset\?token=([0-9a-f]{64})/.exec(mail?.body ?? '')?.[1]
+r = await fetch(`${B}/auth/reset`, { method: 'POST', headers: H, body: JSON.stringify({ token: tok, password: 'brandnewpass1' }) })
+ok('a password reset logs every device out', r.status === 200 && await status(t3) === 401 && await status(a.token) === 401)
+r = await fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login: `alice${S}`, password: 'brandnewpass1' }) }); const a2 = (await r.json()).token
+ok('fresh login works after the reset', await status(a2) === 200)
+const t4 = await fetch(`${B}/auth/login`, { method: 'POST', headers: { ...H, 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) Firefox/131.0' }, body: JSON.stringify({ login: `alice${S}`, password: 'brandnewpass1' }) }).then((x) => x.json()).then((j) => j.token)
+r = await callS(admin.token, 'GET', `/admin/users/${a.user.id}/sessions`); ok('admin can list a user\'s sessions', r.status === 200 && r.body.length === 2 && r.body.every((s) => s.current === false))
+r = await callS(b.token, 'GET', `/admin/users/${a.user.id}/sessions`); ok('non-admins cannot', r.status === 403)
+r = await callS(admin.token, 'DELETE', `/admin/users/${a.user.id}/sessions`); ok('admin logs a user out everywhere', r.status === 200 && r.body.revoked === 2 && await status(a2) === 401 && await status(t4) === 401)
+
+console.log('-- UI')
+const browser = await chromium.launch(); const errors = []
+const mk = async (tok, ua) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, userAgent: ua }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); if (tok) await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); return p }
+const ta = await fetch(`${B}/auth/login`, { method: 'POST', headers: { ...H, 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36' }, body: JSON.stringify({ login: `alice${S}`, password: 'brandnewpass1' }) }).then((x) => x.json()).then((j) => j.token)
+const tb = await fetch(`${B}/auth/login`, { method: 'POST', headers: { ...H, 'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36' }, body: JSON.stringify({ login: `alice${S}`, password: 'brandnewpass1' }) }).then((x) => x.json()).then((j) => j.token)
+const pa = await mk(ta); const pb = await mk(tb)
+await pb.goto(`${WEB}/channels/@me`); await pb.waitForSelector('[data-control="User Settings"]')
+await pa.goto(`${WEB}/channels/@me`); await pa.waitForSelector('[data-control="User Settings"]'); await pa.click('[data-control="User Settings"]'); await pa.waitForSelector('[data-sessions] [data-session]')
+const rows = pa.locator('[data-sessions] [data-session]')
+ok('Devices lists both logins with readable names', await rows.count() === 2 && (await pa.locator('[data-session-current="1"] [data-session-device]').textContent()).includes('Chrome on macOS') && (await pa.locator('[data-session-current="0"] [data-session-device]').textContent()).includes('Chrome on Android'))
+await pa.screenshot({ path: '94-devices.png' })
+await pa.locator('[data-session-current="0"] [data-session-logout]').click(); await pa.waitForFunction(() => document.querySelectorAll('[data-sessions] [data-session]').length === 1)
+ok('logging out the other device drops it from the list', await pa.locator('[data-sessions-logout-others]').count() === 0)
+await pb.waitForURL(/\/login/, { timeout: 10000 }).catch(() => {})
+ok('the other device is kicked to the login page live', /\/login/.test(pb.url()) && await status(tb) === 401)
+await pa.locator('[data-session-current="1"] [data-session-logout]').click(); await pa.waitForURL(/\/login/, { timeout: 10000 }).catch(() => {})
+ok('logging out this device returns to login and kills the token', /\/login/.test(pa.url()) && await status(ta) === 401)
+await pa.close(); await pb.close()
+const t5 = await fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login: `alice${S}`, password: 'brandnewpass1' }) }).then((x) => x.json()).then((j) => j.token)
+const pad = await mk(admin.token); await pad.goto(`${WEB}/admin/users`); await pad.waitForSelector('[data-admin-user-search]'); await pad.fill('[data-admin-user-search]', `alice${S}`); await pad.waitForSelector(`[data-admin-user="alice${S}"] [data-admin-action="logout-all"]`)
+await pad.locator(`[data-admin-user="alice${S}"] [data-admin-action="logout-all"]`).click(); await pad.waitForSelector('text=/logged out of 1 device/')
+ok('admin console logs a user out of all devices', await status(t5) === 401)
+await pad.close()
+ok('no page errors', errors.length === 0, errors.join(' | '))
+await browser.close(); await finish()

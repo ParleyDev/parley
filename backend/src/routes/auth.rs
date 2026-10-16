@@ -1,5 +1,5 @@
 use crate::{
-    auth::{hash_password, issue_mfa_ticket, issue_token, verify_mfa_ticket, verify_password},
+    auth::{hash_password, issue_mfa_ticket, revoke_sessions, start_session, verify_mfa_ticket, verify_password, AuthSession},
     error::{AppError, AppResult},
     mfa,
     models::PrivateUser,
@@ -21,6 +21,7 @@ pub fn router() -> Router<AppState> {
         .route("/auth/resend-verification", post(resend_verification).route_layer(from_fn(crate::ratelimit::rl_mail)))
         .route("/auth/forgot", post(forgot_password).route_layer(from_fn(crate::ratelimit::rl_mail)))
         .route("/auth/reset", post(reset_password))
+        .route("/auth/logout", post(logout))
 }
 
 #[derive(Deserialize)]
@@ -36,7 +37,7 @@ fn valid_username(u: &str) -> bool {
         && u.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
 }
 
-async fn register(State(state): State<AppState>, Json(req): Json<RegisterReq>) -> AppResult<Json<Value>> {
+async fn register(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<RegisterReq>) -> AppResult<Json<Value>> {
     if !crate::routes::admin::load_settings(&state.db).await?.registration_enabled {
         return Err(AppError::Forbidden);
     }
@@ -83,7 +84,7 @@ async fn register(State(state): State<AppState>, Json(req): Json<RegisterReq>) -
     .await?;
 
     send_verification(&state, user.id, &user.email).await;
-    let token = issue_token(&state.config.jwt_secret, user.id)?;
+    let token = start_session(&state, user.id, &headers).await?;
     Ok(Json(json!({ "token": token, "user": user })))
 }
 
@@ -182,6 +183,8 @@ async fn reset_password(State(state): State<AppState>, Json(req): Json<ResetReq>
         .bind(uid).bind(&hash).bind(&email).execute(&state.db).await?;
     // Any other reset links for this account are now moot.
     sqlx::query("UPDATE email_tokens SET used_at = now() WHERE user_id = $1 AND kind = 'reset' AND used_at IS NULL").bind(uid).execute(&state.db).await?;
+    // Whoever had the old password is out everywhere.
+    revoke_sessions(&state, uid, None, None, "Your password was reset. Log in again.").await?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -215,16 +218,22 @@ async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Jso
         // Password is right but the account needs its second factor: hand back a ticket for /auth/mfa, not a session.
         return Ok(Json(json!({ "mfa": true, "ticket": issue_mfa_ticket(&state.config.jwt_secret, id)? })));
     }
-    session(&state, id).await
+    session(&state, id, &headers).await
 }
 
-async fn session(state: &AppState, id: Uuid) -> AppResult<Json<Value>> {
+async fn session(state: &AppState, id: Uuid, headers: &HeaderMap) -> AppResult<Json<Value>> {
     let user = sqlx::query_as::<_, PrivateUser>(&format!("SELECT {PRIVATE_USER_COLS} FROM users WHERE id = $1"))
         .bind(id)
         .fetch_one(&state.db)
         .await?;
-    let token = issue_token(&state.config.jwt_secret, id)?;
+    let token = start_session(state, id, headers).await?;
     Ok(Json(json!({ "token": token, "user": user })))
+}
+
+/// End the calling session; the token stops working at once.
+async fn logout(State(state): State<AppState>, AuthSession(uid, sid): AuthSession) -> AppResult<axum::http::StatusCode> {
+    revoke_sessions(&state, uid, Some(sid), None, "You logged out.").await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
 }
 
 #[derive(Deserialize)]
@@ -247,7 +256,7 @@ async fn login_mfa(State(state): State<AppState>, headers: HeaderMap, Json(req):
         let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limits.login_fail);
         return Err(AppError::BadRequest("Invalid code".into()));
     }
-    session(&state, id).await
+    session(&state, id, &headers).await
 }
 
 /// Accept a TOTP code (recording its step so it cannot be replayed) or burn a matching unused backup code.

@@ -12,6 +12,7 @@ pub mod invites;
 pub mod mfa;
 pub mod relationships;
 pub mod roles;
+pub mod sessions;
 pub mod users;
 
 use crate::state::AppState;
@@ -22,6 +23,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(auth::router())
         .merge(users::router())
         .merge(mfa::router())
+        .merge(sessions::router())
         .merge(guilds::router())
         .merge(invites::router())
         .merge(roles::router())
