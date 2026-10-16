@@ -17,6 +17,7 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
   const pushToast = useStore((s) => s.pushToast)
   const perms = useStore((s) => myChannelPerms(s, threadId))
   const [root, setRoot] = useState<Message | null>(null)
+  const parentKind = useStore((s) => (thread?.parent_id ? s.channels[thread.parent_id]?.kind : undefined))
   useEffect(() => {
     if (!thread?.parent_id) return
     api.get<{ thread: ThreadInfo; root: Message | null }>(`/channels/${thread.parent_id}/threads/${threadId}`).then((r) => { upsertThread(r.thread); setRoot(r.root) }).catch(() => {})
@@ -24,7 +25,6 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
   if (!thread) return null
   const archived = !!info?.archived_at
   const canManage = info?.owner_id === me || has(perms, P.MANAGE_MESSAGES)
-  const parentKind = useStore((s) => (thread?.parent_id ? s.channels[thread.parent_id]?.kind : undefined))
   const pinned = !!info?.pinned_at
   const togglePin = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { pinned: !pinned })) } catch (e) { pushToast((e as Error).message, 'error') } }
   const toggle = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { archived: !archived })) } catch (e) { pushToast((e as Error).message, 'error') } }
