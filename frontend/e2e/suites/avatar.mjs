@@ -12,7 +12,7 @@ const errors=[]; p.on('pageerror',e=>errors.push('pageerror: '+e.message)); p.on
 await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),b.token)
 const check=async(label,url,sel,pre)=>{ await p.goto(url); if(pre){ await p.waitForTimeout(500); await pre() } await p.waitForSelector(sel,{timeout:10000}); await p.waitForTimeout(300); await p.click(sel); await p.waitForTimeout(600); const dlg=await p.locator('[role=dialog]').count(); const body=(await p.locator('body').innerText()).length; console.log(label, 'url=',p.url().replace(`${WEB}`,''), 'dialog=',dlg, 'bodyTextLen=',body, errors.length?errors.join(' | '):''); errors.length=0; await p.keyboard.press('Escape') }
 await check('chat avatar', `${WEB}/channels/${g.id}/${tc}`, 'main .group button:has(img), main .group button:has(div.rounded-full) >> nth=0')
-await check('member list avatar', `${WEB}/channels/${g.id}/${tc}`, 'aside.w-60 button:has-text("alice")')
+await check('member list avatar', `${WEB}/channels/${g.id}/${tc}`, '[data-member-list] button:has-text("alice")')
 await check('DM chat avatar', `${WEB}/channels/@me/${dm.id}`, 'main .group button >> nth=0')
 await check('friends row avatar', `${WEB}/channels/@me`, 'main button:has(div.rounded-full) >> nth=0', ()=>p.click('button:has-text("All")'))
 await browser.close()
