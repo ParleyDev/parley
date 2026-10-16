@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/members", get(list_members))
         .route("/guilds/:id/members/@me", delete(leave_guild))
         .route("/guilds/:id/members/:uid", delete(kick_member))
+        .route("/guilds/:id/members/:uid/timeout", put(timeout_member).delete(clear_timeout))
         .route("/guilds/:id/invites", get(list_invites).post(create_invite))
         .route("/guilds/:id/bans", get(list_bans))
         .route("/guilds/:id/bans/:uid", put(ban_member).delete(unban_member))
@@ -59,7 +60,7 @@ pub async fn require_owner(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppRes
 
 pub async fn fetch_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Member> {
     let mut m = sqlx::query_as::<_, Member>(
-        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status
+        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
     )
     .bind(guild_id)
@@ -274,7 +275,7 @@ async fn list_members(
 ) -> AppResult<Json<Vec<Member>>> {
     require_member(&state.db, id, uid).await?;
     let mut ms = sqlx::query_as::<_, Member>(
-        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status
+        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 ORDER BY u.display_name",
     )
     .bind(id)
@@ -312,6 +313,68 @@ async fn kick_member(
     }
     remove_member(&state, id, target).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct TimeoutReq {
+    /// 1 minute to 28 days.
+    minutes: i64,
+}
+
+/// Time a member out: they can read but not send, react, attach, or use voice until it lapses. Needs MODERATE_MEMBERS
+/// and rank above the target; owners and administrators cannot be timed out.
+async fn timeout_member(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, target)): Path<(Uuid, Uuid)>,
+    Json(req): Json<TimeoutReq>,
+) -> AppResult<Json<Member>> {
+    let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::MODERATE_MEMBERS)?;
+    if !ctx.is_member(target) {
+        return Err(AppError::NotFound("Member not found".into()));
+    }
+    if target == uid {
+        return Err(AppError::BadRequest("You cannot time yourself out".into()));
+    }
+    if !ctx.outranks_member(uid, target) {
+        return Err(AppError::Forbidden);
+    }
+    if ctx.base(target).map(|b| perms::has(b, perms::ADMINISTRATOR)).unwrap_or(false) {
+        return Err(AppError::BadRequest("Administrators cannot be timed out".into()));
+    }
+    if !(1..=28 * 24 * 60).contains(&req.minutes) {
+        return Err(AppError::BadRequest("Timeout must be between 1 minute and 28 days".into()));
+    }
+    sqlx::query("UPDATE guild_members SET timeout_until = now() + make_interval(mins => $3) WHERE guild_id = $1 AND user_id = $2")
+        .bind(id)
+        .bind(target)
+        .bind(req.minutes as i32)
+        .execute(&state.db)
+        .await?;
+    state.hub.voice_evict(|v| v.user_id == target && v.guild_id == Some(id));
+    let m = fetch_member(&state.db, id, target).await?;
+    state.hub.emit_guild(id, "GUILD_MEMBER_UPDATE", json!(m));
+    Ok(Json(m))
+}
+
+async fn clear_timeout(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, target)): Path<(Uuid, Uuid)>,
+) -> AppResult<Json<Member>> {
+    let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::MODERATE_MEMBERS)?;
+    if !ctx.is_member(target) {
+        return Err(AppError::NotFound("Member not found".into()));
+    }
+    if !ctx.outranks_member(uid, target) {
+        return Err(AppError::Forbidden);
+    }
+    sqlx::query("UPDATE guild_members SET timeout_until = NULL WHERE guild_id = $1 AND user_id = $2").bind(id).bind(target).execute(&state.db).await?;
+    let m = fetch_member(&state.db, id, target).await?;
+    state.hub.emit_guild(id, "GUILD_MEMBER_UPDATE", json!(m));
+    Ok(Json(m))
 }
 
 async fn remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppResult<()> {

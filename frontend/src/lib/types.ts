@@ -93,6 +93,8 @@ export interface Member {
   avatar_url: string | null
   status: string
   custom_status?: string
+  /** Moderation timeout: read-only in this server until this instant. */
+  timeout_until?: string | null
   roles: string[]
 }
 

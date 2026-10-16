@@ -32,6 +32,11 @@ pub const SPEAK: u64 = 1 << 21;
 pub const CHANGE_NICKNAME: u64 = 1 << 26;
 pub const MANAGE_NICKNAMES: u64 = 1 << 27;
 pub const MANAGE_ROLES: u64 = 1 << 28;
+/// Time members out (Discord's MODERATE_MEMBERS). Kept below bit 31 so the web client can use plain JS bit ops.
+pub const MODERATE_MEMBERS: u64 = 1 << 29;
+
+/// What a timed-out member loses in every channel: they can still read.
+pub const TIMEOUT_STRIP: u64 = SEND_MESSAGES | ADD_REACTIONS | ATTACH_FILES | CONNECT | SPEAK | STREAM | CREATE_INVITE | CHANGE_NICKNAME | MENTION_EVERYONE;
 
 pub const ALL: u64 = CREATE_INVITE
     | KICK_MEMBERS
@@ -50,7 +55,8 @@ pub const ALL: u64 = CREATE_INVITE
     | SPEAK
     | CHANGE_NICKNAME
     | MANAGE_NICKNAMES
-    | MANAGE_ROLES;
+    | MANAGE_ROLES
+    | MODERATE_MEMBERS;
 
 /// What a fresh @everyone role gets (must match migration 0002).
 pub const DEFAULT_EVERYONE: u64 =
@@ -71,6 +77,8 @@ pub struct GuildCtx {
     /// user_id -> role ids (excluding @everyone, which everyone implicitly has)
     pub member_roles: HashMap<Uuid, Vec<Uuid>>,
     pub members: HashSet<Uuid>,
+    /// Members whose timeout is still running (loaded with the context).
+    pub timed_out: HashSet<Uuid>,
 }
 
 impl GuildCtx {
@@ -96,7 +104,14 @@ impl GuildCtx {
         for (u, r) in rows {
             member_roles.entry(u).or_default().push(r);
         }
-        Ok(Self { guild, roles, member_roles, members })
+        let timed_out: HashSet<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM guild_members WHERE guild_id = $1 AND timeout_until > now()")
+            .bind(guild_id)
+            .fetch_all(db)
+            .await?
+            .into_iter()
+            .map(|r| r.0)
+            .collect();
+        Ok(Self { guild, roles, member_roles, members, timed_out })
     }
 
     pub fn is_member(&self, user: Uuid) -> bool {
@@ -105,6 +120,11 @@ impl GuildCtx {
 
     pub fn is_owner(&self, user: Uuid) -> bool {
         self.guild.owner_id == user
+    }
+
+    /// Timed out and not exempt (owner and administrators cannot be silenced).
+    pub fn is_timed_out(&self, user: Uuid) -> bool {
+        self.timed_out.contains(&user) && self.base(user).map(|p| !has(p, ADMINISTRATOR)).unwrap_or(false)
     }
 
     /// Guild-level permissions, or None if not a member.
@@ -177,7 +197,10 @@ impl GuildCtx {
         if let Some(o) = overwrites.iter().find(|o| o.target_kind == "member" && o.target_id == user) {
             p = (p & !(o.deny as u64)) | o.allow as u64;
         }
-        if !has(p, VIEW_CHANNEL) { 0 } else { p }
+        if !has(p, VIEW_CHANNEL) {
+            return 0;
+        }
+        if self.timed_out.contains(&user) { p & !TIMEOUT_STRIP } else { p }
     }
 }
 
@@ -348,6 +371,7 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
         ("CHANGE_NICKNAME", CHANGE_NICKNAME),
         ("MANAGE_NICKNAMES", MANAGE_NICKNAMES),
         ("MANAGE_ROLES", MANAGE_ROLES),
+        ("MODERATE_MEMBERS", MODERATE_MEMBERS),
     ]
 }
 
@@ -418,7 +442,7 @@ mod tests {
         let admin_role = role(gid, 3, ADMINISTRATOR);
         let (m, v, a) = (mod_role.id, vip_role.id, admin_role.id);
         let roles = [everyone, mod_role, vip_role, admin_role].into_iter().map(|r| (r.id, r)).collect();
-        let ctx = GuildCtx { guild, roles, member_roles: HashMap::new(), members: HashSet::from([owner]) };
+        let ctx = GuildCtx { guild, roles, member_roles: HashMap::new(), members: HashSet::from([owner]), timed_out: HashSet::new() };
         Fx { ctx, owner, mod_role: m, vip_role: v, admin_role: a }
     }
 
@@ -637,6 +661,27 @@ mod tests {
         let ch = Uuid::now_v7();
         let ows = [ow(ch, "member", Uuid::now_v7(), 0, VIEW_CHANNEL)];
         assert_eq!(fx.ctx.in_channel(u, DEFAULT_EVERYONE, &ows), DEFAULT_EVERYONE);
+    }
+
+    #[test]
+    fn timed_out_members_can_only_read() {
+        let mut fx = fixture();
+        let (m, a) = (fx.mod_role, fx.admin_role);
+        let u = fx.member(&[m]);
+        let admin = fx.member(&[a]);
+        fx.ctx.timed_out.insert(u);
+        fx.ctx.timed_out.insert(admin);
+        fx.ctx.timed_out.insert(fx.owner);
+        assert!(fx.ctx.is_timed_out(u));
+        assert!(!fx.ctx.is_timed_out(admin), "administrators are exempt");
+        assert!(!fx.ctx.is_timed_out(fx.owner), "the owner is exempt");
+        let p = fx.ctx.in_channel(u, fx.ctx.base(u).unwrap(), &[]);
+        assert!(has(p, VIEW_CHANNEL) && has(p, MANAGE_MESSAGES), "reading and moderation bits survive");
+        assert!(!has(p, SEND_MESSAGES) && !has(p, ADD_REACTIONS) && !has(p, CONNECT) && !has(p, ATTACH_FILES));
+        assert_eq!(fx.ctx.in_channel(admin, ALL, &[]), ALL);
+        // a member overwrite cannot undo a timeout
+        let ows = [ow(Uuid::now_v7(), "member", u, SEND_MESSAGES, 0)];
+        assert!(!has(fx.ctx.in_channel(u, fx.ctx.base(u).unwrap(), &ows), SEND_MESSAGES));
     }
 
     #[test]
