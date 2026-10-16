@@ -3,6 +3,7 @@ import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import type { PrivateUser } from '../../../lib/types'
 import ProfileCard from '../../ProfileCard'
+import MfaSection from './MfaSection'
 
 export default function AccountTab({ onClose, onEditProfile }: { onClose: () => void; onEditProfile: () => void }) {
   const user = useStore((s) => s.user)
@@ -22,6 +23,7 @@ export default function AccountTab({ onClose, onEditProfile }: { onClose: () => 
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
+    <div className="space-y-6">
     <form onSubmit={submit} className="space-y-6">
       <h2 className="text-xl font-bold">My Account</h2>
       <ProfileCard user={user} compact actions={<button type="button" onClick={onEditProfile} className="btn-primary py-1.5">Edit User Profile</button>} />
@@ -37,5 +39,7 @@ export default function AccountTab({ onClose, onEditProfile }: { onClose: () => 
         </div>
       )}
     </form>
+    <MfaSection />
+    </div>
   )
 }

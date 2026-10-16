@@ -106,6 +106,7 @@ struct AdminUser {
     created_at: DateTime<Utc>,
     is_admin: bool,
     suspended_at: Option<DateTime<Utc>>,
+    mfa_enabled: bool,
     guild_count: i64,
     #[sqlx(skip)]
     online: bool,
@@ -119,7 +120,7 @@ fn pattern(q: &str) -> Option<String> {
 async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<ListQuery>) -> AppResult<Json<Vec<AdminUser>>> {
     require_admin(&state, uid).await?;
     let mut rows = sqlx::query_as::<_, AdminUser>(
-        "SELECT u.id, u.username, u.display_name, u.email, u.created_at, u.is_admin, u.suspended_at,
+        "SELECT u.id, u.username, u.display_name, u.email, u.created_at, u.is_admin, u.suspended_at, (u.totp_secret IS NOT NULL) AS mfa_enabled,
                 (SELECT COUNT(*) FROM guild_members m WHERE m.user_id = u.id) AS guild_count
          FROM users u WHERE ($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR u.email ILIKE $1)
          ORDER BY u.created_at DESC LIMIT 200",
@@ -136,6 +137,8 @@ async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Quer
 struct PatchUser {
     is_admin: Option<bool>,
     suspended: Option<bool>,
+    /// Only `false` is meaningful: clears a locked-out user's second factor so they can log in with their password.
+    mfa: Option<bool>,
 }
 
 async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<PatchUser>) -> AppResult<Json<Value>> {
@@ -161,8 +164,13 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
             state.hub.voice_evict(|v| v.user_id == id);
         }
     }
-    let row: (bool, Option<DateTime<Utc>>) = sqlx::query_as("SELECT is_admin, suspended_at FROM users WHERE id = $1").bind(id).fetch_one(&state.db).await?;
-    Ok(Json(json!({ "id": id, "is_admin": row.0, "suspended_at": row.1 })))
+    match req.mfa {
+        Some(false) => crate::routes::mfa::clear_mfa(&state, id).await?,
+        Some(true) => return Err(AppError::BadRequest("Only the user can enrol in two-factor authentication".into())),
+        None => {}
+    }
+    let row: (bool, Option<DateTime<Utc>>, bool) = sqlx::query_as("SELECT is_admin, suspended_at, totp_secret IS NOT NULL FROM users WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+    Ok(Json(json!({ "id": id, "is_admin": row.0, "suspended_at": row.1, "mfa_enabled": row.2 })))
 }
 
 /// Delete an account outright (their servers, messages and uploads go with it).

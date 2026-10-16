@@ -151,7 +151,7 @@ async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
 }
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, is_admin, email_verified_at";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {

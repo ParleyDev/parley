@@ -4,6 +4,7 @@ mod error;
 mod models;
 mod perms;
 mod mail;
+mod mfa;
 mod ratelimit;
 mod routes;
 mod state;
