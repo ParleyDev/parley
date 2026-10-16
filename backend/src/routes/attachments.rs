@@ -11,7 +11,8 @@ use crate::{
     routes::channels::require_channel_perms,
     state::AppState,
 };
-use axum::{
+use crate::ratelimit::rl_uploads;
+use axum::{middleware::from_fn,
     body::Body,
     extract::{DefaultBodyLimit, Multipart, Path, State},
     http::{header, HeaderValue, StatusCode},
@@ -30,7 +31,7 @@ const ORPHAN_TTL_SECS: i64 = 60 * 60;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/channels/:id/attachments", post(upload).layer(DefaultBodyLimit::max(32 * 1024 * 1024)))
+        .route("/channels/:id/attachments", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(32 * 1024 * 1024)))
         .route("/attachments/:id/:filename", get(serve))
 }
 

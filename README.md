@@ -20,6 +20,8 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 
 Parley admins approve Discover submissions: set `ADMIN_EMAILS=a@b.c,d@e.f` (comma separated); those accounts get the admin flag when they next connect.
 
+Rate limits are token buckets per client IP (registration, login, failed logins) or per user (message sends, uploads, the GIF proxy), configured as `count/seconds`: `RL_REGISTER`, `RL_LOGIN`, `RL_LOGIN_FAIL`, `RL_MESSAGES`, `RL_UPLOADS`, `RL_GIFS`. The backend's built-in defaults (20/60, 30/60, 5/60, 10/5, 30/60, 60/60) suit production; `docker-compose.yml` loosens registration, login, messages and uploads for local development and the e2e suites, so set production values in `.env`. Throttled requests get `429` with `Retry-After`.
+
 The GIF picker needs a provider key: `TENOR_API_KEY=...` (preferred, free from Google Cloud → Tenor API) or `GIPHY_API_KEY=...`. Without one the GIF tab says so; everything else works.
 
 ## Features
