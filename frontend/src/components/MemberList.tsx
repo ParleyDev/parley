@@ -1,4 +1,5 @@
-import { Crown, TimerReset, X } from 'lucide-react'
+import { Circle, Crown, Mic, TimerReset, X } from 'lucide-react'
+import Tooltip from './Tooltip'
 import { useParams } from 'react-router-dom'
 import { channelPerms, has, P } from '../lib/perms'
 import { anchorOf } from '../lib/anchor'
@@ -65,13 +66,10 @@ export default function MemberList({ guildId }: { guildId: string }) {
         <span className="font-bold">Members</span>
         <button onClick={() => setOpen(false)} className="ml-auto h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><X size={20} /></button>
       </div>
-      <div className="mb-4 grid grid-cols-3 gap-2" data-member-stats>
-        {([['Online here', onlineHere, 'online-here'], ['Members', list.length, 'total'], ['In voice', inVoice, 'voice']] as const).map(([label, n, key]) => (
-          <div key={key} className="rounded-lg bg-bg-0/50 px-2 py-1.5 text-center" data-member-stat={key} data-member-stat-value={n}>
-            <div className="text-base font-bold leading-tight">{n}</div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-text-2 leading-tight">{label}</div>
-          </div>
-        ))}
+      <div className="mb-4 flex items-center gap-4 px-1 text-sm font-semibold" data-member-stats>
+        <Tooltip tip={`${onlineHere} online in this channel`}><span className="flex items-center gap-1.5 text-success" data-member-stat="online-here" data-member-stat-value={onlineHere}><Circle size={12} className="fill-current" />{onlineHere}</span></Tooltip>
+        <Tooltip tip={`${list.length} total server members`}><span className="flex items-center gap-1.5 text-text-2" data-member-stat="total" data-member-stat-value={list.length}><Circle size={12} />{list.length}</span></Tooltip>
+        <Tooltip tip={`${inVoice} members in voice`}><span className="flex items-center gap-1.5 text-text-2" data-member-stat="voice" data-member-stat-value={inVoice}><Mic size={13} />{inVoice}</span></Tooltip>
       </div>
       {sections.map((g) => (
         <div key={g.key} className="mb-5">
