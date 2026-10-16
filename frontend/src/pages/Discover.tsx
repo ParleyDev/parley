@@ -56,10 +56,10 @@ function Browse() {
   }, [category, term])
   const tabs = useMemo(() => [{ id: 'home', label: 'Home' }, ...CATEGORIES.filter((c) => c.id !== 'community'), { id: 'community', label: 'Community' }], [])
 
-  // Priority nav: measure every tab (hidden copy), then on each bar resize decide how many fit.
+  const tabCls = (active: boolean) => `px-2.5 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${active ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`
+  // Priority nav: measure every tab, then on each bar resize decide how many fit.
   // The search box collapses to an icon before any tab is moved into "More".
   const barRef = useRef<HTMLDivElement>(null)
-  const measureRef = useRef<HTMLDivElement>(null)
   const [visibleCount, setVisibleCount] = useState(tabs.length)
   const [searchCompact, setSearchCompact] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -68,11 +68,23 @@ function Browse() {
   const searchRef = useRef<HTMLInputElement>(null)
   useEffect(() => { if (searchOpen) searchRef.current?.focus() }, [searchOpen])
   useEffect(() => {
-    const bar = barRef.current, meas = measureRef.current
-    if (!bar || !meas) return
+    const bar = barRef.current
+    if (!bar) return
+    // Measure natural tab widths with throwaway elements on <body>: anything kept inside the bar
+    // (even fixed, since backdrop-blur makes the bar a containing block) widens its scroll extent.
+    const measure = (labels: string[]) => {
+      const host = document.createElement('div')
+      host.style.cssText = 'position:fixed;top:-9999px;left:0;visibility:hidden;pointer-events:none;white-space:nowrap;display:flex'
+      labels.forEach((l) => { const el = document.createElement('span'); el.className = tabCls(false); el.textContent = l; host.appendChild(el) })
+      document.body.appendChild(host)
+      const ws = Array.from(host.children).map((n) => (n as HTMLElement).offsetWidth + 2)
+      host.remove()
+      return ws
+    }
     const layout = () => {
-      const widths = Array.from(meas.querySelectorAll<HTMLElement>('[data-measure-tab]')).map((n) => n.offsetWidth + 2)
-      const more = (meas.querySelector<HTMLElement>('[data-measure-more]')?.offsetWidth ?? 80) + 2
+      const all = measure([...tabs.map((t) => t.label), 'More ▾'])
+      const widths = all.slice(0, -1)
+      const more = all[all.length - 1]
       const fixed = 22 + 8 + 32 // compass + its margin + bar padding slack
       const total = bar.clientWidth - fixed
       const fit = (searchW: number) => {
@@ -98,7 +110,6 @@ function Browse() {
   }, [tabs, searchOpen, q])
   const shown = tabs.slice(0, visibleCount), hidden = tabs.slice(visibleCount)
   const activeHidden = hidden.some((t) => t.id === category)
-  const tabCls = (active: boolean) => `px-2.5 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${active ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`
 
   return (
     <div className="min-h-full flex flex-col">
@@ -106,10 +117,6 @@ function Browse() {
         <MobileBack />
         <Compass size={22} className="text-text-2 mr-2 shrink-0 max-md:hidden" />
         {/* Offscreen copy used only for measuring natural tab widths. */}
-        <div ref={measureRef} aria-hidden className="absolute -top-[999px] left-0 flex items-center gap-0.5 invisible pointer-events-none">
-          {tabs.map((t) => <span key={t.id} data-measure-tab className={tabCls(false)}>{t.label}</span>)}
-          <span data-measure-more className={tabCls(false)}>More ▾</span>
-        </div>
         <div className="flex-1 min-w-0 flex items-center gap-0.5 h-full" data-tab-strip>
           {shown.map((t) => <button key={t.id} type="button" onClick={() => setCategory(t.id)} data-discover-tab={t.id} className={tabCls(category === t.id)}>{t.label}</button>)}
           {hidden.length > 0 && (
