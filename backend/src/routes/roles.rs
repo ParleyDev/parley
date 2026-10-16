@@ -104,6 +104,7 @@ async fn create_role(
     tx.commit().await?;
     // Positions of other roles shifted; send the whole list so clients stay consistent.
     emit_roles(&state, id).await?;
+    crate::audit::guild(&state, id, uid, "role.create", "role", Some(role.id), &role.name, json!({ "permissions": role.permissions })).await;
     Ok((StatusCode::CREATED, Json(role)))
 }
 
@@ -191,6 +192,13 @@ async fn update_role(
     if permissions.is_some() {
         perms::resync_visibility(&state, id, &before).await?;
     }
+    let mut changed = serde_json::Map::new();
+    if req.name.is_some() { changed.insert("name".into(), json!(role.name)); }
+    if let Some(p) = permissions { changed.insert("permissions".into(), json!(p)); }
+    if req.color.is_some() { changed.insert("color".into(), json!(role.color)); }
+    if req.hoist.is_some() { changed.insert("hoist".into(), json!(role.hoist)); }
+    if req.position.is_some() { changed.insert("position".into(), json!(role.position)); }
+    crate::audit::guild(&state, id, uid, "role.update", "role", Some(rid), &role.name, serde_json::Value::Object(changed)).await;
     Ok(Json(role))
 }
 
@@ -247,6 +255,7 @@ async fn delete_role(
     state.hub.emit_guild(id, "ROLE_DELETE", json!({ "guild_id": id, "id": rid }));
     emit_roles(&state, id).await?;
     perms::resync_visibility(&state, id, &before).await?;
+    crate::audit::guild(&state, id, uid, "role.delete", "role", Some(rid), &role.name, json!({})).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -323,6 +332,12 @@ async fn update_member(
     state.hub.emit_guild(id, "GUILD_MEMBER_UPDATE", json!(member));
     if req.roles.is_some() {
         perms::resync_visibility(&state, id, &before).await?;
+    }
+    if target != uid || req.roles.is_some() {
+        let mut d = serde_json::Map::new();
+        if req.nickname.is_some() { d.insert("nickname".into(), json!(member.nickname)); }
+        if req.roles.is_some() { d.insert("roles".into(), json!(member.roles.iter().filter_map(|r| ctx.roles.get(r)).map(|r| r.name.clone()).collect::<Vec<_>>())); }
+        crate::audit::guild(&state, id, uid, "member.update", "user", Some(target), &member.username, serde_json::Value::Object(d)).await;
     }
     Ok(Json(member))
 }

@@ -1,4 +1,4 @@
-import { Compass, Crown, Gavel, Shield, SlidersHorizontal, Smile, Sticker, Trash2, Users } from 'lucide-react'
+import { Compass, Crown, Gavel, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Trash2, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { myGuildPerms, useStore } from '../../store'
@@ -12,8 +12,9 @@ import BansTab from './settings/BansTab'
 import EmojiTab from './settings/EmojiTab'
 import StickersTab from './settings/StickersTab'
 import DiscoveryTab from './settings/DiscoveryTab'
+import AuditLogTab from './settings/AuditLogTab'
 
-type Tab = 'overview' | 'roles' | 'members' | 'bans' | 'emoji' | 'stickers' | 'discovery'
+type Tab = 'overview' | 'roles' | 'members' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit'
 
 export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'overview' }: { onClose: () => void; guildId: string; tab?: Tab }) {
   const guild = useStore((s) => s.guilds[guildId])
@@ -25,7 +26,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'o
   const navigate = useNavigate()
   const canOverview = has(perms, P.MANAGE_GUILD)
   const canBans = has(perms, P.BAN_MEMBERS)
-  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'emoji' || initial === 'stickers' || initial === 'discovery') && !canOverview) || (initial === 'bans' && !canBans) ? 'roles' : initial)
+  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'emoji' || initial === 'stickers' || initial === 'discovery' || initial === 'audit') && !canOverview) || (initial === 'bans' && !canBans) ? 'roles' : initial)
   if (!guild) return null
   const isOwner = guild.owner_id === user?.id
 
@@ -41,7 +42,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'o
   items.push({ id: 'roles', label: 'Roles', icon: <Shield size={16} /> })
   items.push({ id: 'members', label: 'Members', icon: <Users size={16} /> })
   if (canBans) items.push({ id: 'bans', label: 'Bans', icon: <Gavel size={16} /> })
-  if (canOverview) items.push({ id: 'emoji', label: 'Emoji', icon: <Smile size={16} /> }, { id: 'stickers', label: 'Stickers', icon: <Sticker size={16} /> }, { id: 'discovery', label: 'Discovery', icon: <Compass size={16} /> })
+  if (canOverview) items.push({ id: 'emoji', label: 'Emoji', icon: <Smile size={16} /> }, { id: 'stickers', label: 'Stickers', icon: <Sticker size={16} /> }, { id: 'discovery', label: 'Discovery', icon: <Compass size={16} /> }, { id: 'audit', label: 'Audit Log', icon: <ScrollText size={16} /> })
 
   return (
     <SettingsShell<Tab>
@@ -61,6 +62,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'o
       {tab === 'emoji' && canOverview && <EmojiTab guildId={guildId} />}
       {tab === 'stickers' && canOverview && <StickersTab guildId={guildId} />}
       {tab === 'discovery' && canOverview && <DiscoveryTab guildId={guildId} />}
+      {tab === 'audit' && canOverview && <AuditLogTab guildId={guildId} />}
     </SettingsShell>
   )
 }

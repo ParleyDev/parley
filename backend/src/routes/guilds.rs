@@ -28,6 +28,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/members/@me", delete(leave_guild))
         .route("/guilds/:id/members/:uid", delete(kick_member))
         .route("/guilds/:id/members/:uid/timeout", put(timeout_member).delete(clear_timeout))
+        .route("/guilds/:id/audit", get(list_audit))
         .route("/guilds/:id/invites", get(list_invites).post(create_invite))
         .route("/guilds/:id/bans", get(list_bans))
         .route("/guilds/:id/bans/:uid", put(ban_member).delete(unban_member))
@@ -175,7 +176,7 @@ async fn update_guild(
     }
     validate_image(&req.icon_url)?;
     crate::routes::users::validate_image_max(&req.banner_url, 1024 * 1024)?;
-    let before: (Option<String>, Option<String>) = sqlx::query_as("SELECT icon_url, banner_url FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+    let (before_name, before): (String, (Option<String>, Option<String>)) = sqlx::query_as::<_, (String, Option<String>, Option<String>)>("SELECT name, icon_url, banner_url FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await.map(|r| (r.0, (r.1, r.2)))?;
     let g = sqlx::query_as::<_, Guild>(&format!(
         "UPDATE guilds SET name = COALESCE($2, name),
            icon_url = CASE WHEN $3::text IS NULL THEN icon_url WHEN $3 = '' THEN NULL ELSE $3 END,
@@ -191,6 +192,11 @@ async fn update_guild(
     crate::routes::images::release_replaced(&state, before.0.as_deref(), g.icon_url.as_deref()).await;
     crate::routes::images::release_replaced(&state, before.1.as_deref(), g.banner_url.as_deref()).await;
     state.hub.emit_guild(id, "GUILD_UPDATE", json!(g));
+    let mut changed = serde_json::Map::new();
+    if g.name != before_name { changed.insert("name".into(), json!(g.name)); }
+    if g.icon_url != before.0 { changed.insert("icon".into(), json!(g.icon_url.is_some())); }
+    if g.banner_url != before.1 { changed.insert("banner".into(), json!(g.banner_url.is_some())); }
+    crate::audit::guild(&state, id, uid, "guild.update", "guild", Some(id), &g.name, serde_json::Value::Object(changed)).await;
     Ok(Json(g))
 }
 
@@ -253,6 +259,7 @@ async fn create_channel(
     .await?;
     let target = perms::channel_audience(&state.db, &c).await?;
     state.hub.emit(target, "CHANNEL_CREATE", json!(c));
+    crate::audit::guild(&state, id, uid, "channel.create", "channel", Some(c.id), &c.name, json!({ "kind": c.kind })).await;
     Ok((StatusCode::CREATED, Json(c)))
 }
 
@@ -311,7 +318,9 @@ async fn kick_member(
     if !ctx.outranks_member(uid, target) {
         return Err(AppError::Forbidden);
     }
+    let name = crate::audit::username(&state, target).await;
     remove_member(&state, id, target).await?;
+    crate::audit::guild(&state, id, uid, "member.kick", "user", Some(target), &name, json!({})).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -355,6 +364,7 @@ async fn timeout_member(
     state.hub.voice_evict(|v| v.user_id == target && v.guild_id == Some(id));
     let m = fetch_member(&state.db, id, target).await?;
     state.hub.emit_guild(id, "GUILD_MEMBER_UPDATE", json!(m));
+    crate::audit::guild(&state, id, uid, "member.timeout", "user", Some(target), &m.username, json!({ "minutes": req.minutes })).await;
     Ok(Json(m))
 }
 
@@ -374,6 +384,7 @@ async fn clear_timeout(
     sqlx::query("UPDATE guild_members SET timeout_until = NULL WHERE guild_id = $1 AND user_id = $2").bind(id).bind(target).execute(&state.db).await?;
     let m = fetch_member(&state.db, id, target).await?;
     state.hub.emit_guild(id, "GUILD_MEMBER_UPDATE", json!(m));
+    crate::audit::guild(&state, id, uid, "member.timeout_clear", "user", Some(target), &m.username, json!({})).await;
     Ok(Json(m))
 }
 
@@ -488,6 +499,7 @@ async fn ban_member(
     try_remove_member(&state, id, target).await?;
     let ban = fetch_ban(&state.db, id, target).await?;
     state.hub.emit_guild(id, "GUILD_BAN_ADD", json!(ban));
+    crate::audit::guild(&state, id, uid, "member.ban", "user", Some(target), &ban.username, json!({ "reason": reason })).await;
     Ok((StatusCode::CREATED, Json(ban)))
 }
 
@@ -507,6 +519,7 @@ async fn unban_member(
         return Err(AppError::NotFound("Ban not found".into()));
     }
     state.hub.emit_guild(id, "GUILD_BAN_REMOVE", json!({ "guild_id": id, "user_id": target }));
+    crate::audit::guild(&state, id, uid, "member.unban", "user", Some(target), &crate::audit::username(&state, target).await, json!({})).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -543,6 +556,7 @@ async fn transfer_ownership(
         .await?;
     state.hub.emit_guild(id, "GUILD_UPDATE", json!(g));
     perms::resync_visibility(&state, id, &before).await?;
+    crate::audit::guild(&state, id, uid, "guild.transfer", "user", Some(req.user_id), &crate::audit::username(&state, req.user_id).await, json!({})).await;
     Ok(Json(g))
 }
 
@@ -587,4 +601,48 @@ async fn list_invites(
     .fetch_all(&state.db)
     .await?;
     Ok(Json(invs))
+}
+
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+pub struct GuildAuditRow {
+    pub id: Uuid,
+    pub actor_id: Option<Uuid>,
+    pub actor_name: String,
+    pub action: String,
+    pub target_kind: String,
+    pub target_id: Option<Uuid>,
+    pub target_name: String,
+    pub details: serde_json::Value,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Deserialize)]
+struct AuditQuery {
+    before: Option<Uuid>,
+    #[serde(default)]
+    q: String,
+}
+
+/// Server audit log, newest first, 100 per page; needs Manage Server.
+async fn list_audit(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path(id): Path<Uuid>,
+    axum::extract::Query(q): axum::extract::Query<AuditQuery>,
+) -> AppResult<Json<Vec<GuildAuditRow>>> {
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::MANAGE_GUILD)?;
+    let t = q.q.trim().replace('%', "\\%").replace('_', "\\_");
+    let pat = if t.is_empty() { None } else { Some(format!("%{t}%")) };
+    let rows = sqlx::query_as::<_, GuildAuditRow>(
+        "SELECT id, actor_id, actor_name, action, target_kind, target_id, target_name, details, created_at FROM guild_audit
+         WHERE guild_id = $1 AND ($2::uuid IS NULL OR id < $2) AND ($3::text IS NULL OR actor_name ILIKE $3 OR action ILIKE $3 OR target_name ILIKE $3)
+         ORDER BY id DESC LIMIT 100",
+    )
+    .bind(id)
+    .bind(q.before)
+    .bind(pat)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(rows))
 }

@@ -143,6 +143,12 @@ async fn update_channel(
     updated.overwrites = c.overwrites;
     let target = perms::channel_audience(&state.db, &updated).await?;
     state.hub.emit(target, "CHANNEL_UPDATE", json!(updated));
+    if let Some(gid) = updated.guild_id {
+        let mut d = serde_json::Map::new();
+        if updated.name != c.name { d.insert("name".into(), json!(updated.name)); }
+        if updated.topic != c.topic { d.insert("topic".into(), json!(updated.topic)); }
+        crate::audit::guild(&state, gid, uid, "channel.update", "channel", Some(id), &updated.name, serde_json::Value::Object(d)).await;
+    }
     Ok(Json(updated))
 }
 
@@ -164,6 +170,7 @@ async fn delete_channel(
     sqlx::query("DELETE FROM channels WHERE id = $1").bind(id).execute(&state.db).await?;
     state.hub.voice_evict(|v| v.channel_id == id);
     state.hub.emit_guild(gid, "CHANNEL_DELETE", json!({ "id": id, "guild_id": gid }));
+    crate::audit::guild(&state, gid, uid, "channel.delete", "channel", Some(id), &c.name, json!({ "kind": c.kind })).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -379,6 +386,7 @@ async fn delete_message(
     let moderator = c.guild_id.is_some() && has(p, perms::MANAGE_MESSAGES);
     // Collect attachment ids first; files are removed only after the row delete proves the caller may.
     let files: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM attachments WHERE message_id = $1").bind(mid).fetch_all(&state.db).await?;
+    let author: Option<(Uuid,)> = sqlx::query_as("SELECT author_id FROM messages WHERE id = $1").bind(mid).fetch_optional(&state.db).await?;
     let res = if moderator {
         sqlx::query("DELETE FROM messages WHERE id = $1 AND channel_id = $2").bind(mid).bind(id)
     } else {
@@ -394,6 +402,11 @@ async fn delete_message(
     }
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_DELETE", json!({ "id": mid, "channel_id": id, "guild_id": c.guild_id }));
+    if let (Some(gid), Some((author_id,))) = (c.guild_id, author) {
+        if author_id != uid {
+            crate::audit::guild(&state, gid, uid, "message.delete", "user", Some(author_id), &crate::audit::username(&state, author_id).await, json!({ "channel": c.name, "message_id": mid })).await;
+        }
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -547,6 +560,7 @@ async fn set_overwrite(
     .execute(&state.db)
     .await?;
     perms::resync_visibility(&state, gid, &before).await?;
+    crate::audit::guild(&state, gid, uid, "channel.overwrite", "channel", Some(id), &c.name, json!({ "target": target, "kind": req.kind, "allow": allow, "deny": deny })).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -573,6 +587,7 @@ async fn delete_overwrite(
     let before = perms::visibility(&state.db, gid).await?;
     sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_id = $2").bind(id).bind(target).execute(&state.db).await?;
     perms::resync_visibility(&state, gid, &before).await?;
+    crate::audit::guild(&state, gid, uid, "channel.overwrite_delete", "channel", Some(id), &c.name, json!({ "target": target })).await;
     Ok(StatusCode::NO_CONTENT)
 }
 

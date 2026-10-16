@@ -236,12 +236,14 @@ async fn put_listing(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
     .bind(uid)
     .execute(&state.db)
     .await?;
+    crate::audit::guild(&state, id, uid, "discovery.submit", "guild", Some(id), &crate::audit::guild_name(&state, id).await, json!({ "category": req.category })).await;
     Ok(Json(listing_for(&state, uid, id).await?.ok_or_else(|| AppError::NotFound("Listing not found".into()))?))
 }
 
 async fn delete_listing(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
     require_manage(&state.db, id, uid).await?;
     sqlx::query("DELETE FROM guild_discovery WHERE guild_id = $1").bind(id).execute(&state.db).await?;
+    crate::audit::guild(&state, id, uid, "discovery.withdraw", "guild", Some(id), &crate::audit::guild_name(&state, id).await, json!({})).await;
     Ok(StatusCode::NO_CONTENT)
 }
 

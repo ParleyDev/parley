@@ -164,6 +164,7 @@ async fn create_emoji(
     };
     emoji.url = image_url(emoji.id);
     broadcast_emojis(&state, id).await?;
+    crate::audit::guild(&state, id, uid, "emoji.create", "emoji", Some(emoji.id), &emoji.name, json!({})).await;
     Ok((StatusCode::CREATED, Json(emoji)))
 }
 
@@ -197,17 +198,20 @@ async fn update_emoji(
     };
     emoji.url = image_url(emoji.id);
     broadcast_emojis(&state, id).await?;
+    crate::audit::guild(&state, id, uid, "emoji.update", "emoji", Some(eid), &emoji.name, json!({})).await;
     Ok(Json(emoji))
 }
 
 async fn delete_emoji(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, eid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
     require_manage(&state.db, id, uid).await?;
+    let name: Option<(String,)> = sqlx::query_as("SELECT name FROM emojis WHERE id = $1 AND guild_id = $2").bind(eid).bind(id).fetch_optional(&state.db).await?;
     let res = sqlx::query("DELETE FROM emojis WHERE id = $1 AND guild_id = $2").bind(eid).bind(id).execute(&state.db).await?;
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("Emoji not found".into()));
     }
     delete_image(&state, eid).await;
     broadcast_emojis(&state, id).await?;
+    crate::audit::guild(&state, id, uid, "emoji.delete", "emoji", Some(eid), &name.map(|n| n.0).unwrap_or_default(), json!({})).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -273,6 +277,7 @@ async fn create_sticker(
     };
     sticker.url = image_url(sticker.id);
     broadcast_stickers(&state, id).await?;
+    crate::audit::guild(&state, id, uid, "sticker.create", "sticker", Some(sticker.id), &sticker.name, json!({})).await;
     Ok((StatusCode::CREATED, Json(sticker)))
 }
 
@@ -317,17 +322,20 @@ async fn update_sticker(
     };
     sticker.url = image_url(sticker.id);
     broadcast_stickers(&state, id).await?;
+    crate::audit::guild(&state, id, uid, "sticker.update", "sticker", Some(sid), &sticker.name, json!({})).await;
     Ok(Json(sticker))
 }
 
 async fn delete_sticker(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
     require_manage(&state.db, id, uid).await?;
+    let name: Option<(String,)> = sqlx::query_as("SELECT name FROM stickers WHERE id = $1 AND guild_id = $2").bind(sid).bind(id).fetch_optional(&state.db).await?;
     let res = sqlx::query("DELETE FROM stickers WHERE id = $1 AND guild_id = $2").bind(sid).bind(id).execute(&state.db).await?;
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("Sticker not found".into()));
     }
     delete_image(&state, sid).await;
     broadcast_stickers(&state, id).await?;
+    crate::audit::guild(&state, id, uid, "sticker.delete", "sticker", Some(sid), &name.map(|n| n.0).unwrap_or_default(), json!({})).await;
     Ok(StatusCode::NO_CONTENT)
 }
 

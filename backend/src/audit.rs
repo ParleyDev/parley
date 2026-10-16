@@ -33,6 +33,28 @@ pub async fn record(state: &AppState, actor: Uuid, action: &str, target_kind: &s
     }
 }
 
+/// Server audit log entry (Server Settings -> Audit Log). Same never-fails contract as `record`.
+pub async fn guild(state: &AppState, guild_id: Uuid, actor: Uuid, action: &str, target_kind: &str, target_id: Option<Uuid>, target_name: &str, details: Value) {
+    let actor_name = username(state, actor).await;
+    if let Err(e) = sqlx::query(
+        "INSERT INTO guild_audit (id, guild_id, actor_id, actor_name, action, target_kind, target_id, target_name, details) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+    )
+    .bind(Uuid::now_v7())
+    .bind(guild_id)
+    .bind(actor)
+    .bind(actor_name)
+    .bind(action)
+    .bind(target_kind)
+    .bind(target_id)
+    .bind(target_name)
+    .bind(details)
+    .execute(&state.db)
+    .await
+    {
+        tracing::error!(error = %e, action, "failed to write guild audit row");
+    }
+}
+
 pub async fn username(state: &AppState, id: Uuid) -> String {
     sqlx::query_as::<_, (String,)>("SELECT username FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await.ok().flatten().map(|r| r.0).unwrap_or_default()
 }
