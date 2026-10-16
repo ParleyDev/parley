@@ -87,9 +87,11 @@ async fn stats(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppRes
     let (pending,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_discovery WHERE status = 'pending'").fetch_one(&state.db).await?;
     let (approved,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_discovery WHERE status = 'approved'").fetch_one(&state.db).await?;
     let (uploads,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0)::bigint FROM (SELECT size FROM attachments UNION ALL SELECT size FROM images) x").fetch_one(&state.db).await?;
+    let (reports_open,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM reports WHERE status = 'open'").fetch_one(&state.db).await?;
     Ok(Json(json!({
         "users": users, "admins": admins, "suspended": suspended, "online": state.hub.online_users().len(),
         "guilds": guilds, "messages": messages, "discovery_pending": pending, "discovery_approved": approved, "upload_bytes": uploads,
+        "reports_open": reports_open,
     })))
 }
 

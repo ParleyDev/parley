@@ -23,6 +23,7 @@ export type ModalKind =
   | { kind: 'ban'; guildId: string; userId: string }
   | { kind: 'timeout'; guildId: string; userId: string }
   | { kind: 'editHistory'; channelId: string; messageId: string }
+  | { kind: 'report'; messageId?: string; userId: string; name: string }
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
   | { kind: 'customStatus' }
   | { kind: 'forward'; message: Message }
