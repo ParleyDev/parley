@@ -51,7 +51,7 @@ jobs:
       - name: Wait for backend and frontend
         run: |
           for i in $(seq 1 60); do curl -fs http://localhost:18080/health && break; sleep 2; done
-          for i in $(seq 1 30); do curl -fs -o /dev/null http://localhost:3000/ && break; sleep 2; done
+          for i in $(seq 1 30); do curl -fs http://localhost:3000/healthz && break; sleep 2; done
           curl -fs http://localhost:18080/health
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
