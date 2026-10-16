@@ -61,6 +61,10 @@ jobs:
         working-directory: frontend
       - name: Run the suites
         run: npm run e2e
+      - name: Backup smoke test (pg_dump + uploads tarball)
+        run: |
+          docker compose --profile backup run --rm backup once
+          ls -lh backups/ && test -s backups/db-*.dump && test -s backups/uploads-*.tgz
         working-directory: frontend
       - name: Backend logs
         if: failure()

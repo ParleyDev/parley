@@ -10,3 +10,4 @@ frontend/dist
 .beads/proxieddb/
 *.gate.lock*
 frontend/e2e/out/
+backups/
