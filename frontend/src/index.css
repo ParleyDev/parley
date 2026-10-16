@@ -121,7 +121,7 @@ body {
 
 /* Custom emoji (<:name:id>) inline in text, reactions and pickers; jumbo when a message is only emoji. */
 .emoji { display: inline-block; width: 1.375em; height: 1.375em; vertical-align: -0.3em; object-fit: contain; }
-.msg-content.jumbo { font-size: 3rem; line-height: 1.125; }
+.msg-content.jumbo { font-size: calc(3rem * var(--font-scale, 1)) !important; line-height: 1.125 !important; }
 .msg-content.jumbo .emoji { width: 3rem; height: 3rem; vertical-align: -0.5rem; }
 .msg-content.jumbo .emoji + .emoji { margin-left: 0.125rem; }
 

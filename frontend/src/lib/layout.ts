@@ -31,6 +31,21 @@ export type DropTarget =
   | { type: 'combine'; guildId: string }      // onto a top-level server → new folder with both
   | { type: 'into'; folderId: string; index?: number } // onto a folder, or between items inside it
 
+/** Move a folder (top level only: before/after another item). */
+export function moveFolder(layout: LayoutItem[], folderId: string, target: DropTarget): LayoutItem[] {
+  const me = layout.find((it) => it.kind === 'folder' && it.id === folderId)
+  if (!me || (target.type !== 'before' && target.type !== 'after') || target.id === folderId) return layout
+  const base = layout.filter((it) => it.id !== folderId)
+  const i = base.findIndex((it) => it.id === target.id)
+  if (i < 0) return layout
+  const out = [...base]; out.splice(target.type === 'before' ? i : i + 1, 0, me); return out
+}
+
+/** Move whatever was dragged: a folder keeps its contents, a server goes wherever the target says. */
+export function moveItem(layout: LayoutItem[], id: string, target: DropTarget): LayoutItem[] {
+  return layout.some((it) => it.kind === 'folder' && it.id === id) ? moveFolder(layout, id, target) : moveGuild(layout, id, target)
+}
+
 /** Move a server somewhere else in the layout. */
 export function moveGuild(layout: LayoutItem[], guildId: string, target: DropTarget): LayoutItem[] {
   const base = without(layout, guildId)
@@ -73,7 +88,7 @@ export function updateFolder(layout: LayoutItem[], folderId: string, patch: { na
   return layout.map((it) => (it.kind === 'folder' && it.id === folderId ? { ...it, ...patch } : it))
 }
 
-/** Step a top-level item (or a server inside its folder) up or down by one. */
+/** Step a top-level item (server or folder, or a server inside its folder) up or down by one. */
 export function nudge(layout: LayoutItem[], guildId: string, dir: -1 | 1): LayoutItem[] {
   const fi = layout.findIndex((it) => it.kind === 'folder' && it.guilds.includes(guildId))
   if (fi >= 0) {
@@ -83,7 +98,7 @@ export function nudge(layout: LayoutItem[], guildId: string, dir: -1 | 1): Layou
     const guilds = [...f.guilds]; [guilds[i], guilds[j]] = [guilds[j], guilds[i]]
     return layout.map((it, k) => (k === fi ? { ...f, guilds } : it))
   }
-  const i = layout.findIndex((it) => it.kind === 'guild' && it.id === guildId), j = i + dir
+  const i = layout.findIndex((it) => it.id === guildId), j = i + dir
   if (i < 0 || j < 0 || j >= layout.length) return layout
   const out = [...layout]; [out[i], out[j]] = [out[j], out[i]]; return out
 }

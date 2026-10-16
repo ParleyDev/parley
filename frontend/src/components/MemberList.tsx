@@ -1,4 +1,6 @@
 import { Crown, TimerReset, X } from 'lucide-react'
+import { useParams } from 'react-router-dom'
+import { channelPerms, has, P } from '../lib/perms'
 import { anchorOf } from '../lib/anchor'
 import { useStore } from '../store'
 import type { Member, Role } from '../lib/types'
@@ -19,8 +21,15 @@ export default function MemberList({ guildId }: { guildId: string }) {
   const setOpen = useStore((s) => s.setMembersOpen)
   const ctx = useContextMenu()
   const userMenu = useUserMenu(guildId)
+  const { channelId } = useParams()
+  const channel = useStore((s) => (channelId ? s.channels[channelId] : undefined))
+  const voiceStates = useStore((s) => s.voiceStates)
   const list = Object.values(members ?? {}).sort((a, b) => (a.nickname ?? a.display_name).localeCompare(b.nickname ?? b.display_name))
   const visible = (id: string) => online[id] && (users[id]?.status ?? '') !== 'invisible'
+  // Header totals: who can read the current channel and is online, everyone, and who is in voice here.
+  const canView = (m: Member) => !guild || !channel || channel.guild_id !== guildId || has(channelPerms({ guild, roles, member: m }, m.user_id, channel), P.VIEW_CHANNEL)
+  const onlineHere = list.filter((m) => visible(m.user_id) && canView(m)).length
+  const inVoice = Object.values(voiceStates).filter((v) => v.guild_id === guildId && v.channel_id).length
 
   // Discord grouping: online members under their highest hoisted role, the rest under "Online", offline all together.
   const groups: { key: string; label: string; role: Role | null; members: Member[] }[] = []
@@ -51,10 +60,18 @@ export default function MemberList({ guildId }: { guildId: string }) {
 
   if (!open) return null
   return (
-    <aside className="w-60 shrink-0 bg-bg-1 overflow-y-auto px-2 pt-4 max-lg:fixed max-lg:inset-0 max-lg:z-30 max-lg:w-auto max-lg:pt-0">
+    <aside className="w-[280px] shrink-0 bg-bg-1 overflow-y-auto px-4 pt-4 max-lg:fixed max-lg:inset-0 max-lg:z-30 max-lg:w-auto max-lg:pt-0" data-member-list>
       <div className="lg:hidden h-12 -mx-2 mb-2 px-3 flex items-center gap-2 border-b border-line bg-bg-1 sticky top-0">
         <span className="font-bold">Members</span>
         <button onClick={() => setOpen(false)} className="ml-auto h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><X size={20} /></button>
+      </div>
+      <div className="mb-4 grid grid-cols-3 gap-2" data-member-stats>
+        {([['Online here', onlineHere, 'online-here'], ['Members', list.length, 'total'], ['In voice', inVoice, 'voice']] as const).map(([label, n, key]) => (
+          <div key={key} className="rounded-lg bg-bg-0/50 px-2 py-1.5 text-center" data-member-stat={key} data-member-stat-value={n}>
+            <div className="text-base font-bold leading-tight">{n}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-text-2 leading-tight">{label}</div>
+          </div>
+        ))}
       </div>
       {sections.map((g) => (
         <div key={g.key} className="mb-5">
