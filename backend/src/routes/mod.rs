@@ -4,6 +4,7 @@ pub mod auth;
 pub mod channels;
 pub mod discovery;
 pub mod dms;
+pub mod embeds;
 pub mod expressions;
 pub mod gifs;
 pub mod images;
@@ -32,6 +33,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(reports::router())
         .merge(moderation::router())
         .merge(polls::router())
+        .merge(embeds::router())
         .merge(guilds::router())
         .merge(invites::router())
         .merge(roles::router())

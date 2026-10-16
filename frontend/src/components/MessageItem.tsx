@@ -12,6 +12,7 @@ import { isBlocked, mentionsMe, myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
 import { useAppearance } from '../lib/appearance'
 import PollCard from './PollCard'
+import LinkEmbed, { firstLink } from './LinkEmbed'
 import StyledName from './StyledName'
 import type { Message } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
@@ -87,6 +88,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
 
   const media = soleMediaUrl(m.content)
+  const link = media ? null : firstLink(m.content)
 
   /** Right-click menu (Discord layout): quick reactions, Add Reaction, Reply, Edit, Copy Text, Pin, Mark Unread, Copy Link, Speak, Delete, Copy ID. */
   const contextItems = (e: React.MouseEvent): MenuEntry[] => {
@@ -190,6 +192,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 </div>
               )}
               {media && <MediaEmbed url={media} />}
+              {link && <LinkEmbed url={link} />}
               {m.poll && <PollCard m={m} poll={m.poll} />}
               {m.sticker && (
                 <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />

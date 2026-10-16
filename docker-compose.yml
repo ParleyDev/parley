@@ -46,6 +46,9 @@ services:
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-Parley <no-reply@parley.local>}
       APP_URL: ${APP_URL:-http://localhost:3000}
+      # Link previews never fetch private/loopback addresses. The compose network is pinned so the
+      # host's gateway address is known; the e2e suites serve test pages there. Leave empty in production.
+      EMBED_ALLOW_HOSTS: ${EMBED_ALLOW_HOSTS:-172.30.0.1}
     volumes:
       - uploads:/data/uploads
     depends_on:
@@ -67,6 +70,13 @@ services:
     ports:
       - "${WEB_PORT:-3000}:80"
       - "${WEB_TLS_PORT:-3443}:443"
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+          gateway: 172.30.0.1
 
 volumes:
   pgdata:
