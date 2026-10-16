@@ -13,6 +13,9 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [form, setForm] = useState({ login: '', email: '', username: '', display_name: '', password: '' })
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Set when the password was right but the account has 2FA: the ticket proves step one to /auth/mfa.
+  const [mfaTicket, setMfaTicket] = useState<string | null>(null)
+  const [code, setCode] = useState('')
   const registrationOpen = useStore((s) => s.instance.registration_enabled)
   const mailEnabled = useStore((s) => s.instance.mail_enabled !== false)
   const setInstance = useStore((s) => s.setInstance)
@@ -24,10 +27,11 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setErr(null); setBusy(true)
     try {
       const res = mode === 'login'
-        ? await api.post<{ token: string; user: PrivateUser }>('/auth/login', { login: form.login, password: form.password })
+        ? await api.post<{ token: string; user: PrivateUser } | { mfa: true; ticket: string }>('/auth/login', { login: form.login, password: form.password })
         : await api.post<{ token: string; user: PrivateUser }>('/auth/register', {
             email: form.email, username: form.username, display_name: form.display_name || undefined, password: form.password,
           })
+      if ('mfa' in res) { setMfaTicket(res.ticket); setCode(''); return }
       setAuth(res.token, res.user)
       navigate(from, { replace: true })
     } catch (e) {
@@ -37,7 +41,48 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     }
   }
 
+  const submitMfa = async (e: FormEvent) => {
+    e.preventDefault()
+    setErr(null); setBusy(true)
+    try {
+      const res = await api.post<{ token: string; user: PrivateUser }>('/auth/mfa', { ticket: mfaTicket, code })
+      setAuth(res.token, res.user)
+      navigate(from, { replace: true })
+    } catch (e) {
+      const msg = (e as Error).message
+      setErr(msg)
+      if (/expired/i.test(msg)) setMfaTicket(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const f = (k: keyof typeof form) => ({ value: form[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value }) })
+
+  if (mfaTicket) {
+    return (
+      <div className="h-full flex items-center justify-center p-4 relative overflow-hidden bg-bg-0">
+        <div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-accent/25 blur-[120px]" />
+        <div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-sky-500/15 blur-[120px]" />
+        <form onSubmit={submitMfa} className="pop relative w-full max-w-md rounded-2xl bg-bg-1/90 backdrop-blur border border-line p-8 shadow-2xl" data-mfa-form>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="h-10 w-10 rounded-xl bg-accent flex items-center justify-center text-white font-extrabold text-xl shadow-lg shadow-accent/30">{APP_INITIAL}</div>
+            <div>
+              <h1 className="text-xl font-bold leading-tight">Two-factor authentication</h1>
+              <p className="text-sm text-text-2">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+            </div>
+          </div>
+          {err && <div className="mb-4 rounded-lg bg-danger/15 border border-danger/40 px-3 py-2 text-sm" data-mfa-error>{err}</div>}
+          <div>
+            <label className="label">Authentication code</label>
+            <input className="input tracking-widest" autoFocus autoComplete="one-time-code" inputMode="text" required value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456 or abcde-fghij" data-mfa-code />
+          </div>
+          <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || !code.trim()}>{busy ? 'Please wait…' : 'Log In'}</button>
+          <p className="mt-4 text-sm text-text-2"><button type="button" className="text-sky-400 hover:underline" onClick={() => { setMfaTicket(null); setErr(null) }} data-mfa-back>Back to login</button></p>
+        </form>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full flex items-center justify-center p-4 relative overflow-hidden bg-bg-0">

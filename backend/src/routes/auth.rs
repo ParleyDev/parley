@@ -1,7 +1,9 @@
 use crate::{
-    auth::{hash_password, issue_token, verify_password},
+    auth::{hash_password, issue_mfa_ticket, issue_token, verify_mfa_ticket, verify_password},
     error::{AppError, AppResult},
+    mfa,
     models::PrivateUser,
+    routes::users::PRIVATE_USER_COLS,
     state::AppState,
 };
 use axum::{extract::State, http::HeaderMap, middleware::from_fn, routing::post, Json, Router};
@@ -14,6 +16,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/auth/register", post(register).route_layer(from_fn(rl_register)))
         .route("/auth/login", post(login).route_layer(from_fn(rl_login)))
+        .route("/auth/mfa", post(login_mfa).route_layer(from_fn(rl_login)))
         .route("/auth/verify", post(verify_email))
         .route("/auth/resend-verification", post(resend_verification).route_layer(from_fn(crate::ratelimit::rl_mail)))
         .route("/auth/forgot", post(forgot_password).route_layer(from_fn(crate::ratelimit::rl_mail)))
@@ -204,16 +207,59 @@ async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Jso
         let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limits.login_fail);
         return Err(AppError::BadRequest("Invalid credentials".into()));
     }
-    let suspended: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND suspended_at IS NOT NULL").bind(id).fetch_optional(&state.db).await?;
-    if suspended.is_some() {
+    let (suspended, mfa): (bool, bool) = sqlx::query_as("SELECT suspended_at IS NOT NULL, totp_secret IS NOT NULL FROM users WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+    if suspended {
         return Err(AppError::BadRequest("This account has been suspended.".into()));
     }
-    let user = sqlx::query_as::<_, PrivateUser>(
-        "SELECT id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent FROM users WHERE id = $1",
-    )
-    .bind(id)
-    .fetch_one(&state.db)
-    .await?;
+    if mfa {
+        // Password is right but the account needs its second factor: hand back a ticket for /auth/mfa, not a session.
+        return Ok(Json(json!({ "mfa": true, "ticket": issue_mfa_ticket(&state.config.jwt_secret, id)? })));
+    }
+    session(&state, id).await
+}
+
+async fn session(state: &AppState, id: Uuid) -> AppResult<Json<Value>> {
+    let user = sqlx::query_as::<_, PrivateUser>(&format!("SELECT {PRIVATE_USER_COLS} FROM users WHERE id = $1"))
+        .bind(id)
+        .fetch_one(&state.db)
+        .await?;
     let token = issue_token(&state.config.jwt_secret, id)?;
     Ok(Json(json!({ "token": token, "user": user })))
+}
+
+#[derive(Deserialize)]
+struct MfaReq {
+    ticket: String,
+    code: String,
+}
+
+/// Second login step: a TOTP code or a backup code, presented with the ticket from `/auth/login`.
+async fn login_mfa(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<MfaReq>) -> AppResult<Json<Value>> {
+    let id = verify_mfa_ticket(&state.config.jwt_secret, &req.ticket).ok_or(AppError::BadRequest("Your login expired, start again".into()))?;
+    let row: Option<(Option<String>, i64, bool)> = sqlx::query_as("SELECT totp_secret, totp_last_step, suspended_at IS NOT NULL FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    let Some((Some(secret), last_step, suspended)) = row else {
+        return Err(AppError::BadRequest("Two-factor authentication is not enabled on this account".into()));
+    };
+    if suspended {
+        return Err(AppError::BadRequest("This account has been suspended.".into()));
+    }
+    if !check_second_factor(&state, id, &secret, last_step, &req.code).await? {
+        let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limits.login_fail);
+        return Err(AppError::BadRequest("Invalid code".into()));
+    }
+    session(&state, id).await
+}
+
+/// Accept a TOTP code (recording its step so it cannot be replayed) or burn a matching unused backup code.
+pub async fn check_second_factor(state: &AppState, id: Uuid, secret: &str, last_step: i64, code: &str) -> AppResult<bool> {
+    if let Some(step) = mfa::verify(secret, code, last_step) {
+        sqlx::query("UPDATE users SET totp_last_step = GREATEST(totp_last_step, $2) WHERE id = $1").bind(id).bind(step).execute(&state.db).await?;
+        return Ok(true);
+    }
+    let burned = sqlx::query("UPDATE mfa_backup_codes SET used_at = now() WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL")
+        .bind(id)
+        .bind(mfa::hash_backup_code(code))
+        .execute(&state.db)
+        .await?;
+    Ok(burned.rows_affected() == 1)
 }

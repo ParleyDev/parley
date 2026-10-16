@@ -49,6 +49,10 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub email_verified_at: Option<DateTime<Utc>>,
+    /// Two-factor authentication (TOTP) is switched on.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub mfa_enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

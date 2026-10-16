@@ -11,6 +11,9 @@ pub struct Claims {
     pub sub: Uuid,
     pub exp: i64,
     pub iat: i64,
+    /// None for a session; "mfa" for the short-lived ticket issued between password and second factor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub typ: Option<String>,
 }
 
 pub fn hash_password(pw: &str) -> anyhow::Result<String> {
@@ -33,14 +36,29 @@ pub fn issue_token(secret: &str, user_id: Uuid) -> anyhow::Result<String> {
         sub: user_id,
         iat: now.timestamp(),
         exp: (now + Duration::days(30)).timestamp(),
+        typ: None,
     };
     Ok(encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))?)
 }
 
+/// Session token: rejects MFA tickets, which must never act as a login.
 pub fn verify_token(secret: &str, token: &str) -> Option<Uuid> {
-    decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &Validation::default())
-        .ok()
-        .map(|d| d.claims.sub)
+    decode_claims(secret, token).filter(|c| c.typ.is_none()).map(|c| c.sub)
+}
+
+/// Proof that the password step passed; worth nothing except at `POST /auth/mfa`, and only for five minutes.
+pub fn issue_mfa_ticket(secret: &str, user_id: Uuid) -> anyhow::Result<String> {
+    let now = Utc::now();
+    let claims = Claims { sub: user_id, iat: now.timestamp(), exp: (now + Duration::minutes(5)).timestamp(), typ: Some("mfa".into()) };
+    Ok(encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))?)
+}
+
+pub fn verify_mfa_ticket(secret: &str, token: &str) -> Option<Uuid> {
+    decode_claims(secret, token).filter(|c| c.typ.as_deref() == Some("mfa")).map(|c| c.sub)
+}
+
+fn decode_claims(secret: &str, token: &str) -> Option<Claims> {
+    decode::<Claims>(token, &DecodingKey::from_secret(secret.as_bytes()), &Validation::default()).ok().map(|d| d.claims)
 }
 
 /// Extractor: authenticated user id from `Authorization: Bearer <jwt>`.

@@ -1,4 +1,4 @@
-import { Compass, Gavel, LayoutDashboard, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
+import { Compass, Gavel, KeyRound, LayoutDashboard, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -67,7 +67,7 @@ function Overview() {
   )
 }
 
-interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; email_verified_at?: string | null; guild_count: number; online: boolean }
+interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; guild_count: number; online: boolean }
 
 function UsersPane() {
   const me = useStore((s) => s.user)
@@ -77,7 +77,7 @@ function UsersPane() {
   const [list, setList] = useState<AdminUser[] | null>(null)
   const load = () => api.get<AdminUser[]>(`/admin/users?q=${encodeURIComponent(q.trim())}`).then(setList).catch((e: Error) => pushToast(e.message, 'error'))
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
-  const patch = async (u: AdminUser, body: { is_admin?: boolean; suspended?: boolean }, label: string) => {
+  const patch = async (u: AdminUser, body: { is_admin?: boolean; suspended?: boolean; mfa?: boolean }, label: string) => {
     try { await api.patch(`/admin/users/${u.id}`, body); pushToast(label); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const del = (u: AdminUser) => openModal({ kind: 'confirm', title: `Delete @${u.username}`, body: `This permanently deletes ${u.display_name}'s account, the servers they own, their messages and uploads. This cannot be undone.`, danger: true, confirmLabel: 'Delete Account',
@@ -97,6 +97,7 @@ function UsersPane() {
               <span className="min-w-0"><span className="block truncate font-semibold">{u.display_name}</span><span className="block truncate text-xs text-text-2">@{u.username}</span></span>
               {u.is_admin && <span className="rounded bg-success/20 text-success px-1.5 py-0.5 text-[10px] font-bold" data-badge="admin">ADMIN</span>}
               {u.suspended_at && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="suspended">SUSPENDED</span>}
+              {u.mfa_enabled && <span className="rounded bg-sky-500/20 text-sky-300 px-1.5 py-0.5 text-[10px] font-bold" data-badge="mfa">2FA</span>}
               {!u.email_verified_at && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="unverified">UNVERIFIED</span>}
             </div>
             <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">Email: </span>{u.email}</div>
@@ -107,6 +108,7 @@ function UsersPane() {
                 <>
                   <Tool label={u.is_admin ? 'Remove admin' : 'Make admin'} onClick={() => patch(u, { is_admin: !u.is_admin }, u.is_admin ? `@${u.username} is no longer an admin` : `@${u.username} is now an admin`)} testid="toggle-admin">{u.is_admin ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}</Tool>
                   <Tool label={u.suspended_at ? 'Unsuspend' : 'Suspend'} onClick={() => patch(u, { suspended: !u.suspended_at }, u.suspended_at ? `@${u.username} unsuspended` : `@${u.username} suspended`)} testid="toggle-suspend" danger={!u.suspended_at}>{u.suspended_at ? <UserCheck size={16} /> : <UserX size={16} />}</Tool>
+                  {u.mfa_enabled && <Tool label="Clear two-factor auth" onClick={() => patch(u, { mfa: false }, `Two-factor authentication cleared for @${u.username}`)} testid="clear-mfa" danger><KeyRound size={16} /></Tool>}
                   <Tool label="Delete account" onClick={() => del(u)} testid="delete-user" danger><Trash2 size={16} /></Tool>
                 </>
               )}
