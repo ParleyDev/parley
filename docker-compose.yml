@@ -64,14 +64,45 @@ services:
     depends_on:
       - backend
     environment:
-      # CN / SAN for the auto-generated self-signed cert (set to your LAN hostname or IP for fewer warnings)
+      # Public hostname: CN / SAN for the self-signed cert, and the Let's Encrypt domain when that profile is on.
       TLS_HOSTNAME: ${TLS_HOSTNAME:-localhost}
     volumes:
-      # Drop real cert.pem / key.pem here to replace the self-signed one
+      # Drop real cert.pem / key.pem here to replace the self-signed one (or use the letsencrypt profile below).
       - certs:/etc/nginx/certs
+      - letsencrypt:/etc/letsencrypt:ro
+      - acme:/var/www/certbot
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     ports:
       - "${WEB_PORT:-3000}:80"
       - "${WEB_TLS_PORT:-3443}:443"
+
+  # Real TLS from Let's Encrypt: `docker compose --profile letsencrypt up -d` with TLS_HOSTNAME=chat.example.com,
+  # LETSENCRYPT_EMAIL=you@example.com and WEB_PORT=80 (the HTTP-01 challenge must reach port 80 on that name).
+  # Issues on first start, renews twice a day; the frontend picks up renewals and reloads nginx by itself.
+  certbot:
+    image: certbot/certbot:latest
+    profiles: ["letsencrypt"]
+    depends_on:
+      - frontend
+    environment:
+      TLS_HOSTNAME: ${TLS_HOSTNAME:-localhost}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+      LETSENCRYPT_STAGING: ${LETSENCRYPT_STAGING:-0}
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - acme:/var/www/certbot
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        STAGING=""; [ "$$LETSENCRYPT_STAGING" = "1" ] && STAGING="--staging"
+        certbot certonly --webroot -w /var/www/certbot -d "$$TLS_HOSTNAME" --email "$$LETSENCRYPT_EMAIL" --agree-tos --no-eff-email --non-interactive --keep-until-expiring $$STAGING
+        while :; do sleep 12h; certbot renew --webroot -w /var/www/certbot --quiet $$STAGING || true; done
 
 networks:
   default:
@@ -84,3 +115,5 @@ volumes:
   pgdata:
   uploads:
   certs:
+  letsencrypt:
+  acme:

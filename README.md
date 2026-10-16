@@ -12,8 +12,8 @@ Open <http://localhost:3000>, register two accounts in two browsers, create a se
 
 | Service  | Port | Notes                                   |
 |----------|------|-----------------------------------------|
-| frontend | 3000 (HTTP), 3443 (HTTPS) | nginx serving the SPA, proxies /api, /ws |
-| backend  | 18080 | axum REST + WebSocket                   |
+| frontend | 3000 (HTTP), 3443 (HTTPS) | nginx serving the SPA, proxies /api, /ws; health at `/healthz` |
+| backend  | 18080 | axum REST + WebSocket; health at `/health` |
 | db       | —    | Postgres 16, volume `pgdata`            |
 
 Set a real secret in production: `JWT_SECRET=... docker compose up`. Override host ports with `WEB_PORT=8081` (frontend, default 3000) and `API_PORT=...` (backend, default 18080).
@@ -153,6 +153,7 @@ GET  /ws?token=<jwt>   (events: READY, MESSAGE_CREATE/UPDATE/DELETE, REACTION_AD
 Media is peer-to-peer mesh: each participant keeps one `RTCPeerConnection` per other participant, so it suits small rooms (roughly up to 6-8 people for audio, fewer with everyone on camera; upload bandwidth scales with participant count). Each connection negotiates three fixed transceivers once (audio, camera, screen); toggling camera or screen share swaps the sender track with `replaceTrack`, so there is no renegotiation. Camera is capped at 720p / 1.5 Mbps and screen share at 3 Mbps per peer. Signaling goes over the app WebSocket (`voice_join`, `voice_leave`, `voice_state`, `voice_signal` ops; `VOICE_STATE_UPDATE` / `VOICE_SIGNAL` events). The server only relays SDP/ICE between users in the same channel.
 
 - Browsers require a secure context for microphone access: `localhost` works over HTTP, anything else (LAN IP, hostname) needs HTTPS. The frontend container serves HTTPS on port 3443 with a self-signed certificate generated at first start (set `TLS_HOSTNAME=your-host` for a matching CN; accept the browser warning once). To use a real certificate, place `cert.pem` and `key.pem` in the `certs` volume (`/etc/nginx/certs` inside the container). Without HTTPS the client reports "Microphone needs a secure context".
+- Real certificates: either mount `cert.pem` / `key.pem` into the `certs` volume, or run `docker compose --profile letsencrypt up -d` with `TLS_HOSTNAME=chat.example.com`, `LETSENCRYPT_EMAIL=you@example.com` and `WEB_PORT=80` (the HTTP-01 challenge is served from `/.well-known/acme-challenge/` on port 80 of that name). The `certbot` sidecar issues the certificate on first start and renews twice a day into the shared `letsencrypt` volume; the frontend copies a new certificate over the self-signed pair within ten minutes and reloads nginx gracefully. `LETSENCRYPT_STAGING=1` uses the staging CA while testing. Both containers have Docker healthchecks (`frontend` `/healthz`, `backend` `/health`), so `docker compose ps` and orchestrators can tell a wedged container from a slow one.
 - Default ICE config is Google's public STUN. Users behind symmetric NATs need a TURN server; set `ICE_SERVERS` to a JSON array of `RTCIceServer` objects, e.g.
   `ICE_SERVERS='[{"urls":"stun:stun.l.google.com:19302"},{"urls":"turn:turn.example.com:3478","username":"u","credential":"p"}]'`
 - Screen share captures video only (no system audio).
