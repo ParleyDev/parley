@@ -122,6 +122,8 @@ export interface Attachment {
   width: number | null
   height: number | null
   url: string
+  /** Server-made preview (longest side 400px) for large images; absent for small ones and non-images. */
+  thumb_url?: string
 }
 
 export interface Message {

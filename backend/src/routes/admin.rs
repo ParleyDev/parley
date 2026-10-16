@@ -143,6 +143,13 @@ struct PatchUser {
     suspended: Option<bool>,
     /// Only `false` is meaningful: clears a locked-out user's second factor so they can log in with their password.
     mfa: Option<bool>,
+    /// Per-user storage quota in bytes; null restores the instance default; 0 = unlimited.
+    #[serde(default, deserialize_with = "deserialize_nullable_i64")]
+    upload_quota_bytes: Option<Option<i64>>,
+}
+
+fn deserialize_nullable_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
+    Ok(Some(Option::<i64>::deserialize(d)?))
 }
 
 async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<PatchUser>) -> AppResult<Json<Value>> {
@@ -169,6 +176,11 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
             state.hub.voice_evict(|v| v.user_id == id);
         }
         audit::record(&state, uid, if suspended { "user.suspend" } else { "user.unsuspend" }, "user", Some(id), &audit::username(&state, id).await, json!({})).await;
+    }
+    if let Some(q) = req.upload_quota_bytes {
+        if q.map(|v| v < 0).unwrap_or(false) { return Err(AppError::BadRequest("Quota cannot be negative".into())); }
+        sqlx::query("UPDATE users SET upload_quota_bytes = $2 WHERE id = $1").bind(id).bind(q).execute(&state.db).await?;
+        audit::record(&state, uid, "user.quota", "user", Some(id), &audit::username(&state, id).await, json!({ "upload_quota_bytes": q })).await;
     }
     match req.mfa {
         Some(false) => {

@@ -23,6 +23,8 @@ services:
       # JSON array of RTCIceServer objects; add a TURN server for users behind strict NATs.
       ICE_SERVERS: ${ICE_SERVERS:-[{"urls":"stun:stun.l.google.com:19302"}]}
       UPLOAD_DIR: /data/uploads
+      # Per-user storage quota for attachments and profile images, in bytes (0 = unlimited; admins can override per user).
+      UPLOAD_QUOTA_BYTES: ${UPLOAD_QUOTA_BYTES:-1073741824}
       # GIF picker: set one of these (Tenor is preferred). Without a key the GIF tab explains how to enable it.
       TENOR_API_KEY: ${TENOR_API_KEY:-}
       GIPHY_API_KEY: ${GIPHY_API_KEY:-}

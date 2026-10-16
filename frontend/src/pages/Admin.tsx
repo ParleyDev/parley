@@ -354,7 +354,7 @@ function MessagesPane() {
   )
 }
 
-interface UserContent { user: { id: string; username: string; display_name: string }; messages: AdminHit[]; uploads: { id: string; filename: string; content_type: string; size: number; url: string; message_id: string | null; created_at: string }[]; images: { id: string; kind: string; size: number; url: string; created_at: string }[]; totals: { messages: number; attachments: number; attachment_bytes: number; images: number; image_bytes: number } }
+interface UserContent { user: { id: string; username: string; display_name: string }; quota: number | null; quota_override: number | null; messages: AdminHit[]; uploads: { id: string; filename: string; content_type: string; size: number; url: string; message_id: string | null; created_at: string }[]; images: { id: string; kind: string; size: number; url: string; created_at: string }[]; totals: { messages: number; attachments: number; attachment_bytes: number; images: number; image_bytes: number } }
 
 function UserContentPane() {
   const { id } = useParams()
@@ -366,6 +366,12 @@ function UserContentPane() {
   useEffect(() => { load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!data) return <p className="text-sm text-text-2">Loading…</p>
   const { user, totals } = data
+  const used = totals.attachment_bytes + totals.image_bytes
+  const setQuota = async (mb: string) => {
+    const v = mb.trim() === '' ? null : Math.round(Number(mb) * 1024 * 1024)
+    if (v !== null && (!Number.isFinite(v) || v < 0)) { pushToast('Enter a size in MB (0 = unlimited)', 'error'); return }
+    try { await api.patch(`/admin/users/${user.id}`, { upload_quota_bytes: v }); pushToast(v === null ? 'Quota reset to the default' : v === 0 ? 'Quota removed' : `Quota set to ${formatBytes(v)}`); load() } catch (e) { pushToast((e as Error).message, 'error') }
+  }
   const purgeMessages = () => openModal({ kind: 'confirm', title: `Delete all messages by @${user.username}`, body: `This deletes all ${totals.messages.toLocaleString()} messages ${user.display_name} has ever sent, everywhere. This cannot be undone.`, danger: true, confirmLabel: 'Delete All Messages',
     action: async () => { try { const r = await api.delete<{ deleted: number }>(`/admin/users/${user.id}/messages`); pushToast(`${r.deleted} messages deleted`); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
   const purgeUploads = () => openModal({ kind: 'confirm', title: `Purge uploads by @${user.username}`, body: `Removes all ${totals.attachments} attachments (${formatBytes(totals.attachment_bytes)}) and their profile images. Their messages stay, without the files. This cannot be undone.`, danger: true, confirmLabel: 'Purge Uploads',
@@ -375,6 +381,14 @@ function UserContentPane() {
       <NavLink to="/admin/users" className="text-xs text-sky-400 hover:underline">← Users</NavLink>
       <h1 className="text-2xl font-bold mt-1">{user.display_name} <span className="text-base font-normal text-text-2">@{user.username}</span></h1>
       <p className="text-sm text-text-2 mt-1" data-admin-content-totals>{totals.messages.toLocaleString()} messages · {totals.attachments} attachments ({formatBytes(totals.attachment_bytes)}) · {totals.images} profile/expression images ({formatBytes(totals.image_bytes)})</p>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" data-admin-quota-row>
+        <span className="text-text-2">Storage: <b className="text-text-0" data-admin-quota-used>{formatBytes(used)}</b> of <b className="text-text-0" data-admin-quota-value>{data.quota === null ? 'unlimited' : formatBytes(data.quota)}</b>{data.quota_override !== null && <span className="ml-1 rounded bg-warn/20 text-warn px-1 text-[10px] font-bold">CUSTOM</span>}</span>
+        <form className="flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); setQuota((e.currentTarget.elements.namedItem('mb') as HTMLInputElement).value) }}>
+          <input name="mb" className="input w-28 py-1 text-xs" placeholder="MB" inputMode="decimal" data-admin-quota-input />
+          <button className="btn-ghost py-1 text-xs" data-admin-quota-save>Set quota</button>
+          <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setQuota('')} data-admin-quota-reset>Default</button>
+        </form>
+      </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className="btn-danger py-1 text-xs" onClick={purgeMessages} disabled={totals.messages === 0} data-admin-purge-messages>Delete all messages</button>
         <button type="button" className="btn-danger py-1 text-xs" onClick={purgeUploads} disabled={totals.attachments === 0 && totals.images === 0} data-admin-purge-uploads>Purge uploads</button>

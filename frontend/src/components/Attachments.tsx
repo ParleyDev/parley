@@ -41,7 +41,7 @@ function One({ a }: { a: Attachment }) {
           const scale = Math.min(1, MAX_W / w, MAX_H / h)
           return (
             <button key={a.id} onClick={() => openModal({ kind: 'image', url: a.url, name: a.filename })} className="block overflow-hidden rounded-lg bg-bg-0/40 border border-line hover:border-text-2 max-w-full" style={{ width: Math.round(w * scale), aspectRatio: `${w} / ${h}` }} title={a.filename}>
-              <img src={a.url} alt={a.filename} loading="lazy" className="h-full w-full object-cover" />
+              <img src={a.thumb_url ?? a.url} alt={a.filename} loading="lazy" className="h-full w-full object-cover" data-attachment-img={a.thumb_url ? 'thumb' : 'full'} />
             </button>
           )
         }
