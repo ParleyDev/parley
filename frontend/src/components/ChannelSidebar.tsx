@@ -37,6 +37,12 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const userMenu = useUserMenu(guildId)
   const perms = useStore((s) => myGuildPerms(s, guildId))
   const chanPerms = useStore(useShallow((s) => Object.fromEntries(Object.values(s.channels).filter((c) => c.guild_id === guildId).map((c) => [c.id, myChannelPerms(s, c.id)])) as Record<string, number>))
+  // Hooks stay above the early return so the hook count never changes (e.g. when the server vanishes).
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}collapsed.${guildId}`) || '{}') } catch { return {} } })
+  const toggleCollapsed = (id: string) => setCollapsed((c) => { const n = { ...c, [id]: !c[id] }; try { localStorage.setItem(`${STORAGE_PREFIX}collapsed.${guildId}`, JSON.stringify(n)) } catch { /* ignore */ } return n })
+  // Drag and drop: channels can be dropped on another channel (insert before it) or on a category header (append).
+  const [drag, setDrag] = useState<string | null>(null)
+  const [over, setOver] = useState<string | null>(null)
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
   const canInvite = has(perms, P.CREATE_INVITE)
@@ -49,11 +55,6 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const catIds = new Set(categories.map((c) => c.id))
   const uncategorized = list.filter((c) => !c.parent_id || !catIds.has(c.parent_id))
   const childrenOf = (id: string) => list.filter((c) => c.parent_id === id)
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}collapsed.${guildId}`) || '{}') } catch { return {} } })
-  const toggleCollapsed = (id: string) => setCollapsed((c) => { const n = { ...c, [id]: !c[id] }; try { localStorage.setItem(`${STORAGE_PREFIX}collapsed.${guildId}`, JSON.stringify(n)) } catch { /* ignore */ } return n })
-  // Drag and drop: channels can be dropped on another channel (insert before it) or on a category header (append).
-  const [drag, setDrag] = useState<string | null>(null)
-  const [over, setOver] = useState<string | null>(null)
   const persistOrder = async (ordered: { id: string; parent_id: string | null }[]) => {
     const items = ordered.map((c, i) => ({ id: c.id, position: i, parent_id: c.parent_id }))
     try { await api.patch(`/guilds/${guildId}/channels/positions`, { items }) } catch (e) { pushToast((e as Error).message, 'error') }
