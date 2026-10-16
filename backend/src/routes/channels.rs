@@ -166,7 +166,7 @@ async fn delete_channel(
     Ok(StatusCode::NO_CONTENT)
 }
 
-const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
+pub const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
     u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
@@ -563,7 +563,7 @@ async fn mark_read(
 }
 
 /// Hydrate rows into messages (oldest first when `rows` is newest-first).
-async fn hydrate(db: &PgPool, rows: Vec<MessageRow>, me: Uuid, reverse: bool) -> AppResult<Vec<Message>> {
+pub async fn hydrate(db: &PgPool, rows: Vec<MessageRow>, me: Uuid, reverse: bool) -> AppResult<Vec<Message>> {
     let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
     let mut reactions = reactions_for(db, &ids, me).await?;
     let mut atts = attachments_for(db, &ids).await?;
