@@ -108,6 +108,7 @@ pub async fn store_image(state: &AppState, uid: Uuid, kind: &str, mut multipart:
         Err(_) => (None, None),
     };
     let animated = is_animated(&content_type, &bytes);
+    crate::routes::storage::check_quota(state, uid, bytes.len() as i64).await?;
 
     let id = Uuid::new_v4();
     let dir = &state.config.upload_dir;

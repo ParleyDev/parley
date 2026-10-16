@@ -165,7 +165,7 @@ async fn admin_delete_message(State(state): State<AppState>, AuthUser(uid): Auth
     let files: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM attachments WHERE message_id = $1").bind(id).fetch_all(&state.db).await?;
     sqlx::query("DELETE FROM messages WHERE id = $1").bind(id).execute(&state.db).await?;
     for (fid,) in files {
-        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await;
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
     }
     let target = crate::routes::channels::target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_DELETE", json!({ "id": id, "channel_id": cid, "guild_id": c.guild_id }));

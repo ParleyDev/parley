@@ -241,6 +241,9 @@ pub struct Attachment {
     pub width: Option<i32>,
     pub height: Option<i32>,
     pub created_at: DateTime<Utc>,
+    /// Content type of the server-made thumbnail (`/api/attachments/:id/thumb`), when one exists.
+    #[sqlx(default)]
+    pub thumb_type: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -252,12 +255,15 @@ pub struct AttachmentJson {
     pub width: Option<i32>,
     pub height: Option<i32>,
     pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumb_url: Option<String>,
 }
 
 impl From<Attachment> for AttachmentJson {
     fn from(a: Attachment) -> Self {
         let url = a.url();
-        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url }
+        let thumb_url = a.thumb_type.as_ref().map(|_| format!("/api/attachments/{}/thumb", a.id));
+        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url }
     }
 }
 

@@ -21,6 +21,8 @@ pub struct Config {
     pub app_url: String,
     /// Hosts/IPs the link-preview fetcher may reach even though they are private (dev/e2e only).
     pub embed_allow_hosts: Vec<String>,
+    /// Default per-user storage quota for attachments + profile images; 0 = unlimited.
+    pub upload_quota_bytes: i64,
 }
 
 impl Config {
@@ -48,6 +50,7 @@ impl Config {
             smtp_url: std::env::var("SMTP_URL").ok().filter(|s| !s.is_empty()),
             mail_from: std::env::var("MAIL_FROM").unwrap_or_else(|_| "Parley <no-reply@parley.local>".into()),
             app_url: std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".into()).trim_end_matches('/').to_string(),
+            upload_quota_bytes: std::env::var("UPLOAD_QUOTA_BYTES").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(1024 * 1024 * 1024),
             embed_allow_hosts: std::env::var("EMBED_ALLOW_HOSTS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
             admin_emails: std::env::var("ADMIN_EMAILS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
         }

@@ -18,6 +18,7 @@ pub mod reports;
 pub mod roles;
 pub mod search;
 pub mod sessions;
+pub mod storage;
 pub mod users;
 
 use crate::state::AppState;
@@ -34,6 +35,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(moderation::router())
         .merge(polls::router())
         .merge(embeds::router())
+        .merge(storage::router())
         .merge(guilds::router())
         .merge(invites::router())
         .merge(roles::router())

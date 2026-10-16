@@ -233,6 +233,8 @@ Composer and message editor: **Ctrl/⌘+B / I / U / E** (bold, italic, underline
 
 ## Attachments
 
+Thumbnails: image attachments larger than 400px on a side get a server-made preview (`<id>.thumb`, JPEG for JPEG sources, PNG otherwise, decoded only when under 50 megapixels) served at `/api/attachments/:id/thumb` and used by the chat grid; the lightbox and downloads use the original. Quotas: each user may hold `UPLOAD_QUOTA_BYTES` (default 1 GiB, 0 = unlimited) across attachments and profile images; uploads over the limit are refused with the current usage, My Account → Storage shows a usage bar (`GET /users/@me/storage`), and the admin's per-user content page can set a custom quota (`PATCH /admin/users/:id {upload_quota_bytes}`; null = default, 0 = unlimited). Deleting messages or purging uploads frees space.
+
 Files are uploaded first (`POST /api/channels/:id/attachments`, multipart field `file`) and then referenced by `attachment_ids` in `POST /api/channels/:id/messages`; a message may have empty content if it has attachments. Uploads that are never attached are swept after an hour. Files live on disk under `UPLOAD_DIR` (the `uploads` volume in compose) and metadata in the `attachments` table; deleting a message deletes its files.
 
 Profile images (avatars, banners, server icons) and the files behind custom emoji and stickers go through `POST /api/images` into the `images` table and the same upload directory, served at `/api/images/<uuid-v4>` with an immutable cache header; a custom emoji or sticker shares its id with its image, so `<:name:id>` resolves without a lookup. Replacing an avatar deletes the old file; unreferenced images are swept after an hour. Data-URL avatars from older clients are still accepted.

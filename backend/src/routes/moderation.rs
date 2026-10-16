@@ -124,6 +124,8 @@ async fn user_content(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
         "user": { "id": id, "username": username, "display_name": display_name },
         "messages": messages, "uploads": uploads, "images": images,
         "totals": { "messages": message_count, "attachments": uploads.len(), "attachment_bytes": attachment_bytes, "images": images.len(), "image_bytes": image_bytes },
+        "quota": crate::routes::storage::quota(&state, id).await?,
+        "quota_override": sqlx::query_as::<_, (Option<i64>,)>("SELECT upload_quota_bytes FROM users WHERE id = $1").bind(id).fetch_one(&state.db).await?.0,
     })))
 }
 
@@ -137,7 +139,7 @@ async fn purge_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     let files: Vec<(Uuid,)> = sqlx::query_as("SELECT a.id FROM attachments a JOIN messages m ON m.id = a.message_id WHERE m.author_id = $1").bind(id).fetch_all(&state.db).await?;
     let deleted = sqlx::query("DELETE FROM messages WHERE author_id = $1").bind(id).execute(&state.db).await?.rows_affected();
     for (fid,) in files {
-        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await;
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
     }
     for (mid, cid, gid) in recent {
         let target = match gid { Some(g) => Target::Guild(g), None => Target::Users(sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM channel_members WHERE channel_id = $1").bind(cid).fetch_all(&state.db).await?.into_iter().map(|r| r.0).collect()) };
@@ -154,7 +156,7 @@ async fn purge_uploads(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     let atts: Vec<(Uuid,)> = sqlx::query_as("DELETE FROM attachments WHERE uploader_id = $1 RETURNING id").bind(id).fetch_all(&state.db).await?;
     let imgs: Vec<(Uuid,)> = sqlx::query_as("DELETE FROM images WHERE owner_id = $1 AND kind IN ('avatar', 'banner', 'icon') RETURNING id").bind(id).fetch_all(&state.db).await?;
     for (fid,) in atts.iter().chain(imgs.iter()) {
-        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await;
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
     }
     sqlx::query("UPDATE users SET avatar_url = NULL, banner_url = NULL WHERE id = $1 AND (avatar_url LIKE '/api/images/%' OR banner_url LIKE '/api/images/%')").bind(id).execute(&state.db).await?;
     if let Ok(public) = sqlx::query_as::<_, crate::models::User>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::USER_COLS)).bind(id).fetch_one(&state.db).await {

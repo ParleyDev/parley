@@ -447,7 +447,7 @@ async fn delete_message(
         return Err(AppError::Forbidden);
     }
     for (fid,) in files {
-        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await;
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
     }
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_DELETE", json!({ "id": mid, "channel_id": id, "guild_id": c.guild_id }));

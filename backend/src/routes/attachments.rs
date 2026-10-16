@@ -32,10 +32,11 @@ const ORPHAN_TTL_SECS: i64 = 60 * 60;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/channels/:id/attachments", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(32 * 1024 * 1024)))
+        .route("/attachments/:id/thumb", get(serve_thumb))
         .route("/attachments/:id/:filename", get(serve))
 }
 
-pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at";
+pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type";
 
 fn sanitize_filename(raw: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("file");
@@ -103,6 +104,10 @@ async fn upload(
         let _ = tokio::fs::remove_file(&path).await;
         return Err(AppError::BadRequest("Empty file".into()));
     }
+    if let Err(e) = crate::routes::storage::check_quota(&state, uid, size as i64).await {
+        let _ = tokio::fs::remove_file(&path).await;
+        return Err(e);
+    }
 
     // Trust magic bytes over the declared type for anything we'd render inline.
     let sniffed = infer::get(&head).map(|t| t.mime_type().to_string());
@@ -120,9 +125,10 @@ async fn upload(
         (None, None)
     };
 
+    let thumb_type = crate::routes::storage::make_thumbnail(path.clone(), &content_type, width, height).await;
     let att = sqlx::query_as::<_, Attachment>(&format!(
-        "INSERT INTO attachments (id, uploader_id, channel_id, filename, content_type, size, width, height)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING {ATTACHMENT_COLS}"
+        "INSERT INTO attachments (id, uploader_id, channel_id, filename, content_type, size, width, height, thumb_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING {ATTACHMENT_COLS}"
     ))
     .bind(id)
     .bind(uid)
@@ -132,6 +138,7 @@ async fn upload(
     .bind(size as i64)
     .bind(width)
     .bind(height)
+    .bind(thumb_type)
     .fetch_one(&state.db)
     .await?;
     Ok((StatusCode::CREATED, Json(att)))
@@ -157,6 +164,26 @@ async fn serve(State(state): State<AppState>, Path((id, _filename)): Path<(Uuid,
     h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=31536000, immutable"));
     // Never let an uploaded HTML/SVG run script in our origin.
     h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; media-src 'self'; img-src 'self'"));
+    Ok(resp.into_response())
+}
+
+/// The server-made thumbnail of an image attachment (same caching as the file itself).
+async fn serve_thumb(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<Response> {
+    let att = sqlx::query_as::<_, Attachment>(&format!("SELECT {ATTACHMENT_COLS} FROM attachments WHERE id = $1"))
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    let ct = att.thumb_type.ok_or_else(|| AppError::NotFound("No thumbnail".into()))?;
+    let path = state.config.upload_dir.join(format!("{id}.thumb"));
+    let file = tokio::fs::File::open(&path).await.map_err(|_| AppError::NotFound("Thumbnail missing".into()))?;
+    let mut resp = Response::new(Body::from_stream(tokio_util::io::ReaderStream::new(file)));
+    let h = resp.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&ct).unwrap_or(HeaderValue::from_static("image/png")));
+    h.insert(header::CONTENT_DISPOSITION, HeaderValue::from_static("inline"));
+    h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=31536000, immutable"));
+    h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'"));
     Ok(resp.into_response())
 }
 

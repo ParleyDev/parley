@@ -1,0 +1,31 @@
+import { HardDrive } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { api } from '../../../lib/api'
+import { formatBytes } from '../../../lib/upload'
+
+interface Storage { used: number; quota: number | null; attachment_bytes: number; image_bytes: number; attachments: number; images: number }
+
+/** "Storage" card in My Account: how much of the upload quota this account uses. */
+export default function StorageSection() {
+  const [s, setS] = useState<Storage | null>(null)
+  useEffect(() => { api.get<Storage>('/users/@me/storage').then(setS).catch(() => setS(null)) }, [])
+  if (!s) return null
+  const pct = s.quota ? Math.min(100, Math.round((s.used / s.quota) * 100)) : 0
+  return (
+    <section className="rounded-xl bg-bg-0/50 p-4 space-y-3" data-storage-section data-storage-used={s.used} data-storage-quota={s.quota ?? ''}>
+      <div className="flex items-start gap-3">
+        <div className="h-9 w-9 shrink-0 rounded-lg bg-bg-3 text-text-2 flex items-center justify-center"><HardDrive size={18} /></div>
+        <div className="min-w-0 flex-1">
+          <h3 className="font-semibold">Storage</h3>
+          <p className="text-sm text-text-2">{s.quota ? <>{formatBytes(s.used)} of {formatBytes(s.quota)} used</> : <>{formatBytes(s.used)} used (no limit)</>} · {s.attachments} attachment{s.attachments === 1 ? '' : 's'} ({formatBytes(s.attachment_bytes)}) · {s.images} profile image{s.images === 1 ? '' : 's'} ({formatBytes(s.image_bytes)})</p>
+        </div>
+      </div>
+      {s.quota !== null && (
+        <div className="h-2 w-full overflow-hidden rounded-full bg-bg-3" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+          <div className={`h-full ${pct >= 90 ? 'bg-danger' : pct >= 70 ? 'bg-warn' : 'bg-accent'}`} style={{ width: `${pct}%` }} data-storage-bar />
+        </div>
+      )}
+      <p className="text-xs text-text-2">Deleting messages with attachments, or removing your avatar and banner, frees space.</p>
+    </section>
+  )
+}
