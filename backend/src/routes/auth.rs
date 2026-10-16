@@ -16,6 +16,8 @@ pub fn router() -> Router<AppState> {
         .route("/auth/login", post(login).route_layer(from_fn(rl_login)))
         .route("/auth/verify", post(verify_email))
         .route("/auth/resend-verification", post(resend_verification).route_layer(from_fn(crate::ratelimit::rl_mail)))
+        .route("/auth/forgot", post(forgot_password).route_layer(from_fn(crate::ratelimit::rl_mail)))
+        .route("/auth/reset", post(reset_password))
 }
 
 #[derive(Deserialize)]
@@ -127,6 +129,56 @@ async fn resend_verification(State(state): State<AppState>, crate::auth::AuthUse
         return Err(AppError::BadRequest("This server cannot send email.".into()));
     }
     send_verification(&state, uid, &row.0).await;
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+struct ForgotReq {
+    email: String,
+}
+
+/// Always answers ok (no account enumeration). When the address is known and mail is on, sends a
+/// one-hour single-use reset link.
+async fn forgot_password(State(state): State<AppState>, Json(req): Json<ForgotReq>) -> AppResult<Json<Value>> {
+    let email = req.email.trim().to_lowercase();
+    if !crate::mail::enabled(&state.config) {
+        return Err(AppError::BadRequest("This server cannot send email; ask an admin to reset your password.".into()));
+    }
+    let row: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM users WHERE email = $1 AND suspended_at IS NULL").bind(&email).fetch_optional(&state.db).await?;
+    if let Some((uid,)) = row {
+        let token = crate::mail::new_token();
+        sqlx::query("INSERT INTO email_tokens (token, user_id, kind, email, expires_at) VALUES ($1, $2, 'reset', $3, now() + interval '1 hour')")
+            .bind(&token).bind(uid).bind(&email).execute(&state.db).await?;
+        let link = format!("{}/reset?token={token}", state.config.app_url);
+        let body = format!("Someone asked to reset the password for your Parley account.\n\nOpen this link within one hour to choose a new password:\n\n{link}\n\nIf that wasn't you, ignore this message; your password stays the same.");
+        let _ = crate::mail::send(&state.config, &email, "Reset your Parley password", &body).await;
+    }
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+struct ResetReq {
+    token: String,
+    password: String,
+}
+
+/// Set a new password from a reset token; also counts as proof of the address, so it verifies it.
+async fn reset_password(State(state): State<AppState>, Json(req): Json<ResetReq>) -> AppResult<Json<Value>> {
+    if req.password.len() < 8 {
+        return Err(AppError::BadRequest("Password must be at least 8 characters".into()));
+    }
+    let row: Option<(Uuid, String)> = sqlx::query_as(
+        "UPDATE email_tokens SET used_at = now() WHERE token = $1 AND kind = 'reset' AND used_at IS NULL AND expires_at > now() RETURNING user_id, email",
+    )
+    .bind(req.token.trim())
+    .fetch_optional(&state.db)
+    .await?;
+    let (uid, email) = row.ok_or_else(|| AppError::BadRequest("This reset link is invalid or has expired. Request a new one.".into()))?;
+    let hash = hash_password(&req.password)?;
+    sqlx::query("UPDATE users SET password_hash = $2, email_verified_at = COALESCE(email_verified_at, now()) WHERE id = $1 AND email = $3")
+        .bind(uid).bind(&hash).bind(&email).execute(&state.db).await?;
+    // Any other reset links for this account are now moot.
+    sqlx::query("UPDATE email_tokens SET used_at = now() WHERE user_id = $1 AND kind = 'reset' AND used_at IS NULL").bind(uid).execute(&state.db).await?;
     Ok(Json(json!({ "ok": true })))
 }
 
