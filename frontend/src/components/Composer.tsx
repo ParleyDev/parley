@@ -1,4 +1,4 @@
-import { Eye, EyeOff, FileText, ImagePlay, PlusCircle, SendHorizontal, Smile, Sticker, X } from 'lucide-react'
+import { BarChart3, Eye, EyeOff, FileText, ImagePlay, PlusCircle, SendHorizontal, Smile, Sticker, X } from 'lucide-react'
 import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { myChannelPerms, useStore } from '../store'
@@ -23,6 +23,7 @@ let pendingSeq = 1
 export default function Composer({ channel, reply, onCancelReply, onSent }: Props) {
   const sendMessage = useStore((s) => s.sendMessage)
   const pushToast = useStore((s) => s.pushToast)
+  const openModal = useStore((s) => s.openModal)
   const typing = useStore((s) => s.typing[channel.id])
   const users = useStore((s) => s.users)
   const perms = useStore((s) => myChannelPerms(s, channel.id))
@@ -286,6 +287,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         <div className="flex items-end gap-2 px-3 py-2">
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
           <button className={`pb-1 ${canAttach ? 'text-text-2 hover:text-text-0' : 'text-text-2/40 cursor-not-allowed'}`} title={canAttach ? 'Upload a file' : 'No permission to attach files'} onClick={() => canAttach && fileRef.current?.click()}><PlusCircle size={22} /></button>
+          <button className="pb-1 text-text-2 hover:text-text-0" title="Create a poll" onClick={() => openModal({ kind: 'createPoll', channelId: channel.id })} data-composer-poll><BarChart3 size={22} /></button>
           <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={`Message ${name}`}
             onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
             className="composer-input flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />

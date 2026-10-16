@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
+import type { Poll } from './lib/types'
 import type { Ban, Channel, DmChannel, Emoji, Guild, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sticker, User, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
@@ -24,6 +25,7 @@ export type ModalKind =
   | { kind: 'timeout'; guildId: string; userId: string }
   | { kind: 'editHistory'; channelId: string; messageId: string }
   | { kind: 'report'; messageId?: string; userId: string; name: string }
+  | { kind: 'createPoll'; channelId: string }
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
   | { kind: 'customStatus' }
   | { kind: 'forward'; message: Message }
@@ -156,6 +158,9 @@ interface State {
   prependMessages: (channelId: string, ms: Message[], hasMore: boolean) => void
   setLoadingMessages: (channelId: string, v: boolean) => void
   applyReaction: (channelId: string, messageId: string, emoji: string, userId: string, add: boolean) => void
+  /** Merge a POLL_UPDATE (counts/closed) while keeping this viewer's own `me` flags. */
+  applyPollUpdate: (channelId: string, messageId: string, poll: Poll) => void
+  sendPoll: (channelId: string, poll: { question: string; options: string[]; multi: boolean; duration_hours: number | null }) => Promise<void>
   setPresence: (userId: string, online: boolean) => void
   upsertUser: (u: User) => void
   setTyping: (channelId: string, userId: string) => void
@@ -436,6 +441,20 @@ export const useStore = create<State>((set, get) => ({
     return { messages: { ...s.messages, [channelId]: merged }, hasMore: { ...s.hasMore, [channelId]: hasMore } }
   }),
   setLoadingMessages: (channelId, v) => set((s) => ({ loadingMessages: { ...s.loadingMessages, [channelId]: v } })),
+  applyPollUpdate: (channelId, messageId, poll) => set((s) => {
+    const list = s.messages[channelId]
+    if (!list) return {}
+    return { messages: { ...s.messages, [channelId]: list.map((m) => {
+      if (m.id !== messageId) return m
+      const mine = new Set((m.poll?.options ?? []).filter((o) => o.me).map((o) => o.id))
+      return { ...m, poll: { ...poll, options: poll.options.map((o) => ({ ...o, me: mine.has(o.id) })) } }
+    }) } }
+  }),
+  sendPoll: async (channelId, poll) => {
+    const m = await api.post<Message>(`/channels/${channelId}/messages`, { content: '', poll })
+    get().addMessage(m)
+    get().setReadState(channelId, m.id)
+  },
   applyReaction: (channelId, messageId, emoji, userId, add) => set((s) => {
     const list = s.messages[channelId]
     if (!list) return {}

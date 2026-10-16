@@ -215,9 +215,7 @@ pub async fn fetch_message(db: &PgPool, mid: Uuid, me: Uuid) -> AppResult<Messag
         .fetch_optional(db)
         .await?
         .ok_or_else(|| AppError::NotFound("Message not found".into()))?;
-    let mut reactions = reactions_for(db, &[mid], me).await?;
-    let mut atts = attachments_for(db, &[mid]).await?;
-    Ok(row.into_message(reactions.remove(&mid).unwrap_or_default(), atts.remove(&mid).unwrap_or_default()))
+    Ok(hydrate(db, vec![row], me, false).await?.pop().ok_or_else(|| AppError::NotFound("Message not found".into()))?)
 }
 
 async fn list_messages(
@@ -249,19 +247,7 @@ async fn list_messages(
             .await?
         }
     };
-    let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
-    let mut reactions = reactions_for(&state.db, &ids, uid).await?;
-    let mut atts = attachments_for(&state.db, &ids).await?;
-    let msgs: Vec<Message> = rows
-        .into_iter()
-        .rev()
-        .map(|r| {
-            let rx = reactions.remove(&r.id).unwrap_or_default();
-            let at = atts.remove(&r.id).unwrap_or_default();
-            r.into_message(rx, at)
-        })
-        .collect();
-    Ok(Json(msgs))
+    Ok(Json(hydrate(&state.db, rows, uid, true).await?))
 }
 
 #[derive(Deserialize)]
@@ -272,6 +258,7 @@ struct CreateMessage {
     #[serde(default)]
     attachment_ids: Vec<Uuid>,
     sticker_id: Option<Uuid>,
+    poll: Option<crate::routes::polls::PollInput>,
 }
 
 async fn create_message(
@@ -283,7 +270,7 @@ async fn create_message(
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
     let content = req.content.trim_end().to_string();
-    if (content.trim().is_empty() && req.attachment_ids.is_empty() && req.sticker_id.is_none()) || content.chars().count() > 2000 {
+    if (content.trim().is_empty() && req.attachment_ids.is_empty() && req.sticker_id.is_none() && req.poll.is_none()) || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
     }
     if let Some(sid) = req.sticker_id {
@@ -331,6 +318,9 @@ async fn create_message(
         .execute(&mut *tx)
         .await?;
     link(&mut tx, mid, id, uid, &req.attachment_ids).await?;
+    if let Some(poll) = &req.poll {
+        crate::routes::polls::insert(&mut tx, mid, poll).await?;
+    }
     tx.commit().await?;
     // Author has implicitly read their own message.
     sqlx::query(
@@ -656,10 +646,14 @@ pub async fn hydrate(db: &PgPool, rows: Vec<MessageRow>, me: Uuid, reverse: bool
     let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
     let mut reactions = reactions_for(db, &ids, me).await?;
     let mut atts = attachments_for(db, &ids).await?;
+    let mut polls = crate::routes::polls::polls_for(db, &ids, me).await?;
     let it = rows.into_iter().map(|r| {
         let rx = reactions.remove(&r.id).unwrap_or_default();
         let at = atts.remove(&r.id).unwrap_or_default();
-        r.into_message(rx, at)
+        let poll = polls.remove(&r.id);
+        let mut m = r.into_message(rx, at);
+        m.poll = poll;
+        m
     });
     Ok(if reverse { it.rev().collect() } else { it.collect() })
 }

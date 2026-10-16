@@ -140,6 +140,7 @@ export interface Message {
   mention_everyone?: boolean
   /** 'default', or a group-DM system notice kind (recipient_add, recipient_remove, recipient_leave, channel_name_change, channel_icon_change). */
   kind?: string
+  poll?: Poll | null
 }
 
 /** A server custom emoji; `url` serves the image, `id` doubles as the image id. */
@@ -164,6 +165,9 @@ export interface Sticker {
   created_at: string
   url: string
 }
+
+export interface PollOption { id: string; text: string; votes: number; me: boolean }
+export interface Poll { question: string; multi: boolean; expires_at: string | null; closed_at: string | null; closed: boolean; total_votes: number; voters: number; options: PollOption[] }
 
 export interface MessageSticker { id: string; name: string; animated: boolean; url: string }
 
