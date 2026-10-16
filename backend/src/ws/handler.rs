@@ -1,5 +1,5 @@
 use crate::{
-    auth::verify_token,
+    auth::{check_session, verify_session_token},
     models::{Channel, Guild, Member, PrivateUser, Role},
     perms::{self, has},
     routes::{dms::list_dm_channels, roles::attach_roles},
@@ -30,14 +30,13 @@ pub async fn ws_upgrade(
     State(state): State<AppState>,
     Query(q): Query<WsQuery>,
 ) -> Response {
-    let Some(uid) = verify_token(&state.config.jwt_secret, &q.token) else {
+    let Some((uid, sid)) = verify_session_token(&state.config.jwt_secret, &q.token) else {
         return (axum::http::StatusCode::UNAUTHORIZED, "invalid token").into_response();
     };
-    let active: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND suspended_at IS NULL").bind(uid).fetch_optional(&state.db).await.unwrap_or(None);
-    if active.is_none() {
-        return (axum::http::StatusCode::UNAUTHORIZED, "account suspended").into_response();
+    if !check_session(&state, uid, sid).await.unwrap_or(false) {
+        return (axum::http::StatusCode::UNAUTHORIZED, "session revoked or account suspended").into_response();
     }
-    ws.on_upgrade(move |socket| handle_socket(socket, state, uid))
+    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid))
 }
 
 #[derive(Deserialize)]
@@ -52,7 +51,7 @@ enum ClientOp {
     VoiceSignal { to: Uuid, data: Value },
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
+async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid) {
     let (mut tx, mut rx) = socket.split();
 
     // --- Build READY payload ---
@@ -197,6 +196,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
                             Target::All => true,
                             Target::Guild(g) => my_guilds.contains(g),
                             Target::Users(us) => us.contains(&user_id),
+                            Target::Session(s) => *s == session_id,
                         };
                         if !relevant { continue; }
                         track_membership(&ev.payload, user_id, &mut my_guilds);

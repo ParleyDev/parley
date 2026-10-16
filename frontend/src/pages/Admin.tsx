@@ -1,4 +1,4 @@
-import { Compass, Gavel, KeyRound, LayoutDashboard, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
+import { Compass, Gavel, KeyRound, LayoutDashboard, LogOut, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -77,6 +77,9 @@ function UsersPane() {
   const [list, setList] = useState<AdminUser[] | null>(null)
   const load = () => api.get<AdminUser[]>(`/admin/users?q=${encodeURIComponent(q.trim())}`).then(setList).catch((e: Error) => pushToast(e.message, 'error'))
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const logoutAll = async (u: AdminUser) => {
+    try { const r = await api.delete<{ revoked: number }>(`/admin/users/${u.id}/sessions`); pushToast(`@${u.username} logged out of ${r.revoked} device${r.revoked === 1 ? '' : 's'}`) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
   const patch = async (u: AdminUser, body: { is_admin?: boolean; suspended?: boolean; mfa?: boolean }, label: string) => {
     try { await api.patch(`/admin/users/${u.id}`, body); pushToast(label); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
@@ -108,6 +111,7 @@ function UsersPane() {
                 <>
                   <Tool label={u.is_admin ? 'Remove admin' : 'Make admin'} onClick={() => patch(u, { is_admin: !u.is_admin }, u.is_admin ? `@${u.username} is no longer an admin` : `@${u.username} is now an admin`)} testid="toggle-admin">{u.is_admin ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}</Tool>
                   <Tool label={u.suspended_at ? 'Unsuspend' : 'Suspend'} onClick={() => patch(u, { suspended: !u.suspended_at }, u.suspended_at ? `@${u.username} unsuspended` : `@${u.username} suspended`)} testid="toggle-suspend" danger={!u.suspended_at}>{u.suspended_at ? <UserCheck size={16} /> : <UserX size={16} />}</Tool>
+                  <Tool label="Log out of all devices" onClick={() => logoutAll(u)} testid="logout-all"><LogOut size={16} /></Tool>
                   {u.mfa_enabled && <Tool label="Clear two-factor auth" onClick={() => patch(u, { mfa: false }, `Two-factor authentication cleared for @${u.username}`)} testid="clear-mfa" danger><KeyRound size={16} /></Tool>}
                   <Tool label="Delete account" onClick={() => del(u)} testid="delete-user" danger><Trash2 size={16} /></Tool>
                 </>

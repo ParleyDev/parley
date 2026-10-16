@@ -11,6 +11,8 @@ pub enum Target {
     All,
     Guild(Uuid),
     Users(Vec<Uuid>),
+    /// One login (sessions.id): used to log out a single device.
+    Session(Uuid),
 }
 
 #[derive(Debug, Clone)]

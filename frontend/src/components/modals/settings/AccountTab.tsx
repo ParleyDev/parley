@@ -4,6 +4,7 @@ import { useStore } from '../../../store'
 import type { PrivateUser } from '../../../lib/types'
 import ProfileCard from '../../ProfileCard'
 import MfaSection from './MfaSection'
+import SessionsSection from './SessionsSection'
 
 export default function AccountTab({ onClose, onEditProfile }: { onClose: () => void; onEditProfile: () => void }) {
   const user = useStore((s) => s.user)
@@ -40,6 +41,7 @@ export default function AccountTab({ onClose, onEditProfile }: { onClose: () => 
       )}
     </form>
     <MfaSection />
+    <SessionsSection />
     </div>
   )
 }

@@ -250,6 +250,9 @@ export const useStore = create<State>((set, get) => ({
     set({ token, user })
   },
   logout: () => {
+    // Best effort: end the session server-side so the token is dead even if a copy survives. Already-revoked
+    // sessions (SESSION_REVOKED, 401) just fail quietly.
+    if (getToken()) api.post('/auth/logout').catch(() => {})
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], guildLayout: [], channels: {}, dms: {}, relationships: {},
