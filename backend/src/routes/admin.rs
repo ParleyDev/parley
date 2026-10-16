@@ -31,6 +31,22 @@ pub fn router() -> Router<AppState> {
         .route("/admin/settings", get(get_settings).put(put_settings))
         .route("/admin/mail", get(admin_mail))
         .route("/admin/audit", get(list_audit))
+        .route("/admin/maintenance/sweep-images", axum::routing::post(sweep_images))
+}
+
+#[derive(Deserialize)]
+struct SweepQuery {
+    /// Only images older than this are considered (default: the sweeper's own grace period).
+    min_age_secs: Option<f64>,
+}
+
+/// Run the orphan-image sweep now (what the background task does every 15 minutes).
+async fn sweep_images(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<SweepQuery>) -> AppResult<Json<Value>> {
+    require_admin(&state, uid).await?;
+    let age = q.min_age_secs.unwrap_or(crate::routes::images::ORPHAN_TTL_SECS as f64).max(0.0);
+    let removed = crate::routes::images::sweep_now(&state, age).await;
+    audit::record(&state, uid, "maintenance.sweep_images", "", None, "", json!({ "removed": removed, "min_age_secs": age })).await;
+    Ok(Json(json!({ "removed": removed })))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
