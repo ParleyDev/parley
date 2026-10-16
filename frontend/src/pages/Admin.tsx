@@ -1,4 +1,4 @@
-import { Compass, Gavel, KeyRound, LayoutDashboard, LogOut, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
+import { Compass, Gavel, KeyRound, LayoutDashboard, LogOut, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -22,6 +22,7 @@ export default function AdminPage() {
               <NavLink to="/admin/servers" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> Servers</NavLink>
               <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> Discovery Queue</NavLink>
               <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> Instance Settings</NavLink>
+              <NavLink to="/admin/audit" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="audit"><ScrollText size={20} /> Audit Log</NavLink>
             </nav>
           </aside>
     }>
@@ -32,6 +33,7 @@ export default function AdminPage() {
           <Route path="users" element={<UsersPane />} />
           <Route path="servers" element={<ServersPane />} />
           <Route path="settings" element={<SettingsPane />} />
+          <Route path="audit" element={<AuditPane />} />
         </Routes>
       </div>
     </SplitLayout>
@@ -197,4 +199,56 @@ function SettingsPane() {
 
 function Tool({ children, label, onClick, danger, testid }: { children: React.ReactNode; label: string; onClick: () => void; danger?: boolean; testid: string }) {
   return <button type="button" title={label} onClick={onClick} data-admin-action={testid} className={`h-8 w-8 rounded-md flex items-center justify-center hover:bg-bg-3 ${danger ? 'text-text-2 hover:text-danger' : 'text-text-2 hover:text-text-0'}`}>{children}</button>
+}
+
+interface AuditRow { id: string; actor_id: string | null; actor_name: string; action: string; target_kind: string; target_id: string | null; target_name: string; details: Record<string, unknown>; created_at: string }
+
+const ACTION_LABELS: Record<string, string> = {
+  'user.promote': 'made admin', 'user.demote': 'removed admin from', 'user.suspend': 'suspended', 'user.unsuspend': 'unsuspended',
+  'user.delete': 'deleted account', 'user.clear_mfa': 'cleared 2FA for', 'user.logout_all': 'logged out all devices of',
+  'guild.delete': 'deleted server', 'settings.update': 'changed instance settings',
+  'discovery.approved': 'approved Discover listing', 'discovery.rejected': 'rejected Discover listing', 'discovery.pending': 'reset Discover listing',
+}
+
+function AuditPane() {
+  const [q, setQ] = useState('')
+  const [rows, setRows] = useState<AuditRow[]>([])
+  const [done, setDone] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const load = async (before?: string) => {
+    setBusy(true)
+    try {
+      const page = await api.get<AuditRow[]>(`/admin/audit?q=${encodeURIComponent(q)}${before ? `&before=${before}` : ''}`)
+      setRows((r) => before ? [...r, ...page] : page); setDone(page.length < 100)
+    } catch { /* keep what we have */ } finally { setBusy(false) }
+  }
+  useEffect(() => { const t = setTimeout(() => load(), 200); return () => clearTimeout(t) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const detail = (r: AuditRow) => {
+    const d = r.details ?? {}
+    if (r.action === 'settings.update') return Object.entries(d).map(([k, v]) => `${k} → ${typeof v === 'string' ? JSON.stringify(v) : String(v)}`).join(', ')
+    if (typeof d.note === 'string' && d.note) return `note: ${d.note}`
+    if (typeof d.revoked === 'number') return `${d.revoked} session${d.revoked === 1 ? '' : 's'}`
+    return ''
+  }
+  return (
+    <div data-admin-audit>
+      <h1 className="text-2xl font-bold">Audit Log</h1>
+      <p className="text-sm text-text-2 mt-1">Every action taken in this console, newest first. Names are recorded at the time, so entries survive deletions.</p>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by admin, action or target" data-admin-audit-search className="input mt-4 max-w-md" />
+      <div className="mt-4 rounded-xl border border-line bg-bg-1 overflow-hidden">
+        {rows.length === 0 && <div className="px-3 py-6 text-sm text-text-2 text-center" data-admin-audit-empty>{busy ? 'Loading…' : 'Nothing logged yet.'}</div>}
+        {rows.map((r) => (
+          <div key={r.id} className="grid grid-cols-[170px_1fr] max-md:grid-cols-1 gap-x-4 gap-y-0.5 px-3 py-2 border-t border-line first:border-t-0 text-sm" data-admin-audit-row data-audit-action={r.action}>
+            <div className="text-xs text-text-2 pt-0.5" title={r.created_at}>{new Date(r.created_at).toLocaleString()}</div>
+            <div className="min-w-0">
+              <span className="font-semibold">@{r.actor_name || 'unknown'}</span> <span className="text-text-1">{ACTION_LABELS[r.action] ?? r.action}</span>
+              {r.target_name && <span className="font-semibold"> {r.target_kind === 'user' ? '@' : ''}{r.target_name}</span>}
+              {detail(r) && <div className="text-xs text-text-2 truncate" data-audit-detail>{detail(r)}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {!done && rows.length > 0 && <button type="button" className="btn-ghost mt-3" disabled={busy} onClick={() => load(rows[rows.length - 1].id)} data-admin-audit-more>Load more</button>}
+    </div>
+  )
 }

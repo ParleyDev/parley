@@ -289,5 +289,6 @@ async fn review(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("Listing not found".into()));
     }
+    crate::audit::record(&state, uid, &format!("discovery.{}", req.status), "guild", Some(gid), &crate::audit::guild_name(&state, gid).await, json!({ "note": req.note.trim() })).await;
     Ok(Json(listing_for(&state, uid, gid).await?.ok_or_else(|| AppError::NotFound("Listing not found".into()))?))
 }
