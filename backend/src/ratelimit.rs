@@ -46,6 +46,7 @@ pub struct Limits {
     pub messages: Limit,
     pub uploads: Limit,
     pub gifs: Limit,
+    pub mail: Limit,
 }
 
 struct Bucket {
@@ -66,6 +67,7 @@ pub static LIMITER: LazyLock<RateLimiter> = LazyLock::new(|| RateLimiter {
         messages: Limit::from_env("RL_MESSAGES", "10/5"),
         uploads: Limit::from_env("RL_UPLOADS", "30/60"),
         gifs: Limit::from_env("RL_GIFS", "60/60"),
+        mail: Limit::from_env("RL_MAIL", "3/600"),
     },
     buckets: DashMap::new(),
 });
@@ -165,6 +167,12 @@ pub async fn rl_uploads(req: Request<Body>, next: Next) -> Response {
 pub async fn rl_gifs(req: Request<Body>, next: Next) -> Response {
     let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
     limited("gifs", LIMITER.limits.gifs, key, req, next).await
+}
+
+/// Per-user (or IP): emails we send on request (verification resend, password reset).
+pub async fn rl_mail(req: Request<Body>, next: Next) -> Response {
+    let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
+    limited("mail", LIMITER.limits.mail, key, req, next).await
 }
 
 fn secret() -> String {

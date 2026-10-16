@@ -100,6 +100,7 @@ async fn create_guild(
     validate_image(&req.icon_url)?;
 
     let mut tx = state.db.begin().await?;
+    crate::routes::users::require_verified(&state, uid).await?;
     let gid = Uuid::now_v7();
     let guild = sqlx::query_as::<_, Guild>(&format!(
         "INSERT INTO guilds (id, name, icon_url, owner_id, banner_url) VALUES ($1, $2, $3, $4, $5) RETURNING {GUILD_COLS}"

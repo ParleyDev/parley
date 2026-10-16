@@ -67,7 +67,7 @@ function Overview() {
   )
 }
 
-interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; guild_count: number; online: boolean }
+interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; email_verified_at?: string | null; guild_count: number; online: boolean }
 
 function UsersPane() {
   const me = useStore((s) => s.user)
@@ -97,6 +97,7 @@ function UsersPane() {
               <span className="min-w-0"><span className="block truncate font-semibold">{u.display_name}</span><span className="block truncate text-xs text-text-2">@{u.username}</span></span>
               {u.is_admin && <span className="rounded bg-success/20 text-success px-1.5 py-0.5 text-[10px] font-bold" data-badge="admin">ADMIN</span>}
               {u.suspended_at && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="suspended">SUSPENDED</span>}
+              {!u.email_verified_at && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="unverified">UNVERIFIED</span>}
             </div>
             <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">Email: </span>{u.email}</div>
             <div className="text-sm text-text-1"><span className="md:hidden text-text-2">Servers: </span>{u.guild_count}</div>
@@ -161,11 +162,12 @@ function SettingsPane() {
   const setInstance = useStore((s) => s.setInstance)
   const [reg, setReg] = useState(instance.registration_enabled)
   const [ann, setAnn] = useState(instance.announcement)
+  const [reqVerify, setReqVerify] = useState(!!instance.require_email_verification)
   const [busy, setBusy] = useState(false)
-  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string }>('/admin/settings').then((s) => { setReg(s.registration_enabled); setAnn(s.announcement) }).catch(() => {}) }, [])
+  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean }>('/admin/settings').then((s) => { setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification) }).catch(() => {}) }, [])
   const save = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const s = await api.put<{ registration_enabled: boolean; announcement: string }>('/admin/settings', { registration_enabled: reg, announcement: ann }); setInstance(s); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
+    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify }); setInstance(s); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={save} className="max-w-xl space-y-6" data-admin-settings>
@@ -173,6 +175,10 @@ function SettingsPane() {
       <label className="flex items-center justify-between rounded-xl border border-line bg-bg-1 p-4 cursor-pointer">
         <span><span className="block font-semibold">Open registration</span><span className="block text-sm text-text-2">When off, the register page is closed; existing accounts can still log in.</span></span>
         <input type="checkbox" checked={reg} onChange={(e) => setReg(e.target.checked)} className="h-5 w-5 accent-accent" data-admin-registration />
+      </label>
+      <label className="flex items-center justify-between rounded-xl border border-line bg-bg-1 p-4 cursor-pointer">
+        <span><span className="block font-semibold">Require a verified email</span><span className="block text-sm text-text-2">Unverified accounts can chat but cannot create servers or use Discover until they confirm their address.{instance.mail_enabled === false ? ' This server cannot send mail (MAIL_MODE=off), so leave this off.' : ''}</span></span>
+        <input type="checkbox" checked={reqVerify} onChange={(e) => setReqVerify(e.target.checked)} className="h-5 w-5 accent-accent" data-admin-require-verify />
       </label>
       <div>
         <label className="label">Announcement banner</label>

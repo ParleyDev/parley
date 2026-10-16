@@ -9,6 +9,7 @@ import InvitePage from './pages/Invite'
 import DiscoverPage from './pages/Discover'
 import AdminPage from './pages/Admin'
 import GuildPreviewPage from './pages/GuildPreview'
+import VerifyPage from './pages/Verify'
 import { api } from './lib/api'
 import Toasts from './components/Toasts'
 import { useParams } from 'react-router-dom'
@@ -32,6 +33,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={token ? <Navigate to="/channels/@me" replace /> : <AuthPage mode="login" />} />
         <Route path="/register" element={token ? <Navigate to="/channels/@me" replace /> : <AuthPage mode="register" />} />
+        <Route path="/verify" element={<VerifyPage />} />
         <Route path="/invite/:code" element={token ? <InvitePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route
           path="/channels/*"

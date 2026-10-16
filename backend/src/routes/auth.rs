@@ -14,6 +14,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/auth/register", post(register).route_layer(from_fn(rl_register)))
         .route("/auth/login", post(login).route_layer(from_fn(rl_login)))
+        .route("/auth/verify", post(verify_email))
+        .route("/auth/resend-verification", post(resend_verification).route_layer(from_fn(crate::ratelimit::rl_mail)))
 }
 
 #[derive(Deserialize)]
@@ -75,8 +77,57 @@ async fn register(State(state): State<AppState>, Json(req): Json<RegisterReq>) -
     .fetch_one(&state.db)
     .await?;
 
+    send_verification(&state, user.id, &user.email).await;
     let token = issue_token(&state.config.jwt_secret, user.id)?;
     Ok(Json(json!({ "token": token, "user": user })))
+}
+
+/// Create a 24h verification token and mail the link (no-op when mail is off).
+pub async fn send_verification(state: &AppState, uid: Uuid, email: &str) {
+    if !crate::mail::enabled(&state.config) {
+        return;
+    }
+    let token = crate::mail::new_token();
+    if sqlx::query("INSERT INTO email_tokens (token, user_id, kind, email, expires_at) VALUES ($1, $2, 'verify', $3, now() + interval '24 hours')")
+        .bind(&token).bind(uid).bind(email).execute(&state.db).await.is_err() {
+        return;
+    }
+    let link = format!("{}/verify?token={token}", state.config.app_url);
+    let body = format!("Welcome to Parley!\n\nConfirm your email address by opening this link (valid for 24 hours):\n\n{link}\n\nIf you did not create an account, ignore this message.");
+    let _ = crate::mail::send(&state.config, email, "Verify your Parley email", &body).await;
+}
+
+#[derive(Deserialize)]
+struct VerifyReq {
+    token: String,
+}
+
+/// Mark the account verified. Anyone holding a valid token may use it; it is single-use.
+async fn verify_email(State(state): State<AppState>, Json(req): Json<VerifyReq>) -> AppResult<Json<Value>> {
+    let row: Option<(Uuid, String)> = sqlx::query_as(
+        "UPDATE email_tokens SET used_at = now() WHERE token = $1 AND kind = 'verify' AND used_at IS NULL AND expires_at > now() RETURNING user_id, email",
+    )
+    .bind(req.token.trim())
+    .fetch_optional(&state.db)
+    .await?;
+    let (uid, email) = row.ok_or_else(|| AppError::BadRequest("This verification link is invalid or has expired. Request a new one from Account settings.".into()))?;
+    sqlx::query("UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()) WHERE id = $1 AND email = $2").bind(uid).bind(&email).execute(&state.db).await?;
+    let user = sqlx::query_as::<_, PrivateUser>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::PRIVATE_USER_COLS)).bind(uid).fetch_one(&state.db).await?;
+    state.hub.emit_users(vec![uid], "USER_UPDATE", json!(user));
+    Ok(Json(json!({ "ok": true, "user_id": uid })))
+}
+
+/// Logged-in users can ask for a fresh link (rate limited per user).
+async fn resend_verification(State(state): State<AppState>, crate::auth::AuthUser(uid): crate::auth::AuthUser) -> AppResult<Json<Value>> {
+    let row: (String, Option<chrono::DateTime<chrono::Utc>>) = sqlx::query_as("SELECT email, email_verified_at FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    if row.1.is_some() {
+        return Err(AppError::BadRequest("Your email is already verified.".into()));
+    }
+    if !crate::mail::enabled(&state.config) {
+        return Err(AppError::BadRequest("This server cannot send email.".into()));
+    }
+    send_verification(&state, uid, &row.0).await;
+    Ok(Json(json!({ "ok": true })))
 }
 
 #[derive(Deserialize)]

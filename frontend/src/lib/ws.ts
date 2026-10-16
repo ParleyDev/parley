@@ -1,5 +1,5 @@
 import { useStore, type ReadyPayload } from '../store'
-import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Relationship, Role, Sticker, User, VoiceState } from './types'
+import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, PrivateUser, Relationship, Role, Sticker, User, VoiceState } from './types'
 import { voice } from './voice'
 
 type Ev =
@@ -116,7 +116,7 @@ function handle(ev: Ev) {
     case 'REACTION_REMOVE': s.applyReaction(ev.d.channel_id, ev.d.message_id, ev.d.emoji, ev.d.user_id, false); break
     case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id); break
     case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online); break
-    case 'USER_UPDATE': s.upsertUser(ev.d); break
+    case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
     case 'GUILD_CREATE': s.upsertGuild(ev.d); break
     case 'GUILD_UPDATE': s.upsertGuild(ev.d); break
     case 'GUILD_EMOJIS_UPDATE': s.setGuildEmojis(ev.d.guild_id, ev.d.emojis); break

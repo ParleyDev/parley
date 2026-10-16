@@ -13,6 +13,12 @@ pub struct Config {
     pub giphy_api_key: Option<String>,
     /// Emails that are Parley admins (comma separated); they may approve Discover submissions.
     pub admin_emails: Vec<String>,
+    /// smtp | log (default) | off
+    pub mail_mode: String,
+    pub smtp_url: Option<String>,
+    pub mail_from: String,
+    /// Public base URL used in emailed links.
+    pub app_url: String,
 }
 
 impl Config {
@@ -36,6 +42,10 @@ impl Config {
             upload_dir: std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into()).into(),
             tenor_api_key: std::env::var("TENOR_API_KEY").ok(),
             giphy_api_key: std::env::var("GIPHY_API_KEY").ok(),
+            mail_mode: std::env::var("MAIL_MODE").unwrap_or_else(|_| "log".into()).to_lowercase(),
+            smtp_url: std::env::var("SMTP_URL").ok().filter(|s| !s.is_empty()),
+            mail_from: std::env::var("MAIL_FROM").unwrap_or_else(|_| "Parley <no-reply@parley.local>".into()),
+            app_url: std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".into()).trim_end_matches('/').to_string(),
             admin_emails: std::env::var("ADMIN_EMAILS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
         }
     }

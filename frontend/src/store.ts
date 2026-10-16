@@ -106,7 +106,7 @@ interface State {
   pttHeld: boolean
   modal: ModalKind | null
   /** Instance-wide settings from GET /instance (registration, announcement banner). */
-  instance: { registration_enabled: boolean; announcement: string }
+  instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean }
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
 
   // auth
@@ -122,7 +122,7 @@ interface State {
   setBookmark: (messageId: string, on: boolean) => void
   /** Replace the server bar layout; `save` also PUTs it to the server. */
   setGuildLayout: (items: LayoutItem[], save?: boolean) => void
-  setInstance: (i: { registration_enabled: boolean; announcement: string }) => void
+  setInstance: (i: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean }) => void
   upsertRelationship: (r: Relationship) => void
   removeRelationship: (userId: string) => void
   upsertRole: (r: Role) => void

@@ -70,7 +70,16 @@ async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
 }
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, is_admin";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, is_admin, email_verified_at";
+
+/// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
+pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
+    if !crate::routes::admin::load_settings(&state.db).await?.require_email_verification {
+        return Ok(());
+    }
+    let row: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND email_verified_at IS NOT NULL").bind(uid).fetch_optional(&state.db).await?;
+    if row.is_some() { Ok(()) } else { Err(AppError::BadRequest("Verify your email address to do that. Check your inbox or resend the link from Account settings.".into())) }
+}
 
 /// Is this user a Parley admin? The `is_admin` flag, or an email listed in `ADMIN_EMAILS`
 /// (which is then persisted as the flag so the UI sees it too).
