@@ -15,7 +15,7 @@ export type ModalKind =
   | { kind: 'invite'; guildId: string }
   | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
-  | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' }
+  | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string; anchor?: Anchor }
   | { kind: 'image'; url: string; name: string }

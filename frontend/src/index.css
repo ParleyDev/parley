@@ -18,6 +18,26 @@
   --color-danger: #f0506e;
 }
 
+/* Light palette: Tailwind v4 utilities read these variables, so overriding them on <html> re-skins everything. */
+:root[data-theme="light"] {
+  --color-bg-0: #e3e5e8;
+  --color-bg-1: #f2f3f5;
+  --color-bg-2: #ffffff;
+  --color-bg-3: #ebedef;
+  --color-bg-4: #dfe1e5;
+  --color-line: #d7d9de;
+  --color-text-0: #060607;
+  --color-text-1: #313338;
+  --color-text-2: #5c5e66;
+  --color-accent: #5865f2;
+  --color-accent-hover: #4752c4;
+  --scrollbar-thumb: #c4c9d1;
+}
+:root { --scrollbar-thumb: #2c2f3b; --font-scale: 1; }
+
+/* Chat font scaling (Appearance settings): message bodies and the composer follow --font-scale. */
+.msg-content, textarea.composer-input { font-size: calc(15px * var(--font-scale)) !important; line-height: calc(1.375rem * var(--font-scale)) !important; }
+
 html, body, #root { height: 100%; }
 @supports (height: 100dvh) { #root { height: 100dvh; } }
 body {
@@ -29,9 +49,9 @@ body {
   input, textarea, select { font-size: 16px !important; }
 }
 
-* { scrollbar-width: thin; scrollbar-color: #2c2f3b transparent; }
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: #2c2f3b; border-radius: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
 *::-webkit-scrollbar-track { background: transparent; }
 
 /* Markdown in messages and bios */
