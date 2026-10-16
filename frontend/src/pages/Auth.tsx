@@ -14,6 +14,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const registrationOpen = useStore((s) => s.instance.registration_enabled)
+  const mailEnabled = useStore((s) => s.instance.mail_enabled !== false)
   const setInstance = useStore((s) => s.setInstance)
   useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string }>('/instance').then(setInstance).catch(() => {}) }, [setInstance])
   const closed = mode === 'register' && !registrationOpen
@@ -64,7 +65,11 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
               <div><label className="label">Display name <span className="normal-case font-normal text-text-2">(optional)</span></label><input className="input" maxLength={32} {...f('display_name')} /></div>
             </>
           )}
-          <div><label className="label">Password</label><input className="input" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={8} {...f('password')} /></div>
+          <div>
+            <label className="label">Password</label>
+            <input className="input" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={8} {...f('password')} />
+            {mode === 'login' && mailEnabled && <Link to="/forgot" className="mt-1.5 inline-block text-xs text-sky-400 hover:underline" data-forgot-link>Forgot your password?</Link>}
+          </div>
         </div>
 
         <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || closed}>{busy ? 'Please wait…' : mode === 'login' ? 'Log In' : 'Continue'}</button>
