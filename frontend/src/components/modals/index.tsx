@@ -15,6 +15,7 @@ import TimeoutMemberModal from './TimeoutMember'
 import EditHistoryModal from './EditHistory'
 import ReportModal from './Report'
 import CreatePollModal from './CreatePoll'
+import EditCategoryModal from './EditCategory'
 import TransferOwnershipModal from './TransferOwnership'
 import CustomStatusModal from './CustomStatus'
 import ForwardModal from './Forward'
@@ -36,7 +37,7 @@ export default function Modals() {
   switch (modal!.kind) {
     case 'createGuild': return <CreateGuildModal onClose={close} />
     case 'joinGuild': return <JoinGuildModal onClose={close} code={modal!.code} />
-    case 'createChannel': return <CreateChannelModal onClose={close} guildId={modal!.guildId} />
+    case 'createChannel': return <CreateChannelModal onClose={close} guildId={modal!.guildId} parentId={modal!.parentId ?? null} />
     case 'invite': return <InviteModal onClose={close} guildId={modal!.guildId} />
     case 'guildSettings': return <GuildSettingsModal onClose={close} guildId={modal!.guildId} tab={modal!.tab} />
     case 'channelSettings': return <ChannelSettingsModal onClose={close} channelId={modal!.channelId} tab={modal!.tab} />
@@ -50,6 +51,7 @@ export default function Modals() {
     case 'editHistory': return <EditHistoryModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} />
     case 'report': return <ReportModal onClose={close} messageId={modal!.messageId} userId={modal!.userId} name={modal!.name} />
     case 'createPoll': return <CreatePollModal onClose={close} channelId={modal!.channelId} />
+    case 'editCategory': return <EditCategoryModal onClose={close} channelId={modal!.channelId} />
     case 'transferOwnership': return <TransferOwnershipModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'customStatus': return <CustomStatusModal onClose={close} />
     case 'forward': return <ForwardModal onClose={close} message={modal!.message} />

@@ -29,6 +29,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/members/:uid", delete(kick_member))
         .route("/guilds/:id/members/:uid/timeout", put(timeout_member).delete(clear_timeout))
         .route("/guilds/:id/audit", get(list_audit))
+        .route("/guilds/:id/channels/positions", axum::routing::patch(reorder_channels))
         .route("/guilds/:id/invites", get(list_invites).post(create_invite))
         .route("/guilds/:id/bans", get(list_bans))
         .route("/guilds/:id/bans/:uid", put(ban_member).delete(unban_member))
@@ -36,7 +37,7 @@ pub fn router() -> Router<AppState> {
 }
 
 pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url";
-pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url";
+pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
     let g = sqlx::query_as::<_, Guild>(&format!(
@@ -227,6 +228,21 @@ struct CreateChannel {
     name: String,
     kind: Option<String>,
     topic: Option<String>,
+    /// Category to create the channel under (text/voice only).
+    parent_id: Option<Uuid>,
+}
+
+/// A valid category in this guild for `parent_id`, or an error.
+pub async fn check_parent(db: &PgPool, guild_id: Uuid, kind: &str, parent: Option<Uuid>) -> AppResult<Option<Uuid>> {
+    let Some(pid) = parent else { return Ok(None) };
+    if kind == "category" {
+        return Err(AppError::BadRequest("Categories cannot be nested".into()));
+    }
+    let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind = 'category'").bind(pid).bind(guild_id).fetch_optional(db).await?;
+    if ok.is_none() {
+        return Err(AppError::BadRequest("parent_id must be a category in this server".into()));
+    }
+    Ok(Some(pid))
 }
 
 async fn create_channel(
@@ -238,16 +254,17 @@ async fn create_channel(
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::MANAGE_CHANNELS)?;
     let kind = req.kind.unwrap_or_else(|| "text".into());
-    if !["text", "voice"].contains(&kind.as_str()) {
-        return Err(AppError::BadRequest("kind must be text or voice".into()));
+    if !["text", "voice", "category"].contains(&kind.as_str()) {
+        return Err(AppError::BadRequest("kind must be text, voice or category".into()));
     }
     let name = normalize_channel_name(&req.name, &kind)?;
+    let parent = check_parent(&state.db, id, &kind, req.parent_id).await?;
     let (pos,): (i32,) = sqlx::query_as("SELECT COALESCE(MAX(position), -1) + 1 FROM channels WHERE guild_id = $1")
         .bind(id)
         .fetch_one(&state.db)
         .await?;
-    let c = sqlx::query_as::<_, Channel>(&format!(
-        "INSERT INTO channels (id, guild_id, name, kind, topic, position) VALUES ($1, $2, $3, $4, $5, $6) RETURNING {CHANNEL_COLS}"
+    let mut c = sqlx::query_as::<_, Channel>(&format!(
+        "INSERT INTO channels (id, guild_id, name, kind, topic, position, parent_id) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING {CHANNEL_COLS}"
     ))
     .bind(Uuid::now_v7())
     .bind(id)
@@ -255,8 +272,11 @@ async fn create_channel(
     .bind(&kind)
     .bind(req.topic.unwrap_or_default().chars().take(1024).collect::<String>())
     .bind(pos)
+    .bind(parent)
     .fetch_one(&state.db)
     .await?;
+    // Inherit the category's overwrites (so a private category yields a private channel).
+    perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
     let target = perms::channel_audience(&state.db, &c).await?;
     state.hub.emit(target, "CHANNEL_CREATE", json!(c));
     crate::audit::guild(&state, id, uid, "channel.create", "channel", Some(c.id), &c.name, json!({ "kind": c.kind })).await;
@@ -264,7 +284,9 @@ async fn create_channel(
 }
 
 pub fn normalize_channel_name(raw: &str, kind: &str) -> AppResult<String> {
-    let name = if kind == "text" {
+    let name = if kind == "category" {
+        raw.trim().chars().take(100).collect::<String>()
+    } else if kind == "text" {
         raw.trim().to_lowercase().chars().map(|c| if c.is_whitespace() { '-' } else { c }).collect::<String>()
     } else {
         raw.trim().to_string()
@@ -645,4 +667,52 @@ async fn list_audit(
     .fetch_all(&state.db)
     .await?;
     Ok(Json(rows))
+}
+
+#[derive(Deserialize)]
+struct PositionItem {
+    id: Uuid,
+    position: i32,
+    /// Omit to keep the current category; null to move to the top level.
+    #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
+    parent_id: Option<Option<Uuid>>,
+}
+
+#[derive(Deserialize)]
+struct Positions {
+    items: Vec<PositionItem>,
+}
+
+/// Bulk reorder / re-parent (drag and drop). Needs Manage Channels; categories keep parent NULL.
+async fn reorder_channels(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<Positions>,
+) -> AppResult<Json<Vec<Channel>>> {
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::MANAGE_CHANNELS)?;
+    if req.items.len() > 500 {
+        return Err(AppError::BadRequest("Too many items".into()));
+    }
+    let before = perms::visibility(&state.db, id).await?;
+    let mut tx = state.db.begin().await?;
+    for it in &req.items {
+        let kind: Option<(String,)> = sqlx::query_as("SELECT kind FROM channels WHERE id = $1 AND guild_id = $2").bind(it.id).bind(id).fetch_optional(&mut *tx).await?;
+        let Some((kind,)) = kind else { return Err(AppError::NotFound("Channel not found".into())) };
+        match it.parent_id {
+            Some(parent) => {
+                let parent = check_parent(&state.db, id, &kind, parent).await?;
+                sqlx::query("UPDATE channels SET position = $3, parent_id = $4 WHERE id = $1 AND guild_id = $2").bind(it.id).bind(id).bind(it.position).bind(parent).execute(&mut *tx).await?;
+            }
+            None => {
+                sqlx::query("UPDATE channels SET position = $3 WHERE id = $1 AND guild_id = $2").bind(it.id).bind(id).bind(it.position).execute(&mut *tx).await?;
+            }
+        }
+    }
+    tx.commit().await?;
+    // Parent changes can change inherited overwrites; this also pushes CHANNEL_UPDATE (new positions) to everyone.
+    perms::resync_visibility(&state, id, &before).await?;
+    crate::audit::guild(&state, id, uid, "channel.reorder", "guild", Some(id), "", json!({ "count": req.items.len() })).await;
+    Ok(Json(perms::guild_channels(&state.db, id).await?))
 }

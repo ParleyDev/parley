@@ -1,10 +1,10 @@
 import { useShallow } from 'zustand/react/shallow'
 import { anchorOf } from '../lib/anchor'
-import { ChevronDown, Copy, Hash, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Plus, Settings, Trash2, UserPlus, Video, Volume2 } from 'lucide-react'
+import { ChevronDown, Copy, FolderPlus, Hash, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Settings, Trash2, UserPlus, Video, Volume2 } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
-import { useState } from 'react'
+import { useState, type DragEvent } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { isUnread, myChannelPerms, myGuildPerms, showsMentions, showsUnread, useStore, voiceParticipants } from '../store'
 import { notifEntries } from './NotifMenu'
@@ -13,6 +13,8 @@ import { BellOff } from 'lucide-react'
 import { has, P } from '../lib/perms'
 import StyledName from './StyledName'
 import { api } from '../lib/api'
+import type { Channel } from '../lib/types'
+import { STORAGE_PREFIX } from '../lib/brand'
 
 export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const guild = useStore((s) => s.guilds[guildId])
@@ -41,9 +43,65 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const canManageGuild = has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_ROLES)
   const canCreate = has(perms, P.MANAGE_CHANNELS)
   const canEditChannel = (id: string) => has(chanPerms[id] ?? 0, P.MANAGE_CHANNELS) || has(chanPerms[id] ?? 0, P.MANAGE_ROLES)
-  const list = Object.values(channels).filter((c) => c.guild_id === guildId).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
-  const text = list.filter((c) => c.kind === 'text')
-  const voiceChannels = list.filter((c) => c.kind === 'voice')
+  const all = Object.values(channels).filter((c) => c.guild_id === guildId).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+  const categories = all.filter((c) => c.kind === 'category')
+  const list = all.filter((c) => c.kind !== 'category')
+  const catIds = new Set(categories.map((c) => c.id))
+  const uncategorized = list.filter((c) => !c.parent_id || !catIds.has(c.parent_id))
+  const childrenOf = (id: string) => list.filter((c) => c.parent_id === id)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}collapsed.${guildId}`) || '{}') } catch { return {} } })
+  const toggleCollapsed = (id: string) => setCollapsed((c) => { const n = { ...c, [id]: !c[id] }; try { localStorage.setItem(`${STORAGE_PREFIX}collapsed.${guildId}`, JSON.stringify(n)) } catch { /* ignore */ } return n })
+  // Drag and drop: channels can be dropped on another channel (insert before it) or on a category header (append).
+  const [drag, setDrag] = useState<string | null>(null)
+  const [over, setOver] = useState<string | null>(null)
+  const persistOrder = async (ordered: { id: string; parent_id: string | null }[]) => {
+    const items = ordered.map((c, i) => ({ id: c.id, position: i, parent_id: c.parent_id }))
+    try { await api.patch(`/guilds/${guildId}/channels/positions`, { items }) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const dropOn = (targetId: string | null, parent: string | null, where: 'before' | 'end') => {
+    if (!drag || drag === targetId) return
+    const moving = channels[drag]; if (!moving || moving.kind === 'category') return
+    const rest = list.filter((c) => c.id !== drag)
+    const ordered: { id: string; parent_id: string | null }[] = []
+    const groups: (string | null)[] = [null, ...categories.map((c) => c.id)]
+    for (const g of groups) {
+      const members = rest.filter((c) => (g === null ? !c.parent_id || !catIds.has(c.parent_id) : c.parent_id === g))
+      const placed = members.map((c) => ({ id: c.id, parent_id: g }))
+      if (g === parent) {
+        if (where === 'end' || !targetId) placed.push({ id: drag, parent_id: g })
+        else { const i = placed.findIndex((c) => c.id === targetId); placed.splice(i < 0 ? placed.length : i, 0, { id: drag, parent_id: g }) }
+      }
+      ordered.push(...placed)
+    }
+    // Optimistic: apply positions locally, then persist.
+    useStore.setState((s) => ({ channels: { ...s.channels, ...Object.fromEntries(ordered.map((c, i) => [c.id, { ...s.channels[c.id], position: i, parent_id: c.parent_id }])) } }))
+    persistOrder(ordered)
+  }
+  const dragProps = (c: Channel) => canCreate ? {
+    draggable: true,
+    onDragStart: (e: DragEvent<HTMLElement>) => { e.dataTransfer.setData('text/plain', c.id); e.dataTransfer.effectAllowed = 'move'; setDrag(c.id) },
+    onDragEnd: () => { setDrag(null); setOver(null) },
+    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag || drag === c.id) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (over !== c.id) setOver(c.id) },
+    onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); dropOn(c.id, c.parent_id && catIds.has(c.parent_id) ? c.parent_id : null, 'before'); setDrag(null); setOver(null) },
+  } : {}
+  const catDropProps = (catId: string | null) => canCreate ? {
+    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const key = `cat:${catId ?? 'none'}`; if (over !== key) setOver(key) },
+    onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); dropOn(null, catId, 'end'); setDrag(null); setOver(null) },
+  } : {}
+  const categoryMenu = (c: Channel): MenuEntry[] => [
+    { label: collapsed[c.id] ? 'Expand Category' : 'Collapse Category', icon: <ChevronDown size={16} />, onClick: () => toggleCollapsed(c.id) },
+    ...(canCreate ? ['sep' as const, { label: 'Create Channel', icon: <Plus size={16} />, onClick: () => openModal({ kind: 'createChannel', guildId, parentId: c.id }) }, { label: 'Edit Category', icon: <Pencil size={16} />, onClick: () => openModal({ kind: 'editCategory', channelId: c.id }) }, { label: 'Delete Category', icon: <Trash2 size={16} />, danger: true, onClick: () => openModal({ kind: 'confirm', title: `Delete '${c.name}'`, body: `The channels inside ${c.name} are kept and move to the top of the list.`, danger: true, confirmLabel: 'Delete Category', action: async () => { try { await api.delete(`/channels/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } }) }] : []),
+    'sep' as const,
+    { label: 'Copy Category ID', icon: <Copy size={16} />, onClick: () => copyText('Category ID', c.id) },
+  ]
+  const row = (c: Channel) => (
+    <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id ?? ''} className={`${drag === c.id ? 'opacity-40' : ''} ${over === c.id ? 'border-t-2 border-accent' : ''}`} {...dragProps(c)}>
+      <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : <Hash size={18} />} name={c.name} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id)} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+        unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)} onClick={() => setMobilePane('content')}
+        onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
+      {c.kind === 'voice' && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
+    </div>
+  )
   const copyText = async (label: string, t: string) => { try { await navigator.clipboard.writeText(t); pushToast(`${label} copied`) } catch { pushToast('Clipboard unavailable', 'error') } }
   const channelMenu = (c: { id: string; name: string }): MenuEntry[] => {
     const unread = isUnread({ readStates, lastMessageId }, c.id)
@@ -108,26 +166,17 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pt-3 space-y-4">
-        <Category label="Text Channels" onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId }) : undefined}>
-          {text.map((c) => (
-            <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Hash size={18} />} name={c.name} mentions={showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id)} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
-              unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)} onClick={() => setMobilePane('content')}
-              onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
-          ))}
-        </Category>
-        {voiceChannels.length > 0 && (
-          <Category label="Voice Channels" onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId }) : undefined}>
-            {voiceChannels.map((c) => (
-              <div key={c.id}>
-                <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={<Volume2 size={18} />} name={c.name} muted={mutedTarget(notifSettings, c.id)} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
-                  unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)} onClick={() => setMobilePane('content')}
-                  onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
-                <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />
-              </div>
-            ))}
+      <div className="flex-1 overflow-y-auto px-2 pt-3 space-y-4" data-channel-list>
+        <div className={`space-y-0.5 min-h-2 rounded ${over === 'cat:none' ? 'ring-1 ring-accent' : ''}`} data-channel-group="" {...catDropProps(null)}>
+          {uncategorized.map(row)}
+        </div>
+        {categories.map((cat) => (
+          <Category key={cat.id} label={cat.name} open={!collapsed[cat.id]} onToggle={() => toggleCollapsed(cat.id)} highlight={over === `cat:${cat.id}`} dropProps={catDropProps(cat.id)} testid={cat.id}
+            onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId, parentId: cat.id }) : undefined} onContextMenu={(e) => ctx.open(e, categoryMenu(cat))}>
+            {childrenOf(cat.id).filter((c) => !collapsed[cat.id] || c.id === channelId || showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)).map(row)}
           </Category>
-        )}
+        ))}
+        {canCreate && <button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title="Create Channel" className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> Create channel or category</button>}
       </div>
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
     </aside>
@@ -142,17 +191,16 @@ function MenuItem({ children, icon, onClick, danger, accent }: { children: React
   )
 }
 
-function Category({ label, onAdd, children }: { label: string; onAdd?: () => void; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true)
+function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, dropProps, testid, children }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; dropProps?: object; testid: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="group flex items-center justify-between pr-1 text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1">
-        <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-0.5 py-1 pl-0.5">
-          <ChevronDown size={12} className={`transition ${open ? '' : '-rotate-90'}`} />{label}
+    <div data-category={testid} data-category-open={open ? '1' : '0'} className={`rounded ${highlight ? 'ring-1 ring-accent' : ''}`} {...dropProps}>
+      <div className="group flex items-center justify-between pr-1 text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1" onContextMenu={onContextMenu}>
+        <button onClick={onToggle} className="flex items-center gap-0.5 py-1 pl-0.5 min-w-0" data-category-toggle>
+          <ChevronDown size={12} className={`shrink-0 transition ${open ? '' : '-rotate-90'}`} /><span className="truncate">{label}</span>
         </button>
-        {onAdd && <button onClick={onAdd} title="Create Channel" className="opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0"><Plus size={16} /></button>}
+        {onAdd && <button onClick={onAdd} title="Create Channel" className="opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0" data-category-add><Plus size={16} /></button>}
       </div>
-      {open && <div className="mt-0.5 space-y-0.5">{children}</div>}
+      <div className="mt-0.5 space-y-0.5 min-h-1">{children}</div>
     </div>
   )
 }

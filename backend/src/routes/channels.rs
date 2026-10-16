@@ -103,6 +103,10 @@ struct UpdateChannel {
     topic: Option<String>,
     /// Group DMs: empty string clears.
     icon_url: Option<String>,
+    /// Guild channels: move under a category (null = top level).
+    #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
+    parent_id: Option<Option<Uuid>>,
+    position: Option<i32>,
 }
 
 async fn update_channel(
@@ -143,15 +147,28 @@ async fn update_channel(
         Some(n) => Some(normalize_channel_name(&n, &c.kind)?),
         None => None,
     };
+    let gid = c.guild_id.unwrap_or_default();
+    let parent = match req.parent_id {
+        Some(p) => Some(crate::routes::guilds::check_parent(&state.db, gid, &c.kind, p).await?),
+        None => None,
+    };
+    let before = if parent.is_some() { Some(perms::visibility(&state.db, gid).await?) } else { None };
     let mut updated = sqlx::query_as::<_, Channel>(&format!(
-        "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic) WHERE id = $1 RETURNING {CHANNEL_COLS}"
+        "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
+         parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
     .bind(name)
     .bind(req.topic.map(|t| t.chars().take(1024).collect::<String>()))
+    .bind(req.position)
+    .bind(parent.is_some())
+    .bind(parent.flatten())
     .fetch_one(&state.db)
     .await?;
-    updated.overwrites = c.overwrites;
+    perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
+    if let Some(before) = before {
+        perms::resync_visibility(&state, gid, &before).await?;
+    }
     let target = perms::channel_audience(&state.db, &updated).await?;
     state.hub.emit(target, "CHANNEL_UPDATE", json!(updated));
     if let Some(gid) = updated.guild_id {
@@ -269,6 +286,9 @@ async fn create_message(
 ) -> AppResult<(StatusCode, Json<Message>)> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
+    if c.kind == "category" {
+        return Err(AppError::BadRequest("Categories cannot hold messages".into()));
+    }
     let content = req.content.trim_end().to_string();
     if (content.trim().is_empty() && req.attachment_ids.is_empty() && req.sticker_id.is_none() && req.poll.is_none()) || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));

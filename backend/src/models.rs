@@ -81,6 +81,9 @@ pub struct Channel {
     /// Group DMs only: custom icon.
     #[sqlx(default)]
     pub icon_url: Option<String>,
+    /// Guild channels: the category this channel sits under.
+    #[sqlx(default)]
+    pub parent_id: Option<Uuid>,
     /// Permission overwrites; filled by `perms::attach_overwrites` for guild channels.
     #[sqlx(skip)]
     #[serde(default)]
