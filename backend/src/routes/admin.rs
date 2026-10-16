@@ -2,6 +2,7 @@
 //! management, and instance settings (registration on/off, sitewide announcement).
 
 use crate::{
+    audit,
     auth::AuthUser,
     error::{AppError, AppResult},
     routes::users::require_admin,
@@ -29,6 +30,7 @@ pub fn router() -> Router<AppState> {
         .route("/admin/guilds/:id", delete(delete_guild))
         .route("/admin/settings", get(get_settings).put(put_settings))
         .route("/admin/mail", get(admin_mail))
+        .route("/admin/audit", get(list_audit))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -154,6 +156,7 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
             if n == 0 { return Err(AppError::BadRequest("At least one admin must remain".into())); }
         }
         sqlx::query("UPDATE users SET is_admin = $2 WHERE id = $1").bind(id).bind(admin).execute(&state.db).await?;
+        audit::record(&state, uid, if admin { "user.promote" } else { "user.demote" }, "user", Some(id), &audit::username(&state, id).await, json!({})).await;
     }
     if let Some(suspended) = req.suspended {
         if suspended && id == uid { return Err(AppError::BadRequest("You cannot suspend yourself".into())); }
@@ -163,9 +166,13 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
             state.hub.emit_users(vec![id], "SESSION_REVOKED", json!({ "reason": "Your account has been suspended." }));
             state.hub.voice_evict(|v| v.user_id == id);
         }
+        audit::record(&state, uid, if suspended { "user.suspend" } else { "user.unsuspend" }, "user", Some(id), &audit::username(&state, id).await, json!({})).await;
     }
     match req.mfa {
-        Some(false) => crate::routes::mfa::clear_mfa(&state, id).await?,
+        Some(false) => {
+            crate::routes::mfa::clear_mfa(&state, id).await?;
+            audit::record(&state, uid, "user.clear_mfa", "user", Some(id), &audit::username(&state, id).await, json!({})).await;
+        }
         Some(true) => return Err(AppError::BadRequest("Only the user can enrol in two-factor authentication".into())),
         None => {}
     }
@@ -179,7 +186,9 @@ async fn delete_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
     if id == uid {
         return Err(AppError::BadRequest("You cannot delete your own account from here".into()));
     }
+    let name = audit::username(&state, id).await;
     delete_account(&state, id).await?;
+    audit::record(&state, uid, "user.delete", "user", Some(id), &name, json!({})).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -232,12 +241,14 @@ async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser, Que
 
 async fn delete_guild(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
     require_admin(&state, uid).await?;
+    let name = audit::guild_name(&state, id).await;
     state.hub.voice_evict(|v| v.guild_id == Some(id));
     state.hub.emit_guild(id, "GUILD_DELETE", json!({ "id": id }));
     let res = sqlx::query("DELETE FROM guilds WHERE id = $1").bind(id).execute(&state.db).await?;
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("Server not found".into()));
     }
+    audit::record(&state, uid, "guild.delete", "guild", Some(id), &name, json!({})).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -251,6 +262,14 @@ async fn get_settings(State(state): State<AppState>, AuthUser(uid): AuthUser) ->
 async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<InstanceSettings>) -> AppResult<Json<InstanceSettings>> {
     require_admin(&state, uid).await?;
     let announcement: String = req.announcement.trim().chars().take(300).collect();
+    let before = load_settings(&state.db).await?;
+    let mut changed = serde_json::Map::new();
+    if before.registration_enabled != req.registration_enabled { changed.insert("registration_enabled".into(), json!(req.registration_enabled)); }
+    if before.announcement != announcement { changed.insert("announcement".into(), json!(announcement)); }
+    if before.require_email_verification != req.require_email_verification { changed.insert("require_email_verification".into(), json!(req.require_email_verification)); }
+    if !changed.is_empty() {
+        audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
+    }
     for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
@@ -258,4 +277,41 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     s.mail_enabled = crate::mail::enabled(&state.config);
     state.hub.emit_all("INSTANCE_UPDATE", json!(s));
     Ok(Json(s))
+}
+
+#[derive(Debug, Serialize, FromRow)]
+struct AuditRow {
+    id: Uuid,
+    actor_id: Option<Uuid>,
+    actor_name: String,
+    action: String,
+    target_kind: String,
+    target_id: Option<Uuid>,
+    target_name: String,
+    details: Value,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+struct AuditQuery {
+    #[serde(default)]
+    q: String,
+    /// Page by the id of the last row seen (ids are time-ordered v7 UUIDs).
+    before: Option<Uuid>,
+}
+
+/// Newest first, 100 per page; `q` matches actor, action or target name.
+async fn list_audit(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<AuditQuery>) -> AppResult<Json<Vec<AuditRow>>> {
+    require_admin(&state, uid).await?;
+    let rows = sqlx::query_as::<_, AuditRow>(
+        "SELECT id, actor_id, actor_name, action, target_kind, target_id, target_name, details, created_at FROM admin_audit
+         WHERE ($1::text IS NULL OR actor_name ILIKE $1 OR action ILIKE $1 OR target_name ILIKE $1)
+           AND ($2::uuid IS NULL OR id < $2)
+         ORDER BY id DESC LIMIT 100",
+    )
+    .bind(pattern(&q.q))
+    .bind(q.before)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(rows))
 }

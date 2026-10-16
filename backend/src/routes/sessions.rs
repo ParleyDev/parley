@@ -74,5 +74,6 @@ async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
 async fn admin_logout_all(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<serde_json::Value>> {
     require_admin(&state, uid).await?;
     let n = revoke_sessions(&state, id, None, None, "An administrator logged you out of all devices.").await?.len();
+    crate::audit::record(&state, uid, "user.logout_all", "user", Some(id), &crate::audit::username(&state, id).await, serde_json::json!({ "revoked": n })).await;
     Ok(Json(serde_json::json!({ "revoked": n })))
 }
