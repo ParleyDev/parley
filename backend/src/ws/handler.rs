@@ -23,6 +23,9 @@ use uuid::Uuid;
 #[derive(Deserialize)]
 pub struct WsQuery {
     token: String,
+    /// Last event sequence number the client saw; when the gap is still buffered the server replays it
+    /// (RESUMED) instead of sending a fresh READY.
+    seq: Option<u64>,
 }
 
 pub async fn ws_upgrade(
@@ -36,7 +39,7 @@ pub async fn ws_upgrade(
     if !check_session(&state, uid, sid).await.unwrap_or(false) {
         return (axum::http::StatusCode::UNAUTHORIZED, "session revoked or account suspended").into_response();
     }
-    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid))
+    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid, q.seq))
 }
 
 #[derive(Deserialize)]
@@ -51,8 +54,46 @@ enum ClientOp {
     VoiceSignal { to: Uuid, data: Value },
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid) {
+async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid, resume_from: Option<u64>) {
     let (mut tx, mut rx) = socket.split();
+
+    // --- Resume: replay what this client missed if it is all still buffered ---
+    if let Some(after) = resume_from.filter(|a| *a > 0) {
+        // Subscribe first so nothing emitted between the snapshot and the loop is lost (dedup by seq below).
+        let events = state.hub.subscribe();
+        if let Some(missed) = state.hub.replay_after(after) {
+            let guild_ids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT guild_id FROM guild_members WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_all(&state.db)
+                .await
+                .unwrap_or_default()
+                .into_iter()
+                .map(|r| r.0)
+                .collect();
+            let my_guilds: HashSet<Uuid> = guild_ids.into_iter().collect();
+            let relevant: Vec<_> = missed.into_iter().filter(|ev| matches_target(&ev.target, user_id, session_id, &my_guilds)).collect();
+            let last = relevant.last().map(|e| e.seq).unwrap_or(after).max(after);
+            let first = state.hub.connect(user_id);
+            let resumed = json!({ "t": "RESUMED", "d": { "replayed": relevant.len(), "from": after }, "s": state.hub.current_seq() });
+            if tx.send(Message::Text(resumed.to_string())).await.is_err() {
+                state.hub.disconnect(user_id);
+                return;
+            }
+            for ev in &relevant {
+                if tx.send(Message::Text(ev.payload.to_string())).await.is_err() {
+                    state.hub.disconnect(user_id);
+                    return;
+                }
+            }
+            if first {
+                state.hub.emit_all("PRESENCE_UPDATE", json!({ "user_id": user_id, "online": true }));
+            }
+            let session = state.hub.next_session();
+            run_loop(&state, user_id, session_id, session, my_guilds, events, last, &mut tx, &mut rx).await;
+            return;
+        }
+        tracing::debug!(user = %user_id, after, "resume gap not buffered; sending READY");
+    }
 
     // --- Build READY payload ---
     let mut user = match sqlx::query_as::<_, PrivateUser>(
@@ -79,7 +120,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     .unwrap_or_default();
 
     let guild_ids: Vec<Uuid> = guilds.iter().map(|g| g.id).collect();
-    let mut my_guilds: HashSet<Uuid> = guild_ids.iter().copied().collect();
+    let my_guilds: HashSet<Uuid> = guild_ids.iter().copied().collect();
 
     // Only channels this user may view, plus every guild's roles and the user's own member rows.
     let mut channels: Vec<Channel> = Vec::new();
@@ -148,7 +189,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             .unwrap_or_else(|e| { tracing::error!(error = ?e, "last message ids"); Vec::new() });
 
     // Subscribe BEFORE announcing presence so we don't miss events.
-    let mut events = state.hub.subscribe();
+    let events = state.hub.subscribe();
+    let seq_at_subscribe = state.hub.current_seq();
     let first = state.hub.connect(user_id);
     let online = state.hub.online_users();
     let mut voice_states = state.hub.voice_states_for_guilds(&guild_ids);
@@ -157,6 +199,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
 
     let ready = json!({
         "t": "READY",
+        "s": seq_at_subscribe,
         "d": {
             "user": user,
             "guilds": guilds,
@@ -187,18 +230,41 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
         state.hub.emit_all("PRESENCE_UPDATE", json!({ "user_id": user_id, "online": true }));
     }
 
+    run_loop(&state, user_id, session_id, session, my_guilds, events, seq_at_subscribe, &mut tx, &mut rx).await;
+}
+
+fn matches_target(target: &Target, user_id: Uuid, session_id: Uuid, my_guilds: &HashSet<Uuid>) -> bool {
+    match target {
+        Target::All => true,
+        Target::Guild(g) => my_guilds.contains(g),
+        Target::Users(us) => us.contains(&user_id),
+        Target::Session(s) => *s == session_id,
+    }
+}
+
+/// Stream events (skipping any with seq <= `already_sent`, which a resume replayed) and handle client ops
+/// until the socket closes; then tidy voice and presence.
+#[allow(clippy::too_many_arguments)]
+async fn run_loop(
+    state: &AppState,
+    user_id: Uuid,
+    session_id: Uuid,
+    session: u64,
+    mut my_guilds: HashSet<Uuid>,
+    mut events: tokio::sync::broadcast::Receiver<crate::ws::hub::Event>,
+    already_sent: u64,
+    tx: &mut futures::stream::SplitSink<WebSocket, Message>,
+    rx: &mut futures::stream::SplitStream<WebSocket>,
+) {
+    let mut last_seq = already_sent;
     loop {
         tokio::select! {
             ev = events.recv() => {
                 match ev {
                     Ok(ev) => {
-                        let relevant = match &ev.target {
-                            Target::All => true,
-                            Target::Guild(g) => my_guilds.contains(g),
-                            Target::Users(us) => us.contains(&user_id),
-                            Target::Session(s) => *s == session_id,
-                        };
-                        if !relevant { continue; }
+                        if ev.seq <= last_seq { continue; }
+                        if !matches_target(&ev.target, user_id, session_id, &my_guilds) { continue; }
+                        last_seq = ev.seq;
                         track_membership(&ev.payload, user_id, &mut my_guilds);
                         if tx.send(Message::Text(ev.payload.to_string())).await.is_err() {
                             break;
@@ -215,7 +281,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         if let Ok(op) = serde_json::from_str::<ClientOp>(&text) {
-                            handle_client_op(&state, user_id, session, op, &mut tx).await;
+                            handle_client_op(state, user_id, session, op, tx).await;
                         }
                     }
                     Some(Ok(Message::Ping(p))) => { let _ = tx.send(Message::Pong(p)).await; }
@@ -228,7 +294,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
 
     // Leave voice if this socket owned the voice session.
     if let Some(prev) = state.hub.voice_leave(user_id, Some(session)) {
-        emit_voice_leave(&state, &prev);
+        emit_voice_leave(state, &prev);
     }
     if state.hub.disconnect(user_id) {
         state.hub.emit_all("PRESENCE_UPDATE", json!({ "user_id": user_id, "online": false }));
