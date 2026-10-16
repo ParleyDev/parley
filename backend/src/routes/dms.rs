@@ -67,6 +67,24 @@ async fn member_ids(db: &PgPool, channel_id: Uuid) -> AppResult<Vec<Uuid>> {
     Ok(rows.into_iter().map(|r| r.0).collect())
 }
 
+/// Insert a system notice ("X added Y") authored by the actor and push it to every member like a normal message.
+/// `content` is the sentence after the actor's name.
+pub async fn system_message(state: &AppState, channel_id: Uuid, actor: Uuid, kind: &str, content: &str, mentions: Vec<Uuid>) -> AppResult<()> {
+    let mid = Uuid::now_v7();
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, kind, mentions) VALUES ($1, $2, $3, $4, $5, $6)")
+        .bind(mid)
+        .bind(channel_id)
+        .bind(actor)
+        .bind(content)
+        .bind(kind)
+        .bind(&mentions)
+        .execute(&state.db)
+        .await?;
+    let msg = crate::routes::channels::fetch_message(&state.db, mid, actor).await?;
+    state.hub.emit(crate::ws::hub::Target::Users(member_ids(&state.db, channel_id).await?), "MESSAGE_CREATE", json!({ "message": msg, "guild_id": null }));
+    Ok(())
+}
+
 /// Send every member their own view as CHANNEL_UPDATE (recipient lists differ per member).
 pub async fn broadcast_group(state: &AppState, channel_id: Uuid) -> AppResult<()> {
     for m in member_ids(&state.db, channel_id).await? {
@@ -107,6 +125,8 @@ async fn add_recipient(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     if added > 0 {
         state.hub.emit_users(vec![target], "CHANNEL_CREATE", json!(dm_view(&state.db, id, target).await?));
         broadcast_group(&state, id).await?;
+        let name = crate::audit::username(&state, target).await;
+        system_message(&state, id, uid, "recipient_add", &format!("added {name} to the group."), vec![target]).await?;
     }
     Ok(StatusCode::NO_CONTENT)
 }
@@ -132,6 +152,12 @@ async fn remove_recipient(State(state): State<AppState>, AuthUser(uid): AuthUser
     }
     state.hub.voice_evict(|v| v.channel_id == id && v.user_id == target);
     broadcast_group(&state, id).await?;
+    if target == uid {
+        system_message(&state, id, uid, "recipient_leave", "left the group.", vec![]).await?;
+    } else {
+        let name = crate::audit::username(&state, target).await;
+        system_message(&state, id, uid, "recipient_remove", &format!("removed {name} from the group."), vec![target]).await?;
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
