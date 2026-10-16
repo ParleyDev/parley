@@ -22,7 +22,7 @@ use uuid::Uuid;
 pub const MAX_PROFILE_IMAGE: usize = 8 * 1024 * 1024;
 pub const MAX_EMOJI: usize = 512 * 1024;
 pub const MAX_STICKER: usize = 1024 * 1024;
-const ORPHAN_TTL_SECS: f64 = 3600.0;
+pub const ORPHAN_TTL_SECS: f64 = 3600.0;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -183,23 +183,43 @@ pub async fn release_replaced(state: &AppState, old: Option<&str>, new: Option<&
     }
 }
 
-/// Periodic sweep: uploads that never got attached to a profile, server, emoji or sticker.
+/// Images nothing points at any more: not a user's avatar/banner, a server's icon/banner, a Discover
+/// listing's banner, an emoji or a sticker. `min_age_secs` keeps uploads that are still being attached.
+pub async fn orphan_image_ids(db: &sqlx::PgPool, min_age_secs: f64) -> Vec<Uuid> {
+    sqlx::query_as::<_, (Uuid,)>(
+        "SELECT i.id FROM images i WHERE i.created_at < now() - make_interval(secs => $1)
+           AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_url = '/api/images/' || i.id::text OR u.banner_url = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM guilds g WHERE g.icon_url = '/api/images/' || i.id::text OR g.banner_url = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM guild_discovery d WHERE d.banner_url = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM emojis e WHERE e.id = i.id)
+           AND NOT EXISTS (SELECT 1 FROM stickers s WHERE s.id = i.id)",
+    )
+    .bind(min_age_secs)
+    .fetch_all(db)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|r| r.0)
+    .collect()
+}
+
+/// Delete every orphan image; returns how many went.
+pub async fn sweep_now(state: &AppState, min_age_secs: f64) -> usize {
+    let stale = orphan_image_ids(&state.db, min_age_secs).await;
+    let n = stale.len();
+    for id in stale {
+        delete_image(state, id).await;
+    }
+    n
+}
+
+/// Periodic sweep: uploads that never got attached to a profile, server, listing, emoji or sticker.
 pub async fn sweep_orphans(state: AppState) {
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(900)).await;
-        let stale: Vec<(Uuid,)> = sqlx::query_as(
-            "SELECT i.id FROM images i WHERE i.created_at < now() - make_interval(secs => $1) AND NOT EXISTS (
-                SELECT 1 FROM users u WHERE u.avatar_url = '/api/images/' || i.id::text OR u.banner_url = '/api/images/' || i.id::text
-             ) AND NOT EXISTS (SELECT 1 FROM guilds g WHERE g.icon_url = '/api/images/' || i.id::text)
-               AND NOT EXISTS (SELECT 1 FROM emojis e WHERE e.id = i.id)
-               AND NOT EXISTS (SELECT 1 FROM stickers s WHERE s.id = i.id)",
-        )
-        .bind(ORPHAN_TTL_SECS)
-        .fetch_all(&state.db)
-        .await
-        .unwrap_or_default();
-        for (id,) in stale {
-            delete_image(&state, id).await;
+        let n = sweep_now(&state, ORPHAN_TTL_SECS as f64).await;
+        if n > 0 {
+            tracing::info!(removed = n, "swept orphan images");
         }
     }
 }
