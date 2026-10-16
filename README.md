@@ -20,6 +20,8 @@ Set a real secret in production: `JWT_SECRET=... docker compose up`. Override ho
 
 Parley admins approve Discover submissions: set `ADMIN_EMAILS=a@b.c,d@e.f` (comma separated); those accounts get the admin flag when they next connect.
 
+Email: `MAIL_MODE=smtp` with `SMTP_URL` (for example `smtp://user:pass@mail.example.com:587?tls=required`), `MAIL_FROM` and `APP_URL` (the public base used in links) sends real mail; the default `MAIL_MODE=log` prints each mail to the backend log, and admins can always read the last 200 at `GET /admin/mail?to=` (how the e2e suites fetch links). `MAIL_MODE=off` disables mail. New accounts get a 24-hour verification link; a banner in the app offers Resend until they confirm. Admin Console → Instance Settings can require a verified email before creating servers or using Discover (existing accounts were grandfathered in by the migration).
+
 Rate limits are token buckets per client IP (registration, login, failed logins) or per user (message sends, uploads, the GIF proxy), configured as `count/seconds`: `RL_REGISTER`, `RL_LOGIN`, `RL_LOGIN_FAIL`, `RL_MESSAGES`, `RL_UPLOADS`, `RL_GIFS`. The backend's built-in defaults (20/60, 30/60, 5/60, 10/5, 30/60, 60/60) suit production; `docker-compose.yml` loosens registration, login, messages and uploads for local development and the e2e suites, so set production values in `.env`. Throttled requests get `429` with `Retry-After`.
 
 The GIF picker needs a provider key: `TENOR_API_KEY=...` (preferred, free from Google Cloud → Tenor API) or `GIPHY_API_KEY=...`. Without one the GIF tab says so; everything else works.
@@ -162,7 +164,7 @@ Accounts listed in `ADMIN_EMAILS` (or flagged `users.is_admin`) get **Admin Cons
 - **Discovery Queue** — the review page described above.
 - **Instance Settings** — open/close registration (the register page closes and the login page hides its link) and a sitewide announcement banner shown at the top of the app for everyone, both applied live.
 
-Routes: `GET /instance` (public), `GET /admin/stats`, `GET /admin/users?q=`, `PATCH /admin/users/:id {is_admin?, suspended?}`, `DELETE /admin/users/:id`, `GET /admin/guilds?q=`, `DELETE /admin/guilds/:id`, `GET|PUT /admin/settings`.
+Routes: `GET /instance` (public), `GET /admin/stats`, `GET /admin/users?q=`, `PATCH /admin/users/:id {is_admin?, suspended?}`, `DELETE /admin/users/:id`, `GET /admin/guilds?q=`, `DELETE /admin/guilds/:id`, `GET|PUT /admin/settings`, `GET /admin/mail?to=`. Auth: `POST /auth/verify {token}`, `POST /auth/resend-verification`.
 
 ## Permissions
 

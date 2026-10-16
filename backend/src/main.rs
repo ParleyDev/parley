@@ -3,6 +3,7 @@ mod config;
 mod error;
 mod models;
 mod perms;
+mod mail;
 mod ratelimit;
 mod routes;
 mod state;

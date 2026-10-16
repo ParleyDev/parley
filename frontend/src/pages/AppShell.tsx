@@ -12,6 +12,7 @@ import Modals from '../components/modals'
 import ErrorBoundary from '../components/ErrorBoundary'
 import IncomingCall from '../components/IncomingCall'
 import UserPanel from '../components/UserPanel'
+import VerifyBanner from '../components/VerifyBanner'
 import { lastChannel, rememberChannel } from '../lib/dm'
 
 /**
@@ -27,7 +28,9 @@ export default function AppShell() {
     try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission() } catch { /* ignore */ }
   }, [])
   return (
-    <div className="h-full flex overflow-hidden relative">
+    <div className="h-full flex flex-col overflow-hidden relative">
+      <VerifyBanner />
+      <div className="flex-1 min-h-0 flex overflow-hidden relative">
       {!connected && (
         <div className="absolute top-0 inset-x-0 z-40 bg-warn text-black text-xs font-semibold text-center py-1">Reconnecting…</div>
       )}
@@ -57,6 +60,7 @@ export default function AppShell() {
       </ErrorBoundary>
       <Modals />
       <IncomingCall />
+      </div>
     </div>
   )
 }

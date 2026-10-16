@@ -46,6 +46,9 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub is_admin: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub email_verified_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

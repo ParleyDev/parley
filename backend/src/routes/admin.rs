@@ -28,21 +28,29 @@ pub fn router() -> Router<AppState> {
         .route("/admin/guilds", get(list_guilds))
         .route("/admin/guilds/:id", delete(delete_guild))
         .route("/admin/settings", get(get_settings).put(put_settings))
+        .route("/admin/mail", get(admin_mail))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstanceSettings {
     pub registration_enabled: bool,
     pub announcement: String,
+    /// Gate creating servers and using Discover until the email is verified.
+    #[serde(default)]
+    pub require_email_verification: bool,
+    /// Whether the server can send mail at all (so the UI can hide resend when it cannot).
+    #[serde(default)]
+    pub mail_enabled: bool,
 }
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new() };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
             "announcement" => s.announcement = v.as_str().unwrap_or("").to_string(),
+            "require_email_verification" => s.require_email_verification = v.as_bool().unwrap_or(false),
             _ => {}
         }
     }
@@ -51,7 +59,20 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
 
 /// Public (no auth): what the login page and the app banner need.
 async fn instance_public(State(state): State<AppState>) -> AppResult<Json<InstanceSettings>> {
-    Ok(Json(load_settings(&state.db).await?))
+    let mut s = load_settings(&state.db).await?;
+    s.mail_enabled = crate::mail::enabled(&state.config);
+    Ok(Json(s))
+}
+
+/// Admin: recently sent mail (the in-memory outbox), optionally filtered by recipient. How dev and tests read links.
+async fn admin_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<MailQuery>) -> AppResult<Json<Vec<crate::mail::SentMail>>> {
+    require_admin(&state, uid).await?;
+    Ok(Json(crate::mail::outbox(q.to.as_deref())))
+}
+
+#[derive(Deserialize)]
+struct MailQuery {
+    to: Option<String>,
 }
 
 async fn stats(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
@@ -207,16 +228,19 @@ async fn delete_guild(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 
 async fn get_settings(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<InstanceSettings>> {
     require_admin(&state, uid).await?;
-    Ok(Json(load_settings(&state.db).await?))
+    let mut s = load_settings(&state.db).await?;
+    s.mail_enabled = crate::mail::enabled(&state.config);
+    Ok(Json(s))
 }
 
 async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<InstanceSettings>) -> AppResult<Json<InstanceSettings>> {
     require_admin(&state, uid).await?;
     let announcement: String = req.announcement.trim().chars().take(300).collect();
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
-    let s = load_settings(&state.db).await?;
+    let mut s = load_settings(&state.db).await?;
+    s.mail_enabled = crate::mail::enabled(&state.config);
     state.hub.emit_all("INSTANCE_UPDATE", json!(s));
     Ok(Json(s))
 }

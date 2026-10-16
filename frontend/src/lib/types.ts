@@ -15,7 +15,7 @@ export interface User {
   /** Free-text status line, e.g. "😂 doing things". */
   custom_status: string
 }
-export interface PrivateUser extends User { email: string; is_admin?: boolean }
+export interface PrivateUser extends User { email: string; is_admin?: boolean; email_verified_at?: string | null }
 /** GET /users/:id adds the servers you share with that user. */
 export interface UserProfile extends User {
   mutual_guilds?: Pick<Guild, 'id' | 'name' | 'icon_url'>[]

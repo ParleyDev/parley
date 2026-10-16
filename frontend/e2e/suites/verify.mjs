@@ -1,0 +1,48 @@
+import { chromium } from 'playwright'
+import { B, WEB, S, reg, call, raw, ok, finish, adminToken } from '../lib.mjs'
+
+const admin = await adminToken()
+const a = await reg('alice'), b = await reg('bob')
+const mailFor = async (to) => (await call(admin.token, 'GET', `/admin/mail?to=${encodeURIComponent(to)}`))
+const tokenFrom = (m) => /verify\?token=([0-9a-f]{64})/.exec(m?.body ?? '')?.[1]
+
+console.log('-- API')
+ok('new accounts start unverified', (await call(a.token, 'GET', '/users/@me')).email_verified_at === null)
+const mails = await mailFor(`alice${S}@x.io`)
+const tok = tokenFrom(mails[0])
+ok('a verification mail with a link was sent on registration (visible in the admin outbox)', mails.length >= 1 && /Verify/.test(mails[0].subject) && !!tok, JSON.stringify(mails[0]).slice(0, 160))
+let r = await raw(a.token, 'GET', '/admin/mail'); ok('non-admins cannot read the outbox', r.status === 403)
+r = await raw(null, 'POST', '/auth/verify', { token: 'deadbeef' }); ok('bad token refused', r.status === 400)
+r = await raw(null, 'POST', '/auth/verify', { token: tok }); ok('valid token verifies (no login needed)', r.status === 200 && (await call(a.token, 'GET', '/users/@me')).email_verified_at !== null)
+r = await raw(null, 'POST', '/auth/verify', { token: tok }); ok('tokens are single-use', r.status === 400)
+r = await raw(a.token, 'POST', '/auth/resend-verification', {}); ok('resend refused once verified', r.status === 400)
+r = await raw(b.token, 'POST', '/auth/resend-verification', {}); ok('unverified user can resend', r.status === 200 && (await mailFor(`bob${S}@x.io`)).length >= 2)
+
+console.log('-- gate (admin setting)')
+const cur = await call(admin.token, 'GET', '/admin/settings')
+await raw(admin.token, 'PUT', '/admin/settings', { ...cur, require_email_verification: true })
+ok('public /instance exposes the requirement and mail availability', (await (await fetch(`${B}/instance`)).json()).require_email_verification === true && (await (await fetch(`${B}/instance`)).json()).mail_enabled === true)
+r = await raw(b.token, 'POST', '/guilds', { name: 'Nope' }); ok('unverified bob cannot create a server while required', r.status === 400 && /[Vv]erify your email/.test((await r.json()).error))
+r = await raw(a.token, 'POST', '/guilds', { name: `Verified ${S}` }); const g = await r.json(); ok('verified alice can', r.status === 201)
+await raw(a.token, 'PUT', `/guilds/${g.id}/discovery`, { description: 'Verified server for the gate test.', category: 'community' }); await raw(admin.token, 'POST', `/admin/discovery/${g.id}/review`, { status: 'approved' })
+r = await raw(b.token, 'POST', `/discover/${g.id}/join`, {}); ok('unverified bob cannot join from Discover', r.status === 400)
+await raw(admin.token, 'PUT', '/admin/settings', { ...cur, require_email_verification: false })
+r = await raw(b.token, 'POST', '/guilds', { name: 'Fine now' }); ok('with the setting off, unverified accounts are not gated', r.status === 201)
+
+console.log('-- UI')
+const browser = await chromium.launch(); const errors = []
+const p = await browser.newPage({ viewport: { width: 1440, height: 900 } }); p.on('pageerror', (e) => errors.push(e.message))
+await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), b.token)
+await p.goto(`${WEB}/channels/@me`); await p.waitForTimeout(1000)
+ok('unverified user sees the banner with Resend', await p.locator('[data-verify-banner]').count() === 1 && await p.locator('[data-resend-verification]').count() === 1)
+await p.screenshot({ path: '88-verify-banner.png', clip: { x: 0, y: 0, width: 1440, height: 80 } })
+const bobTok = tokenFrom((await mailFor(`bob${S}@x.io`))[0])
+await p.goto(`${WEB}/verify?token=${bobTok}`); await p.waitForSelector('[data-verify-state="ok"]', { timeout: 10000 }).catch(() => {})
+ok('the emailed link lands on a confirmation page', await p.locator('[data-verify-state="ok"]:has-text("Email verified")').count() === 1)
+await p.screenshot({ path: '89-verify-page.png' })
+await p.click('a:has-text("Open Parley")'); await p.waitForTimeout(1000)
+ok('banner is gone after verifying', await p.locator('[data-verify-banner]').count() === 0)
+await p.goto(`${WEB}/verify?token=${bobTok}`); await p.waitForTimeout(800)
+ok('a used link shows the error state', await p.locator('[data-verify-state="bad"]').count() === 1)
+ok('no page errors', errors.length === 0, errors.join(' | '))
+await browser.close(); await finish()

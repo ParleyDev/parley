@@ -101,6 +101,7 @@ async fn browse(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q)
 
 /// Join an approved server from Discover (no invite needed).
 async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Json<Value>> {
+    crate::routes::users::require_verified(&state, uid).await?;
     let approved: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_discovery WHERE guild_id = $1 AND status = 'approved'").bind(gid).fetch_optional(&state.db).await?;
     if approved.is_none() {
         return Err(AppError::NotFound("Server not found in Discover".into()));
@@ -210,6 +211,7 @@ fn default_category() -> String {
 /// Submit or update a listing. New and rejected listings go (back) to pending; an approved one stays approved.
 async fn put_listing(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<PutListing>) -> AppResult<Json<Listing>> {
     require_manage(&state.db, id, uid).await?;
+    crate::routes::users::require_verified(&state, uid).await?;
     let description = req.description.trim().chars().take(MAX_DESCRIPTION).collect::<String>();
     if description.chars().count() < 10 {
         return Err(AppError::BadRequest("Describe your server in at least 10 characters".into()));
