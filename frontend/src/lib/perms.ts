@@ -14,6 +14,7 @@ export const P = {
   SEND_MESSAGES: 1 << 11,
   MANAGE_MESSAGES: 1 << 13,
   ATTACH_FILES: 1 << 15,
+  MENTION_EVERYONE: 1 << 17,
   CONNECT: 1 << 20,
   SPEAK: 1 << 21,
   CHANGE_NICKNAME: 1 << 26,

@@ -3,7 +3,7 @@ import { ArrowDown, ArrowUp, Compass, Copy, Folder, FolderInput, FolderMinus, Fo
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
-import { dmUnreadCount, guildUnread, isUnread, myGuildPerms, pendingCount, useStore } from '../store'
+import { dmUnreadCount, guildMentions, guildUnread, isUnread, myGuildPerms, pendingCount, useStore } from '../store'
 import { colorFor, initials } from '../lib/format'
 import { has, P } from '../lib/perms'
 import { api } from '../lib/api'
@@ -41,6 +41,8 @@ export default function GuildBar() {
   const [drag, setDrag] = useState<string | null>(null)
   const [over, setOver] = useState<{ key: string; zone: 'top' | 'mid' | 'bottom' } | null>(null)
   const unreadOf = (id: string) => guildId !== id && guildUnread({ readStates, lastMessageId, channels }, id)
+  const mentionCounts = useStore((s) => s.mentionCounts)
+  const mentionsOf = (id: string) => guildMentions({ mentionCounts, channels }, id)
 
   const zoneOf = (e: DragEvent<HTMLElement>): 'top' | 'mid' | 'bottom' => {
     const r = e.currentTarget.getBoundingClientRect(); const y = (e.clientY - r.top) / r.height
@@ -102,6 +104,7 @@ export default function GuildBar() {
               style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>
               {g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" draggable={false} /> : initials(g.name)}
             </div>
+            {mentionsOf(g.id) > 0 && <span className="absolute -bottom-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center ring-[3px] ring-bg-0" data-guild-mentions={mentionsOf(g.id)}>{mentionsOf(g.id)}</span>}
           </Pill>
         </NavLink>
       </div>

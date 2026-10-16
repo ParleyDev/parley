@@ -2,6 +2,7 @@ import { Fragment, useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 import hljs from 'highlight.js/lib/core'
 import { CUSTOM_TOKEN_SRC, PICTO_SRC, customUrl, parseCustom } from './emoji'
+import { ChannelMention, EveryoneMention, RoleMention, UserMention } from '../components/Mentions'
 import javascript from 'highlight.js/lib/languages/javascript'
 import typescript from 'highlight.js/lib/languages/typescript'
 import json from 'highlight.js/lib/languages/json'
@@ -135,6 +136,8 @@ const INLINE_SRC = [
   '``[^\\n]+?``|`[^`\\n]+`',                    // code (double backtick may contain single ones)
   '\\|\\|[\\s\\S]+?\\|\\|',                     // spoiler
   CUSTOM_TOKEN_SRC,                             // custom emoji <:name:id>
+  '<@&?[0-9a-f-]{36}>|<#[0-9a-f-]{36}>',        // user / role / channel mentions
+  '@everyone|@here',
   '\\*\\*\\*(?=\\S)[\\s\\S]+?(?<=\\S)\\*\\*\\*', // bold italic
   '\\*\\*(?=\\S)[\\s\\S]+?(?<=\\S)\\*\\*',      // bold
   '__(?=\\S)[\\s\\S]+?(?<=\\S)__',              // underline
@@ -162,6 +165,10 @@ export function renderInline(text: string): ReactNode[] {
     else if (t.startsWith('``')) nodes.push(<code key={k}>{t.slice(2, -2)}</code>)
     else if (t.startsWith('`')) nodes.push(<code key={k}>{t.slice(1, -1)}</code>)
     else if (t.startsWith('||')) nodes.push(<Spoiler key={k}>{renderInline(t.slice(2, -2))}</Spoiler>)
+    else if (t.startsWith('<@&')) nodes.push(<RoleMention key={k} id={t.slice(3, -1)} />)
+    else if (t.startsWith('<@')) nodes.push(<UserMention key={k} id={t.slice(2, -1)} />)
+    else if (t.startsWith('<#')) nodes.push(<ChannelMention key={k} id={t.slice(2, -1)} />)
+    else if (t === '@everyone' || t === '@here') nodes.push(<EveryoneMention key={k} kind={t.slice(1) as 'everyone' | 'here'} />)
     else if (t.startsWith('<:') || t.startsWith('<a:')) {
       const c = parseCustom(t)!
       nodes.push(<img key={k} src={customUrl(c.id)} alt={`:${c.name}:`} title={`:${c.name}:`} className="emoji" draggable={false} data-custom-emoji={c.name} />)

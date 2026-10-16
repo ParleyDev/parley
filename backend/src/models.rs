@@ -143,6 +143,12 @@ pub struct MessageRow {
     pub sticker_name: Option<String>,
     pub sticker_animated: Option<bool>,
     pub forwarded_from: Option<Uuid>,
+    #[sqlx(default)]
+    pub mentions: Vec<Uuid>,
+    #[sqlx(default)]
+    pub mention_roles: Vec<Uuid>,
+    #[sqlx(default)]
+    pub mention_everyone: bool,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -176,6 +182,9 @@ pub struct Message {
     pub sticker: Option<MessageSticker>,
     /// Set when this message was forwarded from another (the original's id, which may since be deleted).
     pub forwarded_from: Option<Uuid>,
+    pub mentions: Vec<Uuid>,
+    pub mention_roles: Vec<Uuid>,
+    pub mention_everyone: bool,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -240,6 +249,9 @@ impl MessageRow {
             edited_at: self.edited_at,
             pinned_at: self.pinned_at,
             forwarded_from: self.forwarded_from,
+            mentions: self.mentions,
+            mention_roles: self.mention_roles,
+            mention_everyone: self.mention_everyone,
             sticker: self.sticker_id.map(|id| MessageSticker {
                 id,
                 name: self.sticker_name.clone().unwrap_or_default(),

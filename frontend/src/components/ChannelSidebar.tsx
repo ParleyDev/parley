@@ -25,6 +25,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const { channelId } = useParams()
   const [menu, setMenu] = useState(false)
   const markRead = useStore((s) => s.markRead)
+  const mentionCounts = useStore((s) => s.mentionCounts)
   const ctx = useContextMenu()
   const userMenu = useUserMenu(guildId)
   const perms = useStore((s) => myGuildPerms(s, guildId))
@@ -102,7 +103,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       <div className="flex-1 overflow-y-auto px-2 pt-3 space-y-4">
         <Category label="Text Channels" onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId }) : undefined}>
           {text.map((c) => (
-            <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Hash size={18} />} name={c.name} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+            <ChannelRow key={c.id} to={`/channels/${guildId}/${c.id}`} icon={<Hash size={18} />} name={c.name} mentions={mentionCounts[c.id] ?? 0} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
               unread={channelId !== c.id && isUnread({ readStates, lastMessageId }, c.id)} onClick={() => setMobilePane('content')}
               onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
           ))}
@@ -176,12 +177,13 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
   )
 }
 
-function ChannelRow({ to, icon, name, unread, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
+function ChannelRow({ to, icon, name, unread, mentions = 0, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; mentions?: number; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
   return (
     <NavLink to={to} onClick={onClick} onContextMenu={onContextMenu} data-channel-row={name} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>
+      {mentions > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center" data-mention-badge={mentions}>{mentions}</span>}
       {onSettings && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 text-text-2 hover:text-text-0" title="Edit Channel"><Settings size={14} /></button>}
     </NavLink>
   )
