@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { myChannelPerms, useStore } from '../store'
 import { sendTyping } from '../lib/ws'
 import type { Attachment, Channel, DmChannel, Message } from '../lib/types'
-import { has, P } from '../lib/perms'
+import { has, isTimedOut, P } from '../lib/perms'
 import { formatBytes, isImage, MAX_PER_MESSAGE, uploadFile, type UploadHandle } from '../lib/upload'
 import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
@@ -26,7 +26,18 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const typing = useStore((s) => s.typing[channel.id])
   const users = useStore((s) => s.users)
   const perms = useStore((s) => myChannelPerms(s, channel.id))
-  const canSend = has(perms, P.SEND_MESSAGES)
+  const myMember = useStore((s) => (channel.guild_id && s.user ? s.members[channel.guild_id]?.[s.user.id] : undefined))
+  const [, bump] = useState(0)
+  // Re-render the moment a timeout lapses so the box comes back without a reload.
+  useEffect(() => {
+    if (!myMember?.timeout_until) return
+    const ms = new Date(myMember.timeout_until).getTime() - Date.now()
+    if (ms <= 0) return
+    const t = setTimeout(() => bump((n) => n + 1), ms + 50)
+    return () => clearTimeout(t)
+  }, [myMember?.timeout_until])
+  const timedOut = isTimedOut(myMember)
+  const canSend = has(perms, P.SEND_MESSAGES) && !timedOut
   const canAttach = canSend && (channel.guild_id === null || has(perms, P.ATTACH_FILES))
   const [value, setValue] = useState('')
   const [picker, setPicker] = useState<PickerTab | null>(null)
@@ -224,7 +235,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   if (!canSend) {
     return (
       <div className="shrink-0 px-4 pb-6 pt-1 max-md:px-2 max-md:pb-2">
-        <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2">You do not have permission to send messages in this channel.</div>
+        {timedOut
+          ? <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-timed-out>You are timed out in this server until <b>{new Date(myMember!.timeout_until!).toLocaleString()}</b>. You can read, but not send messages, react or join voice.</div>
+          : <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2">You do not have permission to send messages in this channel.</div>}
         <div className="h-5" />
       </div>
     )

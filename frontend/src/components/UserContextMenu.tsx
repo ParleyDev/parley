@@ -1,7 +1,7 @@
-import { Ban, Copy, Gavel, MessageSquare, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { Ban, Copy, Gavel, MessageSquare, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
-import { has, highestPosition, P, EMPTY_ROLES } from '../lib/perms'
+import { has, highestPosition, isTimedOut, P, EMPTY_ROLES } from '../lib/perms'
 import type { DmChannel } from '../lib/types'
 import { myGuildPerms, useStore } from '../store'
 import type { MenuEntry } from './ContextMenu'
@@ -23,6 +23,7 @@ export function useUserMenu(guildId?: string | null) {
   const pushToast = useStore((s) => s.pushToast)
   const upsertChannel = useStore((s) => s.upsertChannel)
   const removeMember = useStore((s) => s.removeMember)
+  const upsertMember = useStore((s) => s.upsertMember)
   const navigate = useNavigate()
   const act = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
 
@@ -54,7 +55,10 @@ export function useUserMenu(guildId?: string | null) {
       ...(rel === 'outgoing' ? [{ label: 'Cancel Friend Request', icon: <UserX size={16} />, onClick: () => act(() => api.delete(`/users/@me/relationships/${u.id}`)) }] : []),
       ...(rel === 'friend' ? [{ label: 'Remove Friend', icon: <UserMinus size={16} />, danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${u.id}`)) }] : []),
       rel === 'blocked' ? { label: 'Unblock', icon: <Ban size={16} />, onClick: () => act(() => api.delete(`/users/@me/relationships/${u.id}`)) } : { label: 'Block', icon: <Ban size={16} />, danger: true, onClick: block },
-      ...(outranks && (has(myPerms, P.KICK_MEMBERS) || has(myPerms, P.BAN_MEMBERS)) ? ['sep' as const] : []),
+      ...(outranks && (has(myPerms, P.KICK_MEMBERS) || has(myPerms, P.BAN_MEMBERS) || has(myPerms, P.MODERATE_MEMBERS)) ? ['sep' as const] : []),
+      ...(outranks && has(myPerms, P.MODERATE_MEMBERS) ? [isTimedOut(member)
+        ? { label: 'Remove Timeout', icon: <TimerOff size={16} />, onClick: () => act(async () => { upsertMember(await api.delete(`/guilds/${guildId}/members/${u.id}/timeout`)); pushToast(`Timeout removed for ${name}`) }) }
+        : { label: `Timeout ${name}`, icon: <TimerReset size={16} />, danger: true, onClick: () => openModal({ kind: 'timeout', guildId: guildId!, userId: u.id }) }] : []),
       ...(outranks && has(myPerms, P.KICK_MEMBERS) ? [{ label: `Kick ${name}`, icon: <UserMinus size={16} />, danger: true, onClick: kick }] : []),
       ...(outranks && has(myPerms, P.BAN_MEMBERS) ? [{ label: `Ban ${name}`, icon: <Gavel size={16} />, danger: true, onClick: () => openModal({ kind: 'ban', guildId: guildId!, userId: u.id }) }] : []),
       'sep',

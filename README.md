@@ -174,6 +174,8 @@ Routes: `GET /instance` (public), `GET /admin/stats`, `GET /admin/users?q=`, `PA
 
 ## Permissions
 
+Member timeouts: anyone with Timeout Members (`MODERATE_MEMBERS`, bit 29) who outranks the target can right-click a member → Timeout (60 s to 1 week) or Remove Timeout; `PUT /guilds/:id/members/:uid/timeout {minutes}` (1 to 40320) and `DELETE` the same path. While `guild_members.timeout_until` is in the future the member keeps View and Read but loses Send, React, Attach, Connect/Speak/Video, Create Invite, Change Nickname and Mention Everyone in every channel (enforced inside the permission math, so overwrites cannot undo it); they are dropped from voice, the member list shows a timer badge, and their composer explains until when. Owners and administrators cannot be timed out; it lapses on its own.
+
 Bits mirror Discord's values: Create Invite, Kick Members, Ban Members, Administrator, Manage Channels, Manage Server, Add Reactions, Video (camera/screen), View Channels, Send Messages, Manage Messages, Connect, Speak, Change Nickname, Manage Nicknames, Manage Roles. `GET /api/permissions` lists them.
 
 - Every server has an `@everyone` role whose id equals the server id. New servers give it invite, reactions, video, view, send, connect, speak and nickname.

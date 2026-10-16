@@ -125,6 +125,10 @@ pub struct Member {
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
+    /// Timed out until (moderation): only reading allowed while in the future.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub timeout_until: Option<DateTime<Utc>>,
     #[sqlx(skip)]
     #[serde(default)]
     pub roles: Vec<Uuid>,

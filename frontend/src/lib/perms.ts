@@ -20,6 +20,7 @@ export const P = {
   CHANGE_NICKNAME: 1 << 26,
   MANAGE_NICKNAMES: 1 << 27,
   MANAGE_ROLES: 1 << 28,
+  MODERATE_MEMBERS: 1 << 29,
 } as const
 
 export type PermKey = keyof typeof P
@@ -37,6 +38,7 @@ export const PERMS: PermInfo[] = [
   { key: 'CHANGE_NICKNAME', label: 'Change Nickname', desc: 'Allows members to change their own nickname.', group: 'Membership' },
   { key: 'MANAGE_NICKNAMES', label: 'Manage Nicknames', desc: 'Allows members to change the nicknames of other members.', group: 'Membership' },
   { key: 'KICK_MEMBERS', label: 'Kick Members', desc: 'Allows members to remove other members from this server. Kicked members can rejoin with a new invite.', group: 'Membership' },
+  { key: 'MODERATE_MEMBERS', label: 'Timeout Members', desc: 'Allows members to time other members out: they can read but not send messages, react, attach files or use voice until the timeout ends.', group: 'Membership' },
   { key: 'BAN_MEMBERS', label: 'Ban Members', desc: 'Allows members to permanently ban and unban other members from this server. Banned members cannot rejoin until unbanned.', group: 'Membership' },
   { key: 'SEND_MESSAGES', label: 'Send Messages', desc: 'Allows members to send messages in text channels and voice channel chats.', group: 'Text', channel: 'both' },
   { key: 'ATTACH_FILES', label: 'Attach Files', desc: 'Allows members to upload images and files.', group: 'Text', channel: 'both' },
@@ -64,6 +66,11 @@ export function guildPerms({ guild, roles, member }: Ctx, userId: string): numbe
   return has(p, P.ADMINISTRATOR) ? ALL : p
 }
 
+/** Bits a timed-out member loses everywhere (mirrors perms::TIMEOUT_STRIP). */
+export const TIMEOUT_STRIP = P.SEND_MESSAGES | P.ADD_REACTIONS | P.ATTACH_FILES | P.CONNECT | P.SPEAK | P.STREAM | P.CREATE_INVITE | P.CHANGE_NICKNAME | P.MENTION_EVERYONE
+
+export const isTimedOut = (m: Member | undefined, now = Date.now()) => !!m?.timeout_until && new Date(m.timeout_until).getTime() > now
+
 /** Apply a channel's overwrites to guild permissions. */
 export function channelPerms(ctx: Ctx, userId: string, channel: Channel): number {
   const base = guildPerms(ctx, userId)
@@ -79,7 +86,8 @@ export function channelPerms(ctx: Ctx, userId: string, channel: Channel): number
   p = (p & ~deny) | allow
   const mine = ows.find((o) => o.kind === 'member' && o.id === userId)
   if (mine) p = (p & ~mine.deny) | mine.allow
-  return has(p, P.VIEW_CHANNEL) ? p : 0
+  if (!has(p, P.VIEW_CHANNEL)) return 0
+  return isTimedOut(ctx.member) ? p & ~TIMEOUT_STRIP : p
 }
 
 /** Highest role position a member holds (0 = only @everyone). Owner outranks all. */
