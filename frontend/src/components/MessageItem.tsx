@@ -166,7 +166,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               {(m.content || m.edited_at) && !media && (
                 <div onClick={emojiHover.onClick} className={`msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap ${isJumbo(m.content) ? 'jumbo' : ''}`}>
                   {renderMarkdown(m.content)}
-                  {m.edited_at && <span className="ml-1 text-[10px] text-text-2">(edited)</span>}
+                  {m.edited_at && <button type="button" onClick={(e) => { e.stopPropagation(); openModal({ kind: 'editHistory', channelId: m.channel_id, messageId: m.id }) }} title={`Edited ${new Date(m.edited_at).toLocaleString()} — click to see the history`} className="ml-1 text-[10px] text-text-2 hover:underline" data-edited>(edited)</button>}
                 </div>
               )}
               {media && <MediaEmbed url={media} />}

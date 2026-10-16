@@ -26,6 +26,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id", get(get_channel).patch(update_channel).delete(delete_channel))
         .route("/channels/:id/messages", get(list_messages).post(create_message).route_layer(from_fn(rl_messages)))
         .route("/channels/:id/messages/:mid", axum::routing::patch(edit_message).delete(delete_message))
+        .route("/channels/:id/messages/:mid/history", get(message_history))
         .route("/channels/:id/messages/:mid/reactions/:emoji", get(list_reactors).put(add_reaction).delete(remove_reaction))
         .route("/channels/:id/messages/:mid/forward", post(forward_message))
         .route("/users/@me/bookmarks", get(list_bookmarks))
@@ -355,6 +356,16 @@ async fn edit_message(
     }
     let (m_users, m_roles, m_everyone) = parse_mentions(&content);
     let m_everyone = m_everyone && c.guild_id.is_some() && has(p, perms::MENTION_EVERYONE);
+    let mut tx = state.db.begin().await?;
+    // Keep what is being replaced (only when it actually changes) so readers can see the history.
+    sqlx::query("INSERT INTO message_revisions (id, message_id, content) SELECT $1, id, content FROM messages WHERE id = $2 AND channel_id = $3 AND author_id = $4 AND content <> $5")
+        .bind(Uuid::now_v7())
+        .bind(mid)
+        .bind(id)
+        .bind(uid)
+        .bind(&content)
+        .execute(&mut *tx)
+        .await?;
     let res = sqlx::query(
         "UPDATE messages SET content = $3, edited_at = now(), mentions = $5, mention_roles = $6, mention_everyone = $7 WHERE id = $1 AND channel_id = $2 AND author_id = $4",
     )
@@ -365,15 +376,33 @@ async fn edit_message(
     .bind(&m_users)
     .bind(&m_roles)
     .bind(m_everyone)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await?;
     if res.rows_affected() == 0 {
         return Err(AppError::Forbidden);
     }
+    tx.commit().await?;
     let msg = fetch_message(&state.db, mid, uid).await?;
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
     Ok(Json(msg))
+}
+
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
+struct Revision {
+    id: Uuid,
+    content: String,
+    replaced_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Previous contents of an edited message, oldest first (anyone who can read the channel).
+async fn message_history(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, mid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Vec<Revision>>> {
+    require_channel_perms(&state.db, id, uid).await?;
+    let exists: Option<(bool,)> = sqlx::query_as("SELECT true FROM messages WHERE id = $1 AND channel_id = $2").bind(mid).bind(id).fetch_optional(&state.db).await?;
+    if exists.is_none() {
+        return Err(AppError::NotFound("Message not found".into()));
+    }
+    Ok(Json(sqlx::query_as::<_, Revision>("SELECT id, content, replaced_at FROM message_revisions WHERE message_id = $1 ORDER BY id").bind(mid).fetch_all(&state.db).await?))
 }
 
 async fn delete_message(

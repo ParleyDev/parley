@@ -12,6 +12,7 @@ import ConfirmModal from './Confirm'
 import ImageLightbox from './ImageLightbox'
 import BanMemberModal from './BanMember'
 import TimeoutMemberModal from './TimeoutMember'
+import EditHistoryModal from './EditHistory'
 import TransferOwnershipModal from './TransferOwnership'
 import CustomStatusModal from './CustomStatus'
 import ForwardModal from './Forward'
@@ -44,6 +45,7 @@ export default function Modals() {
     case 'image': return <ImageLightbox onClose={close} url={modal!.url} name={modal!.name} />
     case 'ban': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'timeout': return <TimeoutMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
+    case 'editHistory': return <EditHistoryModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} />
     case 'transferOwnership': return <TransferOwnershipModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'customStatus': return <CustomStatusModal onClose={close} />
     case 'forward': return <ForwardModal onClose={close} message={modal!.message} />

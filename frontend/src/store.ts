@@ -22,6 +22,7 @@ export type ModalKind =
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string }
   | { kind: 'ban'; guildId: string; userId: string }
   | { kind: 'timeout'; guildId: string; userId: string }
+  | { kind: 'editHistory'; channelId: string; messageId: string }
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
   | { kind: 'customStatus' }
   | { kind: 'forward'; message: Message }

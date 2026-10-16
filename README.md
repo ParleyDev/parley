@@ -186,6 +186,10 @@ Bits mirror Discord's values: Create Invite, Kick Members, Ban Members, Administ
 - Voice: no Connect blocks joining (and evicts you if revoked mid-call), no Speak marks you `suppress`ed so your client keeps its mic gate closed (shown as "Muted by server"), no Video drops camera and screen share.
 - Endpoints: `GET/POST /guilds/:id/roles`, `PATCH/DELETE /guilds/:id/roles/:rid` (`position` reorders), `PATCH /guilds/:id/members/:uid` (`roles`, `nickname`), `PUT/DELETE /channels/:id/permissions/:target` (`{kind: role|member, allow, deny}`). Events: `ROLE_UPDATE`, `ROLE_DELETE`, `ROLES_SYNC`, `GUILD_MEMBER_UPDATE`, plus `CHANNEL_CREATE`/`CHANNEL_DELETE`/`CHANNEL_UPDATE` sent per user as visibility changes.
 
+## Edit history
+
+Editing a message stores the text it replaced in `message_revisions` (only when it actually changed). The "(edited)" marker is a button: it opens a modal with the original and every later version (rendered as markdown, with when each was replaced) and the current text. Anyone who can read the channel can view it: `GET /channels/:id/messages/:mid/history` returns revisions oldest first. Deleting the message drops its history.
+
 ## Markdown
 
 Messages and About Me render Discord-flavoured markdown, entirely client-side (the server stores plain text).
