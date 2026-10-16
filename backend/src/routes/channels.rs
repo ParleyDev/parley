@@ -168,7 +168,8 @@ async fn delete_channel(
 }
 
 pub const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
-    u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from
+    u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from,
+    m.mentions, m.mention_roles, m.mention_everyone
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
@@ -295,14 +296,20 @@ async fn create_message(
         }
     }
     let mid = Uuid::now_v7();
+    let (m_users, m_roles, m_everyone) = parse_mentions(&content);
+    // @everyone only counts inside a server for members allowed to use it (it still renders as text otherwise).
+    let m_everyone = m_everyone && c.guild_id.is_some() && has(p, perms::MENTION_EVERYONE);
     let mut tx = state.db.begin().await?;
-    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id) VALUES ($1, $2, $3, $4, $5, $6)")
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
         .bind(mid)
         .bind(id)
         .bind(uid)
         .bind(&content)
         .bind(req.reply_to)
         .bind(req.sticker_id)
+        .bind(&m_users)
+        .bind(&m_roles)
+        .bind(m_everyone)
         .execute(&mut *tx)
         .await?;
     link(&mut tx, mid, id, uid, &req.attachment_ids).await?;
@@ -334,18 +341,23 @@ async fn edit_message(
     Path((id, mid)): Path<(Uuid, Uuid)>,
     Json(req): Json<EditMessage>,
 ) -> AppResult<Json<Message>> {
-    let c = require_channel(&state.db, id, uid).await?;
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     let content = req.content.trim_end().to_string();
     if content.trim().is_empty() || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
     }
+    let (m_users, m_roles, m_everyone) = parse_mentions(&content);
+    let m_everyone = m_everyone && c.guild_id.is_some() && has(p, perms::MENTION_EVERYONE);
     let res = sqlx::query(
-        "UPDATE messages SET content = $3, edited_at = now() WHERE id = $1 AND channel_id = $2 AND author_id = $4",
+        "UPDATE messages SET content = $3, edited_at = now(), mentions = $5, mention_roles = $6, mention_everyone = $7 WHERE id = $1 AND channel_id = $2 AND author_id = $4",
     )
     .bind(mid)
     .bind(id)
     .bind(&content)
     .bind(uid)
+    .bind(&m_users)
+    .bind(&m_roles)
+    .bind(m_everyone)
     .execute(&state.db)
     .await?;
     if res.rows_affected() == 0 {
@@ -383,6 +395,28 @@ async fn delete_message(
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_DELETE", json!({ "id": mid, "channel_id": id, "guild_id": c.guild_id }));
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Mentions in Discord's wire syntax: `<@id>` users, `<@&id>` roles, `@everyone` / `@here`.
+pub fn parse_mentions(content: &str) -> (Vec<Uuid>, Vec<Uuid>, bool) {
+    let mut users = Vec::new();
+    let mut roles = Vec::new();
+    let mut rest = content;
+    while let Some(i) = rest.find("<@") {
+        let after = &rest[i + 2..];
+        let (is_role, body) = match after.strip_prefix('&') { Some(b) => (true, b), None => (false, after) };
+        if let Some(end) = body.find('>') {
+            if let Ok(id) = Uuid::parse_str(&body[..end]) {
+                let v = if is_role { &mut roles } else { &mut users };
+                if !v.contains(&id) { v.push(id) }
+            }
+            rest = &body[end + 1..];
+        } else {
+            break;
+        }
+    }
+    let everyone = content.contains("@everyone") || content.contains("@here");
+    (users, roles, everyone)
 }
 
 /// A unicode emoji (short, no letters/digits) or a custom `<:name:id>` token.

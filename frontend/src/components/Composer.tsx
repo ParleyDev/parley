@@ -10,6 +10,7 @@ import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
 import ExpressionPicker, { type PickerTab } from './ExpressionPicker'
 import ShortcodeSuggest, { shortcodeAt, useShortcodeSuggestions, type Suggestion } from './ShortcodeSuggest'
+import MentionSuggest, { applyMentions, mentionAt, useMentionItems, type MentionItem } from './MentionSuggest'
 import { dmName, isGroup } from '../lib/dm'
 
 
@@ -33,6 +34,21 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const [shortcode, setShortcode] = useState<{ start: number; query: string } | null>(null)
   const [suggestIdx, setSuggestIdx] = useState(0)
   const suggestions = useShortcodeSuggestions(shortcode?.query ?? null, channel.guild_id)
+  // `@name` / `#channel` autocomplete. Picks are typed as plain text and swapped for wire tokens on send.
+  const [mention, setMention] = useState<{ start: number; trigger: '@' | '#'; query: string } | null>(null)
+  const [mentionIdx, setMentionIdx] = useState(0)
+  const [picked, setPicked] = useState<Record<string, MentionItem>>({})
+  const mentionItems = useMentionItems(mention?.trigger ?? null, mention?.query ?? '', channel.id, channel.guild_id)
+  const pickMention = (it: MentionItem) => {
+    const el = ref.current
+    const mn = mention
+    if (!el || !mn) return
+    const caret = el.selectionStart ?? value.length
+    const text = (mn.trigger === '#' ? '#' : '@') + it.label
+    const next = value.slice(0, mn.start) + text + ' ' + value.slice(caret)
+    setValue(next); setMention(null); setPicked((p) => ({ ...p, [text]: it }))
+    requestAnimationFrame(() => { el.focus(); const pos = mn.start + text.length + 1; el.setSelectionRange(pos, pos) })
+  }
   const [pending, setPending] = useState<Pending[]>([])
   const [dragging, setDragging] = useState(false)
   const [sending, setSending] = useState(false)
@@ -112,10 +128,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
 
   const submit = async () => {
     if (!canSubmit) return
-    const content = value.trim()
+    const content = applyMentions(value.trim(), picked)
     const ids = ready.map((p) => p.done!.id)
     const snapshot = pending
-    setValue(''); setPending([]); onCancelReply(); setSending(true)
+    setValue(''); setPending([]); setPicked({}); setMention(null); onCancelReply(); setSending(true)
     try {
       await sendMessage(channel.id, content, reply?.id, ids)
       snapshot.forEach((p) => { if (p.preview) URL.revokeObjectURL(p.preview) })
@@ -136,12 +152,20 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     requestAnimationFrame(() => { el.focus(); const pos = sc.start + sug.token.length + 1; el.setSelectionRange(pos, pos) })
   }
   const updateShortcode = (text: string, caret: number) => {
+    const mn = mentionAt(text, caret)
+    setMention((cur) => (mn?.start !== cur?.start || mn?.query !== cur?.query || mn?.trigger !== cur?.trigger ? mn : cur))
+    if (!mn || mn.start !== mention?.start) setMentionIdx(0)
     const sc = shortcodeAt(text, caret)
     setShortcode((cur) => (sc?.start !== cur?.start || sc?.query !== cur?.query ? sc : cur))
     if (!sc || sc.start !== shortcode?.start) setSuggestIdx(0)
   }
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mention && mentionItems.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setMentionIdx((i) => (i + (e.key === 'ArrowDown' ? 1 : mentionItems.length - 1)) % mentionItems.length); return }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(mentionItems[mentionIdx] ?? mentionItems[0]); return }
+      if (e.key === 'Escape') { e.preventDefault(); setMention(null); return }
+    }
     if (shortcode && suggestions.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setSuggestIdx((i) => (i + (e.key === 'ArrowDown' ? 1 : suggestions.length - 1)) % suggestions.length); return }
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickSuggestion(suggestions[suggestIdx] ?? suggestions[0]); return }
@@ -217,7 +241,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         </div>
       )}
       <FormatToolbar textarea={ref} onChange={setValue} className="absolute -top-8 left-4 max-md:left-2 z-20" />
-      {shortcode && suggestions.length > 0 && (
+      {mention && mentionItems.length > 0 && (
+        <MentionSuggest items={mentionItems} active={mentionIdx} trigger={mention.trigger} query={mention.query} onPick={pickMention} onHover={setMentionIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
+      )}
+      {shortcode && suggestions.length > 0 && !mention && (
         <ShortcodeSuggest query={shortcode.query} items={suggestions} active={suggestIdx} onPick={pickSuggestion} onHover={setSuggestIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
       )}
       <div className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition">
@@ -247,7 +274,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
           <button className={`pb-1 ${canAttach ? 'text-text-2 hover:text-text-0' : 'text-text-2/40 cursor-not-allowed'}`} title={canAttach ? 'Upload a file' : 'No permission to attach files'} onClick={() => canAttach && fileRef.current?.click()}><PlusCircle size={22} /></button>
           <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={`Message ${name}`}
-            onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => setShortcode(null), 150)}
+            onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
             className="flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />
           <div className="relative pb-1 flex items-center gap-2.5">
             <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title="GIF" data-gif-button><ImagePlay size={22} /></button>

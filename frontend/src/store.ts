@@ -35,6 +35,7 @@ export interface ReadyPayload {
   stickers?: Sticker[]
   bookmarks?: string[]
   guild_layout?: LayoutItem[]
+  mention_counts?: { channel_id: string; count: number }[]
   me_members: Member[]
   dm_channels: DmChannel[]
   relationships?: Relationship[]
@@ -71,6 +72,8 @@ interface State {
   stickers: Record<string, Sticker[]>
   /** Message ids the user has bookmarked. */
   bookmarks: Record<string, true>
+  /** Unread messages per channel that mention me (direct, role or @everyone). */
+  mentionCounts: Record<string, number>
   messages: Record<string, Message[]>
   hasMore: Record<string, boolean>
   loadingMessages: Record<string, boolean>
@@ -203,6 +206,7 @@ export const useStore = create<State>((set, get) => ({
   emojis: {},
   stickers: {},
   bookmarks: {},
+  mentionCounts: {},
   messages: {},
   hasMore: {},
   loadingMessages: {},
@@ -241,7 +245,7 @@ export const useStore = create<State>((set, get) => ({
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], guildLayout: [], channels: {}, dms: {}, relationships: {},
-      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
+      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, mentionCounts: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {},
     })
   },
@@ -281,9 +285,11 @@ export const useStore = create<State>((set, get) => ({
     const bookmarks: Record<string, true> = {}
     ;(r.bookmarks ?? []).forEach((id) => (bookmarks[id] = true))
     const guildLayout = reconcile(r.guild_layout ?? [], r.guilds.map((g) => g.id))
+    const mentionCounts: Record<string, number> = {}
+    ;(r.mention_counts ?? []).forEach((m) => (mentionCounts[m.channel_id] = m.count))
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
-      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout,
+      user: r.user, guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events.
       messages: {}, hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
@@ -381,14 +387,15 @@ export const useStore = create<State>((set, get) => ({
     const lastMessageId = { ...s.lastMessageId, [m.channel_id]: m.id }
     // Your own messages (sent, forwarded, from any device) never count as unread for you.
     const readStates = m.author.id === s.user?.id ? { ...s.readStates, [m.channel_id]: m.id } : s.readStates
+    const mentionCounts = m.author.id !== s.user?.id && mentionsMe(s, m) ? { ...s.mentionCounts, [m.channel_id]: (s.mentionCounts[m.channel_id] ?? 0) + 1 } : s.mentionCounts
     const typing = { ...s.typing }
     if (typing[m.channel_id]?.[m.author.id]) {
       typing[m.channel_id] = { ...typing[m.channel_id] }; delete typing[m.channel_id][m.author.id]
     }
     const dms = s.dms[m.channel_id] ? { ...s.dms, [m.channel_id]: { ...s.dms[m.channel_id], last_message_at: m.created_at } } : s.dms
-    if (!list) return { users, lastMessageId, readStates, typing, dms }
-    if (list.some((x) => x.id === m.id)) return { users, lastMessageId, readStates, typing, dms }
-    return { messages: { ...s.messages, [m.channel_id]: [...list, m] }, users, lastMessageId, readStates, typing, dms }
+    if (!list) return { users, lastMessageId, readStates, mentionCounts, typing, dms }
+    if (list.some((x) => x.id === m.id)) return { users, lastMessageId, readStates, mentionCounts, typing, dms }
+    return { messages: { ...s.messages, [m.channel_id]: [...list, m] }, users, lastMessageId, readStates, mentionCounts, typing, dms }
   }),
   updateMessage: (m) => set((s) => {
     const list = s.messages[m.channel_id]
@@ -474,7 +481,7 @@ export const useStore = create<State>((set, get) => ({
     }
     return changed ? { typing } : {}
   }),
-  setReadState: (channelId, msgId) => set((s) => ({ readStates: { ...s.readStates, [channelId]: msgId } })),
+  setReadState: (channelId, msgId) => set((s) => { const mentionCounts = { ...s.mentionCounts }; if (msgId && msgId === s.lastMessageId[channelId]) delete mentionCounts[channelId]; return { readStates: { ...s.readStates, [channelId]: msgId }, mentionCounts } }),
   setActiveChannel: (id) => set({ activeChannelId: id }),
   setMobilePane: (mobilePane) => set({ mobilePane }),
   setMembersOpen: (membersOpen) => set({ membersOpen }),
@@ -610,3 +617,18 @@ export function myChannelPerms(s: PermState, channelId: string): number {
   return channelPerms({ guild, roles: s.roles[c.guild_id] ?? {}, member: s.members[c.guild_id]?.[s.user.id] }, s.user.id, c)
 }
 const ALL_PERMS = -1 >>> 1
+
+/** Does this message mention the current user, one of their roles, or everyone? */
+export function mentionsMe(s: Pick<State, 'user' | 'members'>, m: Message): boolean {
+  const me = s.user?.id
+  if (!me) return false
+  if (m.mention_everyone) return true
+  if (m.mentions?.includes(me)) return true
+  if (m.mention_roles?.length) { for (const g of Object.values(s.members)) { const mine = g[me]?.roles ?? []; if (m.mention_roles.some((r) => mine.includes(r))) return true } }
+  return false
+}
+
+/** Unread mentions summed over a server's channels. */
+export function guildMentions(s: Pick<State, 'mentionCounts' | 'channels'>, guildId: string): number {
+  return Object.entries(s.mentionCounts).reduce((n, [cid, c]) => (s.channels[cid]?.guild_id === guildId ? n + c : n), 0)
+}

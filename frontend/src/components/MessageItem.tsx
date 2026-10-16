@@ -8,7 +8,7 @@ import { parseCustom, unicodeInfo } from '../lib/emoji'
 import { frequentEmoji, recordEmoji } from '../lib/recentEmoji'
 import { anchorOf } from '../lib/anchor'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { isBlocked, myChannelPerms, useStore } from '../store'
+import { isBlocked, mentionsMe, myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
 import StyledName from './StyledName'
 import type { Message } from '../lib/types'
@@ -35,6 +35,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const ctx = useContextMenu()
   const userMenu = useUserMenu(guildId ?? null)
   const emojiHover = useEmojiHover()
+  const mentioned = useStore((s) => mentionsMe(s, m))
   const perms = useStore((s) => myChannelPerms(s, m.channel_id))
   // Moderation only exists inside servers; in DMs and group chats you can delete just your own messages.
   const canDelete = isOwn || (guildId !== undefined && has(perms, P.MANAGE_MESSAGES))
@@ -134,7 +135,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     )
   }
   return (
-    <div data-msg-id={m.id} onContextMenu={(e) => { if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div data-msg-id={m.id} onContextMenu={(e) => { if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {replyTarget !== null && m.reply_to && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md">{replyTarget.content || (replyTarget.attachments?.length ? '📎 Attachment' : '')}</span></>) : <i>Original message was deleted</i>}

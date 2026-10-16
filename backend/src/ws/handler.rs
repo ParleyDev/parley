@@ -106,7 +106,6 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
     let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &guild_ids).await.unwrap_or_default();
     let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &guild_ids).await.unwrap_or_default();
     let bookmarks = crate::routes::channels::bookmark_ids(&state.db, user_id).await.unwrap_or_default();
-    let guild_layout: serde_json::Value = sqlx::query_as::<_, (serde_json::Value,)>("SELECT guild_layout FROM users WHERE id = $1").bind(user_id).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(serde_json::json!([]));
     let dms = list_dm_channels(&state.db, user_id).await.unwrap_or_default();
     let relationships = crate::routes::relationships::list_for(&state.db, user_id).await.unwrap_or_default();
 
@@ -119,6 +118,22 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
 
     let mut all_channel_ids: Vec<Uuid> = channels.iter().map(|c| c.id).collect();
     all_channel_ids.extend(dms.iter().map(|d| d.channel.id));
+    // Unread messages that mention me (directly, via one of my roles, or @everyone) per channel.
+    let my_roles: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT role_id FROM member_roles WHERE user_id = $1").bind(user_id).fetch_all(&state.db).await.unwrap_or_default().into_iter().map(|r| r.0).collect();
+    let mention_counts: Vec<(Uuid, i64)> = sqlx::query_as(
+        "SELECT m.channel_id, COUNT(*) FROM messages m
+         LEFT JOIN read_states rs ON rs.channel_id = m.channel_id AND rs.user_id = $1
+         WHERE m.channel_id = ANY($2) AND m.author_id <> $1 AND (rs.last_read_msg IS NULL OR m.id > rs.last_read_msg)
+           AND (m.mentions @> ARRAY[$1]::uuid[] OR m.mention_everyone OR m.mention_roles && $3::uuid[])
+         GROUP BY m.channel_id",
+    )
+    .bind(user_id)
+    .bind(&all_channel_ids)
+    .bind(&my_roles)
+    .fetch_all(&state.db)
+    .await
+    .unwrap_or_else(|e| { tracing::error!(error = ?e, "mention counts"); Vec::new() });
+    let guild_layout: serde_json::Value = sqlx::query_as::<_, (serde_json::Value,)>("SELECT guild_layout FROM users WHERE id = $1").bind(user_id).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(serde_json::json!([]));
     // Postgres has no max(uuid); DISTINCT ON picks the newest (v7 ids sort by time) per channel.
     let last_ids: Vec<(Uuid, Uuid)> =
         sqlx::query_as("SELECT DISTINCT ON (channel_id) channel_id, id FROM messages WHERE channel_id = ANY($1) ORDER BY channel_id, id DESC")
@@ -145,6 +160,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid) {
             "emojis": emojis,
             "stickers": stickers,
             "bookmarks": bookmarks,
+            "mention_counts": mention_counts.iter().map(|(c, n)| json!({"channel_id": c, "count": n})).collect::<Vec<_>>(),
             "guild_layout": guild_layout,
             "me_members": me_members,
             "dm_channels": dms,

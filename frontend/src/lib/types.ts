@@ -133,6 +133,9 @@ export interface Message {
   attachments: Attachment[]
   sticker?: MessageSticker | null
   forwarded_from?: string | null
+  mentions?: string[]
+  mention_roles?: string[]
+  mention_everyone?: boolean
 }
 
 /** A server custom emoji; `url` serves the image, `id` doubles as the image id. */
