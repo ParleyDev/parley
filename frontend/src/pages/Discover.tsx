@@ -1,6 +1,6 @@
 import { BadgeCheck, Check, ChevronDown, Compass, Search, Server, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
+import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import GuildBar from '../components/GuildBar'
 import Modals from '../components/modals'
 import UserPanel from '../components/UserPanel'
@@ -13,6 +13,8 @@ import { useStore } from '../store'
 /** Discord's Discover: browse approved servers by category, search, and join with one click. Admins also get a review queue. */
 export default function DiscoverPage() {
   const isAdmin = useStore((s) => !!s.user?.is_admin)
+  // /discover/review is routed to this page separately (the preview route owns /discover/:guildId).
+  const isReview = !!useMatch('/discover/review/*')
   const [pending, setPending] = useState<number | null>(null)
   useEffect(() => { if (isAdmin) api.get<Listing[]>('/admin/discovery?status=pending').then((l) => setPending(l.length)).catch(() => {}) }, [isAdmin])
   const item = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2.5 text-[15px] font-medium ${active ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`
@@ -37,10 +39,7 @@ export default function DiscoverPage() {
         <UserPanel />
       </div>
       <main className="flex-1 min-w-0 bg-bg-2 overflow-y-auto">
-        <Routes>
-          <Route index element={<Browse />} />
-          <Route path="review" element={isAdmin ? <ReviewQueue onChange={(n) => setPending(n)} /> : <Browse />} />
-        </Routes>
+        {isReview && isAdmin ? <ReviewQueue onChange={(n) => setPending(n)} /> : <Browse />}
       </main>
       <Modals />
     </div>
@@ -178,30 +177,34 @@ function ServerCard({ l }: { l: Listing }) {
   const pushToast = useStore((s) => s.pushToast)
   const joined = useStore((s) => l.joined || !!s.guilds[l.guild_id])
   const [busy, setBusy] = useState(false)
-  const open = async () => {
-    if (joined) { navigate(`/channels/${l.guild_id}`); return }
-    setBusy(true)
+  // Members open the server; everyone else gets Discord's preview mode (read-only, with a Join bar).
+  const open = () => navigate(joined ? `/channels/${l.guild_id}` : `/discover/${l.guild_id}`)
+  const quickJoin = async (e: React.MouseEvent) => {
+    e.stopPropagation(); setBusy(true)
     try {
       const g = await api.post<Guild & { channels: Channel[] }>(`/discover/${l.guild_id}/join`, {})
       upsertGuild(g); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`)
-    } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
-    <button type="button" onClick={open} disabled={busy} data-server-card={l.guild_id} className="text-left rounded-xl bg-bg-1 border border-line hover:border-text-2 hover:-translate-y-0.5 transition overflow-visible flex flex-col">
+    <div role="button" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open() }} data-server-card={l.guild_id} className="group text-left rounded-xl bg-bg-1 border border-line hover:border-text-2 hover:-translate-y-0.5 transition overflow-visible flex flex-col cursor-pointer">
       <div className="relative h-[140px] rounded-t-xl bg-cover bg-center" style={l.banner_url ? { backgroundImage: `url(${l.banner_url})` } : { background: `linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }}>
         <span className="absolute left-3 -bottom-6 h-12 w-12 rounded-2xl ring-4 ring-bg-1 overflow-hidden flex items-center justify-center text-white font-bold" style={{ background: l.icon_url ? undefined : colorFor(l.guild_id) }}>
           {l.icon_url ? <img src={l.icon_url} alt="" className="h-full w-full object-cover" /> : initials(l.name)}
         </span>
       </div>
       <div className="px-3 pt-8 pb-3 flex-1 flex flex-col">
-        <div className="flex items-center gap-1.5 font-bold text-[15px]"><BadgeCheck size={16} className="text-success shrink-0" /><span className="truncate">{l.name}</span>{joined && <span className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-1" data-joined>JOINED</span>}</div>
+        <div className="flex items-center gap-1.5 font-bold text-[15px]"><BadgeCheck size={16} className="text-success shrink-0" /><span className="truncate">{l.name}</span>
+          {joined ? <span className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-1" data-joined>JOINED</span>
+            : <button type="button" onClick={quickJoin} disabled={busy} className="ml-auto rounded-md bg-success text-black px-2 py-0.5 text-[11px] font-bold opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-success/80" data-quick-join>{busy ? 'Joining…' : 'Join'}</button>}
+        </div>
         <p className="mt-1 text-sm text-text-1 line-clamp-3 flex-1">{l.description}</p>
         <div className="mt-3 flex items-center gap-3 text-xs text-text-2">
           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />{l.online_count.toLocaleString()} Online</span>
           <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-text-2" />{l.member_count.toLocaleString()} Members</span>
         </div>
       </div>
-    </button>
+    </div>
   )
 }
 

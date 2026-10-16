@@ -8,6 +8,7 @@ import AppShell from './pages/AppShell'
 import InvitePage from './pages/Invite'
 import DiscoverPage from './pages/Discover'
 import AdminPage from './pages/Admin'
+import GuildPreviewPage from './pages/GuildPreview'
 import { api } from './lib/api'
 import Toasts from './components/Toasts'
 import { useParams } from 'react-router-dom'
@@ -37,6 +38,8 @@ export default function App() {
           element={token ? (ready ? <AppShell /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />}
         />
         <Route path="/admin/*" element={token ? (ready ? (isAdmin ? <AdminPage /> : <Navigate to="/channels/@me" replace />) : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
+        <Route path="/discover/review/*" element={token ? (ready ? <DiscoverPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
+        <Route path="/discover/:guildId/:channelId?" element={token ? (ready ? <GuildPreviewPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/discover/*" element={token ? (ready ? <DiscoverPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/users/:userId" element={token ? (ready ? <ProfileLink /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="*" element={<Navigate to={token ? '/channels/@me' : '/login'} replace />} />

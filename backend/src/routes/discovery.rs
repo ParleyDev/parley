@@ -27,6 +27,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/discover", get(browse))
         .route("/discover/:gid/join", post(join))
+        .route("/discover/:gid/preview", get(preview))
+        .route("/discover/:gid/channels/:cid/messages", get(preview_messages))
         .route("/guilds/:id/discovery", get(get_listing).put(put_listing).delete(delete_listing))
         .route("/admin/discovery", get(admin_list))
         .route("/admin/discovery/:gid/review", post(review))
@@ -126,6 +128,53 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
         }
     }
     Ok(Json(payload))
+}
+
+/// Text channels of an approved Discover server that @everyone may view (what a non-member sees in preview).
+async fn public_channels(db: &PgPool, gid: Uuid) -> AppResult<(perms::GuildCtx, Vec<crate::models::Channel>)> {
+    let approved: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_discovery WHERE guild_id = $1 AND status = 'approved'").bind(gid).fetch_optional(db).await?;
+    if approved.is_none() {
+        return Err(AppError::NotFound("Server not found in Discover".into()));
+    }
+    let ctx = perms::GuildCtx::load(db, gid).await?;
+    let everyone = ctx.roles.get(&gid).map(|r| r.permissions as u64).unwrap_or(0);
+    let channels = perms::guild_channels(db, gid).await?
+        .into_iter()
+        .filter(|c| c.kind == "text" && perms::has(ctx.in_channel(Uuid::nil(), everyone, &c.overwrites), perms::VIEW_CHANNEL))
+        .collect();
+    Ok((ctx, channels))
+}
+
+/// Discord-style preview for non-members: the server, its public text channels and the listing.
+async fn preview(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Json<Value>> {
+    let (ctx, channels) = public_channels(&state.db, gid).await?;
+    let listing = listing_for(&state, uid, gid).await?;
+    Ok(Json(json!({ "guild": ctx.guild, "channels": channels, "listing": listing, "joined": ctx.is_member(uid) })))
+}
+
+#[derive(Deserialize)]
+struct PreviewMessagesQuery {
+    before: Option<Uuid>,
+    #[serde(default = "default_limit")]
+    limit: i64,
+}
+fn default_limit() -> i64 {
+    50
+}
+
+/// Read-only message history for one public channel of an approved server.
+async fn preview_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, cid)): Path<(Uuid, Uuid)>, Query(q): Query<PreviewMessagesQuery>) -> AppResult<Json<Vec<crate::models::Message>>> {
+    let (_, channels) = public_channels(&state.db, gid).await?;
+    if !channels.iter().any(|c| c.id == cid) {
+        return Err(AppError::NotFound("Channel not found".into()));
+    }
+    let limit = q.limit.clamp(1, 100);
+    let select = crate::routes::channels::MESSAGE_SELECT;
+    let rows = match q.before {
+        Some(b) => sqlx::query_as::<_, crate::models::MessageRow>(&format!("{select} WHERE m.channel_id = $1 AND m.id < $2 ORDER BY m.id DESC LIMIT $3")).bind(cid).bind(b).bind(limit).fetch_all(&state.db).await?,
+        None => sqlx::query_as::<_, crate::models::MessageRow>(&format!("{select} WHERE m.channel_id = $1 ORDER BY m.id DESC LIMIT $2")).bind(cid).bind(limit).fetch_all(&state.db).await?,
+    };
+    Ok(Json(crate::routes::channels::hydrate(&state.db, rows, uid, true).await?))
 }
 
 async fn require_manage(db: &PgPool, gid: Uuid, uid: Uuid) -> AppResult<()> {
