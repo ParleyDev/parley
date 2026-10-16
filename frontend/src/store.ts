@@ -121,7 +121,7 @@ interface State {
   pttHeld: boolean
   modal: ModalKind | null
   /** Instance-wide settings from GET /instance (registration, announcement banner). */
-  instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean }
+  instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string }
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
 
   // auth
@@ -137,7 +137,7 @@ interface State {
   setBookmark: (messageId: string, on: boolean) => void
   /** Replace the server bar layout; `save` also PUTs it to the server. */
   setGuildLayout: (items: LayoutItem[], save?: boolean) => void
-  setInstance: (i: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean }) => void
+  setInstance: (i: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string }) => void
   setNotifSetting: (s: NotifSetting & { deleted?: boolean }) => void
   /** PUT a notification setting (level / mute / suppress) for a server, channel or DM. */
   updateNotif: (target: string, body: { level?: string; mute_minutes?: number; unmute?: boolean; suppress_everyone?: boolean }) => Promise<void>

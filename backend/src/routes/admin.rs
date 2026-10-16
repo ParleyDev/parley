@@ -43,19 +43,45 @@ pub struct InstanceSettings {
     /// Whether the server can send mail at all (so the UI can hide resend when it cannot).
     #[serde(default)]
     pub mail_enabled: bool,
+    /// Voice transport: "mesh" (peer to peer, default) or "sfu" when a LiveKit server is configured.
+    #[serde(default)]
+    pub voice_mode: String,
+    /// LiveKit server URL browsers connect to (ws:// or wss://). Empty = mesh voice.
+    #[serde(default)]
+    pub livekit_url: String,
+    #[serde(default)]
+    pub livekit_api_key: String,
+    #[serde(default)]
+    pub livekit_api_secret: String,
+}
+
+impl InstanceSettings {
+    pub fn sfu_configured(&self) -> bool {
+        !self.livekit_url.trim().is_empty() && !self.livekit_api_key.trim().is_empty() && !self.livekit_api_secret.trim().is_empty()
+    }
+    /// What anyone may see: no API credentials.
+    pub fn public(mut self) -> Self {
+        self.livekit_api_key = String::new();
+        self.livekit_api_secret = String::new();
+        self
+    }
 }
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new() };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
             "announcement" => s.announcement = v.as_str().unwrap_or("").to_string(),
             "require_email_verification" => s.require_email_verification = v.as_bool().unwrap_or(false),
+            "livekit_url" => s.livekit_url = v.as_str().unwrap_or("").to_string(),
+            "livekit_api_key" => s.livekit_api_key = v.as_str().unwrap_or("").to_string(),
+            "livekit_api_secret" => s.livekit_api_secret = v.as_str().unwrap_or("").to_string(),
             _ => {}
         }
     }
+    s.voice_mode = if s.sfu_configured() { "sfu".into() } else { "mesh".into() };
     Ok(s)
 }
 
@@ -63,7 +89,7 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
 async fn instance_public(State(state): State<AppState>) -> AppResult<Json<InstanceSettings>> {
     let mut s = load_settings(&state.db).await?;
     s.mail_enabled = crate::mail::enabled(&state.config);
-    Ok(Json(s))
+    Ok(Json(s.public()))
 }
 
 /// Admin: recently sent mail (the in-memory outbox), optionally filtered by recipient. How dev and tests read links.
@@ -281,15 +307,24 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if before.registration_enabled != req.registration_enabled { changed.insert("registration_enabled".into(), json!(req.registration_enabled)); }
     if before.announcement != announcement { changed.insert("announcement".into(), json!(announcement)); }
     if before.require_email_verification != req.require_email_verification { changed.insert("require_email_verification".into(), json!(req.require_email_verification)); }
+    let lk_url = req.livekit_url.trim().to_string();
+    if !lk_url.is_empty() && !(lk_url.starts_with("ws://") || lk_url.starts_with("wss://") || lk_url.starts_with("http://") || lk_url.starts_with("https://")) {
+        return Err(AppError::BadRequest("LiveKit URL must start with ws://, wss://, http:// or https://".into()));
+    }
+    let lk_key = req.livekit_api_key.trim().to_string();
+    let lk_secret = req.livekit_api_secret.trim().to_string();
+    if before.livekit_url != lk_url { changed.insert("livekit_url".into(), json!(lk_url)); }
+    if before.livekit_api_key != lk_key { changed.insert("livekit_api_key".into(), json!(lk_key)); }
+    if before.livekit_api_secret != lk_secret { changed.insert("livekit_api_secret".into(), json!(if lk_secret.is_empty() { "cleared" } else { "set" })); }
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     let mut s = load_settings(&state.db).await?;
     s.mail_enabled = crate::mail::enabled(&state.config);
-    state.hub.emit_all("INSTANCE_UPDATE", json!(s));
+    state.hub.emit_all("INSTANCE_UPDATE", json!(s.clone().public()));
     Ok(Json(s))
 }
 
