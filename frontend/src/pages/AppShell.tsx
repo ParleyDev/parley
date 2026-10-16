@@ -87,20 +87,27 @@ function DmChat() {
 }
 
 /** `/channels/:guildId` lands on the channel you last had open in that server, else its first text channel. */
+/** /channels/:guildId — render the remembered (or first text) channel straight away and tidy the URL. */
 function GuildRedirect() {
   const { guildId = '' } = useParams()
   const channels = useStore((s) => s.channels)
   const guild = useStore((s) => s.guilds[guildId])
-  if (!guild) return <Navigate to="/channels/@me" replace />
+  const navigate = useNavigate()
   const remembered = lastChannel(guildId)
   const target = (remembered && channels[remembered]?.guild_id === guildId ? channels[remembered] : undefined)
     ?? Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'text').sort((a, b) => a.position - b.position)[0]
-  if (!target) return <div className="flex-1 max-md:hidden" />
-  return <Navigate to={`/channels/${guildId}/${target.id}`} replace />
+  const targetId = target?.id
+  // Rendering never waits for the navigation: the URL is fixed up for bookmarks/reloads, but the view is already there.
+  useEffect(() => { if (guild && targetId) navigate(`/channels/${guildId}/${targetId}`, { replace: true }) }, [guild, guildId, targetId, navigate])
+  if (!guild) return <Navigate to="/channels/@me" replace />
+  if (!targetId) return <div className="flex-1 max-md:hidden" />
+  return <GuildMain channelOverride={targetId} />
 }
 
-function GuildMain() {
-  const { guildId = '', channelId = '' } = useParams()
+function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
+  const params = useParams()
+  const guildId = params.guildId ?? ''
+  const channelId = channelOverride ?? params.channelId ?? ''
   useEffect(() => { if (guildId && channelId) rememberChannel(guildId, channelId) }, [guildId, channelId])
   const guild = useStore((s) => s.guilds[guildId])
   const channel = useStore((s) => s.channels[channelId])
@@ -109,7 +116,7 @@ function GuildMain() {
   const navigate = useNavigate()
 
   useEffect(() => { if (guild && !hasMembers) loadMembers(guildId) }, [guild, guildId, hasMembers, loadMembers])
-  useEffect(() => { if (guild && !channel) navigate(`/channels/${guildId}`, { replace: true }) }, [guild, channel, guildId, navigate])
+  useEffect(() => { if (guild && !channel && !channelOverride) navigate(`/channels/${guildId}`, { replace: true }) }, [guild, channel, guildId, navigate, channelOverride])
 
   if (!guild) return <Navigate to="/channels/@me" replace />
   if (!channel || channel.guild_id !== guildId) return <div className="flex-1 max-md:hidden" />
