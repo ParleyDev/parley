@@ -119,7 +119,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
             {group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? 'Hide Member List' : 'Show Member List'} className={`${btn(dmProfileOpen)} max-md:hidden`} data-group-members-toggle><Users size={20} /></button>}
             {!isDm && <MembersToggle />}
             <span className="relative ml-1 max-md:hidden">
-              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder={isDm && other ? `Search ${other.username}` : 'Search'} aria-label="Search messages" data-search-input
+              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder={isDm && other ? `Search ${other.username}` : 'Search'} title="Filters: from:user in:channel has:link|image|file before:date after:date pinned:true" aria-label="Search messages" data-search-input
                 className="h-7 w-36 focus:w-56 transition-[width] rounded-md bg-bg-0 border border-line pl-2 pr-7 text-sm outline-none focus:border-accent/60" />
               <Search size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-2 pointer-events-none" />
             </span>
@@ -260,20 +260,59 @@ function PinnedPanel({ channel, onClose }: { channel: Channel | DmChannel; onClo
   )
 }
 
+type SearchScope = 'channel' | 'guild' | 'all'
+type SearchHit = Message & { guild_id: string | null; channel_name: string }
+interface SearchResult { total: number; offset: number; results: SearchHit[] }
+const SEARCH_HINTS = ['from:user', 'in:channel', 'has:link', 'has:image', 'has:file', 'before:2026-01-31', 'after:2026-01-01', 'pinned:true']
+
+/** Global search: this channel, this server or everywhere, with Discord-style filters parsed server-side. */
 function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | DmChannel; query: string; onClose: () => void; onMiss: () => void }) {
-  const [results, setResults] = useState<Message[] | null>(null)
-  useEffect(() => { setResults(null); api.get<Message[]>(`/channels/${channel.id}/search?q=${encodeURIComponent(query)}`).then(setResults).catch(() => setResults([])) }, [channel.id, query])
+  const isDm = channel.guild_id === null
+  const [scope, setScope] = useState<SearchScope>(isDm ? 'channel' : 'guild')
+  const [res, setRes] = useState<SearchResult | null>(null)
+  const [busy, setBusy] = useState(false)
+  const navigate = useNavigate()
+  const url = (offset: number) => `/search?q=${encodeURIComponent(query)}&offset=${offset}${scope === 'channel' ? `&channel_id=${channel.id}` : scope === 'guild' ? `&guild_id=${channel.guild_id}` : ''}`
+  useEffect(() => { setRes(null); api.get<SearchResult>(url(0)).then(setRes).catch(() => setRes({ total: 0, offset: 0, results: [] })) }, [channel.id, query, scope]) // eslint-disable-line react-hooks/exhaustive-deps
+  const more = async () => {
+    if (!res) return
+    setBusy(true)
+    try { const next = await api.get<SearchResult>(url(res.results.length)); setRes({ ...next, results: [...res.results, ...next.results] }) } catch { /* keep */ } finally { setBusy(false) }
+  }
+  const jump = (m: SearchHit) => {
+    if (m.channel_id === channel.id) { if (!jumpToMessage(m.id)) onMiss(); return }
+    navigate(`/channels/${m.guild_id ?? '@me'}/${m.channel_id}`)
+    let tries = 0
+    const t = setInterval(() => { if (jumpToMessage(m.id) || ++tries > 20) clearInterval(t) }, 150)
+  }
+  const chip = (id: SearchScope, label: string) => <button key={id} type="button" onClick={() => setScope(id)} className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${scope === id ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-search-scope={id} aria-pressed={scope === id}>{label}</button>
   return (
     <aside className="w-[420px] shrink-0 bg-bg-1 border-l border-line flex flex-col max-md:hidden" data-search-panel>
       <div className="h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line">
         <Search size={16} className="text-text-2" /><span className="font-bold truncate">Results for "{query}"</span>
-        {results && <span className="text-xs text-text-2">{results.length}</span>}
+        {res && <span className="text-xs text-text-2" data-search-total>{res.total}</span>}
         <button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0" title="Close search"><X size={18} /></button>
       </div>
+      <div className="flex items-center gap-1.5 px-4 py-2 border-b border-line">
+        {chip('channel', isDm ? 'This conversation' : 'This channel')}
+        {!isDm && chip('guild', 'This server')}
+        {chip('all', 'Everywhere')}
+      </div>
       <div className="overflow-y-auto p-3 space-y-2">
-        {results === null && <p className="text-sm text-text-2 p-3">Searching…</p>}
-        {results?.length === 0 && <div className="p-6 text-center text-sm text-text-2">No results found.</div>}
-        {results?.map((m) => <MessageCard key={m.id} m={m} onJump={() => { if (!jumpToMessage(m.id)) onMiss() }} />)}
+        {res === null && <p className="text-sm text-text-2 p-3">Searching…</p>}
+        {res?.results.length === 0 && (
+          <div className="p-6 text-center text-sm text-text-2" data-search-empty>
+            No results found.
+            <div className="mt-3 text-left text-xs">Try a filter: {SEARCH_HINTS.map((h) => <code key={h} className="mr-1.5 rounded bg-bg-0 px-1 py-0.5">{h}</code>)}</div>
+          </div>
+        )}
+        {res?.results.map((m) => (
+          <div key={m.id} data-search-hit={m.id} data-search-channel={m.channel_id}>
+            <div className="px-1 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-text-2 truncate" data-search-hit-channel>{m.guild_id ? `# ${m.channel_name}` : m.channel_name || 'Direct message'}</div>
+            <MessageCard m={m} onJump={() => jump(m)} />
+          </div>
+        ))}
+        {res && res.results.length < res.total && <button type="button" className="btn-ghost w-full" disabled={busy} onClick={more} data-search-more>Load more ({res.total - res.results.length} left)</button>}
       </div>
     </aside>
   )

@@ -12,6 +12,7 @@ pub mod invites;
 pub mod mfa;
 pub mod relationships;
 pub mod roles;
+pub mod search;
 pub mod sessions;
 pub mod users;
 
@@ -24,6 +25,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(users::router())
         .merge(mfa::router())
         .merge(sessions::router())
+        .merge(search::router())
         .merge(guilds::router())
         .merge(invites::router())
         .merge(roles::router())
