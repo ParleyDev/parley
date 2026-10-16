@@ -24,8 +24,14 @@ export default function AppShell() {
   const connected = useStore((s) => s.connected)
   const pane = useStore((s) => s.mobilePane)
   const announcement = useStore((s) => s.instance.announcement)
+  // Ask for notification permission on the first click/keypress, not at load: Safari/WebKit only allows the
+  // prompt from a user gesture (and logs an error otherwise), and Chrome ranks gesture-driven prompts better.
   useEffect(() => {
-    try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission() } catch { /* ignore */ }
+    if (!('Notification' in window) || Notification.permission !== 'default') return
+    const ask = () => { try { Notification.requestPermission() } catch { /* ignore */ } cleanup() }
+    const cleanup = () => { window.removeEventListener('pointerdown', ask); window.removeEventListener('keydown', ask) }
+    window.addEventListener('pointerdown', ask, { once: true }); window.addEventListener('keydown', ask, { once: true })
+    return cleanup
   }, [])
   return (
     <div className="h-full flex flex-col overflow-hidden relative">

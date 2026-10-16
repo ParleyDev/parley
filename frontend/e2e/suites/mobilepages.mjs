@@ -1,12 +1,11 @@
-import { chromium, devices } from 'playwright'
-import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track } from '../lib.mjs'
+import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track, launchBrowser, phone, BROWSER } from '../lib.mjs'
 let admin=await login('admin-e2e@x.io'); if(!admin.token) admin=await reg('admin','admin-e2e@x.io')
 const a=await reg('alice'), b=await reg('bob')
 const g=await call(a.token,'POST','/guilds',{name:`Mobile Land ${S}`}); const tc=g.channels.find(c=>c.kind==='text').id
 await call(a.token,'POST',`/channels/${tc}/messages`,{content:'hello mobile 🔥'})
 await call(a.token,'PUT',`/guilds/${g.id}/discovery`,{description:'Mobile preview testing server.',category:'community'}); await fetch(B+`/admin/discovery/${g.id}/review`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+admin.token},body:JSON.stringify({status:'approved'})})
-const browser=await chromium.launch(); const errors=[]
-const mk=async(tok)=>{ const ctx=await browser.newContext({ ...devices['iPhone 13'] }); const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),tok); return p }
+const browser=await launchBrowser(); const errors=[]; console.log('browser:', BROWSER)
+const mk=async(tok)=>{ const ctx=await browser.newContext({ ...phone() }); const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),tok); return p }
 const fits=async(p)=>p.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth + 1)
 const vis=async(p,sel)=>{ const b=await p.locator(sel).first().boundingBox().catch(()=>null); return !!b && b.x>=0 && b.x+b.width<=p.viewportSize().width+1 && b.width>0 }
 

@@ -85,6 +85,8 @@ Browser sessions carry over: the client migrates the old `y99.token` storage key
 
 End-to-end suites live in `frontend/e2e/` (see its README): `npm run e2e` drives a running stack through the API and a headless browser, and each suite cleans up the users it created. CI (`.github/workflows/ci.yml`) typechecks and lints the frontend, builds and tests the backend, then runs the suites against a fresh `docker compose` stack and uploads screenshots on failure.
 
+Cross-browser: `npm run e2e:webkit` (in `frontend/`, after `npx playwright install --with-deps webkit`) runs the phone-layout suites on WebKit, the engine behind iOS Safari; `E2E_BROWSER=webkit|firefox` works for any suite that launches through `launchBrowser()`. CI runs the Chromium pass and then the WebKit mobile pass.
+
 ## Issue tracking (beads)
 
 Open work is tracked in-repo with [beads](https://github.com/steveyegge/beads) (`npm i -g @beads/bd`). Issues live in `.beads/` (Dolt-backed; `.beads/issues.jsonl` is the git-friendly export). Useful commands:

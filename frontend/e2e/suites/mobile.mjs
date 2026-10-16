@@ -1,11 +1,10 @@
-import { chromium } from 'playwright'
-import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track } from '../lib.mjs'
+import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track, launchBrowser, BROWSER } from '../lib.mjs'
 const api=(t,m,p,b)=>fetch(B+p,{method:m,headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:b?JSON.stringify(b):undefined}).then(r=>r.json())
 const a=await reg('alice'), b=await reg('bob')
 const g=await api(a.token,'POST','/guilds',{name:'Mobile Test'}); const inv=await api(a.token,'POST',`/guilds/${g.id}/invites`,{})
 await api(b.token,'POST',`/invites/${inv.code}`)
 const vc=g.channels.find(x=>x.kind==='voice').id, tc=g.channels.find(x=>x.kind==='text').id
-const browser=await chromium.launch({ args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] })
+const browser=await launchBrowser({ args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] }); console.log('browser:', BROWSER)
 const errors=[]
 const open=async(tok,name,viewport,url)=>{const ctx=await browser.newContext({viewport,permissions:['microphone'],isMobile:viewport.width<500,hasTouch:viewport.width<500}); const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(name+': '+e.message)); p.on('console',m=>{if(m.type()==='error')errors.push(name+' console: '+m.text())}); await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),tok); await p.goto(url); return p}
 const vis=(p,sel)=>p.locator(sel).first().isVisible().catch(()=>false)
@@ -40,11 +39,11 @@ const pm=await open(b.token,'M',{width:390,height:844},`${WEB}/channels/@me`)
 await pm.waitForSelector('text=Direct Messages'); await pm.waitForTimeout(300)
 console.log('mobile @me: DM sidebar visible', await vis(pm,'text=Find or start a conversation'), 'Friends main hidden', !(await vis(pm,'input[placeholder*="Search people"]')))
 await pm.screenshot({path:'15-m-home.png'})
-await pm.click(`nav a[href="/channels/${g.id}"]`); await pm.waitForSelector('text=Text Channels'); await pm.waitForTimeout(300)
-console.log('mobile guild tap: channel list visible', await vis(pm,'text=Text Channels'), 'chat hidden', !(await vis(pm,'textarea')))
+await pm.click(`nav a[href="/channels/${g.id}"]`); await pm.waitForSelector('[data-channel-list]'); await pm.waitForTimeout(300)
+console.log('mobile guild tap: channel list visible', await vis(pm,'[data-channel-list]'), 'chat hidden', !(await vis(pm,'textarea')))
 await pm.screenshot({path:'16-m-channels.png'})
 await pm.click(`aside a[href="/channels/${g.id}/${tc}"]`); await pm.waitForSelector('textarea'); await pm.waitForTimeout(300)
-console.log('mobile text channel: chat visible', await vis(pm,'textarea'), 'sidebar hidden', !(await vis(pm,'text=Text Channels')))
+console.log('mobile text channel: chat visible', await vis(pm,'textarea'), 'sidebar hidden', !(await vis(pm,'[data-channel-list]')))
 await pm.fill('textarea','from phone'); await pm.press('textarea','Enter'); await pm.waitForSelector('main >> text=from phone')
 await pm.screenshot({path:'17-m-chat.png'})
 // members sheet
@@ -54,7 +53,7 @@ await pm.screenshot({path:'18-m-members.png'})
 await pm.click('aside button:has(svg.lucide-x)'); await pm.waitForTimeout(200)
 // back to nav
 await pm.click('main button[title="Channels"]'); await pm.waitForTimeout(300)
-console.log('mobile back: sidebar visible', await vis(pm,'text=Text Channels'))
+console.log('mobile back: sidebar visible', await vis(pm,'[data-channel-list]'))
 // voice channel on mobile
 await pm.click(`aside a[href="/channels/${g.id}/${vc}"]`); await pm.waitForSelector('text=Join Voice'); await pm.waitForTimeout(200)
 console.log('mobile VC: not auto joined', await pm.locator('text=Voice Connected').count()===0)
