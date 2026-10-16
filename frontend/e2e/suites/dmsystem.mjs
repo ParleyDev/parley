@@ -1,0 +1,46 @@
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, callS, raw, ok, finish } from '../lib.mjs'
+
+const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol'); const d = await reg('dave')
+const friend = async (x, y) => { await call(x.token, 'POST', '/users/@me/relationships', { user_id: y.user.id }); await call(y.token, 'PUT', `/users/@me/relationships/${x.user.id}`) }
+await friend(a, b); await friend(a, c); await friend(a, d)
+const g = await call(a.token, 'POST', '/users/@me/channels', { recipient_ids: [b.user.id, c.user.id], name: 'Trio' })
+const msgs = async (t) => (await call(t, 'GET', `/channels/${g.id}/messages?limit=20`)).filter((m) => m.kind !== 'default')
+
+console.log('-- API')
+ok('a fresh group has no system messages', (await msgs(a.token)).length === 0)
+await callS(a.token, 'PUT', `/channels/${g.id}/recipients/${d.user.id}`)
+let sys = await msgs(b.token)
+ok('adding dave posts "alice added dave to the group."', sys.length === 1 && sys[0].kind === 'recipient_add' && sys[0].author.id === a.user.id && sys[0].content === `added dave${S} to the group.` && sys[0].mentions?.[0] === d.user.id)
+await callS(a.token, 'PUT', `/channels/${g.id}/recipients/${d.user.id}`)
+ok('re-adding an existing member posts nothing', (await msgs(b.token)).length === 1)
+await callS(a.token, 'PATCH', `/channels/${g.id}`, { name: 'Quartet' })
+await callS(a.token, 'PATCH', `/channels/${g.id}`, { name: 'Quartet' })
+sys = await msgs(b.token)
+ok('renaming posts one notice (not for a no-op rename)', sys.length === 2 && sys[1].kind === 'channel_name_change' && sys[1].content === 'changed the group name to Quartet.')
+await callS(a.token, 'PATCH', `/channels/${g.id}`, { name: '' })
+ok('clearing the name is worded differently', (await msgs(b.token)).at(-1)?.content === 'cleared the group name.')
+await callS(a.token, 'DELETE', `/channels/${g.id}/recipients/${d.user.id}`)
+sys = await msgs(b.token)
+ok('owner removing dave posts recipient_remove naming him', sys.at(-1)?.kind === 'recipient_remove' && sys.at(-1).content === `removed dave${S} from the group.` && sys.at(-1).mentions?.[0] === d.user.id)
+await callS(c.token, 'DELETE', `/channels/${g.id}/recipients/${c.user.id}`)
+sys = await msgs(b.token)
+ok('carol leaving posts "carol left the group."', sys.at(-1)?.kind === 'recipient_leave' && sys.at(-1).author.id === c.user.id && sys.at(-1).content === 'left the group.')
+let r = await raw(a.token, 'PATCH', `/channels/${g.id}/messages/${sys.at(-1).id}`, { content: 'hacked' }); ok('system messages cannot be edited by others', r.status === 403)
+const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
+ok('1:1 DMs are unaffected', (await call(a.token, 'GET', `/channels/${dm.id}/messages?limit=5`)).every((m) => m.kind === 'default'))
+
+console.log('-- UI')
+const browser = await chromium.launch(); const errors = []
+const p = await browser.newPage({ viewport: { width: 1440, height: 900 } }); p.on('pageerror', (e) => errors.push(e.message))
+await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), b.token)
+await p.goto(`${WEB}/channels/@me/${g.id}`); await p.waitForSelector('[data-system="recipient_leave"]')
+ok('system rows render compactly with the actor and the sentence', (await p.textContent('[data-system="recipient_leave"]')).includes('Carol') && (await p.textContent('[data-system="recipient_leave"]')).includes('left the group.') && await p.locator('[data-system="recipient_add"]').count() === 1 && await p.locator('[data-system="channel_name_change"]').count() === 2)
+await p.screenshot({ path: '101-dm-system.png' })
+// live: alice re-adds carol while bob watches
+await friend(a, c).catch(() => {})
+await callS(a.token, 'PUT', `/channels/${g.id}/recipients/${c.user.id}`)
+await p.waitForSelector('[data-system="recipient_add"]:nth-of-type(1)'); await p.waitForFunction(() => document.querySelectorAll('[data-system="recipient_add"]').length === 2)
+ok('a new notice arrives live over the socket', true)
+ok('no page errors', errors.length === 0, errors.join(' | '))
+await browser.close(); await finish()

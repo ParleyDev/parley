@@ -138,6 +138,8 @@ export interface Message {
   mentions?: string[]
   mention_roles?: string[]
   mention_everyone?: boolean
+  /** 'default', or a group-DM system notice kind (recipient_add, recipient_remove, recipient_leave, channel_name_change, channel_icon_change). */
+  kind?: string
 }
 
 /** A server custom emoji; `url` serves the image, `id` doubles as the image id. */

@@ -157,6 +157,10 @@ pub struct MessageRow {
     pub mention_roles: Vec<Uuid>,
     #[sqlx(default)]
     pub mention_everyone: bool,
+    /// 'default' for ordinary messages; group-DM system notices use recipient_add / recipient_remove /
+    /// recipient_leave / channel_name_change / channel_icon_change.
+    #[sqlx(default)]
+    pub kind: String,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -193,6 +197,7 @@ pub struct Message {
     pub mentions: Vec<Uuid>,
     pub mention_roles: Vec<Uuid>,
     pub mention_everyone: bool,
+    pub kind: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -260,6 +265,7 @@ impl MessageRow {
             mentions: self.mentions,
             mention_roles: self.mention_roles,
             mention_everyone: self.mention_everyone,
+            kind: if self.kind.is_empty() { "default".into() } else { self.kind },
             sticker: self.sticker_id.map(|id| MessageSticker {
                 id,
                 name: self.sticker_name.clone().unwrap_or_default(),

@@ -119,13 +119,23 @@ async fn update_channel(
         }
         crate::routes::users::validate_image(&req.icon_url)?;
         let name = req.name.map(|n| n.trim().chars().take(100).collect::<String>());
+        let renamed = name.as_ref().map(|n| *n != c.name).unwrap_or(false);
+        let icon_changed = req.icon_url.as_ref().map(|u| u.as_str() != c.icon_url.as_deref().unwrap_or("")).unwrap_or(false);
         sqlx::query("UPDATE channels SET name = COALESCE($2, name), icon_url = CASE WHEN $3::text IS NULL THEN icon_url WHEN $3 = '' THEN NULL ELSE $3 END WHERE id = $1")
             .bind(id)
-            .bind(name)
+            .bind(&name)
             .bind(req.icon_url)
             .execute(&state.db)
             .await?;
         crate::routes::dms::broadcast_group(&state, id).await?;
+        if renamed {
+            let n = name.clone().unwrap_or_default();
+            let text = if n.is_empty() { "cleared the group name.".to_string() } else { format!("changed the group name to {n}.") };
+            crate::routes::dms::system_message(&state, id, uid, "channel_name_change", &text, vec![]).await?;
+        }
+        if icon_changed {
+            crate::routes::dms::system_message(&state, id, uid, "channel_icon_change", "changed the group icon.", vec![]).await?;
+        }
         return Ok(Json(sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(id).fetch_one(&state.db).await?));
     }
     perms::check(p, perms::MANAGE_CHANNELS)?;
@@ -177,7 +187,7 @@ async fn delete_channel(
 
 pub const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
     u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from,
-    m.mentions, m.mention_roles, m.mention_everyone
+    m.mentions, m.mention_roles, m.mention_everyone, m.kind
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {

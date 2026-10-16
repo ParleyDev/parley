@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkMinus, Copy, Forward, Hash, Link2, MailOpen, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2, Volume2 } from 'lucide-react'
+import { ArrowLeftFromLine, Bookmark, BookmarkMinus, Copy, Forward, Hash, ImageIcon, Link2, MailOpen, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
@@ -122,6 +122,17 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       'sep' as const,
       { label: 'Copy Message ID', icon: <Hash size={16} />, onClick: () => copy('Message ID', m.id) },
     ]
+  }
+
+  if (m.kind && m.kind !== 'default') {
+    const icon = m.kind === 'recipient_add' ? <UserPlus size={16} className="text-success" /> : m.kind === 'recipient_remove' || m.kind === 'recipient_leave' ? <UserMinus size={16} className="text-danger" /> : m.kind === 'channel_icon_change' ? <ImageIcon size={16} className="text-text-2" /> : <ArrowLeftFromLine size={16} className="text-text-2" />
+    return (
+      <div className="px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
+        <span className="w-10 flex justify-center shrink-0">{icon}</span>
+        <span className="min-w-0"><button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{m.author.display_name}</button> {m.content}</span>
+        <span className="ml-auto text-xs text-text-2 shrink-0" title={new Date(m.created_at).toLocaleString()}>{new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+      </div>
+    )
   }
 
   if (blocked && !revealed) {
