@@ -24,17 +24,33 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
   const user = useStore((s) => s.user)
   const [reply, setReply] = useState<Message | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const stickBottom = useRef(true)
   const prevHeight = useRef(0)
+  // Where the reader was when they opened the channel: everything after it is "new" until they leave.
+  const [readAtOpen, setReadAtOpen] = useState<string | null | undefined>(undefined)
+  const initialScrollDone = useRef(false)
 
   useEffect(() => {
     setActiveChannel(channel.id)
     setReply(null)
     stickBottom.current = true
+    initialScrollDone.current = false
+    // Capture before the mark-read effect below moves the pointer to the newest message.
+    setReadAtOpen(useStore.getState().readStates[channel.id] ?? null)
     if (!messages) loadMessages(channel.id)
     return () => setActiveChannel(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel.id])
+
+  // First message the reader has not seen (from someone else), if any is loaded.
+  const firstUnreadId = (() => {
+    if (readAtOpen === undefined || !messages?.length) return null
+    const m = messages.find((x) => (readAtOpen === null || x.id > readAtOpen) && x.author.id !== user?.id)
+    // With no read state at all (never opened), everything is "new"; only mark when there is history before it.
+    if (!m || (readAtOpen === null && messages[0].id === m.id)) return null
+    return m.id
+  })()
 
   // Mark read when viewing and tab visible.
   useEffect(() => {
@@ -45,17 +61,41 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
     return () => { document.removeEventListener('visibilitychange', mark); window.removeEventListener('focus', mark) }
   }, [channel.id, lastId, markRead])
 
-  // Keep scroll pinned to bottom on new messages, or preserve position when prepending history.
+  // First paint of a channel: land on the first unread message (Discord's "NEW" line) or the bottom.
+  // After that: stay pinned to the bottom on new messages, or hold position when history is prepended.
   useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    if (stickBottom.current) {
+    if (!initialScrollDone.current && messages) {
+      initialScrollDone.current = true
+      const divider = firstUnreadId ? el.querySelector<HTMLElement>('[data-unread-divider]') : null
+      if (divider) {
+        el.scrollTop = Math.max(0, divider.offsetTop - el.offsetTop - 24)
+        stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+      } else {
+        el.scrollTop = el.scrollHeight
+        stickBottom.current = true
+      }
+    } else if (stickBottom.current) {
       el.scrollTop = el.scrollHeight
     } else if (prevHeight.current && el.scrollHeight > prevHeight.current) {
       el.scrollTop += el.scrollHeight - prevHeight.current
     }
     prevHeight.current = el.scrollHeight
-  }, [messages])
+  }, [messages, firstUnreadId])
+
+  // Late-loading content (thumbnails, link cards, poll results) grows the list after the first paint;
+  // when pinned to the bottom, follow it so the view never drifts up.
+  useEffect(() => {
+    const el = scrollRef.current, content = contentRef.current
+    if (!el || !content || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      if (stickBottom.current) el.scrollTop = el.scrollHeight
+      prevHeight.current = el.scrollHeight
+    })
+    ro.observe(content)
+    return () => ro.disconnect()
+  }, [channel.id])
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current
@@ -72,7 +112,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
   return (
     <>
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto">
-        <div className="min-h-full flex flex-col justify-end">
+        <div ref={contentRef} className="min-h-full flex flex-col justify-end">
           {hasMore === false || (messages && messages.length < 50 && !loading) ? (
             <ChannelIntro channel={channel} />
           ) : loading ? (
@@ -82,13 +122,18 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
             {messages?.map((m, i) => {
               const prev = messages[i - 1]
               const newDay = !prev || !sameDay(prev.created_at, m.created_at)
-              const grouped = !!prev && !newDay && prev.author.id === m.author.id && !m.reply_to
+              const grouped = !!prev && !newDay && firstUnreadId !== m.id && prev.author.id === m.author.id && !m.reply_to
                 && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 7 * 60 * 1000
               return (
                 <div key={m.id}>
                   {newDay && (
                     <div className="relative my-4 mx-4 flex items-center">
                       <div className="h-px flex-1 bg-line" /><span className="px-2 text-[11px] font-semibold text-text-2">{formatDateDivider(m.created_at)}</span><div className="h-px flex-1 bg-line" />
+                    </div>
+                  )}
+                  {firstUnreadId === m.id && (
+                    <div className="relative mx-4 my-1 flex items-center" data-unread-divider>
+                      <div className="h-px flex-1 bg-danger" /><span className="rounded-sm bg-danger px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">New</span>
                     </div>
                   )}
                   <MessageItem message={m} grouped={grouped} isOwn={m.author.id === user?.id} onReply={() => setReply(m)} replyTarget={m.reply_to ? messages.find((x) => x.id === m.reply_to) ?? null : null} />
