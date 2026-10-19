@@ -46,4 +46,12 @@ export const api = {
   put: <T>(p: string, b?: unknown) => request<T>('PUT', p, b ?? {}),
   patch: <T>(p: string, b?: unknown) => request<T>('PATCH', p, b ?? {}),
   delete: <T>(p: string, body?: unknown) => request<T>('DELETE', p, body),
+  /** GET that also returns response headers (for X-Total-Count style paging). */
+  getWithHeaders: async <T>(p: string): Promise<{ data: T; headers: Headers }> => {
+    const token = getToken()
+    const res = await fetch(`/api${p}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    const text = await res.text(); let data: unknown = null; try { data = text ? JSON.parse(text) : null } catch { data = null }
+    if (!res.ok) throw new ApiError(res.status, (data as { error?: string } | null)?.error ?? res.statusText)
+    return { data: data as T, headers: res.headers }
+  },
 }

@@ -75,16 +75,36 @@ function Overview() {
   )
 }
 
-interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; guild_count: number; online: boolean }
+interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; upload_quota_bytes?: number | null; last_seen_at?: string | null; guild_count: number; online: boolean }
+type Tri = '' | 'true' | 'false'
+interface UserFilters { admin: Tri; suspended: Tri; verified: Tri; mfa: Tri; online: Tri; joined_before: string; joined_after: string; inactive_days: string }
+const EMPTY_FILTERS: UserFilters = { admin: '', suspended: '', verified: '', mfa: '', online: '', joined_before: '', joined_after: '', inactive_days: '' }
+const PAGE = 100
 
 function UsersPane() {
   const me = useStore((s) => s.user)
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
   const [q, setQ] = useState('')
+  const [filters, setFilters] = useState<UserFilters>(EMPTY_FILTERS)
   const [list, setList] = useState<AdminUser[] | null>(null)
-  const load = () => api.get<AdminUser[]>(`/admin/users?q=${encodeURIComponent(q.trim())}`).then(setList).catch((e: Error) => pushToast(e.message, 'error'))
-  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [total, setTotal] = useState(0)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const query = (offset: number) => {
+    const p = new URLSearchParams({ q: q.trim(), offset: String(offset), limit: String(PAGE) })
+    for (const [k, v] of Object.entries(filters)) if (v !== '') p.set(k, v)
+    return `/admin/users?${p.toString()}`
+  }
+  const load = async (append = false) => {
+    try {
+      const { data, headers } = await api.getWithHeaders<AdminUser[]>(query(append ? (list?.length ?? 0) : 0))
+      setTotal(Number(headers.get('x-total-count') ?? data.length))
+      setList((cur) => (append && cur ? [...cur, ...data] : data))
+      if (!append) setSelected(new Set())
+    } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  useEffect(() => { const t = setTimeout(() => load(), 250); return () => clearTimeout(t) }, [q, filters]) // eslint-disable-line react-hooks/exhaustive-deps
   const navigate = useNavigate()
   const logoutAll = async (u: AdminUser) => {
     try { const r = await api.delete<{ revoked: number }>(`/admin/users/${u.id}/sessions`); pushToast(`@${u.username} logged out of ${r.revoked} device${r.revoked === 1 ? '' : 's'}`) } catch (e) { pushToast((e as Error).message, 'error') }
@@ -94,19 +114,70 @@ function UsersPane() {
   }
   const del = (u: AdminUser) => openModal({ kind: 'confirm', title: `Delete @${u.username}`, body: `This permanently deletes ${u.display_name}'s account, the servers they own, their messages and uploads. This cannot be undone.`, danger: true, confirmLabel: 'Delete Account',
     action: async () => { try { await api.delete(`/admin/users/${u.id}`); pushToast('Account deleted'); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
+
+  // ---- bulk mode ----
+  const selectable = (list ?? []).filter((u) => u.id !== me?.id)
+  const allSelected = selectable.length > 0 && selectable.every((u) => selected.has(u.id))
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((u) => u.id)))
+  const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const runBulk = async (action: string, extra: Record<string, unknown> = {}) => {
+    setBusy(true)
+    try {
+      const r = await api.post<{ done: number; failed: { id: string; error: string }[] }>('/admin/users/bulk', { ids: [...selected], action, ...extra })
+      pushToast(`${r.done} account${r.done === 1 ? '' : 's'} updated${r.failed.length ? `, ${r.failed.length} skipped (${r.failed[0].error})` : ''}`, r.failed.length ? 'error' : 'info')
+      await load()
+    } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+  }
+  const bulk = (action: string, label: string, body: string, danger = false, extra: Record<string, unknown> = {}) =>
+    openModal({ kind: 'confirm', title: `${label} ${selected.size} account${selected.size === 1 ? '' : 's'}`, body, danger, confirmLabel: label, action: () => runBulk(action, extra) })
+  const bulkQuota = () => { const mb = window.prompt('Storage quota in MB for the selected accounts (0 = unlimited, empty = instance default)', ''); if (mb === null) return; const v = mb.trim() === '' ? null : Math.round(Number(mb) * 1024 * 1024); if (v !== null && !Number.isFinite(v)) { pushToast('Enter a number of MB', 'error'); return } runBulk('quota', { upload_quota_bytes: v }) }
+  const tri = (k: keyof UserFilters, label: string, yes: string, no: string) => (
+    <select className="input w-auto py-1 text-xs" value={filters[k]} onChange={(e) => setFilters({ ...filters, [k]: e.target.value })} data-admin-filter={k} aria-label={label}>
+      <option value="">{label}: any</option><option value="true">{yes}</option><option value="false">{no}</option>
+    </select>
+  )
+  const activeFilters = Object.values(filters).filter((v) => v !== '').length
   return (
     <div data-admin-users>
       <h1 className="text-2xl font-bold">Users</h1>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by username, display name or email" data-admin-user-search className="input mt-4 max-w-md" />
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by username, display name or email" data-admin-user-search className="input max-w-md" />
+        {tri('admin', 'Role', 'Admins', 'Not admins')}
+        {tri('suspended', 'Status', 'Suspended', 'Active')}
+        {tri('verified', 'Email', 'Verified', 'Unverified')}
+        {tri('mfa', '2FA', 'Enabled', 'Not enabled')}
+        {tri('online', 'Presence', 'Online now', 'Offline')}
+        <label className="flex items-center gap-1 text-xs text-text-2">Joined after <input type="date" className="input w-auto py-1 text-xs" value={filters.joined_after} onChange={(e) => setFilters({ ...filters, joined_after: e.target.value })} data-admin-filter="joined_after" /></label>
+        <label className="flex items-center gap-1 text-xs text-text-2">before <input type="date" className="input w-auto py-1 text-xs" value={filters.joined_before} onChange={(e) => setFilters({ ...filters, joined_before: e.target.value })} data-admin-filter="joined_before" /></label>
+        <label className="flex items-center gap-1 text-xs text-text-2">Inactive for <input type="number" min={1} className="input w-20 py-1 text-xs" value={filters.inactive_days} onChange={(e) => setFilters({ ...filters, inactive_days: e.target.value })} placeholder="days" data-admin-filter="inactive_days" /> days</label>
+        {activeFilters > 0 && <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setFilters(EMPTY_FILTERS)} data-admin-filter-clear>Clear filters</button>}
+        <span className="ml-auto text-xs text-text-2" data-admin-user-total>{list ? `${list.length} of ${total}` : '…'}</span>
+      </div>
+      {selected.size > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm" data-admin-bulk-bar>
+          <span className="font-semibold" data-admin-bulk-count>{selected.size} selected</span>
+          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('suspend', 'Suspend', 'Suspended accounts are logged out everywhere and cannot log in until unsuspended.', true)} data-admin-bulk="suspend">Suspend</button>
+          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('unsuspend', 'Unsuspend', 'They will be able to log in again.')} data-admin-bulk="unsuspend">Unsuspend</button>
+          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('logout', 'Log out', 'Every session of the selected accounts is revoked.')} data-admin-bulk="logout">Log out everywhere</button>
+          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('clear_mfa', 'Clear 2FA', 'Two-factor authentication is removed from the selected accounts; they log in with just their password.', true)} data-admin-bulk="clear_mfa">Clear 2FA</button>
+          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={bulkQuota} data-admin-bulk="quota">Set quota</button>
+          <button type="button" className="btn-danger py-1 text-xs" disabled={busy} onClick={() => bulk('delete', 'Delete', 'This permanently deletes the selected accounts, the servers they own, their messages and uploads. This cannot be undone.', true)} data-admin-bulk="delete">Delete</button>
+          <button type="button" className="ml-auto text-xs text-text-2 hover:text-text-0" onClick={() => setSelected(new Set())} data-admin-bulk-clear>Clear selection</button>
+        </div>
+      )}
       <div className="mt-4 rounded-xl border border-line overflow-hidden">
-        <div className="grid grid-cols-[1fr_1fr_90px_110px_200px] gap-3 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-text-2 bg-bg-0/40 max-md:hidden"><span>User</span><span>Email</span><span>Servers</span><span>Joined</span><span /></div>
+        <div className="grid grid-cols-[28px_1fr_1fr_90px_110px_200px] gap-3 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-text-2 bg-bg-0/40 max-md:hidden items-center">
+          <input type="checkbox" className="h-4 w-4 accent-accent" checked={allSelected} onChange={toggleAll} aria-label="Select all" data-admin-select-all />
+          <span>User</span><span>Email</span><span>Servers</span><span>Joined</span><span />
+        </div>
         {list === null && <p className="p-4 text-sm text-text-2">Loading…</p>}
         {list?.length === 0 && <p className="p-4 text-sm text-text-2">No users match.</p>}
         {list?.map((u) => (
-          <div key={u.id} className="grid grid-cols-[1fr_1fr_90px_110px_200px] max-md:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40" data-admin-user={u.username}>
+          <div key={u.id} className={`grid grid-cols-[28px_1fr_1fr_90px_110px_200px] max-md:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40 ${selected.has(u.id) ? 'bg-accent/5' : ''}`} data-admin-user={u.username} data-selected={selected.has(u.id) ? '1' : '0'}>
+            <input type="checkbox" className="h-4 w-4 accent-accent" checked={selected.has(u.id)} disabled={u.id === me?.id} onChange={() => toggle(u.id)} aria-label={`Select @${u.username}`} data-admin-select />
             <div className="min-w-0 flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full shrink-0 ${u.online ? 'bg-success' : 'bg-text-2'}`} />
-              <span className="min-w-0"><span className="block truncate font-semibold">{u.display_name}</span><span className="block truncate text-xs text-text-2">@{u.username}</span></span>
+              <span className="min-w-0"><span className="block truncate font-semibold">{u.display_name}</span><span className="block truncate text-xs text-text-2">@{u.username}{u.last_seen_at ? ` · seen ${new Date(u.last_seen_at).toLocaleDateString()}` : ''}</span></span>
               {u.is_admin && <span className="rounded bg-success/20 text-success px-1.5 py-0.5 text-[10px] font-bold" data-badge="admin">ADMIN</span>}
               {u.suspended_at && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="suspended">SUSPENDED</span>}
               {u.mfa_enabled && <span className="rounded bg-sky-500/20 text-sky-300 px-1.5 py-0.5 text-[10px] font-bold" data-badge="mfa">2FA</span>}
@@ -130,6 +201,7 @@ function UsersPane() {
             </div>
           </div>
         ))}
+        {list && list.length < total && <button type="button" className="w-full py-2 text-sm text-sky-400 hover:bg-bg-3 border-t border-line" onClick={() => load(true)} data-admin-user-more>Load more ({total - list.length} remaining)</button>}
       </div>
     </div>
   )
