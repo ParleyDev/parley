@@ -9,6 +9,7 @@ use crate::{
     state::AppState,
 };
 use axum::{
+    response::IntoResponse,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{delete, get},
@@ -26,6 +27,7 @@ pub fn router() -> Router<AppState> {
         .route("/admin/stats", get(stats))
         .route("/admin/users", get(list_users))
         .route("/admin/users/:id", axum::routing::patch(patch_user).delete(delete_user))
+        .route("/admin/users/bulk", axum::routing::post(bulk_users))
         .route("/admin/guilds", get(list_guilds))
         .route("/admin/guilds/:id", delete(delete_guild))
         .route("/admin/settings", get(get_settings).put(put_settings))
@@ -141,6 +143,19 @@ async fn stats(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppRes
 struct ListQuery {
     #[serde(default)]
     q: String,
+    /// Filters (all optional, AND-ed): admin, suspended, verified, mfa, online as true/false;
+    /// joined_before / joined_after as YYYY-MM-DD; inactive_days = no session activity for N days.
+    admin: Option<bool>,
+    suspended: Option<bool>,
+    verified: Option<bool>,
+    mfa: Option<bool>,
+    online: Option<bool>,
+    joined_before: Option<chrono::NaiveDate>,
+    joined_after: Option<chrono::NaiveDate>,
+    inactive_days: Option<i64>,
+    #[serde(default)]
+    offset: i64,
+    limit: Option<i64>,
 }
 
 #[derive(Debug, Serialize, FromRow)]
@@ -153,6 +168,13 @@ struct AdminUser {
     is_admin: bool,
     suspended_at: Option<DateTime<Utc>>,
     mfa_enabled: bool,
+    #[sqlx(default)]
+    email_verified_at: Option<DateTime<Utc>>,
+    #[sqlx(default)]
+    upload_quota_bytes: Option<i64>,
+    /// Newest session activity (any device), None if never logged in since sessions were introduced.
+    #[sqlx(default)]
+    last_seen_at: Option<DateTime<Utc>>,
     guild_count: i64,
     #[sqlx(skip)]
     online: bool,
@@ -163,20 +185,107 @@ fn pattern(q: &str) -> Option<String> {
     if t.is_empty() { None } else { Some(format!("%{t}%")) }
 }
 
-async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<ListQuery>) -> AppResult<Json<Vec<AdminUser>>> {
+/// Filtered, paged user list (newest first). The total for the filter is in the X-Total-Count header so the
+/// response stays a plain array.
+async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<ListQuery>) -> AppResult<axum::response::Response> {
     require_admin(&state, uid).await?;
-    let mut rows = sqlx::query_as::<_, AdminUser>(
+    let online = crate::ws::bus::online_users(&state.db).await;
+    let limit = q.limit.unwrap_or(200).clamp(1, 200);
+    let before: Option<DateTime<Utc>> = q.joined_before.and_then(|d| d.and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
+    let after: Option<DateTime<Utc>> = q.joined_after.and_then(|d| (d + chrono::Duration::days(1)).and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
+    let where_sql = "($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR u.email ILIKE $1)
+         AND ($2::bool IS NULL OR u.is_admin = $2)
+         AND ($3::bool IS NULL OR (u.suspended_at IS NOT NULL) = $3)
+         AND ($4::bool IS NULL OR (u.email_verified_at IS NOT NULL) = $4)
+         AND ($5::bool IS NULL OR (u.totp_secret IS NOT NULL) = $5)
+         AND ($6::bool IS NULL OR (u.id = ANY($7)) = $6)
+         AND ($8::timestamptz IS NULL OR u.created_at < $8)
+         AND ($9::timestamptz IS NULL OR u.created_at >= $9)
+         AND ($10::bigint IS NULL OR COALESCE((SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), u.created_at) < now() - make_interval(days => $10::int))";
+    let (total,): (i64,) = sqlx::query_as(&format!("SELECT COUNT(*) FROM users u WHERE {where_sql}"))
+        .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days)
+        .fetch_one(&state.db)
+        .await?;
+    let mut rows = sqlx::query_as::<_, AdminUser>(&format!(
         "SELECT u.id, u.username, u.display_name, u.email, u.created_at, u.is_admin, u.suspended_at, (u.totp_secret IS NOT NULL) AS mfa_enabled,
+                u.email_verified_at, u.upload_quota_bytes, (SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id) AS last_seen_at,
                 (SELECT COUNT(*) FROM guild_members m WHERE m.user_id = u.id) AS guild_count
-         FROM users u WHERE ($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR u.email ILIKE $1)
-         ORDER BY u.created_at DESC LIMIT 200",
-    )
-    .bind(pattern(&q.q))
+         FROM users u WHERE {where_sql}
+         ORDER BY u.created_at DESC LIMIT $11 OFFSET $12"))
+    .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days)
+    .bind(limit).bind(q.offset.max(0))
     .fetch_all(&state.db)
     .await?;
-    let online = crate::ws::bus::online_users(&state.db).await;
     for r in &mut rows { r.online = online.contains(&r.id) }
-    Ok(Json(rows))
+    let mut resp = Json(rows).into_response();
+    resp.headers_mut().insert("x-total-count", axum::http::HeaderValue::from(total as u64));
+    Ok(resp)
+}
+
+#[derive(Deserialize)]
+struct BulkReq {
+    ids: Vec<Uuid>,
+    /// suspend | unsuspend | logout | delete | quota | clear_mfa
+    action: String,
+    upload_quota_bytes: Option<i64>,
+}
+
+/// Apply one action to many accounts; the caller is skipped for destructive actions. Each change is audited.
+async fn bulk_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<BulkReq>) -> AppResult<Json<Value>> {
+    require_admin(&state, uid).await?;
+    if req.ids.len() > 500 {
+        return Err(AppError::BadRequest("At most 500 accounts per request".into()));
+    }
+    if !["suspend", "unsuspend", "logout", "delete", "quota", "clear_mfa"].contains(&req.action.as_str()) {
+        return Err(AppError::BadRequest("Unknown action".into()));
+    }
+    let mut done = 0usize;
+    let mut failed: Vec<Value> = Vec::new();
+    for id in req.ids.iter().copied().collect::<std::collections::BTreeSet<_>>() {
+        let res: AppResult<()> = async {
+            let name = audit::username(&state, id).await;
+            if name.is_empty() { return Err(AppError::NotFound("User not found".into())) }
+            match req.action.as_str() {
+                "suspend" => {
+                    if id == uid { return Err(AppError::BadRequest("You cannot suspend yourself".into())) }
+                    sqlx::query("UPDATE users SET suspended_at = COALESCE(suspended_at, now()) WHERE id = $1").bind(id).execute(&state.db).await?;
+                    state.hub.emit_users(vec![id], "SESSION_REVOKED", json!({ "reason": "Your account has been suspended." }));
+                    state.hub.voice_evict(|v| v.user_id == id);
+                    audit::record(&state, uid, "user.suspend", "user", Some(id), &name, json!({ "bulk": true })).await;
+                }
+                "unsuspend" => {
+                    sqlx::query("UPDATE users SET suspended_at = NULL WHERE id = $1").bind(id).execute(&state.db).await?;
+                    audit::record(&state, uid, "user.unsuspend", "user", Some(id), &name, json!({ "bulk": true })).await;
+                }
+                "logout" => {
+                    let n = crate::auth::revoke_sessions(&state, id, None, None, "An administrator logged you out of all devices.").await?.len();
+                    audit::record(&state, uid, "user.logout_all", "user", Some(id), &name, json!({ "revoked": n, "bulk": true })).await;
+                }
+                "delete" => {
+                    if id == uid { return Err(AppError::BadRequest("You cannot delete your own account from here".into())) }
+                    delete_account(&state, id).await?;
+                    audit::record(&state, uid, "user.delete", "user", Some(id), &name, json!({ "bulk": true })).await;
+                }
+                "quota" => {
+                    let q = req.upload_quota_bytes;
+                    if q.map(|v| v < 0).unwrap_or(false) { return Err(AppError::BadRequest("Quota cannot be negative".into())) }
+                    sqlx::query("UPDATE users SET upload_quota_bytes = $2 WHERE id = $1").bind(id).bind(q).execute(&state.db).await?;
+                    audit::record(&state, uid, "user.quota", "user", Some(id), &name, json!({ "upload_quota_bytes": q, "bulk": true })).await;
+                }
+                "clear_mfa" => {
+                    crate::routes::mfa::clear_mfa(&state, id).await?;
+                    audit::record(&state, uid, "user.clear_mfa", "user", Some(id), &name, json!({ "bulk": true })).await;
+                }
+                _ => unreachable!(),
+            }
+            Ok(())
+        }.await;
+        match res {
+            Ok(()) => done += 1,
+            Err(e) => failed.push(json!({ "id": id, "error": match &e { AppError::BadRequest(m) | AppError::NotFound(m) => m.clone(), _ => "failed".to_string() } })),
+        }
+    }
+    Ok(Json(json!({ "done": done, "failed": failed })))
 }
 
 #[derive(Deserialize)]
