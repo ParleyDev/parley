@@ -98,6 +98,16 @@ bd ready                 # unblocked work, highest priority first
 bd show <id> / bd close <id>
 ```
 
+## Publishing through a Cloudflare Tunnel
+
+No ports need opening: create a tunnel in Cloudflare Zero Trust (Networks → Tunnels), add a public hostname (for example `chat.example.com`) whose service is `http://frontend:80`, copy the tunnel token, then
+
+```bash
+TUNNEL_TOKEN=... APP_URL=https://chat.example.com docker compose --profile tunnel up -d
+```
+
+Cloudflare terminates TLS (the browser gets the secure context voice needs), forwards WebSockets, and sets `X-Forwarded-For` to the visitor's address so the per-IP rate limits keep working. Leave the origin on plain HTTP, keep ports 3000 and 18080 unpublished (so the forwarded header cannot be spoofed and `/metrics` stays private), set `APP_URL` to the public address (emailed links, invites), and leave `EMBED_ALLOW_HOSTS` empty. Mesh voice works unchanged (media is peer-to-peer; add a TURN server in `ICE_SERVERS` for strict NATs). The LiveKit SFU cannot ride the tunnel: its media ports (UDP 7882, TCP 7881) must be reachable directly, or use LiveKit Cloud.
+
 ## Running more than one backend
 
 Backends are stateless apart from the websocket hub, and the hub is clustered over Postgres: every event an instance emits is also `NOTIFY`-ed on the `parley_events` channel (payloads over 7 KB go through `bus_outbox` by id) and every other instance injects it into its own broadcast, so members connected anywhere see the same messages, typing, reactions, channel and role changes. Presence lives in the `presence` table (one row per user and instance, refreshed by a 30 s heartbeat, rows stale after 90 s): `PRESENCE_UPDATE` fires only when a user's first socket anywhere opens or their last one closes, and online lists (READY, admin console, Discover counts, metrics) read the table. Resume with replay only works against the instance that numbered the client's last event (`READY`/`RESUMED` carry the instance id as `i`, the client sends it back); after a failover the client gets a fresh `READY`. Voice state is still per instance: route a user's websocket consistently (sticky sessions) and keep call participants on the same instance, or put a TURN/SFU in front. Try it locally with `docker compose --profile cluster up -d` (a second backend on port 18081 sharing the database and uploads); the `cluster` e2e suite starts it on demand and checks that events and presence cross instances.

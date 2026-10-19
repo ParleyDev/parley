@@ -97,6 +97,20 @@ services:
     ports: !override
       - "${API_PORT2:-18081}:8080"
 
+  # Cloudflare Tunnel (profile "tunnel"): publish the frontend without opening any port. Create a tunnel in
+  # Zero Trust -> Networks -> Tunnels, add a public hostname pointing at http://frontend:80, then
+  #   TUNNEL_TOKEN=... APP_URL=https://chat.example.com docker compose --profile tunnel up -d
+  # The tunnel terminates TLS, forwards WebSockets and sets X-Forwarded-For, so nothing else changes.
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - frontend
+    restart: unless-stopped
+
   # Optional SFU for larger calls (profile "sfu"): a LiveKit server in dev mode (API key "devkey", secret
   # "secret"). Point Admin Console -> Instance Settings -> Voice at ws://<host>:7880 with those credentials.
   # For production run LiveKit with your own keys and TLS and enter them there instead.
