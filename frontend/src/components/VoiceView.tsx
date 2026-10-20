@@ -11,6 +11,7 @@ import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 import StudioPanel from './StudioPanel'
 import { DeviceCtl, type DeviceKind } from './DeviceMenu'
+import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
 import VideoTile from './VideoTile'
 import ChatPane from './ChatPane'
@@ -55,6 +56,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const isEngineer = isStudio && !!me && engineers.includes(me.id)
   const isMod = has(perms, P.MANAGE_CHANNELS) || isEngineer
   const [sessionsOpen, setSessionsOpen] = useState(false)
+  const chatPanel = useResizablePanel('voiceChat', 400)
+  const sessionsPanel = useResizablePanel('studioSessions', 420)
   const liveSession = useStore((s) => (isStudio ? s.studio[channel.id]?.find((x) => !x.ended_at) : undefined))
   const [recBusy, setRecBusy] = useState(false)
   const record = async () => {
@@ -128,13 +131,14 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const count = participants.length
 
   const phone = usePhone()
+  const toggleFullscreen = (el: HTMLElement) => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else el.requestFullscreen?.().catch(() => {}) }
   const renderTile = (t: Tile, big: boolean) => {
     const talking = t.kind === 'camera' && !!speaking[t.userId]
     const status = t.kind !== 'camera' ? null : t.isMe ? (connecting ? 'connecting' : 'connected') : inThis ? peerStatus[t.userId] ?? 'connecting' : null
     const name = t.user?.display_name ?? 'Unknown'
     return (
-      <div key={t.key} onClick={() => setFocused(focused === t.key ? null : t.key)}
-        className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big ? 'h-full w-full' : 'aspect-video'}`} data-voice-tile={t.userId}>
+      <div key={t.key} onClick={() => setFocused(focused === t.key ? null : t.key)} onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget) }}
+        className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big ? 'h-full w-full' : 'aspect-video'}`} data-voice-tile={t.userId} data-tile-big={big ? '1' : '0'} title={big ? 'Click to return to the grid · double-click for fullscreen' : 'Click to focus · double-click for fullscreen'}>
         {isStage && isMod && inThis && !t.isMe && t.kind === 'camera' && <button type="button" onClick={(e) => { e.stopPropagation(); toAudience(t.userId) }} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 group-hover:opacity-100" data-to-audience>Move to audience</button>}
         {isStudio && t.kind === 'camera' && engineers.includes(t.userId) && <span className="absolute left-2 top-2 z-10 rounded-md bg-warn px-1.5 py-0.5 text-[10px] font-bold uppercase text-black" data-engineer-badge>Engineer</span>}
         {isStudio && t.kind === 'camera' && !engineers.includes(t.userId) && !t.state.suppress && <span className="absolute left-2 top-2 z-10 rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-white" data-artist-badge>Artist</span>}
@@ -159,7 +163,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {status && status !== 'connected' && (
           <span className={`absolute right-3 top-3 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase ${status === 'failed' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{status === 'failed' ? 'No route' : 'Connecting'}</span>
         )}
-        <span className="absolute right-3 bottom-3 rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100">{big ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</span>
+        <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget.parentElement as HTMLElement) }} title="Fullscreen" aria-label="Fullscreen" className="absolute right-3 bottom-3 rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{document.fullscreenElement ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
       </div>
     )
   }
@@ -184,7 +188,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           {chatToggle}<MembersToggle /></span>
       </header>
 
-      <div className="flex-1 min-h-0 flex">
+      <div className="flex-1 min-h-0 flex" ref={(el) => { chatPanel.setContainer(el); sessionsPanel.setContainer(el) }}>
         {/* Stage */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-hidden p-4 max-md:p-2 flex flex-col gap-3">
@@ -273,10 +277,11 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           </div>
         </div>
 
-        {isStudio && sessionsOpen && <StudioPanel channelId={channel.id} canManage={isMod} onClose={() => setSessionsOpen(false)} />}
+        {isStudio && sessionsOpen && <StudioPanel channelId={channel.id} canManage={isMod} onClose={() => setSessionsOpen(false)} width={sessionsPanel.width} handle={<div {...sessionsPanel.handleProps} />} />}
         {/* Chat: side panel on wide screens, full overlay on phones. */}
         {chat && (
-          <section className="flex flex-col bg-bg-2 border-l border-line w-[400px] shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10">
+          <section className="relative flex flex-col bg-bg-2 border-l border-line shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10" style={{ width: chatPanel.width }} data-voice-chat-panel>
+            <div {...chatPanel.handleProps} />
             <div className="h-12 shrink-0 px-3 flex items-center gap-2 border-b border-line">
               <MessageSquare size={18} className="text-text-2" />
               <span className="font-bold truncate">{channel.name}</span>
