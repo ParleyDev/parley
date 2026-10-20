@@ -64,6 +64,8 @@ if (pubUrl && !WEB.startsWith(pubUrl)) {
   const other = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: `public link ${pubUrl}/invite/${inv.code}` })
   await pa.goto(`${WEB}/channels/@me/${dm.id}`); await pa.waitForSelector(`[data-msg-id="${other.id}"] [data-invite-card]`, { timeout: 10000 })
   ok('a link carrying the instance\'s public URL renders a card even when browsing from another address', true)
+  await pa.waitForTimeout(1500)
+  ok('…and no link preview is unfurled for it', await pa.locator(`[data-msg-id="${other.id}"] [data-link-embed]`).count() === 0)
   await pa.goto(`${WEB}/channels/${g.id}/${tc.id}`); await pa.waitForSelector('textarea')
 }
 await pa.click(`aside button:has-text("Social")`); await pa.click('text=Invite People'); await pa.waitForSelector('[data-invite-friends]')
