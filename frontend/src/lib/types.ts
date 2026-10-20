@@ -127,6 +127,10 @@ export interface Attachment {
   /** Voice messages: length and base64 waveform (amplitude bytes). */
   duration_ms?: number
   waveform?: string
+  /** Voice messages: speech-to-text (when the instance has an STT server) and who has listened. */
+  transcript?: string
+  transcript_status?: 'pending' | 'done' | 'failed'
+  listened_by?: string[]
 }
 
 export interface Message {

@@ -33,10 +33,11 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/channels/:id/attachments", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(32 * 1024 * 1024)))
         .route("/attachments/:id/thumb", get(serve_thumb))
+        .route("/attachments/:id/listened", post(mark_listened))
         .route("/attachments/:id/:filename", get(serve))
 }
 
-pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform";
+pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform, transcript, transcript_status";
 
 fn sanitize_filename(raw: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("file");
@@ -211,7 +212,14 @@ pub async fn attachments_for(db: &PgPool, message_ids: &[Uuid]) -> AppResult<Has
     .bind(message_ids)
     .fetch_all(db)
     .await?;
-    for a in rows {
+    let voice: Vec<Uuid> = rows.iter().filter(|a| a.duration_ms.is_some()).map(|a| a.id).collect();
+    let mut listens: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    if !voice.is_empty() {
+        let l: Vec<(Uuid, Uuid)> = sqlx::query_as("SELECT attachment_id, user_id FROM attachment_listens WHERE attachment_id = ANY($1) ORDER BY created_at").bind(&voice).fetch_all(db).await?;
+        for (att, u) in l { listens.entry(att).or_default().push(u); }
+    }
+    for mut a in rows {
+        a.listened_by = listens.remove(&a.id).unwrap_or_default();
         map.entry(a.message_id.unwrap()).or_default().push(a);
     }
     Ok(map)
@@ -255,4 +263,67 @@ pub async fn sweep_orphans(state: AppState) {
             let _ = tokio::fs::remove_file(state.config.upload_dir.join(id.to_string())).await;
         }
     }
+}
+
+/// `POST /attachments/:id/listened`: the caller played most of a voice message. Idempotent; tells the channel so the sender's card updates.
+async fn mark_listened(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
+    let att: Option<(Uuid, Option<Uuid>, Option<i32>)> = sqlx::query_as("SELECT channel_id, message_id, duration_ms FROM attachments WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    let (channel_id, message_id, duration) = att.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    let (Some(message_id), Some(_)) = (message_id, duration) else { return Err(AppError::NotFound("Not a voice message".into())) };
+    let c = crate::routes::channels::require_channel(&state.db, channel_id, uid).await?;
+    let res = sqlx::query("INSERT INTO attachment_listens (attachment_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(id).bind(uid).execute(&state.db).await?;
+    if res.rows_affected() > 0 {
+        let target = crate::routes::channels::target_for(&state.db, &c).await?;
+        state.hub.emit(target, "VOICE_LISTENED", serde_json::json!({ "channel_id": channel_id, "message_id": message_id, "attachment_id": id, "user_id": uid, "guild_id": c.guild_id }));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Voice messages just attached to `mid`: mark them pending and transcribe in the background when an STT server is configured.
+pub async fn queue_transcriptions(state: &AppState, mid: Uuid, author: Uuid, c: &crate::models::Channel) -> AppResult<()> {
+    let settings = crate::routes::admin::load_settings(&state.db).await?;
+    if !settings.stt_configured() { return Ok(()); }
+    let ids: Vec<(Uuid,)> = sqlx::query_as("UPDATE attachments SET transcript_status = 'pending' WHERE message_id = $1 AND duration_ms IS NOT NULL AND transcript_status IS NULL RETURNING id").bind(mid).fetch_all(&state.db).await?;
+    for (id,) in ids {
+        let st = state.clone(); let ch = c.clone();
+        let (url, key, model) = (settings.stt_url.clone(), settings.stt_api_key.clone(), settings.stt_model.clone());
+        tokio::spawn(async move { transcribe(st, id, mid, author, ch, url, key, model).await });
+    }
+    Ok(())
+}
+
+/// Posts the file to an OpenAI-compatible `/v1/audio/transcriptions` endpoint (faster-whisper-server, speaches, OpenAI, Groq...).
+async fn transcribe(state: AppState, id: Uuid, mid: Uuid, author: Uuid, c: crate::models::Channel, url: String, key: String, model: String) {
+    let status = match transcribe_once(&state, id, &url, &key, &model).await {
+        Ok(text) => {
+            let _ = sqlx::query("UPDATE attachments SET transcript = $2, transcript_status = 'done' WHERE id = $1").bind(id).bind(&text).execute(&state.db).await;
+            "done"
+        }
+        Err(e) => {
+            tracing::warn!(attachment = %id, error = %e, "transcription failed");
+            let _ = sqlx::query("UPDATE attachments SET transcript_status = 'failed' WHERE id = $1").bind(id).execute(&state.db).await;
+            "failed"
+        }
+    };
+    tracing::debug!(attachment = %id, status, "transcription finished");
+    if let (Ok(msg), Ok(target)) = (crate::routes::channels::fetch_message(&state.db, mid, author).await, crate::routes::channels::target_for(&state.db, &c).await) {
+        state.hub.emit(target, "MESSAGE_UPDATE", serde_json::json!({ "message": msg, "guild_id": c.guild_id }));
+    }
+}
+
+async fn transcribe_once(state: &AppState, id: Uuid, url: &str, key: &str, model: &str) -> Result<String, String> {
+    let (filename, content_type): (String, String) = sqlx::query_as("SELECT filename, content_type FROM attachments WHERE id = $1").bind(id).fetch_one(&state.db).await.map_err(|e| e.to_string())?;
+    let bytes = tokio::fs::read(state.config.upload_dir.join(id.to_string())).await.map_err(|e| e.to_string())?;
+    let part = reqwest::multipart::Part::bytes(bytes).file_name(filename).mime_str(&content_type).map_err(|e| e.to_string())?;
+    let form = reqwest::multipart::Form::new().text("model", model.to_string()).text("response_format", "json").part("file", part);
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(300)).build().map_err(|e| e.to_string())?;
+    let mut req = client.post(format!("{}/v1/audio/transcriptions", url.trim_end_matches('/'))).multipart(form);
+    if !key.is_empty() { req = req.bearer_auth(key); }
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+    let status = resp.status();
+    let body = resp.text().await.unwrap_or_default();
+    if !status.is_success() { return Err(format!("{status}: {}", body.chars().take(200).collect::<String>())); }
+    let v: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    let text = v.get("text").and_then(|t| t.as_str()).unwrap_or("").trim().chars().take(4000).collect::<String>();
+    Ok(text)
 }

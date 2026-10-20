@@ -71,9 +71,20 @@ pub struct InstanceSettings {
     pub livekit_api_key: String,
     #[serde(default)]
     pub livekit_api_secret: String,
+    /// Speech-to-text for voice messages: base URL of an OpenAI-compatible `/v1/audio/transcriptions` server. Empty = off.
+    #[serde(default)]
+    pub stt_url: String,
+    #[serde(default)]
+    pub stt_api_key: String,
+    #[serde(default)]
+    pub stt_model: String,
+    /// Whether voice messages get transcribed (derived; clients use it to show "Transcribing…").
+    #[serde(default)]
+    pub transcription: bool,
 }
 
 impl InstanceSettings {
+    pub fn stt_configured(&self) -> bool { !self.stt_url.trim().is_empty() }
     pub fn sfu_configured(&self) -> bool {
         !self.livekit_url.trim().is_empty() && !self.livekit_api_key.trim().is_empty() && !self.livekit_api_secret.trim().is_empty()
     }
@@ -81,13 +92,15 @@ impl InstanceSettings {
     pub fn public(mut self) -> Self {
         self.livekit_api_key = String::new();
         self.livekit_api_secret = String::new();
+        self.stt_url = String::new();
+        self.stt_api_key = String::new();
         self
     }
 }
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new() };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -96,10 +109,14 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "livekit_url" => s.livekit_url = v.as_str().unwrap_or("").to_string(),
             "livekit_api_key" => s.livekit_api_key = v.as_str().unwrap_or("").to_string(),
             "livekit_api_secret" => s.livekit_api_secret = v.as_str().unwrap_or("").to_string(),
+            "stt_url" => s.stt_url = v.as_str().unwrap_or("").to_string(),
+            "stt_api_key" => s.stt_api_key = v.as_str().unwrap_or("").to_string(),
+            "stt_model" => s.stt_model = v.as_str().unwrap_or("").to_string(),
             _ => {}
         }
     }
     s.voice_mode = if s.sfu_configured() { "sfu".into() } else { "mesh".into() };
+    s.transcription = s.stt_configured();
     Ok(s)
 }
 
@@ -441,10 +458,19 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if before.livekit_url != lk_url { changed.insert("livekit_url".into(), json!(lk_url)); }
     if before.livekit_api_key != lk_key { changed.insert("livekit_api_key".into(), json!(lk_key)); }
     if before.livekit_api_secret != lk_secret { changed.insert("livekit_api_secret".into(), json!(if lk_secret.is_empty() { "cleared" } else { "set" })); }
+    let stt_url = req.stt_url.trim().trim_end_matches('/').to_string();
+    if !stt_url.is_empty() && !(stt_url.starts_with("http://") || stt_url.starts_with("https://")) {
+        return Err(AppError::BadRequest("Transcription URL must start with http:// or https://".into()));
+    }
+    let stt_key = req.stt_api_key.trim().to_string();
+    let stt_model = req.stt_model.trim().chars().take(100).collect::<String>();
+    if before.stt_url != stt_url { changed.insert("stt_url".into(), json!(stt_url)); }
+    if before.stt_api_key != stt_key { changed.insert("stt_api_key".into(), json!(if stt_key.is_empty() { "cleared" } else { "set" })); }
+    if before.stt_model != stt_model { changed.insert("stt_model".into(), json!(stt_model)); }
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     let mut s = load_settings(&state.db).await?;
