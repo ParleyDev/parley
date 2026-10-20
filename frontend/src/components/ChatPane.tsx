@@ -25,6 +25,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
   const loadNewer = useStore((s) => s.loadNewer)
   const loadLatest = useStore((s) => s.loadLatest)
   const loading = useStore((s) => !!s.loadingMessages[channel.id])
+  const readyCount = useStore((s) => s.readyCount)
   const loadMessages = useStore((s) => s.loadMessages)
   const markRead = useStore((s) => s.markRead)
   const setActiveChannel = useStore((s) => s.setActiveChannel)
@@ -57,6 +58,26 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
     return () => setActiveChannel(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel.id])
+  // A full reconnect (READY) may have missed events: refetch the newest window of the channel on screen. The rows
+  // stayed on screen meanwhile, so nothing blanks.
+  const seenReady = useRef(readyCount)
+  useEffect(() => {
+    if (readyCount === seenReady.current) return
+    seenReady.current = readyCount
+    stickBottom.current = true
+    void loadLatest(channel.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyCount])
+  // If this pane's cache was dropped (a thread or secondary pane during a reconnect), load it again from scratch.
+  const hadRows = useRef(false)
+  useEffect(() => {
+    if (messages) { hadRows.current = true; return }
+    if (!hadRows.current) return
+    hadRows.current = false
+    initialScrollDone.current = false; stickBottom.current = true
+    loadMessages(channel.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages])
 
   // First message the reader has not seen (from someone else), if any is loaded.
   const firstUnreadId = (() => {

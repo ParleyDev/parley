@@ -136,6 +136,8 @@ interface State {
   readStates: Record<string, string | null>
   lastMessageId: Record<string, string>
   activeChannelId: string | null
+  /** How many READY payloads this session has applied; bumps on every full (re)connect. */
+  readyCount: number
   /** Mobile only: which pane is on screen. */
   mobilePane: 'nav' | 'content'
   /** Member list visible (desktop sidebar / mobile overlay). */
@@ -301,6 +303,7 @@ export const useStore = create<State>((set, get) => ({
   receipts: {},
   lastMessageId: {},
   activeChannelId: null,
+  readyCount: 0,
   mobilePane: initialPane(),
   membersOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
   dmProfileOpen: (() => { try { return localStorage.getItem(STORAGE_PREFIX + 'dmProfile') !== '0' } catch { return true } })(),
@@ -382,8 +385,11 @@ export const useStore = create<State>((set, get) => ({
       // READY is a snapshot taken when the socket connected; a verification that landed in between must not be undone.
       user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
       ready: true, connected: true,
-      // Drop cached messages/members on (re)connect: we may have missed events.
-      messages: {}, hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
+      // Drop cached messages/members on (re)connect: we may have missed events. The channel on screen keeps its
+      // rows so nothing goes blank; ChatPane refreshes it when readyCount changes.
+      messages: (() => { const a = get().activeChannelId; const cur = a ? get().messages[a] : undefined; return a && cur ? { [a]: cur } : {} })(),
+      hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
+      readyCount: get().readyCount + 1,
     })
   },
   setConnected: (connected) => set({ connected }),
