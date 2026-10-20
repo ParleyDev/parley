@@ -32,6 +32,7 @@ const mk = async (tok) => { const ctx = await browser.newContext({ viewport: { w
 const pa = await mk(a.token); const pb = await mk(b.token)
 const card = pb.locator(`[data-voice-message="${att.id}"]`); await card.waitFor()
 ok('API-made voice message renders as the waveform card', await card.locator('[data-voice-wave] span').count() === 64 && (await card.locator('[data-voice-time]').textContent()) === '0:03' && (await card.getAttribute('data-duration')) === '2500')
+ok('waveform stays inside the card', await card.evaluate((c) => { const w = c.querySelector('[data-voice-wave]').getBoundingClientRect(); const r = c.getBoundingClientRect(); const bars = [...c.querySelectorAll('[data-voice-wave] span')].map((b) => b.getBoundingClientRect()); return w.right <= r.right && bars.every((b) => b.right <= w.right + 0.5 && b.left >= w.left - 0.5) && bars.every((b) => b.width > 0) }))
 ok('theirs is the neutral style, mine is accent', (await card.getAttribute('class')).includes('bg-bg-3') && (await pa.locator(`[data-voice-message="${att.id}"]`).getAttribute('class')).includes('bg-accent'))
 ok('mic button shows in the composer', await pa.locator('[data-voice-record]').count() === 1)
 await pa.click('[data-voice-record]'); await pa.waitForSelector('[data-voice-recording]')
