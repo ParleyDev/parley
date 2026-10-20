@@ -35,6 +35,9 @@ export interface PrivateUser extends User {
   group_dm_privacy?: 'friends' | 'nobody'
   /** Default for 'allow DMs from server members' on servers you join. */
   guild_dms_default?: boolean
+  /** Data & Privacy: others see Seen on your DMs / see you typing. */
+  show_read_receipts?: boolean
+  show_typing?: boolean
   /** Server-side notification preferences (Settings → Notifications). */
   notif_prefs?: NotifPrefsServer
 }

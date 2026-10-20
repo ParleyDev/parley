@@ -445,6 +445,8 @@ async fn handle_client_op(
             let _ = sqlx::query("UPDATE users SET active_at = now() WHERE id = $1").bind(user_id).execute(&state.db).await;
         }
         ClientOp::Typing { channel_id } => {
+            let shows: Option<(bool,)> = sqlx::query_as("SELECT show_typing FROM users WHERE id = $1").bind(user_id).fetch_optional(&state.db).await.unwrap_or(None);
+            if !shows.map(|x| x.0).unwrap_or(true) { return; }
             if let Ok((c, p)) = crate::routes::channels::require_channel_perms(&state.db, channel_id, user_id).await {
                 if !has(p, perms::SEND_MESSAGES) { return; }
                 if let Ok(target) = crate::routes::channels::target_for(&state.db, &c).await {
