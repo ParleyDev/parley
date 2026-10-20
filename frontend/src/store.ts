@@ -4,6 +4,8 @@ import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
 
+/** Most messages kept per channel; beyond this the list becomes a window and pages in either direction. */
+const MAX_LOADED = 400
 let localSeq = Date.now()
 /** Undelivered rows survive channel switches, reconnects and reloads: they live in localStorage until Retry succeeds, Delete or Dismiss. */
 const localKey = (uid: string) => `parley.undelivered.${uid}`
@@ -476,7 +478,12 @@ export const useStore = create<State>((set, get) => ({
     }
     const dms = s.dms[m.channel_id] ? { ...s.dms, [m.channel_id]: { ...s.dms[m.channel_id], last_message_at: m.created_at } } : s.dms
     if (!list || s.hasNewer[m.channel_id]) return { users, lastMessageId, readStates, mentionCounts, typing, dms }
-    return { messages: { ...s.messages, [m.channel_id]: [...list, m] }, users, lastMessageId, readStates, mentionCounts, typing, dms }
+    // Live append at the bottom: keep the window bounded by dropping the oldest (they page back in on scroll-up).
+    let next = [...list, m]
+    const extra: Partial<State> = {}
+    const realCount = next.filter((x) => !x.local).length
+    if (realCount > MAX_LOADED) { const firstReal = next.findIndex((x) => !x.local); next = [...next.slice(0, firstReal), ...next.slice(firstReal + 1)]; extra.hasMore = { ...s.hasMore, [m.channel_id]: true } }
+    return { messages: { ...s.messages, [m.channel_id]: next }, users, lastMessageId, readStates, mentionCounts, typing, dms, ...extra }
   }),
   updateMessage: (m) => set((s) => {
     const list = s.messages[m.channel_id]
@@ -492,13 +499,18 @@ export const useStore = create<State>((set, get) => ({
     const existing = s.messages[channelId] ?? []
     const ids = new Set(existing.map((m) => m.id))
     const fresh = ms.filter((m) => !ids.has(m.id))
-    const merged = [...fresh, ...existing].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    let merged = [...fresh, ...existing].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    // Bounded window: past MAX_LOADED rows, drop the newest (the reader is looking at old history) and let the
+    // existing forward paging bring them back; the DOM never holds more than a few hundred messages.
+    let hasNewer = s.hasNewer[channelId] ?? false
+    const real = merged.filter((m) => !m.local)
+    if (real.length > MAX_LOADED) { const local = merged.filter((m) => m.local); merged = [...real.slice(0, MAX_LOADED), ...local]; hasNewer = true }
     // First page of a channel: bring back any undelivered rows saved for it (they sort last: ids start with "local-").
     if (s.user && !merged.some((m) => m.local)) {
       const saved = readLocal(s.user.id)[channelId]
       if (saved?.length) merged.push(...saved)
     }
-    return { messages: { ...s.messages, [channelId]: merged }, hasMore: { ...s.hasMore, [channelId]: hasMore } }
+    return { messages: { ...s.messages, [channelId]: merged }, hasMore: { ...s.hasMore, [channelId]: hasMore }, hasNewer: { ...s.hasNewer, [channelId]: hasNewer } }
   }),
   setLoadingMessages: (channelId, v) => set((s) => ({ loadingMessages: { ...s.loadingMessages, [channelId]: v } })),
   openThread: null,
@@ -706,8 +718,10 @@ export const useStore = create<State>((set, get) => ({
         const cur = st.messages[channelId] ?? []
         const ids = new Set(cur.map((m) => m.id))
         const fresh = ms.filter((m) => !ids.has(m.id))
-        const real = cur.filter((m) => !m.local), local = cur.filter((m) => m.local)
-        return { messages: { ...st.messages, [channelId]: [...real, ...fresh, ...local] }, hasNewer: { ...st.hasNewer, [channelId]: ms.length === 50 } }
+        let real = [...cur.filter((m) => !m.local), ...fresh]; const local = cur.filter((m) => m.local)
+        let hasMore = st.hasMore[channelId]
+        if (real.length > MAX_LOADED) { real = real.slice(real.length - MAX_LOADED); hasMore = true }
+        return { messages: { ...st.messages, [channelId]: [...real, ...local] }, hasNewer: { ...st.hasNewer, [channelId]: ms.length === 50 }, hasMore: { ...st.hasMore, [channelId]: hasMore } }
       })
     } catch (e) {
       get().pushToast((e as Error).message, 'error')

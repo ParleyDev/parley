@@ -38,6 +38,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
   const stickBottom = useRef(true)
   const prevHeight = useRef(0)
   const prevFirst = useRef<string | null>(null)
+  const anchor = useRef<{ id: string; top: number } | null>(null)
   // Where the reader was when they opened the channel: everything after it is "new" until they leave.
   const [readAtOpen, setReadAtOpen] = useState<string | null | undefined>(undefined)
   const initialScrollDone = useRef(false)
@@ -90,9 +91,13 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
       }
     } else if (stickBottom.current) {
       el.scrollTop = el.scrollHeight
+    } else if (anchor.current) {
+      // Older history was prepended (and maybe the newest rows trimmed): keep the row the reader was looking at
+      // exactly where it was, whatever happened to the total height.
+      const node = el.querySelector<HTMLElement>(`[data-msg-id="${anchor.current.id}"]`)
+      if (node) el.scrollTop += node.getBoundingClientRect().top - anchor.current.top
+      anchor.current = null
     } else if (prevHeight.current && el.scrollHeight > prevHeight.current && messages?.[0]?.id !== prevFirst.current) {
-      // Older history was prepended: keep what the reader was looking at in place. (Pages appended below
-      // after a jump must not shift the view, or scrolling down would cascade through the whole channel.)
       el.scrollTop += el.scrollHeight - prevHeight.current
     }
     prevHeight.current = el.scrollHeight
@@ -124,6 +129,8 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
     setAway(fromBottom > 300)
     if (el.scrollTop < 120 && hasMore !== false && !loading && messages?.length) {
       prevHeight.current = el.scrollHeight
+      const first = el.querySelector<HTMLElement>('[data-msg-id]')
+      anchor.current = first ? { id: first.getAttribute('data-msg-id')!, top: first.getBoundingClientRect().top } : null
       loadMessages(channel.id, messages[0].id)
     }
     if (hasNewer && fromBottom < 160 && !loading) loadNewer(channel.id)
@@ -157,7 +164,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
               const grouped = !!prev && !newDay && firstUnreadId !== m.id && prev.author.id === m.author.id && !m.reply_to && (!prev.kind || prev.kind === 'default')
                 && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 7 * 60 * 1000
               return (
-                <div key={m.id}>
+                <div key={m.id} className="msg-row">
                   {newDay && (
                     <div className="relative my-4 mx-4 flex items-center">
                       <div className="h-px flex-1 bg-line" /><span className="px-2 text-[11px] font-semibold text-text-2">{formatDateDivider(m.created_at)}</span><div className="h-px flex-1 bg-line" />
