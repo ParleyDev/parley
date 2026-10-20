@@ -44,7 +44,7 @@ console.log('-- UI')
 const browser = await chromium.launch(); const errors = []
 const mk = async (tok) => { const p = await browser.newPage({ viewport: { width: 1440, height: 900 } }); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${tc.id}`); await p.waitForSelector('textarea'); return p }
 const pa = await mk(a.token); const pb = await mk(b.token)
-await pa.click('[data-composer-poll]'); await pa.waitForSelector('[data-create-poll]')
+await pa.click('[data-composer-plus]'); await pa.click('[data-context-menu] [data-menu-item="Create Poll"]'); await pa.waitForSelector('[data-create-poll]')
 ok('Post Poll is disabled until valid', await pa.isDisabled('[data-poll-submit]'))
 await pa.fill('[data-poll-q]', `Game night? ${S}`); await pa.fill('[data-poll-opt="0"]', 'Yes'); await pa.fill('[data-poll-opt="1"]', 'No'); await pa.click('[data-poll-add]'); await pa.fill('[data-poll-opt="2"]', 'Maybe')
 await pa.selectOption('[data-poll-duration]', '4'); await pa.click('[data-poll-submit]')

@@ -1,4 +1,5 @@
-import { BarChart3, Eye, EyeOff, FileText, ImagePlay, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, X } from 'lucide-react'
+import { BarChart3, Eye, EyeOff, FileText, ImagePlay, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
+import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { myChannelPerms, useStore } from '../store'
@@ -254,6 +255,13 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setRecBusy(false); setRec(null) }
   }
   useEffect(() => () => { recorder.current?.cancel() }, [])
+  // The "+" menu on the left of the box: everything that adds something other than text.
+  const plus = useContextMenu()
+  const plusItems: MenuEntry[] = [
+    { label: 'Upload a File', icon: <Upload size={16} />, disabled: !canAttach, onClick: () => fileRef.current?.click() },
+    { label: 'Create Poll', icon: <BarChart3 size={16} />, onClick: () => openModal({ kind: 'createPoll', channelId: channel.id }) },
+    ...(typeof MediaRecorder !== 'undefined' ? [{ label: 'Record Voice Message', icon: <Mic size={16} />, disabled: !canAttach, onClick: () => { void startRecording() } }] : []),
+  ]
   const sendGif = async (g: { url: string }) => {
     setSending(true)
     try { await sendMessage(channel.id, g.url, reply?.id); onCancelReply(); onSent() } catch (e) { pushToast((e as Error).message, 'error') } finally { setSending(false) }
@@ -332,9 +340,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         ) : (
         <div className="flex items-end gap-2 px-3 py-2">
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
-          <button className={`pb-1 ${canAttach ? 'text-text-2 hover:text-text-0' : 'text-text-2/40 cursor-not-allowed'}`} title={canAttach ? 'Upload a file' : 'No permission to attach files'} onClick={() => canAttach && fileRef.current?.click()}><PlusCircle size={22} /></button>
-          <button className="pb-1 text-text-2 hover:text-text-0" title="Create a poll" onClick={() => openModal({ kind: 'createPoll', channelId: channel.id })} data-composer-poll><BarChart3 size={22} /></button>
-          {canAttach && typeof MediaRecorder !== 'undefined' && <button className="pb-1 text-text-2 hover:text-text-0" title="Record a voice message" onClick={startRecording} data-voice-record><Mic size={22} /></button>}
+          <button className="pb-1 text-text-2 hover:text-text-0" title="Attach, poll or voice message" onClick={(e) => { const r = (e.currentTarget.closest('[data-composer-box]') ?? e.currentTarget).getBoundingClientRect(); plus.open({ clientX: r.left, clientY: r.top - 8 }, plusItems, { above: true }) }} aria-haspopup="menu" data-composer-plus><PlusCircle size={22} /></button>
           <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={`Message ${name}`}
             onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
             className="composer-input flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />
@@ -351,6 +357,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         </div>
         )}
       </div>
+      {plus.menu && <ContextMenu {...plus.menu} onClose={plus.close} label="Add to message" />}
     </div>
   )
 }
