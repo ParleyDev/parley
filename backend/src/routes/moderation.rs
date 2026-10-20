@@ -73,7 +73,7 @@ async fn find_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, Q
         return Ok(Json(vec![]));
     }
     let rows = sqlx::query_as::<_, MessageRow>(&format!(
-        "{MESSAGE_SELECT} WHERE ($1::text IS NULL OR m.search @@ to_tsquery('simple', $1)) AND ($2::uuid IS NULL OR m.author_id = $2) AND ($3::uuid IS NULL OR m.id < $3) ORDER BY m.id DESC LIMIT 50"
+        "{MESSAGE_SELECT} WHERE m.kind = 'default' AND ($1::text IS NULL OR m.search @@ to_tsquery('simple', $1)) AND ($2::uuid IS NULL OR m.author_id = $2) AND ($3::uuid IS NULL OR m.id < $3) ORDER BY m.id DESC LIMIT 50"
     ))
     .bind(&tsq)
     .bind(q.user_id)
@@ -108,7 +108,7 @@ async fn user_content(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     require_admin(&state, uid).await?;
     let user: Option<(String, String)> = sqlx::query_as("SELECT username, display_name FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
     let Some((username, display_name)) = user else { return Err(AppError::NotFound("User not found".into())) };
-    let rows = sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE m.author_id = $1 ORDER BY m.id DESC LIMIT 50")).bind(id).fetch_all(&state.db).await?;
+    let rows = sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE m.author_id = $1 AND m.kind = 'default' ORDER BY m.id DESC LIMIT 50")).bind(id).fetch_all(&state.db).await?;
     let messages = decorate(&state, rows, uid).await?;
     let atts = sqlx::query_as::<_, Attachment>("SELECT id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at FROM attachments WHERE uploader_id = $1 ORDER BY created_at DESC LIMIT 200")
         .bind(id)
@@ -117,7 +117,7 @@ async fn user_content(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     let uploads: Vec<UploadRow> = atts.into_iter().map(|a| UploadRow { message_id: a.message_id, channel_id: a.channel_id, created_at: a.created_at, file: a.into() }).collect();
     let mut images = sqlx::query_as::<_, ImageRow>("SELECT id, kind, content_type, size, created_at FROM images WHERE owner_id = $1 ORDER BY created_at DESC LIMIT 200").bind(id).fetch_all(&state.db).await?;
     for i in &mut images { i.url = crate::routes::images::image_url(i.id) }
-    let (message_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages WHERE author_id = $1").bind(id).fetch_one(&state.db).await?;
+    let (message_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages WHERE author_id = $1 AND kind = 'default'").bind(id).fetch_one(&state.db).await?;
     let (attachment_bytes,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0)::bigint FROM attachments WHERE uploader_id = $1").bind(id).fetch_one(&state.db).await?;
     let (image_bytes,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(size), 0)::bigint FROM images WHERE owner_id = $1").bind(id).fetch_one(&state.db).await?;
     Ok(Json(json!({
@@ -137,7 +137,9 @@ async fn purge_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, 
         .fetch_all(&state.db)
         .await?;
     let files: Vec<(Uuid,)> = sqlx::query_as("SELECT a.id FROM attachments a JOIN messages m ON m.id = a.message_id WHERE m.author_id = $1").bind(id).fetch_all(&state.db).await?;
-    let deleted = sqlx::query("DELETE FROM messages WHERE author_id = $1").bind(id).execute(&state.db).await?.rows_affected();
+    let deleted = sqlx::query("DELETE FROM messages WHERE author_id = $1 AND kind = 'default'").bind(id).execute(&state.db).await?.rows_affected();
+    // Their system notices (joins, pins…) go too, but are not counted as purged messages.
+    sqlx::query("DELETE FROM messages WHERE author_id = $1").bind(id).execute(&state.db).await?;
     for (fid,) in files {
         let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
     }
