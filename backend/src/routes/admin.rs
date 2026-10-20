@@ -266,6 +266,7 @@ async fn bulk_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
                 "suspend" => {
                     if id == uid { return Err(AppError::BadRequest("You cannot suspend yourself".into())) }
                     sqlx::query("UPDATE users SET suspended_at = COALESCE(suspended_at, now()) WHERE id = $1").bind(id).execute(&state.db).await?;
+                    state.hub.session_forget(id);
                     state.hub.emit_users(vec![id], "SESSION_REVOKED", json!({ "reason": "Your account has been suspended." }));
                     state.hub.voice_evict(|v| v.user_id == id);
                     audit::record(&state, uid, "user.suspend", "user", Some(id), &name, json!({ "bulk": true })).await;
@@ -332,12 +333,14 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
             let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE is_admin AND id <> $1").bind(id).fetch_one(&state.db).await?;
             if n == 0 { return Err(AppError::BadRequest("At least one admin must remain".into())); }
         }
-        sqlx::query("UPDATE users SET is_admin = $2 WHERE id = $1").bind(id).bind(admin).execute(&state.db).await?;
+        // Console grants are not tied to ADMIN_EMAILS; a console demotion of a listed email is undone at their next check.
+        sqlx::query("UPDATE users SET is_admin = $2, admin_via_env = false WHERE id = $1").bind(id).bind(admin).execute(&state.db).await?;
         audit::record(&state, uid, if admin { "user.promote" } else { "user.demote" }, "user", Some(id), &audit::username(&state, id).await, json!({})).await;
     }
     if let Some(suspended) = req.suspended {
         if suspended && id == uid { return Err(AppError::BadRequest("You cannot suspend yourself".into())); }
         sqlx::query("UPDATE users SET suspended_at = CASE WHEN $2 THEN COALESCE(suspended_at, now()) ELSE NULL END WHERE id = $1").bind(id).bind(suspended).execute(&state.db).await?;
+        state.hub.session_forget(id);
         if suspended {
             // Their token stops working at once (the auth extractor checks suspension); tell open clients to log out.
             state.hub.emit_users(vec![id], "SESSION_REVOKED", json!({ "reason": "Your account has been suspended." }));
@@ -377,6 +380,7 @@ async fn delete_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
 /// Remove an account and everything hanging off it (servers they own, messages, uploads, sessions);
 /// members of their servers and their own open clients hear about it live.
 pub async fn delete_account(state: &AppState, id: Uuid) -> AppResult<()> {
+    state.hub.session_forget(id);
     let owned: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM guilds WHERE owner_id = $1").bind(id).fetch_all(&state.db).await?;
     for (gid,) in &owned {
         state.hub.voice_evict(|v| v.guild_id == Some(*gid));
@@ -409,7 +413,7 @@ async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser, Que
     let rows = sqlx::query_as::<_, AdminGuild>(
         "SELECT g.id, g.name, g.icon_url, g.created_at, g.owner_id, u.username AS owner_username,
                 (SELECT COUNT(*) FROM guild_members m WHERE m.guild_id = g.id) AS member_count,
-                (SELECT COUNT(*) FROM messages ms JOIN channels c ON c.id = ms.channel_id WHERE c.guild_id = g.id) AS message_count,
+                (SELECT COUNT(*) FROM messages ms JOIN channels c ON c.id = ms.channel_id WHERE c.guild_id = g.id AND ms.kind = 'default') AS message_count,
                 d.status AS discovery_status
          FROM guilds g JOIN users u ON u.id = g.owner_id LEFT JOIN guild_discovery d ON d.guild_id = g.id
          WHERE ($1::text IS NULL OR g.name ILIKE $1 OR u.username ILIKE $1)
