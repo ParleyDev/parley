@@ -1,4 +1,4 @@
-import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, Pin, PinOff, Reply, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
+import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
@@ -229,7 +229,6 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
               <Attachments items={m.attachments ?? []} mine={isOwn} />
-              {m.local === 'failed' && <FailedActions m={m} />}
             </>
           )}
           {m.reactions.length > 0 && (
@@ -248,6 +247,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
 
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} label="Message" />}
       {emojiHover.tip}
+      {!editing && m.local === 'failed' && <FailedActions m={m} tapped={tapped} />}
       {!editing && !m.local && (
         <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
           {m.pinned_at && <span className="h-8 px-1.5 flex items-center text-text-2" title="Pinned"><Pin size={13} /></span>}
@@ -345,18 +345,15 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
 }
 
 
-/** Under a message the server refused: send it again or drop it. */
-function FailedActions({ m }: { m: Message }) {
+/** Hover bar for a message the server refused: send it again or drop it. */
+function FailedActions({ m, tapped }: { m: Message; tapped: boolean }) {
   const retryLocal = useStore((s) => s.retryLocal)
   const discardLocal = useStore((s) => s.discardLocal)
   const [busy, setBusy] = useState(false)
   return (
-    <div className="mt-0.5 flex items-center gap-2 text-xs text-text-2" data-failed-actions>
-      <span className="text-danger">Not delivered</span>
-      <span>·</span>
-      <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await retryLocal(m.channel_id, m.id) } finally { setBusy(false) } }} className="text-sky-400 hover:underline disabled:opacity-50" data-failed-retry>{busy ? 'Retrying…' : 'Retry'}</button>
-      <span>·</span>
-      <button type="button" onClick={() => discardLocal(m.channel_id, m.id)} className="text-sky-400 hover:underline" data-failed-delete>Delete</button>
+    <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg`} data-failed-actions>
+      <Tool label={busy ? 'Retrying…' : 'Retry'} onClick={() => { if (busy) return; setBusy(true); retryLocal(m.channel_id, m.id).finally(() => setBusy(false)) }}><RotateCw size={16} className={busy ? 'animate-spin' : ''} /></Tool>
+      <Tool label="Delete" danger onClick={() => discardLocal(m.channel_id, m.id)}><Trash2 size={16} /></Tool>
     </div>
   )
 }
@@ -374,7 +371,7 @@ function RibbitNotice({ m }: { m: Message }) {
   const discardLocal = useStore((s) => s.discardLocal)
   const [reasons, setReasons] = useState(false)
   return (
-    <div className="group relative px-4 max-md:px-3 mt-[17px] py-0.5" data-msg-id={m.id} data-ribbit data-local="notice">
+    <div className="group relative mt-[17px] py-2 pl-[14px] pr-4 max-md:pl-[10px] max-md:pr-3 border-l-2 border-accent bg-accent/10" data-msg-id={m.id} data-ribbit data-local="notice">
       <div className="flex gap-4 max-md:gap-3">
         <img src={m.author.avatar_url ?? ''} alt="" className="h-10 w-10 max-md:h-8 max-md:w-8 shrink-0 rounded-full" draggable={false} data-msg-avatar />
         <div className="min-w-0 flex-1">
