@@ -1,4 +1,5 @@
 import { Inbox } from 'lucide-react'
+import { locale } from '../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -55,7 +56,7 @@ export default function InboxButton() {
               <button key={m.id} type="button" onClick={() => jump(m)} className="w-full text-left flex gap-3 px-4 py-2.5 hover:bg-bg-3 border-b border-line/60" data-inbox-item={m.id}>
                 <Avatar user={m.author} size={32} />
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline gap-2"><span className="font-semibold truncate">{m.author.display_name}</span><span className="text-[11px] text-text-2 truncate">{whereOf(m)}</span><span className="ml-auto text-[11px] text-text-2 shrink-0">{new Date(m.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span></span>
+                  <span className="flex items-baseline gap-2"><span className="font-semibold truncate">{m.author.display_name}</span><span className="text-[11px] text-text-2 truncate">{whereOf(m)}</span><span className="ml-auto text-[11px] text-text-2 shrink-0">{new Date(m.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric' })}</span></span>
                   <span className="block text-sm text-text-1 truncate">{m.content || (m.attachments?.length ? '📎 Attachment' : '')}</span>
                 </span>
               </button>

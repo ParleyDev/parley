@@ -1,4 +1,5 @@
 import { Check, ChevronRight, Clock, Crown, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { locale } from '../lib/i18n'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
@@ -224,7 +225,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         {panel && (
           <div>
             <h3 className="text-xs font-bold mb-1">Member Since</h3>
-            <p className="text-sm text-[#b5bac1]">{new Date(user.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+            <p className="text-sm text-[#b5bac1]">{new Date(user.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}</p>
           </div>
         )}
         {!panel && !isMe && rel !== 'blocked' && (
