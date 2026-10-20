@@ -1,13 +1,16 @@
-import type { DmChannel, User } from './types'
+import type { DmChannel, User, UserNote } from './types'
 
 export const isGroup = (d: Pick<DmChannel, 'kind'>) => d.kind === 'group'
 
-/** Display name for a DM row/header: the other person, or the group's name (custom or the members' names). */
-export function dmName(d: DmChannel, users: Record<string, User>): string {
+/** A user's name as you see it: your friend nickname for them if you set one. */
+export const nameOf = (u: Pick<User, 'id' | 'display_name'>, notes?: Record<string, UserNote>) => notes?.[u.id]?.nickname || u.display_name
+
+/** Display name for a DM row/header: the other person, or the group's name (custom or the members' names). Friend nicknames apply. */
+export function dmName(d: DmChannel, users: Record<string, User>, notes?: Record<string, UserNote>): string {
   const rec = d.recipients.map((r) => users[r.id] ?? r)
-  if (!isGroup(d)) return rec[0]?.display_name ?? 'Unknown'
+  if (!isGroup(d)) return rec[0] ? nameOf(rec[0], notes) : 'Unknown'
   if (d.name) return d.name
-  return rec.length ? rec.map((r) => r.display_name).join(', ') : 'Unnamed Group'
+  return rec.length ? rec.map((r) => nameOf(r, notes)).join(', ') : 'Unnamed Group'
 }
 
 /** Last visited channel per server, so returning to a server lands where you left it. */

@@ -84,7 +84,7 @@ pub async fn broadcast_group(state: &AppState, channel_id: Uuid) -> AppResult<()
     Ok(())
 }
 
-async fn are_friends(db: &PgPool, a: Uuid, b: Uuid) -> AppResult<bool> {
+pub async fn are_friends(db: &PgPool, a: Uuid, b: Uuid) -> AppResult<bool> {
     let r: Option<(bool,)> = sqlx::query_as("SELECT true FROM relationships WHERE user_id = $1 AND target_id = $2 AND kind = 'friend'").bind(a).bind(b).fetch_optional(db).await?;
     Ok(r.is_some())
 }

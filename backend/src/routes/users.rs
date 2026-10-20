@@ -25,6 +25,8 @@ pub fn router() -> Router<AppState> {
         .route("/users/:id/reviews", get(list_reviews).put(put_review))
         .route("/users/:id/reviews/:rid", delete(delete_review))
         .route("/users/@me/guild-layout", get(get_layout).put(put_layout))
+        .route("/users/@me/notes", get(list_notes))
+        .route("/users/@me/notes/:id", put(put_note))
         .route("/users/@me/notification-settings", get(list_notif))
         .route("/users/@me/notification-settings/:target", put(put_notif).delete(delete_notif))
 }
@@ -498,4 +500,52 @@ async fn delete_review(
         return Err(AppError::NotFound("Review not found".into()));
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct UserNote {
+    #[serde(rename = "user_id")]
+    pub target_id: Uuid,
+    pub nickname: String,
+    pub note: String,
+}
+
+/// Everything you have written about other users (nicknames and notes); loaded once on connect.
+async fn list_notes(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<UserNote>>> {
+    Ok(Json(sqlx::query_as::<_, UserNote>("SELECT target_id, nickname, note FROM user_notes WHERE user_id = $1").bind(uid).fetch_all(&state.db).await?))
+}
+
+#[derive(Deserialize)]
+struct PutNote {
+    nickname: Option<String>,
+    note: Option<String>,
+}
+
+/// Set a friend nickname (friends only, up to 32 chars) and/or a private note (anyone, up to 256 chars).
+/// Clearing both removes the row. Only you ever see either.
+async fn put_note(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<PutNote>) -> AppResult<Json<UserNote>> {
+    if id == uid {
+        return Err(AppError::BadRequest("You cannot write a note about yourself".into()));
+    }
+    let exists: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    if exists.is_none() {
+        return Err(AppError::NotFound("User not found".into()));
+    }
+    let nickname = req.nickname.map(|n| n.trim().chars().take(32).collect::<String>());
+    let note = req.note.map(|n| n.trim_end().chars().take(256).collect::<String>());
+    if nickname.as_ref().map(|n| !n.is_empty()).unwrap_or(false) && !crate::routes::dms::are_friends(&state.db, uid, id).await? {
+        return Err(AppError::BadRequest("You can only set a nickname for a friend".into()));
+    }
+    let row = sqlx::query_as::<_, UserNote>(
+        "INSERT INTO user_notes (user_id, target_id, nickname, note) VALUES ($1, $2, COALESCE($3, ''), COALESCE($4, ''))
+         ON CONFLICT (user_id, target_id) DO UPDATE SET nickname = COALESCE($3, user_notes.nickname), note = COALESCE($4, user_notes.note), updated_at = now()
+         RETURNING target_id, nickname, note",
+    )
+    .bind(uid).bind(id).bind(&nickname).bind(&note)
+    .fetch_one(&state.db)
+    .await?;
+    if row.nickname.is_empty() && row.note.is_empty() {
+        sqlx::query("DELETE FROM user_notes WHERE user_id = $1 AND target_id = $2").bind(uid).bind(id).execute(&state.db).await?;
+    }
+    Ok(Json(row))
 }

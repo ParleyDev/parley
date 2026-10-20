@@ -101,7 +101,13 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const friends = user.mutual_friends ?? []
   const reviewCount = user.review_count ?? 0
   const inviteTargets = myGuilds.filter((g) => !mutual.some((m) => m.id === g.id))
-  const nickname = member?.nickname ?? null
+  const friendNote = useStore((s) => s.notes[user.id])
+  const setNote = useStore((s) => s.setNote)
+  const nickname = member?.nickname ?? friendNote?.nickname ?? null
+  const [nickEdit, setNickEdit] = useState<string | null>(null)
+  const [noteDraft, setNoteDraft] = useState<string | null>(null)
+  const saveNick = () => { const v = nickEdit ?? ''; setNickEdit(null); if (v.trim() === (friendNote?.nickname ?? '')) return; act(() => setNote(user.id, { nickname: v })) }
+  const saveNoteText = () => { const v = noteDraft; setNoteDraft(null); if (v === null || v === (friendNote?.note ?? '')) return; act(() => setNote(user.id, { note: v })) }
 
   const menuItems: MenuEntry[] = isMe
     ? [
@@ -160,8 +166,14 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
       <div className="px-4 pt-3 pb-4 space-y-3">
         <div>
           <h2 className="text-[20px] font-bold leading-6 truncate flex items-center gap-1.5">
-            <span style={nameStyle}>{nickname ?? user.display_name}</span>
+            {nickEdit !== null ? (
+              <input autoFocus value={nickEdit} maxLength={32} onChange={(e) => setNickEdit(e.target.value)} onBlur={saveNick} onKeyDown={(e) => { if (e.key === 'Enter') saveNick(); if (e.key === 'Escape') setNickEdit(null) }} placeholder={user.display_name}
+                className="h-7 w-48 rounded-md bg-black/30 border border-white/20 px-2 text-sm font-bold outline-none" data-friend-nick-input />
+            ) : (
+              <span style={nameStyle} data-profile-name>{nickname ?? user.display_name}</span>
+            )}
             {guild?.owner_id === user.id && <Crown size={16} className="text-warn shrink-0" />}
+            {rel === 'friend' && nickEdit === null && <button type="button" onClick={() => setNickEdit(friendNote?.nickname ?? '')} title="Set friend nickname" className="shrink-0 opacity-60 hover:opacity-100" data-friend-nick><Pencil size={13} /></button>}
           </h2>
           {/* Like Discord: "username • pronouns" wraps so long pronouns drop to their own line. */}
           <p className="text-sm leading-[18px] flex flex-wrap gap-x-1 break-words">
@@ -170,6 +182,13 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             {user.pronouns ? <><span className="opacity-60">•</span><span>{user.pronouns}</span></> : null}
           </p>
         </div>
+        {!isMe && (
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#b5bac1] mb-1">Note</div>
+            <textarea value={noteDraft ?? friendNote?.note ?? ''} onChange={(e) => setNoteDraft(e.target.value)} onBlur={saveNoteText} maxLength={256} rows={noteDraft || friendNote?.note ? 3 : 1} placeholder="Click to add a note"
+              className="w-full resize-none rounded-md bg-black/20 px-2 py-1 text-sm outline-none placeholder:text-[#b5bac1]/70 focus:bg-black/30" data-profile-note />
+          </div>
+        )}
         {(friends.length > 0 || mutual.length > 0) && (
           <button onClick={fullProfile} className="flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px] leading-4 text-[#b5bac1] hover:text-[#dbdee1]" data-mutual>
             {friends.length > 0 && (

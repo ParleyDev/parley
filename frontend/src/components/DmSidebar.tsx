@@ -15,6 +15,7 @@ import StyledName from './StyledName'
 export default function DmSidebar() {
   const dms = useStore((s) => s.dms)
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const readStates = useStore((s) => s.readStates)
   const lastMessageId = useStore((s) => s.lastMessageId)
   const openModal = useStore((s) => s.openModal)
@@ -35,7 +36,7 @@ export default function DmSidebar() {
     ...notifEntries(d.id, 'Conversation', notifSettings),
     'sep',
     ...(isGroup(d)
-      ? [{ label: 'Leave Group', icon: <LogOut size={16} />, danger: true, onClick: () => leave(d.id, dmName(d, users)) }]
+      ? [{ label: 'Leave Group', icon: <LogOut size={16} />, danger: true, onClick: () => leave(d.id, dmName(d, users, notes)) }]
       : other ? userMenu(other, e.currentTarget.getBoundingClientRect()) : []),
   ]
   const list = Object.values(dms).sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at))
@@ -65,7 +66,7 @@ export default function DmSidebar() {
                 {group ? <GroupIcon dm={d} size={32} /> : other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
                 {group ? (
                   <span className="min-w-0 flex-1 leading-tight">
-                    <span className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{dmName(d, users)}</span>
+                    <span className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{dmName(d, users, notes)}</span>
                     <span className="block truncate text-xs text-text-2">{d.recipients.length + 1} Members</span>
                   </span>
                 ) : other ? (

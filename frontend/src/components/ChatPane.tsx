@@ -191,13 +191,14 @@ function ChannelIntro({ channel }: { channel: Channel | DmChannel }) {
   const other = isDm && !group ? (channel as DmChannel).recipients[0] : null
   const isVoice = !isDm && (channel as Channel).kind === 'voice'
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   return (
     <div className="px-4 pt-12 pb-4 fade-in">
       {group ? (
         <>
           <GroupIcon dm={channel as DmChannel} size={80} />
-          <h1 className="mt-3 text-3xl font-extrabold">{dmName(channel as DmChannel, users)}</h1>
-          <p className="mt-2 text-text-2 text-sm">Welcome to the beginning of the <b>{dmName(channel as DmChannel, users)}</b> group.</p>
+          <h1 className="mt-3 text-3xl font-extrabold">{dmName(channel as DmChannel, users, notes)}</h1>
+          <p className="mt-2 text-text-2 text-sm">Welcome to the beginning of the <b>{dmName(channel as DmChannel, users, notes)}</b> group.</p>
         </>
       ) : other ? (
         <>
