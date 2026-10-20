@@ -9,6 +9,7 @@ import { has, highestPosition, P, EMPTY_ROLES } from '../lib/perms'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import ExpressionPicker from './ExpressionPicker'
 import Avatar from './Avatar'
+import { publicOrigin } from './InviteCard'
 import { Badges, ClanTag } from './Flair'
 import { nameCss, colorRole } from './StyledName'
 
@@ -84,7 +85,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const invite = (g: Guild) => act(async () => {
     const inv = await api.post<{ code: string }>(`/guilds/${g.id}/invites`, {})
     const c = await openDm()
-    await sendMessage(c.id, `${location.origin}/invite/${inv.code}`)
+    await sendMessage(c.id, `${publicOrigin()}/invite/${inv.code}`)
     pushToast(`Invite to ${g.name} sent`)
   })
   const kick = () => { onClose(); openModal({ kind: 'confirm', title: `Kick ${user.display_name}`, body: `Are you sure you want to kick ${user.display_name} from ${guild?.name}? They can rejoin with a new invite.`, danger: true, confirmLabel: 'Kick', action: () => act(async () => { await api.delete(`/guilds/${guildId}/members/${user.id}`); removeMember(guildId!, user.id) }) }) }

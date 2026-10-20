@@ -7,11 +7,19 @@ import { colorFor, initials } from '../lib/format'
 
 interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; online_count: number }; expired: boolean; already_member: boolean; banned: boolean }
 
-/** Invite links to this instance found in a message body (at most three). */
-export function inviteCodes(content: string): string[] {
+/** The address invite links should carry: the instance's public URL, else wherever we are. */
+export function publicOrigin(): string {
+  const app = useStore.getState().instance.app_url?.replace(/\/+$/, '')
+  return app && /^https?:\/\//.test(app) ? app : location.origin
+}
+
+/** Invite links to this instance found in a message body (at most three): links to the current address or to the
+ *  instance's public URL both count, so a link pasted on the public domain still renders as a card on the LAN. */
+export function inviteCodes(content: string, extraOrigins: (string | undefined)[] = [useStore.getState().instance.app_url]): string[] {
   if (!content || !content.includes('/invite/')) return []
-  const origin = location.origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const re = new RegExp(`${origin}/invite/([A-Za-z0-9_-]+)`, 'g')
+  const origins = Array.from(new Set([location.origin, ...extraOrigins.filter((o): o is string => !!o).map((o) => o.replace(/\/+$/, ''))]))
+  const esc = (o: string) => o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(?:${origins.map(esc).join('|')})/invite/([A-Za-z0-9_-]+)`, 'g')
   const out: string[] = []
   for (const m of content.matchAll(re)) if (!out.includes(m[1])) out.push(m[1])
   return out.slice(0, 3)

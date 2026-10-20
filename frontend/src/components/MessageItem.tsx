@@ -47,6 +47,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const userMenu = useUserMenu(guildId ?? null)
   const emojiHover = useEmojiHover()
   const mentioned = useStore((s) => mentionsMe(s, m))
+  const appUrl = useStore((s) => s.instance.app_url)
   const perms = useStore((s) => myChannelPerms(s, m.channel_id))
   // Moderation only exists inside servers; in DMs and group chats you can delete just your own messages.
   const canDelete = isOwn || (guildId !== undefined && has(perms, P.MANAGE_MESSAGES))
@@ -217,7 +218,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               )}
               {media && <MediaEmbed url={media} />}
               {link && <LinkEmbed url={link} />}
-              {inviteCodes(m.content).map((code) => <InviteCard key={code} code={code} />)}
+              {inviteCodes(m.content, [appUrl]).map((code) => <InviteCard key={code} code={code} />)}
               {m.poll && <PollCard m={m} poll={m.poll} />}
               {m.thread && (
                 <button type="button" onClick={(e) => { e.stopPropagation(); setOpenThread(m.thread!.id) }} className="mt-1 flex max-w-[520px] items-center gap-2 rounded-lg border border-line bg-bg-1 px-3 py-2 text-left text-sm hover:border-text-2" data-thread-card={m.thread.id} data-thread-count={m.thread.message_count}>

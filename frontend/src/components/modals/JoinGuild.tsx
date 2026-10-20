@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
 import { useStore } from '../../store'
+import { publicOrigin } from '../InviteCard'
 
 export default function JoinGuildModal({ onClose, code: initial }: { onClose: () => void; code?: string }) {
   const [code, setCode] = useState(initial ?? '')
@@ -19,8 +20,8 @@ export default function JoinGuildModal({ onClose, code: initial }: { onClose: ()
       footer={<><button type="button" className="btn-ghost" onClick={() => openModal({ kind: 'createGuild' })} data-join-back>Back</button><button form="join-guild" className="btn-primary" disabled={!code.trim()}>Join Server</button></>}>
       <form id="join-guild" onSubmit={submit}>
         <label className="label">Invite link or code</label>
-        <input className="input" autoFocus value={code} onChange={(e) => setCode(e.target.value)} placeholder={`${location.origin}/invite/abcd1234`} />
-        <p className="mt-3 text-xs text-text-2">Invites look like <b className="text-text-1">{location.origin}/invite/hTKzmak8</b> or just <b className="text-text-1">hTKzmak8</b>.</p>
+        <input className="input" autoFocus value={code} onChange={(e) => setCode(e.target.value)} placeholder={`${publicOrigin()}/invite/abcd1234`} />
+        <p className="mt-3 text-xs text-text-2">Invites look like <b className="text-text-1">{publicOrigin()}/invite/hTKzmak8</b> or just <b className="text-text-1">hTKzmak8</b>.</p>
       </form>
     </Modal>
   )

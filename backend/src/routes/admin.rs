@@ -102,6 +102,10 @@ pub struct InstanceSettings {
     /// Derived: push configured (shown to admins and clients).
     #[serde(default)]
     pub push: bool,
+    /// The instance's public base URL (APP_URL), so clients build invite links and recognise them whatever address
+    /// they happen to be browsing from (LAN, localhost, the public domain, the native app).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub app_url: String,
 }
 
 impl InstanceSettings {
@@ -126,7 +130,7 @@ impl InstanceSettings {
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false, app_url: String::new() };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -157,6 +161,7 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
 async fn instance_public(State(state): State<AppState>) -> AppResult<Json<InstanceSettings>> {
     let mut s = load_settings(&state.db).await?;
     s.mail_enabled = crate::mail::enabled(&state.config);
+    s.app_url = state.config.app_url.clone();
     Ok(Json(s.public()))
 }
 
