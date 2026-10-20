@@ -6,6 +6,7 @@ const g = await call(a.token, 'POST', '/guilds', { name: `Notif Land ${S}` })
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`)
 const tc = g.channels.find((x) => x.kind === 'text').id
 const quiet = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'quiet', kind: 'text' })
+await call(a.token, 'POST', '/users/@me/relationships', { user_id: b.user.id }); await call(b.token, 'PUT', `/users/@me/relationships/${a.user.id}`) // friends: a stranger's DM waits in Message Requests
 const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
 
 console.log('-- API')
