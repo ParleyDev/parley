@@ -13,14 +13,6 @@ export interface VoiceSettings {
   echoCancellation: boolean
   noiseSuppression: boolean
   autoGainControl: boolean
-  /** Play a ringtone while an incoming DM call banner is showing (never while deafened). */
-  ringtone: boolean
-  /** Sound on a new message that would notify you (DMs, mentions, unmuted channels) while you are not looking at it. */
-  messageSounds: boolean
-  /** Sounds for voice: someone joins/leaves your call, and your own mute/unmute/deafen. */
-  voiceSounds: boolean
-  /** Volume of those effects, 0..100 (%). */
-  soundVolume: number
 }
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -37,10 +29,6 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   echoCancellation: true,
   noiseSuppression: true,
   autoGainControl: true,
-  ringtone: true,
-  messageSounds: true,
-  voiceSounds: true,
-  soundVolume: 100,
 }
 
 const KEY = `${STORAGE_PREFIX}voiceSettings`
