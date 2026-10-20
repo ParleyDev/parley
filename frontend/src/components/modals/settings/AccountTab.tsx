@@ -4,7 +4,6 @@ import { useStore } from '../../../store'
 import type { PrivateUser } from '../../../lib/types'
 import ProfileCard from '../../ProfileCard'
 import MfaSection from './MfaSection'
-import SessionsSection from './SessionsSection'
 import StorageSection from './StorageSection'
 import DeleteAccountSection from './DeleteAccountSection'
 import DataSection from './DataSection'
@@ -45,7 +44,6 @@ export default function AccountTab({ onClose, onEditProfile }: { onClose: () => 
     <AccountChanges />
     <StandingCard />
     <MfaSection />
-    <SessionsSection />
     <StorageSection />
     <DataSection />
     <DeleteAccountSection />

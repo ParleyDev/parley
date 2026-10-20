@@ -34,3 +34,20 @@ export function relativeTime(iso: string): string {
   if (d < 30) return `${d} d ago`
   return new Date(iso).toLocaleDateString()
 }
+
+export type UaKind = 'phone' | 'tablet' | 'desktop' | 'other'
+/** Rough device class for an icon: phone, tablet, desktop browser, or something else (scripts, bots). */
+export function uaKind(ua: string): UaKind {
+  if (!ua) return 'other'
+  if (/iPad|Tablet|Android(?!.*Mobile)/.test(ua) && /Mozilla/.test(ua)) return 'tablet'
+  if (/iPhone|Android.*Mobile|Mobile Safari|Windows Phone/.test(ua)) return 'phone'
+  if (/Mozilla|Chrome|Safari|Firefox|Edg\//.test(ua)) return 'desktop'
+  return 'other'
+}
+
+/** "Local network" for private/loopback addresses; the address otherwise. */
+export function describeIp(ip: string): string {
+  if (!ip) return 'unknown network'
+  if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|::1$|fc|fd|fe80)/i.test(ip)) return `${ip} · local network`
+  return ip
+}
