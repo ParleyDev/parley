@@ -1,10 +1,10 @@
-import { Bookmark, BookmarkMinus, CalendarDays, CircleUserRound, Crown, Hash, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { Bookmark, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup, nameOf } from '../lib/dm'
 import { uploadImage } from '../lib/upload'
 import { anchorOf } from '../lib/anchor'
 import { useNavigate } from 'react-router-dom'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { Channel, DmChannel, Message } from '../lib/types'
 import { api } from '../lib/api'
 import { myChannelPerms, useStore } from '../store'
@@ -258,7 +258,7 @@ function GroupMembersPanel({ dm }: { dm: DmChannel }) {
   )
 }
 
-type BookmarkedMessage = Message & { guild_id: string | null; channel_name: string }
+type BookmarkedMessage = Message & { guild_id: string | null; channel_name: string; folder: string; position: number }
 
 /** Every message the user bookmarked, across channels; Jump navigates when it lives elsewhere. */
 function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: () => void }) {
@@ -276,6 +276,23 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
     if (m.channel_id !== channelId) navigate(`/channels/${m.guild_id ?? '@me'}/${m.channel_id}`)
     void jumpToMessageAsync(m.channel_id, m.id).then((found) => { if (!found) pushToast('That message could not be found', 'error') })
   }
+  // Folders: group by name ('' = loose bookmarks first), manual order inside each.
+  const folders = useMemo(() => { const names = Array.from(new Set((list ?? []).map((m) => m.folder))).filter(Boolean).sort((a, b) => a.localeCompare(b)); return ['', ...names] }, [list])
+  const inFolder = (f: string) => (list ?? []).filter((m) => m.folder === f).sort((a, b) => a.position - b.position || (a.id < b.id ? 1 : -1))
+  const [newFolderFor, setNewFolderFor] = useState<string | null>(null)
+  const [newFolder, setNewFolder] = useState('')
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const patch = async (m: BookmarkedMessage, body: { folder?: string; position?: number }) => {
+    try { const r = await api.patch<{ folder: string; position: number }>(`/users/@me/bookmarks/${m.id}`, body); setList((l) => (l ?? []).map((x) => (x.id === m.id ? { ...x, folder: r.folder, position: r.position } : x))) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const moveTo = (m: BookmarkedMessage, folder: string) => { if (folder === '__new__') { setNewFolderFor(m.id); setNewFolder(''); return } patch(m, { folder, position: inFolder(folder).length }) }
+  const shift = (m: BookmarkedMessage, dir: -1 | 1) => {
+    const peers = inFolder(m.folder); const i = peers.findIndex((x) => x.id === m.id); const j = i + dir
+    if (j < 0 || j >= peers.length) return
+    // Renumber the folder densely, then swap the two neighbours.
+    const order = peers.map((x) => x.id); [order[i], order[j]] = [order[j], order[i]]
+    order.forEach((id, pos) => { const x = peers.find((p) => p.id === id)!; if (x.position !== pos) patch(x, { position: pos }) })
+  }
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
@@ -284,10 +301,35 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
         <div className="overflow-y-auto p-3 space-y-2">
           {list === null && <p className="text-sm text-text-2 p-3">Loading…</p>}
           {list?.length === 0 && <div className="p-6 text-center text-sm text-text-2">No bookmarks yet.<br />Right-click a message and choose Bookmark Message.</div>}
-          {list?.map((m) => (
-            <div key={m.id}>
-              <div className="px-1 mb-0.5 text-[11px] text-text-2 truncate">{m.guild_id ? `#${m.channel_name}` : 'Direct Message'}</div>
-              <MessageCard m={m} onJump={() => jump(m)} action={<button onClick={() => remove(m)} title="Remove bookmark" className="rounded p-0.5 text-text-2 hover:text-danger" data-unbookmark><BookmarkMinus size={14} /></button>} />
+          {list && list.length > 0 && folders.map((f) => (
+            <div key={f || '__loose'} data-bookmark-folder={f}>
+              {f && (
+                <button type="button" onClick={() => setCollapsed((c) => ({ ...c, [f]: !c[f] }))} className="w-full flex items-center gap-1.5 px-1 py-1 text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-0" aria-expanded={!collapsed[f]} data-bookmark-folder-toggle={f}>
+                  <ChevronRight size={12} className={`transition-transform ${collapsed[f] ? '' : 'rotate-90'}`} />{f}<span className="ml-auto font-normal">{inFolder(f).length}</span>
+                </button>
+              )}
+              {!collapsed[f] && inFolder(f).map((m, i, arr) => (
+                <div key={m.id} className="mb-2" data-bookmark={m.id} data-bookmark-position={i}>
+                  <div className="px-1 mb-0.5 flex items-center gap-1 text-[11px] text-text-2">
+                    <span className="truncate flex-1">{m.guild_id ? `#${m.channel_name}` : 'Direct Message'}</span>
+                    {newFolderFor === m.id ? (
+                      <form onSubmit={(e) => { e.preventDefault(); const name = newFolder.trim(); setNewFolderFor(null); if (name) patch(m, { folder: name, position: inFolder(name).length }) }} className="flex items-center gap-1">
+                        <input autoFocus value={newFolder} onChange={(e) => setNewFolder(e.target.value)} maxLength={40} placeholder="Folder name" className="input w-32 py-0.5 text-xs" data-bookmark-new-folder />
+                        <button className="btn-ghost py-0.5 text-xs" data-bookmark-new-folder-save>Save</button>
+                      </form>
+                    ) : (
+                      <select value={m.folder} onChange={(e) => moveTo(m, e.target.value)} title="Move to folder" className="rounded bg-bg-0 border border-line px-1 py-0.5 text-[11px] text-text-1" data-bookmark-move>
+                        <option value="">No folder</option>
+                        {folders.filter(Boolean).map((n) => <option key={n} value={n}>{n}</option>)}
+                        <option value="__new__">New folder…</option>
+                      </select>
+                    )}
+                    <button type="button" onClick={() => shift(m, -1)} disabled={i === 0} title="Move up" className="rounded px-1 text-text-2 hover:text-text-0 disabled:opacity-30" data-bookmark-up>▲</button>
+                    <button type="button" onClick={() => shift(m, 1)} disabled={i === arr.length - 1} title="Move down" className="rounded px-1 text-text-2 hover:text-text-0 disabled:opacity-30" data-bookmark-down>▼</button>
+                  </div>
+                  <MessageCard m={m} onJump={() => jump(m)} action={<button onClick={() => remove(m)} title="Remove bookmark" className="rounded p-0.5 text-text-2 hover:text-danger" data-unbookmark><BookmarkMinus size={14} /></button>} />
+                </div>
+              ))}
             </div>
           ))}
         </div>
