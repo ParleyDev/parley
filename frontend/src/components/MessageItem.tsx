@@ -1,4 +1,4 @@
-import { ArrowLeftFromLine, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
+import { ArrowLeftFromLine, ArrowRight, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, Pin, PinOff, Reply, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
@@ -138,11 +138,24 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
 
   if (m.kind && m.kind !== 'default') {
-    const icon = m.kind === 'recipient_add' ? <UserPlus size={16} className="text-success" /> : m.kind === 'recipient_remove' || m.kind === 'recipient_leave' ? <UserMinus size={16} className="text-danger" /> : m.kind === 'channel_icon_change' ? <ImageIcon size={16} className="text-text-2" /> : <ArrowLeftFromLine size={16} className="text-text-2" />
+    const icon = m.kind === 'recipient_add' || m.kind === 'member_join' ? <UserPlus size={16} className="text-success" />
+      : m.kind === 'recipient_remove' || m.kind === 'recipient_leave' ? <UserMinus size={16} className="text-danger" />
+      : m.kind === 'channel_icon_change' ? <ImageIcon size={16} className="text-text-2" />
+      : m.kind === 'pins_add' ? <Pin size={16} className="text-text-2" />
+      : m.kind === 'thread_created' ? <MessagesSquare size={16} className="text-text-2" />
+      : m.kind === 'call_started' ? <Phone size={16} className="text-success" />
+      : <ArrowLeftFromLine size={16} className="text-text-2" />
+    // thread_created: "started a thread: <name>" with the name as a link that opens the thread.
+    const threadName = m.kind === 'thread_created' ? m.content.replace(/^started a thread: /, '') : null
     return (
       <div className="px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
         <span className="w-10 flex justify-center shrink-0">{icon}</span>
-        <span className="min-w-0"><button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{m.author.display_name}</button> {m.content}</span>
+        <span className="min-w-0"><button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{m.author.display_name}</button>{' '}
+          {threadName !== null ? (<>started a thread: <button type="button" className="font-medium text-text-0 hover:underline" onClick={() => m.ref_id && setOpenThread(m.ref_id)} data-system-thread={m.ref_id ?? ''}>{threadName}</button></>) : m.content}
+          {m.kind === 'pins_add' && m.reply_to && onJumpToReply && (
+            <button type="button" onClick={onJumpToReply} className="ml-2 inline-flex items-center gap-0.5 text-xs text-sky-400 hover:underline" data-system-jump={m.reply_to}>See the message <ArrowRight size={12} /></button>
+          )}
+        </span>
         <span className="ml-auto text-xs text-text-2 shrink-0" title={new Date(m.created_at).toLocaleString()}>{new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
       </div>
     )

@@ -70,19 +70,8 @@ async fn member_ids(db: &PgPool, channel_id: Uuid) -> AppResult<Vec<Uuid>> {
 /// Insert a system notice ("X added Y") authored by the actor and push it to every member like a normal message.
 /// `content` is the sentence after the actor's name.
 pub async fn system_message(state: &AppState, channel_id: Uuid, actor: Uuid, kind: &str, content: &str, mentions: Vec<Uuid>) -> AppResult<()> {
-    let mid = Uuid::now_v7();
-    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, kind, mentions) VALUES ($1, $2, $3, $4, $5, $6)")
-        .bind(mid)
-        .bind(channel_id)
-        .bind(actor)
-        .bind(content)
-        .bind(kind)
-        .bind(&mentions)
-        .execute(&state.db)
-        .await?;
-    let msg = crate::routes::channels::fetch_message(&state.db, mid, actor).await?;
-    crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    state.hub.emit(crate::ws::hub::Target::Users(member_ids(&state.db, channel_id).await?), "MESSAGE_CREATE", json!({ "message": msg, "guild_id": null }));
+    let channel = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(channel_id).fetch_one(&state.db).await?;
+    crate::routes::channels::system_message(state, &channel, actor, kind, content, mentions, None, None).await?;
     Ok(())
 }
 

@@ -205,7 +205,7 @@ async fn delete_channel(
 
 pub const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
     u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from,
-    m.mentions, m.mention_roles, m.mention_everyone, m.kind
+    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
@@ -225,6 +225,30 @@ async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap
         map.entry(mid).or_default().push(Reaction { emoji, count, me });
     }
     Ok(map)
+}
+
+/// Insert a system notice ("X pinned a message") authored by the actor and push it to the channel's audience like a normal
+/// message. `content` is the sentence after the actor's name; `reply_to` links a related message, `ref_id` a related object.
+pub async fn system_message(state: &AppState, c: &Channel, actor: Uuid, kind: &str, content: &str, mentions: Vec<Uuid>, reply_to: Option<Uuid>, ref_id: Option<Uuid>) -> AppResult<Message> {
+    let mid = Uuid::now_v7();
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, kind, mentions, reply_to, ref_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+        .bind(mid).bind(c.id).bind(actor).bind(content).bind(kind).bind(&mentions).bind(reply_to).bind(ref_id)
+        .execute(&state.db)
+        .await?;
+    let msg = fetch_message(&state.db, mid, actor).await?;
+    crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let target = target_for(&state.db, c).await?;
+    state.hub.emit(target, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    Ok(msg)
+}
+
+/// Post a server-wide notice ("X joined the server") to the guild's system channel: its first text channel.
+pub async fn guild_system_message(state: &AppState, guild_id: Uuid, actor: Uuid, kind: &str, content: &str) -> AppResult<()> {
+    let Some(mut c) = sqlx::query_as::<_, Channel>(&format!("SELECT {} FROM channels WHERE guild_id = $1 AND kind = 'text' ORDER BY position, created_at LIMIT 1", crate::routes::guilds::CHANNEL_COLS))
+        .bind(guild_id).fetch_optional(&state.db).await? else { return Ok(()) };
+    perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
+    system_message(state, &c, actor, kind, content, vec![], None, None).await?;
+    Ok(())
 }
 
 pub async fn fetch_message(db: &PgPool, mid: Uuid, me: Uuid) -> AppResult<Message> {
@@ -757,6 +781,9 @@ async fn set_pinned(state: &AppState, id: Uuid, mid: Uuid, uid: Uuid, pinned: bo
     let msg = fetch_message(&state.db, mid, uid).await?;
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    if pinned && res.rows_affected() > 0 {
+        system_message(state, &c, uid, "pins_add", "pinned a message to this channel.", vec![], Some(mid), None).await?;
+    }
     Ok(Json(msg))
 }
 

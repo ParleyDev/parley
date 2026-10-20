@@ -141,7 +141,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
             {messages?.map((m, i) => {
               const prev = messages[i - 1]
               const newDay = !prev || !sameDay(prev.created_at, m.created_at)
-              const grouped = !!prev && !newDay && firstUnreadId !== m.id && prev.author.id === m.author.id && !m.reply_to
+              const grouped = !!prev && !newDay && firstUnreadId !== m.id && prev.author.id === m.author.id && !m.reply_to && (!prev.kind || prev.kind === 'default')
                 && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 7 * 60 * 1000
               return (
                 <div key={m.id}>

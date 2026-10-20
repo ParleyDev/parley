@@ -155,6 +155,8 @@ pub struct MessageRow {
     pub sticker_animated: Option<bool>,
     pub forwarded_from: Option<Uuid>,
     #[sqlx(default)]
+    pub ref_id: Option<Uuid>,
+    #[sqlx(default)]
     pub mentions: Vec<Uuid>,
     #[sqlx(default)]
     pub mention_roles: Vec<Uuid>,
@@ -229,6 +231,9 @@ pub struct Message {
     pub sticker: Option<MessageSticker>,
     /// Set when this message was forwarded from another (the original's id, which may since be deleted).
     pub forwarded_from: Option<Uuid>,
+    /// System messages: the related object (thread id for `thread_created`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ref_id: Option<Uuid>,
     pub mentions: Vec<Uuid>,
     pub mention_roles: Vec<Uuid>,
     pub mention_everyone: bool,
@@ -329,6 +334,7 @@ impl MessageRow {
             edited_at: self.edited_at,
             pinned_at: self.pinned_at,
             forwarded_from: self.forwarded_from,
+            ref_id: self.ref_id,
             mentions: self.mentions,
             mention_roles: self.mention_roles,
             mention_everyone: self.mention_everyone,
