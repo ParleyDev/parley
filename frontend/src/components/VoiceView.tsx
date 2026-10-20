@@ -13,7 +13,7 @@ import StudioPanel from './StudioPanel'
 import { DeviceCtl, type DeviceKind } from './DeviceMenu'
 import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
-import VideoTile from './VideoTile'
+import VideoTile, { FitToggle, useVideoFit } from './VideoTile'
 import ChatPane from './ChatPane'
 import { MembersToggle, MobileBack } from './HeaderBits'
 import { useT } from '../lib/i18n'
@@ -131,6 +131,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const count = participants.length
 
   const phone = usePhone()
+  const videoFit = useVideoFit()
   const toggleFullscreen = (el: HTMLElement) => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else el.requestFullscreen?.().catch(() => {}) }
   const renderTile = (t: Tile, big: boolean) => {
     const talking = t.kind === 'camera' && !!speaking[t.userId]
@@ -144,7 +145,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {isStudio && t.kind === 'camera' && !engineers.includes(t.userId) && !t.state.suppress && <span className="absolute left-2 top-2 z-10 rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-white" data-artist-badge>Artist</span>}
         {isStudio && t.kind === 'camera' && (isMod || t.isMe) && <span className="absolute right-2 top-2 z-10" onClick={(e) => e.stopPropagation()}><RoleMenu uid={t.userId} /></span>}
         {t.stream ? (
-          <VideoTile stream={t.stream} mirror={t.isMe && t.kind === 'camera'} contain={t.kind === 'screen' || big} />
+          <VideoTile stream={t.stream} mirror={t.isMe && t.kind === 'camera'} contain={videoFit === 'fit' || t.kind === 'screen'} />
         ) : t.kind === 'screen' ? (
           <div className="h-full w-full flex flex-col items-center justify-center gap-2 text-text-2"><Monitor size={big ? 64 : 40} /><span className="text-sm">Loading stream…</span></div>
         ) : (
@@ -163,7 +164,10 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {status && status !== 'connected' && (
           <span className={`absolute right-3 top-3 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase ${status === 'failed' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{status === 'failed' ? 'No route' : 'Connecting'}</span>
         )}
-        <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget.parentElement as HTMLElement) }} title="Fullscreen" aria-label="Fullscreen" className="absolute right-3 bottom-3 rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{document.fullscreenElement ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
+        <div className="absolute right-3 bottom-3 flex items-center gap-1">
+          {t.stream && t.kind === 'camera' && <FitToggle />}
+          <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget.closest('[data-voice-tile]') as HTMLElement) }} title="Fullscreen" aria-label="Fullscreen" className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{document.fullscreenElement ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
+        </div>
       </div>
     )
   }
