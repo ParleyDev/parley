@@ -4,7 +4,7 @@ import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { canHover } from './GuildBar'
 import { useEmojiHover } from './EmojiHover'
-import { parseCustom, unicodeInfo } from '../lib/emoji'
+import { emojiLabel, parseCustom } from '../lib/emoji'
 import { frequentEmoji, recordEmoji } from '../lib/recentEmoji'
 import { anchorOf } from '../lib/anchor'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
@@ -321,7 +321,7 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
     return () => { live = false }
   }, [rect, m.channel_id, m.id, r.emoji, r.count])
   const c = parseCustom(r.emoji)
-  const name = c ? `:${c.name}:` : (() => { const i = unicodeInfo(r.emoji); return i ? `:${i.slug}:` : r.emoji })()
+  const name = c ? `:${c.name}:` : emojiLabel(r.emoji)
   // The chip's own `me` flag is authoritative; the fetched list can lag a toggle by a round trip.
   const others = (who ?? []).filter((u) => u.id !== me?.id).map((u) => u.display_name)
   const names = r.me ? [...others, 'You'] : others

@@ -25,6 +25,16 @@ export function applyTone(emoji: string, tone: number): string {
 }
 /** The tone-free form, for matching reactions and recent-emoji keys. */
 export const stripTone = (emoji: string) => emoji.replace(TONE_RE, '')
+/** Which skin tone (1..5) an emoji carries, 0 for none. */
+export const toneOf = (emoji: string): number => { const i = SKIN_TONES.findIndex((t, i) => i > 0 && emoji.includes(t)); return i < 0 ? 0 : i }
+
+// Per-emoji memory: picking 👍🏽 once makes 👍 default to that tone next time, whatever the global tone is (Discord does the same).
+const TONES_KEY = 'parley.emojiTones'
+function loadTones(): Record<string, number> { try { return JSON.parse(localStorage.getItem(TONES_KEY) ?? '{}') } catch { return {} } }
+export function emojiTone(base: string): number | undefined { const t = loadTones()[stripTone(base)]; return typeof t === 'number' ? t : undefined }
+export function rememberEmojiTone(base: string, tone: number) { try { const m = loadTones(); m[stripTone(base)] = tone; localStorage.setItem(TONES_KEY, JSON.stringify(m)) } catch { /* ignore */ } }
+/** Reaction / tooltip label with the tone spelled out: `:thumbs_up::skin-tone-3:`. */
+export function emojiLabel(emoji: string): string { const i = unicodeInfo(emoji); if (!i) return emoji; const t = toneOf(emoji); return `:${i.slug}:${t ? `:skin-tone-${t}:` : ''}` }
 export interface EmojiGroup { name: string; emojis: UnicodeEmoji[] }
 
 let groupsPromise: Promise<EmojiGroup[]> | null = null
