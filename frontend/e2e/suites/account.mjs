@@ -46,6 +46,25 @@ const g = await call(b.token, 'POST', '/guilds', { name: `Standing ${S}` }); con
 await call(b.token, 'PUT', `/guilds/${g.id}/bans/${a.user.id}`, { reason: 'test' })
 ok('a server ban moves it to limited', (await call(a.token, 'GET', '/users/@me/standing')).level === 'limited')
 
+console.log('-- data export')
+await call(a.token, 'POST', `/channels/${(await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })).id}/messages`, { content: `exported words ${S}` })
+r = await raw(a.token, 'POST', '/users/@me/data-exports', {}); const ex = await r.json(); ok('an export can be requested', r.status === 200 && ex.status === 'pending')
+r = await raw(a.token, 'POST', '/users/@me/data-exports', {}); ok('a second request the same day is refused (429)', r.status === 429)
+let list; for (let i = 0; i < 20; i++) { list = await call(a.token, 'GET', '/users/@me/data-exports'); if (list[0]?.status !== 'pending') break; await new Promise((r) => setTimeout(r, 500)) }
+ok('it becomes ready', list[0]?.status === 'ready' && list[0].size > 0, JSON.stringify(list[0]))
+const dl = await raw(a.token, 'GET', `/users/@me/data-exports/${ex.id}/download`); const doc = await dl.json()
+ok('the download is a JSON document with the account, servers and messages', dl.status === 200 && /attachment/.test(dl.headers.get('content-disposition') ?? '') && doc.account.username === `alice_new${S}` && Array.isArray(doc.servers) && doc.messages.some((m) => m.content === `exported words ${S}`) && Array.isArray(doc.relationships) && Array.isArray(doc.sessions))
+ok('someone else cannot download it', (await raw(b.token, 'GET', `/users/@me/data-exports/${ex.id}/download`)).status === 404)
+ok('a mail says it is ready', (await mailFor(newMail)).some((x) => /data is ready/.test(x.subject)))
+
+console.log('-- disable')
+r = await raw(a.token, 'POST', '/users/@me/disable', { password: 'wrong' }); ok('disabling needs the password', r.status === 400)
+r = await raw(a.token, 'POST', '/users/@me/disable', { password: 'newpassword1' }); ok('disable succeeds', r.status === 204)
+ok('every session is gone', (await raw(a.token, 'GET', '/users/@me')).status === 401)
+const back = await (await fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login: `alice_new${S}`, password: 'newpassword1' }) })).json()
+ok('logging in re-enables the account', !!back.token && back.reenabled === true && (await raw(back.token, 'GET', '/users/@me')).status === 200)
+a.token = back.token
+
 console.log('-- UI')
 const browser = await chromium.launch(); const errors = []
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
@@ -63,6 +82,11 @@ await p.fill('[data-account-password]', PASSWORD); await p.fill('[data-account-n
 await p.waitForSelector('[data-account-error]'); ok('mismatched confirmation is caught before sending', (await p.textContent('[data-account-error]')).includes('match'))
 await p.fill('[data-account-confirm]', 'newpassword2'); await p.click('[data-account-submit]'); await p.waitForFunction(() => !document.querySelector('[data-account-dialog]'))
 ok('the password dialog closes on success', !!(await (await fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login: `bob_new${S}`, password: 'newpassword2' }) })).json()).token)
+ok('Your data and Disable Account are offered', await p.locator('[data-export-request]').count() === 1 && await p.locator('[data-disable-open]').count() === 1)
 await p.screenshot({ path: '164-account.png' })
+await p.click('[data-disable-open]'); await p.waitForSelector('[data-delete-form]'); await p.fill('[data-delete-password]', 'newpassword2'); await p.click('[data-delete-submit]')
+await p.waitForURL(/\/login/, { timeout: 10000 }); ok('disabling from the UI logs out to the login page', true)
+await p.fill('input[autocomplete="username"]', `bob_new${S}`); await p.fill('input[type="password"]', 'newpassword2'); await p.keyboard.press('Enter')
+await p.waitForSelector('[data-user-panel-bar]', { timeout: 10000 }); ok('logging back in re-enables and shows the welcome-back toast', await p.locator('text=re-enabled').count() === 1)
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

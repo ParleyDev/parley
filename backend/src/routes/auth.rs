@@ -222,12 +222,14 @@ async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Jso
 }
 
 async fn session(state: &AppState, id: Uuid, headers: &HeaderMap) -> AppResult<Json<Value>> {
+    // A disabled account comes back to life on its next successful login.
+    let reenabled: Option<(bool,)> = sqlx::query_as("UPDATE users SET disabled_at = NULL WHERE id = $1 AND disabled_at IS NOT NULL RETURNING true").bind(id).fetch_optional(&state.db).await?;
     let user = sqlx::query_as::<_, PrivateUser>(&format!("SELECT {PRIVATE_USER_COLS} FROM users WHERE id = $1"))
         .bind(id)
         .fetch_one(&state.db)
         .await?;
     let token = start_session(state, id, headers).await?;
-    Ok(Json(json!({ "token": token, "user": user })))
+    Ok(Json(json!({ "token": token, "user": user, "reenabled": reenabled.is_some() })))
 }
 
 /// End the calling session; the token stops working at once.
