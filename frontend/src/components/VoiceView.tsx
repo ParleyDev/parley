@@ -196,21 +196,6 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {/* Stage */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-hidden p-4 max-md:p-2 flex flex-col gap-3">
-            {isStage && !isStudio && audience.length > 0 && (
-              <div className="shrink-0 rounded-xl border border-line bg-bg-2/60 px-3 py-2" data-stage-audience>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1">{isStudio ? 'Audience' : 'Audience'} — {audience.length}</div>
-                <div className="flex flex-wrap gap-2">
-                  {audience.map((p) => { const u = users[p.user_id] ?? (me?.id === p.user_id ? me : undefined); return (
-                    <div key={p.user_id} className={`flex items-center gap-1.5 rounded-full bg-bg-3 pl-1 pr-2 py-0.5 text-sm ${p.request_to_speak ? 'ring-1 ring-warn' : ''}`} data-audience={p.user_id} data-hand={p.request_to_speak ? '1' : '0'}>
-                      {u && <Avatar user={u} size={22} />}<span className="truncate max-w-[120px]">{u?.display_name ?? 'Unknown'}</span>
-                      {p.request_to_speak && <Hand size={14} className="text-warn" />}
-                      {!isStudio && isMod && inThis && <button type="button" onClick={() => inviteToSpeak(p.user_id)} className="ml-1 rounded-full bg-accent px-2 text-[11px] font-bold text-white hover:bg-accent-hover" data-invite-speak>Invite to speak</button>}
-                      {isStudio && isMod && inThis && <RoleMenu uid={p.user_id} />}
-                    </div>
-                  ) })}
-                </div>
-              </div>
-            )}
             {count === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <div className="h-20 w-20 rounded-full bg-bg-3 flex items-center justify-center mb-4"><Volume2 size={36} className="text-text-1" /></div>
@@ -233,10 +218,10 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 </div>
               </div>
             )}
-            {isStudio && audience.length > 0 && (
-              <div className="shrink-0 rounded-xl border border-line bg-bg-2/60 px-3 py-2 max-h-[40%] overflow-y-auto" data-stage-audience data-studio-audience>
+            {isStage && audience.length > 0 && (
+              <div className="shrink-0 rounded-xl border border-line bg-bg-2/60 px-3 py-2 max-h-[40%] overflow-y-auto" data-stage-audience data-studio-audience={isStudio ? '1' : undefined}>
                 <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-2">Audience — {audience.length}</div>
-                <div className="grid gap-2 justify-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))' }}>
+                <div className="grid gap-2 justify-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
                   {audience.map((p) => { const u = users[p.user_id] ?? (me?.id === p.user_id ? me : undefined); const talking = !!speaking[p.user_id]; return (
                     <div key={p.user_id} className="group relative flex flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-center hover:bg-bg-3" data-audience={p.user_id} data-hand={p.request_to_speak ? '1' : '0'}>
                       <div className={`relative rounded-full ${talking ? 'ring-2 ring-success' : ''}`}>
@@ -245,7 +230,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                         {(p.self_deaf || p.self_mute) && <span className="absolute -right-1 -bottom-1 rounded-full bg-bg-0 p-0.5 text-danger">{p.self_deaf ? <HeadphoneOff size={12} /> : <MicOff size={12} />}</span>}
                       </div>
                       <span className="w-full truncate text-xs text-text-1" data-audience-name>{u?.display_name ?? 'Unknown'}</span>
-                      {isMod && inThis && <span className="absolute right-0.5 top-0.5 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}><RoleMenu uid={p.user_id} /></span>}
+                      {!isStudio && isMod && inThis && <button type="button" onClick={() => inviteToSpeak(p.user_id)} className="whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-white hover:bg-accent-hover" title="Invite to speak" data-invite-speak>Invite to speak</button>}
+                      {isStudio && isMod && inThis && <span className="absolute right-0.5 top-0.5 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}><RoleMenu uid={p.user_id} /></span>}
                     </div>
                   ) })}
                 </div>

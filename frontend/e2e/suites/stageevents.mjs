@@ -37,6 +37,9 @@ ok('the owner joins as a speaker (tile), bob as audience (chip)', await pa.locat
 ok('audience sees Raise Hand, speakers do not', await pb.locator('button[title="Raise Hand"]').count() === 1 && await pa.locator('button[title="Raise Hand"]').count() === 0)
 await pb.click('button[title="Raise Hand"]')
 await pa.waitForSelector(`[data-audience="${b.user.id}"][data-hand="1"]`)
+{ const tb = await pa.locator('[data-voice-tile]').first().boundingBox(); const ab = await pa.locator('[data-stage-audience]').boundingBox()
+  ok('the stage audience is a grid of avatars with names below the speakers', ab.y >= tb.y + tb.height && (await pa.locator(`[data-audience="${b.user.id}"] [data-audience-name]`).textContent()) === 'Bob', JSON.stringify({ tb, ab }))
+  await pa.screenshot({ path: '163-stage-audience.png' }) }
 ok('the raised hand shows to everyone and the moderator gets Invite to speak', await pa.locator(`[data-audience="${b.user.id}"] [data-invite-speak]`).count() === 1 && await pb.locator('button[title="Lower Hand"]').count() === 1)
 await pa.screenshot({ path: '151-stage-hand.png' })
 await pa.locator(`[data-audience="${b.user.id}"] [data-invite-speak]`).click()
