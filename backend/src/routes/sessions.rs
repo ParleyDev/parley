@@ -22,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/users/@me/sessions", get(list).delete(logout_others))
         .route("/users/@me/sessions/:id", delete(logout_one))
         .route("/admin/users/:id/sessions", get(admin_list).delete(admin_logout_all))
+        .route("/admin/users/:id/sessions/:sid", delete(admin_logout_one))
 }
 
 #[derive(Debug, Serialize, FromRow)]
@@ -76,4 +77,14 @@ async fn admin_logout_all(State(state): State<AppState>, AuthUser(uid): AuthUser
     let n = revoke_sessions(&state, id, None, None, "An administrator logged you out of all devices.").await?.len();
     crate::audit::record(&state, uid, "user.logout_all", "user", Some(id), &crate::audit::username(&state, id).await, serde_json::json!({ "revoked": n })).await;
     Ok(Json(serde_json::json!({ "revoked": n })))
+}
+
+/// Log one device out of a user's account.
+async fn admin_logout_one(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
+    require_admin(&state, uid).await?;
+    if revoke_sessions(&state, id, Some(sid), None, "An administrator logged this device out.").await?.is_empty() {
+        return Err(AppError::NotFound("Session not found".into()));
+    }
+    crate::audit::record(&state, uid, "user.logout_session", "user", Some(id), &crate::audit::username(&state, id).await, serde_json::json!({ "session": sid })).await;
+    Ok(StatusCode::NO_CONTENT)
 }

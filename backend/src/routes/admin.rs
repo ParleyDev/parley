@@ -81,6 +81,12 @@ pub struct InstanceSettings {
     /// Whether voice messages get transcribed (derived; clients use it to show "Transcribing…").
     #[serde(default)]
     pub transcription: bool,
+    /// Rate limit overrides as `count/seconds` by bucket (register, login, login_fail, messages, uploads, gifs, mail);
+    /// a missing bucket uses the RL_* environment value, shown in `rate_limit_defaults`.
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub rate_limits: std::collections::HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub rate_limit_defaults: std::collections::HashMap<String, String>,
 }
 
 impl InstanceSettings {
@@ -94,13 +100,15 @@ impl InstanceSettings {
         self.livekit_api_secret = String::new();
         self.stt_url = String::new();
         self.stt_api_key = String::new();
+        self.rate_limits.clear();
+        self.rate_limit_defaults.clear();
         self
     }
 }
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default() };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -112,9 +120,11 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "stt_url" => s.stt_url = v.as_str().unwrap_or("").to_string(),
             "stt_api_key" => s.stt_api_key = v.as_str().unwrap_or("").to_string(),
             "stt_model" => s.stt_model = v.as_str().unwrap_or("").to_string(),
+            "rate_limits" => s.rate_limits = v.as_object().map(|o| o.iter().filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string()))).collect()).unwrap_or_default(),
             _ => {}
         }
     }
+    s.rate_limit_defaults = crate::ratelimit::LIMITER.env_defaults();
     s.voice_mode = if s.sfu_configured() { "sfu".into() } else { "mesh".into() };
     s.transcription = s.stt_configured();
     Ok(s)
@@ -170,6 +180,8 @@ struct ListQuery {
     joined_before: Option<chrono::NaiveDate>,
     joined_after: Option<chrono::NaiveDate>,
     inactive_days: Option<i64>,
+    /// Users who have had a session from this client IP (exact match) in the last 30 days.
+    ip: Option<String>,
     #[serde(default)]
     offset: i64,
     limit: Option<i64>,
@@ -218,9 +230,11 @@ async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Quer
          AND ($6::bool IS NULL OR (u.id = ANY($7)) = $6)
          AND ($8::timestamptz IS NULL OR u.created_at < $8)
          AND ($9::timestamptz IS NULL OR u.created_at >= $9)
-         AND ($10::bigint IS NULL OR COALESCE((SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), u.created_at) < now() - make_interval(days => $10::int))";
+         AND ($10::bigint IS NULL OR COALESCE((SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), u.created_at) < now() - make_interval(days => $10::int))
+         AND ($13::text IS NULL OR EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.ip = $13 AND s.created_at > now() - interval '30 days'))";
+    let ip = q.ip.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
     let (total,): (i64,) = sqlx::query_as(&format!("SELECT COUNT(*) FROM users u WHERE {where_sql}"))
-        .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days)
+        .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days).bind(0i64).bind(0i64).bind(&ip)
         .fetch_one(&state.db)
         .await?;
     let mut rows = sqlx::query_as::<_, AdminUser>(&format!(
@@ -230,7 +244,7 @@ async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Quer
          FROM users u WHERE {where_sql}
          ORDER BY u.created_at DESC LIMIT $11 OFFSET $12"))
     .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days)
-    .bind(limit).bind(q.offset.max(0))
+    .bind(limit).bind(q.offset.max(0)).bind(&ip)
     .fetch_all(&state.db)
     .await?;
     for r in &mut rows { r.online = online.contains(&r.id) }
@@ -471,13 +485,27 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if before.stt_url != stt_url { changed.insert("stt_url".into(), json!(stt_url)); }
     if before.stt_api_key != stt_key { changed.insert("stt_api_key".into(), json!(if stt_key.is_empty() { "cleared" } else { "set" })); }
     if before.stt_model != stt_model { changed.insert("stt_model".into(), json!(stt_model)); }
+    let mut rate_limits: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for (k, v) in &req.rate_limits {
+        let v = v.trim();
+        if v.is_empty() { continue; }
+        if !crate::ratelimit::BUCKETS.contains(&k.as_str()) {
+            return Err(AppError::BadRequest(format!("Unknown rate limit bucket '{k}'")));
+        }
+        if crate::ratelimit::Limit::parse(v).is_none() {
+            return Err(AppError::BadRequest(format!("Rate limit for {k} must be count/seconds, e.g. 10/5")));
+        }
+        rate_limits.insert(k.clone(), v.to_string());
+    }
+    if before.rate_limits != rate_limits { changed.insert("rate_limits".into(), json!(rate_limits)); }
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     let mut s = load_settings(&state.db).await?;
+    crate::ratelimit::LIMITER.apply_overrides(&s.rate_limits);
     s.mail_enabled = crate::mail::enabled(&state.config);
     state.hub.emit_all("INSTANCE_UPDATE", json!(s.clone().public()));
     Ok(Json(s))

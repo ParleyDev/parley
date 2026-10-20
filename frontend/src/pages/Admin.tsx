@@ -1,6 +1,6 @@
 import { Compass, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
-import { NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
 import { MobileBack } from '../components/HeaderBits'
 import { api } from '../lib/api'
@@ -77,8 +77,8 @@ function Overview() {
 
 interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; upload_quota_bytes?: number | null; last_seen_at?: string | null; guild_count: number; online: boolean }
 type Tri = '' | 'true' | 'false'
-interface UserFilters { admin: Tri; suspended: Tri; verified: Tri; mfa: Tri; online: Tri; joined_before: string; joined_after: string; inactive_days: string }
-const EMPTY_FILTERS: UserFilters = { admin: '', suspended: '', verified: '', mfa: '', online: '', joined_before: '', joined_after: '', inactive_days: '' }
+interface UserFilters { admin: Tri; suspended: Tri; verified: Tri; mfa: Tri; online: Tri; joined_before: string; joined_after: string; inactive_days: string; ip: string }
+const EMPTY_FILTERS: UserFilters = { admin: '', suspended: '', verified: '', mfa: '', online: '', joined_before: '', joined_after: '', inactive_days: '', ip: '' }
 const PAGE = 100
 
 function UsersPane() {
@@ -86,7 +86,8 @@ function UsersPane() {
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
   const [q, setQ] = useState('')
-  const [filters, setFilters] = useState<UserFilters>(EMPTY_FILTERS)
+  const [params] = useSearchParams()
+  const [filters, setFilters] = useState<UserFilters>({ ...EMPTY_FILTERS, ip: params.get('ip') ?? '' })
   const [list, setList] = useState<AdminUser[] | null>(null)
   const [total, setTotal] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -150,6 +151,7 @@ function UsersPane() {
         <label className="flex items-center gap-1 text-xs text-text-2">Joined after <input type="date" className="input w-auto py-1 text-xs" value={filters.joined_after} onChange={(e) => setFilters({ ...filters, joined_after: e.target.value })} data-admin-filter="joined_after" /></label>
         <label className="flex items-center gap-1 text-xs text-text-2">before <input type="date" className="input w-auto py-1 text-xs" value={filters.joined_before} onChange={(e) => setFilters({ ...filters, joined_before: e.target.value })} data-admin-filter="joined_before" /></label>
         <label className="flex items-center gap-1 text-xs text-text-2">Inactive for <input type="number" min={1} className="input w-20 py-1 text-xs" value={filters.inactive_days} onChange={(e) => setFilters({ ...filters, inactive_days: e.target.value })} placeholder="days" data-admin-filter="inactive_days" /> days</label>
+        <label className="flex items-center gap-1 text-xs text-text-2">IP <input className="input w-36 py-1 text-xs" value={filters.ip} onChange={(e) => setFilters({ ...filters, ip: e.target.value })} placeholder="203.0.113.7" data-admin-filter-ip /></label>
         {activeFilters > 0 && <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setFilters(EMPTY_FILTERS)} data-admin-filter-clear>Clear filters</button>}
         <span className="ml-auto text-xs text-text-2" data-admin-user-total>{list ? `${list.length} of ${total}` : '…'}</span>
       </div>
@@ -257,11 +259,13 @@ function SettingsPane() {
   const [sttUrl, setSttUrl] = useState('')
   const [sttKey, setSttKey] = useState('')
   const [sttModel, setSttModel] = useState('')
+  const [rl, setRl] = useState<Record<string, string>>({})
+  const [rlDefaults, setRlDefaults] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string; stt_url?: string; stt_api_key?: string; stt_model?: string }>('/admin/settings').then((s) => { setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification); setLkUrl(s.livekit_url ?? ''); setLkKey(s.livekit_api_key ?? ''); setLkSecret(s.livekit_api_secret ?? ''); setSttUrl(s.stt_url ?? ''); setSttKey(s.stt_api_key ?? ''); setSttModel(s.stt_model ?? '') }).catch(() => {}) }, [])
+  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string; stt_url?: string; stt_api_key?: string; stt_model?: string; rate_limits?: Record<string, string>; rate_limit_defaults?: Record<string, string> }>('/admin/settings').then((s) => { setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification); setLkUrl(s.livekit_url ?? ''); setLkKey(s.livekit_api_key ?? ''); setLkSecret(s.livekit_api_secret ?? ''); setSttUrl(s.stt_url ?? ''); setSttKey(s.stt_api_key ?? ''); setSttModel(s.stt_model ?? ''); setRl(s.rate_limits ?? {}); setRlDefaults(s.rate_limit_defaults ?? {}) }).catch(() => {}) }, [])
   const save = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify, livekit_url: lkUrl, livekit_api_key: lkKey, livekit_api_secret: lkSecret, stt_url: sttUrl, stt_api_key: sttKey, stt_model: sttModel }); setInstance({ ...s, livekit_url: s.livekit_url }); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
+    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify, livekit_url: lkUrl, livekit_api_key: lkKey, livekit_api_secret: lkSecret, stt_url: sttUrl, stt_api_key: sttKey, stt_model: sttModel, rate_limits: rl }); setInstance({ ...s, livekit_url: s.livekit_url }); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={save} className="max-w-xl space-y-6" data-admin-settings>
@@ -295,6 +299,14 @@ function SettingsPane() {
           <div><label className="label">Model</label><input className="input" value={sttModel} onChange={(e) => setSttModel(e.target.value)} placeholder="Systran/faster-whisper-base.en or whisper-1" data-admin-stt-model /></div>
         </div>
         <div className="text-xs text-text-2">Transcription: <b data-admin-stt-state>{instance.transcription ? 'on' : 'off'}</b></div>
+      </div>
+      <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-rate-limits>
+        <div><span className="block font-semibold">Rate limits</span><span className="block text-sm text-text-2">Requests allowed per window as <code>count/seconds</code>, e.g. <code>10/5</code>. Blank uses the server's RL_* environment value (shown as the placeholder). Applies immediately on this instance; other instances pick it up on restart.</span></div>
+        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+          {([['register', 'Registrations (per IP)'], ['login', 'Logins (per IP)'], ['login_fail', 'Failed logins (per IP)'], ['messages', 'Messages (per user)'], ['uploads', 'Uploads (per user)'], ['gifs', 'GIF searches (per user)'], ['mail', 'Emails sent (per user)']] as const).map(([k, label]) => (
+            <div key={k}><label className="label">{label}</label><input className="input" value={rl[k] ?? ''} onChange={(e) => setRl({ ...rl, [k]: e.target.value })} placeholder={rlDefaults[k] ?? ''} data-admin-rl={k} /></div>
+          ))}
+        </div>
       </div>
       <button className="btn-primary" disabled={busy} data-admin-settings-save>{busy ? 'Saving…' : 'Save Settings'}</button>
     </form>
@@ -452,14 +464,21 @@ function MessagesPane() {
 
 interface UserContent { user: { id: string; username: string; display_name: string }; quota: number | null; quota_override: number | null; messages: AdminHit[]; uploads: { id: string; filename: string; content_type: string; size: number; url: string; message_id: string | null; created_at: string }[]; images: { id: string; kind: string; size: number; url: string; created_at: string }[]; totals: { messages: number; attachments: number; attachment_bytes: number; images: number; image_bytes: number } }
 
+interface AdminSession { id: string; created_at: string; last_seen_at: string; ip: string; user_agent: string }
+
 function UserContentPane() {
   const { id } = useParams()
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const [data, setData] = useState<UserContent | null>(null)
-  const [tab, setTab] = useState<'messages' | 'uploads'>('messages')
-  const load = async () => { try { setData(await api.get<UserContent>(`/admin/users/${id}/content`)) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const [tab, setTab] = useState<'messages' | 'uploads' | 'sessions'>('messages')
+  const [sessions, setSessions] = useState<AdminSession[] | null>(null)
+  const loadSessions = async () => { try { setSessions(await api.get<AdminSession[]>(`/admin/users/${id}/sessions`)) } catch { setSessions([]) } }
+  const load = async () => { try { setData(await api.get<UserContent>(`/admin/users/${id}/content`)); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
   useEffect(() => { load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const navigate = useNavigate()
+  const logoutOne = async (sid: string) => { try { await api.delete(`/admin/users/${id}/sessions/${sid}`); pushToast('Device logged out'); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
+  const logoutAll = async () => { try { const r = await api.delete<{ revoked: number }>(`/admin/users/${id}/sessions`); pushToast(`Logged out of ${r.revoked} device${r.revoked === 1 ? '' : 's'}`); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
   if (!data) return <p className="text-sm text-text-2">Loading…</p>
   const { user, totals } = data
   const used = totals.attachment_bytes + totals.image_bytes
@@ -490,9 +509,29 @@ function UserContentPane() {
         <button type="button" className="btn-danger py-1 text-xs" onClick={purgeUploads} disabled={totals.attachments === 0 && totals.images === 0} data-admin-purge-uploads>Purge uploads</button>
       </div>
       <div className="mt-5 flex gap-1.5">
-        {(['messages', 'uploads'] as const).map((t) => <button key={t} type="button" onClick={() => setTab(t)} className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${tab === t ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-admin-content-tab={t}>{t}</button>)}
+        {(['messages', 'uploads', 'sessions'] as const).map((t) => <button key={t} type="button" onClick={() => setTab(t)} className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${tab === t ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-admin-content-tab={t}>{t}</button>)}
       </div>
-      {tab === 'messages' ? (
+      {tab === 'sessions' ? (
+        <div className="mt-3 rounded-xl border border-line bg-bg-1 overflow-hidden" data-admin-sessions>
+          <div className="flex items-center justify-between px-3 py-2 border-b border-line text-xs text-text-2">
+            <span>{sessions ? `${sessions.length} active device${sessions.length === 1 ? '' : 's'} (last 30 days)` : 'Loading…'}</span>
+            {!!sessions?.length && <button type="button" className="btn-danger py-1 text-xs" onClick={logoutAll} data-admin-logout-all>Log out all</button>}
+          </div>
+          {sessions?.length === 0 && <p className="p-4 text-sm text-text-2">No active sessions.</p>}
+          {sessions?.map((sn) => (
+            <div key={sn.id} className="px-3 py-2 border-t border-line first:border-t-0 text-sm flex items-center gap-3" data-admin-session={sn.id}>
+              <div className="min-w-0 flex-1">
+                <div className="truncate" title={sn.user_agent}>{sn.user_agent || 'Unknown client'}</div>
+                <div className="text-xs text-text-2">
+                  <button type="button" className="text-sky-400 hover:underline" title="Users seen from this IP" onClick={() => navigate(`/admin/users?ip=${encodeURIComponent(sn.ip)}`)} data-admin-session-ip>{sn.ip}</button>
+                  {' · '}signed in {new Date(sn.created_at).toLocaleString()} · last seen {new Date(sn.last_seen_at).toLocaleString()}
+                </div>
+              </div>
+              <button type="button" className="btn-ghost py-1 text-xs text-danger" onClick={() => logoutOne(sn.id)} data-admin-session-logout>Log out</button>
+            </div>
+          ))}
+        </div>
+      ) : tab === 'messages' ? (
         <div className="mt-3 rounded-xl border border-line bg-bg-1 overflow-hidden" data-admin-content-messages>
           {data.messages.length === 0 && <p className="p-4 text-sm text-text-2">No messages.</p>}
           {data.messages.map((m) => <HitRow key={m.id} m={m} onDeleted={load} />)}
