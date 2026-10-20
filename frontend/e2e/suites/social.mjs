@@ -59,6 +59,13 @@ ok('server channels show the reader avatars (no "Seen" word)', !(await pa.textCo
 await pa.hover(`[data-read-by="${b.user.id}"] [data-tip]`); await pa.waitForSelector('[role=tooltip]')
 ok('hovering lists who has seen it', (await pa.textContent('[role=tooltip]')).includes('Bob'))
 // invite card + invite friend from modal
+const pubUrl = (await call(a.token, 'GET', '/instance')).app_url
+if (pubUrl && !WEB.startsWith(pubUrl)) {
+  const other = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: `public link ${pubUrl}/invite/${inv.code}` })
+  await pa.goto(`${WEB}/channels/@me/${dm.id}`); await pa.waitForSelector(`[data-msg-id="${other.id}"] [data-invite-card]`, { timeout: 10000 })
+  ok('a link carrying the instance\'s public URL renders a card even when browsing from another address', true)
+  await pa.goto(`${WEB}/channels/${g.id}/${tc.id}`); await pa.waitForSelector('textarea')
+}
 await pa.click(`aside button:has-text("Social")`); await pa.click('text=Invite People'); await pa.waitForSelector('[data-invite-friends]')
 await pa.waitForSelector(`[data-invite-friend="${c.user.id}"] [data-invite-send]`)
 ok('the invite modal lists friends; bob (already a member) has no button', await pa.locator(`[data-invite-friend="${b.user.id}"]:has-text("Already a member")`).count() === 1)

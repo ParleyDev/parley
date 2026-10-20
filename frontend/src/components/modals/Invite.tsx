@@ -2,6 +2,7 @@ import { Check, Copy, Search, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import Modal from '../Modal'
 import { api } from '../../lib/api'
+import { publicOrigin } from '../InviteCard'
 import { useStore } from '../../store'
 import type { DmChannel, Invite } from '../../lib/types'
 import Avatar from '../Avatar'
@@ -26,7 +27,7 @@ export default function InviteModal({ onClose, guildId }: { onClose: () => void;
       .then((list) => list.find((i) => i.max_uses === null) ?? api.post<Invite>(`/guilds/${guildId}/invites`, {}))
       .then(setInvite).catch((e) => setErr((e as Error).message))
   }, [guildId])
-  const link = invite ? `${location.origin}/invite/${invite.code}` : ''
+  const link = invite ? `${publicOrigin()}/invite/${invite.code}` : ''
   const copy = async () => { try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* ignore */ } }
   const sendTo = async (userId: string) => {
     if (!link) return
