@@ -420,6 +420,7 @@ async fn create_message(
     let msg = fetch_message(&state.db, mid, uid).await?;
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    crate::push::after_message(state.clone(), msg.clone(), c.clone());
     if c.kind == "thread" {
         crate::routes::threads::on_thread_message(&state, c.id).await?;
     }

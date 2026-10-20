@@ -2,6 +2,7 @@ import { useStore } from '../store'
 import type { VoiceState } from './types'
 import { sendOp, type SignalData } from './ws'
 import { supportsSinkId, type VoiceSettings } from './settings'
+import { keepAwake } from './native'
 import { api } from './api'
 import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant } from 'livekit-client'
 
@@ -83,6 +84,7 @@ class VoiceManager {
   // ---- public controls ----
 
   async join(channelId: string) {
+    keepAwake(true)
     if (this.joining) return
     const s = useStore.getState()
     if (this.channelId === channelId) return
@@ -104,6 +106,7 @@ class VoiceManager {
   }
 
   leave() {
+    keepAwake(false)
     const s = useStore.getState()
     if (this.channelId) sendOp({ op: 'voice_leave' })
     this.channelId = null

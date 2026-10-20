@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Parley</string>
+    <string name="title_activity_main">Parley</string>
+    <string name="package_name">us.vic10.parley</string>
+    <string name="custom_url_scheme">us.vic10.parley</string>
+</resources>

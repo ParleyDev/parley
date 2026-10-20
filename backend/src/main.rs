@@ -5,6 +5,7 @@ mod config;
 mod error;
 mod models;
 mod perms;
+mod push;
 mod mail;
 mod metrics;
 mod mfa;

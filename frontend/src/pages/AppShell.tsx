@@ -16,6 +16,7 @@ import VerifyBanner from '../components/VerifyBanner'
 import { lastChannel, rememberChannel } from '../lib/dm'
 import { useSwipe } from '../lib/swipe'
 import { useKeybinds } from '../lib/keybinds'
+import { setNativeNavigator } from '../lib/native'
 import { voice } from '../lib/voice'
 import { useMemo } from 'react'
 
@@ -136,6 +137,8 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
 
 /** Phone swipes (content → channel list / member list) and the rebindable keyboard shortcuts. Renders nothing. */
 function Shortcuts() {
+  const nav = useNavigate()
+  useEffect(() => { setNativeNavigator((p) => nav(p)) }, [nav])
   // AppShell is mounted at /channels/*, so read the ids from the path rather than useParams.
   const { pathname } = useLocation()
   const [, guildId, channelId] = /^\/channels\/([^/]+)(?:\/([^/]+))?/.exec(pathname) ?? []

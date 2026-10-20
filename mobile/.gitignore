@@ -1,0 +1,14 @@
+node_modules/
+android/local.properties
+android/.gradle/
+android/app/build/
+android/build/
+android/app/google-services.json
+ios/App/Pods/
+ios/App/App/GoogleService-Info.plist
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+ios/App/App/config.xml

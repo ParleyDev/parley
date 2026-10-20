@@ -3,6 +3,7 @@ import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, User, VoiceState } from './types'
 import { voice } from './voice'
 import { studio } from './studio'
+import { registerPush } from './native'
 
 type Ev = { s?: number; i?: string } & (
   | { t: 'READY'; d: ReadyPayload }
@@ -123,7 +124,7 @@ export function sendTyping(channelId: string) {
 function handle(ev: Ev) {
   const s = useStore.getState()
   switch (ev.t) {
-    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void s.loadNotes(); voice.onReconnect(); break
+    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void s.loadNotes(); void registerPush(); voice.onReconnect(); break
     // The server replayed everything we missed; state is already current, no need to rebuild it.
     case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); break
     case 'RESYNC': lastSeq = 0; instanceId = null; socket?.close(); break

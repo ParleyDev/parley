@@ -93,6 +93,15 @@ pub struct InstanceSettings {
     /// When the scanner is unreachable: refuse uploads (true) or let them through with an error logged (false).
     #[serde(default)]
     pub av_fail_closed: bool,
+    /// Push for the native apps: a Firebase service-account JSON (secret). Empty = push off.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fcm_service_account: String,
+    /// Test hook: base URL replacing the Google OAuth/FCM hosts.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fcm_endpoint: String,
+    /// Derived: push configured (shown to admins and clients).
+    #[serde(default)]
+    pub push: bool,
 }
 
 impl InstanceSettings {
@@ -109,13 +118,15 @@ impl InstanceSettings {
         self.rate_limits.clear();
         self.rate_limit_defaults.clear();
         self.av_addr = String::new();
+        self.fcm_service_account = String::new();
+        self.fcm_endpoint = String::new();
         self
     }
 }
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -129,6 +140,8 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "stt_model" => s.stt_model = v.as_str().unwrap_or("").to_string(),
             "av_addr" => s.av_addr = v.as_str().unwrap_or("").to_string(),
             "av_fail_closed" => s.av_fail_closed = v.as_bool().unwrap_or(false),
+            "fcm_service_account" => s.fcm_service_account = v.as_str().unwrap_or("").to_string(),
+            "fcm_endpoint" => s.fcm_endpoint = v.as_str().unwrap_or("").to_string(),
             "rate_limits" => s.rate_limits = v.as_object().map(|o| o.iter().filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string()))).collect()).unwrap_or_default(),
             _ => {}
         }
@@ -136,6 +149,7 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     s.rate_limit_defaults = crate::ratelimit::LIMITER.env_defaults();
     s.voice_mode = if s.sfu_configured() { "sfu".into() } else { "mesh".into() };
     s.transcription = s.stt_configured();
+    s.push = !s.fcm_service_account.trim().is_empty();
     Ok(s)
 }
 
@@ -513,10 +527,20 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     }
     if before.av_addr != av_addr { changed.insert("av_addr".into(), json!(av_addr)); }
     if before.av_fail_closed != req.av_fail_closed { changed.insert("av_fail_closed".into(), json!(req.av_fail_closed)); }
+    let fcm_sa = req.fcm_service_account.trim().to_string();
+    if !fcm_sa.is_empty() {
+        if let Err(e) = crate::push::parse(&fcm_sa) { return Err(AppError::BadRequest(format!("Firebase service account: {e}"))); }
+    }
+    let fcm_endpoint = req.fcm_endpoint.trim().to_string();
+    if !fcm_endpoint.is_empty() && !(fcm_endpoint.starts_with("http://") || fcm_endpoint.starts_with("https://")) {
+        return Err(AppError::BadRequest("FCM endpoint must be an http(s) URL".into()));
+    }
+    if before.fcm_service_account != fcm_sa { changed.insert("fcm_service_account".into(), json!(if fcm_sa.is_empty() { "cleared" } else { "set" })); }
+    if before.fcm_endpoint != fcm_endpoint { changed.insert("fcm_endpoint".into(), json!(fcm_endpoint)); }
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     let mut s = load_settings(&state.db).await?;

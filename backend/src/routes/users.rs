@@ -25,6 +25,7 @@ pub fn router() -> Router<AppState> {
         .route("/users/:id/reviews", get(list_reviews).put(put_review))
         .route("/users/:id/reviews/:rid", delete(delete_review))
         .route("/users/@me/guild-layout", get(get_layout).put(put_layout))
+        .route("/users/@me/push-tokens", put(put_push_token).delete(delete_push_token))
         .route("/users/@me/notes", get(list_notes))
         .route("/users/@me/notes/:id", put(put_note))
         .route("/users/@me/notification-settings", get(list_notif))
@@ -631,4 +632,24 @@ pub async fn badges_for(db: &sqlx::PgPool, id: Uuid) -> AppResult<Vec<&'static s
     if verified { out.push("verified"); }
     if secure { out.push("secure"); }
     Ok(out)
+}
+
+#[derive(Deserialize)]
+struct PushTokenReq { platform: String, token: String }
+
+/// The native app registers its device token after login (and again on every launch, which refreshes `seen_at`).
+async fn put_push_token(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<PushTokenReq>) -> AppResult<Json<serde_json::Value>> {
+    if !["android", "ios", "web"].contains(&req.platform.as_str()) { return Err(AppError::BadRequest("platform must be android, ios or web".into())); }
+    let token = req.token.trim().to_string();
+    if token.len() < 16 || token.len() > 4096 { return Err(AppError::BadRequest("Invalid token".into())); }
+    sqlx::query("INSERT INTO push_tokens (token, user_id, platform) VALUES ($1, $2, $3) ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, platform = EXCLUDED.platform, seen_at = now()")
+        .bind(&token).bind(uid).bind(&req.platform).execute(&state.db).await?;
+    Ok(Json(serde_json::json!({ "ok": true, "push_enabled": crate::push::enabled(&state).await })))
+}
+
+#[derive(Deserialize)]
+struct DeletePushToken { token: String }
+async fn delete_push_token(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<DeletePushToken>) -> AppResult<StatusCode> {
+    sqlx::query("DELETE FROM push_tokens WHERE token = $1 AND user_id = $2").bind(req.token.trim()).bind(uid).execute(&state.db).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
