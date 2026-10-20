@@ -35,6 +35,7 @@ export default function App() {
         <Route path="/login" element={token ? <Navigate to="/channels/@me" replace /> : <AuthPage mode="login" />} />
         <Route path="/register" element={token ? <Navigate to="/channels/@me" replace /> : <AuthPage mode="register" />} />
         <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/confirm-email" element={<VerifyPage mode="change" />} />
         <Route path="/forgot" element={token ? <Navigate to="/channels/@me" replace /> : <ForgotPage />} />
         <Route path="/reset" element={<ResetPage />} />
         <Route path="/invite/:code" element={token ? <InvitePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />

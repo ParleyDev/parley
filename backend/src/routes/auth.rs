@@ -32,7 +32,7 @@ struct RegisterReq {
     display_name: Option<String>,
 }
 
-fn valid_username(u: &str) -> bool {
+pub fn valid_username(u: &str) -> bool {
     (2..=32).contains(&u.len())
         && u.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
 }

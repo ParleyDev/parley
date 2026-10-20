@@ -1,0 +1,68 @@
+// Settings → My Account: change username (password, once a day), change email (confirmed from the new address),
+// change password (current password, log out other devices), and the account standing card.
+import { chromium } from 'playwright'
+import { B, H, WEB, S, PASSWORD, reg, call, raw, ok, finish, adminToken, login } from '../lib.mjs'
+const admin = await adminToken()
+const a = await reg('alice'); const b = await reg('bob')
+const mailFor = async (to) => (await call(admin.token, 'GET', `/admin/mail?to=${encodeURIComponent(to)}`))
+
+console.log('-- username')
+let r = await raw(a.token, 'PATCH', '/users/@me/username', { username: `alice_new${S}`, password: 'wrong' }); ok('wrong password refused', r.status === 400)
+r = await raw(a.token, 'PATCH', '/users/@me/username', { username: 'a b', password: PASSWORD }); ok('invalid username refused', r.status === 400)
+r = await raw(a.token, 'PATCH', '/users/@me/username', { username: b.user.username, password: PASSWORD }); ok('taken username refused', r.status === 409)
+r = await raw(a.token, 'PATCH', '/users/@me/username', { username: `alice_new${S}`, password: PASSWORD }); const u1 = await r.json()
+ok('a valid change applies', r.status === 200 && u1.username === `alice_new${S}`)
+r = await raw(a.token, 'PATCH', '/users/@me/username', { username: `alice_again${S}`, password: PASSWORD }); ok('a second change the same day is refused (429)', r.status === 429)
+ok('logging in with the new username works', !!(await login(`alice_new${S}`)).token)
+ok('others see the new username', (await call(b.token, 'GET', `/users/${a.user.id}`)).username === `alice_new${S}`)
+
+console.log('-- email')
+const newMail = `alice_moved${S}@x.io`
+r = await raw(a.token, 'POST', '/users/@me/email', { email: newMail, password: 'wrong' }); ok('email change needs the password', r.status === 400)
+r = await raw(a.token, 'POST', '/users/@me/email', { email: `bob${S}@x.io`, password: PASSWORD }); ok('an address in use is refused', r.status === 409)
+r = await raw(a.token, 'POST', '/users/@me/email', { email: newMail, password: PASSWORD }); const er = await r.json()
+ok('a valid request is pending until confirmed', r.status === 200 && er.pending === true && (await call(a.token, 'GET', '/users/@me')).email === `alice${S}@x.io`)
+const m = (await mailFor(newMail))[0]; const tok = /confirm-email\?token=([0-9a-f]{64})/.exec(m?.body ?? '')?.[1]
+ok('the confirmation link went to the NEW address', !!tok, JSON.stringify(m).slice(0, 200))
+ok('the old address got a heads-up', (await mailFor(`alice${S}@x.io`)).some((x) => /being changed/.test(x.subject)))
+r = await raw(null, 'POST', '/auth/confirm-email', { token: 'nope' }); ok('bad confirmation token refused', r.status === 400)
+r = await raw(null, 'POST', '/auth/confirm-email', { token: tok }); const me = await call(a.token, 'GET', '/users/@me')
+ok('confirming applies the new address and marks it verified', r.status === 200 && me.email === newMail && me.email_verified_at !== null)
+r = await raw(null, 'POST', '/auth/confirm-email', { token: tok }); ok('confirmation tokens are single-use', r.status === 400)
+
+console.log('-- password')
+const other = await login(`alice_new${S}`)
+r = await raw(a.token, 'POST', '/users/@me/password', { current_password: 'wrong', new_password: 'newpassword1' }); ok('wrong current password refused', r.status === 400)
+r = await raw(a.token, 'POST', '/users/@me/password', { current_password: PASSWORD, new_password: 'short' }); ok('short new password refused', r.status === 400)
+r = await raw(a.token, 'POST', '/users/@me/password', { current_password: PASSWORD, new_password: 'newpassword1', logout_others: true }); const pr = await r.json()
+ok('a valid change applies and logs out the other devices', r.status === 200 && pr.logged_out >= 1, JSON.stringify(pr))
+ok('the other session is gone, this one stays', (await raw(other.token, 'GET', '/users/@me')).status === 401 && (await raw(a.token, 'GET', '/users/@me')).status === 200)
+ok('the new password logs in; the old one does not', !!(await (await fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login: `alice_new${S}`, password: 'newpassword1' }) })).json()).token && !(await login(`alice_new${S}`)).token)
+ok('a password-changed mail was sent', (await mailFor(newMail)).some((x) => /password was changed/.test(x.subject)))
+
+console.log('-- standing')
+const st = await call(a.token, 'GET', '/users/@me/standing'); ok('a clean account is all good', st.level === 'all_good')
+const g = await call(b.token, 'POST', '/guilds', { name: `Standing ${S}` }); const inv = await call(b.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(a.token, 'POST', `/invites/${inv.code}`)
+await call(b.token, 'PUT', `/guilds/${g.id}/bans/${a.user.id}`, { reason: 'test' })
+ok('a server ban moves it to limited', (await call(a.token, 'GET', '/users/@me/standing')).level === 'limited')
+
+console.log('-- UI')
+const browser = await chromium.launch(); const errors = []
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
+await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), b.token); await p.goto(`${WEB}/channels/@me`); await p.waitForSelector('[data-user-panel-bar]')
+await p.click('button[title="User Settings"]'); await p.waitForSelector('[data-account-row="username"]')
+ok('My Account shows username, email and password rows with Edit buttons and a standing card', await p.locator('[data-account-edit]').count() === 3 && await p.locator('[data-account-standing="all_good"]').count() === 1)
+await p.click('[data-account-edit="username"]'); await p.waitForSelector('[data-account-dialog="username"]')
+await p.fill('[data-account-dialog] [data-account-new]', `bob_new${S}`); await p.fill('[data-account-dialog] [data-account-password]', 'wrong'); await p.click('[data-account-submit]')
+await p.waitForSelector('[data-account-error]'); ok('the dialog shows the server error for a wrong password', (await p.textContent('[data-account-error]')).includes('password'))
+await p.fill('[data-account-dialog] [data-account-password]', PASSWORD); await p.click('[data-account-submit]')
+await p.waitForFunction((u) => document.querySelector('[data-account-value="username"]')?.textContent === u, `bob_new${S}`)
+ok('the username row updates after a successful change', true)
+await p.click('[data-account-edit="password"]'); await p.waitForSelector('[data-account-dialog="password"]')
+await p.fill('[data-account-password]', PASSWORD); await p.fill('[data-account-new]', 'newpassword2'); await p.fill('[data-account-confirm]', 'different'); await p.click('[data-account-submit]')
+await p.waitForSelector('[data-account-error]'); ok('mismatched confirmation is caught before sending', (await p.textContent('[data-account-error]')).includes('match'))
+await p.fill('[data-account-confirm]', 'newpassword2'); await p.click('[data-account-submit]'); await p.waitForFunction(() => !document.querySelector('[data-account-dialog]'))
+ok('the password dialog closes on success', !!(await (await fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login: `bob_new${S}`, password: 'newpassword2' }) })).json()).token)
+await p.screenshot({ path: '164-account.png' })
+ok('no page errors', errors.length === 0, errors.join('\n'))
+await browser.close(); await finish()
