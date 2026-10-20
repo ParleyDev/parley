@@ -1,5 +1,6 @@
 pub mod account;
 pub mod admin;
+pub mod applications;
 pub mod attachments;
 pub mod auth;
 pub mod channels;
@@ -38,6 +39,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(users::router())
         .merge(account::router())
         .merge(connections::router())
+        .merge(applications::router())
         .merge(mfa::router())
         .merge(sessions::router())
         .merge(search::router())

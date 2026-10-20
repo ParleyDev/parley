@@ -82,7 +82,7 @@ await p.fill('[data-account-password]', PASSWORD); await p.fill('[data-account-n
 await p.waitForSelector('[data-account-error]'); ok('mismatched confirmation is caught before sending', (await p.textContent('[data-account-error]')).includes('match'))
 await p.fill('[data-account-confirm]', 'newpassword2'); await p.click('[data-account-submit]'); await p.waitForFunction(() => !document.querySelector('[data-account-dialog]'))
 ok('the password dialog closes on success', !!(await (await fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login: `bob_new${S}`, password: 'newpassword2' }) })).json()).token)
-ok('Your data and Disable Account are offered', await p.locator('[data-export-request]').count() === 1 && await p.locator('[data-disable-open]').count() === 1)
+ok('Disable Account is offered (data export lives under Data & Privacy now)', await p.locator('[data-disable-open]').count() === 1)
 await p.screenshot({ path: '164-account.png' })
 await p.click('[data-disable-open]'); await p.waitForSelector('[data-delete-form]'); await p.fill('[data-delete-password]', 'newpassword2'); await p.click('[data-delete-submit]')
 await p.waitForURL(/\/login/, { timeout: 10000 }); ok('disabling from the UI logs out to the login page', true)
