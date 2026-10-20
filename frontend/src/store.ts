@@ -4,7 +4,17 @@ import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
 
-let localSeq = 0
+let localSeq = Date.now()
+/** Undelivered rows survive channel switches, reconnects and reloads: they live in localStorage until Retry succeeds, Delete or Dismiss. */
+const localKey = (uid: string) => `parley.undelivered.${uid}`
+const readLocal = (uid: string): Record<string, Message[]> => { try { return JSON.parse(localStorage.getItem(localKey(uid)) ?? '{}') } catch { return {} } }
+const writeLocal = (uid: string, channelId: string, rows: Message[]) => {
+  try {
+    const all = readLocal(uid)
+    if (rows.length) all[channelId] = rows; else delete all[channelId]
+    localStorage.setItem(localKey(uid), JSON.stringify(all))
+  } catch { /* storage unavailable */ }
+}
 /** The in-app "system app" that explains undelivered messages: a friendly frog. */
 const FROG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#57c26b"/><circle cx="20" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="44" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="20" cy="22" r="6" fill="#fff"/><circle cx="44" cy="22" r="6" fill="#fff"/><circle cx="21.5" cy="23" r="3" fill="#1f2937"/><circle cx="45.5" cy="23" r="3" fill="#1f2937"/><circle cx="22.5" cy="21.5" r="1" fill="#fff"/><circle cx="46.5" cy="21.5" r="1" fill="#fff"/><path d="M18 40q14 12 28 0" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/><circle cx="14" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/><circle cx="50" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/></svg>`)
 export const RIBBIT = { id: 'ribbit', username: 'ribbit', display_name: 'Ribbit', avatar_url: FROG, bio: '', status: '', created_at: new Date(0).toISOString(), banner_url: null, theme_primary: null, theme_accent: null, pronouns: '', name_primary: null } as unknown as User
@@ -468,6 +478,11 @@ export const useStore = create<State>((set, get) => ({
     const ids = new Set(existing.map((m) => m.id))
     const fresh = ms.filter((m) => !ids.has(m.id))
     const merged = [...fresh, ...existing].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    // First page of a channel: bring back any undelivered rows saved for it (they sort last: ids start with "local-").
+    if (s.user && !merged.some((m) => m.local)) {
+      const saved = readLocal(s.user.id)[channelId]
+      if (saved?.length) merged.push(...saved)
+    }
     return { messages: { ...s.messages, [channelId]: merged }, hasMore: { ...s.hasMore, [channelId]: hasMore } }
   }),
   setLoadingMessages: (channelId, v) => set((s) => ({ loadingMessages: { ...s.loadingMessages, [channelId]: v } })),
@@ -611,7 +626,9 @@ export const useStore = create<State>((set, get) => ({
     const now = new Date().toISOString()
     const failed: Message = { id: `local-failed-${n}`, channel_id: channelId, author: me, content, reply_to: draft.reply_to, created_at: now, edited_at: null, pinned_at: null, reactions: [], attachments: [], kind: 'default', local: 'failed', draft }
     const notice: Message = { id: `local-notice-${n}`, channel_id: channelId, author: RIBBIT, content: '', reply_to: null, created_at: now, edited_at: null, pinned_at: null, reactions: [], attachments: [], kind: 'ribbit', local: 'notice', ref_id: failed.id }
-    return { messages: { ...s.messages, [channelId]: [...(s.messages[channelId] ?? []), failed, notice] } }
+    const list = [...(s.messages[channelId] ?? []), failed, notice]
+    writeLocal(me.id, channelId, list.filter((m) => m.local))
+    return { messages: { ...s.messages, [channelId]: list } }
   }),
   retryLocal: async (channelId, id) => {
     const m = (get().messages[channelId] ?? []).find((x) => x.id === id)
@@ -628,7 +645,9 @@ export const useStore = create<State>((set, get) => ({
   discardLocal: (channelId, id) => set((s) => {
     const list = s.messages[channelId]
     if (!list) return {}
-    return { messages: { ...s.messages, [channelId]: list.filter((x) => x.id !== id && x.ref_id !== id) } }
+    const next = list.filter((x) => x.id !== id && x.ref_id !== id)
+    if (s.user) writeLocal(s.user.id, channelId, next.filter((m) => m.local))
+    return { messages: { ...s.messages, [channelId]: next } }
   }),
   applyListened: (channelId, messageId, attachmentId, userId) => set((s) => {
     const list = s.messages[channelId]
