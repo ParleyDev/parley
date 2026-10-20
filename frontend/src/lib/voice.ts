@@ -442,6 +442,17 @@ class VoiceManager {
     useStore.getState().setPttHeld(down)
   }
 
+  /** Soundboard: play a short clip through the voice output device at the clip's volume (skipped while deafened). */
+  playSound(url: string, volume: number, id?: string) {
+    const w = window as unknown as { __parleySounds?: string[] }
+    w.__parleySounds = [...(w.__parleySounds ?? []), id ?? url]
+    if (useStore.getState().selfDeaf) return
+    const el = new Audio(url)
+    this.applyOutput(el)
+    el.volume = Math.max(0, Math.min(1, el.volume * volume))
+    el.play().catch(() => {})
+  }
+
   private applyOutput(el: HTMLAudioElement) {
     const st = this.settings
     el.volume = Math.max(0, Math.min(1, st.outputVolume / 100))

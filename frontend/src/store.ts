@@ -21,7 +21,7 @@ const writeLocal = (uid: string, channelId: string, rows: Message[]) => {
 const FROG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#57c26b"/><circle cx="20" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="44" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="20" cy="22" r="6" fill="#fff"/><circle cx="44" cy="22" r="6" fill="#fff"/><circle cx="21.5" cy="23" r="3" fill="#1f2937"/><circle cx="45.5" cy="23" r="3" fill="#1f2937"/><circle cx="22.5" cy="21.5" r="1" fill="#fff"/><circle cx="46.5" cy="21.5" r="1" fill="#fff"/><path d="M18 40q14 12 28 0" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/><circle cx="14" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/><circle cx="50" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/></svg>`)
 export const RIBBIT = { id: 'ribbit', username: 'ribbit', display_name: 'Ribbit', avatar_url: FROG, bio: '', status: '', created_at: new Date(0).toISOString(), banner_url: null, theme_primary: null, theme_accent: null, pronouns: '', name_primary: null } as unknown as User
 import type { Poll, ThreadInfo } from './lib/types'
-import type { Ban, Channel, DmChannel, Draft, Emoji, Guild, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sticker, User, UserNote, VoiceState } from './lib/types'
+import type { Ban, Channel, DmChannel, Draft, Emoji, Guild, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sound, Sticker, User, UserNote, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
 import { channelPerms, guildPerms } from './lib/perms'
@@ -102,6 +102,10 @@ interface State {
   /** Custom emoji and stickers per server, sorted by name. */
   emojis: Record<string, Emoji[]>
   stickers: Record<string, Sticker[]>
+  /** Soundboard per server, loaded on demand (voice view / settings) and kept fresh by SOUNDBOARD_UPDATE. */
+  sounds: Record<string, Sound[]>
+  setSounds: (guildId: string, sounds: Sound[]) => void
+  loadSounds: (guildId: string) => Promise<void>
   /** Message ids the user has bookmarked. */
   bookmarks: Record<string, true>
   /** Unread messages per channel that mention me (direct, role or @everyone). */
@@ -387,6 +391,9 @@ export const useStore = create<State>((set, get) => ({
     return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder, roles, emojis, stickers, guildLayout }
   }),
   setGuildEmojis: (guildId, emojis) => set((s) => ({ emojis: { ...s.emojis, [guildId]: emojis } })),
+  sounds: {},
+  setSounds: (guildId, sounds) => set((s) => ({ sounds: { ...s.sounds, [guildId]: sounds } })),
+  loadSounds: async (guildId) => { try { const list = await api.get<Sound[]>(`/guilds/${guildId}/sounds`); get().setSounds(guildId, list) } catch { /* ignore */ } },
   setGuildStickers: (guildId, stickers) => set((s) => ({ stickers: { ...s.stickers, [guildId]: stickers } })),
   setInstance: (instance) => set({ instance }),
   setNotifSetting: (n) => set((s) => { const notifSettings = { ...s.notifSettings }; if (n.deleted) delete notifSettings[n.target_id]; else notifSettings[n.target_id] = n; return { notifSettings } }),

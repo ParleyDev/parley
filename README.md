@@ -340,6 +340,10 @@ Some actions leave a notice in the conversation, rendered as a one-line system r
 - `call_started` when the first person joins a DM or group call
 - the group-DM notices (`recipient_add`, `recipient_remove`, `recipient_leave`, `channel_name_change`, `channel_icon_change`)
 
+## Soundboard
+
+Server Settings → Soundboard (Manage Server) takes short clips (MP3/OGG/WAV/WebM/M4A under 512 KB, up to 48 per server) with a name, emoji and volume; files are scanned like any upload and served at `/api/sounds/:id`. In a voice channel the Soundboard control opens a grid; a pick calls `POST /channels/:id/soundboard/:sid` (needs Speak there and to be connected, never while server-suppressed) and the server fans out `SOUNDBOARD_PLAY` to everyone in the channel, who play the clip locally through their voice output device (not while deafened). `SOUNDBOARD_UPDATE` keeps lists fresh.
+
 ## Tablets, phones, accessibility and keybinds
 
 - Three layouts: desktop (≥1024px), tablet (768–1023px: narrower server/channel sidebars, member list as an overlay from its toggle) and phone (<768px: one pane at a time). Phones respect notch safe areas (`viewport-fit=cover`), and a horizontal swipe on the content pane opens the channel list (right) or the member list (left); swiping right again closes the member list.
