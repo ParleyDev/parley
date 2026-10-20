@@ -57,6 +57,15 @@ impl VoiceState {
     }
 }
 
+/// A DM call in progress: rewritten into "lasted N minutes" / "missed call" when the last person leaves.
+#[derive(Clone, Debug)]
+pub struct CallInfo {
+    pub message_id: Uuid,
+    pub starter: Uuid,
+    pub started_at: std::time::Instant,
+    pub answered: bool,
+}
+
 /// Fan-out hub. One global broadcast channel; each socket task filters by target.
 pub struct Hub {
     /// This process; events carry it so other instances can tell their own echoes apart, and clients
@@ -69,6 +78,8 @@ pub struct Hub {
     online: DashMap<Uuid, usize>,
     /// user_id -> current voice channel
     voice: DashMap<Uuid, VoiceState>,
+    /// DM channel -> the call in progress there (its notice message, who started it, whether anyone else picked up).
+    pub calls: DashMap<Uuid, CallInfo>,
     /// (user, session) -> when the DB last confirmed it live; see auth::check_session.
     session_ok: DashMap<(Uuid, Uuid), std::time::Instant>,
     session_seq: std::sync::atomic::AtomicU64,
@@ -93,6 +104,7 @@ impl Hub {
             bus: std::sync::Mutex::new(None),
             online: DashMap::new(),
             voice: DashMap::new(),
+            calls: DashMap::new(),
             session_ok: DashMap::new(),
             session_seq: std::sync::atomic::AtomicU64::new(1),
             seq: std::sync::atomic::AtomicU64::new(0),

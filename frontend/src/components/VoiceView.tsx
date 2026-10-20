@@ -196,7 +196,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {/* Stage */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-hidden p-4 max-md:p-2 flex flex-col gap-3">
-            {isStage && audience.length > 0 && (
+            {isStage && !isStudio && audience.length > 0 && (
               <div className="shrink-0 rounded-xl border border-line bg-bg-2/60 px-3 py-2" data-stage-audience>
                 <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1">{isStudio ? 'Audience' : 'Audience'} — {audience.length}</div>
                 <div className="flex flex-wrap gap-2">
@@ -230,6 +230,24 @@ export default function VoiceView({ channel }: { channel: Channel }) {
               <div className="flex-1 overflow-y-auto">
                 <div className="grid gap-4 max-md:gap-2 justify-center content-start" data-voice-grid style={{ gridTemplateColumns: phone ? (tiles.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))') : `repeat(auto-fit, minmax(min(240px, 100%), ${tiles.length <= 2 ? '480px' : '340px'}))` }}>
                   {tiles.map((t) => renderTile(t, false))}
+                </div>
+              </div>
+            )}
+            {isStudio && audience.length > 0 && (
+              <div className="shrink-0 rounded-xl border border-line bg-bg-2/60 px-3 py-2 max-h-[40%] overflow-y-auto" data-stage-audience data-studio-audience>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-2">Audience — {audience.length}</div>
+                <div className="grid gap-2 justify-start" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(84px, 1fr))' }}>
+                  {audience.map((p) => { const u = users[p.user_id] ?? (me?.id === p.user_id ? me : undefined); const talking = !!speaking[p.user_id]; return (
+                    <div key={p.user_id} className="group relative flex flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-center hover:bg-bg-3" data-audience={p.user_id} data-hand={p.request_to_speak ? '1' : '0'}>
+                      <div className={`relative rounded-full ${talking ? 'ring-2 ring-success' : ''}`}>
+                        {u ? <Avatar user={u} size={48} /> : <div className="h-12 w-12 rounded-full bg-bg-4" />}
+                        {p.request_to_speak && <span className="absolute -right-1 -top-1 rounded-full bg-warn p-0.5 text-black"><Hand size={12} /></span>}
+                        {(p.self_deaf || p.self_mute) && <span className="absolute -right-1 -bottom-1 rounded-full bg-bg-0 p-0.5 text-danger">{p.self_deaf ? <HeadphoneOff size={12} /> : <MicOff size={12} />}</span>}
+                      </div>
+                      <span className="w-full truncate text-xs text-text-1" data-audience-name>{u?.display_name ?? 'Unknown'}</span>
+                      {isMod && inThis && <span className="absolute right-0.5 top-0.5 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}><RoleMenu uid={p.user_id} /></span>}
+                    </div>
+                  ) })}
                 </div>
               </div>
             )}
