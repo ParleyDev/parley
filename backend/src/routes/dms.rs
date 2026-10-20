@@ -5,7 +5,7 @@ use crate::{
     routes::{guilds::CHANNEL_COLS, users::USER_COLS},
     state::AppState,
 };
-use axum::{extract::{Path, State}, http::StatusCode, routing::{get, put}, Json, Router};
+use axum::{extract::{Path, State}, http::StatusCode, routing::{get, put, post}, Json, Router};
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::json;
@@ -18,12 +18,41 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/users/@me/channels", get(list).post(open_dm))
         .route("/channels/:id/recipients/:uid", put(add_recipient).delete(remove_recipient))
+        .route("/channels/:id/request", post(answer_request))
+}
+
+#[derive(Deserialize)]
+struct RequestAnswer { action: String }
+
+/// Accept or ignore a message request. Accepting moves the DM into your list; ignoring hides it (the
+/// other side is not told either way). Block them from the user menu if you want more than that.
+async fn answer_request(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<RequestAnswer>) -> AppResult<Json<DmChannel>> {
+    let next = match req.action.as_str() { "accept" => "accepted", "ignore" => "ignored", _ => return Err(AppError::BadRequest("action must be accept or ignore".into())) };
+    let n = sqlx::query("UPDATE channel_members SET request_state = $3 WHERE channel_id = $1 AND user_id = $2 AND request_state <> 'accepted'")
+        .bind(id).bind(uid).bind(next).execute(&state.db).await?.rows_affected();
+    if n == 0 {
+        return Err(AppError::NotFound("No message request here".into()));
+    }
+    let view = dm_view(&state.db, id, uid).await?;
+    state.hub.emit_users(vec![uid], "CHANNEL_UPDATE", json!(view));
+    Ok(Json(view))
+}
+
+/// Becoming friends settles any message request between the two (both directions).
+pub async fn accept_requests_between(db: &PgPool, a: Uuid, b: Uuid) -> AppResult<Vec<(Uuid, Uuid)>> {
+    let rows: Vec<(Uuid, Uuid)> = sqlx::query_as(
+        "UPDATE channel_members cm SET request_state = 'accepted'
+         FROM channels c WHERE c.id = cm.channel_id AND c.kind = 'dm' AND cm.request_state <> 'accepted' AND cm.user_id IN ($1, $2)
+           AND EXISTS (SELECT 1 FROM channel_members x WHERE x.channel_id = c.id AND x.user_id = $1)
+           AND EXISTS (SELECT 1 FROM channel_members y WHERE y.channel_id = c.id AND y.user_id = $2)
+         RETURNING cm.channel_id, cm.user_id").bind(a).bind(b).fetch_all(db).await?;
+    Ok(rows)
 }
 
 pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel>> {
-    let channels: Vec<(Uuid, Option<Uuid>, String, String, String, i32, DateTime<Utc>, Option<DateTime<Utc>>, Option<Uuid>, Option<String>)> = sqlx::query_as(
+    let channels: Vec<(Uuid, Option<Uuid>, String, String, String, i32, DateTime<Utc>, Option<DateTime<Utc>>, Option<Uuid>, Option<String>, String)> = sqlx::query_as(
         "SELECT c.id, c.guild_id, c.name, c.kind, c.topic, c.position, c.created_at,
-                (SELECT MAX(created_at) FROM messages WHERE channel_id = c.id), c.owner_id, c.icon_url
+                (SELECT MAX(created_at) FROM messages WHERE channel_id = c.id), c.owner_id, c.icon_url, cm.request_state
          FROM channels c JOIN channel_members cm ON cm.channel_id = c.id
          WHERE cm.user_id = $1 AND c.guild_id IS NULL
          ORDER BY 8 DESC NULLS LAST, c.created_at DESC",
@@ -32,12 +61,13 @@ pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel
     .fetch_all(db)
     .await?;
     let mut out = Vec::with_capacity(channels.len());
-    for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url) in channels {
+    for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state) in channels {
         let recipients = recipients_for(db, id, uid).await?;
         out.push(DmChannel {
             channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, engineer_ids: vec![], overwrites: vec![] },
             recipients,
             last_message_at: last,
+            request_state,
         });
     }
     Ok(out)
@@ -59,7 +89,13 @@ async fn recipients_for(db: &PgPool, channel_id: Uuid, uid: Uuid) -> AppResult<V
 pub async fn dm_view(db: &PgPool, channel_id: Uuid, uid: Uuid) -> AppResult<DmChannel> {
     let channel = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(channel_id).fetch_one(db).await?;
     let last: Option<(Option<DateTime<Utc>>,)> = sqlx::query_as("SELECT MAX(created_at) FROM messages WHERE channel_id = $1").bind(channel_id).fetch_optional(db).await?;
-    Ok(DmChannel { channel, recipients: recipients_for(db, channel_id, uid).await?, last_message_at: last.and_then(|l| l.0) })
+    Ok(DmChannel { channel, recipients: recipients_for(db, channel_id, uid).await?, last_message_at: last.and_then(|l| l.0), request_state: request_state_of(db, channel_id, uid).await? })
+}
+
+/// accepted / pending / ignored for one member of a DM channel (accepted when not a member at all).
+pub async fn request_state_of(db: &PgPool, channel_id: Uuid, uid: Uuid) -> AppResult<String> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT request_state FROM channel_members WHERE channel_id = $1 AND user_id = $2").bind(channel_id).bind(uid).fetch_optional(db).await?;
+    Ok(row.map(|r| r.0).unwrap_or_else(|| "accepted".into()))
 }
 
 async fn member_ids(db: &PgPool, channel_id: Uuid) -> AppResult<Vec<Uuid>> {
@@ -84,6 +120,23 @@ pub async fn broadcast_group(state: &AppState, channel_id: Uuid) -> AppResult<()
     Ok(())
 }
 
+async fn allows_group_add(db: &PgPool, target: Uuid) -> AppResult<bool> {
+    let (p,): (String,) = sqlx::query_as("SELECT group_dm_privacy FROM users WHERE id = $1").bind(target).fetch_one(db).await?;
+    Ok(p != "nobody")
+}
+
+/// May `from` deliver a 1:1 DM to `to` right now? Friends always; otherwise it depends on the recipient's
+/// "who can message you" setting (everyone / friends and server members / friends only).
+pub async fn can_dm(db: &PgPool, from: Uuid, to: Uuid) -> AppResult<bool> {
+    if are_friends(db, from, to).await? { return Ok(true) }
+    let (p,): (String,) = sqlx::query_as("SELECT dm_privacy FROM users WHERE id = $1").bind(to).fetch_one(db).await?;
+    Ok(match p.as_str() {
+        "friends" => false,
+        "friends_and_servers" => crate::routes::relationships::shares_guild(db, from, to).await?,
+        _ => true,
+    })
+}
+
 pub async fn are_friends(db: &PgPool, a: Uuid, b: Uuid) -> AppResult<bool> {
     let r: Option<(bool,)> = sqlx::query_as("SELECT true FROM relationships WHERE user_id = $1 AND target_id = $2 AND kind = 'friend'").bind(a).bind(b).fetch_optional(db).await?;
     Ok(r.is_some())
@@ -106,6 +159,9 @@ async fn add_recipient(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     require_group_member(&state.db, id, uid).await?;
     if !are_friends(&state.db, uid, target).await? {
         return Err(AppError::BadRequest("You can only add your friends to a group".into()));
+    }
+    if !allows_group_add(&state.db, target).await? {
+        return Err(AppError::BadRequest("That user doesn't allow being added to groups.".into()));
     }
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM channel_members WHERE channel_id = $1").bind(id).fetch_one(&state.db).await?;
     if count >= MAX_GROUP_MEMBERS {
@@ -163,6 +219,9 @@ async fn create_group(state: &AppState, uid: Uuid, ids: Vec<Uuid>, name: Option<
     for id in &ids {
         if !are_friends(&state.db, uid, *id).await? {
             return Err(AppError::BadRequest("You can only add your friends to a group".into()));
+        }
+        if !allows_group_add(&state.db, *id).await? {
+            return Err(AppError::BadRequest("One of those users doesn't allow being added to groups.".into()));
         }
     }
     let cid = Uuid::now_v7();
@@ -249,10 +308,14 @@ async fn open_dm(
             .bind(cid)
             .fetch_one(&mut *tx)
             .await?;
-            sqlx::query("INSERT INTO channel_members (channel_id, user_id) VALUES ($1, $2), ($1, $3)")
+            // A DM opened by a non-friend lands in the recipient's Message Requests (if they use them).
+            let (wants_requests,): (bool,) = sqlx::query_as("SELECT message_requests FROM users WHERE id = $1").bind(req.recipient_id).fetch_one(&mut *tx).await?;
+            let pending = wants_requests && !are_friends(&state.db, uid, req.recipient_id).await?;
+            sqlx::query("INSERT INTO channel_members (channel_id, user_id, request_state) VALUES ($1, $2, 'accepted'), ($1, $3, $4)")
                 .bind(cid)
                 .bind(uid)
                 .bind(req.recipient_id)
+                .bind(if pending { "pending" } else { "accepted" })
                 .execute(&mut *tx)
                 .await?;
             tx.commit().await?;
@@ -266,7 +329,7 @@ async fn open_dm(
             .fetch_optional(&state.db)
             .await?;
 
-    let dm = DmChannel { channel: channel.clone(), recipients: vec![recipient], last_message_at: last.and_then(|l| l.0) };
+    let dm = DmChannel { channel: channel.clone(), recipients: vec![recipient], last_message_at: last.and_then(|l| l.0), request_state: "accepted".into() };
 
     if created {
         // Notify both sides; each side gets the channel with the *other* party as recipient.
@@ -275,7 +338,7 @@ async fn open_dm(
             .fetch_one(&state.db)
             .await?;
         state.hub.emit_users(vec![uid], "CHANNEL_CREATE", json!(dm));
-        let other_view = DmChannel { channel, recipients: vec![me], last_message_at: None };
+        let other_view = DmChannel { channel: channel.clone(), recipients: vec![me], last_message_at: None, request_state: request_state_of(&state.db, channel.id, req.recipient_id).await? };
         state.hub.emit_users(vec![req.recipient_id], "CHANNEL_CREATE", json!(other_view));
     }
     Ok((if created { StatusCode::CREATED } else { StatusCode::OK }, Json(dm)))

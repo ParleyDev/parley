@@ -833,6 +833,12 @@ export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'd
 }
 
 /** Incoming friend requests awaiting my answer. */
+/** DMs waiting in Message Requests (from non-friends, not yet accepted or ignored). */
+export function messageRequests(s: Pick<State, 'dms'>): DmChannel[] {
+  return Object.values(s.dms).filter((d) => d.request_state === 'pending')
+}
+export const isRequest = (d: DmChannel | undefined) => !!d && !!d.request_state && d.request_state !== 'accepted'
+
 export function pendingCount(s: Pick<State, 'relationships'>): number {
   return Object.values(s.relationships).filter((r) => r.kind === 'incoming').length
 }

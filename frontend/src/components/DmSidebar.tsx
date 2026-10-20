@@ -1,11 +1,11 @@
-import { LogOut, MailCheck, Plus, Users } from 'lucide-react'
+import { Inbox, LogOut, MailCheck, Plus, Users } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup } from '../lib/dm'
 import { api } from '../lib/api'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { NavLink } from 'react-router-dom'
-import { isUnread, pendingCount, showsUnread, useStore } from '../store'
+import { isUnread, messageRequests, pendingCount, showsUnread, useStore } from '../store'
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import type { DmChannel } from '../lib/types'
@@ -41,7 +41,8 @@ export default function DmSidebar() {
       ? [{ label: 'Leave Group', icon: <LogOut size={16} />, danger: true, onClick: () => leave(d.id, dmName(d, users, notes)) }]
       : other ? userMenu(other, e.currentTarget.getBoundingClientRect()) : []),
   ]
-  const list = Object.values(dms).sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at))
+  const list = Object.values(dms).filter((d) => !d.request_state || d.request_state === 'accepted').sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at))
+  const requests = useStore((s) => messageRequests(s).length)
 
   return (
     <aside className="w-[272px] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
@@ -53,6 +54,12 @@ export default function DmSidebar() {
           <Users size={20} /> {t('Friends')}
           {pending > 0 && <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center">{pending}</span>}
         </NavLink>
+        {requests > 0 && (
+          <NavLink to="/channels/@me/requests" onClick={() => setMobilePane('content')} className={({ isActive }) => `mt-0.5 flex items-center gap-3 rounded-md px-2 py-2 text-[15px] font-medium ${isActive ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`} data-message-requests={requests}>
+            <Inbox size={20} /> Message Requests
+            <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center">{requests}</span>
+          </NavLink>
+        )}
         <div className="mt-4 mb-1 flex items-center justify-between px-2 text-[11px] font-bold uppercase tracking-wider text-text-2">
           <span>{t('Direct Messages')}</span>
           <button onClick={() => openModal({ kind: 'newDm' })} title="Create DM" className="hover:text-text-0"><Plus size={16} /></button>

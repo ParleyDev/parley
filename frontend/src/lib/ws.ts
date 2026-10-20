@@ -136,6 +136,8 @@ function handle(ev: Ev) {
       const me = s.user?.id
       if (ev.d.message.author.id !== me && s.relationships[ev.d.message.author.id]?.kind !== 'blocked' && (!ev.d.message.kind || ev.d.message.kind === 'default')) {
         const ch = s.channels[ev.d.message.channel_id] ?? s.dms[ev.d.message.channel_id]
+        const dmReq = s.dms[ev.d.message.channel_id]?.request_state
+        if (dmReq && dmReq !== 'accepted') break // message requests wait quietly
         const mentioned = mentionsMe(s, ev.d.message)
         const hidden = document.visibilityState !== 'visible'
         if (shouldNotify(effective(s.notifSettings, ch), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {

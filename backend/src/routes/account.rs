@@ -21,6 +21,7 @@ pub fn router() -> Router<AppState> {
         .route("/users/@me/standing", get(standing))
         .route("/auth/confirm-email", post(confirm_email))
         .route("/users/@me/disable", post(disable_account))
+        .route("/users/@me/privacy", patch(update_privacy))
         .route("/users/@me/data-exports", get(list_exports).post(request_export))
         .route("/users/@me/data-exports/:id/download", get(download_export))
 }
@@ -287,4 +288,26 @@ async fn download_export(State(state): State<AppState>, AuthUser(uid): AuthUser,
         .header(header::CONTENT_DISPOSITION, format!("attachment; filename=\"parley-data-{}.json\"", at.format("%Y-%m-%d")))
         .body(Body::from_stream(stream))
         .map_err(|e| AppError::Other(e.into()))?)
+}
+
+#[derive(Deserialize)]
+struct PrivacyReq { dm_privacy: Option<String>, message_requests: Option<bool>, friend_request_from: Option<Vec<String>>, group_dm_privacy: Option<String> }
+
+/// Content & Social settings.
+async fn update_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<PrivacyReq>) -> AppResult<Json<PrivateUser>> {
+    if let Some(p) = &req.dm_privacy { if !["everyone", "friends_and_servers", "friends"].contains(&p.as_str()) { return Err(AppError::BadRequest("Bad dm_privacy".into())) } }
+    if let Some(p) = &req.group_dm_privacy { if !["friends", "nobody"].contains(&p.as_str()) { return Err(AppError::BadRequest("Bad group_dm_privacy".into())) } }
+    let from = match &req.friend_request_from {
+        Some(list) => {
+            let mut v: Vec<String> = list.iter().filter(|x| ["everyone", "friends_of_friends", "server_members"].contains(&x.as_str())).cloned().collect();
+            v.sort(); v.dedup();
+            Some(v)
+        }
+        None => None,
+    };
+    sqlx::query("UPDATE users SET dm_privacy = COALESCE($2, dm_privacy), message_requests = COALESCE($3, message_requests), friend_request_from = COALESCE($4, friend_request_from), group_dm_privacy = COALESCE($5, group_dm_privacy) WHERE id = $1")
+        .bind(uid).bind(req.dm_privacy).bind(req.message_requests).bind(from).bind(req.group_dm_privacy).execute(&state.db).await?;
+    let u = private(&state, uid).await?;
+    state.hub.emit_users(vec![uid], "USER_UPDATE", json!(u));
+    Ok(Json(u))
 }

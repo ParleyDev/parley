@@ -138,6 +138,10 @@ async fn send_request(
         // Don't reveal the block; same message as a wrong username.
         return Err(AppError::BadRequest("Hm, didn't work. Double check that the username is correct.".into()));
     }
+    // Their "who can send you friend requests" setting (unless they already asked us).
+    if mine.as_deref() != Some("incoming") && !accepts_friend_request(&state.db, target.id, uid).await? {
+        return Err(AppError::BadRequest("That user isn't accepting friend requests from you.".into()));
+    }
     let mut tx = state.db.begin().await?;
     let status = if mine.as_deref() == Some("incoming") {
         // They asked first: accept.
@@ -157,6 +161,7 @@ async fn send_request(
     };
     tx.commit().await?;
     emit_add(&state, uid, target.id).await?;
+    if status == StatusCode::OK { settle_requests(&state, uid, target.id).await; }
     Ok((status, Json(one(&state.db, uid, target.id).await?)))
 }
 
@@ -170,7 +175,37 @@ async fn accept(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tar
         .execute(&state.db)
         .await?;
     emit_add(&state, uid, target).await?;
+    settle_requests(&state, uid, target).await;
     Ok(Json(one(&state.db, uid, target).await?))
+}
+
+/// New friends: any message request between them is accepted and both sides get the updated channel.
+async fn settle_requests(state: &AppState, a: Uuid, b: Uuid) {
+    if let Ok(rows) = crate::routes::dms::accept_requests_between(&state.db, a, b).await {
+        for (cid, uid) in rows {
+            if let Ok(v) = crate::routes::dms::dm_view(&state.db, cid, uid).await { state.hub.emit_users(vec![uid], "CHANNEL_UPDATE", json!(v)); }
+        }
+    }
+}
+
+/// Do `target`'s friend-request settings let `from` ask? everyone; friends_of_friends (a mutual friend);
+/// server_members (a shared server); an empty set means nobody.
+pub async fn accepts_friend_request(db: &PgPool, target: Uuid, from: Uuid) -> AppResult<bool> {
+    let (allowed,): (Vec<String>,) = sqlx::query_as("SELECT friend_request_from FROM users WHERE id = $1").bind(target).fetch_one(db).await?;
+    if allowed.iter().any(|a| a == "everyone") { return Ok(true) }
+    if allowed.iter().any(|a| a == "server_members") && shares_guild(db, from, target).await? { return Ok(true) }
+    if allowed.iter().any(|a| a == "friends_of_friends") && mutual_friend(db, from, target).await? { return Ok(true) }
+    Ok(false)
+}
+
+pub async fn shares_guild(db: &PgPool, a: Uuid, b: Uuid) -> AppResult<bool> {
+    let row: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members x JOIN guild_members y ON y.guild_id = x.guild_id WHERE x.user_id = $1 AND y.user_id = $2 LIMIT 1").bind(a).bind(b).fetch_optional(db).await?;
+    Ok(row.is_some())
+}
+
+pub async fn mutual_friend(db: &PgPool, a: Uuid, b: Uuid) -> AppResult<bool> {
+    let row: Option<(bool,)> = sqlx::query_as("SELECT true FROM relationships r1 JOIN relationships r2 ON r2.user_id = r1.target_id WHERE r1.user_id = $1 AND r1.kind = 'friend' AND r2.target_id = $2 AND r2.kind = 'friend' LIMIT 1").bind(a).bind(b).fetch_optional(db).await?;
+    Ok(row.is_some())
 }
 
 /// Remove a friend, cancel an outgoing request, decline an incoming one, or unblock.

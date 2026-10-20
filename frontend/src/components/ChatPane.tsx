@@ -8,6 +8,8 @@ import type { Channel, DmChannel, Message } from '../lib/types'
 import { formatDateDivider, sameDay } from '../lib/format'
 import MessageItem from './MessageItem'
 import Composer from './Composer'
+import { RequestBanner } from './RequestsView'
+import { isRequest } from '../store'
 import Avatar from './Avatar'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup } from '../lib/dm'
@@ -197,7 +199,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
       )}
       </div>
 
-      <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} />
+      {channel.guild_id === null && isRequest(channel as DmChannel) ? <RequestBanner dm={channel as DmChannel} /> : <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} />}
     </>
   )
 }
