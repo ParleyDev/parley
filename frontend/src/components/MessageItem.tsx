@@ -19,7 +19,7 @@ import StyledName from './StyledName'
 import type { Message, ReplyRef } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
-import Attachments from './Attachments'
+import Attachments, { MaybeBlurred } from './Attachments'
 import Emoji from './Emoji'
 import ExpressionPicker from './ExpressionPicker'
 import { isJumbo } from '../lib/emoji'
@@ -97,6 +97,14 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
 
   const media = soleMediaUrl(m.content)
   const link = media ? null : firstLink(m.content)
+  // Sensitive media: blur pictures and videos from non-friends in DMs, and in age-restricted channels, by preference.
+  const sensitive = useStore((s) => {
+    if (isOwn) return false
+    const pref = s.user?.sensitive_media ?? {}
+    const dm = s.dms[m.channel_id]
+    if (dm) return (pref.non_friend_dms ?? 'show') === 'blur' && s.relationships[m.author.id]?.kind !== 'friend'
+    return !!s.channels[m.channel_id]?.nsfw && (pref.restricted ?? 'show') === 'blur'
+  })
 
   /** Right-click menu (Discord layout): quick reactions, Add Reaction, Reply, Edit, Copy Text, Pin, Mark Unread, Copy Link, Speak, Delete, Copy ID. */
   const contextItems = (e: React.MouseEvent): MenuEntry[] => {
@@ -227,8 +235,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                   {m.edited_at && <button type="button" onClick={(e) => { e.stopPropagation(); openModal({ kind: 'editHistory', channelId: m.channel_id, messageId: m.id }) }} title={`Edited ${new Date(m.edited_at).toLocaleString()} — click to see the history`} className="ml-1 text-[10px] text-text-2 hover:underline" data-edited>(edited)</button>}
                 </div>
               )}
-              {media && <MediaEmbed url={media} />}
-              {link && <LinkEmbed url={link} />}
+              {media && <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred>}
+              {link && <MaybeBlurred on={sensitive}><LinkEmbed url={link} /></MaybeBlurred>}
               {inviteCodes(m.content, [appUrl]).map((code) => <InviteCard key={code} code={code} />)}
               {m.poll && <PollCard m={m} poll={m.poll} />}
               {m.thread && (
@@ -242,7 +250,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               {m.sticker && (
                 <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
-              <Attachments items={m.attachments ?? []} mine={isOwn} />
+              <Attachments items={m.attachments ?? []} mine={isOwn} sensitive={sensitive} />
             </>
           )}
           {m.reactions.length > 0 && (

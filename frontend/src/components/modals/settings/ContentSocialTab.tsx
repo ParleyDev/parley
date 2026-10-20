@@ -10,7 +10,7 @@ export default function ContentSocialTab() {
   const setAuth = useStore((s) => s.setAuth)
   const pushToast = useStore((s) => s.pushToast)
   if (!user) return null
-  const save = async (patch: Partial<Pick<PrivateUser, 'dm_privacy' | 'message_requests' | 'friend_request_from' | 'group_dm_privacy' | 'guild_dms_default'>>) => {
+  const save = async (patch: Partial<Pick<PrivateUser, 'dm_privacy' | 'message_requests' | 'friend_request_from' | 'group_dm_privacy' | 'guild_dms_default' | 'sensitive_media' | 'spam_filter'>>) => {
     try { const u = await api.patch<PrivateUser>('/users/@me/privacy', patch); if (token) setAuth(token, u) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const dm = user.dm_privacy ?? 'everyone'
@@ -37,6 +37,34 @@ export default function ContentSocialTab() {
   return (
     <div className="space-y-6" data-social-tab>
       <h2 className="text-xl font-bold">Content & Social</h2>
+
+      <section className="space-y-2">
+        <h3 className="label">Sensitive media</h3>
+        <p className="text-xs text-text-2">Blur pictures and videos until you click them. This server does not scan media, so "blur" covers everything from the sources below.</p>
+        {([['non_friend_dms', 'Direct messages from people who are not your friends'], ['restricted', 'Age-restricted channels']] as const).map(([k, label]) => (
+          <div key={k} className="flex items-center justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2" data-sensitive={k} data-on={(user.sensitive_media?.[k] ?? 'show') === 'blur' ? 'blur' : 'show'}>
+            <span className="text-[15px]">{label}</span>
+            <span className="flex rounded-md border border-line overflow-hidden text-sm">
+              {(['show', 'blur'] as const).map((v) => <button key={v} type="button" onClick={() => save({ sensitive_media: { [k]: v } })} className={`px-3 py-1 capitalize ${(user.sensitive_media?.[k] ?? 'show') === v ? 'bg-accent text-white' : 'bg-bg-2 text-text-1 hover:bg-bg-3'}`}>{v}</button>)}
+            </span>
+          </div>
+        ))}
+      </section>
+
+      <div className="h-px bg-line" />
+
+      <section className="space-y-2">
+        <h3 className="label">DM spam filter</h3>
+        {([['none', 'Do not filter', 'Every message lands where it normally would.'], ['non_friends', 'Filter from non-friends', 'A suspicious first message from someone you are not friends with goes to the Spam folder in Message Requests.'], ['all', 'Filter all', 'Suspicious messages from anyone, friends included, are filtered.']] as const).map(([v, label, hint]) => (
+          <label key={v} className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer ${(user.spam_filter ?? 'non_friends') === v ? 'border-accent bg-accent/10' : 'border-line bg-bg-1 hover:border-text-2'}`} data-spam-filter={v} data-on={(user.spam_filter ?? 'non_friends') === v ? '1' : '0'}>
+            <input type="radio" name="spam_filter" className="mt-1 accent-accent" checked={(user.spam_filter ?? 'non_friends') === v} onChange={() => save({ spam_filter: v })} />
+            <span><span className="block text-[15px]">{label}</span><span className="block text-xs text-text-2">{hint}</span></span>
+          </label>
+        ))}
+        <p className="text-xs text-text-2">Suspicious means a link from an account under a week old, or the usual bait ("free nitro", "giveaway"…).</p>
+      </section>
+
+      <div className="h-px bg-line" />
 
       <section className="space-y-2">
         <h3 className="label">Direct messages — who can message you</h3>

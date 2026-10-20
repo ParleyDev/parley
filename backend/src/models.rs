@@ -78,6 +78,13 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default = "default_true")]
     pub show_typing: bool,
+    /// Sensitive media: {non_friend_dms: show|blur, restricted: show|blur}; DM spam filter: none | non_friends | all.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub sensitive_media: serde_json::Value,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub spam_filter: String,
     /// Notifications: push_timeout_min, email_dms, email_friend_requests, default_suppress_everyone, default_suppress_roles.
     #[sqlx(default)]
     #[serde(default)]
@@ -141,6 +148,10 @@ pub struct Channel {
     /// Guild channels: the category this channel sits under.
     #[sqlx(default)]
     pub parent_id: Option<Uuid>,
+    /// Guild text channels: age-restricted (a gate before first view; media may be blurred by preference).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub nsfw: bool,
     /// Studio channels: the engineers (run recordings, manage the band); filled by `perms::attach_overwrites`.
     #[sqlx(skip)]
     #[serde(default)]

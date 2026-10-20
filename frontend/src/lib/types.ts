@@ -38,6 +38,9 @@ export interface PrivateUser extends User {
   /** Data & Privacy: others see Seen on your DMs / see you typing. */
   show_read_receipts?: boolean
   show_typing?: boolean
+  /** Sensitive media: blur images/videos from non-friends' DMs and in age-restricted channels until clicked. */
+  sensitive_media?: { non_friend_dms?: 'show' | 'blur'; restricted?: 'show' | 'blur' }
+  spam_filter?: 'none' | 'non_friends' | 'all'
   /** Server-side notification preferences (Settings → Notifications). */
   notif_prefs?: NotifPrefsServer
 }
@@ -90,6 +93,8 @@ export interface Channel {
   created_at: string
   /** Guild channels: the category this channel sits under. */
   parent_id?: string | null
+  /** Guild text channels: age-restricted (gate before first view; media blurred by preference). */
+  nsfw?: boolean
   /** Studio channels: the engineers (several allowed). */
   engineer_ids?: string[]
   overwrites?: Overwrite[]
@@ -121,7 +126,7 @@ export interface DmChannel extends Channel {
   owner_id: string | null
   icon_url: string | null
   /** Your membership: a DM from a non-friend is a message request until you accept (pending) or ignore it. */
-  request_state?: 'accepted' | 'pending' | 'ignored'
+  request_state?: 'accepted' | 'pending' | 'ignored' | 'spam'
 }
 
 export interface Member {

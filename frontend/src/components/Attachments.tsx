@@ -11,24 +11,36 @@ export const isSpoiler = (a: Pick<Attachment, 'filename'>) => a.filename.startsW
 export const displayName = (a: Pick<Attachment, 'filename'>) => a.filename.replace(/^SPOILER_/, '')
 
 /** Renders a message's attachments: images inline (click for lightbox), video/audio players, file cards. Spoilers stay blurred until clicked. */
-export default function Attachments({ items, mine }: { items: Attachment[]; mine?: boolean }) {
+export default function Attachments({ items, mine, sensitive }: { items: Attachment[]; mine?: boolean; sensitive?: boolean }) {
   if (!items.length) return null
   return (
     <div className="mt-1 flex flex-wrap gap-2">
-      {items.map((a) => <Spoilered key={a.id} a={a}><One a={{ ...a, filename: displayName(a) }} mine={mine} /></Spoilered>)}
+      {items.map((a) => <Spoilered key={a.id} a={a} sensitive={sensitive && (isImage(a.content_type) || isVideo(a.content_type))}><One a={{ ...a, filename: displayName(a) }} mine={mine} /></Spoilered>)}
     </div>
   )
 }
 
-function Spoilered({ a, children }: { a: Attachment; children: React.ReactNode }) {
+function Spoilered({ a, children, sensitive }: { a: Attachment; children: React.ReactNode; sensitive?: boolean }) {
   const [shown, setShown] = useState(false)
-  if (!isSpoiler(a) || shown) return <>{children}</>
+  if ((!isSpoiler(a) && !sensitive) || shown) return <>{children}</>
+  return <Blurred label={isSpoiler(a) ? 'SPOILER' : 'SENSITIVE'} onShow={() => setShown(true)}>{children}</Blurred>
+}
+
+/** Blur-until-clicked overlay used for spoilers and for media the sensitive-media preference hides. */
+export function Blurred({ label, onShow, children }: { label: 'SPOILER' | 'SENSITIVE'; onShow: () => void; children: React.ReactNode }) {
   return (
-    <div className="relative overflow-hidden rounded-lg cursor-pointer" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShown(true) }} data-spoiler-attachment>
+    <div className="relative overflow-hidden rounded-lg cursor-pointer" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShow() }} data-spoiler-attachment data-blur={label.toLowerCase()}>
       <div className="pointer-events-none blur-xl brightness-50 select-none" aria-hidden>{children}</div>
-      <span className="absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-black/70 px-3 py-1 text-xs font-extrabold tracking-wider text-white">SPOILER</span></span>
+      <span className="absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-black/70 px-3 py-1 text-xs font-extrabold tracking-wider text-white">{label}</span></span>
     </div>
   )
+}
+
+/** Wrap any media (an embed image, a linked picture) so it blurs until clicked when `on`. */
+export function MaybeBlurred({ on, children }: { on: boolean; children: React.ReactNode }) {
+  const [shown, setShown] = useState(false)
+  if (!on || shown) return <>{children}</>
+  return <Blurred label="SENSITIVE" onShow={() => setShown(true)}>{children}</Blurred>
 }
 
 function One({ a, mine }: { a: Attachment; mine?: boolean }) {
