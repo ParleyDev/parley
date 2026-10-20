@@ -145,8 +145,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       ...(m.content && 'speechSynthesis' in window ? [{ label: 'Speak Message', icon: <Volume2 size={16} />, onClick: () => { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(`${m.author.display_name} said ${m.content}`)) } }] : []),
       ...(canDelete ? ['sep' as const, { label: 'Delete Message', icon: <Trash2 size={16} />, danger: true, onClick: del }] : []),
       ...(!isOwn ? [{ label: 'Report Message', icon: <Flag size={16} />, danger: true, onClick: () => openModal({ kind: 'report', messageId: m.id, userId: m.author.id, name: m.author.display_name }) }] : []),
-      'sep' as const,
-      { label: 'Copy Message ID', icon: <Hash size={16} />, onClick: () => copy('Message ID', m.id) },
+      ...(prefs.developerMode ? ['sep' as const, { label: 'Copy Message ID', icon: <Hash size={16} />, onClick: () => copy('Message ID', m.id) }] : []),
     ]
   }
 

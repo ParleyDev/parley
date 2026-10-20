@@ -1,0 +1,31 @@
+import { setPrefs, usePrefs } from '../../../lib/prefs'
+import { useKeybindMap, prettyCombo } from '../../../lib/keybinds'
+import { isNative } from '../../../lib/native'
+import { Toggle } from '../SettingsShell'
+
+/** Settings → Streamer Mode: hide what a stream should not show, and go quiet. */
+export default function StreamerTab() {
+  const p = usePrefs()
+  const kb = useKeybindMap()
+  return (
+    <div className="space-y-6" data-streamer-tab>
+      <h2 className="text-xl font-bold">Streamer Mode</h2>
+      <p className="text-sm text-text-2">For when the app is on screen: hides your email and other personal details, blurs invite links and codes, and keeps sounds and notifications from interrupting. Toggle it with <b>{prettyCombo(kb.toggleStreamer)}</b> (Keybinds) or the banner.</p>
+      <section className="space-y-3">
+        <span data-streamer-toggle><Toggle label="Enable Streamer Mode" checked={p.streamer} onChange={(v) => setPrefs({ streamer: v })} /></span>
+        <Toggle label="Automatically enable when OBS or XSplit is running" checked={false} onChange={() => {}} disabled />
+        <p className="text-xs text-text-2">{isNative() ? 'Not available on this platform yet.' : 'Only the desktop app can see other programs; a browser cannot.'}</p>
+      </section>
+      <div className="h-px bg-line" />
+      <section className="space-y-3">
+        <Toggle label="Hide personal information" checked={p.streamerHideInfo} onChange={(v) => setPrefs({ streamerHideInfo: v })} />
+        <p className="text-xs text-text-2">Masks your email in My Account and in mails shown on screen.</p>
+        <Toggle label="Hide invite links" checked={p.streamerHideInvites} onChange={(v) => setPrefs({ streamerHideInvites: v })} />
+        <p className="text-xs text-text-2">Invite links in chat and the Invite dialog are blurred (they still copy).</p>
+        <Toggle label="Disable sounds" checked={p.streamerMuteSounds} onChange={(v) => setPrefs({ streamerMuteSounds: v })} />
+        <Toggle label="Disable notifications" checked={p.streamerMuteNotifications} onChange={(v) => setPrefs({ streamerMuteNotifications: v })} />
+        <p className="text-xs text-text-2">Desktop notifications, sounds and text-to-speech stay quiet while Streamer Mode is on.</p>
+      </section>
+    </div>
+  )
+}

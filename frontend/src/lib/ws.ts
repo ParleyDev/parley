@@ -4,7 +4,8 @@ import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, Priv
 import { voice } from './voice'
 import { playSfx } from './sfx'
 import { getNotifPrefs } from './notifPrefs'
-import { getPrefs } from './prefs'
+import { getPrefs, streamerHides } from './prefs'
+import { log } from './log'
 import { studio } from './studio'
 import { registerPush } from './native'
 
@@ -77,6 +78,7 @@ export function connectSocket() {
   socket = ws
 
   ws.onopen = () => {
+    log('info', 'ws open', resume ? 'resume' : 'fresh')
     retry = 0
     lastActivity = 0; activity()
     pingTimer = setInterval(() => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ op: 'ping' })) }, 25000)
@@ -89,6 +91,7 @@ export function connectSocket() {
     handle(ev)
   }
   ws.onclose = () => {
+    log('info', 'ws closed', closedByUser ? 'by user' : 'unexpected')
     if (pingTimer) clearInterval(pingTimer)
     socket = null
     useStore.getState().setConnected(false)
@@ -142,7 +145,7 @@ function handle(ev: Ev) {
         if (dmReq && dmReq !== 'accepted') break // message requests wait quietly
         const mentioned = mentionsMe(s, ev.d.message)
         const hidden = document.visibilityState !== 'visible'
-        if (shouldNotify(effective(s.notifSettings, ch), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {
+        if (!streamerHides('notifications') && shouldNotify(effective(s.notifSettings, ch), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {
           if (hidden) notify(ev.d.message)
           // A sound unless you are looking right at that channel in a focused window.
           if (hidden || !document.hasFocus() || s.activeChannelId !== ev.d.message.channel_id) playSfx(mentioned ? 'mention' : 'message')

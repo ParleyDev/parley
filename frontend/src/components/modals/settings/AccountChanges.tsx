@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import type { PrivateUser } from '../../../lib/types'
+import { usePrefs } from '../../../lib/prefs'
 
 type Kind = 'username' | 'email' | 'password'
 
@@ -13,6 +14,7 @@ export function AccountChanges() {
   const setAuth = useStore((s) => s.setAuth)
   const pushToast = useStore((s) => s.pushToast)
   const [open, setOpen] = useState<Kind | null>(null)
+  const streamer = usePrefs().streamer && usePrefs().streamerHideInfo
   const [pending, setPending] = useState<string | null>(null)
   const [value, setValue] = useState('')
   const [password, setPassword] = useState('')
@@ -48,7 +50,7 @@ export function AccountChanges() {
     <>
       <div className="rounded-xl bg-bg-0/50 p-4 space-y-4">
         <Row label="Username" value={user.username} kind="username" />
-        <Row label="Email" value={user.email} kind="email" hint={pending ? `Waiting for you to confirm ${pending}` : user.email_verified_at ? undefined : 'Not verified yet'} />
+        <Row label="Email" value={streamer ? <span data-streamer-masked title="Hidden by Streamer Mode">{user.email.replace(/^(.).*(@).*$/, '$1••••••$2••••••')}</span> : user.email} kind="email" hint={pending ? `Waiting for you to confirm ${pending}` : user.email_verified_at ? undefined : 'Not verified yet'} />
         <Row label="Password" value="••••••••••" kind="password" />
       </div>
       {open && (

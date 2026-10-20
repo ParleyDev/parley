@@ -13,6 +13,7 @@ import { BellOff } from 'lucide-react'
 import { has, P } from '../lib/perms'
 import StyledName from './StyledName'
 import { api } from '../lib/api'
+import { getPrefs } from '../lib/prefs'
 import type { Channel } from '../lib/types'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useT } from '../lib/i18n'
@@ -116,8 +117,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const categoryMenu = (c: Channel): MenuEntry[] => [
     { label: collapsed[c.id] ? 'Expand Category' : 'Collapse Category', icon: <ChevronDown size={16} />, onClick: () => toggleCollapsed(c.id) },
     ...(canCreate ? ['sep' as const, { label: 'Create Channel', icon: <Plus size={16} />, onClick: () => openModal({ kind: 'createChannel', guildId, parentId: c.id }) }, { label: 'Edit Category', icon: <Pencil size={16} />, onClick: () => openModal({ kind: 'editCategory', channelId: c.id }) }, { label: 'Delete Category', icon: <Trash2 size={16} />, danger: true, onClick: () => openModal({ kind: 'confirm', title: `Delete '${c.name}'`, body: `The channels inside ${c.name} are kept and move to the top of the list.`, danger: true, confirmLabel: 'Delete Category', action: async () => { try { await api.delete(`/channels/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } }) }] : []),
-    'sep' as const,
-    { label: 'Copy Category ID', icon: <Copy size={16} />, onClick: () => copyText('Category ID', c.id) },
+    ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Category ID', icon: <Copy size={16} />, onClick: () => copyText('Category ID', c.id) }] : []),
   ]
   const row = (c: Channel) => (
     <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id ?? ''} className={`${drag === c.id ? 'opacity-40' : ''} ${over === c.id ? 'border-t-2 border-accent' : ''}`} {...dragProps(c)}>
@@ -140,8 +140,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       { label: 'Copy Link', icon: <Link2 size={16} />, onClick: () => copyText('Link', `${location.origin}/channels/${guildId}/${c.id}`) },
       ...(canEdit ? ['sep' as const, { label: 'Edit Channel', icon: <Settings size={16} />, onClick: () => openModal({ kind: 'channelSettings', channelId: c.id }) }] : []),
       ...(canEdit && list.length > 1 ? [{ label: 'Delete Channel', icon: <Trash2 size={16} />, danger: true, onClick: () => openModal({ kind: 'confirm', title: `Delete '${c.name}'`, body: `Are you sure you want to delete #${c.name}? This cannot be undone.`, danger: true, confirmLabel: 'Delete Channel', action: async () => { try { await api.delete(`/channels/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } }) }] : []),
-      'sep',
-      { label: 'Copy Channel ID', icon: <Copy size={16} />, onClick: () => copyText('Channel ID', c.id) },
+      ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Channel ID', icon: <Copy size={16} />, onClick: () => copyText('Channel ID', c.id) }] : []),
     ]
   }
 

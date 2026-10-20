@@ -43,12 +43,23 @@ export interface ClientPrefs {
   spoilers: 'click' | 'moderate' | 'always'
   emojiSuggestions: boolean
   mediaSize: 'small' | 'medium' | 'large'
+  // Streamer Mode
+  streamer: boolean
+  streamerHideInfo: boolean
+  streamerHideInvites: boolean
+  streamerMuteSounds: boolean
+  streamerMuteNotifications: boolean
+  // Advanced
+  /** Developer Mode: "Copy … ID" entries in context menus. */
+  developerMode: boolean
 }
 
 export const DEFAULT_PREFS: ClientPrefs = {
   accent: null, messageGap: 17, zoom: 100, compactAvatars: false, roleColors: 'name',
   saturation: 100, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, focusRing: false, timeFormat: 'auto',
   inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
+  streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true,
+  developerMode: true,
 }
 export const ACCENTS = ['#6d5dfc', '#5865f2', '#3ba55d', '#faa81a', '#ed4245', '#eb459e', '#1abc9c', '#e67e22', '#9b59b6', '#00bcd4']
 export const MEDIA_SIZES: Record<ClientPrefs['mediaSize'], { w: number; h: number }> = { small: { w: 280, h: 210 }, medium: { w: 400, h: 300 }, large: { w: 560, h: 420 } }
@@ -68,6 +79,8 @@ function load(): ClientPrefs {
       stickerAnimation: oneOf(p.stickerAnimation, ['always', 'interaction', 'never'] as const, 'always'), ttsRate: clamp(p.ttsRate, 0.5, 2, 1), focusRing: bool(p.focusRing, false), timeFormat: oneOf(p.timeFormat, ['auto', '12', '24'] as const, 'auto'),
       inlineAttachments: bool(p.inlineAttachments, true), linkMedia: bool(p.linkMedia, true), embeds: bool(p.embeds, true), emoticons: bool(p.emoticons, true), showReactions: bool(p.showReactions, true),
       spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'),
+      streamer: bool(p.streamer, false), streamerHideInfo: bool(p.streamerHideInfo, true), streamerHideInvites: bool(p.streamerHideInvites, true), streamerMuteSounds: bool(p.streamerMuteSounds, true), streamerMuteNotifications: bool(p.streamerMuteNotifications, true),
+      developerMode: bool(p.developerMode, true),
     }
   } catch { return { ...DEFAULT_PREFS } }
 }
@@ -92,6 +105,15 @@ export function applyPrefs(p: ClientPrefs = current) {
   el.dataset.underlineLinks = p.underlineLinks ? '1' : '0'
   el.dataset.focusRing = p.focusRing ? '1' : '0'
   el.dataset.compactAvatars = p.compactAvatars ? '1' : '0'
+  el.dataset.streamer = p.streamer ? '1' : '0'
+  el.dataset.streamerInvites = p.streamer && p.streamerHideInvites ? '1' : '0'
+}
+
+/** Streamer Mode helpers: is personal info / are invites hidden, are sounds / notifications muted right now? */
+export const streamerHides = (what: 'info' | 'invites' | 'sounds' | 'notifications'): boolean => {
+  const p = current
+  if (!p.streamer) return false
+  return what === 'info' ? p.streamerHideInfo : what === 'invites' ? p.streamerHideInvites : what === 'sounds' ? p.streamerMuteSounds : p.streamerMuteNotifications
 }
 
 export function getPrefs(): ClientPrefs { return current }
