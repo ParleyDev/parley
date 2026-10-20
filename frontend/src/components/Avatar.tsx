@@ -3,6 +3,8 @@ import { useStore } from '../store'
 
 interface Props {
   user: { id: string; display_name: string; avatar_url: string | null; status?: string; avatar_decoration?: string }
+  /** Force a frame regardless of what is saved (previews and unsaved drafts). */
+  decoration?: string
   size?: number
   presence?: boolean
   className?: string
@@ -28,10 +30,11 @@ const DECORATION_STYLE: Record<string, React.CSSProperties> = {
   ember: { boxShadow: 'inset 0 0 0 2px #f97316, 0 0 8px 2px rgba(249,115,22,.6)' },
 }
 
-export default function Avatar({ user, size = 32, presence = false, className = '' }: Props) {
+export default function Avatar({ user, size = 32, presence = false, className = '', decoration: override }: Props) {
   const online = useStore((s) => !!s.online[user.id])
   const status = useStore((s) => s.users[user.id]?.status ?? user.status)
-  const decoration = useStore((s) => s.users[user.id]?.avatar_decoration ?? user.avatar_decoration ?? '')
+  // `decoration` forces a frame (previews, unsaved drafts); otherwise the live store value, then the user object's.
+  const decoration = useStore((s) => override ?? s.users[user.id]?.avatar_decoration ?? user.avatar_decoration ?? '')
   const dot = Math.max(8, Math.round(size * 0.32))
   return (
     <div className={`relative shrink-0 ${className}`} style={{ width: size, height: size }}>
