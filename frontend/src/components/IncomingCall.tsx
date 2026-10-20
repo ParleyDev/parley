@@ -1,5 +1,5 @@
 import { Phone, PhoneOff } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { voice } from '../lib/voice'
@@ -15,6 +15,22 @@ export default function IncomingCall() {
   const navigate = useNavigate()
   const [ignored, setIgnored] = useState<Record<string, true>>({})
   const ringing = Object.values(voiceStates).find((v) => v.guild_id === null && v.channel_id && dms[v.channel_id] && v.user_id !== me?.id && myChannel !== v.channel_id && !ignored[v.channel_id])
+  const selfDeaf = useStore((s) => s.selfDeaf)
+  const wantRing = useStore((s) => s.voiceSettings.ringtone)
+  const ringFor = ringing?.channel_id ?? null
+  // Ringtone: a classic two-tone ring (440 + 480 Hz, 1 s on / 2 s off) from the Web Audio API while the banner shows.
+  useEffect(() => {
+    const w = window as unknown as { __parleyRing?: boolean }
+    if (!ringFor || selfDeaf || !wantRing || typeof AudioContext === 'undefined') { w.__parleyRing = false; return }
+    const ctx = new AudioContext()
+    const gain = ctx.createGain(); gain.gain.value = 0; gain.connect(ctx.destination)
+    for (const f of [440, 480]) { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f; o.connect(gain); o.start() }
+    const burst = () => { const t = ctx.currentTime; gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(0, t); gain.gain.linearRampToValueAtTime(0.12, t + 0.03); gain.gain.setValueAtTime(0.12, t + 0.97); gain.gain.linearRampToValueAtTime(0, t + 1) }
+    ctx.resume().catch(() => {}); burst()
+    const timer = setInterval(burst, 3000)
+    w.__parleyRing = true
+    return () => { clearInterval(timer); w.__parleyRing = false; ctx.close().catch(() => {}) }
+  }, [ringFor, selfDeaf, wantRing])
   if (!ringing || !ringing.channel_id) return null
   const dm = dms[ringing.channel_id]
   const caller = users[ringing.user_id] ?? dm.recipients.find((r) => r.id === ringing.user_id)

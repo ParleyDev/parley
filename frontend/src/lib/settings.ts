@@ -13,6 +13,8 @@ export interface VoiceSettings {
   echoCancellation: boolean
   noiseSuppression: boolean
   autoGainControl: boolean
+  /** Play a ringtone while an incoming DM call banner is showing (never while deafened). */
+  ringtone: boolean
 }
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   echoCancellation: true,
   noiseSuppression: true,
   autoGainControl: true,
+  ringtone: true,
 }
 
 const KEY = `${STORAGE_PREFIX}voiceSettings`
