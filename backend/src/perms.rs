@@ -219,6 +219,12 @@ pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResu
     if ids.is_empty() {
         return Ok(());
     }
+    // Studio engineers ride along with the channel payload.
+    let studios: Vec<Uuid> = channels.iter().filter(|c| c.kind == "studio").map(|c| c.id).collect();
+    if !studios.is_empty() {
+        let rows: Vec<(Uuid, Uuid)> = sqlx::query_as("SELECT channel_id, user_id FROM studio_engineers WHERE channel_id = ANY($1) ORDER BY added_at").bind(&studios).fetch_all(db).await?;
+        for c in channels.iter_mut() { c.engineer_ids = rows.iter().filter(|(ch, _)| *ch == c.id).map(|(_, u)| *u).collect(); }
+    }
     // Channels without their own overwrites inherit their category's, so load parents too.
     for pid in channels.iter().filter_map(|c| c.parent_id) {
         if !ids.contains(&pid) {
@@ -710,4 +716,10 @@ mod tests {
         assert_eq!(p, DEFAULT_EVERYONE | ADMINISTRATOR);
         assert!(!has(p, MANAGE_ROLES));
     }
+}
+
+/// Is this user an engineer of the studio channel?
+pub async fn is_engineer(db: &PgPool, channel_id: Uuid, user: Uuid) -> AppResult<bool> {
+    let row: Option<(bool,)> = sqlx::query_as("SELECT true FROM studio_engineers WHERE channel_id = $1 AND user_id = $2").bind(channel_id).bind(user).fetch_optional(db).await?;
+    Ok(row.is_some())
 }

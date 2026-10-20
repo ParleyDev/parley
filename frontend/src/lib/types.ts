@@ -73,8 +73,8 @@ export interface Channel {
   created_at: string
   /** Guild channels: the category this channel sits under. */
   parent_id?: string | null
-  /** Studio channels: the sound engineer. */
-  engineer_id?: string | null
+  /** Studio channels: the engineers (several allowed). */
+  engineer_ids?: string[]
   overwrites?: Overwrite[]
 }
 

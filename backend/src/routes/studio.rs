@@ -24,6 +24,7 @@ pub const MAX_TRACK_BYTES: i64 = 30 * 1024 * 1024;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/channels/:id/studio/role/:uid", put(set_role))
         .route("/channels/:id/studio/engineer/:uid", put(set_engineer).delete(clear_engineer))
         .route("/channels/:id/studio/sessions", get(list_sessions).post(start_session))
         .route("/channels/:id/studio/sessions/:sid/stop", post(stop_session))
@@ -102,29 +103,54 @@ async fn channel_json(state: &AppState, id: Uuid) -> AppResult<crate::models::Ch
     Ok(c)
 }
 
-/// Manage Channels picks the engineer; the engineer joins (or is moved) into the band.
-async fn set_engineer(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, target)): Path<(Uuid, Uuid)>) -> AppResult<Json<crate::models::Channel>> {
+async fn is_crew(state: &AppState, id: Uuid, uid: Uuid, p: u64) -> AppResult<bool> {
+    Ok(perms::has(p, perms::MANAGE_CHANNELS) || perms::is_engineer(&state.db, id, uid).await?)
+}
+
+#[derive(Deserialize)]
+struct RoleReq { role: String }
+
+/// `PUT /channels/:id/studio/role/:uid {role: engineer|artist|audience}`. Engineers and Manage Channels set anyone's
+/// role (engineers included: a studio may have several); anyone may step down themselves (engineer → artist,
+/// artist → audience). Engineers and artists are unsuppressed; the audience is suppressed.
+async fn set_role(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, target)): Path<(Uuid, Uuid)>, Json(req): Json<RoleReq>) -> AppResult<Json<crate::models::Channel>> {
     let (c, p) = studio_channel(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_CHANNELS)?;
-    let member: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2").bind(c.guild_id).bind(target).fetch_optional(&state.db).await?;
-    if member.is_none() { return Err(AppError::BadRequest("That user is not in the server".into())); }
-    sqlx::query("UPDATE channels SET engineer_id = $2 WHERE id = $1").bind(id).bind(target).execute(&state.db).await?;
-    if let Some(vs) = state.hub.voice_update(target, |v| { if v.channel_id == id { v.suppress = false; v.request_to_speak = false; } }) {
-        if vs.channel_id == id { broadcast(&state, &c, "VOICE_STATE_UPDATE", json!(vs)).await?; }
-    }
+    let role = req.role.as_str();
+    if !["engineer", "artist", "audience"].contains(&role) { return Err(AppError::BadRequest("Role must be engineer, artist or audience".into())); }
+    let crew = is_crew(&state, id, uid, p).await?;
+    if !crew && !(uid == target && role != "engineer") { return Err(AppError::Forbidden); }
+    apply_role(&state, &c, target, role).await?;
     let updated = channel_json(&state, id).await?;
     state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(updated));
-    crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.engineer", "channel", Some(id), &c.name, json!({ "engineer": target })).await;
+    crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.role", "channel", Some(id), &c.name, json!({ "user": target, "role": role })).await;
     Ok(Json(updated))
 }
 
+async fn apply_role(state: &AppState, c: &crate::models::Channel, target: Uuid, role: &str) -> AppResult<()> {
+    let member: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2").bind(c.guild_id).bind(target).fetch_optional(&state.db).await?;
+    if member.is_none() { return Err(AppError::BadRequest("That user is not in the server".into())); }
+    if role == "engineer" {
+        sqlx::query("INSERT INTO studio_engineers (channel_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(c.id).bind(target).execute(&state.db).await?;
+    } else {
+        sqlx::query("DELETE FROM studio_engineers WHERE channel_id = $1 AND user_id = $2").bind(c.id).bind(target).execute(&state.db).await?;
+    }
+    if role != "audience" {
+        // Being heard still needs Speak in the channel.
+        if let Ok((_, tp)) = require_channel_perms(&state.db, c.id, target).await { if !perms::has(tp, perms::SPEAK) { return Err(AppError::BadRequest("That member cannot speak in this channel".into())); } }
+    }
+    let suppress = role == "audience";
+    if let Some(vs) = state.hub.voice_update(target, |v| { if v.channel_id == c.id { v.suppress = suppress; v.request_to_speak = false; } }) {
+        if vs.channel_id == c.id { broadcast(state, c, "VOICE_STATE_UPDATE", json!(vs)).await?; }
+    }
+    Ok(())
+}
+
+/// Older shape: PUT makes an engineer, DELETE demotes one to artist.
+async fn set_engineer(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, target)): Path<(Uuid, Uuid)>) -> AppResult<Json<crate::models::Channel>> {
+    set_role(State(state), AuthUser(uid), Path((id, target)), Json(RoleReq { role: "engineer".into() })).await
+}
 async fn clear_engineer(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, target)): Path<(Uuid, Uuid)>) -> AppResult<Json<crate::models::Channel>> {
-    let (c, p) = studio_channel(&state.db, id, uid).await?;
-    if c.engineer_id != Some(uid) || target != uid { perms::check(p, perms::MANAGE_CHANNELS)?; }   // the engineer may step down
-    sqlx::query("UPDATE channels SET engineer_id = NULL WHERE id = $1 AND engineer_id = $2").bind(id).bind(target).execute(&state.db).await?;
-    let updated = channel_json(&state, id).await?;
-    state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(updated));
-    Ok(Json(updated))
+    set_role(State(state), AuthUser(uid), Path((id, target)), Json(RoleReq { role: "artist".into() })).await
 }
 
 async fn list_sessions(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<Session>>> {
@@ -139,7 +165,7 @@ struct StartReq { #[serde(default)] name: String }
 /// band members' clients begin recording their own mic and upload it as a track.
 async fn start_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<StartReq>) -> AppResult<(StatusCode, Json<Session>)> {
     let (c, _) = studio_channel(&state.db, id, uid).await?;
-    if c.engineer_id != Some(uid) { return Err(AppError::Forbidden); }
+    if !perms::is_engineer(&state.db, id, uid).await? { return Err(AppError::Forbidden); }
     let open: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_sessions WHERE channel_id = $1 AND ended_at IS NULL").bind(id).fetch_optional(&state.db).await?;
     if open.is_some() { return Err(AppError::Conflict("A session is already recording".into())); }
     let name: String = { let n: String = req.name.trim().chars().take(80).collect(); if n.is_empty() { format!("Session {}", Utc::now().format("%Y-%m-%d %H:%M")) } else { n } };
@@ -153,7 +179,7 @@ async fn start_session(State(state): State<AppState>, AuthUser(uid): AuthUser, P
 
 async fn stop_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Session>> {
     let (c, p) = studio_channel(&state.db, id, uid).await?;
-    if c.engineer_id != Some(uid) { perms::check(p, perms::MANAGE_CHANNELS)?; }
+    if !is_crew(&state, id, uid, p).await? { return Err(AppError::Forbidden); }
     let res = sqlx::query("UPDATE studio_sessions SET ended_at = now() WHERE id = $1 AND channel_id = $2 AND ended_at IS NULL").bind(sid).bind(id).execute(&state.db).await?;
     if res.rows_affected() == 0 { return Err(AppError::NotFound("No recording session with that id".into())); }
     broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": id, "action": "stop", "session_id": sid })).await?;
@@ -163,7 +189,7 @@ async fn stop_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 
 async fn delete_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
     let (c, p) = studio_channel(&state.db, id, uid).await?;
-    if c.engineer_id != Some(uid) { perms::check(p, perms::MANAGE_CHANNELS)?; }
+    if !is_crew(&state, id, uid, p).await? { return Err(AppError::Forbidden); }
     let tracks: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_tracks WHERE session_id = $1").bind(sid).fetch_all(&state.db).await?;
     let res = sqlx::query("DELETE FROM studio_sessions WHERE id = $1 AND channel_id = $2").bind(sid).bind(id).execute(&state.db).await?;
     if res.rows_affected() == 0 { return Err(AppError::NotFound("Session not found".into())); }
