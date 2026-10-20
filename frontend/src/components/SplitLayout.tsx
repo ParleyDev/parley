@@ -16,7 +16,7 @@ export default function SplitLayout({ sidebar, children, defaultPane = 'nav', te
   useEffect(() => { if (window.matchMedia('(max-width: 767px)').matches) setMobilePane(defaultPane) }, [defaultPane, setMobilePane])
   return (
     <div className="h-full flex overflow-hidden relative" {...testid}>
-      <div className={`flex flex-col h-full shrink-0 w-[344px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${pane === 'content' ? 'max-md:hidden' : ''}`}>
+      <div className={`flex flex-col h-full shrink-0 w-[344px] tab:w-[296px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${pane === 'content' ? 'max-md:hidden' : ''}`}>
         <div className="flex flex-1 min-h-0">
           <GuildBar />
           {sidebar}
