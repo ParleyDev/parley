@@ -306,7 +306,9 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
   }, [rect, m.channel_id, m.id, r.emoji, r.count])
   const c = parseCustom(r.emoji)
   const name = c ? `:${c.name}:` : (() => { const i = unicodeInfo(r.emoji); return i ? `:${i.slug}:` : r.emoji })()
-  const names = (who ?? []).map((u) => (u.id === me?.id ? 'You' : u.display_name))
+  // The chip's own `me` flag is authoritative; the fetched list can lag a toggle by a round trip.
+  const others = (who ?? []).filter((u) => u.id !== me?.id).map((u) => u.display_name)
+  const names = r.me ? [...others, 'You'] : others
   const text = names.length === 0 ? '' : names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : names.length === 3 ? `${names[0]}, ${names[1]}, and ${names[2]}` : `${names[0]}, ${names[1]}, and ${names.length - 2} others`
   return (
     <>
