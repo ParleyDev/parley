@@ -1,4 +1,4 @@
-import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
+import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
@@ -147,10 +147,21 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       : m.kind === 'channel_icon_change' ? <ImageIcon size={16} className="text-text-2" />
       : m.kind === 'pins_add' ? <Pin size={16} className="text-text-2" />
       : m.kind === 'thread_created' ? <MessagesSquare size={16} className="text-text-2" />
-      : m.kind === 'call_started' ? <Phone size={16} className="text-success" />
+      : m.kind === 'call_started' || m.kind === 'call_ended' ? <Phone size={16} className="text-success" />
+      : m.kind === 'call_missed' ? <PhoneMissed size={16} className="text-danger" />
       : <ArrowLeftFromLine size={16} className="text-text-2" />
     // thread_created: "started a thread: <name>" with the name as a link that opens the thread.
     const threadName = m.kind === 'thread_created' ? m.content.replace(/^started a thread: /, '') : null
+    // A missed call reads from the receiver's side: "You missed a call from Alice."
+    if (m.kind === 'call_missed' && !isOwn) {
+      return (
+        <div className="px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
+          <span className="w-10 flex justify-center shrink-0">{icon}</span>
+          <span className="min-w-0">You missed a call from <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{m.author.display_name}</button>.</span>
+          <span className="ml-auto text-xs text-text-2 shrink-0" title={new Date(m.created_at).toLocaleString()}>{new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+        </div>
+      )
+    }
     return (
       <div className="px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
         <span className="w-10 flex justify-center shrink-0">{icon}</span>

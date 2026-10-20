@@ -257,6 +257,33 @@ pub async fn system_message(state: &AppState, c: &Channel, actor: Uuid, kind: &s
     Ok(msg)
 }
 
+/// Human length of a call: "a few seconds", "4 minutes", "1 hour 12 minutes".
+pub fn call_duration(secs: u64) -> String {
+    if secs < 60 { return "a few seconds".into() }
+    let (h, m) = (secs / 3600, (secs % 3600) / 60);
+    let mins = |m: u64| format!("{m} minute{}", if m == 1 { "" } else { "s" });
+    if h == 0 { mins(m) } else if m == 0 { format!("{h} hour{}", if h == 1 { "" } else { "s" }) } else { format!("{h} hour{} {}", if h == 1 { "" } else { "s" }, mins(m)) }
+}
+
+/// The last person left a DM call: turn its "started a call." notice into "started a call that lasted N minutes."
+/// (call_ended) or, if nobody else ever picked up, a missed call (call_missed).
+pub async fn finish_call(state: &AppState, channel_id: Uuid, call: crate::ws::hub::CallInfo) -> AppResult<()> {
+    let (kind, content) = if call.answered {
+        ("call_ended", format!("started a call that lasted {}.", call_duration(call.started_at.elapsed().as_secs())))
+    } else {
+        ("call_missed", "started a call. No one answered.".to_string())
+    };
+    sqlx::query("UPDATE messages SET kind = $1, content = $2 WHERE id = $3 AND kind = 'call_started'")
+        .bind(kind).bind(&content).bind(call.message_id).execute(&state.db).await?;
+    let Some(mut c) = sqlx::query_as::<_, Channel>(&format!("SELECT {} FROM channels WHERE id = $1", crate::routes::guilds::CHANNEL_COLS))
+        .bind(channel_id).fetch_optional(&state.db).await? else { return Ok(()) };
+    perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
+    let msg = fetch_message(&state.db, call.message_id, call.starter).await?;
+    let target = target_for(&state.db, &c).await?;
+    state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    Ok(())
+}
+
 /// Post a server-wide notice ("X joined the server") to the guild's system channel: its first text channel.
 pub async fn guild_system_message(state: &AppState, guild_id: Uuid, actor: Uuid, kind: &str, content: &str) -> AppResult<()> {
     let Some(mut c) = sqlx::query_as::<_, Channel>(&format!("SELECT {} FROM channels WHERE guild_id = $1 AND kind = 'text' ORDER BY position, created_at LIMIT 1", crate::routes::guilds::CHANNEL_COLS))

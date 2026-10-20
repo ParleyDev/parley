@@ -314,6 +314,18 @@ async fn run_loop(
 
 fn emit_voice_leave(state: &AppState, prev: &VoiceState) {
     state.hub.emit_voice(prev, prev.leave_payload());
+    // Last one out of a DM call: settle its notice.
+    if prev.guild_id.is_none() && state.hub.voice_in_channel(prev.channel_id) == 0 {
+        if let Some((_, call)) = state.hub.calls.remove(&prev.channel_id) {
+            let st = state.clone();
+            let channel_id = prev.channel_id;
+            tokio::spawn(async move {
+                if let Err(e) = crate::routes::channels::finish_call(&st, channel_id, call).await {
+                    tracing::warn!(error = ?e, "call wrap-up failed");
+                }
+            });
+        }
+    }
 }
 
 /// Keep the per-socket guild set in sync from the event stream itself.
@@ -372,11 +384,15 @@ async fn handle_client_op(
                 state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
             } else {
                 state.hub.emit_voice(&vs, json!(vs));
-                // First person in a DM call: leave a "started a call" notice in the conversation.
+                // First person in a DM call: leave a "started a call" notice in the conversation and remember the
+                // call so the notice can become "lasted N minutes" or "missed call" once everyone has left.
                 if state.hub.voice_in_channel(channel_id) == 1 {
-                    if let Err(e) = crate::routes::channels::system_message(state, &channel, user_id, "call_started", "started a call.", vec![], None, None).await {
-                        tracing::warn!(error = ?e, "call notice failed");
+                    match crate::routes::channels::system_message(state, &channel, user_id, "call_started", "started a call.", vec![], None, None).await {
+                        Ok(m) => { state.hub.calls.insert(channel_id, crate::ws::hub::CallInfo { message_id: m.id, starter: user_id, started_at: std::time::Instant::now(), answered: false }); }
+                        Err(e) => tracing::warn!(error = ?e, "call notice failed"),
                     }
+                } else if let Some(mut c) = state.hub.calls.get_mut(&channel_id) {
+                    if c.starter != user_id { c.answered = true; }
                 }
             }
         }
