@@ -148,6 +148,14 @@ export default function VoiceVideoTab() {
 
       <Divider />
 
+      <section className="space-y-3">
+        <label className="label">Calls</label>
+        <Toggle label="Ringtone for incoming calls" checked={st.ringtone} onChange={set('ringtone')} />
+        <p className="text-xs text-text-2">Plays while the incoming-call banner is showing. Never rings while you are deafened.</p>
+      </section>
+
+      <Divider />
+
       <section className="space-y-4">
         <h3 className="text-base font-bold">Video Settings</h3>
         <div className="aspect-video w-full max-w-md rounded-xl bg-bg-0 border border-line overflow-hidden flex items-center justify-center">
