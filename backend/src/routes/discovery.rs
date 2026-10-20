@@ -61,16 +61,26 @@ const LISTING_SELECT: &str = "SELECT d.guild_id, g.name, g.icon_url, d.descripti
 
 /// Fill in live online counts and whether the caller is a member.
 async fn decorate(state: &AppState, uid: Uuid, mut rows: Vec<Listing>) -> AppResult<Vec<Listing>> {
+    if rows.is_empty() {
+        return Ok(rows);
+    }
     let online = crate::ws::bus::online_users(&state.db).await;
+    let ids: Vec<Uuid> = rows.iter().map(|l| l.guild_id).collect();
+    // One grouped query for every listing on the page instead of two per row.
+    let stats: Vec<(Uuid, i64, bool)> = sqlx::query_as(
+        "SELECT guild_id, COUNT(*) FILTER (WHERE user_id = ANY($2)), bool_or(user_id = $3)
+         FROM guild_members WHERE guild_id = ANY($1) GROUP BY guild_id",
+    )
+    .bind(&ids)
+    .bind(&online)
+    .bind(uid)
+    .fetch_all(&state.db)
+    .await?;
+    let by_guild: std::collections::HashMap<Uuid, (i64, bool)> = stats.into_iter().map(|(g, n, j)| (g, (n, j))).collect();
     for l in &mut rows {
-        let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1 AND user_id = ANY($2)")
-            .bind(l.guild_id)
-            .bind(&online)
-            .fetch_one(&state.db)
-            .await?;
+        let (n, joined) = by_guild.get(&l.guild_id).copied().unwrap_or((0, false));
         l.online_count = n;
-        let joined: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2").bind(l.guild_id).bind(uid).fetch_optional(&state.db).await?;
-        l.joined = joined.is_some();
+        l.joined = joined;
     }
     Ok(rows)
 }
