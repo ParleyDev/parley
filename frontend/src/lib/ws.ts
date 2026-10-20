@@ -2,6 +2,7 @@ import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, User, VoiceState } from './types'
 import { voice } from './voice'
+import { playSfx } from './sfx'
 import { studio } from './studio'
 import { registerPush } from './native'
 
@@ -132,9 +133,15 @@ function handle(ev: Ev) {
     case 'MESSAGE_CREATE': {
       s.addMessage(ev.d.message)
       const me = s.user?.id
-      if (ev.d.message.author.id !== me && document.visibilityState !== 'visible' && s.relationships[ev.d.message.author.id]?.kind !== 'blocked') {
+      if (ev.d.message.author.id !== me && s.relationships[ev.d.message.author.id]?.kind !== 'blocked' && (!ev.d.message.kind || ev.d.message.kind === 'default')) {
         const ch = s.channels[ev.d.message.channel_id] ?? s.dms[ev.d.message.channel_id]
-        if (shouldNotify(effective(s.notifSettings, ch), mentionsMe(s, ev.d.message), ev.d.message, !!ch && ch.guild_id === null)) notify(ev.d.message)
+        const mentioned = mentionsMe(s, ev.d.message)
+        const hidden = document.visibilityState !== 'visible'
+        if (shouldNotify(effective(s.notifSettings, ch), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {
+          if (hidden) notify(ev.d.message)
+          // A sound unless you are looking right at that channel in a focused window.
+          if (hidden || !document.hasFocus() || s.activeChannelId !== ev.d.message.channel_id) playSfx(mentioned ? 'mention' : 'message')
+        }
       }
       break
     }
@@ -179,7 +186,7 @@ function handle(ev: Ev) {
     case 'READ_STATE_UPDATE': s.setReadState(ev.d.channel_id, ev.d.last_read_msg); break
     case 'READ_RECEIPT': if (ev.d.user_id !== s.user?.id) s.applyReceipt(ev.d.channel_id, ev.d.user_id, ev.d.message_id); break
     case 'VOICE_LISTENED': s.applyListened(ev.d.channel_id, ev.d.message_id, ev.d.attachment_id, ev.d.user_id); break
-    case 'VOICE_STATE_UPDATE': s.applyVoiceState(ev.d); voice.onVoiceState(ev.d); break
+    case 'VOICE_STATE_UPDATE': voiceSfx(s, ev.d); s.applyVoiceState(ev.d); voice.onVoiceState(ev.d); break
     case 'SOUNDBOARD_PLAY': if (s.myVoiceChannelId === ev.d.channel_id) voice.playSound(ev.d.sound.url, ev.d.sound.volume, ev.d.sound.id); break
     case 'SOUNDBOARD_UPDATE': s.setSounds(ev.d.guild_id, ev.d.sounds); break
     case 'EVENT_UPDATE': if (s.events[ev.d.guild_id]) void s.loadEvents(ev.d.guild_id); break
@@ -188,6 +195,16 @@ function handle(ev: Ev) {
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(); break
   }
+}
+
+/** Join/leave sounds for other people entering or leaving the call you are in. */
+function voiceSfx(s: ReturnType<typeof useStore.getState>, v: VoiceState) {
+  const me = s.user?.id
+  const mine = s.myVoiceChannelId
+  if (!me || !mine || v.user_id === me) return
+  const was = s.voiceStates[v.user_id]?.channel_id ?? null
+  if (v.channel_id === mine && was !== mine) playSfx('join')
+  else if (was === mine && v.channel_id !== mine) playSfx('leave')
 }
 
 function notify(m: Message) {

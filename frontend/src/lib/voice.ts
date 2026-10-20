@@ -1,4 +1,5 @@
 import { useStore } from '../store'
+import { applySfxSink, playSfx } from './sfx'
 import type { VoiceState } from './types'
 import { sendOp, type SignalData } from './ws'
 import { supportsSinkId, type VoiceSettings } from './settings'
@@ -108,7 +109,7 @@ class VoiceManager {
   leave() {
     keepAwake(false)
     const s = useStore.getState()
-    if (this.channelId) sendOp({ op: 'voice_leave' })
+    if (this.channelId) { sendOp({ op: 'voice_leave' }); playSfx('leave') }
     this.channelId = null
     this.closeAllPeers()
     this.disconnectSfu()
@@ -121,6 +122,7 @@ class VoiceManager {
   setMute(mute: boolean) {
     const s = useStore.getState()
     const deaf = mute ? s.selfDeaf : false // unmuting also undeafens, like Discord
+    if (mute !== s.selfMute) playSfx(mute ? 'mute' : 'unmute')
     s.setSelfVoiceFlags(mute, deaf)
     this.applyMute(mute)
     this.applyDeaf(deaf)
@@ -132,6 +134,7 @@ class VoiceManager {
     // Deafening also mutes; undeafening restores the prior mute choice.
     if (deaf) this.muteBeforeDeaf = s.selfMute
     const mute = deaf ? true : this.muteBeforeDeaf
+    if (deaf !== s.selfDeaf) playSfx(deaf ? 'deafen' : 'undeafen')
     s.setSelfVoiceFlags(mute, deaf)
     this.applyMute(mute)
     this.applyDeaf(deaf)
@@ -191,7 +194,7 @@ class VoiceManager {
   async applySettings(prev: VoiceSettings) {
     const cur = this.settings
     if (this.inputGain) this.inputGain.gain.value = cur.inputVolume / 100
-    if (prev.outputDeviceId !== cur.outputDeviceId || prev.outputVolume !== cur.outputVolume) { this.peers.forEach((p) => this.applyOutput(p.audio)); this.sfuAudio.forEach((a) => this.applyOutput(a)) }
+    if (prev.outputDeviceId !== cur.outputDeviceId || prev.outputVolume !== cur.outputVolume) { this.peers.forEach((p) => this.applyOutput(p.audio)); this.sfuAudio.forEach((a) => this.applyOutput(a)); applySfxSink(cur.outputDeviceId) }
     const micChanged = prev.inputDeviceId !== cur.inputDeviceId || prev.echoCancellation !== cur.echoCancellation
       || prev.noiseSuppression !== cur.noiseSuppression || prev.autoGainControl !== cur.autoGainControl
     if (micChanged && this.raw) await this.reopenMicDevice()
@@ -263,6 +266,7 @@ class VoiceManager {
           // Server acknowledged our join: offer to everyone already here (mesh) or join the SFU room,
           // then re-announce media flags.
           s.setMyVoice(this.channelId, false)
+          playSfx('join')
           if (this.sfu) {
             this.connectSfu(this.channelId)
           } else {

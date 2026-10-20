@@ -4,6 +4,7 @@ import { useStore } from '../../../store'
 import { voice } from '../../../lib/voice'
 import { keyLabel, supportsSinkId, type VoiceSettings } from '../../../lib/settings'
 import VideoTile from '../../VideoTile'
+import { playSfx, type Sfx } from '../../../lib/sfx'
 
 interface Devices { inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[]; cameras: MediaDeviceInfo[]; labelsHidden: boolean }
 
@@ -151,7 +152,23 @@ export default function VoiceVideoTab() {
       <section className="space-y-3">
         <label className="label">Calls</label>
         <Toggle label="Ringtone for incoming calls" checked={st.ringtone} onChange={set('ringtone')} />
-        <p className="text-xs text-text-2">Plays while the incoming-call banner is showing. Never rings while you are deafened.</p>
+        <p className="text-xs text-text-2">Plays while the incoming-call banner is showing, for up to 45 seconds. Never rings while you are deafened.</p>
+      </section>
+
+      <Divider />
+
+      <section className="space-y-3" data-sound-settings>
+        <label className="label">Sounds</label>
+        <Toggle label="Message sounds" checked={st.messageSounds} onChange={set('messageSounds')} />
+        <p className="text-xs text-text-2 -mt-2">For a new DM, a mention, or a message in a channel you have notifications on for, while you are not looking at it.</p>
+        <Toggle label="Voice sounds" checked={st.voiceSounds} onChange={set('voiceSounds')} />
+        <p className="text-xs text-text-2 -mt-2">Someone joining or leaving your call, and your own mute, unmute, deafen and undeafen.</p>
+        <Slider label="Sound volume" value={st.soundVolume} min={0} max={100} onChange={set('soundVolume')} format={(v) => `${v}%`} />
+        <div className="flex flex-wrap gap-2">
+          {(['message', 'mention', 'join', 'leave', 'mute', 'unmute', 'deafen', 'undeafen'] as Sfx[]).map((k) => (
+            <button key={k} type="button" onClick={() => playSfx(k, true)} className="btn-ghost text-xs capitalize" data-sfx-preview={k}>▶ {k}</button>
+          ))}
+        </div>
       </section>
 
       <Divider />
