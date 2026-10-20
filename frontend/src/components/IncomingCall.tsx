@@ -5,6 +5,8 @@ import { useStore } from '../store'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 
+const RING_MS = 45_000
+
 /** Bottom-right banner while someone is in a DM call you have not joined. */
 export default function IncomingCall() {
   const me = useStore((s) => s.user)
@@ -14,11 +16,14 @@ export default function IncomingCall() {
   const myChannel = useStore((s) => s.myVoiceChannelId)
   const navigate = useNavigate()
   const [ignored, setIgnored] = useState<Record<string, true>>({})
-  const ringing = Object.values(voiceStates).find((v) => v.guild_id === null && v.channel_id && dms[v.channel_id] && v.user_id !== me?.id && myChannel !== v.channel_id && !ignored[v.channel_id])
+  // Where I am from any session (another tab, the phone): answering there must silence this one too.
+  const mineElsewhere = me ? voiceStates[me.id]?.channel_id ?? null : null
+  const ringing = Object.values(voiceStates).find((v) => v.guild_id === null && v.channel_id && dms[v.channel_id] && v.user_id !== me?.id && myChannel !== v.channel_id && mineElsewhere !== v.channel_id && !ignored[v.channel_id])
   const selfDeaf = useStore((s) => s.selfDeaf)
   const wantRing = useStore((s) => s.voiceSettings.ringtone)
   const ringFor = ringing?.channel_id ?? null
-  // Ringtone: a classic two-tone ring (440 + 480 Hz, 1 s on / 2 s off) from the Web Audio API while the banner shows.
+  // Ringtone: a classic two-tone ring (440 + 480 Hz, 1 s on / 2 s off) from the Web Audio API while the banner shows,
+  // for at most RING_MS; the banner stays until answered or ignored.
   useEffect(() => {
     const w = window as unknown as { __parleyRing?: boolean }
     if (!ringFor || selfDeaf || !wantRing || typeof AudioContext === 'undefined') { w.__parleyRing = false; return }
@@ -28,8 +33,10 @@ export default function IncomingCall() {
     const burst = () => { const t = ctx.currentTime; gain.gain.cancelScheduledValues(t); gain.gain.setValueAtTime(0, t); gain.gain.linearRampToValueAtTime(0.12, t + 0.03); gain.gain.setValueAtTime(0.12, t + 0.97); gain.gain.linearRampToValueAtTime(0, t + 1) }
     ctx.resume().catch(() => {}); burst()
     const timer = setInterval(burst, 3000)
+    const stop = () => { clearInterval(timer); w.__parleyRing = false; ctx.close().catch(() => {}) }
+    const cutoff = setTimeout(stop, RING_MS)
     w.__parleyRing = true
-    return () => { clearInterval(timer); w.__parleyRing = false; ctx.close().catch(() => {}) }
+    return () => { clearTimeout(cutoff); stop() }
   }, [ringFor, selfDeaf, wantRing])
   if (!ringing || !ringing.channel_id) return null
   const dm = dms[ringing.channel_id]
