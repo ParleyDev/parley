@@ -222,6 +222,19 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           <span>User Reviews</span>
           <span className="font-normal text-[#b5bac1]">{reviewCount === 0 ? 'No reviews yet' : `${reviewCount} review${reviewCount === 1 ? '' : 's'}`}</span>
         </button>
+        {(user.connections?.length ?? 0) > 0 && (
+          <div data-profile-connections>
+            <h3 className="text-xs font-bold mb-1">Connections</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {user.connections!.map((c) => (
+                <a key={c.id} href={c.url || undefined} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-connection={c.provider} title={c.provider}>
+                  <span className="h-4 w-4 rounded-sm bg-white/15 text-[10px] font-bold flex items-center justify-center uppercase">{c.provider[0]}</span>
+                  <span className="truncate max-w-[140px]">{c.name}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
         {panel && (
           <div>
             <h3 className="text-xs font-bold mb-1">Member Since</h3>

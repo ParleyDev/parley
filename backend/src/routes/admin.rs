@@ -102,6 +102,15 @@ pub struct InstanceSettings {
     /// Derived: push configured (shown to admins and clients).
     #[serde(default)]
     pub push: bool,
+    /// Linked-account providers: {github: {client_id, client_secret}, twitch: {…}} (secrets; admins only).
+    #[serde(default)]
+    pub oauth_providers: Value,
+    /// Test hook: base URL replacing every provider origin.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub oauth_endpoint_override: String,
+    /// Derived: providers with keys, so clients can offer Connect buttons.
+    #[serde(default)]
+    pub oauth_available: Vec<String>,
     /// The instance's public base URL (APP_URL), so clients build invite links and recognise them whatever address
     /// they happen to be browsing from (LAN, localhost, the public domain, the native app).
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -124,13 +133,15 @@ impl InstanceSettings {
         self.av_addr = String::new();
         self.fcm_service_account = String::new();
         self.fcm_endpoint = String::new();
+        self.oauth_providers = Value::Null;
+        self.oauth_endpoint_override = String::new();
         self
     }
 }
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false, app_url: String::new() };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new() };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -146,6 +157,8 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "av_fail_closed" => s.av_fail_closed = v.as_bool().unwrap_or(false),
             "fcm_service_account" => s.fcm_service_account = v.as_str().unwrap_or("").to_string(),
             "fcm_endpoint" => s.fcm_endpoint = v.as_str().unwrap_or("").to_string(),
+            "oauth_providers" => s.oauth_providers = v,
+            "oauth_endpoint_override" => s.oauth_endpoint_override = v.as_str().unwrap_or("").to_string(),
             "rate_limits" => s.rate_limits = v.as_object().map(|o| o.iter().filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string()))).collect()).unwrap_or_default(),
             _ => {}
         }
@@ -154,6 +167,10 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     s.voice_mode = if s.sfu_configured() { "sfu".into() } else { "mesh".into() };
     s.transcription = s.stt_configured();
     s.push = !s.fcm_service_account.trim().is_empty();
+    s.oauth_available = crate::routes::connections::PROVIDERS.iter().filter(|p| {
+        let c = s.oauth_providers.get(**p).cloned().unwrap_or(Value::Null);
+        !c.get("client_id").and_then(|v| v.as_str()).unwrap_or("").trim().is_empty() && !c.get("client_secret").and_then(|v| v.as_str()).unwrap_or("").trim().is_empty()
+    }).map(|p| p.to_string()).collect();
     Ok(s)
 }
 
@@ -542,10 +559,28 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     }
     if before.fcm_service_account != fcm_sa { changed.insert("fcm_service_account".into(), json!(if fcm_sa.is_empty() { "cleared" } else { "set" })); }
     if before.fcm_endpoint != fcm_endpoint { changed.insert("fcm_endpoint".into(), json!(fcm_endpoint)); }
+    // OAuth providers: keep only the known ones with string keys.
+    let mut oauth = serde_json::Map::new();
+    if let Some(obj) = req.oauth_providers.as_object() {
+        for p in crate::routes::connections::PROVIDERS {
+            if let Some(c) = obj.get(p) {
+                let id = c.get("client_id").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                let secret = c.get("client_secret").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+                if !id.is_empty() || !secret.is_empty() { oauth.insert(p.to_string(), json!({ "client_id": id, "client_secret": secret })); }
+            }
+        }
+    }
+    let oauth = Value::Object(oauth);
+    let oauth_override = req.oauth_endpoint_override.trim().to_string();
+    if !oauth_override.is_empty() && !(oauth_override.starts_with("http://") || oauth_override.starts_with("https://")) {
+        return Err(AppError::BadRequest("OAuth endpoint override must be an http(s) URL".into()));
+    }
+    if before.oauth_providers != oauth { changed.insert("oauth_providers".into(), json!(oauth.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()).unwrap_or_default())); }
+    if before.oauth_endpoint_override != oauth_override { changed.insert("oauth_endpoint_override".into(), json!(oauth_override)); }
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     let mut s = load_settings(&state.db).await?;

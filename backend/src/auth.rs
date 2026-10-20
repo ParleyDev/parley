@@ -130,6 +130,16 @@ pub fn issue_mfa_ticket(secret: &str, user_id: Uuid) -> anyhow::Result<String> {
     Ok(encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))?)
 }
 
+/// A short-lived signed token of an arbitrary type (OAuth state, …).
+pub fn issue_typed(secret: &str, user_id: Uuid, typ: &str, minutes: i64) -> anyhow::Result<String> {
+    let now = Utc::now();
+    let claims = Claims { sub: user_id, iat: now.timestamp(), exp: (now + Duration::minutes(minutes)).timestamp(), typ: Some(typ.into()), sid: None };
+    Ok(encode(&Header::default(), &claims, &EncodingKey::from_secret(secret.as_bytes()))?)
+}
+pub fn verify_typed(secret: &str, token: &str, typ: &str) -> Option<Uuid> {
+    decode_claims(secret, token).filter(|c| c.typ.as_deref() == Some(typ)).map(|c| c.sub)
+}
+
 pub fn verify_mfa_ticket(secret: &str, token: &str) -> Option<Uuid> {
     decode_claims(secret, token).filter(|c| c.typ.as_deref() == Some("mfa")).map(|c| c.sub)
 }

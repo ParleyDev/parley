@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { locale } from '../lib/i18n'
-import type { User } from '../lib/types'
+import type { User, Connection } from '../lib/types'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import { APP_INITIAL, APP_NAME } from '../lib/brand'
 import Avatar from './Avatar'
@@ -11,6 +11,7 @@ export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_nam
   banner_url?: string | null
   clan_tag?: string
   badges?: string[]
+  connections?: Connection[]
   panels?: User['panels']
   theme_primary?: string | null
   theme_accent?: string | null
@@ -113,6 +114,19 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
               )}
             </div>
           </section>
+          {(user.connections?.length ?? 0) > 0 && (
+            <section data-profile-connections>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Connections</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {user.connections!.map((c) => (
+                  <a key={c.id} href={c.url || undefined} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-md bg-bg-0/40 px-2 py-1 text-xs hover:bg-bg-0/70" data-connection={c.provider} title={c.provider}>
+                    <span className="h-4 w-4 rounded-sm bg-text-0/15 text-[10px] font-bold flex items-center justify-center uppercase">{c.provider[0]}</span>
+                    <span className="truncate max-w-[140px]">{c.name}</span>
+                  </a>
+                ))}
+              </div>
+            </section>
+          )}
           {(user.panels?.wishlist?.length ?? 0) > 0 && (
             <section data-panel="wishlist">
               <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Wishlist</h3>
