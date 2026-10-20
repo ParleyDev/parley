@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { STORAGE_PREFIX } from './brand'
 
 /** Actions a user can bind. Combos are stored as "Ctrl+Shift+M" (modifier names + KeyboardEvent.key, upper-cased). */
-export type KeybindAction = 'toggleMute' | 'toggleDeafen' | 'toggleMembers' | 'focusComposer' | 'prevChannel' | 'nextChannel' | 'openSettings' | 'jumpToDate'
+export type KeybindAction = 'toggleMute' | 'toggleDeafen' | 'toggleMembers' | 'focusComposer' | 'prevChannel' | 'nextChannel' | 'openSettings' | 'jumpToDate' | 'toggleStreamer'
 
 export const KEYBIND_LABELS: Record<KeybindAction, string> = {
   toggleMute: 'Toggle mute',
@@ -13,6 +13,7 @@ export const KEYBIND_LABELS: Record<KeybindAction, string> = {
   nextChannel: 'Next channel',
   openSettings: 'Open user settings',
   jumpToDate: 'Jump to date',
+  toggleStreamer: 'Toggle Streamer Mode',
 }
 
 export const DEFAULT_KEYBINDS: Record<KeybindAction, string> = {
@@ -24,6 +25,7 @@ export const DEFAULT_KEYBINDS: Record<KeybindAction, string> = {
   nextChannel: 'Alt+ArrowDown',
   openSettings: 'Ctrl+,',
   jumpToDate: 'Ctrl+Shift+J',
+  toggleStreamer: 'Ctrl+Shift+X',
 }
 
 const KEY = `${STORAGE_PREFIX}keybinds`

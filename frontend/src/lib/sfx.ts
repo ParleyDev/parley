@@ -1,5 +1,6 @@
 import { useStore } from '../store'
 import { getNotifPrefs, type SoundKey } from './notifPrefs'
+import { streamerHides } from './prefs'
 
 /**
  * Short synthesised sound effects (Web Audio, no asset files). Each has its own switch in
@@ -49,6 +50,7 @@ export function applySfxSink(deviceId: string) {
 
 /** Is this effect enabled by the user's settings right now? */
 export function sfxEnabled(kind: Sfx): boolean {
+  if (streamerHides('sounds')) return false
   if (useStore.getState().selfDeaf && !SELF_KINDS.includes(kind)) return false
   return getNotifPrefs().sounds[kind] !== false
 }

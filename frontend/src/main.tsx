@@ -5,11 +5,13 @@ import './index.css'
 import App from './App'
 import { initAppearance } from './lib/appearance'
 import { initPrefs } from './lib/prefs'
+import { initLog } from './lib/log'
 import { initLanguage } from './lib/i18n'
 import { initNative } from './lib/native'
 
 initAppearance()
 initPrefs()
+initLog()
 initLanguage()
 void initNative()
 

@@ -20,6 +20,8 @@ import { useKeybinds } from '../lib/keybinds'
 import { setNativeNavigator } from '../lib/native'
 import { voice } from '../lib/voice'
 import { initBadge } from '../lib/badge'
+import { getPrefs, setPrefs } from '../lib/prefs'
+import StreamerBanner from '../components/StreamerBanner'
 import { useMemo } from 'react'
 
 /**
@@ -45,6 +47,7 @@ export default function AppShell() {
     <div className="h-full flex flex-col overflow-hidden relative safe-area">
       <Shortcuts />
       <VerifyBanner />
+      <StreamerBanner />
       <div className="flex-1 min-h-0 flex overflow-hidden relative">
       {!connected && (
         <div className="absolute top-0 inset-x-0 z-40 bg-warn text-black text-xs font-semibold text-center py-1">Reconnecting…</div>
@@ -177,6 +180,7 @@ function Shortcuts() {
     nextChannel: () => step(1),
     openSettings: () => openModal({ kind: 'userSettings', tab: 'account' }),
     jumpToDate: () => document.querySelector<HTMLButtonElement>('[data-jump-date-btn]')?.click(),
+    toggleStreamer: () => { const on = !getPrefs().streamer; setPrefs({ streamer: on }); useStore.getState().pushToast(on ? 'Streamer Mode on' : 'Streamer Mode off') },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [guildId, channelId, selfMute, selfDeaf])
   useKeybinds(handlers)

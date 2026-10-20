@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { voice } from '../lib/voice'
 import { useNotifPrefs } from '../lib/notifPrefs'
+import { usePrefs } from '../lib/prefs'
 import Avatar from './Avatar'
 
 const RING_MS = 45_000
@@ -21,7 +22,8 @@ export default function IncomingCall() {
   const mineElsewhere = me ? voiceStates[me.id]?.channel_id ?? null : null
   const ringing = Object.values(voiceStates).find((v) => v.guild_id === null && v.channel_id && dms[v.channel_id] && v.user_id !== me?.id && myChannel !== v.channel_id && mineElsewhere !== v.channel_id && !ignored[v.channel_id])
   const selfDeaf = useStore((s) => s.selfDeaf)
-  const wantRing = useNotifPrefs().sounds.incoming_ring
+  const prefs = usePrefs()
+  const wantRing = useNotifPrefs().sounds.incoming_ring && !(prefs.streamer && prefs.streamerMuteSounds)
   const ringFor = ringing?.channel_id ?? null
   // Ringtone: a classic two-tone ring (440 + 480 Hz, 1 s on / 2 s off) from the Web Audio API while the banner shows,
   // for at most RING_MS; the banner stays until answered or ignored.

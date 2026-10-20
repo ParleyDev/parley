@@ -38,6 +38,8 @@
 .msg-group-start { margin-top: var(--msg-gap, 17px); }
 :root[data-underline-links="1"] .msg-content a { text-decoration: underline; }
 :root[data-focus-ring="1"] :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+/* Streamer Mode: invite links and codes are blurred on screen (they still copy). */
+:root[data-streamer-invites="1"] a[href*="/invite/"], :root[data-streamer-invites="1"] [data-invite-secret] { filter: blur(6px); user-select: none; }
 /* High contrast (Appearance → Accessibility): brighter secondary text and borders on either palette. */
 :root[data-contrast="high"] { --color-line: #5a5f70; --color-text-1: #dde0e6; --color-text-2: #a9aebb; }
 :root[data-theme="light"][data-contrast="high"] { --color-line: #8f939d; --color-text-1: #1b1c20; --color-text-2: #3c3e46; }

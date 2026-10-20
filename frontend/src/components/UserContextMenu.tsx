@@ -1,4 +1,5 @@
 import { Ban, Copy, Flag, Gavel, MessageSquare, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { getPrefs } from '../lib/prefs'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { has, highestPosition, isTimedOut, P, EMPTY_ROLES } from '../lib/perms'
@@ -42,8 +43,7 @@ export function useUserMenu(guildId?: string | null) {
       return [
         { label: 'Profile', icon: <UserIcon size={16} />, onClick: profile },
         { label: 'Edit Profile', onClick: () => openModal({ kind: 'userSettings', tab: 'profile' }) },
-        'sep',
-        { label: 'Copy User ID', icon: <Copy size={16} />, onClick: () => copy('User ID', u.id) },
+        ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy User ID', icon: <Copy size={16} />, onClick: () => copy('User ID', u.id) }] : []),
       ]
     }
     return [
@@ -62,8 +62,7 @@ export function useUserMenu(guildId?: string | null) {
         : { label: `Timeout ${name}`, icon: <TimerReset size={16} />, danger: true, onClick: () => openModal({ kind: 'timeout', guildId: guildId!, userId: u.id }) }] : []),
       ...(outranks && has(myPerms, P.KICK_MEMBERS) ? [{ label: `Kick ${name}`, icon: <UserMinus size={16} />, danger: true, onClick: kick }] : []),
       ...(outranks && has(myPerms, P.BAN_MEMBERS) ? [{ label: `Ban ${name}`, icon: <Gavel size={16} />, danger: true, onClick: () => openModal({ kind: 'ban', guildId: guildId!, userId: u.id }) }] : []),
-      'sep',
-      { label: 'Copy User ID', icon: <Copy size={16} />, onClick: () => copy('User ID', u.id) },
+      ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy User ID', icon: <Copy size={16} />, onClick: () => copy('User ID', u.id) }] : []),
     ]
   }
 }

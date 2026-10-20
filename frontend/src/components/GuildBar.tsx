@@ -10,6 +10,7 @@ import { api } from '../lib/api'
 import { dissolveFolder, moveGuild, moveItem, newFolderId, nudge, removeFromFolder, type DropTarget } from '../lib/layout'
 import type { Guild, LayoutItem } from '../lib/types'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
+import { getPrefs } from '../lib/prefs'
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import { useT } from '../lib/i18n'
@@ -224,8 +225,7 @@ export function useGuildMenu() {
       ...(has(perms, P.MANAGE_CHANNELS) ? [{ label: 'Create Channel', icon: <Plus size={16} />, onClick: () => openModal({ kind: 'createChannel', guildId }) }] : []),
       'sep',
       isOwner ? { label: 'Delete Server', icon: <Trash2 size={16} />, danger: true, onClick: del } : { label: 'Leave Server', icon: <LogOut size={16} />, danger: true, onClick: leave },
-      'sep',
-      { label: 'Copy Server ID', icon: <Copy size={16} />, onClick: () => act(async () => { await navigator.clipboard.writeText(guildId); pushToast('Server ID copied') }) },
+      ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Server ID', icon: <Copy size={16} />, onClick: () => act(async () => { await navigator.clipboard.writeText(guildId); pushToast('Server ID copied') }) }] : []),
     ]
   }
 }
