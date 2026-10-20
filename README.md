@@ -258,6 +258,12 @@ Listened state: once someone plays past 80% of a voice message the client posts 
 
 Transcription: Admin Console → Instance Settings → Voice message transcription takes any OpenAI-compatible `POST /v1/audio/transcriptions` server (URL, optional API key, model). `docker compose --profile stt up -d` runs a CPU Whisper server (faster-whisper-server, `base.en` by default, a few seconds per clip on a modern CPU); enter `http://stt:8000` and `Systran/faster-whisper-base.en`. Hosted providers (OpenAI `whisper-1`, Groq, Deepgram's OpenAI-compatible endpoint) work the same with a key. When configured, each new voice message is marked `transcript_status: pending`, transcribed in the background and pushed to the channel with `MESSAGE_UPDATE`; the player shows "Transcribing…" and then a "View transcript" toggle that expands the text under it. Failures show "Transcript unavailable" and never block the message. `/instance` exposes `transcription: true|false` (never the key).
 
+## Undelivered DMs and Ribbit
+
+When a direct message cannot be delivered (the other person blocked you, or you blocked them) the server answers 403 with `code: "undeliverable"`. The client keeps the message in the conversation in red with Not delivered · Retry · Delete, and **Ribbit**, the in-app helper (a frog with an App badge), posts a note under it only you can see: why it may have failed, an expandable list of reasons, and Dismiss. Retry sends the same body again (after an unblock it goes through and becomes a normal message); Delete drops it. These rows exist only in your browser and disappear on reload.
+
+Scrolling well above the bottom of a channel shows a "You're viewing older messages" pill with Jump to Present.
+
 ## System messages
 
 Some actions leave a notice in the conversation, rendered as a one-line system row rather than a chat bubble (`kind` on the message; the actor is its author):

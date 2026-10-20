@@ -157,7 +157,15 @@ export interface Message {
   poll?: Poll | null
   /** Thread started from this message (card under it). */
   thread?: ThreadRef | null
+  /** Client-only rows: 'failed' = your message the server refused to deliver (red, Retry / Delete);
+   *  'notice' = the Ribbit explanation under it (kind 'ribbit'). Never sent by the server; gone on reload. */
+  local?: 'failed' | 'notice'
+  /** What a failed message would send again on Retry. */
+  draft?: Draft
 }
+
+/** The body of POST /channels/:id/messages, kept for retrying a failed send. */
+export interface Draft { content: string; reply_to: string | null; attachment_ids: string[]; sticker_id: string | null }
 
 /** A server custom emoji; `url` serves the image, `id` doubles as the image id. */
 export interface Emoji {

@@ -1,9 +1,12 @@
 import { STORAGE_PREFIX } from './brand'
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  /** Machine-readable reason when the server gives one (e.g. "undeliverable"). */
+  code?: string
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.status = status
+    this.code = code
   }
 }
 
@@ -35,7 +38,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   try { data = text ? JSON.parse(text) : null } catch { data = null }
   if (!res.ok) {
     const msg = (data as { error?: string } | null)?.error ?? res.statusText ?? 'Request failed'
-    throw new ApiError(res.status, msg)
+    throw new ApiError(res.status, msg, (data as { code?: string } | null)?.code)
   }
   return data as T
 }

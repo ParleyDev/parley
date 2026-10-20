@@ -9,6 +9,10 @@ pub enum AppError {
     Unauthorized,
     #[error("forbidden")]
     Forbidden,
+    /// A DM that cannot reach its recipient (blocked either way). 403 with `code: "undeliverable"` so the client can
+    /// keep the message as "not delivered" instead of showing a bare error.
+    #[error("undeliverable")]
+    Undeliverable,
     #[error("{0}")]
     NotFound(String),
     #[error("{0}")]
@@ -25,6 +29,9 @@ impl IntoResponse for AppError {
             AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone()),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized".into()),
             AppError::Forbidden => (StatusCode::FORBIDDEN, "Forbidden".into()),
+            AppError::Undeliverable => {
+                return (StatusCode::FORBIDDEN, Json(json!({ "error": "Your message could not be delivered.", "code": "undeliverable" }))).into_response();
+            }
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             AppError::Conflict(m) => (StatusCode::CONFLICT, m.clone()),
             AppError::Db(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND, "Not found".into()),
