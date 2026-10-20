@@ -311,6 +311,13 @@ When a direct message cannot be delivered (the other person blocked you, or you 
 
 Scrolling well above the bottom of a channel shows a "You're viewing older messages" pill with Jump to Present.
 
+## Profile flair: badges, decorations, clan tags, panels
+
+- **Badges** are computed by the server on `GET /users/:id` (`badges`): `admin`, `founder` (first ten accounts), `veteran` (over a year), `host` (owns a server), `verified` (email), `secure` (2FA). They show as icon chips with tooltips on the profile popout and card.
+- **Avatar decorations**: User Settings → Profiles offers preset frames (gold, rainbow, glow, ice, dashed, ember) drawn over the avatar everywhere (`users.avatar_decoration`).
+- **Clan tags**: a 2–4 character tag (`users.clan_tag`) shown as a chip beside your name in chat, member lists and profiles.
+- **Panels**: optional Wishlist and Game collection sections on the profile card (`users.panels`, up to 25 `{title, url?}` items each), edited one per line as `Title | https://link`.
+
 ## Friend nicknames and notes
 
 Open someone's profile popout: the pencil next to a friend's name sets a nickname only you see (it replaces their name in DMs, member lists and messages), and the Note box keeps a private note about anyone. `GET /users/@me/notes` lists yours, `PUT /users/@me/notes/:id {nickname?, note?}` sets them (nicknames for friends only, 32 chars; notes 256 chars; clearing both removes the row).

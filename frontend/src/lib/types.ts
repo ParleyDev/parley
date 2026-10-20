@@ -14,13 +14,24 @@ export interface User {
   name_accent: string | null
   /** Free-text status line, e.g. "😂 doing things". */
   custom_status: string
+  /** Profile flair: preset avatar frame ('' = none), 2–4 char clan tag, optional panels. */
+  avatar_decoration?: string
+  clan_tag?: string
+  panels?: { wishlist?: PanelItem[]; games?: PanelItem[] } | null
 }
+export interface PanelItem { title: string; url?: string }
+/** Preset avatar frames (User Settings → Profiles). */
+export const DECORATIONS: { id: string; label: string }[] = [
+  { id: '', label: 'None' }, { id: 'gold', label: 'Gold ring' }, { id: 'rainbow', label: 'Rainbow' }, { id: 'glow', label: 'Glow' }, { id: 'ice', label: 'Ice' }, { id: 'dashed', label: 'Dashed' }, { id: 'ember', label: 'Ember' },
+]
 export interface PrivateUser extends User { email: string; is_admin?: boolean; email_verified_at?: string | null; mfa_enabled?: boolean }
 /** GET /users/:id adds the servers you share with that user. */
 export interface UserProfile extends User {
   mutual_guilds?: Pick<Guild, 'id' | 'name' | 'icon_url'>[]
   mutual_friends?: Pick<User, 'id' | 'display_name' | 'avatar_url'>[]
   review_count?: number
+  /** Computed by the server: admin, founder, veteran, host, verified, secure. */
+  badges?: string[]
 }
 
 export interface Review {
@@ -100,6 +111,8 @@ export interface Member {
   custom_status?: string
   /** When this member accepted the server rules; null while screening is pending. */
   rules_accepted_at?: string | null
+  avatar_decoration?: string
+  clan_tag?: string
   /** Moderation timeout: read-only in this server until this instant. */
   timeout_until?: string | null
   roles: string[]

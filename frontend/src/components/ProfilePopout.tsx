@@ -9,6 +9,7 @@ import { has, highestPosition, P, EMPTY_ROLES } from '../lib/perms'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import ExpressionPicker from './ExpressionPicker'
 import Avatar from './Avatar'
+import { Badges, ClanTag } from './Flair'
 import { nameCss, colorRole } from './StyledName'
 
 export const POPOUT_W = 300
@@ -172,6 +173,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             ) : (
               <span style={nameStyle} data-profile-name>{nickname ?? user.display_name}</span>
             )}
+            <ClanTag userId={user.id} tag={user.clan_tag} />
+            <Badges badges={user.badges} />
             {guild?.owner_id === user.id && <Crown size={16} className="text-warn shrink-0" />}
             {rel === 'friend' && nickEdit === null && <button type="button" onClick={() => setNickEdit(friendNote?.nickname ?? '')} title="Set friend nickname" className="shrink-0 opacity-60 hover:opacity-100" data-friend-nick><Pencil size={13} /></button>}
           </h2>
