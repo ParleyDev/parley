@@ -71,6 +71,13 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default = "default_true")]
     pub guild_dms_default: bool,
+    /// Data & Privacy: others see "Seen" on your DMs / see you typing.
+    #[sqlx(default)]
+    #[serde(default = "default_true")]
+    pub show_read_receipts: bool,
+    #[sqlx(default)]
+    #[serde(default = "default_true")]
+    pub show_typing: bool,
     /// Notifications: push_timeout_min, email_dms, email_friend_requests, default_suppress_everyone, default_suppress_roles.
     #[sqlx(default)]
     #[serde(default)]

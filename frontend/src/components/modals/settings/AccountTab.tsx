@@ -6,7 +6,6 @@ import ProfileCard from '../../ProfileCard'
 import MfaSection from './MfaSection'
 import StorageSection from './StorageSection'
 import DeleteAccountSection from './DeleteAccountSection'
-import DataSection from './DataSection'
 import { AccountChanges, StandingCard } from './AccountChanges'
 
 export default function AccountTab({ onClose, onEditProfile }: { onClose: () => void; onEditProfile: () => void }) {
@@ -45,7 +44,6 @@ export default function AccountTab({ onClose, onEditProfile }: { onClose: () => 
     <StandingCard />
     <MfaSection />
     <StorageSection />
-    <DataSection />
     <DeleteAccountSection />
     </div>
   )

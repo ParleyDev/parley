@@ -70,6 +70,14 @@ r = await raw(b.token, 'POST', '/users/@me/channels', { recipient_ids: [a.user.i
 await privacy(a.token, { group_dm_privacy: 'friends' })
 r = await raw(b.token, 'POST', '/users/@me/channels', { recipient_ids: [a.user.id, d.user.id] }); ok('…and can once they allow it', r.status === 201)
 
+console.log('-- data & privacy')
+await privacy(b.token, { show_read_receipts: false, show_typing: false })
+const mb = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'did you see this?' })
+await call(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: mb.id })
+ok('with receipts off, bob\'s read pointer is not listed for alice', !(await call(a.token, 'GET', `/channels/${dm.id}/receipts`)).some((x) => x.user_id === b.user.id))
+await privacy(b.token, { show_read_receipts: true })
+ok('…and is once they are back on', (await call(a.token, 'GET', `/channels/${dm.id}/receipts`)).some((x) => x.user_id === b.user.id))
+
 console.log('-- UI')
 const browser = await chromium.launch(); const errors = []
 const mk = async (tok, url) => { const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(url); await p.waitForSelector('[data-user-panel-bar]'); return p }
@@ -95,5 +103,18 @@ await pb.click('[data-guild-privacy-toggle] [role=switch]'); await pb.waitForSel
 ok('the server menu\'s Privacy Settings sets a per-server override', (await call(b.token, 'GET', `/guilds/${g.id}/members/@me/privacy`)).allow_dms === false)
 await pb.click('[data-guild-privacy-reset]'); await pb.waitForSelector('[data-guild-privacy="default"]')
 ok('…and can go back to the default', true)
+await pb.keyboard.press('Escape')
+// typing privacy: alice watches the DM; bob types with the setting off (no indicator) then on (indicator)
+await privacy(b.token, { dm_privacy: 'everyone' }); await call(b.token, 'POST', '/users/@me/relationships', { user_id: a.user.id }).catch(() => {}); await call(a.token, 'PUT', `/users/@me/relationships/${b.user.id}`).catch(() => {})
+const pa = await mk(a.token, `${WEB}/channels/@me/${dm.id}`); await pa.waitForSelector('textarea[placeholder^="Message"]')
+await pb.goto(`${WEB}/channels/@me/${dm.id}`); await pb.waitForSelector('textarea[placeholder^="Message"]')
+await pb.type('textarea[placeholder^="Message"]', 'quiet typing'); await pa.waitForTimeout(1200)
+ok('with typing off, alice sees no typing indicator', (await pa.locator('[data-typing-row]').textContent()).trim() === '')
+await privacy(b.token, { show_typing: true }); await pb.fill('textarea[placeholder^="Message"]', ''); await pb.waitForTimeout(4500); await pb.type('textarea[placeholder^="Message"]', 'loud typing')
+await pa.waitForFunction(() => (document.querySelector('[data-typing-row]')?.textContent ?? '').includes('typing'), null, { timeout: 8000 })
+ok('with typing on, the indicator shows', true)
+await pb.click('button[title="User Settings"]'); await pb.click('text=Data & Privacy'); await pb.waitForSelector('[data-privacy-tab]')
+ok('the Data & Privacy tab has the receipt and typing switches and the data export', await pb.locator('[data-privacy-receipts] [role=switch]').count() === 1 && await pb.locator('[data-export-request]').count() === 1)
+await pb.screenshot({ path: '168-data-privacy.png' })
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

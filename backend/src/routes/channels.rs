@@ -755,9 +755,11 @@ async fn mark_read(
     )
     .bind(uid).bind(id).bind(req.message_id).execute(&state.db).await?;
     state.hub.emit_users(vec![uid], "READ_STATE_UPDATE", json!({ "channel_id": id, "last_read_msg": req.message_id }));
-    // Read receipt for everyone else in the channel, only when the pointer actually moved forward.
+    // Read receipt for everyone else in the channel, only when the pointer actually moved forward and the
+    // reader has not turned receipts off.
     let advanced = prev.and_then(|p| p.0).map(|p| req.message_id > p).unwrap_or(true);
-    if advanced {
+    let (shows,): (bool,) = sqlx::query_as("SELECT show_read_receipts FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    if advanced && shows {
         if let Ok(target) = target_for(&state.db, &c).await {
             state.hub.emit(target, "READ_RECEIPT", json!({ "channel_id": id, "user_id": uid, "message_id": req.message_id }));
         }
@@ -775,7 +777,7 @@ struct Receipt {
 async fn receipts(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<Receipt>>> {
     require_channel(&state.db, id, uid).await?;
     Ok(Json(
-        sqlx::query_as::<_, Receipt>("SELECT user_id, last_read_msg AS message_id FROM read_states WHERE channel_id = $1 AND user_id <> $2 AND last_read_msg IS NOT NULL ORDER BY last_read_msg DESC LIMIT 500")
+        sqlx::query_as::<_, Receipt>("SELECT rs.user_id, rs.last_read_msg AS message_id FROM read_states rs JOIN users u ON u.id = rs.user_id WHERE rs.channel_id = $1 AND rs.user_id <> $2 AND rs.last_read_msg IS NOT NULL AND u.show_read_receipts ORDER BY rs.last_read_msg DESC LIMIT 500")
             .bind(id).bind(uid)
             .fetch_all(&state.db)
             .await?,

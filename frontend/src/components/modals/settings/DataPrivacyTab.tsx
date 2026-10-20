@@ -1,0 +1,46 @@
+import { api } from '../../../lib/api'
+import { useStore } from '../../../store'
+import type { PrivateUser } from '../../../lib/types'
+import { Toggle } from '../SettingsShell'
+import DataSection from './DataSection'
+
+/** Settings → Data & Privacy: what others can tell about you, what this server keeps, and your data export. */
+export default function DataPrivacyTab() {
+  const user = useStore((s) => s.user)
+  const token = useStore((s) => s.token)
+  const setAuth = useStore((s) => s.setAuth)
+  const pushToast = useStore((s) => s.pushToast)
+  if (!user) return null
+  const save = async (patch: Partial<Pick<PrivateUser, 'show_read_receipts' | 'show_typing'>>) => {
+    try { const u = await api.patch<PrivateUser>('/users/@me/privacy', patch); if (token) setAuth(token, u) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  return (
+    <div className="space-y-6" data-privacy-tab>
+      <h2 className="text-xl font-bold">Data & Privacy</h2>
+
+      <section className="space-y-3">
+        <h3 className="label">Privacy controls</h3>
+        <span data-privacy-receipts><Toggle label="Show that I have read direct messages" checked={user.show_read_receipts !== false} onChange={(v) => save({ show_read_receipts: v })} /></span>
+        <p className="text-xs text-text-2">Off: nobody sees a "Seen" marker on messages you read. You will still see theirs if they allow it.</p>
+        <span data-privacy-typing><Toggle label="Show when I am typing" checked={user.show_typing !== false} onChange={(v) => save({ show_typing: v })} /></span>
+        <p className="text-xs text-text-2">Off: the "… is typing" line never shows for you. Your online status is controlled from the status picker (choose Invisible to appear offline).</p>
+      </section>
+
+      <div className="h-px bg-line" />
+
+      <section className="space-y-2">
+        <h3 className="label">How this server uses your data</h3>
+        <ul className="text-sm text-text-1 space-y-1 list-disc pl-5">
+          <li>No analytics, advertising or tracking: nothing about your use of the app is sent to third parties.</li>
+          <li>Messages, uploads and settings stay on this server so it can show them to you and the people you share them with.</li>
+          <li>Logins keep the IP address and browser of each device (see Devices) so you can spot one you do not recognise.</li>
+          <li>Email is used for verification, password resets, security notices and the notifications you turn on.</li>
+        </ul>
+      </section>
+
+      <div className="h-px bg-line" />
+
+      <DataSection />
+    </div>
+  )
+}
