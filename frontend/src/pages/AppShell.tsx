@@ -127,7 +127,7 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
   if (!channel || channel.guild_id !== guildId) return <div className="flex-1 max-md:hidden" />
   return (
     <>
-      {channel.kind === 'voice' ? <VoiceView channel={channel} /> : <ChatView channel={channel} />}
+      {channel.kind === 'voice' || channel.kind === 'stage' ? <VoiceView channel={channel} /> : <ChatView channel={channel} />}
       <MemberList guildId={guildId} />
     </>
   )
@@ -156,7 +156,7 @@ function Shortcuts() {
   const step = (dir: -1 | 1) => {
     if (!inGuild || !channelId) return
     const s = useStore.getState()
-    const list = Object.values(s.channels).filter((c) => c.guild_id === guildId && (c.kind === 'text' || c.kind === 'voice' || c.kind === 'forum')).sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : 1))
+    const list = Object.values(s.channels).filter((c) => c.guild_id === guildId && (c.kind === 'text' || c.kind === 'voice' || c.kind === 'stage' || c.kind === 'forum')).sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : 1))
     const i = list.findIndex((c) => c.id === channelId)
     const next = list[i + dir]
     if (next) navigate(`/channels/${guildId}/${next.id}`)
@@ -173,5 +173,24 @@ function Shortcuts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [guildId, channelId, selfMute, selfDeaf])
   useKeybinds(handlers)
+  // Event reminders: ten minutes before an event you RSVPed to (once per event per browser).
+  const events = useStore((s) => s.events)
+  const pushToast = useStore((s) => s.pushToast)
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now()
+      for (const list of Object.values(events)) for (const e of list) {
+        if (!e.me_rsvp) continue
+        const ms = new Date(e.starts_at).getTime() - now
+        if (ms > 10 * 60 * 1000 || ms < -60 * 1000) continue
+        const key = `parley.reminded.${e.id}`
+        try { if (localStorage.getItem(key)) continue; localStorage.setItem(key, '1') } catch { /* ignore */ }
+        const when = ms <= 0 ? 'is starting now' : `starts in ${Math.max(1, Math.round(ms / 60000))} min`
+        pushToast(`${e.name} ${when}`)
+        try { if ('Notification' in window && Notification.permission === 'granted') new Notification(e.name, { body: `Event ${when}` }) } catch { /* ignore */ }
+      }
+    }
+    tick(); const t = setInterval(tick, 30 * 1000); return () => clearInterval(t)
+  }, [events, pushToast])
   return null
 }

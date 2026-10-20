@@ -67,7 +67,7 @@ export interface Channel {
   id: string
   guild_id: string | null
   name: string
-  kind: 'text' | 'voice' | 'dm' | 'group' | 'category' | 'thread' | 'forum'
+  kind: 'text' | 'voice' | 'stage' | 'dm' | 'group' | 'category' | 'thread' | 'forum'
   topic: string
   position: number
   created_at: string
@@ -247,9 +247,14 @@ export interface VoiceState {
   self_deaf: boolean
   self_video: boolean
   self_stream: boolean
-  /** Server says this member may not speak here; the client keeps its mic gate shut. */
+  /** Server says this member may not speak here (no Speak, or stage audience); the client keeps its mic gate shut. */
   suppress?: boolean
+  /** Stage channels: raised hand. */
+  request_to_speak?: boolean
 }
+
+/** Scheduled event (GET /guilds/:id/events). */
+export interface GuildEvent { id: string; guild_id: string; name: string; description: string; starts_at: string; ends_at: string | null; channel_id: string | null; location: string; creator_id: string | null; created_at: string; rsvp_count: number; me_rsvp: boolean }
 
 export type RelationshipKind = 'friend' | 'outgoing' | 'incoming' | 'blocked'
 export interface Relationship { kind: RelationshipKind; user: User; created_at: string }

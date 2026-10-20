@@ -41,6 +41,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'VOICE_LISTENED'; d: { channel_id: string; message_id: string; attachment_id: string; user_id: string } }
   | { t: 'SOUNDBOARD_PLAY'; d: { channel_id: string; guild_id: string; user_id: string; sound: Sound } }
   | { t: 'SOUNDBOARD_UPDATE'; d: { guild_id: string; sounds: Sound[] } }
+  | { t: 'EVENT_UPDATE'; d: { guild_id: string } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
   | { t: 'VOICE_ERROR'; d: { message: string } })
@@ -177,6 +178,7 @@ function handle(ev: Ev) {
     case 'VOICE_STATE_UPDATE': s.applyVoiceState(ev.d); voice.onVoiceState(ev.d); break
     case 'SOUNDBOARD_PLAY': if (s.myVoiceChannelId === ev.d.channel_id) voice.playSound(ev.d.sound.url, ev.d.sound.volume, ev.d.sound.id); break
     case 'SOUNDBOARD_UPDATE': s.setSounds(ev.d.guild_id, ev.d.sounds); break
+    case 'EVENT_UPDATE': if (s.events[ev.d.guild_id]) void s.loadEvents(ev.d.guild_id); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(); break
   }

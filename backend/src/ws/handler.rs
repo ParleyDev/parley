@@ -344,7 +344,7 @@ async fn handle_client_op(
         ClientOp::VoiceJoin { channel_id } => {
             // Guild voice channels need CONNECT; a DM channel is a 1:1/group call for its members.
             let (channel, p) = match crate::routes::channels::require_channel_perms(&state.db, channel_id, user_id).await {
-                Ok((c, p)) if c.guild_id.is_none() || (c.kind == "voice" && has(p, perms::CONNECT)) => (c, p),
+                Ok((c, p)) if c.guild_id.is_none() || ((c.kind == "voice" || c.kind == "stage") && has(p, perms::CONNECT)) => (c, p),
                 _ => {
                     let _ = tx.send(Message::Text(json!({"t":"VOICE_ERROR","d":{"message":"You don't have permission to join this voice channel"}}).to_string())).await;
                     return;
@@ -357,8 +357,9 @@ async fn handle_client_op(
             // Carry over mute/deaf prefs if moving between channels.
             let (self_mute, self_deaf) = state.hub.voice_state(user_id).map(|v| (v.self_mute, v.self_deaf)).unwrap_or((false, false));
             // Video/screen always start off in a new channel: the client re-attaches tracks after joining.
-            let suppress = guild_id.is_some() && !has(p, perms::SPEAK);
-            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, session, peers };
+            // Stage channels: everyone but moderators (Manage Channels) joins as audience, i.e. suppressed.
+            let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || (channel.kind == "stage" && !has(p, perms::MANAGE_CHANNELS)));
+            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, request_to_speak: false, session, peers };
             if let Some(prev) = state.hub.voice_join(vs.clone()) {
                 if prev.channel_id != channel_id || prev.guild_id != guild_id {
                     emit_voice_leave(state, &prev);
@@ -397,7 +398,8 @@ async fn handle_client_op(
             if let Some(vs) = state.hub.voice_update(user_id, |v| {
                 v.self_mute = self_mute; v.self_deaf = self_deaf;
                 v.self_video = self_video && can_stream; v.self_stream = self_stream && can_stream;
-                v.suppress = suppress;
+                // Stage audience stays suppressed across mute/deaf toggles; only a moderator lifts it.
+                v.suppress = suppress || (channel.kind == "stage" && v.suppress);
             }) {
                 if channel.guild_id.is_some() {
                     let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Users(vec![user_id]));

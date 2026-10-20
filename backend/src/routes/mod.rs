@@ -19,6 +19,8 @@ pub mod roles;
 pub mod search;
 pub mod sessions;
 pub mod sounds;
+pub mod stage;
+pub mod events;
 pub mod storage;
 pub mod threads;
 pub mod users;
@@ -42,6 +44,8 @@ pub fn api_router() -> Router<AppState> {
         .merge(threads::router())
         .merge(voice::router())
         .merge(sounds::router())
+        .merge(stage::router())
+        .merge(events::router())
         .merge(guilds::router())
         .merge(invites::router())
         .merge(roles::router())

@@ -36,8 +36,11 @@ pub struct VoiceState {
     pub self_deaf: bool,
     pub self_video: bool,
     pub self_stream: bool,
-    /// Server-side: the member lacks SPEAK here, so the client must keep its mic gate closed.
+    /// Server-side: the member lacks SPEAK here (or is in a stage audience), so the client must keep its mic gate closed.
     pub suppress: bool,
+    /// Stage channels: the member asked to speak (shown to moderators).
+    #[serde(default)]
+    pub request_to_speak: bool,
     /// Which socket owns this state; another tab joining replaces it.
     #[serde(skip)]
     pub session: u64,
