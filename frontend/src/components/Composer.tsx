@@ -4,7 +4,8 @@ import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { myChannelPerms, useStore } from '../store'
 import { sendTyping } from '../lib/ws'
-import type { Attachment, Channel, DmChannel, Message } from '../lib/types'
+import type { Attachment, Channel, DmChannel, Draft, Message } from '../lib/types'
+import type { ApiError } from '../lib/api'
 import { has, isTimedOut, P } from '../lib/perms'
 import { formatBytes, isImage, MAX_PER_MESSAGE, uploadFile, uploadVoice, type UploadHandle } from '../lib/upload'
 import { VoiceRecorder } from '../lib/voiceRecorder'
@@ -24,7 +25,14 @@ let pendingSeq = 1
 
 export default function Composer({ channel, reply, onCancelReply, onSent }: Props) {
   const sendMessage = useStore((s) => s.sendMessage)
+  const failDelivery = useStore((s) => s.failDelivery)
   const pushToast = useStore((s) => s.pushToast)
+  /** An undeliverable DM is kept in the list in red with a Ribbit notice instead of a toast. */
+  const undeliverable = (e: unknown, draft: Draft): boolean => {
+    if ((e as ApiError).code !== 'undeliverable') return false
+    failDelivery(channel.id, draft); onCancelReply(); onSent()
+    return true
+  }
   const openModal = useStore((s) => s.openModal)
   const typing = useStore((s) => s.typing[channel.id])
   const users = useStore((s) => s.users)
@@ -151,6 +159,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
       snapshot.forEach((p) => { if (p.preview) URL.revokeObjectURL(p.preview) })
       onSent()
     } catch (e) {
+      if (undeliverable(e, { content, reply_to: reply?.id ?? null, attachment_ids: ids, sticker_id: null })) { snapshot.forEach((p) => { if (p.preview) URL.revokeObjectURL(p.preview) }); return }
       pushToast((e as Error).message, 'error'); setValue(content); setPending(snapshot)
     } finally { setSending(false) }
   }
@@ -228,7 +237,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   }
   const sendSticker = async (st: { id: string; name: string }) => {
     setSending(true)
-    try { await sendMessage(channel.id, '', reply?.id, [], st.id); onCancelReply(); onSent() } catch (e) { pushToast((e as Error).message, 'error') } finally { setSending(false) }
+    try { await sendMessage(channel.id, '', reply?.id, [], st.id); onCancelReply(); onSent() } catch (e) { if (!undeliverable(e, { content: '', reply_to: reply?.id ?? null, attachment_ids: [], sticker_id: st.id })) pushToast((e as Error).message, 'error') } finally { setSending(false) }
   }
   // Voice messages: hold state for the recorder bar that replaces the text box while recording.
   const recorder = useRef<VoiceRecorder | null>(null)
@@ -264,7 +273,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   ]
   const sendGif = async (g: { url: string }) => {
     setSending(true)
-    try { await sendMessage(channel.id, g.url, reply?.id); onCancelReply(); onSent() } catch (e) { pushToast((e as Error).message, 'error') } finally { setSending(false) }
+    try { await sendMessage(channel.id, g.url, reply?.id); onCancelReply(); onSent() } catch (e) { if (!undeliverable(e, { content: g.url, reply_to: reply?.id ?? null, attachment_ids: [], sticker_id: null })) pushToast((e as Error).message, 'error') } finally { setSending(false) }
   }
 
   if (!canSend) {

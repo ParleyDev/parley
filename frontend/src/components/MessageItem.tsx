@@ -1,4 +1,4 @@
-import { ArrowLeftFromLine, ArrowRight, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, Pin, PinOff, Reply, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
+import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, Pin, PinOff, Reply, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
@@ -137,6 +137,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     ]
   }
 
+  if (m.kind === 'ribbit') return <RibbitNotice m={m} />
+
   if (m.kind && m.kind !== 'default') {
     const icon = m.kind === 'recipient_add' || m.kind === 'member_join' ? <UserPlus size={16} className="text-success" />
       : m.kind === 'recipient_remove' || m.kind === 'recipient_leave' ? <UserMinus size={16} className="text-danger" />
@@ -172,7 +174,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     )
   }
   return (
-    <div data-msg-id={m.id} onContextMenu={(e) => { if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div data-msg-id={m.id} data-local={m.local} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {m.reply_to && (
         <div role="button" onClick={(e) => { if (onJumpToReply) { e.stopPropagation(); onJumpToReply() } }} data-reply-link={m.reply_to} className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 cursor-pointer hover:text-text-0 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" title="Jump to the original message">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md">{replyTarget.content || (replyTarget.attachments?.length ? '📎 Attachment' : '')}</span></>) : <i>Replying to an earlier message · click to jump</i>}
@@ -206,7 +208,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
             <>
               {m.forwarded_from && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded><Forward size={13} /> Forwarded</div>}
               {(m.content || m.edited_at) && !media && (
-                <div onClick={emojiHover.onClick} className={`msg-content text-[15px] leading-[1.375rem] text-text-0 break-words whitespace-pre-wrap ${isJumbo(m.content) ? 'jumbo' : ''}`}>
+                <div onClick={emojiHover.onClick} className={`msg-content text-[15px] leading-[1.375rem] break-words whitespace-pre-wrap ${m.local === 'failed' ? 'text-danger' : 'text-text-0'} ${isJumbo(m.content) ? 'jumbo' : ''}`}>
                   {renderMarkdown(m.content)}
                   {m.edited_at && <button type="button" onClick={(e) => { e.stopPropagation(); openModal({ kind: 'editHistory', channelId: m.channel_id, messageId: m.id }) }} title={`Edited ${new Date(m.edited_at).toLocaleString()} — click to see the history`} className="ml-1 text-[10px] text-text-2 hover:underline" data-edited>(edited)</button>}
                 </div>
@@ -227,6 +229,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
               <Attachments items={m.attachments ?? []} mine={isOwn} />
+              {m.local === 'failed' && <FailedActions m={m} />}
             </>
           )}
           {m.reactions.length > 0 && (
@@ -245,7 +248,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
 
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} label="Message" />}
       {emojiHover.tip}
-      {!editing && (
+      {!editing && !m.local && (
         <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
           {m.pinned_at && <span className="h-8 px-1.5 flex items-center text-text-2" title="Pinned"><Pin size={13} /></span>}
           {canReact && frequent.map((e) => <button key={e} title={`React with ${e}`} onClick={() => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} className="h-8 w-8 flex items-center justify-center text-base hover:bg-bg-3 first:rounded-l-lg" data-quick-react><Emoji value={e} size={20} /></button>)}
@@ -338,5 +341,68 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
         document.body,
       )}
     </>
+  )
+}
+
+
+/** Under a message the server refused: send it again or drop it. */
+function FailedActions({ m }: { m: Message }) {
+  const retryLocal = useStore((s) => s.retryLocal)
+  const discardLocal = useStore((s) => s.discardLocal)
+  const [busy, setBusy] = useState(false)
+  return (
+    <div className="mt-0.5 flex items-center gap-2 text-xs text-text-2" data-failed-actions>
+      <span className="text-danger">Not delivered</span>
+      <span>·</span>
+      <button type="button" disabled={busy} onClick={async () => { setBusy(true); try { await retryLocal(m.channel_id, m.id) } finally { setBusy(false) } }} className="text-sky-400 hover:underline disabled:opacity-50" data-failed-retry>{busy ? 'Retrying…' : 'Retry'}</button>
+      <span>·</span>
+      <button type="button" onClick={() => discardLocal(m.channel_id, m.id)} className="text-sky-400 hover:underline" data-failed-delete>Delete</button>
+    </div>
+  )
+}
+
+const DELIVERY_REASONS = [
+  'The recipient has blocked you, or you have blocked them.',
+  'You no longer share a server with the recipient and are not friends.',
+  'The recipient only accepts direct messages from friends.',
+  'The recipient\'s account was deleted or suspended.',
+  'Your account is restricted from sending direct messages.',
+]
+
+/** Ribbit, the in-app helper: explains why a DM was not delivered. Only the sender sees it. */
+function RibbitNotice({ m }: { m: Message }) {
+  const discardLocal = useStore((s) => s.discardLocal)
+  const [reasons, setReasons] = useState(false)
+  return (
+    <div className="group relative px-4 max-md:px-3 mt-[17px] py-0.5" data-msg-id={m.id} data-ribbit data-local="notice">
+      <div className="flex gap-4 max-md:gap-3">
+        <img src={m.author.avatar_url ?? ''} alt="" className="h-10 w-10 max-md:h-8 max-md:w-8 shrink-0 rounded-full" draggable={false} data-msg-avatar />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2 leading-[1.375rem] h-[1.375rem]" data-msg-header>
+            <span className="font-medium text-text-0">{m.author.display_name}</span>
+            <span className="rounded bg-accent px-1 py-px text-[10px] font-bold uppercase leading-4 text-white" data-app-badge>App</span>
+            <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
+          </div>
+          <div className="text-[15px] leading-[1.375rem] text-text-0 break-words">
+            Your message could not be delivered. Send a friend request first and start the conversation once they've accepted.
+          </div>
+          <div className="mt-2 text-[15px] leading-[1.375rem] text-text-0">
+            Here is the full list of reasons why your message could not be delivered:{' '}
+            <button type="button" onClick={() => setReasons((v) => !v)} className="inline-flex items-center gap-0.5 text-sky-400 hover:underline" aria-expanded={reasons} data-ribbit-reasons>
+              {reasons ? 'hide' : 'show'} <ChevronDown size={14} className={`transition-transform ${reasons ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+          {reasons && (
+            <ul className="mt-1 list-disc pl-5 text-sm text-text-1 space-y-0.5" data-ribbit-list>
+              {DELIVERY_REASONS.map((r) => <li key={r}>{r}</li>)}
+            </ul>
+          )}
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-text-2">
+            <span>Only you can see this</span><span>•</span>
+            <button type="button" onClick={() => discardLocal(m.channel_id, m.id)} className="hover:underline hover:text-text-0" data-ribbit-dismiss>Dismiss message</button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

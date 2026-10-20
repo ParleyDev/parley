@@ -1,4 +1,4 @@
-import { Hash, Volume2 } from 'lucide-react'
+import { ArrowDown, Hash, Volume2 } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { api } from '../lib/api'
@@ -54,7 +54,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
   // First message the reader has not seen (from someone else), if any is loaded.
   const firstUnreadId = (() => {
     if (readAtOpen === undefined || !messages?.length) return null
-    const m = messages.find((x) => (readAtOpen === null || x.id > readAtOpen) && x.author.id !== user?.id)
+    const m = messages.find((x) => (readAtOpen === null || x.id > readAtOpen) && x.author.id !== user?.id && !x.local)
     // With no read state at all (never opened), everything is "new"; only mark when there is history before it.
     if (!m || (readAtOpen === null && messages[0].id === m.id)) return null
     return m.id
@@ -105,10 +105,14 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
     return () => ro.disconnect()
   }, [channel.id])
 
+  // "You're viewing older messages" once the reader is well above the bottom.
+  const [away, setAway] = useState(false)
+  useEffect(() => { setAway(false) }, [channel.id])
   const onScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+    setAway(el.scrollHeight - el.scrollTop - el.clientHeight > 300)
     if (el.scrollTop < 120 && hasMore !== false && !loading && messages?.length) {
       prevHeight.current = el.scrollHeight
       loadMessages(channel.id, messages[0].id)
@@ -128,6 +132,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
 
   return (
     <>
+      <div className="relative flex-1 min-h-0 flex flex-col">
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto">
         <div ref={contentRef} className="min-h-full flex flex-col justify-end">
           {hasMore === false || (messages && messages.length < 50 && !loading) ? (
@@ -163,6 +168,16 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
             })}
           </div>
         </div>
+      </div>
+      {away && (
+        <div className="pointer-events-none absolute inset-x-4 bottom-2 flex justify-center" data-older-bar>
+          <button type="button" onClick={() => { const el = scrollRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); stickBottom.current = true }}
+            className="pointer-events-auto pop flex items-center gap-3 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white shadow-xl hover:bg-accent-hover" data-jump-present>
+            <span>You're viewing older messages</span>
+            <span className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-xs">Jump to Present <ArrowDown size={12} /></span>
+          </button>
+        </div>
+      )}
       </div>
 
       <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} />

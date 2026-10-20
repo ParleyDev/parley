@@ -3,8 +3,13 @@ import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
+
+let localSeq = 0
+/** The in-app "system app" that explains undelivered messages: a friendly frog. */
+const FROG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#57c26b"/><circle cx="20" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="44" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="20" cy="22" r="6" fill="#fff"/><circle cx="44" cy="22" r="6" fill="#fff"/><circle cx="21.5" cy="23" r="3" fill="#1f2937"/><circle cx="45.5" cy="23" r="3" fill="#1f2937"/><circle cx="22.5" cy="21.5" r="1" fill="#fff"/><circle cx="46.5" cy="21.5" r="1" fill="#fff"/><path d="M18 40q14 12 28 0" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/><circle cx="14" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/><circle cx="50" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/></svg>`)
+export const RIBBIT = { id: 'ribbit', username: 'ribbit', display_name: 'Ribbit', avatar_url: FROG, bio: '', status: '', created_at: new Date(0).toISOString(), banner_url: null, theme_primary: null, theme_accent: null, pronouns: '', name_primary: null } as unknown as User
 import type { Poll, ThreadInfo } from './lib/types'
-import type { Ban, Channel, DmChannel, Emoji, Guild, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sticker, User, VoiceState } from './lib/types'
+import type { Ban, Channel, DmChannel, Draft, Emoji, Guild, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sticker, User, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
 import { channelPerms, guildPerms } from './lib/perms'
@@ -175,6 +180,12 @@ interface State {
   applyReceipt: (channelId: string, userId: string, messageId: string) => void
   /** Someone listened to a voice message: add them to the attachment's listened_by. */
   applyListened: (channelId: string, messageId: string, attachmentId: string, userId: string) => void
+  /** The server refused to deliver a DM: keep it in the list in red with a Ribbit notice under it. */
+  failDelivery: (channelId: string, draft: Draft) => void
+  /** Send a failed message again; on success it becomes a real message and the notice goes away. */
+  retryLocal: (channelId: string, id: string) => Promise<void>
+  /** Remove a failed message (and its notice) or just a notice. */
+  discardLocal: (channelId: string, id: string) => void
   /** Load older pages (up to 60) until `messageId` is in the list (jumping to pins, bookmarks, search hits, reply originals). Returns whether it is loaded. */
   loadUntil: (channelId: string, messageId: string) => Promise<boolean>
   setActiveChannel: (id: string | null) => void
@@ -593,6 +604,32 @@ export const useStore = create<State>((set, get) => ({
 
   setReceipts: (channelId, list) => set((s) => ({ receipts: { ...s.receipts, [channelId]: Object.fromEntries(list.map((r) => [r.user_id, r.message_id])) } })),
   applyReceipt: (channelId, userId, messageId) => set((s) => { const cur = s.receipts[channelId]?.[userId]; if (cur && cur >= messageId) return {}; return { receipts: { ...s.receipts, [channelId]: { ...(s.receipts[channelId] ?? {}), [userId]: messageId } } } }),
+  failDelivery: (channelId, draft) => set((s) => {
+    const me = s.user; if (!me) return {}
+    const n = ++localSeq
+    const content = draft.content || (draft.sticker_id ? 'Sticker' : draft.attachment_ids.length ? `${draft.attachment_ids.length} attachment${draft.attachment_ids.length === 1 ? '' : 's'}` : '')
+    const now = new Date().toISOString()
+    const failed: Message = { id: `local-failed-${n}`, channel_id: channelId, author: me, content, reply_to: draft.reply_to, created_at: now, edited_at: null, pinned_at: null, reactions: [], attachments: [], kind: 'default', local: 'failed', draft }
+    const notice: Message = { id: `local-notice-${n}`, channel_id: channelId, author: RIBBIT, content: '', reply_to: null, created_at: now, edited_at: null, pinned_at: null, reactions: [], attachments: [], kind: 'ribbit', local: 'notice', ref_id: failed.id }
+    return { messages: { ...s.messages, [channelId]: [...(s.messages[channelId] ?? []), failed, notice] } }
+  }),
+  retryLocal: async (channelId, id) => {
+    const m = (get().messages[channelId] ?? []).find((x) => x.id === id)
+    if (!m?.draft) return
+    try {
+      const sent = await api.post<Message>(`/channels/${channelId}/messages`, { content: m.draft.content, reply_to: m.draft.reply_to, attachment_ids: m.draft.attachment_ids, sticker_id: m.draft.sticker_id })
+      get().discardLocal(channelId, id)
+      get().addMessage(sent)
+      get().setReadState(channelId, sent.id)
+    } catch (e) {
+      if ((e as { code?: string }).code !== 'undeliverable') get().pushToast((e as Error).message, 'error')
+    }
+  },
+  discardLocal: (channelId, id) => set((s) => {
+    const list = s.messages[channelId]
+    if (!list) return {}
+    return { messages: { ...s.messages, [channelId]: list.filter((x) => x.id !== id && x.ref_id !== id) } }
+  }),
   applyListened: (channelId, messageId, attachmentId, userId) => set((s) => {
     const list = s.messages[channelId]
     if (!list?.some((m) => m.id === messageId)) return {}
