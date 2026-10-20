@@ -36,6 +36,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const openModal = useStore((s) => s.openModal)
   const typing = useStore((s) => s.typing[channel.id])
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const perms = useStore((s) => myChannelPerms(s, channel.id))
   const myMember = useStore((s) => (channel.guild_id && s.user ? s.members[channel.guild_id]?.[s.user.id] : undefined))
   const [, bump] = useState(0)
@@ -78,7 +79,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const fileRef = useRef<HTMLInputElement>(null)
   const lastTyping = useRef(0)
   const isDm = channel.guild_id === null
-  const name = isDm ? (isGroup(channel as DmChannel) ? dmName(channel as DmChannel, users) : `@${(channel as DmChannel).recipients[0]?.display_name ?? ''}`) : (channel as Channel).kind === 'voice' ? channel.name : `#${channel.name}`
+  const name = isDm ? (isGroup(channel as DmChannel) ? dmName(channel as DmChannel, users, notes) : `@${(channel as DmChannel).recipients[0]?.display_name ?? ''}`) : (channel as Channel).kind === 'voice' ? channel.name : `#${channel.name}`
 
   useEffect(() => { ref.current?.focus() }, [channel.id, reply])
   useEffect(() => {

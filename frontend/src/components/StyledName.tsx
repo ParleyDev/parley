@@ -47,7 +47,9 @@ export default function StyledName({ userId, guildId, children, className, style
   const user = useStore((s) => s.users[userId] ?? (s.user?.id === userId ? s.user : undefined))
   const member = useStore((s) => (guildId ? s.members[guildId]?.[userId] : undefined))
   const roles = useStore((s) => (guildId ? s.roles[guildId] : undefined))
+  const nick = useStore((s) => s.notes[userId]?.nickname)
   const css = resolveNameStyle(roles, member, user)
-  const label = children ?? member?.nickname ?? user?.display_name ?? 'Unknown'
+  // Your friend nickname for them wins everywhere, like Discord.
+  const label = nick || (children ?? member?.nickname ?? user?.display_name ?? 'Unknown')
   return <span className={className} style={{ ...style, ...css }}>{label}</span>
 }

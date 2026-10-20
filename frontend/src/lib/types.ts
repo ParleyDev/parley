@@ -232,6 +232,8 @@ export interface VoiceState {
 
 export type RelationshipKind = 'friend' | 'outgoing' | 'incoming' | 'blocked'
 export interface Relationship { kind: RelationshipKind; user: User; created_at: string }
+/** Your private nickname and note for another user (GET/PUT /users/@me/notes). */
+export interface UserNote { user_id: string; nickname: string; note: string }
 
 export interface RemoteMedia { camera: MediaStream | null; screen: MediaStream | null }
 
