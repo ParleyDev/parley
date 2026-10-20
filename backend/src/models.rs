@@ -424,5 +424,10 @@ pub struct Relationship {
 #[derive(Debug, Deserialize)]
 pub struct Pagination {
     pub before: Option<Uuid>,
+    /// Newer than this id, oldest first (paging forward after an `around` jump).
+    pub after: Option<Uuid>,
+    /// A window centred on this id (which need not exist: uuid v7 ids sort by time, so a date works too):
+    /// up to limit/2 messages at or before it and the rest after it.
+    pub around: Option<Uuid>,
     pub limit: Option<i64>,
 }

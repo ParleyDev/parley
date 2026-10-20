@@ -107,6 +107,12 @@ interface State {
   notifSettings: Record<string, NotifSetting>
   messages: Record<string, Message[]>
   hasMore: Record<string, boolean>
+  /** True while a channel shows a window from the past (after a jump); newer pages load on scroll-down and live messages wait until Jump to Present. */
+  hasNewer: Record<string, boolean>
+  /** Replace the channel's list with a window around a message id (or a uuid v7 built from a date). */
+  loadAround: (channelId: string, anchor: string) => Promise<void>
+  loadNewer: (channelId: string) => Promise<void>
+  loadLatest: (channelId: string) => Promise<void>
   loadingMessages: Record<string, boolean>
   online: Record<string, true>
   users: Record<string, User>
@@ -270,6 +276,7 @@ export const useStore = create<State>((set, get) => ({
   notifSettings: {},
   messages: {},
   hasMore: {},
+  hasNewer: {},
   loadingMessages: {},
   online: {},
   users: {},
@@ -467,7 +474,7 @@ export const useStore = create<State>((set, get) => ({
       typing[m.channel_id] = { ...typing[m.channel_id] }; delete typing[m.channel_id][m.author.id]
     }
     const dms = s.dms[m.channel_id] ? { ...s.dms, [m.channel_id]: { ...s.dms[m.channel_id], last_message_at: m.created_at } } : s.dms
-    if (!list) return { users, lastMessageId, readStates, mentionCounts, typing, dms }
+    if (!list || s.hasNewer[m.channel_id]) return { users, lastMessageId, readStates, mentionCounts, typing, dms }
     return { messages: { ...s.messages, [m.channel_id]: [...list, m] }, users, lastMessageId, readStates, mentionCounts, typing, dms }
   }),
   updateMessage: (m) => set((s) => {
@@ -670,6 +677,56 @@ export const useStore = create<State>((set, get) => ({
       if ((get().messages[channelId] ?? []).length === list.length) return false
     }
     return false
+  },
+  loadAround: async (channelId, anchor) => {
+    const s = get()
+    if (s.loadingMessages[channelId]) return
+    s.setLoadingMessages(channelId, true)
+    try {
+      const ms = await api.get<Message[]>(`/channels/${channelId}/messages?around=${anchor}&limit=50`)
+      const older = ms.filter((m) => m.id <= anchor).length, newer = ms.length - older
+      const local = (get().messages[channelId] ?? []).filter((m) => m.local)
+      set((st) => ({ messages: { ...st.messages, [channelId]: [...ms, ...local] }, hasMore: { ...st.hasMore, [channelId]: older >= 25 }, hasNewer: { ...st.hasNewer, [channelId]: newer >= 25 } }))
+    } catch (e) {
+      get().pushToast((e as Error).message, 'error')
+    } finally {
+      get().setLoadingMessages(channelId, false)
+    }
+  },
+  loadNewer: async (channelId) => {
+    const s = get()
+    if (s.loadingMessages[channelId] || !s.hasNewer[channelId]) return
+    const list = (s.messages[channelId] ?? []).filter((m) => !m.local)
+    if (!list.length) return
+    s.setLoadingMessages(channelId, true)
+    try {
+      const ms = await api.get<Message[]>(`/channels/${channelId}/messages?after=${list[list.length - 1].id}&limit=50`)
+      set((st) => {
+        const cur = st.messages[channelId] ?? []
+        const ids = new Set(cur.map((m) => m.id))
+        const fresh = ms.filter((m) => !ids.has(m.id))
+        const real = cur.filter((m) => !m.local), local = cur.filter((m) => m.local)
+        return { messages: { ...st.messages, [channelId]: [...real, ...fresh, ...local] }, hasNewer: { ...st.hasNewer, [channelId]: ms.length === 50 } }
+      })
+    } catch (e) {
+      get().pushToast((e as Error).message, 'error')
+    } finally {
+      get().setLoadingMessages(channelId, false)
+    }
+  },
+  loadLatest: async (channelId) => {
+    const s = get()
+    if (s.loadingMessages[channelId]) return
+    s.setLoadingMessages(channelId, true)
+    try {
+      const ms = await api.get<Message[]>(`/channels/${channelId}/messages?limit=50`)
+      const local = (get().messages[channelId] ?? []).filter((m) => m.local)
+      set((st) => ({ messages: { ...st.messages, [channelId]: [...ms, ...local] }, hasMore: { ...st.hasMore, [channelId]: ms.length === 50 }, hasNewer: { ...st.hasNewer, [channelId]: false } }))
+    } catch (e) {
+      get().pushToast((e as Error).message, 'error')
+    } finally {
+      get().setLoadingMessages(channelId, false)
+    }
   },
   loadMessages: async (channelId, before) => {
     const s = get()

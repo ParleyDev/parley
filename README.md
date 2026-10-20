@@ -112,6 +112,10 @@ Cloudflare terminates TLS (the browser gets the secure context voice needs), for
 
 Backends are stateless apart from the websocket hub, and the hub is clustered over Postgres: every event an instance emits is also `NOTIFY`-ed on the `parley_events` channel (payloads over 7 KB go through `bus_outbox` by id) and every other instance injects it into its own broadcast, so members connected anywhere see the same messages, typing, reactions, channel and role changes. Presence lives in the `presence` table (one row per user and instance, refreshed by a 30 s heartbeat, rows stale after 90 s): `PRESENCE_UPDATE` fires only when a user's first socket anywhere opens or their last one closes, and online lists (READY, admin console, Discover counts, metrics) read the table. Resume with replay only works against the instance that numbered the client's last event (`READY`/`RESUMED` carry the instance id as `i`, the client sends it back); after a failover the client gets a fresh `READY`. Voice state is still per instance: route a user's websocket consistently (sticky sessions) and keep call participants on the same instance, or put a TURN/SFU in front. Try it locally with `docker compose --profile cluster up -d` (a second backend on port 18081 sharing the database and uploads); the `cluster` e2e suite starts it on demand and checks that events and presence cross instances.
 
+## Rate limits and sessions (admin)
+
+Rate limits start from the `RL_*` environment values and can be overridden per bucket in Admin Console → Instance Settings → Rate limits (`count/seconds`; blank = environment value). Changes apply immediately on the instance that saved them and on others at their next restart. Admin → Users → a user → Sessions lists their active devices (IP, client, last seen) with per-device and log-out-all buttons; clicking an IP filters the user list to everyone seen from it (`GET /admin/users?ip=`).
+
 ## Observability
 
 - **Metrics**: `GET /metrics` on the backend port (18080, not proxied by nginx) in Prometheus text format: `parley_http_requests_total{method,class}`, a latency histogram `parley_http_request_duration_ms`, `parley_http_errors_5xx_total`, `parley_http_rate_limited_total`, `parley_messages_created_total`, `parley_uploads_total` / `parley_upload_bytes_total`, `parley_ws_connects_total` / `parley_ws_resumes_total`, gauges `parley_ws_connections`, `parley_online_users`, `parley_voice_sessions`, `parley_ws_events_total`, `parley_db_pool_size` / `parley_db_pool_idle`. Set `METRICS_TOKEN` to require `Authorization: Bearer <token>` (or `?token=`) — do that whenever the port is reachable beyond the host.
@@ -279,6 +283,10 @@ Some actions leave a notice in the conversation, rendered as a one-line system r
 - `member_join` when someone joins a server, posted to its system channel: the first text channel
 - `call_started` when the first person joins a DM or group call
 - the group-DM notices (`recipient_add`, `recipient_remove`, `recipient_leave`, `channel_name_change`, `channel_icon_change`)
+
+## Jumping around history
+
+`GET /channels/:id/messages` takes `before` (older pages), `after` (newer pages, oldest first) and `around` (a window of `limit/2` messages at or before an id and the rest after it). Ids are uuid v7, so `around` also accepts an id built from a timestamp: the client's jump-to-date (calendar button in the channel header) does exactly that. Jumping to a pin, bookmark, search hit or reply far back loads one window, the pane pages forward as you scroll down, live messages are held back until you press Jump to Present, and the "You're viewing older messages" pill shows the whole time.
 
 ## Read receipts, reply links and invite cards
 

@@ -283,6 +283,21 @@ async fn list_messages(
 ) -> AppResult<Json<Vec<Message>>> {
     require_channel(&state.db, id, uid).await?;
     let limit = p.limit.unwrap_or(50).clamp(1, 100);
+    if let Some(anchor) = p.around {
+        let half = limit / 2;
+        let mut older = sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE m.channel_id = $1 AND m.id <= $2 ORDER BY m.id DESC LIMIT $3"))
+            .bind(id).bind(anchor).bind(half).fetch_all(&state.db).await?;
+        older.reverse();
+        let newer = sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE m.channel_id = $1 AND m.id > $2 ORDER BY m.id ASC LIMIT $3"))
+            .bind(id).bind(anchor).bind(limit - half).fetch_all(&state.db).await?;
+        older.extend(newer);
+        return Ok(Json(hydrate(&state.db, older, uid, false).await?));
+    }
+    if let Some(after) = p.after {
+        let rows = sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE m.channel_id = $1 AND m.id > $2 ORDER BY m.id ASC LIMIT $3"))
+            .bind(id).bind(after).bind(limit).fetch_all(&state.db).await?;
+        return Ok(Json(hydrate(&state.db, rows, uid, false).await?));
+    }
     let rows = match p.before {
         Some(b) => {
             sqlx::query_as::<_, MessageRow>(&format!(
