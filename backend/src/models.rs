@@ -67,6 +67,10 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default = "default_friends")]
     pub group_dm_privacy: String,
+    /// Default for "allow direct messages from server members" on servers you join (overridable per server).
+    #[sqlx(default)]
+    #[serde(default = "default_true")]
+    pub guild_dms_default: bool,
     /// Notifications: push_timeout_min, email_dms, email_friend_requests, default_suppress_everyone, default_suppress_roles.
     #[sqlx(default)]
     #[serde(default)]

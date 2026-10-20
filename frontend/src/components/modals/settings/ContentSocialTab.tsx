@@ -10,7 +10,7 @@ export default function ContentSocialTab() {
   const setAuth = useStore((s) => s.setAuth)
   const pushToast = useStore((s) => s.pushToast)
   if (!user) return null
-  const save = async (patch: Partial<Pick<PrivateUser, 'dm_privacy' | 'message_requests' | 'friend_request_from' | 'group_dm_privacy'>>) => {
+  const save = async (patch: Partial<Pick<PrivateUser, 'dm_privacy' | 'message_requests' | 'friend_request_from' | 'group_dm_privacy' | 'guild_dms_default'>>) => {
     try { const u = await api.patch<PrivateUser>('/users/@me/privacy', patch); if (token) setAuth(token, u) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const dm = user.dm_privacy ?? 'everyone'
@@ -44,6 +44,8 @@ export default function ContentSocialTab() {
         <Radio value="friends_and_servers" label="Friends and server members" hint="Only your friends and people you share a server with." />
         <Radio value="friends" label="Friends only" hint="Only your friends. Everyone else sees their message bounce." />
         <div className="pt-2">
+          <Toggle label="Allow direct messages from server members" checked={user.guild_dms_default !== false} onChange={(v) => save({ guild_dms_default: v })} />
+          <p className="text-xs text-text-2 mt-1 mb-3">The default for servers you join when "Friends and server members" is selected. Change it for one server from the server menu → Privacy Settings.</p>
           <Toggle label="Message requests" checked={user.message_requests !== false} onChange={(v) => save({ message_requests: v })} />
           <p className="text-xs text-text-2 mt-1">Messages from people you are not friends with wait in Message Requests until you accept them, and never ring or ping you. Off: they go straight to your DM list.</p>
         </div>

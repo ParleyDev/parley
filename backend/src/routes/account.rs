@@ -23,6 +23,7 @@ pub fn router() -> Router<AppState> {
         .route("/users/@me/disable", post(disable_account))
         .route("/users/@me/privacy", patch(update_privacy))
         .route("/users/@me/notification-prefs", patch(update_notif_prefs))
+        .route("/guilds/:id/members/@me/privacy", get(guild_privacy).patch(update_guild_privacy))
         .route("/users/@me/mentions", get(recent_mentions))
         .route("/users/@me/data-exports", get(list_exports).post(request_export))
         .route("/users/@me/data-exports/:id/download", get(download_export))
@@ -293,7 +294,7 @@ async fn download_export(State(state): State<AppState>, AuthUser(uid): AuthUser,
 }
 
 #[derive(Deserialize)]
-struct PrivacyReq { dm_privacy: Option<String>, message_requests: Option<bool>, friend_request_from: Option<Vec<String>>, group_dm_privacy: Option<String> }
+struct PrivacyReq { dm_privacy: Option<String>, message_requests: Option<bool>, friend_request_from: Option<Vec<String>>, group_dm_privacy: Option<String>, guild_dms_default: Option<bool> }
 
 /// Content & Social settings.
 async fn update_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<PrivacyReq>) -> AppResult<Json<PrivateUser>> {
@@ -307,8 +308,8 @@ async fn update_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, 
         }
         None => None,
     };
-    sqlx::query("UPDATE users SET dm_privacy = COALESCE($2, dm_privacy), message_requests = COALESCE($3, message_requests), friend_request_from = COALESCE($4, friend_request_from), group_dm_privacy = COALESCE($5, group_dm_privacy) WHERE id = $1")
-        .bind(uid).bind(req.dm_privacy).bind(req.message_requests).bind(from).bind(req.group_dm_privacy).execute(&state.db).await?;
+    sqlx::query("UPDATE users SET dm_privacy = COALESCE($2, dm_privacy), message_requests = COALESCE($3, message_requests), friend_request_from = COALESCE($4, friend_request_from), group_dm_privacy = COALESCE($5, group_dm_privacy), guild_dms_default = COALESCE($6, guild_dms_default) WHERE id = $1")
+        .bind(uid).bind(req.dm_privacy).bind(req.message_requests).bind(from).bind(req.group_dm_privacy).bind(req.guild_dms_default).execute(&state.db).await?;
     let u = private(&state, uid).await?;
     state.hub.emit_users(vec![uid], "USER_UPDATE", json!(u));
     Ok(Json(u))
@@ -345,4 +346,28 @@ async fn recent_mentions(State(state): State<AppState>, AuthUser(uid): AuthUser,
          ORDER BY m.id DESC LIMIT $2", crate::routes::channels::MESSAGE_SELECT))
         .bind(uid).bind(limit).fetch_all(&state.db).await?;
     Ok(Json(crate::routes::channels::hydrate(&state.db, rows, uid, false).await?))
+}
+
+#[derive(serde::Serialize)]
+struct GuildPrivacy { allow_dms: Option<bool>, effective: bool, default: bool }
+
+async fn guild_privacy_of(state: &AppState, uid: Uuid, gid: Uuid) -> AppResult<GuildPrivacy> {
+    let row: Option<(Option<bool>, bool)> = sqlx::query_as("SELECT gm.allow_dms, u.guild_dms_default FROM guild_members gm JOIN users u ON u.id = gm.user_id WHERE gm.guild_id = $1 AND gm.user_id = $2")
+        .bind(gid).bind(uid).fetch_optional(&state.db).await?;
+    let (allow, default) = row.ok_or_else(|| AppError::NotFound("Not a member of that server".into()))?;
+    Ok(GuildPrivacy { allow_dms: allow, effective: allow.unwrap_or(default), default })
+}
+
+/// Your privacy choices for one server: allow DMs from its members (null = your default).
+async fn guild_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Json<GuildPrivacy>> {
+    Ok(Json(guild_privacy_of(&state, uid, gid).await?))
+}
+
+#[derive(Deserialize)]
+struct GuildPrivacyReq { allow_dms: Option<bool> }
+
+async fn update_guild_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>, Json(req): Json<GuildPrivacyReq>) -> AppResult<Json<GuildPrivacy>> {
+    let n = sqlx::query("UPDATE guild_members SET allow_dms = $3 WHERE guild_id = $1 AND user_id = $2").bind(gid).bind(uid).bind(req.allow_dms).execute(&state.db).await?.rows_affected();
+    if n == 0 { return Err(AppError::NotFound("Not a member of that server".into())) }
+    Ok(Json(guild_privacy_of(&state, uid, gid).await?))
 }

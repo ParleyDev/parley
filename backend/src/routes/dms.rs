@@ -132,9 +132,17 @@ pub async fn can_dm(db: &PgPool, from: Uuid, to: Uuid) -> AppResult<bool> {
     let (p,): (String,) = sqlx::query_as("SELECT dm_privacy FROM users WHERE id = $1").bind(to).fetch_one(db).await?;
     Ok(match p.as_str() {
         "friends" => false,
-        "friends_and_servers" => crate::routes::relationships::shares_guild(db, from, to).await?,
+        "friends_and_servers" => shares_guild_allowing_dms(db, from, to).await?,
         _ => true,
     })
+}
+
+/// Do `from` and `to` share a server where `to` allows DMs from members (their per-server choice, else default)?
+pub async fn shares_guild_allowing_dms(db: &PgPool, from: Uuid, to: Uuid) -> AppResult<bool> {
+    let row: Option<(bool,)> = sqlx::query_as(
+        "SELECT true FROM guild_members x JOIN guild_members y ON y.guild_id = x.guild_id JOIN users u ON u.id = y.user_id
+         WHERE x.user_id = $1 AND y.user_id = $2 AND COALESCE(y.allow_dms, u.guild_dms_default) LIMIT 1").bind(from).bind(to).fetch_optional(db).await?;
+    Ok(row.is_some())
 }
 
 pub async fn are_friends(db: &PgPool, a: Uuid, b: Uuid) -> AppResult<bool> {

@@ -54,6 +54,7 @@ export type ModalKind =
   | { kind: 'forward'; message: Message }
   | { kind: 'groupMembers'; channelId?: string; userIds?: string[] }
   | { kind: 'folderSettings'; folderId: string }
+  | { kind: 'guildPrivacy'; guildId: string }
 
 export interface ReadyPayload {
   user: PrivateUser
