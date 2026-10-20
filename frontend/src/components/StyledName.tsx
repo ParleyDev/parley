@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { Member, Role } from '../lib/types'
 import { useStore } from '../store'
+import { usePrefs } from '../lib/prefs'
 
 export interface NameStyleSource { name_primary?: string | null; name_accent?: string | null }
 
@@ -48,8 +49,10 @@ export default function StyledName({ userId, guildId, children, className, style
   const member = useStore((s) => (guildId ? s.members[guildId]?.[userId] : undefined))
   const roles = useStore((s) => (guildId ? s.roles[guildId] : undefined))
   const nick = useStore((s) => s.notes[userId]?.nickname)
-  const css = resolveNameStyle(roles, member, user)
+  const mode = usePrefs().roleColors
+  const role = roles ? colorRole(roles, member) : null
+  const css = mode === 'name' ? resolveNameStyle(roles, member, user) : mode === 'off' && role ? undefined : nameCss(user?.name_primary, user?.name_accent)
   // Your friend nickname for them wins everywhere, like Discord.
   const label = nick || (children ?? member?.nickname ?? user?.display_name ?? 'Unknown')
-  return <span className={className} style={{ ...style, ...css }}>{label}</span>
+  return <span className={className} style={{ ...style, ...css }} data-role-colors={mode}>{label}{mode === 'next' && role && <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: role.color ?? undefined }} title={role.name} data-role-dot />}</span>
 }

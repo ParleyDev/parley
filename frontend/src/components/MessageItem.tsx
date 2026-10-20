@@ -20,6 +20,8 @@ import type { Message, ReplyRef } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
 import Attachments, { MaybeBlurred } from './Attachments'
+import { getPrefs, usePrefs } from '../lib/prefs'
+import FrozenGif from './FrozenGif'
 import Emoji from './Emoji'
 import ExpressionPicker from './ExpressionPicker'
 import { isJumbo } from '../lib/emoji'
@@ -95,6 +97,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     try { has ? await api.delete(path) : await api.put(path) } catch (e) { pushToast((e as Error).message, 'error') }
   }
 
+  const prefs = usePrefs()
   const media = soleMediaUrl(m.content)
   const link = media ? null : firstLink(m.content)
   // Sensitive media: blur pictures and videos from non-friends in DMs, and in age-restricted channels, by preference.
@@ -195,7 +198,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     )
   }
   return (
-    <div data-msg-id={m.id} data-local={m.local} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {m.reply_to && (
         <div role="button" onClick={(e) => { if (onJumpToReply) { e.stopPropagation(); onJumpToReply() } }} data-reply-link={m.reply_to} className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 cursor-pointer hover:text-text-0 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" title="Jump to the original message">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{replyTarget.content || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 Attachment' : '')}</span></>) : <i data-reply-preview="deleted">Original message was deleted</i>}
@@ -217,6 +220,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
             </div>
           )}
+          {compact && prefs.compactAvatars && <span className="float-left mr-2 mt-0.5" data-compact-avatar><Avatar user={m.author} size={20} /></span>}
           {compact && (
             <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="float-left mr-2 font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
           )}
@@ -235,8 +239,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                   {m.edited_at && <button type="button" onClick={(e) => { e.stopPropagation(); openModal({ kind: 'editHistory', channelId: m.channel_id, messageId: m.id }) }} title={`Edited ${new Date(m.edited_at).toLocaleString()} — click to see the history`} className="ml-1 text-[10px] text-text-2 hover:underline" data-edited>(edited)</button>}
                 </div>
               )}
-              {media && <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred>}
-              {link && <MaybeBlurred on={sensitive}><LinkEmbed url={link} /></MaybeBlurred>}
+              {media && (prefs.linkMedia ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
+              {link && prefs.embeds && <MaybeBlurred on={sensitive}><LinkEmbed url={link} /></MaybeBlurred>}
               {inviteCodes(m.content, [appUrl]).map((code) => <InviteCard key={code} code={code} />)}
               {m.poll && <PollCard m={m} poll={m.poll} />}
               {m.thread && (
@@ -248,12 +252,14 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 </button>
               )}
               {m.sticker && (
-                <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
+                m.sticker.animated && prefs.stickerAnimation !== 'always'
+                  ? <FrozenGif src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" mode={prefs.stickerAnimation === 'never' ? 'never' : 'hover'} data-msg-sticker={m.sticker.name} />
+                  : <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
               <Attachments items={m.attachments ?? []} mine={isOwn} sensitive={sensitive} />
             </>
           )}
-          {m.reactions.length > 0 && (
+          {m.reactions.length > 0 && prefs.showReactions && (
             <div className="mt-1.5 flex flex-wrap gap-1" data-reactions>
               {m.reactions.map((r) => <ReactionChip key={r.emoji} r={r} message={m} canReact={canReact} onToggle={() => react(r.emoji, r.me)} />)}
               {canReact && (
@@ -326,7 +332,9 @@ function MediaEmbed({ url }: { url: string }) {
   if (failed) return <a href={url} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all">{url}</a>
   return (
     <button onClick={() => openModal({ kind: 'image', url, name: url.split('/').pop() ?? 'image' })} className="mt-1 block overflow-hidden rounded-lg bg-bg-0/40 border border-line hover:border-text-2 max-w-full" title={url} data-media-embed>
-      <img src={url} alt="" loading="lazy" onError={() => setFailed(true)} className="block max-h-[300px] max-w-[400px] object-contain" />
+      {(/\.gif(?:$|[?#])/i.test(url) || /tenor|giphy/i.test(url)) && !getPrefs().autoplayGifs
+        ? <FrozenGif src={url} alt="" className="block max-h-[300px] max-w-[400px] object-contain" />
+        : <img src={url} alt="" loading="lazy" onError={() => setFailed(true)} className="block max-h-[300px] max-w-[400px] object-contain" />}
     </button>
   )
 }
