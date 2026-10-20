@@ -1,12 +1,13 @@
-import { Check, ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Settings, ShieldCheck, Signal, Smile } from 'lucide-react'
+import { ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Settings, ShieldCheck, Signal, Smile } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { voice } from '../lib/voice'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useStore } from '../store'
 import { api } from '../lib/api'
 import { colorFor } from '../lib/format'
 import { dmName } from '../lib/dm'
 import Avatar from './Avatar'
+import DeviceMenu from './DeviceMenu'
 import StyledName from './StyledName'
 import { useT } from '../lib/i18n'
 
@@ -77,7 +78,7 @@ export default function UserPanel() {
         <ControlBtn label={deaf ? 'Undeafen' : 'Deafen'} onClick={() => voice.setDeaf(!deaf)} active={deaf} onMenu={() => setDevices((d) => (d === 'output' ? null : 'output'))} menuOpen={devices === 'output'}>{deaf ? <HeadphoneOff size={20} /> : <Headphones size={20} />}</ControlBtn>
         <ControlBtn label={t('User Settings')} onClick={() => openModal({ kind: 'userSettings' })}><Settings size={20} /></ControlBtn>
 
-        {devices && <DeviceMenu kind={devices} onClose={() => setDevices(null)} onSettings={() => { setDevices(null); openModal({ kind: 'userSettings', tab: 'voice' }) }} />}
+        {devices && <DeviceMenu kind={devices} onClose={() => setDevices(null)} />}
         {open && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
@@ -115,32 +116,3 @@ function ControlBtn({ children, label, onClick, active, onMenu, menuOpen }: { ch
   )
 }
 
-/** Input / output device picker, mirroring the Voice & Video settings. */
-function DeviceMenu({ kind, onClose, onSettings }: { kind: 'input' | 'output'; onClose: () => void; onSettings: () => void }) {
-  const settings = useStore((s) => s.voiceSettings)
-  const update = useStore((s) => s.updateVoiceSettings)
-  const [list, setList] = useState<MediaDeviceInfo[] | null>(null)
-  useEffect(() => {
-    if (!navigator.mediaDevices?.enumerateDevices) { setList([]); return }
-    navigator.mediaDevices.enumerateDevices().then((ds) => setList(ds.filter((d) => d.kind === (kind === 'input' ? 'audioinput' : 'audiooutput')))).catch(() => setList([]))
-  }, [kind])
-  const current = kind === 'input' ? settings.inputDeviceId : settings.outputDeviceId
-  const pick = (id: string) => { update(kind === 'input' ? { inputDeviceId: id } : { outputDeviceId: id }); onClose() }
-  const title = kind === 'input' ? 'Input Device' : 'Output Device'
-  return (
-    <>
-      <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="pop absolute bottom-full right-0 mb-2 z-40 w-64 rounded-xl bg-bg-0 border border-line shadow-2xl p-2" data-device-menu={kind}>
-        <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{title}</div>
-        {list === null && <div className="px-2 py-1.5 text-sm text-text-2">Looking for devices…</div>}
-        {list && [{ deviceId: '', label: 'Default' } as Pick<MediaDeviceInfo, 'deviceId' | 'label'>, ...list.filter((d) => d.deviceId !== 'default' && d.deviceId !== '')].map((d, i) => (
-          <button key={d.deviceId || 'default'} onClick={() => pick(d.deviceId)} className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-left hover:bg-accent hover:text-white ${current === d.deviceId ? 'text-text-0' : 'text-text-1'}`} data-device-option>
-            <span className="w-4 shrink-0">{current === d.deviceId && <Check size={14} />}</span><span className="truncate">{d.label || (i === 0 ? 'Default' : `${kind === 'input' ? 'Microphone' : 'Speakers'} ${i}`)}</span>
-          </button>
-        ))}
-        <div className="h-px bg-line my-1" />
-        <button onClick={onSettings} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-text-1 hover:bg-accent hover:text-white"><Settings size={14} /> Voice Settings</button>
-      </div>
-    </>
-  )
-}
