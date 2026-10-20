@@ -74,9 +74,17 @@ pub async fn start_session(state: &AppState, user_id: Uuid, headers: &HeaderMap)
     Ok(issue_token(&state.config.jwt_secret, user_id, sid)?)
 }
 
+/// How long a confirmed session check is trusted before asking the DB again. Revocation, suspension and
+/// deletion clear the cache on the instance that performs them (and, via the bus, on the others), so the
+/// window only matters for a suspension done directly in SQL.
+pub const SESSION_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(15);
+
 /// Is this (user, session) still good: session not revoked, user not suspended or deleted?
-/// Bumps `last_seen_at` at most once a minute.
+/// Cached per instance for SESSION_CACHE_TTL; bumps `last_seen_at` at most once a minute.
 pub async fn check_session(state: &AppState, user_id: Uuid, session_id: Uuid) -> AppResult<bool> {
+    if state.hub.session_fresh(user_id, session_id, SESSION_CACHE_TTL) {
+        return Ok(true);
+    }
     let row: Option<(bool,)> = sqlx::query_as(
         "SELECT s.last_seen_at < now() - interval '1 minute' FROM sessions s JOIN users u ON u.id = s.user_id
          WHERE s.id = $1 AND s.user_id = $2 AND s.revoked_at IS NULL AND u.suspended_at IS NULL",
@@ -91,6 +99,7 @@ pub async fn check_session(state: &AppState, user_id: Uuid, session_id: Uuid) ->
             if stale {
                 sqlx::query("UPDATE sessions SET last_seen_at = now() WHERE id = $1").bind(session_id).execute(&state.db).await?;
             }
+            state.hub.session_confirm(user_id, session_id);
             Ok(true)
         }
     }
@@ -107,6 +116,7 @@ pub async fn revoke_sessions(state: &AppState, user_id: Uuid, only: Option<Uuid>
     .fetch_all(&state.db)
     .await?;
     let ids: Vec<Uuid> = rows.into_iter().map(|r| r.0).collect();
+    state.hub.session_forget(user_id);
     for sid in &ids {
         state.hub.emit(crate::ws::hub::Target::Session(*sid), "SESSION_REVOKED", serde_json::json!({ "reason": reason }));
     }

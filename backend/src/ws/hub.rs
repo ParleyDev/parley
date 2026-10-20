@@ -66,6 +66,8 @@ pub struct Hub {
     online: DashMap<Uuid, usize>,
     /// user_id -> current voice channel
     voice: DashMap<Uuid, VoiceState>,
+    /// (user, session) -> when the DB last confirmed it live; see auth::check_session.
+    session_ok: DashMap<(Uuid, Uuid), std::time::Instant>,
     session_seq: std::sync::atomic::AtomicU64,
     /// Last assigned event sequence number.
     seq: std::sync::atomic::AtomicU64,
@@ -88,6 +90,7 @@ impl Hub {
             bus: std::sync::Mutex::new(None),
             online: DashMap::new(),
             voice: DashMap::new(),
+            session_ok: DashMap::new(),
             session_seq: std::sync::atomic::AtomicU64::new(1),
             seq: std::sync::atomic::AtomicU64::new(0),
             replay: std::sync::Mutex::new(std::collections::VecDeque::with_capacity(REPLAY_BUFFER)),
@@ -133,7 +136,28 @@ impl Hub {
 
     /// An event that arrived from another instance: deliver locally, never re-publish.
     pub fn inject(&self, target: Target, payload: Value) {
+        // A revocation from another instance must also drop this instance's cached session check.
+        if let Target::Session(sid) = &target {
+            if payload.get("t").and_then(|t| t.as_str()) == Some("SESSION_REVOKED") {
+                self.session_ok.retain(|(_, s), _| s != sid);
+            }
+        }
         self.publish_local(target, payload);
+    }
+
+    /// Was this session confirmed live within `ttl`?
+    pub fn session_fresh(&self, user: Uuid, session: Uuid, ttl: std::time::Duration) -> bool {
+        self.session_ok.get(&(user, session)).map(|t| t.elapsed() < ttl).unwrap_or(false)
+    }
+    pub fn session_confirm(&self, user: Uuid, session: Uuid) {
+        self.session_ok.insert((user, session), std::time::Instant::now());
+        if self.session_ok.len() > 50_000 {
+            self.session_ok.retain(|_, t| t.elapsed() < std::time::Duration::from_secs(60));
+        }
+    }
+    /// Forget every cached check for a user (revocation, suspension, deletion) so the next request hits the DB.
+    pub fn session_forget(&self, user: Uuid) {
+        self.session_ok.retain(|(u, _), _| *u != user);
     }
 
     /// Number the event, buffer it for resumes and broadcast to local sockets (all under one lock so
