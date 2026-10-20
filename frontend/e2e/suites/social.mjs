@@ -49,6 +49,7 @@ const rep = await call(a.token, 'POST', `/channels/${tc.id}/messages`, { content
 await pa.reload(); await pa.waitForSelector(`[data-msg-id="${rep.id}"]`)
 ok('the original is not loaded yet (older than the first page)', await pa.locator(`[data-msg-id="${old.id}"]`).count() === 0)
 ok('the reply header is still a link', await pa.locator(`[data-msg-id="${rep.id}"] [data-reply-link="${old.id}"]`).count() === 1)
+ok('…and still previews the original\'s author and text', (await pa.locator(`[data-msg-id="${rep.id}"] [data-reply-link] [data-reply-preview]`).textContent()) === `the original ${S}` && (await pa.locator(`[data-msg-id="${rep.id}"] [data-reply-link]`).textContent()).includes('Bob'))
 await pa.click(`[data-msg-id="${rep.id}"] [data-reply-link]`); await pa.waitForSelector(`[data-msg-id="${old.id}"]`, { timeout: 15000 }); await pa.waitForTimeout(300)
 ok('clicking it loads history and scrolls the original into view', await pa.evaluate((id) => { const r = document.querySelector(`[data-msg-id="${id}"]`).getBoundingClientRect(); const c = document.querySelector('main .overflow-y-auto').getBoundingClientRect(); return r.top >= c.top - 2 && r.bottom <= c.bottom + 2 }, old.id))
 // The jump showed a window from the past; the receipt lands on the newest message, so return to the present first.

@@ -16,7 +16,7 @@ import PollCard from './PollCard'
 import LinkEmbed, { firstLink } from './LinkEmbed'
 import InviteCard, { inviteCodes } from './InviteCard'
 import StyledName from './StyledName'
-import type { Message } from '../lib/types'
+import type { Message, ReplyRef } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
 import Attachments from './Attachments'
@@ -28,7 +28,7 @@ import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
 import { useParams } from 'react-router-dom'
 
-interface Props { message: Message; grouped: boolean; isOwn: boolean; onReply: () => void; replyTarget: Message | null
+interface Props { message: Message; grouped: boolean; isOwn: boolean; onReply: () => void; replyTarget: ReplyRef | null
   /** Reply header click: scroll to (and if needed load) the original message. */
   onJumpToReply?: () => void
 }
@@ -190,7 +190,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     <div data-msg-id={m.id} data-local={m.local} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'mt-[17px] py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {m.reply_to && (
         <div role="button" onClick={(e) => { if (onJumpToReply) { e.stopPropagation(); onJumpToReply() } }} data-reply-link={m.reply_to} className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 cursor-pointer hover:text-text-0 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" title="Jump to the original message">
-          {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md">{replyTarget.content || (replyTarget.attachments?.length ? '📎 Attachment' : '')}</span></>) : <i>Replying to an earlier message · click to jump</i>}
+          {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{replyTarget.content || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 Attachment' : '')}</span></>) : <i data-reply-preview="deleted">Original message was deleted</i>}
         </div>
       )}
       <div className={`flex ${compact ? 'gap-2' : 'gap-4 max-md:gap-3'}`}>

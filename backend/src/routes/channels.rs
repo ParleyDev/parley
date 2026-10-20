@@ -789,17 +789,36 @@ pub async fn hydrate(db: &PgPool, rows: Vec<MessageRow>, me: Uuid, reverse: bool
     let mut atts = attachments_for(db, &ids).await?;
     let mut polls = crate::routes::polls::polls_for(db, &ids, me).await?;
     let mut threads = crate::routes::threads::threads_for(db, &ids).await?;
+    let mut refs = referenced_for(db, &rows).await?;
     let it = rows.into_iter().map(|r| {
         let rx = reactions.remove(&r.id).unwrap_or_default();
         let at = atts.remove(&r.id).unwrap_or_default();
         let poll = polls.remove(&r.id);
         let thread = threads.remove(&r.id);
+        let referenced = r.reply_to.and_then(|t| refs.get(&t).cloned());
         let mut m = r.into_message(rx, at);
         m.poll = poll;
         m.thread = thread;
+        m.referenced = referenced.map(Box::new);
         m
     });
     Ok(if reverse { it.rev().collect() } else { it.collect() })
+}
+
+/// Previews of the messages these rows reply to, keyed by the original's id (missing when deleted).
+async fn referenced_for(db: &PgPool, rows: &[MessageRow]) -> AppResult<HashMap<Uuid, crate::models::Referenced>> {
+    let mut targets: Vec<Uuid> = rows.iter().filter_map(|r| r.reply_to).collect();
+    targets.sort(); targets.dedup();
+    if targets.is_empty() { return Ok(HashMap::new()) }
+    let originals = sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE m.id = ANY($1)"))
+        .bind(&targets).fetch_all(db).await?;
+    let counts: Vec<(Uuid, i64)> = sqlx::query_as("SELECT message_id, count(*) FROM attachments WHERE message_id = ANY($1) GROUP BY message_id")
+        .bind(&targets).fetch_all(db).await?;
+    let counts: HashMap<Uuid, i64> = counts.into_iter().collect();
+    Ok(originals.into_iter().map(|r| {
+        let m = r.into_message(vec![], vec![]);
+        (m.id, crate::models::Referenced { id: m.id, author: m.author, content: m.content, attachment_count: counts.get(&m.id).copied().unwrap_or(0), kind: m.kind })
+    }).collect())
 }
 
 async fn list_pins(
