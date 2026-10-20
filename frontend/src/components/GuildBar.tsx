@@ -12,6 +12,7 @@ import type { Guild, LayoutItem } from '../lib/types'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
+import { useT } from '../lib/i18n'
 
 type FolderItem = Extract<LayoutItem, { kind: 'folder' }>
 const OPEN_KEY = 'parley.folderOpen'
@@ -25,6 +26,7 @@ const loadOpen = (): Record<string, boolean> => { try { return JSON.parse(localS
  * equivalents, and keeps the selection pill / unread stubs / portal tooltips.
  */
 export default function GuildBar() {
+  const t = useT()
   const layout = useStore((s) => s.guildLayout)
   const setLayout = useStore((s) => s.setGuildLayout)
   const guilds = useStore((s) => s.guilds)
@@ -159,7 +161,7 @@ export default function GuildBar() {
     <nav className="w-[72px] shrink-0 bg-bg-0 flex flex-col items-center py-3 gap-2 overflow-y-auto overflow-x-hidden" data-guild-bar>
       <NavLink to="/channels/@me" className={({ isActive }) => `group relative ${isActive ? 'active' : ''}`}>
         {({ isActive }) => (
-          <Pill active={isActive} unread={dmUnread > 0} tip="Direct Messages">
+          <Pill active={isActive} unread={dmUnread > 0} tip={t('Direct Messages')}>
             <div className={`h-12 w-12 flex items-center justify-center transition-all duration-200 rounded-2xl ${isActive ? 'bg-accent' : 'bg-bg-3 group-hover:bg-accent'}`}>
               <span className="font-extrabold text-white text-lg">{APP_INITIAL}</span>
             </div>
@@ -177,13 +179,13 @@ export default function GuildBar() {
       })}
 
       <button onClick={() => openModal({ kind: 'createGuild' })} className="group relative">
-        <Pill tip="Add a Server">
+        <Pill tip={t('Add a Server')}>
           <div className="h-12 w-12 rounded-2xl bg-bg-3 text-success flex items-center justify-center transition-all duration-200 group-hover:bg-success group-hover:text-white"><Plus size={24} /></div>
         </Pill>
       </button>
       <NavLink to="/discover" className="group relative" data-discover-link>
         {({ isActive }) => (
-          <Pill active={isActive} tip="Discover">
+          <Pill active={isActive} tip={t('Discover')}>
             <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${isActive ? 'bg-success text-white' : 'bg-bg-3 text-success group-hover:bg-success group-hover:text-white'}`}><Compass size={22} /></div>
           </Pill>
         )}

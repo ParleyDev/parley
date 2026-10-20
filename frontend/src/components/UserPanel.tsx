@@ -8,6 +8,7 @@ import { colorFor } from '../lib/format'
 import { dmName } from '../lib/dm'
 import Avatar from './Avatar'
 import StyledName from './StyledName'
+import { useT } from '../lib/i18n'
 
 const STATUSES: { v: string; label: string; color: string }[] = [
   { v: 'online', label: 'Online', color: '#3ccf7d' },
@@ -22,6 +23,7 @@ const STATUSES: { v: string; label: string; color: string }[] = [
  * dropdown) and settings.
  */
 export default function UserPanel() {
+  const t = useT()
   const user = useStore((s) => s.user)
   const openModal = useStore((s) => s.openModal)
   const [open, setOpen] = useState(false)
@@ -59,8 +61,8 @@ export default function UserPanel() {
             <div className="text-[11px] text-text-2 truncate">{voiceDm ? `${voiceDm} / Direct Message` : `${voiceChannel?.name ?? 'Voice'}${voiceGuild ? ` / ${voiceGuild.name}` : ''}`}</div>
           </div>
           {pttMode && <span title="Push to talk" className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${pttHeld ? 'bg-success text-black' : 'bg-bg-3 text-text-2'}`}>PTT</span>}
-          <button title="Voice Settings" onClick={() => openModal({ kind: 'userSettings', tab: 'voice' })} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0"><Settings size={16} /></button>
-          <button title="Disconnect" onClick={() => voice.leave()} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-danger"><PhoneOff size={18} /></button>
+          <button title={t('Voice Settings')} onClick={() => openModal({ kind: 'userSettings', tab: 'voice' })} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0"><Settings size={16} /></button>
+          <button title={t('Disconnect')} onClick={() => voice.leave()} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-danger"><PhoneOff size={18} /></button>
         </div>
       )}
       <div className="relative rounded-xl border shadow-lg pl-2 pr-1.5 py-1.5 flex items-center gap-0.5" style={cardStyle} data-user-panel>
@@ -73,7 +75,7 @@ export default function UserPanel() {
         </button>
         <ControlBtn label={muted ? 'Unmute' : 'Mute'} onClick={() => voice.setMute(!muted)} active={muted} onMenu={() => setDevices((d) => (d === 'input' ? null : 'input'))} menuOpen={devices === 'input'}>{muted ? <MicOff size={20} /> : <Mic size={20} />}</ControlBtn>
         <ControlBtn label={deaf ? 'Undeafen' : 'Deafen'} onClick={() => voice.setDeaf(!deaf)} active={deaf} onMenu={() => setDevices((d) => (d === 'output' ? null : 'output'))} menuOpen={devices === 'output'}>{deaf ? <HeadphoneOff size={20} /> : <Headphones size={20} />}</ControlBtn>
-        <ControlBtn label="User Settings" onClick={() => openModal({ kind: 'userSettings' })}><Settings size={20} /></ControlBtn>
+        <ControlBtn label={t('User Settings')} onClick={() => openModal({ kind: 'userSettings' })}><Settings size={20} /></ControlBtn>
 
         {devices && <DeviceMenu kind={devices} onClose={() => setDevices(null)} onSettings={() => { setDevices(null); openModal({ kind: 'userSettings', tab: 'voice' }) }} />}
         {open && (

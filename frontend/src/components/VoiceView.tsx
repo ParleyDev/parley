@@ -12,12 +12,14 @@ import Avatar from './Avatar'
 import VideoTile from './VideoTile'
 import ChatPane from './ChatPane'
 import { MembersToggle, MobileBack } from './HeaderBits'
+import { useT } from '../lib/i18n'
 
 type Tile = { key: string; userId: string; kind: 'camera' | 'screen'; user: User | undefined; state: VoiceState; stream: MediaStream | null; isMe: boolean }
 
 const CHAT_KEY = `${STORAGE_PREFIX}voiceChat`
 
 export default function VoiceView({ channel }: { channel: Channel }) {
+  const t = useT()
   const participants = useStore(useShallow((s) => voiceParticipants(s, channel.id)))
   const users = useStore((s) => s.users)
   const me = useStore((s) => s.user)
@@ -181,14 +183,14 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           <div className="shrink-0 flex items-center justify-center gap-3 max-md:gap-4 max-md:flex-wrap py-4 max-md:py-3 px-2 border-t border-line safe-bottom" data-voice-controls>
             {inThis ? (
               <>
-                {isStage && suppressed && <Ctl label={handUp ? 'Lower Hand' : 'Raise Hand'} on={handUp} accent onClick={toggleHand}><Hand size={22} /></Ctl>}
-                {isStage && !suppressed && !isMod && <Ctl label="Leave the stage" on={false} onClick={() => toAudience(me!.id)}><Hand size={22} /></Ctl>}
-                <Ctl label={selfMute ? 'Unmute' : 'Mute'} on={selfMute} onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={22} /> : <Mic size={22} />}</Ctl>
-                <Ctl label={selfDeaf ? 'Undeafen' : 'Deafen'} on={selfDeaf} onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={22} /> : <Headphones size={22} />}</Ctl>
-                {canStream && <Ctl label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} accent onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>}
+                {isStage && suppressed && <Ctl label={handUp ? t('Lower Hand') : t('Raise Hand')} on={handUp} accent onClick={toggleHand}><Hand size={22} /></Ctl>}
+                {isStage && !suppressed && !isMod && <Ctl label={t('Leave the stage')} on={false} onClick={() => toAudience(me!.id)}><Hand size={22} /></Ctl>}
+                <Ctl label={selfMute ? t('Unmute') : t('Mute')} on={selfMute} onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={22} /> : <Mic size={22} />}</Ctl>
+                <Ctl label={selfDeaf ? t('Undeafen') : t('Deafen')} on={selfDeaf} onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={22} /> : <Headphones size={22} />}</Ctl>
+                {canStream && <Ctl label={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} on={!!localCamera} accent onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>}
                 {canSpeak && !suppressed && (
                   <span className="relative">
-                    <Ctl label="Soundboard" on={board} accent onClick={() => setBoard((b) => !b)}><Music2 size={22} /></Ctl>
+                    <Ctl label={t('Soundboard')} on={board} accent onClick={() => setBoard((b) => !b)}><Music2 size={22} /></Ctl>
                     {board && (
                       <>
                         <div className="fixed inset-0 z-30" onClick={() => setBoard(false)} />
@@ -207,12 +209,12 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                     )}
                   </span>
                 )}
-                {canStream && <Ctl label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} accent onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={22} /> : <Monitor size={22} />}</Ctl>}
-                <button onClick={() => voice.leave()} title="Disconnect" className="h-14 max-md:h-12 px-6 max-md:px-4 rounded-full bg-danger text-white font-semibold flex items-center gap-2 hover:bg-danger/80 max-md:basis-full max-md:justify-center max-md:order-last" data-voice-leave><PhoneOff size={20} /><span className="max-md:hidden">Leave</span></button>
+                {canStream && <Ctl label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} accent onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={22} /> : <Monitor size={22} />}</Ctl>}
+                <button onClick={() => voice.leave()} title={t('Disconnect')} className="h-14 max-md:h-12 px-6 max-md:px-4 rounded-full bg-danger text-white font-semibold flex items-center gap-2 hover:bg-danger/80 max-md:basis-full max-md:justify-center max-md:order-last" data-voice-leave><PhoneOff size={20} /><span className="max-md:hidden">Leave</span></button>
               </>
             ) : (
               <button onClick={() => voice.join(channel.id)} disabled={connecting || !canConnect} title={canConnect ? undefined : 'You do not have permission to connect'} className="h-14 max-md:h-12 px-8 rounded-full bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50">
-                <Volume2 size={20} /> {!canConnect ? 'No permission to connect' : myChannel ? 'Switch to this channel' : 'Join Voice'}
+                <Volume2 size={20} /> {!canConnect ? t('No permission to connect') : myChannel ? t('Switch to this channel') : t('Join Voice')}
               </button>
             )}
           </div>

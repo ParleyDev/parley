@@ -15,8 +15,10 @@ import StyledName from './StyledName'
 import { api } from '../lib/api'
 import type { Channel } from '../lib/types'
 import { STORAGE_PREFIX } from '../lib/brand'
+import { useT } from '../lib/i18n'
 
 export default function ChannelSidebar({ guildId }: { guildId: string }) {
+  const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
   const channels = useStore((s) => s.channels)
   const readStates = useStore((s) => s.readStates)
@@ -176,14 +178,14 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
           <>
             <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
             <div className="pop absolute left-2 right-2 top-full mt-1 z-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5 text-sm" onClick={() => setMenu(false)}>
-              {canInvite && <MenuItem icon={<UserPlus size={16} />} onClick={() => openModal({ kind: 'invite', guildId })} accent>Invite People</MenuItem>}
+              {canInvite && <MenuItem icon={<UserPlus size={16} />} onClick={() => openModal({ kind: 'invite', guildId })} accent>{t('Invite People')}</MenuItem>}
               <MenuItem icon={<BellOff size={16} />} onClick={(e) => { setMenu(false); ctx.open(e as React.MouseEvent, notifEntries(guildId, 'Server', notifSettings, { suppress: true })) }}>{mutedTarget(notifSettings, guildId) ? 'Unmute / Notifications' : 'Mute / Notifications'}</MenuItem>
-              {canManageGuild && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>Server Settings</MenuItem>}
-              {canCreate && <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>Create Channel</MenuItem>}
+              {canManageGuild && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>{t('Server Settings')}</MenuItem>}
+              {canCreate && <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>{t('Create Channel')}</MenuItem>}
               <div className="h-px bg-line my-1" />
               {isOwner
-                ? <MenuItem icon={<Trash2 size={16} />} onClick={del} danger>Delete Server</MenuItem>
-                : <MenuItem icon={<LogOut size={16} />} onClick={leave} danger>Leave Server</MenuItem>}
+                ? <MenuItem icon={<Trash2 size={16} />} onClick={del} danger>{t('Delete Server')}</MenuItem>
+                : <MenuItem icon={<LogOut size={16} />} onClick={leave} danger>{t('Leave Server')}</MenuItem>}
             </div>
           </>
         )}
@@ -273,6 +275,7 @@ function ChannelRow({ to, icon, name, unread, mentions = 0, muted, onSettings, o
 
 /** "Events" entry above the channels: upcoming count, opens the events modal. */
 function EventsRow({ guildId }: { guildId: string }) {
+  const t = useT()
   const events = useStore((s) => s.events[guildId])
   const loadEvents = useStore((s) => s.loadEvents)
   const openModal = useStore((s) => s.openModal)
@@ -281,7 +284,7 @@ function EventsRow({ guildId }: { guildId: string }) {
   const live = events?.some((e) => new Date(e.starts_at).getTime() <= Date.now()) ?? false
   return (
     <button type="button" onClick={() => openModal({ kind: 'events', guildId })} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-[15px] font-medium text-text-1 hover:bg-bg-3 hover:text-text-0" data-events-row data-events-count={n}>
-      <CalendarDays size={18} className={live ? 'text-success' : 'text-text-2'} /><span className="flex-1 text-left">Events</span>
+      <CalendarDays size={18} className={live ? 'text-success' : 'text-text-2'} /><span className="flex-1 text-left">{t('Events')}</span>
       {n > 0 && <span className={`rounded-full px-1.5 text-[11px] font-bold ${live ? 'bg-success text-black' : 'bg-bg-4 text-text-1'}`}>{n}</span>}
     </button>
   )
