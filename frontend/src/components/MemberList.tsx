@@ -61,7 +61,7 @@ export default function MemberList({ guildId }: { guildId: string }) {
 
   if (!open) return null
   return (
-    <aside className="w-[280px] shrink-0 bg-bg-1 overflow-y-auto px-4 pt-4 max-lg:fixed max-lg:inset-0 max-lg:z-30 max-lg:w-auto max-lg:pt-0" data-member-list>
+    <aside className="w-[280px] shrink-0 bg-bg-1 overflow-y-auto px-4 pt-4 max-lg:fixed max-lg:inset-0 max-lg:z-30 max-lg:w-auto max-lg:pt-0 tab:absolute tab:right-0 tab:top-0 tab:bottom-0 tab:z-20 tab:shadow-2xl tab:border-l tab:border-line" data-member-list>
       <div className="lg:hidden h-12 -mx-2 mb-2 px-3 flex items-center gap-2 border-b border-line bg-bg-1 sticky top-0">
         <span className="font-bold">Members</span>
         <button onClick={() => setOpen(false)} className="ml-auto h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><X size={20} /></button>

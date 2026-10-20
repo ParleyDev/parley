@@ -157,7 +157,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   })
 
   return (
-    <aside className="w-[272px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
+    <aside className="w-[272px] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="relative">
         {guild.banner_url ? (
           <div className="relative h-[135px] bg-cover bg-center" style={{ backgroundImage: `url(${guild.banner_url})` }} data-guild-banner>

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store'
 import GuildBar from '../components/GuildBar'
 import ChannelSidebar from '../components/ChannelSidebar'
@@ -14,6 +14,10 @@ import IncomingCall from '../components/IncomingCall'
 import UserPanel from '../components/UserPanel'
 import VerifyBanner from '../components/VerifyBanner'
 import { lastChannel, rememberChannel } from '../lib/dm'
+import { useSwipe } from '../lib/swipe'
+import { useKeybinds } from '../lib/keybinds'
+import { voice } from '../lib/voice'
+import { useMemo } from 'react'
 
 /**
  * Two route trees share the URL: one picks the sidebar, one picks the main content.
@@ -34,7 +38,8 @@ export default function AppShell() {
     return cleanup
   }, [])
   return (
-    <div className="h-full flex flex-col overflow-hidden relative">
+    <div className="h-full flex flex-col overflow-hidden relative safe-area">
+      <Shortcuts />
       <VerifyBanner />
       <div className="flex-1 min-h-0 flex overflow-hidden relative">
       {!connected && (
@@ -43,13 +48,13 @@ export default function AppShell() {
       {announcement && connected && (
         <div className="absolute top-0 inset-x-0 z-40 bg-accent text-white text-xs font-semibold text-center py-1 px-3 truncate" data-announcement>{announcement}</div>
       )}
-      <div className={`flex flex-col h-full shrink-0 w-[344px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${pane === 'content' ? 'max-md:hidden' : ''}`}>
+      <div className={`flex flex-col h-full shrink-0 w-[344px] tab:w-[296px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${pane === 'content' ? 'max-md:hidden' : ''}`}>
         <div className="flex flex-1 min-h-0">
           <GuildBar />
           <Routes>
             <Route path="@me/*" element={<DmSidebar />} />
             <Route path=":guildId/*" element={<GuildSidebar />} />
-            <Route path="*" element={<div className="w-[272px] max-md:flex-1 bg-bg-1" />} />
+            <Route path="*" element={<div className="w-[272px] tab:w-[224px] max-md:flex-1 bg-bg-1" />} />
           </Routes>
         </div>
         {/* Discord's self card floats across the bottom of both the server column and the channel list. */}
@@ -126,4 +131,47 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
       <MemberList guildId={guildId} />
     </>
   )
+}
+
+
+/** Phone swipes (content → channel list / member list) and the rebindable keyboard shortcuts. Renders nothing. */
+function Shortcuts() {
+  // AppShell is mounted at /channels/*, so read the ids from the path rather than useParams.
+  const { pathname } = useLocation()
+  const [, guildId, channelId] = /^\/channels\/([^/]+)(?:\/([^/]+))?/.exec(pathname) ?? []
+  const navigate = useNavigate()
+  const pane = useStore((s) => s.mobilePane)
+  const membersOpen = useStore((s) => s.membersOpen)
+  const setMembersOpen = useStore((s) => s.setMembersOpen)
+  const setMobilePane = useStore((s) => s.setMobilePane)
+  const openModal = useStore((s) => s.openModal)
+  const selfMute = useStore((s) => s.selfMute)
+  const selfDeaf = useStore((s) => s.selfDeaf)
+  const inGuild = !!guildId && guildId !== '@me'
+  const swipe = useMemo(() => ({
+    onRight: () => { if (membersOpen) setMembersOpen(false); else if (pane === 'content') setMobilePane('nav') },
+    onLeft: () => { if (pane === 'content' && inGuild && !membersOpen) setMembersOpen(true) },
+  }), [membersOpen, pane, inGuild, setMembersOpen, setMobilePane])
+  useSwipe(swipe, typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches)
+  const step = (dir: -1 | 1) => {
+    if (!inGuild || !channelId) return
+    const s = useStore.getState()
+    const list = Object.values(s.channels).filter((c) => c.guild_id === guildId && (c.kind === 'text' || c.kind === 'voice' || c.kind === 'forum')).sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : 1))
+    const i = list.findIndex((c) => c.id === channelId)
+    const next = list[i + dir]
+    if (next) navigate(`/channels/${guildId}/${next.id}`)
+  }
+  const handlers = useMemo(() => ({
+    toggleMute: () => voice.setMute(!useStore.getState().selfMute),
+    toggleDeafen: () => voice.setDeaf(!useStore.getState().selfDeaf),
+    toggleMembers: () => setMembersOpen(!useStore.getState().membersOpen),
+    focusComposer: () => document.querySelector<HTMLTextAreaElement>('textarea.composer-input')?.focus(),
+    prevChannel: () => step(-1),
+    nextChannel: () => step(1),
+    openSettings: () => openModal({ kind: 'userSettings', tab: 'account' }),
+    jumpToDate: () => document.querySelector<HTMLButtonElement>('[data-jump-date-btn]')?.click(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [guildId, channelId, selfMute, selfDeaf])
+  useKeybinds(handlers)
+  return null
 }

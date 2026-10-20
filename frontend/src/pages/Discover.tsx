@@ -20,7 +20,7 @@ export default function DiscoverPage() {
   const showContent = useShowContent()
   return (
     <SplitLayout defaultPane="content" testid={{ 'data-discover': '' }} sidebar={
-          <aside className="w-[272px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
+          <aside className="w-[272px] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
             <div className="h-12 px-4 flex items-center font-bold text-lg border-b border-line">Discover</div>
             <nav className="p-2 space-y-0.5">
               <NavLink to="/discover" end onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-servers><Server size={20} /> Servers</NavLink>
