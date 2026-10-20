@@ -169,6 +169,12 @@ interface State {
   setTyping: (channelId: string, userId: string) => void
   pruneTyping: () => void
   setReadState: (channelId: string, msgId: string | null) => void
+  /** channel -> other user -> newest message they have read (read receipts). */
+  receipts: Record<string, Record<string, string>>
+  setReceipts: (channelId: string, list: { user_id: string; message_id: string }[]) => void
+  applyReceipt: (channelId: string, userId: string, messageId: string) => void
+  /** Load older pages until `messageId` is in the list (for jumping to a reply's original). Returns whether it is loaded. */
+  loadUntil: (channelId: string, messageId: string) => Promise<boolean>
   setActiveChannel: (id: string | null) => void
   setMobilePane: (p: 'nav' | 'content') => void
   setMembersOpen: (open: boolean) => void
@@ -239,6 +245,7 @@ export const useStore = create<State>((set, get) => ({
   users: {},
   typing: {},
   readStates: {},
+  receipts: {},
   lastMessageId: {},
   activeChannelId: null,
   mobilePane: initialPane(),
@@ -582,6 +589,18 @@ export const useStore = create<State>((set, get) => ({
   },
   dismissToast: (id) => set((s) => ({ toast: s.toast.filter((t) => t.id !== id) })),
 
+  setReceipts: (channelId, list) => set((s) => ({ receipts: { ...s.receipts, [channelId]: Object.fromEntries(list.map((r) => [r.user_id, r.message_id])) } })),
+  applyReceipt: (channelId, userId, messageId) => set((s) => { const cur = s.receipts[channelId]?.[userId]; if (cur && cur >= messageId) return {}; return { receipts: { ...s.receipts, [channelId]: { ...(s.receipts[channelId] ?? {}), [userId]: messageId } } } }),
+  loadUntil: async (channelId, messageId) => {
+    for (let i = 0; i < 10; i++) {
+      const list = get().messages[channelId] ?? []
+      if (list.some((m) => m.id === messageId)) return true
+      if (!list.length || get().hasMore[channelId] === false || list[0].id < messageId) return false
+      await get().loadMessages(channelId, list[0].id)
+      if ((get().messages[channelId] ?? []).length === list.length) return false
+    }
+    return false
+  },
   loadMessages: async (channelId, before) => {
     const s = get()
     if (s.loadingMessages[channelId]) return

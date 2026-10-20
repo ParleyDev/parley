@@ -35,9 +35,11 @@ async fn preview(
         .bind(uid)
         .fetch_optional(&state.db)
         .await?;
+    let online = crate::ws::bus::online_users(&state.db).await;
+    let (online_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1 AND user_id = ANY($2)").bind(gid).bind(&online).fetch_one(&state.db).await?;
     Ok(Json(json!({
         "code": code,
-        "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count },
+        "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count },
         "expired": max.map(|m| uses >= m).unwrap_or(false),
         "already_member": already.is_some(),
         "banned": is_banned(&state.db, gid, uid).await?,

@@ -15,7 +15,7 @@ use axum::{middleware::from_fn,
     routing::{get, post, put},
     Json, Router,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -31,6 +31,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/messages/:mid/forward", post(forward_message))
         .route("/users/@me/bookmarks", get(list_bookmarks))
         .route("/users/@me/bookmarks/:mid", put(add_bookmark).delete(remove_bookmark))
+        .route("/channels/:id/receipts", get(receipts))
         .route("/channels/:id/pins", get(list_pins))
         .route("/channels/:id/pins/:mid", put(pin_message).delete(unpin_message))
         .route("/channels/:id/search", get(search_messages))
@@ -658,14 +659,39 @@ async fn mark_read(
     Path(id): Path<Uuid>,
     Json(req): Json<MarkRead>,
 ) -> AppResult<StatusCode> {
-    require_channel(&state.db, id, uid).await?;
+    let c = require_channel(&state.db, id, uid).await?;
+    let prev: Option<(Option<Uuid>,)> = sqlx::query_as("SELECT last_read_msg FROM read_states WHERE user_id = $1 AND channel_id = $2").bind(uid).bind(id).fetch_optional(&state.db).await?;
     sqlx::query(
         "INSERT INTO read_states (user_id, channel_id, last_read_msg) VALUES ($1, $2, $3)
          ON CONFLICT (user_id, channel_id) DO UPDATE SET last_read_msg = EXCLUDED.last_read_msg",
     )
     .bind(uid).bind(id).bind(req.message_id).execute(&state.db).await?;
     state.hub.emit_users(vec![uid], "READ_STATE_UPDATE", json!({ "channel_id": id, "last_read_msg": req.message_id }));
+    // Read receipt for everyone else in the channel, only when the pointer actually moved forward.
+    let advanced = prev.and_then(|p| p.0).map(|p| req.message_id > p).unwrap_or(true);
+    if advanced {
+        if let Ok(target) = target_for(&state.db, &c).await {
+            state.hub.emit(target, "READ_RECEIPT", json!({ "channel_id": id, "user_id": uid, "message_id": req.message_id }));
+        }
+    }
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+struct Receipt {
+    user_id: Uuid,
+    message_id: Uuid,
+}
+
+/// Where everyone else in this channel has read up to (what the "seen" markers are built from).
+async fn receipts(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<Receipt>>> {
+    require_channel(&state.db, id, uid).await?;
+    Ok(Json(
+        sqlx::query_as::<_, Receipt>("SELECT user_id, last_read_msg AS message_id FROM read_states WHERE channel_id = $1 AND user_id <> $2 AND last_read_msg IS NOT NULL ORDER BY last_read_msg DESC LIMIT 500")
+            .bind(id).bind(uid)
+            .fetch_all(&state.db)
+            .await?,
+    ))
 }
 
 /// Hydrate rows into messages (oldest first when `rows` is newest-first).
