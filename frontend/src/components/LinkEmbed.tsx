@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
+import { publicOrigin } from './InviteCard'
 
 export interface Embed { url: string; title?: string; description?: string; image?: string; site_name?: string }
 
@@ -22,7 +23,11 @@ export function firstLink(content: string): string | null {
   if (!m) return null
   const url = m[0]
   if (IMAGE_RE.test(url.split(/[?#]/)[0])) return null
-  try { if (new URL(url).origin === location.origin) return null } catch { return null }
+  // Links to this instance (either the address being browsed or its public URL) never unfurl: invites get a card instead.
+  try {
+    const origin = new URL(url).origin
+    if (origin === location.origin || origin === publicOrigin()) return null
+  } catch { return null }
   return url
 }
 
