@@ -3,10 +3,14 @@ import type { User } from '../lib/types'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import { APP_INITIAL, APP_NAME } from '../lib/brand'
 import Avatar from './Avatar'
+import { Badges, ClanTag } from './Flair'
 import { nameCss } from './StyledName'
 
 export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> {
   banner_url?: string | null
+  clan_tag?: string
+  badges?: string[]
+  panels?: User['panels']
   theme_primary?: string | null
   theme_accent?: string | null
   pronouns?: string
@@ -73,7 +77,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
         {actions && <div className="flex flex-wrap justify-end gap-1.5 pb-1 min-w-0 pl-3">{actions}</div>}
       </div>
       <div className="px-4 pt-2 shrink-0">
-        <h2 className="text-xl font-bold leading-tight truncate"><span style={nameCssFinal}>{nameOverride ?? user.display_name}</span></h2>
+        <h2 className="text-xl font-bold leading-tight truncate flex items-center gap-1.5"><span style={nameCssFinal}>{nameOverride ?? user.display_name}</span><ClanTag userId={user.id} tag={user.clan_tag} /><Badges badges={user.badges} className="ml-1" /></h2>
         {user.custom_status && <p className="text-sm truncate mb-0.5" data-custom-status>{user.custom_status}</p>}
         <p className="text-sm truncate" style={{ color: dim }}>
           {nameOverride && nameOverride !== user.display_name ? <span className="text-[15px]" style={{ color: text }}>{user.display_name} · </span> : null}
@@ -108,6 +112,18 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
               )}
             </div>
           </section>
+          {(user.panels?.wishlist?.length ?? 0) > 0 && (
+            <section data-panel="wishlist">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Wishlist</h3>
+              <ul className="space-y-0.5">{user.panels!.wishlist!.map((it, i) => <li key={i} className="truncate">{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:decoration-solid">{it.title}</a> : it.title}</li>)}</ul>
+            </section>
+          )}
+          {(user.panels?.games?.length ?? 0) > 0 && (
+            <section data-panel="games">
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Game collection</h3>
+              <ul className="flex flex-wrap gap-1">{user.panels!.games!.map((it, i) => <li key={i} className="rounded-md px-2 py-0.5 text-xs" style={{ background: 'rgba(0,0,0,0.25)' }}>{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="hover:underline">{it.title}</a> : it.title}</li>)}</ul>
+            </section>
+          )}
           {children}
         </div>
         {footer && <div className="mt-3">{footer}</div>}

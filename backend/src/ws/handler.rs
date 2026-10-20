@@ -139,7 +139,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
         channels.extend(perms::visible_channels(&state.db, *gid, user_id).await.unwrap_or_default());
         roles.extend(perms::list_roles(&state.db, *gid).await.unwrap_or_default());
         if let Ok(mut m) = sqlx::query_as::<_, Member>(
-            "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at
+            "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at, u.avatar_decoration, u.clan_tag
              FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
         )
         .bind(gid)

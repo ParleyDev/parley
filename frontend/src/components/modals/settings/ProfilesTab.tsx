@@ -2,11 +2,12 @@ import { Camera, Trash2 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
-import type { PrivateUser } from '../../../lib/types'
+import { DECORATIONS, type PanelItem, type PrivateUser } from '../../../lib/types'
 import { colorFor } from '../../../lib/format'
 import { prepareImage, uploadImage } from '../../../lib/upload'
 import ImagePicker from '../ImagePicker'
 import ProfileCard from '../../ProfileCard'
+import Avatar from '../../Avatar'
 import { Toggle } from '../SettingsShell'
 import { ROLE_COLORS } from '../../../lib/perms'
 import { nameCss } from '../../StyledName'
@@ -28,11 +29,18 @@ export default function ProfilesTab() {
   const [accent, setAccent] = useState<string | null>(user?.theme_accent ?? null)
   const [namePrimary, setNamePrimary] = useState<string | null>(user?.name_primary ?? null)
   const [nameAccent, setNameAccent] = useState<string | null>(user?.name_accent ?? null)
+  const [decoration, setDecoration] = useState(user?.avatar_decoration ?? '')
+  const [clanTag, setClanTag] = useState(user?.clan_tag ?? '')
+  const toLines = (items?: PanelItem[]) => (items ?? []).map((i) => (i.url ? `${i.title} | ${i.url}` : i.title)).join('\n')
+  const fromLines = (text: string): PanelItem[] => text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [title, url] = l.split('|').map((x) => x.trim()); return url ? { title, url } : { title } })
+  const [wishlist, setWishlist] = useState(toLines(user?.panels?.wishlist))
+  const [games, setGames] = useState(toLines(user?.panels?.games))
   const [busy, setBusy] = useState(false)
   const bannerRef = useRef<HTMLInputElement>(null)
   if (!user) return null
 
   const dirty = display !== user.display_name || pronouns !== (user.pronouns ?? '') || bio !== user.bio
+    || decoration !== (user.avatar_decoration ?? '') || clanTag !== (user.clan_tag ?? '') || wishlist !== toLines(user.panels?.wishlist) || games !== toLines(user.panels?.games)
     || (avatar ?? null) !== (user.avatar_url ?? null) || (banner ?? null) !== (user.banner_url ?? null)
     || (primary ?? null) !== (user.theme_primary ?? null) || (accent ?? null) !== (user.theme_accent ?? null)
     || (namePrimary ?? null) !== (user.name_primary ?? null) || (nameAccent ?? null) !== (user.name_accent ?? null)
@@ -43,6 +51,7 @@ export default function ProfilesTab() {
       const u = await api.patch<PrivateUser>('/users/@me', {
         display_name: display, pronouns, bio, avatar_url: avatar ?? '', banner_url: banner ?? '', theme_primary: primary ?? '', theme_accent: accent ?? '',
         name_primary: namePrimary ?? '', name_accent: namePrimary ? (nameAccent ?? '') : '',
+        avatar_decoration: decoration, clan_tag: clanTag, panels: { wishlist: fromLines(wishlist), games: fromLines(games) },
       })
       if (token) setAuth(token, u)
       pushToast('Profile saved')
@@ -61,6 +70,17 @@ export default function ProfilesTab() {
         <div className="flex-1 min-w-0 space-y-6">
           <div><label className="label">Display name</label><input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} maxLength={32} required /></div>
           <div><label className="label">Pronouns</label><input className="input" value={pronouns} onChange={(e) => setPronouns(e.target.value)} maxLength={40} placeholder="Add your pronouns" /></div>
+          <div><label className="label">Clan tag</label><input className="input w-32 uppercase" value={clanTag} onChange={(e) => setClanTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))} maxLength={4} placeholder="TAG" data-clan-tag-input /><p className="text-xs text-text-2 mt-1">2–4 letters or digits shown beside your name everywhere. Leave empty for none.</p></div>
+          <div>
+            <label className="label">Avatar decoration</label>
+            <div className="flex flex-wrap gap-2" data-decoration-options>
+              {DECORATIONS.map((d) => (
+                <button key={d.id} type="button" onClick={() => setDecoration(d.id)} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-sm ${decoration === d.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-decoration-option={d.id} aria-pressed={decoration === d.id}>
+                  <Avatar user={{ ...user, avatar_url: avatar, avatar_decoration: d.id }} size={28} />{d.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div>
             <label className="label">Avatar</label>
             <ImagePicker value={avatar} onChange={setAvatar} label={display} id={user.id} kind="avatar" />
@@ -89,6 +109,11 @@ export default function ProfilesTab() {
             {namePrimary && <Toggle label="Gradient name (add a second colour)" checked={nameAccent !== null} onChange={(v) => setNameAccent(v ? (nameAccent ?? '#6d5dfc') : null)} />}
             {namePrimary && nameAccent !== null && <ColorField label="Second colour" value={nameAccent} onChange={(v) => setNameAccent(v ?? '#6d5dfc')} allowClear={false} base="#6d5dfc" />}
             <div className="text-sm">Preview: <span className="text-[15px] font-semibold" style={nameCss(namePrimary, nameAccent)}>{display || user.display_name}</span> <span className="text-text-2 text-xs">Today at 9:41 AM</span></div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1" data-panels>
+            <div><label className="label">Wishlist panel</label><textarea className="input resize-none font-mono text-[13px]" rows={4} value={wishlist} onChange={(e) => setWishlist(e.target.value)} placeholder={'One per line: Title | https://link (link optional)'} data-panel-wishlist /></div>
+            <div><label className="label">Game collection panel</label><textarea className="input resize-none font-mono text-[13px]" rows={4} value={games} onChange={(e) => setGames(e.target.value)} placeholder={'One per line: Title | https://link (link optional)'} data-panel-games /></div>
+            <p className="col-span-full -mt-2 text-xs text-text-2">Optional sections on your profile card, up to 25 items each. Leave empty to hide.</p>
           </div>
           <div>
             <label className="label">About me</label>

@@ -21,6 +21,16 @@ pub struct User {
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
+    /// Profile flair: preset avatar frame ('' = none), short clan tag, optional panels (wishlist / games).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub avatar_decoration: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub clan_tag: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub panels: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -42,6 +52,16 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
+    /// Profile flair: preset avatar frame ('' = none), short clan tag, optional panels (wishlist / games).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub avatar_decoration: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub clan_tag: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub panels: serde_json::Value,
     /// Parley admin: may review discovery submissions.
     #[sqlx(default)]
     #[serde(default)]
@@ -135,6 +155,16 @@ pub struct Member {
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
+    /// Profile flair: preset avatar frame ('' = none), short clan tag, optional panels (wishlist / games).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub avatar_decoration: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub clan_tag: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub panels: serde_json::Value,
     /// Timed out until (moderation): only reading allowed while in the future.
     #[sqlx(default)]
     #[serde(default)]
@@ -167,6 +197,10 @@ pub struct MessageRow {
     pub forwarded_from: Option<Uuid>,
     #[sqlx(default)]
     pub ref_id: Option<Uuid>,
+    #[sqlx(default)]
+    pub avatar_decoration: String,
+    #[sqlx(default)]
+    pub clan_tag: String,
     #[sqlx(default)]
     pub mentions: Vec<Uuid>,
     #[sqlx(default)]
@@ -373,6 +407,9 @@ impl MessageRow {
                 pronouns: String::new(),
                 name_primary: None,
                 name_accent: None,
+                avatar_decoration: self.avatar_decoration,
+                clan_tag: self.clan_tag,
+                panels: serde_json::Value::Null,
             },
             reactions,
             attachments,

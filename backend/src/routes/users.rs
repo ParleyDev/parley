@@ -152,8 +152,8 @@ async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
     Ok(Json(out))
 }
 
-pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
+pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, avatar_decoration, clan_tag, panels";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -218,6 +218,40 @@ struct UpdateMe {
     name_primary: Option<String>,
     name_accent: Option<String>,
     custom_status: Option<String>,
+    /// Flair: one of DECORATIONS ('' clears), a 2–4 character tag ('' clears), panels {wishlist, games} of {title, url?}.
+    avatar_decoration: Option<String>,
+    clan_tag: Option<String>,
+    panels: Option<serde_json::Value>,
+}
+
+pub const DECORATIONS: [&str; 7] = ["", "gold", "rainbow", "glow", "ice", "dashed", "ember"];
+
+/// Validate and normalise the optional profile panels: up to 25 items each, titles ≤ 60 chars, http(s) urls ≤ 200.
+fn clean_panels(v: &serde_json::Value) -> Result<serde_json::Value, AppError> {
+    let mut out = serde_json::Map::new();
+    for key in ["wishlist", "games"] {
+        let Some(items) = v.get(key).and_then(|x| x.as_array()) else { continue };
+        if items.len() > 25 {
+            return Err(AppError::BadRequest(format!("At most 25 items in {key}")));
+        }
+        let mut list = Vec::new();
+        for it in items {
+            let title: String = it.get("title").and_then(|t| t.as_str()).unwrap_or("").trim().chars().take(60).collect();
+            if title.is_empty() { continue; }
+            let url = it.get("url").and_then(|u| u.as_str()).map(str::trim).filter(|u| !u.is_empty());
+            if let Some(u) = url {
+                if u.len() > 200 || !(u.starts_with("https://") || u.starts_with("http://")) {
+                    return Err(AppError::BadRequest("Panel links must be http(s) URLs".into()));
+                }
+            }
+            let mut o = serde_json::Map::new();
+            o.insert("title".into(), serde_json::Value::String(title));
+            if let Some(u) = url { o.insert("url".into(), serde_json::Value::String(u.to_string())); }
+            list.push(serde_json::Value::Object(o));
+        }
+        if !list.is_empty() { out.insert(key.into(), serde_json::Value::Array(list)); }
+    }
+    Ok(serde_json::Value::Object(out))
 }
 
 pub fn validate_image(url: &Option<String>) -> AppResult<()> {
@@ -295,6 +329,18 @@ async fn update_me(
         }
     }
     validate_image(&req.avatar_url)?;
+    if let Some(d) = &req.avatar_decoration {
+        if !DECORATIONS.contains(&d.as_str()) {
+            return Err(AppError::BadRequest("Unknown avatar decoration".into()));
+        }
+    }
+    let clan_tag = req.clan_tag.as_ref().map(|t| t.trim().to_uppercase());
+    if let Some(t) = &clan_tag {
+        if !t.is_empty() && (t.chars().count() < 2 || t.chars().count() > 4 || !t.chars().all(|c| c.is_ascii_alphanumeric())) {
+            return Err(AppError::BadRequest("Tag must be 2-4 letters or digits".into()));
+        }
+    }
+    let panels = match &req.panels { Some(v) => Some(clean_panels(v)?), None => None };
     let before: (Option<String>, Option<String>) = sqlx::query_as("SELECT avatar_url, banner_url FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
 
     let u = sqlx::query_as::<_, PrivateUser>(
@@ -309,7 +355,10 @@ async fn update_me(
             pronouns = COALESCE($9, pronouns),
             custom_status = COALESCE($12, custom_status),
             name_primary = CASE WHEN $10::text IS NULL THEN name_primary WHEN $10 = '' THEN NULL ELSE $10 END,
-            name_accent = CASE WHEN $11::text IS NULL THEN name_accent WHEN $11 = '' THEN NULL ELSE $11 END
+            name_accent = CASE WHEN $11::text IS NULL THEN name_accent WHEN $11 = '' THEN NULL ELSE $11 END,
+            avatar_decoration = COALESCE($13, avatar_decoration),
+            clan_tag = COALESCE($14, clan_tag),
+            panels = COALESCE($15, panels)
          WHERE id = $1
          RETURNING {PRIVATE_USER_COLS}"),
     )
@@ -325,6 +374,9 @@ async fn update_me(
     .bind(req.name_primary)
     .bind(req.name_accent)
     .bind(req.custom_status.as_ref().map(|c| c.trim().chars().take(128).collect::<String>()))
+    .bind(req.avatar_decoration)
+    .bind(clan_tag)
+    .bind(panels)
     .fetch_one(&state.db)
     .await?;
     crate::routes::images::release_replaced(&state, before.0.as_deref(), u.avatar_url.as_deref()).await;
@@ -345,6 +397,9 @@ async fn update_me(
         pronouns: u.pronouns.clone(),
         name_primary: u.name_primary.clone(),
         name_accent: u.name_accent.clone(),
+        avatar_decoration: u.avatar_decoration.clone(),
+        clan_tag: u.clan_tag.clone(),
+        panels: u.panels.clone(),
     };
     state.hub.emit_all("USER_UPDATE", json!(public));
     Ok(Json(u))
@@ -417,7 +472,9 @@ async fn get_user(
         .await?
     };
     let (review_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM user_reviews WHERE target_id = $1").bind(id).fetch_one(&state.db).await?;
+    let badges = badges_for(&state.db, id).await?;
     let mut v = json!(u);
+    v["badges"] = json!(badges);
     v["mutual_guilds"] = json!(mutual.into_iter().map(|(gid, name, icon)| json!({ "id": gid, "name": name, "icon_url": icon })).collect::<Vec<_>>());
     v["mutual_friends"] = json!(friends.into_iter().map(|(fid, name, avatar)| json!({ "id": fid, "display_name": name, "avatar_url": avatar })).collect::<Vec<_>>());
     v["review_count"] = json!(review_count);
@@ -548,4 +605,30 @@ async fn put_note(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(i
         sqlx::query("DELETE FROM user_notes WHERE user_id = $1 AND target_id = $2").bind(uid).bind(id).execute(&state.db).await?;
     }
     Ok(Json(row))
+}
+
+/// Profile badges, computed: admin (instance admin), founder (one of the first ten accounts), veteran (over a year),
+/// host (owns a server), verified (email confirmed), secure (2FA on).
+pub async fn badges_for(db: &sqlx::PgPool, id: Uuid) -> AppResult<Vec<&'static str>> {
+    let row: Option<(bool, bool, bool, bool, bool, bool)> = sqlx::query_as(
+        "SELECT u.is_admin,
+                (SELECT COUNT(*) FROM users o WHERE o.created_at < u.created_at) < 10,
+                u.created_at < now() - interval '1 year',
+                EXISTS (SELECT 1 FROM guilds g WHERE g.owner_id = u.id),
+                u.email_verified_at IS NOT NULL,
+                u.totp_secret IS NOT NULL
+         FROM users u WHERE u.id = $1",
+    )
+    .bind(id)
+    .fetch_optional(db)
+    .await?;
+    let Some((admin, founder, veteran, host, verified, secure)) = row else { return Ok(vec![]) };
+    let mut out = Vec::new();
+    if admin { out.push("admin"); }
+    if founder { out.push("founder"); }
+    if veteran { out.push("veteran"); }
+    if host { out.push("host"); }
+    if verified { out.push("verified"); }
+    if secure { out.push("secure"); }
+    Ok(out)
 }
