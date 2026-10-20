@@ -149,8 +149,11 @@ export interface Message {
   mentions?: string[]
   mention_roles?: string[]
   mention_everyone?: boolean
-  /** 'default', or a group-DM system notice kind (recipient_add, recipient_remove, recipient_leave, channel_name_change, channel_icon_change). */
+  /** 'default', or a system notice kind: recipient_add, recipient_remove, recipient_leave, channel_name_change, channel_icon_change,
+   *  pins_add (reply_to = pinned message), thread_created (ref_id = thread), member_join, call_started. */
   kind?: string
+  /** System messages: related object id (the thread for thread_created). */
+  ref_id?: string | null
   poll?: Poll | null
   /** Thread started from this message (card under it). */
   thread?: ThreadRef | null

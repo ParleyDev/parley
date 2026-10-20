@@ -369,6 +369,12 @@ async fn handle_client_op(
                 state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
             } else {
                 state.hub.emit_voice(&vs, json!(vs));
+                // First person in a DM call: leave a "started a call" notice in the conversation.
+                if state.hub.voice_in_channel(channel_id) == 1 {
+                    if let Err(e) = crate::routes::channels::system_message(state, &channel, user_id, "call_started", "started a call.", vec![], None, None).await {
+                        tracing::warn!(error = ?e, "call notice failed");
+                    }
+                }
             }
         }
         ClientOp::VoiceLeave => {

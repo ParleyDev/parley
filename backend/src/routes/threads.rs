@@ -171,6 +171,9 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
         let msg = fetch_message(&state.db, mid, uid).await?;
         state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": parent.guild_id }));
     }
+    if !is_forum {
+        crate::routes::channels::system_message(&state, &parent, uid, "thread_created", &format!("started a thread: {name}"), vec![], req.message_id, Some(tid)).await?;
+    }
     if let Some(gid) = parent.guild_id {
         crate::audit::guild(&state, gid, uid, "thread.create", "channel", Some(tid), &name, json!({ "parent": parent.name })).await;
     }

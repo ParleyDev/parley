@@ -208,6 +208,11 @@ impl Hub {
         self.voice.insert(state.user_id, state)
     }
 
+    /// How many users are currently in a voice channel / call.
+    pub fn voice_in_channel(&self, channel: Uuid) -> usize {
+        self.voice.iter().filter(|v| v.channel_id == channel).count()
+    }
+
     /// Remove the user's voice state. If `session` is given, only remove when that session owns it.
     pub fn voice_leave(&self, user: Uuid, session: Option<u64>) -> Option<VoiceState> {
         match session {

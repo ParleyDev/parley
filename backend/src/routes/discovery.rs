@@ -127,6 +127,9 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
         if let Ok(member) = fetch_member(&state.db, gid, uid).await {
             state.hub.emit_guild(gid, "GUILD_MEMBER_ADD", json!(member));
         }
+        if let Err(e) = crate::routes::channels::guild_system_message(&state, gid, uid, "member_join", "joined the server.").await {
+            tracing::warn!(error = ?e, "join notice failed");
+        }
     }
     Ok(Json(payload))
 }
