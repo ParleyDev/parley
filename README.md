@@ -116,6 +116,34 @@ Backends are stateless apart from the websocket hub, and the hub is clustered ov
 
 Rate limits start from the `RL_*` environment values and can be overridden per bucket in Admin Console → Instance Settings → Rate limits (`count/seconds`; blank = environment value). Changes apply immediately on the instance that saved them and on others at their next restart. Admin → Users → a user → Sessions lists their active devices (IP, client, last seen) with per-device and log-out-all buttons; clicking an IP filters the user list to everyone seen from it (`GET /admin/users?ip=`).
 
+## Upgrades and rollback
+
+`ops/upgrade.sh` takes a backup (`ops/backup.sh`), builds the new images and rolls them with `docker compose up -d`; the backend applies pending `sqlx` migrations on start. Migrations are forward-only and, by policy, additive (new tables and nullable or defaulted columns; nothing dropped or renamed in the same release that stops writing it), so an older build can run against a newer schema. To roll back:
+
+1. `git checkout <previous tag>` (or pull the previous image).
+2. `MIGRATIONS_IGNORE_MISSING=1 docker compose up -d --build` — without the flag the older backend refuses to start with "migration N was previously applied but is missing in the resolved migrations".
+3. Leave the flag on until you roll forward again; it only skips rows the build does not know.
+
+If a release ever ships a destructive migration it says so in its notes, and the rollback for that one is the backup: `ops/restore.sh backups/db-<ts>.dump backups/uploads-<ts>.tgz` taken by the upgrade script right before the migration ran.
+
+## Secrets
+
+Every secret-bearing setting (`DATABASE_URL`, `JWT_SECRET`, `SMTP_URL`, `TENOR_API_KEY`, `GIPHY_API_KEY`, `METRICS_TOKEN`, `SENTRY_DSN`) also accepts a `*_FILE` variable naming a file whose trimmed contents are the value, which is how Docker and Kubernetes secrets arrive. With compose:
+
+```yaml
+services:
+  backend:
+    environment:
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      SMTP_URL_FILE: /run/secrets/smtp_url
+    secrets: [jwt_secret, smtp_url]
+secrets:
+  jwt_secret: { file: ./secrets/jwt_secret }      # or `external: true` under Swarm
+  smtp_url: { file: ./secrets/smtp_url }
+```
+
+Keep `./secrets/` out of git (it is in `.gitignore`), and rotate `JWT_SECRET` knowing it logs every session out. For a vault (HashiCorp Vault, AWS Secrets Manager, 1Password Connect…), have its agent write the files the `*_FILE` variables point at; nothing in the app needs to know which vault. The Cloudflare tunnel token stays a plain `TUNNEL_TOKEN` because `cloudflared` reads it from the environment.
+
 ## Observability
 
 - **Metrics**: `GET /metrics` on the backend port (18080, not proxied by nginx) in Prometheus text format: `parley_http_requests_total{method,class}`, a latency histogram `parley_http_request_duration_ms`, `parley_http_errors_5xx_total`, `parley_http_rate_limited_total`, `parley_messages_created_total`, `parley_uploads_total` / `parley_upload_bytes_total`, `parley_ws_connects_total` / `parley_ws_resumes_total`, gauges `parley_ws_connections`, `parley_online_users`, `parley_voice_sessions`, `parley_ws_events_total`, `parley_db_pool_size` / `parley_db_pool_idle`. Set `METRICS_TOKEN` to require `Authorization: Bearer <token>` (or `?token=`) — do that whenever the port is reachable beyond the host.

@@ -42,7 +42,14 @@ async fn main() -> anyhow::Result<()> {
         .acquire_timeout(std::time::Duration::from_secs(10))
         .connect(&config.database_url)
         .await?;
-    sqlx::migrate!("./migrations").run(&db).await?;
+    // Rolling back to an older build leaves newer rows in _sqlx_migrations; every migration here is additive, so
+    // MIGRATIONS_IGNORE_MISSING=1 lets the older binary start against the newer schema (see README "Upgrades and rollback").
+    let mut migrator = sqlx::migrate!("./migrations");
+    if std::env::var("MIGRATIONS_IGNORE_MISSING").map(|v| v == "1" || v.eq_ignore_ascii_case("true")).unwrap_or(false) {
+        migrator.set_ignore_missing(true);
+        tracing::warn!("MIGRATIONS_IGNORE_MISSING set: migrations unknown to this build are ignored");
+    }
+    migrator.run(&db).await?;
     tracing::info!("migrations applied");
 
     let state = state::AppState { db, config: Arc::new(config.clone()), hub: Arc::new(ws::hub::Hub::new()) };

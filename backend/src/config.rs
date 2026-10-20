@@ -31,13 +31,26 @@ pub struct Config {
     pub sentry_environment: String,
 }
 
+/// `VAR`, or the trimmed contents of the file named by `VAR_FILE` (Docker / Kubernetes secrets mount one file
+/// per secret). An unreadable `VAR_FILE` is logged and treated as unset.
+pub fn env_or_file(var: &str) -> Option<String> {
+    if let Ok(v) = std::env::var(var) {
+        return Some(v);
+    }
+    let path = std::env::var(format!("{var}_FILE")).ok()?;
+    match std::fs::read_to_string(&path) {
+        Ok(v) => Some(v.trim_end_matches(['\n', '\r']).to_string()),
+        Err(e) => { tracing::warn!("{var}_FILE={path}: {e}"); None }
+    }
+}
+
 impl Config {
     pub fn from_env() -> Self {
         let _ = dotenvy::dotenv();
         Self {
-            database_url: std::env::var("DATABASE_URL")
+            database_url: env_or_file("DATABASE_URL").ok_or(std::env::VarError::NotPresent)
                 .unwrap_or_else(|_| "postgres://parley:parley@localhost:5432/parley".into()),
-            jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+            jwt_secret: env_or_file("JWT_SECRET").ok_or(std::env::VarError::NotPresent).unwrap_or_else(|_| {
                 tracing::warn!("JWT_SECRET not set; using insecure default");
                 "dev-insecure-secret-change-me".into()
             }),
@@ -50,15 +63,15 @@ impl Config {
                 .and_then(|s| serde_json::from_str(&s).map_err(|e| tracing::warn!("ICE_SERVERS is not valid JSON: {e}")).ok())
                 .unwrap_or_else(|| serde_json::json!([{ "urls": "stun:stun.l.google.com:19302" }])),
             upload_dir: std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into()).into(),
-            tenor_api_key: std::env::var("TENOR_API_KEY").ok(),
-            giphy_api_key: std::env::var("GIPHY_API_KEY").ok(),
+            tenor_api_key: env_or_file("TENOR_API_KEY").ok_or(std::env::VarError::NotPresent).ok(),
+            giphy_api_key: env_or_file("GIPHY_API_KEY").ok_or(std::env::VarError::NotPresent).ok(),
             mail_mode: std::env::var("MAIL_MODE").unwrap_or_else(|_| "log".into()).to_lowercase(),
-            smtp_url: std::env::var("SMTP_URL").ok().filter(|s| !s.is_empty()),
+            smtp_url: env_or_file("SMTP_URL").ok_or(std::env::VarError::NotPresent).ok().filter(|s| !s.is_empty()),
             mail_from: std::env::var("MAIL_FROM").unwrap_or_else(|_| "Parley <no-reply@parley.local>".into()),
             app_url: std::env::var("APP_URL").unwrap_or_else(|_| "http://localhost:3000".into()).trim_end_matches('/').to_string(),
-            metrics_token: std::env::var("METRICS_TOKEN").ok(),
+            metrics_token: env_or_file("METRICS_TOKEN").ok_or(std::env::VarError::NotPresent).ok(),
             log_format: std::env::var("LOG_FORMAT").unwrap_or_else(|_| "text".into()).to_lowercase(),
-            sentry_dsn: std::env::var("SENTRY_DSN").ok(),
+            sentry_dsn: env_or_file("SENTRY_DSN").ok_or(std::env::VarError::NotPresent).ok(),
             sentry_environment: std::env::var("SENTRY_ENVIRONMENT").unwrap_or_else(|_| "production".into()),
             upload_quota_bytes: std::env::var("UPLOAD_QUOTA_BYTES").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(1024 * 1024 * 1024),
             embed_allow_hosts: std::env::var("EMBED_ALLOW_HOSTS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
