@@ -359,7 +359,7 @@ async fn handle_client_op(
             // Video/screen always start off in a new channel: the client re-attaches tracks after joining.
             // Stage channels: everyone but moderators (Manage Channels) joins as audience, i.e. suppressed.
             // Stage: everyone but moderators joins as audience. Studio: the engineer and moderators are in the band from the start.
-            let crew = has(p, perms::MANAGE_CHANNELS) || (channel.kind == "studio" && channel.engineer_id == Some(user_id));
+            let crew = has(p, perms::MANAGE_CHANNELS) || (channel.kind == "studio" && perms::is_engineer(&state.db, channel_id, user_id).await.unwrap_or(false));
             let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew));
             let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, request_to_speak: false, session, peers };
             if let Some(prev) = state.hub.voice_join(vs.clone()) {

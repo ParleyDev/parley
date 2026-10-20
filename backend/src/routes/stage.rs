@@ -36,7 +36,7 @@ async fn lower_hand(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
 async fn set_speaker(state: AppState, id: Uuid, uid: Uuid, target: Uuid, speaker: bool) -> AppResult<StatusCode> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     if c.kind != "stage" && c.kind != "studio" { return Err(AppError::BadRequest("Not a stage channel".into())); }
-    let engineer = c.kind == "studio" && c.engineer_id == Some(uid);
+    let engineer = c.kind == "studio" && perms::is_engineer(&state.db, id, uid).await?;
     if (uid != target || speaker) && !engineer { perms::check(p, perms::MANAGE_CHANNELS)?; }   // anyone may step down themselves
     let in_here = state.hub.voice_state(target).map(|v| v.channel_id == id).unwrap_or(false);
     if !in_here { return Err(AppError::NotFound("That member is not on this stage".into())); }

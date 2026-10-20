@@ -51,9 +51,9 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   // Stage channels: speakers are the unsuppressed participants; everyone else is the audience (can raise a hand).
   const isStudio = channel.kind === 'studio'
   const isStage = channel.kind === 'stage' || isStudio
-  const isEngineer = isStudio && channel.engineer_id === me?.id
+  const engineers = channel.engineer_ids ?? []
+  const isEngineer = isStudio && !!me && engineers.includes(me.id)
   const isMod = has(perms, P.MANAGE_CHANNELS) || isEngineer
-  const canAssign = has(perms, P.MANAGE_CHANNELS)
   const [sessionsOpen, setSessionsOpen] = useState(false)
   const liveSession = useStore((s) => (isStudio ? s.studio[channel.id]?.find((x) => !x.ended_at) : undefined))
   const [recBusy, setRecBusy] = useState(false)
@@ -61,12 +61,35 @@ export default function VoiceView({ channel }: { channel: Channel }) {
     setRecBusy(true)
     try { if (liveSession) await api.post(`/channels/${channel.id}/studio/sessions/${liveSession.id}/stop`); else await api.post(`/channels/${channel.id}/studio/sessions`, { name: '' }) } catch (e) { pushToast((e as Error).message, 'error') } finally { setRecBusy(false) }
   }
-  const setEngineer = (uid: string) => stageCallAny('put', `/channels/${channel.id}/studio/engineer/${uid}`)
+  const setRole = async (uid: string, role: 'engineer' | 'artist' | 'audience') => { try { await api.put(`/channels/${channel.id}/studio/role/${uid}`, { role }); setRoleMenu(null) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const [roleMenu, setRoleMenu] = useState<string | null>(null)
+  const roleOf = (uid: string, suppress: boolean | undefined) => (engineers.includes(uid) ? 'engineer' : suppress ? 'audience' : 'artist')
+  /** Promote / demote between engineer, artist and audience; moderators and engineers for anyone, members can step down. */
+  const RoleMenu = ({ uid }: { uid: string }) => {
+    const st = participants.find((x) => x.user_id === uid)
+    const cur = roleOf(uid, st?.suppress)
+    const self = uid === me?.id
+    const open = roleMenu === uid
+    const options: ('engineer' | 'artist' | 'audience')[] = isMod ? ['engineer', 'artist', 'audience'] : cur === 'engineer' ? ['artist', 'audience'] : cur === 'artist' ? ['audience'] : []
+    if (!options.length) return null
+    return (
+      <span className="relative inline-flex" data-role-menu={uid} data-role={cur}>
+        <button type="button" onClick={() => setRoleMenu(open ? null : uid)} className={`rounded-md px-2 py-0.5 text-[11px] font-bold capitalize ${cur === 'engineer' ? 'bg-warn text-black' : cur === 'artist' ? 'bg-accent text-white' : 'bg-bg-4 text-text-1'} hover:brightness-110`} aria-haspopup="menu" aria-expanded={open} data-role-button>{self && !isMod ? 'Step down' : cur} ▾</button>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-30" onClick={() => setRoleMenu(null)} />
+            <div className="pop absolute right-0 top-full mt-1 z-40 w-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5" role="menu">
+              {options.map((r) => <button key={r} type="button" role="menuitemradio" aria-checked={cur === r} onClick={() => setRole(uid, r)} className={`w-full rounded-md px-2 py-1.5 text-left text-sm capitalize hover:bg-accent hover:text-white ${cur === r ? 'text-text-0 font-semibold' : 'text-text-1'}`} data-role-option={r}>{r === 'engineer' ? 'Engineer' : r === 'artist' ? 'Artist (band)' : 'Audience'}{cur === r ? ' ✓' : ''}</button>)}
+            </div>
+          </>
+        )}
+      </span>
+    )
+  }
   useEffect(() => { if (isStudio) loadStudioList(channel.id) }, [isStudio, channel.id])  // eslint-disable-line react-hooks/exhaustive-deps
   const myState = useStore((s) => (s.user ? s.voiceStates[s.user.id] : undefined))
   const handUp = !!myState?.request_to_speak
   const stageCall = async (method: 'post' | 'put' | 'delete', path: string) => { try { await api[method](path) } catch (e) { pushToast((e as Error).message, 'error') } }
-  const stageCallAny = stageCall
   const loadStudioList = useStore((s) => s.loadStudio)
   const toggleHand = () => stageCall(handUp ? 'delete' : 'post', `/channels/${channel.id}/stage/hand`)
   const inviteToSpeak = (uid: string) => stageCall('put', `/channels/${channel.id}/stage/speakers/${uid}`)
@@ -113,9 +136,9 @@ export default function VoiceView({ channel }: { channel: Channel }) {
       <div key={t.key} onClick={() => setFocused(focused === t.key ? null : t.key)}
         className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big ? 'h-full w-full' : 'aspect-video'}`} data-voice-tile={t.userId}>
         {isStage && isMod && inThis && !t.isMe && t.kind === 'camera' && <button type="button" onClick={(e) => { e.stopPropagation(); toAudience(t.userId) }} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 group-hover:opacity-100" data-to-audience>Move to audience</button>}
-        {isStudio && t.kind === 'camera' && channel.engineer_id === t.userId && <span className="absolute left-2 top-2 z-10 rounded-md bg-warn px-1.5 py-0.5 text-[10px] font-bold uppercase text-black" data-engineer-badge>Engineer</span>}
-        {isStudio && t.kind === 'camera' && channel.engineer_id !== t.userId && !t.state.suppress && <span className="absolute left-2 top-2 z-10 rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-white" data-artist-badge>Artist</span>}
-        {isStudio && canAssign && t.kind === 'camera' && channel.engineer_id !== t.userId && <button type="button" onClick={(e) => { e.stopPropagation(); setEngineer(t.userId) }} className="absolute left-2 bottom-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 group-hover:opacity-100" data-make-engineer>Make engineer</button>}
+        {isStudio && t.kind === 'camera' && engineers.includes(t.userId) && <span className="absolute left-2 top-2 z-10 rounded-md bg-warn px-1.5 py-0.5 text-[10px] font-bold uppercase text-black" data-engineer-badge>Engineer</span>}
+        {isStudio && t.kind === 'camera' && !engineers.includes(t.userId) && !t.state.suppress && <span className="absolute left-2 top-2 z-10 rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-white" data-artist-badge>Artist</span>}
+        {isStudio && t.kind === 'camera' && (isMod || t.isMe) && <span className="absolute right-2 top-2 z-10" onClick={(e) => e.stopPropagation()}><RoleMenu uid={t.userId} /></span>}
         {t.stream ? (
           <VideoTile stream={t.stream} mirror={t.isMe && t.kind === 'camera'} contain={t.kind === 'screen' || big} />
         ) : t.kind === 'screen' ? (
@@ -173,8 +196,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                     <div key={p.user_id} className={`flex items-center gap-1.5 rounded-full bg-bg-3 pl-1 pr-2 py-0.5 text-sm ${p.request_to_speak ? 'ring-1 ring-warn' : ''}`} data-audience={p.user_id} data-hand={p.request_to_speak ? '1' : '0'}>
                       {u && <Avatar user={u} size={22} />}<span className="truncate max-w-[120px]">{u?.display_name ?? 'Unknown'}</span>
                       {p.request_to_speak && <Hand size={14} className="text-warn" />}
-                      {isMod && inThis && <button type="button" onClick={() => inviteToSpeak(p.user_id)} className="ml-1 rounded-full bg-accent px-2 text-[11px] font-bold text-white hover:bg-accent-hover" data-invite-speak>{isStudio ? 'Add to band' : 'Invite to speak'}</button>}
-                      {isStudio && canAssign && channel.engineer_id !== p.user_id && <button type="button" onClick={() => setEngineer(p.user_id)} className="ml-1 rounded-full bg-bg-4 px-2 text-[11px] font-bold hover:bg-warn hover:text-black" data-make-engineer>Make engineer</button>}
+                      {!isStudio && isMod && inThis && <button type="button" onClick={() => inviteToSpeak(p.user_id)} className="ml-1 rounded-full bg-accent px-2 text-[11px] font-bold text-white hover:bg-accent-hover" data-invite-speak>Invite to speak</button>}
+                      {isStudio && isMod && inThis && <RoleMenu uid={p.user_id} />}
                     </div>
                   ) })}
                 </div>
