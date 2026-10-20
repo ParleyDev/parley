@@ -1,9 +1,10 @@
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useShallow } from 'zustand/react/shallow'
-import { Headphones, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, PhoneOff, Video, VideoOff, Volume2, X } from 'lucide-react'
+import { Headphones, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, Music2, PhoneOff, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
 import { has, P } from '../lib/perms'
+import { api } from '../lib/api'
 import { isPhone } from '../lib/swipe'
 import type { Channel, User, VoiceState } from '../lib/types'
 import { voice } from '../lib/voice'
@@ -36,6 +37,14 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const suppressed = useStore((s) => !!(s.user && s.voiceStates[s.user.id]?.suppress))
   const [focused, setFocused] = useState<string | null>(null)
   const [chat, setChat] = useState(() => { try { return localStorage.getItem(CHAT_KEY) === '1' } catch { return false } })
+  // Soundboard: the server's sounds, loaded when the picker first opens; playing is a REST call the server fans out.
+  const sounds = useStore((s) => (channel.guild_id ? s.sounds[channel.guild_id] : undefined))
+  const loadSounds = useStore((s) => s.loadSounds)
+  const pushToast = useStore((s) => s.pushToast)
+  const canSpeak = has(perms, P.SPEAK)
+  const [board, setBoard] = useState(false)
+  useEffect(() => { if (board && channel.guild_id && !sounds) loadSounds(channel.guild_id) }, [board, channel.guild_id, sounds, loadSounds])
+  const playSound = async (id: string) => { try { await api.post(`/channels/${channel.id}/soundboard/${id}`) } catch (e) { pushToast((e as Error).message, 'error') } }
   const inThis = myChannel === channel.id
   const toggleChat = () => setChat((c) => { try { localStorage.setItem(CHAT_KEY, c ? '0' : '1') } catch { /* ignore */ } return !c })
 
@@ -149,6 +158,27 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 <Ctl label={selfMute ? 'Unmute' : 'Mute'} on={selfMute} onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={22} /> : <Mic size={22} />}</Ctl>
                 <Ctl label={selfDeaf ? 'Undeafen' : 'Deafen'} on={selfDeaf} onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={22} /> : <Headphones size={22} />}</Ctl>
                 {canStream && <Ctl label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} accent onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>}
+                {canSpeak && !suppressed && (
+                  <span className="relative">
+                    <Ctl label="Soundboard" on={board} accent onClick={() => setBoard((b) => !b)}><Music2 size={22} /></Ctl>
+                    {board && (
+                      <>
+                        <div className="fixed inset-0 z-30" onClick={() => setBoard(false)} />
+                        <div className="pop absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-40 w-[320px] max-w-[calc(100vw-16px)] rounded-xl bg-bg-1 border border-line shadow-2xl p-3" data-soundboard>
+                          <div className="flex items-center justify-between mb-2"><span className="font-bold text-sm">Soundboard</span><span className="text-xs text-text-2">{sounds ? `${sounds.length} sound${sounds.length === 1 ? '' : 's'}` : 'Loading…'}</span></div>
+                          {sounds?.length === 0 && <p className="text-sm text-text-2 py-4 text-center">No sounds yet. Add some in Server Settings → Soundboard.</p>}
+                          <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                            {sounds?.map((snd) => (
+                              <button key={snd.id} type="button" onClick={() => playSound(snd.id)} className="rounded-lg bg-bg-3 hover:bg-accent hover:text-white px-2 py-2 text-xs font-semibold flex flex-col items-center gap-1" data-sound={snd.id} title={snd.name}>
+                                <span className="text-xl leading-none">{snd.emoji || '🔊'}</span><span className="truncate max-w-full">{snd.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </span>
+                )}
                 {canStream && <Ctl label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} accent onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={22} /> : <Monitor size={22} />}</Ctl>}
                 <button onClick={() => voice.leave()} title="Disconnect" className="h-14 max-md:h-12 px-6 max-md:px-4 rounded-full bg-danger text-white font-semibold flex items-center gap-2 hover:bg-danger/80 max-md:basis-full max-md:justify-center max-md:order-last" data-voice-leave><PhoneOff size={20} /><span className="max-md:hidden">Leave</span></button>
               </>

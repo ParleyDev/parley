@@ -196,6 +196,9 @@ export interface Emoji {
   url: string
 }
 
+/** Soundboard sound (GET /guilds/:id/sounds). */
+export interface Sound { id: string; guild_id: string; name: string; emoji: string; content_type: string; size: number; volume: number; creator_id: string | null; created_at: string; url: string }
+
 export interface Sticker {
   id: string
   guild_id: string
