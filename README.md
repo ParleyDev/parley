@@ -264,6 +264,12 @@ When a direct message cannot be delivered (the other person blocked you, or you 
 
 Scrolling well above the bottom of a channel shows a "You're viewing older messages" pill with Jump to Present.
 
+## Friend nicknames and notes
+
+Open someone's profile popout: the pencil next to a friend's name sets a nickname only you see (it replaces their name in DMs, member lists and messages), and the Note box keeps a private note about anyone. `GET /users/@me/notes` lists yours, `PUT /users/@me/notes/:id {nickname?, note?}` sets them (nicknames for friends only, 32 chars; notes 256 chars; clearing both removes the row).
+
+Group DMs: click the group icon in the header to upload a new one (any member); the owner can hand the group to another member from the member list (crown on hover, `PATCH /channels/:id {owner_id}`), which posts a "made X the group owner." notice.
+
 ## System messages
 
 Some actions leave a notice in the conversation, rendered as a one-line system row rather than a chat bubble (`kind` on the message; the actor is its author):

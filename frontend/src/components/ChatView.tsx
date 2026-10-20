@@ -1,6 +1,7 @@
 import { Bookmark, BookmarkMinus, CircleUserRound, Crown, Hash, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
-import { dmName, isGroup } from '../lib/dm'
+import { dmName, isGroup, nameOf } from '../lib/dm'
+import { uploadImage } from '../lib/upload'
 import { anchorOf } from '../lib/anchor'
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
@@ -54,6 +55,7 @@ function useEscape(onClose: () => void) {
 export default function ChatView({ channel }: { channel: Channel | DmChannel }) {
   const isDm = channel.guild_id === null
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const dmProfileOpen = useStore((s) => s.dmProfileOpen)
   const setDmProfileOpen = useStore((s) => s.setDmProfileOpen)
   const myVoice = useStore((s) => s.myVoiceChannelId)
@@ -63,6 +65,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const other = recipient ? { ...recipient, ...users[recipient.id] } : null
   const openModal = useStore((s) => s.openModal)
   const [renaming, setRenaming] = useState(false)
+  const iconRef = useRef<HTMLInputElement>(null)
   const [nameDraft, setNameDraft] = useState('')
   const saveName = async () => {
     setRenaming(false)
@@ -99,19 +102,20 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
           <MobileBack />
           {group ? (
             <>
-              <GroupIcon dm={channel as DmChannel} size={24} />
+              <button type="button" title="Change group icon" className="rounded-full hover:opacity-80" onClick={() => iconRef.current?.click()} data-group-icon-btn><GroupIcon dm={channel as DmChannel} size={24} /></button>
+              <input ref={iconRef} type="file" accept="image/*" className="hidden" data-group-icon-input onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; try { const img = await uploadImage('icon', f); await api.patch(`/channels/${channel.id}`, { icon_url: img.url }) } catch (err) { pushToast((err as Error).message, 'error') } }} />
               {renaming ? (
                 <input autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} onBlur={saveName} onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setRenaming(false) }} maxLength={100} placeholder="Group name" data-group-rename
                   className="h-7 w-56 rounded-md bg-bg-0 border border-accent/60 px-2 text-sm font-bold outline-none" />
               ) : (
-                <button onClick={() => { setNameDraft(channel.name ?? ''); setRenaming(true) }} title="Rename group" className="font-bold truncate hover:underline text-left" data-group-name>{dmName(channel as DmChannel, users)}</button>
+                <button onClick={() => { setNameDraft(channel.name ?? ''); setRenaming(true) }} title="Rename group" className="font-bold truncate hover:underline text-left" data-group-name>{dmName(channel as DmChannel, users, notes)}</button>
               )}
               <span className="text-xs text-text-2 whitespace-nowrap max-md:hidden" data-group-count>{(channel as DmChannel).recipients.length + 1} members</span>
             </>
           ) : isDm && other ? (
             <>
               <Avatar user={other} size={24} presence />
-              <span className="font-bold truncate">{other.display_name}</span>
+              <span className="font-bold truncate" data-dm-header-name>{nameOf(other, notes)}</span>
               {other.custom_status && <span className="text-sm text-text-1 truncate max-md:hidden" data-header-status>{other.custom_status}</span>}
             </>
           ) : (
@@ -192,13 +196,16 @@ function MessageCard({ m, onJump, action }: { m: Message; onJump: () => void; ac
 function GroupMembersPanel({ dm }: { dm: DmChannel }) {
   const me = useStore((s) => s.user)
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const isOwner = dm.owner_id === me?.id
   const members = [...(me ? [me as unknown as typeof dm.recipients[number]] : []), ...dm.recipients].map((u) => users[u.id] ?? u)
   const remove = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: `Remove ${u.display_name}`, body: `Remove ${u.display_name} from the group? They can be added back later.`, danger: true, confirmLabel: 'Remove',
     action: async () => { try { await api.delete(`/channels/${dm.id}/recipients/${u.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
-  const leave = () => openModal({ kind: 'confirm', title: `Leave '${dmName(dm, users)}'`, body: 'You will stop receiving messages from this group unless someone adds you back.', danger: true, confirmLabel: 'Leave Group',
+  const transfer = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: `Transfer ownership to ${nameOf(u, notes)}`, body: `${nameOf(u, notes)} will be able to rename the group, change its icon and remove members. You stay in the group as a member.`, confirmLabel: 'Transfer',
+    action: async () => { try { await api.patch(`/channels/${dm.id}`, { owner_id: u.id }) } catch (e) { pushToast((e as Error).message, 'error') } } })
+  const leave = () => openModal({ kind: 'confirm', title: `Leave '${dmName(dm, users, notes)}'`, body: 'You will stop receiving messages from this group unless someone adds you back.', danger: true, confirmLabel: 'Leave Group',
     action: async () => { try { await api.delete(`/channels/${dm.id}/recipients/${me?.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
   return (
     <aside className="w-60 shrink-0 bg-bg-1 border-l border-line overflow-y-auto px-2 pt-4 max-md:hidden flex flex-col" data-group-members>
@@ -208,9 +215,10 @@ function GroupMembersPanel({ dm }: { dm: DmChannel }) {
           <div key={u.id} className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3" data-group-member={u.id}>
             <button onClick={(e) => openModal({ kind: 'profile', userId: u.id, anchor: anchorOf(e) })} className="flex items-center gap-3 min-w-0 flex-1 text-left">
               <Avatar user={u} size={32} presence />
-              <span className="truncate text-[15px] font-medium text-text-1">{u.display_name}</span>
+              <span className="truncate text-[15px] font-medium text-text-1">{nameOf(u, notes)}</span>
               {dm.owner_id === u.id && <span title="Group owner" className="shrink-0 flex"><Crown size={14} className="text-warn" /></span>}
             </button>
+            {isOwner && u.id !== me?.id && <button onClick={() => transfer(u)} title="Transfer ownership" className="opacity-0 group-hover:opacity-100 text-text-2 hover:text-warn" data-transfer-owner><Crown size={16} /></button>}
             {isOwner && u.id !== me?.id && <button onClick={() => remove(u)} title="Remove from group" className="opacity-0 group-hover:opacity-100 text-text-2 hover:text-danger" data-remove-member><X size={16} /></button>}
           </div>
         ))}
