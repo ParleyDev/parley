@@ -1,4 +1,4 @@
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 import hljs from 'highlight.js/lib/core'
 import { CUSTOM_TOKEN_SRC, PICTO_SRC, customUrl, parseCustom } from './emoji'
@@ -25,8 +25,9 @@ import diff from 'highlight.js/lib/languages/diff'
  * Discord-flavoured markdown → React. Supported:
  *   inline: **bold** *italic* _italic_ ***both*** __underline__ ~~strike~~ `code` ``code`` ||spoiler||
  *           [text](https://url) <https://url> bare URLs, and backslash escapes (\*)
- *   blocks: # ## ### headers, -# subtext, > quote, >>> multi-line quote, - * + bullets,
- *           1. numbered lists (one level of nesting), ```lang fenced code``` with highlighting
+ *   blocks: # ## ### headers, -# subtext, > quote, >>> multi-line quote (headers and lists work inside quotes),
+ *           - * + bullets, 1. numbered lists (one level of nesting), | pipe | tables | with a |---| separator row,
+ *           ```lang fenced code``` with highlighting (18 languages bundled, ~30 more loaded on first use)
  * Everything is produced as React elements; no HTML strings from user input ever reach the DOM
  * except highlight.js output, which escapes its input.
  */
@@ -47,6 +48,57 @@ hljs.registerLanguage('sql', sql)
 hljs.registerLanguage('yaml', yaml); hljs.registerAliases(['yml'], { languageName: 'yaml' })
 hljs.registerLanguage('markdown', markdown); hljs.registerAliases(['md'], { languageName: 'markdown' })
 hljs.registerLanguage('diff', diff)
+
+/** Languages bundled as separate chunks and registered the first time a code block asks for them. */
+const LAZY_LANGS: Record<string, { label: string; aliases?: string[]; load: () => Promise<{ default: import('highlight.js').LanguageFn }> }> = {
+  php: { label: 'PHP', load: () => import('highlight.js/lib/languages/php') },
+  ruby: { label: 'Ruby', aliases: ['rb'], load: () => import('highlight.js/lib/languages/ruby') },
+  kotlin: { label: 'Kotlin', aliases: ['kt'], load: () => import('highlight.js/lib/languages/kotlin') },
+  swift: { label: 'Swift', load: () => import('highlight.js/lib/languages/swift') },
+  scala: { label: 'Scala', load: () => import('highlight.js/lib/languages/scala') },
+  lua: { label: 'Lua', load: () => import('highlight.js/lib/languages/lua') },
+  perl: { label: 'Perl', aliases: ['pl'], load: () => import('highlight.js/lib/languages/perl') },
+  r: { label: 'R', load: () => import('highlight.js/lib/languages/r') },
+  dart: { label: 'Dart', load: () => import('highlight.js/lib/languages/dart') },
+  dockerfile: { label: 'Dockerfile', aliases: ['docker'], load: () => import('highlight.js/lib/languages/dockerfile') },
+  nginx: { label: 'nginx', load: () => import('highlight.js/lib/languages/nginx') },
+  ini: { label: 'INI / TOML', aliases: ['toml'], load: () => import('highlight.js/lib/languages/ini') },
+  powershell: { label: 'PowerShell', aliases: ['ps', 'ps1'], load: () => import('highlight.js/lib/languages/powershell') },
+  makefile: { label: 'Makefile', aliases: ['make', 'mk'], load: () => import('highlight.js/lib/languages/makefile') },
+  graphql: { label: 'GraphQL', aliases: ['gql'], load: () => import('highlight.js/lib/languages/graphql') },
+  haskell: { label: 'Haskell', aliases: ['hs'], load: () => import('highlight.js/lib/languages/haskell') },
+  elixir: { label: 'Elixir', aliases: ['ex', 'exs'], load: () => import('highlight.js/lib/languages/elixir') },
+  erlang: { label: 'Erlang', aliases: ['erl'], load: () => import('highlight.js/lib/languages/erlang') },
+  clojure: { label: 'Clojure', aliases: ['clj'], load: () => import('highlight.js/lib/languages/clojure') },
+  objectivec: { label: 'Objective-C', aliases: ['objc', 'objective-c'], load: () => import('highlight.js/lib/languages/objectivec') },
+  scss: { label: 'SCSS', aliases: ['sass'], load: () => import('highlight.js/lib/languages/scss') },
+  less: { label: 'Less', load: () => import('highlight.js/lib/languages/less') },
+  vbnet: { label: 'VB.NET', aliases: ['vb'], load: () => import('highlight.js/lib/languages/vbnet') },
+  matlab: { label: 'MATLAB', load: () => import('highlight.js/lib/languages/matlab') },
+  julia: { label: 'Julia', aliases: ['jl'], load: () => import('highlight.js/lib/languages/julia') },
+  protobuf: { label: 'Protobuf', aliases: ['proto'], load: () => import('highlight.js/lib/languages/protobuf') },
+  http: { label: 'HTTP', load: () => import('highlight.js/lib/languages/http') },
+  latex: { label: 'LaTeX', aliases: ['tex'], load: () => import('highlight.js/lib/languages/latex') },
+  wasm: { label: 'WebAssembly', aliases: ['wat'], load: () => import('highlight.js/lib/languages/wasm') },
+}
+const lazyLoads = new Map<string, Promise<void>>()
+/** Resolve an alias to a lazy language key, or null. */
+function lazyKey(lang: string): string | null {
+  if (LAZY_LANGS[lang]) return lang
+  for (const [k, v] of Object.entries(LAZY_LANGS)) if (v.aliases?.includes(lang)) return k
+  return null
+}
+/** Load and register a lazy language once; resolves when hljs knows it. */
+export function ensureLanguage(lang: string): Promise<void> | null {
+  const key = lazyKey(lang)
+  if (!key || hljs.getLanguage(key)) return null
+  let p = lazyLoads.get(key)
+  if (!p) {
+    p = LAZY_LANGS[key].load().then((m) => { hljs.registerLanguage(key, m.default); if (LAZY_LANGS[key].aliases) hljs.registerAliases(LAZY_LANGS[key].aliases!, { languageName: key }) }).catch(() => { lazyLoads.delete(key) })
+    lazyLoads.set(key, p)
+  }
+  return p
+}
 
 export interface MarkdownOptions {
   /** Headers, lists and multi-line quotes; off for compact places like profile bios. */
@@ -89,6 +141,22 @@ function renderLines(lines: string[], blocks: boolean, key: () => string): React
     if (blocks && (m = /^(#{1,3})\s+(.+)$/.exec(line))) {
       const Tag = (`h${m[1].length}`) as 'h1' | 'h2' | 'h3'
       out.push(<Tag key={key()}>{renderInline(m[2])}</Tag>); prevPlain = false; i++; continue
+    }
+    // GitHub-style pipe table: a header row, a |---|:--:| separator, then rows. Cells take inline markdown.
+    if (blocks && /^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/.test(lines[i + 1])) {
+      const cells = (l: string) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'))
+      const head = cells(line)
+      const align = cells(lines[i + 1]).map((c) => (/^:-+:$/.test(c) ? 'center' : /^-+:$/.test(c) ? 'right' : 'left'))
+      const rows: string[][] = []
+      i += 2
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { rows.push(cells(lines[i])); i++ }
+      out.push(
+        <table key={key()}>
+          <thead><tr>{head.map((h, ci) => <th key={ci} style={{ textAlign: align[ci] ?? 'left' }}>{renderInline(h)}</th>)}</tr></thead>
+          <tbody>{rows.map((r, ri) => <tr key={ri}>{head.map((_, ci) => <td key={ci} style={{ textAlign: align[ci] ?? 'left' }}>{renderInline(r[ci] ?? '')}</td>)}</tr>)}</tbody>
+        </table>,
+      )
+      prevPlain = false; continue
     }
     if (blocks && (m = /^-#\s+(.+)$/.exec(line))) {
       out.push(<span key={key()} className="subtext">{renderInline(m[1])}</span>); prevPlain = false; i++; continue
@@ -213,8 +281,13 @@ const LANG_LABELS: Record<string, string> = { javascript: 'JavaScript', typescri
 
 function CodeBlock({ code, lang }: { code: string; lang: string }) {
   const [copied, setCopied] = useState(false)
+  // Lazy languages: render plain first, re-render once the chunk has registered itself.
+  const [, bump] = useState(0)
+  const pending = lang ? ensureLanguage(lang) : null
+  useEffect(() => { let live = true; pending?.then(() => { if (live) bump((n) => n + 1) }); return () => { live = false } }, [pending])
   const name = lang ? hljs.getLanguage(lang)?.name ?? null : null
-  const canonical = name ? Object.keys(LANG_LABELS).find((l) => hljs.getLanguage(l)?.name === name) ?? null : null
+  const labels: Record<string, string> = { ...LANG_LABELS, ...Object.fromEntries(Object.entries(LAZY_LANGS).map(([k, v]) => [k, v.label])) }
+  const canonical = name ? Object.keys(labels).find((l) => hljs.getLanguage(l)?.name === name) ?? null : null
   const html = canonical ? hljs.highlight(code, { language: canonical, ignoreIllegals: true }).value : null
   const copy = async () => {
     try { await navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* clipboard unavailable */ }
@@ -222,7 +295,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
   return (
     <div className="codeblock" data-lang={canonical ?? lang ?? ''}>
       <div className="codeblock-head">
-        <span>{canonical ? LANG_LABELS[canonical] : lang || 'Code'}</span>
+        <span>{canonical ? labels[canonical] : lang || 'Code'}</span>
         <button type="button" onClick={copy} title="Copy code" className="codeblock-copy">{copied ? <Check size={13} /> : <Copy size={13} />}<span>{copied ? 'Copied' : 'Copy'}</span></button>
       </div>
       <pre>{html !== null ? <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /> : <code>{code}</code>}</pre>
