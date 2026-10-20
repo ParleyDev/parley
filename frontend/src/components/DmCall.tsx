@@ -3,6 +3,7 @@ import { Headphones, HeadphoneOff, Mic, MicOff, Monitor, MonitorOff, Phone, Phon
 import { useEffect, useRef } from 'react'
 import { useStore, voiceParticipants } from '../store'
 import type { DmChannel } from '../lib/types'
+import { DeviceCtl, type DeviceKind } from './DeviceMenu'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 
@@ -42,9 +43,9 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
       <div className="mt-3 flex items-center justify-center gap-2">
         {inThis ? (
           <>
-            <Ctl label={selfMute ? 'Unmute' : 'Mute'} on={selfMute} onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={18} /> : <Mic size={18} />}</Ctl>
-            <Ctl label={selfDeaf ? 'Undeafen' : 'Deafen'} on={selfDeaf} onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={18} /> : <Headphones size={18} />}</Ctl>
-            <Ctl label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} accent onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={18} /> : <VideoOff size={18} />}</Ctl>
+            <Ctl label={selfMute ? 'Unmute' : 'Mute'} on={selfMute} menu="input" onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={18} /> : <Mic size={18} />}</Ctl>
+            <Ctl label={selfDeaf ? 'Undeafen' : 'Deafen'} on={selfDeaf} menu="output" onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={18} /> : <Headphones size={18} />}</Ctl>
+            <Ctl label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} accent menu="camera" onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={18} /> : <VideoOff size={18} />}</Ctl>
             <Ctl label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} accent onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <Monitor size={18} />}</Ctl>
             <button onClick={() => voice.leave()} title="Leave Call" className="h-10 px-5 rounded-full bg-danger text-white font-semibold flex items-center gap-2 hover:bg-danger/80"><PhoneOff size={18} /> Leave</button>
           </>
@@ -62,7 +63,6 @@ function Vid({ stream, muted }: { stream: MediaStream; muted: boolean }) {
   return <video ref={ref} autoPlay playsInline muted={muted} className="h-full w-full object-cover" />
 }
 
-function Ctl({ children, label, on, accent, onClick }: { children: React.ReactNode; label: string; on: boolean; accent?: boolean; onClick: () => void }) {
-  const cls = on ? (accent ? 'bg-text-0 text-bg-0' : 'bg-danger/20 text-danger') : 'bg-bg-3 text-text-0 hover:bg-bg-4'
-  return <button onClick={onClick} title={label} className={`h-10 w-10 rounded-full flex items-center justify-center ${cls}`}>{children}</button>
+function Ctl(props: { children: React.ReactNode; label: string; on: boolean; accent?: boolean; onClick: () => void; menu?: DeviceKind }) {
+  return <DeviceCtl {...props} size={40} />
 }

@@ -10,6 +10,7 @@ import type { Channel, User, VoiceState } from '../lib/types'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 import StudioPanel from './StudioPanel'
+import { DeviceCtl, type DeviceKind } from './DeviceMenu'
 import { studio as studioRec } from '../lib/studio'
 import VideoTile from './VideoTile'
 import ChatPane from './ChatPane'
@@ -214,9 +215,9 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 )}
                 {isStage && suppressed && <Ctl label={handUp ? t('Lower Hand') : t('Raise Hand')} on={handUp} accent onClick={toggleHand}><Hand size={22} /></Ctl>}
                 {isStage && !suppressed && !isMod && <Ctl label={t('Leave the stage')} on={false} onClick={() => toAudience(me!.id)}><Hand size={22} /></Ctl>}
-                <Ctl label={selfMute ? t('Unmute') : t('Mute')} on={selfMute} onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={22} /> : <Mic size={22} />}</Ctl>
-                <Ctl label={selfDeaf ? t('Undeafen') : t('Deafen')} on={selfDeaf} onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={22} /> : <Headphones size={22} />}</Ctl>
-                {canStream && <Ctl label={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} on={!!localCamera} accent onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>}
+                <Ctl label={selfMute ? t('Unmute') : t('Mute')} on={selfMute} menu="input" onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={22} /> : <Mic size={22} />}</Ctl>
+                <Ctl label={selfDeaf ? t('Undeafen') : t('Deafen')} on={selfDeaf} menu="output" onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={22} /> : <Headphones size={22} />}</Ctl>
+                {canStream && <Ctl label={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} on={!!localCamera} accent menu="camera" onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>}
                 {canSpeak && !suppressed && (
                   <span className="relative">
                     <Ctl label={t('Soundboard')} on={board} accent onClick={() => setBoard((b) => !b)}><Music2 size={22} /></Ctl>
@@ -280,12 +281,6 @@ function usePhone() {
   return p
 }
 
-function Ctl({ children, label, on, accent, onClick }: { children: React.ReactNode; label: string; on: boolean; accent?: boolean; onClick: () => void }) {
-  const onCls = accent ? 'bg-accent text-white' : 'bg-white text-black'
-  return (
-    <span className="flex flex-col items-center gap-1">
-      <button title={label} aria-label={label} aria-pressed={on} onClick={onClick} className={`h-14 w-14 rounded-full flex items-center justify-center ${on ? onCls : 'bg-bg-3 text-text-0 hover:bg-bg-4'}`}>{children}</button>
-      <span className="md:hidden text-[11px] text-text-2">{label}</span>
-    </span>
-  )
+function Ctl(props: { children: React.ReactNode; label: string; on: boolean; accent?: boolean; onClick: () => void; menu?: DeviceKind }) {
+  return <DeviceCtl {...props} mobileLabel />
 }
