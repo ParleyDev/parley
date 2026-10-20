@@ -1,6 +1,7 @@
 import { useShallow } from 'zustand/react/shallow'
 import { Headphones, HeadphoneOff, Maximize2, Mic, MicOff, Minimize2, Monitor, MonitorOff, Phone, PhoneOff, Video, VideoOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { playSfx, sfxEnabled } from '../lib/sfx'
 import { useStore, voiceParticipants } from '../store'
 import type { DmChannel, User, VoiceState } from '../lib/types'
 import { DeviceCtl, type DeviceKind } from './DeviceMenu'
@@ -55,6 +56,17 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screenKeys, tiles.length])
 
+  // Outgoing ring: you are the only one in the call → ring every few seconds until someone picks up (45 s max).
+  const waiting = inThis && participants.length === 1 && participants[0]?.user_id === me?.id
+  useEffect(() => {
+    const w = window as unknown as { __parleyOutRing?: boolean }
+    if (!waiting || !sfxEnabled('outgoing_ring')) { w.__parleyOutRing = false; return }
+    w.__parleyOutRing = true
+    playSfx('outgoing_ring')
+    const timer = setInterval(() => playSfx('outgoing_ring'), 3000)
+    const cutoff = setTimeout(() => { clearInterval(timer); w.__parleyOutRing = false }, 45_000)
+    return () => { clearInterval(timer); clearTimeout(cutoff); w.__parleyOutRing = false }
+  }, [waiting])
   if (participants.length === 0 && !inThis) return null
   const focusTile = focused ? tiles.find((t) => t.key === focused) : undefined
   const strip = focusTile ? tiles.filter((t) => t.key !== focused) : []

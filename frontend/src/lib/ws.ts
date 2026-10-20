@@ -3,6 +3,7 @@ import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, User, VoiceState } from './types'
 import { voice } from './voice'
 import { playSfx } from './sfx'
+import { getNotifPrefs } from './notifPrefs'
 import { studio } from './studio'
 import { registerPush } from './native'
 
@@ -193,23 +194,27 @@ function handle(ev: Ev) {
     case 'STUDIO_UPDATE': void s.loadStudio(ev.d.channel_id); break
     case 'STUDIO_SESSION': studio.onSession(ev.d); void s.loadStudio(ev.d.channel_id); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
-    case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(); break
+    case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break
   }
 }
 
-/** Join/leave sounds for other people entering or leaving the call you are in. */
+/** Join/leave sounds for other people entering or leaving the call you are in; a chime when a stage moderator lifts you up. */
 function voiceSfx(s: ReturnType<typeof useStore.getState>, v: VoiceState) {
   const me = s.user?.id
   const mine = s.myVoiceChannelId
-  if (!me || !mine || v.user_id === me) return
-  const was = s.voiceStates[v.user_id]?.channel_id ?? null
-  if (v.channel_id === mine && was !== mine) playSfx('join')
-  else if (was === mine && v.channel_id !== mine) playSfx('leave')
+  if (!me || !mine) return
+  const was = s.voiceStates[v.user_id]
+  if (v.user_id === me) {
+    if (was?.suppress && !v.suppress && v.channel_id === mine && s.channels[mine]?.kind === 'stage') playSfx('invite_speak')
+    return
+  }
+  if (v.channel_id === mine && (was?.channel_id ?? null) !== mine) playSfx('user_join')
+  else if (was?.channel_id === mine && v.channel_id !== mine) playSfx('user_leave')
 }
 
 function notify(m: Message) {
   try {
-    if ('Notification' in window && Notification.permission === 'granted') {
+    if (getNotifPrefs().desktop && 'Notification' in window && Notification.permission === 'granted') {
       const body = m.content ? m.content.slice(0, 120) : m.attachments?.length ? `Sent ${m.attachments.length === 1 ? 'an attachment' : `${m.attachments.length} attachments`}` : ''
       new Notification(m.author.display_name, { body })
     }

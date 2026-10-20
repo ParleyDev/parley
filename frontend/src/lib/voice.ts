@@ -106,10 +106,10 @@ class VoiceManager {
     }
   }
 
-  leave() {
+  leave(evicted = false) {
     keepAwake(false)
     const s = useStore.getState()
-    if (this.channelId) { sendOp({ op: 'voice_leave' }); playSfx('leave') }
+    if (this.channelId) { sendOp({ op: 'voice_leave' }); playSfx(evicted ? 'disconnect' : 'user_leave') }
     this.channelId = null
     this.closeAllPeers()
     this.disconnectSfu()
@@ -169,12 +169,14 @@ class VoiceManager {
       this.peers.forEach((p) => this.replaceVideo(p.pc, 1, null))
       await this.sfuUnpublish('screen')
       s.setLocalMedia({ screen: null })
+      playSfx('stream_stopped')
       this.pushState()
       return
     }
     if (!navigator.mediaDevices?.getDisplayMedia) { s.pushToast('Screen sharing is not supported in this browser', 'error'); return }
     try {
       this.screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false })
+      playSfx('stream_started')
     } catch (e) {
       if ((e as Error).name !== 'NotAllowedError') s.pushToast(`Screen share failed: ${(e as Error).message}`, 'error')
       return
@@ -266,7 +268,7 @@ class VoiceManager {
           // Server acknowledged our join: offer to everyone already here (mesh) or join the SFU room,
           // then re-announce media flags.
           s.setMyVoice(this.channelId, false)
-          playSfx('join')
+          playSfx('user_join')
           if (this.sfu) {
             this.connectSfu(this.channelId)
           } else {
@@ -277,7 +279,7 @@ class VoiceManager {
         }
       } else if (v.channel_id === null) {
         // Server evicted us (kicked, channel deleted, another tab took over).
-        this.leave()
+        this.leave(true)
       }
       return
     }
@@ -444,6 +446,7 @@ class VoiceManager {
     if (typing && !modifier) return
     if (!typing) e.preventDefault()
     if (down && e.repeat) return
+    if (this.pttDown !== down) playSfx(down ? 'ptt_activate' : 'ptt_deactivate')
     this.pttDown = down
     if (!down) this.pttUpAt = Date.now()
     useStore.getState().setPttHeld(down)
