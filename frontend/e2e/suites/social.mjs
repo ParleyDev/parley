@@ -51,6 +51,8 @@ ok('the original is not loaded yet (older than the first page)', await pa.locato
 ok('the reply header is still a link', await pa.locator(`[data-msg-id="${rep.id}"] [data-reply-link="${old.id}"]`).count() === 1)
 await pa.click(`[data-msg-id="${rep.id}"] [data-reply-link]`); await pa.waitForSelector(`[data-msg-id="${old.id}"]`, { timeout: 15000 }); await pa.waitForTimeout(300)
 ok('clicking it loads history and scrolls the original into view', await pa.evaluate((id) => { const r = document.querySelector(`[data-msg-id="${id}"]`).getBoundingClientRect(); const c = document.querySelector('main .overflow-y-auto').getBoundingClientRect(); return r.top >= c.top - 2 && r.bottom <= c.bottom + 2 }, old.id))
+// The jump showed a window from the past; the receipt lands on the newest message, so return to the present first.
+await pa.click('[data-jump-present]'); await pa.waitForFunction(() => !document.querySelector('[data-older-bar]'), null, { timeout: 15000 }); await pa.waitForSelector(`[data-msg-id="${rep.id}"]`)
 await callS(b.token, 'PUT', `/channels/${tc.id}/read`, { message_id: rep.id })
 await pa.waitForSelector(`[data-read-by="${b.user.id}"]`)
 ok('server channels show the reader avatars (no "Seen" word)', !(await pa.textContent(`[data-read-by="${b.user.id}"]`)).includes('Seen') && await pa.locator(`[data-read-by="${b.user.id}"] img, [data-read-by="${b.user.id}"] [data-avatar]`).count() >= 0)
