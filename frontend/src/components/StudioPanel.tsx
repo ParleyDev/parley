@@ -7,7 +7,7 @@ import { useStore } from '../store'
 const fmt = (ms: number | null | undefined) => { const s = Math.max(0, Math.round((ms ?? 0) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 
 /** Sessions recorded in this studio, each with its per-artist tracks and a multitrack player/mixer. */
-export default function StudioPanel({ channelId, canManage, onClose }: { channelId: string; canManage: boolean; onClose: () => void }) {
+export default function StudioPanel({ channelId, canManage, onClose, width, handle }: { channelId: string; canManage: boolean; onClose: () => void; width?: number; handle?: React.ReactNode }) {
   const sessions = useStore((s) => s.studio[channelId])
   const loadStudio = useStore((s) => s.loadStudio)
   const pushToast = useStore((s) => s.pushToast)
@@ -17,7 +17,8 @@ export default function StudioPanel({ channelId, canManage, onClose }: { channel
   const del = (s: StudioSession) => openModal({ kind: 'confirm', title: `Delete ${s.name}`, body: `Removes the session and its ${s.tracks.length} track${s.tracks.length === 1 ? '' : 's'}. This cannot be undone.`, danger: true, confirmLabel: 'Delete',
     action: async () => { try { await api.delete(`/channels/${channelId}/studio/sessions/${s.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
   return (
-    <section className="flex flex-col bg-bg-2 border-l border-line w-[420px] shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10" data-studio-panel>
+    <section className="relative flex flex-col bg-bg-2 border-l border-line shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10" style={{ width: width ?? 420 }} data-studio-panel>
+      {handle}
       <div className="h-12 shrink-0 px-3 flex items-center gap-2 border-b border-line"><span className="font-bold">Sessions</span><span className="text-xs text-text-2">{sessions ? sessions.length : '…'}</span><button onClick={onClose} title="Close" className="ml-auto h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><X size={18} /></button></div>
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {sessions?.length === 0 && <p className="text-sm text-text-2 p-4 text-center">Nothing recorded yet. The engineer presses Record to start a session.</p>}
