@@ -294,12 +294,27 @@ async fn download_export(State(state): State<AppState>, AuthUser(uid): AuthUser,
 }
 
 #[derive(Deserialize)]
-struct PrivacyReq { dm_privacy: Option<String>, message_requests: Option<bool>, friend_request_from: Option<Vec<String>>, group_dm_privacy: Option<String>, guild_dms_default: Option<bool>, show_read_receipts: Option<bool>, show_typing: Option<bool> }
+struct PrivacyReq { dm_privacy: Option<String>, message_requests: Option<bool>, friend_request_from: Option<Vec<String>>, group_dm_privacy: Option<String>, guild_dms_default: Option<bool>, show_read_receipts: Option<bool>, show_typing: Option<bool>, sensitive_media: Option<Value>, spam_filter: Option<String> }
 
 /// Content & Social settings.
 async fn update_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<PrivacyReq>) -> AppResult<Json<PrivateUser>> {
     if let Some(p) = &req.dm_privacy { if !["everyone", "friends_and_servers", "friends"].contains(&p.as_str()) { return Err(AppError::BadRequest("Bad dm_privacy".into())) } }
     if let Some(p) = &req.group_dm_privacy { if !["friends", "nobody"].contains(&p.as_str()) { return Err(AppError::BadRequest("Bad group_dm_privacy".into())) } }
+    if let Some(p) = &req.spam_filter { if !["none", "non_friends", "all"].contains(&p.as_str()) { return Err(AppError::BadRequest("Bad spam_filter".into())) } }
+    let sensitive = match &req.sensitive_media {
+        Some(v) => {
+            let Some(o) = v.as_object() else { return Err(AppError::BadRequest("sensitive_media must be an object".into())) };
+            let mut clean = serde_json::Map::new();
+            for (k, v) in o {
+                if !["non_friend_dms", "restricted"].contains(&k.as_str()) { return Err(AppError::BadRequest(format!("Unknown sensitive_media key {k}"))) }
+                let Some(s) = v.as_str() else { return Err(AppError::BadRequest("sensitive_media values must be show or blur".into())) };
+                if !["show", "blur"].contains(&s) { return Err(AppError::BadRequest("sensitive_media values must be show or blur".into())) }
+                clean.insert(k.clone(), json!(s));
+            }
+            Some(Value::Object(clean))
+        }
+        None => None,
+    };
     let from = match &req.friend_request_from {
         Some(list) => {
             let mut v: Vec<String> = list.iter().filter(|x| ["everyone", "friends_of_friends", "server_members"].contains(&x.as_str())).cloned().collect();
@@ -308,8 +323,8 @@ async fn update_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, 
         }
         None => None,
     };
-    sqlx::query("UPDATE users SET dm_privacy = COALESCE($2, dm_privacy), message_requests = COALESCE($3, message_requests), friend_request_from = COALESCE($4, friend_request_from), group_dm_privacy = COALESCE($5, group_dm_privacy), guild_dms_default = COALESCE($6, guild_dms_default), show_read_receipts = COALESCE($7, show_read_receipts), show_typing = COALESCE($8, show_typing) WHERE id = $1")
-        .bind(uid).bind(req.dm_privacy).bind(req.message_requests).bind(from).bind(req.group_dm_privacy).bind(req.guild_dms_default).bind(req.show_read_receipts).bind(req.show_typing).execute(&state.db).await?;
+    sqlx::query("UPDATE users SET dm_privacy = COALESCE($2, dm_privacy), message_requests = COALESCE($3, message_requests), friend_request_from = COALESCE($4, friend_request_from), group_dm_privacy = COALESCE($5, group_dm_privacy), guild_dms_default = COALESCE($6, guild_dms_default), show_read_receipts = COALESCE($7, show_read_receipts), show_typing = COALESCE($8, show_typing), sensitive_media = CASE WHEN $9::jsonb IS NULL THEN sensitive_media ELSE sensitive_media || $9 END, spam_filter = COALESCE($10, spam_filter) WHERE id = $1")
+        .bind(uid).bind(req.dm_privacy).bind(req.message_requests).bind(from).bind(req.group_dm_privacy).bind(req.guild_dms_default).bind(req.show_read_receipts).bind(req.show_typing).bind(sensitive).bind(req.spam_filter).execute(&state.db).await?;
     let u = private(&state, uid).await?;
     state.hub.emit_users(vec![uid], "USER_UPDATE", json!(u));
     Ok(Json(u))

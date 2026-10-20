@@ -110,6 +110,8 @@ struct UpdateChannel {
     #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
     parent_id: Option<Option<Uuid>>,
     position: Option<i32>,
+    /// Guild text channels: age-restricted.
+    nsfw: Option<bool>,
 }
 
 async fn update_channel(
@@ -171,7 +173,7 @@ async fn update_channel(
     let before = if parent.is_some() { Some(perms::visibility(&state.db, gid).await?) } else { None };
     let mut updated = sqlx::query_as::<_, Channel>(&format!(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
-         parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END WHERE id = $1 RETURNING {CHANNEL_COLS}"
+         parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw) WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
     .bind(name)
@@ -179,6 +181,7 @@ async fn update_channel(
     .bind(req.position)
     .bind(parent.is_some())
     .bind(parent.flatten())
+    .bind(req.nsfw)
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
@@ -396,6 +399,7 @@ async fn create_message(
             if crate::routes::relationships::blocked_either_way(&state.db, uid, other).await? || !crate::routes::dms::can_dm(&state.db, uid, other).await? {
                 return Err(AppError::Undeliverable);
             }
+            crate::routes::dms::spam_check(&state, id, uid, other, &req.content).await;
         }
     }
     if let Some(r) = req.reply_to {

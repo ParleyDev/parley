@@ -16,6 +16,7 @@ import ChatPane from './ChatPane'
 import { ThreadPanel, ThreadsPanel } from './ThreadPanel'
 import ForumView from './ForumView'
 import DmCall from './DmCall'
+import { STORAGE_PREFIX } from '../lib/brand'
 import InboxButton from './InboxButton'
 import DmProfilePanel from './DmProfilePanel'
 import { MembersToggle, MobileBack } from './HeaderBits'
@@ -73,6 +74,7 @@ function useEscape(onClose: () => void) {
 export default function ChatView({ channel }: { channel: Channel | DmChannel }) {
   const t = useT()
   const isDm = channel.guild_id === null
+  const [ageOk, setAgeOk] = useState(() => nsfwAccepted(channel.id))
   const users = useStore((s) => s.users)
   const notes = useStore((s) => s.notes)
   const dmProfileOpen = useStore((s) => s.dmProfileOpen)
@@ -142,6 +144,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
             <>
               {channel.kind === 'forum' ? <MessageSquareText size={22} className="text-text-2 shrink-0" /> : <Hash size={22} className="text-text-2 shrink-0" />}
               <span className="font-bold truncate">{channel.name}</span>
+              {channel.nsfw && <span className="ml-1 rounded bg-danger/20 px-1.5 py-0.5 text-[10px] font-bold text-danger" title="Age-restricted channel" data-nsfw-badge>18+</span>}
               {channel.topic && <><span className="mx-2 h-6 w-px bg-line max-md:hidden" /><span className="text-sm text-text-2 truncate max-md:hidden">{channel.topic}</span></>}
             </>
           )}
@@ -189,7 +192,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
           </span>
         </header>
         {isDm && <DmCall channel={channel as DmChannel} />}
-        {channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : <ChatPane channel={channel} />}
+        {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : <ChatPane channel={channel} />}
       </main>
       {search !== null ? (
         <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast('That message could not be found', 'error')} />
@@ -201,6 +204,28 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
         <GroupMembersPanel dm={channel as DmChannel} />
       ) : null}
     </>
+  )
+}
+
+const NSFW_KEY = `${STORAGE_PREFIX}nsfwOk`
+function nsfwAccepted(id: string): boolean { try { return (JSON.parse(localStorage.getItem(NSFW_KEY) ?? '[]') as string[]).includes(id) } catch { return false } }
+function rememberNsfw(id: string) { try { const l = JSON.parse(localStorage.getItem(NSFW_KEY) ?? '[]') as string[]; if (!l.includes(id)) localStorage.setItem(NSFW_KEY, JSON.stringify([...l, id])) } catch { /* ignore */ } }
+
+/** The warning shown once before an age-restricted channel opens. */
+function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
+  const navigate = useNavigate()
+  return (
+    <div className="flex-1 flex items-center justify-center p-6" data-age-gate>
+      <div className="max-w-md text-center space-y-4">
+        <div className="mx-auto h-16 w-16 rounded-full bg-danger/15 text-danger flex items-center justify-center text-2xl font-extrabold">18+</div>
+        <h2 className="text-xl font-bold">Age-Restricted Channel</h2>
+        <p className="text-sm text-text-2">#{channel.name} may contain content that is not suitable for everyone. You must be over 18 to continue. Pictures and videos here stay blurred until clicked if your sensitive-media setting says so.</p>
+        <div className="flex justify-center gap-2">
+          <button type="button" className="btn-ghost" onClick={() => navigate(-1)} data-age-nope>Nope</button>
+          <button type="button" className="btn-primary" onClick={() => { rememberNsfw(channel.id); onOk() }} data-age-continue>Continue</button>
+        </div>
+      </div>
+    </div>
   )
 }
 

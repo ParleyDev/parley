@@ -839,6 +839,9 @@ export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'd
 export function messageRequests(s: Pick<State, 'dms'>): DmChannel[] {
   return Object.values(s.dms).filter((d) => d.request_state === 'pending')
 }
+export function spamRequests(s: Pick<State, 'dms'>): DmChannel[] {
+  return Object.values(s.dms).filter((d) => d.request_state === 'spam')
+}
 export const isRequest = (d: DmChannel | undefined) => !!d && !!d.request_state && d.request_state !== 'accepted'
 
 export function pendingCount(s: Pick<State, 'relationships'>): number {

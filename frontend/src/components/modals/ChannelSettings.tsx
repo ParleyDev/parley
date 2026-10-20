@@ -54,21 +54,28 @@ function Overview({ channel }: { channel: Channel }) {
   const pushToast = useStore((s) => s.pushToast)
   const [name, setName] = useState(channel.name)
   const [topic, setTopic] = useState(channel.topic)
+  const [nsfw, setNsfw] = useState(!!channel.nsfw)
   const [busy, setBusy] = useState(false)
-  const dirty = name !== channel.name || topic !== channel.topic
+  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
       <h1 className="text-xl font-bold">Overview</h1>
       <div><label className="label">Channel name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
       {channel.kind === 'text' && <div><label className="label">Channel topic</label><textarea className="input resize-none" rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} placeholder="Let everyone know how to use this channel!" /></div>}
+      {(channel.kind === 'text' || channel.kind === 'forum') && (
+        <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-nsfw={nsfw ? '1' : '0'}>
+          <span><span className="block text-[15px]">Age-Restricted Channel</span><span className="block text-xs text-text-2">Members see a warning before opening it, and those who blur sensitive media get pictures and videos here blurred until clicked.</span></span>
+          <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} />
+        </label>
+      )}
       {dirty && (
         <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
           <span className="text-sm flex-1">Careful — you have unsaved changes!</span>
-          <button type="button" className="btn-ghost" onClick={() => { setName(channel.name); setTopic(channel.topic) }}>Reset</button>
+          <button type="button" className="btn-ghost" onClick={() => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw) }}>Reset</button>
           <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !name.trim()}>Save Changes</button>
         </div>
       )}
