@@ -261,6 +261,13 @@ pub struct Attachment {
     pub duration_ms: Option<i32>,
     #[sqlx(default)]
     pub waveform: Option<String>,
+    #[sqlx(default)]
+    pub transcript: Option<String>,
+    #[sqlx(default)]
+    pub transcript_status: Option<String>,
+    /// Users who have listened to (most of) this voice message; filled by `attachments_for`.
+    #[sqlx(default)]
+    pub listened_by: Vec<Uuid>,
 }
 
 #[derive(Serialize)]
@@ -278,13 +285,19 @@ pub struct AttachmentJson {
     pub duration_ms: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub waveform: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transcript: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transcript_status: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub listened_by: Vec<Uuid>,
 }
 
 impl From<Attachment> for AttachmentJson {
     fn from(a: Attachment) -> Self {
         let url = a.url();
         let thumb_url = a.thumb_type.as_ref().map(|_| format!("/api/attachments/{}/thumb", a.id));
-        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform }
+        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, listened_by: a.listened_by }
     }
 }
 

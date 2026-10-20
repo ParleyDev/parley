@@ -38,6 +38,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'CHANNEL_DELETE'; d: { id: string; guild_id: string | null } }
   | { t: 'READ_STATE_UPDATE'; d: { channel_id: string; last_read_msg: string } }
   | { t: 'READ_RECEIPT'; d: { channel_id: string; user_id: string; message_id: string } }
+  | { t: 'VOICE_LISTENED'; d: { channel_id: string; message_id: string; attachment_id: string; user_id: string } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
   | { t: 'VOICE_ERROR'; d: { message: string } })
@@ -170,6 +171,7 @@ function handle(ev: Ev) {
     case 'CHANNEL_DELETE': s.removeChannel(ev.d.id); break
     case 'READ_STATE_UPDATE': s.setReadState(ev.d.channel_id, ev.d.last_read_msg); break
     case 'READ_RECEIPT': if (ev.d.user_id !== s.user?.id) s.applyReceipt(ev.d.channel_id, ev.d.user_id, ev.d.message_id); break
+    case 'VOICE_LISTENED': s.applyListened(ev.d.channel_id, ev.d.message_id, ev.d.attachment_id, ev.d.user_id); break
     case 'VOICE_STATE_UPDATE': s.applyVoiceState(ev.d); voice.onVoiceState(ev.d); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(); break
