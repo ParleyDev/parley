@@ -62,7 +62,7 @@ let lastSeq = 0
 /** Backend instance that numbered lastSeq; a resume is only valid against the same one. */
 let instanceId: string | null = null
 /** Debug counters (also handy for tests): how often we resumed vs. got a fresh READY. */
-export const wsStats = { resumed: 0, ready: 0, replayed: 0, /** Drop the socket as a network blip would (debugging/tests); it reconnects and resumes. */ drop: () => { socket?.close() } }
+export const wsStats = { resumed: 0, ready: 0, replayed: 0, /** Drop the socket as a network blip would (debugging/tests); it reconnects and resumes. */ drop: () => { socket?.close() }, /** Drop and forget the sequence: the next connect is a full READY (as after a server restart). */ resync: () => { lastSeq = 0; instanceId = null; socket?.close() } }
 let retry = 0
 let closedByUser = false
 let pingTimer: ReturnType<typeof setInterval> | null = null
