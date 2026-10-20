@@ -24,7 +24,14 @@ pub struct Limit {
     pub secs: f64,
 }
 
+/// Buckets an admin may override from Instance Settings.
+pub const BUCKETS: [&str; 7] = ["register", "login", "login_fail", "messages", "uploads", "gifs", "mail"];
+
 impl Limit {
+    /// `count/seconds`, both positive.
+    pub fn parse(raw: &str) -> Option<Limit> {
+        raw.split_once('/').and_then(|(c, s)| Some(Limit { count: c.trim().parse().ok()?, secs: s.trim().parse().ok()? })).filter(|l| l.count > 0.0 && l.secs > 0.0)
+    }
     fn from_env(var: &str, default: &str) -> Limit {
         let raw = std::env::var(var).unwrap_or_else(|_| default.to_string());
         let parsed = raw.split_once('/').and_then(|(c, s)| Some(Limit { count: c.trim().parse().ok()?, secs: s.trim().parse().ok()? }));
@@ -56,6 +63,8 @@ struct Bucket {
 
 pub struct RateLimiter {
     pub limits: Limits,
+    /// Instance Settings overrides by bucket name; empty = environment defaults.
+    overrides: std::sync::RwLock<std::collections::HashMap<String, Limit>>,
     buckets: DashMap<(&'static str, String), Bucket>,
 }
 
@@ -69,10 +78,35 @@ pub static LIMITER: LazyLock<RateLimiter> = LazyLock::new(|| RateLimiter {
         gifs: Limit::from_env("RL_GIFS", "60/60"),
         mail: Limit::from_env("RL_MAIL", "3/600"),
     },
+    overrides: std::sync::RwLock::new(std::collections::HashMap::new()),
     buckets: DashMap::new(),
 });
 
 impl RateLimiter {
+    fn env_limit(&self, name: &str) -> Limit {
+        match name {
+            "register" => self.limits.register,
+            "login" => self.limits.login,
+            "login_fail" => self.limits.login_fail,
+            "messages" => self.limits.messages,
+            "uploads" => self.limits.uploads,
+            "gifs" => self.limits.gifs,
+            _ => self.limits.mail,
+        }
+    }
+    /// The effective limit for a bucket: the admin override if set, else the environment value.
+    pub fn limit(&self, name: &str) -> Limit {
+        self.overrides.read().ok().and_then(|o| o.get(name).copied()).unwrap_or_else(|| self.env_limit(name))
+    }
+    /// Replace all overrides (from Instance Settings, at startup and on every save).
+    pub fn apply_overrides(&self, map: &std::collections::HashMap<String, String>) {
+        let parsed = map.iter().filter_map(|(k, v)| Limit::parse(v).map(|l| (k.clone(), l))).collect();
+        if let Ok(mut o) = self.overrides.write() { *o = parsed; }
+    }
+    pub fn env_defaults(&self) -> std::collections::HashMap<String, String> {
+        BUCKETS.iter().map(|b| { let l = self.env_limit(b); (b.to_string(), format!("{}/{}", l.count, l.secs)) }).collect()
+    }
+
     /// Take one token from `bucket` for `key`. Err carries the seconds until a token is back.
     pub fn take(&self, bucket: &'static str, key: &str, limit: Limit) -> Result<(), u64> {
         let now = Instant::now();
@@ -139,40 +173,40 @@ async fn limited(bucket: &'static str, limit: Limit, key: String, req: Request<B
 /// Per-IP: registration.
 pub async fn rl_register(req: Request<Body>, next: Next) -> Response {
     let key = client_ip(req.headers());
-    limited("register", LIMITER.limits.register, key, req, next).await
+    limited("register", LIMITER.limit("register"), key, req, next).await
 }
 
 /// Per-IP: login attempts, plus a tighter bucket that only failed attempts consume (see auth::login).
 pub async fn rl_login(req: Request<Body>, next: Next) -> Response {
     let key = client_ip(req.headers());
-    if let Err(retry) = LIMITER.peek("login_fail", &key, LIMITER.limits.login_fail) {
+    if let Err(retry) = LIMITER.peek("login_fail", &key, LIMITER.limit("login_fail")) {
         return too_many(retry);
     }
-    limited("login", LIMITER.limits.login, key, req, next).await
+    limited("login", LIMITER.limit("login"), key, req, next).await
 }
 
 /// Per-user (falls back to IP when unauthenticated): message sends.
 pub async fn rl_messages(req: Request<Body>, next: Next) -> Response {
     if req.method() != axum::http::Method::POST { return next.run(req).await }
     let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
-    limited("messages", LIMITER.limits.messages, key, req, next).await
+    limited("messages", LIMITER.limit("messages"), key, req, next).await
 }
 
 pub async fn rl_uploads(req: Request<Body>, next: Next) -> Response {
     if req.method() != axum::http::Method::POST { return next.run(req).await }
     let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
-    limited("uploads", LIMITER.limits.uploads, key, req, next).await
+    limited("uploads", LIMITER.limit("uploads"), key, req, next).await
 }
 
 pub async fn rl_gifs(req: Request<Body>, next: Next) -> Response {
     let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
-    limited("gifs", LIMITER.limits.gifs, key, req, next).await
+    limited("gifs", LIMITER.limit("gifs"), key, req, next).await
 }
 
 /// Per-user (or IP): emails we send on request (verification resend, password reset).
 pub async fn rl_mail(req: Request<Body>, next: Next) -> Response {
     let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
-    limited("mail", LIMITER.limits.mail, key, req, next).await
+    limited("mail", LIMITER.limit("mail"), key, req, next).await
 }
 
 fn secret() -> String {
