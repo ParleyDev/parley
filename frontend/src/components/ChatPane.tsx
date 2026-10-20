@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { useStore } from '../store'
 import { api } from '../lib/api'
 import Tooltip from './Tooltip'
-import { jumpToMessage } from './ChatView'
+import { jumpToMessage, jumpToMessageAsync } from './ChatView'
 import type { Channel, DmChannel, Message } from '../lib/types'
 import { formatDateDivider, sameDay } from '../lib/format'
 import MessageItem from './MessageItem'
@@ -28,7 +28,6 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
   const receipts = useStore((s) => s.receipts[channel.id])
   const users = useStore((s) => s.users)
   const setReceipts = useStore((s) => s.setReceipts)
-  const loadUntil = useStore((s) => s.loadUntil)
   const pushToast = useStore((s) => s.pushToast)
   const [reply, setReply] = useState<Message | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -121,8 +120,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
   const jumpTo = async (id: string) => {
     if (jumpToMessage(id)) return
     stickBottom.current = false
-    const ok = await loadUntil(channel.id, id)
-    if (!ok || !jumpToMessage(id)) { pushToast('The original message could not be found', 'error'); return }
+    if (!(await jumpToMessageAsync(channel.id, id))) pushToast('The original message could not be found', 'error')
   }
   // Read receipts: for each message, who has read exactly up to it (one marker per reader).
   const readersOf = (id: string) => Object.entries(receipts ?? {}).filter(([uid, mid]) => mid === id && uid !== user?.id).map(([uid]) => uid)

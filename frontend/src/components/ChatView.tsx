@@ -27,6 +27,21 @@ export function jumpToMessage(id: string): boolean {
   return true
 }
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/**
+ * Scroll to a message in `channelId`, loading older history page by page until it is in the list (pins, bookmarks,
+ * search hits, reply links). Works right after navigating to the channel too: waits for its first page first.
+ * Resolves false only when the message cannot be reached (deleted, or further back than the page cap).
+ */
+export async function jumpToMessageAsync(channelId: string, id: string): Promise<boolean> {
+  if (jumpToMessage(id)) return true
+  for (let i = 0; i < 50 && !(useStore.getState().messages[channelId]?.length); i++) await sleep(100)
+  if (!(await useStore.getState().loadUntil(channelId, id))) return false
+  for (let i = 0; i < 20; i++) { if (jumpToMessage(id)) return true; await sleep(50) }
+  return false
+}
+
 /** Close a header popover on Escape. */
 function useEscape(onClose: () => void) {
   useEffect(() => {
@@ -142,7 +157,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
         {channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : <ChatPane channel={channel} />}
       </main>
       {search !== null ? (
-        <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast('That message is not loaded in this view yet', 'error')} />
+        <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast('That message could not be found', 'error')} />
       ) : threadHere ? (
         <ThreadPanel threadId={openThread!} onClose={() => setOpenThread(null)} />
       ) : isDm && other && dmProfileOpen ? (
@@ -222,11 +237,9 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
     try { await api.delete(`/users/@me/bookmarks/${m.id}`); setBookmark(m.id, false); setList((l) => (l ?? []).filter((x) => x.id !== m.id)) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const jump = (m: BookmarkedMessage) => {
-    if (m.channel_id === channelId) { if (jumpToMessage(m.id)) onClose(); else pushToast('That message is not loaded in this view yet', 'error'); return }
-    onClose(); navigate(`/channels/${m.guild_id ?? '@me'}/${m.channel_id}`)
-    // Give the channel a moment to load, then flash the message if it is among the recent ones.
-    let tries = 0
-    const t = setInterval(() => { if (jumpToMessage(m.id) || ++tries > 20) clearInterval(t) }, 150)
+    onClose()
+    if (m.channel_id !== channelId) navigate(`/channels/${m.guild_id ?? '@me'}/${m.channel_id}`)
+    void jumpToMessageAsync(m.channel_id, m.id).then((found) => { if (!found) pushToast('That message could not be found', 'error') })
   }
   return (
     <>
@@ -267,7 +280,7 @@ function PinnedPanel({ channel, onClose }: { channel: Channel | DmChannel; onClo
         <div className="overflow-y-auto p-3 space-y-2">
           {pins === null && <p className="text-sm text-text-2 p-3">Loading…</p>}
           {pins?.length === 0 && <div className="p-6 text-center text-sm text-text-2">This channel doesn't have any pinned messages yet.<br />Pin one from a message's "⋯" menu.</div>}
-          {pins?.map((m) => <MessageCard key={m.id} m={m} onJump={() => { if (jumpToMessage(m.id)) onClose(); else pushToast('That message is not loaded in this view yet', 'error') }}
+          {pins?.map((m) => <MessageCard key={m.id} m={m} onJump={() => { onClose(); void jumpToMessageAsync(channel.id, m.id).then((found) => { if (!found) pushToast('That message could not be found', 'error') }) }}
             action={canUnpin ? <button onClick={() => unpin(m)} title="Unpin" className="rounded p-0.5 text-text-2 hover:text-danger" data-unpin><PinOff size={14} /></button> : undefined} />)}
         </div>
       </div>
@@ -295,10 +308,8 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
     try { const next = await api.get<SearchResult>(url(res.results.length)); setRes({ ...next, results: [...res.results, ...next.results] }) } catch { /* keep */ } finally { setBusy(false) }
   }
   const jump = (m: SearchHit) => {
-    if (m.channel_id === channel.id) { if (!jumpToMessage(m.id)) onMiss(); return }
-    navigate(`/channels/${m.guild_id ?? '@me'}/${m.channel_id}`)
-    let tries = 0
-    const t = setInterval(() => { if (jumpToMessage(m.id) || ++tries > 20) clearInterval(t) }, 150)
+    if (m.channel_id !== channel.id) navigate(`/channels/${m.guild_id ?? '@me'}/${m.channel_id}`)
+    void jumpToMessageAsync(m.channel_id, m.id).then((found) => { if (!found) onMiss() })
   }
   const chip = (id: SearchScope, label: string) => <button key={id} type="button" onClick={() => setScope(id)} className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${scope === id ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-search-scope={id} aria-pressed={scope === id}>{label}</button>
   return (
