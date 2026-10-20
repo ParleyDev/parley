@@ -8,7 +8,7 @@ use crate::{
     models::{PrivateUser, User},
     state::AppState,
 };
-use axum::{extract::State, middleware::from_fn, routing::{get, patch, post}, Json, Router};
+use axum::{body::Body, extract::{Path, State}, http::header, middleware::from_fn, response::Response, routing::{get, patch, post}, Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -20,6 +20,9 @@ pub fn router() -> Router<AppState> {
         .route("/users/@me/password", post(change_password))
         .route("/users/@me/standing", get(standing))
         .route("/auth/confirm-email", post(confirm_email))
+        .route("/users/@me/disable", post(disable_account))
+        .route("/users/@me/data-exports", get(list_exports).post(request_export))
+        .route("/users/@me/data-exports/:id/download", get(download_export))
 }
 
 async fn check_password(state: &AppState, uid: Uuid, password: &str) -> AppResult<()> {
@@ -170,4 +173,118 @@ async fn standing(State(state): State<AppState>, AuthUser(uid): AuthUser) -> App
     let score = actioned + bans + timeouts;
     let level = if suspended { "suspended" } else if score >= 5 { "at_risk" } else if score >= 3 { "very_limited" } else if score >= 1 { "limited" } else { "all_good" };
     Ok(Json(json!({ "level": level, "actioned_reports": actioned, "bans": bans, "active_timeouts": timeouts, "suspended": suspended })))
+}
+
+#[derive(Deserialize)]
+struct DisableReq { password: String, code: Option<String> }
+
+/// Disable the account: every session ends and the account stays hidden until the next successful login,
+/// which re-enables it. Nothing is deleted.
+async fn disable_account(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<DisableReq>) -> AppResult<axum::http::StatusCode> {
+    crate::routes::mfa::check_password_and_factor(&state, uid, &req.password, req.code.as_deref()).await?;
+    sqlx::query("UPDATE users SET disabled_at = now() WHERE id = $1").bind(uid).execute(&state.db).await?;
+    crate::auth::revoke_sessions(&state, uid, None, None, "Your account was disabled. Log in again to re-enable it.").await?;
+    Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+// ---- Data export -----------------------------------------------------------------------------------
+
+pub const EXPORT_COOLDOWN_HOURS: i64 = 24;
+pub const EXPORT_KEEP_DAYS: i64 = 7;
+
+fn export_path(state: &AppState, id: Uuid) -> std::path::PathBuf {
+    state.config.upload_dir.join("exports").join(format!("{id}.json"))
+}
+
+#[derive(serde::Serialize, sqlx::FromRow)]
+struct Export { id: Uuid, status: String, requested_at: chrono::DateTime<chrono::Utc>, ready_at: Option<chrono::DateTime<chrono::Utc>>, size: i64, error: Option<String> }
+
+/// Your exports (newest first). Ones older than EXPORT_KEEP_DAYS are dropped on the way.
+async fn list_exports(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Export>>> {
+    let old: Vec<(Uuid,)> = sqlx::query_as("DELETE FROM data_exports WHERE user_id = $1 AND requested_at < now() - make_interval(days => $2) RETURNING id")
+        .bind(uid).bind(EXPORT_KEEP_DAYS as i32).fetch_all(&state.db).await?;
+    for (id,) in old { let _ = tokio::fs::remove_file(export_path(&state, id)).await; }
+    let rows = sqlx::query_as::<_, Export>("SELECT id, status, requested_at, ready_at, size, error FROM data_exports WHERE user_id = $1 ORDER BY requested_at DESC LIMIT 10")
+        .bind(uid).fetch_all(&state.db).await?;
+    Ok(Json(rows))
+}
+
+/// Start an export of everything we hold about you (one per EXPORT_COOLDOWN_HOURS). Built in the
+/// background; the list shows when it is ready and a mail goes out too.
+async fn request_export(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Export>> {
+    let last: Option<(chrono::DateTime<chrono::Utc>,)> = sqlx::query_as("SELECT requested_at FROM data_exports WHERE user_id = $1 ORDER BY requested_at DESC LIMIT 1").bind(uid).fetch_optional(&state.db).await?;
+    if let Some((t,)) = last {
+        let next = t + chrono::Duration::hours(EXPORT_COOLDOWN_HOURS);
+        if next > chrono::Utc::now() {
+            let mins = (next - chrono::Utc::now()).num_minutes().max(1);
+            return Err(AppError::TooMany(format!("You can request one export a day. Try again in {}.", if mins >= 60 { format!("{} hours", mins / 60) } else { format!("{mins} min") })));
+        }
+    }
+    let id = Uuid::now_v7();
+    let row = sqlx::query_as::<_, Export>("INSERT INTO data_exports (id, user_id) VALUES ($1, $2) RETURNING id, status, requested_at, ready_at, size, error")
+        .bind(id).bind(uid).fetch_one(&state.db).await?;
+    let st = state.clone();
+    tokio::spawn(async move {
+        match build_export(&st, uid, id).await {
+            Ok(size) => {
+                let _ = sqlx::query("UPDATE data_exports SET status = 'ready', ready_at = now(), size = $2 WHERE id = $1").bind(id).bind(size).execute(&st.db).await;
+                if crate::mail::enabled(&st.config) {
+                    if let Ok((email,)) = sqlx::query_as::<_, (String,)>("SELECT email FROM users WHERE id = $1").bind(uid).fetch_one(&st.db).await {
+                        let _ = crate::mail::send(&st.config, &email, "Your Parley data is ready", &format!("The copy of your data you asked for is ready. Download it from Settings → My Account → Your data within {EXPORT_KEEP_DAYS} days.")).await;
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = ?e, "data export failed");
+                let _ = sqlx::query("UPDATE data_exports SET status = 'failed', error = $2 WHERE id = $1").bind(id).bind(e.to_string()).execute(&st.db).await;
+            }
+        }
+    });
+    Ok(Json(row))
+}
+
+/// Everything about one user as a JSON document: account, memberships, messages, relationships, settings.
+async fn build_export(state: &AppState, uid: Uuid, id: Uuid) -> AppResult<i64> {
+    let db = &state.db;
+    let rows = |sql: &'static str| async move {
+        sqlx::query_scalar::<_, Value>(sql).bind(uid).fetch_one(db).await
+    };
+    let user = sqlx::query_as::<_, PrivateUser>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::PRIVATE_USER_COLS)).bind(uid).fetch_one(db).await?;
+    let doc = json!({
+        "exported_at": chrono::Utc::now(),
+        "format": "parley-data-export/1",
+        "account": user,
+        "servers": rows("SELECT COALESCE(json_agg(json_build_object('id', g.id, 'name', g.name, 'joined_at', gm.joined_at, 'nickname', gm.nickname, 'owner', g.owner_id = gm.user_id) ORDER BY gm.joined_at), '[]'::json) FROM guild_members gm JOIN guilds g ON g.id = gm.guild_id WHERE gm.user_id = $1").await?,
+        "direct_messages": rows("SELECT COALESCE(json_agg(json_build_object('id', c.id, 'kind', c.kind, 'name', c.name, 'recipients', (SELECT json_agg(json_build_object('id', u.id, 'username', u.username)) FROM channel_members m2 JOIN users u ON u.id = m2.user_id WHERE m2.channel_id = c.id))), '[]'::json) FROM channel_members cm JOIN channels c ON c.id = cm.channel_id WHERE cm.user_id = $1").await?,
+        "messages": rows("SELECT COALESCE(json_agg(json_build_object('id', m.id, 'channel_id', m.channel_id, 'content', m.content, 'created_at', m.created_at, 'edited_at', m.edited_at, 'reply_to', m.reply_to, 'kind', m.kind, 'attachments', (SELECT COALESCE(json_agg(json_build_object('id', a.id, 'filename', a.filename, 'content_type', a.content_type, 'size', a.size)), '[]'::json) FROM attachments a WHERE a.message_id = m.id)) ORDER BY m.id), '[]'::json) FROM messages m WHERE m.author_id = $1").await?,
+        "reactions": rows("SELECT COALESCE(json_agg(row_to_json(r)), '[]'::json) FROM reactions r WHERE r.user_id = $1").await?,
+        "relationships": rows("SELECT COALESCE(json_agg(json_build_object('user_id', r.target_id, 'username', u.username, 'kind', r.kind, 'created_at', r.created_at)), '[]'::json) FROM relationships r JOIN users u ON u.id = r.target_id WHERE r.user_id = $1").await?,
+        "notes": rows("SELECT COALESCE(json_agg(row_to_json(n)), '[]'::json) FROM user_notes n WHERE n.user_id = $1").await?,
+        "bookmarks": rows("SELECT COALESCE(json_agg(row_to_json(b)), '[]'::json) FROM bookmarks b WHERE b.user_id = $1").await?,
+        "notification_settings": rows("SELECT COALESCE(json_agg(row_to_json(n)), '[]'::json) FROM notification_settings n WHERE n.user_id = $1").await?,
+        "reviews_written": rows("SELECT COALESCE(json_agg(row_to_json(r)), '[]'::json) FROM user_reviews r WHERE r.author_id = $1").await?,
+        "reports_filed": rows("SELECT COALESCE(json_agg(json_build_object('id', r.id, 'kind', r.kind, 'reason', r.reason, 'status', r.status, 'created_at', r.created_at)), '[]'::json) FROM reports r WHERE r.reporter_id = $1").await?,
+        "sessions": rows("SELECT COALESCE(json_agg(json_build_object('ip', s.ip, 'user_agent', s.user_agent, 'created_at', s.created_at, 'last_seen_at', s.last_seen_at, 'revoked_at', s.revoked_at)), '[]'::json) FROM sessions s WHERE s.user_id = $1").await?,
+        "uploads": rows("SELECT COALESCE(json_agg(json_build_object('id', a.id, 'filename', a.filename, 'content_type', a.content_type, 'size', a.size, 'created_at', a.created_at)), '[]'::json) FROM attachments a WHERE a.uploader_id = $1").await?,
+    });
+    let bytes = serde_json::to_vec_pretty(&doc).map_err(|e| AppError::Other(e.into()))?;
+    let path = export_path(state, id);
+    if let Some(dir) = path.parent() { tokio::fs::create_dir_all(dir).await.map_err(|e| AppError::Other(e.into()))?; }
+    tokio::fs::write(&path, &bytes).await.map_err(|e| AppError::Other(e.into()))?;
+    Ok(bytes.len() as i64)
+}
+
+async fn download_export(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Response> {
+    let row: Option<(String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as("SELECT status, requested_at FROM data_exports WHERE id = $1 AND user_id = $2").bind(id).bind(uid).fetch_optional(&state.db).await?;
+    let (status, at) = row.ok_or_else(|| AppError::NotFound("Export not found".into()))?;
+    if status != "ready" {
+        return Err(AppError::BadRequest("That export is not ready yet.".into()));
+    }
+    let file = tokio::fs::File::open(export_path(&state, id)).await.map_err(|_| AppError::NotFound("Export file missing".into()))?;
+    let stream = tokio_util::io::ReaderStream::new(file);
+    Ok(Response::builder()
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::CONTENT_DISPOSITION, format!("attachment; filename=\"parley-data-{}.json\"", at.format("%Y-%m-%d")))
+        .body(Body::from_stream(stream))
+        .map_err(|e| AppError::Other(e.into()))?)
 }

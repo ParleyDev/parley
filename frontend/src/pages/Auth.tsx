@@ -29,12 +29,13 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setErr(null); setBusy(true)
     try {
       const res = mode === 'login'
-        ? await api.post<{ token: string; user: PrivateUser } | { mfa: true; ticket: string }>('/auth/login', { login: form.login, password: form.password })
+        ? await api.post<{ token: string; user: PrivateUser; reenabled?: boolean } | { mfa: true; ticket: string }>('/auth/login', { login: form.login, password: form.password })
         : await api.post<{ token: string; user: PrivateUser }>('/auth/register', {
             email: form.email, username: form.username, display_name: form.display_name || undefined, password: form.password,
           })
       if ('mfa' in res) { setMfaTicket(res.ticket); setCode(''); return }
       setAuth(res.token, res.user)
+      if ('reenabled' in res && res.reenabled) useStore.getState().pushToast('Welcome back! Your account has been re-enabled.')
       navigate(from, { replace: true })
     } catch (e) {
       setErr((e as Error).message)

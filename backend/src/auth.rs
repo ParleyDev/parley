@@ -87,7 +87,7 @@ pub async fn check_session(state: &AppState, user_id: Uuid, session_id: Uuid) ->
     }
     let row: Option<(bool,)> = sqlx::query_as(
         "SELECT s.last_seen_at < now() - interval '1 minute' FROM sessions s JOIN users u ON u.id = s.user_id
-         WHERE s.id = $1 AND s.user_id = $2 AND s.revoked_at IS NULL AND u.suspended_at IS NULL",
+         WHERE s.id = $1 AND s.user_id = $2 AND s.revoked_at IS NULL AND u.suspended_at IS NULL AND u.disabled_at IS NULL",
     )
     .bind(session_id)
     .bind(user_id)
