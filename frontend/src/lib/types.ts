@@ -33,6 +33,8 @@ export interface PrivateUser extends User {
   message_requests?: boolean
   friend_request_from?: FriendRequestSource[]
   group_dm_privacy?: 'friends' | 'nobody'
+  /** Default for 'allow DMs from server members' on servers you join. */
+  guild_dms_default?: boolean
   /** Server-side notification preferences (Settings → Notifications). */
   notif_prefs?: NotifPrefsServer
 }

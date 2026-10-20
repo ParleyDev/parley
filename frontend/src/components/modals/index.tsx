@@ -25,6 +25,7 @@ import CustomStatusModal from './CustomStatus'
 import ForwardModal from './Forward'
 import GroupMembersModal from './GroupMembers'
 import FolderSettingsModal from './FolderSettings'
+import GuildPrivacyModal from './GuildPrivacy'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
@@ -65,6 +66,7 @@ export default function Modals() {
     case 'forward': return <ForwardModal onClose={close} message={modal!.message} />
     case 'groupMembers': return <GroupMembersModal onClose={close} channelId={modal!.channelId} userIds={modal!.userIds} />
     case 'folderSettings': return <FolderSettingsModal onClose={close} folderId={modal!.folderId} />
+    case 'guildPrivacy': return <GuildPrivacyModal onClose={close} guildId={modal!.guildId} />
   }
   }
 }
