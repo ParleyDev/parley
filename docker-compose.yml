@@ -18,6 +18,10 @@ services:
     environment:
       DATABASE_URL: postgres://parley:parley@db:5432/parley
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-secret-change-me}
+      # Any secret-bearing variable (DATABASE_URL, JWT_SECRET, SMTP_URL, TENOR/GIPHY keys, METRICS_TOKEN, SENTRY_DSN) also
+      # accepts a *_FILE path, e.g. JWT_SECRET_FILE=/run/secrets/jwt_secret with a top-level `secrets:` block (README "Secrets").
+      # Set to 1 only while rolling back to an older image whose migrations lag the database (README "Upgrades and rollback").
+      MIGRATIONS_IGNORE_MISSING: ${MIGRATIONS_IGNORE_MISSING:-0}
       BIND_ADDR: 0.0.0.0:8080
       RUST_LOG: ${RUST_LOG:-info}
       # JSON array of RTCIceServer objects; add a TURN server for users behind strict NATs.

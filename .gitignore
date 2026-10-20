@@ -11,3 +11,4 @@ frontend/dist
 *.gate.lock*
 frontend/e2e/out/
 backups/
+secrets/
