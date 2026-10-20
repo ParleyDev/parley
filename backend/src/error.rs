@@ -20,6 +20,9 @@ pub enum AppError {
     NotFound(String),
     #[error("{0}")]
     Conflict(String),
+    /// 429 with a message: a per-feature cooldown (username changes, ...).
+    #[error("{0}")]
+    TooMany(String),
     #[error(transparent)]
     Db(#[from] sqlx::Error),
     #[error(transparent)]
@@ -40,6 +43,7 @@ impl IntoResponse for AppError {
             }
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             AppError::Conflict(m) => (StatusCode::CONFLICT, m.clone()),
+            AppError::TooMany(m) => (StatusCode::TOO_MANY_REQUESTS, m.clone()),
             AppError::Db(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND, "Not found".into()),
             AppError::Db(e) => {
                 tracing::error!(error = ?e, "database error");

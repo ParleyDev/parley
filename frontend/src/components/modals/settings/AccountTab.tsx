@@ -7,6 +7,7 @@ import MfaSection from './MfaSection'
 import SessionsSection from './SessionsSection'
 import StorageSection from './StorageSection'
 import DeleteAccountSection from './DeleteAccountSection'
+import { AccountChanges, StandingCard } from './AccountChanges'
 
 export default function AccountTab({ onClose, onEditProfile }: { onClose: () => void; onEditProfile: () => void }) {
   const user = useStore((s) => s.user)
@@ -32,8 +33,6 @@ export default function AccountTab({ onClose, onEditProfile }: { onClose: () => 
       <ProfileCard user={user} compact actions={<button type="button" onClick={onEditProfile} className="btn-primary py-1.5">Edit User Profile</button>} />
       <div className="rounded-xl bg-bg-0/50 p-4 space-y-4">
         <div><label className="label">Display name</label><input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} maxLength={32} required /></div>
-        <div><label className="label">Username</label><div className="text-sm">{user.username}</div></div>
-        <div><label className="label">Email</label><div className="text-sm">{user.email}</div></div>
       </div>
       {dirty && (
         <div className="sticky bottom-4 flex items-center justify-between rounded-lg bg-bg-0 border border-line px-4 py-3 shadow-xl">
@@ -42,6 +41,8 @@ export default function AccountTab({ onClose, onEditProfile }: { onClose: () => 
         </div>
       )}
     </form>
+    <AccountChanges />
+    <StandingCard />
     <MfaSection />
     <SessionsSection />
     <StorageSection />
