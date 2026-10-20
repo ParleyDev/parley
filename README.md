@@ -274,6 +274,12 @@ Open someone's profile popout: the pencil next to a friend's name sets a nicknam
 
 Group DMs: click the group icon in the header to upload a new one (any member); the owner can hand the group to another member from the member list (crown on hover, `PATCH /channels/:id {owner_id}`), which posts a "made X the group owner." notice.
 
+## Membership screening, featured servers, bookmark folders
+
+- **Rules**: Server Settings → Overview has a rules box (markdown, 4000 chars) and "Members must accept the rules before chatting". Invite pages and Discover previews show the rules; once inside, members who have not accepted see a bar above the composer with View rules → I agree (`POST /guilds/:id/rules/accept`, `guild_members.rules_accepted_at`, `GUILD_MEMBER_UPDATE`). Sending into a channel before accepting answers 403 `code: "rules_required"`. Turning the requirement on applies to existing members too.
+- **Featured and verified** (Discover): on an approved listing the admin review queue offers Verified (a badge the instance vouches with, shown on the card) and Featured with an order; featured servers lead the Discover home page (`PATCH /admin/discovery/:gid {featured_order, verified}`, audited as `discovery.update`).
+- **Bookmark folders**: each bookmark can be moved into a folder (or a new one) and reordered within it from the Bookmarks panel (`PATCH /users/@me/bookmarks/:mid {folder, position}`); the list groups by folder, loose bookmarks first.
+
 ## System messages
 
 Some actions leave a notice in the conversation, rendered as a one-line system row rather than a chat bubble (`kind` on the message; the actor is its author):
