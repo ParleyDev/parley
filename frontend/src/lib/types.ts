@@ -52,7 +52,10 @@ export interface UserProfile extends User {
   review_count?: number
   /** Computed by the server: admin, founder, veteran, host, verified, secure. */
   badges?: string[]
+  /** Linked external accounts the user shows on their profile. */
+  connections?: Connection[]
 }
+export interface Connection { id: string; provider: string; name: string; url: string; visible: boolean; created_at?: string }
 
 export interface Review {
   id: string

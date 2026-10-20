@@ -1,4 +1,6 @@
 import { Check, MessageSquare, MoreVertical, Search, UserPlus, Users, X } from 'lucide-react'
+import { useEffect as useEffectCb } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import InboxButton from './InboxButton'
 import { anchorOf } from '../lib/anchor'
 import { useEffect, useState, type FormEvent } from 'react'
@@ -13,6 +15,14 @@ import StyledName from './StyledName'
 type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add'
 
 export default function HomeView() {
+  const [params, setParams] = useSearchParams()
+  useEffectCb(() => {
+    const ok = params.get('connected'); const err = params.get('connect_error')
+    if (!ok && !err) return
+    useStore.getState().pushToast(ok ? `${ok[0].toUpperCase()}${ok.slice(1)} account linked. Manage it in Settings → Connections.` : `Could not link the account: ${err}`, ok ? undefined : 'error')
+    setParams({}, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const relationships = useStore((s) => s.relationships)
   const online = useStore((s) => s.online)
   const users = useStore((s) => s.users)

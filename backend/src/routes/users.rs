@@ -495,6 +495,7 @@ async fn get_user(
     v["mutual_guilds"] = json!(mutual.into_iter().map(|(gid, name, icon)| json!({ "id": gid, "name": name, "icon_url": icon })).collect::<Vec<_>>());
     v["mutual_friends"] = json!(friends.into_iter().map(|(fid, name, avatar)| json!({ "id": fid, "display_name": name, "avatar_url": avatar })).collect::<Vec<_>>());
     v["review_count"] = json!(review_count);
+    v["connections"] = json!(crate::routes::connections::visible_for(&state.db, id, me == id).await?.into_iter().map(|c| json!({ "id": c.id, "provider": c.provider, "name": c.name, "url": c.url, "visible": c.visible })).collect::<Vec<_>>());
     Ok(Json(v))
 }
 
