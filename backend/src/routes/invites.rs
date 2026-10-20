@@ -72,6 +72,7 @@ async fn accept(
         .rows_affected();
     if inserted > 0 {
         sqlx::query("UPDATE invites SET uses = uses + 1 WHERE code = $1").bind(&code).execute(&mut *tx).await?;
+        crate::routes::users::apply_join_defaults(&state.db, uid, gid).await;
     }
     let guild = sqlx::query_as::<_, Guild>(&format!("SELECT {GUILD_COLS} FROM guilds WHERE id = $1"))
         .bind(gid)

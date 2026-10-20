@@ -33,7 +33,10 @@ export interface PrivateUser extends User {
   message_requests?: boolean
   friend_request_from?: FriendRequestSource[]
   group_dm_privacy?: 'friends' | 'nobody'
+  /** Server-side notification preferences (Settings → Notifications). */
+  notif_prefs?: NotifPrefsServer
 }
+export interface NotifPrefsServer { push_timeout_min?: number; email_dms?: boolean; email_friend_requests?: boolean; default_suppress_everyone?: boolean; default_suppress_roles?: boolean }
 /** GET /users/:id adds the servers you share with that user. */
 export interface UserProfile extends User {
   mutual_guilds?: Pick<Guild, 'id' | 'name' | 'icon_url'>[]

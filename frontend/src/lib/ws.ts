@@ -77,6 +77,7 @@ export function connectSocket() {
 
   ws.onopen = () => {
     retry = 0
+    lastActivity = 0; activity()
     pingTimer = setInterval(() => { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ op: 'ping' })) }, 25000)
   }
   ws.onmessage = (e) => {
@@ -144,6 +145,7 @@ function handle(ev: Ev) {
           if (hidden) notify(ev.d.message)
           // A sound unless you are looking right at that channel in a focused window.
           if (hidden || !document.hasFocus() || s.activeChannelId !== ev.d.message.channel_id) playSfx(mentioned ? 'mention' : 'message')
+          speak(ev.d.message, s.activeChannelId === ev.d.message.channel_id)
         }
       }
       break
@@ -214,6 +216,30 @@ function voiceSfx(s: ReturnType<typeof useStore.getState>, v: VoiceState) {
   else if (was?.channel_id === mine && v.channel_id !== mine) playSfx('user_leave')
 }
 
+/** Text-to-speech notifications: never / only the channel you are looking at / all. */
+function speak(m: Message, current: boolean) {
+  const mode = getNotifPrefs().tts
+  if (mode === 'never' || (mode === 'current' && !current) || useStore.getState().selfDeaf) return
+  const text = `${m.author.display_name} said ${m.content ? m.content.slice(0, 200) : 'sent an attachment'}`
+  ;(window.__parleyTts ??= []).push(text)
+  try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); speechSynthesis.speak(u) } } catch { /* ignore */ }
+}
+
+// Activity pings: tell the server we are at the keyboard (at most once a minute) so push notifications wait
+// for the inactive timeout instead of firing while we are reading.
+let lastActivity = 0
+function activity() {
+  if (document.visibilityState !== 'visible') return
+  const now = Date.now()
+  if (now - lastActivity < 60_000) return
+  lastActivity = now
+  sendOp({ op: 'activity' })
+}
+if (typeof window !== 'undefined') {
+  for (const ev of ['keydown', 'pointerdown', 'focus']) window.addEventListener(ev, activity, { passive: true })
+  document.addEventListener('visibilitychange', activity)
+}
+
 function notify(m: Message) {
   try {
     if (getNotifPrefs().desktop && 'Notification' in window && Notification.permission === 'granted') {
@@ -225,5 +251,5 @@ function notify(m: Message) {
 
 setInterval(() => useStore.getState().pruneTyping(), 2000)
 
-declare global { interface Window { __parleyWs?: typeof wsStats } }
+declare global { interface Window { __parleyWs?: typeof wsStats; __parleyTts?: string[] } }
 if (typeof window !== 'undefined') window.__parleyWs = wsStats

@@ -162,6 +162,7 @@ async fn send_request(
     tx.commit().await?;
     emit_add(&state, uid, target.id).await?;
     if status == StatusCode::OK { settle_requests(&state, uid, target.id).await; }
+    else { mail_friend_request(&state, uid, target.id).await; }
     Ok((status, Json(one(&state.db, uid, target.id).await?)))
 }
 
@@ -177,6 +178,17 @@ async fn accept(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tar
     emit_add(&state, uid, target).await?;
     settle_requests(&state, uid, target).await;
     Ok(Json(one(&state.db, uid, target).await?))
+}
+
+/// Email the target about a new friend request when they are offline and have not turned those mails off.
+async fn mail_friend_request(state: &AppState, from: Uuid, target: Uuid) {
+    if !crate::mail::enabled(&state.config) { return }
+    if crate::ws::bus::online_users(&state.db).await.contains(&target) { return }
+    let row: Option<(String, bool)> = sqlx::query_as("SELECT email, COALESCE((notif_prefs->>'email_friend_requests')::bool, true) FROM users WHERE id = $1").bind(target).fetch_optional(&state.db).await.unwrap_or(None);
+    let Some((email, wants)) = row else { return };
+    if !wants { return }
+    let name = crate::audit::username(state, from).await;
+    let _ = crate::mail::send(&state.config, &email, &format!("{name} sent you a friend request"), &format!("{name} wants to be your friend on Parley. Accept or ignore it from the Friends page: {}/channels/@me\n\nTurn these mails off in Settings → Notifications.", state.config.app_url)).await;
 }
 
 /// New friends: any message request between them is accepted and both sides get the updated channel.

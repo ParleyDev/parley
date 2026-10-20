@@ -60,6 +60,8 @@ enum ClientOp {
     VoiceState { self_mute: bool, self_deaf: bool, #[serde(default)] self_video: bool, #[serde(default)] self_stream: bool },
     /// WebRTC signaling relayed verbatim to one peer in the same voice channel.
     VoiceSignal { to: Uuid, data: Value },
+    /// The user is active at the keyboard (sent at most once a minute while focused): feeds the push inactive timeout.
+    Activity,
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid, resume_from: Option<u64>) {
@@ -179,7 +181,10 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
                       (SELECT suppress_everyone FROM notification_settings WHERE user_id = $1 AND target_id = m.channel_id),
                       (SELECT ns.suppress_everyone FROM notification_settings ns JOIN channels c ON c.guild_id = ns.target_id WHERE ns.user_id = $1 AND c.id = m.channel_id),
                       false))
-                OR m.mention_roles && $3::uuid[])
+                OR (m.mention_roles && $3::uuid[] AND NOT COALESCE(
+                      (SELECT suppress_roles FROM notification_settings WHERE user_id = $1 AND target_id = m.channel_id),
+                      (SELECT ns.suppress_roles FROM notification_settings ns JOIN channels c ON c.guild_id = ns.target_id WHERE ns.user_id = $1 AND c.id = m.channel_id),
+                      false)))
          GROUP BY m.channel_id",
     )
     .bind(user_id)
@@ -435,6 +440,9 @@ async fn handle_client_op(
         }
         ClientOp::Ping => {
             let _ = tx.send(Message::Text(json!({"t":"PONG","d":{}}).to_string())).await;
+        }
+        ClientOp::Activity => {
+            let _ = sqlx::query("UPDATE users SET active_at = now() WHERE id = $1").bind(user_id).execute(&state.db).await;
         }
         ClientOp::Typing { channel_id } => {
             if let Ok((c, p)) = crate::routes::channels::require_channel_perms(&state.db, channel_id, user_id).await {

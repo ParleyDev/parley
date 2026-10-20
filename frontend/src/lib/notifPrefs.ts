@@ -30,16 +30,23 @@ export const SOUND_LABELS: { key: SoundKey; label: string; hint?: string }[] = [
   { key: 'invite_speak', label: 'Invited to Speak', hint: 'A stage moderator invites you to the stage' },
 ]
 
+export type Tts = 'never' | 'current' | 'all'
 export interface NotifPrefs {
   /** Show desktop (browser) notifications for messages that would notify you, when the tab is hidden. */
   desktop: boolean
   sounds: Record<SoundKey, boolean>
   /** Volume of every sound, 0..100 (%). */
   volume: number
+  /** Unread badge: a count on the tab icon (and the app icon where supported). */
+  badge: boolean
+  /** Read notifying messages aloud: never, only in the channel you are looking at, or all of them. */
+  tts: Tts
+  /** A reply to one of your messages counts as a mention. */
+  replyMentions: boolean
 }
 
 const allOn = (): Record<SoundKey, boolean> => Object.fromEntries(SOUND_LABELS.map((s) => [s.key, true])) as Record<SoundKey, boolean>
-export const DEFAULT_NOTIF_PREFS: NotifPrefs = { desktop: true, sounds: allOn(), volume: 100 }
+export const DEFAULT_NOTIF_PREFS: NotifPrefs = { desktop: true, sounds: allOn(), volume: 100, badge: true, tts: 'never', replyMentions: true }
 const KEY = `${STORAGE_PREFIX}notifications`
 
 function load(): NotifPrefs {
@@ -52,7 +59,8 @@ function load(): NotifPrefs {
       return prefs
     }
     const p = JSON.parse(raw) as Partial<NotifPrefs>
-    return { desktop: p.desktop !== false, sounds: { ...allOn(), ...(p.sounds ?? {}) }, volume: typeof p.volume === 'number' ? Math.max(0, Math.min(100, p.volume)) : 100 }
+    return { desktop: p.desktop !== false, sounds: { ...allOn(), ...(p.sounds ?? {}) }, volume: typeof p.volume === 'number' ? Math.max(0, Math.min(100, p.volume)) : 100,
+      badge: p.badge !== false, tts: p.tts === 'current' || p.tts === 'all' ? p.tts : 'never', replyMentions: p.replyMentions !== false }
   } catch { return { ...DEFAULT_NOTIF_PREFS, sounds: allOn() } }
 }
 

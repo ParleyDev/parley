@@ -1,4 +1,5 @@
 import { Check, MessageSquare, MoreVertical, Search, UserPlus, Users, X } from 'lucide-react'
+import InboxButton from './InboxButton'
 import { anchorOf } from '../lib/anchor'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -44,6 +45,7 @@ export default function HomeView() {
         <TabBtn id="pending" label="Pending" badge={pending} />
         <TabBtn id="blocked" label="Blocked" />
         <button onClick={() => setTab('add')} className={`text-sm rounded-md px-2.5 py-0.5 font-semibold whitespace-nowrap ${tab === 'add' ? 'text-success' : 'bg-success text-black hover:bg-success/80'}`}>Add Friend</button>
+              <span className="ml-auto"><InboxButton /></span>
       </header>
 
       {tab === 'add' ? <AddFriend /> : (

@@ -1,4 +1,5 @@
 import { STORAGE_PREFIX } from './lib/brand'
+import { getNotifPrefs } from './lib/notifPrefs'
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
@@ -179,7 +180,7 @@ interface State {
   setInstance: (i: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; app_url?: string }) => void
   setNotifSetting: (s: NotifSetting & { deleted?: boolean }) => void
   /** PUT a notification setting (level / mute / suppress) for a server, channel or DM. */
-  updateNotif: (target: string, body: { level?: string; mute_minutes?: number; unmute?: boolean; suppress_everyone?: boolean }) => Promise<void>
+  updateNotif: (target: string, body: { level?: string; mute_minutes?: number; unmute?: boolean; suppress_everyone?: boolean; suppress_roles?: boolean }) => Promise<void>
   upsertRelationship: (r: Relationship) => void
   removeRelationship: (userId: string) => void
   upsertRole: (r: Role) => void
@@ -875,9 +876,11 @@ const ALL_PERMS = -1 >>> 1
 export function mentionsMe(s: Pick<State, 'user' | 'members' | 'notifSettings' | 'channels' | 'dms'>, m: Message): boolean {
   const me = s.user?.id
   if (!me) return false
-  if (m.mention_everyone && !effective(s.notifSettings, s.channels[m.channel_id] ?? s.dms[m.channel_id]).suppressEveryone) return true
+  const eff = effective(s.notifSettings, s.channels[m.channel_id] ?? s.dms[m.channel_id])
+  if (m.mention_everyone && !eff.suppressEveryone) return true
   if (m.mentions?.includes(me)) return true
-  if (m.mention_roles?.length) { for (const g of Object.values(s.members)) { const mine = g[me]?.roles ?? []; if (m.mention_roles.some((r) => mine.includes(r))) return true } }
+  if (m.referenced?.author.id === me && getNotifPrefs().replyMentions) return true
+  if (m.mention_roles?.length && !eff.suppressRoles) { for (const g of Object.values(s.members)) { const mine = g[me]?.roles ?? []; if (m.mention_roles.some((r) => mine.includes(r))) return true } }
   return false
 }
 
