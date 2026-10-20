@@ -67,6 +67,10 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default = "default_friends")]
     pub group_dm_privacy: String,
+    /// Notifications: push_timeout_min, email_dms, email_friend_requests, default_suppress_everyone, default_suppress_roles.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub notif_prefs: serde_json::Value,
     /// Profile flair: preset avatar frame ('' = none), short clan tag, optional panels (wishlist / games).
     #[sqlx(default)]
     #[serde(default)]

@@ -19,6 +19,7 @@ import { useSwipe } from '../lib/swipe'
 import { useKeybinds } from '../lib/keybinds'
 import { setNativeNavigator } from '../lib/native'
 import { voice } from '../lib/voice'
+import { initBadge } from '../lib/badge'
 import { useMemo } from 'react'
 
 /**
@@ -27,6 +28,7 @@ import { useMemo } from 'react'
  * guild bar + sidebar + content + member list sit side by side.
  */
 export default function AppShell() {
+  useEffect(() => { initBadge() }, [])
   const connected = useStore((s) => s.connected)
   const pane = useStore((s) => s.mobilePane)
   const announcement = useStore((s) => s.instance.announcement)

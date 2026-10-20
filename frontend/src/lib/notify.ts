@@ -1,21 +1,21 @@
 import type { Channel, DmChannel, Message } from './types'
 
 export type NotifLevel = 'default' | 'all' | 'mentions' | 'nothing'
-export interface NotifSetting { target_id: string; level: NotifLevel; muted_until: string | null; suppress_everyone: boolean }
-export interface Effective { level: 'all' | 'mentions' | 'nothing'; muted: boolean; suppressEveryone: boolean }
+export interface NotifSetting { target_id: string; level: NotifLevel; muted_until: string | null; suppress_everyone: boolean; suppress_roles?: boolean }
+export interface Effective { level: 'all' | 'mentions' | 'nothing'; muted: boolean; suppressEveryone: boolean; suppressRoles: boolean }
 
 const isMuted = (s?: NotifSetting) => !!s?.muted_until && new Date(s.muted_until).getTime() > Date.now()
 
 /** Channel setting overrides the server's; DMs default to all messages. */
 export function effective(settings: Record<string, NotifSetting>, channel: (Pick<Channel | DmChannel, 'id' | 'guild_id'> & { parent_id?: string | null; kind?: string }) | undefined): Effective {
-  if (!channel) return { level: 'all', muted: false, suppressEveryone: false }
+  if (!channel) return { level: 'all', muted: false, suppressEveryone: false, suppressRoles: false }
   // A thread without its own setting follows its parent channel, which follows the server.
   const own = settings[channel.id]
   const parent = channel.kind === 'thread' && channel.parent_id ? settings[channel.parent_id] : undefined
   const ch = own?.level && own.level !== 'default' ? own : parent?.level && parent.level !== 'default' ? parent : own ?? parent
   const g = channel.guild_id ? settings[channel.guild_id] : undefined
   const level = (ch?.level && ch.level !== 'default' ? ch.level : g?.level && g.level !== 'default' ? g.level : 'all') as Effective['level']
-  return { level, muted: isMuted(own) || isMuted(parent) || isMuted(g), suppressEveryone: !!(own?.suppress_everyone || parent?.suppress_everyone || g?.suppress_everyone) }
+  return { level, muted: isMuted(own) || isMuted(parent) || isMuted(g), suppressEveryone: !!(own?.suppress_everyone || parent?.suppress_everyone || g?.suppress_everyone), suppressRoles: !!(own?.suppress_roles || parent?.suppress_roles || g?.suppress_roles) }
 }
 
 export const mutedTarget = (settings: Record<string, NotifSetting>, id: string) => isMuted(settings[id])

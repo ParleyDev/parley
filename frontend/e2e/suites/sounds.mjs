@@ -5,6 +5,8 @@ import { WEB, S, reg, call, ok, finish } from '../lib.mjs'
 const a = await reg('alice'); const b = await reg('bob')
 const g = await call(a.token, 'POST', '/guilds', { name: `Sounds ${S}` }); const tc = g.channels.find((x) => x.kind === 'text'); const vc = g.channels.find((x) => x.kind === 'voice')
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`)
+// Friends first: a DM from a stranger would wait quietly in Message Requests.
+await call(a.token, 'POST', '/users/@me/relationships', { user_id: b.user.id }); await call(b.token, 'PUT', `/users/@me/relationships/${a.user.id}`)
 const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
 const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
 const mk = async (tok, url) => { const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(url); await p.waitForSelector('[data-user-panel-bar]'); return p }

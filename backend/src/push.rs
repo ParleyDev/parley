@@ -89,22 +89,52 @@ pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, d
 /// muted the channel or server. Runs in the background; never blocks the request.
 pub fn after_message(state: AppState, msg: crate::models::Message, channel: crate::models::Channel) {
     tokio::spawn(async move {
-        if !enabled(&state).await { return; }
+        let push_on = enabled(&state).await;
+        let mail_on = crate::mail::enabled(&state.config);
+        if !push_on && !mail_on { return; }
         let online = crate::ws::bus::online_users(&state.db).await;
         let candidates: Vec<Uuid> = if channel.guild_id.is_none() {
             sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM channel_members WHERE channel_id = $1 AND user_id <> $2").bind(channel.id).bind(msg.author.id).fetch_all(&state.db).await.unwrap_or_default().into_iter().map(|r| r.0).collect()
         } else {
             msg.mentions.iter().copied().filter(|u| *u != msg.author.id).collect()
         };
-        let mut targets: Vec<Uuid> = Vec::new();
+        let mut targets: Vec<Uuid> = Vec::new();   // push: offline, or online but idle past their timeout
+        let mut mail_to: Vec<Uuid> = Vec::new();   // email: offline, opted in, not mailed in the last hour
         for u in candidates {
-            if online.contains(&u) { continue; }
             let muted: Option<(bool,)> = sqlx::query_as(
                 "SELECT true FROM notification_settings WHERE user_id = $1 AND target_id = ANY($2) AND (level = 'nothing' OR (muted_until IS NOT NULL AND muted_until > now())) LIMIT 1",
             ).bind(u).bind(&[Some(channel.id), channel.guild_id].into_iter().flatten().collect::<Vec<Uuid>>()).fetch_optional(&state.db).await.unwrap_or(None);
-            if muted.is_none() { targets.push(u); }
+            if muted.is_some() { continue; }
+            if online.contains(&u) {
+                // Online somewhere: push only once they have been idle longer than their inactive timeout.
+                let idle: Option<(bool,)> = sqlx::query_as(
+                    "SELECT COALESCE(active_at, now()) < now() - make_interval(mins => COALESCE((notif_prefs->>'push_timeout_min')::int, 10)) FROM users WHERE id = $1",
+                ).bind(u).fetch_optional(&state.db).await.unwrap_or(None);
+                if idle.map(|x| x.0).unwrap_or(false) { targets.push(u); }
+                continue;
+            }
+            targets.push(u);
+            if mail_on {
+                let wants: Option<(bool,)> = sqlx::query_as(
+                    "SELECT COALESCE((notif_prefs->>'email_dms')::bool, true) AND (notify_mailed_at IS NULL OR notify_mailed_at < now() - interval '1 hour') FROM users WHERE id = $1",
+                ).bind(u).fetch_optional(&state.db).await.unwrap_or(None);
+                if wants.map(|x| x.0).unwrap_or(false) { mail_to.push(u); }
+            }
         }
-        if targets.is_empty() { return; }
+        if !mail_to.is_empty() {
+            let where_ = if let Some(gid) = channel.guild_id {
+                let g: Option<(String,)> = sqlx::query_as("SELECT name FROM guilds WHERE id = $1").bind(gid).fetch_optional(&state.db).await.unwrap_or(None);
+                format!("#{} in {}", channel.name, g.map(|x| x.0).unwrap_or_default())
+            } else { "a direct message".to_string() };
+            let snippet: String = if msg.content.is_empty() { "(an attachment)".into() } else { msg.content.chars().take(200).collect() };
+            for u in &mail_to {
+                if let Ok((email,)) = sqlx::query_as::<_, (String,)>("UPDATE users SET notify_mailed_at = now() WHERE id = $1 RETURNING email").bind(u).fetch_one(&state.db).await {
+                    let body = format!("{} sent you a message in {}:\n\n{}\n\nOpen Parley: {}\n\nYou get at most one of these an hour while you are away. Turn them off in Settings → Notifications.", msg.author.display_name, where_, snippet, state.config.app_url);
+                    let _ = crate::mail::send(&state.config, &email, &format!("New message from {}", msg.author.display_name), &body).await;
+                }
+            }
+        }
+        if !push_on || targets.is_empty() { return; }
         let where_ = if let Some(gid) = channel.guild_id {
             let g: Option<(String,)> = sqlx::query_as("SELECT name FROM guilds WHERE id = $1").bind(gid).fetch_optional(&state.db).await.unwrap_or(None);
             format!("#{} · {}", channel.name, g.map(|x| x.0).unwrap_or_default())

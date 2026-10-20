@@ -22,6 +22,8 @@ pub fn router() -> Router<AppState> {
         .route("/auth/confirm-email", post(confirm_email))
         .route("/users/@me/disable", post(disable_account))
         .route("/users/@me/privacy", patch(update_privacy))
+        .route("/users/@me/notification-prefs", patch(update_notif_prefs))
+        .route("/users/@me/mentions", get(recent_mentions))
         .route("/users/@me/data-exports", get(list_exports).post(request_export))
         .route("/users/@me/data-exports/:id/download", get(download_export))
 }
@@ -310,4 +312,37 @@ async fn update_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     let u = private(&state, uid).await?;
     state.hub.emit_users(vec![uid], "USER_UPDATE", json!(u));
     Ok(Json(u))
+}
+
+/// Notification preferences kept on the server (they affect push, mail and new servers):
+/// push_timeout_min (1–120), email_dms, email_friend_requests, default_suppress_everyone, default_suppress_roles.
+async fn update_notif_prefs(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<Value>) -> AppResult<Json<PrivateUser>> {
+    let Some(obj) = req.as_object() else { return Err(AppError::BadRequest("Expected an object".into())) };
+    let mut clean = serde_json::Map::new();
+    for (k, v) in obj {
+        match k.as_str() {
+            "push_timeout_min" => { let n = v.as_i64().ok_or_else(|| AppError::BadRequest("push_timeout_min must be a number".into()))?; clean.insert(k.clone(), json!(n.clamp(1, 120))); }
+            "email_dms" | "email_friend_requests" | "default_suppress_everyone" | "default_suppress_roles" => { let b = v.as_bool().ok_or_else(|| AppError::BadRequest(format!("{k} must be true or false")))?; clean.insert(k.clone(), json!(b)); }
+            _ => return Err(AppError::BadRequest(format!("Unknown preference {k}"))),
+        }
+    }
+    sqlx::query("UPDATE users SET notif_prefs = notif_prefs || $2 WHERE id = $1").bind(uid).bind(Value::Object(clean)).execute(&state.db).await?;
+    let u = private(&state, uid).await?;
+    state.hub.emit_users(vec![uid], "USER_UPDATE", json!(u));
+    Ok(Json(u))
+}
+
+#[derive(Deserialize)]
+struct MentionsQ { limit: Option<i64> }
+
+/// Inbox: recent messages that mention you by name (last 30 days, newest first) in channels you can read.
+async fn recent_mentions(State(state): State<AppState>, AuthUser(uid): AuthUser, axum::extract::Query(q): axum::extract::Query<MentionsQ>) -> AppResult<Json<Vec<crate::models::Message>>> {
+    let limit = q.limit.unwrap_or(30).clamp(1, 100);
+    let rows = sqlx::query_as::<_, crate::models::MessageRow>(&format!(
+        "{} JOIN channels c ON c.id = m.channel_id
+         WHERE m.mentions @> ARRAY[$1]::uuid[] AND m.author_id <> $1 AND m.created_at > now() - interval '30 days'
+           AND (c.guild_id IN (SELECT guild_id FROM guild_members WHERE user_id = $1) OR c.id IN (SELECT channel_id FROM channel_members WHERE user_id = $1))
+         ORDER BY m.id DESC LIMIT $2", crate::routes::channels::MESSAGE_SELECT))
+        .bind(uid).bind(limit).fetch_all(&state.db).await?;
+    Ok(Json(crate::routes::channels::hydrate(&state.db, rows, uid, false).await?))
 }

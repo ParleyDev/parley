@@ -135,6 +135,7 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
         .execute(&state.db)
         .await?
         .rows_affected();
+    if inserted > 0 { crate::routes::users::apply_join_defaults(&state.db, uid, gid).await; }
     let guild = sqlx::query_as::<_, crate::models::Guild>(&format!("SELECT {GUILD_COLS} FROM guilds WHERE id = $1")).bind(gid).fetch_one(&state.db).await?;
     let channels = perms::visible_channels(&state.db, gid, uid).await?;
     let roles = perms::list_roles(&state.db, gid).await?;

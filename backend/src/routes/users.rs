@@ -38,10 +38,23 @@ pub struct NotifSetting {
     pub level: String,
     pub muted_until: Option<chrono::DateTime<chrono::Utc>>,
     pub suppress_everyone: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub suppress_roles: bool,
+}
+
+/// On joining a server, seed its notification setting from the user's defaults (suppress @everyone / role mentions).
+pub async fn apply_join_defaults(db: &sqlx::PgPool, uid: Uuid, guild_id: Uuid) {
+    let _ = sqlx::query(
+        "INSERT INTO notification_settings (user_id, target_id, suppress_everyone, suppress_roles)
+         SELECT id, $2, COALESCE((notif_prefs->>'default_suppress_everyone')::bool, false), COALESCE((notif_prefs->>'default_suppress_roles')::bool, false)
+         FROM users WHERE id = $1 AND (COALESCE((notif_prefs->>'default_suppress_everyone')::bool, false) OR COALESCE((notif_prefs->>'default_suppress_roles')::bool, false))
+         ON CONFLICT (user_id, target_id) DO NOTHING",
+    ).bind(uid).bind(guild_id).execute(db).await;
 }
 
 pub async fn notif_settings_for(db: &sqlx::PgPool, uid: Uuid) -> AppResult<Vec<NotifSetting>> {
-    Ok(sqlx::query_as::<_, NotifSetting>("SELECT target_id, level, muted_until, suppress_everyone FROM notification_settings WHERE user_id = $1").bind(uid).fetch_all(db).await?)
+    Ok(sqlx::query_as::<_, NotifSetting>("SELECT target_id, level, muted_until, suppress_everyone, suppress_roles FROM notification_settings WHERE user_id = $1").bind(uid).fetch_all(db).await?)
 }
 
 async fn list_notif(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<NotifSetting>>> {
@@ -56,6 +69,7 @@ struct PutNotif {
     #[serde(default)]
     unmute: bool,
     suppress_everyone: Option<bool>,
+    suppress_roles: Option<bool>,
 }
 
 /// Upsert the setting for a server or channel the user can see.
@@ -84,12 +98,13 @@ async fn put_notif(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(
         req.mute_minutes.map(|m| Some(if m <= 0 { chrono::Utc::now() + chrono::Duration::days(365 * 100) } else { chrono::Utc::now() + chrono::Duration::minutes(m.min(60 * 24 * 365)) }))
     };
     sqlx::query(
-        "INSERT INTO notification_settings (user_id, target_id, level, muted_until, suppress_everyone)
-         VALUES ($1, $2, COALESCE($3, 'default'), $4, COALESCE($5, false))
+        "INSERT INTO notification_settings (user_id, target_id, level, muted_until, suppress_everyone, suppress_roles)
+         VALUES ($1, $2, COALESCE($3, 'default'), $4, COALESCE($5, false), COALESCE($7, false))
          ON CONFLICT (user_id, target_id) DO UPDATE SET
            level = COALESCE($3, notification_settings.level),
            muted_until = CASE WHEN $6 THEN $4 ELSE notification_settings.muted_until END,
            suppress_everyone = COALESCE($5, notification_settings.suppress_everyone),
+           suppress_roles = COALESCE($7, notification_settings.suppress_roles),
            updated_at = now()",
     )
     .bind(uid)
@@ -98,6 +113,7 @@ async fn put_notif(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(
     .bind(muted_until.clone().flatten())
     .bind(req.suppress_everyone)
     .bind(muted_until.is_some())
+    .bind(req.suppress_roles)
     .execute(&state.db)
     .await?;
     let row = sqlx::query_as::<_, NotifSetting>("SELECT target_id, level, muted_until, suppress_everyone FROM notification_settings WHERE user_id = $1 AND target_id = $2").bind(uid).bind(target).fetch_one(&state.db).await?;
@@ -154,7 +170,7 @@ async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
 }
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, avatar_decoration, clan_tag, panels";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, dm_privacy, message_requests, friend_request_from, group_dm_privacy, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, dm_privacy, message_requests, friend_request_from, group_dm_privacy, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {

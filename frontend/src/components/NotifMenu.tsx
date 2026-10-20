@@ -12,7 +12,10 @@ export function notifEntries(target: string, what: 'Server' | 'Channel' | 'Conve
   const levels: MenuItem[] = [
     ...(opts.serverDefault ? [{ label: 'Use Server Default', icon: level === 'default' ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { level: 'default' }) }] : []),
     ...(['all', 'mentions', 'nothing'] as const).map((l) => ({ label: LEVEL_LABELS[l], icon: level === l || (!opts.serverDefault && level === 'default' && l === 'all') ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { level: l }) })),
-    ...(opts.suppress ? [{ label: `${cur?.suppress_everyone ? 'Allow' : 'Suppress'} @everyone and @here`, icon: cur?.suppress_everyone ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { suppress_everyone: !cur?.suppress_everyone }) }] : []),
+    ...(opts.suppress ? [
+      { label: `${cur?.suppress_everyone ? 'Allow' : 'Suppress'} @everyone and @here`, icon: cur?.suppress_everyone ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { suppress_everyone: !cur?.suppress_everyone }) },
+      { label: `${cur?.suppress_roles ? 'Allow' : 'Suppress'} role @mentions`, icon: cur?.suppress_roles ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { suppress_roles: !cur?.suppress_roles }) },
+    ] : []),
   ]
   return [
     muted

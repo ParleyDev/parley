@@ -16,6 +16,7 @@ import ChatPane from './ChatPane'
 import { ThreadPanel, ThreadsPanel } from './ThreadPanel'
 import ForumView from './ForumView'
 import DmCall from './DmCall'
+import InboxButton from './InboxButton'
 import DmProfilePanel from './DmProfilePanel'
 import { MembersToggle, MobileBack } from './HeaderBits'
 import { useT } from '../lib/i18n'
@@ -145,6 +146,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
             </>
           )}
           <span className="ml-auto flex items-center gap-0.5">
+            <InboxButton />
             {isDm && (
               <>
                 <button onClick={() => startCall(false)} title="Start Voice Call" className={btn(myVoice === channel.id)} data-start-call><Phone size={20} /></button>
