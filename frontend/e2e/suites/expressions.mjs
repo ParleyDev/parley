@@ -48,7 +48,9 @@ ok('edit sticker', (await call(a.token,'PATCH',`/guilds/${g.id}/stickers/${st.id
 ok('READY-style list includes it', (await call(b.token,'GET',`/guilds/${g.id}/stickers`)).length===1)
 
 console.log('-- gifs')
-r=await raw(a.token,'GET','/gifs/search?q=cat'); const gj=await r.json(); ok('GIF search without a key explains how to enable it', r.status===400 && /TENOR_API_KEY/.test(gj.error), JSON.stringify(gj))
+r=await raw(a.token,'GET','/gifs/search?q=cat'); const gj=await r.json(); const gifsOn = r.status===200
+if (gifsOn) ok('GIF search works with the configured provider key', Array.isArray(gj.results) && gj.results.length>0 && typeof gj.provider==='string', JSON.stringify(gj).slice(0,120))
+else ok('GIF search without a key explains how to enable it', r.status===400 && /TENOR_API_KEY/.test(gj.error), JSON.stringify(gj))
 
 console.log('-- UI')
 const browser=await chromium.launch(); const errors=[]
@@ -92,7 +94,8 @@ ok('sticker tab lists server stickers', await pa.locator('[data-picker-tab="stic
 await pa.click('[data-sticker-btn="Party Time"]'); await pa.waitForTimeout(700)
 ok('clicking a sticker sends it (both sides)', await pa.locator('[data-msg-sticker="Party Time"]').count()===2 && await pb.locator('[data-msg-sticker="Party Time"]').count()===2 && await pa.locator('[data-expression-picker]').count()===0)
 await pa.click('[data-gif-button]'); await pa.waitForTimeout(600)
-ok('GIF tab explains the missing key', await pa.locator('[data-picker-tab="gif"] [data-gif-error]:has-text("TENOR_API_KEY")').count()===1)
+if (gifsOn) ok('GIF tab shows results with a provider key', await pa.locator('[data-picker-tab="gif"] [data-gif-error]').count()===0)
+else ok('GIF tab explains the missing key', await pa.locator('[data-picker-tab="gif"] [data-gif-error]:has-text("TENOR_API_KEY")').count()===1)
 await pa.screenshot({ path: '53-gif-tab.png' })
 await pa.click('[data-tab="emoji"]'); await pa.waitForTimeout(200); ok('tabs switch inside the picker', await pa.locator('[data-picker-tab="emoji"]').count()===1)
 await pa.keyboard.press('Escape'); await pa.waitForTimeout(200)
