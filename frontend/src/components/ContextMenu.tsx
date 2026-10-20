@@ -6,7 +6,8 @@ export type MenuItem = { label: string; icon?: ReactNode; danger?: boolean; acce
 /** 'sep' draws a divider; a React node is rendered as-is (e.g. the quick-reaction row). */
 export type MenuEntry = MenuItem | 'sep' | { node: ReactNode }
 
-export interface MenuState { x: number; y: number; items: MenuEntry[] }
+/** `above`: (x, y) is the bottom-left corner the menu should sit above (a button), instead of the top-left at a cursor. */
+export interface MenuState { x: number; y: number; items: MenuEntry[]; above?: boolean }
 
 /**
  * Right-click menu state: `open(e, items)` positions the menu at the cursor, `menu` is what to render.
@@ -14,25 +15,25 @@ export interface MenuState { x: number; y: number; items: MenuEntry[] }
  */
 export function useContextMenu() {
   const [menu, setMenu] = useState<MenuState | null>(null)
-  const open = (e: MouseEvent | { clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void }, items: MenuEntry[]) => {
+  const open = (e: MouseEvent | { clientX: number; clientY: number; preventDefault?: () => void; stopPropagation?: () => void }, items: MenuEntry[], opts: { above?: boolean } = {}) => {
     e.preventDefault?.(); e.stopPropagation?.()
     if (!items.length) return
-    setMenu({ x: e.clientX, y: e.clientY, items })
+    setMenu({ x: e.clientX, y: e.clientY, items, above: opts.above })
   }
   return { menu, open, close: () => setMenu(null) }
 }
 
 /** Discord-style context menu rendered in a portal at a viewport point, flipping to stay on screen. */
-export default function ContextMenu({ x, y, items, onClose, label }: MenuState & { onClose: () => void; label?: string }) {
+export default function ContextMenu({ x, y, items, above, onClose, label }: MenuState & { onClose: () => void; label?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState({ left: x, top: y })
   useLayoutEffect(() => {
     const r = ref.current?.getBoundingClientRect()
     if (!r) return
     const left = x + r.width > window.innerWidth - 8 ? Math.max(8, x - r.width) : x
-    const top = y + r.height > window.innerHeight - 8 ? Math.max(8, window.innerHeight - r.height - 8) : y
+    const top = above ? Math.max(8, y - r.height) : y + r.height > window.innerHeight - 8 ? Math.max(8, window.innerHeight - r.height - 8) : y
     setPos({ left, top })
-  }, [x, y, items])
+  }, [x, y, items, above])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
     window.addEventListener('keydown', onKey, true)
