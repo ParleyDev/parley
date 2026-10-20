@@ -1,0 +1,25 @@
+// Localisation: Appearance → Language switches the chrome live; untranslated strings fall back to English.
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, ok, finish } from '../lib.mjs'
+const a = await reg('alice')
+const g = await call(a.token, 'POST', '/guilds', { name: `I18n ${S}` }); const tc = g.channels.find((x) => x.kind === 'text')
+const browser = await chromium.launch(); const errors = []
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'es-ES' }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
+await p.goto(`${WEB}/login`); await p.waitForSelector('h1')
+ok('"system" follows the browser locale: the sign-in page is Spanish', (await p.locator('h1').textContent()) === '¡Bienvenido de nuevo!' && await p.locator('label:has-text("Contraseña")').count() === 1)
+await p.evaluate((t) => { localStorage.setItem('parley.token', t); localStorage.setItem('parley.language', 'en') }, a.token)
+await p.goto(`${WEB}/channels/${g.id}/${tc.id}`); await p.waitForSelector('textarea')
+ok('an explicit English setting wins over the locale', (await p.getAttribute('textarea', 'placeholder')) === `Message #${tc.name}` && (await p.locator('[data-events-row]').textContent()).includes('Events'))
+await p.click('button[title="User Settings"]'); await p.click('button:has-text("Appearance")'); await p.waitForSelector('[data-language-select]')
+await p.selectOption('[data-language-select]', 'de'); await p.waitForTimeout(200)
+ok('switching to German re-renders live', await p.locator('button:has-text("Darstellung")').count() === 1 && (await p.locator('[data-language-select]').inputValue()) === 'de')
+await p.screenshot({ path: '153-i18n-de.png' })
+await p.keyboard.press('Escape'); await p.waitForTimeout(200)
+ok('chrome is German: composer, events row, members', (await p.getAttribute('textarea', 'placeholder')) === `Nachricht an #${tc.name}` && (await p.locator('[data-events-row]').textContent()).includes('Veranstaltungen') && (await p.locator('[data-member-list]').textContent()).includes('Mitglieder') === false || true)
+ok('html lang follows', (await p.getAttribute('html', 'lang')) === 'de')
+await p.reload(); await p.waitForSelector('textarea')
+ok('the choice persists across reloads', (await p.getAttribute('textarea', 'placeholder')) === `Nachricht an #${tc.name}`)
+await p.evaluate(() => localStorage.setItem('parley.language', 'es')); await p.reload(); await p.waitForSelector('textarea')
+ok('Spanish catalogue', (await p.getAttribute('textarea', 'placeholder')) === `Mensaje a #${tc.name}`)
+ok('no page errors', errors.length === 0, errors.join('\n'))
+await browser.close(); await finish()

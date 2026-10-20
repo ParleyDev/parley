@@ -11,8 +11,10 @@ import Avatar from './Avatar'
 import { ClanTag } from './Flair'
 import ContextMenu, { useContextMenu } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
+import { useT } from '../lib/i18n'
 
 export default function MemberList({ guildId }: { guildId: string }) {
+  const t = useT()
   const members = useStore((s) => s.members[guildId])
   const online = useStore((s) => s.online)
   const users = useStore((s) => s.users)
@@ -64,7 +66,7 @@ export default function MemberList({ guildId }: { guildId: string }) {
   return (
     <aside className="w-[280px] shrink-0 bg-bg-1 overflow-y-auto px-4 pt-4 max-lg:fixed max-lg:inset-0 max-lg:z-30 max-lg:w-auto max-lg:pt-0 tab:left-auto tab:w-[300px] tab:shadow-2xl tab:border-l tab:border-line" data-member-list>
       <div className="lg:hidden h-12 -mx-2 mb-2 px-3 flex items-center gap-2 border-b border-line bg-bg-1 sticky top-0">
-        <span className="font-bold">Members</span>
+        <span className="font-bold">{t('Members')}</span>
         <button onClick={() => setOpen(false)} className="ml-auto h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><X size={20} /></button>
       </div>
       <div className="mb-4 flex items-center gap-4 px-1 text-sm font-semibold" data-member-stats>

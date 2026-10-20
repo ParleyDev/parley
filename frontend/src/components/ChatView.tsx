@@ -18,6 +18,7 @@ import ForumView from './ForumView'
 import DmCall from './DmCall'
 import DmProfilePanel from './DmProfilePanel'
 import { MembersToggle, MobileBack } from './HeaderBits'
+import { useT } from '../lib/i18n'
 
 /** Scroll a loaded message into view and flash it. Returns false when it is not in the DOM. */
 export function jumpToMessage(id: string): boolean {
@@ -69,6 +70,7 @@ function useEscape(onClose: () => void) {
 }
 
 export default function ChatView({ channel }: { channel: Channel | DmChannel }) {
+  const t = useT()
   const isDm = channel.guild_id === null
   const users = useStore((s) => s.users)
   const notes = useStore((s) => s.notes)
@@ -156,7 +158,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               </span>
             )}
             <span className="relative">
-              <button onClick={() => setDatePick((d) => !d)} title="Jump to date" className={btn(datePick)} data-jump-date-btn><CalendarDays size={20} /></button>
+              <button onClick={() => setDatePick((d) => !d)} title={t('Jump to date')} className={btn(datePick)} data-jump-date-btn><CalendarDays size={20} /></button>
               {datePick && (
                 <form className="pop absolute right-0 top-full mt-2 z-40 flex items-center gap-2 rounded-xl bg-bg-1 border border-line shadow-2xl p-3" data-jump-date-pop
                   onSubmit={async (e) => { e.preventDefault(); const d = (e.currentTarget.elements.namedItem('date') as HTMLInputElement).value; if (!d) return; setDatePick(false); const found = await jumpToDate(channel.id, d); if (!found) pushToast('No messages on or after that date', 'error') }}>
@@ -166,11 +168,11 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               )}
             </span>
             <span className="relative">
-              <button onClick={() => setPins((p) => !p)} title="Pinned Messages" className={btn(pins)} data-pins-toggle><Pin size={20} /></button>
+              <button onClick={() => setPins((p) => !p)} title={t('Pinned Messages')} className={btn(pins)} data-pins-toggle><Pin size={20} /></button>
               {pins && <PinnedPanel channel={channel} onClose={() => setPins(false)} />}
             </span>
             <span className="relative">
-              <button onClick={() => setBookmarks((b) => !b)} title="Bookmarks" className={btn(bookmarks)} data-bookmarks-toggle><Bookmark size={20} /></button>
+              <button onClick={() => setBookmarks((b) => !b)} title={t('Bookmarks')} className={btn(bookmarks)} data-bookmarks-toggle><Bookmark size={20} /></button>
               {bookmarks && <BookmarksPanel channelId={channel.id} onClose={() => setBookmarks(false)} />}
             </span>
             {isDm && <button onClick={() => openModal({ kind: 'groupMembers', channelId: channel.id })} title={group ? 'Add Friends to Group' : 'Add Friends to DM'} className={btn(false)} data-add-to-group><UserPlus size={20} /></button>}

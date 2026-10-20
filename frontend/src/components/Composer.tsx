@@ -15,6 +15,7 @@ import ExpressionPicker, { type PickerTab } from './ExpressionPicker'
 import ShortcodeSuggest, { shortcodeAt, useShortcodeSuggestions, type Suggestion } from './ShortcodeSuggest'
 import MentionSuggest, { applyMentions, mentionAt, useMentionItems, type MentionItem } from './MentionSuggest'
 import { dmName, isGroup } from '../lib/dm'
+import { useT } from '../lib/i18n'
 
 
 interface Props { channel: Channel | DmChannel; reply: Message | null; onCancelReply: () => void; onSent: () => void }
@@ -24,6 +25,7 @@ interface Pending { key: number; file: File; preview: string | null; progress: n
 let pendingSeq = 1
 
 export default function Composer({ channel, reply, onCancelReply, onSent }: Props) {
+  const t = useT()
   const sendMessage = useStore((s) => s.sendMessage)
   const failDelivery = useStore((s) => s.failDelivery)
   const pushToast = useStore((s) => s.pushToast)
@@ -355,7 +357,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         <div className="flex items-end gap-2 px-3 py-2">
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
           <button className="pb-1 text-text-2 hover:text-text-0" title="Attach, poll or voice message" onClick={(e) => { const r = (e.currentTarget.closest('[data-composer-box]') ?? e.currentTarget).getBoundingClientRect(); plus.open({ clientX: r.left, clientY: r.top - 8 }, plusItems, { above: true }) }} aria-haspopup="menu" data-composer-plus><PlusCircle size={22} /></button>
-          <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={`Message ${name}`}
+          <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={t('Message {name}', { name })}
             onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
             className="composer-input flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />
           <div className="relative pb-1 flex items-center gap-2.5">
