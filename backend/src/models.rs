@@ -64,6 +64,13 @@ pub struct Guild {
     pub created_at: DateTime<Utc>,
     #[sqlx(default)]
     pub banner_url: Option<String>,
+    /// Membership screening: rules text (markdown) and whether members must accept it before chatting.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub rules: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub rules_required: bool,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -132,6 +139,10 @@ pub struct Member {
     #[sqlx(default)]
     #[serde(default)]
     pub timeout_until: Option<DateTime<Utc>>,
+    /// When this member accepted the server rules (membership screening); null = not yet.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub rules_accepted_at: Option<DateTime<Utc>>,
     #[sqlx(skip)]
     #[serde(default)]
     pub roles: Vec<Uuid>,

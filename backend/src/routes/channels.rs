@@ -30,7 +30,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/messages/:mid/reactions/:emoji", get(list_reactors).put(add_reaction).delete(remove_reaction))
         .route("/channels/:id/messages/:mid/forward", post(forward_message))
         .route("/users/@me/bookmarks", get(list_bookmarks))
-        .route("/users/@me/bookmarks/:mid", put(add_bookmark).delete(remove_bookmark))
+        .route("/users/@me/bookmarks/:mid", put(add_bookmark).delete(remove_bookmark).patch(move_bookmark))
         .route("/channels/:id/receipts", get(receipts))
         .route("/channels/:id/pins", get(list_pins))
         .route("/channels/:id/pins/:mid", put(pin_message).delete(unpin_message))
@@ -341,6 +341,9 @@ async fn create_message(
 ) -> AppResult<(StatusCode, Json<Message>)> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
+    if let Some(gid) = c.guild_id {
+        crate::routes::guilds::check_rules(&state.db, gid, uid).await?;
+    }
     if c.kind == "category" {
         return Err(AppError::BadRequest("Categories cannot hold messages".into()));
     }
@@ -923,19 +926,24 @@ async fn forward_message(
 /// Bookmarked messages the user can still see, newest bookmark first, with their channel's guild id.
 async fn list_bookmarks(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<serde_json::Value>>> {
     let rows = sqlx::query_as::<_, MessageRow>(&format!(
-        "{MESSAGE_SELECT} JOIN bookmarks b ON b.message_id = m.id AND b.user_id = $1 ORDER BY b.created_at DESC LIMIT 200"
+        "{MESSAGE_SELECT} JOIN bookmarks b ON b.message_id = m.id AND b.user_id = $1 ORDER BY b.folder, b.position, b.created_at DESC LIMIT 200"
     ))
     .bind(uid)
     .fetch_all(&state.db)
     .await?;
+    let meta: Vec<(Uuid, String, i32)> = sqlx::query_as("SELECT message_id, folder, position FROM bookmarks WHERE user_id = $1").bind(uid).fetch_all(&state.db).await?;
+    let meta: HashMap<Uuid, (String, i32)> = meta.into_iter().map(|(id, f, p)| (id, (f, p))).collect();
     let msgs = hydrate(&state.db, rows, uid, false).await?;
     let mut out = Vec::with_capacity(msgs.len());
     for m in msgs {
         // Skip messages in channels the user can no longer view.
         let Ok(c) = require_channel(&state.db, m.channel_id, uid).await else { continue };
+        let (folder, position) = meta.get(&m.id).cloned().unwrap_or_default();
         let mut v = json!(m);
         v["guild_id"] = json!(c.guild_id);
         v["channel_name"] = json!(c.name);
+        v["folder"] = json!(folder);
+        v["position"] = json!(position);
         out.push(v);
     }
     Ok(Json(out))
@@ -947,6 +955,27 @@ async fn add_bookmark(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     require_channel(&state.db, channel_id, uid).await?;
     sqlx::query("INSERT INTO bookmarks (user_id, message_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(uid).bind(mid).execute(&state.db).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct MoveBookmark {
+    /// Folder name (empty = no folder), up to 40 chars.
+    folder: Option<String>,
+    /// Manual order inside the folder (lower first).
+    position: Option<i32>,
+}
+
+/// `PATCH /users/@me/bookmarks/:mid`: move a bookmark into a folder and/or reorder it.
+async fn move_bookmark(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(mid): Path<Uuid>, Json(req): Json<MoveBookmark>) -> AppResult<Json<serde_json::Value>> {
+    let folder = req.folder.map(|f| f.trim().chars().take(40).collect::<String>());
+    let row: Option<(String, i32)> = sqlx::query_as(
+        "UPDATE bookmarks SET folder = COALESCE($3, folder), position = COALESCE($4, position) WHERE user_id = $1 AND message_id = $2 RETURNING folder, position",
+    )
+    .bind(uid).bind(mid).bind(&folder).bind(req.position)
+    .fetch_optional(&state.db)
+    .await?;
+    let (folder, position) = row.ok_or_else(|| AppError::NotFound("Bookmark not found".into()))?;
+    Ok(Json(json!({ "message_id": mid, "folder": folder, "position": position })))
 }
 
 async fn remove_bookmark(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(mid): Path<Uuid>) -> AppResult<StatusCode> {

@@ -22,6 +22,7 @@ use uuid::Uuid;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/guilds", get(list_guilds).post(create_guild))
+        .route("/guilds/:id/rules/accept", axum::routing::post(accept_rules))
         .route("/guilds/:id", get(get_guild).patch(update_guild).delete(delete_guild))
         .route("/guilds/:id/channels", get(list_channels).post(create_channel))
         .route("/guilds/:id/members", get(list_members))
@@ -36,7 +37,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/owner", post(transfer_ownership))
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required";
 pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -60,9 +61,27 @@ pub async fn require_owner(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppRes
     Ok(g)
 }
 
+/// `POST /guilds/:id/rules/accept`: the caller accepts the server rules (membership screening).
+pub async fn accept_rules(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Member>> {
+    let res = sqlx::query("UPDATE guild_members SET rules_accepted_at = COALESCE(rules_accepted_at, now()) WHERE guild_id = $1 AND user_id = $2").bind(id).bind(uid).execute(&state.db).await?;
+    if res.rows_affected() == 0 {
+        return Err(AppError::NotFound("Not a member".into()));
+    }
+    let m = fetch_member(&state.db, id, uid).await?;
+    state.hub.emit_guild(id, "GUILD_MEMBER_UPDATE", json!(m));
+    Ok(Json(m))
+}
+
+/// Membership screening gate: Err(RulesRequired) when the guild requires rules the member has not accepted.
+pub async fn check_rules(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<()> {
+    let blocked: Option<(bool,)> = sqlx::query_as("SELECT g.rules_required AND m.rules_accepted_at IS NULL FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $2 WHERE g.id = $1")
+        .bind(guild_id).bind(user_id).fetch_optional(db).await?;
+    if blocked.map(|b| b.0).unwrap_or(false) { Err(AppError::RulesRequired) } else { Ok(()) }
+}
+
 pub async fn fetch_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Member> {
     let mut m = sqlx::query_as::<_, Member>(
-        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until
+        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at, m.rules_accepted_at
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
     )
     .bind(guild_id)
@@ -140,7 +159,7 @@ async fn create_guild(
     tx.commit().await?;
 
     let roles = perms::list_roles(&state.db, gid).await?;
-    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id,
+    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id, "rules": guild.rules, "rules_required": guild.rules_required,
         "created_at": guild.created_at, "channels": channels, "roles": roles });
     state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
     Ok((StatusCode::CREATED, Json(payload)))
@@ -160,6 +179,9 @@ struct UpdateGuild {
     icon_url: Option<String>,
     /// Empty string clears.
     banner_url: Option<String>,
+    /// Membership screening: rules markdown (up to 4000 chars) and whether accepting them is required to chat.
+    rules: Option<String>,
+    rules_required: Option<bool>,
 }
 
 async fn update_guild(
@@ -178,16 +200,20 @@ async fn update_guild(
     validate_image(&req.icon_url)?;
     crate::routes::users::validate_image_max(&req.banner_url, 1024 * 1024)?;
     let (before_name, before): (String, (Option<String>, Option<String>)) = sqlx::query_as::<_, (String, Option<String>, Option<String>)>("SELECT name, icon_url, banner_url FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await.map(|r| (r.0, (r.1, r.2)))?;
+    let rules = req.rules.map(|r| r.trim_end().chars().take(4000).collect::<String>());
     let g = sqlx::query_as::<_, Guild>(&format!(
         "UPDATE guilds SET name = COALESCE($2, name),
            icon_url = CASE WHEN $3::text IS NULL THEN icon_url WHEN $3 = '' THEN NULL ELSE $3 END,
-           banner_url = CASE WHEN $4::text IS NULL THEN banner_url WHEN $4 = '' THEN NULL ELSE $4 END
+           banner_url = CASE WHEN $4::text IS NULL THEN banner_url WHEN $4 = '' THEN NULL ELSE $4 END,
+           rules = COALESCE($5, rules), rules_required = COALESCE($6, rules_required)
          WHERE id = $1 RETURNING {GUILD_COLS}"
     ))
     .bind(id)
     .bind(req.name.map(|n| n.trim().to_string()))
     .bind(req.icon_url)
     .bind(req.banner_url)
+    .bind(&rules)
+    .bind(req.rules_required)
     .fetch_one(&state.db)
     .await?;
     crate::routes::images::release_replaced(&state, before.0.as_deref(), g.icon_url.as_deref()).await;
@@ -197,6 +223,8 @@ async fn update_guild(
     if g.name != before_name { changed.insert("name".into(), json!(g.name)); }
     if g.icon_url != before.0 { changed.insert("icon".into(), json!(g.icon_url.is_some())); }
     if g.banner_url != before.1 { changed.insert("banner".into(), json!(g.banner_url.is_some())); }
+    if rules.is_some() { changed.insert("rules".into(), json!(!g.rules.is_empty())); }
+    if let Some(r) = req.rules_required { changed.insert("rules_required".into(), json!(r)); }
     crate::audit::guild(&state, id, uid, "guild.update", "guild", Some(id), &g.name, serde_json::Value::Object(changed)).await;
     Ok(Json(g))
 }
@@ -304,7 +332,7 @@ async fn list_members(
 ) -> AppResult<Json<Vec<Member>>> {
     require_member(&state.db, id, uid).await?;
     let mut ms = sqlx::query_as::<_, Member>(
-        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until
+        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 ORDER BY u.display_name",
     )
     .bind(id)

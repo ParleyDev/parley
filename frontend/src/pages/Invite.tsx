@@ -2,11 +2,12 @@ import { APP_NAME } from '../lib/brand'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
+import { renderMarkdown } from '../lib/markdown'
 import { useStore } from '../store'
 import type { Channel, Guild } from '../lib/types'
 import { colorFor, initials } from '../lib/format'
 
-interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number }; expired: boolean; already_member: boolean; banned: boolean }
+interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; rules?: string; rules_required?: boolean }; expired: boolean; already_member: boolean; banned: boolean }
 
 export default function InvitePage() {
   const { code = '' } = useParams()
@@ -49,6 +50,12 @@ export default function InvitePage() {
             <p className="text-text-2 text-sm">You've been invited to join</p>
             <h1 className="text-2xl font-bold mb-1">{p.guild.name}</h1>
             <p className="text-text-2 text-sm mb-6">{p.guild.member_count} member{p.guild.member_count === 1 ? '' : 's'}</p>
+            {p.guild.rules && (
+              <div className="mb-6 rounded-xl border border-line bg-bg-1 p-3 text-left" data-invite-rules>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1">Server rules{p.guild.rules_required ? ' · you will be asked to accept these' : ''}</div>
+                <div className="msg-content text-sm text-text-1 max-h-40 overflow-y-auto">{renderMarkdown(p.guild.rules)}</div>
+              </div>
+            )}
             {p.already_member ? (
               <button className="btn-primary w-full" onClick={() => navigate(`/channels/${p.guild.id}`)}>Open server</button>
             ) : p.banned ? (

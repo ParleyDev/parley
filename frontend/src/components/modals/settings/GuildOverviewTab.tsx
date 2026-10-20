@@ -15,13 +15,15 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
   const [name, setName] = useState(guild?.name ?? '')
   const [icon, setIcon] = useState<string | null>(guild?.icon_url ?? null)
   const [banner, setBanner] = useState<string | null>(guild?.banner_url ?? null)
+  const [rules, setRules] = useState(guild?.rules ?? '')
+  const [rulesRequired, setRulesRequired] = useState(!!guild?.rules_required)
   const [busy, setBusy] = useState(false)
   if (!guild) return null
-  const dirty = name !== guild.name || (icon ?? null) !== (guild.icon_url ?? null) || (banner ?? null) !== (guild.banner_url ?? null)
+  const dirty = name !== guild.name || (icon ?? null) !== (guild.icon_url ?? null) || (banner ?? null) !== (guild.banner_url ?? null) || rules !== (guild.rules ?? '') || rulesRequired !== !!guild.rules_required
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
     try {
-      const g = await api.patch<Guild>(`/guilds/${guildId}`, { name, icon_url: icon ?? '', banner_url: banner ?? '' })
+      const g = await api.patch<Guild>(`/guilds/${guildId}`, { name, icon_url: icon ?? '', banner_url: banner ?? '', rules, rules_required: rulesRequired })
       upsertGuild(g); pushToast('Server updated')
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
@@ -43,10 +45,18 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
         </p>
         {guild.owner_id === me?.id && <button type="button" className="btn-ghost mt-3" onClick={() => openModal({ kind: 'transferOwnership', guildId })}><Crown size={16} /> Transfer Ownership</button>}
       </div>
+      <div className="space-y-2" data-guild-rules>
+        <label className="label">Server rules</label>
+        <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={6} maxLength={4000} placeholder={'1. Be kind.\n2. No spam.\nMarkdown works.'} className="input resize-y font-mono text-sm" data-guild-rules-text />
+        <label className="flex items-center justify-between rounded-xl border border-line bg-bg-1 p-3 cursor-pointer">
+          <span><span className="block font-semibold text-sm">Members must accept the rules before chatting</span><span className="block text-xs text-text-2">New and existing members see the rules with an "I agree" button; until they accept they can read but not send messages.</span></span>
+          <input type="checkbox" checked={rulesRequired} onChange={(e) => setRulesRequired(e.target.checked)} className="h-5 w-5 accent-accent" data-guild-rules-required />
+        </label>
+      </div>
       {dirty && (
         <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
           <span className="text-sm flex-1">Careful — you have unsaved changes!</span>
-          <button type="button" className="btn-ghost" onClick={() => { setName(guild.name); setIcon(guild.icon_url); setBanner(guild.banner_url ?? null) }}>Reset</button>
+          <button type="button" className="btn-ghost" onClick={() => { setName(guild.name); setIcon(guild.icon_url); setBanner(guild.banner_url ?? null); setRules(guild.rules ?? ''); setRulesRequired(!!guild.rules_required) }}>Reset</button>
           <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !name.trim()}>Save Changes</button>
         </div>
       )}

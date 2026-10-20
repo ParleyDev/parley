@@ -22,14 +22,14 @@ async fn preview(
     AuthUser(uid): AuthUser,
     Path(code): Path<String>,
 ) -> AppResult<Json<Value>> {
-    let row: Option<(Uuid, String, Option<String>, i64, i32, Option<i32>)> = sqlx::query_as(
-        "SELECT g.id, g.name, g.icon_url, (SELECT COUNT(*) FROM guild_members WHERE guild_id = g.id), i.uses, i.max_uses
+    let row: Option<(Uuid, String, Option<String>, i64, i32, Option<i32>, String, bool)> = sqlx::query_as(
+        "SELECT g.id, g.name, g.icon_url, (SELECT COUNT(*) FROM guild_members WHERE guild_id = g.id), i.uses, i.max_uses, g.rules, g.rules_required
          FROM invites i JOIN guilds g ON g.id = i.guild_id WHERE i.code = $1",
     )
     .bind(&code)
     .fetch_optional(&state.db)
     .await?;
-    let (gid, name, icon, count, uses, max) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
+    let (gid, name, icon, count, uses, max, rules, rules_required) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
     let already: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2")
         .bind(gid)
         .bind(uid)
@@ -39,7 +39,7 @@ async fn preview(
     let (online_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1 AND user_id = ANY($2)").bind(gid).bind(&online).fetch_one(&state.db).await?;
     Ok(Json(json!({
         "code": code,
-        "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count },
+        "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count, "rules": rules, "rules_required": rules_required },
         "expired": max.map(|m| uses >= m).unwrap_or(false),
         "already_member": already.is_some(),
         "banned": is_banned(&state.db, gid, uid).await?,
@@ -83,7 +83,7 @@ async fn accept(
     let roles = crate::perms::list_roles(&state.db, gid).await?;
     let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &[gid]).await?;
     let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &[gid]).await?;
-    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id,
+    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id, "rules": guild.rules, "rules_required": guild.rules_required,
         "created_at": guild.created_at, "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers });
     if inserted > 0 {
         state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
