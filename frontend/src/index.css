@@ -65,6 +65,9 @@ body {
 .msg-content li { @apply pl-0.5; }
 .msg-content li > ul, .msg-content li > ol { @apply my-0; }
 .msg-content blockquote blockquote { @apply mt-1; }
+.msg-content table { @apply my-1 border-collapse text-sm; }
+.msg-content th, .msg-content td { @apply border border-line px-2 py-1 align-top; }
+.msg-content th { @apply bg-bg-3 font-semibold; }
 .msg-content .spoiler { @apply rounded px-0.5 cursor-pointer select-none bg-bg-0 text-transparent; }
 .msg-content .spoiler:not(.open) * { color: transparent !important; }
 .msg-content .spoiler:not(.open) code { background: transparent; }
