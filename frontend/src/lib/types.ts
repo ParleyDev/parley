@@ -24,7 +24,16 @@ export interface PanelItem { title: string; url?: string }
 export const DECORATIONS: { id: string; label: string }[] = [
   { id: '', label: 'None' }, { id: 'gold', label: 'Gold ring' }, { id: 'rainbow', label: 'Rainbow' }, { id: 'glow', label: 'Glow' }, { id: 'ice', label: 'Ice' }, { id: 'dashed', label: 'Dashed' }, { id: 'ember', label: 'Ember' },
 ]
-export interface PrivateUser extends User { email: string; is_admin?: boolean; email_verified_at?: string | null; mfa_enabled?: boolean }
+export type DmPrivacy = 'everyone' | 'friends_and_servers' | 'friends'
+export type FriendRequestSource = 'everyone' | 'friends_of_friends' | 'server_members'
+export interface PrivateUser extends User {
+  email: string; is_admin?: boolean; email_verified_at?: string | null; mfa_enabled?: boolean
+  /** Content & Social (Settings): who may DM you, message requests from non-friends, who may send friend requests, who may add you to groups. */
+  dm_privacy?: DmPrivacy
+  message_requests?: boolean
+  friend_request_from?: FriendRequestSource[]
+  group_dm_privacy?: 'friends' | 'nobody'
+}
 /** GET /users/:id adds the servers you share with that user. */
 export interface UserProfile extends User {
   mutual_guilds?: Pick<Guild, 'id' | 'name' | 'icon_url'>[]
@@ -103,6 +112,8 @@ export interface DmChannel extends Channel {
   /** Groups: who may remove members. */
   owner_id: string | null
   icon_url: string | null
+  /** Your membership: a DM from a non-friend is a message request until you accept (pending) or ignore it. */
+  request_state?: 'accepted' | 'pending' | 'ignored'
 }
 
 export interface Member {

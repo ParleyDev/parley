@@ -52,6 +52,21 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
+    /// Content & Social: who may DM you (everyone | friends_and_servers | friends), whether DMs from non-friends
+    /// land in Message Requests, who may send friend requests (subset of everyone, friends_of_friends,
+    /// server_members; empty = nobody), who may add you to groups (friends | nobody).
+    #[sqlx(default)]
+    #[serde(default = "default_everyone")]
+    pub dm_privacy: String,
+    #[sqlx(default)]
+    #[serde(default = "default_true")]
+    pub message_requests: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub friend_request_from: Vec<String>,
+    #[sqlx(default)]
+    #[serde(default = "default_friends")]
+    pub group_dm_privacy: String,
     /// Profile flair: preset avatar frame ('' = none), short clan tag, optional panels (wishlist / games).
     #[sqlx(default)]
     #[serde(default)]
@@ -477,7 +492,15 @@ pub struct DmChannel {
     pub channel: Channel,
     pub recipients: Vec<User>,
     pub last_message_at: Option<DateTime<Utc>>,
+    /// This viewer's membership: accepted, or a message request they have not accepted (pending) or ignored.
+    #[serde(default = "default_accepted")]
+    pub request_state: String,
 }
+
+fn default_everyone() -> String { "everyone".into() }
+fn default_friends() -> String { "friends".into() }
+fn default_accepted() -> String { "accepted".into() }
+fn default_true() -> bool { true }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Relationship {

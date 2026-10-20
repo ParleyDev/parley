@@ -393,7 +393,7 @@ async fn create_message(
         // 1:1 DMs: either side blocking the other closes the channel to new messages. Groups stay open.
         let others: Vec<(Uuid,)> = sqlx::query_as("SELECT user_id FROM channel_members WHERE channel_id = $1 AND user_id <> $2").bind(id).bind(uid).fetch_all(&state.db).await?;
         for (other,) in others {
-            if crate::routes::relationships::blocked_either_way(&state.db, uid, other).await? {
+            if crate::routes::relationships::blocked_either_way(&state.db, uid, other).await? || !crate::routes::dms::can_dm(&state.db, uid, other).await? {
                 return Err(AppError::Undeliverable);
             }
         }
@@ -918,7 +918,7 @@ async fn forward_message(
     if target_ch.guild_id.is_none() {
         let others: Vec<(Uuid,)> = sqlx::query_as("SELECT user_id FROM channel_members WHERE channel_id = $1 AND user_id <> $2").bind(req.channel_id).bind(uid).fetch_all(&state.db).await?;
         for (other,) in others {
-            if crate::routes::relationships::blocked_either_way(&state.db, uid, other).await? {
+            if crate::routes::relationships::blocked_either_way(&state.db, uid, other).await? || (target_ch.kind == "dm" && !crate::routes::dms::can_dm(&state.db, uid, other).await?) {
                 return Err(AppError::Undeliverable);
             }
         }

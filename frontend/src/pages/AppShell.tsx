@@ -7,6 +7,7 @@ import DmSidebar from '../components/DmSidebar'
 import ChatView from '../components/ChatView'
 import MemberList from '../components/MemberList'
 import HomeView from '../components/HomeView'
+import RequestsView from '../components/RequestsView'
 import VoiceView from '../components/VoiceView'
 import Modals from '../components/modals'
 import ErrorBoundary from '../components/ErrorBoundary'
@@ -64,6 +65,7 @@ export default function AppShell() {
       <ErrorBoundary>
       <Routes>
         <Route path="@me" element={<HomeView />} />
+        <Route path="@me/requests" element={<RequestsView />} />
         <Route path="@me/:channelId" element={<DmChat />} />
         <Route path=":guildId" element={<GuildRedirect />} />
         <Route path=":guildId/:channelId" element={<GuildMain />} />
