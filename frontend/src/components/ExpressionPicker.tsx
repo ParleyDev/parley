@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
 import { STORAGE_PREFIX } from '../lib/brand'
-import { applyTone, customToken, getSkinTone, loadEmojiGroups, searchEmoji, setSkinTone, SKIN_TONE_NAMES, SKIN_TONES, type EmojiGroup } from '../lib/emoji'
+import { applyTone, customToken, emojiTone, getSkinTone, rememberEmojiTone, toneOf, loadEmojiGroups, searchEmoji, setSkinTone, SKIN_TONE_NAMES, SKIN_TONES, type EmojiGroup } from '../lib/emoji'
 import { colorFor, initials } from '../lib/format'
 import { has, P } from '../lib/perms'
 import { frequentEmoji } from '../lib/recentEmoji'
@@ -91,6 +91,10 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
   const [tone, setTone] = useState(getSkinTone)
   const [toneOpen, setToneOpen] = useState(false)
   const pickTone = (t: number) => { setTone(t); setSkinTone(t); setToneOpen(false) }
+  // Right-click / long-press a tone-capable emoji for its six variants; the pick is remembered for that emoji.
+  const [variants, setVariants] = useState<{ base: string; label: string; x: number; y: number } | null>(null)
+  const toneFor = (base: string) => emojiTone(base) ?? tone
+  const pickToned = (base: string, t: number) => { rememberEmojiTone(base, t); setVariants(null); onPick(applyTone(base, t)) }
   const guilds = useStore(useShallow((s) => s.guildOrder.map((id) => s.guilds[id]).filter(Boolean)))
   const emojis = useStore((s) => s.emojis)
   const gridRef = useRef<HTMLDivElement>(null)
@@ -107,12 +111,14 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
   const jump = (id: string) => gridRef.current?.querySelector<HTMLElement>(`[data-section="${id}"]`)?.scrollIntoView({ block: 'start' })
   const nameOf = (token: string) => { const c = /^<a?:([^:]+):/.exec(token); return c ? `:${c[1]}:` : token }
 
-  const cell = (token: string, label: string, key: string) => (
-    <button key={key} type="button" onClick={() => onPick(token)} onMouseEnter={() => setHover({ token, name: label })} title={label} data-emoji-btn={label}
+  const cell = (token: string, label: string, key: string, base?: string) => (
+    <button key={key} type="button" onClick={() => { if (base) rememberEmojiTone(base, toneOf(token)); onPick(token) }} onMouseEnter={() => setHover({ token, name: label })} title={label} data-emoji-btn={label} data-emoji-toned={base ? toneOf(token) : undefined}
+      onContextMenu={(e) => { if (!base) return; e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setVariants({ base, label, x: r.left, y: r.top }) }}
       className="h-10 w-10 rounded-md flex items-center justify-center text-[26px] hover:bg-white/10 leading-none">
       <Emoji value={token} size={30} />
     </button>
   )
+  const unicodeCell = (e: { emoji: string; tone: boolean }, label: string, key: string) => cell(e.tone ? applyTone(e.emoji, toneFor(e.emoji)) : e.emoji, label, key, e.tone ? e.emoji : undefined)
   return (
     <>
       <div className="px-3 py-2 shrink-0 flex items-center gap-2">
@@ -129,6 +135,15 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
           )}
         </div>
       </div>
+      {variants && createPortal(
+        <>
+          <div className="fixed inset-0 z-[150]" onMouseDown={() => setVariants(null)} onContextMenu={(e) => { e.preventDefault(); setVariants(null) }} />
+          <div className="pop fixed z-[160] flex gap-0.5 rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1" style={{ left: Math.min(variants.x, window.innerWidth - 260), top: Math.max(8, variants.y - 48) }} data-tone-variants={variants.label} onMouseDown={(e) => e.stopPropagation()}>
+            {SKIN_TONES.map((_, i) => <button key={i} type="button" onClick={() => pickToned(variants.base, i)} title={`${variants.label} ${SKIN_TONE_NAMES[i]}`} data-tone-variant={i} className="h-10 w-10 rounded-md flex items-center justify-center text-[26px] leading-none hover:bg-white/10"><Emoji value={applyTone(variants.base, i)} size={30} /></button>)}
+          </div>
+        </>,
+        document.body,
+      )}
       <div className="flex min-h-0 flex-1">
         {!results && (
           <div className="w-12 shrink-0 overflow-y-auto border-r border-white/5 py-1 flex flex-col items-center gap-1" data-emoji-rail>
@@ -143,7 +158,7 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
           {groups && results && (
             results.length === 0 ? <div className="py-10 text-center text-sm text-text-2">No emoji found</div> : (
               <div className="grid grid-cols-[repeat(auto-fill,2.5rem)] gap-0.5 pt-1">
-                {results.map((r) => r.kind === 'custom' ? cell(customToken(r.emoji), `:${r.emoji.name}:`, `c-${r.emoji.id}`) : cell(r.emoji.tone ? applyTone(r.emoji.emoji, tone) : r.emoji.emoji, `:${r.name}:`, `u-${r.emoji.emoji}`))}
+                {results.map((r) => r.kind === 'custom' ? cell(customToken(r.emoji), `:${r.emoji.name}:`, `c-${r.emoji.id}`) : unicodeCell(r.emoji, `:${r.name}:`, `u-${r.emoji.emoji}`))}
               </div>
             )
           )}
@@ -151,7 +166,7 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
             <>
               <Section id="frequent" title="Frequently Used">{frequent.map((e) => cell(e, nameOf(e), `f-${e}`))}</Section>
               {ordered.map((g) => <Section key={g.id} id={`g-${g.id}`} title={g.name}>{(emojis[g.id] ?? []).map((e) => cell(customToken(e), `:${e.name}:`, e.id))}</Section>)}
-              {groups.map((g, i) => <Section key={g.name} id={`u-${i}`} title={g.name}>{g.emojis.map((e) => cell(e.tone ? applyTone(e.emoji, tone) : e.emoji, `:${e.slug}:`, e.emoji))}</Section>)}
+              {groups.map((g, i) => <Section key={g.name} id={`u-${i}`} title={g.name}>{g.emojis.map((e) => unicodeCell(e, `:${e.slug}:`, e.emoji))}</Section>)}
             </>
           )}
         </div>
