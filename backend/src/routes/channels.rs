@@ -104,6 +104,8 @@ struct UpdateChannel {
     topic: Option<String>,
     /// Group DMs: empty string clears.
     icon_url: Option<String>,
+    /// Group DMs: hand the group to another member (owner only).
+    owner_id: Option<Uuid>,
     /// Guild channels: move under a category (null = top level).
     #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
     parent_id: Option<Option<Uuid>>,
@@ -140,6 +142,19 @@ async fn update_channel(
         }
         if icon_changed {
             crate::routes::dms::system_message(&state, id, uid, "channel_icon_change", "changed the group icon.", vec![]).await?;
+        }
+        if let Some(new_owner) = req.owner_id.filter(|o| Some(*o) != c.owner_id) {
+            if c.owner_id != Some(uid) {
+                return Err(AppError::Forbidden);
+            }
+            let member: Option<(bool,)> = sqlx::query_as("SELECT true FROM channel_members WHERE channel_id = $1 AND user_id = $2").bind(id).bind(new_owner).fetch_optional(&state.db).await?;
+            if member.is_none() {
+                return Err(AppError::BadRequest("That user is not in the group".into()));
+            }
+            sqlx::query("UPDATE channels SET owner_id = $2 WHERE id = $1").bind(id).bind(new_owner).execute(&state.db).await?;
+            crate::routes::dms::broadcast_group(&state, id).await?;
+            let name = crate::audit::username(&state, new_owner).await;
+            crate::routes::dms::system_message(&state, id, uid, "channel_owner_change", &format!("made {name} the group owner."), vec![new_owner]).await?;
         }
         return Ok(Json(sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(id).fetch_one(&state.db).await?));
     }
