@@ -15,7 +15,7 @@ ok('card tinted with the profile theme', (await panel.evaluate(n=>n.style.backgr
 ok('three 36px controls with chevrons on mic and headphones', await p.locator('[data-control]').count()===3 && (await p.locator('[data-control="Mute"]').boundingBox()).height===36 && await p.locator('[data-control-menu]').count()===2)
 await p.screenshot({ path: '68-self-panel.png', clip:{x:0,y:700,width:360,height:200} })
 await p.click('[data-control-menu="Mute"]'); await p.waitForTimeout(500)
-ok('mic chevron opens the Input Device menu with a Default entry + Voice Settings', await p.locator('[data-device-menu="input"]').count()===1 && await p.locator('[data-device-menu="input"] [data-device-option]').count()>=1 && await p.locator('[data-device-menu="input"] button:has-text("Voice Settings")').count()===1)
+ok('mic chevron opens the Input Device menu with a Default entry + Voice Settings', await p.locator('[data-device-menu="input"]').count()===1 && await p.locator('[data-device-menu="input"] [data-device-option]').count()>=1 && await p.locator('[data-device-menu="input"] button:has-text("Video Settings")').count()===1)
 await p.screenshot({ path: '69-device-menu.png', clip:{x:0,y:560,width:360,height:340} })
 const opts=await p.locator('[data-device-menu="input"] [data-device-option]').count()
 if (opts>1) { await p.locator('[data-device-menu="input"] [data-device-option]').nth(1).click(); await p.waitForTimeout(200); ok('picking a device saves it', (await p.evaluate(()=>JSON.parse(localStorage.getItem('parley.voiceSettings')||'{}').inputDeviceId||'')).length>0) } else { await p.keyboard.press('Escape'); await p.mouse.click(700,300); ok('picking a device saves it (no extra devices in CI; skipped)', true) }

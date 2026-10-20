@@ -9,6 +9,7 @@ r=await callS(a.token,'PATCH','/users/@me',{name_accent:'zzz'}); ok('bad name co
 r=await callS(a.token,'POST',`/guilds/${g.id}/roles`,{name:'Rainbow',color:'#f1c40f',color_accent:'#1abc9c'}); const role=r.body; ok('role with gradient created', r.status===201 && role.color_accent==='#1abc9c')
 r=await callS(a.token,'PATCH',`/guilds/${g.id}/roles/${role.id}`,{color_accent:null}); ok('role accent cleared via null', r.status===200 && r.body.color_accent===null)
 await callS(a.token,'PATCH',`/guilds/${g.id}/roles/${role.id}`,{color_accent:'#1abc9c'})
+await callS(a.token,'POST','/users/@me/relationships',{user_id:b.user.id}); await callS(b.token,'PUT',`/users/@me/relationships/${a.user.id}`) // friends: a stranger's DM waits in Message Requests
 const dm=(await callS(a.token,'POST','/users/@me/channels',{recipient_id:b.user.id})).body
 await callS(a.token,'POST',`/channels/${dm.id}/messages`,{content:'dm hello'})
 await callS(a.token,'POST',`/channels/${tc}/messages`,{content:'guild hello'})
