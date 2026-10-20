@@ -1,4 +1,4 @@
-import { FolderOpen, Hash, Lock, MessageSquareText, Volume2, Radio } from 'lucide-react'
+import { FolderOpen, Hash, Lock, MessageSquareText, Volume2, Radio, Disc3 } from 'lucide-react'
 import { P } from '../../lib/perms'
 import { Toggle } from './SettingsShell'
 import { useState, type FormEvent } from 'react'
@@ -10,7 +10,7 @@ import type { Channel } from '../../lib/types'
 
 export default function CreateChannelModal({ onClose, guildId, parentId = null }: { onClose: () => void; guildId: string; parentId?: string | null }) {
   const [name, setName] = useState('')
-  const [kind, setKind] = useState<'text' | 'voice' | 'stage' | 'category' | 'forum'>('text')
+  const [kind, setKind] = useState<'text' | 'voice' | 'stage' | 'studio' | 'category' | 'forum'>('text')
   const [parent, setParent] = useState<string>(parentId ?? '')
   const allChannels = useStore((s) => s.channels)
   const categories = Object.values(allChannels).filter((c) => c.guild_id === guildId && c.kind === 'category').sort((a, b) => a.position - b.position)
@@ -41,7 +41,7 @@ export default function CreateChannelModal({ onClose, guildId, parentId = null }
         <div>
           <label className="label">Channel type</label>
           <div className="space-y-2">
-            {([['text', 'Text', 'Send messages, images, GIFs, emoji, opinions, and puns', Hash], ['voice', 'Voice', 'Hang out together with voice, video, and screen share', Volume2], ['stage', 'Stage', 'Speakers on stage, everyone else listens and can raise a hand', Radio], ['forum', 'Forum', 'Organised posts with tags instead of a running chat', MessageSquareText], ['category', 'Category', 'Group channels under a collapsible heading', FolderOpen]] as const).map(([v, t, d, Icon]) => (
+            {([['text', 'Text', 'Send messages, images, GIFs, emoji, opinions, and puns', Hash], ['voice', 'Voice', 'Hang out together with voice, video, and screen share', Volume2], ['stage', 'Stage', 'Speakers on stage, everyone else listens and can raise a hand', Radio], ['studio', 'Recording Studio', 'An engineer records the band as separate tracks while the audience listens', Disc3], ['forum', 'Forum', 'Organised posts with tags instead of a running chat', MessageSquareText], ['category', 'Category', 'Group channels under a collapsible heading', FolderOpen]] as const).map(([v, t, d, Icon]) => (
               <button type="button" key={v} onClick={() => setKind(v)} data-channel-kind={v} className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left ${kind === v ? 'border-accent bg-accent/10' : 'border-line bg-bg-3 hover:bg-bg-4'}`}>
                 <Icon size={22} className="text-text-1" />
                 <div><div className="font-semibold">{t}</div><div className="text-xs text-text-2">{d}</div></div>

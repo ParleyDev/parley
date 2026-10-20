@@ -111,6 +111,9 @@ pub struct Channel {
     /// Guild channels: the category this channel sits under.
     #[sqlx(default)]
     pub parent_id: Option<Uuid>,
+    /// Studio channels: the sound engineer (runs recordings, picks the band).
+    #[sqlx(default)]
+    pub engineer_id: Option<Uuid>,
     /// Permission overwrites; filled by `perms::attach_overwrites` for guild channels.
     #[sqlx(skip)]
     #[serde(default)]

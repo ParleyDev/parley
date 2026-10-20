@@ -67,14 +67,20 @@ export interface Channel {
   id: string
   guild_id: string | null
   name: string
-  kind: 'text' | 'voice' | 'stage' | 'dm' | 'group' | 'category' | 'thread' | 'forum'
+  kind: 'text' | 'voice' | 'stage' | 'studio' | 'dm' | 'group' | 'category' | 'thread' | 'forum'
   topic: string
   position: number
   created_at: string
   /** Guild channels: the category this channel sits under. */
   parent_id?: string | null
+  /** Studio channels: the sound engineer. */
+  engineer_id?: string | null
   overwrites?: Overwrite[]
 }
+
+/** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */
+export interface StudioTrack { id: string; session_id: string; user_id: string | null; content_type: string; size: number; duration_ms: number | null; offset_ms: number; done: boolean; created_at: string; display_name: string; url: string }
+export interface StudioSession { id: string; channel_id: string; guild_id: string; name: string; started_by: string | null; started_at: string; ended_at: string | null; tracks: StudioTrack[] }
 
 export interface Overwrite { id: string; kind: 'role' | 'member'; allow: number; deny: number }
 

@@ -127,7 +127,7 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
   if (!channel || channel.guild_id !== guildId) return <div className="flex-1 max-md:hidden" />
   return (
     <>
-      {channel.kind === 'voice' || channel.kind === 'stage' ? <VoiceView channel={channel} /> : <ChatView channel={channel} />}
+      {channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio' ? <VoiceView channel={channel} /> : <ChatView channel={channel} />}
       <MemberList guildId={guildId} />
     </>
   )
@@ -156,7 +156,7 @@ function Shortcuts() {
   const step = (dir: -1 | 1) => {
     if (!inGuild || !channelId) return
     const s = useStore.getState()
-    const list = Object.values(s.channels).filter((c) => c.guild_id === guildId && (c.kind === 'text' || c.kind === 'voice' || c.kind === 'stage' || c.kind === 'forum')).sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : 1))
+    const list = Object.values(s.channels).filter((c) => c.guild_id === guildId && (c.kind === 'text' || c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio' || c.kind === 'forum')).sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : 1))
     const i = list.findIndex((c) => c.id === channelId)
     const next = list[i + dir]
     if (next) navigate(`/channels/${guildId}/${next.id}`)
