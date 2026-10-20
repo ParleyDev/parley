@@ -61,8 +61,16 @@ async fn logout_one(State(state): State<AppState>, AuthSession(uid, sid): AuthSe
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Log out every other device; the caller keeps this session.
-async fn logout_others(State(state): State<AppState>, AuthSession(uid, sid): AuthSession) -> AppResult<Json<serde_json::Value>> {
+#[derive(serde::Deserialize, Default)]
+pub struct LogoutOthers { #[serde(default)] password: String }
+
+/// Log out every other device (password required, like Discord); the caller keeps this session.
+async fn logout_others(State(state): State<AppState>, AuthSession(uid, sid): AuthSession, body: Option<Json<LogoutOthers>>) -> AppResult<Json<serde_json::Value>> {
+    let password = body.map(|b| b.0.password).unwrap_or_default();
+    let (hash,): (String,) = sqlx::query_as("SELECT password_hash FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    if !crate::auth::verify_password(&password, &hash) {
+        return Err(AppError::BadRequest("Enter your password to log out your other devices.".into()));
+    }
     let n = revoke_sessions(&state, uid, None, Some(sid), "This device was logged out from another session.").await?.len();
     Ok(Json(serde_json::json!({ "revoked": n })))
 }
