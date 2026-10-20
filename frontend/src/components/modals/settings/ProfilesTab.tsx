@@ -44,7 +44,7 @@ export default function ProfilesTab() {
     || (avatar ?? null) !== (user.avatar_url ?? null) || (banner ?? null) !== (user.banner_url ?? null)
     || (primary ?? null) !== (user.theme_primary ?? null) || (accent ?? null) !== (user.theme_accent ?? null)
     || (namePrimary ?? null) !== (user.name_primary ?? null) || (nameAccent ?? null) !== (user.name_accent ?? null)
-  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setNamePrimary(user.name_primary ?? null); setNameAccent(user.name_accent ?? null) }
+  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setNamePrimary(user.name_primary ?? null); setNameAccent(user.name_accent ?? null); setDecoration(user.avatar_decoration ?? ''); setClanTag(user.clan_tag ?? ''); setWishlist(toLines(user.panels?.wishlist)); setGames(toLines(user.panels?.games)) }
   const save = async () => {
     setBusy(true)
     try {
@@ -76,7 +76,7 @@ export default function ProfilesTab() {
             <div className="flex flex-wrap gap-2" data-decoration-options>
               {DECORATIONS.map((d) => (
                 <button key={d.id} type="button" onClick={() => setDecoration(d.id)} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-sm ${decoration === d.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-decoration-option={d.id} aria-pressed={decoration === d.id}>
-                  <Avatar user={{ ...user, avatar_url: avatar, avatar_decoration: d.id }} size={28} />{d.label}
+                  <Avatar user={{ ...user, avatar_url: avatar }} decoration={d.id} size={28} />{d.label}
                 </button>
               ))}
             </div>
@@ -123,7 +123,7 @@ export default function ProfilesTab() {
         </div>
         <div className="w-[340px] max-lg:w-full shrink-0">
           <div className="label">Preview</div>
-          <ProfileCard user={{ ...user, display_name: display || user.display_name, pronouns, bio, avatar_url: avatar, banner_url: banner, theme_primary: primary, theme_accent: accent, name_primary: namePrimary, name_accent: nameAccent }} />
+          <ProfileCard user={{ ...user, display_name: display || user.display_name, pronouns, bio, avatar_url: avatar, avatar_decoration: decoration, banner_url: banner, theme_primary: primary, theme_accent: accent, name_primary: namePrimary, name_accent: nameAccent }} />
         </div>
       </div>
       {dirty && (

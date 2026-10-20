@@ -10,6 +10,7 @@ import { nameCss } from './StyledName'
 export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> {
   banner_url?: string | null
   clan_tag?: string
+  avatar_decoration?: string
   badges?: string[]
   connections?: Connection[]
   panels?: User['panels']
@@ -75,7 +76,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
     <div className="overflow-hidden rounded-2xl flex flex-col max-h-full" style={{ background: theme, color: text }} data-profile-card>
       <div className={`${compact ? 'h-20' : 'h-[105px]'} w-full shrink-0 bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: 'rgba(0,0,0,0.18)' }} />
       <div className={`px-4 ${compact ? '-mt-8' : '-mt-11'} flex items-end justify-between shrink-0`}>
-        <div className="rounded-full ring-[6px] bg-bg-1" style={{ ['--tw-ring-color' as string]: ring }}><Avatar user={user} size={avatar} presence /></div>
+        <div className="rounded-full ring-[6px] bg-bg-1" style={{ ['--tw-ring-color' as string]: ring }}><Avatar user={user} size={avatar} presence decoration={user.avatar_decoration} /></div>
         {actions && <div className="flex flex-wrap justify-end gap-1.5 pb-1 min-w-0 pl-3">{actions}</div>}
       </div>
       <div className="px-4 pt-2 shrink-0">
