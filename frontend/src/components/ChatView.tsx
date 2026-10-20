@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkMinus, CircleUserRound, Crown, Hash, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { Bookmark, BookmarkMinus, CalendarDays, CircleUserRound, Crown, Hash, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup, nameOf } from '../lib/dm'
 import { uploadImage } from '../lib/upload'
@@ -38,8 +38,24 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 export async function jumpToMessageAsync(channelId: string, id: string): Promise<boolean> {
   if (jumpToMessage(id)) return true
   for (let i = 0; i < 50 && !(useStore.getState().messages[channelId]?.length); i++) await sleep(100)
-  if (!(await useStore.getState().loadUntil(channelId, id))) return false
+  // Load a window around it (one request however far back it is); the pane then pages forward on scroll.
+  await useStore.getState().loadAround(channelId, id)
   for (let i = 0; i < 20; i++) { if (jumpToMessage(id)) return true; await sleep(50) }
+  return false
+}
+
+/** A uuid v7 whose timestamp is `ms`: sorts exactly where a message created then would. */
+export const uuidAt = (ms: number) => { const hex = Math.max(0, Math.floor(ms)).toString(16).padStart(12, '0'); return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-7000-8000-000000000000` }
+
+/** Show the channel from the start of a day (local time); true when a message on or after it was found. */
+export async function jumpToDate(channelId: string, date: string): Promise<boolean> {
+  const start = new Date(`${date}T00:00:00`).getTime()
+  if (!Number.isFinite(start)) return false
+  const anchor = uuidAt(start)
+  await useStore.getState().loadAround(channelId, anchor)
+  const first = (useStore.getState().messages[channelId] ?? []).find((m) => m.id > anchor && !m.local)
+  if (!first) return false
+  for (let i = 0; i < 20; i++) { if (jumpToMessage(first.id)) return true; await sleep(50) }
   return false
 }
 
@@ -65,6 +81,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const other = recipient ? { ...recipient, ...users[recipient.id] } : null
   const openModal = useStore((s) => s.openModal)
   const [renaming, setRenaming] = useState(false)
+  const [datePick, setDatePick] = useState(false)
   const iconRef = useRef<HTMLInputElement>(null)
   const [nameDraft, setNameDraft] = useState('')
   const saveName = async () => {
@@ -138,6 +155,16 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
                 {threads && <ThreadsPanel channel={channel as Channel} onClose={() => setThreads(false)} />}
               </span>
             )}
+            <span className="relative">
+              <button onClick={() => setDatePick((d) => !d)} title="Jump to date" className={btn(datePick)} data-jump-date-btn><CalendarDays size={20} /></button>
+              {datePick && (
+                <form className="pop absolute right-0 top-full mt-2 z-40 flex items-center gap-2 rounded-xl bg-bg-1 border border-line shadow-2xl p-3" data-jump-date-pop
+                  onSubmit={async (e) => { e.preventDefault(); const d = (e.currentTarget.elements.namedItem('date') as HTMLInputElement).value; if (!d) return; setDatePick(false); const found = await jumpToDate(channel.id, d); if (!found) pushToast('No messages on or after that date', 'error') }}>
+                  <input name="date" type="date" required className="input py-1 text-sm" max={new Date().toISOString().slice(0, 10)} data-jump-date />
+                  <button className="btn-primary py-1 text-sm" data-jump-date-go>Go</button>
+                </form>
+              )}
+            </span>
             <span className="relative">
               <button onClick={() => setPins((p) => !p)} title="Pinned Messages" className={btn(pins)} data-pins-toggle><Pin size={20} /></button>
               {pins && <PinnedPanel channel={channel} onClose={() => setPins(false)} />}

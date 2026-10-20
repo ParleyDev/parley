@@ -19,6 +19,9 @@ import { dmName, isGroup } from '../lib/dm'
 export default function ChatPane({ channel }: { channel: Channel | DmChannel }) {
   const messages = useStore((s) => s.messages[channel.id])
   const hasMore = useStore((s) => s.hasMore[channel.id])
+  const hasNewer = useStore((s) => s.hasNewer[channel.id])
+  const loadNewer = useStore((s) => s.loadNewer)
+  const loadLatest = useStore((s) => s.loadLatest)
   const loading = useStore((s) => !!s.loadingMessages[channel.id])
   const loadMessages = useStore((s) => s.loadMessages)
   const markRead = useStore((s) => s.markRead)
@@ -34,6 +37,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
   const contentRef = useRef<HTMLDivElement>(null)
   const stickBottom = useRef(true)
   const prevHeight = useRef(0)
+  const prevFirst = useRef<string | null>(null)
   // Where the reader was when they opened the channel: everything after it is "new" until they leave.
   const [readAtOpen, setReadAtOpen] = useState<string | null | undefined>(undefined)
   const initialScrollDone = useRef(false)
@@ -86,10 +90,13 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
       }
     } else if (stickBottom.current) {
       el.scrollTop = el.scrollHeight
-    } else if (prevHeight.current && el.scrollHeight > prevHeight.current) {
+    } else if (prevHeight.current && el.scrollHeight > prevHeight.current && messages?.[0]?.id !== prevFirst.current) {
+      // Older history was prepended: keep what the reader was looking at in place. (Pages appended below
+      // after a jump must not shift the view, or scrolling down would cascade through the whole channel.)
       el.scrollTop += el.scrollHeight - prevHeight.current
     }
     prevHeight.current = el.scrollHeight
+    prevFirst.current = messages?.[0]?.id ?? null
   }, [messages, firstUnreadId])
 
   // Late-loading content (thumbnails, link cards, poll results) grows the list after the first paint;
@@ -108,16 +115,19 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
   // "You're viewing older messages" once the reader is well above the bottom.
   const [away, setAway] = useState(false)
   useEffect(() => { setAway(false) }, [channel.id])
+  useEffect(() => { if (hasNewer) stickBottom.current = false }, [hasNewer])
   const onScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-    setAway(el.scrollHeight - el.scrollTop - el.clientHeight > 300)
+    const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    stickBottom.current = !hasNewer && fromBottom < 40
+    setAway(fromBottom > 300)
     if (el.scrollTop < 120 && hasMore !== false && !loading && messages?.length) {
       prevHeight.current = el.scrollHeight
       loadMessages(channel.id, messages[0].id)
     }
-  }, [channel.id, hasMore, loading, messages, loadMessages])
+    if (hasNewer && fromBottom < 160 && !loading) loadNewer(channel.id)
+  }, [channel.id, hasMore, hasNewer, loading, messages, loadMessages, loadNewer])
 
   const scrollToBottom = () => { stickBottom.current = true; const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }
   /** Reply header click: scroll to the original, loading older history if needed. */
@@ -169,9 +179,9 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
           </div>
         </div>
       </div>
-      {away && (
+      {(away || hasNewer) && (
         <div className="pointer-events-none absolute inset-x-4 bottom-2 flex justify-center" data-older-bar>
-          <button type="button" onClick={() => { const el = scrollRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); stickBottom.current = true }}
+          <button type="button" onClick={async () => { if (hasNewer) { await loadLatest(channel.id); stickBottom.current = true; requestAnimationFrame(() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }); return } const el = scrollRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); stickBottom.current = true }}
             className="pointer-events-auto pop flex items-center gap-3 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white shadow-xl hover:bg-accent-hover" data-jump-present>
             <span>You're viewing older messages</span>
             <span className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-xs">Jump to Present <ArrowDown size={12} /></span>
