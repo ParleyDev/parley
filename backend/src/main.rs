@@ -1,4 +1,5 @@
 mod audit;
+mod av;
 mod auth;
 mod config;
 mod error;
