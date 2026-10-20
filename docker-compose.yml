@@ -115,6 +115,16 @@ services:
       - frontend
     restart: unless-stopped
 
+  # Upload malware scanning (profile "av"): ClamAV with its daemon on 3310. First start downloads signatures
+  # (~300 MB) into the av-db volume and takes a few minutes; freshclam keeps them current. Then in Admin Console ->
+  # Instance Settings -> Antivirus enter clamav:3310. Uploads are scanned before they are stored and served.
+  clamav:
+    image: clamav/clamav:stable
+    profiles: ["av"]
+    volumes:
+      - av-db:/var/lib/clamav
+    restart: unless-stopped
+
   # Voice message transcription (profile "stt"): a CPU Whisper server with an OpenAI-compatible API. First start
   # downloads the model (~150 MB for base.en) into the stt-models volume. Then in Admin Console -> Instance
   # Settings -> Voice message transcription enter URL http://stt:8000 and model Systran/faster-whisper-base.en
@@ -197,6 +207,7 @@ networks:
 
 volumes:
   stt-models:
+  av-db:
   pgdata:
   uploads:
   certs:

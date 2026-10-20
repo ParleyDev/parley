@@ -116,6 +116,21 @@ Backends are stateless apart from the websocket hub, and the hub is clustered ov
 
 Rate limits start from the `RL_*` environment values and can be overridden per bucket in Admin Console → Instance Settings → Rate limits (`count/seconds`; blank = environment value). Changes apply immediately on the instance that saved them and on others at their next restart. Admin → Users → a user → Sessions lists their active devices (IP, client, last seen) with per-device and log-out-all buttons; clicking an IP filters the user list to everyone seen from it (`GET /admin/users?ip=`).
 
+## Load testing
+
+`ops/load/messages.js` (REST send + list per VU) and `ops/load/ws.js` (N sockets in one server, one publisher, measures MESSAGE_CREATE fan-out latency) run under [k6](https://k6.io):
+
+```bash
+docker run --rm -i --network host -e BASE=http://localhost:8080 -e VUS=20 -e DURATION=60s grafana/k6 run - < ops/load/messages.js
+docker run --rm -i --network host -e BASE=http://localhost:8080 -e VUS=200 -e DURATION=60s grafana/k6 run - < ops/load/ws.js
+```
+
+Each VU registers its own account (raise `RL_REGISTER` / `RL_MESSAGES` for the run; the compose defaults are already loose), so point them at a scratch stack, not production. Thresholds: p95 send/list under 300 ms, p95 fan-out under 500 ms, under 1% failed requests. Voice signalling is only exercised by the e2e suites with fake media devices; put LiveKit (`--profile sfu`) in front before testing calls with more than a handful of participants.
+
+## Antivirus
+
+Admin Console → Instance Settings → Antivirus takes a clamd address; `docker compose --profile av up -d` runs ClamAV (`clamav:3310`, signatures in the `av-db` volume, first start takes minutes while they download). Every upload (attachments, voice messages, profile images, custom emoji and stickers) is streamed to clamd (INSTREAM) before it is stored, so nothing unscanned is ever served; an infected file is refused with the signature name and counted in `/metrics` (`av_rejected`). "Fail closed" refuses uploads while the scanner is unreachable; otherwise they pass with an error logged.
+
 ## Upgrades and rollback
 
 `ops/upgrade.sh` takes a backup (`ops/backup.sh`), builds the new images and rolls them with `docker compose up -d`; the backend applies pending `sqlx` migrations on start. Migrations are forward-only and, by policy, additive (new tables and nullable or defaulted columns; nothing dropped or renamed in the same release that stops writing it), so an older build can run against a newer schema. To roll back:

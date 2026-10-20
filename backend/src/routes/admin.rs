@@ -87,6 +87,12 @@ pub struct InstanceSettings {
     pub rate_limits: std::collections::HashMap<String, String>,
     #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
     pub rate_limit_defaults: std::collections::HashMap<String, String>,
+    /// Antivirus: clamd host:port (compose `av` profile: clamav:3310). Empty = uploads are not scanned.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub av_addr: String,
+    /// When the scanner is unreachable: refuse uploads (true) or let them through with an error logged (false).
+    #[serde(default)]
+    pub av_fail_closed: bool,
 }
 
 impl InstanceSettings {
@@ -102,13 +108,14 @@ impl InstanceSettings {
         self.stt_api_key = String::new();
         self.rate_limits.clear();
         self.rate_limit_defaults.clear();
+        self.av_addr = String::new();
         self
     }
 }
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default() };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -120,6 +127,8 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "stt_url" => s.stt_url = v.as_str().unwrap_or("").to_string(),
             "stt_api_key" => s.stt_api_key = v.as_str().unwrap_or("").to_string(),
             "stt_model" => s.stt_model = v.as_str().unwrap_or("").to_string(),
+            "av_addr" => s.av_addr = v.as_str().unwrap_or("").to_string(),
+            "av_fail_closed" => s.av_fail_closed = v.as_bool().unwrap_or(false),
             "rate_limits" => s.rate_limits = v.as_object().map(|o| o.iter().filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string()))).collect()).unwrap_or_default(),
             _ => {}
         }
@@ -498,10 +507,16 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
         rate_limits.insert(k.clone(), v.to_string());
     }
     if before.rate_limits != rate_limits { changed.insert("rate_limits".into(), json!(rate_limits)); }
+    let av_addr = req.av_addr.trim().to_string();
+    if !av_addr.is_empty() && (av_addr.contains('/') || !av_addr.contains(':')) {
+        return Err(AppError::BadRequest("Antivirus address must be host:port, e.g. clamav:3310".into()));
+    }
+    if before.av_addr != av_addr { changed.insert("av_addr".into(), json!(av_addr)); }
+    if before.av_fail_closed != req.av_fail_closed { changed.insert("av_fail_closed".into(), json!(req.av_fail_closed)); }
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     let mut s = load_settings(&state.db).await?;

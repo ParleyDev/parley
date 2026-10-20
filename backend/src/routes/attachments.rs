@@ -114,6 +114,13 @@ async fn upload(
         let _ = tokio::fs::remove_file(&path).await;
         return Err(e);
     }
+    // Antivirus (when configured): the file is scanned before it is recorded, so it is never served unscanned.
+    if let Ok(bytes) = tokio::fs::read(&path).await {
+        if let Err(e) = crate::av::check(&state, &bytes, "attachment").await {
+            let _ = tokio::fs::remove_file(&path).await;
+            return Err(e);
+        }
+    }
 
     // Trust magic bytes over the declared type for anything we'd render inline.
     let sniffed = infer::get(&head).map(|t| t.mime_type().to_string());
