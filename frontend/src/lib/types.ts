@@ -42,6 +42,9 @@ export interface Guild {
   owner_id: string
   created_at: string
   banner_url?: string | null
+  /** Membership screening: rules markdown and whether members must accept it before chatting. */
+  rules?: string
+  rules_required?: boolean
 }
 
 /** One entry of the user's server bar: a server, or a folder of servers. */
@@ -95,6 +98,8 @@ export interface Member {
   avatar_url: string | null
   status: string
   custom_status?: string
+  /** When this member accepted the server rules; null while screening is pending. */
+  rules_accepted_at?: string | null
   /** Moderation timeout: read-only in this server until this instant. */
   timeout_until?: string | null
   roles: string[]

@@ -49,7 +49,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     return () => clearTimeout(t)
   }, [myMember?.timeout_until])
   const timedOut = isTimedOut(myMember)
-  const canSend = has(perms, P.SEND_MESSAGES) && !timedOut
+  const rulesGuild = useStore((s) => (channel.guild_id ? s.guilds[channel.guild_id] : undefined))
+  const rulesPending = !!rulesGuild?.rules_required && !!myMember && !myMember.rules_accepted_at
+  const canSend = has(perms, P.SEND_MESSAGES) && !timedOut && !rulesPending
   const canAttach = canSend && (channel.guild_id === null || has(perms, P.ATTACH_FILES))
   const [value, setValue] = useState('')
   const [picker, setPicker] = useState<PickerTab | null>(null)
@@ -280,7 +282,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   if (!canSend) {
     return (
       <div className="shrink-0 px-4 pb-2 pt-1 max-md:px-2 max-md:pb-2">
-        {timedOut
+        {rulesPending
+          ? <div className="rounded-xl bg-accent/10 border border-accent/40 px-4 py-3 text-[15px] text-text-1 flex items-center gap-3" data-rules-gate><span className="flex-1">Read and accept the server rules to start chatting in <b>{rulesGuild?.name}</b>.</span><button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'rules', guildId: channel.guild_id! })} data-rules-open>View rules</button></div>
+          : timedOut
           ? <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-timed-out>You are timed out in this server until <b>{new Date(myMember!.timeout_until!).toLocaleString()}</b>. You can read, but not send messages, react or join voice.</div>
           : <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2">You do not have permission to send messages in this channel.</div>}
         <div className="h-5" />

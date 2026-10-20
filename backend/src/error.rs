@@ -13,6 +13,9 @@ pub enum AppError {
     /// keep the message as "not delivered" instead of showing a bare error.
     #[error("undeliverable")]
     Undeliverable,
+    /// Membership screening: the member has not accepted the server rules yet (403, code "rules_required").
+    #[error("rules_required")]
+    RulesRequired,
     #[error("{0}")]
     NotFound(String),
     #[error("{0}")]
@@ -29,6 +32,9 @@ impl IntoResponse for AppError {
             AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone()),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized".into()),
             AppError::Forbidden => (StatusCode::FORBIDDEN, "Forbidden".into()),
+            AppError::RulesRequired => {
+                return (StatusCode::FORBIDDEN, Json(json!({ "error": "Accept the server rules before chatting.", "code": "rules_required" }))).into_response();
+            }
             AppError::Undeliverable => {
                 return (StatusCode::FORBIDDEN, Json(json!({ "error": "Your message could not be delivered.", "code": "undeliverable" }))).into_response();
             }

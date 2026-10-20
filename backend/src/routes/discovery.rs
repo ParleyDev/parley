@@ -32,6 +32,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/discovery", get(get_listing).put(put_listing).delete(delete_listing))
         .route("/admin/discovery", get(admin_list))
         .route("/admin/discovery/:gid/review", post(review))
+        .route("/admin/discovery/:gid", axum::routing::patch(admin_update))
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -47,6 +48,14 @@ pub struct Listing {
     pub submitted_at: DateTime<Utc>,
     pub reviewed_at: Option<DateTime<Utc>>,
     pub member_count: i64,
+    /// Admin-chosen spot on the Discover home page (lower first); null = not featured.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub featured_order: Option<i32>,
+    /// Admin-granted badge: the instance vouches for this server (more than being approved for listing).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub verified: bool,
     #[sqlx(skip)]
     #[serde(default)]
     pub online_count: i64,
@@ -56,6 +65,7 @@ pub struct Listing {
 }
 
 const LISTING_SELECT: &str = "SELECT d.guild_id, g.name, g.icon_url, d.description, d.category, COALESCE(d.banner_url, g.banner_url) AS banner_url, d.status, d.note, d.submitted_at, d.reviewed_at,
+    d.featured_order, d.verified,
     (SELECT COUNT(*) FROM guild_members m WHERE m.guild_id = d.guild_id) AS member_count
     FROM guild_discovery d JOIN guilds g ON g.id = d.guild_id";
 
@@ -100,7 +110,7 @@ async fn browse(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q)
     let rows = sqlx::query_as::<_, Listing>(&format!(
         "{LISTING_SELECT} WHERE d.status = 'approved' AND ($1::text IS NULL OR d.category = $1)
            AND ($2::text IS NULL OR g.name ILIKE $2 OR d.description ILIKE $2)
-         ORDER BY member_count DESC, g.name LIMIT 100"
+         ORDER BY d.featured_order ASC NULLS LAST, member_count DESC, g.name LIMIT 100"
     ))
     .bind(category)
     .bind(pattern)
@@ -130,7 +140,7 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
     let roles = perms::list_roles(&state.db, gid).await?;
     let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &[gid]).await?;
     let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &[gid]).await?;
-    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id,
+    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id, "rules": guild.rules, "rules_required": guild.rules_required,
         "created_at": guild.created_at, "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers });
     if inserted > 0 {
         state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
@@ -305,5 +315,37 @@ async fn review(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid
         return Err(AppError::NotFound("Listing not found".into()));
     }
     crate::audit::record(&state, uid, &format!("discovery.{}", req.status), "guild", Some(gid), &crate::audit::guild_name(&state, gid).await, json!({ "note": req.note.trim() })).await;
+    Ok(Json(listing_for(&state, uid, gid).await?.ok_or_else(|| AppError::NotFound("Listing not found".into()))?))
+}
+
+#[derive(Deserialize)]
+struct AdminUpdate {
+    /// Featured spot (lower first); explicit null un-features.
+    #[serde(default, deserialize_with = "deserialize_nullable_i32")]
+    featured_order: Option<Option<i32>>,
+    verified: Option<bool>,
+}
+fn deserialize_nullable_i32<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i32>>, D::Error> {
+    Ok(Some(Option::<i32>::deserialize(d)?))
+}
+
+/// Admin: feature a listing (and order it) and/or grant the verified badge. Only approved listings can be featured or verified.
+async fn admin_update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>, Json(req): Json<AdminUpdate>) -> AppResult<Json<Listing>> {
+    require_admin(&state, uid).await?;
+    let status: Option<(String,)> = sqlx::query_as("SELECT status FROM guild_discovery WHERE guild_id = $1").bind(gid).fetch_optional(&state.db).await?;
+    let Some((status,)) = status else { return Err(AppError::NotFound("Listing not found".into())) };
+    let featuring = req.featured_order.map(|f| f.is_some()).unwrap_or(false);
+    if status != "approved" && (featuring || req.verified == Some(true)) {
+        return Err(AppError::BadRequest("Only approved listings can be featured or verified".into()));
+    }
+    if let Some(Some(n)) = req.featured_order { if !(0..=1000).contains(&n) { return Err(AppError::BadRequest("Featured order must be 0-1000".into())); } }
+    sqlx::query("UPDATE guild_discovery SET featured_order = CASE WHEN $2 THEN $3 ELSE featured_order END, verified = COALESCE($4, verified) WHERE guild_id = $1")
+        .bind(gid).bind(req.featured_order.is_some()).bind(req.featured_order.flatten()).bind(req.verified)
+        .execute(&state.db)
+        .await?;
+    let mut details = serde_json::Map::new();
+    if let Some(f) = req.featured_order { details.insert("featured_order".into(), json!(f)); }
+    if let Some(v) = req.verified { details.insert("verified".into(), json!(v)); }
+    crate::audit::record(&state, uid, "discovery.update", "guild", Some(gid), &crate::audit::guild_name(&state, gid).await, Value::Object(details)).await;
     Ok(Json(listing_for(&state, uid, gid).await?.ok_or_else(|| AppError::NotFound("Listing not found".into()))?))
 }

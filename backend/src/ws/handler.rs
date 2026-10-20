@@ -120,7 +120,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     }
 
     let guilds = sqlx::query_as::<_, Guild>(
-        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at, g.banner_url FROM guilds g
+        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at, g.banner_url, g.rules, g.rules_required FROM guilds g
          JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at",
     )
     .bind(user_id)
@@ -139,7 +139,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
         channels.extend(perms::visible_channels(&state.db, *gid, user_id).await.unwrap_or_default());
         roles.extend(perms::list_roles(&state.db, *gid).await.unwrap_or_default());
         if let Ok(mut m) = sqlx::query_as::<_, Member>(
-            "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until
+            "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at
              FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
         )
         .bind(gid)

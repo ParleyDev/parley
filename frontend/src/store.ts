@@ -45,6 +45,7 @@ export type ModalKind =
   | { kind: 'createThread'; channelId: string; messageId?: string; suggested?: string }
   | { kind: 'newPost'; channelId: string }
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
+  | { kind: 'rules'; guildId: string }
   | { kind: 'customStatus' }
   | { kind: 'forward'; message: Message }
   | { kind: 'groupMembers'; channelId?: string; userIds?: string[] }
