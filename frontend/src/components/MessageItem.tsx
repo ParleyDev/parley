@@ -213,7 +213,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               {m.sticker && (
                 <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
-              <Attachments items={m.attachments ?? []} />
+              <Attachments items={m.attachments ?? []} mine={isOwn} />
             </>
           )}
           {m.reactions.length > 0 && (

@@ -1,6 +1,7 @@
 import { Download, FileText } from 'lucide-react'
 import { useState } from 'react'
 import { useStore } from '../store'
+import VoiceMessage from './VoiceMessage'
 import type { Attachment } from '../lib/types'
 import { formatBytes, isAudio, isImage, isVideo } from '../lib/upload'
 
@@ -10,11 +11,11 @@ export const isSpoiler = (a: Pick<Attachment, 'filename'>) => a.filename.startsW
 export const displayName = (a: Pick<Attachment, 'filename'>) => a.filename.replace(/^SPOILER_/, '')
 
 /** Renders a message's attachments: images inline (click for lightbox), video/audio players, file cards. Spoilers stay blurred until clicked. */
-export default function Attachments({ items }: { items: Attachment[] }) {
+export default function Attachments({ items, mine }: { items: Attachment[]; mine?: boolean }) {
   if (!items.length) return null
   return (
     <div className="mt-1 flex flex-wrap gap-2">
-      {items.map((a) => <Spoilered key={a.id} a={a}><One a={{ ...a, filename: displayName(a) }} /></Spoilered>)}
+      {items.map((a) => <Spoilered key={a.id} a={a}><One a={{ ...a, filename: displayName(a) }} mine={mine} /></Spoilered>)}
     </div>
   )
 }
@@ -30,7 +31,7 @@ function Spoilered({ a, children }: { a: Attachment; children: React.ReactNode }
   )
 }
 
-function One({ a }: { a: Attachment }) {
+function One({ a, mine }: { a: Attachment; mine?: boolean }) {
   const openModal = useStore((s) => s.openModal)
   return (
     <>
@@ -47,6 +48,9 @@ function One({ a }: { a: Attachment }) {
         }
         if (isVideo(a.content_type)) {
           return <video key={a.id} src={a.url} controls preload="metadata" className="rounded-lg border border-line bg-black max-w-full" style={{ maxWidth: MAX_W, maxHeight: MAX_H }} />
+        }
+        if (isAudio(a.content_type) && a.duration_ms) {
+          return <VoiceMessage key={a.id} a={a} mine={!!mine} />
         }
         if (isAudio(a.content_type)) {
           return (
