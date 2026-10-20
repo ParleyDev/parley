@@ -190,6 +190,12 @@ where
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        // App and bot tokens ("Bot …" / "Bearer oa_…") act as a user without a session; everything else is a JWT.
+        let st = AppState::from_ref(state);
+        let header = parts.headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+        if let Some(uid) = crate::routes::applications::resolve_token(&st, &header, &parts.method, parts.uri.path()).await? {
+            return Ok(AuthUser(uid));
+        }
         AuthSession::from_request_parts(parts, state).await.map(|AuthSession(uid, _)| AuthUser(uid))
     }
 }

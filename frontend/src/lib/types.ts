@@ -2,6 +2,8 @@ export interface User {
   id: string
   username: string
   display_name: string
+  /** Bot account (acts through an app token). */
+  bot?: boolean
   avatar_url: string | null
   bio: string
   status: string
@@ -303,3 +305,8 @@ export interface UserNote { user_id: string; nickname: string; note: string }
 export interface RemoteMedia { camera: MediaStream | null; screen: MediaStream | null }
 
 export type PeerStatus = 'connecting' | 'connected' | 'failed'
+
+/** A developer application (Settings → Applications). */
+export interface Application { id: string; owner_id: string; name: string; description: string; client_id: string; redirect_uris: string[]; bot_user_id: string | null; created_at: string; client_secret?: string; bot?: User | null; authorized_users?: number }
+/** An app holding a token for you (Settings → Authorized Apps). */
+export interface AuthorizedApp { id: string; name: string; description: string; owner: string | null; scopes: string[]; since: string }

@@ -210,7 +210,10 @@ async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Jso
         let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limit("login_fail"));
         return Err(AppError::BadRequest("Invalid credentials".into()));
     }
-    let (suspended, mfa): (bool, bool) = sqlx::query_as("SELECT suspended_at IS NOT NULL, totp_secret IS NOT NULL FROM users WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+    let (suspended, mfa, bot): (bool, bool, bool) = sqlx::query_as("SELECT suspended_at IS NOT NULL, totp_secret IS NOT NULL, bot FROM users WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+    if bot {
+        return Err(AppError::BadRequest("Bot accounts log in with their token, not a password.".into()));
+    }
     if suspended {
         return Err(AppError::BadRequest("This account has been suspended.".into()));
     }

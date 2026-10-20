@@ -238,6 +238,11 @@ impl Hub {
         self.online.iter().map(|e| *e.key()).collect()
     }
 
+    /// Drop every cached session check for a user (tokens revoked, account changed).
+    pub fn session_forget_user(&self, user: Uuid) {
+        self.session_ok.retain(|k, _| k.0 != user);
+    }
+
     pub fn next_session(&self) -> u64 {
         self.session_seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }

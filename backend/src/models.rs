@@ -18,6 +18,10 @@ pub struct User {
     pub pronouns: String,
     pub name_primary: Option<String>,
     pub name_accent: Option<String>,
+    /// A bot account (acts only through its token).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub bot: bool,
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
@@ -52,6 +56,9 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub bot: bool,
     /// Content & Social: who may DM you (everyone | friends_and_servers | friends), whether DMs from non-friends
     /// land in Message Requests, who may send friend requests (subset of everyone, friends_of_friends,
     /// server_members; empty = nobody), who may add you to groups (friends | nobody).
@@ -256,6 +263,8 @@ pub struct MessageRow {
     /// recipient_leave / channel_name_change / channel_icon_change.
     #[sqlx(default)]
     pub kind: String,
+    #[sqlx(default)]
+    pub author_bot: bool,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -452,6 +461,7 @@ impl MessageRow {
                 url: crate::routes::images::image_url(id),
             }),
             author: User {
+                bot: self.author_bot,
                 id: self.author_id,
                 username: self.username,
                 display_name: self.display_name,
