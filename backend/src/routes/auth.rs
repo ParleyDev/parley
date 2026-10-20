@@ -203,11 +203,11 @@ async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Jso
             .await?;
     // Wrong user or wrong password: both spend a login_fail token for this IP (brute-force guard).
     let Some((id, hash)) = row else {
-        let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limits.login_fail);
+        let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limit("login_fail"));
         return Err(AppError::BadRequest("Invalid credentials".into()));
     };
     if !verify_password(&req.password, &hash) {
-        let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limits.login_fail);
+        let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limit("login_fail"));
         return Err(AppError::BadRequest("Invalid credentials".into()));
     }
     let (suspended, mfa): (bool, bool) = sqlx::query_as("SELECT suspended_at IS NOT NULL, totp_secret IS NOT NULL FROM users WHERE id = $1").bind(id).fetch_one(&state.db).await?;
@@ -253,7 +253,7 @@ async fn login_mfa(State(state): State<AppState>, headers: HeaderMap, Json(req):
         return Err(AppError::BadRequest("This account has been suspended.".into()));
     }
     if !check_second_factor(&state, id, &secret, last_step, &req.code).await? {
-        let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limits.login_fail);
+        let _ = LIMITER.take("login_fail", &client_ip(&headers), LIMITER.limit("login_fail"));
         return Err(AppError::BadRequest("Invalid code".into()));
     }
     session(&state, id, &headers).await

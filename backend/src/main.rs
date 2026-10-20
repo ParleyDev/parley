@@ -49,6 +49,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_sweep = state.clone();
     // Legacy data-URL avatars/banners become uploaded images (no-op once converted).
     routes::images::convert_data_urls(&state).await;
+    // Rate limit overrides saved in Instance Settings apply from the start.
+    if let Ok(s) = routes::admin::load_settings(&state.db).await { ratelimit::LIMITER.apply_overrides(&s.rate_limits); }
     // Cross-instance bus (Postgres LISTEN/NOTIFY) + shared presence: harmless on one instance, required for more.
     let (bus_tx, bus_rx) = tokio::sync::mpsc::unbounded_channel();
     state.hub.attach_bus(bus_tx);
