@@ -259,15 +259,17 @@ function SettingsPane() {
   const [sttUrl, setSttUrl] = useState('')
   const [sttKey, setSttKey] = useState('')
   const [sttModel, setSttModel] = useState('')
+  const [fcm, setFcm] = useState('')
+  const [fcmEndpoint, setFcmEndpoint] = useState('')
   const [avAddr, setAvAddr] = useState('')
   const [avClosed, setAvClosed] = useState(false)
   const [rl, setRl] = useState<Record<string, string>>({})
   const [rlDefaults, setRlDefaults] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string; stt_url?: string; stt_api_key?: string; stt_model?: string; rate_limits?: Record<string, string>; rate_limit_defaults?: Record<string, string>; av_addr?: string; av_fail_closed?: boolean }>('/admin/settings').then((s) => { setAvAddr(s.av_addr ?? ''); setAvClosed(!!s.av_fail_closed); setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification); setLkUrl(s.livekit_url ?? ''); setLkKey(s.livekit_api_key ?? ''); setLkSecret(s.livekit_api_secret ?? ''); setSttUrl(s.stt_url ?? ''); setSttKey(s.stt_api_key ?? ''); setSttModel(s.stt_model ?? ''); setRl(s.rate_limits ?? {}); setRlDefaults(s.rate_limit_defaults ?? {}) }).catch(() => {}) }, [])
+  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string; stt_url?: string; stt_api_key?: string; stt_model?: string; rate_limits?: Record<string, string>; rate_limit_defaults?: Record<string, string>; av_addr?: string; av_fail_closed?: boolean; fcm_service_account?: string; fcm_endpoint?: string; push?: boolean }>('/admin/settings').then((s) => { setAvAddr(s.av_addr ?? ''); setAvClosed(!!s.av_fail_closed); setFcm(s.fcm_service_account ?? ''); setFcmEndpoint(s.fcm_endpoint ?? ''); setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification); setLkUrl(s.livekit_url ?? ''); setLkKey(s.livekit_api_key ?? ''); setLkSecret(s.livekit_api_secret ?? ''); setSttUrl(s.stt_url ?? ''); setSttKey(s.stt_api_key ?? ''); setSttModel(s.stt_model ?? ''); setRl(s.rate_limits ?? {}); setRlDefaults(s.rate_limit_defaults ?? {}) }).catch(() => {}) }, [])
   const save = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify, livekit_url: lkUrl, livekit_api_key: lkKey, livekit_api_secret: lkSecret, stt_url: sttUrl, stt_api_key: sttKey, stt_model: sttModel, rate_limits: rl, av_addr: avAddr, av_fail_closed: avClosed }); setInstance({ ...s, livekit_url: s.livekit_url }); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
+    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify, livekit_url: lkUrl, livekit_api_key: lkKey, livekit_api_secret: lkSecret, stt_url: sttUrl, stt_api_key: sttKey, stt_model: sttModel, rate_limits: rl, av_addr: avAddr, av_fail_closed: avClosed, fcm_service_account: fcm, fcm_endpoint: fcmEndpoint }); setInstance({ ...s, livekit_url: s.livekit_url }); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={save} className="max-w-xl space-y-6" data-admin-settings>
@@ -301,6 +303,12 @@ function SettingsPane() {
           <div><label className="label">Model</label><input className="input" value={sttModel} onChange={(e) => setSttModel(e.target.value)} placeholder="Systran/faster-whisper-base.en or whisper-1" data-admin-stt-model /></div>
         </div>
         <div className="text-xs text-text-2">Transcription: <b data-admin-stt-state>{instance.transcription ? 'on' : 'off'}</b></div>
+      </div>
+      <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-push>
+        <div><span className="block font-semibold">Push notifications (iOS / Android apps)</span><span className="block text-sm text-text-2">Paste the Firebase <b>service account</b> JSON (Project settings → Service accounts → Generate new private key). DMs and mentions are pushed to members who have no app or browser open. Leave empty to turn push off.</span></div>
+        <textarea className="input resize-y font-mono text-xs" rows={4} value={fcm} onChange={(e) => setFcm(e.target.value)} placeholder='{"type":"service_account","project_id":"…","client_email":"…","private_key":"-----BEGIN PRIVATE KEY-----…"}' autoComplete="off" data-admin-fcm />
+        <div><label className="label">FCM endpoint override (tests only)</label><input className="input" value={fcmEndpoint} onChange={(e) => setFcmEndpoint(e.target.value)} placeholder="leave empty for Google" data-admin-fcm-endpoint /></div>
+        <div className="text-xs text-text-2">Push: <b data-admin-push-state>{fcm.trim() ? 'on' : 'off'}</b></div>
       </div>
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-av>
         <div><span className="block font-semibold">Antivirus (ClamAV)</span><span className="block text-sm text-text-2">Every upload (attachments, voice messages, profile images, emoji) is scanned by a ClamAV daemon before it is stored. <code>docker compose --profile av up -d</code> runs one; enter <code>clamav:3310</code>. Leave empty to skip scanning.</span></div>

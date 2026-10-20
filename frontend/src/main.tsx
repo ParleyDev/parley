@@ -5,9 +5,11 @@ import './index.css'
 import App from './App'
 import { initAppearance } from './lib/appearance'
 import { initLanguage } from './lib/i18n'
+import { initNative } from './lib/native'
 
 initAppearance()
 initLanguage()
+void initNative()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
