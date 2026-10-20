@@ -47,6 +47,8 @@ async fn main() -> anyhow::Result<()> {
 
     let state = state::AppState { db, config: Arc::new(config.clone()), hub: Arc::new(ws::hub::Hub::new()) };
     let state_for_sweep = state.clone();
+    // Legacy data-URL avatars/banners become uploaded images (no-op once converted).
+    routes::images::convert_data_urls(&state).await;
     // Cross-instance bus (Postgres LISTEN/NOTIFY) + shared presence: harmless on one instance, required for more.
     let (bus_tx, bus_rx) = tokio::sync::mpsc::unbounded_channel();
     state.hub.attach_bus(bus_tx);

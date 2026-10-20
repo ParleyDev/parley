@@ -96,6 +96,12 @@ pub async fn store_image(state: &AppState, uid: Uuid, kind: &str, mut multipart:
         }
     }
     let bytes = data.ok_or_else(|| AppError::BadRequest("Missing 'file' field".into()))?;
+    let img = store_bytes(state, uid, kind, bytes).await?;
+    Ok((img, fields))
+}
+
+/// Validate, write to disk and record an image from raw bytes (uploads and the legacy data-URL conversion).
+pub async fn store_bytes(state: &AppState, uid: Uuid, kind: &str, bytes: Vec<u8>) -> AppResult<Image> {
     if bytes.is_empty() {
         return Err(AppError::BadRequest("Empty file".into()));
     }
@@ -129,7 +135,35 @@ pub async fn store_image(state: &AppState, uid: Uuid, kind: &str, mut multipart:
     .fetch_one(&state.db)
     .await?;
     img.url = image_url(id);
-    Ok((img, fields))
+    Ok(img)
+}
+
+/// One-off at startup: avatars and banners that older clients saved as `data:` URLs become uploaded images.
+/// Rows that cannot be decoded are cleared rather than left as data URLs (the API no longer accepts them).
+pub async fn convert_data_urls(state: &AppState) {
+    use base64::Engine;
+    let rows: Vec<(Uuid, Option<String>, Option<String>)> = match sqlx::query_as("SELECT id, avatar_url, banner_url FROM users WHERE avatar_url LIKE 'data:%' OR banner_url LIKE 'data:%'").fetch_all(&state.db).await {
+        Ok(r) => r,
+        Err(e) => { tracing::warn!(error = ?e, "data-URL scan failed"); return; }
+    };
+    let mut converted = 0;
+    for (uid, avatar, banner) in rows {
+        for (col, kind, val) in [("avatar_url", "avatar", avatar), ("banner_url", "banner", banner)] {
+            let Some(v) = val.filter(|v| v.starts_with("data:")) else { continue };
+            let decoded = v.split_once(',').filter(|(head, _)| head.contains(";base64")).and_then(|(_, b64)| base64::engine::general_purpose::STANDARD.decode(b64.trim()).ok());
+            let new_url: Option<String> = match decoded {
+                Some(bytes) => match store_bytes(state, uid, kind, bytes).await {
+                    Ok(img) => { converted += 1; Some(img.url) }
+                    Err(e) => { tracing::warn!(user = %uid, col, error = %e, "data-URL image rejected; clearing"); None }
+                },
+                None => None,
+            };
+            let _ = sqlx::query(&format!("UPDATE users SET {col} = $2 WHERE id = $1")).bind(uid).bind(new_url).execute(&state.db).await;
+        }
+    }
+    if converted > 0 {
+        tracing::info!(converted, "converted legacy data-URL profile images to uploads");
+    }
 }
 
 #[derive(Deserialize)]

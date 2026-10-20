@@ -162,19 +162,30 @@ pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
     if row.is_some() { Ok(()) } else { Err(AppError::BadRequest("Verify your email address to do that. Check your inbox or resend the link from Account settings.".into())) }
 }
 
-/// Is this user a Parley admin? The `is_admin` flag, or an email listed in `ADMIN_EMAILS`
-/// (which is then persisted as the flag so the UI sees it too).
+/// Is this user a Parley admin? The `is_admin` flag, or an email listed in `ADMIN_EMAILS` (persisted as the flag,
+/// marked `admin_via_env`). Removing an email from the list demotes an env-granted admin the next time they are
+/// checked, unless they are the last admin; admins promoted from the console are never demoted this way.
 pub async fn ensure_admin(state: &AppState, uid: Uuid) -> AppResult<bool> {
-    let row: Option<(bool, String)> = sqlx::query_as("SELECT is_admin, email FROM users WHERE id = $1").bind(uid).fetch_optional(&state.db).await?;
-    let Some((flag, email)) = row else { return Ok(false) };
-    if flag {
+    let row: Option<(bool, String, bool)> = sqlx::query_as("SELECT is_admin, email, admin_via_env FROM users WHERE id = $1").bind(uid).fetch_optional(&state.db).await?;
+    let Some((flag, email, via_env)) = row else { return Ok(false) };
+    let listed = state.config.admin_emails.iter().any(|e| e.eq_ignore_ascii_case(&email));
+    if listed {
+        if !flag || !via_env {
+            sqlx::query("UPDATE users SET is_admin = true, admin_via_env = true WHERE id = $1").bind(uid).execute(&state.db).await?;
+        }
         return Ok(true);
     }
-    if state.config.admin_emails.iter().any(|e| e.eq_ignore_ascii_case(&email)) {
-        sqlx::query("UPDATE users SET is_admin = true WHERE id = $1").bind(uid).execute(&state.db).await?;
-        return Ok(true);
+    if flag && via_env {
+        let (others,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE is_admin AND id <> $1").bind(uid).fetch_one(&state.db).await?;
+        if others == 0 {
+            tracing::warn!(user = %uid, "ADMIN_EMAILS no longer lists the only admin; keeping their rights");
+            return Ok(true);
+        }
+        sqlx::query("UPDATE users SET is_admin = false, admin_via_env = false WHERE id = $1").bind(uid).execute(&state.db).await?;
+        crate::audit::record(state, uid, "user.demote", "user", Some(uid), &crate::audit::username(state, uid).await, serde_json::json!({ "reason": "removed from ADMIN_EMAILS" })).await;
+        return Ok(false);
     }
-    Ok(false)
+    Ok(flag)
 }
 
 pub async fn require_admin(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -216,8 +227,8 @@ pub fn validate_image_max(url: &Option<String>, max: usize) -> AppResult<()> {
         if u.len() > max {
             return Err(AppError::BadRequest(format!("Image too large (max {}KB)", max / 1024)));
         }
-        if !u.is_empty() && !(u.starts_with("data:image/") || u.starts_with("https://") || u.starts_with("http://") || crate::routes::images::image_id(u).is_some()) {
-            return Err(AppError::BadRequest("Image must be an uploaded image, a data URL or an http(s) URL".into()));
+        if !u.is_empty() && !(u.starts_with("https://") || u.starts_with("http://") || crate::routes::images::image_id(u).is_some()) {
+            return Err(AppError::BadRequest("Image must be an uploaded image (POST /images) or an http(s) URL".into()));
         }
     }
     Ok(())
