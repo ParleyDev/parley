@@ -10,7 +10,7 @@ for (const [tag,vp] of [['d',{width:1440,height:900}],['m',{width:390,height:844
   await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),a.token)
   await p.goto(`${WEB}/channels/${g.id}/${tc}`); await p.waitForTimeout(700)
   if (tag==='m') { await p.click('button[title="Member List"]'); await p.waitForTimeout(300) }
-  await p.click('aside button:has-text("bob"), [class*="sheet"] button:has-text("bob"), button:has-text("bob") >> nth=0'); await p.waitForTimeout(500)
+  await p.click('[data-member-list] button:has-text("bob") >> nth=0'); await p.waitForTimeout(500)
   // Roles live in the full profile: popout → … → View Full Profile.
   await p.click('[role=dialog] button[title="More"]'); await p.waitForTimeout(200); await p.click('[role=menuitem]:has-text("View Full Profile")'); await p.waitForTimeout(500)
   await p.click('[role=dialog] button[title="Add role"]'); await p.waitForTimeout(400)
