@@ -175,7 +175,7 @@ interface State {
   applyReceipt: (channelId: string, userId: string, messageId: string) => void
   /** Someone listened to a voice message: add them to the attachment's listened_by. */
   applyListened: (channelId: string, messageId: string, attachmentId: string, userId: string) => void
-  /** Load older pages until `messageId` is in the list (for jumping to a reply's original). Returns whether it is loaded. */
+  /** Load older pages (up to 60) until `messageId` is in the list (jumping to pins, bookmarks, search hits, reply originals). Returns whether it is loaded. */
   loadUntil: (channelId: string, messageId: string) => Promise<boolean>
   setActiveChannel: (id: string | null) => void
   setMobilePane: (p: 'nav' | 'content') => void
@@ -599,7 +599,7 @@ export const useStore = create<State>((set, get) => ({
     return { messages: { ...s.messages, [channelId]: list.map((m) => (m.id !== messageId ? m : { ...m, attachments: (m.attachments ?? []).map((a) => (a.id !== attachmentId || a.listened_by?.includes(userId) ? a : { ...a, listened_by: [...(a.listened_by ?? []), userId] })) })) } }
   }),
   loadUntil: async (channelId, messageId) => {
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 60; i++) {
       const list = get().messages[channelId] ?? []
       if (list.some((m) => m.id === messageId)) return true
       if (!list.length || get().hasMore[channelId] === false || list[0].id < messageId) return false
