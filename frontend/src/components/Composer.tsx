@@ -323,8 +323,8 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             <button className="text-text-2 hover:text-danger" title="Discard recording" onClick={cancelRecording} disabled={recBusy} data-voice-cancel><Trash2 size={20} /></button>
             <span className="relative flex h-3 w-3 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-75" /><span className="relative inline-flex h-3 w-3 rounded-full bg-danger" /></span>
             <span className="text-sm tabular-nums text-text-0 w-10" data-voice-timer>{Math.floor((rec?.ms ?? 0) / 60000)}:{String(Math.floor(((rec?.ms ?? 0) % 60000) / 1000)).padStart(2, '0')}</span>
-            <div className="flex h-8 flex-1 items-center justify-end gap-[2px] overflow-hidden" data-voice-levels>
-              {Array.from({ length: 40 }, (_, i) => { const v = rec?.levels[rec.levels.length - 40 + i] ?? 0; return <span key={i} className="w-[3px] rounded-full bg-accent transition-[height] duration-100" style={{ height: `${Math.max(10, v * 100)}%`, opacity: 0.4 + v * 0.6 }} /> })}
+            <div className="flex h-8 min-w-0 flex-1 items-center justify-end gap-[2px] overflow-hidden" data-voice-levels>
+              {Array.from({ length: 40 }, (_, i) => { const v = rec?.levels[rec.levels.length - 40 + i] ?? 0; return <span key={i} className="w-[3px] shrink-0 rounded-full bg-accent transition-[height] duration-100" style={{ height: `${Math.max(10, v * 100)}%`, opacity: 0.4 + v * 0.6 }} /> })}
             </div>
             <span className="text-xs text-text-2 max-md:hidden">{recBusy ? 'Sending…' : 'Recording…'}</span>
             <button className="h-9 w-9 rounded-full bg-accent text-white flex items-center justify-center hover:bg-accent-hover disabled:opacity-50" title="Send voice message" onClick={sendRecording} disabled={recBusy} data-voice-send><SendHorizontal size={18} /></button>

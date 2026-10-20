@@ -24,10 +24,10 @@ export default function VoiceMessage({ a, mine }: { a: Attachment; mine?: boolea
       <button type="button" onClick={toggle} className={`h-9 w-9 shrink-0 rounded-full flex items-center justify-center ${mine ? 'bg-white/20 hover:bg-white/30' : 'bg-accent text-white hover:bg-accent-hover'}`} title={playing ? 'Pause' : 'Play'} data-voice-play>
         {playing ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
       </button>
-      <div className="flex h-8 flex-1 items-center gap-[2px] cursor-pointer" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); seek((e.clientX - r.left) / r.width) }} role="slider" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.round(pos)} data-voice-wave>
+      <div className="flex h-8 min-w-0 flex-1 items-center gap-[2px] overflow-hidden cursor-pointer" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); seek((e.clientX - r.left) / r.width) }} role="slider" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.round(pos)} data-voice-wave>
         {Array.from(bars).map((v, i) => {
           const played = (i + 1) / bars.length <= progress
-          return <span key={i} className={`w-[3px] shrink-0 rounded-full transition-[height] duration-150 ${mine ? (played ? 'bg-white' : 'bg-white/40') : (played ? 'bg-accent' : 'bg-text-2/50')}`} style={{ height: `${Math.max(12, (v / 255) * 100)}%` }} />
+          return <span key={i} className={`min-w-0 flex-1 basis-0 max-w-[4px] rounded-full transition-[height] duration-150 ${mine ? (played ? 'bg-white' : 'bg-white/40') : (played ? 'bg-accent' : 'bg-text-2/50')}`} style={{ height: `${Math.max(12, (v / 255) * 100)}%` }} />
         })}
       </div>
       <span className={`shrink-0 text-xs tabular-nums ${mine ? 'text-white/85' : 'text-text-1'}`} data-voice-time>{playing || pos > 0 ? fmt(pos) : fmt(total)}</span>
