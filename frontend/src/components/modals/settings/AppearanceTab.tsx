@@ -55,6 +55,18 @@ export default function AppearanceTab() {
           ))}
         </div>
       </section>
+
+      <section data-accessibility>
+        <h3 className="label">Accessibility</h3>
+        <label className="flex items-center justify-between rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer">
+          <span><span className="block text-sm font-semibold">Reduced motion</span><span className="block text-xs text-text-2">Turns off pop-ins, fades and pulses. Your system's reduce-motion setting is honoured either way.</span></span>
+          <input type="checkbox" checked={a.reducedMotion} onChange={(e) => setAppearance({ reducedMotion: e.target.checked })} className="h-5 w-5 accent-accent" data-reduced-motion />
+        </label>
+        <label className="mt-2 flex items-center justify-between rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer">
+          <span><span className="block text-sm font-semibold">High contrast</span><span className="block text-xs text-text-2">Brighter secondary text and borders.</span></span>
+          <input type="checkbox" checked={a.highContrast} onChange={(e) => setAppearance({ highContrast: e.target.checked })} className="h-5 w-5 accent-accent" data-high-contrast />
+        </label>
+      </section>
     </div>
   )
 }

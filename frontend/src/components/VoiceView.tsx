@@ -4,6 +4,7 @@ import { Headphones, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimi
 import { useEffect, useState } from 'react'
 import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
 import { has, P } from '../lib/perms'
+import { isPhone } from '../lib/swipe'
 import type { Channel, User, VoiceState } from '../lib/types'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
@@ -64,6 +65,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const strip = focusTile ? tiles.filter((t) => t.key !== focused) : []
   const count = participants.length
 
+  const phone = usePhone()
   const renderTile = (t: Tile, big: boolean) => {
     const talking = t.kind === 'camera' && !!speaking[t.userId]
     const status = t.kind !== 'camera' ? null : t.isMe ? (connecting ? 'connecting' : 'connected') : inThis ? peerStatus[t.userId] ?? 'connecting' : null
@@ -134,21 +136,21 @@ export default function VoiceView({ channel }: { channel: Channel }) {
               </>
             ) : (
               <div className="flex-1 overflow-y-auto">
-                <div className="grid gap-4 max-md:gap-2 justify-center content-start" style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(240px, 100%), ${tiles.length <= 2 ? '480px' : '340px'}))` }}>
+                <div className="grid gap-4 max-md:gap-2 justify-center content-start" data-voice-grid style={{ gridTemplateColumns: phone ? (tiles.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))') : `repeat(auto-fit, minmax(min(240px, 100%), ${tiles.length <= 2 ? '480px' : '340px'}))` }}>
                   {tiles.map((t) => renderTile(t, false))}
                 </div>
               </div>
             )}
           </div>
 
-          <div className="shrink-0 flex items-center justify-center gap-3 max-md:gap-2 py-4 max-md:py-3 px-2 border-t border-line">
+          <div className="shrink-0 flex items-center justify-center gap-3 max-md:gap-4 max-md:flex-wrap py-4 max-md:py-3 px-2 border-t border-line safe-bottom" data-voice-controls>
             {inThis ? (
               <>
                 <Ctl label={selfMute ? 'Unmute' : 'Mute'} on={selfMute} onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={22} /> : <Mic size={22} />}</Ctl>
                 <Ctl label={selfDeaf ? 'Undeafen' : 'Deafen'} on={selfDeaf} onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={22} /> : <Headphones size={22} />}</Ctl>
                 {canStream && <Ctl label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} accent onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>}
                 {canStream && <Ctl label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} accent onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={22} /> : <Monitor size={22} />}</Ctl>}
-                <button onClick={() => voice.leave()} title="Disconnect" className="h-14 max-md:h-12 px-6 max-md:px-4 rounded-full bg-danger text-white font-semibold flex items-center gap-2 hover:bg-danger/80"><PhoneOff size={20} /><span className="max-md:hidden">Leave</span></button>
+                <button onClick={() => voice.leave()} title="Disconnect" className="h-14 max-md:h-12 px-6 max-md:px-4 rounded-full bg-danger text-white font-semibold flex items-center gap-2 hover:bg-danger/80 max-md:basis-full max-md:justify-center max-md:order-last" data-voice-leave><PhoneOff size={20} /><span className="max-md:hidden">Leave</span></button>
               </>
             ) : (
               <button onClick={() => voice.join(channel.id)} disabled={connecting || !canConnect} title={canConnect ? undefined : 'You do not have permission to connect'} className="h-14 max-md:h-12 px-8 rounded-full bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50">
@@ -181,7 +183,19 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   )
 }
 
+/** Phone-sized layout? Re-evaluated on resize/rotation. */
+function usePhone() {
+  const [p, setP] = useState(isPhone)
+  useEffect(() => { const mq = window.matchMedia('(max-width: 767px)'); const on = () => setP(mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on) }, [])
+  return p
+}
+
 function Ctl({ children, label, on, accent, onClick }: { children: React.ReactNode; label: string; on: boolean; accent?: boolean; onClick: () => void }) {
   const onCls = accent ? 'bg-accent text-white' : 'bg-white text-black'
-  return <button title={label} onClick={onClick} className={`h-14 w-14 max-md:h-12 max-md:w-12 rounded-full flex items-center justify-center ${on ? onCls : 'bg-bg-3 text-text-0 hover:bg-bg-4'}`}>{children}</button>
+  return (
+    <span className="flex flex-col items-center gap-1">
+      <button title={label} aria-label={label} aria-pressed={on} onClick={onClick} className={`h-14 w-14 rounded-full flex items-center justify-center ${on ? onCls : 'bg-bg-3 text-text-0 hover:bg-bg-4'}`}>{children}</button>
+      <span className="md:hidden text-[11px] text-text-2">{label}</span>
+    </span>
+  )
 }

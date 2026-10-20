@@ -318,6 +318,13 @@ Some actions leave a notice in the conversation, rendered as a one-line system r
 - `call_started` when the first person joins a DM or group call
 - the group-DM notices (`recipient_add`, `recipient_remove`, `recipient_leave`, `channel_name_change`, `channel_icon_change`)
 
+## Tablets, phones, accessibility and keybinds
+
+- Three layouts: desktop (≥1024px), tablet (768–1023px: narrower server/channel sidebars, member list as an overlay from its toggle) and phone (<768px: one pane at a time). Phones respect notch safe areas (`viewport-fit=cover`), and a horizontal swipe on the content pane opens the channel list (right) or the member list (left); swiping right again closes the member list.
+- Appearance → Accessibility: Reduced motion (the OS setting is honoured automatically) and High contrast.
+- User Settings → Keybinds: rebind the app shortcuts (defaults: Ctrl+Shift+M mute, Ctrl+Shift+D deafen, Ctrl+U member list, Ctrl+/ focus the message box, Alt+↑/↓ previous/next channel, Ctrl+, settings, Ctrl+Shift+J jump to date). Plain keys never fire while typing.
+- Voice on phones: a two-column tile grid, labelled round controls with a full-width Disconnect, and the chat as a full-screen overlay.
+
 ## Jumping around history
 
 `GET /channels/:id/messages` takes `before` (older pages), `after` (newer pages, oldest first) and `around` (a window of `limit/2` messages at or before an id and the rest after it). Ids are uuid v7, so `around` also accepts an id built from a timestamp: the client's jump-to-date (calendar button in the channel header) does exactly that. Jumping to a pin, bookmark, search hit or reply far back loads one window, the pane pages forward as you scroll down, live messages are held back until you press Jump to Present, and the "You're viewing older messages" pill shows the whole time.

@@ -8,9 +8,13 @@ export interface Appearance {
   /** Chat font scale in percent (80..120); applies to message text and the composer. */
   fontScale: number
   density: Density
+  /** Accessibility: cut animations and transitions (the OS "reduce motion" setting is honoured regardless). */
+  reducedMotion: boolean
+  /** Accessibility: brighter secondary text and borders. */
+  highContrast: boolean
 }
 
-export const DEFAULT_APPEARANCE: Appearance = { theme: 'dark', fontScale: 100, density: 'cozy' }
+export const DEFAULT_APPEARANCE: Appearance = { theme: 'dark', fontScale: 100, density: 'cozy', reducedMotion: false, highContrast: false }
 export const FONT_SCALES = [80, 90, 100, 110, 120]
 const KEY = `${STORAGE_PREFIX}appearance`
 
@@ -26,6 +30,8 @@ function load(): Appearance {
       theme: p.theme === 'light' || p.theme === 'system' ? p.theme : 'dark',
       fontScale: FONT_SCALES.includes(Number(p.fontScale)) ? Number(p.fontScale) : 100,
       density: p.density === 'compact' ? 'compact' : 'cozy',
+      reducedMotion: p.reducedMotion === true,
+      highContrast: p.highContrast === true,
     }
   } catch { return { ...DEFAULT_APPEARANCE } }
 }
@@ -41,6 +47,8 @@ export function applyAppearance(a: Appearance = current) {
   el.dataset.theme = resolvedTheme(a)
   el.dataset.themeSetting = a.theme
   el.dataset.density = a.density
+  el.dataset.motion = a.reducedMotion ? 'reduced' : 'normal'
+  el.dataset.contrast = a.highContrast ? 'high' : 'normal'
   el.style.setProperty('--font-scale', String(a.fontScale / 100))
   el.style.colorScheme = resolvedTheme(a)
 }
