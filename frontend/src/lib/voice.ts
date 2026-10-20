@@ -442,6 +442,16 @@ class VoiceManager {
     useStore.getState().setPttHeld(down)
   }
 
+  /** Studio recording: the microphone after input volume but before the talk gate, so takes are never clipped by VAD/PTT. */
+  getRecordingStream(): MediaStream | null {
+    if (this.ctx && this.inputGain) {
+      const dest = this.ctx.createMediaStreamDestination()
+      this.inputGain.connect(dest)
+      return dest.stream
+    }
+    return this.raw ?? this.mic
+  }
+
   /** Soundboard: play a short clip through the voice output device at the clip's volume (skipped while deafened). */
   playSound(url: string, volume: number, id?: string) {
     const w = window as unknown as { __parleySounds?: string[] }

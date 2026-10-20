@@ -23,7 +23,7 @@ async fn broadcast(state: &AppState, channel: &crate::models::Channel, user: Uui
 
 async fn set_hand(state: AppState, id: Uuid, uid: Uuid, up: bool) -> AppResult<StatusCode> {
     let (c, _) = require_channel_perms(&state.db, id, uid).await?;
-    if c.kind != "stage" { return Err(AppError::BadRequest("Not a stage channel".into())); }
+    if c.kind != "stage" && c.kind != "studio" { return Err(AppError::BadRequest("Not a stage channel".into())); }
     let in_here = state.hub.voice_state(uid).map(|v| v.channel_id == id).unwrap_or(false);
     if !in_here { return Err(AppError::BadRequest("Join the stage first".into())); }
     state.hub.voice_update(uid, |v| v.request_to_speak = up && v.suppress);
@@ -35,8 +35,9 @@ async fn lower_hand(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
 
 async fn set_speaker(state: AppState, id: Uuid, uid: Uuid, target: Uuid, speaker: bool) -> AppResult<StatusCode> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
-    if c.kind != "stage" { return Err(AppError::BadRequest("Not a stage channel".into())); }
-    if uid != target || speaker { perms::check(p, perms::MANAGE_CHANNELS)?; }   // anyone may step down themselves
+    if c.kind != "stage" && c.kind != "studio" { return Err(AppError::BadRequest("Not a stage channel".into())); }
+    let engineer = c.kind == "studio" && c.engineer_id == Some(uid);
+    if (uid != target || speaker) && !engineer { perms::check(p, perms::MANAGE_CHANNELS)?; }   // anyone may step down themselves
     let in_here = state.hub.voice_state(target).map(|v| v.channel_id == id).unwrap_or(false);
     if !in_here { return Err(AppError::NotFound("That member is not on this stage".into())); }
     if speaker {

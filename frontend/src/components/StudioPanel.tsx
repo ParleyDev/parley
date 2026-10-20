@@ -1,0 +1,147 @@
+import { Download, Pause, Play, Square, Trash2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { api, getToken } from '../lib/api'
+import type { StudioSession, StudioTrack } from '../lib/types'
+import { useStore } from '../store'
+
+const fmt = (ms: number | null | undefined) => { const s = Math.max(0, Math.round((ms ?? 0) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
+
+/** Sessions recorded in this studio, each with its per-artist tracks and a multitrack player/mixer. */
+export default function StudioPanel({ channelId, canManage, onClose }: { channelId: string; canManage: boolean; onClose: () => void }) {
+  const sessions = useStore((s) => s.studio[channelId])
+  const loadStudio = useStore((s) => s.loadStudio)
+  const pushToast = useStore((s) => s.pushToast)
+  const openModal = useStore((s) => s.openModal)
+  const [open, setOpen] = useState<string | null>(null)
+  useEffect(() => { loadStudio(channelId) }, [channelId, loadStudio])
+  const del = (s: StudioSession) => openModal({ kind: 'confirm', title: `Delete ${s.name}`, body: `Removes the session and its ${s.tracks.length} track${s.tracks.length === 1 ? '' : 's'}. This cannot be undone.`, danger: true, confirmLabel: 'Delete',
+    action: async () => { try { await api.delete(`/channels/${channelId}/studio/sessions/${s.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
+  return (
+    <section className="flex flex-col bg-bg-2 border-l border-line w-[420px] shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10" data-studio-panel>
+      <div className="h-12 shrink-0 px-3 flex items-center gap-2 border-b border-line"><span className="font-bold">Sessions</span><span className="text-xs text-text-2">{sessions ? sessions.length : '…'}</span><button onClick={onClose} title="Close" className="ml-auto h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><X size={18} /></button></div>
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {sessions?.length === 0 && <p className="text-sm text-text-2 p-4 text-center">Nothing recorded yet. The engineer presses Record to start a session.</p>}
+        {sessions?.map((s) => (
+          <div key={s.id} className="rounded-xl border border-line bg-bg-1" data-studio-session={s.id} data-session-live={s.ended_at ? '0' : '1'}>
+            <button type="button" onClick={() => setOpen(open === s.id ? null : s.id)} className="w-full text-left px-3 py-2 flex items-center gap-2">
+              {!s.ended_at && <span className="h-2 w-2 rounded-full bg-danger animate-pulse" />}
+              <span className="font-semibold truncate flex-1">{s.name}</span>
+              <span className="text-xs text-text-2">{s.tracks.length} track{s.tracks.length === 1 ? '' : 's'} · {new Date(s.started_at).toLocaleString()}</span>
+            </button>
+            {open === s.id && (
+              <div className="border-t border-line p-3 space-y-2">
+                {s.tracks.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2 text-sm" data-studio-track={t.id} data-track-done={t.done ? '1' : '0'}>
+                    <span className="truncate flex-1">{t.display_name}</span>
+                    <span className="text-xs text-text-2 tabular-nums">{t.done ? fmt(t.duration_ms) : 'recording…'} · {Math.round(t.size / 1024)} KB{t.offset_ms ? ` · +${t.offset_ms} ms` : ''}</span>
+                    <a href={t.url} download={`${s.name} - ${t.display_name}.webm`} title="Download track" className="text-text-2 hover:text-text-0" data-track-download><Download size={14} /></a>
+                  </div>
+                ))}
+                {s.ended_at && s.tracks.some((t) => t.done) && <Mixer session={s} />}
+                {canManage && <div className="flex justify-end"><button type="button" onClick={() => del(s)} className="btn-ghost py-1 text-xs text-danger" data-session-delete><Trash2 size={14} /> Delete session</button></div>}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+type Loaded = { track: StudioTrack; buffer: AudioBuffer; gain: number; mute: boolean; solo: boolean }
+
+/** Multitrack player: decodes every finished track, plays them aligned by offset with per-track gain / mute / solo,
+ *  and renders a WAV mixdown offline for download. */
+function Mixer({ session }: { session: StudioSession }) {
+  const pushToast = useStore((s) => s.pushToast)
+  const [tracks, setTracks] = useState<Loaded[] | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [playing, setPlaying] = useState(false)
+  const [pos, setPos] = useState(0)
+  const ctxRef = useRef<AudioContext | null>(null)
+  const nodes = useRef<{ src: AudioBufferSourceNode; gain: GainNode }[]>([])
+  const startedAt = useRef(0)
+  const raf = useRef(0)
+  const length = tracks ? Math.max(0, ...tracks.map((t) => t.track.offset_ms / 1000 + t.buffer.duration)) : 0
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const ctx = (ctxRef.current ??= new AudioContext())
+      const token = getToken()
+      const out: Loaded[] = []
+      for (const t of session.tracks.filter((t) => t.done && t.size > 0)) {
+        const r = await fetch(t.url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+        if (!r.ok) throw new Error(`${t.display_name}: ${r.status}`)
+        const buffer = await ctx.decodeAudioData(await r.arrayBuffer())
+        out.push({ track: t, buffer, gain: 1, mute: false, solo: false })
+      }
+      setTracks(out)
+      ;(window as unknown as { __parleyMix?: unknown }).__parleyMix = { tracks: out.length, seconds: Math.max(0, ...out.map((t) => t.buffer.duration)) }
+    } catch (e) { pushToast(`Could not load tracks: ${(e as Error).message}`, 'error') } finally { setLoading(false) }
+  }
+  const audible = (t: Loaded, all: Loaded[]) => !t.mute && (!all.some((x) => x.solo) || t.solo)
+  const stop = () => { nodes.current.forEach((n) => { try { n.src.stop() } catch { /* already stopped */ } }); nodes.current = []; cancelAnimationFrame(raf.current); setPlaying(false) }
+  const play = () => {
+    if (!tracks || !ctxRef.current) return
+    const ctx = ctxRef.current; ctx.resume().catch(() => {})
+    stop()
+    const t0 = ctx.currentTime + 0.05
+    nodes.current = tracks.map((t) => {
+      const src = ctx.createBufferSource(); src.buffer = t.buffer
+      const gain = ctx.createGain(); gain.gain.value = audible(t, tracks) ? t.gain : 0
+      src.connect(gain).connect(ctx.destination)
+      src.start(t0 + t.track.offset_ms / 1000)
+      return { src, gain }
+    })
+    startedAt.current = t0; setPlaying(true)
+    const tick = () => { const p = ctx.currentTime - startedAt.current; setPos(p); if (p >= length) { stop(); setPos(0); return } raf.current = requestAnimationFrame(tick) }
+    raf.current = requestAnimationFrame(tick)
+  }
+  const update = (i: number, patch: Partial<Loaded>) => setTracks((cur) => { if (!cur) return cur; const next = cur.map((t, j) => (j === i ? { ...t, ...patch } : t)); nodes.current.forEach((n, j) => { n.gain.gain.value = audible(next[j], next) ? next[j].gain : 0 }); return next })
+  const exportWav = async () => {
+    if (!tracks?.length) return
+    const rate = 48000
+    const off = new OfflineAudioContext(2, Math.ceil(length * rate), rate)
+    for (const t of tracks) { if (!audible(t, tracks)) continue; const src = off.createBufferSource(); src.buffer = t.buffer; const g = off.createGain(); g.gain.value = t.gain; src.connect(g).connect(off.destination); src.start(t.track.offset_ms / 1000) }
+    const mix = await off.startRendering()
+    const wav = encodeWav(mix)
+    ;(window as unknown as { __parleyMix?: Record<string, unknown> }).__parleyMix = { ...((window as unknown as { __parleyMix?: Record<string, unknown> }).__parleyMix ?? {}), exportedBytes: wav.byteLength }
+    const url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }))
+    const a = document.createElement('a'); a.href = url; a.download = `${session.name} - mix.wav`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 5000)
+  }
+  useEffect(() => () => { stop(); ctxRef.current?.close().catch(() => {}) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  if (!tracks) return <button type="button" onClick={load} disabled={loading} className="btn-ghost w-full justify-center text-sm" data-mix-load>{loading ? 'Decoding…' : 'Open in multitrack player'}</button>
+  return (
+    <div className="rounded-lg bg-bg-0/50 p-2 space-y-2" data-mixer>
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={playing ? stop : play} className="h-8 w-8 rounded-full bg-accent text-white flex items-center justify-center" title={playing ? 'Stop' : 'Play all'} data-mix-play>{playing ? <Square size={14} /> : <Play size={14} />}</button>
+        <div className="flex-1 h-1.5 rounded bg-bg-4 overflow-hidden"><div className="h-full bg-accent" style={{ width: `${length ? Math.min(100, (pos / length) * 100) : 0}%` }} /></div>
+        <span className="text-xs tabular-nums text-text-2">{fmt(pos * 1000)} / {fmt(length * 1000)}</span>
+        <button type="button" onClick={exportWav} className="btn-ghost py-1 text-xs" title="Render all audible tracks to one WAV" data-mix-export><Download size={14} /> Export mix</button>
+      </div>
+      {tracks.map((t, i) => (
+        <div key={t.track.id} className="flex items-center gap-2 text-xs" data-mix-track={t.track.id}>
+          <span className="w-24 truncate" title={t.track.display_name}>{t.track.display_name}</span>
+          <button type="button" onClick={() => update(i, { mute: !t.mute })} className={`rounded px-1.5 py-0.5 font-bold ${t.mute ? 'bg-danger text-white' : 'bg-bg-3 text-text-2'}`} data-mix-mute aria-pressed={t.mute}>M</button>
+          <button type="button" onClick={() => update(i, { solo: !t.solo })} className={`rounded px-1.5 py-0.5 font-bold ${t.solo ? 'bg-warn text-black' : 'bg-bg-3 text-text-2'}`} data-mix-solo aria-pressed={t.solo}>S</button>
+          <input type="range" min={0} max={150} value={Math.round(t.gain * 100)} onChange={(e) => update(i, { gain: Number(e.target.value) / 100 })} className="flex-1 accent-accent" title={`${Math.round(t.gain * 100)}%`} data-mix-gain />
+          <span className="w-10 text-right tabular-nums text-text-2">{Math.round(t.gain * 100)}%</span>
+          {playing && <Pause size={12} className="invisible" />}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** 16-bit PCM WAV from an AudioBuffer. */
+function encodeWav(buf: AudioBuffer): ArrayBuffer {
+  const ch = buf.numberOfChannels, n = buf.length, rate = buf.sampleRate
+  const out = new ArrayBuffer(44 + n * ch * 2); const v = new DataView(out)
+  const str = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)) }
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true); v.setUint32(24, rate, true); v.setUint32(28, rate * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * ch * 2, true)
+  const chans = Array.from({ length: ch }, (_, c) => buf.getChannelData(c))
+  let o = 44
+  for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { const s = Math.max(-1, Math.min(1, chans[c][i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2 }
+  return out
+}

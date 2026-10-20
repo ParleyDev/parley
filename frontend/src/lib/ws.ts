@@ -2,6 +2,7 @@ import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, User, VoiceState } from './types'
 import { voice } from './voice'
+import { studio } from './studio'
 
 type Ev = { s?: number; i?: string } & (
   | { t: 'READY'; d: ReadyPayload }
@@ -42,6 +43,8 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'SOUNDBOARD_PLAY'; d: { channel_id: string; guild_id: string; user_id: string; sound: Sound } }
   | { t: 'SOUNDBOARD_UPDATE'; d: { guild_id: string; sounds: Sound[] } }
   | { t: 'EVENT_UPDATE'; d: { guild_id: string } }
+  | { t: 'STUDIO_UPDATE'; d: { channel_id: string } }
+  | { t: 'STUDIO_SESSION'; d: { channel_id: string; action: 'start' | 'stop'; session_id: string; name?: string; started_at?: string } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
   | { t: 'VOICE_ERROR'; d: { message: string } })
@@ -179,6 +182,8 @@ function handle(ev: Ev) {
     case 'SOUNDBOARD_PLAY': if (s.myVoiceChannelId === ev.d.channel_id) voice.playSound(ev.d.sound.url, ev.d.sound.volume, ev.d.sound.id); break
     case 'SOUNDBOARD_UPDATE': s.setSounds(ev.d.guild_id, ev.d.sounds); break
     case 'EVENT_UPDATE': if (s.events[ev.d.guild_id]) void s.loadEvents(ev.d.guild_id); break
+    case 'STUDIO_UPDATE': void s.loadStudio(ev.d.channel_id); break
+    case 'STUDIO_SESSION': studio.onSession(ev.d); void s.loadStudio(ev.d.channel_id); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(); break
   }

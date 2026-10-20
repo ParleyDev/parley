@@ -20,6 +20,7 @@ pub mod search;
 pub mod sessions;
 pub mod sounds;
 pub mod stage;
+pub mod studio;
 pub mod events;
 pub mod storage;
 pub mod threads;
@@ -45,6 +46,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(voice::router())
         .merge(sounds::router())
         .merge(stage::router())
+        .merge(studio::router())
         .merge(events::router())
         .merge(guilds::router())
         .merge(invites::router())
