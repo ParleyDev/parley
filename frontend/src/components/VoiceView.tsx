@@ -1,6 +1,6 @@
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useShallow } from 'zustand/react/shallow'
-import { Headphones, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, Music2, PhoneOff, Video, VideoOff, Volume2, X } from 'lucide-react'
+import { Hand, Headphones, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
 import { has, P } from '../lib/perms'
@@ -43,6 +43,16 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const pushToast = useStore((s) => s.pushToast)
   const canSpeak = has(perms, P.SPEAK)
   const [board, setBoard] = useState(false)
+  // Stage channels: speakers are the unsuppressed participants; everyone else is the audience (can raise a hand).
+  const isStage = channel.kind === 'stage'
+  const isMod = has(perms, P.MANAGE_CHANNELS)
+  const myState = useStore((s) => (s.user ? s.voiceStates[s.user.id] : undefined))
+  const handUp = !!myState?.request_to_speak
+  const stageCall = async (method: 'post' | 'put' | 'delete', path: string) => { try { await api[method](path) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const toggleHand = () => stageCall(handUp ? 'delete' : 'post', `/channels/${channel.id}/stage/hand`)
+  const inviteToSpeak = (uid: string) => stageCall('put', `/channels/${channel.id}/stage/speakers/${uid}`)
+  const toAudience = (uid: string) => stageCall('delete', `/channels/${channel.id}/stage/speakers/${uid}`)
+  const audience = isStage ? participants.filter((p) => p.suppress) : []
   useEffect(() => { if (board && channel.guild_id && !sounds) loadSounds(channel.guild_id) }, [board, channel.guild_id, sounds, loadSounds])
   const playSound = async (id: string) => { try { await api.post(`/channels/${channel.id}/soundboard/${id}`) } catch (e) { pushToast((e as Error).message, 'error') } }
   const inThis = myChannel === channel.id
@@ -51,6 +61,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   // Build tiles: one per participant (camera or avatar) plus one per active screen share.
   const tiles: Tile[] = []
   for (const p of participants) {
+    if (isStage && p.suppress) continue
     const isMe = me?.id === p.user_id
     const user = users[p.user_id] ?? (isMe ? me ?? undefined : undefined)
     const media = isMe ? { camera: localCamera, screen: localScreen } : remoteMedia[p.user_id]
@@ -81,7 +92,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
     const name = t.user?.display_name ?? 'Unknown'
     return (
       <div key={t.key} onClick={() => setFocused(focused === t.key ? null : t.key)}
-        className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big ? 'h-full w-full' : 'aspect-video'}`}>
+        className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big ? 'h-full w-full' : 'aspect-video'}`} data-voice-tile={t.userId}>
+        {isStage && isMod && inThis && !t.isMe && t.kind === 'camera' && <button type="button" onClick={(e) => { e.stopPropagation(); toAudience(t.userId) }} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 group-hover:opacity-100" data-to-audience>Move to audience</button>}
         {t.stream ? (
           <VideoTile stream={t.stream} mirror={t.isMe && t.kind === 'camera'} contain={t.kind === 'screen' || big} />
         ) : t.kind === 'screen' ? (
@@ -118,8 +130,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
     <main className="flex-1 min-w-0 flex flex-col bg-bg-0 relative">
       <header className="h-12 shrink-0 px-4 max-md:px-2 flex items-center gap-2 border-b border-line">
         <MobileBack />
-        <Volume2 size={22} className="text-text-2 shrink-0" /><span className="font-bold truncate">{channel.name}</span>
-        <span className="text-xs text-text-2 whitespace-nowrap">{count} connected</span>
+        {isStage ? <Radio size={22} className="text-text-2 shrink-0" /> : <Volume2 size={22} className="text-text-2 shrink-0" />}<span className="font-bold truncate">{channel.name}</span>
+        <span className="text-xs text-text-2 whitespace-nowrap" data-voice-count>{isStage ? `${tiles.length} speaking · ${audience.length} listening` : `${count} connected`}</span>
         {inThis && suppressed && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase">Muted by server</span>}
         <span className="ml-auto flex items-center gap-1">{chatToggle}<MembersToggle /></span>
       </header>
@@ -128,6 +140,20 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {/* Stage */}
         <div className="flex-1 min-w-0 flex flex-col">
           <div className="flex-1 min-h-0 overflow-hidden p-4 max-md:p-2 flex flex-col gap-3">
+            {isStage && audience.length > 0 && (
+              <div className="shrink-0 rounded-xl border border-line bg-bg-2/60 px-3 py-2" data-stage-audience>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1">Audience — {audience.length}</div>
+                <div className="flex flex-wrap gap-2">
+                  {audience.map((p) => { const u = users[p.user_id] ?? (me?.id === p.user_id ? me : undefined); return (
+                    <div key={p.user_id} className={`flex items-center gap-1.5 rounded-full bg-bg-3 pl-1 pr-2 py-0.5 text-sm ${p.request_to_speak ? 'ring-1 ring-warn' : ''}`} data-audience={p.user_id} data-hand={p.request_to_speak ? '1' : '0'}>
+                      {u && <Avatar user={u} size={22} />}<span className="truncate max-w-[120px]">{u?.display_name ?? 'Unknown'}</span>
+                      {p.request_to_speak && <Hand size={14} className="text-warn" />}
+                      {isMod && inThis && <button type="button" onClick={() => inviteToSpeak(p.user_id)} className="ml-1 rounded-full bg-accent px-2 text-[11px] font-bold text-white hover:bg-accent-hover" data-invite-speak>Invite to speak</button>}
+                    </div>
+                  ) })}
+                </div>
+              </div>
+            )}
             {count === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <div className="h-20 w-20 rounded-full bg-bg-3 flex items-center justify-center mb-4"><Volume2 size={36} className="text-text-1" /></div>
@@ -155,6 +181,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           <div className="shrink-0 flex items-center justify-center gap-3 max-md:gap-4 max-md:flex-wrap py-4 max-md:py-3 px-2 border-t border-line safe-bottom" data-voice-controls>
             {inThis ? (
               <>
+                {isStage && suppressed && <Ctl label={handUp ? 'Lower Hand' : 'Raise Hand'} on={handUp} accent onClick={toggleHand}><Hand size={22} /></Ctl>}
+                {isStage && !suppressed && !isMod && <Ctl label="Leave the stage" on={false} onClick={() => toAudience(me!.id)}><Hand size={22} /></Ctl>}
                 <Ctl label={selfMute ? 'Unmute' : 'Mute'} on={selfMute} onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={22} /> : <Mic size={22} />}</Ctl>
                 <Ctl label={selfDeaf ? 'Undeafen' : 'Deafen'} on={selfDeaf} onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={22} /> : <Headphones size={22} />}</Ctl>
                 {canStream && <Ctl label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} accent onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>}

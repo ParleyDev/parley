@@ -5,6 +5,7 @@ import CreateChannelModal from './CreateChannel'
 import InviteModal from './Invite'
 import GuildSettingsModal from './GuildSettings'
 import RulesModal from './Rules'
+import EventsModal from './Events'
 import ChannelSettingsModal from './ChannelSettings'
 import UserSettingsModal from './UserSettings'
 import NewDmModal from './NewDm'
@@ -59,6 +60,7 @@ export default function Modals() {
     case 'createThread': return <CreateThreadModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} suggested={modal!.suggested} />
     case 'transferOwnership': return <TransferOwnershipModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'rules': return <RulesModal onClose={close} guildId={modal!.guildId} />
+    case 'events': return <EventsModal onClose={close} guildId={modal!.guildId} />
     case 'customStatus': return <CustomStatusModal onClose={close} />
     case 'forward': return <ForwardModal onClose={close} message={modal!.message} />
     case 'groupMembers': return <GroupMembersModal onClose={close} channelId={modal!.channelId} userIds={modal!.userIds} />

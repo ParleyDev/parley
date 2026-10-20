@@ -1,0 +1,67 @@
+// Stage channels (speakers / audience / raise hand / moderators) and scheduled events with RSVPs.
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, callS, raw, ok, finish } from '../lib.mjs'
+
+const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol')
+const g = await call(a.token, 'POST', '/guilds', { name: `Stage ${S}` })
+const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`); await call(c.token, 'POST', `/invites/${inv.code}`)
+const vc = g.channels.find((x) => x.kind === 'voice')
+
+console.log('-- events API')
+let r = await callS(b.token, 'POST', `/guilds/${g.id}/events`, { name: 'Nope', starts_at: new Date(Date.now() + 3600e3).toISOString(), location: 'x' }); ok('creating needs Manage Server', r.status === 403)
+r = await callS(a.token, 'POST', `/guilds/${g.id}/events`, { name: 'Past', starts_at: new Date(Date.now() - 3600e3).toISOString(), location: 'x' }); ok('past start refused', r.status === 400)
+r = await callS(a.token, 'POST', `/guilds/${g.id}/events`, { name: 'Nowhere', starts_at: new Date(Date.now() + 3600e3).toISOString() }); ok('needs a channel or a location', r.status === 400)
+r = await callS(a.token, 'POST', `/guilds/${g.id}/events`, { name: 'Bad end', starts_at: new Date(Date.now() + 3600e3).toISOString(), ends_at: new Date(Date.now() + 1800e3).toISOString(), location: 'x' }); ok('end before start refused', r.status === 400)
+const starts = new Date(Date.now() + 2 * 3600e3).toISOString()
+r = await callS(a.token, 'POST', `/guilds/${g.id}/events`, { name: `Game night ${S}`, description: 'Bring snacks', starts_at: starts, channel_id: vc.id })
+ok('event created in a voice channel; creator is going', r.status === 201 && r.body.channel_id === vc.id && r.body.rsvp_count === 1 && r.body.me_rsvp === true, JSON.stringify(r.body))
+const ev = r.body
+r = await callS(b.token, 'PUT', `/guilds/${g.id}/events/${ev.id}/rsvp`); ok('bob RSVPs', r.status === 200 && r.body.rsvp_count === 2 && r.body.me_rsvp === true)
+r = await callS(b.token, 'DELETE', `/guilds/${g.id}/events/${ev.id}/rsvp`); ok('and backs out', r.body.rsvp_count === 1 && r.body.me_rsvp === false)
+r = await callS(a.token, 'PATCH', `/guilds/${g.id}/events/${ev.id}`, { name: `Game night 2 ${S}`, channel_id: null, location: 'https://meet.example.com/x' }); ok('edit moves it to an external location', r.status === 200 && r.body.location.startsWith('https://') && r.body.channel_id === null)
+const soon = (await callS(a.token, 'POST', `/guilds/${g.id}/events`, { name: `Soon ${S}`, starts_at: new Date(Date.now() + 5 * 60e3).toISOString(), location: 'here' })).body
+ok('members list upcoming events soonest first', (await call(c.token, 'GET', `/guilds/${g.id}/events`)).map((e) => e.id).join() === [soon.id, ev.id].join())
+ok('outsiders cannot', (await raw((await reg('dave')).token, 'GET', `/guilds/${g.id}/events`)).status === 404)
+ok('audited', (await callS(a.token, 'GET', `/guilds/${g.id}/audit`)).body.some((e) => e.action === 'event.create'))
+
+console.log('-- stage API + UI')
+r = await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'town-hall', kind: 'stage' }); ok('stage channel created', r.status === 201 && r.body.kind === 'stage')
+const stage = r.body
+r = await raw(b.token, 'POST', `/channels/${stage.id}/stage/hand`); ok('raising a hand needs to be on the stage', r.status === 400)
+r = await raw(b.token, 'POST', `/channels/${vc.id}/stage/hand`); ok('not a stage channel -> 400', r.status === 400)
+const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] }); const errors = []
+const mk = async (tok) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${stage.id}`); await p.waitForSelector('text=Join Voice'); await p.click('text=Join Voice'); await p.waitForSelector('[data-voice-leave]'); return p }
+const pa = await mk(a.token); const pb = await mk(b.token)
+await pb.waitForSelector(`[data-stage-audience] [data-audience="${b.user.id}"]`)
+ok('the owner joins as a speaker (tile), bob as audience (chip)', await pa.locator(`[data-voice-tile="${a.user.id}"]`).count() === 1 && await pa.locator(`[data-audience="${b.user.id}"]`).count() === 1 && await pb.locator(`[data-voice-tile="${b.user.id}"]`).count() === 0)
+ok('audience sees Raise Hand, speakers do not', await pb.locator('button[title="Raise Hand"]').count() === 1 && await pa.locator('button[title="Raise Hand"]').count() === 0)
+await pb.click('button[title="Raise Hand"]')
+await pa.waitForSelector(`[data-audience="${b.user.id}"][data-hand="1"]`)
+ok('the raised hand shows to everyone and the moderator gets Invite to speak', await pa.locator(`[data-audience="${b.user.id}"] [data-invite-speak]`).count() === 1 && await pb.locator('button[title="Lower Hand"]').count() === 1)
+await pa.screenshot({ path: '151-stage-hand.png' })
+await pa.locator(`[data-audience="${b.user.id}"] [data-invite-speak]`).click()
+await pb.waitForSelector(`[data-voice-tile="${b.user.id}"]`)
+ok('invited: bob becomes a speaker tile with no suppression', await pb.locator('[data-stage-audience]').count() === 0 && await pb.locator('button[title="Leave the stage"]').count() === 1)
+r = await raw(b.token, 'DELETE', `/channels/${stage.id}/stage/speakers/${a.user.id}`); ok('non-moderators cannot move others', r.status === 403)
+await pa.locator(`[data-voice-tile="${b.user.id}"]`).hover(); await pa.locator(`[data-voice-tile="${b.user.id}"] [data-to-audience]`).click()
+await pb.waitForSelector(`[data-stage-audience] [data-audience="${b.user.id}"]`)
+ok('moderator moves bob back to the audience', await pb.locator(`[data-voice-tile="${b.user.id}"]`).count() === 0)
+r = await raw(c.token, 'PUT', `/channels/${stage.id}/stage/speakers/${b.user.id}`); ok('audience members cannot invite', r.status === 403)
+
+console.log('-- events UI')
+await pa.waitForSelector('[data-events-row]')
+ok('sidebar Events row counts upcoming events', (await pa.getAttribute('[data-events-row]', 'data-events-count')) === '2')
+await pa.click('[data-events-row]'); await pa.waitForSelector(`[data-event="${ev.id}"]`)
+await pa.locator(`[data-event="${soon.id}"] [data-event-rsvp]`).click().catch(() => {})
+await pb.goto(`${WEB}/channels/${g.id}/${vc.id}`); await pb.waitForSelector('[data-events-row]'); await pb.click('[data-events-row]'); await pb.waitForSelector(`[data-event="${ev.id}"] [data-event-rsvp]`)
+await pb.locator(`[data-event="${ev.id}"] [data-event-rsvp]`).click(); await pb.waitForFunction((id) => document.querySelector(`[data-event="${id}"] [data-event-rsvp]`)?.getAttribute('aria-pressed') === 'true', ev.id)
+ok('bob RSVPs from the modal', (await call(b.token, 'GET', `/guilds/${g.id}/events`)).find((e) => e.id === ev.id).me_rsvp === true)
+await pa.waitForFunction((id) => document.querySelector(`[data-event="${id}"] [data-event-count]`)?.textContent.startsWith('2'), ev.id)
+ok('the count updates live for alice', true)
+await pa.click('[data-event-new]'); await pa.waitForSelector('[data-event-form]')
+await pa.fill('[data-event-name]', `From the UI ${S}`); await pa.selectOption('[data-event-channel]', vc.id); await pa.fill('[data-event-description]', 'made in the modal'); await pa.click('[data-event-submit]')
+await pa.waitForFunction((n) => [...document.querySelectorAll('[data-event]')].some((e) => e.textContent.includes(n)), `From the UI ${S}`)
+ok('creating from the modal works', (await call(c.token, 'GET', `/guilds/${g.id}/events`)).some((e) => e.name === `From the UI ${S}` && e.channel_id === vc.id))
+await pa.screenshot({ path: '152-events.png' })
+ok('no page errors', errors.length === 0, errors.join('\n'))
+await browser.close(); await finish()

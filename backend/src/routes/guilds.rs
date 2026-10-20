@@ -282,7 +282,7 @@ async fn create_channel(
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::MANAGE_CHANNELS)?;
     let kind = req.kind.unwrap_or_else(|| "text".into());
-    if !["text", "voice", "category", "forum"].contains(&kind.as_str()) {
+    if !["text", "voice", "stage", "category", "forum"].contains(&kind.as_str()) {
         return Err(AppError::BadRequest("kind must be text, voice, forum or category".into()));
     }
     let name = normalize_channel_name(&req.name, &kind)?;

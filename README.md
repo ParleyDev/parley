@@ -340,6 +340,11 @@ Some actions leave a notice in the conversation, rendered as a one-line system r
 - `call_started` when the first person joins a DM or group call
 - the group-DM notices (`recipient_add`, `recipient_remove`, `recipient_leave`, `channel_name_change`, `channel_icon_change`)
 
+## Stage channels and scheduled events
+
+- **Stage** is a channel kind (Create Channel → Stage): members with Manage Channels join as speakers, everyone else joins as audience (voice state `suppress`, mic gate shut) and can Raise Hand (`POST/DELETE /channels/:id/stage/hand`, `request_to_speak` on their voice state). Moderators see hands in the audience strip and Invite to speak (`PUT /channels/:id/stage/speakers/:uid`, needs Speak) or move someone back (`DELETE …`); speakers can step down themselves. The voice view shows speakers as tiles and the audience as chips.
+- **Events** (`guild_events`, `event_rsvps`): the Events row above the channel list opens the server's upcoming events; Manage Server creates them with a name, start/end, a voice or stage channel or an external location, and a description (`POST /guilds/:id/events`, `PATCH`, `DELETE`, audited). Anyone RSVPs (`PUT/DELETE …/rsvp`); `EVENT_UPDATE` refreshes lists live, and the client reminds you ten minutes before an event you are going to (toast and browser notification). Events drop off an hour after they end.
+
 ## Soundboard
 
 Server Settings → Soundboard (Manage Server) takes short clips (MP3/OGG/WAV/WebM/M4A under 512 KB, up to 48 per server) with a name, emoji and volume; files are scanned like any upload and served at `/api/sounds/:id`. In a voice channel the Soundboard control opens a grid; a pick calls `POST /channels/:id/soundboard/:sid` (needs Speak there and to be connected, never while server-suppressed) and the server fans out `SOUNDBOARD_PLAY` to everyone in the channel, who play the clip locally through their voice output device (not while deafened). `SOUNDBOARD_UPDATE` keeps lists fresh.

@@ -1,10 +1,10 @@
 import { useShallow } from 'zustand/react/shallow'
 import { anchorOf } from '../lib/anchor'
-import { ChevronDown, Copy, FolderPlus, Hash, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Settings, Trash2, UserPlus, Video, Volume2 } from 'lucide-react'
+import { CalendarDays, ChevronDown, Copy, FolderPlus, Hash, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2 } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
-import { useState, type DragEvent } from 'react'
+import { useState, type DragEvent, useEffect } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { isUnread, myChannelPerms, myGuildPerms, showsMentions, showsUnread, useStore, voiceParticipants } from '../store'
 import { notifEntries } from './NotifMenu'
@@ -119,10 +119,10 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   ]
   const row = (c: Channel) => (
     <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id ?? ''} className={`${drag === c.id ? 'opacity-40' : ''} ${over === c.id ? 'border-t-2 border-accent' : ''}`} {...dragProps(c)}>
-      <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id)} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+      <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id)} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
         unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)} onClick={() => setMobilePane('content')}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
-      {c.kind === 'voice' && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
+      {(c.kind === 'voice' || c.kind === 'stage') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
     </div>
   )
   const copyText = async (label: string, t: string) => { try { await navigator.clipboard.writeText(t); pushToast(`${label} copied`) } catch { pushToast('Clipboard unavailable', 'error') } }
@@ -190,6 +190,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 pt-3 space-y-4" data-channel-list>
+        <EventsRow guildId={guildId} />
         <div className={`space-y-0.5 min-h-2 rounded ${over === 'cat:none' ? 'ring-1 ring-accent' : ''}`} data-channel-group="" {...catDropProps(null)}>
           {uncategorized.map(row)}
         </div>
@@ -266,5 +267,22 @@ function ChannelRow({ to, icon, name, unread, mentions = 0, muted, onSettings, o
       {mentions > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center" data-mention-badge={mentions}>{mentions}</span>}
       {onSettings && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 text-text-2 hover:text-text-0" title="Edit Channel"><Settings size={14} /></button>}
     </NavLink>
+  )
+}
+
+
+/** "Events" entry above the channels: upcoming count, opens the events modal. */
+function EventsRow({ guildId }: { guildId: string }) {
+  const events = useStore((s) => s.events[guildId])
+  const loadEvents = useStore((s) => s.loadEvents)
+  const openModal = useStore((s) => s.openModal)
+  useEffect(() => { if (!events) loadEvents(guildId) }, [guildId, events, loadEvents])
+  const n = events?.length ?? 0
+  const live = events?.some((e) => new Date(e.starts_at).getTime() <= Date.now()) ?? false
+  return (
+    <button type="button" onClick={() => openModal({ kind: 'events', guildId })} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-[15px] font-medium text-text-1 hover:bg-bg-3 hover:text-text-0" data-events-row data-events-count={n}>
+      <CalendarDays size={18} className={live ? 'text-success' : 'text-text-2'} /><span className="flex-1 text-left">Events</span>
+      {n > 0 && <span className={`rounded-full px-1.5 text-[11px] font-bold ${live ? 'bg-success text-black' : 'bg-bg-4 text-text-1'}`}>{n}</span>}
+    </button>
   )
 }
