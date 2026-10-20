@@ -182,12 +182,17 @@ export interface Message {
   poll?: Poll | null
   /** Thread started from this message (card under it). */
   thread?: ThreadRef | null
+  /** Preview of the message this replies to; absent when there is no reply or the original was deleted. */
+  referenced?: ReplyRef | null
   /** Client-only rows: 'failed' = your message the server refused to deliver (red, Retry / Delete);
    *  'notice' = the Ribbit explanation under it (kind 'ribbit'). Never sent by the server; gone on reload. */
   local?: 'failed' | 'notice'
   /** What a failed message would send again on Retry. */
   draft?: Draft
 }
+
+/** What a reply header needs from the original: enough to show "Author · text", loaded or not. */
+export interface ReplyRef { id: string; author: User; content: string; attachment_count?: number; attachments?: Attachment[]; kind?: string }
 
 /** The body of POST /channels/:id/messages, kept for retrying a failed send. */
 export interface Draft { content: string; reply_to: string | null; attachment_ids: string[]; sticker_id: string | null }

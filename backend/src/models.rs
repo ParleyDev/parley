@@ -291,6 +291,19 @@ pub struct Message {
     pub poll: Option<Poll>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thread: Option<ThreadRef>,
+    /// The message this one replies to, as a preview (author, text, attachment count), so the reply header
+    /// renders even when the original is not loaded. None when the original was deleted (or no reply).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub referenced: Option<Box<Referenced>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Referenced {
+    pub id: Uuid,
+    pub author: User,
+    pub content: String,
+    pub attachment_count: i64,
+    pub kind: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -390,6 +403,7 @@ impl MessageRow {
             kind: if self.kind.is_empty() { "default".into() } else { self.kind },
             poll: None,
             thread: None,
+            referenced: None,
             sticker: self.sticker_id.map(|id| MessageSticker {
                 id,
                 name: self.sticker_name.clone().unwrap_or_default(),

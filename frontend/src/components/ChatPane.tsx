@@ -175,7 +175,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
                       <div className="h-px flex-1 bg-danger" /><span className="rounded-sm bg-danger px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">New</span>
                     </div>
                   )}
-                  <MessageItem message={m} grouped={grouped} isOwn={m.author.id === user?.id} onReply={() => setReply(m)} replyTarget={m.reply_to ? messages.find((x) => x.id === m.reply_to) ?? null : null} onJumpToReply={m.reply_to ? () => jumpTo(m.reply_to!) : undefined} />
+                  <MessageItem message={m} grouped={grouped} isOwn={m.author.id === user?.id} onReply={() => setReply(m)} replyTarget={m.reply_to ? messages.find((x) => x.id === m.reply_to) ?? m.referenced ?? null : null} onJumpToReply={m.reply_to ? () => jumpTo(m.reply_to!) : undefined} />
                   {(() => { const r = readersOf(m.id); if (!r.length) return null; const names = r.map((id) => users[id]?.display_name ?? 'Someone'); return (
                     <div className="flex items-center justify-end gap-1 px-4 pb-1 -mt-0.5" data-read-by={r.join(',')}>
                       <Tooltip tip={`Seen by ${names.join(', ')}`}><span className="flex items-center gap-1 text-[11px] text-text-2">{isDm ? 'Seen' : null}<span className="flex -space-x-1">{r.slice(0, 4).map((id) => { const u = users[id]; return u ? <Avatar key={id} user={u} size={14} /> : null })}</span>{r.length > 4 ? <span>+{r.length - 4}</span> : null}</span></Tooltip>
