@@ -124,6 +124,9 @@ export interface Attachment {
   url: string
   /** Server-made preview (longest side 400px) for large images; absent for small ones and non-images. */
   thumb_url?: string
+  /** Voice messages: length and base64 waveform (amplitude bytes). */
+  duration_ms?: number
+  waveform?: string
 }
 
 export interface Message {

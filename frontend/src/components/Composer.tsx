@@ -1,11 +1,12 @@
-import { BarChart3, Eye, EyeOff, FileText, ImagePlay, PlusCircle, SendHorizontal, Smile, Sticker, X } from 'lucide-react'
+import { BarChart3, Eye, EyeOff, FileText, ImagePlay, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, X } from 'lucide-react'
 import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { myChannelPerms, useStore } from '../store'
 import { sendTyping } from '../lib/ws'
 import type { Attachment, Channel, DmChannel, Message } from '../lib/types'
 import { has, isTimedOut, P } from '../lib/perms'
-import { formatBytes, isImage, MAX_PER_MESSAGE, uploadFile, type UploadHandle } from '../lib/upload'
+import { formatBytes, isImage, MAX_PER_MESSAGE, uploadFile, uploadVoice, type UploadHandle } from '../lib/upload'
+import { VoiceRecorder } from '../lib/voiceRecorder'
 import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
 import ExpressionPicker, { type PickerTab } from './ExpressionPicker'
@@ -228,6 +229,31 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     setSending(true)
     try { await sendMessage(channel.id, '', reply?.id, [], st.id); onCancelReply(); onSent() } catch (e) { pushToast((e as Error).message, 'error') } finally { setSending(false) }
   }
+  // Voice messages: hold state for the recorder bar that replaces the text box while recording.
+  const recorder = useRef<VoiceRecorder | null>(null)
+  const [rec, setRec] = useState<{ ms: number; levels: number[] } | null>(null)
+  const [recBusy, setRecBusy] = useState(false)
+  const startRecording = async () => {
+    if (recorder.current || !canAttach) return
+    const r = new VoiceRecorder()
+    try {
+      await r.start((levels, ms) => setRec({ ms, levels: levels.slice(-40) }))
+      recorder.current = r; setRec({ ms: 0, levels: [] })
+    } catch (e) { pushToast(`Microphone unavailable: ${(e as Error).message}`, 'error') }
+  }
+  const cancelRecording = () => { recorder.current?.cancel(); recorder.current = null; setRec(null) }
+  const sendRecording = async () => {
+    const r = recorder.current; if (!r) return
+    recorder.current = null; setRecBusy(true)
+    try {
+      const out = await r.stop()
+      if (out.durationMs < 300) throw new Error('Recording too short')
+      const att = await uploadVoice(channel.id, out.blob, out.waveform, out.durationMs)
+      await sendMessage(channel.id, '', reply?.id, [att.id])
+      onCancelReply(); onSent()
+    } catch (e) { pushToast((e as Error).message, 'error') } finally { setRecBusy(false); setRec(null) }
+  }
+  useEffect(() => () => { recorder.current?.cancel() }, [])
   const sendGif = async (g: { url: string }) => {
     setSending(true)
     try { await sendMessage(channel.id, g.url, reply?.id); onCancelReply(); onSent() } catch (e) { pushToast((e as Error).message, 'error') } finally { setSending(false) }
@@ -292,10 +318,23 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             ))}
           </div>
         )}
+        {(rec || recBusy) ? (
+          <div className="flex items-center gap-3 px-3 py-2" data-voice-recording>
+            <button className="text-text-2 hover:text-danger" title="Discard recording" onClick={cancelRecording} disabled={recBusy} data-voice-cancel><Trash2 size={20} /></button>
+            <span className="relative flex h-3 w-3 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-75" /><span className="relative inline-flex h-3 w-3 rounded-full bg-danger" /></span>
+            <span className="text-sm tabular-nums text-text-0 w-10" data-voice-timer>{Math.floor((rec?.ms ?? 0) / 60000)}:{String(Math.floor(((rec?.ms ?? 0) % 60000) / 1000)).padStart(2, '0')}</span>
+            <div className="flex h-8 flex-1 items-center justify-end gap-[2px] overflow-hidden" data-voice-levels>
+              {Array.from({ length: 40 }, (_, i) => { const v = rec?.levels[rec.levels.length - 40 + i] ?? 0; return <span key={i} className="w-[3px] rounded-full bg-accent transition-[height] duration-100" style={{ height: `${Math.max(10, v * 100)}%`, opacity: 0.4 + v * 0.6 }} /> })}
+            </div>
+            <span className="text-xs text-text-2 max-md:hidden">{recBusy ? 'Sending…' : 'Recording…'}</span>
+            <button className="h-9 w-9 rounded-full bg-accent text-white flex items-center justify-center hover:bg-accent-hover disabled:opacity-50" title="Send voice message" onClick={sendRecording} disabled={recBusy} data-voice-send><SendHorizontal size={18} /></button>
+          </div>
+        ) : (
         <div className="flex items-end gap-2 px-3 py-2">
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
           <button className={`pb-1 ${canAttach ? 'text-text-2 hover:text-text-0' : 'text-text-2/40 cursor-not-allowed'}`} title={canAttach ? 'Upload a file' : 'No permission to attach files'} onClick={() => canAttach && fileRef.current?.click()}><PlusCircle size={22} /></button>
           <button className="pb-1 text-text-2 hover:text-text-0" title="Create a poll" onClick={() => openModal({ kind: 'createPoll', channelId: channel.id })} data-composer-poll><BarChart3 size={22} /></button>
+          {canAttach && typeof MediaRecorder !== 'undefined' && <button className="pb-1 text-text-2 hover:text-text-0" title="Record a voice message" onClick={startRecording} data-voice-record><Mic size={22} /></button>}
           <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={`Message ${name}`}
             onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
             className="composer-input flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />
@@ -310,6 +349,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           </div>
           <button onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-1 hover:text-accent-hover" title="Send"><SendHorizontal size={22} /></button>
         </div>
+        )}
       </div>
     </div>
   )

@@ -36,7 +36,7 @@ pub fn router() -> Router<AppState> {
         .route("/attachments/:id/:filename", get(serve))
 }
 
-pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type";
+pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform";
 
 fn sanitize_filename(raw: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("file");
@@ -62,9 +62,14 @@ async fn upload(
         perms::check(p, perms::ATTACH_FILES)?;
     }
 
+    // Voice messages send their metadata as text fields *before* the file.
+    let mut duration_ms: Option<i32> = None;
+    let mut waveform: Option<String> = None;
     let mut field = loop {
         match multipart.next_field().await.map_err(|e| AppError::BadRequest(format!("Bad upload: {e}")))? {
             Some(f) if f.name() == Some("file") => break f,
+            Some(f) if f.name() == Some("duration_ms") => { duration_ms = f.text().await.ok().and_then(|t| t.trim().parse::<i32>().ok()).filter(|d| (1..=20 * 60 * 1000).contains(d)); }
+            Some(f) if f.name() == Some("waveform") => { waveform = f.text().await.ok().map(|t| t.trim().chars().take(200).collect::<String>()).filter(|w| !w.is_empty() && w.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '/' || c == '=')); }
             Some(_) => continue,
             None => return Err(AppError::BadRequest("Missing 'file' field".into())),
         }
@@ -112,6 +117,8 @@ async fn upload(
     // Trust magic bytes over the declared type for anything we'd render inline.
     let sniffed = infer::get(&head).map(|t| t.mime_type().to_string());
     let content_type = match sniffed {
+        // Audio-only WebM/Matroska sniffs as video; trust the declared audio type for recordings.
+        Some(s) if s.starts_with("video/webm") && declared.starts_with("audio/") => declared.clone(),
         Some(s) => s,
         None if declared.starts_with("text/") => declared,
         None => "application/octet-stream".to_string(),
@@ -128,9 +135,10 @@ async fn upload(
     let thumb_type = crate::routes::storage::make_thumbnail(path.clone(), &content_type, width, height).await;
     crate::metrics::METRICS.uploads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     crate::metrics::METRICS.upload_bytes.fetch_add(size as u64, std::sync::atomic::Ordering::Relaxed);
+    let voice = content_type.starts_with("audio/") && duration_ms.is_some();
     let att = sqlx::query_as::<_, Attachment>(&format!(
-        "INSERT INTO attachments (id, uploader_id, channel_id, filename, content_type, size, width, height, thumb_type)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING {ATTACHMENT_COLS}"
+        "INSERT INTO attachments (id, uploader_id, channel_id, filename, content_type, size, width, height, thumb_type, duration_ms, waveform)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING {ATTACHMENT_COLS}"
     ))
     .bind(id)
     .bind(uid)
@@ -141,6 +149,8 @@ async fn upload(
     .bind(width)
     .bind(height)
     .bind(thumb_type)
+    .bind(if voice { duration_ms } else { None })
+    .bind(if voice { waveform } else { None })
     .fetch_one(&state.db)
     .await?;
     Ok((StatusCode::CREATED, Json(att)))

@@ -100,3 +100,18 @@ export async function postMultipart<T>(path: string, file: File, fields: Record<
   if (!res.ok) { let msg = `Upload failed (${res.status})`; try { msg = (await res.json()).error ?? msg } catch { /* keep */ } throw new Error(msg) }
   return res.json()
 }
+
+/** Upload a recorded voice message with its waveform and length (fields go first so the server reads them before the file). */
+export function uploadVoice(channelId: string, blob: Blob, waveform: Uint8Array, durationMs: number): Promise<Attachment> {
+  const form = new FormData()
+  form.append('duration_ms', String(Math.round(durationMs)))
+  form.append('waveform', btoa(String.fromCharCode(...waveform)))
+  const ext = blob.type.includes('ogg') ? 'ogg' : blob.type.includes('mp4') ? 'm4a' : 'webm'
+  form.append('file', blob, `voice-message.${ext}`)
+  const token = getToken()
+  return fetch(`/api/channels/${channelId}/attachments`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form }).then(async (r) => {
+    const j = await r.json().catch(() => null)
+    if (!r.ok) throw new Error(j?.error ?? `Upload failed (${r.status})`)
+    return j as Attachment
+  })
+}
