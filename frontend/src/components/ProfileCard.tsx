@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react'
+import { locale } from '../lib/i18n'
 import type { User } from '../lib/types'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import { APP_INITIAL, APP_NAME } from '../lib/brand'
@@ -53,7 +54,7 @@ interface Props {
   footer?: ReactNode
 }
 
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })
 
 /**
  * Discord-style profile popout: banner, overlapping avatar with status, name block, then a

@@ -1,7 +1,7 @@
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import { FONT_SCALES, setAppearance, useAppearance, type Density, type Theme } from '../../../lib/appearance'
 import { renderMarkdown } from '../../../lib/markdown'
-import { LANGUAGES, setLanguage, useLanguage, useT, type Language } from '../../../lib/i18n'
+import { useT } from '../../../lib/i18n'
 import { ACCENTS, setPrefs, usePrefs } from '../../../lib/prefs'
 import { Toggle } from '../SettingsShell'
 
@@ -14,7 +14,6 @@ const THEMES: { id: Theme; label: string; icon: React.ReactNode }[] = [
 /** User Settings → Appearance: theme, chat font scale and message density. Stored per browser. */
 export default function AppearanceTab() {
   const t = useT()
-  const language = useLanguage()
   const a = useAppearance()
   const p = usePrefs()
   return (
@@ -92,13 +91,6 @@ export default function AppearanceTab() {
         </div>
       </section>
 
-      <section data-language>
-        <h3 className="label">{t('Language')}</h3>
-        <select className="input" value={language} onChange={(e) => setLanguage(e.target.value as Language)} data-language-select>
-          {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
-        </select>
-        <p className="text-xs text-text-2 mt-1">Applies immediately. Strings without a translation stay in English.</p>
-      </section>
 
       <p className="text-xs text-text-2">Reduced motion and high contrast moved to the Accessibility tab.</p>
     </div>

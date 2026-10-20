@@ -1,4 +1,5 @@
 import { Search, ShieldOff } from 'lucide-react'
+import { locale } from '../../../lib/i18n'
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
@@ -42,7 +43,7 @@ export default function BansTab({ guildId }: { guildId: string }) {
             <div className="min-w-0 flex-1">
               <div className="font-semibold truncate">{b.display_name} <span className="text-xs font-normal text-text-2">@{b.username}</span></div>
               <div className="text-xs text-text-2 truncate">
-                {new Date(b.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                {new Date(b.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}
                 {b.moderator_name ? ` · by ${b.moderator_name}` : ''}
                 {b.reason ? ` · ${b.reason}` : ' · No reason given'}
               </div>

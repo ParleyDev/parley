@@ -1,4 +1,5 @@
 import { CalendarDays, Check, MapPin, Plus, Trash2, Volume2 } from 'lucide-react'
+import { locale } from '../../lib/i18n'
 import { useEffect, useState, type FormEvent } from 'react'
 import Modal from '../Modal'
 import { api } from '../../lib/api'
@@ -6,7 +7,7 @@ import { has, P } from '../../lib/perms'
 import type { GuildEvent } from '../../lib/types'
 import { myGuildPerms, useStore } from '../../store'
 
-const fmt = (iso: string) => new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+const fmt = (iso: string) => new Date(iso).toLocaleString(locale(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 const toLocalInput = (d: Date) => { const p = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}` }
 
 /** Server events: the upcoming list with RSVP, and a create form for Manage Server. */
