@@ -4,8 +4,9 @@ import { useStore } from '../store'
 import VoiceMessage from './VoiceMessage'
 import type { Attachment } from '../lib/types'
 import { formatBytes, isAudio, isImage, isVideo } from '../lib/upload'
+import { MEDIA_SIZES, usePrefs } from '../lib/prefs'
+import FrozenGif from './FrozenGif'
 
-const MAX_W = 400, MAX_H = 300
 
 export const isSpoiler = (a: Pick<Attachment, 'filename'>) => a.filename.startsWith('SPOILER_')
 export const displayName = (a: Pick<Attachment, 'filename'>) => a.filename.replace(/^SPOILER_/, '')
@@ -45,20 +46,25 @@ export function MaybeBlurred({ on, children }: { on: boolean; children: React.Re
 
 function One({ a, mine }: { a: Attachment; mine?: boolean }) {
   const openModal = useStore((s) => s.openModal)
+  const prefs = usePrefs()
+  const { w: MAX_W, h: MAX_H } = MEDIA_SIZES[prefs.mediaSize]
+  const inline = prefs.inlineAttachments
   return (
     <>
       {[a].map((a) => {
-        if (isImage(a.content_type)) {
+        if (isImage(a.content_type) && inline) {
           // Size the box from the known dimensions so the chat doesn't jump while loading.
           const w = a.width ?? MAX_W, h = a.height ?? MAX_H
           const scale = Math.min(1, MAX_W / w, MAX_H / h)
           return (
             <button key={a.id} onClick={() => openModal({ kind: 'image', url: a.url, name: a.filename })} className="block overflow-hidden rounded-lg bg-bg-0/40 border border-line hover:border-text-2 max-w-full" style={{ width: Math.round(w * scale), aspectRatio: `${w} / ${h}` }} title={a.filename}>
-              <img src={a.thumb_url ?? a.url} alt={a.filename} loading="lazy" className="h-full w-full object-cover" data-attachment-img={a.thumb_url ? 'thumb' : 'full'} />
+              {a.content_type === 'image/gif' && !prefs.autoplayGifs
+                ? <FrozenGif src={a.url} alt={a.filename} className="h-full w-full object-cover" data-attachment-img="gif" />
+                : <img src={a.thumb_url ?? a.url} alt={a.filename} loading="lazy" className="h-full w-full object-cover" data-attachment-img={a.thumb_url ? 'thumb' : 'full'} />}
             </button>
           )
         }
-        if (isVideo(a.content_type)) {
+        if (isVideo(a.content_type) && inline) {
           return <video key={a.id} src={a.url} controls preload="metadata" className="rounded-lg border border-line bg-black max-w-full" style={{ maxWidth: MAX_W, maxHeight: MAX_H }} />
         }
         if (isAudio(a.content_type) && a.duration_ms) {
@@ -73,7 +79,7 @@ function One({ a, mine }: { a: Attachment; mine?: boolean }) {
           )
         }
         return (
-          <a key={a.id} href={a.url} download={a.filename} className="flex items-center gap-3 rounded-lg border border-line bg-bg-3 px-3 py-2.5 w-full max-w-[400px] hover:bg-bg-4 group">
+          <a key={a.id} href={a.url} download={a.filename} className="flex items-center gap-3 rounded-lg border border-line bg-bg-3 px-3 py-2.5 w-full max-w-[400px] hover:bg-bg-4 group" data-attachment-card>
             <FileText size={28} className="text-text-2 shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-sky-400 truncate group-hover:underline">{a.filename}</div>

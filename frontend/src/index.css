@@ -33,7 +33,11 @@
   --color-accent-hover: #4752c4;
   --scrollbar-thumb: #c4c9d1;
 }
-:root { --scrollbar-thumb: #2c2f3b; --font-scale: 1; }
+:root { --scrollbar-thumb: #2c2f3b; --font-scale: 1; --msg-gap: 17px; }
+/* Client prefs (Appearance / Accessibility): message group spacing, link underlines, keyboard focus ring. */
+.msg-group-start { margin-top: var(--msg-gap, 17px); }
+:root[data-underline-links="1"] .msg-content a { text-decoration: underline; }
+:root[data-focus-ring="1"] :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 /* High contrast (Appearance → Accessibility): brighter secondary text and borders on either palette. */
 :root[data-contrast="high"] { --color-line: #5a5f70; --color-text-1: #dde0e6; --color-text-2: #a9aebb; }
 :root[data-theme="light"][data-contrast="high"] { --color-line: #8f939d; --color-text-1: #1b1c20; --color-text-2: #3c3e46; }

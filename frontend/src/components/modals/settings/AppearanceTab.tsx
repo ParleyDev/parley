@@ -2,6 +2,8 @@ import { Check, Monitor, Moon, Sun } from 'lucide-react'
 import { FONT_SCALES, setAppearance, useAppearance, type Density, type Theme } from '../../../lib/appearance'
 import { renderMarkdown } from '../../../lib/markdown'
 import { LANGUAGES, setLanguage, useLanguage, useT, type Language } from '../../../lib/i18n'
+import { ACCENTS, setPrefs, usePrefs } from '../../../lib/prefs'
+import { Toggle } from '../SettingsShell'
 
 const THEMES: { id: Theme; label: string; icon: React.ReactNode }[] = [
   { id: 'dark', label: 'Dark', icon: <Moon size={16} /> },
@@ -14,6 +16,7 @@ export default function AppearanceTab() {
   const t = useT()
   const language = useLanguage()
   const a = useAppearance()
+  const p = usePrefs()
   return (
     <div className="space-y-8" data-appearance>
       <div>
@@ -29,6 +32,15 @@ export default function AppearanceTab() {
               {t.icon}<span className="flex-1">{t.label}</span>{a.theme === t.id && <Check size={16} className="text-accent" />}
             </button>
           ))}
+        </div>
+      </section>
+
+      <section>
+        <h3 className="label">Accent colour</h3>
+        <div className="flex flex-wrap items-center gap-2" data-accent-options>
+          <button type="button" onClick={() => setPrefs({ accent: null })} className={`h-8 rounded-md border px-2 text-xs ${p.accent === null ? 'border-white' : 'border-transparent'} bg-bg-3`} data-accent="default">Theme default</button>
+          {ACCENTS.map((c) => <button key={c} type="button" onClick={() => setPrefs({ accent: c })} title={c} className={`h-8 w-8 rounded-md border-2 ${p.accent === c ? 'border-white' : 'border-transparent'}`} style={{ background: c }} data-accent={c} />)}
+          <label className="flex items-center gap-2 text-xs text-text-2">Custom <input type="color" value={p.accent ?? '#6d5dfc'} onChange={(e) => setPrefs({ accent: e.target.value })} className="h-8 w-10 cursor-pointer rounded bg-transparent" data-accent-custom /></label>
         </div>
       </section>
 
@@ -59,6 +71,27 @@ export default function AppearanceTab() {
         </div>
       </section>
 
+      <section>
+        <div className="flex justify-between"><h3 className="label">Space between message groups</h3><span className="text-xs text-text-2">{p.messageGap}px</span></div>
+        <input type="range" min={0} max={24} step={1} value={p.messageGap} onChange={(e) => setPrefs({ messageGap: Number(e.target.value) })} className="w-full accent-accent" data-message-gap />
+      </section>
+
+      <section>
+        <div className="flex justify-between"><h3 className="label">Zoom level</h3><span className="text-xs text-text-2">{p.zoom}%</span></div>
+        <input type="range" min={50} max={200} step={10} value={p.zoom} onChange={(e) => setPrefs({ zoom: Number(e.target.value) })} className="w-full accent-accent" data-zoom />
+        <p className="text-xs text-text-2 mt-1">Scales the whole app (Ctrl + / Ctrl − in the browser does too).</p>
+      </section>
+
+      <section className="space-y-3">
+        <Toggle label="Show avatars in compact mode" checked={p.compactAvatars} onChange={(v) => setPrefs({ compactAvatars: v })} />
+        <div>
+          <h3 className="label">Role colours</h3>
+          <div className="flex gap-2" data-role-color-options>
+            {([['name', 'In names'], ['next', 'Next to names'], ['off', 'Off']] as const).map(([v, label]) => <button key={v} type="button" onClick={() => setPrefs({ roleColors: v })} className={`rounded-md border px-3 py-1.5 text-sm ${p.roleColors === v ? 'border-accent bg-accent/15 text-text-0' : 'border-line bg-bg-1 text-text-1 hover:border-text-2'}`} data-role-colors={v}>{label}</button>)}
+          </div>
+        </div>
+      </section>
+
       <section data-language>
         <h3 className="label">{t('Language')}</h3>
         <select className="input" value={language} onChange={(e) => setLanguage(e.target.value as Language)} data-language-select>
@@ -67,17 +100,7 @@ export default function AppearanceTab() {
         <p className="text-xs text-text-2 mt-1">Applies immediately. Strings without a translation stay in English.</p>
       </section>
 
-      <section data-accessibility>
-        <h3 className="label">{t('Accessibility')}</h3>
-        <label className="flex items-center justify-between rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer">
-          <span><span className="block text-sm font-semibold">{t('Reduced motion')}</span><span className="block text-xs text-text-2">Turns off pop-ins, fades and pulses. Your system's reduce-motion setting is honoured either way.</span></span>
-          <input type="checkbox" checked={a.reducedMotion} onChange={(e) => setAppearance({ reducedMotion: e.target.checked })} className="h-5 w-5 accent-accent" data-reduced-motion />
-        </label>
-        <label className="mt-2 flex items-center justify-between rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer">
-          <span><span className="block text-sm font-semibold">{t('High contrast')}</span><span className="block text-xs text-text-2">Brighter secondary text and borders.</span></span>
-          <input type="checkbox" checked={a.highContrast} onChange={(e) => setAppearance({ highContrast: e.target.checked })} className="h-5 w-5 accent-accent" data-high-contrast />
-        </label>
-      </section>
+      <p className="text-xs text-text-2">Reduced motion and high contrast moved to the Accessibility tab.</p>
     </div>
   )
 }

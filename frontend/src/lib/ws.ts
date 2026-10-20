@@ -4,6 +4,7 @@ import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, Priv
 import { voice } from './voice'
 import { playSfx } from './sfx'
 import { getNotifPrefs } from './notifPrefs'
+import { getPrefs } from './prefs'
 import { studio } from './studio'
 import { registerPush } from './native'
 
@@ -222,7 +223,7 @@ function speak(m: Message, current: boolean) {
   if (mode === 'never' || (mode === 'current' && !current) || useStore.getState().selfDeaf) return
   const text = `${m.author.display_name} said ${m.content ? m.content.slice(0, 200) : 'sent an attachment'}`
   ;(window.__parleyTts ??= []).push(text)
-  try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); speechSynthesis.speak(u) } } catch { /* ignore */ }
+  try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = getPrefs().ttsRate; speechSynthesis.speak(u) } } catch { /* ignore */ }
 }
 
 // Activity pings: tell the server we are at the keyboard (at most once a minute) so push notifications wait

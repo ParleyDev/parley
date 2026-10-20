@@ -1,4 +1,6 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode, useRef } from 'react'
+import { getPrefs } from './prefs'
+import FrozenGif from '../components/FrozenGif'
 import { Check, Copy } from 'lucide-react'
 import hljs from 'highlight.js/lib/core'
 import { CUSTOM_TOKEN_SRC, PICTO_SRC, customUrl, parseCustom } from './emoji'
@@ -239,7 +241,8 @@ export function renderInline(text: string): ReactNode[] {
     else if (t === '@everyone' || t === '@here') nodes.push(<EveryoneMention key={k} kind={t.slice(1) as 'everyone' | 'here'} />)
     else if (t.startsWith('<:') || t.startsWith('<a:')) {
       const c = parseCustom(t)!
-      nodes.push(<img key={k} src={customUrl(c.id)} alt={`:${c.name}:`} title={`:${c.name}:`} className="emoji" draggable={false} data-custom-emoji={c.name} />)
+      if (t.startsWith('<a:') && !getPrefs().animatedEmoji) nodes.push(<FrozenGif key={k} src={customUrl(c.id)} alt={`:${c.name}:`} title={`:${c.name}:`} className="emoji" data-custom-emoji={c.name} />)
+      else nodes.push(<img key={k} src={customUrl(c.id)} alt={`:${c.name}:`} title={`:${c.name}:`} className="emoji" draggable={false} data-custom-emoji={c.name} />)
     }
     else if (t.startsWith('***')) nodes.push(<strong key={k}><em>{renderInline(t.slice(3, -3))}</em></strong>)
     else if (t.startsWith('**')) nodes.push(<strong key={k}>{renderInline(t.slice(2, -2))}</strong>)
@@ -267,9 +270,13 @@ export function renderInline(text: string): ReactNode[] {
 }
 
 function Spoiler({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false)
+  const mode = getPrefs().spoilers
+  const ref = useRef<HTMLSpanElement>(null)
+  const [open, setOpen] = useState(mode === 'always')
+  // "On servers I moderate": the message marks itself data-can-moderate when the reader has Manage Messages there.
+  useEffect(() => { if (mode === 'moderate' && ref.current?.closest('[data-can-moderate="1"]')) setOpen(true) }, [mode])
   return (
-    <span className={`spoiler ${open ? 'open' : ''}`} role="button" tabIndex={0} aria-label={open ? undefined : 'Spoiler'} title={open ? undefined : 'Click to reveal'}
+    <span ref={ref} className={`spoiler ${open ? 'open' : ''}`} role="button" tabIndex={0} aria-label={open ? undefined : 'Spoiler'} title={open ? undefined : 'Click to reveal'}
       onClick={(e) => { if (!open) { e.stopPropagation(); setOpen(true) } }}
       onKeyDown={(e) => { if (!open && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpen(true) } }}>
       {children}

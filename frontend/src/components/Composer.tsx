@@ -4,6 +4,7 @@ import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { myChannelPerms, useStore } from '../store'
 import { sendTyping } from '../lib/ws'
+import { convertEmoticons, getPrefs } from '../lib/prefs'
 import type { Attachment, Channel, DmChannel, Draft, Message } from '../lib/types'
 import type { ApiError } from '../lib/api'
 import { has, isTimedOut, P } from '../lib/perms'
@@ -60,7 +61,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   // `:shortcode` autocomplete: tracks the query at the caret, the highlighted row, and whether it was dismissed.
   const [shortcode, setShortcode] = useState<{ start: number; query: string } | null>(null)
   const [suggestIdx, setSuggestIdx] = useState(0)
-  const suggestions = useShortcodeSuggestions(shortcode?.query ?? null, channel.guild_id)
+  const suggestions = useShortcodeSuggestions(getPrefs().emojiSuggestions ? shortcode?.query ?? null : null, channel.guild_id)
   // `@name` / `#channel` autocomplete. Picks are typed as plain text and swapped for wire tokens on send.
   const [mention, setMention] = useState<{ start: number; trigger: '@' | '#'; query: string } | null>(null)
   const [mentionIdx, setMentionIdx] = useState(0)
@@ -155,7 +156,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
 
   const submit = async () => {
     if (!canSubmit) return
-    const content = applyMentions(value.trim(), picked)
+    const content = applyMentions(getPrefs().emoticons ? convertEmoticons(value.trim()) : value.trim(), picked)
     const ids = ready.map((p) => p.done!.id)
     const snapshot = pending
     setValue(''); setPending([]); setPicked({}); setMention(null); onCancelReply(); setSending(true)

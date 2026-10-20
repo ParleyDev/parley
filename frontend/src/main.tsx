@@ -4,10 +4,12 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App'
 import { initAppearance } from './lib/appearance'
+import { initPrefs } from './lib/prefs'
 import { initLanguage } from './lib/i18n'
 import { initNative } from './lib/native'
 
 initAppearance()
+initPrefs()
 initLanguage()
 void initNative()
 
