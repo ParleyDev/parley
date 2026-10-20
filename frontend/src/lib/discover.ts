@@ -23,6 +23,10 @@ export interface Listing {
   member_count: number
   online_count: number
   joined: boolean
+  /** Admin-chosen spot on the Discover home page; null = not featured. */
+  featured_order: number | null
+  /** Admin-granted badge: the instance vouches for this server. */
+  verified: boolean
 }
 
 /** Starter channel sets for "Create Your Server"; every server also gets #general and a General voice channel. */

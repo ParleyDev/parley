@@ -191,12 +191,13 @@ function ServerCard({ l }: { l: Listing }) {
   return (
     <div role="button" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open() }} data-server-card={l.guild_id} className="group text-left rounded-xl bg-bg-1 border border-line hover:border-text-2 hover:-translate-y-0.5 transition overflow-visible flex flex-col cursor-pointer">
       <div className="relative h-[140px] rounded-t-xl bg-cover bg-center" style={l.banner_url ? { backgroundImage: `url(${l.banner_url})` } : { background: `linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }}>
+        {l.featured_order !== null && <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow" data-featured>Featured</span>}
         <span className="absolute left-3 -bottom-6 h-12 w-12 rounded-2xl ring-4 ring-bg-1 overflow-hidden flex items-center justify-center text-white font-bold" style={{ background: l.icon_url ? undefined : colorFor(l.guild_id) }}>
           {l.icon_url ? <img src={l.icon_url} alt="" className="h-full w-full object-cover" /> : initials(l.name)}
         </span>
       </div>
       <div className="px-3 pt-8 pb-3 flex-1 flex flex-col">
-        <div className="flex items-center gap-1.5 font-bold text-[15px]"><BadgeCheck size={16} className="text-success shrink-0" /><span className="truncate">{l.name}</span>
+        <div className="flex items-center gap-1.5 font-bold text-[15px]">{l.verified && <span title="Verified by this instance's admins" className="flex shrink-0" data-verified><BadgeCheck size={16} className="text-success" /></span>}<span className="truncate">{l.name}</span>
           {joined ? <span className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-1" data-joined>JOINED</span>
             : <button type="button" onClick={quickJoin} disabled={busy} className="ml-auto rounded-md bg-success text-black px-2 py-0.5 text-[11px] font-bold opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-success/80" data-quick-join>{busy ? 'Joining…' : 'Join'}</button>}
         </div>
@@ -221,6 +222,9 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
   const decide = async (l: Listing, next: 'approved' | 'rejected' | 'pending') => {
     try { await api.post(`/admin/discovery/${l.guild_id}/review`, { status: next, note: notes[l.guild_id] ?? '' }); pushToast(`${l.name} ${next}`); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
+  const flag = async (l: Listing, patch: { featured_order?: number | null; verified?: boolean }) => {
+    try { await api.patch(`/admin/discovery/${l.guild_id}`, patch); load() } catch (e) { pushToast((e as Error).message, 'error') }
+  }
   return (
     <div className="px-10 py-8 max-md:px-4" data-review-queue>
       <div className="flex items-center gap-2"><MobileBack /><h1 className="text-2xl font-bold">Discovery review</h1></div>
@@ -244,6 +248,13 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
                 {status !== 'rejected' && <button type="button" onClick={() => decide(l, 'rejected')} className="btn-danger py-1.5" data-reject><X size={16} /> Reject</button>}
                 {status !== 'pending' && <button type="button" onClick={() => decide(l, 'pending')} className="btn-ghost py-1.5">Back to pending</button>}
               </div>
+              {status === 'approved' && (
+                <div className="mt-3 flex items-center gap-4 flex-wrap text-sm" data-review-flags>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={l.verified} onChange={(e) => flag(l, { verified: e.target.checked })} className="h-4 w-4 accent-accent" data-review-verified /> Verified badge</label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={l.featured_order !== null} onChange={(e) => flag(l, { featured_order: e.target.checked ? 0 : null })} className="h-4 w-4 accent-accent" data-review-featured /> Featured</label>
+                  {l.featured_order !== null && <label className="flex items-center gap-2">order <input type="number" min={0} max={1000} defaultValue={l.featured_order} onBlur={(e) => { const n = Number(e.target.value); if (Number.isInteger(n) && n !== l.featured_order) flag(l, { featured_order: n }) }} className="input w-20 py-1 text-xs" data-review-featured-order /></label>}
+                </div>
+              )}
             </div>
           </div>
         ))}
