@@ -14,6 +14,7 @@ services:
       retries: 10
 
   backend:
+    image: "parleydev/parley:${PARLEY_IMAGE_TAG:-latest}"
     build: ./backend
     environment:
       DATABASE_URL: postgres://parley:parley@db:5432/parley
@@ -70,6 +71,7 @@ services:
       - "${API_PORT:-18080}:8080"
 
   frontend:
+    image: "parleydev/frontend:${PARLEY_IMAGE_TAG:-latest}"
     build: ./frontend
     depends_on:
       - backend
