@@ -44,6 +44,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/attachments", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(BODY_CEILING)))
         .route("/attachments/:id/thumb", get(serve_thumb))
         .route("/attachments/:id/listened", post(mark_listened))
+        .route("/attachments/:id/transcribe", post(retranscribe))
         .route("/attachments/:id/:filename", get(serve))
 }
 
@@ -295,6 +296,28 @@ async fn mark_listened(State(state): State<AppState>, AuthUser(uid): AuthUser, P
         state.hub.emit(target, "VOICE_LISTENED", serde_json::json!({ "channel_id": channel_id, "message_id": message_id, "attachment_id": id, "user_id": uid, "guild_id": c.guild_id }));
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Ask for a (new) transcript of one voice message: anyone who can read the channel may, e.g. when transcription was
+/// off at upload time or the last attempt failed. Marks it pending at once so clients show progress.
+async fn retranscribe(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<serde_json::Value>> {
+    let row: Option<(Uuid, Uuid, Uuid, Option<i32>, Option<String>)> = sqlx::query_as(
+        "SELECT a.message_id, a.channel_id, m.author_id, a.duration_ms, a.transcript_status FROM attachments a JOIN messages m ON m.id = a.message_id WHERE a.id = $1",
+    ).bind(id).fetch_optional(&state.db).await?;
+    let (mid, channel_id, author, duration, status) = row.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    let c = crate::routes::channels::require_channel(&state.db, channel_id, uid).await?;
+    if duration.is_none() { return Err(AppError::BadRequest("Only voice messages can be transcribed".into())); }
+    let settings = crate::routes::admin::load_settings(&state.db).await?;
+    if !settings.stt_configured() { return Err(AppError::BadRequest("Transcription is not set up on this server.".into())); }
+    if status.as_deref() == Some("pending") { return Ok(Json(serde_json::json!({ "status": "pending" }))); }
+    sqlx::query("UPDATE attachments SET transcript_status = 'pending', transcript = NULL WHERE id = $1").bind(id).execute(&state.db).await?;
+    if let (Ok(msg), Ok(target)) = (crate::routes::channels::fetch_message(&state.db, mid, author).await, crate::routes::channels::target_for(&state.db, &c).await) {
+        state.hub.emit(target, "MESSAGE_UPDATE", serde_json::json!({ "message": msg, "guild_id": c.guild_id }));
+    }
+    let st = state.clone();
+    let (url, key, model) = (settings.stt_url.clone(), settings.stt_api_key.clone(), settings.stt_model.clone());
+    tokio::spawn(async move { transcribe(st, id, mid, author, c, url, key, model).await });
+    Ok(Json(serde_json::json!({ "status": "pending" })))
 }
 
 /// Voice messages just attached to `mid`: mark them pending and transcribe in the background when an STT server is configured.
