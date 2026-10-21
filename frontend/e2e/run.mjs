@@ -12,6 +12,16 @@ const out = join(here, 'out'); mkdirSync(out, { recursive: true })
 const all = readdirSync(join(here, 'suites')).filter((f) => f.endsWith('.mjs')).map((f) => f.replace(/\.mjs$/, '')).sort()
 const wanted = process.argv.slice(2)
 const suites = wanted.length ? all.filter((s) => wanted.includes(s)) : all
+// Suites run against the live stack and several rewrite Instance Settings (STT, push, OAuth keys, limits).
+// Snapshot the admin view of the settings first and put it back afterwards so the instance is left as found.
+const { adminToken, B, H } = await import('./lib.mjs')
+let snapshot = null, adminTok = null
+try { adminTok = (await adminToken()).token; const r = await fetch(`${B}/admin/settings`, { headers: { ...H, Authorization: 'Bearer ' + adminTok } }); if (r.ok) snapshot = await r.json() } catch { /* no admin: nothing to restore */ }
+const restore = async () => {
+  if (!snapshot || !adminTok) return
+  try { const r = await fetch(`${B}/admin/settings`, { method: 'PUT', headers: { ...H, Authorization: 'Bearer ' + adminTok }, body: JSON.stringify(snapshot) }); console.log(`\n(instance settings restored: ${r.status})`) } catch (e) { console.log('\n(could not restore instance settings)', e?.message) }
+}
+process.on('SIGINT', () => { restore().finally(() => process.exit(130)) })
 const results = []
 for (const s of suites) {
   console.log(`\n===== ${s} =====`)
@@ -19,6 +29,7 @@ for (const s of suites) {
   const r = spawnSync(process.execPath, [join(here, 'suites', `${s}.mjs`)], { cwd: out, stdio: 'inherit', env: process.env, timeout: 10 * 60 * 1000 })
   results.push({ s, code: r.status ?? 1, secs: Math.round((Date.now() - t0) / 1000) })
 }
+await restore()
 console.log('\n===== summary =====')
 for (const r of results) console.log(`${r.code === 0 ? 'PASS' : 'FAIL'}  ${r.s} (${r.secs}s)`)
 const failed = results.filter((r) => r.code !== 0)
