@@ -1,4 +1,10 @@
 #!/usr/bin/env sh
+# --- identity guard (project-owned, outside the beads markers): check every pushed commit, then hand the
+# same ref list to beads on stdin.
+_ig_in=$(mktemp) || exit 1
+cat > "$_ig_in"
+"$(git rev-parse --show-toplevel)/scripts/identity-guard.sh" pre-push < "$_ig_in" || { rm -f "$_ig_in"; exit 1; }
+exec < "$_ig_in"; rm -f "$_ig_in"
 # --- BEGIN BEADS INTEGRATION v1.3.1 ---
 # This section is managed by beads. Do not remove these markers.
 if command -v bd >/dev/null 2>&1; then
