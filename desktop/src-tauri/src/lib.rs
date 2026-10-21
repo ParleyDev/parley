@@ -4,6 +4,7 @@
 //! connect screen by navigating to `/?parley-switch=1` (User Settings → Switch server).
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_opener::OpenerExt;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -35,6 +36,16 @@ pub fn run() {
                 .min_inner_size(720.0, 480.0)
                 .user_agent(&user_agent())
                 .on_navigation(move |url| {
+                    // The web client asks to open a link outside the app with ?parley-open=<url>: hand it to the OS
+                    // (browser / mail client) and stay where we are. Only web and mail schemes are allowed through.
+                    if let Some((_, target)) = url.query_pairs().find(|(k, _)| k == "parley-open") {
+                        if let Ok(t) = url::Url::parse(&target) {
+                            if matches!(t.scheme(), "http" | "https" | "mailto") {
+                                let _ = handle.opener().open_url(t.as_str(), None::<&str>);
+                            }
+                        }
+                        return false;
+                    }
                     // The web client asks for the connect screen with ?parley-switch=1: cancel that navigation and
                     // load the bundled page instead.
                     if url.query_pairs().any(|(k, v)| k == "parley-switch" && v == "1") {

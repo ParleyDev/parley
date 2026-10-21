@@ -220,7 +220,7 @@ const INLINE_SRC = [
   PICTO_SRC,                                    // unicode emoji (wrapped for the hover tooltip)
 ].join('|')
 
-export function renderInline(text: string): ReactNode[] {
+export function renderInline(text: string, opts: { noLinks?: boolean } = {}): ReactNode[] {
   const nodes: ReactNode[] = []
   let last = 0
   let m: RegExpExecArray | null
@@ -230,6 +230,8 @@ export function renderInline(text: string): ReactNode[] {
   while ((m = re.exec(text))) {
     if (m.index > last) nodes.push(text.slice(last, m.index))
     const t = m[0]
+    // Inside a masked link's text, URLs stay plain text: nested anchors would hide the real destination.
+    if (opts.noLinks && (/^\[[^\]]+\]\(https?:/.test(t) || /^<https?:\/\//.test(t) || /^https?:\/\//.test(t))) { nodes.push(t); last = m.index + t.length; continue }
     k++
     if (t.startsWith('\\')) nodes.push(t.slice(1))
     else if (t.startsWith('``')) nodes.push(<code key={k}>{t.slice(2, -2)}</code>)
@@ -251,7 +253,7 @@ export function renderInline(text: string): ReactNode[] {
     else if (t.startsWith('*') || t.startsWith('_')) nodes.push(<em key={k}>{renderInline(t.slice(1, -1))}</em>)
     else if (t.startsWith('[')) {
       const mm = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(t)!
-      nodes.push(<a key={k} href={mm[2]} title={mm[2]} target="_blank" rel="noopener noreferrer">{renderInline(mm[1])}</a>)
+      nodes.push(<a key={k} href={mm[2]} title={mm[2]} target="_blank" rel="noopener noreferrer">{renderInline(mm[1], { noLinks: true })}</a>)
     } else if (t.startsWith('<')) {
       const url = t.slice(1, -1)
       nodes.push(<a key={k} href={url} target="_blank" rel="noopener noreferrer">{url}</a>)

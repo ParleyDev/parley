@@ -20,6 +20,7 @@ import { useKeybinds } from '../lib/keybinds'
 import { setNativeNavigator } from '../lib/native'
 import { voice } from '../lib/voice'
 import { initBadge } from '../lib/badge'
+import { installLinkGuard } from '../lib/links'
 import { getPrefs, setPrefs } from '../lib/prefs'
 import StreamerBanner from '../components/StreamerBanner'
 import { useMemo } from 'react'
@@ -31,6 +32,7 @@ import { useMemo } from 'react'
  */
 export default function AppShell() {
   useEffect(() => { initBadge() }, [])
+  useEffect(() => installLinkGuard(), [])
   const connected = useStore((s) => s.connected)
   const pane = useStore((s) => s.mobilePane)
   const announcement = useStore((s) => s.instance.announcement)

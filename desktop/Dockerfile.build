@@ -1,0 +1,36 @@
+# Builds the Parley desktop installers in a clean Ubuntu, for hosts without WebKitGTK (or without Windows).
+#   V=$(node scripts/version.mjs)
+#   docker build -f desktop/Dockerfile.build --build-arg PARLEY_VERSION=$V --target linux   -o desktop/dist/linux   .
+#   docker build -f desktop/Dockerfile.build --build-arg PARLEY_VERSION=$V --target windows -o desktop/dist/windows .
+FROM ubuntu:24.04 AS base
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl ca-certificates build-essential pkg-config git file \
+      libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libssl-dev \
+      nsis clang lld llvm xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+ENV PATH=/root/.cargo/bin:$PATH
+WORKDIR /src/desktop
+COPY desktop/package.json desktop/package-lock.json ./
+RUN npm ci
+COPY desktop/ ./
+COPY VERSION scripts/version.mjs /src/
+RUN mkdir -p /src/scripts && mv /src/version.mjs /src/scripts/version.mjs
+# The display version is computed outside (git lives there): docker build --build-arg PARLEY_VERSION=$(node scripts/version.mjs)
+ARG PARLEY_VERSION=dev
+RUN PARLEY_VERSION=$PARLEY_VERSION node /src/scripts/version.mjs --apply
+RUN npx tauri icon assets/icon.png
+
+FROM base AS linux-build
+RUN npx tauri build --bundles deb,appimage 2>&1 | tail -40
+FROM scratch AS linux
+COPY --from=linux-build /src/desktop/src-tauri/target/release/bundle/deb/*.deb /
+COPY --from=linux-build /src/desktop/src-tauri/target/release/bundle/appimage/*.AppImage /
+
+FROM base AS windows-build
+RUN rustup target add x86_64-pc-windows-msvc && cargo install cargo-xwin --locked
+RUN npx tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc --bundles nsis 2>&1 | tail -40
+FROM scratch AS windows
+COPY --from=windows-build /src/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe /

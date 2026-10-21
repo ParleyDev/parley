@@ -12,3 +12,4 @@ frontend/dist
 frontend/e2e/out/
 backups/
 secrets/
+desktop/dist/

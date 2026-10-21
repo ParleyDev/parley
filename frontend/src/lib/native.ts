@@ -68,6 +68,14 @@ export function haptic(style: 'light' | 'medium' = 'light') {
 /** Back to the app's connect screen to pick another server. */
 /** Running inside the Tauri desktop shell (its window carries a ParleyDesktop marker in the user agent). */
 export const isDesktop = () => typeof navigator !== 'undefined' && /ParleyDesktop\//.test(navigator.userAgent)
+/** The desktop shell's version from its user agent marker. */
+export const desktopVersion = () => (typeof navigator !== 'undefined' && /ParleyDesktop\/([^\s]+)/.exec(navigator.userAgent)?.[1]) ?? ''
+
+/** Open a URL outside the app: the desktop shell intercepts /?parley-open=… and hands it to the OS; browsers get a new tab. */
+export function openExternal(url: string) {
+  if (isDesktop()) { location.href = `${location.origin}/?parley-open=${encodeURIComponent(url)}`; return }
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
 
 export function switchServer() {
   if (isDesktop()) { location.href = `${location.origin}/?parley-switch=1`; return }

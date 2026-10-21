@@ -54,6 +54,8 @@ export interface ClientPrefs {
   // Advanced
   /** Developer Mode: "Copy … ID" entries in context menus. */
   developerMode: boolean
+  /** External link hosts the user chose not to be warned about again. */
+  trustedHosts: string[]
 }
 
 export const DEFAULT_PREFS: ClientPrefs = {
@@ -62,6 +64,7 @@ export const DEFAULT_PREFS: ClientPrefs = {
   inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
   streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true,
   developerMode: true,
+  trustedHosts: [],
 }
 export const ACCENTS = ['#6d5dfc', '#5865f2', '#3ba55d', '#faa81a', '#ed4245', '#eb459e', '#1abc9c', '#e67e22', '#9b59b6', '#00bcd4']
 export const MEDIA_SIZES: Record<ClientPrefs['mediaSize'], { w: number; h: number }> = { small: { w: 280, h: 210 }, medium: { w: 400, h: 300 }, large: { w: 560, h: 420 } }
@@ -83,6 +86,7 @@ function load(): ClientPrefs {
       spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'),
       streamer: bool(p.streamer, false), streamerHideInfo: bool(p.streamerHideInfo, true), streamerHideInvites: bool(p.streamerHideInvites, true), streamerMuteSounds: bool(p.streamerMuteSounds, true), streamerMuteNotifications: bool(p.streamerMuteNotifications, true),
       developerMode: bool(p.developerMode, true),
+      trustedHosts: Array.isArray(p.trustedHosts) ? p.trustedHosts.filter((h): h is string => typeof h === 'string').slice(0, 500) : [],
     }
   } catch { return { ...DEFAULT_PREFS } }
 }
