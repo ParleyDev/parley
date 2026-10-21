@@ -169,8 +169,8 @@ async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
     Ok(Json(out))
 }
 
-pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, avatar_decoration, clan_tag, panels";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, dm_privacy, message_requests, friend_request_from, group_dm_privacy, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
+pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, avatar_decoration, clan_tag, panels";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -234,12 +234,17 @@ struct UpdateMe {
     pronouns: Option<String>,
     name_primary: Option<String>,
     name_accent: Option<String>,
+    /// {font, effect} from the style picker; unknown values are refused.
+    name_style: Option<serde_json::Value>,
     custom_status: Option<String>,
     /// Flair: one of DECORATIONS ('' clears), a 2–4 character tag ('' clears), panels {wishlist, games} of {title, url?}.
     avatar_decoration: Option<String>,
     clan_tag: Option<String>,
     panels: Option<serde_json::Value>,
 }
+
+pub const NAME_FONTS: [&str; 12] = ["default", "serif", "mono", "rounded", "display", "script", "smallcaps", "condensed", "wide", "italic", "slab", "pixel"];
+pub const NAME_EFFECTS: [&str; 9] = ["solid", "gradient", "neon", "toon", "pop", "gummy", "prism", "glitch", "wave"];
 
 pub const DECORATIONS: [&str; 7] = ["", "gold", "rainbow", "glow", "ice", "dashed", "ember"];
 
@@ -358,6 +363,17 @@ async fn update_me(
         }
     }
     let panels = match &req.panels { Some(v) => Some(clean_panels(v)?), None => None };
+    let name_style = match &req.name_style {
+        Some(v) => {
+            let o = v.as_object().ok_or_else(|| AppError::BadRequest("name_style must be an object".into()))?;
+            let font = o.get("font").and_then(|x| x.as_str()).unwrap_or("default");
+            let effect = o.get("effect").and_then(|x| x.as_str()).unwrap_or("solid");
+            if !NAME_FONTS.contains(&font) { return Err(AppError::BadRequest(format!("Unknown font {font}"))); }
+            if !NAME_EFFECTS.contains(&effect) { return Err(AppError::BadRequest(format!("Unknown effect {effect}"))); }
+            Some(serde_json::json!({ "font": font, "effect": effect }))
+        }
+        None => None,
+    };
     let before: (Option<String>, Option<String>) = sqlx::query_as("SELECT avatar_url, banner_url FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
 
     let u = sqlx::query_as::<_, PrivateUser>(
@@ -375,7 +391,8 @@ async fn update_me(
             name_accent = CASE WHEN $11::text IS NULL THEN name_accent WHEN $11 = '' THEN NULL ELSE $11 END,
             avatar_decoration = COALESCE($13, avatar_decoration),
             clan_tag = COALESCE($14, clan_tag),
-            panels = COALESCE($15, panels)
+            panels = COALESCE($15, panels),
+            name_style = COALESCE($16, name_style)
          WHERE id = $1
          RETURNING {PRIVATE_USER_COLS}"),
     )
@@ -394,12 +411,14 @@ async fn update_me(
     .bind(req.avatar_decoration)
     .bind(clan_tag)
     .bind(panels)
+    .bind(name_style)
     .fetch_one(&state.db)
     .await?;
     crate::routes::images::release_replaced(&state, before.0.as_deref(), u.avatar_url.as_deref()).await;
     crate::routes::images::release_replaced(&state, before.1.as_deref(), u.banner_url.as_deref()).await;
 
     let public = User {
+        name_style: u.name_style.clone(),
         bot: u.bot,
         id: u.id,
         username: u.username.clone(),

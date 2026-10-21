@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import type { Member, Role } from '../lib/types'
 import { useStore } from '../store'
 import { usePrefs } from '../lib/prefs'
+import { nameLook } from '../lib/nameStyle'
 
 export interface NameStyleSource { name_primary?: string | null; name_accent?: string | null }
 
@@ -51,8 +52,11 @@ export default function StyledName({ userId, guildId, children, className, style
   const nick = useStore((s) => s.notes[userId]?.nickname)
   const mode = usePrefs().roleColors
   const role = roles ? colorRole(roles, member) : null
-  const css = mode === 'name' ? resolveNameStyle(roles, member, user) : mode === 'off' && role ? undefined : nameCss(user?.name_primary, user?.name_accent)
+  // Inside a server a coloured role wins (solid or gradient); otherwise the user's own style (font + effect + colours).
+  const useRole = mode === 'name' && role
+  const css = useRole ? nameCss(role.color, role.color_accent) : undefined
+  const look = useRole ? { className: '', style: {} } : nameLook(user)
   // Your friend nickname for them wins everywhere, like Discord.
   const label = nick || (children ?? member?.nickname ?? user?.display_name ?? 'Unknown')
-  return <span className={className} style={{ ...style, ...css }} data-role-colors={mode}>{label}{mode === 'next' && role && <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: role.color ?? undefined }} title={role.name} data-role-dot />}</span>
+  return <span className={`${className ?? ''} ${look.className}`.trim()} style={{ ...style, ...look.style, ...css }} data-role-colors={mode} data-name-effect={useRole ? undefined : (user?.name_style?.effect ?? (user?.name_accent ? 'gradient' : user?.name_primary ? 'solid' : undefined))}>{label}{mode === 'next' && role && <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: role.color ?? undefined }} title={role.name} data-role-dot />}</span>
 }

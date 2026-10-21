@@ -4,6 +4,8 @@ export interface User {
   display_name: string
   /** Bot account (acts through an app token). */
   bot?: boolean
+  /** Display name style: font and effect (see lib/nameStyle.ts); colours in name_primary / name_accent. */
+  name_style?: { font?: string; effect?: string } | null
   avatar_url: string | null
   bio: string
   status: string
@@ -35,6 +37,8 @@ export interface PrivateUser extends User {
   message_requests?: boolean
   friend_request_from?: FriendRequestSource[]
   group_dm_privacy?: 'friends' | 'nobody'
+  /** Largest single upload for this user in bytes (null = instance default). */
+  max_upload_bytes?: number | null
   /** Default for 'allow DMs from server members' on servers you join. */
   guild_dms_default?: boolean
   /** Data & Privacy: others see Seen on your DMs / see you typing. */
