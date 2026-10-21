@@ -22,6 +22,10 @@ pub struct User {
     #[sqlx(default)]
     #[serde(default)]
     pub bot: bool,
+    /// Display name style: {font, effect} (colours in name_primary / name_accent).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub name_style: serde_json::Value,
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
@@ -56,6 +60,13 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub name_style: serde_json::Value,
+    /// Largest single upload for this user (null = instance default).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub max_upload_bytes: Option<i64>,
     #[sqlx(default)]
     #[serde(default)]
     pub bot: bool,
@@ -461,6 +472,7 @@ impl MessageRow {
                 url: crate::routes::images::image_url(id),
             }),
             author: User {
+                name_style: serde_json::Value::Null,
                 bot: self.author_bot,
                 id: self.author_id,
                 username: self.username,

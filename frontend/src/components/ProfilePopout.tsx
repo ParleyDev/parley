@@ -1,4 +1,5 @@
 import { Check, ChevronRight, Clock, Crown, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { nameLook } from '../lib/nameStyle'
 import { locale } from '../lib/i18n'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -63,7 +64,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const canKick = outranks && has(myPerms, P.KICK_MEMBERS)
   const canBan = outranks && has(myPerms, P.BAN_MEMBERS)
   const roleForName = colorRole(roles, member as Member | undefined)
-  const nameStyle = roleForName ? nameCss(roleForName.color, roleForName.color_accent) : nameCss(user.name_primary, user.name_accent)
+  const look = roleForName ? { className: '', style: nameCss(roleForName.color, roleForName.color_accent) } : nameLook(user)
+  const nameStyle = look.style
 
   const themed = !!user.theme_primary
   const primary = user.theme_primary ?? colorFor(user.id)
@@ -173,7 +175,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
               <input autoFocus value={nickEdit} maxLength={32} onChange={(e) => setNickEdit(e.target.value)} onBlur={saveNick} onKeyDown={(e) => { if (e.key === 'Enter') saveNick(); if (e.key === 'Escape') setNickEdit(null) }} placeholder={user.display_name}
                 className="h-7 w-48 rounded-md bg-black/30 border border-white/20 px-2 text-sm font-bold outline-none" data-friend-nick-input />
             ) : (
-              <span style={nameStyle} data-profile-name>{nickname ?? user.display_name}</span>
+              <span className={look.className} style={nameStyle} data-profile-name>{nickname ?? user.display_name}</span>
             )}
             <ClanTag userId={user.id} tag={user.clan_tag} />
             <Badges badges={user.badges} />

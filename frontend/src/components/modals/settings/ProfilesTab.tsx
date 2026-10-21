@@ -3,6 +3,8 @@ import { useRef, useState } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import { DECORATIONS, type PanelItem, type PrivateUser } from '../../../lib/types'
+import { EFFECTS, FONTS, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../../lib/nameStyle'
+import NameStyleModal from '../NameStyle'
 import { colorFor } from '../../../lib/format'
 import { prepareImage, uploadImage } from '../../../lib/upload'
 import ImagePicker from '../ImagePicker'
@@ -10,7 +12,6 @@ import ProfileCard from '../../ProfileCard'
 import Avatar from '../../Avatar'
 import { Toggle } from '../SettingsShell'
 import { ROLE_COLORS } from '../../../lib/perms'
-import { nameCss } from '../../StyledName'
 
 const MAX_BIO = 400
 
@@ -31,6 +32,9 @@ export default function ProfilesTab() {
   const [nameAccent, setNameAccent] = useState<string | null>(user?.name_accent ?? null)
   const [decoration, setDecoration] = useState(user?.avatar_decoration ?? '')
   const [clanTag, setClanTag] = useState(user?.clan_tag ?? '')
+  const [nameStyle, setNameStyle] = useState<NameStyle>({ font: (user?.name_style?.font as NameFont) ?? 'default', effect: (user?.name_style?.effect as NameEffect) ?? (user?.name_accent ? 'gradient' : 'solid') })
+  const [styleOpen, setStyleOpen] = useState(false)
+  const previewLook = nameLook({ name_primary: namePrimary, name_accent: nameAccent, name_style: nameStyle })
   const toLines = (items?: PanelItem[]) => (items ?? []).map((i) => (i.url ? `${i.title} | ${i.url}` : i.title)).join('\n')
   const fromLines = (text: string): PanelItem[] => text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [title, url] = l.split('|').map((x) => x.trim()); return url ? { title, url } : { title } })
   const [wishlist, setWishlist] = useState(toLines(user?.panels?.wishlist))
@@ -40,18 +44,18 @@ export default function ProfilesTab() {
   if (!user) return null
 
   const dirty = display !== user.display_name || pronouns !== (user.pronouns ?? '') || bio !== user.bio
-    || decoration !== (user.avatar_decoration ?? '') || clanTag !== (user.clan_tag ?? '') || wishlist !== toLines(user.panels?.wishlist) || games !== toLines(user.panels?.games)
+    || decoration !== (user.avatar_decoration ?? '') || (nameStyle.font ?? 'default') !== (user.name_style?.font ?? 'default') || (nameStyle.effect ?? 'solid') !== (user.name_style?.effect ?? (user.name_accent ? 'gradient' : 'solid')) || clanTag !== (user.clan_tag ?? '') || wishlist !== toLines(user.panels?.wishlist) || games !== toLines(user.panels?.games)
     || (avatar ?? null) !== (user.avatar_url ?? null) || (banner ?? null) !== (user.banner_url ?? null)
     || (primary ?? null) !== (user.theme_primary ?? null) || (accent ?? null) !== (user.theme_accent ?? null)
     || (namePrimary ?? null) !== (user.name_primary ?? null) || (nameAccent ?? null) !== (user.name_accent ?? null)
-  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setNamePrimary(user.name_primary ?? null); setNameAccent(user.name_accent ?? null); setDecoration(user.avatar_decoration ?? ''); setClanTag(user.clan_tag ?? ''); setWishlist(toLines(user.panels?.wishlist)); setGames(toLines(user.panels?.games)) }
+  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setNamePrimary(user.name_primary ?? null); setNameAccent(user.name_accent ?? null); setDecoration(user.avatar_decoration ?? ''); setClanTag(user.clan_tag ?? ''); setNameStyle({ font: (user.name_style?.font as NameFont) ?? 'default', effect: (user.name_style?.effect as NameEffect) ?? (user.name_accent ? 'gradient' : 'solid') }); setWishlist(toLines(user.panels?.wishlist)); setGames(toLines(user.panels?.games)) }
   const save = async () => {
     setBusy(true)
     try {
       const u = await api.patch<PrivateUser>('/users/@me', {
         display_name: display, pronouns, bio, avatar_url: avatar ?? '', banner_url: banner ?? '', theme_primary: primary ?? '', theme_accent: accent ?? '',
         name_primary: namePrimary ?? '', name_accent: namePrimary ? (nameAccent ?? '') : '',
-        avatar_decoration: decoration, clan_tag: clanTag, panels: { wishlist: fromLines(wishlist), games: fromLines(games) },
+        avatar_decoration: decoration, clan_tag: clanTag, name_style: nameStyle, panels: { wishlist: fromLines(wishlist), games: fromLines(games) },
       })
       if (token) setAuth(token, u)
       pushToast('Profile saved')
@@ -64,6 +68,7 @@ export default function ProfilesTab() {
   const base = primary ?? colorFor(user.id)
 
   return (
+    <>
     <div>
       <h1 className="text-xl font-bold mb-5">Profiles</h1>
       <div className="flex gap-8 max-lg:flex-col">
@@ -103,12 +108,13 @@ export default function ProfilesTab() {
             <Toggle label="Gradient (add a second colour)" checked={accent !== null} onChange={(v) => setAccent(v ? (accent ?? '#6d5dfc') : null)} />
             {accent !== null && <ColorField label="Second colour" value={accent} onChange={(v) => setAccent(v ?? '#6d5dfc')} allowClear={false} base={base} />}
           </div>
-          <div className="space-y-4 rounded-xl bg-bg-0/40 border border-line p-4">
+          <div className="space-y-3 rounded-xl bg-bg-0/40 border border-line p-4" data-name-style-card>
             <div className="text-sm text-text-2">How your name appears in chat, DMs and lists. Inside a server a coloured role takes over.</div>
-            <ColorField label="Name colour" value={namePrimary} onChange={(v) => { setNamePrimary(v); if (!v) setNameAccent(null) }} allowClear base="#f2f3f7" />
-            {namePrimary && <Toggle label="Gradient name (add a second colour)" checked={nameAccent !== null} onChange={(v) => setNameAccent(v ? (nameAccent ?? '#6d5dfc') : null)} />}
-            {namePrimary && nameAccent !== null && <ColorField label="Second colour" value={nameAccent} onChange={(v) => setNameAccent(v ?? '#6d5dfc')} allowClear={false} base="#6d5dfc" />}
-            <div className="text-sm">Preview: <span className="text-[15px] font-semibold" style={nameCss(namePrimary, nameAccent)}>{display || user.display_name}</span> <span className="text-text-2 text-xs">Today at 9:41 AM</span></div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-[15px] font-semibold"><span className={previewLook.className} style={previewLook.style} data-name-preview>{display || user.display_name}</span></span>
+              <span className="text-xs text-text-2">{EFFECTS.find((e) => e.id === (nameStyle.effect ?? 'solid'))?.label} · {FONTS.find((f) => f.id === (nameStyle.font ?? 'default'))?.label}{namePrimary ? '' : ' · no colour'}</span>
+              <button type="button" className="btn-ghost bg-bg-3 hover:bg-bg-4 ml-auto" onClick={() => setStyleOpen(true)} data-name-style-open>Change Display Name Style</button>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1" data-panels>
             <div><label className="label">Wishlist panel</label><textarea className="input resize-none font-mono text-[13px]" rows={4} value={wishlist} onChange={(e) => setWishlist(e.target.value)} placeholder={'One per line: Title | https://link (link optional)'} data-panel-wishlist /></div>
@@ -123,7 +129,7 @@ export default function ProfilesTab() {
         </div>
         <div className="w-[340px] max-lg:w-full shrink-0">
           <div className="label">Preview</div>
-          <ProfileCard user={{ ...user, display_name: display || user.display_name, pronouns, bio, avatar_url: avatar, avatar_decoration: decoration, banner_url: banner, theme_primary: primary, theme_accent: accent, name_primary: namePrimary, name_accent: nameAccent }} />
+          <ProfileCard user={{ ...user, display_name: display || user.display_name, pronouns, bio, avatar_url: avatar, avatar_decoration: decoration, name_style: nameStyle, banner_url: banner, theme_primary: primary, theme_accent: accent, name_primary: namePrimary, name_accent: nameAccent }} />
         </div>
       </div>
       {dirty && (
@@ -134,6 +140,8 @@ export default function ProfilesTab() {
         </div>
       )}
     </div>
+    {styleOpen && <NameStyleModal onClose={() => setStyleOpen(false)} name={display || user.display_name} primary={namePrimary} accent={nameAccent} style={nameStyle} onApply={(v) => { setNamePrimary(v.primary); setNameAccent(v.accent); setNameStyle({ font: v.font, effect: v.effect }); setStyleOpen(false) }} />}
+    </>
   )
 }
 
