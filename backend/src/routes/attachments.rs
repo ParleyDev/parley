@@ -25,13 +25,23 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 pub const MAX_FILE_BYTES: usize = 25 * 1024 * 1024;
+/// Hard ceiling for the request body (per-user limits can be raised up to this).
+pub const BODY_CEILING: usize = 4 * 1024 * 1024 * 1024 + 1024 * 1024;
+
+/// The largest single upload this user may make: their override, else the instance setting, else 25 MB.
+pub async fn max_upload_bytes(state: &AppState, uid: Uuid) -> AppResult<usize> {
+    let (over,): (Option<i64>,) = sqlx::query_as("SELECT max_upload_bytes FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    if let Some(v) = over.filter(|v| *v > 0) { return Ok(v as usize) }
+    let inst = crate::routes::admin::load_settings(&state.db).await?.max_upload_bytes;
+    Ok(if inst > 0 { inst as usize } else { MAX_FILE_BYTES })
+}
 pub const MAX_PER_MESSAGE: usize = 10;
 /// Pending (unlinked) uploads older than this are swept.
 const ORPHAN_TTL_SECS: i64 = 60 * 60;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/channels/:id/attachments", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(32 * 1024 * 1024)))
+        .route("/channels/:id/attachments", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(BODY_CEILING)))
         .route("/attachments/:id/thumb", get(serve_thumb))
         .route("/attachments/:id/listened", post(mark_listened))
         .route("/attachments/:id/:filename", get(serve))
@@ -84,13 +94,14 @@ async fn upload(
     tokio::fs::create_dir_all(dir).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     let path = dir.join(id.to_string());
     let mut file = tokio::fs::File::create(&path).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    let limit = max_upload_bytes(&state, uid).await?;
     let mut size: usize = 0;
     let mut too_big = false;
     let mut head: Vec<u8> = Vec::with_capacity(8192);
     use tokio::io::AsyncWriteExt;
     while let Some(chunk) = field.chunk().await.map_err(|e| AppError::BadRequest(format!("Upload interrupted: {e}")))? {
         size += chunk.len();
-        if size > MAX_FILE_BYTES {
+        if size > limit {
             // Keep draining so the client (and nginx) see a clean 400 instead of a reset connection.
             too_big = true;
             continue;
@@ -104,7 +115,7 @@ async fn upload(
     if too_big {
         drop(file);
         let _ = tokio::fs::remove_file(&path).await;
-        return Err(AppError::BadRequest("File too large (max 25 MB)".into()));
+        return Err(AppError::BadRequest(format!("File too large (max {})", crate::routes::storage::human(limit as i64))));
     }
     if size == 0 {
         let _ = tokio::fs::remove_file(&path).await;

@@ -111,6 +111,9 @@ pub struct InstanceSettings {
     /// Derived: providers with keys, so clients can offer Connect buttons.
     #[serde(default)]
     pub oauth_available: Vec<String>,
+    /// Largest single upload (attachment) in bytes; 0 = the built-in 25 MB default. Per-user overrides exist.
+    #[serde(default)]
+    pub max_upload_bytes: i64,
     /// The instance's public base URL (APP_URL), so clients build invite links and recognise them whatever address
     /// they happen to be browsing from (LAN, localhost, the public domain, the native app).
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -141,7 +144,7 @@ impl InstanceSettings {
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new() };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0 };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -159,6 +162,7 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "fcm_endpoint" => s.fcm_endpoint = v.as_str().unwrap_or("").to_string(),
             "oauth_providers" => s.oauth_providers = v,
             "oauth_endpoint_override" => s.oauth_endpoint_override = v.as_str().unwrap_or("").to_string(),
+            "max_upload_bytes" => s.max_upload_bytes = v.as_i64().unwrap_or(0),
             "rate_limits" => s.rate_limits = v.as_object().map(|o| o.iter().filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string()))).collect()).unwrap_or_default(),
             _ => {}
         }
@@ -246,6 +250,8 @@ struct AdminUser {
     email_verified_at: Option<DateTime<Utc>>,
     #[sqlx(default)]
     upload_quota_bytes: Option<i64>,
+    #[sqlx(default)]
+    max_upload_bytes: Option<i64>,
     /// Newest session activity (any device), None if never logged in since sessions were introduced.
     #[sqlx(default)]
     last_seen_at: Option<DateTime<Utc>>,
@@ -284,7 +290,7 @@ async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Quer
         .await?;
     let mut rows = sqlx::query_as::<_, AdminUser>(&format!(
         "SELECT u.id, u.username, u.display_name, u.email, u.created_at, u.is_admin, u.suspended_at, (u.totp_secret IS NOT NULL) AS mfa_enabled,
-                u.email_verified_at, u.upload_quota_bytes, (SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id) AS last_seen_at,
+                u.email_verified_at, u.upload_quota_bytes, u.max_upload_bytes, (SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id) AS last_seen_at,
                 (SELECT COUNT(*) FROM guild_members m WHERE m.user_id = u.id) AS guild_count
          FROM users u WHERE {where_sql}
          ORDER BY u.created_at DESC LIMIT $11 OFFSET $12"))
@@ -374,6 +380,9 @@ struct PatchUser {
     /// Per-user storage quota in bytes; null restores the instance default; 0 = unlimited.
     #[serde(default, deserialize_with = "deserialize_nullable_i64")]
     upload_quota_bytes: Option<Option<i64>>,
+    /// Largest single upload for this user in bytes; null restores the instance default.
+    #[serde(default, deserialize_with = "deserialize_nullable_i64")]
+    max_upload_bytes: Option<Option<i64>>,
 }
 
 fn deserialize_nullable_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
@@ -406,6 +415,12 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
             state.hub.voice_evict(|v| v.user_id == id);
         }
         audit::record(&state, uid, if suspended { "user.suspend" } else { "user.unsuspend" }, "user", Some(id), &audit::username(&state, id).await, json!({})).await;
+    }
+    if let Some(m) = req.max_upload_bytes {
+        if m.map(|v| v <= 0 || v > 4 * 1024 * 1024 * 1024).unwrap_or(false) { return Err(AppError::BadRequest("Upload limit must be between 1 byte and 4 GB (null = instance default)".into())); }
+        sqlx::query("UPDATE users SET max_upload_bytes = $2 WHERE id = $1").bind(id).bind(m).execute(&state.db).await?;
+        audit::record(&state, uid, "user.upload_limit", "user", Some(id), &audit::username(&state, id).await, json!({ "max_upload_bytes": m })).await;
+        state.hub.emit_users(vec![id], "USER_UPDATE", json!(sqlx::query_as::<_, crate::models::PrivateUser>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::PRIVATE_USER_COLS)).bind(id).fetch_one(&state.db).await?));
     }
     if let Some(q) = req.upload_quota_bytes {
         if q.map(|v| v < 0).unwrap_or(false) { return Err(AppError::BadRequest("Quota cannot be negative".into())); }
@@ -577,10 +592,12 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     }
     if before.oauth_providers != oauth { changed.insert("oauth_providers".into(), json!(oauth.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()).unwrap_or_default())); }
     if before.oauth_endpoint_override != oauth_override { changed.insert("oauth_endpoint_override".into(), json!(oauth_override)); }
+    if req.max_upload_bytes < 0 || req.max_upload_bytes > 4 * 1024 * 1024 * 1024 { return Err(AppError::BadRequest("Max upload size must be between 0 (default) and 4 GB".into())); }
+    if before.max_upload_bytes != req.max_upload_bytes { changed.insert("max_upload_bytes".into(), json!(req.max_upload_bytes)); }
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override)), ("max_upload_bytes", json!(req.max_upload_bytes))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     let mut s = load_settings(&state.db).await?;

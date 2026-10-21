@@ -1,4 +1,4 @@
-import { Compass, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX } from 'lucide-react'
+import { Compass, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -75,7 +75,7 @@ function Overview() {
   )
 }
 
-interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; upload_quota_bytes?: number | null; last_seen_at?: string | null; guild_count: number; online: boolean }
+interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; upload_quota_bytes?: number | null; max_upload_bytes?: number | null; last_seen_at?: string | null; guild_count: number; online: boolean }
 type Tri = '' | 'true' | 'false'
 interface UserFilters { admin: Tri; suspended: Tri; verified: Tri; mfa: Tri; online: Tri; joined_before: string; joined_after: string; inactive_days: string; ip: string }
 const EMPTY_FILTERS: UserFilters = { admin: '', suspended: '', verified: '', mfa: '', online: '', joined_before: '', joined_after: '', inactive_days: '', ip: '' }
@@ -112,6 +112,22 @@ function UsersPane() {
   }
   const patch = async (u: AdminUser, body: { is_admin?: boolean; suspended?: boolean; mfa?: boolean }, label: string) => {
     try { await api.patch(`/admin/users/${u.id}`, body); pushToast(label); load() } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const [limitFor, setLimitFor] = useState<AdminUser | null>(null)
+  const [limitMb, setLimitMb] = useState('')
+  const saveLimit = async (mode: 'set' | 'default') => {
+    if (!limitFor) return
+    const body = mode === 'default' ? null : Math.round(Number(limitMb) * 1024 * 1024)
+    if (mode === 'set' && (!Number.isFinite(body as number) || (body as number) <= 0)) { pushToast('Enter a size in MB', 'error'); return }
+    try { await api.patch(`/admin/users/${limitFor.id}`, { max_upload_bytes: body }); pushToast(mode === 'default' ? `@${limitFor.username} uses the instance upload limit` : `@${limitFor.username} may upload files up to ${limitMb} MB`); setLimitFor(null); await load() } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const [quotaFor, setQuotaFor] = useState<AdminUser | null>(null)
+  const [quotaMb, setQuotaMb] = useState('')
+  const saveQuota = async (mode: 'set' | 'unlimited' | 'default') => {
+    if (!quotaFor) return
+    const body = mode === 'default' ? null : mode === 'unlimited' ? 0 : Math.round(Number(quotaMb) * 1024 * 1024)
+    if (mode === 'set' && (!Number.isFinite(body as number) || (body as number) <= 0)) { pushToast('Enter a size in MB', 'error'); return }
+    try { await api.patch(`/admin/users/${quotaFor.id}`, { upload_quota_bytes: body }); pushToast(mode === 'default' ? `@${quotaFor.username} uses the instance default quota` : mode === 'unlimited' ? `@${quotaFor.username} has unlimited storage` : `@${quotaFor.username} may store ${quotaMb} MB`); setQuotaFor(null); setQuotaMb('') } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const del = (u: AdminUser) => openModal({ kind: 'confirm', title: `Delete @${u.username}`, body: `This permanently deletes ${u.display_name}'s account, the servers they own, their messages and uploads. This cannot be undone.`, danger: true, confirmLabel: 'Delete Account',
     action: async () => { try { await api.delete(`/admin/users/${u.id}`); pushToast('Account deleted'); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
@@ -155,6 +171,26 @@ function UsersPane() {
         {activeFilters > 0 && <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setFilters(EMPTY_FILTERS)} data-admin-filter-clear>Clear filters</button>}
         <span className="ml-auto text-xs text-text-2" data-admin-user-total>{list ? `${list.length} of ${total}` : '…'}</span>
       </div>
+      {limitFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setLimitFor(null)} data-admin-limit-dialog>
+          <div className="pop w-full max-w-md rounded-xl bg-bg-1 border border-line p-5 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold">Upload size limit for @{limitFor.username}</h3>
+            <p className="text-sm text-text-2">The largest single file they can attach. The instance limit applies unless you set one here.</p>
+            <div className="flex items-center gap-2"><input type="number" min={1} className="input w-32" placeholder="MB" value={limitMb} onChange={(e) => setLimitMb(e.target.value)} data-admin-limit-mb /><span className="text-sm text-text-2">MB</span><button type="button" className="btn-primary py-1.5" onClick={() => saveLimit('set')} data-admin-limit-set>Set</button></div>
+            <div className="flex gap-2"><button type="button" className="btn-ghost py-1.5" onClick={() => saveLimit('default')} data-admin-limit-default>Use instance limit</button><button type="button" className="btn-ghost py-1.5 ml-auto" onClick={() => setLimitFor(null)}>Cancel</button></div>
+          </div>
+        </div>
+      )}
+      {quotaFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setQuotaFor(null)} data-admin-quota-dialog>
+          <div className="pop w-full max-w-md rounded-xl bg-bg-1 border border-line p-5 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold">Storage quota for @{quotaFor.username}</h3>
+            <p className="text-sm text-text-2">Attachments and profile images together. The instance default applies unless you set one here.</p>
+            <div className="flex items-center gap-2"><input type="number" min={1} className="input w-32" placeholder="MB" value={quotaMb} onChange={(e) => setQuotaMb(e.target.value)} data-admin-quota-mb /><span className="text-sm text-text-2">MB</span><button type="button" className="btn-primary py-1.5" onClick={() => saveQuota('set')} data-admin-quota-set>Set</button></div>
+            <div className="flex gap-2"><button type="button" className="btn-ghost py-1.5" onClick={() => saveQuota('unlimited')} data-admin-quota-unlimited>Unlimited</button><button type="button" className="btn-ghost py-1.5" onClick={() => saveQuota('default')} data-admin-quota-default>Use instance default</button><button type="button" className="btn-ghost py-1.5 ml-auto" onClick={() => setQuotaFor(null)}>Cancel</button></div>
+          </div>
+        </div>
+      )}
       {selected.size > 0 && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm" data-admin-bulk-bar>
           <span className="font-semibold" data-admin-bulk-count>{selected.size} selected</span>
@@ -195,6 +231,8 @@ function UsersPane() {
                   <Tool label={u.suspended_at ? 'Unsuspend' : 'Suspend'} onClick={() => patch(u, { suspended: !u.suspended_at }, u.suspended_at ? `@${u.username} unsuspended` : `@${u.username} suspended`)} testid="toggle-suspend" danger={!u.suspended_at}>{u.suspended_at ? <UserCheck size={16} /> : <UserX size={16} />}</Tool>
                   <Tool label="Messages and uploads" onClick={() => navigate(`/admin/users/${u.id}`)} testid="content"><FolderOpen size={16} /></Tool>
                   <Tool label="Log out of all devices" onClick={() => logoutAll(u)} testid="logout-all"><LogOut size={16} /></Tool>
+                  <Tool label="Storage quota" onClick={() => setQuotaFor(u)} testid="quota"><HardDrive size={16} /></Tool>
+                  <Tool label="Upload size limit" onClick={() => { setLimitFor(u); setLimitMb(u.max_upload_bytes ? String(Math.round(u.max_upload_bytes / 1048576)) : '') }} testid="upload-limit"><Upload size={16} /></Tool>
                   {u.mfa_enabled && <Tool label="Clear two-factor auth" onClick={() => patch(u, { mfa: false }, `Two-factor authentication cleared for @${u.username}`)} testid="clear-mfa" danger><KeyRound size={16} /></Tool>}
                   <Tool label="Delete account" onClick={() => del(u)} testid="delete-user" danger><Trash2 size={16} /></Tool>
                 </>
@@ -263,15 +301,16 @@ function SettingsPane() {
   const [fcmEndpoint, setFcmEndpoint] = useState('')
   const [oauth, setOauth] = useState<Record<string, { client_id: string; client_secret: string }>>({})
   const [oauthOverride, setOauthOverride] = useState('')
+  const [maxUploadMb, setMaxUploadMb] = useState('')
   const [avAddr, setAvAddr] = useState('')
   const [avClosed, setAvClosed] = useState(false)
   const [rl, setRl] = useState<Record<string, string>>({})
   const [rlDefaults, setRlDefaults] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string; stt_url?: string; stt_api_key?: string; stt_model?: string; rate_limits?: Record<string, string>; rate_limit_defaults?: Record<string, string>; av_addr?: string; av_fail_closed?: boolean; fcm_service_account?: string; fcm_endpoint?: string; push?: boolean; oauth_providers?: Record<string, { client_id: string; client_secret: string }>; oauth_endpoint_override?: string }>('/admin/settings').then((s) => { setOauth(s.oauth_providers && typeof s.oauth_providers === 'object' ? s.oauth_providers : {}); setOauthOverride(s.oauth_endpoint_override ?? ''); setAvAddr(s.av_addr ?? ''); setAvClosed(!!s.av_fail_closed); setFcm(s.fcm_service_account ?? ''); setFcmEndpoint(s.fcm_endpoint ?? ''); setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification); setLkUrl(s.livekit_url ?? ''); setLkKey(s.livekit_api_key ?? ''); setLkSecret(s.livekit_api_secret ?? ''); setSttUrl(s.stt_url ?? ''); setSttKey(s.stt_api_key ?? ''); setSttModel(s.stt_model ?? ''); setRl(s.rate_limits ?? {}); setRlDefaults(s.rate_limit_defaults ?? {}) }).catch(() => {}) }, [])
+  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string; stt_url?: string; stt_api_key?: string; stt_model?: string; rate_limits?: Record<string, string>; rate_limit_defaults?: Record<string, string>; av_addr?: string; av_fail_closed?: boolean; fcm_service_account?: string; fcm_endpoint?: string; push?: boolean; oauth_providers?: Record<string, { client_id: string; client_secret: string }>; oauth_endpoint_override?: string; max_upload_bytes?: number }>('/admin/settings').then((s) => { setMaxUploadMb(s.max_upload_bytes ? String(Math.round(s.max_upload_bytes / 1048576)) : ''); setOauth(s.oauth_providers && typeof s.oauth_providers === 'object' ? s.oauth_providers : {}); setOauthOverride(s.oauth_endpoint_override ?? ''); setAvAddr(s.av_addr ?? ''); setAvClosed(!!s.av_fail_closed); setFcm(s.fcm_service_account ?? ''); setFcmEndpoint(s.fcm_endpoint ?? ''); setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification); setLkUrl(s.livekit_url ?? ''); setLkKey(s.livekit_api_key ?? ''); setLkSecret(s.livekit_api_secret ?? ''); setSttUrl(s.stt_url ?? ''); setSttKey(s.stt_api_key ?? ''); setSttModel(s.stt_model ?? ''); setRl(s.rate_limits ?? {}); setRlDefaults(s.rate_limit_defaults ?? {}) }).catch(() => {}) }, [])
   const save = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify, livekit_url: lkUrl, livekit_api_key: lkKey, livekit_api_secret: lkSecret, stt_url: sttUrl, stt_api_key: sttKey, stt_model: sttModel, rate_limits: rl, av_addr: avAddr, av_fail_closed: avClosed, fcm_service_account: fcm, fcm_endpoint: fcmEndpoint, oauth_providers: oauth, oauth_endpoint_override: oauthOverride }); setInstance({ ...s, livekit_url: s.livekit_url }); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
+    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify, livekit_url: lkUrl, livekit_api_key: lkKey, livekit_api_secret: lkSecret, stt_url: sttUrl, stt_api_key: sttKey, stt_model: sttModel, rate_limits: rl, av_addr: avAddr, av_fail_closed: avClosed, fcm_service_account: fcm, fcm_endpoint: fcmEndpoint, oauth_providers: oauth, oauth_endpoint_override: oauthOverride, max_upload_bytes: maxUploadMb ? Math.round(Number(maxUploadMb) * 1048576) : 0 }); setInstance({ ...s, livekit_url: s.livekit_url }); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={save} className="max-w-xl space-y-6" data-admin-settings>
@@ -321,6 +360,10 @@ function SettingsPane() {
           </div>
         ))}
         <div><label className="label">Provider endpoint override (tests only)</label><input className="input" value={oauthOverride} onChange={(e) => setOauthOverride(e.target.value)} placeholder="leave empty for the real providers" data-admin-oauth-override /></div>
+      </div>
+      <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-uploads>
+        <div><span className="block font-semibold">Uploads</span><span className="block text-sm text-text-2">The largest single file anyone may attach. Leave empty for 25 MB. Individual users can be given their own limit from the users table.</span></div>
+        <div className="flex items-center gap-2"><input type="number" min={1} className="input w-32" placeholder="25" value={maxUploadMb} onChange={(e) => setMaxUploadMb(e.target.value)} data-admin-max-upload /><span className="text-sm text-text-2">MB per file</span></div>
       </div>
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-av>
         <div><span className="block font-semibold">Antivirus (ClamAV)</span><span className="block text-sm text-text-2">Every upload (attachments, voice messages, profile images, emoji) is scanned by a ClamAV daemon before it is stored. <code>docker compose --profile av up -d</code> runs one; enter <code>clamav:3310</code>. Leave empty to skip scanning.</span></div>
