@@ -4,7 +4,7 @@ import { WEB, B, S, reg, call, callS, raw, ok, finish, adminToken } from '../lib
 
 // LiveKit SFU: start the dev server (compose profile "sfu"), point the instance at it, make two browsers
 // join a voice channel and check media flows through the room instead of peer connections.
-const compose = (args) => execSync(`docker compose -f /git/vic10us/y99-bot/docker-compose.yml ${args}`, { stdio: 'pipe' }).toString()
+const compose = (args) => execSync(`docker compose -f /git/vic10us/reChat-bot/docker-compose.yml ${args}`, { stdio: 'pipe' }).toString()
 const LK = 'http://localhost:7880'
 let startedHere = false
 const up = async () => { try { if ((await fetch(LK)).status) return } catch { /* down */ } compose('--profile sfu up -d livekit'); startedHere = true; for (let i = 0; i < 60; i++) { try { if ((await fetch(LK)).status) return } catch { /* wait */ } await new Promise((r) => setTimeout(r, 1000)) } throw new Error('livekit did not start') }

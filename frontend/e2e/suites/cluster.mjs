@@ -3,7 +3,7 @@ import { API_ORIGIN, S, reg, call, callS, ok, finish, adminToken } from '../lib.
 
 // Two backend instances sharing Postgres: events and presence must cross between them.
 const A = API_ORIGIN, Bb = process.env.PARLEY_API_ORIGIN2 ?? 'http://localhost:18081'
-const compose = (args) => execSync(`docker compose -f /git/vic10us/y99-bot/docker-compose.yml ${args}`, { stdio: 'pipe' }).toString()
+const compose = (args) => execSync(`docker compose -f /git/vic10us/reChat-bot/docker-compose.yml ${args}`, { stdio: 'pipe' }).toString()
 let startedHere = false
 const up = async () => { try { if ((await fetch(`${Bb}/health`)).ok) return } catch { /* not up */ } compose('--profile cluster up -d backend2'); startedHere = true; for (let i = 0; i < 60; i++) { try { if ((await fetch(`${Bb}/health`)).ok) return } catch { /* wait */ } await new Promise((r) => setTimeout(r, 1000)) } throw new Error('backend2 did not come up') }
 await up()

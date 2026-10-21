@@ -71,19 +71,19 @@ The GIF picker needs a provider key: `TENOR_API_KEY=...` (preferred, free from G
 - Direct messages: search any user, 1:1 DM channels with presence
 - Live member list with online/offline grouping and user profile cards
 
-### Upgrading from the Y99-era checkout
+### Upgrading from the reChat-era checkout
 
-The Postgres role and database were renamed `y99` → `parley`. An existing `pgdata` volume keeps the old names, so either reset it (`docker compose down -v`, loses data) or rename in place before starting the new compose file:
+The Postgres role and database were renamed `reChat` → `parley`. An existing `pgdata` volume keeps the old names, so either reset it (`docker compose down -v`, loses data) or rename in place before starting the new compose file:
 
 ```sh
 docker compose stop backend
-docker compose exec db psql -U y99 -d postgres -c "ALTER DATABASE y99 RENAME TO parley;" -c "CREATE USER tmp_admin SUPERUSER PASSWORD 'tmp';"
-docker compose exec db psql -U tmp_admin -d postgres -c "ALTER USER y99 RENAME TO parley;" -c "ALTER USER parley PASSWORD 'parley';"
+docker compose exec db psql -U reChat -d postgres -c "ALTER DATABASE reChat RENAME TO parley;" -c "CREATE USER tmp_admin SUPERUSER PASSWORD 'tmp';"
+docker compose exec db psql -U tmp_admin -d postgres -c "ALTER USER reChat RENAME TO parley;" -c "ALTER USER parley PASSWORD 'parley';"
 docker compose exec db psql -U parley -d parley -c "DROP USER tmp_admin;"
 docker compose up -d --build
 ```
 
-Browser sessions carry over: the client migrates the old `y99.token` storage key on first load.
+Browser sessions carry over: the client migrates the old `reChat.token` storage key on first load.
 
 ## Tests
 
