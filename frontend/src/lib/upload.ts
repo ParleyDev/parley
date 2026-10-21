@@ -1,7 +1,16 @@
+import { useStore } from '../store'
 import { getToken } from './api'
 import type { Attachment, UploadedImage } from './types'
 
 export const MAX_FILE_BYTES = 25 * 1024 * 1024
+/** The largest single upload allowed right now: the user's override, else the instance setting, else 25 MB. */
+export function maxUploadBytes(): number {
+  const s = useStore.getState()
+  const over = s.user?.max_upload_bytes
+  if (over && over > 0) return over
+  const inst = s.instance.max_upload_bytes
+  return inst && inst > 0 ? inst : MAX_FILE_BYTES
+}
 export const MAX_PER_MESSAGE = 10
 
 export interface UploadHandle { promise: Promise<Attachment>; abort: () => void }
@@ -10,7 +19,7 @@ export interface UploadHandle { promise: Promise<Attachment>; abort: () => void 
 export function uploadFile(channelId: string, file: File, onProgress: (fraction: number) => void): UploadHandle {
   const xhr = new XMLHttpRequest()
   const promise = new Promise<Attachment>((resolve, reject) => {
-    if (file.size > MAX_FILE_BYTES) { reject(new Error('File too large (max 25 MB)')); return }
+    if (file.size > maxUploadBytes()) { reject(new Error(`File too large (max ${formatBytes(maxUploadBytes())})`)); return }
     const form = new FormData()
     form.append('file', file, file.name)
     xhr.open('POST', `/api/channels/${channelId}/attachments`)
