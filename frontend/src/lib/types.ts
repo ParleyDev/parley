@@ -153,6 +153,9 @@ export interface Member {
   /** When this member accepted the server rules; null while screening is pending. */
   rules_accepted_at?: string | null
   avatar_decoration?: string
+  name_primary?: string | null
+  name_accent?: string | null
+  name_style?: { font?: string; effect?: string; colors?: string[] } | null
   clan_tag?: string
   /** Moderation timeout: read-only in this server until this instant. */
   timeout_until?: string | null

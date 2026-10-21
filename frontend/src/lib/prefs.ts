@@ -29,6 +29,8 @@ export interface ClientPrefs {
   /** Always show a focus ring for keyboard navigation. */
   focusRing: boolean
   timeFormat: 'auto' | '12' | '24'
+  /** Animated name styles play on hover (default), always, or never. */
+  nameAnimation: 'hover' | 'always' | 'never'
   // Chat
   /** Show pictures and videos uploaded directly, inline. */
   inlineAttachments: boolean
@@ -56,7 +58,7 @@ export interface ClientPrefs {
 
 export const DEFAULT_PREFS: ClientPrefs = {
   accent: null, messageGap: 17, zoom: 100, compactAvatars: false, roleColors: 'name',
-  saturation: 100, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, focusRing: false, timeFormat: 'auto',
+  saturation: 100, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
   inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
   streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true,
   developerMode: true,
@@ -76,7 +78,7 @@ function load(): ClientPrefs {
       accent: typeof p.accent === 'string' && /^#[0-9a-f]{6}$/i.test(p.accent) ? p.accent : null,
       messageGap: clamp(p.messageGap, 0, 24, 17), zoom: clamp(p.zoom, 50, 200, 100), compactAvatars: bool(p.compactAvatars, false), roleColors: oneOf(p.roleColors, ['name', 'next', 'off'] as const, 'name'),
       saturation: clamp(p.saturation, 0, 100, 100), underlineLinks: bool(p.underlineLinks, false), animatedEmoji: bool(p.animatedEmoji, true), autoplayGifs: bool(p.autoplayGifs, true),
-      stickerAnimation: oneOf(p.stickerAnimation, ['always', 'interaction', 'never'] as const, 'always'), ttsRate: clamp(p.ttsRate, 0.5, 2, 1), focusRing: bool(p.focusRing, false), timeFormat: oneOf(p.timeFormat, ['auto', '12', '24'] as const, 'auto'),
+      stickerAnimation: oneOf(p.stickerAnimation, ['always', 'interaction', 'never'] as const, 'always'), ttsRate: clamp(p.ttsRate, 0.5, 2, 1), focusRing: bool(p.focusRing, false), timeFormat: oneOf(p.timeFormat, ['auto', '12', '24'] as const, 'auto'), nameAnimation: oneOf(p.nameAnimation, ['hover', 'always', 'never'] as const, 'hover'),
       inlineAttachments: bool(p.inlineAttachments, true), linkMedia: bool(p.linkMedia, true), embeds: bool(p.embeds, true), emoticons: bool(p.emoticons, true), showReactions: bool(p.showReactions, true),
       spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'),
       streamer: bool(p.streamer, false), streamerHideInfo: bool(p.streamerHideInfo, true), streamerHideInvites: bool(p.streamerHideInvites, true), streamerMuteSounds: bool(p.streamerMuteSounds, true), streamerMuteNotifications: bool(p.streamerMuteNotifications, true),
@@ -105,6 +107,7 @@ export function applyPrefs(p: ClientPrefs = current) {
   el.dataset.underlineLinks = p.underlineLinks ? '1' : '0'
   el.dataset.focusRing = p.focusRing ? '1' : '0'
   el.dataset.compactAvatars = p.compactAvatars ? '1' : '0'
+  el.dataset.nameAnim = p.nameAnimation
   el.dataset.streamer = p.streamer ? '1' : '0'
   el.dataset.streamerInvites = p.streamer && p.streamerHideInvites ? '1' : '0'
 }
