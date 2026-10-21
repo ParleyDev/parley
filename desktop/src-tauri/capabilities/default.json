@@ -1,0 +1,7 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "default",
+  "description": "Connect screen: notifications and opening links in the system browser.",
+  "windows": ["main"],
+  "permissions": ["core:default", "notification:default", "opener:default"]
+}

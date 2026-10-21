@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Parley</title>
+  <!-- Desktop connect screen (Tauri). Same flow as the mobile shell: probe /api/instance, remember the server, navigate the window to it. -->
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0b0c10; color: #f2f3f7; font-family: -apple-system, system-ui, Inter, sans-serif; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+    main { width: min(420px, 90vw); }
+    h1 { font-size: 28px; margin: 0 0 4px; }
+    p { color: #b8bcc8; margin: 0 0 20px; font-size: 15px; }
+    label { display: block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #7d8394; margin-bottom: 6px; }
+    input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 12px; border-radius: 10px; border: 1px solid #2a2c37; background: #1a1b23; color: inherit; outline: none; }
+    input:focus { border-color: #6d5dfc; }
+    button { width: 100%; margin-top: 14px; padding: 13px; border: 0; border-radius: 10px; background: #6d5dfc; color: #fff; font-size: 16px; font-weight: 700; }
+    button:disabled { opacity: .6; }
+    .err { color: #f0506e; font-size: 14px; margin-top: 10px; min-height: 1.2em; }
+    .recent { margin-top: 18px; font-size: 14px; }
+    .recent button { background: #1a1b23; color: #b8bcc8; font-weight: 500; margin-top: 8px; text-align: left; }
+    .logo { width: 56px; height: 56px; border-radius: 16px; background: #6d5dfc; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 28px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="logo">P</div>
+    <h1>Connect to a server</h1>
+    <p>Enter the address of the Parley server you were invited to. You can change it later from User Settings → Switch server.</p>
+    <form id="f">
+      <label for="url">Server address</label>
+      <input id="url" type="text" inputmode="url" autocapitalize="off" autocomplete="url" placeholder="https://chat.example.com" required />
+      <button id="go" type="submit">Connect</button>
+      <div class="err" id="err"></div>
+    </form>
+    <div class="recent" id="recent"></div>
+  </main>
+  <script>
+    const KEY = 'parley.servers'
+    const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]') } catch { return [] } }
+    const save = (list) => localStorage.setItem(KEY, JSON.stringify(list.slice(0, 5)))
+    // No scheme typed: try https first, then plain http (LAN / dev servers), and say so.
+    const normalise = (raw) => { let u = raw.trim(); const typed = /^https?:\/\//i.test(u); if (!typed) u = 'https://' + u; const url = new URL(u); return { origin: url.origin, typed } }
+    const probe = async (origin) => { const r = await fetch(origin + '/api/instance', { cache: 'no-store' }); if (!r.ok) throw new Error('That address answered ' + r.status + ', not a Parley server'); await r.json() }
+    const go = async (origin, remember = true, typed = true) => {
+      const err = document.getElementById('err'), btn = document.getElementById('go')
+      err.textContent = ''; btn.disabled = true; btn.textContent = 'Checking…'
+      try {
+        try { await probe(origin) } catch (e) {
+          if (!typed && origin.startsWith('https://') && e instanceof TypeError) { origin = 'http://' + origin.slice(8); await probe(origin); err.textContent = 'Connected without encryption (http).' } else throw e
+        }
+        if (remember) save([origin, ...load().filter((s) => s !== origin)])
+        localStorage.setItem('parley.lastServer', origin)
+        location.href = origin + '/?desktop=1'
+      } catch (e) {
+        err.textContent = e.message || 'Could not reach that server'
+        btn.disabled = false; btn.textContent = 'Connect'
+      }
+    }
+    document.getElementById('f').addEventListener('submit', (e) => { e.preventDefault(); try { const n = normalise(document.getElementById('url').value); go(n.origin, true, n.typed) } catch { document.getElementById('err').textContent = 'Enter a valid address' } })
+    const recent = load(); const box = document.getElementById('recent')
+    if (recent.length) { box.innerHTML = '<label>Recent</label>'; for (const s of recent) { const b = document.createElement('button'); b.type = 'button'; b.textContent = s; b.onclick = () => go(s); box.appendChild(b) } }
+    // Returning users go straight back in unless they opened the app with the "switch server" flag.
+    const last = localStorage.getItem('parley.lastServer')
+    if (last && !location.hash.includes('switch')) { document.getElementById('url').value = last; go(last, false) }
+  </script>
+</body>
+</html>
