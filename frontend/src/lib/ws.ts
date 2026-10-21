@@ -7,7 +7,7 @@ import { getNotifPrefs } from './notifPrefs'
 import { getPrefs, streamerHides } from './prefs'
 import { log } from './log'
 import { studio } from './studio'
-import { registerPush } from './native'
+import { isNative, registerPush } from './native'
 
 type Ev = { s?: number; i?: string } & (
   | { t: 'READY'; d: ReadyPayload }
@@ -20,7 +20,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'POLL_UPDATE'; d: { channel_id: string; message_id: string; poll: Poll } }
   | { t: 'THREAD_UPDATE'; d: ThreadInfo }
   | { t: 'TYPING_START'; d: { channel_id: string; user_id: string } }
-  | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean } }
+  | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean; platforms?: string[] } }
   | { t: 'USER_UPDATE'; d: User }
   | { t: 'GUILD_CREATE'; d: Guild & { channels: Channel[]; roles: Role[] } }
   | { t: 'GUILD_MEMBER_UPDATE'; d: Member }
@@ -57,6 +57,15 @@ type Ev = { s?: number; i?: string } & (
 export type SignalData = { type: 'offer' | 'answer'; sdp: string } | { type: 'candidate'; candidate: RTCIceCandidateInit | null }
 
 let socket: WebSocket | null = null
+/** Where this client runs, for the presence indicator: the native apps say so; VR browsers by user agent; else web. */
+export function clientPlatform(): 'web' | 'desktop' | 'mobile' | 'vr' {
+  if (isNative()) return 'mobile'
+  const ua = navigator.userAgent
+  if (/ParleyDesktop|Electron|Tauri/i.test(ua)) return 'desktop'
+  if (/OculusBrowser|Quest|Pico|VR|HorizonOS|WolvicBrowser/i.test(ua)) return 'vr'
+  return 'web'
+}
+
 /** Highest event sequence number seen; sent back on reconnect so the server can replay the gap. */
 let lastSeq = 0
 /** Backend instance that numbered lastSeq; a resume is only valid against the same one. */
@@ -74,7 +83,7 @@ export function connectSocket() {
   closedByUser = false
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
   const resume = lastSeq > 0 && useStore.getState().ready ? `&seq=${lastSeq}${instanceId ? `&instance=${instanceId}` : ''}` : ''
-  const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}${resume}`)
+  const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}&platform=${clientPlatform()}${resume}`)
   socket = ws
 
   ws.onopen = () => {
@@ -161,7 +170,7 @@ function handle(ev: Ev) {
     case 'POLL_UPDATE': s.applyPollUpdate(ev.d.channel_id, ev.d.message_id, ev.d.poll); break
     case 'THREAD_UPDATE': s.upsertThread(ev.d); break
     case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id); break
-    case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online); break
+    case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online, ev.d.platforms ?? []); break
     case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
     case 'GUILD_CREATE': s.upsertGuild(ev.d); break
     case 'GUILD_UPDATE': s.upsertGuild(ev.d); break

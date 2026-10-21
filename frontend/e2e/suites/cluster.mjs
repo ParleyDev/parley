@@ -39,7 +39,7 @@ const sb1 = await sock(A, b.token)
 await new Promise((r) => setTimeout(r, 400))
 const presenceBefore = sa.events.filter((e) => e.t === 'PRESENCE_UPDATE' && e.d.user_id === b.user.id).length
 sb1.ws.close(); await new Promise((r) => setTimeout(r, 600))
-ok('closing one of two sockets (other instance still open) emits no offline', sa.events.filter((e) => e.t === 'PRESENCE_UPDATE' && e.d.user_id === b.user.id).length === presenceBefore)
+ok('closing one of two sockets (other instance still open) emits no offline', !sa.events.slice(presenceBefore).some((e) => e.t === 'PRESENCE_UPDATE' && e.d.user_id === b.user.id && e.d.online === false))
 sb.ws.close()
 ok('closing the last socket (on instance 2) tells instance 1 he went offline', await waitFor(sa.events, (e) => e.t === 'PRESENCE_UPDATE' && e.d.user_id === b.user.id && e.d.online === false))
 // resume: a seq from instance 1 presented to instance 2 must yield READY, not a bogus replay

@@ -71,6 +71,7 @@ export interface ReadyPayload {
   dm_channels: DmChannel[]
   relationships?: Relationship[]
   online: string[]
+  platforms?: Record<string, string[]>
   read_states: ReadState[]
   last_message_ids: { channel_id: string; message_id: string }[]
   voice_states: VoiceState[]
@@ -131,6 +132,8 @@ interface State {
   loadLatest: (channelId: string) => Promise<void>
   loadingMessages: Record<string, boolean>
   online: Record<string, true>
+  /** Platforms each online user has a connection on: web / desktop / mobile / vr. */
+  platforms: Record<string, string[]>
   users: Record<string, User>
   typing: Record<string, Record<string, number>>
   readStates: Record<string, string | null>
@@ -207,7 +210,7 @@ interface State {
   /** Merge a POLL_UPDATE (counts/closed) while keeping this viewer's own `me` flags. */
   applyPollUpdate: (channelId: string, messageId: string, poll: Poll) => void
   sendPoll: (channelId: string, poll: { question: string; options: string[]; multi: boolean; duration_hours: number | null }) => Promise<void>
-  setPresence: (userId: string, online: boolean) => void
+  setPresence: (userId: string, online: boolean, platforms?: string[]) => void
   upsertUser: (u: User) => void
   setTyping: (channelId: string, userId: string) => void
   pruneTyping: () => void
@@ -297,6 +300,7 @@ export const useStore = create<State>((set, get) => ({
   hasNewer: {},
   loadingMessages: {},
   online: {},
+  platforms: {},
   users: {},
   typing: {},
   readStates: {},
@@ -356,6 +360,7 @@ export const useStore = create<State>((set, get) => ({
     ;(r.relationships ?? []).forEach((rel) => { relationships[rel.user.id] = rel; users[rel.user.id] = rel.user })
     const online: Record<string, true> = {}
     r.online.forEach((id) => (online[id] = true))
+    const platforms: Record<string, string[]> = r.platforms ?? {}
     const readStates: Record<string, string | null> = {}
     r.read_states.forEach((rs) => (readStates[rs.channel_id] = rs.last_read_msg))
     const lastMessageId: Record<string, string> = {}
@@ -383,7 +388,7 @@ export const useStore = create<State>((set, get) => ({
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
       // READY is a snapshot taken when the socket connected; a verification that landed in between must not be undone.
-      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
+      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, platforms, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events. The channel on screen keeps its
       // rows so nothing goes blank; ChatPane refreshes it when readyCount changes.
@@ -582,10 +587,10 @@ export const useStore = create<State>((set, get) => ({
       },
     }
   }),
-  setPresence: (userId, isOnline) => set((s) => {
-    const online = { ...s.online }
-    if (isOnline) online[userId] = true; else delete online[userId]
-    return { online }
+  setPresence: (userId, isOnline, plats) => set((s) => {
+    const online = { ...s.online }; const platforms = { ...s.platforms }
+    if (isOnline) { online[userId] = true; platforms[userId] = plats ?? s.platforms[userId] ?? [] } else { delete online[userId]; delete platforms[userId] }
+    return { online, platforms }
   }),
   upsertUser: (u) => set((s) => {
     const members = { ...s.members }
