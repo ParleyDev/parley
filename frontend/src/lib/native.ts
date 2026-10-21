@@ -66,7 +66,11 @@ export function haptic(style: 'light' | 'medium' = 'light') {
 }
 
 /** Back to the app's connect screen to pick another server. */
+/** Running inside the Tauri desktop shell (its window carries a ParleyDesktop marker in the user agent). */
+export const isDesktop = () => typeof navigator !== 'undefined' && /ParleyDesktop\//.test(navigator.userAgent)
+
 export function switchServer() {
+  if (isDesktop()) { location.href = `${location.origin}/?parley-switch=1`; return }
   if (!isNative()) return
   location.href = (nativePlatform() === 'android' ? 'https://localhost' : 'capacitor://localhost') + '/#switch'
 }
