@@ -5,13 +5,13 @@ import { colorFor, initials, renderMarkdown } from '../lib/format'
 import { APP_INITIAL, APP_NAME } from '../lib/brand'
 import Avatar from './Avatar'
 import { Badges, ClanTag } from './Flair'
-import { nameLook } from '../lib/nameStyle'
+import { nameLook, type NameLook } from '../lib/nameStyle'
 
 export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> {
   banner_url?: string | null
   clan_tag?: string
   avatar_decoration?: string
-  name_style?: { font?: string; effect?: string } | null
+  name_style?: { font?: string; effect?: string; colors?: string[] } | null
   badges?: string[]
   connections?: Connection[]
   panels?: User['panels']
@@ -51,6 +51,8 @@ interface Props {
   compact?: boolean
   /** Overrides the user's own name style (e.g. a role colour inside a server). */
   nameStyle?: CSSProperties
+  /** A ready-made look (role styles) that wins over the user's own. */
+  nameLook?: NameLook
   /** When opened inside a server: adds the server join date next to the app join date. */
   server?: { name: string; icon_url: string | null; id: string; joined_at: string }
   /** Rendered at the bottom of the card (the quick "Message @user" box). */
@@ -64,8 +66,8 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(locale(), { mo
  * detail panel with About Me, Member Since (app + server), roles, and a footer slot.
  * The whole card is tinted with the user's theme colours.
  */
-export default function ProfileCard({ user, actions, children, nameOverride, compact, nameStyle, server, footer }: Props) {
-  const look = nameStyle ? { className: '', style: nameStyle } : nameLook(user)
+export default function ProfileCard({ user, actions, children, nameOverride, compact, nameStyle, nameLook: nameLook_, server, footer }: Props) {
+  const look = nameLook_ ?? (nameStyle ? { className: '', style: nameStyle } : nameLook(user))
   const nameCssFinal = look.style
   const theme = themeBackground(user)
   const text = contrastText(user.theme_primary ?? colorFor(user.id))

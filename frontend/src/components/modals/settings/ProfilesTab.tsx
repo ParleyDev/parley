@@ -3,7 +3,10 @@ import { useRef, useState } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import { DECORATIONS, type PanelItem, type PrivateUser } from '../../../lib/types'
-import { EFFECTS, FONTS, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../../lib/nameStyle'
+import { colorsOf, EFFECTS, FONTS, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../../lib/nameStyle'
+
+/** The user's saved style as the editor's draft (colours fall back to the classic fields). */
+const styleOfUser = (u: PrivateUser | null | undefined): NameStyle => ({ font: (u?.name_style?.font as NameFont) ?? 'default', effect: (u?.name_style?.effect as NameEffect) ?? (u?.name_accent ? 'gradient' : 'solid'), colors: colorsOf(u ?? undefined) })
 import NameStyleModal from '../NameStyle'
 import { colorFor } from '../../../lib/format'
 import { prepareImage, uploadImage } from '../../../lib/upload'
@@ -28,13 +31,11 @@ export default function ProfilesTab() {
   const [banner, setBanner] = useState<string | null>(user?.banner_url ?? null)
   const [primary, setPrimary] = useState<string | null>(user?.theme_primary ?? null)
   const [accent, setAccent] = useState<string | null>(user?.theme_accent ?? null)
-  const [namePrimary, setNamePrimary] = useState<string | null>(user?.name_primary ?? null)
-  const [nameAccent, setNameAccent] = useState<string | null>(user?.name_accent ?? null)
   const [decoration, setDecoration] = useState(user?.avatar_decoration ?? '')
   const [clanTag, setClanTag] = useState(user?.clan_tag ?? '')
-  const [nameStyle, setNameStyle] = useState<NameStyle>({ font: (user?.name_style?.font as NameFont) ?? 'default', effect: (user?.name_style?.effect as NameEffect) ?? (user?.name_accent ? 'gradient' : 'solid') })
+  const [nameStyle, setNameStyle] = useState<NameStyle>(() => styleOfUser(user))
   const [styleOpen, setStyleOpen] = useState(false)
-  const previewLook = nameLook({ name_primary: namePrimary, name_accent: nameAccent, name_style: nameStyle })
+  const previewLook = nameLook({ name_style: nameStyle })
   const toLines = (items?: PanelItem[]) => (items ?? []).map((i) => (i.url ? `${i.title} | ${i.url}` : i.title)).join('\n')
   const fromLines = (text: string): PanelItem[] => text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [title, url] = l.split('|').map((x) => x.trim()); return url ? { title, url } : { title } })
   const [wishlist, setWishlist] = useState(toLines(user?.panels?.wishlist))
@@ -44,17 +45,15 @@ export default function ProfilesTab() {
   if (!user) return null
 
   const dirty = display !== user.display_name || pronouns !== (user.pronouns ?? '') || bio !== user.bio
-    || decoration !== (user.avatar_decoration ?? '') || (nameStyle.font ?? 'default') !== (user.name_style?.font ?? 'default') || (nameStyle.effect ?? 'solid') !== (user.name_style?.effect ?? (user.name_accent ? 'gradient' : 'solid')) || clanTag !== (user.clan_tag ?? '') || wishlist !== toLines(user.panels?.wishlist) || games !== toLines(user.panels?.games)
+    || decoration !== (user.avatar_decoration ?? '') || JSON.stringify(nameStyle) !== JSON.stringify(styleOfUser(user)) || clanTag !== (user.clan_tag ?? '') || wishlist !== toLines(user.panels?.wishlist) || games !== toLines(user.panels?.games)
     || (avatar ?? null) !== (user.avatar_url ?? null) || (banner ?? null) !== (user.banner_url ?? null)
     || (primary ?? null) !== (user.theme_primary ?? null) || (accent ?? null) !== (user.theme_accent ?? null)
-    || (namePrimary ?? null) !== (user.name_primary ?? null) || (nameAccent ?? null) !== (user.name_accent ?? null)
-  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setNamePrimary(user.name_primary ?? null); setNameAccent(user.name_accent ?? null); setDecoration(user.avatar_decoration ?? ''); setClanTag(user.clan_tag ?? ''); setNameStyle({ font: (user.name_style?.font as NameFont) ?? 'default', effect: (user.name_style?.effect as NameEffect) ?? (user.name_accent ? 'gradient' : 'solid') }); setWishlist(toLines(user.panels?.wishlist)); setGames(toLines(user.panels?.games)) }
+  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setDecoration(user.avatar_decoration ?? ''); setClanTag(user.clan_tag ?? ''); setNameStyle(styleOfUser(user)); setWishlist(toLines(user.panels?.wishlist)); setGames(toLines(user.panels?.games)) }
   const save = async () => {
     setBusy(true)
     try {
       const u = await api.patch<PrivateUser>('/users/@me', {
         display_name: display, pronouns, bio, avatar_url: avatar ?? '', banner_url: banner ?? '', theme_primary: primary ?? '', theme_accent: accent ?? '',
-        name_primary: namePrimary ?? '', name_accent: namePrimary ? (nameAccent ?? '') : '',
         avatar_decoration: decoration, clan_tag: clanTag, name_style: nameStyle, panels: { wishlist: fromLines(wishlist), games: fromLines(games) },
       })
       if (token) setAuth(token, u)
@@ -112,7 +111,7 @@ export default function ProfilesTab() {
             <div className="text-sm text-text-2">How your name appears in chat, DMs and lists. Inside a server a coloured role takes over.</div>
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-[15px] font-semibold"><span className={previewLook.className} style={previewLook.style} data-name-preview>{display || user.display_name}</span></span>
-              <span className="text-xs text-text-2">{EFFECTS.find((e) => e.id === (nameStyle.effect ?? 'solid'))?.label} · {FONTS.find((f) => f.id === (nameStyle.font ?? 'default'))?.label}{namePrimary ? '' : ' · no colour'}</span>
+              <span className="text-xs text-text-2">{EFFECTS.find((e) => e.id === (nameStyle.effect ?? 'solid'))?.label} · {FONTS.find((f) => f.id === (nameStyle.font ?? 'default'))?.label}{nameStyle.colors?.length ? '' : ' · no colour'}</span>
               <button type="button" className="btn-ghost bg-bg-3 hover:bg-bg-4 ml-auto" onClick={() => setStyleOpen(true)} data-name-style-open>Change Display Name Style</button>
             </div>
           </div>
@@ -129,7 +128,7 @@ export default function ProfilesTab() {
         </div>
         <div className="w-[340px] max-lg:w-full shrink-0">
           <div className="label">Preview</div>
-          <ProfileCard user={{ ...user, display_name: display || user.display_name, pronouns, bio, avatar_url: avatar, avatar_decoration: decoration, name_style: nameStyle, banner_url: banner, theme_primary: primary, theme_accent: accent, name_primary: namePrimary, name_accent: nameAccent }} />
+          <ProfileCard user={{ ...user, display_name: display || user.display_name, pronouns, bio, avatar_url: avatar, avatar_decoration: decoration, name_style: nameStyle, name_primary: nameStyle.colors?.[0] ?? null, name_accent: nameStyle.colors?.[1] ?? null, banner_url: banner, theme_primary: primary, theme_accent: accent}} />
         </div>
       </div>
       {dirty && (
@@ -140,7 +139,7 @@ export default function ProfilesTab() {
         </div>
       )}
     </div>
-    {styleOpen && <NameStyleModal onClose={() => setStyleOpen(false)} name={display || user.display_name} primary={namePrimary} accent={nameAccent} style={nameStyle} onApply={(v) => { setNamePrimary(v.primary); setNameAccent(v.accent); setNameStyle({ font: v.font, effect: v.effect }); setStyleOpen(false) }} />}
+    {styleOpen && <NameStyleModal onClose={() => setStyleOpen(false)} name={display || user.display_name} value={nameStyle} onApply={(v) => { setNameStyle(v); setStyleOpen(false) }} />}
     </>
   )
 }

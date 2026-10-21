@@ -5,7 +5,7 @@ export interface User {
   /** Bot account (acts through an app token). */
   bot?: boolean
   /** Display name style: font and effect (see lib/nameStyle.ts); colours in name_primary / name_accent. */
-  name_style?: { font?: string; effect?: string } | null
+  name_style?: { font?: string; effect?: string; colors?: string[] } | null
   avatar_url: string | null
   bio: string
   status: string
@@ -125,6 +125,8 @@ export interface Role {
   permissions: number
   hoist: boolean
   created_at: string
+  /** Name style for members holding this role: {font, effect, colors}. */
+  name_style?: { font?: string; effect?: string; colors?: string[] } | null
 }
 
 export interface DmChannel extends Channel {

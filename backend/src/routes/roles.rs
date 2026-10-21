@@ -65,6 +65,8 @@ struct CreateRole {
     name: String,
     color: Option<String>,
     color_accent: Option<String>,
+    /// {font, effect, colors}; when given, color / color_accent are derived from it.
+    name_style: Option<serde_json::Value>,
     permissions: Option<i64>,
     hoist: Option<bool>,
 }
@@ -80,6 +82,10 @@ async fn create_role(
     let name = validate_name(&req.name)?;
     validate_color(&req.color)?;
     validate_color(&req.color_accent)?;
+    let (name_style, color, color_accent) = match &req.name_style {
+        Some(v) => { let (st, p, a) = crate::routes::users::validate_name_style(v)?; (st, p, a) }
+        None => (serde_json::json!({}), req.color.clone(), req.color_accent.clone()),
+    };
     let permissions = (req.permissions.unwrap_or(0) as u64) & perms::ALL;
     check_bits_delta(p, 0, permissions)?;
 
@@ -90,15 +96,16 @@ async fn create_role(
         .execute(&mut *tx)
         .await?;
     let role = sqlx::query_as::<_, Role>(&format!(
-        "INSERT INTO roles (id, guild_id, name, color, color_accent, position, permissions, hoist) VALUES ($1, $2, $3, $4, $7, 1, $5, $6) RETURNING {ROLE_COLS}"
+        "INSERT INTO roles (id, guild_id, name, color, color_accent, position, permissions, hoist, name_style) VALUES ($1, $2, $3, $4, $7, 1, $5, $6, $8) RETURNING {ROLE_COLS}"
     ))
     .bind(Uuid::now_v7())
     .bind(id)
     .bind(&name)
-    .bind(&req.color)
+    .bind(&color)
     .bind(permissions as i64)
     .bind(req.hoist.unwrap_or(false))
-    .bind(&req.color_accent)
+    .bind(&color_accent)
+    .bind(&name_style)
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -115,6 +122,8 @@ struct UpdateRole {
     color: Option<Option<String>>,
     #[serde(default, deserialize_with = "deserialize_nullable")]
     color_accent: Option<Option<String>>,
+    /// {font, effect, colors}; when given, color / color_accent follow it.
+    name_style: Option<serde_json::Value>,
     permissions: Option<i64>,
     hoist: Option<bool>,
     position: Option<i32>,
@@ -153,6 +162,10 @@ async fn update_role(
     if let Some(c) = &req.color_accent {
         validate_color(c)?;
     }
+    let (set_style, name_style, color_req, accent_req) = match &req.name_style {
+        Some(v) => { let (st, p, a) = crate::routes::users::validate_name_style(v)?; (true, st, Some(p), Some(a)) }
+        None => (false, serde_json::json!({}), req.color.clone(), req.color_accent.clone()),
+    };
     let permissions = match req.permissions {
         Some(np) => {
             let np = (np as u64) & perms::ALL;
@@ -173,17 +186,20 @@ async fn update_role(
     let role = sqlx::query_as::<_, Role>(&format!(
         "UPDATE roles SET name = COALESCE($2, name), color = CASE WHEN $3 THEN $4 ELSE color END,
             permissions = COALESCE($5, permissions), hoist = COALESCE($6, hoist),
-            color_accent = CASE WHEN $7 THEN $8 ELSE color_accent END
+            color_accent = CASE WHEN $7 THEN $8 ELSE color_accent END,
+            name_style = CASE WHEN $9 THEN $10 ELSE name_style END
          WHERE id = $1 RETURNING {ROLE_COLS}"
     ))
     .bind(rid)
     .bind(name)
-    .bind(req.color.is_some())
-    .bind(req.color.clone().flatten())
+    .bind(color_req.is_some())
+    .bind(color_req.clone().flatten())
     .bind(permissions)
     .bind(req.hoist)
-    .bind(req.color_accent.is_some())
-    .bind(req.color_accent.clone().flatten())
+    .bind(accent_req.is_some())
+    .bind(accent_req.clone().flatten())
+    .bind(set_style)
+    .bind(name_style)
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;

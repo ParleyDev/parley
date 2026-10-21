@@ -243,6 +243,25 @@ struct UpdateMe {
     panels: Option<serde_json::Value>,
 }
 
+/// Check a {font, effect, colors} style; returns the cleaned style plus (first colour, second colour for gradients).
+pub fn validate_name_style(v: &serde_json::Value) -> AppResult<(serde_json::Value, Option<String>, Option<String>)> {
+    let o = v.as_object().ok_or_else(|| AppError::BadRequest("name_style must be an object".into()))?;
+    let font = o.get("font").and_then(|x| x.as_str()).unwrap_or("default");
+    let effect = o.get("effect").and_then(|x| x.as_str()).unwrap_or("solid");
+    if !NAME_FONTS.contains(&font) { return Err(AppError::BadRequest(format!("Unknown font {font}"))); }
+    if !NAME_EFFECTS.contains(&effect) { return Err(AppError::BadRequest(format!("Unknown effect {effect}"))); }
+    let mut colors: Vec<String> = Vec::new();
+    for c in o.get("colors").and_then(|x| x.as_array()).cloned().unwrap_or_default() {
+        let c = c.as_str().unwrap_or("").to_lowercase();
+        if c.len() != 7 || !c.starts_with('#') || !c[1..].chars().all(|ch| ch.is_ascii_hexdigit()) { return Err(AppError::BadRequest(format!("Bad colour {c}"))); }
+        colors.push(c);
+    }
+    if colors.len() > 6 { return Err(AppError::BadRequest("At most 6 colours".into())); }
+    let primary = colors.first().cloned();
+    let accent = if effect == "gradient" { colors.get(1).cloned() } else { None };
+    Ok((serde_json::json!({ "font": font, "effect": effect, "colors": colors }), primary, accent))
+}
+
 pub const NAME_FONTS: [&str; 12] = ["default", "serif", "mono", "rounded", "display", "script", "smallcaps", "condensed", "wide", "italic", "slab", "pixel"];
 pub const NAME_EFFECTS: [&str; 9] = ["solid", "gradient", "neon", "toon", "pop", "gummy", "prism", "glitch", "wave"];
 
@@ -363,16 +382,14 @@ async fn update_me(
         }
     }
     let panels = match &req.panels { Some(v) => Some(clean_panels(v)?), None => None };
-    let name_style = match &req.name_style {
-        Some(v) => {
-            let o = v.as_object().ok_or_else(|| AppError::BadRequest("name_style must be an object".into()))?;
-            let font = o.get("font").and_then(|x| x.as_str()).unwrap_or("default");
-            let effect = o.get("effect").and_then(|x| x.as_str()).unwrap_or("solid");
-            if !NAME_FONTS.contains(&font) { return Err(AppError::BadRequest(format!("Unknown font {font}"))); }
-            if !NAME_EFFECTS.contains(&effect) { return Err(AppError::BadRequest(format!("Unknown effect {effect}"))); }
-            Some(serde_json::json!({ "font": font, "effect": effect }))
-        }
-        None => None,
+    let (name_style, derived) = match &req.name_style {
+        Some(v) => { let (st, p, a) = validate_name_style(v)?; (Some(st), Some((p, a))) }
+        None => (None, None),
+    };
+    // A style with colours also sets the classic colour fields so older clients keep a sensible name colour.
+    let (name_primary, name_accent) = match derived {
+        Some((p, a)) => (Some(p.unwrap_or_default()), Some(a.unwrap_or_default())),
+        None => (req.name_primary.clone(), req.name_accent.clone()),
     };
     let before: (Option<String>, Option<String>) = sqlx::query_as("SELECT avatar_url, banner_url FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
 
@@ -405,8 +422,8 @@ async fn update_me(
     .bind(req.theme_primary)
     .bind(req.theme_accent)
     .bind(req.pronouns.map(|p| p.trim().to_string()))
-    .bind(req.name_primary)
-    .bind(req.name_accent)
+    .bind(name_primary)
+    .bind(name_accent)
     .bind(req.custom_status.as_ref().map(|c| c.trim().chars().take(128).collect::<String>()))
     .bind(req.avatar_decoration)
     .bind(clan_tag)
