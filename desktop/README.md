@@ -7,7 +7,8 @@ What the shell adds over the browser:
 - A proper window with the Parley name and icon, single-instance (a second launch focuses the first).
 - The **desktop** presence indicator: the window's user agent carries `ParleyDesktop/<version>`, which the web client reports when it connects.
 - User Settings → **Switch server** brings the connect screen back (the client navigates to `/?parley-switch=1`, the shell intercepts it).
-- External links: the web client never opens them silently. A "Leaving Parley" dialog shows the real destination (host and full URL, with a warning when the link text names a different site, and the ASCII form of internationalised domains); the shell then opens it in the default browser via `/?parley-open=<url>`.
+- External links: the web client never opens them silently. A "Leaving Parley" dialog shows the real destination (host and full URL, with a warning when the link text names a different site, and the ASCII form of internationalised domains); the shell then opens it in the default browser via `/?parley-open=<url>`. New-tab links are resolved by the page (WebKitGTK drops `target="_blank"`), and any `window.open` the page still makes is caught by the shell and routed through the same dialog, or a native confirm showing the URL when the loaded web client predates it. Shells older than 0.2.0 cannot open links at all: reinstall.
+- Stale web clients: a window left open across a server update shows a "new version available" bar with a Reload button.
 - System notifications (Tauri plugin; the web client already uses the Notification API).
 
 ## Build

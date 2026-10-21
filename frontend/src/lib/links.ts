@@ -1,6 +1,6 @@
 import { useStore } from '../store'
 import { getPrefs, setPrefs } from './prefs'
-import { openExternal } from './native'
+import { isDesktop, openExternal } from './native'
 import { publicOrigin } from '../components/InviteCard'
 
 /**
@@ -46,17 +46,40 @@ export function openLink(url: URL, text?: string) {
   useStore.getState().openModal({ kind: 'leaveLink', url: url.href, text })
 }
 
-/** Install the global click guard once; returns the uninstaller. */
+/**
+ * Install the global click guard once; returns the uninstaller. In the desktop shell there are no tabs, and
+ * WebKitGTK silently drops `target="_blank"` navigations, so every new-tab link is resolved here instead:
+ * in-app pages stay in the window, other same-site URLs (files, API links) go to the OS browser.
+ */
 export function installLinkGuard(): () => void {
+  const desktop = isDesktop()
   const onClick = (e: MouseEvent) => {
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+    if (e.defaultPrevented || e.button !== 0) return
+    if (!desktop && (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)) return
     const a = (e.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null
-    if (!a || a.dataset.noLeave !== undefined) return
+    if (!a) return
+    const newTab = a.target === '_blank' || e.metaKey || e.ctrlKey || e.shiftKey
+    if (a.dataset.noLeave !== undefined) {
+      if (desktop && newTab && /^https?:/.test(a.href)) { e.preventDefault(); openExternal(a.href) }
+      return
+    }
     const url = externalTarget(a)
-    if (!url) return
+    if (!url) {
+      if (!desktop || !newTab) return
+      let own: URL
+      try { own = new URL(a.href) } catch { return }
+      if (!own.protocol.startsWith('http')) return
+      e.preventDefault(); e.stopPropagation()
+      if (/^\/(channels|invite|login|register)(\/|$)/.test(own.pathname)) location.assign(own.href)
+      else openExternal(own.href)
+      return
+    }
     e.preventDefault(); e.stopPropagation()
     openLink(url, a.textContent ?? undefined)
   }
   document.addEventListener('click', onClick, true)
-  return () => document.removeEventListener('click', onClick, true)
+  // The desktop shell calls this when something asks for a new window (window.open, a link the guard missed).
+  const w = window as unknown as { __parleyOpenLink?: (u: string, text?: string) => void }
+  w.__parleyOpenLink = (u, text) => { try { openLink(new URL(u), text) } catch { /* not a URL */ } }
+  return () => { document.removeEventListener('click', onClick, true); delete w.__parleyOpenLink }
 }

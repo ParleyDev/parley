@@ -23,6 +23,7 @@ import { initBadge } from '../lib/badge'
 import { installLinkGuard } from '../lib/links'
 import { getPrefs, setPrefs } from '../lib/prefs'
 import StreamerBanner from '../components/StreamerBanner'
+import UpdateBanner from '../components/UpdateBanner'
 import { useMemo } from 'react'
 
 /**
@@ -50,6 +51,7 @@ export default function AppShell() {
       <Shortcuts />
       <VerifyBanner />
       <StreamerBanner />
+      <UpdateBanner />
       <div className="flex-1 min-h-0 flex overflow-hidden relative">
       {!connected && (
         <div className="absolute top-0 inset-x-0 z-40 bg-warn text-black text-xs font-semibold text-center py-1">Reconnecting…</div>
