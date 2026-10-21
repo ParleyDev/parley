@@ -175,12 +175,12 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 .nf-pixel { font-family: "Courier New", monospace; font-weight: 700; text-shadow: 1px 1px 0 rgba(0,0,0,.6); letter-spacing: 0.05em; }
 
 .ne-solid { color: var(--n1); }
-.ne-gradient { background-image: linear-gradient(90deg, var(--n1), var(--n2), var(--n1)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: ne-slide 4s linear infinite; }
+.ne-gradient { background-image: var(--ngrad, linear-gradient(90deg, var(--n1), var(--n2), var(--n1))); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: ne-slide 4s linear infinite; }
 .ne-neon { color: var(--n1); text-shadow: 0 0 4px var(--n1), 0 0 12px var(--n1), 0 0 24px color-mix(in srgb, var(--n1) 60%, transparent); animation: ne-flicker 2.4s ease-in-out infinite; }
 .ne-toon { color: var(--n1); -webkit-text-stroke: 1px color-mix(in srgb, var(--n2) 70%, #000); paint-order: stroke fill; text-shadow: 2px 2px 0 color-mix(in srgb, var(--n2) 70%, #000); display: inline-block; animation: ne-bounce 1.6s ease-in-out infinite; }
 .ne-pop { color: var(--n1); text-shadow: 2px 2px 0 var(--n2), 4px 4px 0 color-mix(in srgb, var(--n2) 45%, #000); display: inline-block; animation: ne-pop 2s ease-in-out infinite; }
-.ne-gummy { color: var(--n1); text-shadow: 0 1px 0 color-mix(in srgb, var(--n1) 60%, #fff), 0 2px 2px rgba(0,0,0,.45), inset 0 0 0 transparent; display: inline-block; animation: ne-wobble 2.2s ease-in-out infinite; }
-.ne-prism { background-image: linear-gradient(90deg, #ff5c3b, #f2d84b, #57f287, #3b9bff, #c94bff, #ff5c3b); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: ne-slide 3s linear infinite; }
+.ne-gummy { background-image: var(--ngrad, linear-gradient(90deg, var(--n1), var(--n2))); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; filter: drop-shadow(0 1px 0 rgba(255,255,255,.35)) drop-shadow(0 2px 2px rgba(0,0,0,.45)); display: inline-block; animation: ne-wobble 2.2s ease-in-out infinite; }
+.ne-prism { background-image: var(--ngrad, linear-gradient(90deg, #ff5c3b, #f2d84b, #57f287, #3b9bff, #c94bff, #ff5c3b)); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: ne-slide 3s linear infinite; }
 .ne-glitch { color: var(--n1); position: relative; display: inline-block; animation: ne-glitch 2.8s steps(1, end) infinite; }
 .ne-wave { color: var(--n1); display: inline-block; animation: ne-wave 2.4s ease-in-out infinite; text-shadow: 0 2px 0 color-mix(in srgb, var(--n2) 60%, transparent); }
 @keyframes ne-slide { to { background-position: 200% 50%; } }

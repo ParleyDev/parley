@@ -203,6 +203,10 @@ pub struct Role {
     pub permissions: i64,
     pub hoist: bool,
     pub created_at: DateTime<Utc>,
+    /// Name style for members with this role: {font, effect, colors}.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub name_style: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

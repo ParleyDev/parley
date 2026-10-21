@@ -1,5 +1,6 @@
 import { Check, ChevronRight, Clock, Crown, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { nameLook } from '../lib/nameStyle'
+import { roleLook } from './StyledName'
 import { locale } from '../lib/i18n'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -13,7 +14,7 @@ import ExpressionPicker from './ExpressionPicker'
 import Avatar from './Avatar'
 import { publicOrigin } from './InviteCard'
 import { Badges, ClanTag } from './Flair'
-import { nameCss, colorRole } from './StyledName'
+import { colorRole } from './StyledName'
 
 export const POPOUT_W = 300
 
@@ -64,7 +65,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const canKick = outranks && has(myPerms, P.KICK_MEMBERS)
   const canBan = outranks && has(myPerms, P.BAN_MEMBERS)
   const roleForName = colorRole(roles, member as Member | undefined)
-  const look = roleForName ? { className: '', style: nameCss(roleForName.color, roleForName.color_accent) } : nameLook(user)
+  const look = roleForName ? roleLook(roleForName) : nameLook(user)
   const nameStyle = look.style
 
   const themed = !!user.theme_primary

@@ -7,7 +7,7 @@ import { myGuildPerms, useStore } from '../../store'
 import type { DmChannel, Review, UserProfile } from '../../lib/types'
 import { has, highestPosition, P, EMPTY_ROLES } from '../../lib/perms'
 import type { Anchor } from '../../lib/anchor'
-import { colorRole, nameCss } from '../StyledName'
+import { colorRole, roleLook } from '../StyledName'
 import RolePicker from '../RolePicker'
 import ProfileCard, { contrastText } from '../ProfileCard'
 import ProfilePopout, { POPOUT_W } from '../ProfilePopout'
@@ -78,7 +78,7 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
   const canKick = outranks && has(myPerms, P.KICK_MEMBERS)
   const canBan = outranks && has(myPerms, P.BAN_MEMBERS)
   const roleForName = colorRole(roles, member)
-  const roleNameStyle = roleForName ? nameCss(roleForName.color, roleForName.color_accent) : undefined
+  const roleNameLook = roleForName ? roleLook(roleForName) : undefined
 
   const text = contrastText(user.theme_primary ?? colorFor(user.id))
   const light = text === '#fff'
@@ -106,7 +106,7 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
   return (
     <Modal onClose={onClose} width="max-w-sm">
       <div className="-mx-6 -my-4">
-        <ProfileCard user={user} actions={actions} nameOverride={member?.nickname ? member.nickname : null} nameStyle={roleNameStyle}
+        <ProfileCard user={user} actions={actions} nameOverride={member?.nickname ? member.nickname : null} nameLook={roleNameLook}
           server={guild && member ? { id: guild.id, name: guild.name, icon_url: guild.icon_url, joined_at: member.joined_at } : undefined}>
           {inGuild && member && (
             <section className="w-full">

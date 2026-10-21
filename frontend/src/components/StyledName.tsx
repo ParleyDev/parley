@@ -2,7 +2,10 @@ import type { CSSProperties, ReactNode } from 'react'
 import type { Member, Role } from '../lib/types'
 import { useStore } from '../store'
 import { usePrefs } from '../lib/prefs'
-import { nameLook } from '../lib/nameStyle'
+import { nameLook, type NameLook } from '../lib/nameStyle'
+
+/** A role's name look (its style, or its classic colour / gradient). */
+export const roleLook = (r: Pick<Role, 'color' | 'color_accent' | 'name_style'>): NameLook => nameLook({ name_primary: r.color, name_accent: r.color_accent, name_style: r.name_style })
 
 export interface NameStyleSource { name_primary?: string | null; name_accent?: string | null }
 
@@ -19,7 +22,7 @@ export function colorRole(roles: Record<string, Role>, member: Member | undefine
   let best: Role | null = null
   for (const rid of member.roles) {
     const r = roles[rid]
-    if (r?.color && (!best || r.position > best.position)) best = r
+    if (r && (r.color || r.name_style?.colors?.length) && (!best || r.position > best.position)) best = r
   }
   return best
 }
@@ -54,9 +57,8 @@ export default function StyledName({ userId, guildId, children, className, style
   const role = roles ? colorRole(roles, member) : null
   // Inside a server a coloured role wins (solid or gradient); otherwise the user's own style (font + effect + colours).
   const useRole = mode === 'name' && role
-  const css = useRole ? nameCss(role.color, role.color_accent) : undefined
-  const look = useRole ? { className: '', style: {} } : nameLook(user)
+  const look = useRole ? roleLook(role) : nameLook(user)
   // Your friend nickname for them wins everywhere, like Discord.
   const label = nick || (children ?? member?.nickname ?? user?.display_name ?? 'Unknown')
-  return <span className={`${className ?? ''} ${look.className}`.trim()} style={{ ...style, ...look.style, ...css }} data-role-colors={mode} data-name-effect={useRole ? undefined : (user?.name_style?.effect ?? (user?.name_accent ? 'gradient' : user?.name_primary ? 'solid' : undefined))}>{label}{mode === 'next' && role && <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: role.color ?? undefined }} title={role.name} data-role-dot />}</span>
+  return <span className={`${className ?? ''} ${look.className}`.trim()} style={{ ...style, ...look.style }} data-role-colors={mode} data-name-effect={useRole ? (role.name_style?.effect ?? (role.color_accent ? 'gradient' : 'solid')) : (user?.name_style?.effect ?? (user?.name_accent ? 'gradient' : user?.name_primary ? 'solid' : undefined))}>{label}{mode === 'next' && role && <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: role.color ?? undefined }} title={role.name} data-role-dot />}</span>
 }
