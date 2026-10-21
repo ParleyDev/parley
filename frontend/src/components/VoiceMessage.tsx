@@ -16,6 +16,7 @@ export default function VoiceMessage({ a, mine }: { a: Attachment; mine?: boolea
   const me = useStore((s) => s.user?.id)
   const users = useStore((s) => s.users)
   const transcription = useStore((s) => s.instance.transcription)
+  const pushToast = useStore((s) => s.pushToast)
   const [playing, setPlaying] = useState(false)
   const [pos, setPos] = useState(0)
   const [speed, setSpeed] = useState(1)
@@ -77,7 +78,7 @@ export default function VoiceMessage({ a, mine }: { a: Attachment; mine?: boolea
           ) : status === 'pending' ? (
             <span className="flex items-center gap-1.5 text-xs text-text-2" data-voice-transcribing><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2" />Transcribing…</span>
           ) : (
-            <span className="text-xs text-text-2/70" data-voice-transcript-failed>Transcript unavailable</span>
+            <span className="text-xs text-text-2/70" data-voice-transcript-failed>Transcript unavailable{transcription !== false && <> · <button type="button" className="text-sky-400 hover:underline" onClick={() => api.post(`/attachments/${a.id}/transcribe`, {}).catch((e: Error) => pushToast(e.message, 'error'))} data-voice-transcript-retry>Retry</button></>}</span>
           )}
         </div>
       )}

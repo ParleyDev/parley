@@ -1,4 +1,4 @@
-import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2 } from 'lucide-react'
+import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions } from 'lucide-react'
 import { locale } from '../lib/i18n'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
@@ -111,6 +111,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   })
 
   /** Right-click menu (Discord layout): quick reactions, Add Reaction, Reply, Edit, Copy Text, Pin, Mark Unread, Copy Link, Speak, Delete, Copy ID. */
+  // Voice messages without a usable transcript (never attempted, failed, or empty) can be (re)transcribed.
+  const voiceNeedingText = (m.attachments ?? []).filter((a) => a.duration_ms && a.transcript_status !== 'pending' && !(a.transcript_status === 'done' && a.transcript))
+  const transcriptionOn = useStore((s) => s.instance.transcription)
   const contextItems = (e: React.MouseEvent): MenuEntry[] => {
     const quick = frequentEmoji(4)
     const anchorRect = new DOMRect(e.clientX, e.clientY, 0, 0)
@@ -138,6 +141,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       { label: 'Forward', icon: <Forward size={16} />, onClick: () => openModal({ kind: 'forward', message: m }) },
       ...(isOwn ? [{ label: 'Edit Message', icon: <Pencil size={16} />, onClick: () => { setDraft(m.content); setEditing(true) } }] : []),
       'sep' as const,
+      ...(voiceNeedingText.length ? [{ label: voiceNeedingText.some((a) => a.transcript_status === 'failed') ? 'Retry transcript' : 'Generate transcript', icon: <Captions size={16} />, disabled: transcriptionOn === false, onClick: () => { void Promise.all(voiceNeedingText.map((a) => api.post(`/attachments/${a.id}/transcribe`, {}))).then(() => pushToast('Transcribing…')).catch((e: Error) => pushToast(e.message, 'error')) } }] : []),
       { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => copy('Text', m.content) },
       bookmarked ? { label: 'Remove Bookmark', icon: <BookmarkMinus size={16} />, onClick: toggleBookmark } : { label: 'Bookmark Message', icon: <Bookmark size={16} />, onClick: toggleBookmark },
       ...(canPin ? [{ label: m.pinned_at ? 'Unpin Message' : 'Pin Message', icon: m.pinned_at ? <PinOff size={16} /> : <Pin size={16} />, onClick: togglePin }] : []),
