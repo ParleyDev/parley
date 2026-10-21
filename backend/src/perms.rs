@@ -449,13 +449,23 @@ mod tests {
             permissions: permissions as i64,
             hoist: false,
             created_at: Utc::now(),
+            name_style: serde_json::Value::Null,
         }
     }
 
     fn fixture() -> Fx {
         let gid = Uuid::now_v7();
         let owner = Uuid::now_v7();
-        let guild = Guild { id: gid, name: "g".into(), icon_url: None, owner_id: owner, created_at: Utc::now(), banner_url: None };
+        let guild = Guild {
+            id: gid,
+            name: "g".into(),
+            icon_url: None,
+            owner_id: owner,
+            created_at: Utc::now(),
+            banner_url: None,
+            rules: String::new(),
+            rules_required: false,
+        };
         let mut everyone = role(gid, 0, DEFAULT_EVERYONE);
         everyone.id = gid; // @everyone shares the guild id
         let mod_role = role(gid, 2, KICK_MEMBERS | MANAGE_MESSAGES);
