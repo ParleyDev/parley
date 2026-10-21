@@ -1,4 +1,4 @@
-import { Camera, Trash2 } from 'lucide-react'
+import { Camera, Trash2, Pipette } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
@@ -13,8 +13,6 @@ import { prepareImage, uploadImage } from '../../../lib/upload'
 import ImagePicker from '../ImagePicker'
 import ProfileCard from '../../ProfileCard'
 import Avatar from '../../Avatar'
-import { Toggle } from '../SettingsShell'
-import { ROLE_COLORS } from '../../../lib/perms'
 
 const MAX_BIO = 400
 
@@ -102,10 +100,17 @@ export default function ProfilesTab() {
             </div>
             <p className="text-xs text-text-2 mt-1">Without a banner the card shows your theme colour. Still images are resized to 1200×480; animated ones are kept as uploaded.</p>
           </div>
-          <div className="space-y-4 rounded-xl bg-bg-0/40 border border-line p-4">
-            <ColorField label="Theme colour" value={primary} onChange={setPrimary} allowClear base={base} />
-            <Toggle label="Gradient (add a second colour)" checked={accent !== null} onChange={(v) => setAccent(v ? (accent ?? '#6d5dfc') : null)} />
-            {accent !== null && <ColorField label="Second colour" value={accent} onChange={(v) => setAccent(v ?? '#6d5dfc')} allowClear={false} base={base} />}
+          <div className="space-y-2 rounded-xl bg-bg-0/40 border border-line p-4" data-theme-card>
+            <label className="label">Profile theme</label>
+            <div className="relative h-28 w-full max-w-[260px] rounded-xl" style={{ background: `linear-gradient(180deg, ${primary ?? base}, ${accent ?? primary ?? base})` }} data-theme-box>
+              <label className="absolute left-1/2 -translate-x-1/2 top-3 h-8 w-8 rounded-full border-2 border-white/80 bg-white/20 backdrop-blur cursor-pointer flex items-center justify-center text-white" title="Primary colour"><Pipette size={13} /><input type="color" value={primary ?? base} onChange={(e) => setPrimary(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" data-theme-primary /></label>
+              <label className="absolute left-1/2 -translate-x-1/2 bottom-3 h-8 w-8 rounded-full border-2 border-white/80 bg-white/20 backdrop-blur cursor-pointer flex items-center justify-center text-white" title="Accent colour"><Pipette size={13} /><input type="color" value={accent ?? primary ?? base} onChange={(e) => setAccent(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" data-theme-accent /></label>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-text-2">
+              <span>Tints your profile card top to bottom.</span>
+              {(primary || accent) && <button type="button" className="hover:text-text-0" onClick={() => { setPrimary(null); setAccent(null) }} data-theme-reset>Reset</button>}
+              {accent && primary && accent !== primary && <button type="button" className="hover:text-text-0" onClick={() => setAccent(null)} data-theme-single>Single colour</button>}
+            </div>
           </div>
           <div className="space-y-3 rounded-xl bg-bg-0/40 border border-line p-4" data-name-style-card>
             <div className="text-sm text-text-2">How your name appears in chat, DMs and lists. Inside a server a coloured role takes over.</div>
@@ -144,19 +149,3 @@ export default function ProfilesTab() {
   )
 }
 
-function ColorField({ label, value, onChange, allowClear, base }: { label: string; value: string | null; onChange: (v: string | null) => void; allowClear: boolean; base: string }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      <div className="flex items-center gap-2 flex-wrap">
-        <label className="relative h-9 w-14 rounded-md border border-line overflow-hidden cursor-pointer" style={{ background: value ?? base }} title="Custom colour">
-          <input type="color" value={value ?? base} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
-        </label>
-        {ROLE_COLORS.slice(0, 12).map((c) => (
-          <button key={c} type="button" onClick={() => onChange(c)} className={`h-7 w-7 rounded-md border-2 ${value === c ? 'border-white' : 'border-transparent'}`} style={{ background: c }} title={c} />
-        ))}
-        {allowClear && value && <button type="button" onClick={() => onChange(null)} className="text-xs text-text-2 hover:text-text-0">Reset</button>}
-      </div>
-    </div>
-  )
-}
