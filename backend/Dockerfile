@@ -4,6 +4,8 @@ WORKDIR /app
 # Cache dependencies
 COPY Cargo.toml Cargo.lock* ./
 RUN mkdir src && echo 'fn main(){}' > src/main.rs && cargo build --release && rm -rf src target/release/deps/parley_backend*
+ARG PARLEY_VERSION=dev
+ENV PARLEY_VERSION=$PARLEY_VERSION
 COPY . .
 RUN cargo build --release
 

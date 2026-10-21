@@ -55,6 +55,7 @@ export type ModalKind =
   | { kind: 'groupMembers'; channelId?: string; userIds?: string[] }
   | { kind: 'folderSettings'; folderId: string }
   | { kind: 'guildPrivacy'; guildId: string }
+  | { kind: 'leaveLink'; url: string; text?: string }
 
 export interface ReadyPayload {
   user: PrivateUser
@@ -167,7 +168,7 @@ interface State {
   pttHeld: boolean
   modal: ModalKind | null
   /** Instance-wide settings from GET /instance (registration, announcement banner). */
-  instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; app_url?: string; oauth_available?: string[]; max_upload_bytes?: number }
+  instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; app_url?: string; oauth_available?: string[]; max_upload_bytes?: number; version?: string }
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
 
   // auth

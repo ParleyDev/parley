@@ -20,6 +20,9 @@ use std::sync::Arc;
 use tower_http::{cors::{AllowOrigin, CorsLayer}, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+/// Build version: PARLEY_VERSION baked at build (see scripts/version.mjs), else the crate version.
+pub const VERSION: &str = match option_env!("PARLEY_VERSION") { Some(v) => v, None => env!("CARGO_PKG_VERSION") };
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let config = config::Config::from_env();
@@ -81,6 +84,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
+        .route("/version", get(|| async { axum::Json(serde_json::json!({ "version": VERSION })) }))
         .route("/metrics", get(metrics::endpoint))
         .route("/ws", get(ws::handler::ws_upgrade))
         .nest("/api", routes::api_router())

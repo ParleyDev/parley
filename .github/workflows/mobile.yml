@@ -1,7 +1,8 @@
 name: mobile
 on:
   push:
-    paths: ['mobile/**', '.github/workflows/mobile.yml']
+    paths: ['mobile/**', 'VERSION', 'scripts/version.mjs', '.github/workflows/mobile.yml']
+    tags: ['v*']
   workflow_dispatch:
 jobs:
   android:
@@ -13,6 +14,9 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - uses: android-actions/setup-android@v3
+      - name: Compute version
+        id: ver
+        run: echo "display=$(node scripts/version.mjs)" >> "$GITHUB_OUTPUT" && node scripts/version.mjs --apply
       - run: npm ci
         working-directory: mobile
       - run: npx cap sync android
@@ -24,13 +28,16 @@ jobs:
       - run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
         working-directory: mobile/android
       - uses: actions/upload-artifact@v4
-        with: { name: parley-android-debug, path: mobile/android/app/build/outputs/apk/debug/app-debug.apk }
+        with:
+          name: parley-android-debug-${{ steps.ver.outputs.display }}
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
   ios:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
+      - run: node scripts/version.mjs --apply
       - run: npm ci
         working-directory: mobile
       - run: npx cap sync ios

@@ -3,10 +3,14 @@ import { useStore } from '../../../store'
 import type { PrivateUser } from '../../../lib/types'
 import { Toggle } from '../SettingsShell'
 import DataSection from './DataSection'
+import { usePrefs } from '../../../lib/prefs'
+import { untrustHost } from '../../../lib/links'
+import { APP_NAME } from '../../../lib/brand'
 
 /** Settings → Data & Privacy: what others can tell about you, what this server keeps, and your data export. */
 export default function DataPrivacyTab() {
   const user = useStore((s) => s.user)
+  const prefs = usePrefs()
   const token = useStore((s) => s.token)
   const setAuth = useStore((s) => s.setAuth)
   const pushToast = useStore((s) => s.pushToast)
@@ -24,6 +28,15 @@ export default function DataPrivacyTab() {
         <p className="text-xs text-text-2">Off: nobody sees a "Seen" marker on messages you read. You will still see theirs if they allow it.</p>
         <span data-privacy-typing><Toggle label="Show when I am typing" checked={user.show_typing !== false} onChange={(v) => save({ show_typing: v })} /></span>
         <p className="text-xs text-text-2">Off: the "… is typing" line never shows for you. Your online status is controlled from the status picker (choose Invisible to appear offline).</p>
+      </section>
+
+      <div className="h-px bg-line" />
+
+      <section className="space-y-2" data-trusted-hosts>
+        <h3 className="label">Trusted link destinations</h3>
+        <p className="text-xs text-text-2">Sites you chose "don't ask again" for in the Leaving {APP_NAME} warning. Links to any other site always show the warning with the real address.</p>
+        {prefs.trustedHosts.length === 0 && <p className="text-sm text-text-2">None yet.</p>}
+        <ul className="flex flex-wrap gap-2">{prefs.trustedHosts.map((h) => <li key={h} className="flex items-center gap-1 rounded-full bg-bg-3 pl-3 pr-1 py-0.5 text-sm" data-trusted-host={h}>{h}<button type="button" onClick={() => untrustHost(h)} className="h-6 w-6 rounded-full hover:bg-bg-4 text-text-2" title="Forget">×</button></li>)}</ul>
       </section>
 
       <div className="h-px bg-line" />

@@ -15,7 +15,9 @@ services:
 
   backend:
     image: "parleydev/parley:${PARLEY_IMAGE_TAG:-latest}"
-    build: ./backend
+    build:
+      context: ./backend
+      args: { PARLEY_VERSION: "${PARLEY_VERSION:-dev}" }
     environment:
       DATABASE_URL: postgres://parley:parley@db:5432/parley
       JWT_SECRET: ${JWT_SECRET:-dev-insecure-secret-change-me}
@@ -72,7 +74,9 @@ services:
 
   frontend:
     image: "parleydev/frontend:${PARLEY_IMAGE_TAG:-latest}"
-    build: ./frontend
+    build:
+      context: ./frontend
+      args: { PARLEY_VERSION: "${PARLEY_VERSION:-dev}" }
     depends_on:
       - backend
     environment:

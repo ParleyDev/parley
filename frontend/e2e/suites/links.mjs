@@ -1,0 +1,38 @@
+// External links: the Leaving Parley dialog shows the real destination, flags spoofed link text, remembers trusted
+// hosts, and the desktop shell hands the URL to the OS via /?parley-open=.
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, ok, finish } from '../lib.mjs'
+const a = await reg('alice'); const b = await reg('bob')
+await call(a.token, 'POST', '/users/@me/relationships', { user_id: b.user.id }); await call(b.token, 'PUT', `/users/@me/relationships/${a.user.id}`)
+const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
+const m1 = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'docs: https://example.com/guide' })
+const m2 = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: '[https://github.com/login](https://evil.example/steal)' })
+const m3 = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: `own: ${(await call(a.token, 'GET', '/instance')).app_url}/invite/nope` })
+const browser = await chromium.launch(); const errors = []
+const mk = async (ua) => { const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...(ua ? { userAgent: ua } : {}) }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), b.token); await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForSelector(`[data-msg-id="${m2.id}"]`); return p }
+const p = await mk()
+console.log('-- dialog')
+let popup = null; p.context().on('page', (pg) => { popup = pg })
+await p.locator(`[data-msg-id="${m1.id}"] a`).first().click(); await p.waitForSelector('[data-leave-link]')
+ok('an external link opens the Leaving dialog instead of the site, showing host and full URL', (await p.textContent('[data-leave-host]')) === 'example.com' && (await p.textContent('[data-leave-url]')) === 'https://example.com/guide' && popup === null)
+await p.click('[data-leave-cancel]'); await p.waitForFunction(() => !document.querySelector('[data-leave-link]'))
+await p.locator(`[data-msg-id="${m2.id}"] a`).first().click(); await p.waitForSelector('[data-leave-spoof]')
+ok('link text naming another site is flagged as spoofing, with the real host', (await p.textContent('[data-leave-spoof]')).includes('github.com') && (await p.textContent('[data-leave-spoof]')).includes('evil.example') && await p.locator('[data-leave-trust]').count() === 0)
+await p.screenshot({ path: '182-leaving.png' }); await p.click('[data-leave-cancel]')
+await p.locator(`[data-msg-id="${m1.id}"] a`).first().click(); await p.waitForSelector('[data-leave-trust]'); await p.click('[data-leave-trust]')
+const [pg] = await Promise.all([p.context().waitForEvent('page'), p.click('[data-leave-visit]')])
+ok('Visit site opens the real URL in a new tab', pg.url().startsWith('https://example.com/guide')); await pg.close()
+await p.locator(`[data-msg-id="${m1.id}"] a`).first().click(); await p.waitForTimeout(500)
+ok('a trusted host opens without the dialog next time', await p.locator('[data-leave-link]').count() === 0)
+await p.click('button[title="User Settings"]'); await p.click('text=Data & Privacy'); await p.waitForSelector('[data-trusted-host="example.com"]')
+ok('Data & Privacy lists the trusted host', true); await p.click('[data-trusted-host="example.com"] button'); await p.waitForFunction(() => !document.querySelector('[data-trusted-host="example.com"]'))
+ok('…and can forget it', true); await p.keyboard.press('Escape')
+await p.locator(`[data-msg-id="${m3.id}"] a`).first().click({ timeout: 3000 }).catch(() => {}); await p.waitForTimeout(300)
+ok('links to this instance never trigger the dialog', await p.locator('[data-leave-link]').count() === 0)
+console.log('-- desktop shell')
+const pd = await mk('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 ParleyDesktop/0.2.0')
+let opened = null; await pd.route('**/*parley-open=*', (route) => { opened = route.request().url(); route.abort() })
+await pd.locator(`[data-msg-id="${m1.id}"] a`).first().click(); await pd.waitForSelector('[data-leave-visit]'); await pd.click('[data-leave-visit]'); await pd.waitForTimeout(500)
+ok('in the desktop shell, Visit site navigates to /?parley-open=<url> for the shell to hand to the OS', !!opened && decodeURIComponent(opened.split('parley-open=')[1]) === 'https://example.com/guide', opened)
+ok('no page errors', errors.length === 0, errors.join('\n'))
+await browser.close(); await finish()
