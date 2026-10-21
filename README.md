@@ -8,6 +8,10 @@ Rust backend (axum + sqlx/Postgres + WebSockets) and a React/Vite/Tailwind front
 docker compose up --build
 ```
 
+The `main` branch publishes multi-platform images to Docker Hub as `parleydev/parley:latest` (backend) and `parleydev/frontend:latest` (web frontend), with matching `sha-<commit>` tags. Pushing a `v*` Git tag also publishes that version tag for both images. To run a published version with Compose, set `PARLEY_IMAGE_TAG` to `latest`, a `v*` release tag, or a `sha-*` tag, then run `docker compose pull` and `docker compose up`. The Compose file defaults to `latest`; `docker compose up --build` builds from the local source instead.
+
+Image publishing uses the repository secret `DOCKERHUB_TOKEN`, a Docker Hub access token with write access to both repositories. Add it under **Settings → Secrets and variables → Actions** in GitHub before the first publish.
+
 Open <http://localhost:3000>, register two accounts in two browsers, create a server, copy an invite link, join, chat.
 
 | Service  | Port | Notes                                   |
