@@ -11,5 +11,10 @@
         "matcher": ""
       }
     ]
-  }
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "includeCoAuthoredBy": false
 }

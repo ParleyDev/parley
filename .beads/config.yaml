@@ -22,6 +22,7 @@
 
 # Default actor for audit trails (overridden by BEADS_ACTOR or --actor)
 # actor: ""
+actor: "ParleyDev"
 
 # Optional JSONL sidecar for explicit agent/tool interaction audit records.
 # Issue history is always recorded in the database and is visible with

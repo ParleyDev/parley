@@ -57,3 +57,6 @@ if command -v bd >/dev/null 2>&1; then
   if [ "$_bd_exit" -ne 0 ]; then exit "$_bd_exit"; fi
 fi
 # --- END BEADS INTEGRATION v1.3.1 ---
+
+# --- identity guard (project-owned, outside the beads markers) ---
+"$(git rev-parse --show-toplevel)/scripts/identity-guard.sh" pre-commit || exit 1
