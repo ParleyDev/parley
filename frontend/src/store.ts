@@ -470,7 +470,7 @@ export const useStore = create<State>((set, get) => ({
     ms.forEach((m) => {
       map[m.user_id] = m
       const prev = users[m.user_id] as User | undefined
-      users[m.user_id] = { id: m.user_id, username: m.username, display_name: m.display_name, avatar_url: m.avatar_url, status: m.status, bio: prev?.bio ?? '', created_at: prev?.created_at ?? m.joined_at, banner_url: prev?.banner_url ?? null, theme_primary: prev?.theme_primary ?? null, theme_accent: prev?.theme_accent ?? null, pronouns: prev?.pronouns ?? '', name_primary: prev?.name_primary ?? null, name_accent: prev?.name_accent ?? null, custom_status: m.custom_status ?? prev?.custom_status ?? '' }
+      users[m.user_id] = { id: m.user_id, username: m.username, display_name: m.display_name, avatar_url: m.avatar_url, status: m.status, bio: prev?.bio ?? '', created_at: prev?.created_at ?? m.joined_at, banner_url: prev?.banner_url ?? null, theme_primary: prev?.theme_primary ?? null, theme_accent: prev?.theme_accent ?? null, pronouns: prev?.pronouns ?? '', name_primary: m.name_primary ?? prev?.name_primary ?? null, name_accent: m.name_accent ?? prev?.name_accent ?? null, name_style: m.name_style ?? prev?.name_style ?? null, avatar_decoration: m.avatar_decoration ?? prev?.avatar_decoration, clan_tag: m.clan_tag ?? prev?.clan_tag, bot: prev?.bot, custom_status: m.custom_status ?? prev?.custom_status ?? '' }
     })
     return { members: { ...s.members, [guildId]: map }, membersLoaded: { ...s.membersLoaded, [guildId]: true }, users }
   }),
@@ -591,7 +591,7 @@ export const useStore = create<State>((set, get) => ({
     const members = { ...s.members }
     for (const gid of Object.keys(members)) {
       const m = members[gid][u.id]
-      if (m) members[gid] = { ...members[gid], [u.id]: { ...m, display_name: u.display_name, avatar_url: u.avatar_url, status: u.status } }
+      if (m) members[gid] = { ...members[gid], [u.id]: { ...m, display_name: u.display_name, avatar_url: u.avatar_url, status: u.status, name_primary: u.name_primary, name_accent: u.name_accent, name_style: u.name_style, avatar_decoration: u.avatar_decoration ?? m.avatar_decoration, clan_tag: u.clan_tag ?? m.clan_tag } }
     }
     const dms = { ...s.dms }
     for (const id of Object.keys(dms)) {

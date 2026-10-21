@@ -26,6 +26,17 @@ ok('the chat author name carries the font and effect classes with the colour var
 ok('neon paints a glow', (await author.evaluate((el) => getComputedStyle(el).textShadow)) !== 'none')
 ok('the DM sidebar and profile panel use it too', (await pb.locator(`aside a[href="/channels/@me/${dm.id}"] span.truncate`).first().getAttribute('class')).includes('ne-neon') && (await pb.locator('[data-dm-profile] [data-profile-name]').getAttribute('class')).includes('ne-neon'))
 
+// A member seen only through the member list (no DM, not a friend) still gets their style; animation waits for hover.
+const c = await reg('carol'); const g = await call(a.token, 'POST', '/guilds', { name: `Style ${S}` }); const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(c.token, 'POST', `/invites/${inv.code}`)
+const tc = g.channels.find((x) => x.kind === 'text'); const gm = await call(a.token, 'POST', `/channels/${tc.id}/messages`, { content: 'styled in a server' })
+const pc = await mk(c.token, `${WEB}/channels/${g.id}/${tc.id}`); await pc.waitForSelector(`[data-msg-id="${gm.id}"]`); await pc.waitForSelector(`[data-member-list] button:has-text("Alice")`)
+ok('the member list and a server message both paint the style for a user carol has never loaded', await pc.locator(`[data-member-list] button:has-text("Alice") [data-name-effect="neon"]`).count() === 1 && (await pc.locator(`[data-msg-id="${gm.id}"] [data-msg-author] span`).first().getAttribute('class')).includes('ne-neon'))
+const authorEl = pc.locator(`[data-msg-id="${gm.id}"] [data-msg-author] span`).first()
+ok('animated styles are paused until hovered by default', (await pc.evaluate(() => document.documentElement.dataset.nameAnim)) === 'hover' && (await authorEl.evaluate((el) => getComputedStyle(el).animationPlayState)) === 'paused')
+await pc.locator(`[data-msg-id="${gm.id}"]`).hover(); await pc.waitForTimeout(100)
+ok('…and run while the message is hovered', (await authorEl.evaluate((el) => getComputedStyle(el).animationPlayState)) === 'running')
+await pc.close()
+
 console.log('-- picker')
 const pa = await mk(a.token, `${WEB}/channels/@me`); await pa.waitForSelector('[data-user-panel-bar]')
 await pa.click('button[title="User Settings"]'); await pa.click('text=Profiles'); await pa.waitForSelector('[data-name-style-card]')

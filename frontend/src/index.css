@@ -191,3 +191,7 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 @keyframes ne-glitch { 0%, 88%, 100% { text-shadow: none; transform: none; } 90% { text-shadow: -2px 0 var(--n2), 2px 0 #0ff; transform: translateX(1px); } 93% { text-shadow: 2px 0 var(--n2), -2px 0 #0ff; transform: translateX(-1px); } 96% { text-shadow: none; transform: none; } }
 @keyframes ne-wave { 0%, 100% { transform: translateY(0); } 25% { transform: translateY(-1.5px); } 75% { transform: translateY(1.5px); } }
 :root[data-motion="reduced"] [class*="ne-"] { animation: none !important; }
+/* Name animations: paused until the message, row, card or dialog holding the name is hovered (default). */
+:root[data-name-anim="hover"] [class*="ne-"] { animation-play-state: paused; }
+:root[data-name-anim="hover"] :is([data-msg-id], [data-dm-row], [data-group-row], [data-member-list] li, [data-dm-profile], [data-profile-card], [data-name-style-card], [data-role-style-card], [role="dialog"] [data-name-preview-chat], [role="dialog"] [data-effect-options], aside a, button):hover [class*="ne-"], :root[data-name-anim="hover"] [class*="ne-"]:hover { animation-play-state: running; }
+:root[data-name-anim="never"] [class*="ne-"] { animation: none !important; }

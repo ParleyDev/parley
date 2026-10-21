@@ -219,6 +219,14 @@ pub struct Member {
     pub display_name: String,
     pub avatar_url: Option<String>,
     pub status: String,
+    /// Name style fields so lists can paint names without a separate user lookup.
+    #[sqlx(default)]
+    pub name_primary: Option<String>,
+    #[sqlx(default)]
+    pub name_accent: Option<String>,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub name_style: serde_json::Value,
     #[sqlx(default)]
     #[serde(default)]
     pub custom_status: String,
@@ -280,6 +288,12 @@ pub struct MessageRow {
     pub kind: String,
     #[sqlx(default)]
     pub author_bot: bool,
+    #[sqlx(default)]
+    pub author_name_primary: Option<String>,
+    #[sqlx(default)]
+    pub author_name_accent: Option<String>,
+    #[sqlx(default)]
+    pub author_name_style: serde_json::Value,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -476,7 +490,7 @@ impl MessageRow {
                 url: crate::routes::images::image_url(id),
             }),
             author: User {
-                name_style: serde_json::Value::Null,
+                name_style: self.author_name_style.clone(),
                 bot: self.author_bot,
                 id: self.author_id,
                 username: self.username,
@@ -490,8 +504,8 @@ impl MessageRow {
                 theme_primary: None,
                 theme_accent: None,
                 pronouns: String::new(),
-                name_primary: None,
-                name_accent: None,
+                name_primary: self.author_name_primary.clone(),
+                name_accent: self.author_name_accent.clone(),
                 avatar_decoration: self.avatar_decoration,
                 clan_tag: self.clan_tag,
                 panels: serde_json::Value::Null,

@@ -30,6 +30,13 @@ export default function AccessibilityTab() {
         <h3 className="label">Animation</h3>
         <Toggle label="Play animated emoji" checked={p.animatedEmoji} onChange={(v) => setPrefs({ animatedEmoji: v })} />
         <Toggle label="Automatically play GIFs" checked={p.autoplayGifs} onChange={(v) => setPrefs({ autoplayGifs: v })} />
+        <div>
+          <label className="label">Animated name styles</label>
+          <div className="flex gap-2">
+            {([['hover', 'On hover'], ['always', 'Always'], ['never', 'Never']] as const).map(([v, label]) => <button key={v} type="button" onClick={() => setPrefs({ nameAnimation: v })} className={`rounded-md border px-3 py-1.5 text-sm ${p.nameAnimation === v ? 'border-accent bg-accent/15 text-text-0' : 'border-line bg-bg-1 text-text-1 hover:border-text-2'}`} data-name-animation={v}>{label}</button>)}
+          </div>
+          <p className="text-xs text-text-2">Neon, gradient and the other moving name effects play while you hover the message or row that shows them.</p>
+        </div>
         <p className="text-xs text-text-2">Off: animated emoji and GIFs show their first frame and play while you hover.</p>
         <div>
           <label className="label">Animated stickers</label>
