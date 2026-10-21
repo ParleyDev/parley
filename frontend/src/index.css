@@ -175,20 +175,23 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 .nf-pixel { font-family: "Courier New", monospace; font-weight: 700; text-shadow: 1px 1px 0 rgba(0,0,0,.6); letter-spacing: 0.05em; }
 
 .ne-solid { color: var(--n1); }
-.ne-gradient { background-image: var(--ngrad, linear-gradient(90deg, var(--n1), var(--n2), var(--n1))); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: ne-slide 4s linear infinite; }
-.ne-neon { color: var(--n1); text-shadow: 0 0 4px var(--n1), 0 0 12px var(--n1), 0 0 24px color-mix(in srgb, var(--n1) 60%, transparent); animation: ne-flicker 2.4s ease-in-out infinite; }
+.ne-gradient { background-image: var(--ngrad, linear-gradient(90deg, var(--n1), var(--n2), var(--n1))); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: ne-slide-2 6s linear infinite; }
+.ne-neon { color: var(--n1); text-shadow: 0 0 4px var(--n1), 0 0 12px var(--n1), 0 0 24px color-mix(in srgb, var(--n1) 60%, transparent); animation: ne-glow 2.8s ease-in-out infinite; }
 .ne-toon { color: var(--n1); -webkit-text-stroke: 1px color-mix(in srgb, var(--n2) 70%, #000); paint-order: stroke fill; text-shadow: 2px 2px 0 color-mix(in srgb, var(--n2) 70%, #000); display: inline-block; animation: ne-bounce 1.6s ease-in-out infinite; }
 .ne-pop { color: var(--n1); text-shadow: 2px 2px 0 var(--n2), 4px 4px 0 color-mix(in srgb, var(--n2) 45%, #000); display: inline-block; animation: ne-pop 2s ease-in-out infinite; }
 .ne-gummy { background-image: var(--ngrad, linear-gradient(90deg, var(--n1), var(--n2))); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; filter: drop-shadow(0 1px 0 rgba(255,255,255,.35)) drop-shadow(0 2px 2px rgba(0,0,0,.45)); display: inline-block; animation: ne-wobble 2.2s ease-in-out infinite; }
-.ne-prism { background-image: var(--ngrad, linear-gradient(90deg, #ff5c3b, #f2d84b, #57f287, #3b9bff, #c94bff, #ff5c3b)); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: ne-slide 3s linear infinite; }
-.ne-glitch { color: var(--n1); position: relative; display: inline-block; animation: ne-glitch 2.8s steps(1, end) infinite; }
+.ne-prism { background-image: var(--ngrad, linear-gradient(90deg, #ff5c3b, #f2d84b, #57f287, #3b9bff, #c94bff, #ff5c3b)); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; animation: ne-slide-3 5s linear infinite; }
+.ne-glitch { color: var(--n1); position: relative; display: inline-block; animation: ne-glitch 3.2s linear infinite; }
 .ne-wave { color: var(--n1); display: inline-block; animation: ne-wave 2.4s ease-in-out infinite; text-shadow: 0 2px 0 color-mix(in srgb, var(--n2) 60%, transparent); }
-@keyframes ne-slide { to { background-position: 200% 50%; } }
-@keyframes ne-flicker { 0%, 100% { opacity: 1; } 45% { opacity: 1; } 48% { opacity: .7; } 50% { opacity: 1; } 90% { opacity: 1; } 92% { opacity: .85; } 94% { opacity: 1; } }
+/* Loops are seamless: slides move exactly one tile (tile = N% of the element → position N/(N-100)·100%), and every
+   other effect starts and ends on the same frame with ease-in-out. */
+@keyframes ne-slide-2 { from { background-position: 0% 50%; } to { background-position: 200% 50%; } }
+@keyframes ne-slide-3 { from { background-position: 0% 50%; } to { background-position: 150% 50%; } }
+@keyframes ne-glow { 0%, 100% { text-shadow: 0 0 4px var(--n1), 0 0 10px var(--n1), 0 0 18px color-mix(in srgb, var(--n1) 45%, transparent); } 50% { text-shadow: 0 0 6px var(--n1), 0 0 16px var(--n1), 0 0 32px color-mix(in srgb, var(--n1) 75%, transparent); } }
 @keyframes ne-bounce { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-2px) rotate(-1.5deg); } }
 @keyframes ne-pop { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
-@keyframes ne-wobble { 0%, 100% { transform: scaleX(1) scaleY(1); } 30% { transform: scaleX(1.06) scaleY(.94); } 60% { transform: scaleX(.96) scaleY(1.05); } }
-@keyframes ne-glitch { 0%, 88%, 100% { text-shadow: none; transform: none; } 90% { text-shadow: -2px 0 var(--n2), 2px 0 #0ff; transform: translateX(1px); } 93% { text-shadow: 2px 0 var(--n2), -2px 0 #0ff; transform: translateX(-1px); } 96% { text-shadow: none; transform: none; } }
+@keyframes ne-wobble { 0%, 100% { transform: scale(1, 1); } 33% { transform: scale(1.05, .95); } 66% { transform: scale(.96, 1.04); } }
+@keyframes ne-glitch { 0%, 86%, 100% { text-shadow: none; transform: none; } 88% { text-shadow: -2px 0 var(--n2), 2px 0 #0ff; transform: translateX(1px); } 91% { text-shadow: 2px 0 var(--n2), -2px 0 #0ff; transform: translateX(-1px); } 94% { text-shadow: -1px 0 var(--n2), 1px 0 #0ff; transform: translateX(.5px); } 97% { text-shadow: none; transform: none; } }
 @keyframes ne-wave { 0%, 100% { transform: translateY(0); } 25% { transform: translateY(-1.5px); } 75% { transform: translateY(1.5px); } }
 :root[data-motion="reduced"] [class*="ne-"] { animation: none !important; }
 /* Name animations: paused until the message, row, card or dialog holding the name is hovered (default). */
