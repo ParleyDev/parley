@@ -98,21 +98,45 @@ pub async fn heartbeat(state: AppState) {
 }
 
 /// Register a socket; true when the user was offline everywhere before (announce PRESENCE_UPDATE online).
-pub async fn connect(state: &AppState, user: Uuid) -> bool {
+pub const PLATFORMS: [&str; 4] = ["web", "desktop", "mobile", "vr"];
+
+pub async fn connect(state: &AppState, user: Uuid, platform: &str) -> bool {
     state.hub.connect(user);
     let before = global_sockets(&state.db, user).await.unwrap_or(0);
-    let _ = sqlx::query("INSERT INTO presence (user_id, instance_id, sockets) VALUES ($1, $2, 1) ON CONFLICT (user_id, instance_id) DO UPDATE SET sockets = presence.sockets + 1, updated_at = now()")
-        .bind(user).bind(state.hub.instance_id).execute(&state.db).await;
+    let _ = sqlx::query(
+        "INSERT INTO presence (user_id, instance_id, sockets, platforms) VALUES ($1, $2, 1, jsonb_build_object($3::text, 1))
+         ON CONFLICT (user_id, instance_id) DO UPDATE SET sockets = presence.sockets + 1, updated_at = now(),
+           platforms = jsonb_set(presence.platforms, ARRAY[$3::text], to_jsonb(COALESCE((presence.platforms->>$3)::int, 0) + 1))")
+        .bind(user).bind(state.hub.instance_id).bind(platform).execute(&state.db).await;
     before == 0
 }
 
 /// Drop a socket; true when the user is now offline everywhere.
-pub async fn disconnect(state: &AppState, user: Uuid) -> bool {
+pub async fn disconnect(state: &AppState, user: Uuid, platform: &str) -> bool {
     state.hub.disconnect(user);
-    let _ = sqlx::query("UPDATE presence SET sockets = GREATEST(sockets - 1, 0), updated_at = now() WHERE user_id = $1 AND instance_id = $2")
-        .bind(user).bind(state.hub.instance_id).execute(&state.db).await;
+    let _ = sqlx::query(
+        "UPDATE presence SET sockets = GREATEST(sockets - 1, 0), updated_at = now(),
+           platforms = jsonb_set(platforms, ARRAY[$3::text], to_jsonb(GREATEST(COALESCE((platforms->>$3)::int, 0) - 1, 0)))
+         WHERE user_id = $1 AND instance_id = $2")
+        .bind(user).bind(state.hub.instance_id).bind(platform).execute(&state.db).await;
     let _ = sqlx::query("DELETE FROM presence WHERE user_id = $1 AND instance_id = $2 AND sockets <= 0").bind(user).bind(state.hub.instance_id).execute(&state.db).await;
     global_sockets(&state.db, user).await.unwrap_or(0) == 0
+}
+
+/// Platforms a user currently has sockets on, across instances (web / desktop / mobile / vr).
+pub async fn platforms_for(db: &PgPool, user: Uuid) -> Vec<String> {
+    sqlx::query_as::<_, (String,)>(
+        "SELECT e.key FROM presence p, jsonb_each_text(p.platforms) e
+         WHERE p.user_id = $1 AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $2) AND e.value::int > 0 GROUP BY e.key ORDER BY e.key")
+        .bind(user).bind(STALE_SECS as f64).fetch_all(db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default()
+}
+
+/// Everyone online with their platforms, for READY.
+pub async fn online_platforms(db: &PgPool) -> Vec<(Uuid, Vec<String>)> {
+    sqlx::query_as::<_, (Uuid, Vec<String>)>(
+        "SELECT p.user_id, array_agg(DISTINCT e.key ORDER BY e.key) FROM presence p, jsonb_each_text(p.platforms) e
+         WHERE p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1) AND e.value::int > 0 GROUP BY p.user_id")
+        .bind(STALE_SECS as f64).fetch_all(db).await.unwrap_or_default()
 }
 
 async fn global_sockets(db: &PgPool, user: Uuid) -> sqlx::Result<i64> {

@@ -32,6 +32,7 @@ const DECORATION_STYLE: Record<string, React.CSSProperties> = {
 
 export default function Avatar({ user, size = 32, presence = false, className = '', decoration: override }: Props) {
   const online = useStore((s) => !!s.online[user.id])
+  const platforms = useStore((s) => s.platforms[user.id])
   const status = useStore((s) => s.users[user.id]?.status ?? user.status)
   // `decoration` forces a frame (previews, unsaved drafts); otherwise the live store value, then the user object's.
   const decoration = useStore((s) => override ?? s.users[user.id]?.avatar_decoration ?? user.avatar_decoration ?? '')
@@ -49,10 +50,35 @@ export default function Avatar({ user, size = 32, presence = false, className = 
       {decoration && DECORATION_STYLE[decoration] && size >= 20 && (
         <span className="absolute inset-0 rounded-full pointer-events-none" style={DECORATION_STYLE[decoration]} data-decoration={decoration} aria-hidden />
       )}
-      {presence && (
-        <span className="absolute rounded-full ring-[3px] ring-bg-1"
-          style={{ width: dot, height: dot, right: -1, bottom: -1, background: statusColor(status, online) }} />
-      )}
+      {presence && <PresenceBadge size={dot} color={statusColor(status, online)} kind={online ? presenceKind(platforms) : 'dot'} title={presenceTitle(status, online, platforms)} />}
     </div>
+  )
+}
+
+/** Discord-style presence indicator: a dot for desktop/web, a phone when only on mobile, a headset when only in VR. */
+export type PresenceKind = 'dot' | 'mobile' | 'vr'
+export function presenceKind(platforms: string[] | undefined): PresenceKind {
+  const p = platforms ?? []
+  if (!p.length || p.includes('desktop') || p.includes('web')) return 'dot'
+  if (p.includes('mobile')) return 'mobile'
+  if (p.includes('vr')) return 'vr'
+  return 'dot'
+}
+const LABEL: Record<string, string> = { web: 'web', desktop: 'desktop', mobile: 'mobile', vr: 'VR' }
+export function presenceTitle(status: string | undefined, online: boolean, platforms: string[] | undefined): string {
+  if (!online || status === 'invisible') return 'Offline'
+  const s = status === 'idle' ? 'Idle' : status === 'dnd' ? 'Do Not Disturb' : 'Online'
+  const p = (platforms ?? []).map((x) => LABEL[x] ?? x)
+  return p.length ? `${s} on ${p.join(', ')}` : s
+}
+function PresenceBadge({ size, color, kind, title }: { size: number; color: string; kind: PresenceKind; title: string }) {
+  if (kind === 'dot') return <span className="absolute rounded-full ring-[3px] ring-bg-1" style={{ width: size, height: size, right: -1, bottom: -1, background: color }} title={title} data-presence="dot" />
+  const w = Math.round(size * 1.25), h = Math.round(size * 1.25)
+  return (
+    <span className="absolute rounded-md ring-[3px] ring-bg-1 bg-bg-1 flex items-center justify-center" style={{ width: w, height: h, right: -2, bottom: -2 }} title={title} data-presence={kind} aria-label={title}>
+      {kind === 'mobile'
+        ? <svg viewBox="0 0 10 16" width={w * 0.55} height={h * 0.8} aria-hidden><rect x="0.5" y="0.5" width="9" height="15" rx="2" fill={color} /><rect x="2" y="2.5" width="6" height="9" rx="0.5" fill="var(--color-bg-1)" /><circle cx="5" cy="13.5" r="0.9" fill="var(--color-bg-1)" /></svg>
+        : <svg viewBox="0 0 18 10" width={w * 0.85} height={h * 0.55} aria-hidden><rect x="0.5" y="0.5" width="17" height="9" rx="3" fill={color} /><path d="M6 5.2 Q9 8 12 5.2" stroke="var(--color-bg-1)" strokeWidth="1.6" fill="none" /><circle cx="4.8" cy="4.2" r="1.3" fill="var(--color-bg-1)" /><circle cx="13.2" cy="4.2" r="1.3" fill="var(--color-bg-1)" /></svg>}
+    </span>
   )
 }
