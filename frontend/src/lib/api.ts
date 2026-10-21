@@ -17,8 +17,8 @@ export function getToken(): string | null {
     const t = localStorage.getItem(TOKEN_KEY)
     if (t) return t
     // One-time migration from the pre-rename key.
-    const old = localStorage.getItem('y99.token')
-    if (old) { localStorage.setItem(TOKEN_KEY, old); localStorage.removeItem('y99.token') }
+    const old = localStorage.getItem('reChat.token')
+    if (old) { localStorage.setItem(TOKEN_KEY, old); localStorage.removeItem('reChat.token') }
     return old
   } catch { return null }
 }
