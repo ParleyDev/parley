@@ -112,6 +112,11 @@ struct UpdateChannel {
     position: Option<i32>,
     /// Guild text channels: age-restricted.
     nsfw: Option<bool>,
+    /// Voice/stage/studio audio profile: 'voice' | 'music'.
+    audio_mode: Option<String>,
+    /// Opus kbps, 8..510, or 0 for the mode's default.
+    audio_bitrate: Option<i32>,
+    audio_low_latency: Option<bool>,
 }
 
 async fn update_channel(
@@ -161,6 +166,16 @@ async fn update_channel(
         return Ok(Json(sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(id).fetch_one(&state.db).await?));
     }
     perms::check(p, perms::MANAGE_CHANNELS)?;
+    if let Some(m) = &req.audio_mode {
+        if m != "voice" && m != "music" {
+            return Err(AppError::BadRequest("audio_mode must be 'voice' or 'music'".into()));
+        }
+    }
+    if let Some(b) = req.audio_bitrate {
+        if b != 0 && !(8..=510).contains(&b) {
+            return Err(AppError::BadRequest("audio_bitrate must be 8-510 kbps (or 0 for the default)".into()));
+        }
+    }
     let name = match req.name {
         Some(n) => Some(normalize_channel_name(&n, &c.kind)?),
         None => None,
@@ -173,7 +188,9 @@ async fn update_channel(
     let before = if parent.is_some() { Some(perms::visibility(&state.db, gid).await?) } else { None };
     let mut updated = sqlx::query_as::<_, Channel>(&format!(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
-         parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw) WHERE id = $1 RETURNING {CHANNEL_COLS}"
+         parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw),
+         audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency)
+         WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
     .bind(name)
@@ -182,6 +199,9 @@ async fn update_channel(
     .bind(parent.is_some())
     .bind(parent.flatten())
     .bind(req.nsfw)
+    .bind(&req.audio_mode)
+    .bind(req.audio_bitrate)
+    .bind(req.audio_low_latency)
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
@@ -194,6 +214,9 @@ async fn update_channel(
         let mut d = serde_json::Map::new();
         if updated.name != c.name { d.insert("name".into(), json!(updated.name)); }
         if updated.topic != c.topic { d.insert("topic".into(), json!(updated.topic)); }
+        if updated.audio_mode != c.audio_mode { d.insert("audio_mode".into(), json!(updated.audio_mode)); }
+        if updated.audio_bitrate != c.audio_bitrate { d.insert("audio_bitrate".into(), json!(updated.audio_bitrate)); }
+        if updated.audio_low_latency != c.audio_low_latency { d.insert("audio_low_latency".into(), json!(updated.audio_low_latency)); }
         crate::audit::guild(&state, gid, uid, "channel.update", "channel", Some(id), &updated.name, serde_json::Value::Object(d)).await;
     }
     Ok(Json(updated))

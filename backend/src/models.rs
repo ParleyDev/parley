@@ -170,6 +170,18 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub nsfw: bool,
+    /// Voice/stage/studio: 'voice' (speech) or 'music' (high fidelity: stereo, no processing, no DTX).
+    #[sqlx(default)]
+    #[serde(default = "default_audio_mode")]
+    pub audio_mode: String,
+    /// Opus bitrate in kbps (8..510); 0 = the mode's default.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub audio_bitrate: i32,
+    /// 10 ms Opus frames and a minimal jitter buffer.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub audio_low_latency: bool,
     /// Studio channels: the engineers (run recordings, manage the band); filled by `perms::attach_overwrites`.
     #[sqlx(skip)]
     #[serde(default)]
@@ -585,4 +597,8 @@ pub struct Pagination {
     /// up to limit/2 messages at or before it and the rest after it.
     pub around: Option<Uuid>,
     pub limit: Option<i64>,
+}
+
+fn default_audio_mode() -> String {
+    "voice".into()
 }

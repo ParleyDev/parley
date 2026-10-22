@@ -5,6 +5,7 @@ import { sendOp, type SignalData } from './ws'
 import { supportsSinkId, type VoiceSettings } from './settings'
 import { keepAwake } from './native'
 import { api } from './api'
+import { captureConstraints, measure, profileOf, sameProfile, tuneAudioReceiver, tuneAudioSender, tuneOpusSdp, type AudioProfile, type AudioStat } from './audioProfile'
 import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant } from 'livekit-client'
 
 /**
@@ -25,6 +26,8 @@ interface Peer {
   audio: HTMLAudioElement
   pendingCandidates: RTCIceCandidateInit[]
   stopMeter?: () => void
+  /** We sent the first offer, so we drive renegotiation when the channel's audio profile changes. */
+  offerer: boolean
 }
 
 const CAMERA_MAX_BITRATE = 1_500_000
@@ -50,6 +53,8 @@ class VoiceManager {
   private pttDown = false
   private pttUpAt = 0
   private holders = new Set<MicHolder>()
+  /** Audio profile of the channel we are in (or joining); drives capture, Opus parameters and jitter buffers. */
+  private profile: AudioProfile = profileOf(null)
   private testAudio: HTMLAudioElement | null = null
   private acquiring: Promise<boolean> | null = null
 
@@ -65,6 +70,7 @@ class VoiceManager {
   private sfuAudio = new Map<string, HTMLAudioElement>()
   private sfuMeters = new Map<string, () => void>()
   private sfuCamera: LocalVideoTrack | null = null
+  private sfuMic: LocalAudioTrack | null = null
   private sfuScreen: LocalVideoTrack | null = null
 
   /** Debug/test window: current transport and room state. */
@@ -76,7 +82,75 @@ class VoiceManager {
       window.addEventListener('keydown', (e) => this.onKey(e, true), true)
       window.addEventListener('keyup', (e) => this.onKey(e, false), true)
       window.addEventListener('blur', () => { this.pttDown = false; useStore.getState().setPttHeld(false) })
+      // An admin changing the channel's audio profile mid-call applies to everyone in it without rejoining.
+      useStore.subscribe((s, prev) => {
+        const id = this.channelId
+        if (!id || s.channels[id] === prev.channels[id]) return
+        const next = profileOf(s.channels[id])
+        if (!sameProfile(next, this.profile)) this.applyProfile(next)
+      })
     }
+  }
+
+  /** The active audio profile (for the UI). */
+  get audioProfile(): AudioProfile { return this.profile }
+
+  private profileFor(channelId: string): AudioProfile {
+    const s = useStore.getState()
+    return profileOf(s.channels[channelId] ?? null)
+  }
+
+  /** Switch profile live: re-open the mic if capture changed, renegotiate mesh peers we offered to, republish to the SFU. */
+  private async applyProfile(next: AudioProfile) {
+    const prev = this.profile
+    this.profile = next
+    if (this.raw && (prev.mode !== next.mode || prev.lowLatency !== next.lowLatency)) await this.reopenMicDevice()
+    for (const peer of this.peers.values()) {
+      peer.pc.getReceivers().forEach((r) => { if (r.track.kind === 'audio') tuneAudioReceiver(r, next) })
+      if (peer.offerer) this.renegotiate(peer)
+    }
+    if (this.room) await this.sfuPublishMic()
+  }
+
+  private async renegotiate(peer: Peer) {
+    const to = [...this.peers.entries()].find(([, p]) => p === peer)?.[0]
+    if (!to) return
+    try {
+      const offer = await peer.pc.createOffer()
+      await peer.pc.setLocalDescription(offer)
+      sendOp({ op: 'voice_signal', to, data: { type: 'offer', sdp: tuneOpusSdp(offer.sdp ?? '', this.profile) } })
+    } catch (e) { console.warn('renegotiation failed', e) }
+  }
+
+  private tunePeer(pc: RTCPeerConnection) {
+    pc.getSenders().forEach((s) => { if (s.track?.kind === 'audio') tuneAudioSender(s, this.profile) })
+    pc.getReceivers().forEach((r) => { if (r.track.kind === 'audio') tuneAudioReceiver(r, this.profile) })
+  }
+
+  /** Test/debug view: profile, stats, and the Opus fmtp + ptime lines of each mesh peer's local and remote descriptions. */
+  async audioDebug() {
+    const opus = (sdp?: string) => {
+      if (!sdp) return null
+      const pt = /a=rtpmap:(\d+) opus\/48000/i.exec(sdp)?.[1]
+      return { fmtp: pt ? (new RegExp(`a=fmtp:${pt} ([^\\r\\n]*)`).exec(sdp)?.[1] ?? '') : '', ptime: /a=ptime:(\d+)/.exec(sdp)?.[1] ?? null }
+    }
+    const peers = [...this.peers.entries()].map(([id, p]) => ({ id, local: opus(p.pc.localDescription?.sdp), remote: opus(p.pc.remoteDescription?.sdp) }))
+    return { profile: this.profile, stats: await this.audioStats(), peers, constraints: this.raw?.getAudioTracks()[0]?.getSettings() ?? null }
+  }
+
+  /** Live per-participant audio numbers: codec, bitrate in/out, frame size, jitter buffer, round trip, loss. */
+  async audioStats(): Promise<AudioStat[]> {
+    const out: AudioStat[] = []
+    for (const [userId, p] of this.peers) { try { out.push(await measure(userId, { pc: p.pc })) } catch { /* closed */ } }
+    if (this.room) {
+      const sender = this.sfuMic?.sender
+      for (const part of this.room.remoteParticipants.values()) {
+        const pub = [...part.audioTrackPublications.values()][0]
+        const receiver = pub?.track?.receiver
+        if (receiver) { try { out.push(await measure(part.identity, { receiver, sender })) } catch { /* gone */ } }
+      }
+    }
+    return out
   }
 
   get currentChannel() { return this.channelId }
@@ -91,6 +165,10 @@ class VoiceManager {
     if (this.channelId === channelId) return
     this.joining = true
     try {
+      const next = this.profileFor(channelId)
+      const captureChanged = next.mode !== this.profile.mode || next.lowLatency !== this.profile.lowLatency
+      this.profile = next
+      if (this.raw && captureChanged) await this.reopenMicDevice()
       if (!(await this.acquireMic('call'))) return
       // Moving channels: tear down old peers; camera/screen stay on and re-attach to new peers.
       if (this.channelId) this.closeAllPeers()
@@ -291,15 +369,20 @@ class VoiceManager {
     const peer = this.peers.get(from) ?? this.createPeer(from, false)
     try {
       if (data.type === 'offer') {
+        // A renegotiation offer can beat our own CHANNEL_UPDATE: answer with the channel's current profile.
+        const fresh = this.profileFor(channelId)
+        if (!sameProfile(fresh, this.profile)) await this.applyProfile(fresh)
         await peer.pc.setRemoteDescription({ type: 'offer', sdp: data.sdp })
         this.attachLocalTracks(peer.pc)
         await this.flushCandidates(peer)
         const answer = await peer.pc.createAnswer()
         await peer.pc.setLocalDescription(answer)
-        sendOp({ op: 'voice_signal', to: from, data: { type: 'answer', sdp: answer.sdp } })
+        sendOp({ op: 'voice_signal', to: from, data: { type: 'answer', sdp: tuneOpusSdp(answer.sdp ?? '', this.profile) } })
+        this.tunePeer(peer.pc)
       } else if (data.type === 'answer') {
         await peer.pc.setRemoteDescription({ type: 'answer', sdp: data.sdp })
         await this.flushCandidates(peer)
+        this.tunePeer(peer.pc)
       } else if (data.type === 'candidate') {
         if (!data.candidate) return
         if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(data.candidate)
@@ -328,7 +411,7 @@ class VoiceManager {
 
   private micConstraints(): MediaStreamConstraints {
     const st = this.settings
-    const audio: MediaTrackConstraints = { echoCancellation: st.echoCancellation, noiseSuppression: st.noiseSuppression, autoGainControl: st.autoGainControl }
+    const audio: MediaTrackConstraints = captureConstraints(this.profile, st)
     if (st.inputDeviceId) audio.deviceId = { exact: st.inputDeviceId }
     return { audio, video: false }
   }
@@ -362,7 +445,7 @@ class VoiceManager {
       if (!raw) { this.holders.delete(holder); return false }
       if (!this.holders.size) { this.stopTracks(raw); return false } // released while waiting
       this.raw = raw
-      const ctx = (this.ctx ??= new AudioContext())
+      const ctx = (this.ctx ??= newAudioContext())
       if (ctx.state === 'suspended') ctx.resume().catch(() => {})
       this.inputGain = ctx.createGain(); this.inputGain.gain.value = this.settings.inputVolume / 100
       this.gate = ctx.createGain(); this.gate.gain.value = 0
@@ -423,6 +506,8 @@ class VoiceManager {
       let open: boolean
       if (st.inputMode === 'ptt') {
         open = this.pttDown || now - this.pttUpAt < st.pttRelease
+      } else if (st.inputMode === 'open') {
+        open = true
       } else {
         const threshold = st.autoSensitivity ? AUTO_THRESHOLD_DB : st.sensitivity
         if (db >= threshold) this.lastVoiceAt = now
@@ -496,7 +581,7 @@ class VoiceManager {
     try {
       const offer = await peer.pc.createOffer()
       await peer.pc.setLocalDescription(offer)
-      sendOp({ op: 'voice_signal', to: userId, data: { type: 'offer', sdp: offer.sdp } })
+      sendOp({ op: 'voice_signal', to: userId, data: { type: 'offer', sdp: tuneOpusSdp(offer.sdp ?? '', this.profile) } })
     } catch (e) {
       console.warn('offer failed', e)
       useStore.getState().setPeerStatus(userId, 'failed')
@@ -512,7 +597,7 @@ class VoiceManager {
     audio.dataset.peer = userId
     document.body.appendChild(audio)
     this.applyOutput(audio)
-    const peer: Peer = { pc, audio, pendingCandidates: [] }
+    const peer: Peer = { pc, audio, pendingCandidates: [], offerer }
     this.peers.set(userId, peer)
     s.setPeerStatus(userId, 'connecting')
 
@@ -529,6 +614,7 @@ class VoiceManager {
     pc.ontrack = (e) => {
       const stream = new MediaStream([e.track])
       if (e.track.kind === 'audio') {
+        tuneAudioReceiver(e.receiver, this.profile)
         audio.srcObject = stream
         audio.play().catch(() => {})
         peer.stopMeter?.()
@@ -540,7 +626,7 @@ class VoiceManager {
     }
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState
-      if (st === 'connected') useStore.getState().setPeerStatus(userId, 'connected')
+      if (st === 'connected') { useStore.getState().setPeerStatus(userId, 'connected'); this.tunePeer(pc) }
       else if (st === 'failed') { useStore.getState().setPeerStatus(userId, 'failed'); pc.restartIce() }
       else if (st === 'disconnected') useStore.getState().setPeerStatus(userId, 'connecting')
     }
@@ -625,8 +711,7 @@ class VoiceManager {
     try {
       await room.connect(grant.url, grant.token)
       room.remoteParticipants.forEach((p) => useStore.getState().setPeerStatus(p.identity, 'connected'))
-      const mic = this.mic?.getAudioTracks()[0]
-      if (mic) await room.localParticipant.publishTrack(new LocalAudioTrack(mic, undefined, false), { source: Track.Source.Microphone, dtx: true, red: true })
+      await this.sfuPublishMic()
       if (this.camera) await this.sfuPublish('camera', this.camera.getVideoTracks()[0])
       if (this.screen) await this.sfuPublish('screen', this.screen.getVideoTracks()[0])
     } catch (e) {
@@ -636,10 +721,28 @@ class VoiceManager {
     }
   }
 
+  /** Publish (or republish after a profile change) the mic with the channel's audio profile. */
+  private async sfuPublishMic() {
+    const room = this.room
+    const mic = this.mic?.getAudioTracks()[0]
+    if (!room || !mic) return
+    if (this.sfuMic) { const old = this.sfuMic; this.sfuMic = null; try { await room.localParticipant.unpublishTrack(old, false) } catch { /* gone */ } }
+    const p = this.profile
+    const local = new LocalAudioTrack(mic, undefined, false)
+    // Music: stereo, no DTX (it gates quiet passages), no RED (doubles a high bitrate). Voice keeps both for robustness.
+    await room.localParticipant.publishTrack(local, {
+      source: Track.Source.Microphone, audioPreset: { maxBitrate: p.bitrate * 1000, priority: 'high' },
+      dtx: p.mode === 'voice', red: p.mode === 'voice' && !p.lowLatency, forceStereo: p.mode === 'music',
+    })
+    this.sfuMic = local
+    if (local.sender) tuneAudioSender(local.sender, p)
+  }
+
   private onSfuTrack(track: RemoteTrack, participant: RemoteParticipant) {
     const userId = participant.identity
     const stream = new MediaStream([track.mediaStreamTrack])
     if (track.kind === Track.Kind.Audio) {
+      tuneAudioReceiver(track.receiver, this.profile)
       const s = useStore.getState()
       let el = this.sfuAudio.get(userId)
       if (!el) { el = document.createElement('audio'); el.autoplay = true; el.dataset.peer = userId; document.body.appendChild(el); this.sfuAudio.set(userId, el) }
@@ -675,7 +778,7 @@ class VoiceManager {
   private async disconnectSfu() {
     const room = this.room
     this.room = null
-    this.sfuCamera = null; this.sfuScreen = null
+    this.sfuCamera = null; this.sfuScreen = null; this.sfuMic = null
     this.sfuAudio.forEach((a) => { a.srcObject = null; a.remove() }); this.sfuAudio.clear()
     this.sfuMeters.forEach((stop) => stop()); this.sfuMeters.clear()
     if (room) { try { await room.disconnect(false) } catch { /* ignore */ } }
@@ -684,7 +787,7 @@ class VoiceManager {
   /** RMS voice-activity meter for a remote stream → store.speaking. Returns a stop function. */
   private remoteMeter(stream: MediaStream, userId: string): () => void {
     try {
-      const ctx = (this.ctx ??= new AudioContext())
+      const ctx = (this.ctx ??= newAudioContext())
       if (ctx.state === 'suspended') ctx.resume().catch(() => {})
       const src = ctx.createMediaStreamSource(stream)
       const analyser = ctx.createAnalyser()
@@ -712,6 +815,8 @@ class VoiceManager {
 export const voice = new VoiceManager()
 declare global { interface Window { __parleyVoice?: () => { mode: string; room: string | null; remote: number; channel: string | null } } }
 if (typeof window !== 'undefined') window.__parleyVoice = () => voice.debug
+/** Debug/test hook: active audio profile, live stats and the Opus parameters each peer negotiated. */
+if (typeof window !== 'undefined') (window as unknown as { __parleyAudio: () => Promise<unknown> }).__parleyAudio = () => voice.audioDebug()
 
 // Apply setting changes live.
 let prevSettings = useStore.getState().voiceSettings
@@ -722,3 +827,8 @@ useStore.subscribe((s) => {
     voice.applySettings(prev)
   }
 })
+
+/** 48 kHz interactive context: Opus runs at 48 kHz, so the mic path never resamples. Falls back to the device rate. */
+function newAudioContext(): AudioContext {
+  try { return new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 }) } catch { return new AudioContext({ latencyHint: 'interactive' }) }
+}

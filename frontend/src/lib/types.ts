@@ -104,6 +104,10 @@ export interface Channel {
   parent_id?: string | null
   /** Guild text channels: age-restricted (gate before first view; media blurred by preference). */
   nsfw?: boolean
+  /** Voice/stage/studio audio profile (see lib/audioProfile). */
+  audio_mode?: 'voice' | 'music'
+  audio_bitrate?: number
+  audio_low_latency?: boolean
   /** Studio channels: the engineers (several allowed). */
   engineer_ids?: string[]
   overwrites?: Overwrite[]

@@ -5,7 +5,7 @@ export interface VoiceSettings {
   cameraDeviceId: string
   inputVolume: number              // 0..200 (%)
   outputVolume: number             // 0..200 (%)
-  inputMode: 'vad' | 'ptt'
+  inputMode: 'vad' | 'ptt' | 'open'   // open = always transmit (music)
   pttKey: string                   // KeyboardEvent.code
   pttRelease: number               // ms to keep transmitting after key release
   autoSensitivity: boolean
