@@ -26,15 +26,22 @@ const version = release ? base : `${base}-dev.${count}${dirty ? '.dirty' : ''}`
 const display = release ? `${base}+${sha}` : `${version}+${sha}`
 // Android versionCode / iOS build number: monotonic with history, room for 99 releases a day of a given commit count.
 const code = count * 10 + (release ? 1 : 0)
-// PARLEY_VERSION=<display version> overrides everything (containers without .git, CI passing the computed value).
-const forced = process.env.PARLEY_VERSION && process.env.PARLEY_VERSION !== 'dev' ? process.env.PARLEY_VERSION : null
+// PARLEY_VERSION overrides everything: containers without .git get the computed display version, and release
+// workflows pass the release tag (v1.4.0 → 1.4.0, v2.0.0-rc.1 → 2.0.0-rc.1), which wins over /VERSION.
+// A version without a pre-release part (1.4.0) is a release; anything with one (1.4.0-dev.12, 2.0.0-rc.1) is not.
+const forced = process.env.PARLEY_VERSION && process.env.PARLEY_VERSION !== 'dev' ? process.env.PARLEY_VERSION.replace(/^v/, '') : null
+const fVersion = forced?.split('+')[0] ?? ''
+const fRelease = !!forced && !fVersion.includes('-')
+// Build codes stay monotonic with history whenever git is available; containers fall back to the dev counter.
+const fCount = count || Number((/dev\.(\d+)/.exec(fVersion) ?? [])[1] ?? 0)
 const info = forced
-  ? { base, version: forced.split('+')[0], display: forced, code: Number((/dev\.(\d+)/.exec(forced) ?? [])[1] ?? 0) * 10 + (forced.includes('-') ? 0 : 1), sha: forced.split('+')[1] ?? sha, dirty: forced.includes('.dirty'), release: !forced.includes('-') }
+  ? { base: fVersion.split('-')[0], version: fVersion, display: forced.includes('+') ? forced : `${fVersion}+${sha}`, code: fCount * 10 + (fRelease ? 1 : 0), sha: forced.split('+')[1] ?? sha, dirty: forced.includes('.dirty'), release: fRelease }
   : { base, version, display, code, sha, dirty, release }
 // Installer version (Tauri bundle): MSI needs a numeric-only suffix (<= 65535) and RPM forbids '-', so dev builds
 // use numeric build metadata: 0.2.0+412 (MSI 0.2.0.412). The app binary keeps the full semver `version`.
+// Pre-releases (rc, beta, dev) get <core>+<commit count>; MSI turns that into core.count.
 const devCount = Number((/dev\.(\d+)/.exec(info.version) ?? [])[1] ?? count)
-info.bundle = info.release ? info.version : `${base}+${Math.min(devCount, 65535)}`
+info.bundle = info.release ? info.version : `${info.base}+${Math.min(devCount, 65535)}`
 
 const arg = process.argv[2]
 if (arg === '--json') { console.log(JSON.stringify(info)) }
@@ -45,7 +52,7 @@ else if (arg === '--apply') {
   const { version: v, code: c, display: d, bundle: bv } = info
   edit('mobile/package.json', (s) => s.replace(/"version": "[^"]*"/, `"version": "${v}"`))
   edit('mobile/android/app/build.gradle', (s) => s.replace(/versionCode \d+/, `versionCode ${c}`).replace(/versionName "[^"]*"/, `versionName "${v}"`))
-  edit('mobile/ios/App/App.xcodeproj/project.pbxproj', (s) => s.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${c};`).replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${base};`))
+  edit('mobile/ios/App/App.xcodeproj/project.pbxproj', (s) => s.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${c};`).replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${info.base};`))
   edit('desktop/package.json', (s) => s.replace(/"version": "[^"]*"/, `"version": "${v}"`))
   edit('desktop/src-tauri/tauri.conf.json', (s) => s.replace(/"version": "[^"]*"/, `"version": "${bv}"`))
   edit('desktop/src-tauri/Cargo.toml', (s) => s.replace(/^version = "[^"]*"/m, `version = "${v}"`))

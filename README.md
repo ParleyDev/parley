@@ -145,6 +145,12 @@ Admin Console → Instance Settings → Antivirus takes a clamd address; `docker
 
 If a release ever ships a destructive migration it says so in its notes, and the rollback for that one is the backup: `ops/restore.sh backups/db-<ts>.dump backups/uploads-<ts>.tgz` taken by the upgrade script right before the migration ran.
 
+## Versions and releases
+
+`VERSION` holds the next release (semver) and `scripts/version.mjs` derives every artifact's version from it: a development build is `<VERSION>-dev.<commits>` (plus `.dirty` with local changes), displayed with the commit (`0.2.0-dev.230+f6a133a`). Desktop installers use `<VERSION>+<commits>` instead, because MSI needs a numeric suffix and RPM forbids `-`. `PARLEY_VERSION` overrides the computed value (containers, CI).
+
+To ship a release, publish a GitHub release whose tag is semver (`v1.4.0`, `1.4.0`, or a pre-release such as `v2.0.0-rc.1`). That triggers the desktop (Windows, macOS, Linux) and mobile (Android, iOS) workflows, and the tag becomes the version of every artifact: `v1.4.0` builds `1.4.0` installers and apps, `v2.0.0-rc.1` builds `2.0.0-rc.1` (installers `2.0.0+<commits>`). Tags that are not semver are skipped with a notice. Android version codes and iOS build numbers come from the commit count, so they always increase. Both workflows can also be started by hand (Actions → Run workflow) for a development build. Bump `VERSION` after a release so development builds count toward the next one.
+
 ## Secrets
 
 Every secret-bearing setting (`DATABASE_URL`, `JWT_SECRET`, `SMTP_URL`, `TENOR_API_KEY`, `GIPHY_API_KEY`, `METRICS_TOKEN`, `SENTRY_DSN`) also accepts a `*_FILE` variable naming a file whose trimmed contents are the value, which is how Docker and Kubernetes secrets arrive. With compose:
