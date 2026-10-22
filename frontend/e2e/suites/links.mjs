@@ -38,8 +38,12 @@ await pd.evaluate(() => { const a = document.createElement('a'); a.id = 'own'; a
 opened = null; await pd.locator('#own').dispatchEvent('click'); await pd.waitForTimeout(500)
 ok('in the desktop shell, same-site new-tab links (attachments) go to the OS browser instead of being dropped', !!opened && decodeURIComponent(opened.split('parley-open=')[1]).endsWith('/api/attachments/x/f.png'), opened)
 console.log('-- stale client')
+const built = await fetch(`${WEB}/version.json`).then((r) => r.ok ? r.json() : null).then((j) => j?.version ?? 'dev').catch(() => 'dev')
+if (built === 'dev') console.log('  (skipped: unversioned dev build has no update banner; CI builds with PARLEY_VERSION)')
+else {
 await pd.route('**/version.json*', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ version: '9.9.9' }) }))
 await pd.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); await pd.waitForSelector('[data-update-banner="9.9.9"]', { timeout: 5000 }).catch(() => {})
 ok('a client older than the served build offers a reload', await pd.locator('[data-update-banner="9.9.9"] [data-update-reload]').count() === 1)
+}
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

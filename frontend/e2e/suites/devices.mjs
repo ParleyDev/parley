@@ -19,7 +19,7 @@ await p.click('[data-voice-controls] [data-device-chevron="camera"]'); await p.w
 ok('the camera menu lists video inputs', await p.locator('[data-device-menu="camera"] [data-device-option]').count() >= 2)
 await p.locator('[data-device-menu="camera"] [data-device-option]').nth(1).click()
 ok('camera choice saved', ((await settings()).cameraDeviceId ?? '') !== '')
-await p.click('[data-voice-controls] [data-device-chevron="output"]'); await p.waitForSelector('[data-device-menu="output"]')
+await p.click('[data-voice-controls] [data-device-chevron="output"]'); await p.waitForSelector('[data-device-menu="output"] [data-device-option="default"]', { timeout: 10000 }).catch(() => {})
 ok('the speaker menu opens (default always offered)', await p.locator('[data-device-menu="output"] [data-device-option="default"]').count() === 1)
 await p.locator('[data-device-menu="output"] [data-device-option="default"]').click()
 await p.screenshot({ path: '156-device-menus.png' })

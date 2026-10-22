@@ -67,11 +67,11 @@ await pc.keyboard.press('Escape'); await pc.mouse.click(700,400)
 await pa.click('aside button:has-text("Perm Test")'); await pa.click('text=Server Settings'); await pa.waitForSelector('text=Server Overview')
 await pa.click('button:has-text("Roles")'); await pa.waitForSelector('h1:has-text("Roles")')
 await pa.click('button:has-text("Create Role")'); await pa.waitForSelector('h2:has-text("new role")')
-await pa.fill('input[maxlength="100"]','Artists'); await pa.click('button[title="#9b59b6"]')
+await pa.fill('input[maxlength="100"]','Artists'); await pa.click('[data-role-style-open]'); await pa.waitForSelector('[data-name-style-modal]'); await pa.click('[data-effect="solid"]'); await pa.click('[data-name-color="#c94bff"]'); await pa.click('[data-name-apply]'); await pa.waitForFunction(() => !document.querySelector('[data-name-style-modal]'))
 // toggle Manage Channels
 const manageRow = pa.locator('div:has(> div > div:text-is("Manage Channels")) button[role=switch]').first(); await manageRow.click()
 await pa.click('button:has-text("Save Changes")'); await pa.waitForSelector('text=Role saved')
-r=await callS(a.token,'GET',`/guilds/${g.id}/roles`); const artists=r.body.find(x=>x.name==='Artists'); ok('Artists role saved via UI with Manage Channels + colour', !!artists && (artists.permissions&P.MANAGE_CHANNELS)>0 && artists.color==='#9b59b6')
+r=await callS(a.token,'GET',`/guilds/${g.id}/roles`); const artists=r.body.find(x=>x.name==='Artists'); ok('Artists role saved via UI with Manage Channels + colour', !!artists && (artists.permissions&P.MANAGE_CHANNELS)>0 && artists.color==='#c94bff')
 await pa.screenshot({path:'22-roles.png'})
 // Members tab: assign Artists to carol via picker
 await pa.click('button:has-text("Members")'); await pa.waitForSelector('h1:has-text("Members")')

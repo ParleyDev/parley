@@ -56,7 +56,7 @@ ok('both sides chat inside the thread live', await pa.locator('main >> text=sush
 await pa.screenshot({ path: '113-thread.png' })
 await pa.click('[data-thread-archive]'); await pa.waitForSelector('[data-thread-panel][data-thread-archived="1"]')
 ok('archive from the panel header', (await pb.textContent(`[data-msg-id="${root2.id}"] [data-thread-card]`)).includes('archived'))
-await pa.click('[data-threads-toggle]'); await pa.waitForSelector('[data-threads-panel]'); await pa.click('[data-threads-archived-toggle]'); await pa.waitForSelector('[data-thread-row]')
+await pa.click('[data-threads-toggle]'); await pa.waitForSelector('[data-threads-panel]'); await pa.click('[data-threads-archived-toggle]'); await pa.waitForSelector('[data-thread-row]:has-text("Lunch")', { timeout: 10000 }).catch(() => {})
 ok('the Threads panel lists the archived thread', (await pa.locator('[data-thread-row]').allTextContents()).some((t) => t.includes('Lunch')))
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await browser.close(); await finish()

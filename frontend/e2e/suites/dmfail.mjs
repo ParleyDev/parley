@@ -60,6 +60,7 @@ ok('after unblocking, Retry delivers and the row becomes a normal message', !!de
 console.log('-- older messages bar')
 for (let i = 0; i < 80; i++) await call(b.token, 'POST', `/channels/${dm.id}/messages`, { content: `scroll filler ${i}` })
 await pa.reload(); await pa.waitForSelector('textarea'); await pa.waitForFunction(() => document.querySelectorAll('[data-msg-id]').length > 40)
+await pa.waitForFunction(() => !document.querySelector('[data-older-bar]'), null, { timeout: 10000 }).catch(() => {})
 ok('no bar at the bottom', await pa.locator('[data-older-bar]').count() === 0)
 await pa.evaluate(() => { const el = document.querySelector('[data-msg-id]').closest('.overflow-y-auto'); el.scrollTop = 0 })
 await pa.waitForSelector('[data-older-bar]')
