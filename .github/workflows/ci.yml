@@ -37,8 +37,9 @@ jobs:
 
   e2e:
     name: End-to-end (docker compose + Playwright)
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Pinned: browser system packages come from the image's apt mirror, and the newest image's mirror can stall.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     env:
       ADMIN_EMAILS: admin-e2e@x.io
       # A real (non-"dev") build version, so the stale-client update banner is active and tested.
@@ -59,13 +60,14 @@ jobs:
         with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
       - run: npm ci
         working-directory: frontend
-      - run: npx playwright install --with-deps chromium
+      # Both browsers and their system packages in one apt round (WebKit runs the iOS-engine suites below).
+      - run: npx playwright install --with-deps chromium webkit
         working-directory: frontend
       - name: Run the suites
         run: npm run e2e
         working-directory: frontend
       - name: Mobile suites under WebKit (iOS engine)
-        run: npx playwright install --with-deps webkit && npm run e2e:webkit
+        run: npm run e2e:webkit
         working-directory: frontend
       - name: Backup smoke test (pg_dump + uploads tarball)
         run: |
