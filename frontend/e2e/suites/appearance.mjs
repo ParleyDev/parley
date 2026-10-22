@@ -9,7 +9,7 @@ await call(a.token, 'POST', `/channels/${tc.id}/messages`, { content: 'second me
 
 const browser = await chromium.launch(); const errors = []
 const p = await browser.newPage({ viewport: { width: 1440, height: 900 }, colorScheme: 'light' }); p.on('pageerror', (e) => errors.push(e.message))
-await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+await p.goto(`${WEB}/login`, { waitUntil: 'networkidle' }); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await p.goto(`${WEB}/channels/${g.id}/${tc.id}`); await p.waitForSelector('.msg-content')
 const theme = () => p.evaluate(() => document.documentElement.dataset.theme)
 const bodyBg = () => p.evaluate(() => getComputedStyle(document.body).backgroundColor)

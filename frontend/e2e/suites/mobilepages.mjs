@@ -5,7 +5,7 @@ const g=await call(a.token,'POST','/guilds',{name:`Mobile Land ${S}`}); const tc
 await call(a.token,'POST',`/channels/${tc}/messages`,{content:'hello mobile 🔥'})
 await call(a.token,'PUT',`/guilds/${g.id}/discovery`,{description:'Mobile preview testing server.',category:'community'}); await fetch(B+`/admin/discovery/${g.id}/review`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+admin.token},body:JSON.stringify({status:'approved'})})
 const browser=await launchBrowser(); const errors=[]; console.log('browser:', BROWSER)
-const mk=async(tok)=>{ const ctx=await browser.newContext({ ...phone() }); const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),tok); return p }
+const mk=async(tok)=>{ const ctx=await browser.newContext({ ...phone() }); const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(e.message)); await p.goto(`${WEB}/login`, { waitUntil: 'networkidle' }); await p.evaluate((t)=>localStorage.setItem('parley.token',t),tok); return p }
 const fits=async(p)=>p.evaluate(()=>document.documentElement.scrollWidth <= window.innerWidth + 1)
 const vis=async(p,sel)=>{ const b=await p.locator(sel).first().boundingBox().catch(()=>null); return !!b && b.x>=0 && b.x+b.width<=p.viewportSize().width+1 && b.width>0 }
 
