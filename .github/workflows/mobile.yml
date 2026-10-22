@@ -3,25 +3,38 @@ on:
   # Publishing a GitHub release (including pre-releases) builds it; the gate job checks the tag is semver.
   release:
     types: [published]
+  # By hand: leave the tag blank for a development build, or give an existing release's tag (v1.4.0) to build that
+  # tag's code and attach the files to the release (for releases published before this workflow could, or re-runs).
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and attach to (blank = development build)
+        required: false
+        default: ''
+# Attaching build outputs to the GitHub release needs write access to repository contents.
+permissions:
+  contents: write
 jobs:
-  # Releases build only for semver tags (v1.2.3, 1.2.3, v2.0.0-rc.1, v1.2.3+build.5); manual runs always build.
-  # The tag becomes the version of every artifact (scripts/version.mjs, PARLEY_VERSION).
+  # Releases build only for semver tags (v1.2.3, 1.2.3, v2.0.0-rc.1, v1.2.3+build.5); manual runs without a tag
+  # always build. The tag becomes the version of every artifact (scripts/version.mjs, PARLEY_VERSION), the code
+  # that is built, and the release the files are attached to.
   gate:
     runs-on: ubuntu-latest
     outputs:
       ok: ${{ steps.check.outputs.ok }}
       version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
     steps:
       - id: check
         env:
-          EVENT: ${{ github.event_name }}
-          TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
-          if [ "$EVENT" != "release" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ -z "$TAG" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "::error::No GitHub release with tag '$TAG'"; exit 1; fi
           SEMVER='^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$'
           if printf '%s' "$TAG" | grep -qE "$SEMVER"; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"; echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+            echo "ok=true" >> "$GITHUB_OUTPUT"; echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"; echo "tag=$TAG" >> "$GITHUB_OUTPUT"
             echo "Release $TAG: building version ${TAG#v}"
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice::Release tag '$TAG' is not semver (e.g. v1.2.3); skipping build"
@@ -35,7 +48,7 @@ jobs:
     steps:
       # Full history and tags: scripts/version.mjs counts commits and detects release tags.
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, ref: "${{ needs.gate.outputs.tag }}" }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - uses: actions/setup-java@v4
@@ -60,6 +73,16 @@ jobs:
         with:
           name: parley-android-debug-${{ steps.ver.outputs.display }}
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+      # Published release: attach the APK (debug-signed, installable by sideloading; Play Store needs a release key).
+      - name: Attach the APK to the release
+        if: needs.gate.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.gate.outputs.tag }}
+        run: |
+          apk="Parley_${PARLEY_VERSION}_android.apk"
+          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          gh release upload "$TAG" "$apk" --clobber --repo "$GITHUB_REPOSITORY"
   ios:
     needs: gate
     if: needs.gate.outputs.ok == 'true'
@@ -68,7 +91,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0, ref: "${{ needs.gate.outputs.tag }}" }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: node scripts/version.mjs --apply
