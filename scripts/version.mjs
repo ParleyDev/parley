@@ -5,7 +5,8 @@
 // and the short commit hash is appended as build metadata for display (+<sha>), never in package versions.
 //
 //   node scripts/version.mjs            → prints the full display version (e.g. 0.2.0-dev.412+ab12cd3)
-//   node scripts/version.mjs --json     → {"base","version","display","code","sha","dirty","release"}
+//   node scripts/version.mjs --json     → {"base","version","bundle","display","code","sha","dirty","release"}
+//   node scripts/version.mjs --bundle   → installer version (0.2.0 for releases, 0.2.0+412 for dev builds)
 //   node scripts/version.mjs --apply    → writes the version into mobile (package.json, Android, iOS) and desktop
 //                                         (tauri.conf.json, Cargo.toml); backend and web take PARLEY_VERSION at build
 import { execSync } from 'node:child_process'
@@ -30,18 +31,23 @@ const forced = process.env.PARLEY_VERSION && process.env.PARLEY_VERSION !== 'dev
 const info = forced
   ? { base, version: forced.split('+')[0], display: forced, code: Number((/dev\.(\d+)/.exec(forced) ?? [])[1] ?? 0) * 10 + (forced.includes('-') ? 0 : 1), sha: forced.split('+')[1] ?? sha, dirty: forced.includes('.dirty'), release: !forced.includes('-') }
   : { base, version, display, code, sha, dirty, release }
+// Installer version (Tauri bundle): MSI needs a numeric-only suffix (<= 65535) and RPM forbids '-', so dev builds
+// use numeric build metadata: 0.2.0+412 (MSI 0.2.0.412). The app binary keeps the full semver `version`.
+const devCount = Number((/dev\.(\d+)/.exec(info.version) ?? [])[1] ?? count)
+info.bundle = info.release ? info.version : `${base}+${Math.min(devCount, 65535)}`
 
 const arg = process.argv[2]
 if (arg === '--json') { console.log(JSON.stringify(info)) }
 else if (arg === '--version') { console.log(info.version) }
+else if (arg === '--bundle') { console.log(info.bundle) }
 else if (arg === '--apply') {
   const edit = (rel, fn) => { const p = join(root, rel); if (!existsSync(p)) return; const before = readFileSync(p, 'utf8'); const after = fn(before); if (after !== before) { writeFileSync(p, after); console.log(`updated ${rel}`) } }
-  const { version: v, code: c, display: d } = info
+  const { version: v, code: c, display: d, bundle: bv } = info
   edit('mobile/package.json', (s) => s.replace(/"version": "[^"]*"/, `"version": "${v}"`))
   edit('mobile/android/app/build.gradle', (s) => s.replace(/versionCode \d+/, `versionCode ${c}`).replace(/versionName "[^"]*"/, `versionName "${v}"`))
   edit('mobile/ios/App/App.xcodeproj/project.pbxproj', (s) => s.replace(/CURRENT_PROJECT_VERSION = [^;]+;/g, `CURRENT_PROJECT_VERSION = ${c};`).replace(/MARKETING_VERSION = [^;]+;/g, `MARKETING_VERSION = ${base};`))
   edit('desktop/package.json', (s) => s.replace(/"version": "[^"]*"/, `"version": "${v}"`))
-  edit('desktop/src-tauri/tauri.conf.json', (s) => s.replace(/"version": "[^"]*"/, `"version": "${v}"`))
+  edit('desktop/src-tauri/tauri.conf.json', (s) => s.replace(/"version": "[^"]*"/, `"version": "${bv}"`))
   edit('desktop/src-tauri/Cargo.toml', (s) => s.replace(/^version = "[^"]*"/m, `version = "${v}"`))
   console.log(d)
 }

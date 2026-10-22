@@ -8,12 +8,16 @@ jobs:
   android:
     runs-on: ubuntu-latest
     steps:
+      # Full history and tags: scripts/version.mjs counts commits and detects release tags.
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
+      # The obsolete "tools" package (the action's default) no longer exists in current cmdline-tools.
       - uses: android-actions/setup-android@v3
+        with: { packages: platform-tools }
       - name: Compute version
         id: ver
         run: echo "display=$(node scripts/version.mjs)" >> "$GITHUB_OUTPUT" && node scripts/version.mjs --apply
@@ -35,6 +39,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - run: node scripts/version.mjs --apply
@@ -42,8 +47,7 @@ jobs:
         working-directory: mobile
       - run: npx cap sync ios
         working-directory: mobile
-      - run: pod install
-        working-directory: mobile/ios/App
+      # Capacitor 8 uses Swift Package Manager (ios/App/CapApp-SPM), not CocoaPods: build the project directly.
       # Unsigned simulator build proves the project compiles; signing and TestFlight need your team's certificates.
-      - run: xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+      - run: xcodebuild -project App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
         working-directory: mobile/ios/App
