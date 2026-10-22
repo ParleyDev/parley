@@ -25,7 +25,7 @@ ok('server context menu: Mark As Read, Invite People, Server Settings, Delete Se
 await p.screenshot({ path: '58-server-menu.png', clip:{x:0,y:0,width:420,height:420} })
 await p.keyboard.press('Escape'); await p.waitForTimeout(150); ok('Escape closes it', await p.locator('[data-context-menu]').count()===0)
 // unread pill on the other server after a message from bob there? bob isn't in g2; use DM unread badge instead
-ok('DM unread badge counts the unread DM', await p.locator('nav a[href="/channels/@me"] span:has-text("1")').count()===1)
+ok('DM unread badge counts the unread DM', await p.locator('[data-unread-dm-count="1"]').count()===1)
 
 console.log('-- message context menu')
 await p.click(`[data-msg-id="${m2.id}"] .msg-content`, { button: 'right' }); await p.waitForTimeout(300)
@@ -97,6 +97,6 @@ await p.goto(`${WEB}/channels/@me`); await p.waitForTimeout(800)
 await p.click(`[data-dm-row="${b.user.id}"]`, { button: 'right' }); await p.waitForTimeout(200)
 ok('DM row menu: Mark As Read enabled (unread) + user actions', await p.locator('[data-context-menu] [data-menu-item="Mark As Read"]:not([disabled])').count()===1 && await p.locator('[data-context-menu] [data-menu-item="Cancel Friend Request"]').count()===1)
 await p.click('[data-context-menu] [data-menu-item="Mark As Read"]'); await p.waitForTimeout(500)
-ok('Mark As Read clears the DM unread badge', await p.locator('nav a[href="/channels/@me"] span:has-text("1")').count()===0)
+ok('Mark As Read clears the DM unread badge', await p.locator('[data-unread-dm-count="1"]').count()===0)
 ok('no page errors', errors.length===0, errors.join(' | '))
 await browser.close(); await finish()

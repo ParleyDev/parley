@@ -8,7 +8,7 @@ const m1=await call(b.token,'POST',`/channels/${tc}/messages`,{content:'forward 
 const browser=await chromium.launch(); const p=await browser.newPage({viewport:{width:1440,height:900}})
 await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),a.token)
 await p.goto(`${WEB}/channels/${g.id}/${tc}`); await p.waitForTimeout(1000)
-const badge=()=>p.locator('nav a[href="/channels/@me"] span:has-text("1")').count()
+const badge=()=>p.locator('[data-unread-dm-count="1"]').count()
 const pill=()=>p.locator(`[data-guild-icon="${g2.id}"] [data-pill]`).getAttribute('data-pill')
 ok('clean start: no DM badge, other server not unread', (await badge())===0 && (await pill())==='none')
 await p.click(`[data-msg-id="${m1.id}"] .msg-content`, { button: 'right' }); await p.waitForTimeout(200); await p.click('[data-context-menu] [data-menu-item="Forward"]'); await p.waitForTimeout(400)
