@@ -18,7 +18,9 @@ jobs:
             name: macos
     runs-on: ${{ matrix.os }}
     steps:
+      # Full history and tags: scripts/version.mjs counts commits and detects release tags.
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - uses: dtolnay/rust-toolchain@stable
@@ -37,7 +39,7 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         with:
           projectPath: desktop
-          # Installers: .msi + .exe (Windows), .dmg + .app (macOS), .AppImage + .deb (Linux)
+          # Installers: .msi + .exe (Windows), .dmg + .app (macOS), .AppImage + .deb + .rpm (Linux)
           args: ''
       - uses: actions/upload-artifact@v4
         with:
@@ -48,4 +50,5 @@ jobs:
             desktop/src-tauri/target/release/bundle/dmg/*.dmg
             desktop/src-tauri/target/release/bundle/appimage/*.AppImage
             desktop/src-tauri/target/release/bundle/deb/*.deb
+            desktop/src-tauri/target/release/bundle/rpm/*.rpm
           if-no-files-found: warn
