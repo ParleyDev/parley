@@ -1,0 +1,102 @@
+# Parley for self-hosting: published images only, nothing to build.
+# Put this file and a filled-in `.env` (copy example.env) in one folder, then `docker compose up -d`.
+# See docs/self-hosting/README.md for every platform guide.
+#
+# Data lives in bind mounts under DATA_DIR (default ./data) so it is easy to find, back up and move:
+#   data/postgres  database        data/uploads  attachments, avatars, emoji
+#   data/certs     TLS cert/key    data/letsencrypt, data/acme  Let's Encrypt state (profile "letsencrypt")
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: parley
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: parley
+    volumes:
+      - ${DATA_DIR:-./data}/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parley -d parley"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    image: "parleydev/parley:${PARLEY_IMAGE_TAG:-latest}"
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://parley:${POSTGRES_PASSWORD}@db:5432/parley
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      BIND_ADDR: 0.0.0.0:8080
+      RUST_LOG: ${RUST_LOG:-info}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      UPLOAD_DIR: /data/uploads
+      UPLOAD_QUOTA_BYTES: ${UPLOAD_QUOTA_BYTES:-1073741824}
+      ICE_SERVERS: ${ICE_SERVERS:-[{"urls":"stun:stun.l.google.com:19302"}]}
+      MAIL_MODE: ${MAIL_MODE:-log}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-Parley <no-reply@parley.local>}
+      TENOR_API_KEY: ${TENOR_API_KEY:-}
+      GIPHY_API_KEY: ${GIPHY_API_KEY:-}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      LOG_FORMAT: ${LOG_FORMAT:-text}
+      # Rate limits (RL_*) are left unset on purpose: the backend's built-in defaults suit a real instance.
+    volumes:
+      - ${DATA_DIR:-./data}/uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    # No published port: the frontend reaches the backend on the compose network. Publishing 8080 would let
+    # clients spoof X-Forwarded-For (rate limits) and read /metrics.
+
+  frontend:
+    # nginx proxies /api and /ws to the service named "backend"; keep that service name.
+    image: "parleydev/frontend:${PARLEY_IMAGE_TAG:-latest}"
+    restart: unless-stopped
+    environment:
+      TLS_HOSTNAME: ${TLS_HOSTNAME:-localhost}
+    volumes:
+      - ${DATA_DIR:-./data}/certs:/etc/nginx/certs
+      - ${DATA_DIR:-./data}/letsencrypt:/etc/letsencrypt:ro
+      - ${DATA_DIR:-./data}/acme:/var/www/certbot
+    depends_on:
+      - backend
+    ports:
+      - "${WEB_PORT:-3000}:80"
+      - "${WEB_TLS_PORT:-3443}:443"
+
+  # Cloudflare Tunnel: `docker compose --profile tunnel up -d` (see remote-access.md).
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - frontend
+
+  # Let's Encrypt: `docker compose --profile letsencrypt up -d` with TLS_HOSTNAME, LETSENCRYPT_EMAIL and
+  # WEB_PORT=80 (see remote-access.md).
+  certbot:
+    image: certbot/certbot:latest
+    profiles: ["letsencrypt"]
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    environment:
+      TLS_HOSTNAME: ${TLS_HOSTNAME:-localhost}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-}
+      LETSENCRYPT_STAGING: ${LETSENCRYPT_STAGING:-0}
+    volumes:
+      - ${DATA_DIR:-./data}/letsencrypt:/etc/letsencrypt
+      - ${DATA_DIR:-./data}/acme:/var/www/certbot
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        STAGING=""; [ "$$LETSENCRYPT_STAGING" = "1" ] && STAGING="--staging"
+        certbot certonly --webroot -w /var/www/certbot -d "$$TLS_HOSTNAME" --email "$$LETSENCRYPT_EMAIL" --agree-tos --no-eff-email --non-interactive --keep-until-expiring $$STAGING
+        while :; do sleep 12h; certbot renew --webroot -w /var/www/certbot --quiet $$STAGING || true; done
