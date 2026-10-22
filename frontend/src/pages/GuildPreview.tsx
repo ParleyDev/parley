@@ -37,7 +37,7 @@ export default function GuildPreviewPage() {
   }
   return (
     <SplitLayout defaultPane="content" testid={{ 'data-guild-preview': guildId }} sidebar={
-          <aside className="w-[272px] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
+          <aside className="w-[var(--sidebar-w)] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
             {pv ? (
               <>
                 {pv.guild.banner_url ? (

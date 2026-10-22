@@ -1,6 +1,7 @@
 import { Inbox } from 'lucide-react'
 import { locale } from '../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useStore } from '../store'
@@ -20,13 +21,24 @@ export default function InboxButton() {
   const pushToast = useStore((s) => s.pushToast)
   const navigate = useNavigate()
   const ref = useRef<HTMLDivElement>(null)
+  const panel = useRef<HTMLDivElement>(null)
+  // Viewport position under the button. The panel is portalled to <body> because headers scroll
+  // horizontally on phones (overflow-x-auto), which would clip an absolutely positioned child.
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
+  const toggle = () => {
+    if (open) { setOpen(false); return }
+    const r = ref.current!.getBoundingClientRect()
+    setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) })
+    setOpen(true)
+  }
   useEffect(() => { if (open) api.get<Message[]>('/users/@me/mentions').then(setList).catch(() => setList([])) }, [open])
   useEffect(() => {
     if (!open) return
-    const onDown = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const onDown = (e: PointerEvent) => { const t = e.target as Node; if (!ref.current?.contains(t) && !panel.current?.contains(t)) setOpen(false) }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
-    window.addEventListener('pointerdown', onDown); window.addEventListener('keydown', onKey)
-    return () => { window.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey) }
+    const onResize = () => setOpen(false)
+    window.addEventListener('pointerdown', onDown); window.addEventListener('keydown', onKey); window.addEventListener('resize', onResize)
+    return () => { window.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize) }
   }, [open])
   const whereOf = (m: Message) => {
     const ch = channels[m.channel_id]
@@ -42,12 +54,12 @@ export default function InboxButton() {
   }
   return (
     <div ref={ref} className="relative">
-      <button onClick={() => setOpen((o) => !o)} title="Inbox" className={`relative h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${open ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-inbox-toggle>
+      <button onClick={toggle} title="Inbox" className={`relative h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${open ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-inbox-toggle>
         <Inbox size={20} />
         {count > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-bg-1" data-inbox-count>{count > 99 ? '99+' : count}</span>}
       </button>
-      {open && (
-        <div className="pop absolute right-0 top-11 z-40 w-[420px] max-w-[calc(100vw-16px)] rounded-xl border border-line bg-bg-1 shadow-2xl" data-inbox>
+      {open && pos && createPortal(
+        <div ref={panel} style={{ top: pos.top, right: pos.right }} className="pop fixed z-50 w-[420px] max-w-[calc(100vw-16px)] rounded-xl border border-line bg-bg-1 shadow-2xl" data-inbox>
           <div className="flex items-center gap-2 px-4 py-3 border-b border-line"><Inbox size={16} className="text-text-2" /><span className="font-bold">Inbox</span><span className="text-xs text-text-2">Recent mentions</span></div>
           <div className="max-h-[60vh] overflow-y-auto">
             {list === null && <p className="px-4 py-6 text-sm text-text-2">Loading…</p>}
@@ -62,7 +74,8 @@ export default function InboxButton() {
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

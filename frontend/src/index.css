@@ -55,8 +55,15 @@ body {
 }
 /* Tablets (768–1023px): sidebars stay but shrink, the member list becomes an overlay. */
 @custom-variant tab (@media (min-width: 768px) and (max-width: 1023px));
-/* Notched phones: keep chrome out of the safe areas (viewport-fit=cover is set in index.html). */
-.safe-area { padding-top: env(safe-area-inset-top); padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+/* Notched phones and Android's edge-to-edge system bars: keep chrome out of the safe areas (viewport-fit=cover is set
+   in index.html). The bottom matters on Android, where the 3-button nav bar otherwise covers the composer and self card.
+   Capacitor's SystemBars plugin also injects --safe-area-inset-* for WebViews whose env() values are unreliable. */
+.safe-area {
+  padding-top: max(env(safe-area-inset-top), var(--safe-area-inset-top, 0px));
+  padding-right: max(env(safe-area-inset-right), var(--safe-area-inset-right, 0px));
+  padding-bottom: max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px));
+  padding-left: max(env(safe-area-inset-left), var(--safe-area-inset-left, 0px));
+}
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 /* Reduced motion: the OS setting or the Appearance toggle turns animations and transitions off. */
 @media (prefers-reduced-motion: reduce) { .pop, .fade-in, .animate-ping, .animate-pulse, .animate-spin { animation: none !important; } *, *::before, *::after { transition-duration: 0s !important; scroll-behavior: auto !important; } }

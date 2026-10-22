@@ -1,10 +1,10 @@
 import { useShallow } from 'zustand/react/shallow'
-import { Headphones, HeadphoneOff, Maximize2, Mic, MicOff, Minimize2, Monitor, MonitorOff, Phone, PhoneOff, Video, VideoOff } from 'lucide-react'
+import { HeadphoneOff, Maximize2, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, Phone, Video, VideoOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { playSfx, sfxEnabled } from '../lib/sfx'
 import { useStore, voiceParticipants } from '../store'
 import type { DmChannel, User, VoiceState } from '../lib/types'
-import { DeviceCtl, type DeviceKind } from './DeviceMenu'
+import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
 import { useResizableHeight } from '../lib/resize'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
@@ -125,24 +125,27 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
           </div>
         )}
       </div>
-      <div className="mt-2 shrink-0 flex items-center justify-center gap-2">
+      <div className="mt-2 shrink-0 flex justify-center pb-1">
         {inThis ? (
-          <>
-            <Ctl label={selfMute ? 'Unmute' : 'Mute'} on={selfMute} menu="input" onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={18} /> : <Mic size={18} />}</Ctl>
-            <Ctl label={selfDeaf ? 'Undeafen' : 'Deafen'} on={selfDeaf} menu="output" onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={18} /> : <Headphones size={18} />}</Ctl>
-            <Ctl label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} accent menu="camera" onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={18} /> : <VideoOff size={18} />}</Ctl>
-            <Ctl label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} accent onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <Monitor size={18} />}</Ctl>
-            <button onClick={() => voice.leave()} title="Leave Call" className="h-10 px-5 rounded-full bg-danger text-white font-semibold flex items-center gap-2 hover:bg-danger/80"><PhoneOff size={18} /> Leave</button>
-          </>
+          <ControlBar compact>
+            <ControlGroup>
+              <SplitControl chevronLabel="Microphone options" menuKind="input" menu={(close) => <MicMenu close={close} />}>
+                <ControlButton label={selfMute ? 'Unmute' : 'Mute'} on={selfMute || selfDeaf} tone="danger" onClick={() => voice.setMute(!selfMute)}>{selfMute || selfDeaf ? <MicOff size={18} /> : <Mic size={18} />}</ControlButton>
+              </SplitControl>
+              <SplitControl chevronLabel="Camera options" menuKind="camera" menu={(close) => <CameraMenu close={close} />}>
+                <ControlButton label={localCamera ? 'Turn Off Camera' : 'Turn On Camera'} on={!!localCamera} onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={18} /> : <VideoOff size={18} />}</ControlButton>
+              </SplitControl>
+            </ControlGroup>
+            <ControlGroup>
+              <ControlButton label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>
+            </ControlGroup>
+            <HangUpButton label="Leave Call" onClick={() => voice.leave()} />
+          </ControlBar>
         ) : (
-          <button onClick={() => voice.join(channel.id)} disabled={connecting} title="Join Call" className="h-10 px-6 rounded-full bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50" data-join-call><Phone size={18} /> {myChannel ? 'Switch to this call' : 'Join Call'}</button>
+          <button onClick={() => voice.join(channel.id)} disabled={connecting} title="Join Call" className="h-10 px-6 rounded-xl bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50" data-join-call><Phone size={18} /> {myChannel ? 'Switch to this call' : 'Join Call'}</button>
         )}
       </div>
       <div {...stage.handleProps} />
     </section>
   )
-}
-
-function Ctl(props: { children: React.ReactNode; label: string; on: boolean; accent?: boolean; onClick: () => void; menu?: DeviceKind }) {
-  return <DeviceCtl {...props} size={40} />
 }
