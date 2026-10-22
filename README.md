@@ -8,6 +8,8 @@ Rust backend (axum + sqlx/Postgres + WebSockets) and a React/Vite/Tailwind front
 docker compose up --build
 ```
 
+**Self-hosting:** to run Parley on your own server, NAS or home lab (Linux, Raspberry Pi, Windows, macOS, Proxmox, Synology, Unraid, TrueNAS, Portainer, plus reverse proxies and tunnels), follow [docs/self-hosting](docs/self-hosting/README.md). It uses an image-only `compose.yaml` with production defaults. The root `docker-compose.yml` is meant for development.
+
 The `main` branch publishes multi-platform images to Docker Hub as `parleydev/parley:latest` (backend) and `parleydev/frontend:latest` (web frontend), with matching `sha-<commit>` tags. Pushing a `v*` Git tag also publishes that version tag for both images. To run a published version with Compose, set `PARLEY_IMAGE_TAG` to `latest`, a `v*` release tag, or a `sha-*` tag, then run `docker compose pull` and `docker compose up`. The Compose file defaults to `latest`; `docker compose up --build` builds from the local source instead.
 
 Image publishing uses the repository secret `DOCKERHUB_TOKEN`, a Docker Hub access token with write access to both repositories. Add it under **Settings → Secrets and variables → Actions** in GitHub before the first publish.
