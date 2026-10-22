@@ -70,7 +70,7 @@ console.log('mobile VC: not auto joined', await pm.locator('text=Voice Connected
 await pm.click('text=Join Voice'); await pm.waitForTimeout(1500)
 console.log('mobile VC joined; tiles', await pm.locator('main .aspect-video').count(), 'A tiles', await pa.locator('main .aspect-video').count())
 await pm.screenshot({path:'19-m-voice.png'})
-ok('phone voice: controls carry labels and Disconnect spans the row', await pm.locator('[data-voice-controls] span.md\\:hidden:text-is("Mute")').count()===1 && await pm.locator('[data-voice-leave]').evaluate((b)=>getComputedStyle(b).flexBasis==='100%'))
+ok('phone voice: the control bar fits on screen with Disconnect reachable', await pm.locator('[data-voice-leave]').evaluate((b)=>{ const r=b.getBoundingClientRect(); return r.left>=0 && r.right<=innerWidth && r.bottom<=innerHeight }) && await pm.locator('[data-voice-controls] button[title="Mute"]').count()===1)
 const tilesM=await pm.locator('main .aspect-video').count()
 ok('phone voice: tiles use a two-column grid (one column for a lone tile)', await pm.locator('[data-voice-grid]').evaluate((g)=>getComputedStyle(g).gridTemplateColumns.split(' ').length)===Math.min(2,tilesM), String(tilesM))
 await pm.click('main button[title="Show Chat"]'); await pm.waitForSelector('main textarea'); await pm.waitForTimeout(200)

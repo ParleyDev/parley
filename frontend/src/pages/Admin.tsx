@@ -14,7 +14,7 @@ export default function AdminPage() {
   const showContent = useShowContent()
   return (
     <SplitLayout defaultPane="nav" testid={{ 'data-admin': '' }} sidebar={
-          <aside className="w-[272px] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
+          <aside className="w-[var(--sidebar-w)] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
             <div className="h-12 px-4 flex items-center gap-2 font-bold text-lg border-b border-line"><ShieldCheck size={20} className="text-success" /> Admin Console</div>
             <nav className="p-2 space-y-0.5">
               <NavLink to="/admin" end onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="overview"><LayoutDashboard size={20} /> Overview</NavLink>

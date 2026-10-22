@@ -13,6 +13,7 @@ import Modals from '../components/modals'
 import ErrorBoundary from '../components/ErrorBoundary'
 import IncomingCall from '../components/IncomingCall'
 import UserPanel from '../components/UserPanel'
+import { NavColumn } from '../components/SplitLayout'
 import VerifyBanner from '../components/VerifyBanner'
 import { lastChannel, rememberChannel } from '../lib/dm'
 import { useSwipe } from '../lib/swipe'
@@ -59,18 +60,18 @@ export default function AppShell() {
       {announcement && connected && (
         <div className="absolute top-0 inset-x-0 z-40 bg-accent text-white text-xs font-semibold text-center py-1 px-3 truncate" data-announcement>{announcement}</div>
       )}
-      <div className={`flex flex-col h-full shrink-0 w-[344px] tab:w-[296px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${pane === 'content' ? 'max-md:hidden' : ''}`}>
+      <NavColumn hidden={pane === 'content'}>
         <div className="flex flex-1 min-h-0">
           <GuildBar />
           <Routes>
             <Route path="@me/*" element={<DmSidebar />} />
             <Route path=":guildId/*" element={<GuildSidebar />} />
-            <Route path="*" element={<div className="w-[272px] tab:w-[224px] max-md:flex-1 bg-bg-1" />} />
+            <Route path="*" element={<div className="w-[var(--sidebar-w)] tab:w-[224px] max-md:flex-1 bg-bg-1" />} />
           </Routes>
         </div>
         {/* Discord's self card floats across the bottom of both the server column and the channel list. */}
         <UserPanel />
-      </div>
+      </NavColumn>
       <ErrorBoundary>
       <Routes>
         <Route path="@me" element={<HomeView />} />

@@ -55,12 +55,12 @@ export default function HomeView() {
         <TabBtn id="pending" label="Pending" badge={pending} />
         <TabBtn id="blocked" label="Blocked" />
         <button onClick={() => setTab('add')} className={`text-sm rounded-md px-2.5 py-0.5 font-semibold whitespace-nowrap ${tab === 'add' ? 'text-success' : 'bg-success text-black hover:bg-success/80'}`}>Add Friend</button>
-              <span className="ml-auto"><InboxButton /></span>
+        <span className="ml-auto"><InboxButton /></span>
       </header>
 
       {tab === 'add' ? <AddFriend /> : (
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="p-6 max-md:p-3 max-w-3xl w-full mx-auto">
+          <div className="p-6 max-md:p-3 w-full">
             <div className="relative mb-5">
               <input className="input pl-9 py-2" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />
@@ -163,7 +163,7 @@ function AddFriend() {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="p-6 max-md:p-3 max-w-3xl w-full mx-auto">
+      <div className="p-6 max-md:p-3 w-full">
         <h2 className="font-bold uppercase text-sm tracking-wide">Add Friend</h2>
         <p className="text-sm text-text-2 mt-1">You can add friends with their username.</p>
         <form onSubmit={submit} className={`mt-4 flex items-center gap-2 rounded-lg bg-bg-0/60 border p-1 pl-3 ${msg ? (msg.ok ? 'border-success' : 'border-danger') : 'border-line focus-within:border-accent/70'}`}>

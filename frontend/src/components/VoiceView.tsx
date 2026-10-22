@@ -1,6 +1,6 @@
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useShallow } from 'zustand/react/shallow'
-import { Disc3, Hand, Headphones, HeadphoneOff, ListMusic, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
+import { Disc3, Hand, HeadphoneOff, ListMusic, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
 import { has, P } from '../lib/perms'
@@ -10,7 +10,7 @@ import type { Channel, User, VoiceState } from '../lib/types'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 import StudioPanel from './StudioPanel'
-import { DeviceCtl, type DeviceKind } from './DeviceMenu'
+import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpButton, MenuControl, MenuDivider, MicMenu, SettingsRow, SplitControl } from './CallControls'
 import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
 import VideoTile, { FitToggle, useVideoFit } from './VideoTile'
@@ -21,6 +21,8 @@ import { useT } from '../lib/i18n'
 type Tile = { key: string; userId: string; kind: 'camera' | 'screen'; user: User | undefined; state: VoiceState; stream: MediaStream | null; isMe: boolean }
 
 const CHAT_KEY = `${STORAGE_PREFIX}voiceChat`
+const VIEW_KEY = `${STORAGE_PREFIX}voiceView`
+const loadView = (): { self: boolean; nonVideo: boolean } => { try { return { self: true, nonVideo: true, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}') } } catch { return { self: true, nonVideo: true } } }
 
 export default function VoiceView({ channel }: { channel: Channel }) {
   const t = useT()
@@ -101,6 +103,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   useEffect(() => { if (board && channel.guild_id && !sounds) loadSounds(channel.guild_id) }, [board, channel.guild_id, sounds, loadSounds])
   const playSound = async (id: string) => { try { await api.post(`/channels/${channel.id}/soundboard/${id}`) } catch (e) { pushToast((e as Error).message, 'error') } }
   const inThis = myChannel === channel.id
+  // Regular voice channels show a join splash until you connect; stages keep their speakers/audience layout.
+  const preJoin = !inThis && !isStage
   const toggleChat = () => setChat((c) => { try { localStorage.setItem(CHAT_KEY, c ? '0' : '1') } catch { /* ignore */ } return !c })
 
   // Build tiles: one per participant (camera or avatar) plus one per active screen share.
@@ -126,8 +130,14 @@ export default function VoiceView({ channel }: { channel: Channel }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screenKeys, tiles.length])
 
-  const focusTile = focused ? tiles.find((t) => t.key === focused) : undefined
-  const strip = focusTile ? tiles.filter((t) => t.key !== focused) : []
+  // View options (More menu): hide your own camera tile and/or tiles without video. If that would empty the stage,
+  // everyone is shown rather than a blank grid.
+  const [view, setViewState] = useState(loadView)
+  const setView = (patch: Partial<typeof view>) => setViewState((v) => { const n = { ...v, ...patch }; try { localStorage.setItem(VIEW_KEY, JSON.stringify(n)) } catch { /* ignore */ } return n })
+  const filtered = tiles.filter((t) => t.kind === 'screen' || ((view.self || !t.isMe) && (view.nonVideo || !!t.stream)))
+  const shown = filtered.length ? filtered : tiles
+  const focusTile = focused ? shown.find((t) => t.key === focused) : undefined
+  const strip = focusTile ? shown.filter((t) => t.key !== focused) : []
   const count = participants.length
 
   const phone = usePhone()
@@ -195,6 +205,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
       <div className="flex-1 min-h-0 flex" ref={(el) => { chatPanel.setContainer(el); sessionsPanel.setContainer(el) }}>
         {/* Stage */}
         <div className="flex-1 min-w-0 flex flex-col">
+          {preJoin ? <PreJoin channel={channel} participants={participants.map((p) => users[p.user_id]).filter((u): u is User => !!u)} count={count} canConnect={canConnect} connecting={connecting} switching={!!myChannel} /> : (
           <div className="flex-1 min-h-0 overflow-hidden p-4 max-md:p-2 flex flex-col gap-3">
             {count === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
@@ -213,8 +224,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
               </>
             ) : (
               <div className="flex-1 overflow-y-auto">
-                <div className="grid gap-4 max-md:gap-2 justify-center content-start" data-voice-grid style={{ gridTemplateColumns: phone ? (tiles.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))') : `repeat(auto-fit, minmax(min(240px, 100%), ${tiles.length <= 2 ? '480px' : '340px'}))` }}>
-                  {tiles.map((t) => renderTile(t, false))}
+                <div className="grid gap-4 max-md:gap-2 justify-center content-start" data-voice-grid style={{ gridTemplateColumns: phone ? (shown.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))') : `repeat(auto-fit, minmax(min(240px, 100%), ${shown.length <= 2 ? '480px' : '340px'}))` }}>
+                  {shown.map((t) => renderTile(t, false))}
                 </div>
               </div>
             )}
@@ -239,50 +250,68 @@ export default function VoiceView({ channel }: { channel: Channel }) {
             )}
           </div>
 
-          <div className="shrink-0 flex items-center justify-center gap-3 max-md:gap-4 max-md:flex-wrap py-4 max-md:py-3 px-2 border-t border-line safe-bottom" data-voice-controls>
+          )}
+          {!preJoin && <div className="shrink-0 px-3 pt-3 pb-4 max-md:px-2 max-md:pb-3 border-t border-line" data-voice-controls>
             {inThis ? (
-              <>
-                {isStudio && isEngineer && (
-                  <span className="flex flex-col items-center gap-1">
-                    <button onClick={record} disabled={recBusy} title={liveSession ? 'Stop recording' : 'Record'} aria-label={liveSession ? 'Stop recording' : 'Record'} className={`h-14 w-14 rounded-full flex items-center justify-center ${liveSession ? 'bg-danger text-white' : 'bg-bg-3 text-danger hover:bg-bg-4'}`} data-studio-record>{liveSession ? <span className="h-5 w-5 rounded-sm bg-white" /> : <span className="h-5 w-5 rounded-full bg-danger" />}</button>
-                    <span className="md:hidden text-[11px] text-text-2">{liveSession ? 'Stop' : 'Record'}</span>
-                  </span>
-                )}
-                {isStage && suppressed && <Ctl label={handUp ? t('Lower Hand') : t('Raise Hand')} on={handUp} accent onClick={toggleHand}><Hand size={22} /></Ctl>}
-                {isStage && !suppressed && !isMod && <Ctl label={t('Leave the stage')} on={false} onClick={() => toAudience(me!.id)}><Hand size={22} /></Ctl>}
-                <Ctl label={selfMute ? t('Unmute') : t('Mute')} on={selfMute} menu="input" onClick={() => voice.setMute(!selfMute)}>{selfMute ? <MicOff size={22} /> : <Mic size={22} />}</Ctl>
-                <Ctl label={selfDeaf ? t('Undeafen') : t('Deafen')} on={selfDeaf} menu="output" onClick={() => voice.setDeaf(!selfDeaf)}>{selfDeaf ? <HeadphoneOff size={22} /> : <Headphones size={22} />}</Ctl>
-                {canStream && <Ctl label={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} on={!!localCamera} accent menu="camera" onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={22} /> : <VideoOff size={22} />}</Ctl>}
-                {canSpeak && !suppressed && (
-                  <span className="relative">
-                    <Ctl label={t('Soundboard')} on={board} accent onClick={() => setBoard((b) => !b)}><Music2 size={22} /></Ctl>
-                    {board && (
-                      <>
-                        <div className="fixed inset-0 z-30" onClick={() => setBoard(false)} />
-                        <div className="pop absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-40 w-[320px] max-w-[calc(100vw-16px)] rounded-xl bg-bg-1 border border-line shadow-2xl p-3" data-soundboard>
-                          <div className="flex items-center justify-between mb-2"><span className="font-bold text-sm">Soundboard</span><span className="text-xs text-text-2">{sounds ? `${sounds.length} sound${sounds.length === 1 ? '' : 's'}` : 'Loading…'}</span></div>
-                          {sounds?.length === 0 && <p className="text-sm text-text-2 py-4 text-center">No sounds yet. Add some in Server Settings → Soundboard.</p>}
-                          <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                            {sounds?.map((snd) => (
-                              <button key={snd.id} type="button" onClick={() => playSound(snd.id)} className="rounded-lg bg-bg-3 hover:bg-accent hover:text-white px-2 py-2 text-xs font-semibold flex flex-col items-center gap-1" data-sound={snd.id} title={snd.name}>
-                                <span className="text-xl leading-none">{snd.emoji || '🔊'}</span><span className="truncate max-w-full">{snd.name}</span>
-                              </button>
-                            ))}
+              <ControlBar>
+                <ControlGroup>
+                  <SplitControl chevronLabel="Microphone options" menuKind="input" menu={(close) => <MicMenu close={close} />}>
+                    <ControlButton label={selfMute ? t('Unmute') : t('Mute')} on={selfMute || selfDeaf} tone="danger" onClick={() => voice.setMute(!selfMute)}>{selfMute || selfDeaf ? <MicOff size={20} /> : <Mic size={20} />}</ControlButton>
+                  </SplitControl>
+                  {canStream && (
+                    <SplitControl chevronLabel="Camera options" menuKind="camera" menu={(close) => <CameraMenu close={close} />}>
+                      <ControlButton label={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} on={!!localCamera} onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={20} /> : <VideoOff size={20} />}</ControlButton>
+                    </SplitControl>
+                  )}
+                </ControlGroup>
+                <ControlGroup>
+                  {isStudio && isEngineer && (
+                    <ControlButton label={liveSession ? 'Stop recording' : 'Record'} on={!!liveSession} tone="danger" onClick={record} disabled={recBusy} data-studio-record="">{liveSession ? <span className="h-3.5 w-3.5 rounded-sm bg-danger" /> : <span className="h-3.5 w-3.5 rounded-full bg-danger" />}</ControlButton>
+                  )}
+                  {isStage && suppressed && <ControlButton label={handUp ? t('Lower Hand') : t('Raise Hand')} on={handUp} onClick={toggleHand}><Hand size={20} /></ControlButton>}
+                  {isStage && !suppressed && !isMod && <ControlButton label={t('Leave the stage')} onClick={() => toAudience(me!.id)}><Hand size={20} /></ControlButton>}
+                  {canStream && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>}
+                  {canSpeak && !suppressed && (
+                    <span className="relative flex">
+                      <ControlButton label={t('Soundboard')} on={board} onClick={() => setBoard((b) => !b)}><Music2 size={20} /></ControlButton>
+                      {board && (
+                        <>
+                          <div className="fixed inset-0 z-30" onClick={() => setBoard(false)} />
+                          <div className="pop absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-40 w-[320px] max-w-[calc(100vw-16px)] rounded-xl bg-bg-1 border border-line shadow-2xl p-3" data-soundboard>
+                            <div className="flex items-center justify-between mb-2"><span className="font-bold text-sm">Soundboard</span><span className="text-xs text-text-2">{sounds ? `${sounds.length} sound${sounds.length === 1 ? '' : 's'}` : 'Loading…'}</span></div>
+                            {sounds?.length === 0 && <p className="text-sm text-text-2 py-4 text-center">No sounds yet. Add some in Server Settings → Soundboard.</p>}
+                            <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                              {sounds?.map((snd) => (
+                                <button key={snd.id} type="button" onClick={() => playSound(snd.id)} className="rounded-lg bg-bg-3 hover:bg-accent hover:text-white px-2 py-2 text-xs font-semibold flex flex-col items-center gap-1" data-sound={snd.id} title={snd.name}>
+                                  <span className="text-xl leading-none">{snd.emoji || '🔊'}</span><span className="truncate max-w-full">{snd.name}</span>
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      </>
-                    )}
-                  </span>
-                )}
-                {canStream && <Ctl label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} accent onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={22} /> : <Monitor size={22} />}</Ctl>}
-                <button onClick={() => { void studioRec.stop(); voice.leave() }} title={t('Disconnect')} className="h-14 max-md:h-12 px-6 max-md:px-4 rounded-full bg-danger text-white font-semibold flex items-center gap-2 hover:bg-danger/80 max-md:basis-full max-md:justify-center max-md:order-last" data-voice-leave><PhoneOff size={20} /><span className="max-md:hidden">Leave</span></button>
-              </>
+                        </>
+                      )}
+                    </span>
+                  )}
+                  <MenuControl label="More options" icon={<MoreHorizontal size={20} />} menu={(close) => (
+                    <div data-voice-more>
+                      <CheckRow label="Grid View" checked={!focusTile} onChange={(grid) => setFocused(grid ? null : (shown.find((x) => x.kind === 'screen') ?? shown[0])?.key ?? null)} data-view-grid="" />
+                      <CheckRow label="Show My Own Camera" checked={view.self} onChange={(v) => setView({ self: v })} data-view-self="" />
+                      <CheckRow label="Show Non-Video Participants" checked={view.nonVideo} onChange={(v) => setView({ nonVideo: v })} data-view-nonvideo="" />
+                      <MenuDivider />
+                      <SettingsRow label="Voice & Video Settings" close={close} />
+                    </div>
+                  )} />
+                </ControlGroup>
+                <HangUpButton label={t('Disconnect')} onClick={() => { void studioRec.stop(); voice.leave() }} data-voice-leave="" />
+              </ControlBar>
             ) : (
-              <button onClick={() => voice.join(channel.id)} disabled={connecting || !canConnect} title={canConnect ? undefined : 'You do not have permission to connect'} className="h-14 max-md:h-12 px-8 rounded-full bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50">
-                <Volume2 size={20} /> {!canConnect ? t('No permission to connect') : myChannel ? t('Switch to this channel') : t('Join Voice')}
-              </button>
+              <div className="flex justify-center">
+                <button onClick={() => voice.join(channel.id)} disabled={connecting || !canConnect} title={canConnect ? undefined : 'You do not have permission to connect'} className="h-12 px-8 rounded-xl bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50">
+                  <Volume2 size={20} /> {!canConnect ? t('No permission to connect') : myChannel ? t('Switch to this channel') : t('Join Voice')}
+                </button>
+              </div>
             )}
-          </div>
+          </div>}
         </div>
 
         {isStudio && sessionsOpen && <StudioPanel channelId={channel.id} canManage={isMod} onClose={() => setSessionsOpen(false)} width={sessionsPanel.width} handle={<div {...sessionsPanel.handleProps} />} />}
@@ -317,6 +346,32 @@ function usePhone() {
   return p
 }
 
-function Ctl(props: { children: React.ReactNode; label: string; on: boolean; accent?: boolean; onClick: () => void; menu?: DeviceKind }) {
-  return <DeviceCtl {...props} mobileLabel />
+/** Before joining a voice channel: who is in it (Discord-style cards), and one big Join button. */
+function PreJoin({ channel, participants, count, canConnect, connecting, switching }: { channel: Channel; participants: User[]; count: number; canConnect: boolean; connecting: boolean; switching: boolean }) {
+  const t = useT()
+  const names = participants.map((u) => u.display_name)
+  const who = count === 0 ? 'No one is currently in voice'
+    : count === 1 ? `${names[0] ?? 'Someone'} is currently in voice`
+    : count === 2 && names.length === 2 ? `${names[0]} and ${names[1]} are currently in voice`
+    : `${names.slice(0, 2).join(', ')}, and ${count - Math.min(2, names.length)} other${count - Math.min(2, names.length) === 1 ? '' : 's'} are currently in voice`
+  return (
+    <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-5 p-6 text-center" style={{ background: 'radial-gradient(120% 70% at 50% 115%, color-mix(in srgb, var(--color-accent) 75%, transparent), transparent 75%), var(--color-bg-0)' }} data-voice-prejoin>
+      {participants.length > 0 && (
+        <div className="flex max-w-[520px] flex-wrap justify-center gap-2" data-prejoin-people>
+          {participants.slice(0, 6).map((u) => (
+            <div key={u.id} title={u.display_name} className="flex h-[88px] w-[156px] max-md:h-16 max-md:w-28 items-center justify-center rounded-lg bg-bg-3" style={u.theme_accent ? { backgroundColor: u.theme_accent } : undefined}>
+              <Avatar user={u} size={44} />
+            </div>
+          ))}
+        </div>
+      )}
+      <div>
+        <h2 className="flex items-center justify-center gap-2 text-3xl max-md:text-2xl font-bold"><Volume2 size={30} className="text-text-1 shrink-0" /><span className="truncate">{channel.name}</span></h2>
+        <p className="mt-1.5 text-sm text-text-1" data-prejoin-who>{who}</p>
+      </div>
+      <button onClick={() => voice.join(channel.id)} disabled={connecting || !canConnect} title={canConnect ? undefined : 'You do not have permission to connect'} className="h-10 rounded-lg bg-text-0 px-5 font-semibold text-bg-0 hover:bg-text-1 disabled:opacity-50">
+        {!canConnect ? t('No permission to connect') : switching ? t('Switch to this channel') : t('Join Voice')}
+      </button>
+    </div>
+  )
 }

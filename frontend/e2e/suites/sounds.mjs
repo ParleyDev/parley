@@ -49,7 +49,7 @@ ok('joining voice plays the join sound', (await sfx(pa)).includes('user_join'), 
 await clear(pa); await pb.goto(`${WEB}/channels/${g.id}/${vc.id}`); await pb.waitForSelector('text=Join Voice'); await pb.click('text=Join Voice'); await pb.waitForSelector('[data-voice-leave]'); await pa.waitForTimeout(800)
 ok('alice hears a join sound when bob arrives', (await sfx(pa)).includes('user_join'), JSON.stringify(await sfx(pa)))
 await clear(pa); await pa.click('[data-voice-controls] button[title="Mute"]'); await pa.waitForTimeout(200); await pa.click('[data-voice-controls] button[title="Unmute"]'); await pa.waitForTimeout(200)
-await pa.click('[data-voice-controls] button[title="Deafen"]'); await pa.waitForTimeout(200); await pa.click('[data-voice-controls] button[title="Undeafen"]'); await pa.waitForTimeout(300)
+await pa.click('[data-voice-controls] [data-device-chevron="input"]'); await pa.click('[data-call-deafen]'); await pa.waitForTimeout(200); await pa.click('[data-call-deafen]'); await pa.waitForTimeout(300); await pa.keyboard.press('Escape')
 const vs = await sfx(pa)
 ok('mute, unmute, deafen and undeafen each have a sound', ['mute', 'unmute', 'deafen', 'undeafen'].every((k) => vs.includes(k)), JSON.stringify(vs))
 await clear(pa); await pb.click('[data-voice-leave]'); await pa.waitForTimeout(800)

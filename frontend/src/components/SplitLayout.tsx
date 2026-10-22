@@ -1,8 +1,9 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, type CSSProperties, type ReactNode } from 'react'
 import GuildBar from './GuildBar'
 import Modals from './modals'
 import UserPanel from './UserPanel'
 import { useStore } from '../store'
+import { useResizableSidebar } from '../lib/resize'
 
 /**
  * The app's two-column frame (server bar + sidebar on the left, content on the right) for pages
@@ -15,14 +16,14 @@ export default function SplitLayout({ sidebar, children, defaultPane = 'nav', te
   const setMobilePane = useStore((s) => s.setMobilePane)
   useEffect(() => { if (window.matchMedia('(max-width: 767px)').matches) setMobilePane(defaultPane) }, [defaultPane, setMobilePane])
   return (
-    <div className="h-full flex overflow-hidden relative" {...testid}>
-      <div className={`flex flex-col h-full shrink-0 w-[344px] tab:w-[296px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${pane === 'content' ? 'max-md:hidden' : ''}`}>
+    <div className="h-full flex overflow-hidden relative safe-area" {...testid}>
+      <NavColumn hidden={pane === 'content'}>
         <div className="flex flex-1 min-h-0">
           <GuildBar />
           {sidebar}
         </div>
         <UserPanel />
-      </div>
+      </NavColumn>
       <main className={`flex-1 min-w-0 flex flex-col bg-bg-2 ${pane === 'nav' ? 'max-md:hidden' : ''}`}>{children}</main>
       <Modals />
     </div>
@@ -33,4 +34,18 @@ export default function SplitLayout({ sidebar, children, defaultPane = 'nav', te
 export function useShowContent() {
   const setMobilePane = useStore((s) => s.setMobilePane)
   return () => setMobilePane('content')
+}
+
+/**
+ * The left column: server bar, the page's sidebar and the self card. On desktop the sidebar width is draggable
+ * (224–450 px) and reaches the sidebars through `--sidebar-w`; tablets and phones keep their fixed layouts.
+ */
+export function NavColumn({ hidden, children }: { hidden: boolean; children: ReactNode }) {
+  const { width, handleProps } = useResizableSidebar('sidebar', 272, 224, 450)
+  return (
+    <div style={{ '--sidebar-w': `${width}px` } as CSSProperties} className={`relative flex flex-col h-full shrink-0 w-[calc(72px_+_var(--sidebar-w))] tab:w-[296px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${hidden ? 'max-md:hidden' : ''}`}>
+      {children}
+      <div {...handleProps} aria-label="Resize sidebar" data-sidebar-resizer />
+    </div>
+  )
 }
