@@ -51,6 +51,8 @@ await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parl
 await p.goto(`${WEB}/channels/@me?connected=github`); await p.waitForSelector('text=account linked')
 ok('landing with ?connected shows a toast and cleans the URL', !/connected=/.test(p.url()))
 await p.click('button[title="User Settings"]'); await p.click('text=Connections'); await p.waitForSelector('[data-connections-tab]')
+// The tab renders before its provider list and connections load.
+await p.waitForFunction(() => document.querySelectorAll('[data-connection-row]').length === 2 && !!document.querySelector('[data-connect="twitch"]'), null, { timeout: 10000 }).catch(() => {})
 ok('the tab offers Connect buttons for the configured providers and lists both links', await p.locator('[data-connect="github"]').count() === 1 && await p.locator('[data-connect="twitch"]').count() === 1 && await p.locator('[data-connection-row]').count() === 2)
 await p.locator('[data-connection-row="github"] [data-connection-visible] [role=switch]').click(); await p.waitForSelector('[data-connection-row="github"] [data-connection-visible="1"]')
 ok('the visibility switch saves', (await call(b.token, 'GET', `/users/${a.user.id}`)).connections.length === 2)
