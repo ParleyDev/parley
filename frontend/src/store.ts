@@ -503,7 +503,9 @@ export const useStore = create<State>((set, get) => ({
     const lastMessageId = { ...s.lastMessageId, [m.channel_id]: m.id }
     // Your own messages (sent, forwarded, from any device) never count as unread for you.
     const readStates = m.author.id === s.user?.id ? { ...s.readStates, [m.channel_id]: m.id } : s.readStates
-    const mentionCounts = m.author.id !== s.user?.id && mentionsMe(s, m) ? { ...s.mentionCounts, [m.channel_id]: (s.mentionCounts[m.channel_id] ?? 0) + 1 } : s.mentionCounts
+    // Every message in an accepted DM counts like a mention (Discord), which badges the DM in the server bar.
+    const counts = m.author.id !== s.user?.id && (mentionsMe(s, m) || (!!s.dms[m.channel_id] && !isRequest(s.dms[m.channel_id])))
+    const mentionCounts = counts ? { ...s.mentionCounts, [m.channel_id]: (s.mentionCounts[m.channel_id] ?? 0) + 1 } : s.mentionCounts
     const typing = { ...s.typing }
     if (typing[m.channel_id]?.[m.author.id]) {
       typing[m.channel_id] = { ...typing[m.channel_id] }; delete typing[m.channel_id][m.author.id]
@@ -844,6 +846,14 @@ export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'cha
 
 export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'dms' | 'channels' | 'notifSettings'>): number {
   return Object.keys(s.dms).filter((id) => showsUnread(s, id)).length
+}
+
+/** Accepted, unmuted DMs with unread messages (and their count), newest first: shown under Home in the server bar. */
+export function unreadDms(s: Pick<State, 'mentionCounts' | 'readStates' | 'lastMessageId' | 'dms' | 'channels' | 'notifSettings'>): { dm: DmChannel; count: number }[] {
+  return Object.values(s.dms)
+    .filter((d) => !isRequest(d) && showsUnread(s, d.id) && (s.mentionCounts[d.id] ?? 0) > 0)
+    .sort((a, b) => (s.lastMessageId[b.id] ?? '').localeCompare(s.lastMessageId[a.id] ?? ''))
+    .map((dm) => ({ dm, count: s.mentionCounts[dm.id] }))
 }
 
 /** Incoming friend requests awaiting my answer. */

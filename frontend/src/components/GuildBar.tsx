@@ -3,12 +3,15 @@ import { ArrowDown, ArrowUp, Compass, Copy, Folder, FolderInput, FolderMinus, Fo
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
-import { dmUnreadCount, guildMentions, guildUnread, isUnread, myGuildPerms, pendingCount, useStore } from '../store'
+import { guildMentions, guildUnread, isUnread, messageRequests, myGuildPerms, pendingCount, unreadDms, useStore } from '../store'
+import Avatar from './Avatar'
+import GroupIcon from './GroupIcon'
+import { dmName, isGroup } from '../lib/dm'
 import { colorFor, initials } from '../lib/format'
 import { has, P } from '../lib/perms'
 import { api } from '../lib/api'
 import { dissolveFolder, moveGuild, moveItem, newFolderId, nudge, removeFromFolder, type DropTarget } from '../lib/layout'
-import type { Guild, LayoutItem } from '../lib/types'
+import type { DmChannel, Guild, LayoutItem } from '../lib/types'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { getPrefs } from '../lib/prefs'
 import { notifEntries } from './NotifMenu'
@@ -38,8 +41,12 @@ export default function GuildBar() {
   const notifSettings = useStore((s) => s.notifSettings)
   const openModal = useStore((s) => s.openModal)
   const guildId = useMatch('/channels/:guildId/*')?.params.guildId
-  const pending = useStore(pendingCount)
-  const dmUnread = dmUnreadCount({ readStates, lastMessageId, dms, channels, notifSettings }) + pending
+  // Home badges what waits outside DMs (friend and message requests); each unread DM gets its own icon below it.
+  const pending = useStore((s) => pendingCount(s) + messageRequests(s).length)
+  const dmMatch = useMatch('/channels/@me/:channelId')?.params.channelId
+  const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
+  const markRead = useStore((s) => s.markRead)
   const ctx = useContextMenu()
   const guildMenu = useGuildMenu()
   const [open, setOpen] = useState<Record<string, boolean>>(loadOpen)
@@ -48,6 +55,7 @@ export default function GuildBar() {
   const [over, setOver] = useState<{ key: string; zone: 'top' | 'mid' | 'bottom' } | null>(null)
   const unreadOf = (id: string) => guildId !== id && guildUnread({ readStates, lastMessageId, channels, dms, notifSettings }, id)
   const mentionCounts = useStore((s) => s.mentionCounts)
+  const dmList = unreadDms({ mentionCounts, readStates, lastMessageId, dms, channels, notifSettings })
   const mentionsOf = (id: string) => guildMentions({ mentionCounts, channels, dms, notifSettings }, id)
   const mutedOf = (id: string) => mutedTarget(notifSettings, id)
 
@@ -113,7 +121,7 @@ export default function GuildBar() {
               style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>
               {g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" draggable={false} /> : initials(g.name)}
             </div>
-            {mentionsOf(g.id) > 0 && <span className="absolute -bottom-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center ring-[3px] ring-bg-0" data-guild-mentions={mentionsOf(g.id)}>{mentionsOf(g.id)}</span>}
+            {mentionsOf(g.id) > 0 && <Badge n={mentionsOf(g.id)} data-guild-mentions={String(mentionsOf(g.id))} />}
           </Pill>
         </NavLink>
       </div>
@@ -125,6 +133,7 @@ export default function GuildBar() {
     const isOpen = !!open[f.id]
     const anyActive = f.guilds.includes(guildId ?? '')
     const anyUnread = f.guilds.some(unreadOf)
+    const folderMentions = f.guilds.reduce((n, id) => n + mentionsOf(id), 0)
     const tint = f.color ?? '#7d8394'
     const ind = indicator(f.id)
     const label = f.name || members.map((g) => g.name).join(', ')
@@ -146,6 +155,7 @@ export default function GuildBar() {
                   </div>
                 )}
               </div>
+              {!isOpen && folderMentions > 0 && <Badge n={folderMentions} data-folder-mentions={String(folderMentions)} />}
             </Pill>
           </button>
         </div>
@@ -162,14 +172,15 @@ export default function GuildBar() {
     <nav className="w-[72px] shrink-0 bg-bg-0 flex flex-col items-center py-3 gap-2 overflow-y-auto overflow-x-hidden" data-guild-bar>
       <NavLink to="/channels/@me" className={({ isActive }) => `group relative ${isActive ? 'active' : ''}`}>
         {({ isActive }) => (
-          <Pill active={isActive} unread={dmUnread > 0} tip={t('Direct Messages')}>
+          <Pill active={isActive} unread={pending > 0} tip={t('Direct Messages')}>
             <div className={`h-12 w-12 flex items-center justify-center transition-all duration-200 rounded-2xl ${isActive ? 'bg-accent' : 'bg-bg-3 group-hover:bg-accent'}`}>
               <span className="font-extrabold text-white text-lg">{APP_INITIAL}</span>
             </div>
-            {dmUnread > 0 && <span className="absolute -bottom-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center ring-[3px] ring-bg-0">{dmUnread}</span>}
+            {pending > 0 && <Badge n={pending} data-home-badge />}
           </Pill>
         )}
       </NavLink>
+      {dmList.map(({ dm, count }) => <UnreadDm key={dm.id} dm={dm} count={count} active={dmMatch === dm.id} name={dmName(dm, users, notes)} onMarkRead={(e) => ctx.open(e, [{ label: 'Mark As Read', icon: <MailCheck size={16} />, onClick: () => markRead(dm.id) }])} />)}
       <div className="h-0.5 w-8 rounded bg-bg-4 my-1" />
 
       {layout.map((it) => {
@@ -248,5 +259,25 @@ function Pill({ active, unread, tip, children }: { active?: boolean; unread?: bo
         document.body,
       )}
     </div>
+  )
+}
+
+/** Red count in the icon's corner (mentions, unread DM messages, requests). */
+function Badge({ n, ...data }: { n: number } & Record<`data-${string}`, string | boolean | undefined>) {
+  return <span className="absolute -bottom-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center ring-[3px] ring-bg-0" {...data}>{n > 99 ? '99+' : n}</span>
+}
+
+/** An unread DM under Home: the person's (or group's) icon with its unread count; gone once read. */
+function UnreadDm({ dm, count, active, name, onMarkRead }: { dm: DmChannel; count: number; active: boolean; name: string; onMarkRead: (e: React.MouseEvent<HTMLElement>) => void }) {
+  const other = isGroup(dm) ? undefined : dm.recipients[0]
+  return (
+    <NavLink to={`/channels/@me/${dm.id}`} onContextMenu={onMarkRead} className="group relative block" data-unread-dm={dm.id}>
+      <Pill active={active} unread tip={name}>
+        <div className="h-12 w-12 overflow-hidden rounded-full transition-all duration-200 group-hover:rounded-2xl">
+          {isGroup(dm) ? <GroupIcon dm={dm} size={48} /> : other ? <Avatar user={other} size={48} /> : <div className="h-full w-full bg-bg-4" />}
+        </div>
+        <Badge n={count} data-unread-dm-count={String(count)} />
+      </Pill>
+    </NavLink>
   )
 }

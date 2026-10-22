@@ -172,13 +172,15 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
 
     let mut all_channel_ids: Vec<Uuid> = channels.iter().map(|c| c.id).collect();
     all_channel_ids.extend(dms.iter().map(|d| d.channel.id));
-    // Unread messages that mention me (directly, via one of my roles, or @everyone) per channel.
+    // Unread messages that mention me (directly, via one of my roles, or @everyone) per channel. In accepted DMs every
+    // message counts, as in Discord, so the server bar can badge each unread DM with its message count.
+    let dm_ids: Vec<Uuid> = dms.iter().filter(|d| d.request_state == "accepted").map(|d| d.channel.id).collect();
     let my_roles: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT role_id FROM member_roles WHERE user_id = $1").bind(user_id).fetch_all(&state.db).await.unwrap_or_default().into_iter().map(|r| r.0).collect();
     let mention_counts: Vec<(Uuid, i64)> = sqlx::query_as(
         "SELECT m.channel_id, COUNT(*) FROM messages m
          LEFT JOIN read_states rs ON rs.channel_id = m.channel_id AND rs.user_id = $1
          WHERE m.channel_id = ANY($2) AND m.author_id <> $1 AND (rs.last_read_msg IS NULL OR m.id > rs.last_read_msg)
-           AND (m.mentions @> ARRAY[$1]::uuid[]
+           AND (m.channel_id = ANY($4) OR m.mentions @> ARRAY[$1]::uuid[]
                 OR (m.mention_everyone AND NOT COALESCE(
                       (SELECT suppress_everyone FROM notification_settings WHERE user_id = $1 AND target_id = m.channel_id),
                       (SELECT ns.suppress_everyone FROM notification_settings ns JOIN channels c ON c.guild_id = ns.target_id WHERE ns.user_id = $1 AND c.id = m.channel_id),
@@ -192,6 +194,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     .bind(user_id)
     .bind(&all_channel_ids)
     .bind(&my_roles)
+    .bind(&dm_ids)
     .fetch_all(&state.db)
     .await
     .unwrap_or_else(|e| { tracing::error!(error = ?e, "mention counts"); Vec::new() });
