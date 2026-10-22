@@ -6,7 +6,7 @@ await api(b.token,'POST',`/invites/${inv.code}`)
 const vc=g.channels.find(x=>x.kind==='voice').id, tc=g.channels.find(x=>x.kind==='text').id
 const browser=await launchBrowser({ args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] }); console.log('browser:', BROWSER)
 const errors=[]
-const open=async(tok,name,viewport,url)=>{const ctx=await browser.newContext({viewport,permissions:['microphone'],isMobile:viewport.width<500,hasTouch:viewport.width<500}); const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(name+': '+e.message)); p.on('console',m=>{if(m.type()==='error')errors.push(name+' console: '+m.text())}); await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),tok); await p.goto(url); return p}
+const open=async(tok,name,viewport,url)=>{const ctx=await browser.newContext({viewport,permissions:['microphone'],isMobile:viewport.width<500,hasTouch:viewport.width<500}); const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(name+': '+e.message)); p.on('console',m=>{if(m.type()==='error')errors.push(name+' console: '+m.text())}); await p.goto(`${WEB}/login`, { waitUntil: 'networkidle' }); await p.evaluate((t)=>localStorage.setItem('parley.token',t),tok); await p.goto(url); return p}
 const vis=(p,sel)=>p.locator(sel).first().isVisible().catch(()=>false)
 
 // ---- Desktop: intentional join + VC chat
@@ -46,8 +46,9 @@ await pm.click(`aside a[href="/channels/${g.id}/${tc}"]`); await pm.waitForSelec
 console.log('mobile text channel: chat visible', await vis(pm,'textarea'), 'sidebar hidden', !(await vis(pm,'[data-channel-list]')))
 await pm.fill('textarea','from phone'); await pm.press('textarea','Enter'); await pm.waitForSelector('main >> text=from phone')
 await pm.screenshot({path:'17-m-chat.png'})
-// swipe gestures (synthetic touch events; Playwright's touchscreen has no drag)
-const swipe=async(p,dx)=>p.evaluate((dx)=>{const el=document.querySelector('main')||document.body; const mk=(type,x)=>el.dispatchEvent(new TouchEvent(type,{bubbles:true,touches:type==='touchend'?[]:[new Touch({identifier:1,target:el,clientX:x,clientY:300})],changedTouches:[new Touch({identifier:1,target:el,clientX:x,clientY:300})]})); mk('touchstart',dx>0?20:300); mk('touchend',dx>0?20+dx:300+dx)},dx)
+// swipe gestures: plain events carrying touch-shaped data. WebKit forbids constructing Touch objects from script,
+// and Playwright's touchscreen has no drag; the app's swipe handler only reads clientX/clientY.
+const swipe=async(p,dx)=>p.evaluate((dx)=>{const el=document.querySelector('main')||document.body; const mk=(type,x)=>{const t={identifier:1,target:el,clientX:x,clientY:300}; const e=new Event(type,{bubbles:true}); Object.defineProperty(e,'touches',{value:type==='touchend'?[]:[t]}); Object.defineProperty(e,'changedTouches',{value:[t]}); el.dispatchEvent(e)}; mk('touchstart',dx>0?20:300); mk('touchend',dx>0?20+dx:300+dx)},dx)
 await swipe(pm,160); await pm.waitForTimeout(300)
 ok('swipe right opens the channel list', await vis(pm,'[data-channel-list]'))
 await pm.click(`aside a[href="/channels/${g.id}/${tc}"]`); await pm.waitForSelector('textarea'); await pm.waitForTimeout(300)
