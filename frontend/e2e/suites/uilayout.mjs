@@ -53,10 +53,27 @@ const bar = await p.locator('[data-voice-controls]').evaluate((el) => { const la
 ok('the control bar has padding below its buttons', bar >= 12, String(bar))
 await p.screenshot({ path: 'uilayout-controls.png' })
 await p.click('[data-voice-controls] [data-device-chevron="input"]'); await p.waitForSelector('[data-mic-menu]')
+await p.waitForTimeout(250) // let the menu's open animation finish before measuring it
 const menu = await p.locator('[data-call-menu]').boundingBox(); const ctl = await p.locator('[data-voice-controls]').boundingBox()
 ok('the mic menu opens above the bar, inside the window', menu.y + menu.height <= ctl.y + 4 && menu.y >= 0)
 await p.screenshot({ path: 'uilayout-micmenu.png' })
 await p.keyboard.press('Escape'); await pb.click('[data-voice-leave]'); await p.click('[data-voice-leave]')
+
+console.log('-- stage and studio pre-join')
+const stage = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'town-hall', kind: 'stage' })
+const studio = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'studio-a', kind: 'studio' })
+for (const [ch, empty, word] of [[stage, 'No one is on stage', 'stage'], [studio, 'No one is in the studio', 'studio']]) {
+  await p.goto(`${WEB}/channels/${g.id}/${ch.id}`); await p.waitForSelector(`[data-voice-prejoin="${word}"]`)
+  ok(`${word}: an empty channel gets the splash, without a control bar`, (await p.textContent('[data-prejoin-who]')).includes(empty) && await p.locator('[data-voice-controls]').count() === 0)
+  await pb.goto(`${WEB}/channels/${g.id}/${ch.id}`); await pb.click('text=Join Voice'); await pb.waitForSelector('[data-voice-leave]')
+  await p.waitForFunction(() => document.querySelector('[data-prejoin-who]')?.textContent.includes('listening'))
+  ok(`${word}: bob joining as audience shows as a listener, not a card`, (await p.textContent('[data-prejoin-who]')).includes('1 listening') && await p.locator('[data-prejoin-people]').count() === 0)
+  await p.screenshot({ path: `uilayout-prejoin-${word}.png` })
+  await p.click('text=Join Voice'); await p.waitForSelector('[data-voice-leave]')
+  ok(`${word}: joining shows the stage, audience and the new control bar`, await p.locator('[data-voice-prejoin]').count() === 0 && await p.locator('[data-stage-audience]').count() === 1 && await p.locator('[data-voice-controls] [role=group]').count() === 2)
+  await p.screenshot({ path: `uilayout-joined-${word}.png` })
+  await pb.click('[data-voice-leave]'); await p.click('[data-voice-leave]')
+}
 
 console.log('-- safe area')
 ok('the shell pads the bottom safe area (Android nav bar)', await p.evaluate(() => { document.documentElement.style.setProperty('--safe-area-inset-bottom', '48px'); const pad = getComputedStyle(document.querySelector('.safe-area')).paddingBottom; document.documentElement.style.removeProperty('--safe-area-inset-bottom'); return pad === '48px' }))

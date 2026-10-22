@@ -103,8 +103,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   useEffect(() => { if (board && channel.guild_id && !sounds) loadSounds(channel.guild_id) }, [board, channel.guild_id, sounds, loadSounds])
   const playSound = async (id: string) => { try { await api.post(`/channels/${channel.id}/soundboard/${id}`) } catch (e) { pushToast((e as Error).message, 'error') } }
   const inThis = myChannel === channel.id
-  // Regular voice channels show a join splash until you connect; stages keep their speakers/audience layout.
-  const preJoin = !inThis && !isStage
+  // Every voice, stage and studio channel shows a join splash until you connect.
+  const preJoin = !inThis
   const toggleChat = () => setChat((c) => { try { localStorage.setItem(CHAT_KEY, c ? '0' : '1') } catch { /* ignore */ } return !c })
 
   // Build tiles: one per participant (camera or avatar) plus one per active screen share.
@@ -205,7 +205,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
       <div className="flex-1 min-h-0 flex" ref={(el) => { chatPanel.setContainer(el); sessionsPanel.setContainer(el) }}>
         {/* Stage */}
         <div className="flex-1 min-w-0 flex flex-col">
-          {preJoin ? <PreJoin channel={channel} participants={participants.map((p) => users[p.user_id]).filter((u): u is User => !!u)} count={count} canConnect={canConnect} connecting={connecting} switching={!!myChannel} /> : (
+          {preJoin ? <PreJoin channel={channel} participants={participants} users={users} canConnect={canConnect} connecting={connecting} switching={!!myChannel} recording={liveSession?.name} /> : (
           <div className="flex-1 min-h-0 overflow-hidden p-4 max-md:p-2 flex flex-col gap-3">
             {count === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
@@ -252,7 +252,6 @@ export default function VoiceView({ channel }: { channel: Channel }) {
 
           )}
           {!preJoin && <div className="shrink-0 px-3 pt-3 pb-4 max-md:px-2 max-md:pb-3 border-t border-line" data-voice-controls>
-            {inThis ? (
               <ControlBar>
                 <ControlGroup>
                   <SplitControl chevronLabel="Microphone options" menuKind="input" menu={(close) => <MicMenu close={close} />}>
@@ -304,13 +303,6 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 </ControlGroup>
                 <HangUpButton label={t('Disconnect')} onClick={() => { void studioRec.stop(); voice.leave() }} data-voice-leave="" />
               </ControlBar>
-            ) : (
-              <div className="flex justify-center">
-                <button onClick={() => voice.join(channel.id)} disabled={connecting || !canConnect} title={canConnect ? undefined : 'You do not have permission to connect'} className="h-12 px-8 rounded-xl bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50">
-                  <Volume2 size={20} /> {!canConnect ? t('No permission to connect') : myChannel ? t('Switch to this channel') : t('Join Voice')}
-                </button>
-              </div>
-            )}
           </div>}
         </div>
 
@@ -346,27 +338,46 @@ function usePhone() {
   return p
 }
 
-/** Before joining a voice channel: who is in it (Discord-style cards), and one big Join button. */
-function PreJoin({ channel, participants, count, canConnect, connecting, switching }: { channel: Channel; participants: User[]; count: number; canConnect: boolean; connecting: boolean; switching: boolean }) {
+/** "Alice", "Alice and Bob", "Alice, Bob, and 3 others" for `count` people of whom `names` are known. */
+function peopleList(names: string[], count: number) {
+  if (count === 1) return names[0] ?? 'Someone'
+  if (count === 2 && names.length === 2) return `${names[0]} and ${names[1]}`
+  const rest = count - Math.min(2, names.length)
+  return `${names.slice(0, 2).join(', ')}, and ${rest} other${rest === 1 ? '' : 's'}`
+}
+
+/**
+ * Before joining: who is there (Discord-style cards) and one Join button. Voice channels list everyone; stages and
+ * studios show the people on stage (or in the band) as cards with the audience as a count, and a studio shows when
+ * a session is recording.
+ */
+function PreJoin({ channel, participants, users, canConnect, connecting, switching, recording }: { channel: Channel; participants: VoiceState[]; users: Record<string, User>; canConnect: boolean; connecting: boolean; switching: boolean; recording?: string }) {
   const t = useT()
-  const names = participants.map((u) => u.display_name)
-  const who = count === 0 ? 'No one is currently in voice'
-    : count === 1 ? `${names[0] ?? 'Someone'} is currently in voice`
-    : count === 2 && names.length === 2 ? `${names[0]} and ${names[1]} are currently in voice`
-    : `${names.slice(0, 2).join(', ')}, and ${count - Math.min(2, names.length)} other${count - Math.min(2, names.length) === 1 ? '' : 's'} are currently in voice`
+  const isStudio = channel.kind === 'studio', isStage = channel.kind === 'stage' || isStudio
+  const onStage = isStage ? participants.filter((p) => !p.suppress) : participants
+  const listening = participants.length - onStage.length
+  const people = onStage.map((p) => users[p.user_id]).filter((u): u is User => !!u)
+  const names = people.map((u) => u.display_name)
+  const where = isStudio ? 'in the studio' : isStage ? 'on stage' : 'currently in voice'
+  const lead = onStage.length === 0 ? (isStudio ? 'No one is in the studio' : isStage ? 'No one is on stage' : 'No one is currently in voice')
+    : `${peopleList(names, onStage.length)} ${onStage.length === 1 ? 'is' : 'are'} ${where}`
+  const who = isStage && listening > 0 ? `${lead} · ${listening} listening` : lead
+  const Icon = isStudio ? Disc3 : isStage ? Radio : Volume2
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-5 p-6 text-center" style={{ background: 'radial-gradient(120% 70% at 50% 115%, color-mix(in srgb, var(--color-accent) 75%, transparent), transparent 75%), var(--color-bg-0)' }} data-voice-prejoin>
-      {participants.length > 0 && (
+    <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center gap-5 p-6 text-center" style={{ background: 'radial-gradient(120% 70% at 50% 115%, color-mix(in srgb, var(--color-accent) 75%, transparent), transparent 75%), var(--color-bg-0)' }} data-voice-prejoin={channel.kind}>
+      {people.length > 0 && (
         <div className="flex max-w-[520px] flex-wrap justify-center gap-2" data-prejoin-people>
-          {participants.slice(0, 6).map((u) => (
+          {people.slice(0, 6).map((u) => (
             <div key={u.id} title={u.display_name} className="flex h-[88px] w-[156px] max-md:h-16 max-md:w-28 items-center justify-center rounded-lg bg-bg-3" style={u.theme_accent ? { backgroundColor: u.theme_accent } : undefined}>
               <Avatar user={u} size={44} />
             </div>
           ))}
         </div>
       )}
-      <div>
-        <h2 className="flex items-center justify-center gap-2 text-3xl max-md:text-2xl font-bold"><Volume2 size={30} className="text-text-1 shrink-0" /><span className="truncate">{channel.name}</span></h2>
+      <div className="max-w-full">
+        {recording !== undefined && <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-danger/20 px-2.5 py-0.5 text-[11px] font-bold uppercase text-danger" data-prejoin-rec><span className="h-2 w-2 rounded-full bg-danger animate-pulse" />Recording{recording ? ` · ${recording}` : ''}</span>}
+        <h2 className="flex items-center justify-center gap-2 text-3xl max-md:text-2xl font-bold"><Icon size={30} className="text-text-1 shrink-0" /><span className="truncate">{channel.name}</span></h2>
+        {isStage && channel.topic && <p className="mt-1 text-sm text-text-0">{channel.topic}</p>}
         <p className="mt-1.5 text-sm text-text-1" data-prejoin-who>{who}</p>
       </div>
       <button onClick={() => voice.join(channel.id)} disabled={connecting || !canConnect} title={canConnect ? undefined : 'You do not have permission to connect'} className="h-10 rounded-lg bg-text-0 px-5 font-semibold text-bg-0 hover:bg-text-1 disabled:opacity-50">
