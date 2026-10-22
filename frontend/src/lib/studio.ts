@@ -60,6 +60,7 @@ class StudioRecorder {
     const sid = this.sessionId, tid = this.trackId, dur = Date.now() - this.startedAt
     this.sessionId = null; this.trackId = null; this.rec = null
     this.stream?.getTracks().forEach((t) => t.stop()); this.stream = null
+    voice.releaseRecordingStream()
     this.expose()
     if (sid && tid) { try { await api.post(`/studio/sessions/${sid}/tracks/${tid}/finish`, { duration_ms: dur }) } catch { /* server keeps what it has */ } }
   }

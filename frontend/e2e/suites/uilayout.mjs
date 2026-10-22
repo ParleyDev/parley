@@ -54,8 +54,8 @@ ok('the control bar has padding below its buttons', bar >= 12, String(bar))
 await p.screenshot({ path: 'uilayout-controls.png' })
 await p.click('[data-voice-controls] [data-device-chevron="input"]'); await p.waitForSelector('[data-mic-menu]')
 await p.waitForTimeout(250) // let the menu's open animation finish before measuring it
-const menu = await p.locator('[data-call-menu]').boundingBox(); const ctl = await p.locator('[data-voice-controls]').boundingBox()
-ok('the mic menu opens above the bar, inside the window', menu.y + menu.height <= ctl.y + 4 && menu.y >= 0)
+const menu = await p.locator('[data-call-menu]').boundingBox(); const btn = await p.locator('[data-voice-controls] [data-device-chevron="input"]').boundingBox()
+ok('the mic menu opens above its button, inside the window', menu.y + menu.height <= btn.y && menu.y >= 0, JSON.stringify({ menu, btn }))
 await p.screenshot({ path: 'uilayout-micmenu.png' })
 await p.keyboard.press('Escape'); await pb.click('[data-voice-leave]'); await p.click('[data-voice-leave]')
 

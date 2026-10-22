@@ -46,6 +46,8 @@ class VoiceManager {
   private source: MediaStreamAudioSourceNode | null = null
   private inputGain: GainNode | null = null
   private gate: GainNode | null = null
+  /** Studio recording branch: its own mute stage, since it taps the mic before the talk gate. */
+  private recGain: GainNode | null = null
   private analyser: AnalyserNode | null = null
   private dest: MediaStreamAudioDestinationNode | null = null
   private gateTimer: ReturnType<typeof setInterval> | null = null
@@ -117,8 +119,9 @@ class VoiceManager {
     if (!to) return
     try {
       const offer = await peer.pc.createOffer()
-      await peer.pc.setLocalDescription(offer)
-      sendOp({ op: 'voice_signal', to, data: { type: 'offer', sdp: tuneOpusSdp(offer.sdp ?? '', this.profile) } })
+      const sdp = tuneOpusSdp(offer.sdp ?? '', this.profile)
+      await peer.pc.setLocalDescription({ type: 'offer', sdp })
+      sendOp({ op: 'voice_signal', to, data: { type: 'offer', sdp } })
     } catch (e) { console.warn('renegotiation failed', e) }
   }
 
@@ -375,9 +378,12 @@ class VoiceManager {
         await peer.pc.setRemoteDescription({ type: 'offer', sdp: data.sdp })
         this.attachLocalTracks(peer.pc)
         await this.flushCandidates(peer)
+        // The tuned SDP goes into our own local description too: libwebrtc configures the receiving Opus decoder
+        // from it, so without stereo=1 there a stereo stream is decoded (and played) as mono.
         const answer = await peer.pc.createAnswer()
-        await peer.pc.setLocalDescription(answer)
-        sendOp({ op: 'voice_signal', to: from, data: { type: 'answer', sdp: tuneOpusSdp(answer.sdp ?? '', this.profile) } })
+        const sdp = tuneOpusSdp(answer.sdp ?? '', this.profile)
+        await peer.pc.setLocalDescription({ type: 'answer', sdp })
+        sendOp({ op: 'voice_signal', to: from, data: { type: 'answer', sdp } })
         this.tunePeer(peer.pc)
       } else if (data.type === 'answer') {
         await peer.pc.setRemoteDescription({ type: 'answer', sdp: data.sdp })
@@ -518,6 +524,7 @@ class VoiceManager {
       gate.gain.setTargetAtTime(open ? 1 : 0, ctx.currentTime, 0.015)
       const muted = s.selfMute || s.selfDeaf
       s.setInputLevel(Math.round(db), open && !muted)
+      if (this.recGain) this.recGain.gain.setTargetAtTime(this.recordingSilenced() ? 0 : 1, ctx.currentTime, 0.015)
       if (s.user) s.setSpeaking(s.user.id, open && !muted && db > -60)
     }, GATE_INTERVAL_MS)
   }
@@ -540,11 +547,21 @@ class VoiceManager {
   /** Studio recording: the microphone after input volume but before the talk gate, so takes are never clipped by VAD/PTT. */
   getRecordingStream(): MediaStream | null {
     if (this.ctx && this.inputGain) {
+      this.releaseRecordingStream()
       const dest = this.ctx.createMediaStreamDestination()
-      this.inputGain.connect(dest)
+      // Muting (or being server-muted) silences the take too; the gate loop keeps this in step.
+      this.recGain = this.ctx.createGain(); this.recGain.gain.value = this.recordingSilenced() ? 0 : 1
+      this.inputGain.connect(this.recGain).connect(dest)
       return dest.stream
     }
     return this.raw ?? this.mic
+  }
+
+  releaseRecordingStream() { this.recGain?.disconnect(); this.recGain = null }
+
+  private recordingSilenced() {
+    const s = useStore.getState()
+    return s.selfMute || s.selfDeaf || !!(s.user && s.voiceStates[s.user.id]?.suppress)
   }
 
   /** Soundboard: play a short clip through the voice output device at the clip's volume (skipped while deafened). */
@@ -580,8 +597,9 @@ class VoiceManager {
     const peer = this.createPeer(userId, true)
     try {
       const offer = await peer.pc.createOffer()
-      await peer.pc.setLocalDescription(offer)
-      sendOp({ op: 'voice_signal', to: userId, data: { type: 'offer', sdp: tuneOpusSdp(offer.sdp ?? '', this.profile) } })
+      const sdp = tuneOpusSdp(offer.sdp ?? '', this.profile)
+      await peer.pc.setLocalDescription({ type: 'offer', sdp })
+      sendOp({ op: 'voice_signal', to: userId, data: { type: 'offer', sdp } })
     } catch (e) {
       console.warn('offer failed', e)
       useStore.getState().setPeerStatus(userId, 'failed')
@@ -682,7 +700,10 @@ class VoiceManager {
   private closeAllPeers() { [...this.peers.keys()].forEach((id) => this.closePeer(id)) }
 
   private stopTracks(stream: MediaStream | null) { stream?.getTracks().forEach((t) => { t.onended = null; t.stop() }) }
-  private applyMute(muted: boolean) { this.mic?.getAudioTracks().forEach((t) => (t.enabled = !muted)) }
+  private applyMute(muted: boolean) {
+    this.mic?.getAudioTracks().forEach((t) => (t.enabled = !muted))
+    if (this.recGain && this.ctx) this.recGain.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.015)
+  }
   private applyDeaf(deaf: boolean) { this.peers.forEach((p) => (p.audio.muted = deaf)); this.sfuAudio.forEach((a) => (a.muted = deaf)) }
 
   // ---- SFU (LiveKit) ----
