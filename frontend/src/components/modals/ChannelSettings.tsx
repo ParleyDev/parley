@@ -1,4 +1,4 @@
-import { Lock, SlidersHorizontal, Tag, Trash2 } from 'lucide-react'
+import { AudioLines, Lock, Mic, SlidersHorizontal, Tag, Timer, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -8,6 +8,7 @@ import { has, P } from '../../lib/perms'
 import SettingsShell from './SettingsShell'
 import ChannelPermissionsTab from './settings/ChannelPermissionsTab'
 import ForumTagsTab from './settings/ForumTagsTab'
+import { DEFAULT_BITRATE, MAX_BITRATE, MIN_BITRATE, type AudioMode } from '../../lib/audioProfile'
 
 type Tab = 'overview' | 'permissions' | 'tags'
 
@@ -55,11 +56,17 @@ function Overview({ channel }: { channel: Channel }) {
   const [name, setName] = useState(channel.name)
   const [topic, setTopic] = useState(channel.topic)
   const [nsfw, setNsfw] = useState(!!channel.nsfw)
+  const [audioMode, setAudioMode] = useState<AudioMode>(channel.audio_mode === 'music' ? 'music' : 'voice')
+  const [bitrate, setBitrate] = useState(channel.audio_bitrate ?? 0)
+  const [lowLatency, setLowLatency] = useState(!!channel.audio_low_latency)
   const [busy, setBusy] = useState(false)
-  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw
+  const isAudio = channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
+  const audioDirty = isAudio && (audioMode !== (channel.audio_mode === 'music' ? 'music' : 'voice') || bitrate !== (channel.audio_bitrate ?? 0) || lowLatency !== !!channel.audio_low_latency)
+  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || audioDirty
+  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency) }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
@@ -72,13 +79,57 @@ function Overview({ channel }: { channel: Channel }) {
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} />
         </label>
       )}
+      {isAudio && <AudioSection mode={audioMode} setMode={setAudioMode} bitrate={bitrate} setBitrate={setBitrate} lowLatency={lowLatency} setLowLatency={setLowLatency} />}
       {dirty && (
         <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
           <span className="text-sm flex-1">Careful — you have unsaved changes!</span>
-          <button type="button" className="btn-ghost" onClick={() => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw) }}>Reset</button>
+          <button type="button" className="btn-ghost" onClick={reset}>Reset</button>
           <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !name.trim()}>Save Changes</button>
         </div>
       )}
     </form>
+  )
+}
+
+/** Voice / stage / studio audio profile: speech vs high fidelity, Opus bitrate, ultra-low latency. */
+function AudioSection({ mode, setMode, bitrate, setBitrate, lowLatency, setLowLatency }: {
+  mode: AudioMode; setMode: (m: AudioMode) => void; bitrate: number; setBitrate: (b: number) => void; lowLatency: boolean; setLowLatency: (v: boolean) => void
+}) {
+  const effective = bitrate || DEFAULT_BITRATE[mode]
+  const card = (m: AudioMode, icon: React.ReactNode, title: string, body: string) => (
+    <button type="button" onClick={() => setMode(m)} aria-pressed={mode === m} data-audio-mode={m}
+      className={`flex-1 min-w-[220px] text-left rounded-lg border px-3 py-2.5 ${mode === m ? 'border-accent bg-accent/10' : 'border-line bg-bg-1 hover:border-text-2'}`}>
+      <span className="flex items-center gap-2 text-[15px] font-semibold">{icon}{title}</span>
+      <span className="block mt-1 text-xs text-text-2">{body}</span>
+    </button>
+  )
+  return (
+    <section className="space-y-4" data-audio-settings>
+      <h2 className="text-base font-bold">Audio</h2>
+      <div className="flex flex-wrap gap-2">
+        {card('voice', <Mic size={16} />, 'Voice', 'Clear speech. Uses each member\'s echo cancellation, noise suppression and auto gain; mono.')}
+        {card('music', <AudioLines size={16} />, 'High fidelity', 'Music and instruments: 48 kHz stereo with all voice processing off. Members should wear headphones (no echo cancellation).')}
+      </div>
+      <div>
+        <div className="flex items-center justify-between">
+          <label className="label mb-0">Bitrate</label>
+          <span className="text-sm font-semibold tabular-nums" data-audio-bitrate-value>{effective} kbps{bitrate ? '' : ' (default)'}</span>
+        </div>
+        <input type="range" min={MIN_BITRATE} max={MAX_BITRATE} step={1} value={effective} onChange={(e) => setBitrate(Number(e.target.value))} className="w-full accent-accent" data-audio-bitrate />
+        <div className="flex items-center justify-between text-xs text-text-2">
+          <span>{MIN_BITRATE} kbps</span>
+          {bitrate ? <button type="button" className="hover:underline" onClick={() => setBitrate(0)} data-audio-bitrate-default>Use default ({DEFAULT_BITRATE[mode]} kbps)</button> : <span>Opus, up to {MAX_BITRATE} kbps</span>}
+          <span>{MAX_BITRATE} kbps</span>
+        </div>
+        <p className="mt-1 text-xs text-text-2">Each member uploads this much per listener in peer-to-peer calls (once to the voice server when one is configured). 64 kbps is plenty for speech; 192-320 kbps is transparent for music.</p>
+      </div>
+      <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-audio-low-latency={lowLatency ? '1' : '0'}>
+        <span>
+          <span className="flex items-center gap-2 text-[15px]"><Timer size={16} /> Ultra-low latency</span>
+          <span className="block text-xs text-text-2">10 ms audio frames (half the usual) and the smallest jitter buffer the network allows: around 20-60 ms less delay, for playing together. Best on wired or strong connections; packet loss is more audible.</span>
+        </span>
+        <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={lowLatency} onChange={(e) => setLowLatency(e.target.checked)} />
+      </label>
+    </section>
   )
 }

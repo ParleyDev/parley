@@ -106,7 +106,9 @@ export default function VoiceVideoTab() {
         <div className="space-y-2">
           <Radio checked={st.inputMode === 'vad'} onClick={() => update({ inputMode: 'vad' })} title="Voice Activity" />
           <Radio checked={st.inputMode === 'ptt'} onClick={() => update({ inputMode: 'ptt' })} title="Push to Talk" />
+          <Radio checked={st.inputMode === 'open'} onClick={() => update({ inputMode: 'open' })} title="Always Transmit" />
         </div>
+        {st.inputMode === 'open' && <p className="mt-1.5 text-xs text-text-2" data-input-open-note>Your mic is always live (unless muted). Best for music: voice activity detection can cut off quiet notes and tails.</p>}
       </section>
 
       {st.inputMode === 'vad' ? (
@@ -122,7 +124,7 @@ export default function VoiceVideoTab() {
             <p className="mt-1.5 text-xs text-text-2">{st.autoSensitivity ? 'Transmits when the meter turns green.' : `Threshold ${threshold} dB — the bar turns green when you'd be heard.`}</p>
           </div>
         </section>
-      ) : (
+      ) : st.inputMode === 'ptt' ? (
         <section className="space-y-4">
           <div>
             <label className="label">Shortcut</label>
@@ -135,7 +137,7 @@ export default function VoiceVideoTab() {
           </div>
           <Slider label="Push to Talk Release Delay" value={st.pttRelease} min={0} max={2000} step={20} onChange={set('pttRelease')} format={(v) => `${(v / 1000).toFixed(2)}s`} />
         </section>
-      )}
+      ) : null}
 
       <Divider />
 
@@ -144,6 +146,7 @@ export default function VoiceVideoTab() {
         <Toggle label="Echo Cancellation" checked={st.echoCancellation} onChange={set('echoCancellation')} />
         <Toggle label="Noise Suppression" checked={st.noiseSuppression} onChange={set('noiseSuppression')} />
         <Toggle label="Automatic Gain Control" checked={st.autoGainControl} onChange={set('autoGainControl')} />
+        <p className="text-xs text-text-2" data-hifi-processing-note>High-fidelity channels (set by the server) turn all three off and capture 48 kHz stereo, so instruments and music come through untouched.</p>
       </section>
 
       <Divider />
