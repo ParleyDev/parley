@@ -1,11 +1,36 @@
 name: desktop
 on:
-  push:
-    paths: ['desktop/**', 'VERSION', 'scripts/version.mjs', '.github/workflows/desktop.yml']
-    tags: ['v*']
+  # Publishing a GitHub release (including pre-releases) builds it; the gate job checks the tag is semver.
+  release:
+    types: [published]
   workflow_dispatch:
 jobs:
+  # Releases build only for semver tags (v1.2.3, 1.2.3, v2.0.0-rc.1, v1.2.3+build.5); manual runs always build.
+  # The tag becomes the version of every artifact (scripts/version.mjs, PARLEY_VERSION).
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - id: check
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ "$EVENT" != "release" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          SEMVER='^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$'
+          if printf '%s' "$TAG" | grep -qE "$SEMVER"; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"; echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+            echo "Release $TAG: building version ${TAG#v}"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice::Release tag '$TAG' is not semver (e.g. v1.2.3); skipping build"
+          fi
   build:
+    needs: gate
+    if: needs.gate.outputs.ok == 'true'
+    env:
+      PARLEY_VERSION: ${{ needs.gate.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
