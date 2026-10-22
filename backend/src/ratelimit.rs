@@ -188,30 +188,31 @@ pub async fn rl_login(req: Request<Body>, next: Next) -> Response {
 /// Per-user (falls back to IP when unauthenticated): message sends.
 pub async fn rl_messages(req: Request<Body>, next: Next) -> Response {
     if req.method() != axum::http::Method::POST { return next.run(req).await }
-    let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
+    let key = user_key(req.headers(), &SECRET).unwrap_or_else(|| client_ip(req.headers()));
     limited("messages", LIMITER.limit("messages"), key, req, next).await
 }
 
 pub async fn rl_uploads(req: Request<Body>, next: Next) -> Response {
     if req.method() != axum::http::Method::POST { return next.run(req).await }
-    let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
+    let key = user_key(req.headers(), &SECRET).unwrap_or_else(|| client_ip(req.headers()));
     limited("uploads", LIMITER.limit("uploads"), key, req, next).await
 }
 
 pub async fn rl_gifs(req: Request<Body>, next: Next) -> Response {
-    let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
+    let key = user_key(req.headers(), &SECRET).unwrap_or_else(|| client_ip(req.headers()));
     limited("gifs", LIMITER.limit("gifs"), key, req, next).await
 }
 
 /// Per-user (or IP): emails we send on request (verification resend, password reset).
 pub async fn rl_mail(req: Request<Body>, next: Next) -> Response {
-    let key = user_key(req.headers(), &secret()).unwrap_or_else(|| client_ip(req.headers()));
+    let key = user_key(req.headers(), &SECRET).unwrap_or_else(|| client_ip(req.headers()));
     limited("mail", LIMITER.limit("mail"), key, req, next).await
 }
 
-fn secret() -> String {
-    std::env::var("JWT_SECRET").unwrap_or_else(|_| "dev-insecure-secret-change-me".into())
-}
+/// The token signing secret, resolved like `Config::jwt_secret` (so `JWT_SECRET_FILE` works too).
+static SECRET: LazyLock<String> = LazyLock::new(|| {
+    crate::config::env_or_file("JWT_SECRET").unwrap_or_else(|| "dev-insecure-secret-change-me".into())
+});
 
 pub async fn prune_loop() {
     loop {
