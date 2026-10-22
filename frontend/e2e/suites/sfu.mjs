@@ -1,10 +1,13 @@
 import { chromium } from 'playwright'
 import { execSync } from 'node:child_process'
 import { WEB, B, S, reg, call, callS, raw, ok, finish, adminToken } from '../lib.mjs'
+import { fileURLToPath } from 'node:url'
+// The repo's compose file, wherever the checkout lives (dev machine or CI runner).
+const COMPOSE_FILE = fileURLToPath(new URL('../../../docker-compose.yml', import.meta.url))
 
 // LiveKit SFU: start the dev server (compose profile "sfu"), point the instance at it, make two browsers
 // join a voice channel and check media flows through the room instead of peer connections.
-const compose = (args) => execSync(`docker compose -f /git/vic10us/reChat-bot/docker-compose.yml ${args}`, { stdio: 'pipe' }).toString()
+const compose = (args) => execSync(`docker compose -f ${COMPOSE_FILE} ${args}`, { stdio: 'pipe' }).toString()
 const LK = 'http://localhost:7880'
 let startedHere = false
 const up = async () => { try { if ((await fetch(LK)).status) return } catch { /* down */ } compose('--profile sfu up -d livekit'); startedHere = true; for (let i = 0; i < 60; i++) { try { if ((await fetch(LK)).status) return } catch { /* wait */ } await new Promise((r) => setTimeout(r, 1000)) } throw new Error('livekit did not start') }
