@@ -35,6 +35,7 @@ ok('and can promote him to a second engineer', (await call(c.token, 'GET', `/cha
 await pb.waitForSelector('[data-studio-record]'); ok('both engineers get the Record control', await pb.locator('[data-studio-record]').count() === 1)
 await pa.locator(`[data-voice-tile="${b.user.id}"] [data-role-button]`).click(); await pa.locator(`[data-voice-tile="${b.user.id}"] [data-role-option="artist"]`).click()
 await pb.waitForFunction(() => !document.querySelector('[data-studio-record]'))
+await pa.waitForSelector(`[data-voice-tile="${b.user.id}"] [data-artist-badge]`, { timeout: 10000 }).catch(() => {})
 ok('demoting back to artist removes it', await pa.locator(`[data-voice-tile="${b.user.id}"] [data-artist-badge]`).count() === 1)
 await pb.locator(`[data-voice-tile="${b.user.id}"] [data-role-button]`).click(); await pb.locator(`[data-voice-tile="${b.user.id}"] [data-role-option="audience"]`).click()
 await pb.waitForSelector(`[data-stage-audience] [data-audience="${b.user.id}"]`)
