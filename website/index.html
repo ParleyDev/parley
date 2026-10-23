@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parley</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Parley is an open-source, self-hosted chat app for communities: text, voice, video, stages and a recording studio, on a server you own.">
+<meta name="theme-color" content="#07070c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%237b6cff'/%3E%3Ctext x='32' y='44' font-family='Arial Black,Arial' font-weight='900' font-size='34' fill='white' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a broadcast console. Left-set display type over a live stereo waveform; every section is a "channel"
+   with a mono call-sign; product UI is drawn, never screenshotted. One committed dark look, like the app itself. */
+:root {
+  --ink: #07070c;        /* page ground, violet-biased black */
+  --panel: #10101a;      /* raised surfaces, app chrome */
+  --panel-2: #171726;
+  --rule: #24233a;
+  --text: #ecebff;
+  --muted: #9a98b8;
+  --faint: #5f5d7d;
+  --violet: #7b6cff;     /* Parley accent, lifted for dark ground */
+  --violet-deep: #4a3dd1;
+  --signal: #3ccf7d;     /* speaking ring / on air */
+  --hot: #f0506e;        /* hang up, REC */
+  --display: "Unbounded", "Arial Black", Impact, system-ui, sans-serif;
+  --body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --step--1: 0.8125rem; --step-0: 1rem; --step-1: 1.25rem; --step-2: 1.75rem; --step-3: clamp(2rem, 5vw, 3.25rem);
+  --step-hero: clamp(3.1rem, 11.5vw, 10.5rem);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--ink); color: var(--text); font: 400 var(--step-0)/1.6 var(--body); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--ink); }
+a { color: inherit; }
+img, canvas { max-width: 100%; }
+::selection { background: var(--violet); color: #fff; }
+:focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; border-radius: 4px; }
+.wrap { max-width: 1240px; margin-inline: auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+@media (min-width: 720px) { .wrap { padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); } }
+.callsign { font: 500 var(--step--1)/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--violet); display: flex; align-items: center; gap: .6rem; }
+.callsign::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 22%, transparent); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h2 { font-size: var(--step-3); font-weight: 700; line-height: 1.04; letter-spacing: -.02em; }
+h3 { font-size: var(--step-1); font-weight: 700; line-height: 1.2; letter-spacing: -.01em; }
+p { margin: 0; }
+.lede { color: var(--muted); font-size: var(--step-1); line-height: 1.5; max-width: 38ch; }
+.btn { display: inline-flex; align-items: center; gap: .55rem; height: 3rem; padding-inline: 1.35rem; border-radius: 999px; font: 600 var(--step-0)/1 var(--body); text-decoration: none; border: 1px solid transparent; transition: transform .15s ease, background .15s ease, border-color .15s ease; }
+.btn:hover { transform: translateY(-1px); }
+.btn-primary { background: var(--violet); color: #fff; box-shadow: 0 10px 40px -12px color-mix(in srgb, var(--violet) 80%, transparent); }
+.btn-primary:hover { background: #8d80ff; }
+.btn-ghost { border-color: var(--rule); color: var(--text); background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.btn-ghost:hover { border-color: var(--faint); }
+section { padding-block: clamp(4.5rem, 10vw, 8rem); }
+
+/* ---- nav ---- */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; backdrop-filter: blur(14px); background: color-mix(in srgb, var(--ink) 72%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); }
+.nav .wrap { display: flex; align-items: center; gap: 1.5rem; height: 64px; }
+.brand { display: flex; align-items: center; gap: .6rem; font: 900 1.05rem/1 var(--display); text-decoration: none; letter-spacing: .02em; }
+.mark { width: 30px; height: 30px; border-radius: 9px; background: var(--violet); display: grid; place-items: center; color: #fff; font: 900 15px/1 var(--display); box-shadow: inset 0 -3px 0 var(--violet-deep); }
+.nav nav { display: flex; gap: 1.6rem; margin-left: auto; }
+.nav nav a { color: var(--muted); text-decoration: none; font-size: .9375rem; }
+.nav nav a:hover { color: var(--text); }
+.nav .gh { height: 2.4rem; padding-inline: 1rem; font-size: .875rem; }
+@media (max-width: 760px) { .nav nav { display: none; } .nav .gh { margin-left: auto; } }
+
+/* ---- hero ---- */
+.hero { position: relative; padding-block: clamp(3rem, 8vw, 6rem) 0; overflow: hidden; isolation: isolate; }
+.hero::before { content: ""; position: absolute; inset: -20% -10% auto; height: 120%; z-index: -2; background: radial-gradient(60% 50% at 70% 30%, color-mix(in srgb, var(--violet) 28%, transparent), transparent 70%), radial-gradient(40% 40% at 10% 80%, color-mix(in srgb, var(--violet-deep) 22%, transparent), transparent 70%); }
+#wave { position: absolute; left: 0; right: 0; top: clamp(4rem, 12vw, 9rem); width: 100%; height: clamp(240px, 34vw, 440px); z-index: -1; opacity: .9; }
+.eyebrow-row { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; align-items: center; }
+.pill { font: 500 .75rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: .45rem .7rem; border: 1px solid var(--rule); border-radius: 999px; color: var(--muted); background: color-mix(in srgb, var(--panel) 80%, transparent); text-decoration: none; }
+.pill b { color: var(--signal); font-weight: 500; }
+.hero h1 { font-size: var(--step-hero); font-weight: 900; line-height: .86; letter-spacing: -.045em; margin-top: 1.6rem; text-transform: uppercase; }
+.hero h1 .line2 { display: block; color: var(--violet); }
+.hero-copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2rem 3rem; align-items: end; margin-top: clamp(1.75rem, 4vw, 2.75rem); }
+.hero-copy .lede { max-width: 44ch; }
+.hero-copy .lede strong { color: var(--text); font-weight: 500; }
+.ctas { display: flex; flex-wrap: wrap; gap: .75rem; }
+@media (max-width: 820px) { .hero-copy { grid-template-columns: 1fr; } }
+
+/* ---- app window mock ---- */
+.stage-wrap { margin-top: clamp(3rem, 7vw, 5rem); position: relative; }
+.stage-wrap::after { content: ""; position: absolute; left: 8%; right: 8%; bottom: -40px; height: 80px; background: var(--violet); filter: blur(70px); opacity: .35; z-index: -1; }
+.app { border: 1px solid var(--rule); border-bottom: 0; border-radius: 18px 18px 0 0; background: var(--panel); overflow: hidden; display: grid; grid-template-columns: 64px 220px minmax(0, 1fr); height: clamp(360px, 46vw, 560px); box-shadow: 0 -1px 0 color-mix(in srgb, var(--text) 8%, transparent) inset; }
+.rail { background: #0a0a12; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 14px; }
+.rail span { width: 40px; height: 40px; border-radius: 14px; display: grid; place-items: center; font: 700 13px/1 var(--display); color: #fff; }
+.rail .on { border-radius: 12px; background: var(--violet); position: relative; }
+.rail .on::before { content: ""; position: absolute; left: -12px; width: 4px; height: 26px; border-radius: 0 4px 4px 0; background: #fff; }
+.rail hr { width: 26px; border: 0; height: 2px; background: var(--rule); margin: 2px 0; }
+.chans { background: #0e0e17; border-right: 1px solid var(--rule); padding: 14px 10px; font-size: 13.5px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chans .srv { font: 700 13px/1 var(--display); padding: 4px 8px 14px; border-bottom: 1px solid var(--rule); margin-bottom: 10px; }
+.chans .cat { font: 600 10.5px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); padding: 10px 8px 6px; }
+.chans .ch { padding: 6px 8px; border-radius: 7px; color: var(--muted); display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+.chans .ch.active { background: var(--panel-2); color: var(--text); }
+.chans .ch i { font-style: normal; color: var(--faint); width: 14px; text-align: center; }
+.chans .who { padding: 3px 8px 3px 30px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12.5px; }
+.chans .who .av { width: 20px; height: 20px; font-size: 9px; }
+.call { position: relative; display: flex; flex-direction: column; min-width: 0; background: #0b0b13; }
+.call header { height: 46px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--rule); font-weight: 600; font-size: 14px; }
+.call header small { color: var(--faint); font-weight: 400; font-size: 12px; }
+.call header .rec { margin-left: auto; font: 500 11px/1 var(--mono); letter-spacing: .08em; color: var(--hot); background: color-mix(in srgb, var(--hot) 16%, transparent); padding: 5px 8px; border-radius: 999px; display: flex; gap: 6px; align-items: center; }
+.call header .rec::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--hot); animation: blink 1.4s infinite; }
+.tiles { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px; }
+.tile { border-radius: 14px; background: var(--panel-2); border: 2px solid var(--rule); display: grid; place-items: center; position: relative; min-height: 0; overflow: hidden; }
+.tile .name { position: absolute; left: 10px; bottom: 10px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--ink) 80%, transparent); padding: 3px 8px; border-radius: 7px; }
+.tile .role { position: absolute; left: 10px; top: 10px; font: 600 9.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 4px 6px; border-radius: 5px; background: var(--violet); color: #fff; }
+.tile .role.eng { background: #f6b53d; color: #1a1300; }
+.tile.speaking { border-color: var(--signal); }
+.tile.speaking .av { box-shadow: 0 0 0 4px color-mix(in srgb, var(--signal) 70%, transparent); animation: talk 1.1s ease-in-out infinite; }
+.tile.screen { background: linear-gradient(135deg, #1b1840, #0f2a2a); }
+.tile.screen .live { position: absolute; right: 10px; top: 10px; font: 700 9.5px/1 var(--mono); letter-spacing: .1em; background: var(--hot); color: #fff; padding: 4px 6px; border-radius: 5px; }
+.daw { width: 78%; display: grid; gap: 6px; }
+.daw span { height: 14px; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--violet) 70%, transparent), color-mix(in srgb, var(--signal) 55%, transparent)); }
+.av { width: clamp(44px, 6vw, 72px); height: clamp(44px, 6vw, 72px); border-radius: 50%; display: grid; place-items: center; font: 700 clamp(15px, 2vw, 24px)/1 var(--display); color: #fff; flex: none; }
+.c1 { background: #e0609a; } .c2 { background: #3aa6d8; } .c3 { background: #e39a3b; } .c4 { background: #5fbf8a; } .c5 { background: #8d79ff; }
+.bar { flex: none; display: flex; justify-content: center; gap: 8px; padding: 10px 12px 14px; border-top: 1px solid var(--rule); flex-wrap: wrap; }
+.grp { display: flex; gap: 2px; padding: 5px; border-radius: 12px; border: 1px solid var(--rule); background: var(--panel); }
+.grp b { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--text); }
+.grp b.chev { width: 18px; color: var(--faint); }
+.grp b svg { width: 17px; height: 17px; }
+.hang { width: 52px; height: 46px; border-radius: 12px; background: var(--hot); display: grid; place-items: center; color: #fff; }
+.hang svg { width: 19px; height: 19px; }
+@media (max-width: 900px) { .app { grid-template-columns: 56px minmax(0, 1fr); } .chans { display: none; } }
+@media (max-width: 520px) { .app { grid-template-columns: minmax(0, 1fr); height: 420px; } .rail { display: none; } .tiles { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 10px; } .grp b.chev { display: none; } }
+
+/* ---- spec strip ---- */
+.strip { border-block: 1px solid var(--rule); background: var(--panel); padding-block: 0; }
+.strip .wrap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.strip div.cell { padding: 1.6rem 1.25rem 1.6rem 0; border-right: 1px solid var(--rule); display: grid; gap: .35rem; }
+.strip div.cell + div.cell { padding-left: 1.25rem; }
+.strip div.cell:last-child { border-right: 0; }
+.strip .v { font: 700 clamp(1.4rem, 3vw, 2.1rem)/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.strip .k { color: var(--muted); font-size: var(--step--1); }
+@media (max-width: 760px) { .strip .wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip div.cell:nth-child(2) { border-right: 0; } .strip div.cell:nth-child(3) { padding-left: 0; } .strip div.cell:nth-child(n+3) { border-top: 1px solid var(--rule); } }
+
+/* ---- features ---- */
+.head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1.5rem 4rem; align-items: end; margin-bottom: clamp(2.5rem, 5vw, 4rem); }
+.head .callsign { grid-column: 1 / -1; }
+@media (max-width: 820px) { .head { grid-template-columns: 1fr; } }
+.grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 22px; overflow: hidden; }
+.f { background: var(--ink); padding: clamp(1.4rem, 3vw, 2.1rem); display: flex; flex-direction: column; gap: .8rem; min-width: 0; position: relative; }
+.f.w3 { grid-column: span 3; } .f.w2 { grid-column: span 2; } .f.w4 { grid-column: span 4; }
+.f p { color: var(--muted); max-width: 52ch; }
+.f .tag { font: 500 .6875rem/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.f ul { list-style: none; padding: 0; margin: .25rem 0 0; display: flex; flex-wrap: wrap; gap: .4rem; }
+.f li { font-size: .8125rem; color: var(--text); border: 1px solid var(--rule); border-radius: 999px; padding: .3rem .65rem; background: var(--panel); }
+.f:hover { background: #0b0b13; }
+@media (max-width: 980px) { .f.w2, .f.w3, .f.w4 { grid-column: span 3; } }
+@media (max-width: 640px) { .grid { grid-template-columns: minmax(0, 1fr); } .f.w2, .f.w3, .f.w4 { grid-column: auto; } }
+/* mini illustrations inside feature cells */
+.mini { margin-top: auto; padding-top: 1rem; }
+.msg { display: flex; gap: .7rem; align-items: flex-start; font-size: .875rem; }
+.msg .av { width: 30px; height: 30px; font-size: 12px; }
+.msg b { font-weight: 600; }
+.msg small { color: var(--faint); font-family: var(--mono); font-size: .6875rem; margin-left: .4rem; }
+.msg .body { color: var(--muted); }
+.msg .mention { color: #cfc9ff; background: color-mix(in srgb, var(--violet) 25%, transparent); padding: 0 .3rem; border-radius: 4px; }
+.reacts { display: flex; gap: .4rem; margin-top: .45rem; }
+.reacts span { font-size: .75rem; border: 1px solid var(--rule); background: var(--panel); border-radius: 7px; padding: .15rem .45rem; }
+.reacts span.me { border-color: var(--violet); background: color-mix(in srgb, var(--violet) 16%, transparent); }
+.poll { border: 1px solid var(--rule); background: var(--panel); border-radius: 12px; padding: .9rem; display: grid; gap: .5rem; font-size: .8125rem; }
+.poll .q { font-weight: 600; font-size: .875rem; }
+.poll .opt { position: relative; border-radius: 7px; padding: .4rem .6rem; background: var(--panel-2); overflow: hidden; display: flex; justify-content: space-between; }
+.poll .opt i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--violet) 32%, transparent); z-index: 0; }
+.poll .opt span { position: relative; font-variant-numeric: tabular-nums; }
+.vm { display: flex; align-items: center; gap: .7rem; border: 1px solid var(--rule); background: var(--panel); border-radius: 999px; padding: .45rem .9rem .45rem .45rem; }
+.vm .play { width: 30px; height: 30px; border-radius: 50%; background: var(--violet); display: grid; place-items: center; color: #fff; flex: none; }
+.vm canvas { flex: 1; height: 26px; width: 100%; min-width: 0; }
+.vm small { font: 500 .75rem/1 var(--mono); color: var(--muted); }
+.transcript { font-size: .8125rem; color: var(--muted); margin-top: .5rem; padding-left: .8rem; border-left: 2px solid var(--rule); }
+.hand { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.hand .chip { display: flex; flex-direction: column; align-items: center; gap: .3rem; font-size: .6875rem; color: var(--muted); }
+.hand .chip .av { width: 38px; height: 38px; font-size: 13px; position: relative; }
+.hand .chip .av em { position: absolute; right: -4px; top: -4px; width: 16px; height: 16px; border-radius: 50%; background: #f6b53d; font-style: normal; font-size: 9px; display: grid; place-items: center; color: #1a1300; }
+.roles { display: flex; flex-wrap: wrap; gap: .45rem; }
+.roles span { font-size: .8125rem; font-weight: 600; padding: .3rem .6rem; border-radius: 7px; background: var(--panel); border: 1px solid var(--rule); }
+.platforms-mini { display: flex; flex-wrap: wrap; gap: .45rem; }
+.platforms-mini span { font: 500 .75rem/1 var(--mono); padding: .45rem .6rem; border-radius: 7px; border: 1px solid var(--rule); background: var(--panel); color: var(--muted); }
+
+/* ---- studio ---- */
+.studio { background: linear-gradient(180deg, var(--ink), #0b0a16 30%, var(--ink)); }
+.console { margin-top: clamp(2.5rem, 5vw, 4rem); border: 1px solid var(--rule); border-radius: 22px; background: var(--panel); overflow: hidden; }
+.console .top { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--rule); }
+.console .top strong { font: 700 1rem/1.2 var(--display); }
+.console .top .rec { font: 500 .75rem/1 var(--mono); color: var(--hot); display: flex; align-items: center; gap: .45rem; letter-spacing: .06em; }
+.console .top .rec::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hot); animation: blink 1.4s infinite; }
+.console .top .time { margin-left: auto; font: 500 1.05rem/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.console .export { font: 600 .8125rem/1 var(--body); color: var(--text); border: 1px solid var(--rule); border-radius: 8px; padding: .55rem .8rem; background: var(--panel-2); }
+.tracks { position: relative; }
+.track { display: grid; grid-template-columns: 210px minmax(0, 1fr); border-bottom: 1px solid var(--rule); }
+.track:last-child { border-bottom: 0; }
+.track .meta { padding: .9rem 1.25rem; display: flex; align-items: center; gap: .75rem; border-right: 1px solid var(--rule); min-width: 0; }
+.track .meta .av { width: 34px; height: 34px; font-size: 12px; }
+.track .meta div { min-width: 0; }
+.track .meta b { display: block; font-size: .9375rem; }
+.track .meta small { display: block; color: var(--faint); font: 400 .6875rem/1.4 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track .ms { display: flex; gap: 4px; margin-left: auto; }
+.track .ms i { font: 700 .6875rem/1 var(--mono); font-style: normal; width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; background: var(--panel-2); color: var(--faint); border: 1px solid var(--rule); }
+.track .ms i.solo { background: #f6b53d; color: #1a1300; border-color: #f6b53d; }
+.track canvas { width: 100%; height: 76px; display: block; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); left: calc(210px + 38%); box-shadow: 0 0 12px var(--text); pointer-events: none; }
+@media (max-width: 720px) { .track { grid-template-columns: minmax(0, 1fr); } .track .meta { border-right: 0; border-bottom: 1px solid var(--rule); } .playhead { display: none; } }
+.studio-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; margin-top: 2.5rem; }
+.studio-notes div { display: grid; gap: .5rem; align-content: start; }
+.studio-notes p { color: var(--muted); }
+.studio-notes .k { font: 500 .75rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--violet); }
+@media (max-width: 820px) { .studio-notes { grid-template-columns: 1fr; gap: 1.5rem; } }
+
+/* ---- self-host ---- */
+.host { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 3rem 4rem; align-items: start; }
+@media (max-width: 900px) { .host { grid-template-columns: 1fr; } }
+.host > div { min-width: 0; }
+.host .lede { margin-top: 1.25rem; }
+.term { border: 1px solid var(--rule); border-radius: 18px; background: #06060a; overflow: hidden; min-width: 0; box-shadow: 0 30px 80px -40px color-mix(in srgb, var(--violet) 60%, transparent); }
+.term .tb { display: flex; align-items: center; gap: .5rem; padding: .8rem 1rem; border-bottom: 1px solid var(--rule); background: var(--panel); }
+.term .tb i { width: 11px; height: 11px; border-radius: 50%; background: var(--rule); }
+.term .tb span { font: 500 .75rem/1 var(--mono); color: var(--faint); margin-left: .5rem; }
+.term .tb button { margin-left: auto; font: 600 .75rem/1 var(--body); color: var(--text); background: var(--panel-2); border: 1px solid var(--rule); border-radius: 7px; padding: .45rem .7rem; cursor: pointer; }
+.term .tb button:hover { border-color: var(--faint); }
+.term pre { margin: 0; padding: 1.25rem 1.25rem 1.5rem; overflow-x: auto; font: 400 .875rem/1.8 var(--mono); color: var(--text); }
+.term .c { color: var(--faint); }
+.term .p { color: var(--violet); user-select: none; }
+.term .ok { color: var(--signal); }
+.plats { margin-top: 2rem; display: grid; gap: .5rem; }
+.plats .k { font: 500 .75rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: .25rem; }
+.plats div { display: flex; flex-wrap: wrap; gap: .45rem; }
+.plats a { text-decoration: none; font-size: .875rem; padding: .45rem .75rem; border-radius: 8px; border: 1px solid var(--rule); background: var(--panel); color: var(--text); }
+.plats a:hover { border-color: var(--violet); }
+.checks { list-style: none; padding: 0; margin: 2rem 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1.5rem; }
+.checks li { display: flex; gap: .6rem; color: var(--muted); font-size: .9375rem; }
+.checks li::before { content: ""; flex: none; width: 16px; height: 16px; margin-top: .25rem; border-radius: 5px; background: color-mix(in srgb, var(--signal) 22%, transparent); box-shadow: inset 0 0 0 1px var(--signal); }
+.checks b { color: var(--text); font-weight: 500; }
+@media (max-width: 520px) { .checks { grid-template-columns: 1fr; } }
+
+/* ---- download ---- */
+.dl { border: 1px solid var(--rule); border-radius: 22px; overflow: hidden; margin-top: clamp(2.5rem, 5vw, 3.5rem); }
+.dl a { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 1rem 2rem; align-items: center; padding: 1.35rem clamp(1.1rem, 3vw, 2rem); text-decoration: none; border-bottom: 1px solid var(--rule); transition: background .15s ease; }
+.dl a:last-child { border-bottom: 0; }
+.dl a:hover { background: var(--panel); }
+.dl a:hover .go { color: var(--violet); transform: translateX(3px); }
+.dl .os { font: 700 var(--step-1)/1.1 var(--display); }
+.dl .files { display: flex; flex-wrap: wrap; gap: .4rem; }
+.dl .files span { font: 400 .75rem/1 var(--mono); color: var(--muted); border: 1px solid var(--rule); border-radius: 6px; padding: .35rem .5rem; background: var(--panel); overflow-wrap: anywhere; }
+.dl .go { font: 600 .875rem/1 var(--body); color: var(--muted); transition: transform .15s ease, color .15s ease; white-space: nowrap; }
+@media (max-width: 720px) { .dl a { grid-template-columns: minmax(0, 1fr) auto; } .dl .files { grid-column: 1 / -1; grid-row: 2; } }
+.note { margin-top: 1.25rem; color: var(--faint); font-size: .875rem; }
+
+/* ---- finale ---- */
+.finale { text-align: left; overflow: hidden; position: relative; isolation: isolate; border-top: 1px solid var(--rule); }
+.finale::before { content: ""; position: absolute; inset: auto -10% -60% -10%; height: 120%; background: radial-gradient(50% 50% at 50% 50%, color-mix(in srgb, var(--violet) 35%, transparent), transparent 70%); z-index: -1; }
+.finale h2 { font-size: clamp(2.6rem, 9vw, 7.5rem); font-weight: 900; line-height: .9; letter-spacing: -.04em; text-transform: uppercase; }
+.finale .ctas { margin-top: 2.25rem; }
+footer { border-top: 1px solid var(--rule); padding-block: 2rem calc(2rem + env(safe-area-inset-bottom, 0px)); color: var(--faint); font-size: .875rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center; }
+footer nav { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-left: auto; }
+footer a { color: var(--muted); text-decoration: none; }
+footer a:hover { color: var(--text); }
+
+@keyframes blink { 50% { opacity: .25; } }
+@keyframes talk { 0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 70%, transparent); } 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--signal) 45%, transparent); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Parley home"><span class="mark" aria-hidden="true">P</span>Parley</a>
+    <nav aria-label="Sections">
+      <a href="#features">Features</a>
+      <a href="#studio">Studio</a>
+      <a href="#self-host">Self-host</a>
+      <a href="#download">Download</a>
+    </nav>
+    <a class="btn btn-ghost gh" href="https://github.com/ParleyDev/parley">GitHub</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" aria-labelledby="hero-title">
+    <canvas id="wave" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <div class="eyebrow-row">
+        <a class="pill" href="https://github.com/ParleyDev/parley/releases/latest"><b>●</b> v0.3.1 is out</a>
+        <span class="pill">Open source · Apache-2.0</span>
+        <span class="pill">Web · Desktop · Android</span>
+      </div>
+      <h1 id="hero-title">Talk it out.<span class="line2">On your server.</span></h1>
+      <div class="hero-copy">
+        <p class="lede">Parley is an open-source chat app for communities: servers, channels, DMs, <strong>voice, video, stages and a recording studio</strong>. You run it, you keep the data, and nobody else decides the rules.</p>
+        <div class="ctas">
+          <a class="btn btn-primary" href="#self-host">Host your own</a>
+          <a class="btn btn-ghost" href="#download">Get the apps</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap stage-wrap">
+      <div class="app" role="img" aria-label="Parley desktop app: a voice channel called Jam Room with four people, one speaking, one sharing a screen, and the call control bar.">
+        <div class="rail" aria-hidden="true">
+          <span class="c5">P</span><hr>
+          <span class="on">LO</span><span class="c2">SQ</span><span class="c3">RF</span><span class="c4">+</span>
+        </div>
+        <div class="chans" aria-hidden="true">
+          <div class="srv">Late Night Lo-fi</div>
+          <div class="cat">Text</div>
+          <div class="ch"><i>#</i>general</div>
+          <div class="ch"><i>#</i>stems-and-samples</div>
+          <div class="ch"><i>#</i>show-your-gear</div>
+          <div class="cat">Voice</div>
+          <div class="ch active"><i>◖</i>Jam Room</div>
+          <div class="who"><span class="av c1">M</span>Mara</div>
+          <div class="who"><span class="av c2">T</span>Theo</div>
+          <div class="who"><span class="av c3">I</span>Ivy</div>
+          <div class="who"><span class="av c4">J</span>Jonah</div>
+          <div class="ch"><i>◉</i>Listening Party</div>
+          <div class="ch"><i>◎</i>Studio A</div>
+        </div>
+        <div class="call" aria-hidden="true">
+          <header>◖ Jam Room <small>4 connected</small><span class="rec">REC · Take 3</span></header>
+          <div class="tiles">
+            <div class="tile speaking"><span class="role">Artist</span><span class="av c1">M</span><span class="name">Mara</span></div>
+            <div class="tile screen"><span class="live">LIVE</span><div class="daw"><span style="width:92%"></span><span style="width:64%;margin-left:12%"></span><span style="width:80%;margin-left:4%"></span><span style="width:48%;margin-left:30%"></span></div><span class="name">Theo's screen</span></div>
+            <div class="tile"><span class="role eng">Engineer</span><span class="av c3">I</span><span class="name">Ivy</span></div>
+            <div class="tile"><span class="av c4">J</span><span class="name">Jonah</span></div>
+          </div>
+          <div class="bar">
+            <div class="grp"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg></b><b class="chev">⌄</b><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></svg></b><b class="chev">⌄</b></div>
+            <div class="grp"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M9 10l3-3 3 3M12 7v7"/></svg></b><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></b><b>⋯</b></div>
+            <span class="hang"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-3a10 10 0 0 0-7 0v3l-3 1.5Z"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="strip" aria-label="Parley in numbers">
+    <div class="wrap">
+      <div class="cell"><span class="v">48 kHz</span><span class="k">stereo Opus in hi-fi channels</span></div>
+      <div class="cell"><span class="v">510 kbps</span><span class="k">top bitrate for music</span></div>
+      <div class="cell"><span class="v">10 ms</span><span class="k">frames in low-latency mode</span></div>
+      <div class="cell"><span class="v">1 command</span><span class="k">to run it: <code>docker compose up -d</code></span></div>
+    </div>
+  </section>
+
+  <section id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Channel 01 · Everything in one place</span>
+        <h2 id="features-title">The whole hangout, not just the chat.</h2>
+        <p class="lede">Text when you want to read, voice when you want to talk, a stage when you want an audience. All of it lives on one server you control.</p>
+      </div>
+
+      <div class="grid">
+        <article class="f w3">
+          <span class="tag">Text</span>
+          <h3>Conversations that stay organized</h3>
+          <p>Threads, forum channels, polls, pins, bookmarks, replies and full markdown. Mentions badge the server they happened in, and unread DMs line up under Home until you read them.</p>
+          <div class="mini">
+            <div class="msg"><span class="av c2">T</span><div><b>Theo</b><small>9:41 PM</small><div class="body"><span class="mention">@Mara</span> the bridge on take 3 is the one. Bouncing stems now.</div><div class="reacts"><span class="me">🔥 4</span><span>🎛️ 2</span><span>+</span></div></div></div>
+          </div>
+        </article>
+        <article class="f w3">
+          <span class="tag">Polls</span>
+          <h3>Settle it in a minute</h3>
+          <p>Two to ten answers, single or multiple choice, and a timer from an hour to a week. Results update live for everyone.</p>
+          <div class="mini">
+            <div class="poll"><span class="q">Next listening party?</span>
+              <div class="opt"><i style="width:62%"></i><span>Friday 9 PM</span><span>62%</span></div>
+              <div class="opt"><i style="width:27%"></i><span>Saturday 8 PM</span><span>27%</span></div>
+              <div class="opt"><i style="width:11%"></i><span>Sunday afternoon</span><span>11%</span></div>
+            </div>
+          </div>
+        </article>
+        <article class="f w2">
+          <span class="tag">Voice &amp; video</span>
+          <h3>Drop in, talk, share your screen</h3>
+          <p>Peer-to-peer calls that suit rooms of about six to eight. For bigger rooms, point Parley at a LiveKit server. Push-to-talk, noise suppression and per-device settings apply live.</p>
+          <ul><li>Screen share</li><li>Camera</li><li>Push-to-talk</li><li>Soundboard</li></ul>
+        </article>
+        <article class="f w2">
+          <span class="tag">Stages &amp; events</span>
+          <h3>Give someone the mic</h3>
+          <p>Speakers on stage, everyone else listening. Raise a hand to ask to speak; moderators invite you up. Schedule events with RSVPs and a reminder ten minutes before.</p>
+          <div class="mini hand">
+            <span class="chip"><span class="av c4">J<em>✋</em></span>Jonah</span>
+            <span class="chip"><span class="av c5">R</span>Rae</span>
+            <span class="chip"><span class="av c3">N</span>Noor</span>
+            <span class="chip"><span class="av c1">E</span>Eli</span>
+          </div>
+        </article>
+        <article class="f w2">
+          <span class="tag">Voice messages</span>
+          <h3>Say it, don't type it</h3>
+          <p>Record a clip from the message box. With transcription switched on, a local Whisper server writes out what was said.</p>
+          <div class="mini">
+            <div class="vm"><span class="play" aria-hidden="true">▶</span><canvas id="vm" aria-hidden="true"></canvas><small>0:14</small></div>
+            <p class="transcript">"Okay, I re-amped the guitar, check the stems channel."</p>
+          </div>
+        </article>
+        <article class="f w4">
+          <span class="tag">Your community, your rules</span>
+          <h3>Roles, permissions and the tools to run the place</h3>
+          <p>Coloured and gradient roles with a real hierarchy, per-channel overrides, private channels, timeouts, bans, member screening and an audit log. Custom emoji and stickers per server. List your server in Discover when you want new people to find it.</p>
+          <div class="mini roles"><span style="color:#f6b53d">Engineer</span><span style="color:#b6abff">Artist</span><span style="color:#5fbf8a">Regular</span><span style="color:#e0609a">Mod</span><span style="color:var(--muted)">@everyone</span></div>
+        </article>
+        <article class="f w2">
+          <span class="tag">Safety</span>
+          <h3>Locked down by default</h3>
+          <p>Two-factor sign-in, a device list you can log out remotely, rate limits, reports, and optional ClamAV scanning of every upload before it is stored.</p>
+        </article>
+        <article class="f w3">
+          <span class="tag">Everywhere</span>
+          <h3>Same Parley on every screen</h3>
+          <p>A full web app plus Windows, macOS, Linux and Android apps that connect to any Parley server. Phones get a one-pane layout, and the interface speaks English, Español and Deutsch.</p>
+          <div class="mini platforms-mini"><span>Web</span><span>Windows</span><span>macOS</span><span>Linux</span><span>Android</span></div>
+        </article>
+        <article class="f w3">
+          <span class="tag">Built to keep running</span>
+          <h3>Ops that don't need babysitting</h3>
+          <p>Nightly backups with a restore script, Prometheus metrics, JSON logs, Sentry errors, and more than one backend behind a load balancer when you grow.</p>
+          <ul><li>Backups</li><li>/metrics</li><li>Let's Encrypt</li><li>Cluster mode</li></ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="studio" class="studio" aria-labelledby="studio-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Channel 02 · Recording Studio</span>
+        <h2 id="studio-title">Jam live. Leave with the multitrack.</h2>
+        <p class="lede">A studio is a voice channel built for music. Everyone in the band records their own track in full quality, so a bad connection never ruins a take.</p>
+      </div>
+
+      <div class="console" role="img" aria-label="A finished studio session called Take 3 with three tracks: keys, vocals and bass, each with mute and solo controls, and an Export mix button.">
+        <div class="top" aria-hidden="true"><strong>Take 3</strong><span class="rec">RECORDING</span><span class="time" id="clock">00:02:47.30</span><span class="export">Export mix · WAV</span></div>
+        <div class="tracks" aria-hidden="true">
+          <div class="track"><div class="meta"><span class="av c1">M</span><div><b>Mara</b><small>Keys · 48 kHz stereo</small></div><span class="ms"><i>M</i><i>S</i></span></div><canvas data-seed="3" data-hue="#7b6cff"></canvas></div>
+          <div class="track"><div class="meta"><span class="av c2">T</span><div><b>Theo</b><small>Vocals · 48 kHz stereo</small></div><span class="ms"><i>M</i><i class="solo">S</i></span></div><canvas data-seed="11" data-hue="#3ccf7d"></canvas></div>
+          <div class="track"><div class="meta"><span class="av c3">I</span><div><b>Ivy</b><small>Bass · 48 kHz stereo</small></div><span class="ms"><i>M</i><i>S</i></span></div><canvas data-seed="27" data-hue="#e39a3b"></canvas></div>
+          <span class="playhead"></span>
+        </div>
+      </div>
+
+      <div class="studio-notes">
+        <div><span class="k">Engineers &amp; band</span><h3>Roles made for sessions</h3><p>Engineers start and stop takes. Artists are heard and recorded. Everyone else listens from the audience until an engineer brings them in.</p></div>
+        <div><span class="k">Hi-fi audio</span><h3>Music doesn't get treated like speech</h3><p>High-fidelity channels switch off noise suppression and echo cancellation, send stereo Opus at up to 510 kbps, and can drop to 10 ms frames for tighter timing.</p></div>
+        <div><span class="k">Mix in the browser</span><h3>Play back, solo, export</h3><p>Every take opens in a multitrack player with per-track gain, mute and solo, lined up automatically. Export renders a 48 kHz, 16-bit WAV of the mix.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="self-host" aria-labelledby="host-title">
+    <div class="wrap host">
+      <div>
+        <span class="callsign">Channel 03 · Self-host</span>
+        <h2 id="host-title" style="margin-top:1.25rem">Your server. Five minutes.</h2>
+        <p class="lede">Parley ships as two Docker images and a Postgres database. If your machine runs Docker, it runs Parley: a spare PC, a Raspberry Pi, a NAS or a VPS.</p>
+        <div class="plats">
+          <span class="k">Step-by-step guides</span>
+          <div>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/linux.md">Linux</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/raspberry-pi.md">Raspberry Pi</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/windows.md">Windows</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/macos.md">macOS</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/proxmox.md">Proxmox</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/synology.md">Synology</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/unraid.md">Unraid</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/truenas.md">TrueNAS</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/portainer.md">Portainer</a>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="term">
+          <div class="tb"><i></i><i></i><i></i><span>~/parley</span><button type="button" id="copy">Copy commands</button></div>
+<pre id="cmds"><span class="c"># grab the compose file and settings</span>
+<span class="p">$ </span>curl -fsSLO https://raw.githubusercontent.com/ParleyDev/parley/main/docs/self-hosting/compose.yaml
+<span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/ParleyDev/parley/main/docs/self-hosting/example.env -o .env
+
+<span class="c"># set two secrets, then your address and admin email in .env</span>
+<span class="p">$ </span>sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 32)/" .env
+<span class="p">$ </span>sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
+
+<span class="p">$ </span>docker compose up -d
+<span class="ok"> ✔ Container parley-db-1        Healthy</span>
+<span class="ok"> ✔ Container parley-backend-1   Started</span>
+<span class="ok"> ✔ Container parley-frontend-1  Started</span></pre>
+        </div>
+        <ul class="checks">
+          <li><span><b>HTTPS your way:</b> built-in Let's Encrypt, Caddy, Traefik or Nginx Proxy Manager</span></li>
+          <li><span><b>No open ports:</b> Cloudflare Tunnel or Tailscale</span></li>
+          <li><span><b>Backups:</b> one command, or nightly, with a restore script</span></li>
+          <li><span><b>Upgrades:</b> pull, restart, migrations run themselves</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="download" aria-labelledby="dl-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Channel 04 · Apps</span>
+        <h2 id="dl-title">Bring Parley with you.</h2>
+        <p class="lede">The apps connect to any Parley server you choose. Type its address once and you're in.</p>
+      </div>
+      <div class="dl">
+        <a href="https://github.com/ParleyDev/parley/releases/latest"><span class="os">Windows</span><span class="files"><span>Parley_0.3.1_x64-setup.exe</span><span>Parley_0.3.1_x64_en-US.msi</span></span><span class="go">Download →</span></a>
+        <a href="https://github.com/ParleyDev/parley/releases/latest"><span class="os">macOS</span><span class="files"><span>Parley_0.3.1_aarch64.dmg</span></span><span class="go">Download →</span></a>
+        <a href="https://github.com/ParleyDev/parley/releases/latest"><span class="os">Linux</span><span class="files"><span>Parley_0.3.1_amd64.deb</span><span>Parley-0.3.1-1.x86_64.rpm</span><span>Parley_0.3.1_amd64.AppImage</span></span><span class="go">Download →</span></a>
+        <a href="https://github.com/ParleyDev/parley/releases/latest"><span class="os">Android</span><span class="files"><span>Parley_0.3.1_android.apk</span></span><span class="go">Download →</span></a>
+        <a href="#self-host"><span class="os">Web</span><span class="files"><span>Any modern browser, on your server's address</span></span><span class="go">Set up →</span></a>
+      </div>
+      <p class="note">All downloads come from the GitHub release page. The Mac build is for Apple Silicon. iOS builds from source for now.</p>
+    </div>
+  </section>
+
+  <section class="finale" aria-labelledby="finale-title">
+    <div class="wrap">
+      <h2 id="finale-title">Stop renting<br>your community.</h2>
+      <div class="ctas">
+        <a class="btn btn-primary" href="#self-host">Host your own Parley</a>
+        <a class="btn btn-ghost" href="https://github.com/ParleyDev/parley">Star it on GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="mark" aria-hidden="true">P</span>Parley</a>
+    <span>Talk it out. Open source under <a href="https://github.com/ParleyDev/parley/blob/main/LICENSE">Apache-2.0</a>.</span>
+    <nav aria-label="Footer">
+      <a href="https://github.com/ParleyDev/parley">GitHub</a>
+      <a href="https://github.com/ParleyDev/parley/releases">Releases</a>
+      <a href="https://github.com/ParleyDev/parley/tree/main/docs/self-hosting">Self-hosting docs</a>
+      <a href="https://hub.docker.com/r/parleydev/parley">Docker Hub</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const dpr = Math.min(window.devicePixelRatio || 1, 2)
+  const fit = (c) => { const r = c.getBoundingClientRect(); c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr); return c.getContext('2d') }
+  const rand = (seed) => () => (seed = (seed * 16807) % 2147483647) / 2147483647
+
+  // Hero: a stereo waveform, left channel above the axis and right below, drifting like a live signal. The pointer
+  // is a second voice that swells the wave where it passes.
+  const wave = document.getElementById('wave')
+  let ctx = fit(wave), t = 0, px = -1
+  const draw = () => {
+    const w = wave.width, h = wave.height, mid = h / 2
+    ctx.clearRect(0, 0, w, h)
+    const lines = 26
+    for (let k = 0; k < lines; k++) {
+      const f = k / lines
+      ctx.beginPath()
+      for (let x = 0; x <= w; x += 4 * dpr) {
+        const u = x / w
+        const env = Math.sin(Math.PI * u) ** 1.6
+        const near = px < 0 ? 0 : Math.exp(-(((x - px) / (w * 0.12)) ** 2))
+        const amp = h * (0.42 + 0.25 * near) * env
+        const y = Math.sin(u * 9 + t * 1.3 + f * 2.2) * Math.cos(u * 23 - t * 0.9 + f) * amp * (0.35 + f * 0.65)
+        const yy = mid + (k % 2 ? -1 : 1) * Math.abs(y) * (0.6 + 0.4 * Math.sin(t + f * 6))
+        x === 0 ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy)
+      }
+      const a = 0.14 + f * 0.5
+      ctx.strokeStyle = k % 2 ? `rgba(123,108,255,${a})` : `rgba(60,207,125,${a * 0.55})`
+      ctx.lineWidth = dpr
+      ctx.stroke()
+    }
+    ctx.fillStyle = 'rgba(236,235,255,0.12)'
+    ctx.fillRect(0, mid, w, dpr)
+  }
+  const loop = () => { t += 0.012; draw(); raf = requestAnimationFrame(loop) }
+  let raf = 0
+  draw()
+  if (!still) raf = requestAnimationFrame(loop)
+  window.addEventListener('pointermove', (e) => { const r = wave.getBoundingClientRect(); px = e.clientY > r.top - 200 && e.clientY < r.bottom + 200 ? (e.clientX - r.left) * dpr : -1 }, { passive: true })
+  document.addEventListener('visibilitychange', () => { cancelAnimationFrame(raf); if (!document.hidden && !still) raf = requestAnimationFrame(loop) })
+
+  // Studio tracks: deterministic stereo waveforms (left up, right down) with quiet gaps, like real takes.
+  const tracks = [...document.querySelectorAll('.track canvas')]
+  const drawTracks = () => tracks.forEach((c) => {
+    const g = fit(c), w = c.width, h = c.height, mid = h / 2, r = rand(Number(c.dataset.seed) * 7919)
+    g.clearRect(0, 0, w, h)
+    const bw = 3 * dpr, gap = 2 * dpr
+    let level = 0.4
+    for (let x = 0, i = 0; x < w; x += bw + gap, i++) {
+      level += (r() - 0.5) * 0.25; level = Math.max(0.05, Math.min(1, level))
+      const silent = Math.sin(i / 23 + Number(c.dataset.seed)) > 0.82
+      const l = silent ? 0.04 : level * (0.55 + r() * 0.45), rr = silent ? 0.04 : level * (0.55 + r() * 0.45)
+      g.fillStyle = c.dataset.hue
+      g.globalAlpha = x / w < 0.38 ? 0.95 : 0.4
+      g.fillRect(x, mid - l * (mid - 4 * dpr), bw, l * (mid - 4 * dpr))
+      g.fillRect(x, mid + dpr, bw, rr * (mid - 4 * dpr))
+    }
+    g.globalAlpha = 1
+  })
+  drawTracks()
+
+  // Voice message bars.
+  const vm = document.getElementById('vm')
+  const drawVm = () => { const g = fit(vm), w = vm.width, h = vm.height, r = rand(42); g.clearRect(0, 0, w, h); for (let x = 0, i = 0; x < w; x += 4 * dpr, i++) { const v = 0.2 + Math.abs(Math.sin(i / 3)) * 0.5 + r() * 0.3; g.fillStyle = i < 18 ? '#7b6cff' : '#5f5d7d'; g.fillRect(x, (h - v * h) / 2, 2 * dpr, v * h) } }
+  drawVm()
+
+  let resize = 0
+  window.addEventListener('resize', () => { clearTimeout(resize); resize = setTimeout(() => { ctx = fit(wave); draw(); drawTracks(); drawVm() }, 120) })
+
+  // Session clock.
+  const clock = document.getElementById('clock'); let cs = 16730
+  if (!still) setInterval(() => { cs += 7; const s = Math.floor(cs / 100); clock.textContent = `00:${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}.${String(cs % 100).padStart(2, '0')}` }, 70)
+
+  // Copy the self-host commands (only the lines that start with $).
+  const btn = document.getElementById('copy')
+  btn.addEventListener('click', () => {
+    const text = document.getElementById('cmds').innerText.split('\n').filter((l) => l.startsWith('$ ')).map((l) => l.slice(2)).join('\n')
+    const done = () => { btn.textContent = 'Copied'; setTimeout(() => (btn.textContent = 'Copy commands'), 1600) }
+    const fallback = () => { const sel = window.getSelection(), range = document.createRange(); range.selectNodeContents(document.getElementById('cmds')); sel.removeAllRanges(); sel.addRange(range); btn.textContent = 'Press Ctrl+C' }
+    try { navigator.clipboard.writeText(text).then(done, fallback) } catch { fallback() }
+  })
+})()
+</script>
+</body>
+</html>
