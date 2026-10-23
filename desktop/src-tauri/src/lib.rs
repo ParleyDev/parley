@@ -51,6 +51,9 @@ pub fn run() {
                 .inner_size(1280.0, 820.0)
                 .min_inner_size(720.0, 480.0)
                 .user_agent(&user_agent())
+                // Tauri's native file-drop handler swallows HTML drag and drop on Windows (WebView2): reordering
+                // channels and servers, and dropping files onto the composer, never reach the page while it is on.
+                .disable_drag_drop_handler()
                 .on_new_window({
                     let handle = handle.clone();
                     move |url, _features| {
