@@ -43,9 +43,10 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   // Hooks stay above the early return so the hook count never changes (e.g. when the server vanishes).
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => { try { return JSON.parse(localStorage.getItem(`${STORAGE_PREFIX}collapsed.${guildId}`) || '{}') } catch { return {} } })
   const toggleCollapsed = (id: string) => setCollapsed((c) => { const n = { ...c, [id]: !c[id] }; try { localStorage.setItem(`${STORAGE_PREFIX}collapsed.${guildId}`, JSON.stringify(n)) } catch { /* ignore */ } return n })
-  // Drag and drop: channels can be dropped on another channel (insert before it) or on a category header (append).
+  // Drag and drop: a channel dropped on the top half of another lands before it, on the bottom half after it; on a
+  // category header (or the empty part of a group) it is appended. Categories reorder by the same halves.
   const [drag, setDrag] = useState<string | null>(null)
-  const [over, setOver] = useState<string | null>(null)
+  const [over, setOver] = useState<{ id: string; where: Where | 'end' } | null>(null)
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
   const canInvite = has(perms, P.CREATE_INVITE)
@@ -66,18 +67,18 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     useStore.setState((s) => ({ channels: { ...s.channels, ...Object.fromEntries(orderedIds.map((id, i) => [id, { ...s.channels[id], position: i }])) } }))
     try { await api.patch(`/guilds/${guildId}/channels/positions`, { items: orderedIds.map((id, i) => ({ id, position: i })) }) } catch (e) { pushToast((e as Error).message, 'error') }
   }
-  /** A dragged category lands before `beforeCat` (null = at the end). */
-  const dropCategory = (beforeCat: string | null) => {
-    if (!drag || drag === beforeCat) return
+  /** A dragged category lands before or after `target` (null = at the end). */
+  const dropCategory = (target: string | null, where: Where) => {
+    if (!drag || drag === target) return
     const ids = categories.map((c) => c.id).filter((id) => id !== drag)
-    const i = beforeCat ? ids.indexOf(beforeCat) : -1
-    ids.splice(i < 0 ? ids.length : i, 0, drag)
+    const i = target ? ids.indexOf(target) : -1
+    ids.splice(i < 0 ? ids.length : where === 'after' ? i + 1 : i, 0, drag)
     persistCategoryOrder(ids)
   }
-  const dropOn = (targetId: string | null, parent: string | null, where: 'before' | 'end') => {
+  const dropOn = (targetId: string | null, parent: string | null, where: Where | 'end') => {
     if (!drag || drag === targetId) return
     const moving = channels[drag]; if (!moving) return
-    if (moving.kind === 'category') { dropCategory(parent); return }
+    if (moving.kind === 'category') return
     const rest = list.filter((c) => c.id !== drag)
     const ordered: { id: string; parent_id: string | null }[] = []
     const groups: (string | null)[] = [null, ...categories.map((c) => c.id)]
@@ -86,7 +87,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       const placed = members.map((c) => ({ id: c.id, parent_id: g }))
       if (g === parent) {
         if (where === 'end' || !targetId) placed.push({ id: drag, parent_id: g })
-        else { const i = placed.findIndex((c) => c.id === targetId); placed.splice(i < 0 ? placed.length : i, 0, { id: drag, parent_id: g }) }
+        else { const i = placed.findIndex((c) => c.id === targetId); placed.splice(i < 0 ? placed.length : where === 'after' ? i + 1 : i, 0, { id: drag, parent_id: g }) }
       }
       ordered.push(...placed)
     }
@@ -94,25 +95,39 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     useStore.setState((s) => ({ channels: { ...s.channels, ...Object.fromEntries(ordered.map((c, i) => [c.id, { ...s.channels[c.id], position: i, parent_id: c.parent_id }])) } }))
     persistOrder(ordered)
   }
+  const endDrag = () => { setDrag(null); setOver(null) }
+  const mark = (id: string, where: Where | 'end') => { if (over?.id !== id || over.where !== where) setOver({ id, where }) }
   const dragProps = (c: Channel) => canCreate ? {
     draggable: true,
     onDragStart: (e: DragEvent<HTMLElement>) => { e.dataTransfer.setData('text/plain', c.id); e.dataTransfer.effectAllowed = 'move'; setDrag(c.id) },
-    onDragEnd: () => { setDrag(null); setOver(null) },
-    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag || drag === c.id) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (over !== c.id) setOver(c.id) },
-    onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); dropOn(c.id, c.parent_id && catIds.has(c.parent_id) ? c.parent_id : null, 'before'); setDrag(null); setOver(null) },
+    onDragEnd: endDrag,
+    // Categories are placed by their own container, so a category dragged over a channel falls through to it.
+    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag || drag === c.id || channels[drag]?.kind === 'category') return; e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; mark(c.id, halfOf(e)) },
+    onDrop: (e: DragEvent<HTMLElement>) => { if (!drag || channels[drag]?.kind === 'category') return; e.preventDefault(); e.stopPropagation(); dropOn(c.id, c.parent_id && catIds.has(c.parent_id) ? c.parent_id : null, halfOf(e)); endDrag() },
   } : {}
+  /** A group (a category, or `null` for the uncategorized channels): channels dropped on it are appended; a category
+   *  dropped on another goes before or after it (see catHalfOf), and one dropped on the uncategorized group goes first. */
   const catDropProps = (catId: string | null) => canCreate ? {
-    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag || drag === catId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const key = `cat:${catId ?? 'none'}`; if (over !== key) setOver(key) },
-    onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); e.stopPropagation(); dropOn(null, catId, 'end'); setDrag(null); setOver(null) },
+    onDragOver: (e: DragEvent<HTMLElement>) => {
+      if (!drag || drag === catId) return
+      e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'
+      if (channels[drag]?.kind === 'category') mark(catId ?? 'cat:first', catId ? catHalfOf(e) : 'before'); else mark(`cat:${catId ?? 'none'}`, 'end')
+    },
+    onDrop: (e: DragEvent<HTMLElement>) => {
+      if (!drag) return
+      e.preventDefault(); e.stopPropagation()
+      if (channels[drag]?.kind === 'category') dropCategory(catId ?? categories.find((c) => c.id !== drag)?.id ?? null, catId ? catHalfOf(e) : 'before'); else dropOn(null, catId, 'end')
+      endDrag()
+    },
   } : {}
   const catDragProps = (catId: string) => canCreate ? {
     draggable: true,
     onDragStart: (e: DragEvent<HTMLElement>) => { e.dataTransfer.setData('text/plain', catId); e.dataTransfer.effectAllowed = 'move'; setDrag(catId) },
-    onDragEnd: () => { setDrag(null); setOver(null) },
+    onDragEnd: endDrag,
   } : {}
   const tailDropProps = canCreate ? {
-    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag || channels[drag]?.kind !== 'category') return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (over !== 'cat:end') setOver('cat:end') },
-    onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); e.stopPropagation(); dropCategory(null); setDrag(null); setOver(null) },
+    onDragOver: (e: DragEvent<HTMLElement>) => { if (!drag || channels[drag]?.kind !== 'category') return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; mark('cat:end', 'end') },
+    onDrop: (e: DragEvent<HTMLElement>) => { e.preventDefault(); e.stopPropagation(); dropCategory(null, 'after'); endDrag() },
   } : {}
   const categoryMenu = (c: Channel): MenuEntry[] => [
     { label: collapsed[c.id] ? 'Expand Category' : 'Collapse Category', icon: <ChevronDown size={16} />, onClick: () => toggleCollapsed(c.id) },
@@ -120,7 +135,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Category ID', icon: <Copy size={16} />, onClick: () => copyText('Category ID', c.id) }] : []),
   ]
   const row = (c: Channel) => (
-    <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id ?? ''} className={`${drag === c.id ? 'opacity-40' : ''} ${over === c.id ? 'border-t-2 border-accent' : ''}`} {...dragProps(c)}>
+    <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id ?? ''} className={`relative ${drag === c.id ? 'opacity-40' : ''}`} {...dragProps(c)}>
+      {over?.id === c.id && <DropLine where={over.where} />}
       <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id)} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
         unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)} onClick={() => setMobilePane('content')}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
@@ -193,20 +209,43 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
 
       <div className="flex-1 overflow-y-auto px-2 pt-3 space-y-4" data-channel-list>
         <EventsRow guildId={guildId} />
-        <div className={`space-y-0.5 min-h-2 rounded ${over === 'cat:none' ? 'ring-1 ring-accent' : ''}`} data-channel-group="" {...catDropProps(null)}>
+        <div className={`relative space-y-0.5 min-h-2 rounded ${over?.id === 'cat:none' ? 'ring-1 ring-accent' : ''}`} data-channel-group="" {...catDropProps(null)}>
+          {over?.id === 'cat:first' && <DropLine where="after" />}
           {uncategorized.map(row)}
         </div>
         {categories.map((cat) => (
-          <Category key={cat.id} label={cat.name} open={!collapsed[cat.id]} onToggle={() => toggleCollapsed(cat.id)} highlight={over === `cat:${cat.id}`} dragging={drag === cat.id} dropProps={catDropProps(cat.id)} dragProps={catDragProps(cat.id)} testid={cat.id}
+          <Category key={cat.id} label={cat.name} open={!collapsed[cat.id]} onToggle={() => toggleCollapsed(cat.id)} highlight={over?.id === `cat:${cat.id}`} line={over?.id === cat.id && over.where !== 'end' ? over.where : undefined} dragging={drag === cat.id} dropProps={catDropProps(cat.id)} dragProps={catDragProps(cat.id)} testid={cat.id}
             onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId, parentId: cat.id }) : undefined} onContextMenu={(e) => ctx.open(e, categoryMenu(cat))}>
             {childrenOf(cat.id).filter((c) => !collapsed[cat.id] || c.id === channelId || showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)).map(row)}
           </Category>
         ))}
-        {canCreate && <div className={`rounded ${over === 'cat:end' ? 'ring-1 ring-accent' : ''}`} {...tailDropProps}><button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title="Create Channel" className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> Create channel or category</button></div>}
+        {canCreate && <div className={`rounded ${over?.id === 'cat:end' ? 'ring-1 ring-accent' : ''}`} {...tailDropProps}><button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title="Create Channel" className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> Create channel or category</button></div>}
       </div>
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
     </aside>
   )
+}
+
+type Where = 'before' | 'after'
+
+/** Top or bottom half of the element under the pointer. */
+const halfOf = (e: DragEvent<HTMLElement>): Where => {
+  const r = e.currentTarget.getBoundingClientRect()
+  return e.clientY < r.top + r.height / 2 ? 'before' : 'after'
+}
+
+/** For a category: the top half of its header means before it; anywhere lower (header or channels) means after. */
+const catHalfOf = (e: DragEvent<HTMLElement>): Where => {
+  const h = (e.currentTarget.querySelector('[data-category-header]') ?? e.currentTarget).getBoundingClientRect()
+  return e.clientY < h.top + h.height / 2 ? 'before' : 'after'
+}
+
+/** Drop indicator: a line on the edge the dragged item will land against (drawn over, so rows never shift). `gap`
+ *  centres it in the space between categories. */
+function DropLine({ where, gap }: { where: Where | 'end'; gap?: boolean }) {
+  if (where === 'end') return null
+  const pos = where === 'before' ? (gap ? '-top-2' : '-top-px') : (gap ? '-bottom-2' : '-bottom-px')
+  return <span className={`pointer-events-none absolute inset-x-1 z-10 h-0.5 rounded-full bg-accent ${pos}`} data-drop-line={where} />
 }
 
 function MenuItem({ children, icon, onClick, danger, accent }: { children: React.ReactNode; icon: React.ReactNode; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; danger?: boolean; accent?: boolean }) {
@@ -217,9 +256,10 @@ function MenuItem({ children, icon, onClick, danger, accent }: { children: React
   )
 }
 
-function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, dragging, dropProps, dragProps, testid, children }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; dragging?: boolean; dropProps?: object; dragProps?: object; testid: string; children: React.ReactNode }) {
+function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, line, dragging, dropProps, dragProps, testid, children }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; line?: Where; dragging?: boolean; dropProps?: object; dragProps?: object; testid: string; children: React.ReactNode }) {
   return (
-    <div data-category={testid} data-category-open={open ? '1' : '0'} className={`rounded ${highlight ? 'ring-1 ring-accent' : ''} ${dragging ? 'opacity-40' : ''}`} {...dropProps}>
+    <div data-category={testid} data-category-open={open ? '1' : '0'} className={`relative rounded ${highlight ? 'ring-1 ring-accent' : ''} ${dragging ? 'opacity-40' : ''}`} {...dropProps}>
+      {line && <DropLine where={line} gap />}
       <div className="group flex items-center justify-between pr-1 text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1" onContextMenu={onContextMenu} data-category-header {...dragProps}>
         <button onClick={onToggle} className="flex items-center gap-0.5 py-1 pl-0.5 min-w-0" data-category-toggle>
           <ChevronDown size={12} className={`shrink-0 transition ${open ? '' : '-rotate-90'}`} /><span className="truncate">{label}</span>
