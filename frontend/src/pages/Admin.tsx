@@ -1,4 +1,4 @@
-import { Compass, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
+import { Compass, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -25,6 +25,7 @@ export default function AdminPage() {
               <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> Messages</NavLink>
               <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> Reports</NavLink>
               <NavLink to="/admin/audit" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="audit"><ScrollText size={20} /> Audit Log</NavLink>
+              <NavLink to="/admin/mail" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="mail"><Mail size={20} /> Mail</NavLink>
             </nav>
           </aside>
     }>
@@ -36,6 +37,7 @@ export default function AdminPage() {
           <Route path="servers" element={<ServersPane />} />
           <Route path="settings" element={<SettingsPane />} />
           <Route path="audit" element={<AuditPane />} />
+          <Route path="mail" element={<MailPane />} />
           <Route path="reports" element={<ReportsPane />} />
           <Route path="messages" element={<MessagesPane />} />
           <Route path="users/:id" element={<UserContentPane />} />
@@ -396,6 +398,60 @@ const ACTION_LABELS: Record<string, string> = {
   'user.delete': 'deleted account', 'user.clear_mfa': 'cleared 2FA for', 'user.logout_all': 'logged out all devices of',
   'guild.delete': 'deleted server', 'settings.update': 'changed instance settings',
   'discovery.approved': 'approved Discover listing', 'discovery.rejected': 'rejected Discover listing', 'discovery.pending': 'reset Discover listing',
+}
+
+interface SentMail { to: string; subject: string; body: string; sent_at: string; status?: 'sent' | 'failed' | 'logged' | 'off'; error?: string | null }
+const MAIL_STATUS: Record<string, { label: string; cls: string; hint: string }> = {
+  sent: { label: 'Sent', cls: 'bg-success/15 text-success', hint: 'The mail server accepted it. Delivery to the inbox is tracked by your mail provider.' },
+  failed: { label: 'Failed', cls: 'bg-danger/15 text-danger', hint: 'The mail server refused it or the mail settings are wrong.' },
+  logged: { label: 'Logged', cls: 'bg-bg-4 text-text-1', hint: 'MAIL_MODE=log: written to the backend log instead of being sent.' },
+  off: { label: 'Not sent', cls: 'bg-bg-4 text-text-2', hint: 'MAIL_MODE=off: email is switched off.' },
+}
+
+/** The emails this backend tried to send (newest first, last 200, in memory), with what happened to each. */
+function MailPane() {
+  const [to, setTo] = useState('')
+  const [rows, setRows] = useState<SentMail[] | null>(null)
+  const [open, setOpen] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const load = async () => {
+    setBusy(true)
+    try { setRows(await api.get<SentMail[]>(`/admin/mail?limit=200${to.trim() ? `&to=${encodeURIComponent(to.trim())}` : ''}`)); setOpen(null) } catch { setRows((r) => r ?? []) } finally { setBusy(false) }
+  }
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [to]) // eslint-disable-line react-hooks/exhaustive-deps
+  const failed = rows?.filter((m) => m.status === 'failed').length ?? 0
+  return (
+    <div data-admin-mail>
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-bold">Mail</h1>
+        <button type="button" onClick={load} disabled={busy} className="btn-ghost ml-auto py-1.5" data-admin-mail-refresh><RefreshCw size={15} className={busy ? 'animate-spin' : ''} /> Refresh</button>
+      </div>
+      <p className="text-sm text-text-2 mt-1 max-w-2xl">The last 200 emails this server tried to send, newest first. The list is kept in memory, so it starts over when the backend restarts. Whether a sent email reached the inbox is tracked by your mail provider (for SendGrid, its Activity Feed).</p>
+      <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="Filter by recipient email" type="email" className="input mt-4 max-w-md" data-admin-mail-search />
+      {failed > 0 && <p className="mt-3 text-sm text-danger" data-admin-mail-failed>{failed} of these failed. Open one to see the error, and check SMTP_URL and MAIL_FROM.</p>}
+      <div className="mt-4 rounded-xl border border-line bg-bg-1 overflow-hidden">
+        {(rows?.length ?? 0) === 0 && <div className="px-3 py-6 text-sm text-text-2 text-center" data-admin-mail-empty>{rows === null || busy ? 'Loading…' : to.trim() ? 'No emails to that address yet.' : 'No emails sent since the backend started.'}</div>}
+        {rows?.map((m, i) => {
+          const st = MAIL_STATUS[m.status ?? 'logged'] ?? MAIL_STATUS.logged
+          return (
+            <div key={`${m.sent_at}-${i}`} className="border-t border-line first:border-t-0" data-admin-mail-row data-mail-status={m.status ?? 'logged'}>
+              <button type="button" onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i} className="w-full grid grid-cols-[76px_170px_minmax(0,1fr)] max-md:grid-cols-[76px_minmax(0,1fr)] gap-x-4 gap-y-0.5 px-3 py-2 text-left text-sm hover:bg-bg-3">
+                <span className={`self-start justify-self-start rounded px-1.5 py-0.5 text-[11px] font-bold ${st.cls}`} title={st.hint}>{st.label}</span>
+                <span className="text-xs text-text-2 pt-0.5 max-md:hidden" title={m.sent_at}>{new Date(m.sent_at).toLocaleString()}</span>
+                <span className="min-w-0"><span className="block truncate font-semibold">{m.subject}</span><span className="block truncate text-xs text-text-2">to {m.to}<span className="md:hidden"> · {new Date(m.sent_at).toLocaleString()}</span></span></span>
+              </button>
+              {open === i && (
+                <div className="px-3 pb-3 text-sm" data-admin-mail-detail>
+                  {m.error && <p className="mb-2 rounded-md bg-danger/10 px-3 py-2 text-danger break-words" data-admin-mail-error>{m.error}</p>}
+                  <pre className="whitespace-pre-wrap break-words rounded-md bg-bg-0 px-3 py-2 font-sans text-text-1">{m.body}</pre>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function AuditPane() {
