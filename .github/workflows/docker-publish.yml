@@ -1,9 +1,19 @@
 name: Publish Docker images
 
+# main: only when something that goes into the images changes (e2e tests, docs and media do not). Release tags always
+# publish: GitHub does not apply path filters to tag pushes. Run by hand to republish.
 on:
   push:
     branches: [main]
     tags: ['v*']
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '!frontend/e2e/**'
+      - 'scripts/version.mjs'
+      - 'VERSION'
+      - '.github/workflows/docker-publish.yml'
+      - '!**/*.md'
   workflow_dispatch:
 
 permissions:
