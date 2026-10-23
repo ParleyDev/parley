@@ -88,8 +88,8 @@ ok('enabled card offers View Backup Codes and Remove 2FA', await p.locator('[dat
 await p.close()
 
 const pl = await mk()
-await pl.goto(`${WEB}/login`); await pl.waitForSelector('input[autocomplete="username"]')
-await pl.fill('input[autocomplete="username"]', `alice${S}`); await pl.fill('input[type="password"]', PASSWORD); await pl.click('button[type="submit"], form button.btn-primary'); await pl.waitForSelector('[data-mfa-form]')
+await pl.goto(`${WEB}/login`); await pl.waitForSelector('input[autocomplete^="username"]')
+await pl.fill('input[autocomplete^="username"]', `alice${S}`); await pl.fill('input[type="password"]', PASSWORD); await pl.click('button[type="submit"], form button.btn-primary'); await pl.waitForSelector('[data-mfa-form]')
 ok('login page asks for the second factor', await pl.locator('[data-mfa-code]').count() === 1)
 await pl.screenshot({ path: '93-mfa-login.png' })
 await pl.fill('[data-mfa-code]', '000000'); await pl.click('[data-mfa-form] button.btn-primary'); await pl.waitForSelector('[data-mfa-error]')
