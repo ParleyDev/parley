@@ -1,9 +1,27 @@
 name: CI
 
+# Runs only when code that CI builds or tests changes (docs, issue exports and media do not), or by hand.
 on:
   push:
     branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose.yml'
+      - 'ops/**'
+      - 'scripts/**'
+      - '.github/workflows/ci.yml'
+      - '!**/*.md'
   pull_request:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose.yml'
+      - 'ops/**'
+      - 'scripts/**'
+      - '.github/workflows/ci.yml'
+      - '!**/*.md'
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
