@@ -438,6 +438,6 @@ Profile images (avatars, banners, server icons) and the files behind custom emoj
 
 The content type is sniffed from magic bytes, not trusted from the client. Only known image/video/audio/PDF/text types are served `inline`; everything else is `Content-Disposition: attachment` with `nosniff` and a restrictive CSP, so an uploaded HTML or SVG file can never run in the app's origin. Files are served without authentication at `/api/attachments/<uuid-v4>/<name>` so `<img>` tags work, relying on the unguessable id (Discord-CDN style); put the API behind HTTPS if that matters to you.
 
-## Not included
+## License
 
-Threads, an SFU for large calls, audit log, timeouts.
+Parley is open source under the [Apache License 2.0](LICENSE). Copyright 2026 ParleyDev; see [NOTICE](NOTICE). The license does not grant rights to the Parley name or logo.

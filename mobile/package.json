@@ -2,6 +2,7 @@
   "name": "parley-mobile",
   "private": true,
   "version": "1.0.0",
+  "license": "Apache-2.0",
   "description": "Native iOS and Android shells for Parley: a connect-to-server screen, then the server's web client inside a native WebView with push, keep-awake, haptics and hardware back support.",
   "scripts": {
     "sync": "cap sync",
