@@ -1,5 +1,7 @@
 # Parley — a Discord-style chat app
 
+Website: [runparley.com](https://runparley.com)
+
 Rust backend (axum + sqlx/Postgres + WebSockets) and a React/Vite/Tailwind frontend, packaged with Docker Compose.
 
 ## Run it
