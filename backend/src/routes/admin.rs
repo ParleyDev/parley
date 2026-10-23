@@ -192,12 +192,13 @@ async fn instance_public(State(state): State<AppState>) -> AppResult<Json<Instan
 /// Admin: recently sent mail (the in-memory outbox), optionally filtered by recipient. How dev and tests read links.
 async fn admin_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<MailQuery>) -> AppResult<Json<Vec<crate::mail::SentMail>>> {
     require_admin(&state, uid).await?;
-    Ok(Json(crate::mail::outbox(q.to.as_deref())))
+    Ok(Json(crate::mail::outbox(q.to.as_deref(), q.limit)))
 }
 
 #[derive(Deserialize)]
 struct MailQuery {
     to: Option<String>,
+    limit: Option<usize>,
 }
 
 async fn stats(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
