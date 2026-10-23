@@ -251,15 +251,18 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 
 /* ---- download ---- */
 .dl { border: 1px solid var(--rule); border-radius: 22px; overflow: hidden; margin-top: clamp(2.5rem, 5vw, 3.5rem); }
-.dl a { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 1rem 2rem; align-items: center; padding: 1.35rem clamp(1.1rem, 3vw, 2rem); text-decoration: none; border-bottom: 1px solid var(--rule); transition: background .15s ease; }
-.dl a:last-child { border-bottom: 0; }
-.dl a:hover { background: var(--panel); }
-.dl a:hover .go { color: var(--violet); transform: translateX(3px); }
+.dl .row { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 1rem 2rem; align-items: center; padding: 1.35rem clamp(1.1rem, 3vw, 2rem); border-bottom: 1px solid var(--rule); transition: background .15s ease; }
+.dl .row:last-child { border-bottom: 0; }
+.dl .row:hover { background: var(--panel); }
+.dl .go { text-decoration: none; }
+.dl .go:hover { color: var(--violet); transform: translateX(3px); }
 .dl .os { font: 700 var(--step-1)/1.1 var(--display); }
 .dl .files { display: flex; flex-wrap: wrap; gap: .4rem; }
-.dl .files span { font: 400 .75rem/1 var(--mono); color: var(--muted); border: 1px solid var(--rule); border-radius: 6px; padding: .35rem .5rem; background: var(--panel); overflow-wrap: anywhere; }
+.dl .files a, .dl .files span { font: 400 .75rem/1 var(--mono); color: var(--muted); border: 1px solid var(--rule); border-radius: 6px; padding: .45rem .6rem; background: var(--panel); overflow-wrap: anywhere; text-decoration: none; }
+.dl .files a { color: var(--text); }
+.dl .files a:hover { border-color: var(--violet); color: #fff; }
 .dl .go { font: 600 .875rem/1 var(--body); color: var(--muted); transition: transform .15s ease, color .15s ease; white-space: nowrap; }
-@media (max-width: 720px) { .dl a { grid-template-columns: minmax(0, 1fr) auto; } .dl .files { grid-column: 1 / -1; grid-row: 2; } }
+@media (max-width: 720px) { .dl .row { grid-template-columns: minmax(0, 1fr) auto; } .dl .files { grid-column: 1 / -1; grid-row: 2; } }
 .note { margin-top: 1.25rem; color: var(--faint); font-size: .875rem; }
 
 /* ---- finale ---- */
@@ -298,7 +301,7 @@ footer a:hover { color: var(--text); }
     <canvas id="wave" aria-hidden="true"></canvas>
     <div class="wrap">
       <div class="eyebrow-row">
-        <a class="pill" href="https://github.com/ParleyDev/parley/releases/latest"><b>●</b> v0.3.1 is out</a>
+        <a class="pill" href="https://github.com/ParleyDev/parley/releases/latest" id="release-pill"><b>●</b> <span id="release-tag">v0.4.0</span> is out</a>
         <span class="pill">Open source · Apache-2.0</span>
         <span class="pill">Web · Desktop · Android</span>
       </div>
@@ -424,7 +427,8 @@ footer a:hover { color: var(--text); }
         <article class="f w2">
           <span class="tag">Safety</span>
           <h3>Locked down by default</h3>
-          <p>Two-factor sign-in, a device list you can log out remotely, rate limits, reports, and optional ClamAV scanning of every upload before it is stored.</p>
+          <p>Sign in with a passkey or a password plus two-factor codes. A device list you can log out remotely, rate limits, reports, and optional ClamAV scanning of every upload before it is stored.</p>
+          <ul><li>Passkeys</li><li>2FA</li><li>Device list</li></ul>
         </article>
         <article class="f w3">
           <span class="tag">Everywhere</span>
@@ -435,8 +439,8 @@ footer a:hover { color: var(--text); }
         <article class="f w3">
           <span class="tag">Built to keep running</span>
           <h3>Ops that don't need babysitting</h3>
-          <p>Nightly backups with a restore script, Prometheus metrics, JSON logs, Sentry errors, and more than one backend behind a load balancer when you grow.</p>
-          <ul><li>Backups</li><li>/metrics</li><li>Let's Encrypt</li><li>Cluster mode</li></ul>
+          <p>Nightly backups with a restore script, Prometheus metrics, JSON logs, Sentry errors, a mail log in the admin console, and more than one backend behind a load balancer when you grow.</p>
+          <ul><li>Backups</li><li>/metrics</li><li>Mail log</li><li>Let's Encrypt</li><li>Cluster mode</li></ul>
         </article>
       </div>
     </div>
@@ -522,14 +526,14 @@ footer a:hover { color: var(--text); }
         <h2 id="dl-title">Bring Parley with you.</h2>
         <p class="lede">The apps connect to any Parley server you choose. Type its address once and you're in.</p>
       </div>
-      <div class="dl">
-        <a href="https://github.com/ParleyDev/parley/releases/latest"><span class="os">Windows</span><span class="files"><span>Parley_0.3.1_x64-setup.exe</span><span>Parley_0.3.1_x64_en-US.msi</span></span><span class="go">Download →</span></a>
-        <a href="https://github.com/ParleyDev/parley/releases/latest"><span class="os">macOS</span><span class="files"><span>Parley_0.3.1_aarch64.dmg</span></span><span class="go">Download →</span></a>
-        <a href="https://github.com/ParleyDev/parley/releases/latest"><span class="os">Linux</span><span class="files"><span>Parley_0.3.1_amd64.deb</span><span>Parley-0.3.1-1.x86_64.rpm</span><span>Parley_0.3.1_amd64.AppImage</span></span><span class="go">Download →</span></a>
-        <a href="https://github.com/ParleyDev/parley/releases/latest"><span class="os">Android</span><span class="files"><span>Parley_0.3.1_android.apk</span></span><span class="go">Download →</span></a>
-        <a href="#self-host"><span class="os">Web</span><span class="files"><span>Any modern browser, on your server's address</span></span><span class="go">Set up →</span></a>
+      <div class="dl" id="downloads">
+        <div class="row"><span class="os">Windows</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="x64-setup\.exe$">Parley_0.4.0_x64-setup.exe</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.msi$">Parley_0.4.0_x64_en-US.msi</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">macOS</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.dmg$">Parley_0.4.0_aarch64.dmg</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">Linux</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.deb$">Parley_0.4.0_amd64.deb</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.rpm$">Parley-0.4.0-1.x86_64.rpm</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.AppImage$">Parley_0.4.0_amd64.AppImage</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">Android</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.apk$">Parley_0.4.0_android.apk</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">Web</span><span class="files"><span>Any modern browser, on your server's address</span></span><a class="go" href="#self-host">Set up →</a></div>
       </div>
-      <p class="note">All downloads come from the GitHub release page. The Mac build is for Apple Silicon. iOS builds from source for now.</p>
+      <p class="note">Downloads come straight from the <a href="https://github.com/ParleyDev/parley/releases/latest">latest GitHub release</a>. The Mac build is for Apple Silicon. iOS builds from source for now.</p>
     </div>
   </section>
 
@@ -630,6 +634,21 @@ footer a:hover { color: var(--text); }
   // Session clock.
   const clock = document.getElementById('clock'); let cs = 16730
   if (!still) setInterval(() => { cs += 7; const s = Math.floor(cs / 100); clock.textContent = `00:${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}.${String(cs % 100).padStart(2, '0')}` }, 70)
+
+  // Downloads: ask GitHub for the latest release and link each file directly. The static names above stay if
+  // this fails (offline, rate limited), and their links still lead to the release page.
+  fetch('https://api.github.com/repos/ParleyDev/parley/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((rel) => {
+      const tag = document.getElementById('release-tag'), pill = document.getElementById('release-pill')
+      if (rel.tag_name) tag.textContent = rel.tag_name
+      if (rel.html_url) { pill.href = rel.html_url; document.querySelectorAll('#downloads .go[href*="releases"]').forEach((a) => (a.href = rel.html_url)) }
+      document.querySelectorAll('#downloads [data-asset]').forEach((a) => {
+        const asset = (rel.assets || []).find((x) => new RegExp(a.dataset.asset).test(x.name))
+        if (asset) { a.textContent = asset.name; a.href = asset.browser_download_url }
+      })
+    })
+    .catch(() => {})
 
   // Copy the self-host commands (only the lines that start with $).
   const btn = document.getElementById('copy')
