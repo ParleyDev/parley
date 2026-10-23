@@ -60,6 +60,25 @@ ok('a category dropped on the top half of another goes before it', (await cats()
 await drop(`[data-category="${cat2.id}"] [data-category-header]`, `[data-category="${cat.id}"] [data-category-header]`, 'bottom')
 ok('and on the bottom half, after it', (await cats()).join() === [cat.id, cat2.id].join())
 
+console.log('-- no flicker while dragging')
+{
+  const from = await p.locator(row(Bc.id)).boundingBox(); const list = await p.locator('[data-channel-list]').boundingBox()
+  await p.mouse.move(from.x + 40, from.y + from.height / 2); await p.mouse.down()
+  const seen = []
+  for (let y = list.y + 4; y < list.y + Math.min(list.height, 420); y += 2) {
+    await p.mouse.move(from.x + 40, y)
+    seen.push(await p.evaluate(() => { const l = document.querySelector('[data-drop-line]'); const h = document.querySelector('[data-category-header].ring-1'); return l ? `line:${l.style.top}` : h ? `into:${h.closest('[data-category]').dataset.category}` : 'none' }))
+  }
+  await p.keyboard.press('Escape'); await p.mouse.up(); await p.waitForTimeout(300)
+  // The browser only starts the drag after the first move, so samples before the first indicator do not count.
+  seen.splice(0, Math.max(0, seen.findIndex((v) => v !== 'none')))
+  const states = seen.filter((v, i) => v !== seen[i - 1])
+  const lines = seen.filter((v) => v.startsWith('line:')).map((v) => parseFloat(v.slice(5)))
+  ok('while dragging, an indicator is always shown (never flashes off)', !seen.includes('none'), JSON.stringify(states))
+  ok('the drop line only moves down as the pointer moves down', lines.every((v, i) => i === 0 || v >= lines[i - 1]), JSON.stringify(states))
+  ok('it changes only at a handful of slots, not on every pixel', states.length <= 14, `${states.length} changes: ${JSON.stringify(states)}`)
+}
+
 console.log('-- persistence')
 const before = [await show(null), await show(cat.id), await show(cat2.id), (await cats()).join()]
 await p.reload(); await p.waitForSelector(`[data-channel-item="${A.id}"]`)
