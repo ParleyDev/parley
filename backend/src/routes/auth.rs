@@ -224,7 +224,7 @@ async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Jso
     session(&state, id, &headers).await
 }
 
-async fn session(state: &AppState, id: Uuid, headers: &HeaderMap) -> AppResult<Json<Value>> {
+pub(crate) async fn session(state: &AppState, id: Uuid, headers: &HeaderMap) -> AppResult<Json<Value>> {
     // A disabled account comes back to life on its next successful login.
     let reenabled: Option<(bool,)> = sqlx::query_as("UPDATE users SET disabled_at = NULL WHERE id = $1 AND disabled_at IS NOT NULL RETURNING true").bind(id).fetch_optional(&state.db).await?;
     let user = sqlx::query_as::<_, PrivateUser>(&format!("SELECT {PRIVATE_USER_COLS} FROM users WHERE id = $1"))

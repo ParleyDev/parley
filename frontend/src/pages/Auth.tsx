@@ -1,5 +1,7 @@
 import { APP_INITIAL } from '../lib/brand'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { KeyRound } from 'lucide-react'
+import { passkeyError, passkeysSupported, signInWithPasskey } from '../lib/passkey'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useStore } from '../store'
@@ -23,6 +25,30 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const setInstance = useStore((s) => s.setInstance)
   useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string }>('/instance').then(setInstance).catch(() => {}) }, [setInstance])
   const closed = mode === 'register' && !registrationOpen
+  // Passkeys: a button, plus the browser's autofill offering saved passkeys in the username field (conditional UI).
+  useStore((s) => s.instance.app_url) // re-check support once /instance has said where this server lives
+  const canPasskey = mode === 'login' && passkeysSupported()
+  const autofill = useRef<AbortController | null>(null)
+  const signedIn = (res: { token: string; user: PrivateUser; reenabled?: boolean }) => {
+    setAuth(res.token, res.user)
+    if (res.reenabled) useStore.getState().pushToast('Welcome back! Your account has been re-enabled.')
+    navigate(from, { replace: true })
+  }
+  useEffect(() => {
+    if (!canPasskey) return
+    const ctl = new AbortController(); autofill.current = ctl
+    ;(async () => {
+      if (!(await PublicKeyCredential.isConditionalMediationAvailable?.())) return
+      try { signedIn(await signInWithPasskey(undefined, { signal: ctl.signal })) } catch (e) { if (!ctl.signal.aborted) { const m = passkeyError(e); if (m) setErr(m) } }
+    })()
+    return () => ctl.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canPasskey])
+  const passkey = async () => {
+    autofill.current?.abort()
+    setErr(null); setBusy(true)
+    try { signedIn(await signInWithPasskey(form.login)) } catch (e) { const m = passkeyError(e); if (m) setErr(m) } finally { setBusy(false) }
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -105,7 +131,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
 
         <div className="space-y-4">
           {mode === 'login' ? (
-            <div><label className="label">{t('Email or username')}</label><input className="input" autoFocus autoComplete="username" required {...f('login')} /></div>
+            <div><label className="label">{t('Email or username')}</label><input className="input" autoFocus autoComplete={canPasskey ? 'username webauthn' : 'username'} required {...f('login')} data-login-input /></div>
           ) : (
             <>
               <div><label className="label">{t('Email')}</label><input className="input" type="email" autoFocus autoComplete="email" required {...f('email')} /></div>
@@ -121,6 +147,12 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         </div>
 
         <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || closed}>{busy ? t('Please wait…') : mode === 'login' ? t('Log In') : t('Continue')}</button>
+        {canPasskey && (
+          <>
+            <div className="my-3 flex items-center gap-3 text-xs uppercase tracking-wider text-text-2"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
+            <button type="button" onClick={passkey} disabled={busy} className="btn-ghost w-full py-2.5 border border-line" data-passkey-login><KeyRound size={16} /> Sign in with a passkey</button>
+          </>
+        )}
 
         <p className="mt-4 text-sm text-text-2">
           {mode === 'login' ? (

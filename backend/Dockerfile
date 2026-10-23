@@ -11,7 +11,7 @@ RUN cargo build --release
 
 # ---- runtime stage ----
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libssl3 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/target/release/parley-backend /usr/local/bin/parley-backend
 COPY migrations ./migrations
