@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { APP_INITIAL, APP_NAME } from '../lib/brand'
+import { APP_NAME } from '../lib/brand'
+import { LogoNeon } from '../components/Logo'
 import { api } from '../lib/api'
 import { useStore } from '../store'
 import Avatar from '../components/Avatar'
@@ -28,7 +29,7 @@ export default function OAuthPage() {
     <div className="h-full flex items-center justify-center p-4 bg-bg-0">
       <div className="pop w-full max-w-md rounded-2xl bg-bg-1/90 border border-line p-6 shadow-2xl" data-oauth-page>
         <div className="flex items-center justify-center gap-3">
-          <div className="h-12 w-12 rounded-xl bg-accent flex items-center justify-center text-white font-extrabold text-xl">{APP_INITIAL}</div>
+          <LogoNeon className="h-12 w-12 rounded-xl" />
           <span className="text-text-2">⇄</span>
           <div className="h-12 w-12 rounded-xl bg-bg-3 flex items-center justify-center text-xl font-extrabold">{info?.app.name[0] ?? '?'}</div>
         </div>

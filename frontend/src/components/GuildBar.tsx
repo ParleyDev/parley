@@ -1,4 +1,4 @@
-import { APP_INITIAL } from '../lib/brand'
+import { LogoMark } from './Logo'
 import { ArrowDown, ArrowUp, Compass, Copy, Folder, FolderInput, FolderMinus, FolderPlus, LogOut, MailCheck, Plus, Settings, Trash2, UserPlus } from 'lucide-react'
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -174,7 +174,7 @@ export default function GuildBar() {
         {({ isActive }) => (
           <Pill active={isActive} unread={pending > 0} tip={t('Direct Messages')}>
             <div className={`h-12 w-12 flex items-center justify-center transition-all duration-200 rounded-2xl ${isActive ? 'bg-accent' : 'bg-bg-3 group-hover:bg-accent'}`}>
-              <span className="font-extrabold text-white text-lg">{APP_INITIAL}</span>
+              <LogoMark className={`h-7 w-7 transition-colors ${isActive ? 'text-white' : 'text-accent group-hover:text-white'}`} />
             </div>
             {pending > 0 && <Badge n={pending} data-home-badge />}
           </Pill>

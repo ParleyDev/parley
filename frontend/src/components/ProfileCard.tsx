@@ -2,7 +2,8 @@ import type { CSSProperties, ReactNode } from 'react'
 import { locale } from '../lib/i18n'
 import type { User, Connection } from '../lib/types'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
-import { APP_INITIAL, APP_NAME } from '../lib/brand'
+import { APP_NAME } from '../lib/brand'
+import { LogoMark } from './Logo'
 import Avatar from './Avatar'
 import { Badges, ClanTag } from './Flair'
 import { nameLook, type NameLook } from '../lib/nameStyle'
@@ -103,7 +104,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
             <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Member since</h3>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="flex items-center gap-1.5" title={APP_NAME}>
-                <span className="h-4 w-4 rounded-full bg-bg-0 text-text-0 text-[10px] font-bold flex items-center justify-center shrink-0" aria-hidden>{APP_INITIAL}</span>
+                <span className="h-4 w-4 rounded-full bg-bg-0 text-accent flex items-center justify-center shrink-0" aria-hidden><LogoMark className="h-2.5 w-2.5" /></span>
                 <span>{fmtDate(user.created_at)}</span>
               </span>
               {server && (

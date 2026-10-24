@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { APP_INITIAL } from '../lib/brand'
+import { LogoNeon } from '../components/Logo'
 import { api } from '../lib/api'
 import { useStore } from '../store'
 
@@ -25,7 +25,7 @@ export default function VerifyPage({ mode = 'verify' }: { mode?: 'verify' | 'cha
   return (
     <div className="h-full flex items-center justify-center p-4 bg-bg-0">
       <div className="pop w-full max-w-md rounded-2xl bg-bg-1/90 border border-line p-8 shadow-2xl text-center" data-verify-page data-verify-state={state}>
-        <div className="mx-auto h-12 w-12 rounded-xl bg-accent flex items-center justify-center text-white font-extrabold text-xl">{APP_INITIAL}</div>
+        <LogoNeon className="mx-auto h-12 w-12 rounded-xl" />
         {state === 'working' && <p className="mt-6 text-text-1">{mode === 'change' ? 'Confirming your new email…' : 'Verifying your email…'}</p>}
         {state === 'ok' && <><h1 className="mt-6 text-xl font-bold">{mode === 'change' ? 'Email changed' : 'Email verified'}</h1><p className="mt-2 text-sm text-text-2">Thanks{me ? `, ${me.display_name}` : ''}. You're all set.</p></>}
         {state === 'bad' && <><h1 className="mt-6 text-xl font-bold">That link didn't work</h1><p className="mt-2 text-sm text-text-2">{msg}</p></>}
