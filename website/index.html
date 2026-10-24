@@ -80,7 +80,16 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 .nav nav a:hover { color: var(--text); }
 .nav .gh { height: 2.4rem; padding-inline: 1rem; font-size: .875rem; }
 .nav .open { height: 2.4rem; padding-inline: 1.1rem; font-size: .875rem; }
-@media (max-width: 760px) { .nav nav { display: none; } .nav .gh { display: none; } .nav .open { margin-left: auto; } }
+/* Phones: section links drop to their own row under the brand instead of disappearing. */
+@media (max-width: 760px) {
+  html { scroll-padding-top: 112px; }
+  .nav .wrap { flex-wrap: wrap; height: auto; gap: 0 1rem; padding-top: 10px; }
+  .nav .gh { display: none; }
+  .nav .open { margin-left: auto; }
+  .nav nav { order: 3; flex-basis: 100%; margin-left: 0; gap: 1.4rem; padding-block: .7rem .75rem; overflow-x: auto; scrollbar-width: none; }
+  .nav nav::-webkit-scrollbar { display: none; }
+  .nav nav a { white-space: nowrap; }
+}
 
 /* ---- hero ---- */
 .hero { position: relative; padding-block: clamp(3rem, 8vw, 6rem) 0; overflow: hidden; isolation: isolate; }
