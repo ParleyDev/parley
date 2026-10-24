@@ -86,7 +86,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const isDm = channel.guild_id === null
   const name = isDm ? (isGroup(channel as DmChannel) ? dmName(channel as DmChannel, users, notes) : `@${(channel as DmChannel).recipients[0]?.display_name ?? ''}`) : (channel as Channel).kind === 'voice' ? channel.name : `#${channel.name}`
 
-  useEffect(() => { ref.current?.focus() }, [channel.id, reply])
+  // Opening a channel focuses the box on devices with a mouse or trackpad only; on a phone that would pop the
+  // keyboard over the chat. Choosing Reply is a deliberate "I want to type", so it focuses everywhere.
+  useEffect(() => { if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) ref.current?.focus() }, [channel.id])
+  useEffect(() => { if (reply) ref.current?.focus() }, [reply])
   useEffect(() => {
     const el = ref.current
     if (!el) return

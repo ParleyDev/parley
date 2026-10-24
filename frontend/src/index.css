@@ -49,6 +49,9 @@
 
 html, body, #root { height: 100%; }
 @supports (height: 100dvh) { #root { height: 100dvh; } }
+/* lib/viewport.ts: the visible height, so the on-screen keyboard shrinks the app instead of scrolling the header away. */
+#root { height: var(--app-height, 100dvh); }
+html, body { overflow: hidden; }
 body {
   @apply bg-bg-2 text-text-0 font-sans antialiased;
   overscroll-behavior: none;
@@ -64,6 +67,8 @@ body {
   --sab: max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px));
   --sal: max(env(safe-area-inset-left), var(--safe-area-inset-left, 0px));
 }
+/* No home-bar padding above an open keyboard. */
+:root[data-keyboard="open"] { --sab: 0px; }
 /* Full-bleed surfaces (the app shell, full-screen settings): exactly clear of the system bars. */
 .safe-area { padding: var(--sat) var(--sar) var(--sab) var(--sal); }
 /* Overlays that centre a dialog: at least 1rem around it, more where a system bar needs it. */

@@ -32,7 +32,7 @@ export default function InvitePage() {
   }
 
   return (
-    <div className="h-full flex items-center justify-center bg-bg-0 p-4">
+    <div className="h-full overflow-y-auto flex items-center-safe justify-center bg-bg-0 p-4">
       <div className="pop w-full max-w-sm rounded-2xl bg-bg-1 border border-line p-8 text-center shadow-2xl">
         {err ? (
           <>
