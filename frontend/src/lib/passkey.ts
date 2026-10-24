@@ -85,6 +85,7 @@ export function passkeyError(e: unknown): string | null {
   const err = e as DOMException
   if (err?.name === 'NotAllowedError' || err?.name === 'AbortError') return null
   if (err?.name === 'InvalidStateError') return 'This device already has a passkey for your account.'
+  if (err?.name === 'NotSupportedError') return 'This browser can\'t use passkeys here. Sign in with your password instead.'
   if (err?.name === 'SecurityError') return 'Passkeys only work on this server\'s own address.'
   return (e as Error)?.message || 'Something went wrong with the passkey.'
 }
