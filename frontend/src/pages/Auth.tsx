@@ -39,7 +39,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     const ctl = new AbortController(); autofill.current = ctl
     ;(async () => {
       if (!(await PublicKeyCredential.isConditionalMediationAvailable?.())) return
-      try { signedIn(await signInWithPasskey(undefined, { signal: ctl.signal })) } catch (e) { if (!ctl.signal.aborted) { const m = passkeyError(e); if (m) setErr(m) } }
+      // Opportunistic: if this browser or device can't offer passkeys here, stay quiet; the button still explains.
+      try { signedIn(await signInWithPasskey(undefined, { signal: ctl.signal })) } catch { /* no passkey offered */ }
     })()
     return () => ctl.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,7 +127,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           </div>
         </div>
 
-        {err && <div className="mb-4 rounded-lg bg-danger/15 border border-danger/40 px-3 py-2 text-sm">{err}</div>}
+        {err && <div className="mb-4 rounded-lg bg-danger/15 border border-danger/40 px-3 py-2 text-sm" data-auth-error>{err}</div>}
         {closed && <div className="mb-4 rounded-lg bg-warn/15 border border-warn/40 px-3 py-2 text-sm" data-registration-closed>Registration is closed on this Parley instance right now. If you already have an account, log in instead.</div>}
 
         <div className="space-y-4">

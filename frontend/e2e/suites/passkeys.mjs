@@ -29,6 +29,15 @@ const mkPage = async ({ autofill = true, copyFrom } = {}) => {
 }
 const { page: p, cdp, authenticatorId } = await mkPage()
 
+console.log('-- browsers without a passkey device')
+{
+  const plain = await (await browser.newContext()).newPage(); plain.on('pageerror', (e) => errors.push(e.message))
+  await plain.goto(`${WEB}/login`); await plain.waitForSelector('[data-passkey-login]'); await plain.waitForTimeout(1500)
+  const shown = await plain.locator('[data-auth-error]').count()
+  ok('the login page loads without a passkey error when the browser has nothing to offer', shown === 0, shown ? await plain.locator('[data-auth-error]').textContent() : '')
+  await plain.context().close()
+}
+
 console.log('-- add a passkey')
 await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await p.goto(`${WEB}/channels/@me`); await p.click('[data-control="User Settings"]'); await p.waitForSelector('[data-passkeys-section]')
