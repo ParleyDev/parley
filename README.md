@@ -1,3 +1,5 @@
+<p align="center"><img src="branding/Parley-Neon-Logo.png" width="128" alt="Parley logo"></p>
+
 # Parley — a Discord-style chat app
 
 Website: [runparley.com](https://runparley.com)
