@@ -66,7 +66,7 @@ ok('quick reaction applied', await msg.locator('button:has-text("👍")').count(
 ok('used emoji moves to the front of the bar', JSON.parse(await pa.evaluate(()=>localStorage.getItem('parley.recentEmoji')||'{}'))['👍']===1)
 
 console.log('-- spoiler attachment')
-await pa.locator('input[type=file]').setInputFiles(`${FIX}/pic.png`); await pa.waitForTimeout(600)
+await pa.locator('input[data-file-input="files"]').setInputFiles(`${FIX}/pic.png`); await pa.waitForTimeout(600)
 await pa.click('[data-spoiler-toggle]'); await pa.waitForTimeout(900)
 ok('pending card marked spoiler (re-uploaded)', (await pa.locator('[data-spoiler-toggle]').getAttribute('title'))==='Unmark as spoiler')
 await pa.fill('textarea', 'spoiler pic'); await pa.keyboard.press('Enter'); await pa.waitForTimeout(900)

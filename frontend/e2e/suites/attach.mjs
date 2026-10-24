@@ -37,7 +37,7 @@ const browser=await chromium.launch()
 const errors=[]
 const open=async(tok,name)=>{const ctx=await browser.newContext({viewport:{width:1440,height:900}}); const p=await ctx.newPage(); p.on('pageerror',e=>errors.push(name+': '+e.message)); p.on('console',m=>{if(m.type()==='error')errors.push(name+' console: '+m.text())}); await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley.token',t),tok); await p.goto(`${WEB}/channels/${g.id}/${tc}`); await p.waitForSelector('textarea'); return p}
 const pa=await open(a.token,'A'), pb=await open(b.token,'B')
-await pa.setInputFiles('input[type=file]', [`${FIX}/pic.png`,`${FIX}/notes.txt`])
+await pa.setInputFiles('input[data-file-input="files"]', [`${FIX}/pic.png`,`${FIX}/notes.txt`])
 await pa.waitForFunction(()=>document.querySelectorAll('[data-pending]').length===2 && !document.body.innerText.includes('Uploading'))
 ok('two pending previews uploaded', await pa.locator('[data-pending]').count()===2)
 await pa.fill('textarea','here are files'); await pa.press('textarea','Enter')
@@ -57,7 +57,7 @@ await pa.dispatchEvent('main','drop',{dataTransfer:dt})
 await pa.waitForFunction(()=>document.querySelectorAll('[data-pending]').length===1 && !document.body.innerText.includes('Uploading'))
 await pa.press('textarea','Enter'); await pb.waitForSelector('main a[download="dropped.txt"]'); ok('dropped file sent', true)
 // attachment-only send button enabled without text
-await pa.setInputFiles('input[type=file]', [`${FIX}/notes.txt`]); await pa.waitForFunction(()=>!document.body.innerText.includes('Uploading'))
+await pa.setInputFiles('input[data-file-input="files"]', [`${FIX}/notes.txt`]); await pa.waitForFunction(()=>!document.body.innerText.includes('Uploading'))
 ok('send enabled with attachment and empty text', await pa.locator('button[title="Send"]').isEnabled())
 await pa.click('button[title="Remove"]'); ok('pending removed', await pa.locator('[data-pending]').count()===0)
 ok('send disabled again', !(await pa.locator('button[title="Send"]').isEnabled()))
