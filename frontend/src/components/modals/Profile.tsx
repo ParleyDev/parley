@@ -229,7 +229,7 @@ function Popout({ anchor, onClose, children }: { anchor: Anchor; onClose: () => 
 
   if (!wide) {
     return (
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 safe-area" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
         <div className="sheet-up w-full max-h-[90vh] overflow-y-auto rounded-t-lg" role="dialog" aria-modal data-profile-sheet>{children}</div>
       </div>
     )

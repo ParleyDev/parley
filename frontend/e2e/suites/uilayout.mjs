@@ -78,5 +78,25 @@ for (const [ch, empty, word] of [[stage, 'No one is on stage', 'stage'], [studio
 console.log('-- safe area')
 ok('the shell pads the bottom safe area (Android nav bar)', await p.evaluate(() => { document.documentElement.style.setProperty('--safe-area-inset-bottom', '48px'); const pad = getComputedStyle(document.querySelector('.safe-area')).paddingBottom; document.documentElement.style.removeProperty('--safe-area-inset-bottom'); return pad === '48px' }))
 
+console.log('-- phone settings')
+{
+  const ph = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage(); ph.on('pageerror', (e) => errors.push(e.message))
+  await ph.goto(`${WEB}/login`); await ph.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+  await ph.goto(`${WEB}/channels/@me`); await ph.click('button[title="User Settings"]'); await ph.waitForSelector('[data-settings-view="menu"]')
+  ok('on a phone, settings open on a list of sections', await ph.locator('[data-settings-nav] [data-settings-tab]').count() > 10 && await ph.isVisible('[data-settings-tab="voice"]'))
+  await ph.click('[data-settings-tab="voice"]'); await ph.waitForSelector('[data-settings-view="section"]')
+  ok('tapping one opens it full screen with its name', (await ph.textContent('[data-settings-title]')) === 'Voice & Video' && await ph.isHidden('[data-settings-nav]'))
+  await ph.click('[data-settings-back]'); await ph.waitForSelector('[data-settings-view="menu"]')
+  ok('the back button returns to the list', await ph.isVisible('[data-settings-tab="voice"]'))
+  ok('nothing scrolls sideways', await ph.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+  // System bars: pretend the phone reports a 30px status bar and 20px navigation bar (as Capacitor does on Android).
+  await ph.evaluate(() => { document.documentElement.style.setProperty('--safe-area-inset-top', '30px'); document.documentElement.style.setProperty('--safe-area-inset-bottom', '20px') })
+  ok('full-screen settings keep clear of the status and navigation bars', await ph.evaluate(() => { const cs = getComputedStyle(document.querySelector('[data-settings-view]')); return cs.paddingTop === '30px' && cs.paddingBottom === '20px' }))
+  await ph.screenshot({ path: 'uilayout-phone-settings.png' })
+  await ph.click('[data-settings-close]')
+  ok('dialogs keep clear of them too (and keep at least 1rem elsewhere)', await ph.evaluate(() => { const d = document.createElement('div'); d.className = 'safe-pad'; document.body.appendChild(d); const cs = getComputedStyle(d); const okk = cs.paddingTop === '30px' && cs.paddingBottom === '20px' && cs.paddingLeft === '16px'; d.remove(); return okk }))
+  await ph.context().close()
+}
+
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

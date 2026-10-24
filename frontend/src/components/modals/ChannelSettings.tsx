@@ -12,7 +12,8 @@ import { DEFAULT_BITRATE, MAX_BITRATE, MIN_BITRATE, type AudioMode } from '../..
 
 type Tab = 'overview' | 'permissions' | 'tags'
 
-export default function ChannelSettingsModal({ onClose, channelId, tab: initial = 'overview' }: { onClose: () => void; channelId: string; tab?: Tab }) {
+export default function ChannelSettingsModal({ onClose, channelId, tab: requested }: { onClose: () => void; channelId: string; tab?: Tab }) {
+  const initial: Tab = requested ?? 'overview'
   const channel = useStore((s) => s.channels[channelId])
   const perms = useStore((s) => myChannelPerms(s, channelId))
   const openModal = useStore((s) => s.openModal)
@@ -39,9 +40,9 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: initial 
 
   return (
     <SettingsShell<Tab>
-      tab={tab} onTab={setTab} onClose={onClose} wide={tab === 'permissions'}
+      tab={tab} onTab={setTab} onClose={onClose} wide={tab === 'permissions'} title="Channel Settings" startOnMenu={!requested}
       sections={[{ title: `${prefix}${channel.name}`, items }]}
-      footer={canEdit ? <button onClick={del} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Channel"><span className="max-md:hidden">Delete Channel</span><Trash2 size={16} /></button> : undefined}
+      footer={canEdit ? <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Channel"><span>Delete Channel</span><Trash2 size={16} /></button> : undefined}
     >
       {tab === 'overview' && canEdit && <Overview channel={channel} />}
       {tab === 'tags' && canEdit && <ForumTagsTab channelId={channelId} />}

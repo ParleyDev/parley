@@ -8,7 +8,7 @@ export default function ImageLightbox({ onClose, url, name }: { onClose: () => v
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 pop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }} role="dialog" aria-modal>
+    <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center safe-pad pop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }} role="dialog" aria-modal>
       <img src={url} alt={name} className="max-h-[85vh] max-w-[95vw] object-contain rounded-lg shadow-2xl" />
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-lg bg-bg-0/80 px-3 py-1.5 text-sm">
         <span className="truncate max-w-[50vw]">{name}</span>
