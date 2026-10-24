@@ -170,7 +170,7 @@ async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
 }
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, avatar_decoration, clan_tag, panels";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -474,12 +474,20 @@ async fn search(
         return Ok(Json(vec![]));
     }
     let pattern = format!("%{}%", term.replace('%', "\\%").replace('_', "\\_"));
+    // An exact username always matches (that is all a friend request needs). Partial matches only return people who
+    // opted in to being found, plus your existing friends; admins search everyone.
+    let (admin,): (bool,) = sqlx::query_as("SELECT is_admin FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
     let users = sqlx::query_as::<_, User>(&format!(
-        "SELECT {USER_COLS} FROM users WHERE id <> $1 AND (username ILIKE $2 OR display_name ILIKE $2)
-         ORDER BY username LIMIT 20"
+        "SELECT {USER_COLS} FROM users WHERE id <> $1 AND (
+             lower(username) = $3
+             OR ((username ILIKE $2 OR display_name ILIKE $2)
+                 AND ($4 OR searchable OR EXISTS (SELECT 1 FROM relationships r WHERE r.user_id = $1 AND r.target_id = users.id AND r.kind = 'friend'))))
+         ORDER BY lower(username) = $3 DESC, username LIMIT 20"
     ))
     .bind(uid)
     .bind(pattern)
+    .bind(&term)
+    .bind(admin)
     .fetch_all(&state.db)
     .await?;
     Ok(Json(users))

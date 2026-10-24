@@ -1,8 +1,9 @@
 // Undeliverable DMs (red message + Ribbit notice with Retry / Delete / Dismiss) and the "viewing older messages" bar.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, raw, ok, finish } from '../lib.mjs'
+import { WEB, S, reg, call, callS, raw, ok, finish, openDms } from '../lib.mjs'
 
 const a = await reg('alice'); const b = await reg('bob')
+await openDms(a, b)
 const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
 await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: `before the block ${S}` })
 await callS(b.token, 'PUT', `/users/@me/relationships/${a.user.id}/block`)

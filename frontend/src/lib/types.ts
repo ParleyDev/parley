@@ -37,6 +37,8 @@ export interface PrivateUser extends User {
   message_requests?: boolean
   friend_request_from?: FriendRequestSource[]
   group_dm_privacy?: 'friends' | 'nobody'
+  /** Findable by partial-name search; an exact username always works. */
+  searchable?: boolean
   /** Largest single upload for this user in bytes (null = instance default). */
   max_upload_bytes?: number | null
   /** Default for 'allow DMs from server members' on servers you join. */

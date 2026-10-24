@@ -2,7 +2,7 @@
 // users, mute and online suppression, dead-token cleanup.
 import http from 'node:http'
 import { generateKeyPairSync } from 'node:crypto'
-import { B, S, reg, call, callS, raw, ok, finish, adminToken } from '../lib.mjs'
+import { B, S, reg, call, callS, raw, ok, finish, adminToken, openDms } from '../lib.mjs'
 
 const HOST = process.env.PARLEY_EMBED_HOST ?? '172.30.0.1'
 const sent = []; let tokenCalls = 0
@@ -23,6 +23,7 @@ const sa = JSON.stringify({ type: 'service_account', project_id: 'test', client_
 
 const admin = await adminToken()
 const a = await reg('alice'); const b = await reg('bob')
+await openDms(a, b)
 let settings = await call(admin.token, 'GET', '/admin/settings')
 const put = async (patch) => { const r = await callS(admin.token, 'PUT', '/admin/settings', { ...settings, ...patch }); if (r.status === 200) settings = r.body; return r }
 
