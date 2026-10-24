@@ -1,6 +1,7 @@
 import { chromium } from 'playwright'
-import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track } from '../lib.mjs'
+import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track, openDms } from '../lib.mjs'
 const a=await reg('alice'), b=await reg('bob')
+await openDms(a, b)
 const dm=await call(a.token,'POST','/users/@me/channels',{recipient_id:b.user.id})
 const att=await (async()=>{const f=new FormData(); f.append('file',new Blob([GIF],{type:'image/gif'}),'keep.gif'); return (await fetch(B+`/channels/${dm.id}/attachments`,{method:'POST',headers:{Authorization:'Bearer '+a.token},body:f})).json()})()
 const am=await call(a.token,'POST',`/channels/${dm.id}/messages`,{content:'alice says',attachment_ids:[att.id]})

@@ -10,10 +10,10 @@ export default function ContentSocialTab() {
   const setAuth = useStore((s) => s.setAuth)
   const pushToast = useStore((s) => s.pushToast)
   if (!user) return null
-  const save = async (patch: Partial<Pick<PrivateUser, 'dm_privacy' | 'message_requests' | 'friend_request_from' | 'group_dm_privacy' | 'guild_dms_default' | 'sensitive_media' | 'spam_filter'>>) => {
+  const save = async (patch: Partial<Pick<PrivateUser, 'dm_privacy' | 'message_requests' | 'friend_request_from' | 'group_dm_privacy' | 'guild_dms_default' | 'sensitive_media' | 'spam_filter' | 'searchable'>>) => {
     try { const u = await api.patch<PrivateUser>('/users/@me/privacy', patch); if (token) setAuth(token, u) } catch (e) { pushToast((e as Error).message, 'error') }
   }
-  const dm = user.dm_privacy ?? 'everyone'
+  const dm = user.dm_privacy ?? 'friends_and_servers'
   const from = user.friend_request_from ?? ['everyone']
   const toggleFrom = (k: FriendRequestSource) => {
     // "Everyone" implies the other two: ticking it ticks all, unticking it leaves the narrower two on.
@@ -77,6 +77,14 @@ export default function ContentSocialTab() {
           <Toggle label="Message requests" checked={user.message_requests !== false} onChange={(v) => save({ message_requests: v })} />
           <p className="text-xs text-text-2 mt-1">Messages from people you are not friends with wait in Message Requests until you accept them, and never ring or ping you. Off: they go straight to your DM list.</p>
         </div>
+      </section>
+
+      <div className="h-px bg-line" />
+
+      <section className="space-y-2" data-search-section>
+        <h3 className="label">Finding you</h3>
+        <Toggle label="Let people find me by searching" checked={!!user.searchable} onChange={(v) => save({ searchable: v })} />
+        <p className="text-xs text-text-2">On: your name shows up when people search for part of it. Off: people need your exact username to find you or send a friend request. Your friends can always find you.</p>
       </section>
 
       <div className="h-px bg-line" />

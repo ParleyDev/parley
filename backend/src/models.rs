@@ -85,6 +85,10 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default = "default_friends")]
     pub group_dm_privacy: String,
+    /// Findable by partial-name search (an exact username always works).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub searchable: bool,
     /// Default for "allow direct messages from server members" on servers you join (overridable per server).
     #[sqlx(default)]
     #[serde(default = "default_true")]

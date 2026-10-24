@@ -29,6 +29,9 @@ export const reg = async (u, email) => {
   if (j.user && mail !== ADMIN_EMAIL) track(j.user)
   return j
 }
+/** New accounts only take DMs from friends and server members. Suites about DM features (not DM privacy) open their
+ *  test users' DMs to everyone first. */
+export const openDms = (...users) => Promise.all(users.map((u) => fetch(B + '/users/@me/privacy', { method: 'PATCH', headers: { ...H, Authorization: 'Bearer ' + u.token }, body: JSON.stringify({ dm_privacy: 'everyone' }) })))
 export const loginRaw = (login) => fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login, password: PASSWORD }) })
 export const login = async (l) => (await loginRaw(l)).json().catch(() => ({}))
 /** JSON call; returns the parsed body (null when there is none). */

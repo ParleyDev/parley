@@ -1,9 +1,10 @@
 // Settings → My Account: change username (password, once a day), change email (confirmed from the new address),
 // change password (current password, log out other devices), and the account standing card.
 import { chromium } from 'playwright'
-import { B, H, WEB, S, PASSWORD, reg, call, raw, ok, finish, adminToken, login } from '../lib.mjs'
+import { B, H, WEB, S, PASSWORD, reg, call, raw, ok, finish, adminToken, login, openDms } from '../lib.mjs'
 const admin = await adminToken()
 const a = await reg('alice'); const b = await reg('bob')
+await openDms(a, b)
 const mailFor = async (to) => (await call(admin.token, 'GET', `/admin/mail?to=${encodeURIComponent(to)}`))
 
 console.log('-- username')
