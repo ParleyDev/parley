@@ -26,7 +26,7 @@ export default function OAuthPage() {
   const cancel = () => { if (info) { try { const u = new URL(info.redirect_uri); u.searchParams.set('error', 'access_denied'); if (info.state) u.searchParams.set('state', info.state); window.location.href = u.toString(); return } catch { /* fall through */ } } history.back() }
   const wantsBot = info?.scopes.some((s) => s.id === 'bot')
   return (
-    <div className="h-full flex items-center justify-center p-4 bg-bg-0">
+    <div className="h-full overflow-y-auto flex items-center-safe justify-center p-4 bg-bg-0">
       <div className="pop w-full max-w-md rounded-2xl bg-bg-1/90 border border-line p-6 shadow-2xl" data-oauth-page>
         <div className="flex items-center justify-center gap-3">
           <LogoNeon className="h-12 w-12 rounded-xl" />

@@ -5,7 +5,7 @@ import { api } from '../lib/api'
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="h-full flex items-center justify-center p-4 bg-bg-0">
+    <div className="h-full overflow-y-auto flex items-center-safe justify-center p-4 bg-bg-0">
       <div className="pop w-full max-w-md rounded-2xl bg-bg-1/90 border border-line p-8 shadow-2xl">
         <div className="flex items-center gap-3 mb-6">
           <LogoNeon className="h-10 w-10 rounded-xl" />

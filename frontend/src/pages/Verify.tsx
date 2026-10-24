@@ -23,7 +23,7 @@ export default function VerifyPage({ mode = 'verify' }: { mode?: 'verify' | 'cha
     }).catch((e: Error) => { setState('bad'); setMsg(e.message) })
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <div className="h-full flex items-center justify-center p-4 bg-bg-0">
+    <div className="h-full overflow-y-auto flex items-center-safe justify-center p-4 bg-bg-0">
       <div className="pop w-full max-w-md rounded-2xl bg-bg-1/90 border border-line p-8 shadow-2xl text-center" data-verify-page data-verify-state={state}>
         <LogoNeon className="mx-auto h-12 w-12 rounded-xl" />
         {state === 'working' && <p className="mt-6 text-text-1">{mode === 'change' ? 'Confirming your new email…' : 'Verifying your email…'}</p>}

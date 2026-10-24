@@ -91,9 +91,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
 
   if (mfaTicket) {
     return (
-      <div className="h-full flex items-center justify-center p-4 relative overflow-hidden bg-bg-0">
-        <div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-accent/25 blur-[120px]" />
-        <div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-sky-500/15 blur-[120px]" />
+      <div className="h-full overflow-y-auto flex items-center-safe justify-center p-4 relative bg-bg-0">
+        <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden><div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-accent/25 blur-[120px]" /><div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-sky-500/15 blur-[120px]" /></div>
         <form onSubmit={submitMfa} className="pop relative w-full max-w-md rounded-2xl bg-bg-1/90 backdrop-blur border border-line p-8 shadow-2xl" data-mfa-form>
           <div className="flex items-center gap-3 mb-6">
             <LogoNeon className="h-10 w-10 rounded-xl shadow-lg shadow-accent/30" />
@@ -115,9 +114,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   }
 
   return (
-    <div className="h-full flex items-center justify-center p-4 relative overflow-hidden bg-bg-0">
-      <div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-accent/25 blur-[120px]" />
-      <div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-sky-500/15 blur-[120px]" />
+    <div className="h-full overflow-y-auto flex items-center-safe justify-center p-4 relative bg-bg-0">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden><div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-accent/25 blur-[120px]" /><div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-sky-500/15 blur-[120px]" /></div>
       <form onSubmit={submit} className="pop relative w-full max-w-md rounded-2xl bg-bg-1/90 backdrop-blur border border-line p-8 shadow-2xl">
         <div className="flex items-center gap-3 mb-6">
           <LogoNeon className="h-10 w-10 rounded-xl shadow-lg shadow-accent/30" />

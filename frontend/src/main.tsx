@@ -8,12 +8,14 @@ import { initPrefs } from './lib/prefs'
 import { initLog } from './lib/log'
 import { initLanguage } from './lib/i18n'
 import { initNative } from './lib/native'
+import { initViewport } from './lib/viewport'
 
 initAppearance()
 initPrefs()
 initLog()
 initLanguage()
 void initNative()
+initViewport()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
