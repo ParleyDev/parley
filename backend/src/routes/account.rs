@@ -117,9 +117,9 @@ async fn change_email(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
         .bind(&token).bind(uid).bind(&email).execute(&state.db).await?;
     let link = format!("{}/confirm-email?token={token}", state.config.app_url);
     let body = format!("You asked to use this address for your Parley account.\n\nOpen this link within one hour to confirm the change:\n\n{link}\n\nIf that wasn't you, ignore this message; nothing changes.");
-    let _ = crate::mail::send(&state.config, &email, "Confirm your new Parley email", &body).await;
+    let _ = crate::mail::send(&state, &email, "Confirm your new Parley email", &body).await;
     // A heads-up to the old address as well.
-    let _ = crate::mail::send(&state.config, &current, "Your Parley email is being changed", &format!("A request was made to change the email on your Parley account to {email}. If that wasn't you, change your password now.")).await;
+    let _ = crate::mail::send(&state, &current, "Your Parley email is being changed", &format!("A request was made to change the email on your Parley account to {email}. If that wasn't you, change your password now.")).await;
     Ok(Json(json!({ "ok": true, "pending": true, "email": email })))
 }
 
@@ -162,7 +162,7 @@ async fn change_password(State(state): State<AppState>, AuthSession(uid, sid): A
     }
     let (email,): (String,) = sqlx::query_as("SELECT email FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
     if crate::mail::enabled(&state.config) {
-        let _ = crate::mail::send(&state.config, &email, "Your Parley password was changed", "The password on your Parley account was just changed. If that wasn't you, reset it from the login page right away.").await;
+        let _ = crate::mail::send(&state, &email, "Your Parley password was changed", "The password on your Parley account was just changed. If that wasn't you, reset it from the login page right away.").await;
     }
     Ok(Json(json!({ "ok": true, "logged_out": logged_out })))
 }
@@ -234,7 +234,7 @@ async fn request_export(State(state): State<AppState>, AuthUser(uid): AuthUser) 
                 let _ = sqlx::query("UPDATE data_exports SET status = 'ready', ready_at = now(), size = $2 WHERE id = $1").bind(id).bind(size).execute(&st.db).await;
                 if crate::mail::enabled(&st.config) {
                     if let Ok((email,)) = sqlx::query_as::<_, (String,)>("SELECT email FROM users WHERE id = $1").bind(uid).fetch_one(&st.db).await {
-                        let _ = crate::mail::send(&st.config, &email, "Your Parley data is ready", &format!("The copy of your data you asked for is ready. Download it from Settings → My Account → Your data within {EXPORT_KEEP_DAYS} days.")).await;
+                        let _ = crate::mail::send(&st, &email, "Your Parley data is ready", &format!("The copy of your data you asked for is ready. Download it from Settings → My Account → Your data within {EXPORT_KEEP_DAYS} days.")).await;
                     }
                 }
             }

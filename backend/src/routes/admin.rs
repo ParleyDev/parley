@@ -31,7 +31,9 @@ pub fn router() -> Router<AppState> {
         .route("/admin/guilds", get(list_guilds))
         .route("/admin/guilds/:id", delete(delete_guild))
         .route("/admin/settings", get(get_settings).put(put_settings))
-        .route("/admin/mail", get(admin_mail))
+        .route("/admin/mail", get(admin_mail).delete(clear_mail))
+        .route("/admin/mail/settings", get(mail_settings).put(put_mail_settings))
+        .route("/admin/mail/:id", axum::routing::delete(delete_mail))
         .route("/admin/audit", get(list_audit))
         .route("/admin/maintenance/sweep-images", axum::routing::post(sweep_images))
 }
@@ -192,13 +194,55 @@ async fn instance_public(State(state): State<AppState>) -> AppResult<Json<Instan
 /// Admin: recently sent mail (the in-memory outbox), optionally filtered by recipient. How dev and tests read links.
 async fn admin_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<MailQuery>) -> AppResult<Json<Vec<crate::mail::SentMail>>> {
     require_admin(&state, uid).await?;
-    Ok(Json(crate::mail::outbox(q.to.as_deref(), q.limit)))
+    Ok(Json(crate::mail::outbox(&state.db, q.to.as_deref(), q.limit).await?))
 }
 
 #[derive(Deserialize)]
 struct MailQuery {
     to: Option<String>,
-    limit: Option<usize>,
+    limit: Option<i64>,
+}
+
+/// Delete one logged mail.
+async fn delete_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
+    require_admin(&state, uid).await?;
+    let row: Option<(String, String)> = sqlx::query_as("DELETE FROM mail_log WHERE id = $1 RETURNING to_addr, subject").bind(id).fetch_optional(&state.db).await?;
+    let (to, subject) = row.ok_or_else(|| AppError::NotFound("Mail not found".into()))?;
+    audit::record(&state, uid, "mail.delete", "mail", Some(id), &to, json!({ "subject": subject })).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Delete every logged mail, or all for one recipient with `?to=`.
+async fn clear_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<MailQuery>) -> AppResult<Json<Value>> {
+    require_admin(&state, uid).await?;
+    let r = sqlx::query("DELETE FROM mail_log WHERE $1::text IS NULL OR lower(to_addr) = lower($1)").bind(q.to.as_deref()).execute(&state.db).await?;
+    audit::record(&state, uid, "mail.clear", "mail", None, q.to.as_deref().unwrap_or(""), json!({ "removed": r.rows_affected() })).await;
+    Ok(Json(json!({ "removed": r.rows_affected() })))
+}
+
+async fn mail_settings(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
+    require_admin(&state, uid).await?;
+    Ok(Json(json!({ "retention_days": crate::mail::retention_days(&state.db).await })))
+}
+
+#[derive(Deserialize)]
+struct MailSettingsReq {
+    retention_days: i64,
+}
+
+/// How long the mail log keeps entries: 1–3650 days, or 0 to keep them until deleted.
+async fn put_mail_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<MailSettingsReq>) -> AppResult<Json<Value>> {
+    require_admin(&state, uid).await?;
+    if !(0..=3650).contains(&req.retention_days) {
+        return Err(AppError::BadRequest("Keep mail for 0 (forever) to 3650 days".into()));
+    }
+    sqlx::query("INSERT INTO instance_settings (key, value) VALUES ('mail_log_days', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value")
+        .bind(json!(req.retention_days)).execute(&state.db).await?;
+    if req.retention_days > 0 {
+        sqlx::query("DELETE FROM mail_log WHERE sent_at < now() - make_interval(days => $1)").bind(req.retention_days as i32).execute(&state.db).await?;
+    }
+    audit::record(&state, uid, "settings.update", "", None, "", json!({ "mail_log_days": req.retention_days })).await;
+    Ok(Json(json!({ "retention_days": req.retention_days })))
 }
 
 async fn stats(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {

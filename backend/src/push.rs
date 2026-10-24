@@ -130,7 +130,7 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
             for u in &mail_to {
                 if let Ok((email,)) = sqlx::query_as::<_, (String,)>("UPDATE users SET notify_mailed_at = now() WHERE id = $1 RETURNING email").bind(u).fetch_one(&state.db).await {
                     let body = format!("{} sent you a message in {}:\n\n{}\n\nOpen Parley: {}\n\nYou get at most one of these an hour while you are away. Turn them off in Settings → Notifications.", msg.author.display_name, where_, snippet, state.config.app_url);
-                    let _ = crate::mail::send(&state.config, &email, &format!("New message from {}", msg.author.display_name), &body).await;
+                    let _ = crate::mail::send(&state, &email, &format!("New message from {}", msg.author.display_name), &body).await;
                 }
             }
         }

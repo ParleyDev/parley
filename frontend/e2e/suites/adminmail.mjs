@@ -2,7 +2,7 @@
 // off), a recipient filter, and the body and any error on click. Status follows MAIL_MODE (E2E_MAIL_STATUS
 // overrides the expectation, e.g. `failed` against a stack pointed at an unreachable SMTP server).
 import { chromium } from 'playwright'
-import { WEB, reg, call, ok, finish, adminToken } from '../lib.mjs'
+import { WEB, reg, call, callS, raw, ok, finish, adminToken } from '../lib.mjs'
 const expect = process.env.E2E_MAIL_STATUS ?? 'logged'
 const admin = await adminToken()
 const a = await reg('mailee')
@@ -25,6 +25,24 @@ ok('opening a row shows the email body', /verify/i.test(body ?? ''), body?.slice
 if (expect === 'failed') ok('a failed email shows the error', (await p.locator('[data-admin-mail-error]').count()) === 1)
 await p.fill('[data-admin-mail-search]', 'nobody-at-all@example.invalid'); await p.waitForTimeout(700)
 ok('an address with no mail says so', (await p.textContent('[data-admin-mail-empty]'))?.includes('No emails to that address'))
+console.log('-- keeping and deleting')
+let r = await callS(admin.token, 'PUT', '/admin/mail/settings', { retention_days: 9999 }); ok('retention is bounded (0 to 3650 days)', r.status === 400)
+r = await callS(admin.token, 'PUT', '/admin/mail/settings', { retention_days: 90 }); ok('admins set how long emails are kept', r.status === 200 && (await call(admin.token, 'GET', '/admin/mail/settings')).retention_days === 90)
+await p.reload(); await p.waitForSelector('[data-admin-mail-keep]'); await p.waitForTimeout(400)
+ok('the Mail page shows the retention setting', (await p.inputValue('[data-admin-mail-keep]')) === '90')
+await p.selectOption('[data-admin-mail-keep]', '30'); await p.waitForTimeout(500)
+ok('changing it on the page saves it', (await call(admin.token, 'GET', '/admin/mail/settings')).retention_days === 30)
+const b = await reg('mailee2')
+const before = await call(admin.token, 'GET', `/admin/mail?to=${encodeURIComponent(b.user.email)}`)
+ok('each logged email has an id', before.length >= 1 && typeof before[0].id === 'string')
+await p.fill('[data-admin-mail-search]', b.user.email); await p.waitForTimeout(700)
+await p.locator('[data-admin-mail-row] button').first().click(); await p.click('[data-admin-mail-delete]'); await p.waitForTimeout(500)
+ok('deleting one email removes it', (await call(admin.token, 'GET', `/admin/mail?to=${encodeURIComponent(b.user.email)}`)).length === before.length - 1)
+await call(admin.token, 'POST', '/auth/forgot', { email: a.user.email }).catch(() => {})
+await p.fill('[data-admin-mail-search]', a.user.email); await p.waitForTimeout(700)
+await p.click('[data-admin-mail-clear]'); await p.click('[data-admin-mail-clear-confirm] button.btn-primary'); await p.waitForTimeout(600)
+ok('Delete these removes every email to the filtered address, and only those', (await call(admin.token, 'GET', `/admin/mail?to=${encodeURIComponent(a.user.email)}`)).length === 0 && (await call(admin.token, 'GET', '/admin/mail?limit=5')).length > 0)
+r = await raw(a.token, 'DELETE', '/admin/mail'); ok('only admins can delete mail', r.status === 403)
 await p.screenshot({ path: 'adminmail.png' })
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

@@ -400,7 +400,8 @@ const ACTION_LABELS: Record<string, string> = {
   'discovery.approved': 'approved Discover listing', 'discovery.rejected': 'rejected Discover listing', 'discovery.pending': 'reset Discover listing',
 }
 
-interface SentMail { to: string; subject: string; body: string; sent_at: string; status?: 'sent' | 'failed' | 'logged' | 'off'; error?: string | null }
+interface SentMail { id: string; to: string; subject: string; body: string; sent_at: string; status?: 'sent' | 'failed' | 'logged' | 'off'; error?: string | null }
+const KEEP_OPTIONS: [number, string][] = [[7, '7 days'], [30, '30 days'], [90, '90 days'], [365, '1 year'], [0, 'Until deleted']]
 const MAIL_STATUS: Record<string, { label: string; cls: string; hint: string }> = {
   sent: { label: 'Sent', cls: 'bg-success/15 text-success', hint: 'The mail server accepted it. Delivery to the inbox is tracked by your mail provider.' },
   failed: { label: 'Failed', cls: 'bg-danger/15 text-danger', hint: 'The mail server refused it or the mail settings are wrong.' },
@@ -408,17 +409,31 @@ const MAIL_STATUS: Record<string, { label: string; cls: string; hint: string }> 
   off: { label: 'Not sent', cls: 'bg-bg-4 text-text-2', hint: 'MAIL_MODE=off: email is switched off.' },
 }
 
-/** The emails this backend tried to send (newest first, last 200, in memory), with what happened to each. */
+/** Every email the server tried to send, newest first, with what happened to each; kept for the chosen period. */
 function MailPane() {
   const [to, setTo] = useState('')
   const [rows, setRows] = useState<SentMail[] | null>(null)
   const [open, setOpen] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
+  const [keep, setKeep] = useState<number | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
+  const pushToast = useStore((s) => s.pushToast)
+  const filter = to.trim() ? `to=${encodeURIComponent(to.trim())}` : ''
   const load = async () => {
     setBusy(true)
-    try { setRows(await api.get<SentMail[]>(`/admin/mail?limit=200${to.trim() ? `&to=${encodeURIComponent(to.trim())}` : ''}`)); setOpen(null) } catch { setRows((r) => r ?? []) } finally { setBusy(false) }
+    try { setRows(await api.get<SentMail[]>(`/admin/mail?limit=500${filter ? `&${filter}` : ''}`)); setOpen(null) } catch { setRows((r) => r ?? []) } finally { setBusy(false) }
   }
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t) }, [to]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { api.get<{ retention_days: number }>('/admin/mail/settings').then((r) => setKeep(r.retention_days)).catch(() => {}) }, [])
+  const saveKeep = async (days: number) => {
+    try { await api.put('/admin/mail/settings', { retention_days: days }); setKeep(days); pushToast(days ? `Emails are now kept for ${KEEP_OPTIONS.find(([d]) => d === days)?.[1] ?? `${days} days`}` : 'Emails are now kept until deleted'); load() } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const remove = async (id: string) => {
+    try { await api.delete(`/admin/mail/${id}`); setRows((r) => r?.filter((m) => m.id !== id) ?? r); setOpen(null) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const clearAll = async () => {
+    try { const r = await api.delete<{ removed: number }>(`/admin/mail${filter ? `?${filter}` : ''}`); setConfirmClear(false); pushToast(`Deleted ${r.removed} email${r.removed === 1 ? '' : 's'}`); load() } catch (e) { pushToast((e as Error).message, 'error') }
+  }
   const failed = rows?.filter((m) => m.status === 'failed').length ?? 0
   return (
     <div data-admin-mail>
@@ -426,15 +441,29 @@ function MailPane() {
         <h1 className="text-2xl font-bold">Mail</h1>
         <button type="button" onClick={load} disabled={busy} className="btn-ghost ml-auto py-1.5" data-admin-mail-refresh><RefreshCw size={15} className={busy ? 'animate-spin' : ''} /> Refresh</button>
       </div>
-      <p className="text-sm text-text-2 mt-1 max-w-2xl">The last 200 emails this server tried to send, newest first. The list is kept in memory, so it starts over when the backend restarts. Whether a sent email reached the inbox is tracked by your mail provider (for SendGrid, its Activity Feed).</p>
-      <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="Filter by recipient email" type="email" className="input mt-4 max-w-md" data-admin-mail-search />
+      <p className="text-sm text-text-2 mt-1 max-w-2xl">Every email this server tried to send, newest first, kept through restarts until it expires or you delete it. Whether a sent email reached the inbox is tracked by your mail provider (for SendGrid, its Activity Feed).</p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="Filter by recipient email" type="email" className="input max-w-md" data-admin-mail-search />
+        <label className="flex items-center gap-2 text-sm text-text-1">Keep emails for
+          <select className="input w-auto py-1.5" value={keep ?? ''} disabled={keep === null} onChange={(e) => saveKeep(Number(e.target.value))} data-admin-mail-keep>
+            {keep !== null && !KEEP_OPTIONS.some(([d]) => d === keep) && <option value={keep}>{keep} days</option>}
+            {KEEP_OPTIONS.map(([d, label]) => <option key={d} value={d}>{label}</option>)}
+          </select>
+        </label>
+        {(rows?.length ?? 0) > 0 && (confirmClear ? (
+          <span className="flex items-center gap-2 text-sm" data-admin-mail-clear-confirm>{filter ? `Delete every email to ${to.trim()}?` : 'Delete every logged email?'}
+            <button type="button" className="btn-primary bg-danger hover:bg-danger/80 py-1" onClick={clearAll}>Delete</button><button type="button" className="btn-ghost py-1" onClick={() => setConfirmClear(false)}>Cancel</button></span>
+        ) : (
+          <button type="button" className="btn-ghost py-1.5 text-danger" onClick={() => setConfirmClear(true)} data-admin-mail-clear>{filter ? 'Delete these' : 'Delete all'}</button>
+        ))}
+      </div>
       {failed > 0 && <p className="mt-3 text-sm text-danger" data-admin-mail-failed>{failed} of these failed. Open one to see the error, and check SMTP_URL and MAIL_FROM.</p>}
       <div className="mt-4 rounded-xl border border-line bg-bg-1 overflow-hidden">
-        {(rows?.length ?? 0) === 0 && <div className="px-3 py-6 text-sm text-text-2 text-center" data-admin-mail-empty>{rows === null || busy ? 'Loading…' : to.trim() ? 'No emails to that address yet.' : 'No emails sent since the backend started.'}</div>}
+        {(rows?.length ?? 0) === 0 && <div className="px-3 py-6 text-sm text-text-2 text-center" data-admin-mail-empty>{rows === null || busy ? 'Loading…' : to.trim() ? 'No emails to that address yet.' : 'No emails logged.'}</div>}
         {rows?.map((m, i) => {
           const st = MAIL_STATUS[m.status ?? 'logged'] ?? MAIL_STATUS.logged
           return (
-            <div key={`${m.sent_at}-${i}`} className="border-t border-line first:border-t-0" data-admin-mail-row data-mail-status={m.status ?? 'logged'}>
+            <div key={m.id} className="border-t border-line first:border-t-0" data-admin-mail-row data-mail-status={m.status ?? 'logged'}>
               <button type="button" onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i} className="w-full grid grid-cols-[76px_170px_minmax(0,1fr)] max-md:grid-cols-[76px_minmax(0,1fr)] gap-x-4 gap-y-0.5 px-3 py-2 text-left text-sm hover:bg-bg-3">
                 <span className={`self-start justify-self-start rounded px-1.5 py-0.5 text-[11px] font-bold ${st.cls}`} title={st.hint}>{st.label}</span>
                 <span className="text-xs text-text-2 pt-0.5 max-md:hidden" title={m.sent_at}>{new Date(m.sent_at).toLocaleString()}</span>
@@ -444,6 +473,7 @@ function MailPane() {
                 <div className="px-3 pb-3 text-sm" data-admin-mail-detail>
                   {m.error && <p className="mb-2 rounded-md bg-danger/10 px-3 py-2 text-danger break-words" data-admin-mail-error>{m.error}</p>}
                   <pre className="whitespace-pre-wrap break-words rounded-md bg-bg-0 px-3 py-2 font-sans text-text-1">{m.body}</pre>
+                  <button type="button" className="btn-ghost mt-2 py-1 text-danger" onClick={() => remove(m.id)} data-admin-mail-delete>Delete this email</button>
                 </div>
               )}
             </div>
