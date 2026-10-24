@@ -46,6 +46,8 @@
 
 /* Chat font scaling (Appearance settings): message bodies and the composer follow --font-scale. */
 .msg-content, textarea.composer-input { font-size: calc(15px * var(--font-scale)) !important; line-height: calc(1.375rem * var(--font-scale)) !important; }
+/* The message box's placeholder stays on one line (cut off with an ellipsis) at any text size. */
+textarea.composer-input::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 html, body, #root { height: 100%; }
 @supports (height: 100dvh) { #root { height: 100dvh; } }

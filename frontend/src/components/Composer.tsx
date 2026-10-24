@@ -1,4 +1,4 @@
-import { BarChart3, Eye, EyeOff, FileText, ImagePlay, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
+import { BarChart3, Camera, Eye, EyeOff, FileText, FolderOpen, ImagePlay, Images, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
@@ -82,6 +82,22 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const [sending, setSending] = useState(false)
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const mediaRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  // Touch devices get a sheet of big targets that open the phone's own pickers (photos, camera, files).
+  const [sheet, setSheet] = useState(false)
+  // A narrow box (phones, larger text) folds the GIF and sticker buttons into the emoji button, whose picker has
+  // those tabs, so the text keeps its room. Measured rather than a container query, which would trap the pickers'
+  // fixed-position layers inside the box.
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [narrow, setNarrow] = useState(false)
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(([e]) => setNarrow(e.contentRect.width < 480))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const lastTyping = useRef(0)
   const isDm = channel.guild_id === null
   const name = isDm ? (isGroup(channel as DmChannel) ? dmName(channel as DmChannel, users, notes) : `@${(channel as DmChannel).recipients[0]?.display_name ?? ''}`) : (channel as Channel).kind === 'voice' ? channel.name : `#${channel.name}`
@@ -93,6 +109,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   useEffect(() => {
     const el = ref.current
     if (!el) return
+    // Empty: the one row the textarea has, however long the placeholder (it is cut off, never wrapped). With text,
+    // grow with it (up to 300px).
+    if (!value) { el.style.height = ''; return }
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 300) + 'px'
   }, [value])
@@ -323,7 +342,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
       {shortcode && suggestions.length > 0 && !mention && (
         <ShortcodeSuggest query={shortcode.query} items={suggestions} active={suggestIdx} onPick={pickSuggestion} onHover={setSuggestIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
       )}
-      <div className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition" data-composer-box>
+      <div ref={boxRef} className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition" data-composer-box data-composer-narrow={narrow ? '1' : undefined}>
         {reply && (
           <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-xl">
             <span>Replying to <b className="text-text-0">{reply.author.display_name}</b></span>
@@ -359,14 +378,19 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           </div>
         ) : (
         <div className="flex items-end gap-2 px-3 py-2">
-          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} />
-          <button className="pb-1 text-text-2 hover:text-text-0" title="Attach, poll or voice message" onClick={(e) => { const r = (e.currentTarget.closest('[data-composer-box]') ?? e.currentTarget).getBoundingClientRect(); plus.open({ clientX: r.left, clientY: r.top - 8 }, plusItems, { above: true }) }} aria-haspopup="menu" data-composer-plus><PlusCircle size={22} /></button>
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="files" />
+          <input ref={mediaRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="media" />
+          <input ref={cameraRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="camera" />
+          <button className="pb-1 text-text-2 hover:text-text-0" title="Attach, poll or voice message" onClick={(e) => {
+            if (window.matchMedia('(pointer: coarse)').matches) { setSheet(true); return }
+            const r = (e.currentTarget.closest('[data-composer-box]') ?? e.currentTarget).getBoundingClientRect(); plus.open({ clientX: r.left, clientY: r.top - 8 }, plusItems, { above: true })
+          }} aria-haspopup="menu" data-composer-plus><PlusCircle size={22} /></button>
           <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={t('Message {name}', { name })}
             onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
-            className="composer-input flex-1 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />
-          <div className="relative pb-1 flex items-center gap-2.5">
-            <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title="GIF" data-gif-button><ImagePlay size={22} /></button>
-            <button className={`${picker === 'sticker' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'sticker' ? null : 'sticker'))} title="Sticker" data-sticker-button><Sticker size={22} /></button>
+            className="composer-input flex-1 min-w-0 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />
+                    <div className="relative pb-1 flex shrink-0 items-center gap-2.5">
+            {!narrow && <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title="GIF" data-gif-button><ImagePlay size={22} /></button>}
+            {!narrow && <button className={`${picker === 'sticker' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'sticker' ? null : 'sticker'))} title="Sticker" data-sticker-button><Sticker size={22} /></button>}
             <button className={`${picker === 'emoji' ? 'text-warn' : 'text-text-2 hover:text-warn'}`} onClick={() => setPicker((p) => (p === 'emoji' ? null : 'emoji'))} title="Emoji" data-emoji-button><Smile size={22} /></button>
             {picker && (
               <ExpressionPicker initial={picker} guildId={channel.guild_id} className="bottom-full right-0 mb-3" onClose={() => setPicker(null)}
@@ -378,6 +402,47 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         )}
       </div>
       {plus.menu && <ContextMenu {...plus.menu} onClose={plus.close} label="Add to message" />}
+      {sheet && (
+        <AttachSheet onClose={() => setSheet(false)} canAttach={canAttach} canRecord={typeof MediaRecorder !== 'undefined'}
+          onPick={(what) => {
+            setSheet(false)
+            if (what === 'media') mediaRef.current?.click()
+            else if (what === 'camera') cameraRef.current?.click()
+            else if (what === 'files') fileRef.current?.click()
+            else if (what === 'poll') openModal({ kind: 'createPoll', channelId: channel.id })
+            else void startRecording()
+          }} />
+      )}
+    </div>
+  )
+}
+
+type AttachKind = 'media' | 'camera' | 'files' | 'poll' | 'voice'
+
+/** Touch devices: what "+" adds, as a bottom sheet of big targets. Photos, Camera and Files open the phone's own
+ *  pickers (on iOS the Photos one is the system photo library), so there is no separate "upload" step. */
+function AttachSheet({ onPick, onClose, canAttach, canRecord }: { onPick: (k: AttachKind) => void; onClose: () => void; canAttach: boolean; canRecord: boolean }) {
+  useEffect(() => { const k = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose() }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [onClose])
+  const items: { id: AttachKind; label: string; icon: React.ReactNode; tint: string; show: boolean }[] = [
+    { id: 'media', label: 'Photos & videos', icon: <Images size={24} />, tint: 'bg-accent text-white', show: canAttach },
+    { id: 'camera', label: 'Camera', icon: <Camera size={24} />, tint: 'bg-sky-500 text-white', show: canAttach },
+    { id: 'files', label: 'Files', icon: <FolderOpen size={24} />, tint: 'bg-bg-4 text-text-0', show: canAttach },
+    { id: 'poll', label: 'Poll', icon: <BarChart3 size={24} />, tint: 'bg-success text-black', show: true },
+    { id: 'voice', label: 'Voice message', icon: <Mic size={24} />, tint: 'bg-danger text-white', show: canAttach && canRecord },
+  ]
+  return (
+    <div className="fixed inset-0 z-[90] flex items-end bg-black/50" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }} data-attach-sheet>
+      <div className="sheet-up w-full rounded-t-2xl border-t border-line bg-bg-1 px-4 pt-3" style={{ paddingBottom: 'calc(1rem + var(--sab))', paddingLeft: 'max(1rem, var(--sal))', paddingRight: 'max(1rem, var(--sar))' }} role="dialog" aria-label="Add to message">
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-bg-4" />
+        <div className="grid grid-cols-5 gap-2 max-[360px]:grid-cols-3">
+          {items.filter((i) => i.show).map((i) => (
+            <button key={i.id} type="button" onClick={() => onPick(i.id)} className="flex flex-col items-center gap-1.5 rounded-xl py-2 text-xs text-text-1 hover:bg-bg-3" data-attach={i.id}>
+              <span className={`h-12 w-12 rounded-full flex items-center justify-center ${i.tint}`}>{i.icon}</span>
+              <span className="text-center leading-tight">{i.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
