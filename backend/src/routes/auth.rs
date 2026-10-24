@@ -100,7 +100,7 @@ pub async fn send_verification(state: &AppState, uid: Uuid, email: &str) {
     }
     let link = format!("{}/verify?token={token}", state.config.app_url);
     let body = format!("Welcome to Parley!\n\nConfirm your email address by opening this link (valid for 24 hours):\n\n{link}\n\nIf you did not create an account, ignore this message.");
-    let _ = crate::mail::send(&state.config, email, "Verify your Parley email", &body).await;
+    let _ = crate::mail::send(&state, email, "Verify your Parley email", &body).await;
 }
 
 #[derive(Deserialize)]
@@ -155,7 +155,7 @@ async fn forgot_password(State(state): State<AppState>, Json(req): Json<ForgotRe
             .bind(&token).bind(uid).bind(&email).execute(&state.db).await?;
         let link = format!("{}/reset?token={token}", state.config.app_url);
         let body = format!("Someone asked to reset the password for your Parley account.\n\nOpen this link within one hour to choose a new password:\n\n{link}\n\nIf that wasn't you, ignore this message; your password stays the same.");
-        let _ = crate::mail::send(&state.config, &email, "Reset your Parley password", &body).await;
+        let _ = crate::mail::send(&state, &email, "Reset your Parley password", &body).await;
     }
     Ok(Json(json!({ "ok": true })))
 }

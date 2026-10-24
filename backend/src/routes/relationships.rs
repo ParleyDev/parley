@@ -188,7 +188,7 @@ async fn mail_friend_request(state: &AppState, from: Uuid, target: Uuid) {
     let Some((email, wants)) = row else { return };
     if !wants { return }
     let name = crate::audit::username(state, from).await;
-    let _ = crate::mail::send(&state.config, &email, &format!("{name} sent you a friend request"), &format!("{name} wants to be your friend on Parley. Accept or ignore it from the Friends page: {}/channels/@me\n\nTurn these mails off in Settings → Notifications.", state.config.app_url)).await;
+    let _ = crate::mail::send(&state, &email, &format!("{name} sent you a friend request"), &format!("{name} wants to be your friend on Parley. Accept or ignore it from the Friends page: {}/channels/@me\n\nTurn these mails off in Settings → Notifications.", state.config.app_url)).await;
 }
 
 /// New friends: any message request between them is accepted and both sides get the updated channel.

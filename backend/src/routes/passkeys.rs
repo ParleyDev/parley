@@ -143,7 +143,7 @@ async fn register_finish(State(state): State<AppState>, AuthUser(uid): AuthUser,
         .fetch_one(&state.db).await
         .map_err(|e| match e { sqlx::Error::Database(d) if d.is_unique_violation() => AppError::BadRequest("That passkey is already registered".into()), e => e.into() })?;
     let (email,): (String,) = sqlx::query_as("SELECT email FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
-    let _ = crate::mail::send(&state.config, &email, "A passkey was added to your Parley account", &format!("A passkey named \"{name}\" was just added to your Parley account. It can be used to sign in without a password.\n\nIf that wasn't you, remove it in Settings → My Account → Passkeys and change your password right away: {}", state.config.app_url)).await;
+    let _ = crate::mail::send(&state, &email, "A passkey was added to your Parley account", &format!("A passkey named \"{name}\" was just added to your Parley account. It can be used to sign in without a password.\n\nIf that wasn't you, remove it in Settings → My Account → Passkeys and change your password right away: {}", state.config.app_url)).await;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
