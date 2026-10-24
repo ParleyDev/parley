@@ -11,6 +11,7 @@ import DeviceMenu from './DeviceMenu'
 import AudioStats from './AudioStats'
 import { profileOf } from '../lib/audioProfile'
 import StyledName from './StyledName'
+import AccountSwitcher from './AccountSwitcher'
 import { useT } from '../lib/i18n'
 
 const STATUSES: { v: string; label: string; color: string }[] = [
@@ -104,6 +105,9 @@ export default function UserPanel() {
                   <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />{s.label}
                 </button>
               ))}
+              <div className="h-px bg-line my-1" />
+              <div className="px-2 pt-1 pb-0.5 text-[11px] font-bold uppercase tracking-wide text-text-2">Switch account</div>
+              <AccountSwitcher />
             </div>
           </>
         )}

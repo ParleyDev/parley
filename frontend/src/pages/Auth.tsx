@@ -7,6 +7,8 @@ import { api } from '../lib/api'
 import { useStore } from '../store'
 import type { PrivateUser } from '../lib/types'
 import { useT } from '../lib/i18n'
+import { savedAccounts } from '../lib/accounts'
+import AccountSwitcher from '../components/AccountSwitcher'
 
 export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const t = useT()
@@ -125,6 +127,13 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           </div>
         </div>
 
+        {mode === 'login' && savedAccounts().length > 0 && (
+          <div className="mb-5" data-saved-accounts>
+            <div className="label">Continue as</div>
+            <div className="rounded-lg border border-line p-1"><AccountSwitcher signedIn={false} /></div>
+            <div className="mt-4 flex items-center gap-3 text-xs uppercase tracking-wider text-text-2"><span className="h-px flex-1 bg-line" />or sign in<span className="h-px flex-1 bg-line" /></div>
+          </div>
+        )}
         {err && <div className="mb-4 rounded-lg bg-danger/15 border border-danger/40 px-3 py-2 text-sm" data-auth-error>{err}</div>}
         {closed && <div className="mb-4 rounded-lg bg-warn/15 border border-warn/40 px-3 py-2 text-sm" data-registration-closed>Registration is closed on this Parley instance right now. If you already have an account, log in instead.</div>}
 

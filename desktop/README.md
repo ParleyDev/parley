@@ -1,6 +1,6 @@
 # Parley for Windows, macOS and Linux
 
-A native desktop app built with [Tauri 2](https://tauri.app): a small window that opens a **connect screen** (`www/index.html`), checks the address with `/api/instance`, remembers it, and then navigates to that server so the full Parley web client runs inside the app. Nothing about a server is baked in; one build works for every instance. Addresses typed without a scheme try https first and fall back to plain http.
+A native desktop app built with [Tauri 2](https://tauri.app): a small window that opens a **connect screen** (`www/index.html`) offering the hosted service (app.runparley.com) in one tap or any self-hosted address, checks the address with `/api/instance`, remembers it, and then navigates to that server so the full Parley web client runs inside the app. Only the hosted default is built in; one build works for every instance. Addresses typed without a scheme try https first and fall back to plain http.
 
 What the shell adds over the browser:
 

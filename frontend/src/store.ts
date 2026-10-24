@@ -2,6 +2,7 @@ import { STORAGE_PREFIX } from './lib/brand'
 import { getNotifPrefs } from './lib/notifPrefs'
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
+import { forgetToken, rememberAccount } from './lib/accounts'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
 
@@ -332,12 +333,14 @@ export const useStore = create<State>((set, get) => ({
 
   setAuth: (token, user) => {
     setToken(token)
+    rememberAccount(user, token)
     set({ token, user })
   },
   logout: () => {
     // Best effort: end the session server-side so the token is dead even if a copy survives. Already-revoked
     // sessions (SESSION_REVOKED, 401) just fail quietly.
     if (getToken()) api.post('/auth/logout').catch(() => {})
+    forgetToken(getToken())
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], guildLayout: [], channels: {}, dms: {}, relationships: {},
@@ -397,6 +400,7 @@ export const useStore = create<State>((set, get) => ({
       hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
       readyCount: get().readyCount + 1,
     })
+    rememberAccount(r.user, getToken())
   },
   setConnected: (connected) => set({ connected }),
 

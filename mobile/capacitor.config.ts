@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 /**
- * Parley is self-hosted, so the app does not bake a server in: it ships a small connect screen (www/) and then
- * navigates the native WebView to the chosen server, where the normal web client runs with the Capacitor bridge
+ * The app ships a small connect screen (www/) that defaults to the hosted service (app.runparley.com) and also
+ * takes any self-hosted address, then navigates the native WebView to the chosen server, where the normal web client runs with the Capacitor bridge
  * available (push, keep-awake, haptics, status bar, back button). `allowNavigation: ['*']` keeps the bridge
  * injected on whatever server the user picks; the web client only uses it when `Capacitor.isNativePlatform()`.
  */
