@@ -119,6 +119,7 @@ try {
     await p.fill('[data-emoji-search]', 'fire'); await p.waitForTimeout(150); await p.click('[data-emoji-btn=":fire:"]'); await p.waitForTimeout(100); await p.keyboard.press('Escape'); await p.waitForTimeout(150)
     check(`${tag}: picking inserts emoji`, (await p.inputValue('textarea')).includes('🔥'))
     await p.fill('textarea', '')
+    await p.waitForSelector('[data-expression-picker]', { state: 'detached', timeout: 5000 }).catch(() => {})
     const last = p.locator('text=line 13').last()
     if (tag === 'mobile') await last.tap(); else await last.hover()
     await p.waitForTimeout(200)

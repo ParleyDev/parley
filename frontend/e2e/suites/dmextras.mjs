@@ -47,6 +47,7 @@ r = await raw(a.token, 'PATCH', `/channels/${g.id}`, { owner_id: d.user.id }); o
 await pa.goto(`${WEB}/channels/@me/${g.id}`); await pa.waitForSelector('[data-group-members]')
 await pa.setInputFiles('[data-group-icon-input]', `${FIX}/pic.png`)
 await pa.waitForFunction(() => !!document.querySelector('header img[src^="/api/images/"]'))
+await pa.waitForSelector('[data-system="channel_icon_change"]', { timeout: 5000 }).catch(() => {})
 ok('uploading a group icon from the header shows it and posts a notice', (await call(b.token, 'GET', `/users/@me/channels`)).find((x) => x.id === g.id)?.icon_url?.startsWith('/api/images/') && await pa.locator('[data-system="channel_icon_change"]').count() === 1)
 const row = pa.locator(`[data-group-member="${c.user.id}"]`); await row.hover(); await row.locator('[data-transfer-owner]').click()
 await pa.click('button.btn-primary:has-text("Transfer")'); await pa.waitForSelector('[data-system="channel_owner_change"]')

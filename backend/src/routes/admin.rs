@@ -508,12 +508,13 @@ pub async fn delete_account(state: &AppState, id: Uuid) -> AppResult<()> {
         state.hub.voice_evict(|v| v.guild_id == Some(*gid));
         state.hub.emit_guild(*gid, "GUILD_DELETE", json!({ "id": gid }));
     }
-    state.hub.emit_users(vec![id], "SESSION_REVOKED", json!({ "reason": "Your account has been deleted." }));
     state.hub.voice_evict(|v| v.user_id == id);
     let res = sqlx::query("DELETE FROM users WHERE id = $1").bind(id).execute(&state.db).await?;
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("User not found".into()));
     }
+    // Only once the row is gone: clients sign out on this, and their token must already be dead by then.
+    state.hub.emit_users(vec![id], "SESSION_REVOKED", json!({ "reason": "Your account has been deleted." }));
     Ok(())
 }
 
