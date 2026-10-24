@@ -25,20 +25,21 @@ import { APP_NAME, APP_VERSION } from '../../lib/brand'
 
 type Tab = 'account' | 'profile' | 'social' | 'privacy' | 'devices' | 'connections' | 'apps' | 'applications' | 'voice' | 'appearance' | 'accessibility' | 'chat' | 'keybinds' | 'notifications' | 'streamer' | 'advanced' | 'language'
 
-export default function UserSettingsModal({ onClose, tab: initial = 'account' }: { onClose: () => void; tab?: Tab }) {
+export default function UserSettingsModal({ onClose, tab: requested }: { onClose: () => void; tab?: Tab }) {
+  const initial: Tab = requested ?? 'account'
   const t = useT()
   const [tab, setTab] = useState<Tab>(initial)
   const logout = useStore((s) => s.logout)
   const serverVersion = useStore((s) => s.instance.version)
   return (
     <SettingsShell<Tab>
-      tab={tab} onTab={setTab} onClose={onClose}
+      tab={tab} onTab={setTab} onClose={onClose} title={t('User Settings')} startOnMenu={!requested}
       sections={[
         { title: t('User Settings'), items: [{ id: 'account', label: t('My Account'), icon: <UserIcon size={16} /> }, { id: 'profile', label: t('Profiles'), icon: <Palette size={16} /> }, { id: 'social', label: t('Content & Social'), icon: <ShieldCheck size={16} /> }, { id: 'privacy', label: t('Data & Privacy'), icon: <Lock size={16} /> }, { id: 'devices', label: t('Devices'), icon: <MonitorSmartphone size={16} /> }, { id: 'connections', label: t('Connections'), icon: <Link2 size={16} /> }, { id: 'apps', label: t('Authorized Apps'), icon: <KeyRound size={16} /> }] },
         { title: t('Developer'), items: [{ id: 'applications', label: t('Applications'), icon: <Blocks size={16} /> }] },
         { title: t('App Settings'), items: [{ id: 'appearance', label: t('Appearance'), icon: <Paintbrush size={16} /> }, { id: 'accessibility', label: t('Accessibility'), icon: <Accessibility size={16} /> }, { id: 'voice', label: t('Voice & Video'), icon: <Mic size={16} /> }, { id: 'chat', label: t('Chat'), icon: <MessageSquareText size={16} /> }, { id: 'notifications', label: t('Notifications'), icon: <Bell size={16} /> }, { id: 'keybinds', label: t('Keybinds'), icon: <Keyboard size={16} /> }, { id: 'language', label: t('Language'), icon: <Globe size={16} /> }, { id: 'streamer', label: t('Streamer Mode'), icon: <Radio size={16} /> }, { id: 'advanced', label: t('Advanced'), icon: <Wrench size={16} /> }] },
       ]}
-      footer={<><div className="px-2.5 pb-2 text-[11px] leading-4 text-text-2 max-md:hidden" data-version>{APP_NAME} web {APP_VERSION}{serverVersion ? <><br />server {serverVersion}</> : null}{isDesktop() ? <><br />desktop {desktopVersion()}</> : null}</div><button onClick={() => { void unregisterPush().finally(() => { onClose(); logout() }) }} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title={t('Log Out')}><span className="max-md:hidden">Log Out</span><LogOut size={16} /></button>{(isNative() || isDesktop()) && <button onClick={switchServer} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-text-1 hover:bg-bg-3 whitespace-nowrap" title="Switch server" data-switch-server><span className="max-md:hidden">Switch server</span><Server size={16} /></button>}</>}
+      footer={<><div className="px-2.5 pb-2 text-[11px] leading-4 text-text-2" data-version>{APP_NAME} web {APP_VERSION}{serverVersion ? <><br />server {serverVersion}</> : null}{isDesktop() ? <><br />desktop {desktopVersion()}</> : null}</div><button onClick={() => { void unregisterPush().finally(() => { onClose(); logout() }) }} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title={t('Log Out')}><span>Log Out</span><LogOut size={16} /></button>{(isNative() || isDesktop()) && <button onClick={switchServer} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-text-1 hover:bg-bg-3 whitespace-nowrap" title="Switch server" data-switch-server><span>Switch server</span><Server size={16} /></button>}</>}
     >
       {tab === 'account' ? <AccountTab onClose={onClose} onEditProfile={() => setTab('profile')} /> : tab === 'profile' ? <ProfilesTab /> : tab === 'appearance' ? <AppearanceTab /> : tab === 'keybinds' ? <KeybindsTab /> : tab === 'notifications' ? <NotificationsTab /> : tab === 'social' ? <ContentSocialTab /> : tab === 'devices' ? <DevicesTab /> : tab === 'privacy' ? <DataPrivacyTab /> : tab === 'accessibility' ? <AccessibilityTab /> : tab === 'chat' ? <ChatTab /> : tab === 'streamer' ? <StreamerTab /> : tab === 'advanced' ? <AdvancedTab /> : tab === 'language' ? <LanguageTab /> : tab === 'connections' ? <ConnectionsTab /> : tab === 'apps' ? <AuthorizedAppsTab /> : tab === 'applications' ? <ApplicationsTab /> : <VoiceVideoTab />}
     </SettingsShell>

@@ -58,12 +58,18 @@ body {
 /* Notched phones and Android's edge-to-edge system bars: keep chrome out of the safe areas (viewport-fit=cover is set
    in index.html). The bottom matters on Android, where the 3-button nav bar otherwise covers the composer and self card.
    Capacitor's SystemBars plugin also injects --safe-area-inset-* for WebViews whose env() values are unreliable. */
-.safe-area {
-  padding-top: max(env(safe-area-inset-top), var(--safe-area-inset-top, 0px));
-  padding-right: max(env(safe-area-inset-right), var(--safe-area-inset-right, 0px));
-  padding-bottom: max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px));
-  padding-left: max(env(safe-area-inset-left), var(--safe-area-inset-left, 0px));
+:root {
+  --sat: max(env(safe-area-inset-top), var(--safe-area-inset-top, 0px));
+  --sar: max(env(safe-area-inset-right), var(--safe-area-inset-right, 0px));
+  --sab: max(env(safe-area-inset-bottom), var(--safe-area-inset-bottom, 0px));
+  --sal: max(env(safe-area-inset-left), var(--safe-area-inset-left, 0px));
 }
+/* Full-bleed surfaces (the app shell, full-screen settings): exactly clear of the system bars. */
+.safe-area { padding: var(--sat) var(--sar) var(--sab) var(--sal); }
+/* Overlays that centre a dialog: at least 1rem around it, more where a system bar needs it. */
+.safe-pad { padding: max(1rem, var(--sat)) max(1rem, var(--sar)) max(1rem, var(--sab)) max(1rem, var(--sal)); }
+/* Things pinned to the bottom-right corner (toasts, the incoming-call card). */
+.safe-corner { bottom: calc(1rem + var(--sab)); right: calc(1rem + var(--sar)); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 /* Reduced motion: the OS setting or the Appearance toggle turns animations and transitions off. */
 @media (prefers-reduced-motion: reduce) { .pop, .fade-in, .animate-ping, .animate-pulse, .animate-spin { animation: none !important; } *, *::before, *::after { transition-duration: 0s !important; scroll-behavior: auto !important; } }

@@ -54,7 +54,7 @@ export function AccountChanges() {
         <Row label="Password" value="••••••••••" kind="password" />
       </div>
       {open && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={() => !busy && setOpen(null)} data-account-dialog={open}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 safe-pad" onClick={() => !busy && setOpen(null)} data-account-dialog={open}>
           <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="pop w-full max-w-md rounded-xl bg-bg-1 border border-line p-5 space-y-4 shadow-2xl">
             <h3 className="text-lg font-bold">{open === 'username' ? 'Change your username' : open === 'email' ? 'Change your email' : 'Change your password'}</h3>
             <p className="text-sm text-text-2">

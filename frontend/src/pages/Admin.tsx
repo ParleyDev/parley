@@ -174,7 +174,7 @@ function UsersPane() {
         <span className="ml-auto text-xs text-text-2" data-admin-user-total>{list ? `${list.length} of ${total}` : '…'}</span>
       </div>
       {limitFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setLimitFor(null)} data-admin-limit-dialog>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 safe-pad" onClick={() => setLimitFor(null)} data-admin-limit-dialog>
           <div className="pop w-full max-w-md rounded-xl bg-bg-1 border border-line p-5 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold">Upload size limit for @{limitFor.username}</h3>
             <p className="text-sm text-text-2">The largest single file they can attach. The instance limit applies unless you set one here.</p>
@@ -184,7 +184,7 @@ function UsersPane() {
         </div>
       )}
       {quotaFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setQuotaFor(null)} data-admin-quota-dialog>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 safe-pad" onClick={() => setQuotaFor(null)} data-admin-quota-dialog>
           <div className="pop w-full max-w-md rounded-xl bg-bg-1 border border-line p-5 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold">Storage quota for @{quotaFor.username}</h3>
             <p className="text-sm text-text-2">Attachments and profile images together. The instance default applies unless you set one here.</p>

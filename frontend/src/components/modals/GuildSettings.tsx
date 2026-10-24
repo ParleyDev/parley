@@ -17,7 +17,8 @@ import AuditLogTab from './settings/AuditLogTab'
 
 type Tab = 'overview' | 'roles' | 'members' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
 
-export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'overview' }: { onClose: () => void; guildId: string; tab?: Tab }) {
+export default function GuildSettingsModal({ onClose, guildId, tab: requested }: { onClose: () => void; guildId: string; tab?: Tab }) {
+  const initial: Tab = requested ?? 'overview'
   const guild = useStore((s) => s.guilds[guildId])
   const user = useStore((s) => s.user)
   const perms = useStore((s) => myGuildPerms(s, guildId))
@@ -47,12 +48,12 @@ export default function GuildSettingsModal({ onClose, guildId, tab: initial = 'o
 
   return (
     <SettingsShell<Tab>
-      tab={tab} onTab={setTab} onClose={onClose} wide={tab !== 'overview'}
+      tab={tab} onTab={setTab} onClose={onClose} wide={tab !== 'overview'} title="Server Settings" startOnMenu={!requested}
       sections={[{ title: guild.name, items }]}
       footer={isOwner ? (
         <div className="flex flex-col max-md:flex-row gap-0.5">
-          <button onClick={() => openModal({ kind: 'transferOwnership', guildId })} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-text-1 hover:bg-bg-3 hover:text-text-0 whitespace-nowrap" title="Transfer Ownership"><span className="max-md:hidden">Transfer Ownership</span><Crown size={16} /></button>
-          <button onClick={del} className="w-full max-md:w-auto flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Server"><span className="max-md:hidden">Delete Server</span><Trash2 size={16} /></button>
+          <button onClick={() => openModal({ kind: 'transferOwnership', guildId })} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-text-1 hover:bg-bg-3 hover:text-text-0 whitespace-nowrap" title="Transfer Ownership"><span>Transfer Ownership</span><Crown size={16} /></button>
+          <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Server"><span>Delete Server</span><Trash2 size={16} /></button>
         </div>
       ) : undefined}
     >

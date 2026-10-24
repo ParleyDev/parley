@@ -46,7 +46,7 @@ export default function IncomingCall() {
   const caller = users[ringing.user_id] ?? dm.recipients.find((r) => r.id === ringing.user_id)
   const join = () => { navigate(`/channels/@me/${dm.id}`); voice.join(dm.id) }
   return (
-    <div className="pop fixed bottom-4 right-4 z-40 w-72 rounded-xl bg-bg-1 border border-line shadow-2xl p-4" role="alert" data-incoming-call>
+    <div className="pop fixed safe-corner z-40 w-72 rounded-xl bg-bg-1 border border-line shadow-2xl p-4" role="alert" data-incoming-call>
       <div className="flex items-center gap-3">
         {caller && <Avatar user={caller} size={40} />}
         <div className="min-w-0"><div className="font-bold truncate">{caller?.display_name ?? 'Someone'}</div><div className="text-xs text-text-2">Incoming call…</div></div>
