@@ -15,7 +15,7 @@ use crate::ratelimit::rl_uploads;
 use axum::{middleware::from_fn,
     body::Body,
     extract::{DefaultBodyLimit, Multipart, Path, State},
-    http::{header, HeaderValue, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
@@ -86,7 +86,7 @@ async fn upload(
             None => return Err(AppError::BadRequest("Missing 'file' field".into())),
         }
     };
-    let filename = sanitize_filename(field.file_name().unwrap_or("file"));
+    let mut filename = sanitize_filename(field.file_name().unwrap_or("file"));
     let declared = field.content_type().unwrap_or("application/octet-stream").to_string();
 
     // Stream to disk, enforcing the size cap as we go.
@@ -136,9 +136,9 @@ async fn upload(
 
     // Trust magic bytes over the declared type for anything we'd render inline.
     let sniffed = infer::get(&head).map(|t| t.mime_type().to_string());
-    let content_type = match sniffed {
-        // Audio-only WebM/Matroska sniffs as video; trust the declared audio type for recordings.
-        Some(s) if s.starts_with("video/webm") && declared.starts_with("audio/") => declared.clone(),
+    let mut content_type = match sniffed {
+        // Audio-only WebM and MP4 (iPhone recordings) sniff as video; trust the declared audio type for recordings.
+        Some(s) if (s.starts_with("video/webm") || s.starts_with("video/mp4") || s.starts_with("video/quicktime")) && declared.starts_with("audio/") => declared.clone(),
         Some(s) => s,
         None if declared.starts_with("text/") => declared,
         None => "application/octet-stream".to_string(),
@@ -152,6 +152,13 @@ async fn upload(
         (None, None)
     };
 
+    // Voice messages recorded as WebM/Ogg become AAC .m4a so iPhones can play them (see voice_audio.rs).
+    if duration_ms.is_some() && content_type.starts_with("audio/") && crate::voice_audio::needs_conversion(&content_type) {
+        match crate::voice_audio::convert_in_place(&path).await {
+            Ok(n) => { content_type = "audio/mp4".into(); filename = crate::voice_audio::m4a_name(&filename); size = n as usize; }
+            Err(e) => tracing::warn!(attachment = %id, error = %e, "voice message kept in its recorded format"),
+        }
+    }
     let thumb_type = crate::routes::storage::make_thumbnail(path.clone(), &content_type, width, height).await;
     crate::metrics::METRICS.uploads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     crate::metrics::METRICS.upload_bytes.fetch_add(size as u64, std::sync::atomic::Ordering::Relaxed);
@@ -176,26 +183,61 @@ async fn upload(
     Ok((StatusCode::CREATED, Json(att)))
 }
 
-async fn serve(State(state): State<AppState>, Path((id, _filename)): Path<(Uuid, String)>) -> AppResult<Response> {
+/// `Range: bytes=a-b` / `a-` / `-n` against a file of `len` bytes (single ranges only, as media players send).
+/// Some(Ok(range)) to serve part, Some(Err(())) when unsatisfiable, None to serve the whole file.
+fn byte_range(headers: &HeaderMap, len: u64) -> Option<Result<(u64, u64), ()>> {
+    let spec = headers.get(header::RANGE)?.to_str().ok()?.trim().strip_prefix("bytes=")?;
+    if spec.contains(',') || len == 0 { return None; }
+    let (a, b) = spec.split_once('-')?;
+    let (start, end) = match (a.trim(), b.trim()) {
+        ("", n) => { let n: u64 = n.parse().ok()?; if n == 0 { return Some(Err(())) } (len.saturating_sub(n), len - 1) }
+        (s, "") => (s.parse().ok()?, len - 1),
+        (s, e) => (s.parse().ok()?, e.parse::<u64>().ok()?.min(len - 1)),
+    };
+    if start > end || start >= len { return Some(Err(())); }
+    Some(Ok((start, end)))
+}
+
+async fn serve(State(state): State<AppState>, Path((id, _filename)): Path<(Uuid, String)>, headers: HeaderMap) -> AppResult<Response> {
     let att = sqlx::query_as::<_, Attachment>(&format!("SELECT {ATTACHMENT_COLS} FROM attachments WHERE id = $1"))
         .bind(id)
         .fetch_optional(&state.db)
         .await?
         .ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
     let path = state.config.upload_dir.join(id.to_string());
-    let file = tokio::fs::File::open(&path).await.map_err(|_| AppError::NotFound("Attachment file missing".into()))?;
-    let stream = tokio_util::io::ReaderStream::new(file);
+    let mut file = tokio::fs::File::open(&path).await.map_err(|_| AppError::NotFound("Attachment file missing".into()))?;
+    let len = file.metadata().await.map(|m| m.len()).unwrap_or(att.size as u64);
+    // Byte ranges: iOS will not play audio or video from a server that ignores them, and seeking needs them.
+    let range = byte_range(&headers, len);
+    if let Some(Err(())) = range {
+        let mut resp = StatusCode::RANGE_NOT_SATISFIABLE.into_response();
+        resp.headers_mut().insert(header::CONTENT_RANGE, HeaderValue::from_str(&format!("bytes */{len}")).unwrap_or(HeaderValue::from_static("bytes */0")));
+        return Ok(resp);
+    }
+    let part = match range { Some(Ok(r)) => Some(r), _ => None };
+    if let Some((start, _)) = part {
+        use tokio::io::AsyncSeekExt;
+        file.seek(std::io::SeekFrom::Start(start)).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    }
+    let body_len = part.map(|(s, e)| e - s + 1).unwrap_or(len);
+    use tokio::io::AsyncReadExt;
+    let stream = tokio_util::io::ReaderStream::new(file.take(body_len));
     let disposition = if inline_type(&att.content_type) { "inline" } else { "attachment" };
     let ascii_name: String = att.filename.chars().map(|c| if c.is_ascii_graphic() || c == ' ' { c } else { '_' }).collect::<String>().replace('"', "_");
     let mut resp = Response::new(Body::from_stream(stream));
     let h = resp.headers_mut();
     h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&att.content_type).unwrap_or(HeaderValue::from_static("application/octet-stream")));
-    h.insert(header::CONTENT_LENGTH, HeaderValue::from(att.size as u64));
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(body_len));
+    h.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    if let Some((start, end)) = part {
+        if let Ok(v) = HeaderValue::from_str(&format!("bytes {start}-{end}/{len}")) { h.insert(header::CONTENT_RANGE, v); }
+    }
     h.insert(header::CONTENT_DISPOSITION, HeaderValue::from_str(&format!("{disposition}; filename=\"{ascii_name}\"")).unwrap_or(HeaderValue::from_static("attachment")));
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=31536000, immutable"));
     // Never let an uploaded HTML/SVG run script in our origin.
     h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; media-src 'self'; img-src 'self'"));
+    if part.is_some() { *resp.status_mut() = StatusCode::PARTIAL_CONTENT; }
     Ok(resp.into_response())
 }
 
@@ -367,4 +409,21 @@ async fn transcribe_once(state: &AppState, id: Uuid, url: &str, key: &str, model
     let v: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
     let text = v.get("text").and_then(|t| t.as_str()).unwrap_or("").trim().chars().take(4000).collect::<String>();
     Ok(text)
+}
+
+#[cfg(test)]
+mod range_tests {
+    use super::*;
+    fn r(v: &str, len: u64) -> Option<Result<(u64, u64), ()>> { let mut h = HeaderMap::new(); h.insert(header::RANGE, HeaderValue::from_str(v).unwrap()); byte_range(&h, len) }
+    #[test]
+    fn ranges() {
+        assert_eq!(r("bytes=0-1", 10), Some(Ok((0, 1))));
+        assert_eq!(r("bytes=4-", 10), Some(Ok((4, 9))));
+        assert_eq!(r("bytes=-3", 10), Some(Ok((7, 9))));
+        assert_eq!(r("bytes=5-99", 10), Some(Ok((5, 9))));
+        assert_eq!(r("bytes=10-", 10), Some(Err(())));
+        assert_eq!(r("bytes=0-1,4-5", 10), None);
+        assert_eq!(r("items=0-1", 10), None);
+        assert_eq!(byte_range(&HeaderMap::new(), 10), None);
+    }
 }

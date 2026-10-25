@@ -12,6 +12,7 @@ mod mfa;
 mod ratelimit;
 mod routes;
 mod state;
+mod voice_audio;
 mod ws;
 
 use axum::{http::{header, HeaderValue, Method}, routing::get, Router};
@@ -95,6 +96,7 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state);
 
     tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep.clone()));
+    tokio::spawn(voice_audio::convert_backlog(state_for_sweep.clone()));
     tokio::spawn(routes::images::sweep_orphans(state_for_sweep));
     tokio::spawn(ratelimit::prune_loop());
     let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
