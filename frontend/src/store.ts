@@ -168,6 +168,8 @@ interface State {
   transmitting: boolean
   pttHeld: boolean
   modal: ModalKind | null
+  /** Phones: the message whose action bar a tap opened (only one at a time). */
+  tappedMessage: string | null
   /** Instance-wide settings from GET /instance (registration, announcement banner). */
   instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; app_url?: string; oauth_available?: string[]; max_upload_bytes?: number; version?: string }
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
@@ -253,6 +255,7 @@ interface State {
   threads: Record<string, ThreadInfo>
   upsertThread: (t: ThreadInfo) => void
   closeModal: () => void
+  setTappedMessage: (id: string | null) => void
   pushToast: (text: string, kind?: 'info' | 'error') => void
   dismissToast: (id: number) => void
 
@@ -329,6 +332,7 @@ export const useStore = create<State>((set, get) => ({
   transmitting: false,
   pttHeld: false,
   modal: null,
+  tappedMessage: null,
   toast: [],
 
   setAuth: (token, user) => {
@@ -675,6 +679,7 @@ export const useStore = create<State>((set, get) => ({
   })),
   openModal: (modal) => set({ modal }),
   closeModal: () => set({ modal: null }),
+  setTappedMessage: (tappedMessage) => set({ tappedMessage }),
   pushToast: (text, kind = 'info') => {
     const id = toastSeq++
     set((s) => ({ toast: [...s.toast, { id, text, kind }] }))
