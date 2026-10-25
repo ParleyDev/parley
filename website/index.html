@@ -221,6 +221,22 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 .hand .chip .av { width: 38px; height: 38px; font-size: 13px; position: relative; }
 .hand .chip .av em { position: absolute; right: -4px; top: -4px; width: 16px; height: 16px; border-radius: 50%; background: #f6b53d; font-style: normal; font-size: 9px; display: grid; place-items: center; color: #1a1300; }
 .roles { display: flex; flex-wrap: wrap; gap: .45rem; }
+.decor { display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; }
+.decor .av { width: 40px; height: 40px; font-size: 14px; position: relative; }
+.decor .av::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; pointer-events: none; }
+.decor .d1::after { border: 2px solid #f6b53d; box-shadow: 0 0 10px rgba(246,181,61,.5); }
+.decor .d2::after { background: conic-gradient(#f0506e, #f6b53d, #3ccf7d, #38bdf8, #7b6cff, #f0506e); -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%); mask: radial-gradient(circle, transparent 62%, #000 64%); animation: spin 6s linear infinite; }
+.decor .d3::after { border: 2px dashed #7dd3fc; animation: spin 10s linear infinite; }
+.decor .tag-chip { font: 600 .6875rem/1 var(--mono); letter-spacing: .06em; padding: .3rem .45rem; border-radius: 6px; background: color-mix(in srgb, var(--violet) 22%, transparent); color: #cfc9ff; }
+.decor .styled { font: 900 1rem/1 var(--display); background: linear-gradient(90deg, #f0506e, #f6b53d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@keyframes spin { to { transform: rotate(1turn); } }
+.acct { display: grid; gap: .35rem; max-width: 300px; }
+.acct .row { display: flex; align-items: center; gap: .6rem; padding: .45rem .6rem; border-radius: 10px; font-size: .8125rem; }
+.acct .row.on { background: color-mix(in srgb, var(--panel-2) 90%, transparent); }
+.acct .av { width: 26px; height: 26px; font-size: 10px; }
+.acct .who { flex: 1; min-width: 0; } .acct .who small { display: block; color: var(--faint); font-family: var(--mono); font-size: .6875rem; }
+.acct .ok { color: var(--signal); } .acct .add { color: var(--muted); }
+.acct .add .av { background: var(--panel-2); color: var(--muted); }
 .roles span { font-size: .8125rem; font-weight: 600; padding: .3rem .6rem; border-radius: 7px; background: var(--panel); border: 1px solid var(--rule); }
 .platforms-mini { display: flex; flex-wrap: wrap; gap: .45rem; }
 .platforms-mini span { font: 500 .75rem/1 var(--mono); padding: .45rem .6rem; border-radius: 7px; border: 1px solid var(--rule); background: var(--panel); color: var(--muted); }
@@ -333,7 +349,7 @@ footer a:hover { color: var(--text); }
     <canvas id="wave" aria-hidden="true"></canvas>
     <div class="wrap">
       <div class="eyebrow-row">
-        <a class="pill" href="https://github.com/ParleyDev/parley/releases/latest" id="release-pill"><b>●</b> <span id="release-tag">v0.4.0</span> is out</a>
+        <a class="pill" href="https://github.com/ParleyDev/parley/releases/latest" id="release-pill"><b>●</b> <span id="release-tag">v0.7.0</span> is out</a>
         <span class="pill">Open source · Apache-2.0</span>
         <a class="pill pill-try" href="https://app.runparley.com/register">Try it free: <b>app.runparley.com</b> →</a>
       </div>
@@ -493,7 +509,7 @@ footer a:hover { color: var(--text); }
         <article class="f w3">
           <span class="tag">Everywhere</span>
           <h3>Same Parley on every screen</h3>
-          <p>A full web app plus Windows, macOS, Linux and Android apps that connect to any Parley server. Phones get a one-pane layout, and the interface speaks English, Español and Deutsch.</p>
+          <p>A full web app plus Windows, macOS, Linux and Android apps that open app.runparley.com in one tap or connect to any Parley server you choose. Phones get a one-pane layout, and the interface speaks English, Español and Deutsch.</p>
           <div class="mini platforms-mini"><span>Web</span><span>Windows</span><span>macOS</span><span>Linux</span><span>Android</span></div>
         </article>
         <article class="f w3">
@@ -501,6 +517,25 @@ footer a:hover { color: var(--text); }
           <h3>Ops that don't need babysitting</h3>
           <p>Nightly backups with a restore script, Prometheus metrics, JSON logs, Sentry errors, a mail log in the admin console, and more than one backend behind a load balancer when you grow.</p>
           <ul><li>Backups</li><li>/metrics</li><li>Mail log</li><li>Let's Encrypt</li><li>Cluster mode</li></ul>
+        </article>
+        <article class="f w3">
+          <span class="tag">Make it yours</span>
+          <h3>Profiles with some personality</h3>
+          <p>Avatar decorations, styled and animated names, clan tags, banners and profile panels. Hosting your own? Drop PNG, APNG, GIF or WebP decorations into a folder and everyone on your server can pick them, no restart needed.</p>
+          <div class="mini decor" aria-hidden="true">
+            <span class="av c1 d1">M</span><span class="av c3 d2">T</span><span class="av c5 d3">R</span>
+            <span class="styled">Mara</span><span class="tag-chip">STU</span>
+          </div>
+        </article>
+        <article class="f w3">
+          <span class="tag">Accounts</span>
+          <h3>One device, several accounts</h3>
+          <p>Keep a personal and a work account signed in side by side and hop between them from your profile menu. No password prompts, no logging out.</p>
+          <div class="mini acct" aria-hidden="true">
+            <div class="row on"><span class="av c2">T</span><span class="who">Theo<small>@theo</small></span><span class="ok">✓</span></div>
+            <div class="row"><span class="av c4">T</span><span class="who">Theo (Label)<small>@theo.label</small></span></div>
+            <div class="row add"><span class="av">+</span><span class="who">Add an account</span></div>
+          </div>
         </article>
       </div>
     </div>
@@ -587,10 +622,10 @@ footer a:hover { color: var(--text); }
         <p class="lede">The apps work with app.runparley.com or any Parley server. Type the address once and you're in.</p>
       </div>
       <div class="dl" id="downloads">
-        <div class="row"><span class="os">Windows</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="x64-setup\.exe$">Parley_0.4.0_x64-setup.exe</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.msi$">Parley_0.4.0_x64_en-US.msi</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
-        <div class="row"><span class="os">macOS</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.dmg$">Parley_0.4.0_aarch64.dmg</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
-        <div class="row"><span class="os">Linux</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.deb$">Parley_0.4.0_amd64.deb</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.rpm$">Parley-0.4.0-1.x86_64.rpm</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.AppImage$">Parley_0.4.0_amd64.AppImage</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
-        <div class="row"><span class="os">Android</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.apk$">Parley_0.4.0_android.apk</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">Windows</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="x64-setup\.exe$">Parley_0.7.0_x64-setup.exe</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.msi$">Parley_0.7.0_x64_en-US.msi</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">macOS</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.dmg$">Parley_0.7.0_aarch64.dmg</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">Linux</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.deb$">Parley_0.7.0_amd64.deb</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.rpm$">Parley-0.7.0-1.x86_64.rpm</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.AppImage$">Parley_0.7.0_amd64.AppImage</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">Android</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.apk$">Parley_0.7.0_android.apk</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
         <div class="row"><span class="os">Web</span><span class="files"><span>Any modern browser, on your server's address</span></span><a class="go" href="#self-host">Set up →</a></div>
       </div>
       <p class="note">Downloads come straight from the <a href="https://github.com/ParleyDev/parley/releases/latest">latest GitHub release</a>. The Mac build is for Apple Silicon. iOS builds from source for now.</p>
