@@ -1,4 +1,4 @@
-import { BarChart3, Camera, Eye, EyeOff, FileText, FolderOpen, ImagePlay, Images, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
+import { BarChart3, Camera, Eye, Video, EyeOff, FileText, FolderOpen, ImagePlay, Images, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
@@ -83,7 +83,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const mediaRef = useRef<HTMLInputElement>(null)
+  // Separate photo and video capture inputs: with both types and `capture`, Android (its WebView via Capacitor,
+  // and some browsers) opens only the video recorder, so a single "Camera" button could never take a photo.
   const cameraRef = useRef<HTMLInputElement>(null)
+  const videoCamRef = useRef<HTMLInputElement>(null)
   // Touch devices get a sheet of big targets that open the phone's own pickers (photos, camera, files).
   const [sheet, setSheet] = useState(false)
   // A narrow box (phones, larger text) folds the GIF and sticker buttons into the emoji button, whose picker has
@@ -380,7 +383,8 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         <div className="flex items-end gap-2 px-3 py-2">
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="files" />
           <input ref={mediaRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="media" />
-          <input ref={cameraRef} type="file" accept="image/*,video/*" capture="environment" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="camera" />
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="camera" />
+          <input ref={videoCamRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="video-camera" />
           <button className="pb-1 text-text-2 hover:text-text-0" title="Attach, poll or voice message" onClick={(e) => {
             if (window.matchMedia('(pointer: coarse)').matches) { setSheet(true); return }
             const r = (e.currentTarget.closest('[data-composer-box]') ?? e.currentTarget).getBoundingClientRect(); plus.open({ clientX: r.left, clientY: r.top - 8 }, plusItems, { above: true })
@@ -408,6 +412,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             setSheet(false)
             if (what === 'media') mediaRef.current?.click()
             else if (what === 'camera') cameraRef.current?.click()
+            else if (what === 'video') videoCamRef.current?.click()
             else if (what === 'files') fileRef.current?.click()
             else if (what === 'poll') openModal({ kind: 'createPoll', channelId: channel.id })
             else void startRecording()
@@ -417,15 +422,16 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   )
 }
 
-type AttachKind = 'media' | 'camera' | 'files' | 'poll' | 'voice'
+type AttachKind = 'media' | 'camera' | 'video' | 'files' | 'poll' | 'voice'
 
-/** Touch devices: what "+" adds, as a bottom sheet of big targets. Photos, Camera and Files open the phone's own
+/** Touch devices: what "+" adds, as a bottom sheet of big targets. Photos, Take photo, Record video and Files open the phone's own
  *  pickers (on iOS the Photos one is the system photo library), so there is no separate "upload" step. */
 function AttachSheet({ onPick, onClose, canAttach, canRecord }: { onPick: (k: AttachKind) => void; onClose: () => void; canAttach: boolean; canRecord: boolean }) {
   useEffect(() => { const k = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose() }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [onClose])
   const items: { id: AttachKind; label: string; icon: React.ReactNode; tint: string; show: boolean }[] = [
     { id: 'media', label: 'Photos & videos', icon: <Images size={24} />, tint: 'bg-accent text-white', show: canAttach },
-    { id: 'camera', label: 'Camera', icon: <Camera size={24} />, tint: 'bg-sky-500 text-white', show: canAttach },
+    { id: 'camera', label: 'Take photo', icon: <Camera size={24} />, tint: 'bg-sky-500 text-white', show: canAttach },
+    { id: 'video', label: 'Record video', icon: <Video size={24} />, tint: 'bg-violet-500 text-white', show: canAttach },
     { id: 'files', label: 'Files', icon: <FolderOpen size={24} />, tint: 'bg-bg-4 text-text-0', show: canAttach },
     { id: 'poll', label: 'Poll', icon: <BarChart3 size={24} />, tint: 'bg-success text-black', show: true },
     { id: 'voice', label: 'Voice message', icon: <Mic size={24} />, tint: 'bg-danger text-white', show: canAttach && canRecord },
@@ -434,7 +440,7 @@ function AttachSheet({ onPick, onClose, canAttach, canRecord }: { onPick: (k: At
     <div className="fixed inset-0 z-[90] flex items-end bg-black/50" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }} data-attach-sheet>
       <div className="sheet-up w-full rounded-t-2xl border-t border-line bg-bg-1 px-4 pt-3" style={{ paddingBottom: 'calc(1rem + var(--sab))', paddingLeft: 'max(1rem, var(--sal))', paddingRight: 'max(1rem, var(--sar))' }} role="dialog" aria-label="Add to message">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-bg-4" />
-        <div className="grid grid-cols-5 gap-2 max-[360px]:grid-cols-3">
+        <div className="grid grid-cols-6 gap-2 max-[460px]:grid-cols-3">
           {items.filter((i) => i.show).map((i) => (
             <button key={i.id} type="button" onClick={() => onPick(i.id)} className="flex flex-col items-center gap-1.5 rounded-xl py-2 text-xs text-text-1 hover:bg-bg-3" data-attach={i.id}>
               <span className={`h-12 w-12 rounded-full flex items-center justify-center ${i.tint}`}>{i.icon}</span>

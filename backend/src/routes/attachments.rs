@@ -145,7 +145,12 @@ async fn upload(
     };
     let (width, height) = if content_type.starts_with("image/") {
         match imagesize::blob_size(&head).or_else(|_| imagesize::size(&path)) {
-            Ok(d) => (Some(d.width as i32), Some(d.height as i32)),
+            Ok(d) => {
+                // Phone photos stored sideways (EXIF orientation 5-8) display with width and height swapped.
+                let p = path.clone();
+                let turned = tokio::task::spawn_blocking(move || crate::routes::storage::swaps_axes(crate::routes::storage::image_orientation(&p))).await.unwrap_or(false);
+                if turned { (Some(d.height as i32), Some(d.width as i32)) } else { (Some(d.width as i32), Some(d.height as i32)) }
+            }
             Err(_) => (None, None),
         }
     } else {

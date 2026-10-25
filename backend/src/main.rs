@@ -97,6 +97,7 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep.clone()));
     tokio::spawn(voice_audio::convert_backlog(state_for_sweep.clone()));
+    tokio::spawn(routes::storage::fix_orientation_backlog(state_for_sweep.clone()));
     tokio::spawn(routes::images::sweep_orphans(state_for_sweep));
     tokio::spawn(ratelimit::prune_loop());
     let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
