@@ -11,6 +11,7 @@ import AdminPage from './pages/Admin'
 import GuildPreviewPage from './pages/GuildPreview'
 import VerifyPage from './pages/Verify'
 import OAuthPage from './pages/OAuth'
+import McpAuthorizePage from './pages/McpAuthorize'
 import { ForgotPage, ResetPage } from './pages/PasswordReset'
 import { api } from './lib/api'
 import Toasts from './components/Toasts'
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/reset" element={<ResetPage />} />
         <Route path="/invite/:code" element={token ? <InvitePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/oauth2/authorize" element={token ? <OAuthPage /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />} />
+        <Route path="/oauth2/mcp/authorize" element={token ? <McpAuthorizePage /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />} />
         <Route
           path="/channels/*"
           element={token ? (ready ? <AppShell /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />}

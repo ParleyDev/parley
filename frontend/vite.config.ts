@@ -14,6 +14,10 @@ export default defineConfig({
     proxy: {
       '/api': { target: 'http://localhost:8080', changeOrigin: true },
       '/ws': { target: 'ws://localhost:8080', ws: true },
+      // MCP and its OAuth endpoints live at the site root (nginx forwards them the same way in production).
+      '/mcp': { target: 'http://localhost:8080', changeOrigin: true },
+      '/oauth/': { target: 'http://localhost:8080', changeOrigin: true },
+      '/.well-known/oauth-': { target: 'http://localhost:8080', changeOrigin: true },
     },
   },
 })

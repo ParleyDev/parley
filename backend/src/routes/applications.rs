@@ -267,6 +267,12 @@ async fn deauthorize(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
 /// Resolve an opaque app/bot token into the acting user, checking its scope against the request. Returns
 /// None when the header is not an app token at all (so the JWT path runs).
 pub async fn resolve_token(state: &AppState, header: &str, method: &axum::http::Method, path: &str) -> AppResult<Option<Uuid>> {
+    // MCP access tokens (AI assistants): only the REST calls their scopes' tools make (mcp::rest_allows).
+    if let Some(raw) = header.strip_prefix("Bearer ").filter(|t| t.starts_with("mcp_")) {
+        let Some((uid, _, scopes)) = crate::mcp::oauth::resolve(state, raw).await? else { return Err(AppError::Unauthorized) };
+        if !crate::mcp::rest_allows(&scopes, method, path) { return Err(AppError::Forbidden); }
+        return Ok(Some(uid));
+    }
     let raw = match header.strip_prefix("Bot ") { Some(t) => t, None => match header.strip_prefix("Bearer ") { Some(t) if t.starts_with("oa_") || t.starts_with("bot_") => t, _ => return Ok(None) } };
     let row: Option<(Uuid, Vec<String>, String, Uuid)> = sqlx::query_as("SELECT user_id, scopes, kind, id FROM oauth_tokens WHERE token_hash = $1 AND revoked_at IS NULL").bind(hash(raw)).fetch_optional(&state.db).await?;
     let Some((uid, scopes, kind, tid)) = row else { return Err(AppError::Unauthorized) };

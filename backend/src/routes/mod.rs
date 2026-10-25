@@ -70,4 +70,5 @@ pub fn api_router() -> Router<AppState> {
         .merge(gifs::router())
         .merge(discovery::router())
         .merge(admin::router())
+        .merge(crate::mcp::api_router())
 }

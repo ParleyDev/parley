@@ -1,7 +1,8 @@
 //! Token-bucket rate limiting, in memory, per bucket and key (client IP or user id).
 //!
 //! Limits are `count/seconds` strings from the environment (defaults below): `RL_REGISTER`,
-//! `RL_LOGIN`, `RL_LOGIN_FAIL`, `RL_MESSAGES`, `RL_UPLOADS`, `RL_GIFS`. A bucket refills
+//! `RL_LOGIN`, `RL_LOGIN_FAIL`, `RL_MESSAGES`, `RL_UPLOADS`, `RL_GIFS`, `RL_MAIL`, `RL_OAUTH` (MCP client registration
+//! and tokens, per IP: AI services call from a few shared addresses for all their users). A bucket refills
 //! continuously (count tokens per window) so bursts up to `count` are allowed. Exhausted buckets
 //! answer 429 with a `Retry-After` header and a JSON error.
 
@@ -25,7 +26,7 @@ pub struct Limit {
 }
 
 /// Buckets an admin may override from Instance Settings.
-pub const BUCKETS: [&str; 7] = ["register", "login", "login_fail", "messages", "uploads", "gifs", "mail"];
+pub const BUCKETS: [&str; 8] = ["register", "login", "login_fail", "messages", "uploads", "gifs", "mail", "oauth"];
 
 impl Limit {
     /// `count/seconds`, both positive.
@@ -54,6 +55,7 @@ pub struct Limits {
     pub uploads: Limit,
     pub gifs: Limit,
     pub mail: Limit,
+    pub oauth: Limit,
 }
 
 struct Bucket {
@@ -77,6 +79,7 @@ pub static LIMITER: LazyLock<RateLimiter> = LazyLock::new(|| RateLimiter {
         uploads: Limit::from_env("RL_UPLOADS", "30/60"),
         gifs: Limit::from_env("RL_GIFS", "60/60"),
         mail: Limit::from_env("RL_MAIL", "3/600"),
+        oauth: Limit::from_env("RL_OAUTH", "300/60"),
     },
     overrides: std::sync::RwLock::new(std::collections::HashMap::new()),
     buckets: DashMap::new(),
@@ -91,6 +94,7 @@ impl RateLimiter {
             "messages" => self.limits.messages,
             "uploads" => self.limits.uploads,
             "gifs" => self.limits.gifs,
+            "oauth" => self.limits.oauth,
             _ => self.limits.mail,
         }
     }
@@ -153,7 +157,11 @@ pub fn client_ip(headers: &HeaderMap) -> String {
 }
 
 fn user_key(headers: &HeaderMap, secret: &str) -> Option<String> {
-    let token = headers.get(header::AUTHORIZATION)?.to_str().ok()?.strip_prefix("Bearer ")?;
+    let value = headers.get(header::AUTHORIZATION)?.to_str().ok()?;
+    let token = value.strip_prefix("Bearer ").or_else(|| value.strip_prefix("Bot "))?;
+    // Opaque app, bot and MCP tokens get a bucket of their own: an AI service calls from a few shared addresses,
+    // so keying them by IP would make all its users share one limit.
+    if ["mcp_", "oa_", "bot_"].iter().any(|p| token.starts_with(p)) { return Some(format!("t:{}", crate::routes::applications::hash(token))); }
     verify_token(secret, token).map(|u| u.to_string())
 }
 

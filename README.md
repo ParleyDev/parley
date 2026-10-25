@@ -128,9 +128,26 @@ Settings → My Account → Passkeys adds a passkey (fingerprint, face, screen l
 
 Passkeys belong to the host in `APP_URL` (any port), so they need a domain name (not an IP address) and work only on that address; the Passkeys card says so when they are unavailable. Moving an instance to a new domain makes existing passkeys stop working (passwords are unaffected). Server side: `webauthn-rs`, with credentials in `passkeys` and in-progress ceremonies (five minutes, single use) in `webauthn_challenges`, so any backend instance can finish one. Routes: `GET /users/@me/passkeys`, `POST /users/@me/passkeys/begin {password, code?}` → `/finish {id, credential, name}`, `PATCH|DELETE /users/@me/passkeys/:id`, `POST /auth/passkey/begin {login?}` → `/auth/passkey/finish {id, credential}`.
 
+## MCP (AI assistants)
+
+Parley is a remote [MCP](https://modelcontextprotocol.io) server, so assistants such as Claude, ChatGPT and Cursor can read and send messages for a user. Add `https://<your server>/mcp` (on the hosted service, `https://app.runparley.com/mcp`) as a custom connector or remote MCP server in the assistant; it opens Parley's consent page, the user picks what to allow, and the assistant acts as that user from then on. User Settings → Authorized Apps shows the address to copy and every connected assistant, with **Disconnect**.
+
+**Permissions.** The consent page offers four, each a set of tools; an assistant only ever sees the tools it was granted, and it can never do more than the user could in the app:
+
+| Permission | Tools |
+|---|---|
+| `mcp.read` Read | `whoami`, `list_servers`, `list_channels`, `list_dms`, `read_messages`, `search_messages` (with `from:`, `in:`, `has:`, `before:`… filters), `list_members`, `find_users`, `get_user`, `list_pins`, `list_threads` |
+| `mcp.notifications` Notifications | `get_unreads` ("what did I miss?"), `get_mentions`, `mark_read` |
+| `mcp.send` Send messages | `send_message` (replies too), `send_dm`, `edit_message`, `add_reaction`, `remove_reaction`, `create_thread` |
+| `mcp.manage` Manage servers (off unless ticked) | `create_channel`, `update_channel`, `pin_message`, `unpin_message`, `delete_message`, `timeout_member`, `remove_timeout`, `kick_member`, `ban_member`, `unban_member`, `create_invite` |
+
+**How it works.** Streamable HTTP transport (protocol revisions 2024-11-05 to 2025-11-25), stateless: one JSON-RPC response per `POST /mcp`, no session id, no server-initiated stream. Each tool calls Parley's own REST API in-process with the assistant's token, so permission checks, events and rate limits are the app's. Authorization follows the MCP spec: `401` with `WWW-Authenticate: Bearer resource_metadata=…` → `/.well-known/oauth-protected-resource/mcp` (RFC 9728) → `/.well-known/oauth-authorization-server` (RFC 8414) → dynamic client registration at `/oauth/register` (RFC 7591, public clients) → `/oauth/authorize` with PKCE S256 and the `resource` parameter (RFC 8707), which hands over to the web client's `/oauth2/mcp/authorize` consent page → `/oauth/token`. Access tokens (`mcp_…`) last an hour; refresh tokens (`mcpr_…`) last 30 days and rotate on every use, and replaying a used one ends the whole connection. MCP tokens also work against the REST API, but only for the calls their tools make (`backend/src/mcp/mod.rs`, `REST_ALLOW`): never account, password, session, admin, OAuth or MCP-consent endpoints. Tables: `mcp_clients`, `mcp_grants`, `mcp_codes`, `mcp_tokens`. Registration and token requests share the `RL_OAUTH` bucket (default 300/60 per IP), and each MCP token has its own message and upload buckets, since AI services call from a few shared addresses.
+
+Self-hosted servers need `APP_URL` set to the public `https://` address (the metadata and redirects are built from it) and a reverse proxy that passes `/mcp`, `/oauth/` and `/.well-known/oauth-*` through to the web container, as it already does for `/api`. Cloud assistants (claude.ai, ChatGPT) can only reach servers on the public internet; desktop clients can use a LAN address.
+
 ## Rate limits and sessions (admin)
 
-Rate limits start from the `RL_*` environment values and can be overridden per bucket in Admin Console → Instance Settings → Rate limits (`count/seconds`; blank = environment value). Changes apply immediately on the instance that saved them and on others at their next restart. Admin → Users → a user → Sessions lists their active devices (IP, client, last seen) with per-device and log-out-all buttons; clicking an IP filters the user list to everyone seen from it (`GET /admin/users?ip=`).
+Rate limits (`RL_REGISTER`, `RL_LOGIN`, `RL_LOGIN_FAIL`, `RL_MESSAGES`, `RL_UPLOADS`, `RL_GIFS`, `RL_MAIL`, `RL_OAUTH`) start from the `RL_*` environment values and can be overridden per bucket in Admin Console → Instance Settings → Rate limits (`count/seconds`; blank = environment value). Changes apply immediately on the instance that saved them and on others at their next restart. Admin → Users → a user → Sessions lists their active devices (IP, client, last seen) with per-device and log-out-all buttons; clicking an IP filters the user list to everyone seen from it (`GET /admin/users?ip=`).
 
 ## Load testing
 

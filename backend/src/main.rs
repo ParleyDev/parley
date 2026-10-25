@@ -12,6 +12,7 @@ mod mfa;
 mod ratelimit;
 mod routes;
 mod state;
+mod mcp;
 mod voice_audio;
 mod ws;
 
@@ -83,6 +84,16 @@ async fn main() -> anyhow::Result<()> {
     .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
     .allow_credentials(true);
 
+    // MCP tools call the API in-process as the connected user (same checks, events and limits as the app).
+    mcp::set_internal(routes::api_router().with_state(state.clone()));
+    // MCP and its OAuth endpoints are called cross-origin by AI clients (some in a browser) with bearer tokens, never
+    // cookies, so any origin may call them.
+    let mcp_cors = CorsLayer::new()
+        .allow_origin(tower_http::cors::Any)
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::OPTIONS])
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::HeaderName::from_static("mcp-protocol-version"), header::HeaderName::from_static("mcp-session-id")])
+        .expose_headers([header::WWW_AUTHENTICATE, header::HeaderName::from_static("mcp-session-id")]);
+
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/version", get(|| async { axum::Json(serde_json::json!({ "version": VERSION })) }))
@@ -91,6 +102,7 @@ async fn main() -> anyhow::Result<()> {
         .nest("/api", routes::api_router())
         .layer(axum::extract::DefaultBodyLimit::max(2 * 1024 * 1024))
         .layer(cors)
+        .merge(mcp::public_router().layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)).layer(mcp_cors))
         .layer(TraceLayer::new_for_http())
         .layer(axum::middleware::from_fn(metrics::track))
         .with_state(state);

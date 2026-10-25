@@ -136,6 +136,16 @@ Besides the built-in frames, people can pick image decorations that you provide.
 
 The folder is mounted read-only. Still frames are cached under `uploads/asset-cache/`, which is safe to delete.
 
+## AI assistants (MCP)
+
+People can connect Claude, ChatGPT, Cursor and other MCP clients to your server at `https://<your server>/mcp`; User Settings → Authorized Apps shows the address and lets them disconnect. It works with nothing extra to install, provided that:
+
+- `APP_URL` is the address people use, with `https://`. Discovery, the consent page and the redirects are built from it.
+- Anything in front of the web container forwards `/mcp`, `/oauth/` and `/.well-known/oauth-` to it, like `/api`. With Caddy, Traefik, Nginx Proxy Manager or a Cloudflare Tunnel pointed at the whole site, that is already the case.
+- For cloud assistants (claude.ai, ChatGPT), the server is reachable from the internet. Desktop clients also work on a LAN address.
+
+Registration and token requests are limited per IP by `RL_OAUTH` (default `300/60`); see the main README for what each permission allows.
+
 ## Optional extras
 
 The root `docker-compose.yml` in the repository also has profiles for ClamAV upload scanning (`av`), voice-message transcription (`stt`), a LiveKit SFU (`sfu`), and a second backend (`cluster`). Each one is documented in the [main README](../../README.md). You can copy the service you need into your `compose.yaml`.

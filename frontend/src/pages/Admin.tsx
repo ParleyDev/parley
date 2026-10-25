@@ -377,7 +377,7 @@ function SettingsPane() {
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-rate-limits>
         <div><span className="block font-semibold">Rate limits</span><span className="block text-sm text-text-2">Requests allowed per window as <code>count/seconds</code>, e.g. <code>10/5</code>. Blank uses the server's RL_* environment value (shown as the placeholder). Applies immediately on this instance; other instances pick it up on restart.</span></div>
         <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
-          {([['register', 'Registrations (per IP)'], ['login', 'Logins (per IP)'], ['login_fail', 'Failed logins (per IP)'], ['messages', 'Messages (per user)'], ['uploads', 'Uploads (per user)'], ['gifs', 'GIF searches (per user)'], ['mail', 'Emails sent (per user)']] as const).map(([k, label]) => (
+          {([['register', 'Registrations (per IP)'], ['login', 'Logins (per IP)'], ['login_fail', 'Failed logins (per IP)'], ['oauth', 'AI assistant sign-ins and tokens (per IP)'], ['messages', 'Messages (per user)'], ['uploads', 'Uploads (per user)'], ['gifs', 'GIF searches (per user)'], ['mail', 'Emails sent (per user)']] as const).map(([k, label]) => (
             <div key={k}><label className="label">{label}</label><input className="input" value={rl[k] ?? ''} onChange={(e) => setRl({ ...rl, [k]: e.target.value })} placeholder={rlDefaults[k] ?? ''} data-admin-rl={k} /></div>
           ))}
         </div>

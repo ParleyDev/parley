@@ -175,29 +175,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     // Unread messages that mention me (directly, via one of my roles, or @everyone) per channel. In accepted DMs every
     // message counts, as in Discord, so the server bar can badge each unread DM with its message count.
     let dm_ids: Vec<Uuid> = dms.iter().filter(|d| d.request_state == "accepted").map(|d| d.channel.id).collect();
-    let my_roles: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT role_id FROM member_roles WHERE user_id = $1").bind(user_id).fetch_all(&state.db).await.unwrap_or_default().into_iter().map(|r| r.0).collect();
-    let mention_counts: Vec<(Uuid, i64)> = sqlx::query_as(
-        "SELECT m.channel_id, COUNT(*) FROM messages m
-         LEFT JOIN read_states rs ON rs.channel_id = m.channel_id AND rs.user_id = $1
-         WHERE m.channel_id = ANY($2) AND m.author_id <> $1 AND (rs.last_read_msg IS NULL OR m.id > rs.last_read_msg)
-           AND (m.channel_id = ANY($4) OR m.mentions @> ARRAY[$1]::uuid[]
-                OR (m.mention_everyone AND NOT COALESCE(
-                      (SELECT suppress_everyone FROM notification_settings WHERE user_id = $1 AND target_id = m.channel_id),
-                      (SELECT ns.suppress_everyone FROM notification_settings ns JOIN channels c ON c.guild_id = ns.target_id WHERE ns.user_id = $1 AND c.id = m.channel_id),
-                      false))
-                OR (m.mention_roles && $3::uuid[] AND NOT COALESCE(
-                      (SELECT suppress_roles FROM notification_settings WHERE user_id = $1 AND target_id = m.channel_id),
-                      (SELECT ns.suppress_roles FROM notification_settings ns JOIN channels c ON c.guild_id = ns.target_id WHERE ns.user_id = $1 AND c.id = m.channel_id),
-                      false)))
-         GROUP BY m.channel_id",
-    )
-    .bind(user_id)
-    .bind(&all_channel_ids)
-    .bind(&my_roles)
-    .bind(&dm_ids)
-    .fetch_all(&state.db)
-    .await
-    .unwrap_or_else(|e| { tracing::error!(error = ?e, "mention counts"); Vec::new() });
+    let mention_counts = mention_counts(&state.db, user_id, &all_channel_ids, &dm_ids).await;
     let guild_layout: serde_json::Value = sqlx::query_as::<_, (serde_json::Value,)>("SELECT guild_layout FROM users WHERE id = $1").bind(user_id).fetch_one(&state.db).await.map(|r| r.0).unwrap_or(serde_json::json!([]));
     // Postgres has no max(uuid); DISTINCT ON picks the newest (v7 ids sort by time) per channel.
     let last_ids: Vec<(Uuid, Uuid)> =
@@ -461,4 +439,32 @@ async fn handle_client_op(
             }
         }
     }
+}
+
+/// Unread messages that mention `user_id` (directly, via one of their roles, or @everyone) per channel; in accepted
+/// DMs (`dm_ids`) every unread message counts. Used by READY and by `GET /users/@me/unreads`.
+pub async fn mention_counts(db: &sqlx::PgPool, user_id: Uuid, channel_ids: &[Uuid], dm_ids: &[Uuid]) -> Vec<(Uuid, i64)> {
+    let my_roles: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT role_id FROM member_roles WHERE user_id = $1").bind(user_id).fetch_all(db).await.unwrap_or_default().into_iter().map(|r| r.0).collect();
+    sqlx::query_as(
+        "SELECT m.channel_id, COUNT(*) FROM messages m
+         LEFT JOIN read_states rs ON rs.channel_id = m.channel_id AND rs.user_id = $1
+         WHERE m.channel_id = ANY($2) AND m.author_id <> $1 AND (rs.last_read_msg IS NULL OR m.id > rs.last_read_msg)
+           AND (m.channel_id = ANY($4) OR m.mentions @> ARRAY[$1]::uuid[]
+                OR (m.mention_everyone AND NOT COALESCE(
+                      (SELECT suppress_everyone FROM notification_settings WHERE user_id = $1 AND target_id = m.channel_id),
+                      (SELECT ns.suppress_everyone FROM notification_settings ns JOIN channels c ON c.guild_id = ns.target_id WHERE ns.user_id = $1 AND c.id = m.channel_id),
+                      false))
+                OR (m.mention_roles && $3::uuid[] AND NOT COALESCE(
+                      (SELECT suppress_roles FROM notification_settings WHERE user_id = $1 AND target_id = m.channel_id),
+                      (SELECT ns.suppress_roles FROM notification_settings ns JOIN channels c ON c.guild_id = ns.target_id WHERE ns.user_id = $1 AND c.id = m.channel_id),
+                      false)))
+         GROUP BY m.channel_id",
+    )
+    .bind(user_id)
+    .bind(channel_ids)
+    .bind(&my_roles)
+    .bind(dm_ids)
+    .fetch_all(db)
+    .await
+    .unwrap_or_else(|e| { tracing::error!(error = ?e, "mention counts"); Vec::new() })
 }
