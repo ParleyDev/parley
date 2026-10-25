@@ -23,7 +23,7 @@ const photo = Buffer.concat([raw.subarray(0, 2), Buffer.from([0xff, 0xe1]), len,
 const f = new FormData(); f.append('file', new Blob([photo], { type: 'image/jpeg' }), 'IMG_0001.jpg')
 const att = await (await fetch(`${B}/channels/${tc}/attachments`, { method: 'POST', headers: { Authorization: 'Bearer ' + a.token }, body: f })).json()
 ok('stored size is the displayed (upright) one', att.width === 400 && att.height === 800, JSON.stringify([att.width, att.height]))
-ok('a thumbnail was made', att.thumb_url === `/api/attachments/${att.id}/thumb`, String(att.thumb_url))
+ok('a thumbnail was made', att.thumb_url === `/api/attachments/${att.id}/thumb?v=2`, String(att.thumb_url))
 const thumbUrl = `${B}/attachments/${att.id}/thumb`
 const t = await p.evaluate(async (u) => {
   const img = new Image(); img.crossOrigin = 'anonymous'; img.src = u; await img.decode()

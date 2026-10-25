@@ -458,7 +458,8 @@ pub struct AttachmentJson {
 impl From<Attachment> for AttachmentJson {
     fn from(a: Attachment) -> Self {
         let url = a.url();
-        let thumb_url = a.thumb_type.as_ref().map(|_| format!("/api/attachments/{}/thumb", a.id));
+        // `?v=2`: thumbnails are cached as immutable, and v2 ones honour EXIF orientation; bump when they change.
+        let thumb_url = a.thumb_type.as_ref().map(|_| format!("/api/attachments/{}/thumb?v=2", a.id));
         AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, listened_by: a.listened_by }
     }
 }

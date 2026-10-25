@@ -17,7 +17,7 @@ const tc = (await call(a.token, 'GET', `/guilds/${g.id}/channels`)).find((x) => 
 
 console.log('-- thumbnails')
 let up = await (await multi(a.token, `/channels/${tc.id}/attachments`, bigPng)).json()
-ok('a 900x600 upload records its size and gets a thumbnail', up.width === 900 && up.height === 600 && typeof up.thumb_url === 'string' && up.thumb_url.endsWith('/thumb'))
+ok('a 900x600 upload records its size and gets a thumbnail', up.width === 900 && up.height === 600 && typeof up.thumb_url === 'string' && /\/thumb(\?v=\d+)?$/.test(up.thumb_url))
 let r = await fetch('http://localhost:18080' + up.thumb_url); const tb = Buffer.from(await r.arrayBuffer())
 const dims = (buf) => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) })
 ok('the thumbnail is a PNG scaled to 400px on the long side', r.status === 200 && r.headers.get('content-type') === 'image/png' && tb.slice(1, 4).toString() === 'PNG' && dims(tb).w === 400 && dims(tb).h === 267)
@@ -55,7 +55,7 @@ const browser = await chromium.launch(); const errors = []
 const p = await browser.newPage({ viewport: { width: 1440, height: 900 } }); p.on('pageerror', (e) => errors.push(e.message))
 await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await p.goto(`${WEB}/channels/${g.id}/${tc.id}`); await p.waitForSelector(`[data-msg-id="${m2.id}"] [data-attachment-img="thumb"]`)
-ok('the chat grid loads the thumbnail, not the original', (await p.getAttribute(`[data-msg-id="${m2.id}"] [data-attachment-img]`, 'src')).endsWith('/thumb'))
+ok('the chat grid loads the thumbnail, not the original', (await p.getAttribute(`[data-msg-id="${m2.id}"] [data-attachment-img]`, 'src')).match(/\/thumb(\?v=\d+)?$/) !== null)
 await p.click('[data-control="User Settings"]'); await p.waitForSelector('[data-storage-section]')
 ok('My Account shows storage usage against the quota', (await p.textContent('[data-storage-section]')).includes('of 1024.00 MB used') && await p.locator('[data-storage-bar]').count() === 1)
 await p.screenshot({ path: '112-storage.png' })
