@@ -28,6 +28,7 @@ export function jumpToMessage(id: string): boolean {
   if (!el) return false
   el.scrollIntoView({ block: 'center' })
   el.classList.add('msg-flash'); setTimeout(() => el.classList.remove('msg-flash'), 1800)
+  el.dispatchEvent(new Event('msgflash'))
   return true
 }
 

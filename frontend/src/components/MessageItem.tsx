@@ -17,6 +17,7 @@ import PollCard from './PollCard'
 import LinkEmbed, { firstLink } from './LinkEmbed'
 import InviteCard, { inviteCodes } from './InviteCard'
 import StyledName from './StyledName'
+import { AvatarMotion, useHoverMotion } from '../lib/motion'
 import type { Message, ReplyRef } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
@@ -68,6 +69,18 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const togglePicker = () => setPicker((p) => (p ? null : pickerAnchor.current?.getBoundingClientRect() ?? null))
   // Phones have no hover: tapping the message body toggles the action bar.
   const [tapped, setTapped] = useState(false)
+  // Avatars and decorations play while the message is hovered, focused, tapped (phones) or flashed after a jump.
+  const [hovering, motionBind] = useHoverMotion()
+  const [flash, setFlash] = useState(false)
+  const rowRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = rowRef.current; if (!el) return
+    let t: ReturnType<typeof setTimeout> | undefined
+    const on = () => { setFlash(true); clearTimeout(t); t = setTimeout(() => setFlash(false), 1800) }
+    el.addEventListener('msgflash', on)
+    return () => { el.removeEventListener('msgflash', on); clearTimeout(t) }
+  }, [])
+  const motion = hovering || flash || (tapped && !canHover())
   const blocked = useStore((s) => isBlocked(s, m.author.id))
   const [revealed, setRevealed] = useState(false)
 
@@ -202,7 +215,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     )
   }
   return (
-    <div data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <AvatarMotion.Provider value={motion}>
+    <div ref={rowRef} {...motionBind} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTapped((t) => !t) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {m.reply_to && (
         <div role="button" onClick={(e) => { if (onJumpToReply) { e.stopPropagation(); onJumpToReply() } }} data-reply-link={m.reply_to} className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 cursor-pointer hover:text-text-0 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" title="Jump to the original message">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{replyTarget.content || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 Attachment' : '')}</span></>) : <i data-reply-preview="deleted">Original message was deleted</i>}
@@ -311,6 +325,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         </div>
       )}
     </div>
+    </AvatarMotion.Provider>
   )
 }
 

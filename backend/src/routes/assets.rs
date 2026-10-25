@@ -181,12 +181,7 @@ async fn serve_static(State(state): State<AppState>, Path(id): Path<String>, hea
         Ok(b) => b,
         Err(_) => {
             let src = d.path.clone();
-            let made = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<u8>> {
-                let img = image::open(&src)?;
-                let mut out = std::io::Cursor::new(Vec::new());
-                img.write_to(&mut out, image::ImageFormat::Png)?;
-                Ok(out.into_inner())
-            }).await.map_err(anyhow::Error::from)?;
+            let made = tokio::task::spawn_blocking(move || crate::routes::images::first_frame_png(&src)).await.map_err(anyhow::Error::from)?;
             match made {
                 Ok(b) => {
                     if let Some(parent) = cache.parent() { let _ = tokio::fs::create_dir_all(parent).await; }

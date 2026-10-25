@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { colorFor, initials } from '../lib/format'
-import { assetDecorationId, decorationsMayAnimate, decorationUrl } from '../lib/decorations'
+import { assetDecorationId, decorationUrl } from '../lib/decorations'
+import { AvatarMotion, mayAnimate, stillImageUrl } from '../lib/motion'
 import { useStore } from '../store'
 
 interface Props {
   user: { id: string; display_name: string; avatar_url: string | null; status?: string; avatar_decoration?: string }
   /** Force a frame regardless of what is saved (previews and unsaved drafts). */
   decoration?: string
-  /** Play an animated image decoration (profile cards, previews); elsewhere it plays only while hovered. */
+  /** Play an animated avatar and decoration (profile cards, previews). Otherwise they play while the surrounding
+   *  message or row allows it (AvatarMotion, see lib/motion) or the avatar itself is hovered, and are still the rest of the time. */
   animate?: boolean
   size?: number
   presence?: boolean
@@ -44,12 +46,27 @@ export default function Avatar({ user, size = 32, presence = false, className = 
   const assetId = size >= 20 ? assetDecorationId(decoration) : null
   const [hover, setHover] = useState(false)
   const [broken, setBroken] = useState<string | null>(null)
-  const moving = (animate || hover) && decorationsMayAnimate()
+  const inMotion = useContext(AvatarMotion)
+  // List rows (member list, DMs, friends) mark themselves data-motion-row; hovering or focusing the row plays the
+  // avatar. Listening from here survives rows that remount on every parent render.
+  const ref = useRef<HTMLDivElement>(null)
+  const [rowActive, setRowActive] = useState(false)
+  useEffect(() => {
+    const row = ref.current?.parentElement?.closest<HTMLElement>('[data-motion-row]')
+    if (!row) return
+    const sync = () => setRowActive(row.matches(':hover') || !!row.querySelector(':focus-visible') || row.matches(':focus-visible'))
+    const on = () => setRowActive(true)
+    sync()
+    row.addEventListener('mouseenter', on); row.addEventListener('focusin', sync)
+    row.addEventListener('mouseleave', sync); row.addEventListener('focusout', sync)
+    return () => { row.removeEventListener('mouseenter', on); row.removeEventListener('focusin', on); row.removeEventListener('mouseleave', sync); row.removeEventListener('focusout', sync) }
+  }, [])
+  const moving = (animate || inMotion || rowActive || hover) && mayAnimate()
   return (
-    <div className={`relative shrink-0 ${className}`} style={{ width: size, height: size }}
-      onMouseEnter={assetId ? () => setHover(true) : undefined} onMouseLeave={assetId ? () => setHover(false) : undefined}>
+    <div ref={ref} className={`relative shrink-0 ${className}`} style={{ width: size, height: size }} data-avatar-motion={moving ? 'on' : 'off'}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {user.avatar_url ? (
-        <img src={user.avatar_url} alt="" className="h-full w-full rounded-full object-cover" draggable={false} />
+        <img src={moving ? user.avatar_url : stillImageUrl(user.avatar_url)} alt="" className="h-full w-full rounded-full object-cover" draggable={false} data-avatar-img />
       ) : (
         <div className="h-full w-full rounded-full flex items-center justify-center text-white font-bold select-none"
           style={{ background: colorFor(user.id), fontSize: size * 0.38 }}>

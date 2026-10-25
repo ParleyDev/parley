@@ -167,7 +167,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
       </div>
       {/* Avatar */}
       <div className="px-4 -mt-[42px]">
-        <div className="inline-block rounded-full" style={{ boxShadow: `0 0 0 6px ${themed ? '#1a1527' : '#232428'}` }}><Avatar user={user} size={80} presence /></div>
+        <div className="inline-block rounded-full" style={{ boxShadow: `0 0 0 6px ${themed ? '#1a1527' : '#232428'}` }}><Avatar user={user} size={80} presence animate /></div>
       </div>
       <div className="px-4 pt-3 pb-4 space-y-3">
         <div>

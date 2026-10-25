@@ -28,6 +28,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/images", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(MAX_PROFILE_IMAGE + 64 * 1024)))
         .route("/images/:id", get(serve))
+        .route("/images/:id/static", get(serve_static))
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -203,10 +204,51 @@ async fn serve(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult
     Ok(resp.into_response())
 }
 
-/// Drop an image row and its file. Used when a profile picture is replaced or an emoji deleted.
+/// The first frame of an image file as PNG (APNG's default image, a GIF's or animated WebP's first frame).
+pub fn first_frame_png(path: &std::path::Path) -> anyhow::Result<Vec<u8>> {
+    // Uploads are stored without an extension, so pick the decoder from the bytes.
+    let img = image::ImageReader::open(path)?.with_guessed_format()?.decode()?;
+    let mut out = std::io::Cursor::new(Vec::new());
+    img.write_to(&mut out, image::ImageFormat::Png)?;
+    Ok(out.into_inner())
+}
+
+/// A still version of an animated avatar, banner or icon, so clients can show it frozen until it is hovered
+/// (Discord-style) without downloading the animation. Made once and kept next to the original as `<id>.still.png`;
+/// still images, and files that cannot be decoded, are served as they are.
+async fn serve_static(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<Response> {
+    let img = sqlx::query_as::<_, Image>(&format!("SELECT {IMAGE_COLS} FROM images WHERE id = $1"))
+        .bind(id)
+        .fetch_optional(&state.db)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Image not found".into()))?;
+    if !img.animated { return serve(State(state), Path(id)).await; }
+    let cache = state.config.upload_dir.join(format!("{id}.still.png"));
+    let bytes = match tokio::fs::read(&cache).await {
+        Ok(b) => b,
+        Err(_) => {
+            let src = state.config.upload_dir.join(id.to_string());
+            match tokio::task::spawn_blocking(move || first_frame_png(&src)).await.map_err(anyhow::Error::from)? {
+                Ok(b) => { let _ = tokio::fs::write(&cache, &b).await; b }
+                Err(e) => { tracing::warn!(image = %id, "still frame failed: {e}"); return serve(State(state), Path(id)).await; }
+            }
+        }
+    };
+    let mut resp = Response::new(Body::from(bytes));
+    let h = resp.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
+    h.insert(header::CONTENT_DISPOSITION, HeaderValue::from_static("inline"));
+    h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=31536000, immutable"));
+    h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'"));
+    Ok(resp.into_response())
+}
+
+/// Drop an image row and its file (and its cached still frame). Used when a profile picture is replaced or an emoji deleted.
 pub async fn delete_image(state: &AppState, id: Uuid) {
     let _ = sqlx::query("DELETE FROM images WHERE id = $1").bind(id).execute(&state.db).await;
     let _ = tokio::fs::remove_file(state.config.upload_dir.join(id.to_string())).await;
+    let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{id}.still.png"))).await;
 }
 
 /// If `old` was one of ours and is no longer referenced by `new`, remove it.
