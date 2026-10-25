@@ -12,7 +12,7 @@ import DecorationGallery from './DecorationGallery'
 import { colorFor } from '../../../lib/format'
 import { prepareImage, uploadImage } from '../../../lib/upload'
 import ImagePicker from '../ImagePicker'
-import ProfileCard from '../../ProfileCard'
+import ProfileCard, { type ProfileEdit } from '../../ProfileCard'
 import Avatar from '../../Avatar'
 
 const MAX_BIO = 400
@@ -25,6 +25,9 @@ export default function ProfilesTab() {
   const pushToast = useStore((s) => s.pushToast)
   const [display, setDisplay] = useState(user?.display_name ?? '')
   const [pronouns, setPronouns] = useState(user?.pronouns ?? '')
+  const [customStatus, setCustomStatus] = useState(user?.custom_status ?? '')
+  const presence = useStore((s) => (s.user ? s.users[s.user.id]?.status ?? s.user.status : 'online'))
+  const [uploading, setUploading] = useState<'avatar' | 'banner' | null>(null)
   const [bio, setBio] = useState(user?.bio ?? '')
   const [avatar, setAvatar] = useState<string | null>(user?.avatar_url ?? null)
   const [banner, setBanner] = useState<string | null>(user?.banner_url ?? null)
@@ -43,16 +46,16 @@ export default function ProfilesTab() {
   const bannerRef = useRef<HTMLInputElement>(null)
   if (!user) return null
 
-  const dirty = display !== user.display_name || pronouns !== (user.pronouns ?? '') || bio !== user.bio
+  const dirty = display !== user.display_name || pronouns !== (user.pronouns ?? '') || customStatus !== (user.custom_status ?? '') || bio !== user.bio
     || decoration !== (user.avatar_decoration ?? '') || JSON.stringify(nameStyle) !== JSON.stringify(styleOfUser(user)) || clanTag !== (user.clan_tag ?? '') || wishlist !== toLines(user.panels?.wishlist) || games !== toLines(user.panels?.games)
     || (avatar ?? null) !== (user.avatar_url ?? null) || (banner ?? null) !== (user.banner_url ?? null)
     || (primary ?? null) !== (user.theme_primary ?? null) || (accent ?? null) !== (user.theme_accent ?? null)
-  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setDecoration(user.avatar_decoration ?? ''); setClanTag(user.clan_tag ?? ''); setNameStyle(styleOfUser(user)); setWishlist(toLines(user.panels?.wishlist)); setGames(toLines(user.panels?.games)) }
+  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setCustomStatus(user.custom_status ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setDecoration(user.avatar_decoration ?? ''); setClanTag(user.clan_tag ?? ''); setNameStyle(styleOfUser(user)); setWishlist(toLines(user.panels?.wishlist)); setGames(toLines(user.panels?.games)) }
   const save = async () => {
     setBusy(true)
     try {
       const u = await api.patch<PrivateUser>('/users/@me', {
-        display_name: display, pronouns, bio, avatar_url: avatar ?? '', banner_url: banner ?? '', theme_primary: primary ?? '', theme_accent: accent ?? '',
+        display_name: display, pronouns, custom_status: customStatus, bio, avatar_url: avatar ?? '', banner_url: banner ?? '', theme_primary: primary ?? '', theme_accent: accent ?? '',
         avatar_decoration: decoration, clan_tag: clanTag, name_style: nameStyle, panels: { wishlist: fromLines(wishlist), games: fromLines(games) },
       })
       if (token) setAuth(token, u)
@@ -61,7 +64,18 @@ export default function ProfilesTab() {
   }
   const pickBanner = async (f: File | undefined) => {
     if (!f) return
-    try { setBanner((await uploadImage('banner', await prepareImage(f, 1200, 480))).url) } catch (e) { pushToast((e as Error).message, 'error') }
+    setUploading('banner')
+    try { setBanner((await uploadImage('banner', await prepareImage(f, 1200, 480))).url) } catch (e) { pushToast((e as Error).message, 'error') } finally { setUploading(null) }
+  }
+  const pickAvatar = async (f: File) => {
+    setUploading('avatar')
+    try { setAvatar((await uploadImage('avatar', await prepareImage(f, 512, 512))).url) } catch (e) { pushToast((e as Error).message, 'error') } finally { setUploading(null) }
+  }
+  const setPresence = async (v: string) => { try { await api.patch('/users/@me', { status: v }) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const edit: ProfileEdit = {
+    onDisplayName: setDisplay, onPronouns: setPronouns, onCustomStatus: setCustomStatus,
+    onAvatarFile: pickAvatar, onAvatarRemove: () => setAvatar(null), onBannerFile: pickBanner, onBannerRemove: () => setBanner(null),
+    status: presence, onStatus: setPresence, busy: uploading,
   }
   const base = primary ?? colorFor(user.id)
 
@@ -73,6 +87,7 @@ export default function ProfilesTab() {
         <div className="flex-1 min-w-0 space-y-6">
           <div><label className="label">Display name</label><input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} maxLength={32} required /></div>
           <div><label className="label">Pronouns</label><input className="input" value={pronouns} onChange={(e) => setPronouns(e.target.value)} maxLength={40} placeholder="Add your pronouns" /></div>
+          <div><label className="label">Custom status</label><input className="input" value={customStatus} onChange={(e) => setCustomStatus(e.target.value)} maxLength={128} placeholder="Support has arrived!" data-profile-custom-status /></div>
           <div><label className="label">Clan tag</label><input className="input w-32 uppercase" value={clanTag} onChange={(e) => setClanTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))} maxLength={4} placeholder="TAG" data-clan-tag-input /><p className="text-xs text-text-2 mt-1">2–4 letters or digits shown beside your name everywhere. Leave empty for none.</p></div>
           <div>
             <label className="label">Avatar decoration</label>
@@ -135,7 +150,8 @@ export default function ProfilesTab() {
         </div>
         <div className="w-[340px] max-lg:w-full shrink-0">
           <div className="label">Preview</div>
-          <ProfileCard user={{ ...user, display_name: display || user.display_name, pronouns, bio, avatar_url: avatar, avatar_decoration: decoration, name_style: nameStyle, name_primary: nameStyle.colors?.[0] ?? null, name_accent: nameStyle.colors?.[1] ?? null, banner_url: banner, theme_primary: primary, theme_accent: accent}} />
+          <p className="-mt-1 mb-2 text-xs text-text-2">Click your name, pronouns, status, avatar or banner to change them here.</p>
+          <ProfileCard edit={edit} user={{ ...user, display_name: display || user.display_name, pronouns, custom_status: customStatus, bio, avatar_url: avatar, avatar_decoration: decoration, name_style: nameStyle, name_primary: nameStyle.colors?.[0] ?? null, name_accent: nameStyle.colors?.[1] ?? null, banner_url: banner, theme_primary: primary, theme_accent: accent}} />
         </div>
       </div>
       {dirty && (

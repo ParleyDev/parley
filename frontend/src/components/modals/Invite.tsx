@@ -1,4 +1,5 @@
 import { Check, Copy, Search, Send } from 'lucide-react'
+import { describeInvite, EXPIRY, maxAgeOf, USES } from '../../lib/invites'
 import { useEffect, useState } from 'react'
 import Modal from '../Modal'
 import { api } from '../../lib/api'
@@ -21,12 +22,22 @@ export default function InviteModal({ onClose, guildId }: { onClose: () => void;
   const [invite, setInvite] = useState<Invite | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [maxAge, setMaxAge] = useState(0)
+  const [maxUses, setMaxUses] = useState(0)
+  const [busy, setBusy] = useState(false)
   useEffect(() => {
-    // Listing invites needs Manage Server; anyone with Create Invite can still mint a fresh one.
+    // Reuse your own never-expiring, unlimited link when you may list invites (Manage Server); otherwise mint one.
+    const me = useStore.getState().user?.id
     api.get<Invite[]>(`/guilds/${guildId}/invites`).catch(() => [] as Invite[])
-      .then((list) => list.find((i) => i.max_uses === null) ?? api.post<Invite>(`/guilds/${guildId}/invites`, {}))
+      .then((list) => list.find((i) => !i.vanity && i.max_uses === null && !i.expires_at && i.creator_id === me) ?? api.post<Invite>(`/guilds/${guildId}/invites`, {}))
       .then(setInvite).catch((e) => setErr((e as Error).message))
   }, [guildId])
+  const generate = async () => {
+    setBusy(true); setErr(null)
+    try { setInvite(await api.post<Invite>(`/guilds/${guildId}/invites`, { max_age: maxAge, max_uses: maxUses })); setEditing(false); setSent({}) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  const shownAge = invite ? maxAgeOf(invite) : 0
   const link = invite ? `${publicOrigin()}/invite/${invite.code}` : ''
   const copy = async () => { try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* ignore */ } }
   const sendTo = async (userId: string) => {
@@ -45,7 +56,25 @@ export default function InviteModal({ onClose, guildId }: { onClose: () => void;
         <input readOnly value={link || 'Generating…'} className="flex-1 bg-transparent text-sm outline-none" onFocus={(e) => e.target.select()} />
         <button onClick={copy} disabled={!link} className={`btn ${copied ? 'bg-success text-white' : 'bg-accent text-white hover:bg-accent-hover'} py-1.5`}>{copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}</button>
       </div>
-      <p className="mt-2 text-xs text-text-2">Your invite link never expires.</p>
+      {editing ? (
+        <div className="mt-3 rounded-lg border border-line bg-bg-0/40 p-3 space-y-3" data-invite-settings>
+          <div className="grid grid-cols-2 gap-3 max-[420px]:grid-cols-1">
+            <div><label className="label">Expire after</label>
+              <select className="input" value={maxAge} onChange={(e) => setMaxAge(Number(e.target.value))} data-invite-expiry>{EXPIRY.map((o) => <option key={o.s} value={o.s}>{o.label}</option>)}</select></div>
+            <div><label className="label">Max number of uses</label>
+              <select className="input" value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} data-invite-uses>{USES.map((o) => <option key={o.n} value={o.n}>{o.label}</option>)}</select></div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" className="btn-ghost py-1.5" onClick={() => setEditing(false)}>Cancel</button>
+            <button type="button" className="btn-primary py-1.5" onClick={generate} disabled={busy} data-invite-generate>{busy ? 'Generating…' : 'Generate a New Link'}</button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-text-2" data-invite-summary>
+          {invite ? describeInvite(shownAge, invite.max_uses ?? 0) : '\u00a0'}{' '}
+          <button type="button" className="text-sky-400 hover:underline" onClick={() => { setMaxAge(shownAge); setMaxUses(invite?.max_uses ?? 0); setEditing(true) }} data-invite-edit>Edit invite link</button>
+        </p>
+      )}
       <div className="mt-5">
         <div className="relative">
           <input className="input pl-9" placeholder="Search friends" value={q} onChange={(e) => setQ(e.target.value)} data-invite-friend-search />

@@ -290,7 +290,14 @@ export interface Invite {
   uses: number
   max_uses: number | null
   created_at: string
+  /** null never expires. */
+  expires_at: string | null
+  /** A custom code claimed by a server approved for Discovery. */
+  vanity: boolean
 }
+
+/** An invite in Server Settings › Invites, with who made it. */
+export interface InviteListing extends Invite { creator_username: string; creator_display_name: string; creator_avatar_url: string | null }
 
 export interface ReadState { channel_id: string; last_read_msg: string | null }
 

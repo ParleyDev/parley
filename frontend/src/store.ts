@@ -33,7 +33,7 @@ export type ModalKind =
   | { kind: 'joinGuild'; code?: string }
   | { kind: 'createChannel'; guildId: string; parentId?: string | null }
   | { kind: 'invite'; guildId: string }
-  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
+  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' }
   | { kind: 'newDm' }

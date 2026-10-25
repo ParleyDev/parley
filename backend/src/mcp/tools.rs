@@ -116,7 +116,10 @@ const TOOLS: &[Tool] = &[
     Tool { name: "unban_member", title: "Lift a ban", scope: "mcp.manage", read_only: false, destructive: false,
         description: "Lift a ban.", schema: || obj(json!({ "server_id": id("Server id"), "user_id": id("User id") }), &["server_id", "user_id"]) },
     Tool { name: "create_invite", title: "Create an invite", scope: "mcp.manage", read_only: false, destructive: false,
-        description: "Create an invite link to a server.", schema: || obj(json!({ "server_id": id("Server id"), "max_uses": { "type": "integer", "minimum": 1, "maximum": 1000 } }), &["server_id"]) },
+        description: "Create an invite link to a server. Without max_uses or max_age it can be used any number of times and never expires.",
+        schema: || obj(json!({ "server_id": id("Server id"),
+            "max_uses": { "type": "integer", "enum": [1, 5, 10, 25, 50, 100], "description": "How many people can use it" },
+            "max_age": { "type": "integer", "enum": [1800, 3600, 21600, 43200, 86400, 604800, 2592000], "description": "Seconds until it expires (30 minutes to 30 days)" } }), &["server_id"]) },
 ];
 
 /// The tools this connection's scopes allow, in MCP `tools/list` shape.
@@ -297,10 +300,10 @@ async fn run(c: &Caller, name: &str, a: &Value) -> Result<Value, String> {
         "ban_member" => { api(c, Method::PUT, &format!("/guilds/{}/bans/{}", uuid(a, "server_id")?, uuid(a, "user_id")?), Some(json!({ "reason": opt_text(a, "reason") }))).await?; json!("Banned.") }
         "unban_member" => { api(c, Method::DELETE, &format!("/guilds/{}/bans/{}", uuid(a, "server_id")?, uuid(a, "user_id")?), None).await?; json!("Ban lifted.") }
         "create_invite" => {
-            let max = a.get("max_uses").and_then(Value::as_i64).map(|n| n.clamp(1, 1000));
-            let v = api(c, Method::POST, &format!("/guilds/{}/invites", uuid(a, "server_id")?), Some(json!({ "max_uses": max }))).await?;
+            let body = json!({ "max_uses": a.get("max_uses").and_then(Value::as_i64), "max_age": a.get("max_age").and_then(Value::as_i64) });
+            let v = api(c, Method::POST, &format!("/guilds/{}/invites", uuid(a, "server_id")?), Some(body)).await?;
             let code = v["code"].as_str().unwrap_or("");
-            json!({ "code": code, "url": format!("{base}/invite/{code}"), "max_uses": v["max_uses"] })
+            json!({ "code": code, "url": format!("{base}/invite/{code}"), "max_uses": v["max_uses"], "expires_at": v["expires_at"] })
         }
         _ => return Err(format!("Unknown tool {name}")),
     })

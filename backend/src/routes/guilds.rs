@@ -1,7 +1,7 @@
 use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
-    models::{Ban, Channel, Guild, Invite, Member},
+    models::{Ban, Channel, Guild, Invite, InviteListing, Member},
     perms,
     routes::roles::{attach_roles, create_everyone},
     routes::users::validate_image,
@@ -32,6 +32,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/audit", get(list_audit))
         .route("/guilds/:id/channels/positions", axum::routing::patch(reorder_channels))
         .route("/guilds/:id/invites", get(list_invites).post(create_invite))
+        .route("/guilds/:id/invites/:code", delete(delete_invite))
         .route("/guilds/:id/bans", get(list_bans))
         .route("/guilds/:id/bans/:uid", put(ban_member).delete(unban_member))
         .route("/guilds/:id/owner", post(transfer_ownership))
@@ -611,9 +612,31 @@ async fn transfer_ownership(
     Ok(Json(g))
 }
 
+/// Invite lifetimes people can pick, in seconds (30 minutes to 30 days); leaving it out (or 0) never expires.
+pub const INVITE_MAX_AGES: [i64; 7] = [1800, 3600, 6 * 3600, 12 * 3600, 86400, 7 * 86400, 30 * 86400];
+/// Use limits people can pick; leaving it out (or 0) allows any number.
+pub const INVITE_MAX_USES: [i32; 6] = [1, 5, 10, 25, 50, 100];
+/// Servers approved for Discovery may claim this many vanity links.
+pub const MAX_VANITY: i64 = 3;
+pub const INVITE_COLS: &str = "code, guild_id, creator_id, uses, max_uses, created_at, expires_at, vanity";
+
 #[derive(Deserialize)]
 struct CreateInvite {
     max_uses: Option<i32>,
+    /// Seconds until the invite expires: one of INVITE_MAX_AGES, or 0/absent for never.
+    max_age: Option<i64>,
+    /// A custom code (vanity link) instead of a random one; needs Manage Server and an approved Discovery listing.
+    vanity: Option<String>,
+}
+
+/// A vanity code: 3–32 lowercase letters, digits and hyphens, not starting or ending with a hyphen.
+fn vanity_code(raw: &str) -> AppResult<String> {
+    let code = raw.trim().to_lowercase();
+    let ok = (3..=32).contains(&code.len())
+        && code.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        && !code.starts_with('-')
+        && !code.ends_with('-');
+    if ok { Ok(code) } else { Err(AppError::BadRequest("Vanity links are 3 to 32 letters, numbers or hyphens, and can't start or end with a hyphen".into())) }
 }
 
 async fn create_invite(
@@ -624,34 +647,92 @@ async fn create_invite(
 ) -> AppResult<(StatusCode, Json<Invite>)> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::CREATE_INVITE)?;
+    if let Some(raw) = req.vanity.as_deref() {
+        perms::check(p, perms::MANAGE_GUILD)?;
+        let code = vanity_code(raw)?;
+        let approved: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_discovery WHERE guild_id = $1 AND status = 'approved'").bind(id).fetch_optional(&state.db).await?;
+        if approved.is_none() {
+            return Err(AppError::Forbidden);
+        }
+        let mut tx = state.db.begin().await?;
+        // Serialise vanity claims per server so two at once can't both slip under the limit.
+        sqlx::query("SELECT id FROM guilds WHERE id = $1 FOR UPDATE").bind(id).execute(&mut *tx).await?;
+        let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM invites WHERE guild_id = $1 AND vanity").bind(id).fetch_one(&mut *tx).await?;
+        if count >= MAX_VANITY {
+            return Err(AppError::BadRequest(format!("A server can have up to {MAX_VANITY} vanity links")));
+        }
+        let taken: Option<(bool,)> = sqlx::query_as("SELECT true FROM invites WHERE lower(code) = $1").bind(&code).fetch_optional(&mut *tx).await?;
+        if taken.is_some() {
+            return Err(AppError::Conflict("That link is already taken".into()));
+        }
+        let inv = sqlx::query_as::<_, Invite>(&format!("INSERT INTO invites (code, guild_id, creator_id, vanity) VALUES ($1, $2, $3, true) RETURNING {INVITE_COLS}"))
+            .bind(&code)
+            .bind(id)
+            .bind(uid)
+            .fetch_one(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        crate::audit::guild(&state, id, uid, "invite.vanity_create", "invite", None, &code, json!({})).await;
+        return Ok((StatusCode::CREATED, Json(inv)));
+    }
+    let max_uses = req.max_uses.filter(|n| *n > 0);
+    if max_uses.is_some_and(|n| !INVITE_MAX_USES.contains(&n)) {
+        return Err(AppError::BadRequest("Max uses must be 1, 5, 10, 25, 50 or 100".into()));
+    }
+    let max_age = req.max_age.filter(|n| *n > 0);
+    if max_age.is_some_and(|n| !INVITE_MAX_AGES.contains(&n)) {
+        return Err(AppError::BadRequest("Invites expire after 30 minutes, 1, 6 or 12 hours, 1, 7 or 30 days, or never".into()));
+    }
     let code: String = rand::thread_rng().sample_iter(&Alphanumeric).take(8).map(char::from).collect();
-    let inv = sqlx::query_as::<_, Invite>(
-        "INSERT INTO invites (code, guild_id, creator_id, max_uses) VALUES ($1, $2, $3, $4)
-         RETURNING code, guild_id, creator_id, uses, max_uses, created_at",
-    )
+    let inv = sqlx::query_as::<_, Invite>(&format!(
+        "INSERT INTO invites (code, guild_id, creator_id, max_uses, expires_at) VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))
+         RETURNING {INVITE_COLS}"
+    ))
     .bind(&code)
     .bind(id)
     .bind(uid)
-    .bind(req.max_uses.filter(|n| *n > 0))
+    .bind(max_uses)
+    .bind(max_age.map(|n| n as f64))
     .fetch_one(&state.db)
     .await?;
     Ok((StatusCode::CREATED, Json(inv)))
 }
 
+/// Every live invite to the server, newest first (Manage Server). Expired and used-up invites are cleared out first.
 async fn list_invites(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,
-) -> AppResult<Json<Vec<Invite>>> {
+) -> AppResult<Json<Vec<InviteListing>>> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::MANAGE_GUILD)?;
-    let invs = sqlx::query_as::<_, Invite>(
-        "SELECT code, guild_id, creator_id, uses, max_uses, created_at FROM invites WHERE guild_id = $1 ORDER BY created_at DESC",
+    sqlx::query("DELETE FROM invites WHERE guild_id = $1 AND NOT vanity AND (expires_at <= now() OR uses >= max_uses)").bind(id).execute(&state.db).await?;
+    let invs = sqlx::query_as::<_, InviteListing>(
+        "SELECT i.code, i.guild_id, i.creator_id, i.uses, i.max_uses, i.created_at, i.expires_at, i.vanity,
+                u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
+         FROM invites i JOIN users u ON u.id = i.creator_id WHERE i.guild_id = $1 ORDER BY i.vanity DESC, i.created_at DESC",
     )
     .bind(id)
     .fetch_all(&state.db)
     .await?;
     Ok(Json(invs))
+}
+
+/// Revoke an invite: anyone with Manage Server, or the person who made a regular invite.
+async fn delete_invite(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, code)): Path<(Uuid, String)>,
+) -> AppResult<StatusCode> {
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    let row: Option<(Uuid, bool)> = sqlx::query_as("SELECT creator_id, vanity FROM invites WHERE guild_id = $1 AND code = $2").bind(id).bind(&code).fetch_optional(&state.db).await?;
+    let (creator, vanity) = row.ok_or_else(|| AppError::NotFound("Invite not found".into()))?;
+    if !(perms::has(p, perms::MANAGE_GUILD) || (creator == uid && !vanity)) {
+        return Err(AppError::Forbidden);
+    }
+    sqlx::query("DELETE FROM invites WHERE guild_id = $1 AND code = $2").bind(id).bind(&code).execute(&state.db).await?;
+    crate::audit::guild(&state, id, uid, if vanity { "invite.vanity_delete" } else { "invite.delete" }, "invite", None, &code, json!({})).await;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Debug, serde::Serialize, sqlx::FromRow)]

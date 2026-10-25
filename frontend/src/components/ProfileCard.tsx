@@ -1,10 +1,11 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { Camera, ChevronDown, Pencil, Trash2 } from 'lucide-react'
+import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { locale } from '../lib/i18n'
 import type { User, Connection } from '../lib/types'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import { APP_NAME } from '../lib/brand'
 import { LogoMark } from './Logo'
-import Avatar from './Avatar'
+import Avatar, { statusColor } from './Avatar'
 import { Badges, ClanTag } from './Flair'
 import { nameLook, type NameLook } from '../lib/nameStyle'
 
@@ -41,8 +42,57 @@ export function contrastText(hex: string): string {
   return lum > 0.4 ? '#0b0c10' : '#fff'
 }
 
+/** Presence choices, as in the user panel's menu. */
+export const PRESENCE: { v: string; label: string }[] = [
+  { v: 'online', label: 'Online' }, { v: 'idle', label: 'Idle' }, { v: 'dnd', label: 'Do Not Disturb' }, { v: 'invisible', label: 'Invisible' },
+]
+
+/** Makes the card editable in place (User Settings › Profiles): each handler receives the new value. */
+export interface ProfileEdit {
+  onDisplayName: (v: string) => void
+  onPronouns: (v: string) => void
+  onCustomStatus: (v: string) => void
+  onAvatarFile: (f: File) => void
+  onAvatarRemove: () => void
+  onBannerFile: (f: File) => void
+  onBannerRemove: () => void
+  /** Presence (online, idle, dnd, invisible); applied straight away rather than with Save. */
+  status?: string
+  onStatus?: (v: string) => void
+  /** Which image is uploading, to show progress on it. */
+  busy?: 'avatar' | 'banner' | null
+}
+
+const IMAGE_TYPES = 'image/png,image/jpeg,image/gif,image/webp,image/apng'
+
+/** Text that turns into an input when clicked: Enter or leaving the field keeps the change, Escape drops it. */
+function InlineText({ value, placeholder, maxLength, onCommit, className, inputClassName, field, required, children }: {
+  value: string; placeholder: string; maxLength: number; onCommit: (v: string) => void; className?: string; inputClassName?: string; field: string; required?: boolean; children?: ReactNode
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const done = (keep: boolean) => {
+    if (draft !== null && keep) { const v = draft.trim(); if (v !== value && (v || !required)) onCommit(v) }
+    setDraft(null)
+  }
+  if (draft !== null) {
+    return (
+      <input autoFocus value={draft} maxLength={maxLength} placeholder={placeholder} onChange={(e) => setDraft(e.target.value)} onBlur={() => done(true)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); done(true) } else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false) } }}
+        className={`min-w-0 w-full rounded-md bg-black/35 px-1.5 py-0.5 outline-none ring-2 ring-white/40 focus:ring-white/70 text-inherit placeholder:text-current placeholder:opacity-60 ${inputClassName ?? ''}`} data-inline-input={field} />
+    )
+  }
+  return (
+    <button type="button" onClick={() => setDraft(value)} className={`group/inline inline-flex min-w-0 max-w-full items-center gap-1 rounded-md px-1 -mx-1 text-left hover:bg-black/20 ${className ?? ''}`} title="Click to edit" data-inline-edit={field}>
+      {children ?? (value ? <span className="truncate">{value}</span> : <span className="truncate opacity-60">{placeholder}</span>)}
+      <Pencil size={12} className="shrink-0 opacity-0 group-hover/inline:opacity-70" aria-hidden />
+    </button>
+  )
+}
+
 interface Props {
   user: ProfileLike
+  /** Edit the name, pronouns, status, avatar and banner right on the card. */
+  edit?: ProfileEdit
   /** Icon buttons rendered to the right of the avatar. */
   actions?: ReactNode
   /** Extra sections inside the detail box (e.g. roles). */
@@ -67,7 +117,10 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(locale(), { mo
  * detail panel with About Me, Member Since (app + server), roles, and a footer slot.
  * The whole card is tinted with the user's theme colours.
  */
-export default function ProfileCard({ user, actions, children, nameOverride, compact, nameStyle, nameLook: nameLook_, server, footer }: Props) {
+export default function ProfileCard({ user, actions, children, nameOverride, compact, nameStyle, nameLook: nameLook_, server, footer, edit }: Props) {
+  const avatarRef = useRef<HTMLInputElement>(null)
+  const bannerRef = useRef<HTMLInputElement>(null)
+  const [statusMenu, setStatusMenu] = useState(false)
   const look = nameLook_ ?? (nameStyle ? { className: '', style: nameStyle } : nameLook(user))
   const nameCssFinal = look.style
   const theme = themeBackground(user)
@@ -79,11 +132,68 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
   const avatar = compact ? 64 : 80
   return (
     <div className="overflow-hidden rounded-2xl flex flex-col max-h-full" style={{ background: theme, color: text }} data-profile-card>
-      <div className={`${compact ? 'h-20' : 'h-[105px]'} w-full shrink-0 bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: 'rgba(0,0,0,0.18)' }} />
+      <div className={`group/banner relative ${compact ? 'h-20' : 'h-[105px]'} w-full shrink-0 bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: 'rgba(0,0,0,0.18)' }}>
+        {edit && (
+          <>
+            <button type="button" onClick={() => bannerRef.current?.click()} disabled={edit.busy === 'banner'} className={`absolute inset-0 flex items-center justify-center gap-2 bg-black/45 text-sm font-semibold text-white transition-opacity ${edit.busy === 'banner' ? 'opacity-100' : 'opacity-0 group-hover/banner:opacity-100 focus-visible:opacity-100'}`} data-inline-banner>
+              <Camera size={18} className={edit.busy === 'banner' ? 'animate-pulse' : ''} />{edit.busy === 'banner' ? 'Uploading…' : user.banner_url ? 'Change banner' : 'Add banner'}
+            </button>
+            {user.banner_url && <button type="button" onClick={edit.onBannerRemove} className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white opacity-0 group-hover/banner:opacity-100 focus-visible:opacity-100 hover:text-danger" title="Remove banner" data-inline-banner-remove><Trash2 size={14} /></button>}
+            <input ref={bannerRef} type="file" accept={IMAGE_TYPES} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) edit.onBannerFile(f); e.target.value = '' }} data-inline-banner-input />
+          </>
+        )}
+      </div>
       <div className={`px-4 ${compact ? '-mt-8' : '-mt-11'} flex items-end justify-between shrink-0`}>
-        <div className="rounded-full ring-[6px] bg-bg-1" style={{ ['--tw-ring-color' as string]: ring }}><Avatar user={user} size={avatar} presence decoration={user.avatar_decoration} animate /></div>
+        <div className="group/avatar relative rounded-full ring-[6px] bg-bg-1" style={{ ['--tw-ring-color' as string]: ring }}>
+          <Avatar user={user} size={avatar} presence decoration={user.avatar_decoration} animate />
+          {edit && (
+            <>
+              <button type="button" onClick={() => avatarRef.current?.click()} disabled={edit.busy === 'avatar'} className={`absolute inset-0 rounded-full flex flex-col items-center justify-center bg-black/50 text-[10px] font-bold uppercase tracking-wide text-white transition-opacity ${edit.busy === 'avatar' ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100 focus-visible:opacity-100'}`} title="Change avatar" data-inline-avatar>
+                <Camera size={18} className={edit.busy === 'avatar' ? 'animate-pulse' : ''} />{edit.busy === 'avatar' ? '' : 'Change'}
+              </button>
+              {user.avatar_url && <button type="button" onClick={edit.onAvatarRemove} className="absolute -right-1 -top-1 rounded-full bg-black/70 p-1 text-white opacity-0 group-hover/avatar:opacity-100 focus-visible:opacity-100 hover:text-danger" title="Remove avatar" data-inline-avatar-remove><Trash2 size={12} /></button>}
+              <input ref={avatarRef} type="file" accept={IMAGE_TYPES} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) edit.onAvatarFile(f); e.target.value = '' }} data-inline-avatar-input />
+            </>
+          )}
+        </div>
         {actions && <div className="flex flex-wrap justify-end gap-1.5 pb-1 min-w-0 pl-3">{actions}</div>}
       </div>
+      {edit ? (
+        <div className="px-4 pt-2 shrink-0 space-y-0.5" data-profile-editable>
+          <h2 className="text-xl font-bold leading-tight flex items-center gap-1.5 min-w-0">
+            <InlineText field="display_name" value={user.display_name} placeholder="Display name" maxLength={32} required onCommit={edit.onDisplayName} inputClassName="text-xl font-bold">
+              <span className={`truncate ${look.className}`} style={nameCssFinal} data-profile-name>{user.display_name}</span>
+            </InlineText>
+            <ClanTag userId={user.id} tag={user.clan_tag} /><Badges badges={user.badges} className="ml-1" />
+          </h2>
+          <div className="text-sm flex items-center gap-1 min-w-0" style={{ color: dim }}>
+            <span className="shrink-0">{user.username} ·</span>
+            <InlineText field="pronouns" value={user.pronouns ?? ''} placeholder="Add pronouns" maxLength={40} onCommit={edit.onPronouns} />
+          </div>
+          <div className="flex items-center gap-2 min-w-0 pt-1">
+            {edit.onStatus && (
+              <div className="relative shrink-0">
+                <button type="button" onClick={() => setStatusMenu((o) => !o)} className="flex items-center gap-1.5 rounded-full bg-black/25 px-2 py-0.5 text-xs font-medium hover:bg-black/35" aria-haspopup="menu" aria-expanded={statusMenu} data-inline-presence={edit.status ?? 'online'}>
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(edit.status, true) }} />{PRESENCE.find((p) => p.v === (edit.status ?? 'online'))?.label ?? 'Online'}<ChevronDown size={12} />
+                </button>
+                {statusMenu && (
+                  <>
+                    <div className="fixed inset-0 z-[60]" onClick={() => setStatusMenu(false)} />
+                    <div role="menu" className="pop absolute left-0 top-full z-[70] mt-1 w-44 rounded-lg border border-line bg-bg-0 p-1 text-text-0 shadow-2xl">
+                      {PRESENCE.map((p) => (
+                        <button key={p.v} type="button" role="menuitem" onClick={() => { setStatusMenu(false); edit.onStatus!(p.v) }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-bg-3" data-presence-option={p.v}>
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(p.v, true) }} />{p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            <InlineText field="custom_status" value={user.custom_status ?? ''} placeholder="Set a custom status" maxLength={128} onCommit={edit.onCustomStatus} className="text-sm" />
+          </div>
+        </div>
+      ) : (
       <div className="px-4 pt-2 shrink-0">
         <h2 className="text-xl font-bold leading-tight truncate flex items-center gap-1.5"><span className={look.className} style={nameCssFinal} data-profile-name>{nameOverride ?? user.display_name}</span><ClanTag userId={user.id} tag={user.clan_tag} /><Badges badges={user.badges} className="ml-1" /></h2>
         {user.custom_status && <p className="text-sm truncate mb-0.5" data-custom-status>{user.custom_status}</p>}
@@ -92,6 +202,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
           <span>{user.username}</span>{user.pronouns ? <span> · {user.pronouns}</span> : null}
         </p>
       </div>
+      )}
       <div className="px-4 pt-3 pb-4 min-h-0 overflow-y-auto">
         <div className="rounded-xl p-3 space-y-3 text-sm" style={{ background: panel }}>
           {user.bio && (

@@ -14,6 +14,7 @@ const LABELS: Record<string, string> = {
   'message.delete': 'deleted a message by', 'emoji.create': 'added emoji', 'emoji.update': 'renamed emoji', 'emoji.delete': 'deleted emoji',
   'sticker.create': 'added sticker', 'sticker.update': 'edited sticker', 'sticker.delete': 'deleted sticker',
   'discovery.submit': 'submitted to Discover', 'discovery.withdraw': 'withdrew from Discover',
+  'invite.delete': 'revoked invite', 'invite.vanity_create': 'claimed vanity link', 'invite.vanity_delete': 'removed vanity link',
 }
 
 const describe = (r: Row): string => {

@@ -567,6 +567,19 @@ pub struct Invite {
     pub uses: i32,
     pub max_uses: Option<i32>,
     pub created_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub vanity: bool,
+}
+
+/// An invite as Server Settings › Invites lists it, with who made it.
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct InviteListing {
+    #[serde(flatten)]
+    #[sqlx(flatten)]
+    pub invite: Invite,
+    pub creator_username: String,
+    pub creator_display_name: String,
+    pub creator_avatar_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

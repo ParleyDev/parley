@@ -13,6 +13,18 @@ use axum::{
 use serde_json::{json, Value};
 use uuid::Uuid;
 
+/// Finds the invite a code names: an exact (case-sensitive) random code, or a vanity code in any case, which only
+/// resolves while its server is approved for Discovery. A random code wins if both match.
+const MATCH: &str = "((NOT i.vanity AND i.code = $1) OR (i.vanity AND i.code = lower($1)
+    AND EXISTS (SELECT 1 FROM guild_discovery d WHERE d.guild_id = i.guild_id AND d.status = 'approved')))";
+/// Whether the invite can still be used (not expired, not used up).
+const LIVE: &str = "((i.expires_at IS NULL OR i.expires_at > now()) AND (i.max_uses IS NULL OR i.uses < i.max_uses))";
+
+/// guild id, name, icon, member count, live, rules, rules required, invite code.
+type PreviewRow = (Uuid, String, Option<String>, i64, bool, String, bool, String);
+/// guild id, uses, max uses, expiry, invite code.
+type AcceptRow = (Uuid, i32, Option<i32>, Option<chrono::DateTime<chrono::Utc>>, String);
+
 pub fn router() -> Router<AppState> {
     Router::new().route("/invites/:code", get(preview).post(accept))
 }
@@ -22,14 +34,14 @@ async fn preview(
     AuthUser(uid): AuthUser,
     Path(code): Path<String>,
 ) -> AppResult<Json<Value>> {
-    let row: Option<(Uuid, String, Option<String>, i64, i32, Option<i32>, String, bool)> = sqlx::query_as(
-        "SELECT g.id, g.name, g.icon_url, (SELECT COUNT(*) FROM guild_members WHERE guild_id = g.id), i.uses, i.max_uses, g.rules, g.rules_required
-         FROM invites i JOIN guilds g ON g.id = i.guild_id WHERE i.code = $1",
-    )
+    let row: Option<PreviewRow> = sqlx::query_as(&format!(
+        "SELECT g.id, g.name, g.icon_url, (SELECT COUNT(*) FROM guild_members WHERE guild_id = g.id), {LIVE}, g.rules, g.rules_required, i.code
+         FROM invites i JOIN guilds g ON g.id = i.guild_id WHERE {MATCH} ORDER BY i.vanity LIMIT 1"
+    ))
     .bind(&code)
     .fetch_optional(&state.db)
     .await?;
-    let (gid, name, icon, count, uses, max, rules, rules_required) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
+    let (gid, name, icon, count, live, rules, rules_required, code) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
     let already: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2")
         .bind(gid)
         .bind(uid)
@@ -40,7 +52,7 @@ async fn preview(
     Ok(Json(json!({
         "code": code,
         "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count, "rules": rules, "rules_required": rules_required },
-        "expired": max.map(|m| uses >= m).unwrap_or(false),
+        "expired": !live,
         "already_member": already.is_some(),
         "banned": is_banned(&state.db, gid, uid).await?,
     })))
@@ -52,12 +64,16 @@ async fn accept(
     Path(code): Path<String>,
 ) -> AppResult<Json<Value>> {
     let mut tx = state.db.begin().await?;
-    let row: Option<(Uuid, i32, Option<i32>)> =
-        sqlx::query_as("SELECT guild_id, uses, max_uses FROM invites WHERE code = $1 FOR UPDATE")
-            .bind(&code)
-            .fetch_optional(&mut *tx)
-            .await?;
-    let (gid, uses, max) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
+    let row: Option<AcceptRow> = sqlx::query_as(&format!(
+        "SELECT i.guild_id, i.uses, i.max_uses, i.expires_at, i.code FROM invites i WHERE {MATCH} ORDER BY i.vanity LIMIT 1 FOR UPDATE"
+    ))
+    .bind(&code)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let (gid, uses, max, expires, code) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
+    if expires.is_some_and(|t| t <= chrono::Utc::now()) {
+        return Err(AppError::BadRequest("This invite has expired".into()));
+    }
     if max.map(|m| uses >= m).unwrap_or(false) {
         return Err(AppError::BadRequest("Invite has reached its maximum uses".into()));
     }
