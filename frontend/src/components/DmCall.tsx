@@ -8,7 +8,7 @@ import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicM
 import { useResizableHeight } from '../lib/resize'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
-import VideoTile, { FitToggle, useVideoFit } from './VideoTile'
+import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 
 type Tile = { key: string; userId: string; kind: 'camera' | 'screen'; user: User | undefined; state: VoiceState; stream: MediaStream | null; isMe: boolean }
 
@@ -31,6 +31,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const localCamera = useStore((s) => s.localCamera)
   const localScreen = useStore((s) => s.localScreen)
   const remoteMedia = useStore((s) => s.remoteMedia)
+  const watching = useStore((s) => s.watching)
   const [focused, setFocused] = useState<string | null>(null)
   const videoFit = useVideoFit()
   const stage = useResizableHeight('dmCall', DEFAULT_HEIGHT, 160, 0.8)
@@ -80,7 +81,9 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         className={`group relative min-h-0 min-w-0 overflow-hidden rounded-xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big || cell ? 'h-full w-full' : 'aspect-video'}`}
         data-call-tile={t.key} data-tile-big={big ? '1' : '0'} title={big ? 'Click to return to the grid · double-click for fullscreen' : 'Click to focus · double-click for fullscreen'}
         {...(t.kind === 'camera' ? { 'data-call-participant': t.userId } : { 'data-call-screen': t.userId })}>
-        {t.stream ? (
+        {t.kind === 'screen' && !t.isMe && !watching[t.userId] ? (
+          <StreamGate user={t.user} big={big} canWatch={inThis} onWatch={() => voice.watch(t.userId, true)} />
+        ) : t.stream ? (
           <VideoTile stream={t.stream} mirror={t.isMe && t.kind === 'camera'} contain={videoFit === 'fit' || t.kind === 'screen'} />
         ) : t.kind === 'screen' ? (
           <div className="h-full w-full flex flex-col items-center justify-center gap-2 text-text-2"><Monitor size={big ? 64 : 32} /><span className="text-sm">Loading stream…</span></div>
@@ -99,6 +102,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         {t.kind === 'screen' && <span className="absolute left-2 top-2 rounded-md bg-danger px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider text-white">LIVE</span>}
         <div className="absolute right-2 bottom-2 flex items-center gap-1">
           {t.stream && t.kind === 'camera' && <FitToggle />}
+          {t.kind === 'screen' && !t.isMe && watching[t.userId] && <StopWatching onStop={() => voice.watch(t.userId, false)} />}
           <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget.closest('[data-call-tile]') as HTMLElement) }} title="Fullscreen" aria-label="Fullscreen" className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{document.fullscreenElement ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
         </div>
       </div>

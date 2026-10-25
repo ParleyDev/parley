@@ -1,6 +1,7 @@
-import { Expand, Shrink } from 'lucide-react'
+import { Expand, Eye, EyeOff, Shrink } from 'lucide-react'
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { STORAGE_PREFIX } from '../lib/brand'
+import Avatar from './Avatar'
 
 interface Props { stream: MediaStream | null; mirror?: boolean; className?: string; contain?: boolean }
 
@@ -41,5 +42,31 @@ export function FitToggle({ className = '' }: { className?: string }) {
       className={`rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0 ${className}`} data-tile-fit={v}>
       {v === 'fit' ? <Expand size={14} /> : <Shrink size={14} />}
     </button>
+  )
+}
+
+/**
+ * A screen share you aren't watching yet: the streamer's avatar with Watch Stream, like Discord. Nothing is sent to you
+ * until you click it (see voice.watch). `canWatch` is false while you aren't in the call.
+ */
+export function StreamGate({ user, big, canWatch, onWatch }: { user: { id: string; display_name: string; avatar_url: string | null } | undefined; big: boolean; canWatch: boolean; onWatch: () => void }) {
+  return (
+    <div className="relative h-full w-full flex flex-col items-center justify-center gap-3 overflow-hidden bg-bg-1 p-3 text-center" data-stream-gate>
+      {user?.avatar_url && <img src={user.avatar_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25 blur-2xl scale-110" aria-hidden />}
+      <div className="relative flex flex-col items-center gap-2">
+        {user && <Avatar user={user} size={big ? 72 : 40} />}
+        <span className={`font-semibold text-text-0 ${big ? 'text-base' : 'text-xs'}`}>{user?.display_name ?? 'Someone'} is streaming</span>
+        {canWatch
+          ? <button type="button" onClick={(e) => { e.stopPropagation(); onWatch() }} className={`btn-primary ${big ? '' : 'px-3 py-1 text-xs'}`} data-watch-stream><Eye size={big ? 16 : 13} /> Watch Stream</button>
+          : <span className="text-xs text-text-2">Join the call to watch</span>}
+      </div>
+    </div>
+  )
+}
+
+/** Corner button on a screen share you're watching: stop receiving it. */
+export function StopWatching({ onStop }: { onStop: () => void }) {
+  return (
+    <button type="button" onClick={(e) => { e.stopPropagation(); onStop() }} title="Stop Watching" aria-label="Stop Watching" className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0" data-stop-watching><EyeOff size={14} /></button>
   )
 }

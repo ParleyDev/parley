@@ -6,7 +6,7 @@ import { supportsSinkId, type VoiceSettings } from './settings'
 import { keepAwake } from './native'
 import { api } from './api'
 import { captureConstraints, measure, profileOf, sameProfile, tuneAudioReceiver, tuneAudioSender, tuneOpusSdp, type AudioProfile, type AudioStat } from './audioProfile'
-import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant } from 'livekit-client'
+import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant, type RemoteTrackPublication } from 'livekit-client'
 
 /**
  * Mesh WebRTC voice/video: every participant holds one RTCPeerConnection per other participant.
@@ -62,6 +62,8 @@ class VoiceManager {
 
   private camera: MediaStream | null = null
   private screen: MediaStream | null = null
+  /** Mesh: peers who clicked Watch Stream on our screen share; only they are sent its video. */
+  private watchers = new Set<string>()
   private peers = new Map<string, Peer>()
   private channelId: string | null = null
   private joining = false
@@ -247,6 +249,7 @@ class VoiceManager {
     const s = useStore.getState()
     if (this.screen) {
       this.stopTracks(this.screen); this.screen = null
+      this.watchers.clear()
       this.peers.forEach((p) => this.replaceVideo(p.pc, 1, null))
       await this.sfuUnpublish('screen')
       s.setLocalMedia({ screen: null })
@@ -265,7 +268,7 @@ class VoiceManager {
     const track = this.screen.getVideoTracks()[0]
     // Browser "Stop sharing" button ends the track.
     track.onended = () => { if (this.screen) this.toggleScreen() }
-    this.peers.forEach((p) => this.replaceVideo(p.pc, 1, track))
+    this.peers.forEach((p, id) => this.replaceVideo(p.pc, 1, this.screenFor(id)))
     await this.sfuPublish('screen', track)
     s.setLocalMedia({ screen: this.screen })
     this.pushState()
@@ -365,10 +368,18 @@ class VoiceManager {
       return
     }
     if (v.channel_id !== this.channelId && this.peers.has(v.user_id)) this.closePeer(v.user_id)
+    // They stopped sharing or left: the next share needs another Watch Stream click, as in Discord.
+    if ((!v.self_stream || v.channel_id !== this.channelId) && useStore.getState().watching[v.user_id]) useStore.getState().setWatching(v.user_id, false)
   }
 
   async onSignal(from: string, channelId: string, data: SignalData) {
     if (channelId !== this.channelId || this.sfu) return
+    if (data.type === 'watch') {
+      if (data.on) this.watchers.add(from); else this.watchers.delete(from)
+      const p = this.peers.get(from)
+      if (p) this.replaceVideo(p.pc, 1, this.screenFor(from))
+      return
+    }
     const peer = this.peers.get(from) ?? this.createPeer(from, false)
     try {
       if (data.type === 'offer') {
@@ -376,7 +387,7 @@ class VoiceManager {
         const fresh = this.profileFor(channelId)
         if (!sameProfile(fresh, this.profile)) await this.applyProfile(fresh)
         await peer.pc.setRemoteDescription({ type: 'offer', sdp: data.sdp })
-        this.attachLocalTracks(peer.pc)
+        this.attachLocalTracks(peer.pc, from)
         await this.flushCandidates(peer)
         // The tuned SDP goes into our own local description too: libwebrtc configures the receiving Opus decoder
         // from it, so without stereo=1 there a stereo stream is decoded (and played) as mono.
@@ -625,7 +636,7 @@ class VoiceManager {
       pc.addTransceiver('video', { direction: 'sendrecv' })
       pc.addTransceiver('video', { direction: 'sendrecv' })
       this.replaceVideo(pc, 0, this.camera?.getVideoTracks()[0] ?? null)
-      this.replaceVideo(pc, 1, this.screen?.getVideoTracks()[0] ?? null)
+      this.replaceVideo(pc, 1, this.screenFor(userId))
     }
 
     pc.onicecandidate = (e) => sendOp({ op: 'voice_signal', to: userId, data: { type: 'candidate', candidate: e.candidate ? e.candidate.toJSON() : null } })
@@ -644,7 +655,11 @@ class VoiceManager {
     }
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState
-      if (st === 'connected') { useStore.getState().setPeerStatus(userId, 'connected'); this.tunePeer(pc) }
+      if (st === 'connected') {
+        useStore.getState().setPeerStatus(userId, 'connected'); this.tunePeer(pc)
+        // A new connection to someone we were watching (they or we reconnected): ask for their screen again.
+        if (useStore.getState().watching[userId]) sendOp({ op: 'voice_signal', to: userId, data: { type: 'watch', on: true } })
+      }
       else if (st === 'failed') { useStore.getState().setPeerStatus(userId, 'failed'); pc.restartIce() }
       else if (st === 'disconnected') useStore.getState().setPeerStatus(userId, 'connecting')
     }
@@ -652,14 +667,29 @@ class VoiceManager {
   }
 
   /** Answerer side: mirror the offerer's [audio, camera, screen] layout with our own tracks. */
-  private attachLocalTracks(pc: RTCPeerConnection) {
+  private attachLocalTracks(pc: RTCPeerConnection, userId: string) {
     const ts = pc.getTransceivers()
     const audio = ts.find((t) => t.receiver.track.kind === 'audio')
     if (audio) { audio.direction = 'sendrecv'; audio.sender.replaceTrack(this.mic?.getAudioTracks()[0] ?? null).catch(() => {}) }
     const videos = this.videoTransceivers(pc)
     videos.forEach((t) => (t.direction = 'sendrecv'))
     this.replaceVideo(pc, 0, this.camera?.getVideoTracks()[0] ?? null)
-    this.replaceVideo(pc, 1, this.screen?.getVideoTracks()[0] ?? null)
+    this.replaceVideo(pc, 1, this.screenFor(userId))
+  }
+
+  /** Our screen share track for one peer: only peers watching it get the video, like Discord's Watch Stream. */
+  private screenFor(userId: string): MediaStreamTrack | null {
+    return this.watchers.has(userId) ? this.screen?.getVideoTracks()[0] ?? null : null
+  }
+
+  /**
+   * Start or stop watching someone's screen share. Until you watch, their video isn't sent to you (mesh: the streamer
+   * holds it back; SFU: the track stays unsubscribed), which saves bandwidth for everyone not looking at it.
+   */
+  watch(userId: string, on: boolean) {
+    useStore.getState().setWatching(userId, on)
+    if (this.sfu) { this.sfuScreenPub(userId)?.setSubscribed(on); return }
+    sendOp({ op: 'voice_signal', to: userId, data: { type: 'watch', on } })
   }
 
   private videoTransceivers(pc: RTCPeerConnection) {
@@ -692,6 +722,7 @@ class VoiceManager {
     p.pc.close()
     p.audio.srcObject = null; p.audio.remove()
     this.peers.delete(userId)
+    this.watchers.delete(userId)
     const s = useStore.getState()
     s.setPeerStatus(userId, null)
     s.setSpeaking(userId, false)
@@ -716,6 +747,8 @@ class VoiceManager {
     const room = new Room({ adaptiveStream: true, dynacast: true })
     this.room = room
     room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => this.onSfuTrack(track, participant))
+    // Screen shares are only subscribed once you click Watch Stream; everything else as soon as it is published.
+    room.on(RoomEvent.TrackPublished, (pub: RemoteTrackPublication, participant: RemoteParticipant) => this.sfuAutoSubscribe(pub, participant))
     room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => {
       if (track.kind === Track.Kind.Audio) { this.sfuAudio.get(participant.identity)?.remove(); this.sfuAudio.delete(participant.identity); this.sfuMeters.get(participant.identity)?.(); this.sfuMeters.delete(participant.identity) }
       else useStore.getState().setRemoteMedia(participant.identity, track.source === Track.Source.ScreenShare ? 'screen' : 'camera', null)
@@ -730,8 +763,8 @@ class VoiceManager {
     })
     room.on(RoomEvent.Disconnected, () => { if (this.room === room) { this.room = null; if (this.channelId) useStore.getState().pushToast('Voice server connection lost', 'error') } })
     try {
-      await room.connect(grant.url, grant.token)
-      room.remoteParticipants.forEach((p) => useStore.getState().setPeerStatus(p.identity, 'connected'))
+      await room.connect(grant.url, grant.token, { autoSubscribe: false })
+      room.remoteParticipants.forEach((p) => { useStore.getState().setPeerStatus(p.identity, 'connected'); p.trackPublications.forEach((pub) => this.sfuAutoSubscribe(pub, p)) })
       await this.sfuPublishMic()
       if (this.camera) await this.sfuPublish('camera', this.camera.getVideoTracks()[0])
       if (this.screen) await this.sfuPublish('screen', this.screen.getVideoTracks()[0])
@@ -777,6 +810,14 @@ class VoiceManager {
       return
     }
     useStore.getState().setRemoteMedia(userId, track.source === Track.Source.ScreenShare ? 'screen' : 'camera', stream)
+  }
+
+  private sfuAutoSubscribe(pub: RemoteTrackPublication, participant: RemoteParticipant) {
+    pub.setSubscribed(pub.source !== Track.Source.ScreenShare || !!useStore.getState().watching[participant.identity])
+  }
+
+  private sfuScreenPub(userId: string): RemoteTrackPublication | undefined {
+    return this.room?.remoteParticipants.get(userId)?.getTrackPublication(Track.Source.ScreenShare)
   }
 
   private async sfuPublish(kind: 'camera' | 'screen', track: MediaStreamTrack) {

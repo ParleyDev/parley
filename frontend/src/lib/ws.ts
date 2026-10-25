@@ -55,6 +55,8 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'VOICE_ERROR'; d: { message: string } })
 
 export type SignalData = { type: 'offer' | 'answer'; sdp: string } | { type: 'candidate'; candidate: RTCIceCandidateInit | null }
+  /** Mesh: ask a streamer to start (on) or stop sending us their screen share. */
+  | { type: 'watch'; on: boolean }
 
 let socket: WebSocket | null = null
 /** Where this client runs, for the presence indicator: the native apps say so; VR browsers by user agent; else web. */
