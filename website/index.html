@@ -237,6 +237,17 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 .acct .who { flex: 1; min-width: 0; } .acct .who small { display: block; color: var(--faint); font-family: var(--mono); font-size: .6875rem; }
 .acct .ok { color: var(--signal); } .acct .add { color: var(--muted); }
 .acct .add .av { background: var(--panel-2); color: var(--muted); }
+.f.w6 { grid-column: 1 / -1; }
+.f.w6.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: clamp(1.4rem, 4vw, 3rem); align-content: start; }
+.f.w6.split > .mini { grid-column: 2; grid-row: 1 / span 4; margin: 0; padding: 0; align-self: center; }
+@media (max-width: 820px) { .f.w6.split { display: flex; } .f.w6.split > .mini { padding-top: 1rem; } }
+.f code { font: 500 .85em/1 var(--mono); color: var(--text); background: var(--panel); border: 1px solid var(--rule); border-radius: 5px; padding: .1rem .35rem; }
+.ai { display: grid; gap: .55rem; font-size: .8125rem; width: 100%; max-width: 440px; justify-self: center; }
+.ai .ask, .ai .say { padding: .55rem .75rem; border-radius: 12px; max-width: 34ch; }
+.ai .ask { justify-self: end; background: color-mix(in srgb, var(--violet) 28%, transparent); color: #e6e3ff; }
+.ai .say { background: var(--panel); border: 1px solid var(--rule); color: var(--muted); }
+.ai .tool { font: 500 .6875rem/1.4 var(--mono); color: var(--faint); }
+.ai .tool b { color: var(--signal); font-weight: 500; }
 .roles span { font-size: .8125rem; font-weight: 600; padding: .3rem .6rem; border-radius: 7px; background: var(--panel); border: 1px solid var(--rule); }
 .platforms-mini { display: flex; flex-wrap: wrap; gap: .45rem; }
 .platforms-mini span { font: 500 .75rem/1 var(--mono); padding: .45rem .6rem; border-radius: 7px; border: 1px solid var(--rule); background: var(--panel); color: var(--muted); }
@@ -349,7 +360,7 @@ footer a:hover { color: var(--text); }
     <canvas id="wave" aria-hidden="true"></canvas>
     <div class="wrap">
       <div class="eyebrow-row">
-        <a class="pill" href="https://github.com/ParleyDev/parley/releases/latest" id="release-pill"><b>●</b> <span id="release-tag">v0.7.0</span> is out</a>
+        <a class="pill" href="https://github.com/ParleyDev/parley/releases/latest" id="release-pill"><b>●</b> <span id="release-tag">v0.8.0</span> is out</a>
         <span class="pill">Open source · Apache-2.0</span>
         <a class="pill pill-try" href="https://app.runparley.com/register">Try it free: <b>app.runparley.com</b> →</a>
       </div>
@@ -537,6 +548,17 @@ footer a:hover { color: var(--text); }
             <div class="row add"><span class="av">+</span><span class="who">Add an account</span></div>
           </div>
         </article>
+        <article class="f w6 split">
+          <span class="tag">AI assistants</span>
+          <h3>Bring your assistant along</h3>
+          <p>Parley speaks MCP, so Claude, ChatGPT, Cursor and other assistants can catch you up on unreads and mentions, search, reply and react. Add your server's <code>/mcp</code> address as a connector, sign in, and tick what it may do. Server management stays off unless you allow it, and you can disconnect it any time.</p>
+          <ul><li>Read</li><li>Notifications</li><li>Send</li><li>Manage</li><li>OAuth sign-in</li></ul>
+          <div class="mini ai" aria-hidden="true">
+            <div class="ask">What did I miss in #mixing?</div>
+            <div class="tool"><b>✓</b> get_unreads · read_messages</div>
+            <div class="say">Jonah posted new stems and asked you to check the vocal bus. Rae mentioned you about Friday's session. Want me to reply?</div>
+          </div>
+        </article>
       </div>
     </div>
   </section>
@@ -622,10 +644,10 @@ footer a:hover { color: var(--text); }
         <p class="lede">The apps work with app.runparley.com or any Parley server. Type the address once and you're in.</p>
       </div>
       <div class="dl" id="downloads">
-        <div class="row"><span class="os">Windows</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="x64-setup\.exe$">Parley_0.7.0_x64-setup.exe</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.msi$">Parley_0.7.0_x64_en-US.msi</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
-        <div class="row"><span class="os">macOS</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.dmg$">Parley_0.7.0_aarch64.dmg</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
-        <div class="row"><span class="os">Linux</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.deb$">Parley_0.7.0_amd64.deb</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.rpm$">Parley-0.7.0-1.x86_64.rpm</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.AppImage$">Parley_0.7.0_amd64.AppImage</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
-        <div class="row"><span class="os">Android</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.apk$">Parley_0.7.0_android.apk</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">Windows</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="x64-setup\.exe$">Parley_0.8.0_x64-setup.exe</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.msi$">Parley_0.8.0_x64_en-US.msi</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">macOS</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.dmg$">Parley_0.8.0_aarch64.dmg</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">Linux</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.deb$">Parley_0.8.0_amd64.deb</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.rpm$">Parley-0.8.0-1.x86_64.rpm</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.AppImage$">Parley_0.8.0_amd64.AppImage</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
+        <div class="row"><span class="os">Android</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.apk$">Parley_0.8.0_android.apk</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
         <div class="row"><span class="os">Web</span><span class="files"><span>Any modern browser, on your server's address</span></span><a class="go" href="#self-host">Set up →</a></div>
       </div>
       <p class="note">Downloads come straight from the <a href="https://github.com/ParleyDev/parley/releases/latest">latest GitHub release</a>. The Mac build is for Apple Silicon. iOS builds from source for now.</p>
