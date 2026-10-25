@@ -1,6 +1,7 @@
 pub mod account;
 pub mod admin;
 pub mod applications;
+pub mod assets;
 pub mod attachments;
 pub mod auth;
 pub mod channels;
@@ -64,6 +65,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(dms::router())
         .merge(attachments::router())
         .merge(images::router())
+        .merge(assets::router())
         .merge(expressions::router())
         .merge(gifs::router())
         .merge(discovery::router())

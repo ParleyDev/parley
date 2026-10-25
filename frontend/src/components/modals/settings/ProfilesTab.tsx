@@ -8,6 +8,7 @@ import { colorsOf, EFFECTS, FONTS, nameLook, type NameEffect, type NameFont, typ
 /** The user's saved style as the editor's draft (colours fall back to the classic fields). */
 const styleOfUser = (u: PrivateUser | null | undefined): NameStyle => ({ font: (u?.name_style?.font as NameFont) ?? 'default', effect: (u?.name_style?.effect as NameEffect) ?? (u?.name_accent ? 'gradient' : 'solid'), colors: colorsOf(u ?? undefined) })
 import NameStyleModal from '../NameStyle'
+import DecorationGallery from './DecorationGallery'
 import { colorFor } from '../../../lib/format'
 import { prepareImage, uploadImage } from '../../../lib/upload'
 import ImagePicker from '../ImagePicker'
@@ -82,6 +83,7 @@ export default function ProfilesTab() {
                 </button>
               ))}
             </div>
+            <DecorationGallery user={{ ...user, avatar_url: avatar }} value={decoration} onChange={setDecoration} />
           </div>
           <div>
             <label className="label">Avatar</label>

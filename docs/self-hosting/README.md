@@ -64,6 +64,7 @@ Then:
 | `WEB_PORT` / `WEB_TLS_PORT` | Host ports for HTTP (3000) and HTTPS (3443). Write `127.0.0.1:3000` to accept local connections only. |
 | `DATA_DIR` | Where the database, uploads and certificates are stored (default `./data`). |
 | `PARLEY_IMAGE_TAG` | `latest`, a release such as `v0.2.0`, or `sha-<commit>`. |
+| `ASSETS_PATH` | Folder of instance-wide assets, mounted read-only (default `DATA_DIR/assets`). See [Avatar decorations](#avatar-decorations). |
 
 Email defaults to `MAIL_MODE=log`: verification and password-reset mails are printed to `docker compose logs backend` instead of being sent. Admins can also read them in the app. To send real mail, set `MAIL_MODE=smtp`, `SMTP_URL` and `MAIL_FROM`. A free SMTP relay or your email provider's SMTP server works.
 
@@ -123,6 +124,17 @@ docker compose start backend
 ```
 
 `pg_restore --clean` replaces everything currently in the database.
+
+## Avatar decorations
+
+Besides the built-in frames, people can pick image decorations that you provide. Put the files in `avatar-decorations/` inside the assets folder (`data/assets/avatar-decorations/` by default, or set `ASSETS_PATH` to any folder, for example a NAS share):
+
+- **Formats:** PNG, APNG, GIF or WebP, up to 8 MB each. Animated files play when someone hovers an avatar and on profile cards; lists show the first frame. Reduced motion keeps them still.
+- **Shape:** square, with a transparent middle where the avatar shows through. The image is drawn at 1.2× the avatar size, centred, so a 288×288 file suits Discord-style decorations.
+- **Names:** the file name is the name people see (`a_hint_of_clove.png` → "A Hint Of Clove") and, lower-cased, the id saved on profiles. Renaming a file therefore removes it from the people using it.
+- **Changes:** adding or removing files needs no restart; the list refreshes within 30 seconds. A removed decoration simply stops showing.
+
+The folder is mounted read-only. Still frames are cached under `uploads/asset-cache/`, which is safe to delete.
 
 ## Optional extras
 

@@ -337,7 +337,7 @@ Scrolling well above the bottom of a channel shows a "You're viewing older messa
 ## Profile flair: badges, decorations, clan tags, panels
 
 - **Badges** are computed by the server on `GET /users/:id` (`badges`): `admin`, `founder` (first ten accounts), `veteran` (over a year), `host` (owns a server), `verified` (email), `secure` (2FA). They show as icon chips with tooltips on the profile popout and card.
-- **Avatar decorations**: User Settings → Profiles offers preset frames (gold, rainbow, glow, ice, dashed, ember) drawn over the avatar everywhere (`users.avatar_decoration`).
+- **Avatar decorations**: User Settings → Profiles offers preset frames (gold, rainbow, glow, ice, dashed, ember) drawn over the avatar everywhere (`users.avatar_decoration`), plus a searchable gallery of image decorations the instance provides: PNG/APNG/GIF/WebP files in the mounted assets folder (`ASSETS_DIR`, Compose `ASSETS_PATH` → `/data/assets/avatar-decorations/`), saved as `asset:<id>`. `GET /api/assets/avatar-decorations` lists them; `…/:id` serves the file and `…/:id/static` a cached still first frame, which lists use until hovered. See [self-hosting → Avatar decorations](docs/self-hosting/README.md#avatar-decorations).
 - **Clan tags**: a 2–4 character tag (`users.clan_tag`) shown as a chip beside your name in chat, member lists and profiles.
 - **Panels**: optional Wishlist and Game collection sections on the profile card (`users.panels`, up to 25 `{title, url?}` items each), edited one per line as `Title | https://link`.
 

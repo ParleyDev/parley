@@ -237,7 +237,7 @@ struct UpdateMe {
     /// {font, effect} from the style picker; unknown values are refused.
     name_style: Option<serde_json::Value>,
     custom_status: Option<String>,
-    /// Flair: one of DECORATIONS ('' clears), a 2–4 character tag ('' clears), panels {wishlist, games} of {title, url?}.
+    /// Flair: one of DECORATIONS or `asset:<id>` from the assets folder ('' clears), a 2–4 character tag ('' clears), panels {wishlist, games} of {title, url?}.
     avatar_decoration: Option<String>,
     clan_tag: Option<String>,
     panels: Option<serde_json::Value>,
@@ -371,7 +371,7 @@ async fn update_me(
     }
     validate_image(&req.avatar_url)?;
     if let Some(d) = &req.avatar_decoration {
-        if !DECORATIONS.contains(&d.as_str()) {
+        if !DECORATIONS.contains(&d.as_str()) && !crate::routes::assets::decoration_exists(&state.config, d).await {
             return Err(AppError::BadRequest("Unknown avatar decoration".into()));
         }
     }

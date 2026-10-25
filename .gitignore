@@ -11,5 +11,8 @@ frontend/dist
 *.gate.lock*
 frontend/e2e/out/
 backups/
+# Instance assets mounted into the backend (ASSETS_PATH) and local media: never committed.
+/assets/
+/media/
 secrets/
 desktop/dist/

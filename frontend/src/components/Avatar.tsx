@@ -1,10 +1,14 @@
+import { useState } from 'react'
 import { colorFor, initials } from '../lib/format'
+import { assetDecorationId, decorationsMayAnimate, decorationUrl } from '../lib/decorations'
 import { useStore } from '../store'
 
 interface Props {
   user: { id: string; display_name: string; avatar_url: string | null; status?: string; avatar_decoration?: string }
   /** Force a frame regardless of what is saved (previews and unsaved drafts). */
   decoration?: string
+  /** Play an animated image decoration (profile cards, previews); elsewhere it plays only while hovered. */
+  animate?: boolean
   size?: number
   presence?: boolean
   className?: string
@@ -20,7 +24,7 @@ export function statusColor(status: string | undefined, online: boolean): string
   }
 }
 
-/** Preset frames drawn over the avatar; keyed by users.avatar_decoration. */
+/** Preset frames drawn over the avatar; keyed by users.avatar_decoration (`asset:<id>` values are images, see lib/decorations). */
 const DECORATION_STYLE: Record<string, React.CSSProperties> = {
   gold: { boxShadow: 'inset 0 0 0 2px #f6b53d, 0 0 0 1px rgba(246,181,61,.5)' },
   rainbow: { background: 'conic-gradient(#f0506e, #f6b53d, #3ccf7d, #38bdf8, #6d5dfc, #f0506e)', WebkitMask: 'radial-gradient(circle, transparent calc(100% - 3px), #000 calc(100% - 2.5px))', mask: 'radial-gradient(circle, transparent calc(100% - 3px), #000 calc(100% - 2.5px))' },
@@ -30,15 +34,20 @@ const DECORATION_STYLE: Record<string, React.CSSProperties> = {
   ember: { boxShadow: 'inset 0 0 0 2px #f97316, 0 0 8px 2px rgba(249,115,22,.6)' },
 }
 
-export default function Avatar({ user, size = 32, presence = false, className = '', decoration: override }: Props) {
+export default function Avatar({ user, size = 32, presence = false, className = '', decoration: override, animate = false }: Props) {
   const online = useStore((s) => !!s.online[user.id])
   const platforms = useStore((s) => s.platforms[user.id])
   const status = useStore((s) => s.users[user.id]?.status ?? user.status)
   // `decoration` forces a frame (previews, unsaved drafts); otherwise the live store value, then the user object's.
   const decoration = useStore((s) => override ?? s.users[user.id]?.avatar_decoration ?? user.avatar_decoration ?? '')
   const dot = Math.max(8, Math.round(size * 0.32))
+  const assetId = size >= 20 ? assetDecorationId(decoration) : null
+  const [hover, setHover] = useState(false)
+  const [broken, setBroken] = useState<string | null>(null)
+  const moving = (animate || hover) && decorationsMayAnimate()
   return (
-    <div className={`relative shrink-0 ${className}`} style={{ width: size, height: size }}>
+    <div className={`relative shrink-0 ${className}`} style={{ width: size, height: size }}
+      onMouseEnter={assetId ? () => setHover(true) : undefined} onMouseLeave={assetId ? () => setHover(false) : undefined}>
       {user.avatar_url ? (
         <img src={user.avatar_url} alt="" className="h-full w-full rounded-full object-cover" draggable={false} />
       ) : (
@@ -49,6 +58,11 @@ export default function Avatar({ user, size = 32, presence = false, className = 
       )}
       {decoration && DECORATION_STYLE[decoration] && size >= 20 && (
         <span className="absolute inset-0 rounded-full pointer-events-none" style={DECORATION_STYLE[decoration]} data-decoration={decoration} aria-hidden />
+      )}
+      {/* Image decorations are square overlays at 1.2x the avatar, centred, with a transparent middle (Discord's layout). */}
+      {assetId && broken !== assetId && (
+        <img src={decorationUrl(assetId, !moving)} alt="" aria-hidden draggable={false} loading="lazy" decoding="async" onError={() => setBroken(assetId)}
+          className="absolute pointer-events-none select-none max-w-none" style={{ width: '120%', height: '120%', left: '-10%', top: '-10%' }} data-decoration={decoration} />
       )}
       {presence && <PresenceBadge size={dot} color={statusColor(status, online)} kind={online ? presenceKind(platforms) : 'dot'} title={presenceTitle(status, online, platforms)} />}
     </div>

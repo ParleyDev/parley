@@ -4,6 +4,7 @@
 #
 # Data lives in bind mounts under DATA_DIR (default ./data) so it is easy to find, back up and move:
 #   data/postgres  database        data/uploads  attachments, avatars, emoji
+#   data/assets    instance-wide assets you add (avatar-decorations/), mounted read-only; ASSETS_PATH moves it
 #   data/certs     TLS cert/key    data/letsencrypt, data/acme  Let's Encrypt state (profile "letsencrypt")
 
 services:
@@ -33,6 +34,7 @@ services:
       APP_URL: ${APP_URL:-http://localhost:3000}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       UPLOAD_DIR: /data/uploads
+      ASSETS_DIR: /data/assets
       UPLOAD_QUOTA_BYTES: ${UPLOAD_QUOTA_BYTES:-1073741824}
       ICE_SERVERS: ${ICE_SERVERS:-[{"urls":"stun:stun.l.google.com:19302"}]}
       MAIL_MODE: ${MAIL_MODE:-log}
@@ -45,6 +47,7 @@ services:
       # Rate limits (RL_*) are left unset on purpose: the backend's built-in defaults suit a real instance.
     volumes:
       - ${DATA_DIR:-./data}/uploads:/data/uploads
+      - ${ASSETS_PATH:-${DATA_DIR:-./data}/assets}:/data/assets:ro
     depends_on:
       db:
         condition: service_healthy

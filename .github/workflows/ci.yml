@@ -62,6 +62,8 @@ jobs:
       ADMIN_EMAILS: admin-e2e@x.io
       # A real (non-"dev") build version, so the stale-client update banner is active and tested.
       PARLEY_VERSION: ci-${{ github.sha }}
+      # Two small decorations (one still, one APNG) for the decorations suite; mounted read-only into the backend.
+      ASSETS_PATH: ./frontend/e2e/fixtures/assets
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
