@@ -116,6 +116,8 @@ struct UpdateChannel {
     position: Option<i32>,
     /// Guild text channels: age-restricted.
     nsfw: Option<bool>,
+    /// Guild text channels: spoiler warning before viewing.
+    spoiler: Option<bool>,
     /// Voice/stage/studio audio profile: 'voice' | 'music'.
     audio_mode: Option<String>,
     /// Opus kbps, 8..510, or 0 for the mode's default.
@@ -228,7 +230,7 @@ async fn update_channel(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
          parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw),
          audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency), e2ee = COALESCE($11, e2ee),
-         rate_limit_per_user = COALESCE($12, rate_limit_per_user), user_limit = COALESCE($13, user_limit)
+         rate_limit_per_user = COALESCE($12, rate_limit_per_user), user_limit = COALESCE($13, user_limit), spoiler = COALESCE($14, spoiler)
          WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
@@ -244,6 +246,7 @@ async fn update_channel(
     .bind(req.e2ee)
     .bind(req.rate_limit_per_user)
     .bind(req.user_limit)
+    .bind(req.spoiler)
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
@@ -259,6 +262,7 @@ async fn update_channel(
         let mut d = serde_json::Map::new();
         if updated.name != c.name { d.insert("name".into(), json!(updated.name)); }
         if updated.topic != c.topic { d.insert("topic".into(), json!(updated.topic)); }
+        if updated.spoiler != c.spoiler { d.insert("spoiler".into(), json!(updated.spoiler)); }
         if updated.audio_mode != c.audio_mode { d.insert("audio_mode".into(), json!(updated.audio_mode)); }
         if updated.audio_bitrate != c.audio_bitrate { d.insert("audio_bitrate".into(), json!(updated.audio_bitrate)); }
         if updated.audio_low_latency != c.audio_low_latency { d.insert("audio_low_latency".into(), json!(updated.audio_low_latency)); }
@@ -294,7 +298,7 @@ async fn delete_channel(
 
 pub const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
     u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from,
-    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, m.suppress_embeds, u.avatar_decoration, u.clan_tag, u.bot AS author_bot, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
+    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, m.suppress_embeds, m.tts, u.avatar_decoration, u.clan_tag, u.bot AS author_bot, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
@@ -449,6 +453,9 @@ struct CreateMessage {
     /// Alt text for the attachments being sent, by attachment id.
     #[serde(default)]
     attachment_descriptions: HashMap<Uuid, String>,
+    /// Read it aloud (needs Send TTS Messages in a server; quietly ignored without it).
+    #[serde(default)]
+    tts: bool,
 }
 
 async fn create_message(
@@ -508,7 +515,8 @@ async fn create_message(
     let m_everyone = m_everyone && c.guild_id.is_some() && has(p, perms::MENTION_EVERYONE);
     let m_roles = mentionable_roles(&state.db, c.guild_id, m_roles, has(p, perms::MENTION_EVERYONE)).await?;
     let mut tx = state.db.begin().await?;
-    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+    let tts = req.tts && !content.trim().is_empty() && (c.guild_id.is_none() || has(p, perms::SEND_TTS_MESSAGES));
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone, tts) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
         .bind(mid)
         .bind(id)
         .bind(uid)
@@ -518,6 +526,7 @@ async fn create_message(
         .bind(&m_users)
         .bind(&m_roles)
         .bind(m_everyone)
+        .bind(tts)
         .execute(&mut *tx)
         .await?;
     link(&mut tx, mid, id, uid, &req.attachment_ids).await?;
@@ -562,6 +571,9 @@ struct EditMessage {
     /// Alt text for this message's attachments, by id (the author).
     #[serde(default)]
     attachment_descriptions: HashMap<Uuid, String>,
+    /// Mark or unmark attachments as spoilers, by id (the author). Spoilers are the SPOILER_ filename prefix.
+    #[serde(default)]
+    attachment_spoilers: HashMap<Uuid, bool>,
 }
 
 /// Alt text for a message's attachments (up to 1024 characters each; empty clears it).
@@ -589,6 +601,13 @@ async fn edit_message(
     if !req.attachment_descriptions.is_empty() {
         if author != uid { return Err(AppError::Forbidden) }
         set_descriptions(&state.db, mid, &req.attachment_descriptions).await?;
+    }
+    if !req.attachment_spoilers.is_empty() {
+        if author != uid { return Err(AppError::Forbidden) }
+        for (aid, on) in &req.attachment_spoilers {
+            sqlx::query("UPDATE attachments SET filename = CASE WHEN $3 THEN 'SPOILER_' ELSE '' END || regexp_replace(filename, '^SPOILER_', '') WHERE id = $1 AND message_id = $2")
+                .bind(aid).bind(mid).bind(on).execute(&state.db).await?;
+        }
     }
     let Some(content) = req.content else {
         let msg = fetch_message(&state.db, mid, uid).await?;

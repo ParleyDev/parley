@@ -267,6 +267,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     if (tooLong) { pushToast(`Your message is ${chars - MAX_CHARS} characters too long. Shorten it or send it as a file.`, 'error'); return }
     if (!canSubmit) return
     let text = value.trim()
+    let tts = false
     if (text.startsWith('/')) {
       const res = await runCommand(applyMentions(text, picked), { guildId: channel.guild_id, userId, channelId: channel.id, moderator: isMod })
       if (res.kind === 'error') { pushToast(res.message, 'error'); return }
@@ -277,7 +278,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         return
       }
       if (res.kind === 'done') { pushToast(res.toast); setValue(''); setPicked({}); saveDraft(userId, channel.id, '', {}); return }
-      if (res.kind === 'send') text = res.content
+      if (res.kind === 'send') { text = res.content; tts = !!res.tts }
     }
     const content = applyMentions(getPrefs().emoticons ? convertEmoticons(text) : text, picked)
     const ids = ready.map((p) => p.done!.id)
@@ -286,7 +287,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     setValue(''); setPending([]); setPicked({}); setMention(null); onCancelReply(); setSending(true)
     clearTimeout(draftTimer.current); saveDraft(userId, channel.id, '', {})
     try {
-      await sendMessage(channel.id, content, reply?.id, ids, null, descriptions)
+      await sendMessage(channel.id, content, reply?.id, ids, null, descriptions, { tts })
       snapshot.forEach((p) => { if (p.preview) URL.revokeObjectURL(p.preview) })
       startCooldown()
       onSent()

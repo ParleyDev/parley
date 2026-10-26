@@ -9,9 +9,9 @@ import { ClanTag } from './Flair'
 import { canHover } from './GuildBar'
 import { useEmojiHover } from './EmojiHover'
 import { emojiLabel, parseCustom } from '../lib/emoji'
-import { frequentEmoji, recordEmoji } from '../lib/recentEmoji'
+import { recordEmoji } from '../lib/recentEmoji'
 import { anchorOf } from '../lib/anchor'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { isBlocked, mentionsMe, myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
 import { useAppearance } from '../lib/appearance'
@@ -19,6 +19,7 @@ import PollCard from './PollCard'
 import LinkEmbed, { firstLink } from './LinkEmbed'
 import { remindLabel, remindPresets, setReminder } from '../lib/reminders'
 import MessageLinkPreview, { messageLinks } from './MessageLinkPreview'
+import { suggestReactions } from '../lib/suggestReactions'
 import InviteCard, { inviteCodes } from './InviteCard'
 import StyledName from './StyledName'
 import { AvatarMotion, useHoverMotion } from '../lib/motion'
@@ -62,7 +63,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const canReact = has(perms, P.ADD_REACTIONS)
   const canPin = m.channel_id && (guildId === undefined || has(perms, P.MANAGE_MESSAGES))
   const [more, setMore] = useState(false)
-  const frequent = frequentEmoji(3)
+  const frequent = useMemo(() => suggestReactions(m, 3, 1), [m])
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.content)
   const editRef = useRef<HTMLTextAreaElement>(null)
@@ -154,9 +155,20 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
 
   const prefs = usePrefs()
+  // Touch screens: double-tap a message to react with your quick reaction (Chat settings).
+  const lastTap = useRef(0)
+  const onTap = (e: React.PointerEvent) => {
+    if (e.pointerType !== 'touch' || !prefs.doubleTapReact || !canReact || m.local) return
+    if ((e.target as HTMLElement).closest('button, a, textarea, input, img, video')) return
+    const now = Date.now()
+    if (now - lastTap.current < 320) { lastTap.current = 0; const q = prefs.quickReaction; void react(q, !!m.reactions.find((r) => r.emoji === q && r.me)) }
+    else lastTap.current = now
+  }
   const media = soleMediaUrl(m.content)
   const link = media ? null : firstLink(m.content)
   // Sensitive media: blur pictures and videos from non-friends in DMs, and in age-restricted channels, by preference.
+  // Spoiler channels hide every picture and video behind a click.
+  const spoilerChannel = useStore((s) => !!s.channels[m.channel_id]?.spoiler)
   const sensitive = useStore((s) => {
     if (isOwn) return false
     const pref = s.user?.sensitive_media ?? {}
@@ -170,7 +182,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const voiceNeedingText = (m.attachments ?? []).filter((a) => a.duration_ms && a.transcript_status !== 'pending' && !(a.transcript_status === 'done' && a.transcript))
   const transcriptionOn = useStore((s) => s.instance.transcription)
   const contextItems = (e: React.MouseEvent): MenuEntry[] => {
-    const quick = frequentEmoji(4)
+    const quick = suggestReactions(m, 4, 2)
     const anchorRect = new DOMRect(e.clientX, e.clientY, 0, 0)
     const markUnread = async () => {
       const list = useStore.getState().messages[m.channel_id] ?? []
@@ -195,7 +207,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       ...(guildId && chanKind === 'text' && !m.thread && m.kind !== 'default' ? [] : guildId && chanKind === 'text' && !m.thread ? [{ label: 'Create Thread', icon: <MessagesSquare size={16} />, onClick: () => openModal({ kind: 'createThread', channelId: m.channel_id, messageId: m.id, suggested: m.content.replace(/\s+/g, ' ').trim().slice(0, 60) }) }] : []),
       { label: 'Forward', icon: <Forward size={16} />, onClick: () => openModal({ kind: 'forward', message: m }) },
       ...(isOwn ? [{ label: 'Edit Message', icon: <Pencil size={16} />, onClick: () => { setDraft(m.content); setEditing(true) } }] : []),
-      ...(isOwn && pictures.length ? [{ label: 'Edit Alt Text', icon: <ImageIcon size={16} />, onClick: () => openModal({ kind: 'altText', message: m }) }] : []),
+      ...(isOwn && pictures.length ? [{ label: 'Edit Attachments', icon: <ImageIcon size={16} />, onClick: () => openModal({ kind: 'altText', message: m }) }] : []),
       ...(m.reactions.length ? [{ label: 'View Reactions', icon: <SmilePlus size={16} />, onClick: () => openModal({ kind: 'reactions', channelId: m.channel_id, messageId: m.id }) }] : []),
       ...(canSuppress && (link || media) ? [{ label: m.suppress_embeds ? 'Show Embeds' : 'Remove Embeds', icon: <EyeOff size={16} />, onClick: () => setSuppressed(!m.suppress_embeds) }] : []),
       'sep' as const,
@@ -282,7 +294,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
   return (
     <AvatarMotion.Provider value={motion}>
-    <div ref={rowRef} {...motionBind} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div ref={rowRef} {...motionBind} onPointerUp={onTap} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {m.reply_to && (
         <div role="button" onClick={(e) => { if (onJumpToReply) { e.stopPropagation(); onJumpToReply() } }} data-reply-link={m.reply_to} className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 cursor-pointer hover:text-text-0 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" title="Jump to the original message">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{replyTarget.content || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 Attachment' : '')}</span></>) : <i data-reply-preview="deleted">Original message was deleted</i>}
@@ -347,7 +359,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                   ? <FrozenGif src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" mode={prefs.stickerAnimation === 'never' ? 'never' : 'hover'} data-msg-sticker={m.sticker.name} />
                   : <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
-              <Attachments items={m.attachments ?? []} mine={isOwn} sensitive={sensitive} />
+              <Attachments items={spoilerChannel ? (m.attachments ?? []).map((a) => (/^(image|video)\//.test(a.content_type) && !a.filename.startsWith('SPOILER_') ? { ...a, filename: `SPOILER_${a.filename}` } : a)) : m.attachments ?? []} mine={isOwn} sensitive={sensitive} />
             </>
           )}
           {m.reactions.length > 0 && prefs.showReactions && (

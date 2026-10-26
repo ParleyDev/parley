@@ -58,6 +58,7 @@ function Overview({ channel }: { channel: Channel }) {
   const [name, setName] = useState(channel.name)
   const [topic, setTopic] = useState(channel.topic)
   const [nsfw, setNsfw] = useState(!!channel.nsfw)
+  const [spoiler, setSpoiler] = useState(!!channel.spoiler)
   const [slowmode, setSlowmode] = useState(channel.rate_limit_per_user ?? 0)
   const [userLimit, setUserLimit] = useState(channel.user_limit ?? 0)
   const hasSlowmode = channel.guild_id !== null && (channel.kind === 'text' || channel.kind === 'thread')
@@ -68,11 +69,11 @@ function Overview({ channel }: { channel: Channel }) {
   const [busy, setBusy] = useState(false)
   const isAudio = channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
   const audioDirty = isAudio && (audioMode !== (channel.audio_mode === 'music' ? 'music' : 'voice') || bitrate !== (channel.audio_bitrate ?? 0) || lowLatency !== !!channel.audio_low_latency || e2ee !== !!channel.e2ee)
-  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || slowmode !== (channel.rate_limit_per_user ?? 0) || userLimit !== (channel.user_limit ?? 0) || audioDirty
-  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
+  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || spoiler !== !!channel.spoiler || slowmode !== (channel.rate_limit_per_user ?? 0) || userLimit !== (channel.user_limit ?? 0) || audioDirty
+  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSpoiler(!!channel.spoiler); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(channel.kind === 'text' || channel.kind === 'forum' ? { spoiler } : {}), ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
@@ -92,6 +93,12 @@ function Overview({ channel }: { channel: Channel }) {
         <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-nsfw={nsfw ? '1' : '0'}>
           <span><span className="block text-[15px]">Age-Restricted Channel</span><span className="block text-xs text-text-2">Members see a warning before opening it, and those who blur sensitive media get pictures and videos here blurred until clicked.</span></span>
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} />
+        </label>
+      )}
+      {(channel.kind === 'text' || channel.kind === 'forum') && (
+        <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-spoiler={spoiler ? '1' : '0'}>
+          <span><span className="block text-[15px]">Spoiler Channel</span><span className="block text-xs text-text-2">Members see a spoiler warning (with the topic) before opening it, and pictures and videos here stay hidden until clicked.</span></span>
+          <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={spoiler} onChange={(e) => setSpoiler(e.target.checked)} data-channel-spoiler-toggle />
         </label>
       )}
       {channel.kind === 'voice' && (

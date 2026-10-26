@@ -24,6 +24,8 @@ pub const ADD_REACTIONS: u64 = 1 << 6;
 pub const STREAM: u64 = 1 << 9;
 pub const VIEW_CHANNEL: u64 = 1 << 10;
 pub const SEND_MESSAGES: u64 = 1 << 11;
+/// Send /tts messages, read aloud to everyone viewing the channel.
+pub const SEND_TTS_MESSAGES: u64 = 1 << 12;
 pub const MANAGE_MESSAGES: u64 = 1 << 13;
 pub const ATTACH_FILES: u64 = 1 << 15;
 pub const MENTION_EVERYONE: u64 = 1 << 17;
@@ -52,6 +54,7 @@ pub const ALL: u64 = CREATE_INVITE
     | STREAM
     | VIEW_CHANNEL
     | SEND_MESSAGES
+    | SEND_TTS_MESSAGES
     | MANAGE_MESSAGES
     | ATTACH_FILES
     | MENTION_EVERYONE
@@ -67,7 +70,7 @@ pub const ALL: u64 = CREATE_INVITE
 
 /// What a fresh @everyone role gets (must match migration 0002).
 pub const DEFAULT_EVERYONE: u64 =
-    CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | ATTACH_FILES | MENTION_EVERYONE | CONNECT | SPEAK | CHANGE_NICKNAME;
+    CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | SEND_TTS_MESSAGES | ATTACH_FILES | MENTION_EVERYONE | CONNECT | SPEAK | CHANGE_NICKNAME;
 
 pub fn has(perms: u64, bit: u64) -> bool {
     perms & bit == bit
@@ -401,6 +404,7 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
         ("STREAM", STREAM),
         ("VIEW_CHANNEL", VIEW_CHANNEL),
         ("SEND_MESSAGES", SEND_MESSAGES),
+        ("SEND_TTS_MESSAGES", SEND_TTS_MESSAGES),
         ("MANAGE_MESSAGES", MANAGE_MESSAGES),
         ("ATTACH_FILES", ATTACH_FILES),
         ("MENTION_EVERYONE", MENTION_EVERYONE),
@@ -424,7 +428,7 @@ mod tests {
     #[test]
     fn default_matches_migration() {
         // 70258241 from migration 0002, plus ATTACH_FILES (32768) from 0003 and MENTION_EVERYONE (131072) from 0018.
-        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768 + 131072);
+        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768 + 131072 + 4096);
     }
 
     #[test]
@@ -496,6 +500,10 @@ mod tests {
             mfa_level: 0,
             invites_paused: false,
             dms_paused_until: None,
+            afk_channel_id: None,
+            afk_timeout: 300,
+            rules_channel_id: None,
+            welcome_screen: serde_json::json!({}),
         };
         let mut everyone = role(gid, 0, DEFAULT_EVERYONE);
         everyone.id = gid; // @everyone shares the guild id

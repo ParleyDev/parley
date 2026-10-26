@@ -17,7 +17,7 @@ import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpBu
 import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
 import CallLock from './CallLock'
-import { InviteToVoice, ReactButton, StreamViewers, TileReactions } from './CallExtras'
+import { InviteToVoice, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 import ChatPane from './ChatPane'
 import { MembersToggle, MobileBack } from './HeaderBits'
@@ -169,6 +169,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {isStudio && t.kind === 'camera' && (isMod || t.isMe) && <span className="absolute right-2 top-2 z-10" onClick={(e) => e.stopPropagation()}><RoleMenu uid={t.userId} /></span>}
         {t.kind === 'screen' && !t.isMe && !watching[t.userId] ? (
           <StreamGate user={t.user} big={big} canWatch={inThis} onWatch={() => voice.watch(t.userId, true)} />
+        ) : t.stream && t.kind === 'screen' ? (
+          <ZoomPan><VideoTile stream={t.stream} mirror={false} contain /></ZoomPan>
         ) : t.stream ? (
           <VideoTile stream={t.stream} mirror={t.isMe && t.kind === 'camera'} contain={videoFit === 'fit' || t.kind === 'screen'} />
         ) : t.kind === 'screen' ? (

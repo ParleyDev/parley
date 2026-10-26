@@ -165,6 +165,7 @@ function handle(ev: Ev) {
     case 'PONG': break
     case 'MESSAGE_CREATE': {
       s.addMessage(ev.d.message)
+      if (ev.d.message.tts) speakTts(ev.d.message)
       // A new message brings a closed DM back into the list.
       { const dm = s.dms[ev.d.message.channel_id]; if (dm?.closed) s.upsertChannel({ ...dm, closed: false }) }
       const me = s.user?.id
@@ -284,6 +285,15 @@ function voiceSfx(s: ReturnType<typeof useStore.getState>, v: VoiceState) {
 }
 
 /** Text-to-speech notifications: never / only the channel you are looking at / all. */
+/** /tts messages: read aloud to people looking at that channel (unless they turned it off or are deafened). */
+function speakTts(m: Message) {
+  const s = useStore.getState()
+  if (!getPrefs().ttsPlayback || s.selfDeaf || s.activeChannelId !== m.channel_id || document.visibilityState !== 'visible' || s.user?.ignored_users?.includes(m.author.id)) return
+  const text = `${m.author.display_name} says ${m.content.slice(0, 300)}`
+  ;(window.__parleyTts ??= []).push(text)
+  try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = getPrefs().ttsRate; speechSynthesis.speak(u) } } catch { /* ignore */ }
+}
+
 function speak(m: Message, current: boolean) {
   const mode = getNotifPrefs().tts
   if (mode === 'never' || (mode === 'current' && !current) || useStore.getState().selfDeaf) return

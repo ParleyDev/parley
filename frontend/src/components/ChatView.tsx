@@ -1,4 +1,4 @@
-import { AlarmClock, Bookmark, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { AlarmClock, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup, nameOf } from '../lib/dm'
 import { uploadImage } from '../lib/upload'
@@ -78,6 +78,8 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const t = useT()
   const isDm = channel.guild_id === null
   const [ageOk, setAgeOk] = useState(() => nsfwAccepted(channel.id))
+  const [spoilerOk, setSpoilerOk] = useState(() => gateAccepted(SPOILER_KEY, channel.id))
+  useEffect(() => { setSpoilerOk(gateAccepted(SPOILER_KEY, channel.id)) }, [channel.id])
   const users = useStore((s) => s.users)
   const notes = useStore((s) => s.notes)
   const dmProfileOpen = useStore((s) => s.dmProfileOpen)
@@ -215,7 +217,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
           </span>
         </header>
         {isDm && <DmCall channel={channel as DmChannel} />}
-        {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : <ChatPane channel={channel} />}
+        {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : <ChatPane channel={channel} />}
       </main>
       {search !== null ? (
         <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast('That message could not be found', 'error')} />
@@ -233,6 +235,28 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
 const NSFW_KEY = `${STORAGE_PREFIX}nsfwOk`
 function nsfwAccepted(id: string): boolean { try { return (JSON.parse(localStorage.getItem(NSFW_KEY) ?? '[]') as string[]).includes(id) } catch { return false } }
 function rememberNsfw(id: string) { try { const l = JSON.parse(localStorage.getItem(NSFW_KEY) ?? '[]') as string[]; if (!l.includes(id)) localStorage.setItem(NSFW_KEY, JSON.stringify([...l, id])) } catch { /* ignore */ } }
+
+const SPOILER_KEY = `${STORAGE_PREFIX}spoilerOk`
+function gateAccepted(key: string, id: string): boolean { try { return (JSON.parse(localStorage.getItem(key) ?? '[]') as string[]).includes(id) } catch { return false } }
+function rememberGate(key: string, id: string) { try { const l = JSON.parse(localStorage.getItem(key) ?? '[]') as string[]; if (!l.includes(id)) localStorage.setItem(key, JSON.stringify([...l, id])) } catch { /* ignore */ } }
+
+/** The spoiler warning shown once before a spoiler channel opens (its topic says what it spoils). */
+function SpoilerGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
+  const navigate = useNavigate()
+  return (
+    <div className="flex-1 flex items-center justify-center p-6" data-spoiler-gate>
+      <div className="max-w-md text-center space-y-4">
+        <div className="mx-auto h-16 w-16 rounded-full bg-warn/15 text-warn flex items-center justify-center"><EyeOff size={30} /></div>
+        <h2 className="text-xl font-bold">Spoilers ahead</h2>
+        <p className="text-sm text-text-2">#{channel.name} is a spoiler channel{channel.topic ? `: ${channel.topic}` : ''}. Pictures and videos stay hidden until you click them.</p>
+        <div className="flex justify-center gap-2">
+          <button type="button" className="btn-ghost" onClick={() => navigate(-1)} data-spoiler-back>Go Back</button>
+          <button type="button" className="btn-primary" onClick={() => { rememberGate(SPOILER_KEY, channel.id); onOk() }} data-spoiler-continue>Show Me</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /** The warning shown once before an age-restricted channel opens. */
 function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {

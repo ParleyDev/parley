@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { sendOp } from '../lib/ws'
 import { callReactionListeners, type CallReactionListener } from '../lib/callReactions'
@@ -155,6 +155,42 @@ export function VoiceInviteBanner() {
       <div className="mt-3 flex gap-2">
         <button onClick={join} className="flex-1 btn-primary bg-success hover:bg-success/80 text-black py-1.5" data-voice-invite-join><Volume2 size={16} /> Join</button>
         <button onClick={() => setInv(null)} className="flex-1 btn-ghost py-1.5" data-voice-invite-dismiss>Not now</button>
+      </div>
+    </div>
+  )
+}
+
+/* ---- zoom and pan on screen shares ---- */
+
+/** Wheel or the +/− buttons zoom a screen share (up to 4×); drag to pan while zoomed; reset with the 1:1 button. */
+export function ZoomPan({ children }: { children: React.ReactNode }) {
+  const [z, setZ] = useState({ scale: 1, x: 0, y: 0 })
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const clamp = (scale: number, x: number, y: number) => {
+    const r = box.current?.getBoundingClientRect()
+    const mx = r ? (r.width * (scale - 1)) / 2 : 0, my = r ? (r.height * (scale - 1)) / 2 : 0
+    return { scale, x: Math.max(-mx, Math.min(mx, x)), y: Math.max(-my, Math.min(my, y)) }
+  }
+  const zoomBy = (f: number) => setZ((s) => { const scale = Math.max(1, Math.min(4, s.scale * f)); return clamp(scale, scale === 1 ? 0 : s.x, scale === 1 ? 0 : s.y) })
+  useEffect(() => {
+    const el = box.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.15 : 1 / 1.15) }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  })
+  return (
+    <div ref={box} className={`relative h-full w-full overflow-hidden ${z.scale > 1 ? 'cursor-grab active:cursor-grabbing' : ''}`} data-zoom={z.scale.toFixed(2)}
+      onPointerDown={(e) => { if (z.scale > 1 && !(e.target as HTMLElement).closest('[data-zoom-controls]')) { drag.current = { x: e.clientX, y: e.clientY, ox: z.x, oy: z.y, moved: false }; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } }}
+      onPointerMove={(e) => { const d = drag.current; if (!d) return; d.moved ||= Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 3; setZ((s) => clamp(s.scale, d.ox + e.clientX - d.x, d.oy + e.clientY - d.y)) }}
+      onPointerUp={() => { setTimeout(() => { drag.current = null }, 0) }}
+      onClickCapture={(e) => { if ((e.target as HTMLElement).closest('[data-zoom-controls]')) return; if (drag.current?.moved || z.scale > 1) e.stopPropagation() }}>
+      <div className="h-full w-full origin-center transition-transform duration-75" style={{ transform: `translate(${z.x}px, ${z.y}px) scale(${z.scale})` }}>{children}</div>
+      <div data-zoom-controls className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-md bg-black/60 p-0.5 text-white opacity-0 group-hover:opacity-100 focus-within:opacity-100" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+        <button type="button" onClick={() => zoomBy(1 / 1.25)} className="h-6 w-6 rounded hover:bg-white/20" title="Zoom out" aria-label="Zoom out" data-zoom-out>−</button>
+        <button type="button" onClick={() => setZ({ scale: 1, x: 0, y: 0 })} className="h-6 min-w-8 rounded px-1 text-[11px] tabular-nums hover:bg-white/20" title="Reset zoom" aria-label="Reset zoom" data-zoom-reset>{Math.round(z.scale * 100)}%</button>
+        <button type="button" onClick={() => zoomBy(1.25)} className="h-6 w-6 rounded hover:bg-white/20" title="Zoom in" aria-label="Zoom in" data-zoom-in>+</button>
       </div>
     </div>
   )

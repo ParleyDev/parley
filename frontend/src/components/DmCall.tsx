@@ -7,7 +7,7 @@ import ContextMenu, { useContextMenu } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { useUserAudioMap } from '../lib/userAudio'
 import type { DmChannel, User, VoiceState } from '../lib/types'
-import { ReactButton, StreamViewers, TileReactions } from './CallExtras'
+import { ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
 import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
 import { useResizableHeight } from '../lib/resize'
 import { voice } from '../lib/voice'
@@ -94,6 +94,8 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         {...(t.kind === 'camera' ? { 'data-call-participant': t.userId } : { 'data-call-screen': t.userId })}>
         {t.kind === 'screen' && !t.isMe && !watching[t.userId] ? (
           <StreamGate user={t.user} big={big} canWatch={inThis} onWatch={() => voice.watch(t.userId, true)} />
+        ) : t.stream && t.kind === 'screen' ? (
+          <ZoomPan><VideoTile stream={t.stream} mirror={false} contain /></ZoomPan>
         ) : t.stream ? (
           <VideoTile stream={t.stream} mirror={t.isMe && t.kind === 'camera'} contain={videoFit === 'fit' || t.kind === 'screen'} />
         ) : t.kind === 'screen' ? (

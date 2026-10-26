@@ -47,7 +47,7 @@ await p.keyboard.press('Escape'); await p.waitForTimeout(200)
 ok('Escape closes it', await p.locator('[data-lightbox]').count() === 0)
 
 console.log('-- edit alt text after sending')
-await p.locator(`[data-msg-id="${sent.id}"]`).click({ button: 'right', position: { x: 300, y: 10 } }); await p.click('[data-menu-item="Edit Alt Text"]')
+await p.locator(`[data-msg-id="${sent.id}"]`).click({ button: 'right', position: { x: 300, y: 10 } }); await p.click('[data-menu-item="Edit Attachments"]')
 await p.fill(`[data-alt-edit="${sent.attachments.find((x) => x.filename === 'pic1.png').id}"]`, 'A green square'); await p.click('[data-alt-save]'); await p.waitForTimeout(600)
 ok('alt text can be changed after sending', (await latest().then(() => call(a.token, 'GET', `/channels/${ch.id}/messages?limit=5`))).find((m) => m.id === sent.id).attachments.find((x) => x.filename === 'pic1.png').description === 'A green square')
 ok('only the author can', (await raw(b.token, 'PATCH', `/channels/${ch.id}/messages/${sent.id}`, { attachment_descriptions: { [sent.attachments[0].id]: 'nope' } })).status === 403)

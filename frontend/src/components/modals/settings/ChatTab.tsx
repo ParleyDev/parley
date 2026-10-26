@@ -27,6 +27,9 @@ export default function ChatTab() {
       <section className="space-y-3">
         <h3 className="label">Text box</h3>
         <Toggle label="Automatically convert emoticons" checked={p.emoticons} onChange={(v) => setPrefs({ emoticons: v })} />
+        <Toggle label="Play /tts messages aloud" checked={p.ttsPlayback} onChange={(v) => setPrefs({ ttsPlayback: v })} />
+        <Toggle label="Double-tap a message to react (touch screens)" checked={p.doubleTapReact} onChange={(v) => setPrefs({ doubleTapReact: v })} />
+        {p.doubleTapReact && <label className="flex items-center justify-between gap-4 text-[15px]">Double-tap reaction<input className="input w-16 text-center text-lg" value={p.quickReaction} maxLength={16} onChange={(e) => e.target.value.trim() && setPrefs({ quickReaction: e.target.value.trim() })} data-quick-reaction /></label>}
         <p className="text-xs text-text-2">:-) becomes 🙂, &lt;3 becomes ❤️, and so on, when you send.</p>
         <Toggle label="Emoji suggestions" checked={p.emojiSuggestions} onChange={(v) => setPrefs({ emojiSuggestions: v })} />
         <p className="text-xs text-text-2">Suggest emoji while you type a :shortcode.</p>

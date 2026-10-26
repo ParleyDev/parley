@@ -22,6 +22,7 @@ export const COMMANDS: SlashCommand[] = [
   { name: 'lenny', args: '[message]', description: 'Appends ( ͡° ͜ʖ ͡°) to your message' },
   { name: 'me', args: '<message>', description: 'Displays your message in italics' },
   { name: 'spoiler', args: '<message>', description: 'Hides your message behind a spoiler' },
+  { name: 'tts', args: '<message>', description: 'Reads your message aloud to everyone viewing the channel' },
   { name: 'nick', args: '[new nickname]', description: 'Changes your nickname in this server (leave empty to reset)', guildOnly: true },
   { name: 'purge', args: '<count> [@user]', description: 'Deletes the newest messages here (up to 100), optionally only one member\u2019s', guildOnly: true, moderator: true },
 ]
@@ -43,7 +44,7 @@ const FACES: Record<string, string> = {
 }
 
 export type CommandResult =
-  | { kind: 'send'; content: string }
+  | { kind: 'send'; content: string; tts?: boolean }
   | { kind: 'done'; toast: string }
   | { kind: 'error'; message: string }
   /** Ask before doing something that can't be undone. */
@@ -60,6 +61,7 @@ export async function runCommand(text: string, ctx: { guildId: string | null; us
   if (!cmd || (cmd.moderator && !ctx.moderator)) return { kind: 'none' }
   if (FACES[name]) return { kind: 'send', content: rest ? `${rest} ${FACES[name]}` : FACES[name] }
   if (name === 'me') return rest ? { kind: 'send', content: `_${rest}_` } : { kind: 'error', message: 'Type a message after /me' }
+  if (name === 'tts') return rest ? { kind: 'send', content: rest, tts: true } : { kind: 'error', message: 'Type a message after /tts' }
   if (name === 'spoiler') return rest ? { kind: 'send', content: `||${rest}||` } : { kind: 'error', message: 'Type a message after /spoiler' }
   if (name === 'nick') {
     if (!ctx.guildId || !ctx.userId) return { kind: 'error', message: '/nick only works in a server' }

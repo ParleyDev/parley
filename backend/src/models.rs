@@ -249,6 +249,10 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub e2ee: bool,
+    /// Spoiler channel: a warning before you first see it, and media stays blurred until clicked.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub spoiler: bool,
     /// Slowmode: seconds a member waits between messages here (0 = off).
     #[sqlx(default)]
     #[serde(default)]
@@ -401,6 +405,8 @@ pub struct MessageRow {
     pub author_name_style: serde_json::Value,
     #[sqlx(default)]
     pub suppress_embeds: bool,
+    #[sqlx(default)]
+    pub tts: bool,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -479,6 +485,9 @@ pub struct Message {
     /// "Remove embeds": link previews are hidden for this message.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub suppress_embeds: bool,
+    /// Sent with /tts: read aloud to people viewing the channel (who allow it).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub tts: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub poll: Option<Poll>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -600,6 +609,7 @@ impl MessageRow {
             mention_everyone: self.mention_everyone,
             kind: if self.kind.is_empty() { "default".into() } else { self.kind },
             suppress_embeds: self.suppress_embeds,
+            tts: self.tts,
             poll: None,
             thread: None,
             referenced: None,

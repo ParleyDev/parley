@@ -148,6 +148,8 @@ export interface Channel {
   /** Studio channels: the engineers (several allowed). */
   engineer_ids?: string[]
   overwrites?: Overwrite[]
+  /** Spoiler channel: a warning before you first see it; media stays blurred until clicked. */
+  spoiler?: boolean
 }
 
 /** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */
@@ -278,6 +280,8 @@ export interface Message {
   suppress_embeds?: boolean
   /** What a failed message would send again on Retry. */
   draft?: Draft
+  /** Sent with /tts: read aloud to people viewing the channel. */
+  tts?: boolean
 }
 
 /** What a reply header needs from the original: enough to show "Author · text", loaded or not. */
