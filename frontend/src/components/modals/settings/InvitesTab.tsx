@@ -19,6 +19,7 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
   const [approved, setApproved] = useState<boolean | null>(null)
   const [maxAge, setMaxAge] = useState(7 * 86400)
   const [maxUses, setMaxUses] = useState(0)
+  const [temporary, setTemporary] = useState(false)
   const [vanity, setVanity] = useState('')
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
@@ -112,8 +113,12 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
             <select className="input" value={maxAge} onChange={(e) => setMaxAge(Number(e.target.value))} data-new-invite-expiry>{EXPIRY.map((o) => <option key={o.s} value={o.s}>{o.label}</option>)}</select></div>
           <div className="min-w-[9rem] flex-1"><label className="label">Max number of uses</label>
             <select className="input" value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} data-new-invite-uses>{USES.map((o) => <option key={o.n} value={o.n}>{o.label}</option>)}</select></div>
-          <button type="button" className="btn-primary" disabled={busy} onClick={async () => { const inv = await create({ max_age: maxAge, max_uses: maxUses }); if (inv) copy(inv.code) }} data-new-invite>Create and copy</button>
+          <button type="button" className="btn-primary" disabled={busy} onClick={async () => { const inv = await create({ max_age: maxAge, max_uses: maxUses, temporary }); if (inv) copy(inv.code) }} data-new-invite>Create and copy</button>
         </div>
+        <label className="mt-3 flex items-start gap-2 text-sm cursor-pointer" data-new-invite-temporary>
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-accent" checked={temporary} onChange={(e) => setTemporary(e.target.checked)} />
+          <span><span className="block">Grant temporary membership</span><span className="block text-xs text-text-2">People who join with this link are removed when they go offline, unless you give them a role.</span></span>
+        </label>
       </section>
 
       <section>
@@ -133,7 +138,7 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
                 </div>
                 <span className="truncate font-mono text-text-1 max-sm:hidden">{i.code}</span>
                 <span className="text-text-1 max-sm:hidden" data-invite-uses-cell>{i.uses}{i.max_uses ? ` / ${i.max_uses}` : ''}</span>
-                <span className="text-text-1 max-sm:hidden" data-invite-expires>{expiresIn(i)}</span>
+                <span className="text-text-1 max-sm:hidden" data-invite-expires>{expiresIn(i)}{i.temporary && <span className="ml-1 rounded bg-bg-4 px-1 text-[10px] font-semibold text-text-2" title="Temporary membership" data-invite-temporary>TEMP</span>}</span>
                 <div className="flex justify-end">
                   {copyBtn(i.code)}
                   <button type="button" onClick={() => revoke(i)} className="rounded p-1.5 text-text-2 hover:bg-bg-3 hover:text-danger" title="Revoke" data-invite-revoke={i.code}><X size={16} /></button>

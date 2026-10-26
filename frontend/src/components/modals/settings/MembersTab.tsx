@@ -2,6 +2,7 @@ import { Crown, Gavel, Search, UserMinus } from 'lucide-react'
 import { anchorOf } from '../../../lib/anchor'
 import { useEffect, useState } from 'react'
 import { myGuildPerms, useStore } from '../../../store'
+import { api } from '../../../lib/api'
 import { has, highestPosition, P, EMPTY_ROLES } from '../../../lib/perms'
 import StyledName from '../../StyledName'
 import Avatar from '../../Avatar'
@@ -18,6 +19,9 @@ export default function MembersTab({ guildId }: { guildId: string }) {
   const openModal = useStore((s) => s.openModal)
   const [q, setQ] = useState('')
   useEffect(() => { if (!loaded) loadMembers(guildId) }, [guildId, loaded, loadMembers])
+  // How each member joined (Manage Server only; others just don't get it).
+  const [joins, setJoins] = useState<Record<string, JoinInfo>>({})
+  useEffect(() => { api.get<JoinInfo[]>(`/guilds/${guildId}/member-joins`).then((rows) => setJoins(Object.fromEntries(rows.map((r) => [r.user_id, r])))).catch(() => {}) }, [guildId])
   if (!guild || !me) return null
   const myMember = members?.[me.id]
   const ctx = { guild, roles, member: myMember }
@@ -48,6 +52,7 @@ export default function MembersTab({ guildId }: { guildId: string }) {
               <div className="min-w-0 w-48 max-md:w-32 shrink-0">
                 <div className="font-semibold truncate flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId}>{m.nickname ?? m.display_name}</StyledName>{isOwner && <Crown size={13} className="text-warn shrink-0" />}</div>
                 <div className="text-xs text-text-2 truncate">@{m.username}</div>
+                {joins[m.user_id] && <div className="text-[11px] text-text-2 truncate" title="How they joined" data-member-joined-via={m.user_id}>{joinLabel(joins[m.user_id])}</div>}
               </div>
               <div className="flex-1 min-w-0"><RolePicker guildId={guildId} member={m} compact /></div>
               {canTransfer && <button onClick={() => openModal({ kind: 'transferOwnership', guildId, userId: m.user_id })} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-warn" title="Transfer ownership"><Crown size={16} /></button>}
@@ -59,4 +64,11 @@ export default function MembersTab({ guildId }: { guildId: string }) {
       </div>
     </div>
   )
+}
+
+interface JoinInfo { user_id: string; joined_via: string | null; inviter_id: string | null; inviter_name: string | null; temporary: boolean }
+/** "Invite abc123 from Alice", "Discover", plus "temporary". */
+function joinLabel(j: JoinInfo): string {
+  const via = j.joined_via === 'discover' ? 'Joined from Discover' : j.joined_via ? `Invite ${j.joined_via}${j.inviter_name ? ` from ${j.inviter_name}` : ''}` : ''
+  return [via, j.temporary ? 'temporary' : ''].filter(Boolean).join(' · ')
 }

@@ -314,7 +314,11 @@ async fn run_loop(
     if let Some(prev) = state.hub.voice_leave(user_id, Some(session)) {
         emit_voice_leave(state, &prev);
     }
-    crate::ws::bus::disconnect(state, user_id, platform, idle).await;
+    if crate::ws::bus::disconnect(state, user_id, platform, idle).await {
+        // Offline everywhere now: temporary members without a role leave their temporary servers.
+        let st = state.clone();
+        tokio::spawn(async move { crate::routes::guilds::drop_temporary(&st, user_id).await });
+    }
     crate::ws::bus::announce(state, user_id).await;
 }
 

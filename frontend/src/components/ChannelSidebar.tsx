@@ -9,7 +9,7 @@ import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { isUnread, myChannelPerms, myGuildPerms, showsMentions, showsUnread, useStore, voiceParticipants } from '../store'
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
-import { BellOff, Pin, PinOff } from 'lucide-react'
+import { BellOff, Eye, EyeOff, Pin, PinOff } from 'lucide-react'
 import { togglePinned } from '../lib/pins'
 
 const NO_PINS: string[] = []
@@ -37,6 +37,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const [menu, setMenu] = useState(false)
   const markRead = useStore((s) => s.markRead)
   const allGuilds = useStore((s) => s.guilds)
+  const [hideMuted, setHideMuted] = useState(() => { try { return localStorage.getItem(`${STORAGE_PREFIX}hideMuted.${guildId}`) === '1' } catch { return false } })
+  useEffect(() => { try { setHideMuted(localStorage.getItem(`${STORAGE_PREFIX}hideMuted.${guildId}`) === '1') } catch { /* ignore */ } }, [guildId])
+  const toggleHideMuted = () => setHideMuted((on) => { try { localStorage.setItem(`${STORAGE_PREFIX}hideMuted.${guildId}`, on ? '0' : '1') } catch { /* ignore */ } return !on })
   const voiceStates = useStore((s) => s.voiceStates)
   // Pinned channels (per account) also show in a Pinned section at the top, in the order they were pinned.
   const pinnedIds = useStore((s) => s.user?.pinned_channels) ?? NO_PINS
@@ -143,7 +146,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Category ID', icon: <Copy size={16} />, onClick: () => copyText('Category ID', c.id) }] : []),
   ]
   }
-  const row = (c: Channel) => (
+  // Hide Muted Channels (per server, remembered in this browser): muted channels drop out unless you're in one.
+  const isMutedRow = (c: Channel) => mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))
+  const row = (c: Channel) => hideMuted && c.id !== channelId && isMutedRow(c) ? null : (
     <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id && catIds.has(c.parent_id) ? c.parent_id : ''} className={drag === c.id ? 'opacity-40' : ''} {...dragProps(c)}>
       <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name} locked={!!c.e2ee} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
         unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)} onClick={() => setMobilePane('content')}
@@ -206,6 +211,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             <div className="pop absolute left-2 right-2 top-full mt-1 z-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5 text-sm" onClick={() => setMenu(false)}>
               {canInvite && <MenuItem icon={<UserPlus size={16} />} onClick={() => openModal({ kind: 'invite', guildId })} accent>{t('Invite People')}</MenuItem>}
               <MenuItem icon={<BellOff size={16} />} onClick={(e) => { setMenu(false); ctx.open(e as React.MouseEvent, notifEntries(guildId, 'Server', notifSettings, { suppress: true, fallback: allGuilds[guildId]?.default_notifications })) }}>{mutedTarget(notifSettings, guildId) ? 'Unmute / Notifications' : 'Mute / Notifications'}</MenuItem>
+              <MenuItem icon={hideMuted ? <Eye size={16} /> : <EyeOff size={16} />} onClick={() => { setMenu(false); toggleHideMuted() }}>{hideMuted ? 'Show Muted Channels' : 'Hide Muted Channels'}</MenuItem>
               <MenuItem icon={<ShieldCheck size={16} />} onClick={() => openModal({ kind: 'guildPrivacy', guildId })}>{t('Privacy Settings')}</MenuItem>
               {canManageGuild && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>{t('Server Settings')}</MenuItem>}
               {canCreate && <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>{t('Create Channel')}</MenuItem>}

@@ -27,7 +27,7 @@ const LIVE: &str = "((i.expires_at IS NULL OR i.expires_at > now()) AND (i.max_u
 /// guild id, name, icon, member count, live, rules, rules required, invite code.
 type PreviewRow = (Uuid, String, Option<String>, i64, bool, String, bool, String);
 /// guild id, uses, max uses, expiry, invite code.
-type AcceptRow = (Uuid, i32, Option<i32>, Option<chrono::DateTime<chrono::Utc>>, String);
+type AcceptRow = (Uuid, i32, Option<i32>, Option<chrono::DateTime<chrono::Utc>>, String, Uuid, bool);
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -218,12 +218,12 @@ async fn accept(
 ) -> AppResult<Json<Value>> {
     let mut tx = state.db.begin().await?;
     let row: Option<AcceptRow> = sqlx::query_as(&format!(
-        "SELECT i.guild_id, i.uses, i.max_uses, i.expires_at, i.code FROM invites i WHERE {MATCH} ORDER BY i.vanity LIMIT 1 FOR UPDATE"
+        "SELECT i.guild_id, i.uses, i.max_uses, i.expires_at, i.code, i.creator_id, i.temporary FROM invites i WHERE {MATCH} ORDER BY i.vanity LIMIT 1 FOR UPDATE"
     ))
     .bind(&code)
     .fetch_optional(&mut *tx)
     .await?;
-    let (gid, uses, max, expires, code) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
+    let (gid, uses, max, expires, code, inviter, temporary) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
     if expires.is_some_and(|t| t <= chrono::Utc::now()) {
         return Err(AppError::BadRequest("This invite has expired".into()));
     }
@@ -236,9 +236,13 @@ async fn accept(
     if invites_paused(&state.db, gid, uid).await? {
         return Err(AppError::BadRequest("Invites to this server are paused right now".into()));
     }
-    let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+    // Remember how they joined (for moderators), and whether the invite only grants temporary membership.
+    let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id, joined_via, inviter_id, temporary) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING")
         .bind(gid)
         .bind(uid)
+        .bind(&code)
+        .bind(inviter)
+        .bind(temporary)
         .execute(&mut *tx)
         .await?
         .rows_affected();
@@ -256,8 +260,7 @@ async fn accept(
     let roles = crate::perms::list_roles(&state.db, gid).await?;
     let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &[gid]).await?;
     let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &[gid]).await?;
-    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id, "rules": guild.rules, "rules_required": guild.rules_required,
-        "created_at": guild.created_at, "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers });
+    let payload = crate::routes::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers }));
     if inserted > 0 {
         state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
         if let Ok(member) = fetch_member(&state.db, gid, uid).await {

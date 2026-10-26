@@ -650,6 +650,10 @@ pub struct Invite {
     pub created_at: DateTime<Utc>,
     pub expires_at: Option<DateTime<Utc>>,
     pub vanity: bool,
+    /// Members who join with it are removed when they go offline, unless they have been given a role.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub temporary: bool,
 }
 
 /// An invite as Server Settings › Invites lists it, with who made it.

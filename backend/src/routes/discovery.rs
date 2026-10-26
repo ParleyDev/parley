@@ -132,7 +132,7 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
     if crate::routes::invites::invites_paused(&state.db, gid, uid).await? {
         return Err(AppError::BadRequest("This server has paused new members right now".into()));
     }
-    let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+    let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id, joined_via) VALUES ($1, $2, 'discover') ON CONFLICT DO NOTHING")
         .bind(gid)
         .bind(uid)
         .execute(&state.db)
@@ -144,8 +144,7 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
     let roles = perms::list_roles(&state.db, gid).await?;
     let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &[gid]).await?;
     let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &[gid]).await?;
-    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id, "rules": guild.rules, "rules_required": guild.rules_required,
-        "created_at": guild.created_at, "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers });
+    let payload = crate::routes::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers }));
     if inserted > 0 {
         state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
         if let Ok(member) = fetch_member(&state.db, gid, uid).await {

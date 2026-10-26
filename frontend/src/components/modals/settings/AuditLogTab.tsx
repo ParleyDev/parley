@@ -38,29 +38,49 @@ const what = (action: string, d: Record<string, unknown>): string => {
   }
 }
 
+const ACTION_FILTERS: [string, string][] = [
+  ['', 'All actions'], ['guild.', 'Server settings'], ['channel.', 'Channels'], ['role.', 'Roles'], ['member.', 'Members'],
+  ['member.ban', 'Bans'], ['member.kick', 'Kicks'], ['member.timeout', 'Timeouts'], ['message.', 'Messages'], ['invite.', 'Invites'],
+  ['emoji.', 'Emoji'], ['sticker.', 'Stickers'],
+]
+
 /** Server Settings → Audit Log: who changed what, newest first. */
 export default function AuditLogTab({ guildId }: { guildId: string }) {
   const guild = useStore((s) => s.guilds[guildId])
   const [q, setQ] = useState('')
+  // Filters: whose actions, and which kind (a family like "member." or one action).
+  const [actor, setActor] = useState('')
+  const [action, setAction] = useState('')
+  const members = useStore((s) => s.members[guildId])
+  const actors = Object.values(members ?? {}).sort((a, b) => (a.nickname ?? a.display_name).localeCompare(b.nickname ?? b.display_name))
   const [rows, setRows] = useState<Row[] | null>(null)
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
   const load = async (before?: string) => {
     setBusy(true)
     try {
-      const page = await api.get<Row[]>(`/guilds/${guildId}/audit?q=${encodeURIComponent(q)}${before ? `&before=${before}` : ''}`)
+      const page = await api.get<Row[]>(`/guilds/${guildId}/audit?q=${encodeURIComponent(q)}${actor ? `&actor=${actor}` : ''}${action ? `&action=${encodeURIComponent(action)}` : ''}${before ? `&before=${before}` : ''}`)
       setRows((r) => before && r ? [...r, ...page] : page); setDone(page.length < 100)
     } catch { setRows((r) => r ?? []) } finally { setBusy(false) }
   }
-  useEffect(() => { const t = setTimeout(() => load(), 150); return () => clearTimeout(t) }, [guildId, q]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const t = setTimeout(() => load(), 150); return () => clearTimeout(t) }, [guildId, q, actor, action]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!guild) return null
   return (
     <div data-guild-audit>
       <h1 className="text-xl font-bold">Audit Log</h1>
       <p className="text-sm text-text-2 mt-1">Moderation and settings changes in {guild.name}, newest first.</p>
-      <div className="relative mt-4 mb-4">
-        <input className="input pl-9" placeholder="Filter by member, action or target" value={q} onChange={(e) => setQ(e.target.value)} data-guild-audit-search />
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />
+      <div className="mt-4 mb-4 flex flex-wrap gap-2">
+        <div className="relative min-w-[12rem] flex-1">
+          <input className="input pl-9" placeholder="Filter by member, action or target" value={q} onChange={(e) => setQ(e.target.value)} data-guild-audit-search />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />
+        </div>
+        <select className="input w-auto" value={actor} onChange={(e) => setActor(e.target.value)} aria-label="Filter by user" data-audit-filter-user>
+          <option value="">All users</option>
+          {actors.map((m) => <option key={m.user_id} value={m.user_id}>{m.nickname ?? m.display_name}</option>)}
+        </select>
+        <select className="input w-auto" value={action} onChange={(e) => setAction(e.target.value)} aria-label="Filter by action" data-audit-filter-action>
+          {ACTION_FILTERS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+        </select>
       </div>
       {rows && rows.length === 0 && <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-text-2" data-guild-audit-empty>{busy ? 'Loading…' : 'Nothing logged yet.'}</div>}
       <div className="divide-y divide-line">

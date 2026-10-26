@@ -330,6 +330,8 @@ export interface Invite {
   expires_at: string | null
   /** A custom code claimed by a server approved for Discovery. */
   vanity: boolean
+  /** Members who join with it are removed when they go offline, unless given a role. */
+  temporary?: boolean
 }
 
 /** An invite in Server Settings › Invites, with who made it. */

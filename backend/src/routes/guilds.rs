@@ -32,10 +32,20 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/audit", get(list_audit))
         .route("/guilds/:id/channels/positions", axum::routing::patch(reorder_channels))
         .route("/guilds/:id/invites", get(list_invites).post(create_invite))
+        .route("/guilds/:id/member-joins", get(member_joins))
         .route("/guilds/:id/invites/:code", delete(delete_invite))
         .route("/guilds/:id/bans", get(list_bans))
         .route("/guilds/:id/bans/:uid", put(ban_member).delete(unban_member))
         .route("/guilds/:id/owner", post(transfer_ownership))
+}
+
+/// A server as GUILD_CREATE sends it: every guild field, plus the extras (channels, roles, emojis, ...).
+pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
+    let mut v = json!(g);
+    if let (Some(obj), Some(more)) = (v.as_object_mut(), extra.as_object()) {
+        for (k, x) in more { obj.insert(k.clone(), x.clone()); }
+    }
+    v
 }
 
 pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until";
@@ -161,8 +171,7 @@ async fn create_guild(
     tx.commit().await?;
 
     let roles = perms::list_roles(&state.db, gid).await?;
-    let payload = json!({ "id": guild.id, "name": guild.name, "icon_url": guild.icon_url, "banner_url": guild.banner_url, "owner_id": guild.owner_id, "rules": guild.rules, "rules_required": guild.rules_required,
-        "created_at": guild.created_at, "channels": channels, "roles": roles });
+    let payload = crate::routes::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles }));
     state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
     Ok((StatusCode::CREATED, Json(payload)))
 }
@@ -512,6 +521,29 @@ async fn clear_timeout(
     Ok(Json(m))
 }
 
+/// Temporary membership: someone who joined with a temporary invite and still has no role is removed once they
+/// are offline everywhere (Discord's behaviour).
+pub async fn drop_temporary(state: &AppState, user_id: Uuid) {
+    let gids: Vec<(Uuid,)> = sqlx::query_as(
+        "SELECT m.guild_id FROM guild_members m WHERE m.user_id = $1 AND m.temporary
+           AND NOT EXISTS (SELECT 1 FROM member_roles r WHERE r.guild_id = m.guild_id AND r.user_id = m.user_id)")
+        .bind(user_id).fetch_all(&state.db).await.unwrap_or_default();
+    for (gid,) in gids {
+        if let Err(e) = remove_member(state, gid, user_id).await { tracing::warn!(error = ?e, "temporary member removal failed"); }
+    }
+}
+
+/// How each member joined, for moderators (Manage Server): the invite code or 'discover', who invited them, and
+/// whether the membership is temporary.
+async fn member_joins(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<serde_json::Value>>> {
+    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::MANAGE_GUILD)?;
+    let rows: Vec<(Uuid, Option<String>, Option<Uuid>, Option<String>, bool)> = sqlx::query_as(
+        "SELECT m.user_id, m.joined_via, m.inviter_id, u.display_name, m.temporary FROM guild_members m LEFT JOIN users u ON u.id = m.inviter_id WHERE m.guild_id = $1")
+        .bind(id).fetch_all(&state.db).await?;
+    Ok(Json(rows.into_iter().map(|(user, via, inviter, inviter_name, temporary)| json!({ "user_id": user, "joined_via": via, "inviter_id": inviter, "inviter_name": inviter_name, "temporary": temporary })).collect()))
+}
+
 async fn remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppResult<()> {
     if !try_remove_member(state, guild_id, user_id).await? {
         return Err(AppError::NotFound("Member not found".into()));
@@ -705,7 +737,7 @@ pub const INVITE_MAX_AGES: [i64; 7] = [1800, 3600, 6 * 3600, 12 * 3600, 86400, 7
 pub const INVITE_MAX_USES: [i32; 6] = [1, 5, 10, 25, 50, 100];
 /// Servers approved for Discovery may claim this many vanity links.
 pub const MAX_VANITY: i64 = 3;
-pub const INVITE_COLS: &str = "code, guild_id, creator_id, uses, max_uses, created_at, expires_at, vanity";
+pub const INVITE_COLS: &str = "code, guild_id, creator_id, uses, max_uses, created_at, expires_at, vanity, temporary";
 
 #[derive(Deserialize)]
 struct CreateInvite {
@@ -714,6 +746,9 @@ struct CreateInvite {
     max_age: Option<i64>,
     /// A custom code (vanity link) instead of a random one; needs Manage Server and an approved Discovery listing.
     vanity: Option<String>,
+    /// Grant temporary membership: they are removed when they go offline unless given a role.
+    #[serde(default)]
+    temporary: bool,
 }
 
 /// A vanity code: 3–32 lowercase letters, digits and hyphens, not starting or ending with a hyphen.
@@ -772,7 +807,7 @@ async fn create_invite(
     }
     let code: String = rand::thread_rng().sample_iter(&Alphanumeric).take(8).map(char::from).collect();
     let inv = sqlx::query_as::<_, Invite>(&format!(
-        "INSERT INTO invites (code, guild_id, creator_id, max_uses, expires_at) VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))
+        "INSERT INTO invites (code, guild_id, creator_id, max_uses, expires_at, temporary) VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5), $6)
          RETURNING {INVITE_COLS}"
     ))
     .bind(&code)
@@ -780,6 +815,7 @@ async fn create_invite(
     .bind(uid)
     .bind(max_uses)
     .bind(max_age.map(|n| n as f64))
+    .bind(req.temporary)
     .fetch_one(&state.db)
     .await?;
     Ok((StatusCode::CREATED, Json(inv)))
@@ -795,7 +831,7 @@ async fn list_invites(
     perms::check(p, perms::MANAGE_GUILD)?;
     sqlx::query("DELETE FROM invites WHERE guild_id = $1 AND NOT vanity AND (expires_at <= now() OR uses >= max_uses)").bind(id).execute(&state.db).await?;
     let invs = sqlx::query_as::<_, InviteListing>(
-        "SELECT i.code, i.guild_id, i.creator_id, i.uses, i.max_uses, i.created_at, i.expires_at, i.vanity,
+        "SELECT i.code, i.guild_id, i.creator_id, i.uses, i.max_uses, i.created_at, i.expires_at, i.vanity, i.temporary,
                 u.username AS creator_username, u.display_name AS creator_display_name, u.avatar_url AS creator_avatar_url
          FROM invites i JOIN users u ON u.id = i.creator_id WHERE i.guild_id = $1 ORDER BY i.vanity DESC, i.created_at DESC",
     )
@@ -840,6 +876,10 @@ struct AuditQuery {
     before: Option<Uuid>,
     #[serde(default)]
     q: String,
+    /// Only this person's actions.
+    actor: Option<Uuid>,
+    /// Only this action ("member.ban") or family ("member.").
+    action: Option<String>,
 }
 
 /// Server audit log, newest first, 100 per page; needs Manage Server.
@@ -856,11 +896,14 @@ async fn list_audit(
     let rows = sqlx::query_as::<_, GuildAuditRow>(
         "SELECT id, actor_id, actor_name, action, target_kind, target_id, target_name, details, created_at FROM guild_audit
          WHERE guild_id = $1 AND ($2::uuid IS NULL OR id < $2) AND ($3::text IS NULL OR actor_name ILIKE $3 OR action ILIKE $3 OR target_name ILIKE $3)
+           AND ($4::uuid IS NULL OR actor_id = $4) AND ($5::text IS NULL OR action = $5 OR (right($5, 1) = '.' AND starts_with(action, $5)))
          ORDER BY id DESC LIMIT 100",
     )
     .bind(id)
     .bind(q.before)
     .bind(pat)
+    .bind(q.actor)
+    .bind(q.action.filter(|a| !a.is_empty()))
     .fetch_all(&state.db)
     .await?;
     Ok(Json(rows))
