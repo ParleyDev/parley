@@ -63,6 +63,8 @@ class VoiceManager {
   private dest: MediaStreamAudioDestinationNode | null = null
   private gateTimer: ReturnType<typeof setInterval> | null = null
   private lastVoiceAt = 0
+  /** Last time we were heard in a call (or joined one): the server's inactive timeout counts from here. */
+  private lastSpokeAt = Date.now()
   private pttDown = false
   private pttUpAt = 0
   private holders = new Set<MicHolder>()
@@ -205,6 +207,7 @@ class VoiceManager {
       this.endCrypto()
       if (e2ee) await this.startCrypto()
       this.channelId = channelId
+      this.lastSpokeAt = Date.now()
       s.setMyVoice(channelId, true)
       s.setLocalMedia({ camera: this.camera, screen: this.screen })
       if (!sendOp({ op: 'voice_join', channel_id: channelId, e2ee: e2eeSupported() })) {
@@ -587,6 +590,7 @@ class VoiceManager {
       const muted = s.selfMute || s.selfDeaf
       s.setInputLevel(Math.round(db), open && !muted)
       if (this.recGain) this.recGain.gain.setTargetAtTime(this.recordingSilenced() ? 0 : 1, ctx.currentTime, 0.015)
+      if (open && !muted && db > -60) this.lastSpokeAt = now
       if (s.user) s.setSpeaking(s.user.id, open && !muted && db > -60)
     }, GATE_INTERVAL_MS)
   }
@@ -629,7 +633,24 @@ class VoiceManager {
   private serverSilenced() {
     const s = useStore.getState()
     const v = s.user ? s.voiceStates[s.user.id] : undefined
-    return !!(v?.suppress || v?.mute || v?.deaf)
+    return !!(v?.suppress || v?.mute || v?.deaf) || this.inAfkChannel()
+  }
+  private inAfkChannel() {
+    const s = useStore.getState()
+    const g = this.channelId ? s.guilds[s.channels[this.channelId]?.guild_id ?? ''] : undefined
+    return !!g?.afk_channel_id && g.afk_channel_id === this.channelId
+  }
+
+  /** Server inactive channel: after `afk_timeout` seconds without being heard, move there (like Discord's AFK channel). */
+  checkAfk(now = Date.now()) {
+    const s = useStore.getState()
+    if (!this.channelId || this.joining) return false
+    const g = s.guilds[s.channels[this.channelId]?.guild_id ?? '']
+    if (!g?.afk_channel_id || g.afk_channel_id === this.channelId || !s.channels[g.afk_channel_id]) return false
+    if (now - this.lastSpokeAt < (g.afk_timeout ?? 300) * 1000) return false
+    s.pushToast(`You were moved to ${s.channels[g.afk_channel_id].name} for being inactive`)
+    void this.join(g.afk_channel_id)
+    return true
   }
   /** A moderator server-deafened us: we hear nobody until they lift it. */
   private serverDeaf() {
@@ -981,6 +1002,9 @@ class VoiceManager {
 export const voice = new VoiceManager()
 declare global { interface Window { __parleyVoice?: () => { mode: string; room: string | null; remote: number; channel: string | null } } }
 if (typeof window !== 'undefined') window.__parleyVoice = () => voice.debug
+if (typeof window !== 'undefined') setInterval(() => voice.checkAfk(), 15_000)
+/** Test hook: run the inactivity check as if `ms` more had passed. */
+if (typeof window !== 'undefined') (window as unknown as { __parleyAfk: (ms: number) => boolean }).__parleyAfk = (ms) => voice.checkAfk(Date.now() + ms)
 /** Debug/test hook: active audio profile, live stats and the Opus parameters each peer negotiated. */
 if (typeof window !== 'undefined') (window as unknown as { __parleyAudio: () => Promise<unknown> }).__parleyAudio = () => voice.audioDebug()
 

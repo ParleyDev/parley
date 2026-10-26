@@ -31,6 +31,7 @@ import ShortcutsModal from './Shortcuts'
 import QuickSwitcher from './QuickSwitcher'
 import NicknameModal from './Nickname'
 import ReactionsModal from './Reactions'
+import WelcomeModal from './Welcome'
 import AltTextModal from './AltText'
 import ErrorBoundary from '../ErrorBoundary'
 
@@ -78,6 +79,7 @@ export default function Modals() {
     case 'shortcuts': return <ShortcutsModal onClose={close} />
     case 'quickSwitcher': return <QuickSwitcher onClose={close} />
     case 'nickname': return <NicknameModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
+    case 'welcome': return <WelcomeModal onClose={close} guildId={modal!.guildId} />
     case 'reactions': return <ReactionsModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} />
     case 'altText': return <AltTextModal onClose={close} message={modal!.message} />
   }

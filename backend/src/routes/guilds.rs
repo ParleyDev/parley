@@ -14,7 +14,7 @@ use axum::{
     Json, Router,
 };
 use rand::{distributions::Alphanumeric, Rng};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -48,7 +48,7 @@ pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
     v
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen";
 pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -209,6 +209,34 @@ struct UpdateGuild {
     invites_paused: Option<bool>,
     /// Pause DMs between members for this many hours (1-24); 0 resumes them.
     pause_dms_hours: Option<i32>,
+    /// A voice channel in this server, or null for none.
+    #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
+    afk_channel_id: Option<Option<Uuid>>,
+    /// Seconds: 60, 300, 900, 1800 or 3600.
+    afk_timeout: Option<i32>,
+    /// A text channel in this server, or null for none.
+    #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
+    rules_channel_id: Option<Option<Uuid>>,
+    welcome_screen: Option<WelcomeScreen>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct WelcomeChannel {
+    channel_id: Uuid,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    emoji: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct WelcomeScreen {
+    #[serde(default)]
+    enabled: bool,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    channels: Vec<WelcomeChannel>,
 }
 
 async fn update_guild(
@@ -248,6 +276,38 @@ async fn update_guild(
     if let Some(Some(cid)) = req.system_channel_id {
         let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind = 'text'").bind(cid).bind(id).fetch_optional(&state.db).await?;
         if ok.is_none() { return Err(AppError::BadRequest("The system channel must be a text channel in this server".into())) }
+    }
+    for (cid, kind, what) in [(req.afk_channel_id.flatten(), "voice", "The AFK channel must be a voice channel"), (req.rules_channel_id.flatten(), "text", "The rules channel must be a text channel")] {
+        let Some(cid) = cid else { continue };
+        let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind = $3").bind(cid).bind(id).bind(kind).fetch_optional(&state.db).await?;
+        if ok.is_none() { return Err(AppError::BadRequest(format!("{what} in this server"))) }
+    }
+    if req.afk_timeout.map(|t| ![60, 300, 900, 1800, 3600].contains(&t)).unwrap_or(false) {
+        return Err(AppError::BadRequest("afk_timeout must be 60, 300, 900, 1800 or 3600 seconds".into()));
+    }
+    let welcome = match &req.welcome_screen {
+        Some(w) => {
+            if w.channels.len() > 5 { return Err(AppError::BadRequest("The welcome screen can suggest up to 5 channels".into())) }
+            for c in &w.channels {
+                let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind <> 'category'").bind(c.channel_id).bind(id).fetch_optional(&state.db).await?;
+                if ok.is_none() { return Err(AppError::BadRequest("Welcome screen channels must be in this server".into())) }
+            }
+            let clean = WelcomeScreen {
+                enabled: w.enabled,
+                description: w.description.trim().chars().take(140).collect(),
+                channels: w.channels.iter().map(|c| WelcomeChannel { channel_id: c.channel_id, description: c.description.trim().chars().take(50).collect(), emoji: c.emoji.as_ref().map(|e| e.trim().chars().take(64).collect::<String>()).filter(|e| !e.is_empty()) }).collect(),
+            };
+            Some(json!(clean))
+        }
+        None => None,
+    };
+    if req.afk_channel_id.is_some() || req.afk_timeout.is_some() || req.rules_channel_id.is_some() || welcome.is_some() {
+        sqlx::query(
+            "UPDATE guilds SET afk_channel_id = CASE WHEN $2 THEN $3 ELSE afk_channel_id END, afk_timeout = COALESCE($4, afk_timeout),
+               rules_channel_id = CASE WHEN $5 THEN $6 ELSE rules_channel_id END, welcome_screen = COALESCE($7, welcome_screen) WHERE id = $1")
+            .bind(id).bind(req.afk_channel_id.is_some()).bind(req.afk_channel_id.flatten()).bind(req.afk_timeout)
+            .bind(req.rules_channel_id.is_some()).bind(req.rules_channel_id.flatten()).bind(&welcome)
+            .execute(&state.db).await?;
     }
     let (before_name, before): (String, (Option<String>, Option<String>)) = sqlx::query_as::<_, (String, Option<String>, Option<String>)>("SELECT name, icon_url, banner_url FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await.map(|r| (r.0, (r.1, r.2)))?;
     let rules = req.rules.map(|r| r.trim_end().chars().take(4000).collect::<String>());
@@ -297,6 +357,10 @@ async fn update_guild(
     if let Some(v) = req.join_wave { changed.insert("join_wave".into(), json!(v)); }
     if let Some(v) = &req.default_notifications { changed.insert("default_notifications".into(), json!(v)); }
     if let Some(v) = req.verification_level { changed.insert("verification_level".into(), json!(v)); }
+    if req.afk_channel_id.is_some() { changed.insert("afk_channel".into(), json!(g.afk_channel_id)); }
+    if let Some(v) = req.afk_timeout { changed.insert("afk_timeout".into(), json!(v)); }
+    if req.rules_channel_id.is_some() { changed.insert("rules_channel".into(), json!(g.rules_channel_id)); }
+    if welcome.is_some() { changed.insert("welcome_screen".into(), json!(true)); }
     if let Some(v) = req.mfa_level { changed.insert("mfa_required".into(), json!(v == 1)); }
     if let Some(v) = req.invites_paused { changed.insert("invites_paused".into(), json!(v)); }
     if let Some(h) = req.pause_dms_hours { changed.insert("dms_paused_hours".into(), json!(h)); }

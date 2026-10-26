@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
 import { MobileBack } from '../components/HeaderBits'
+import { markJoined } from '../lib/welcome'
 import { api } from '../lib/api'
 import { CATEGORIES, categoryLabel, type Listing } from '../lib/discover'
 import { colorFor, initials } from '../lib/format'
@@ -185,7 +186,7 @@ function ServerCard({ l }: { l: Listing }) {
     e.stopPropagation(); setBusy(true)
     try {
       const g = await api.post<Guild & { channels: Channel[] }>(`/discover/${l.guild_id}/join`, {})
-      upsertGuild(g); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`)
+      upsertGuild(g); markJoined(g.id); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`)
     } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
   return (

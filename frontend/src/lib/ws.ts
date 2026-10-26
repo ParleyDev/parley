@@ -9,6 +9,7 @@ import { getPrefs, streamerHides } from './prefs'
 import { log } from './log'
 import { studio } from './studio'
 import { isNative, registerPush } from './native'
+import { markJoined } from './welcome'
 
 type Ev = { s?: number; i?: string } & (
   | { t: 'READY'; d: ReadyPayload }
@@ -199,7 +200,8 @@ function handle(ev: Ev) {
     case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online, ev.d.platforms ?? [], ev.d.idle); break
     case 'USER_SETTINGS_UPDATE': if (s.user && s.token) s.setAuth(s.token, { ...s.user, ...ev.d } as PrivateUser); break
     case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
-    case 'GUILD_CREATE': s.upsertGuild(ev.d); break
+    // A server we weren't in yet (joined from any device or link): its welcome screen is owed.
+    case 'GUILD_CREATE': if (!s.guilds[ev.d.id] && ev.d.owner_id !== s.user?.id) markJoined(ev.d.id); s.upsertGuild(ev.d); break
     case 'GUILD_UPDATE': s.upsertGuild(ev.d); break
     case 'GUILD_EMOJIS_UPDATE': s.setGuildEmojis(ev.d.guild_id, ev.d.emojis); break
     case 'INSTANCE_UPDATE': s.setInstance(ev.d); break

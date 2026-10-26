@@ -36,13 +36,14 @@ export type ModalKind =
   | { kind: 'joinGuild'; code?: string }
   | { kind: 'createChannel'; guildId: string; parentId?: string | null }
   | { kind: 'invite'; guildId: string }
-  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
+  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'welcome' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' | 'keybinds' }
   | { kind: 'shortcuts' }
   | { kind: 'quickSwitcher' }
   | { kind: 'nickname'; guildId: string; userId: string }
   | { kind: 'reactions'; channelId: string; messageId: string }
+  | { kind: 'welcome'; guildId: string }
   | { kind: 'altText'; message: Message }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string; anchor?: Anchor }

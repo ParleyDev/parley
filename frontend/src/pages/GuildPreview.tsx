@@ -10,6 +10,7 @@ import type { Listing } from '../lib/discover'
 import { formatDateDivider, sameDay, colorFor, initials } from '../lib/format'
 import type { Channel, Guild, Message } from '../lib/types'
 import { useStore } from '../store'
+import { markJoined } from '../lib/welcome'
 
 interface Preview { guild: Guild; channels: Channel[]; listing: Listing | null; joined: boolean }
 
@@ -33,7 +34,7 @@ export default function GuildPreviewPage() {
   if (pv && channel && channel.id !== channelId) return <Navigate to={`/discover/${guildId}/${channel.id}`} replace />
   const join = async () => {
     setJoining(true)
-    try { const g = await api.post<Guild & { channels: Channel[] }>(`/discover/${guildId}/join`, {}); upsertGuild(g); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`) } catch (e) { pushToast((e as Error).message, 'error'); setJoining(false) }
+    try { const g = await api.post<Guild & { channels: Channel[] }>(`/discover/${guildId}/join`, {}); upsertGuild(g); markJoined(g.id); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`) } catch (e) { pushToast((e as Error).message, 'error'); setJoining(false) }
   }
   return (
     <SplitLayout defaultPane="content" testid={{ 'data-guild-preview': guildId }} sidebar={

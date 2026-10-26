@@ -81,6 +81,8 @@ export interface Review {
   author_avatar_url: string | null
 }
 
+export interface WelcomeScreen { enabled?: boolean; description?: string; channels?: { channel_id: string; description: string; emoji?: string | null }[] }
+
 export interface Guild {
   id: string
   name: string
@@ -105,6 +107,11 @@ export interface Guild {
   mfa_level?: number
   invites_paused?: boolean
   dms_paused_until?: string | null
+  /** Idle voice members move here after `afk_timeout` seconds. */
+  afk_channel_id?: string | null
+  afk_timeout?: number
+  rules_channel_id?: string | null
+  welcome_screen?: WelcomeScreen
 }
 
 /** One entry of the user's server bar: a server, or a folder of servers. */

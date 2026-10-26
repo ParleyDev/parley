@@ -129,10 +129,10 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
         user.is_admin = true;
     }
 
-    let guilds = sqlx::query_as::<_, Guild>(
-        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at, g.banner_url, g.rules, g.rules_required, g.description, g.system_channel_id, g.join_notices, g.join_wave, g.default_notifications, g.verification_level, g.mfa_level, g.invites_paused, g.dms_paused_until FROM guilds g
-         JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at",
-    )
+    let guilds = sqlx::query_as::<_, Guild>(&format!(
+        "SELECT g.{} FROM guilds g JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at",
+        crate::routes::guilds::GUILD_COLS.replace(", ", ", g.")
+    ))
     .bind(user_id)
     .fetch_all(&state.db)
     .await
@@ -408,7 +408,8 @@ async fn handle_client_op(
             // Stage channels: everyone but moderators (Manage Channels) joins as audience, i.e. suppressed.
             // Stage: everyone but moderators joins as audience. Studio: the engineer and moderators are in the band from the start.
             let crew = has(p, perms::MANAGE_CHANNELS) || (channel.kind == "studio" && perms::is_engineer(&state.db, channel_id, user_id).await.unwrap_or(false));
-            let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew));
+            // The server's inactive (AFK) channel is listen-only.
+            let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew) || is_afk_channel(&state.db, &channel).await);
             let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, mute, deaf, request_to_speak: false, e2ee, session, peers };
             if let Some(prev) = state.hub.voice_join(vs.clone()) {
                 if prev.channel_id != channel_id || prev.guild_id != guild_id {
@@ -448,7 +449,7 @@ async fn handle_client_op(
                 }
             };
             let can_stream = channel.guild_id.is_none() || has(p, perms::STREAM);
-            let suppress = channel.guild_id.is_some() && !has(p, perms::SPEAK);
+            let suppress = channel.guild_id.is_some() && (!has(p, perms::SPEAK) || is_afk_channel(&state.db, &channel).await);
             if let Some(vs) = state.hub.voice_update(user_id, |v| {
                 v.self_mute = self_mute; v.self_deaf = self_deaf;
                 v.self_video = self_video && can_stream; v.self_stream = self_stream && can_stream;
@@ -516,4 +517,11 @@ pub async fn mention_counts(db: &sqlx::PgPool, user_id: Uuid, channel_ids: &[Uui
     .fetch_all(db)
     .await
     .unwrap_or_else(|e| { tracing::error!(error = ?e, "mention counts"); Vec::new() })
+}
+
+/// Whether `channel` is its server's inactive (AFK) channel, where nobody can speak.
+async fn is_afk_channel(db: &sqlx::PgPool, channel: &crate::models::Channel) -> bool {
+    let Some(g) = channel.guild_id else { return false };
+    sqlx::query_as::<_, (bool,)>("SELECT afk_channel_id IS NOT DISTINCT FROM $2 FROM guilds WHERE id = $1").bind(g).bind(channel.id)
+        .fetch_one(db).await.map(|r| r.0).unwrap_or(false)
 }

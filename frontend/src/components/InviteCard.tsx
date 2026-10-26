@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import type { Channel, Guild, Role } from '../lib/types'
 import { useStore } from '../store'
 import { colorFor, initials } from '../lib/format'
+import { markJoined } from '../lib/welcome'
 
 interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; online_count: number }; expired: boolean; already_member: boolean; banned: boolean }
 
@@ -47,7 +48,7 @@ export default function InviteCard({ code }: { code: string }) {
     setBusy(true)
     try {
       const g = await api.post<Guild & { channels: Channel[]; roles: Role[] }>(`/invites/${code}`, {})
-      upsertGuild(g); cache.delete(code); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`)
+      upsertGuild(g); markJoined(g.id); cache.delete(code); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`)
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   const state = pv.banned ? 'banned' : pv.expired && !member ? 'expired' : member ? 'member' : 'open'

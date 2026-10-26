@@ -6,6 +6,7 @@ import { renderMarkdown } from '../lib/markdown'
 import { useStore } from '../store'
 import type { Channel, Guild } from '../lib/types'
 import { colorFor, initials } from '../lib/format'
+import { markJoined } from '../lib/welcome'
 
 interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; rules?: string; rules_required?: boolean }; expired: boolean; already_member: boolean; banned: boolean; paused?: boolean }
 
@@ -25,7 +26,7 @@ export default function InvitePage() {
     setBusy(true)
     try {
       const g = await api.post<Guild & { channels: Channel[] }>(`/invites/${code}`)
-      upsertGuild(g)
+      upsertGuild(g); markJoined(g.id)
       const first = g.channels.find((c) => c.kind === 'text')
       navigate(first ? `/channels/${g.id}/${first.id}` : `/channels/${g.id}`, { replace: true })
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }

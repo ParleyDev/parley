@@ -9,7 +9,8 @@ import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { isUnread, myChannelPerms, myGuildPerms, showsMentions, showsUnread, useStore, voiceParticipants } from '../store'
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
-import { BellOff, Eye, EyeOff, Pin, PinOff } from 'lucide-react'
+import { takeWelcome } from '../lib/welcome'
+import { BellOff, BookOpenCheck, DoorOpen, Eye, EyeOff, Pin, PinOff } from 'lucide-react'
 import { togglePinned } from '../lib/pins'
 
 const NO_PINS: string[] = []
@@ -21,6 +22,12 @@ import type { Channel } from '../lib/types'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useT } from '../lib/i18n'
 
+
+/** Channel-list icon by kind; the server's rules channel gets a rulebook. */
+function chanIcon(c: Channel, rulesId?: string | null) {
+  if (c.id === rulesId) return <BookOpenCheck size={18} data-rules-icon />
+  return c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />
+}
 export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
@@ -39,6 +46,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const allGuilds = useStore((s) => s.guilds)
   const [hideMuted, setHideMuted] = useState(() => { try { return localStorage.getItem(`${STORAGE_PREFIX}hideMuted.${guildId}`) === '1' } catch { return false } })
   useEffect(() => { try { setHideMuted(localStorage.getItem(`${STORAGE_PREFIX}hideMuted.${guildId}`) === '1') } catch { /* ignore */ } }, [guildId])
+  // Just joined: the server's welcome screen, once.
+  const welcomeOn = !!guild?.welcome_screen?.enabled
+  useEffect(() => { if (welcomeOn && takeWelcome(guildId)) openModal({ kind: 'welcome', guildId }) }, [guildId, welcomeOn, openModal])
   const toggleHideMuted = () => setHideMuted((on) => { try { localStorage.setItem(`${STORAGE_PREFIX}hideMuted.${guildId}`, on ? '0' : '1') } catch { /* ignore */ } return !on })
   const voiceStates = useStore((s) => s.voiceStates)
   // Pinned channels (per account) also show in a Pinned section at the top, in the order they were pinned.
@@ -172,7 +182,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const isMutedRow = (c: Channel) => mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))
   const row = (c: Channel) => hideMuted && c.id !== channelId && isMutedRow(c) ? null : (
     <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id && catIds.has(c.parent_id) ? c.parent_id : ''} className={drag === c.id ? 'opacity-40' : ''} {...dragProps(c)}>
-      <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name} locked={!!c.e2ee} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+      <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={chanIcon(c, guild?.rules_channel_id)} name={c.name} locked={!!c.e2ee} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
         unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)} onClick={() => setMobilePane('content')}
         count={c.user_limit ? `${Object.values(voiceStates).filter((v) => v.channel_id === c.id).length}/${c.user_limit}` : undefined}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
@@ -234,6 +244,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
               {canInvite && <MenuItem icon={<UserPlus size={16} />} onClick={() => openModal({ kind: 'invite', guildId })} accent>{t('Invite People')}</MenuItem>}
               <MenuItem icon={<BellOff size={16} />} onClick={(e) => { setMenu(false); ctx.open(e as React.MouseEvent, notifEntries(guildId, 'Server', notifSettings, { suppress: true, fallback: allGuilds[guildId]?.default_notifications })) }}>{mutedTarget(notifSettings, guildId) ? 'Unmute / Notifications' : 'Mute / Notifications'}</MenuItem>
               <MenuItem icon={hideMuted ? <Eye size={16} /> : <EyeOff size={16} />} onClick={() => { setMenu(false); toggleHideMuted() }}>{hideMuted ? 'Show Muted Channels' : 'Hide Muted Channels'}</MenuItem>
+              {guild.welcome_screen?.enabled && <MenuItem icon={<DoorOpen size={16} />} onClick={() => openModal({ kind: 'welcome', guildId })}>Welcome Screen</MenuItem>}
               <MenuItem icon={<ShieldCheck size={16} />} onClick={() => openModal({ kind: 'guildPrivacy', guildId })}>{t('Privacy Settings')}</MenuItem>
               {canManageGuild && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>{t('Server Settings')}</MenuItem>}
               {canCreate && <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>{t('Create Channel')}</MenuItem>}
@@ -257,7 +268,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             <div className="px-1 pb-0.5 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-text-2"><Pin size={11} /> Pinned</div>
             {pinnedHere.map((c) => (
               <div key={c.id} data-pinned-channel={c.id}>
-                <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name}
+                <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={chanIcon(c, guild?.rules_channel_id)} name={c.name}
                   unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)} onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
                   mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} />
               </div>
@@ -366,7 +377,7 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
             {p.deaf ? <HeadphoneOff size={14} className="text-danger" aria-label="Server deafened" data-server-deaf />
               : p.self_deaf ? <HeadphoneOff size={14} className="text-text-2" />
               : p.mute ? <MicOff size={14} className="text-danger" aria-label="Server muted" data-server-mute />
-              : p.self_mute ? <MicOff size={14} className="text-text-2" /> : null}
+              : p.self_mute || p.suppress ? <MicOff size={14} className="text-text-2" data-voice-silent={p.suppress ? 'suppressed' : 'self'} /> : null}
           </button>
         )
       })}

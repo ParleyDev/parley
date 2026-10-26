@@ -188,6 +188,19 @@ pub struct Guild {
     pub invites_paused: bool,
     #[sqlx(default)]
     pub dms_paused_until: Option<DateTime<Utc>>,
+    /// Voice channel idle members are moved to after `afk_timeout` seconds.
+    #[sqlx(default)]
+    pub afk_channel_id: Option<Uuid>,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub afk_timeout: i32,
+    /// The server's #rules channel.
+    #[sqlx(default)]
+    pub rules_channel_id: Option<Uuid>,
+    /// What new members see first: {enabled, description, channels: [{channel_id, description, emoji}]}.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub welcome_screen: serde_json::Value,
 }
 
 fn default_all() -> String { "all".into() }

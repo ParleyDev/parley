@@ -22,20 +22,26 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
   const [joinNotices, setJoinNotices] = useState(guild?.join_notices ?? true)
   const [joinWave, setJoinWave] = useState(guild?.join_wave ?? true)
   const [defaultNotif, setDefaultNotif] = useState<'all' | 'mentions'>(guild?.default_notifications ?? 'all')
+  const [afkChannel, setAfkChannel] = useState(guild?.afk_channel_id ?? '')
+  const [afkTimeout, setAfkTimeout] = useState(guild?.afk_timeout ?? 300)
+  const [rulesChannel, setRulesChannel] = useState(guild?.rules_channel_id ?? '')
   const channels = useStore((s) => s.channels)
+  const voiceChannels = useMemo(() => Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'voice').sort((a, b) => a.position - b.position), [channels, guildId])
   const textChannels = useMemo(() => Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'text').sort((a, b) => a.position - b.position), [channels, guildId])
   const [busy, setBusy] = useState(false)
   if (!guild) return null
   const extrasDirty = description !== (guild.description ?? '') || systemChannel !== (guild.system_channel_id ?? '') || joinNotices !== (guild.join_notices ?? true) || joinWave !== (guild.join_wave ?? true) || defaultNotif !== (guild.default_notifications ?? 'all')
+    || afkChannel !== (guild.afk_channel_id ?? '') || afkTimeout !== (guild.afk_timeout ?? 300) || rulesChannel !== (guild.rules_channel_id ?? '')
   const dirty = extrasDirty || name !== guild.name || (icon ?? null) !== (guild.icon_url ?? null) || (banner ?? null) !== (guild.banner_url ?? null) || rules !== (guild.rules ?? '') || rulesRequired !== !!guild.rules_required
   const reset = () => {
     setName(guild.name); setIcon(guild.icon_url); setBanner(guild.banner_url ?? null); setRules(guild.rules ?? ''); setRulesRequired(!!guild.rules_required)
     setDescription(guild.description ?? ''); setSystemChannel(guild.system_channel_id ?? ''); setJoinNotices(guild.join_notices ?? true); setJoinWave(guild.join_wave ?? true); setDefaultNotif(guild.default_notifications ?? 'all')
+    setAfkChannel(guild.afk_channel_id ?? ''); setAfkTimeout(guild.afk_timeout ?? 300); setRulesChannel(guild.rules_channel_id ?? '')
   }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
     try {
-      const g = await api.patch<Guild>(`/guilds/${guildId}`, { name, icon_url: icon ?? '', banner_url: banner ?? '', rules, rules_required: rulesRequired, description, system_channel_id: systemChannel || null, join_notices: joinNotices, join_wave: joinWave, default_notifications: defaultNotif })
+      const g = await api.patch<Guild>(`/guilds/${guildId}`, { name, icon_url: icon ?? '', banner_url: banner ?? '', rules, rules_required: rulesRequired, description, system_channel_id: systemChannel || null, join_notices: joinNotices, join_wave: joinWave, default_notifications: defaultNotif, afk_channel_id: afkChannel || null, afk_timeout: afkTimeout, rules_channel_id: rulesChannel || null })
       upsertGuild(g); pushToast('Server updated')
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
@@ -80,6 +86,25 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
           <input type="checkbox" checked={joinWave} disabled={!joinNotices} onChange={(e) => setJoinWave(e.target.checked)} className="h-5 w-5 accent-accent" data-join-wave />
         </label>
       </section>
+      <section className="space-y-3" data-afk-settings>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2">Inactive channel</h2>
+        <div className="flex gap-3 max-md:flex-col">
+          <div className="flex-1">
+            <label className="label" htmlFor="afk-channel">Inactive channel</label>
+            <select id="afk-channel" className="input" value={afkChannel} onChange={(e) => setAfkChannel(e.target.value)} data-afk-channel>
+              <option value="">No inactive channel</option>
+              {voiceChannels.map((c) => <option key={c.id} value={c.id}>🔊 {c.name}</option>)}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="label" htmlFor="afk-timeout">Inactive timeout</label>
+            <select id="afk-timeout" className="input" value={afkTimeout} onChange={(e) => setAfkTimeout(Number(e.target.value))} disabled={!afkChannel} data-afk-timeout>
+              {[[60, '1 minute'], [300, '5 minutes'], [900, '15 minutes'], [1800, '30 minutes'], [3600, '1 hour']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+        </div>
+        <p className="text-xs text-text-2">Members who haven't spoken in voice for longer than the timeout are moved here and muted.</p>
+      </section>
       <section className="space-y-2" data-default-notifications>
         <h2 className="text-xs font-bold uppercase tracking-wider text-text-2">Default notification settings</h2>
         <p className="text-xs text-text-2">What members get notified about until they choose for themselves. Busy servers usually pick Only @mentions.</p>
@@ -90,7 +115,13 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
         ))}
       </section>
       <div className="space-y-2" data-guild-rules>
-        <label className="label">Server rules</label>
+        <label className="label" htmlFor="rules-channel">Rules channel</label>
+        <select id="rules-channel" className="input" value={rulesChannel} onChange={(e) => setRulesChannel(e.target.value)} data-rules-channel>
+          <option value="">None</option>
+          {textChannels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}
+        </select>
+        <p className="text-xs text-text-2">Gets a rulebook icon in the channel list and is linked from the welcome screen and the rules prompt.</p>
+        <label className="label pt-2">Server rules</label>
         <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={6} maxLength={4000} placeholder={'1. Be kind.\n2. No spam.\nMarkdown works.'} className="input resize-y font-mono text-sm" data-guild-rules-text />
         <label className="flex items-center justify-between rounded-xl border border-line bg-bg-1 p-3 cursor-pointer">
           <span><span className="block font-semibold text-sm">Members must accept the rules before chatting</span><span className="block text-xs text-text-2">New and existing members see the rules with an "I agree" button; until they accept they can read but not send messages.</span></span>
