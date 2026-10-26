@@ -7,7 +7,7 @@ import { STORAGE_PREFIX } from '../lib/brand'
 import { applyTone, customToken, emojiTone, getSkinTone, rememberEmojiTone, toneOf, loadEmojiGroups, searchEmoji, setSkinTone, SKIN_TONE_NAMES, SKIN_TONES, type EmojiGroup } from '../lib/emoji'
 import { colorFor, initials } from '../lib/format'
 import { has, P } from '../lib/perms'
-import { frequentEmoji } from '../lib/recentEmoji'
+import { favoriteEmoji, frequentEmoji, toggleFavoriteEmoji } from '../lib/recentEmoji'
 import type { Emoji as EmojiT, Gif, GifCategory, GifPage, Guild, Sticker } from '../lib/types'
 import { myGuildPerms, useStore } from '../store'
 import Emoji from './Emoji'
@@ -107,6 +107,7 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
   }, [guilds, emojis, guildId])
   const allCustom = useMemo(() => ordered.flatMap((g) => emojis[g.id] ?? []), [ordered, emojis])
   const frequent = useMemo(() => frequentEmoji(18), [])
+  const [favs, setFavs] = useState(favoriteEmoji)
   const results = useMemo(() => (groups && q.trim() ? searchEmoji(q, groups, allCustom, 90) : null), [q, groups, allCustom])
   const jump = (id: string) => gridRef.current?.querySelector<HTMLElement>(`[data-section="${id}"]`)?.scrollIntoView({ block: 'start' })
   const nameOf = (token: string) => { const c = /^<a?:([^:]+):/.exec(token); return c ? `:${c[1]}:` : token }
@@ -147,6 +148,7 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
       <div className="flex min-h-0 flex-1">
         {!results && (
           <div className="w-12 shrink-0 overflow-y-auto border-r border-white/5 py-1 flex flex-col items-center gap-1" data-emoji-rail>
+            {favs.length > 0 && <RailBtn title="Favorites" onClick={() => jump('favorites')}><Star size={20} /></RailBtn>}
             <RailBtn title="Frequently Used" onClick={() => jump('frequent')}><Clock size={20} /></RailBtn>
             {ordered.map((g) => <RailBtn key={g.id} title={g.name} onClick={() => jump(`g-${g.id}`)}><GuildIcon g={g} /></RailBtn>)}
             {ordered.length > 0 && <div className="my-1 h-px w-6 bg-white/10" />}
@@ -164,6 +166,7 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
           )}
           {groups && !results && (
             <>
+              <Section id="favorites" title="Favorites">{favs.map((e) => cell(e, nameOf(e), `fav-${e}`))}</Section>
               <Section id="frequent" title="Frequently Used">{frequent.map((e) => cell(e, nameOf(e), `f-${e}`))}</Section>
               {ordered.map((g) => <Section key={g.id} id={`g-${g.id}`} title={g.name}>{(emojis[g.id] ?? []).map((e) => cell(customToken(e), `:${e.name}:`, e.id))}</Section>)}
               {groups.map((g, i) => <Section key={g.name} id={`u-${i}`} title={g.name}>{g.emojis.map((e) => unicodeCell(e, `:${e.slug}:`, e.emoji))}</Section>)}
@@ -172,7 +175,8 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
         </div>
       </div>
       <div className="h-12 shrink-0 border-t border-white/5 bg-[#232428] px-3 flex items-center gap-3 text-sm">
-        {hover ? <><Emoji value={hover.token} size={28} /><span className="font-semibold truncate" data-emoji-preview>{hover.name}</span></> : <span className="text-text-2">Pick an emoji</span>}
+        {hover ? <><Emoji value={hover.token} size={28} /><span className="font-semibold truncate" data-emoji-preview>{hover.name}</span>
+          <button type="button" onClick={() => setFavs(toggleFavoriteEmoji(hover.token))} title={favs.includes(hover.token) ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={favs.includes(hover.token)} className={`ml-auto shrink-0 rounded p-1 hover:bg-white/10 ${favs.includes(hover.token) ? 'text-amber-400' : 'text-text-2'}`} data-emoji-fav><Star size={18} className={favs.includes(hover.token) ? 'fill-current' : ''} /></button></> : <span className="text-text-2">Pick an emoji</span>}
       </div>
     </>
   )

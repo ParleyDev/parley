@@ -108,12 +108,14 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state);
 
     let state_for_expiry = state_for_sweep.clone();
+    let state_for_reminders = state_for_sweep.clone();
     tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep.clone()));
     tokio::spawn(voice_audio::convert_backlog(state_for_sweep.clone()));
     tokio::spawn(routes::storage::fix_orientation_backlog(state_for_sweep.clone()));
     tokio::spawn(routes::images::sweep_orphans(state_for_sweep));
     tokio::spawn(ratelimit::prune_loop());
     tokio::spawn(routes::users::expire_statuses(state_for_expiry));
+    tokio::spawn(routes::channels::bookmark_reminders(state_for_reminders));
     let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
     tracing::info!("listening on {}", config.bind_addr);
     axum::serve(listener, app).await?;

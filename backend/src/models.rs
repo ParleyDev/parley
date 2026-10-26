@@ -397,6 +397,9 @@ pub struct MessageSticker {
 pub struct PollOption {
     pub id: Uuid,
     pub text: String,
+    /// An emoji shown before the answer (unicode or a custom `<:name:id>`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub emoji: Option<String>,
     pub votes: i64,
     /// The viewer voted for this option.
     pub me: bool,

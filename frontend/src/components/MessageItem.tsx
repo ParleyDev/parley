@@ -1,4 +1,4 @@
-import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import { AlarmClock, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
 import { isImage } from '../lib/upload'
 import RoleIcon from './RoleIcon'
 import { locale } from '../lib/i18n'
@@ -17,6 +17,8 @@ import { has, P } from '../lib/perms'
 import { useAppearance } from '../lib/appearance'
 import PollCard from './PollCard'
 import LinkEmbed, { firstLink } from './LinkEmbed'
+import { remindLabel, remindPresets, setReminder } from '../lib/reminders'
+import MessageLinkPreview, { messageLinks } from './MessageLinkPreview'
 import InviteCard, { inviteCodes } from './InviteCard'
 import StyledName from './StyledName'
 import { AvatarMotion, useHoverMotion } from '../lib/motion'
@@ -200,6 +202,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => copy('Text', m.content) },
       bookmarked ? { label: 'Remove Bookmark', icon: <BookmarkMinus size={16} />, onClick: toggleBookmark } : { label: 'Bookmark Message', icon: <Bookmark size={16} />, onClick: toggleBookmark },
       ...(canPin ? [{ label: m.pinned_at ? 'Unpin Message' : 'Pin Message', icon: m.pinned_at ? <PinOff size={16} /> : <Pin size={16} />, onClick: togglePin }] : []),
+      { label: 'Remind Me', icon: <AlarmClock size={16} />, children: remindPresets().map((p) => ({ label: p.label, onClick: () => { setReminder(m.id, p.at).then((at) => pushToast(`I'll remind you ${at ? remindLabel(at) : ''}`)).catch((err: Error) => pushToast(err.message, 'error')) } })) },
       { label: 'Mark Unread', icon: <MailOpen size={16} />, onClick: markUnread },
       { label: 'Copy Message Link', icon: <Link2 size={16} />, onClick: () => copy('Message link', link) },
       ...(m.content && 'speechSynthesis' in window ? [{ label: 'Speak Message', icon: <Volume2 size={16} />, onClick: () => { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(`${m.author.display_name} said ${m.content}`)) } }] : []),
@@ -328,6 +331,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 </div>
               )}
               {inviteCodes(m.content, [appUrl]).map((code) => <InviteCard key={code} code={code} />)}
+              {!m.suppress_embeds && messageLinks(m.content).filter((l) => l.messageId !== m.id).map((l) => <MessageLinkPreview key={l.messageId} link={l} />)}
               {m.poll && <PollCard m={m} poll={m.poll} />}
               {m.thread && (
                 <button type="button" onClick={(e) => { e.stopPropagation(); setOpenThread(m.thread!.id) }} className="mt-1 flex max-w-[520px] items-center gap-2 rounded-lg border border-line bg-bg-1 px-3 py-2 text-left text-sm hover:border-text-2" data-thread-card={m.thread.id} data-thread-count={m.thread.message_count}>

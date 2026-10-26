@@ -195,6 +195,11 @@ pub fn deserialize_nullable_uuid<'de, D: serde::Deserializer<'de>>(d: D) -> Resu
     Ok(Some(Option::<Uuid>::deserialize(d)?))
 }
 
+/// Like `deserialize_nullable_uuid` for a timestamp: absent = None, null = Some(None).
+pub fn deserialize_nullable_time<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<chrono::DateTime<chrono::Utc>>>, D::Error> {
+    Ok(Some(Option::<chrono::DateTime<chrono::Utc>>::deserialize(d)?))
+}
+
 async fn update_role(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,

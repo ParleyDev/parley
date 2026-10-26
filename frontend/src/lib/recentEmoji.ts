@@ -21,3 +21,17 @@ export function frequentEmoji(n = 3): string[] {
   for (const e of [...top, ...DEFAULT]) { if (!out.includes(e)) out.push(e); if (out.length === n) break }
   return out
 }
+
+const FAV_KEY = `${STORAGE_PREFIX}favEmoji`
+
+/** Favourite emoji (star them in the picker), in the order they were added. */
+export function favoriteEmoji(): string[] {
+  try { const v = JSON.parse(localStorage.getItem(FAV_KEY) ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
+}
+
+export function toggleFavoriteEmoji(e: string): string[] {
+  const cur = favoriteEmoji()
+  const next = cur.includes(e) ? cur.filter((x) => x !== e) : [...cur, e]
+  try { localStorage.setItem(FAV_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+  return next
+}

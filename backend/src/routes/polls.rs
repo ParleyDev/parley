@@ -25,6 +25,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/channels/:id/messages/:mid/poll/close", post(close))
         .route("/channels/:id/messages/:mid/poll/:oid", put(vote).delete(unvote))
+        .route("/channels/:id/messages/:mid/poll/:oid/voters", axum::routing::get(voters))
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -35,6 +36,9 @@ pub struct PollInput {
     pub multi: bool,
     /// Hours until the poll closes on its own (1..=168); None = open until closed.
     pub duration_hours: Option<i64>,
+    /// An emoji per answer, in the same order as `options` (null or "" for none).
+    #[serde(default)]
+    pub emojis: Vec<Option<String>>,
 }
 
 /// Validate and insert a poll for a freshly created message (inside the caller's transaction).
@@ -57,9 +61,12 @@ pub async fn insert(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, message_id: 
         .bind(message_id).bind(&question).bind(input.multi).bind(expires)
         .execute(&mut **tx)
         .await?;
+    // Emojis line up with the answers as typed (blank answers dropped above, so match them by their original index).
+    let kept: Vec<usize> = input.options.iter().enumerate().filter(|(_, o)| !o.trim().is_empty()).map(|(i, _)| i).collect();
     for (i, text) in options.iter().enumerate() {
-        sqlx::query("INSERT INTO poll_options (id, message_id, position, text) VALUES ($1, $2, $3, $4)")
-            .bind(Uuid::now_v7()).bind(message_id).bind(i as i32).bind(text)
+        let emoji = kept.get(i).and_then(|&k| input.emojis.get(k).cloned().flatten()).map(|e| e.trim().chars().take(64).collect::<String>()).filter(|e| !e.is_empty());
+        sqlx::query("INSERT INTO poll_options (id, message_id, position, text, emoji) VALUES ($1, $2, $3, $4, $5)")
+            .bind(Uuid::now_v7()).bind(message_id).bind(i as i32).bind(text).bind(emoji)
             .execute(&mut **tx)
             .await?;
     }
@@ -77,10 +84,10 @@ pub async fn polls_for(db: &PgPool, message_ids: &[Uuid], me: Uuid) -> AppResult
     if polls.is_empty() {
         return Ok(out);
     }
-    let opts: Vec<(Uuid, Uuid, String, i64, bool)> = sqlx::query_as(
+    let opts: Vec<(Uuid, Uuid, String, i64, bool, Option<String>)> = sqlx::query_as(
         "SELECT o.message_id, o.id, o.text,
                 (SELECT COUNT(*) FROM poll_votes v WHERE v.option_id = o.id) AS votes,
-                EXISTS (SELECT 1 FROM poll_votes v WHERE v.option_id = o.id AND v.user_id = $2) AS me
+                EXISTS (SELECT 1 FROM poll_votes v WHERE v.option_id = o.id AND v.user_id = $2) AS me, o.emoji
          FROM poll_options o WHERE o.message_id = ANY($1) ORDER BY o.message_id, o.position",
     )
     .bind(message_ids)
@@ -91,12 +98,22 @@ pub async fn polls_for(db: &PgPool, message_ids: &[Uuid], me: Uuid) -> AppResult
     let voters: HashMap<Uuid, i64> = voters.into_iter().collect();
     let now = Utc::now();
     for (mid, question, multi, expires_at, closed_at) in polls {
-        let options: Vec<PollOption> = opts.iter().filter(|o| o.0 == mid).map(|o| PollOption { id: o.1, text: o.2.clone(), votes: o.3, me: o.4 }).collect();
+        let options: Vec<PollOption> = opts.iter().filter(|o| o.0 == mid).map(|o| PollOption { id: o.1, text: o.2.clone(), emoji: o.5.clone(), votes: o.3, me: o.4 }).collect();
         let total_votes = options.iter().map(|o| o.votes).sum();
         let closed = closed_at.is_some() || expires_at.map(|e| e <= now).unwrap_or(false);
         out.insert(mid, Poll { question, multi, expires_at, closed_at, closed, total_votes, voters: voters.get(&mid).copied().unwrap_or(0), options });
     }
     Ok(out)
+}
+
+/// Who voted for an answer (anyone who can see the channel), up to 100.
+async fn voters(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, mid, oid)): Path<(Uuid, Uuid, Uuid)>) -> AppResult<Json<Vec<serde_json::Value>>> {
+    crate::routes::channels::require_channel(&state.db, id, uid).await?;
+    let rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT u.id, u.display_name, u.avatar_url FROM poll_votes v JOIN users u ON u.id = v.user_id JOIN poll_options o ON o.id = v.option_id
+         JOIN messages m ON m.id = o.message_id WHERE v.option_id = $1 AND o.message_id = $2 AND m.channel_id = $3 ORDER BY lower(u.display_name) LIMIT 100")
+        .bind(oid).bind(mid).bind(id).fetch_all(&state.db).await?;
+    Ok(Json(rows.into_iter().map(|(id, name, avatar)| json!({ "id": id, "display_name": name, "avatar_url": avatar })).collect()))
 }
 
 /// Broadcast the poll's current state (with `me` cleared; clients keep their own flags) to the channel.

@@ -232,7 +232,7 @@ interface State {
   applyReaction: (channelId: string, messageId: string, emoji: string, userId: string, add: boolean) => void
   /** Merge a POLL_UPDATE (counts/closed) while keeping this viewer's own `me` flags. */
   applyPollUpdate: (channelId: string, messageId: string, poll: Poll) => void
-  sendPoll: (channelId: string, poll: { question: string; options: string[]; multi: boolean; duration_hours: number | null }) => Promise<void>
+  sendPoll: (channelId: string, poll: { question: string; options: string[]; emojis?: (string | null)[]; multi: boolean; duration_hours: number | null }) => Promise<void>
   setPresence: (userId: string, online: boolean, platforms?: string[], idle?: boolean) => void
   upsertUser: (u: User) => void
   setTyping: (channelId: string, userId: string) => void

@@ -25,7 +25,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/channels/:id", get(get_channel).patch(update_channel).delete(delete_channel))
         .route("/channels/:id/messages", get(list_messages).post(create_message).route_layer(from_fn(rl_messages)))
-        .route("/channels/:id/messages/:mid", axum::routing::patch(edit_message).delete(delete_message))
+        .route("/channels/:id/messages/:mid", get(get_message).patch(edit_message).delete(delete_message))
         .route("/channels/:id/messages/bulk-delete", post(bulk_delete))
         .route("/channels/:id/voice-status", put(set_voice_status))
         .route("/channels/:id/messages/:mid/history", get(message_history))
@@ -368,6 +368,16 @@ pub async fn guild_system_message(state: &AppState, guild_id: Uuid, actor: Uuid,
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
     system_message(state, &c, actor, kind, content, vec![], None, None).await?;
     Ok(())
+}
+
+/// `GET /channels/:id/messages/:mid`: one message (message link previews).
+async fn get_message(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, mid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Message>> {
+    require_channel(&state.db, id, uid).await?;
+    let m = fetch_message(&state.db, mid, uid).await?;
+    if m.channel_id != id {
+        return Err(AppError::NotFound("Message not found".into()));
+    }
+    Ok(Json(m))
 }
 
 pub async fn fetch_message(db: &PgPool, mid: Uuid, me: Uuid) -> AppResult<Message> {
@@ -1239,15 +1249,16 @@ async fn list_bookmarks(State(state): State<AppState>, AuthUser(uid): AuthUser) 
     .bind(uid)
     .fetch_all(&state.db)
     .await?;
-    let meta: Vec<(Uuid, String, i32)> = sqlx::query_as("SELECT message_id, folder, position FROM bookmarks WHERE user_id = $1").bind(uid).fetch_all(&state.db).await?;
-    let meta: HashMap<Uuid, (String, i32)> = meta.into_iter().map(|(id, f, p)| (id, (f, p))).collect();
+    let meta: Vec<(Uuid, String, i32, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as("SELECT message_id, folder, position, CASE WHEN reminded THEN NULL ELSE remind_at END FROM bookmarks WHERE user_id = $1").bind(uid).fetch_all(&state.db).await?;
+    let meta: HashMap<Uuid, (String, i32, Option<chrono::DateTime<chrono::Utc>>)> = meta.into_iter().map(|(id, f, p, r)| (id, (f, p, r))).collect();
     let msgs = hydrate(&state.db, rows, uid, false).await?;
     let mut out = Vec::with_capacity(msgs.len());
     for m in msgs {
         // Skip messages in channels the user can no longer view.
         let Ok(c) = require_channel(&state.db, m.channel_id, uid).await else { continue };
-        let (folder, position) = meta.get(&m.id).cloned().unwrap_or_default();
+        let (folder, position, remind_at) = meta.get(&m.id).cloned().unwrap_or_default();
         let mut v = json!(m);
+        v["remind_at"] = json!(remind_at);
         v["guild_id"] = json!(c.guild_id);
         v["channel_name"] = json!(c.name);
         v["folder"] = json!(folder);
@@ -1269,6 +1280,9 @@ async fn add_bookmark(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 struct MoveBookmark {
     /// Folder name (empty = no folder), up to 40 chars.
     folder: Option<String>,
+    /// "Remind me": when to remind (null clears the reminder).
+    #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_time")]
+    remind_at: Option<Option<chrono::DateTime<chrono::Utc>>>,
     /// Manual order inside the folder (lower first).
     position: Option<i32>,
 }
@@ -1276,14 +1290,34 @@ struct MoveBookmark {
 /// `PATCH /users/@me/bookmarks/:mid`: move a bookmark into a folder and/or reorder it.
 async fn move_bookmark(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(mid): Path<Uuid>, Json(req): Json<MoveBookmark>) -> AppResult<Json<serde_json::Value>> {
     let folder = req.folder.map(|f| f.trim().chars().take(40).collect::<String>());
-    let row: Option<(String, i32)> = sqlx::query_as(
-        "UPDATE bookmarks SET folder = COALESCE($3, folder), position = COALESCE($4, position) WHERE user_id = $1 AND message_id = $2 RETURNING folder, position",
+    let row: Option<(String, i32, Option<chrono::DateTime<chrono::Utc>>)> = sqlx::query_as(
+        "UPDATE bookmarks SET folder = COALESCE($3, folder), position = COALESCE($4, position),
+           remind_at = CASE WHEN $5 THEN $6 ELSE remind_at END, reminded = CASE WHEN $5 THEN false ELSE reminded END
+         WHERE user_id = $1 AND message_id = $2 RETURNING folder, position, remind_at",
     )
-    .bind(uid).bind(mid).bind(&folder).bind(req.position)
+    .bind(uid).bind(mid).bind(&folder).bind(req.position).bind(req.remind_at.is_some()).bind(req.remind_at.flatten())
     .fetch_optional(&state.db)
     .await?;
-    let (folder, position) = row.ok_or_else(|| AppError::NotFound("Bookmark not found".into()))?;
-    Ok(Json(json!({ "message_id": mid, "folder": folder, "position": position })))
+    let (folder, position, remind_at): (String, i32, Option<chrono::DateTime<chrono::Utc>>) = row.ok_or_else(|| AppError::NotFound("Bookmark not found".into()))?;
+    Ok(Json(json!({ "message_id": mid, "folder": folder, "position": position, "remind_at": remind_at })))
+}
+
+/// Background task: deliver due "Remind me" bookmarks once, to the user's sessions (and phone when offline).
+pub async fn bookmark_reminders(state: AppState) {
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+        let due: Vec<(Uuid, Uuid)> = sqlx::query_as("UPDATE bookmarks SET reminded = true WHERE remind_at <= now() AND NOT reminded RETURNING user_id, message_id")
+            .fetch_all(&state.db).await.unwrap_or_default();
+        for (uid, mid) in due {
+            let Ok(m) = fetch_message(&state.db, mid, uid).await else { continue };
+            let Ok(c) = require_channel(&state.db, m.channel_id, uid).await else { continue };
+            state.hub.emit_users(vec![uid], "BOOKMARK_REMINDER", json!({ "message": m, "guild_id": c.guild_id, "channel_name": c.name }));
+            if !crate::ws::bus::online_users(&state.db).await.contains(&uid) {
+                let body: String = format!("{}: {}", m.author.display_name, m.content).chars().take(140).collect();
+                crate::push::notify(&state, &[uid], "Reminder", &body, json!({ "kind": "reminder", "channel_id": m.channel_id, "message_id": mid })).await;
+            }
+        }
+    }
 }
 
 async fn remove_bookmark(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(mid): Path<Uuid>) -> AppResult<StatusCode> {

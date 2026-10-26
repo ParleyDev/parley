@@ -1,9 +1,9 @@
-import { Bookmark, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { AlarmClock, Bookmark, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup, nameOf } from '../lib/dm'
 import { uploadImage } from '../lib/upload'
 import { anchorOf } from '../lib/anchor'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { Channel, DmChannel, Message } from '../lib/types'
 import { api } from '../lib/api'
@@ -21,6 +21,7 @@ import InboxButton from './InboxButton'
 import DmProfilePanel from './DmProfilePanel'
 import { MembersToggle, MobileBack } from './HeaderBits'
 import { useT } from '../lib/i18n'
+import { remindLabel, setReminder } from '../lib/reminders'
 
 /** Scroll a loaded message into view and flash it. Returns false when it is not in the DOM. */
 export function jumpToMessage(id: string): boolean {
@@ -97,6 +98,14 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
     try { await api.patch(`/channels/${channel.id}`, { name: n }) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const [pins, setPins] = useState(false)
+  // Message links (`?message=<id>`) open the channel scrolled to that message.
+  const [params, setParams] = useSearchParams()
+  const linked = params.get('message')
+  useEffect(() => {
+    if (!linked) return
+    void jumpToMessageAsync(channel.id, linked).then((found) => { if (!found) pushToast('That message could not be found', 'error') })
+    setParams((p) => { p.delete('message'); return p }, { replace: true })
+  }, [linked, channel.id, pushToast, setParams])
   const [bookmarks, setBookmarks] = useState(false)
   const [query, setQuery] = useState('')
   const [threads, setThreads] = useState(false)
@@ -293,7 +302,7 @@ function GroupMembersPanel({ dm }: { dm: DmChannel }) {
   )
 }
 
-type BookmarkedMessage = Message & { guild_id: string | null; channel_name: string; folder: string; position: number }
+type BookmarkedMessage = Message & { guild_id: string | null; channel_name: string; folder: string; position: number; remind_at?: string | null }
 
 /** Every message the user bookmarked, across channels; Jump navigates when it lives elsewhere. */
 function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: () => void }) {
@@ -347,6 +356,7 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
                 <div key={m.id} className="mb-2" data-bookmark={m.id} data-bookmark-position={i}>
                   <div className="px-1 mb-0.5 flex items-center gap-1 text-[11px] text-text-2">
                     <span className="truncate flex-1">{m.guild_id ? `#${m.channel_name}` : 'Direct Message'}</span>
+                    {m.remind_at && <button type="button" onClick={() => setReminder(m.id, null).then(() => setList((l) => (l ?? []).map((x) => (x.id === m.id ? { ...x, remind_at: null } : x)))).catch((e: Error) => pushToast(e.message, 'error'))} title="Clear reminder" className="flex items-center gap-1 rounded bg-bg-3 px-1.5 py-0.5 text-text-1 hover:text-danger" data-bookmark-reminder={m.remind_at}><AlarmClock size={11} />{remindLabel(m.remind_at)}</button>}
                     {newFolderFor === m.id ? (
                       <form onSubmit={(e) => { e.preventDefault(); const name = newFolder.trim(); setNewFolderFor(null); if (name) patch(m, { folder: name, position: inFolder(name).length }) }} className="flex items-center gap-1">
                         <input autoFocus value={newFolder} onChange={(e) => setNewFolder(e.target.value)} maxLength={40} placeholder="Folder name" className="input w-32 py-0.5 text-xs" data-bookmark-new-folder />

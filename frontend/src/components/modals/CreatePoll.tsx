@@ -11,14 +11,17 @@ export default function CreatePollModal({ onClose, channelId }: { onClose: () =>
   const pushToast = useStore((s) => s.pushToast)
   const [question, setQuestion] = useState('')
   const [options, setOptions] = useState(['', ''])
+  const [emojis, setEmojis] = useState<string[]>(['', ''])
   const [multi, setMulti] = useState(false)
   const [duration, setDuration] = useState<number | null>(24)
   const [busy, setBusy] = useState(false)
   const filled = options.map((o) => o.trim()).filter(Boolean)
+  // One emoji per kept answer (blank answers are dropped along with their emoji).
+  const filledEmojis = options.map((o, i) => (o.trim() ? emojis[i]?.trim() || null : undefined)).filter((e): e is string | null => e !== undefined)
   const valid = question.trim().length > 0 && filled.length >= 2
   const submit = async () => {
     setBusy(true)
-    try { await sendPoll(channelId, { question: question.trim(), options: filled, multi, duration_hours: duration }); onClose() } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { await sendPoll(channelId, { question: question.trim(), options: filled, emojis: filledEmojis, multi, duration_hours: duration }); onClose() } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <Modal title="Create Poll" onClose={onClose} width="max-w-md"
@@ -30,12 +33,13 @@ export default function CreatePollModal({ onClose, channelId }: { onClose: () =>
           <div className="space-y-2">
             {options.map((o, i) => (
               <div key={i} className="flex gap-2">
+                <input className="input w-12 shrink-0 px-0 text-center text-lg" value={emojis[i] ?? ''} onChange={(e) => setEmojis(options.map((_, j) => (j === i ? e.target.value : emojis[j] ?? '')))} maxLength={64} placeholder="🙂" title="Emoji (optional)" aria-label={`Emoji for answer ${i + 1}`} data-poll-emoji={i} />
                 <input className="input" value={o} onChange={(e) => setOptions(options.map((x, j) => (j === i ? e.target.value : x)))} maxLength={100} placeholder={`Answer ${i + 1}`} data-poll-opt={i} />
-                {options.length > 2 && <button type="button" className="text-text-2 hover:text-danger" onClick={() => setOptions(options.filter((_, j) => j !== i))} title="Remove"><X size={16} /></button>}
+                {options.length > 2 && <button type="button" className="text-text-2 hover:text-danger" onClick={() => { setOptions(options.filter((_, j) => j !== i)); setEmojis(emojis.filter((_, j) => j !== i)) }} title="Remove"><X size={16} /></button>}
               </div>
             ))}
           </div>
-          {options.length < 10 && <button type="button" className="mt-2 flex items-center gap-1 text-sm text-sky-400 hover:underline" onClick={() => setOptions([...options, ''])} data-poll-add><Plus size={14} /> Add answer</button>}
+          {options.length < 10 && <button type="button" className="mt-2 flex items-center gap-1 text-sm text-sky-400 hover:underline" onClick={() => { setOptions([...options, '']); setEmojis([...emojis, '']) }} data-poll-add><Plus size={14} /> Add answer</button>}
         </div>
         <div className="flex flex-wrap gap-4 items-center">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-accent" checked={multi} onChange={(e) => setMulti(e.target.checked)} data-poll-multi /> Allow multiple answers</label>
