@@ -16,6 +16,11 @@ interface Props {
   className?: string
 }
 
+/** The status others see: Online turns Idle while the user is away on every device; a picked status always wins. */
+export function shownStatus(status: string | undefined, idle: boolean): string | undefined {
+  return idle && (!status || status === 'online') ? 'idle' : status
+}
+
 export function statusColor(status: string | undefined, online: boolean): string {
   if (!online) return '#7d8394'
   switch (status) {
@@ -39,7 +44,7 @@ const DECORATION_STYLE: Record<string, React.CSSProperties> = {
 export default function Avatar({ user, size = 32, presence = false, className = '', decoration: override, animate = false }: Props) {
   const online = useStore((s) => !!s.online[user.id])
   const platforms = useStore((s) => s.platforms[user.id])
-  const status = useStore((s) => s.users[user.id]?.status ?? user.status)
+  const status = useStore((s) => shownStatus(s.users[user.id]?.status ?? user.status, !!s.idle[user.id]))
   // `decoration` forces a frame (previews, unsaved drafts); otherwise the live store value, then the user object's.
   const decoration = useStore((s) => override ?? s.users[user.id]?.avatar_decoration ?? user.avatar_decoration ?? '')
   const dot = Math.max(8, Math.round(size * 0.32))

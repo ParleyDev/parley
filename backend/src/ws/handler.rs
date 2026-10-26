@@ -30,6 +30,8 @@ pub struct WsQuery {
     instance: Option<Uuid>,
     /// Where this client runs: web (default), desktop, mobile or vr; shown as a presence indicator.
     platform: Option<String>,
+    /// 1 when the client connects already away (e.g. a mobile app reconnecting in the background).
+    idle: Option<u8>,
 }
 
 pub async fn ws_upgrade(
@@ -50,7 +52,8 @@ pub async fn ws_upgrade(
         (None, _) => None,
     };
     let platform = q.platform.as_deref().filter(|p| crate::ws::bus::PLATFORMS.contains(p)).unwrap_or("web").to_string();
-    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid, resume, platform))
+    let idle = q.idle.unwrap_or(0) != 0;
+    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid, resume, platform, idle))
 }
 
 #[derive(Deserialize)]
@@ -66,9 +69,11 @@ enum ClientOp {
     VoiceSignal { to: Uuid, data: Value },
     /// The user is active at the keyboard (sent at most once a minute while focused): feeds the push inactive timeout.
     Activity,
+    /// The user went away from this client (no input for a while, or the app went to the background) or came back.
+    Idle { idle: bool },
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid, resume_from: Option<u64>, platform: String) {
+async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid, resume_from: Option<u64>, platform: String, idle: bool) {
     let (mut tx, mut rx) = socket.split();
 
     // --- Resume: replay what this client missed if it is all still buffered ---
@@ -87,23 +92,23 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             let my_guilds: HashSet<Uuid> = guild_ids.into_iter().collect();
             let relevant: Vec<_> = missed.into_iter().filter(|ev| matches_target(&ev.target, user_id, session_id, &my_guilds)).collect();
             let last = relevant.last().map(|e| e.seq).unwrap_or(after).max(after);
-            let first = crate::ws::bus::connect(&state, user_id, &platform).await;
+            let first = crate::ws::bus::connect(&state, user_id, &platform, idle).await;
             crate::metrics::METRICS.ws_resumes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let resumed = json!({ "t": "RESUMED", "d": { "replayed": relevant.len(), "from": after }, "s": state.hub.current_seq(), "i": state.hub.instance_id });
             if tx.send(Message::Text(resumed.to_string())).await.is_err() {
-                crate::ws::bus::disconnect(&state, user_id, &platform).await;
+                crate::ws::bus::disconnect(&state, user_id, &platform, idle).await;
                 return;
             }
             for ev in &relevant {
                 if tx.send(Message::Text(ev.payload.to_string())).await.is_err() {
-                    crate::ws::bus::disconnect(&state, user_id, &platform).await;
+                    crate::ws::bus::disconnect(&state, user_id, &platform, idle).await;
                     return;
                 }
             }
             let _ = first;
-            state.hub.emit_all("PRESENCE_UPDATE", json!({ "user_id": user_id, "online": true, "platforms": crate::ws::bus::platforms_for(&state.db, user_id).await }));
+            crate::ws::bus::announce(&state, user_id).await;
             let session = state.hub.next_session();
-            run_loop(&state, user_id, session_id, session, my_guilds, events, last, &mut tx, &mut rx, &platform).await;
+            run_loop(&state, user_id, session_id, session, my_guilds, events, last, &mut tx, &mut rx, &platform, idle).await;
             return;
         }
         tracing::debug!(user = %user_id, after, "resume gap not buffered; sending READY");
@@ -189,8 +194,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     // Subscribe BEFORE announcing presence so we don't miss events.
     let events = state.hub.subscribe();
     let seq_at_subscribe = state.hub.current_seq();
-    let first = crate::ws::bus::connect(&state, user_id, &platform).await;
+    let first = crate::ws::bus::connect(&state, user_id, &platform, idle).await;
     let online = crate::ws::bus::online_users(&state.db).await;
+    let idle_users = crate::ws::bus::idle_users(&state.db).await;
     let platforms: serde_json::Map<String, Value> = crate::ws::bus::online_platforms(&state.db).await.into_iter().map(|(u, p)| (u.to_string(), json!(p))).collect();
     let mut voice_states = state.hub.voice_states_for_guilds(&guild_ids);
     voice_states.extend(state.hub.voice_states_for_channels(&dms.iter().map(|d| d.channel.id).collect::<Vec<_>>()));
@@ -216,6 +222,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             "relationships": relationships,
             "online": online,
             "platforms": platforms,
+            "idle": idle_users,
             "read_states": read_states.iter().map(|(c, m)| json!({"channel_id": c, "last_read_msg": m})).collect::<Vec<_>>(),
             "last_message_ids": last_ids.iter().map(|(c, m)| json!({"channel_id": c, "message_id": m})).collect::<Vec<_>>(),
             "voice_states": voice_states,
@@ -223,15 +230,15 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
         }
     });
     if tx.send(Message::Text(ready.to_string())).await.is_err() {
-        crate::ws::bus::disconnect(&state, user_id, &platform).await;
+        crate::ws::bus::disconnect(&state, user_id, &platform, idle).await;
         return;
     }
     crate::metrics::METRICS.ws_connects.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
     let _ = first;
-    state.hub.emit_all("PRESENCE_UPDATE", json!({ "user_id": user_id, "online": true, "platforms": crate::ws::bus::platforms_for(&state.db, user_id).await }));
+    crate::ws::bus::announce(&state, user_id).await;
 
-    run_loop(&state, user_id, session_id, session, my_guilds, events, seq_at_subscribe, &mut tx, &mut rx, &platform).await;
+    run_loop(&state, user_id, session_id, session, my_guilds, events, seq_at_subscribe, &mut tx, &mut rx, &platform, idle).await;
 }
 
 fn matches_target(target: &Target, user_id: Uuid, session_id: Uuid, my_guilds: &HashSet<Uuid>) -> bool {
@@ -257,6 +264,7 @@ async fn run_loop(
     tx: &mut futures::stream::SplitSink<WebSocket, Message>,
     rx: &mut futures::stream::SplitStream<WebSocket>,
     platform: &str,
+    mut idle: bool,
 ) {
     let mut last_seq = already_sent;
     loop {
@@ -282,8 +290,16 @@ async fn run_loop(
             msg = rx.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        if let Ok(op) = serde_json::from_str::<ClientOp>(&text) {
-                            handle_client_op(state, user_id, session, op, tx).await;
+                        match serde_json::from_str::<ClientOp>(&text) {
+                            // Per-socket state: only announce when the user as a whole goes away or comes back.
+                            Ok(ClientOp::Idle { idle: now }) => if now != idle {
+                                let before = crate::ws::bus::is_idle(&state.db, user_id).await;
+                                crate::ws::bus::set_idle(state, user_id, now).await;
+                                idle = now;
+                                if crate::ws::bus::is_idle(&state.db, user_id).await != before { crate::ws::bus::announce(state, user_id).await; }
+                            },
+                            Ok(op) => handle_client_op(state, user_id, session, op, tx).await,
+                            Err(_) => {}
                         }
                     }
                     Some(Ok(Message::Ping(p))) => { let _ = tx.send(Message::Pong(p)).await; }
@@ -298,8 +314,8 @@ async fn run_loop(
     if let Some(prev) = state.hub.voice_leave(user_id, Some(session)) {
         emit_voice_leave(state, &prev);
     }
-    let gone = crate::ws::bus::disconnect(state, user_id, platform).await;
-    state.hub.emit_all("PRESENCE_UPDATE", json!({ "user_id": user_id, "online": !gone, "platforms": if gone { Vec::new() } else { crate::ws::bus::platforms_for(&state.db, user_id).await } }));
+    crate::ws::bus::disconnect(state, user_id, platform, idle).await;
+    crate::ws::bus::announce(state, user_id).await;
 }
 
 fn emit_voice_leave(state: &AppState, prev: &VoiceState) {
@@ -430,6 +446,8 @@ async fn handle_client_op(
         ClientOp::Ping => {
             let _ = tx.send(Message::Text(json!({"t":"PONG","d":{}}).to_string())).await;
         }
+        // Handled in run_loop, which owns the socket's idle flag.
+        ClientOp::Idle { .. } => {}
         ClientOp::Activity => {
             let _ = sqlx::query("UPDATE users SET active_at = now() WHERE id = $1").bind(user_id).execute(&state.db).await;
         }

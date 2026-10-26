@@ -74,6 +74,8 @@ export interface ReadyPayload {
   relationships?: Relationship[]
   online: string[]
   platforms?: Record<string, string[]>
+  /** Online users who are away on every device (shown as Idle unless they picked a status). */
+  idle?: string[]
   read_states: ReadState[]
   last_message_ids: { channel_id: string; message_id: string }[]
   voice_states: VoiceState[]
@@ -136,6 +138,8 @@ interface State {
   online: Record<string, true>
   /** Platforms each online user has a connection on: web / desktop / mobile / vr. */
   platforms: Record<string, string[]>
+  /** Online users away on every device: no input for a while, or the mobile app in the background. */
+  idle: Record<string, true>
   users: Record<string, User>
   typing: Record<string, Record<string, number>>
   readStates: Record<string, string | null>
@@ -218,7 +222,7 @@ interface State {
   /** Merge a POLL_UPDATE (counts/closed) while keeping this viewer's own `me` flags. */
   applyPollUpdate: (channelId: string, messageId: string, poll: Poll) => void
   sendPoll: (channelId: string, poll: { question: string; options: string[]; multi: boolean; duration_hours: number | null }) => Promise<void>
-  setPresence: (userId: string, online: boolean, platforms?: string[]) => void
+  setPresence: (userId: string, online: boolean, platforms?: string[], idle?: boolean) => void
   upsertUser: (u: User) => void
   setTyping: (channelId: string, userId: string) => void
   pruneTyping: () => void
@@ -312,6 +316,7 @@ export const useStore = create<State>((set, get) => ({
   loadingMessages: {},
   online: {},
   platforms: {},
+  idle: {},
   users: {},
   typing: {},
   readStates: {},
@@ -357,7 +362,7 @@ export const useStore = create<State>((set, get) => ({
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], guildLayout: [], channels: {}, dms: {}, relationships: {},
-      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, mentionCounts: {}, notifSettings: {}, messages: {}, hasMore: {}, online: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
+      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, mentionCounts: {}, notifSettings: {}, messages: {}, hasMore: {}, online: {}, idle: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {}, watching: {},
     })
   },
@@ -378,6 +383,8 @@ export const useStore = create<State>((set, get) => ({
     const online: Record<string, true> = {}
     r.online.forEach((id) => (online[id] = true))
     const platforms: Record<string, string[]> = r.platforms ?? {}
+    const idle: Record<string, true> = {}
+    ;(r.idle ?? []).forEach((id) => (idle[id] = true))
     const readStates: Record<string, string | null> = {}
     r.read_states.forEach((rs) => (readStates[rs.channel_id] = rs.last_read_msg))
     const lastMessageId: Record<string, string> = {}
@@ -405,7 +412,7 @@ export const useStore = create<State>((set, get) => ({
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
       // READY is a snapshot taken when the socket connected; a verification that landed in between must not be undone.
-      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, platforms, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
+      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, platforms, idle, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events. The channel on screen keeps its
       // rows so nothing goes blank; ChatPane refreshes it when readyCount changes.
@@ -608,10 +615,11 @@ export const useStore = create<State>((set, get) => ({
       },
     }
   }),
-  setPresence: (userId, isOnline, plats) => set((s) => {
-    const online = { ...s.online }; const platforms = { ...s.platforms }
+  setPresence: (userId, isOnline, plats, away) => set((s) => {
+    const online = { ...s.online }; const platforms = { ...s.platforms }; const idle = { ...s.idle }
     if (isOnline) { online[userId] = true; platforms[userId] = plats ?? s.platforms[userId] ?? [] } else { delete online[userId]; delete platforms[userId] }
-    return { online, platforms }
+    if (isOnline && away) idle[userId] = true; else delete idle[userId]
+    return { online, platforms, idle }
   }),
   upsertUser: (u) => set((s) => {
     const members = { ...s.members }

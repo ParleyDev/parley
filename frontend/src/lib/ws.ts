@@ -21,7 +21,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'POLL_UPDATE'; d: { channel_id: string; message_id: string; poll: Poll } }
   | { t: 'THREAD_UPDATE'; d: ThreadInfo }
   | { t: 'TYPING_START'; d: { channel_id: string; user_id: string } }
-  | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean; platforms?: string[] } }
+  | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean; platforms?: string[]; idle?: boolean } }
   | { t: 'USER_UPDATE'; d: User }
   | { t: 'GUILD_CREATE'; d: Guild & { channels: Channel[]; roles: Role[] } }
   | { t: 'GUILD_MEMBER_UPDATE'; d: Member }
@@ -76,7 +76,7 @@ let lastSeq = 0
 /** Backend instance that numbered lastSeq; a resume is only valid against the same one. */
 let instanceId: string | null = null
 /** Debug counters (also handy for tests): how often we resumed vs. got a fresh READY. */
-export const wsStats = { resumed: 0, ready: 0, replayed: 0, /** Drop the socket as a network blip would (debugging/tests); it reconnects and resumes. */ drop: () => { socket?.close() }, /** Drop and forget the sequence: the next connect is a full READY (as after a server restart). */ resync: () => { lastSeq = 0; instanceId = null; socket?.close() } }
+export const wsStats = { resumed: 0, ready: 0, replayed: 0, /** No input for this long counts as away (tests shorten it). */ idleAfter: 10 * 60_000, /** Re-check away now (tests). */ checkIdle: () => checkIdle(), /** Drop the socket as a network blip would (debugging/tests); it reconnects and resumes. */ drop: () => { socket?.close() }, /** Drop and forget the sequence: the next connect is a full READY (as after a server restart). */ resync: () => { lastSeq = 0; instanceId = null; socket?.close() } }
 let retry = 0
 let closedByUser = false
 let pingTimer: ReturnType<typeof setInterval> | null = null
@@ -88,7 +88,8 @@ export function connectSocket() {
   closedByUser = false
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
   const resume = lastSeq > 0 && useStore.getState().ready ? `&seq=${lastSeq}${instanceId ? `&instance=${instanceId}` : ''}` : ''
-  const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}&platform=${clientPlatform()}${resume}`)
+  reportedIdle = isAway()
+  const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}&platform=${clientPlatform()}${reportedIdle ? '&idle=1' : ''}${resume}`)
   socket = ws
 
   ws.onopen = () => {
@@ -175,7 +176,7 @@ function handle(ev: Ev) {
     case 'POLL_UPDATE': s.applyPollUpdate(ev.d.channel_id, ev.d.message_id, ev.d.poll); break
     case 'THREAD_UPDATE': s.upsertThread(ev.d); break
     case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id); break
-    case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online, ev.d.platforms ?? []); break
+    case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online, ev.d.platforms ?? [], ev.d.idle); break
     case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
     case 'GUILD_CREATE': s.upsertGuild(ev.d); break
     case 'GUILD_UPDATE': s.upsertGuild(ev.d); break
@@ -256,6 +257,30 @@ function activity() {
 if (typeof window !== 'undefined') {
   for (const ev of ['keydown', 'pointerdown', 'focus']) window.addEventListener(ev, activity, { passive: true })
   document.addEventListener('visibilitychange', activity)
+}
+
+// Automatic idle: this client reports the user away after a stretch with no input, or as soon as the mobile app goes
+// to the background (it may keep its connection there). The server shows them Idle once every device is away, and a
+// status they picked (Idle, Do Not Disturb, Invisible) always wins over this.
+let lastInput = Date.now()
+let reportedIdle = false
+function isAway(): boolean {
+  if (useStore.getState().myVoiceChannelId) return false // listening in a call counts as being here
+  if (isNative() && document.visibilityState !== 'visible') return true
+  return Date.now() - lastInput >= wsStats.idleAfter
+}
+function checkIdle() {
+  const away = isAway()
+  if (away !== reportedIdle && sendOp({ op: 'idle', idle: away })) reportedIdle = away
+}
+function onInput() {
+  lastInput = Date.now()
+  if (reportedIdle) checkIdle()
+}
+if (typeof window !== 'undefined') {
+  for (const ev of ['keydown', 'pointerdown', 'pointermove', 'wheel', 'touchstart', 'focus']) window.addEventListener(ev, onInput, { passive: true })
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') onInput(); else checkIdle() })
+  setInterval(checkIdle, 15_000)
 }
 
 function notify(m: Message) {

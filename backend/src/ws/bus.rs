@@ -100,27 +100,58 @@ pub async fn heartbeat(state: AppState) {
 /// Register a socket; true when the user was offline everywhere before (announce PRESENCE_UPDATE online).
 pub const PLATFORMS: [&str; 4] = ["web", "desktop", "mobile", "vr"];
 
-pub async fn connect(state: &AppState, user: Uuid, platform: &str) -> bool {
+/// `idle`: the socket starts out away (a client connecting from the background).
+pub async fn connect(state: &AppState, user: Uuid, platform: &str, idle: bool) -> bool {
     state.hub.connect(user);
     let before = global_sockets(&state.db, user).await.unwrap_or(0);
     let _ = sqlx::query(
-        "INSERT INTO presence (user_id, instance_id, sockets, platforms) VALUES ($1, $2, 1, jsonb_build_object($3::text, 1))
-         ON CONFLICT (user_id, instance_id) DO UPDATE SET sockets = presence.sockets + 1, updated_at = now(),
+        "INSERT INTO presence (user_id, instance_id, sockets, platforms, idle) VALUES ($1, $2, 1, jsonb_build_object($3::text, 1), $4)
+         ON CONFLICT (user_id, instance_id) DO UPDATE SET sockets = presence.sockets + 1, updated_at = now(), idle = presence.idle + $4,
            platforms = jsonb_set(presence.platforms, ARRAY[$3::text], to_jsonb(COALESCE((presence.platforms->>$3)::int, 0) + 1))")
-        .bind(user).bind(state.hub.instance_id).bind(platform).execute(&state.db).await;
+        .bind(user).bind(state.hub.instance_id).bind(platform).bind(idle as i32).execute(&state.db).await;
     before == 0
 }
 
-/// Drop a socket; true when the user is now offline everywhere.
-pub async fn disconnect(state: &AppState, user: Uuid, platform: &str) -> bool {
+/// Drop a socket (`idle`: it was reporting away); true when the user is now offline everywhere.
+pub async fn disconnect(state: &AppState, user: Uuid, platform: &str, idle: bool) -> bool {
     state.hub.disconnect(user);
     let _ = sqlx::query(
-        "UPDATE presence SET sockets = GREATEST(sockets - 1, 0), updated_at = now(),
+        "UPDATE presence SET sockets = GREATEST(sockets - 1, 0), updated_at = now(), idle = GREATEST(idle - $4, 0),
            platforms = jsonb_set(platforms, ARRAY[$3::text], to_jsonb(GREATEST(COALESCE((platforms->>$3)::int, 0) - 1, 0)))
          WHERE user_id = $1 AND instance_id = $2")
-        .bind(user).bind(state.hub.instance_id).bind(platform).execute(&state.db).await;
+        .bind(user).bind(state.hub.instance_id).bind(platform).bind(idle as i32).execute(&state.db).await;
     let _ = sqlx::query("DELETE FROM presence WHERE user_id = $1 AND instance_id = $2 AND sockets <= 0").bind(user).bind(state.hub.instance_id).execute(&state.db).await;
     global_sockets(&state.db, user).await.unwrap_or(0) == 0
+}
+
+/// A socket went away from the keyboard (`idle`) or came back.
+pub async fn set_idle(state: &AppState, user: Uuid, idle: bool) {
+    let _ = sqlx::query("UPDATE presence SET idle = GREATEST(idle + $3, 0) WHERE user_id = $1 AND instance_id = $2")
+        .bind(user).bind(state.hub.instance_id).bind(if idle { 1 } else { -1 }).execute(&state.db).await;
+}
+
+/// Online, but every socket is away: shown as Idle unless the user picked a status.
+pub async fn is_idle(db: &PgPool, user: Uuid) -> bool {
+    sqlx::query_as::<_, (bool,)>(
+        "SELECT COALESCE(SUM(sockets), 0) > 0 AND COALESCE(SUM(idle), 0) >= COALESCE(SUM(sockets), 0) FROM presence
+         WHERE user_id = $1 AND updated_at > now() - make_interval(secs => $2)")
+        .bind(user).bind(STALE_SECS as f64).fetch_one(db).await.map(|r| r.0).unwrap_or(false)
+}
+
+/// Everyone online whose every socket is away, for READY.
+pub async fn idle_users(db: &PgPool) -> Vec<Uuid> {
+    sqlx::query_as::<_, (Uuid,)>(
+        "SELECT user_id FROM presence WHERE updated_at > now() - make_interval(secs => $1)
+         GROUP BY user_id HAVING SUM(sockets) > 0 AND SUM(idle) >= SUM(sockets)")
+        .bind(STALE_SECS as f64).fetch_all(db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default()
+}
+
+/// Tell everyone where `user` stands now: online or not, on which platforms, and whether they are away.
+pub async fn announce(state: &AppState, user: Uuid) {
+    let platforms = platforms_for(&state.db, user).await;
+    let online = global_sockets(&state.db, user).await.unwrap_or(0) > 0;
+    let idle = online && is_idle(&state.db, user).await;
+    state.hub.emit_all("PRESENCE_UPDATE", serde_json::json!({ "user_id": user, "online": online, "platforms": if online { platforms } else { Vec::new() }, "idle": idle }));
 }
 
 /// Platforms a user currently has sockets on, across instances (web / desktop / mobile / vr).
