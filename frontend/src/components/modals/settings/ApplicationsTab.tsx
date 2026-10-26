@@ -29,6 +29,7 @@ export default function ApplicationsTab() {
   const save = async () => { if (!open) return; try { const a = await api.patch<Application>(`/applications/${open.id}`, { description: desc, redirect_uris: uris.split('\n').map((x) => x.trim()).filter(Boolean) }); pushToast('Saved'); setOpen({ ...open, ...a }); await load() } catch (err) { pushToast((err as Error).message, 'error') } }
   const resetSecret = async () => { if (!open) return; try { const r = await api.post<{ client_secret: string }>(`/applications/${open.id}/reset-secret`, {}); setSecret({ label: 'New client secret (shown once)', value: r.client_secret }) } catch (err) { pushToast((err as Error).message, 'error') } }
   const createBot = async () => { if (!open) return; try { const r = await api.post<{ token: string }>(`/applications/${open.id}/bot`, {}); setSecret({ label: 'Bot token (shown once)', value: r.token }); await show(open.id) } catch (err) { pushToast((err as Error).message, 'error') } }
+  const setIntents = async (v: number) => { if (!open) return; try { const a = await api.patch<Application>(`/applications/${open.id}`, { privileged_intents: v }); setOpen({ ...open, ...a }) } catch (err) { pushToast((err as Error).message, 'error') } }
   const resetBot = async () => { if (!open) return; try { const r = await api.post<{ token: string }>(`/applications/${open.id}/bot/reset-token`, {}); setSecret({ label: 'New bot token (shown once)', value: r.token }) } catch (err) { pushToast((err as Error).message, 'error') } }
   const del = () => open && openModal({ kind: 'confirm', title: `Delete '${open.name}'`, body: 'Every token is revoked and its bot account removed. This cannot be undone.', danger: true, confirmLabel: 'Delete Application', action: async () => { try { await api.delete(`/applications/${open.id}`); setOpen(null); await load() } catch (err) { pushToast((err as Error).message, 'error') } } })
   const authUrl = open ? `${publicOrigin()}/oauth2/authorize?client_id=${open.client_id}&response_type=code&scope=${encodeURIComponent(scopes.join(' '))}${open.redirect_uris[0] ? `&redirect_uri=${encodeURIComponent(open.redirect_uris[0])}` : ''}` : ''
@@ -64,6 +65,14 @@ export default function ApplicationsTab() {
             <div className="font-semibold">Bot</div>
             {open.bot ? (
               <div className="flex items-center gap-3 text-sm"><span className="rounded bg-accent px-1 py-px text-[10px] font-bold uppercase text-white">Bot</span><span className="font-semibold">{open.bot.display_name}</span><span className="text-text-2">@{open.bot.username}</span><button type="button" className="btn-ghost text-xs ml-auto" onClick={resetBot} data-app-reset-bot>Reset token</button></div>
+            ) : null}
+            {open.bot ? (
+              <div className="space-y-1 border-t border-line pt-2" data-app-intents>
+                <div className="text-xs font-semibold text-text-1">Privileged gateway intents</div>
+                {([[1 << 1, 'Server members', 'Join, leave and member updates'], [1 << 8, 'Presence', 'Who is online and what they are doing'], [1 << 15, 'Message content', 'Read messages that don\u2019t mention the bot']] as const).map(([bit, label, hint]) => (
+                  <label key={bit} className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-accent" checked={((open.privileged_intents ?? 0) & bit) !== 0} onChange={(e) => setIntents(e.target.checked ? (open.privileged_intents ?? 0) | bit : (open.privileged_intents ?? 0) & ~bit)} data-app-intent={bit} /><span>{label}</span><span className="text-xs text-text-2">{hint}</span></label>
+                ))}
+              </div>
             ) : (
               <><p className="text-sm text-text-2">A bot is a user that acts through a token (<code>Authorization: Bot …</code>). Add it to servers with the <code>bot</code> scope.</p><button type="button" className="btn-ghost bg-bg-3" onClick={createBot} data-app-create-bot>Create bot</button></>
             )}

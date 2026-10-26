@@ -337,6 +337,9 @@ export interface Message {
   /** Announcements: published original, or a copy with where it came from. */
   /** Sent through a webhook, and bot/webhook rich embeds. */
   webhook_id?: string
+  /** A bot's answer to a command, and (ephemeral) only shown to you, never stored. */
+  interaction?: { id: string; name: string; user: { id: string; display_name: string }; deferred?: boolean }
+  ephemeral?: boolean
   embeds?: import('../components/RichEmbed').Embed[]
   crosspost?: { published?: boolean; guild_id?: string; guild_name?: string; guild_icon?: string | null; channel_id?: string; channel_name?: string; message_id?: string }
   /** What a failed message would send again on Retry. */
@@ -451,6 +454,6 @@ export interface RemoteMedia { camera: MediaStream | null; screen: MediaStream |
 export type PeerStatus = 'connecting' | 'connected' | 'failed'
 
 /** A developer application (Settings → Applications). */
-export interface Application { id: string; owner_id: string; name: string; description: string; client_id: string; redirect_uris: string[]; bot_user_id: string | null; created_at: string; client_secret?: string; bot?: User | null; authorized_users?: number }
+export interface Application { id: string; owner_id: string; name: string; description: string; client_id: string; redirect_uris: string[]; bot_user_id: string | null; created_at: string; privileged_intents?: number; client_secret?: string; bot?: User | null; authorized_users?: number }
 /** An app holding a token for you (Settings → Authorized Apps). */
 export interface AuthorizedApp { id: string; name: string; description: string; owner: string | null; scopes: string[]; since: string }

@@ -49,6 +49,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const setOpenThread = useStore((s) => s.setOpenThread)
   const chanKind = useStore((s) => s.channels[m.channel_id]?.kind)
   const chanNews = useStore((s) => !!s.channels[m.channel_id]?.news)
+  const removeMessage = useStore((s) => s.removeMessage)
   const pushToast = useStore((s) => s.pushToast)
   const setReadState = useStore((s) => s.setReadState)
   const bookmarked = useStore((s) => !!s.bookmarks[m.id])
@@ -167,7 +168,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   // Touch screens: double-tap a message to react with your quick reaction (Chat settings).
   const lastTap = useRef(0)
   const onTap = (e: React.PointerEvent) => {
-    if (e.pointerType !== 'touch' || !prefs.doubleTapReact || !canReact || m.local) return
+    if (e.pointerType !== 'touch' || !prefs.doubleTapReact || !canReact || m.local || m.ephemeral) return
     if ((e.target as HTMLElement).closest('button, a, textarea, input, img, video')) return
     const now = Date.now()
     if (now - lastTap.current < 320) { lastTap.current = 0; const q = prefs.quickReaction; void react(q, !!m.reactions.find((r) => r.emoji === q && r.me)) }
@@ -317,7 +318,12 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
   return (
     <AvatarMotion.Provider value={motion}>
-    <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${m.author.display_name}: ${m.content.slice(0, 200)}`} onPointerUp={onTap} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${m.author.display_name}: ${m.content.slice(0, 200)}`} onPointerUp={onTap} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local || m.ephemeral) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+      {m.interaction && (
+        <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" data-interaction-header={m.interaction.name}>
+          <span className="font-semibold text-text-1">{m.interaction.user.display_name}</span> used <span className="font-semibold text-sky-400">/{m.interaction.name}</span>
+        </div>
+      )}
       {m.reply_to && (
         <div role="button" onClick={(e) => { if (onJumpToReply) { e.stopPropagation(); onJumpToReply() } }} data-reply-link={m.reply_to} className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 cursor-pointer hover:text-text-0 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" title="Jump to the original message">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{replyTarget.content || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 Attachment' : '')}</span></>) : <i data-reply-preview="deleted">Original message was deleted</i>}
@@ -363,7 +369,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               )}
               {blockMedia && (media || links.length > 0 || (m.attachments ?? []).some((a) => /^(image|video)\//.test(a.content_type))) && <div className="mt-1 text-xs text-text-2 italic" data-media-blocked>Media hidden by your Content & Social settings.</div>}
               {media && !blockMedia && (prefs.linkMedia && !m.suppress_embeds ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
+              {m.interaction?.deferred && <div className="flex items-center gap-1.5 text-sm italic text-text-2" data-interaction-thinking><span className="inline-flex gap-0.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2 [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2 [animation-delay:300ms]" /></span>{m.author.display_name} is thinking…</div>}
               {m.embeds?.map((e, i) => <RichEmbed key={i} e={e} />)}
+              {m.ephemeral && <div className="mt-1 flex items-center gap-1 text-xs text-text-2" data-ephemeral><EyeOff size={12} />Only you can see this · <button type="button" className="text-sky-400 hover:underline" onClick={() => removeMessage(m.channel_id, m.id)} data-ephemeral-dismiss>Dismiss message</button></div>}
               {link && !blockMedia && prefs.embeds && !m.suppress_embeds && (
                 <div className="group/embed relative w-fit max-w-full" data-embed-wrap>
                   {links.map((l) => <MaybeBlurred key={l} on={sensitive}><LinkEmbed url={l} /></MaybeBlurred>)}
@@ -406,7 +414,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} label="Message" />}
       {emojiHover.tip}
       {!editing && m.local === 'failed' && <FailedActions m={m} tapped={tapped} />}
-      {!editing && !m.local && (
+      {!editing && !m.local && !m.ephemeral && (
         <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
           {m.pinned_at && <span className="h-8 px-1.5 flex items-center text-text-2" title="Pinned"><Pin size={13} /></span>}
           {canReact && frequent.map((e) => <button key={e} title={`React with ${e}`} onClick={() => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} className="h-8 w-8 flex items-center justify-center text-base hover:bg-bg-3 first:rounded-l-lg" data-quick-react><Emoji value={e} size={20} /></button>)}

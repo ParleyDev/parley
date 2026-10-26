@@ -13,6 +13,38 @@ export interface SlashCommand {
   guildOnly?: boolean
   /** Only for people who can manage messages here. */
   moderator?: boolean
+  /** An app's command (answered by its bot) rather than a built-in. */
+  app?: AppCommand
+}
+
+export interface CommandOption { type: number; name: string; description: string; required: boolean; choices: { name: string; value: string | number }[] }
+/** A command an app registered (`type` 1 slash, 2 user, 3 message), as listed for a channel. */
+export interface AppCommand { id: string; application_id: string; type: 1 | 2 | 3; name: string; description: string; options: CommandOption[]; application: { name: string; icon_url: string | null } }
+
+const OPT_TYPE: Record<number, string> = { 3: 'text', 4: 'integer', 5: 'true/false', 6: '@user', 7: '#channel', 8: '@role', 10: 'number' }
+const argsOf = (c: AppCommand) => c.options.map((o) => (o.required ? `<${o.name}>` : `[${o.name}]`)).join(' ')
+export const optionHint = (o: CommandOption) => `${o.name}: ${o.choices.length ? o.choices.map((c) => c.name).join(' | ') : OPT_TYPE[o.type] ?? 'value'}`
+
+/**
+ * An app command's options from what follows its name: `name:value` pairs (a value runs to the next `word:`), or,
+ * without any, the whole text for its first option. Mentions (<@id>, <#id>, <@&id>) become ids.
+ */
+export function parseOptions(cmd: AppCommand, rest: string): { name: string; value: string }[] | string {
+  const out: { name: string; value: string }[] = []
+  const names = cmd.options.map((o) => o.name)
+  const re = new RegExp(`(?:^|\\s)(${names.map((n) => n.replace(/[-]/g, '\\-')).join('|')}):`, 'g')
+  const marks = names.length ? [...rest.matchAll(re)] : []
+  if (marks.length === 0 && rest.trim() && cmd.options[0]) out.push({ name: cmd.options[0].name, value: rest.trim() })
+  marks.forEach((m, i) => { const start = m.index! + m[0].length; const end = i + 1 < marks.length ? marks[i + 1].index! : rest.length; out.push({ name: m[1], value: rest.slice(start, end).trim() }) })
+  for (const o of out) {
+    const def = cmd.options.find((x) => x.name === o.name)!
+    const id = /^<(?:@&?|#)([0-9a-f-]{36})>$/.exec(o.value)?.[1]
+    if (id && [6, 7, 8].includes(def.type)) o.value = id
+    if (def.choices.length) { const ch = def.choices.find((c) => c.name.toLowerCase() === o.value.toLowerCase() || String(c.value) === o.value); if (!ch) return `${o.name} must be one of: ${def.choices.map((c) => c.name).join(', ')}`; o.value = String(ch.value) }
+  }
+  const missing = cmd.options.find((o) => o.required && !out.some((x) => x.name === o.name && x.value))
+  if (missing) return `/${cmd.name} needs ${optionHint(missing)}`
+  return out.filter((o) => o.value)
 }
 
 export const COMMANDS: SlashCommand[] = [
@@ -28,11 +60,13 @@ export const COMMANDS: SlashCommand[] = [
 ]
 
 /** The command menu for the text typed so far: `/` and a partial name, before any space. */
-export function commandMatches(text: string, inGuild: boolean, moderator = false): SlashCommand[] {
-  const m = /^\/([a-z]*)$/i.exec(text)
+export function commandMatches(text: string, inGuild: boolean, moderator = false, apps: AppCommand[] = []): SlashCommand[] {
+  const m = /^\/([a-z0-9_-]*)$/i.exec(text)
   if (!m) return []
   const q = m[1].toLowerCase()
-  return COMMANDS.filter((c) => (inGuild || !c.guildOnly) && (moderator || !c.moderator) && c.name.startsWith(q))
+  const builtins = COMMANDS.filter((c) => (inGuild || !c.guildOnly) && (moderator || !c.moderator) && c.name.startsWith(q))
+  const fromApps = apps.filter((c) => c.type === 1 && c.name.startsWith(q)).map((c) => ({ name: c.name, args: argsOf(c), description: c.description, app: c }))
+  return [...builtins, ...fromApps]
 }
 
 // Kaomoji carry markdown characters; escaped so they render as typed.
@@ -50,13 +84,18 @@ export type CommandResult =
   /** Ask before doing something that can't be undone. */
   | { kind: 'confirm'; title: string; body: string; label: string; action: () => Promise<string> }
   | { kind: 'none' }
+  /** An app command: send it as an interaction. */
+  | { kind: 'interaction'; command: AppCommand; options: { name: string; value: string }[] }
 
 /** Run a built-in command: what to send, or what happened. `none` means it isn't a command (send as typed). */
-export async function runCommand(text: string, ctx: { guildId: string | null; userId: string | undefined; channelId: string; moderator?: boolean }): Promise<CommandResult> {
-  const m = /^\/([a-z]+)(?:\s+([\s\S]*))?$/i.exec(text)
+export async function runCommand(text: string, ctx: { guildId: string | null; userId: string | undefined; channelId: string; moderator?: boolean; apps?: AppCommand[] }): Promise<CommandResult> {
+  const m = /^\/([a-z0-9_-]+)(?:\s+([\s\S]*))?$/i.exec(text)
   if (!m) return { kind: 'none' }
   const name = m[1].toLowerCase()
   const rest = (m[2] ?? '').trim()
+  // Built-ins win a name clash, like Discord.
+  const appCmd = !COMMANDS.some((c) => c.name === name) ? ctx.apps?.find((c) => c.type === 1 && c.name === name) : undefined
+  if (appCmd) { const opts = parseOptions(appCmd, m[2] ?? ''); return typeof opts === 'string' ? { kind: 'error', message: opts } : { kind: 'interaction', command: appCmd, options: opts } }
   const cmd = COMMANDS.find((c) => c.name === name)
   if (!cmd || (cmd.moderator && !ctx.moderator)) return { kind: 'none' }
   if (FACES[name]) return { kind: 'send', content: rest ? `${rest} ${FACES[name]}` : FACES[name] }

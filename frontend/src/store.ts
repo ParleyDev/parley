@@ -1,4 +1,5 @@
 import { STORAGE_PREFIX } from './lib/brand'
+import type { AppCommand } from './lib/commands'
 import { getNotifPrefs } from './lib/notifPrefs'
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
@@ -153,6 +154,10 @@ interface State {
   myThreads: Record<string, true>
   /** Per server: channels you hid from your list (Browse Channels) and whether you've done onboarding. */
   customize: Record<string, { hidden: string[]; onboarded: boolean }>
+  /** App commands usable in a channel (from the bots there); cleared when an app changes its commands. */
+  appCommands: Record<string, AppCommand[]>
+  loadAppCommands: (channelId: string) => Promise<void>
+  clearAppCommands: () => void
   loadCustomize: (guildId: string) => Promise<void>
   setHidden: (guildId: string, hidden: string[]) => void
   setMyThread: (id: string, on: boolean) => void
@@ -354,6 +359,9 @@ export const useStore = create<State>((set, get) => ({
   viewAs: null,
   myThreads: {},
   customize: {},
+  appCommands: {},
+  loadAppCommands: async (channelId) => { try { const list = await api.get<AppCommand[]>(`/channels/${channelId}/commands`); set((s) => ({ appCommands: { ...s.appCommands, [channelId]: list } })) } catch { /* ignore */ } },
+  clearAppCommands: () => set({ appCommands: {} }),
   loadCustomize: async (guildId) => { try { const r = await api.get<{ hidden_channels: string[]; onboarded: boolean }>(`/guilds/${guildId}/me/customize`); set((s) => ({ customize: { ...s.customize, [guildId]: { hidden: r.hidden_channels, onboarded: r.onboarded } } })) } catch { /* ignore */ } },
   setHidden: (guildId, hidden) => set((s) => ({ customize: { ...s.customize, [guildId]: { onboarded: s.customize[guildId]?.onboarded ?? true, hidden } } })),
   setMyThread: (id, on) => set((s) => { const myThreads = { ...s.myThreads }; if (on) myThreads[id] = true; else delete myThreads[id]; return { myThreads } }),

@@ -596,6 +596,8 @@ pub struct MessageRow {
     pub author_override: Option<serde_json::Value>,
     #[sqlx(default)]
     pub embeds: Option<serde_json::Value>,
+    #[sqlx(default)]
+    pub interaction: Option<serde_json::Value>,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -689,6 +691,9 @@ pub struct Message {
     /// Rich embeds from bots and webhooks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embeds: Option<serde_json::Value>,
+    /// A bot's answer to a command: {id, name, user: {id, display_name}, deferred?}.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interaction: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub poll: Option<Poll>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -814,6 +819,7 @@ impl MessageRow {
             crosspost: self.crosspost,
             webhook_id: self.webhook_id,
             embeds: self.embeds,
+            interaction: self.interaction,
             poll: None,
             thread: None,
             referenced: None,

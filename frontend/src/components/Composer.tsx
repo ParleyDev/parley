@@ -17,6 +17,7 @@ import ShortcodeSuggest, { shortcodeAt, useShortcodeSuggestions, type Suggestion
 import MentionSuggest, { applyMentions, mentionAt, useMentionItems, type MentionItem } from './MentionSuggest'
 import { dmName, isGroup } from '../lib/dm'
 import { useT } from '../lib/i18n'
+import { api } from '../lib/api'
 import { commandMatches, runCommand, type SlashCommand } from '../lib/commands'
 import { getDraft, saveDraft } from '../lib/drafts'
 import { shortDuration } from '../lib/slowmode'
@@ -93,7 +94,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const [cmdIdx, setCmdIdx] = useState(0)
   const [cmdDismissed, setCmdDismissed] = useState(false)
   const isMod = !!channel.guild_id && has(perms, P.MANAGE_MESSAGES)
-  const commands = cmdDismissed ? [] : commandMatches(value, !!channel.guild_id, isMod)
+  const appCommands = useStore((s) => s.appCommands[channel.id])
+  const loadAppCommands = useStore((s) => s.loadAppCommands)
+  useEffect(() => { if (!appCommands && value.startsWith('/')) void loadAppCommands(channel.id) }, [appCommands, value.startsWith('/'), channel.id, loadAppCommands]) // eslint-disable-line react-hooks/exhaustive-deps
+  const commands = cmdDismissed ? [] : commandMatches(value, !!channel.guild_id, isMod, appCommands ?? [])
   // Slowmode: one message per interval here unless you can manage messages or the channel.
   const slow = channel.guild_id ? (channel as Channel).rate_limit_per_user ?? 0 : 0
   const slowExempt = has(perms, P.MANAGE_MESSAGES) || has(perms, P.MANAGE_CHANNELS)
@@ -271,7 +275,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     let text = value.trim()
     let tts = false
     if (text.startsWith('/')) {
-      const res = await runCommand(applyMentions(text, picked), { guildId: channel.guild_id, userId, channelId: channel.id, moderator: isMod })
+      const res = await runCommand(applyMentions(text, picked), { guildId: channel.guild_id, userId, channelId: channel.id, moderator: isMod, apps: appCommands ?? useStore.getState().appCommands[channel.id] })
       if (res.kind === 'error') { pushToast(res.message, 'error'); return }
       if (res.kind === 'confirm') {
         openModal({ kind: 'confirm', title: res.title, body: res.body, danger: true, confirmLabel: res.label, action: async () => {
@@ -280,6 +284,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         return
       }
       if (res.kind === 'done') { pushToast(res.toast); setValue(''); setPicked({}); saveDraft(userId, channel.id, '', {}); return }
+      if (res.kind === 'interaction') {
+        try { await api.post('/interactions', { command_id: res.command.id, channel_id: channel.id, options: res.options }); setValue(''); setPicked({}); saveDraft(userId, channel.id, '', {}) } catch (e) { pushToast((e as Error).message, 'error') }
+        return
+      }
       if (res.kind === 'send') { text = res.content; tts = !!res.tts }
     }
     const content = applyMentions(getPrefs().emoticons ? convertEmoticons(text) : text, picked)
@@ -490,6 +498,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
               className={`w-full flex items-baseline gap-2 px-3 py-1.5 text-left ${i === cmdIdx ? 'bg-bg-3' : ''}`} data-command={c.name}>
               <span className="font-semibold shrink-0">/{c.name}</span>{c.args && <span className="text-xs text-text-2 shrink-0">{c.args}</span>}
               <span className="min-w-0 truncate text-sm text-text-2 ml-auto">{c.description}</span>
+              {c.app && <span className="shrink-0 rounded bg-bg-4 px-1.5 text-[10px] font-semibold text-text-1" data-command-app>{c.app.application.name}</span>}
             </button>
           ))}
         </div>

@@ -32,6 +32,8 @@ pub struct WsQuery {
     platform: Option<String>,
     /// 1 when the client connects already away (e.g. a mobile app reconnecting in the background).
     idle: Option<u8>,
+    /// Bots (token `bot_…`): which events they want (see `ws::intents`). Default: everything not privileged.
+    intents: Option<u32>,
 }
 
 pub async fn ws_upgrade(
@@ -39,12 +41,21 @@ pub async fn ws_upgrade(
     State(state): State<AppState>,
     Query(q): Query<WsQuery>,
 ) -> Response {
-    let Some((uid, sid)) = verify_session_token(&state.config.jwt_secret, &q.token) else {
-        return (axum::http::StatusCode::UNAUTHORIZED, "invalid token").into_response();
+    // Bots connect with their bot token and choose intents; people with a session token.
+    let (uid, sid, intents) = if q.token.starts_with("bot_") {
+        match crate::ws::intents::authorize_bot(&state, &q.token, q.intents).await {
+            Ok((uid, intents)) => (uid, Uuid::nil(), Some(intents)),
+            Err(msg) => return (axum::http::StatusCode::UNAUTHORIZED, msg).into_response(),
+        }
+    } else {
+        let Some((uid, sid)) = verify_session_token(&state.config.jwt_secret, &q.token) else {
+            return (axum::http::StatusCode::UNAUTHORIZED, "invalid token").into_response();
+        };
+        if !check_session(&state, uid, sid).await.unwrap_or(false) {
+            return (axum::http::StatusCode::UNAUTHORIZED, "session revoked or account suspended").into_response();
+        }
+        (uid, sid, None)
     };
-    if !check_session(&state, uid, sid).await.unwrap_or(false) {
-        return (axum::http::StatusCode::UNAUTHORIZED, "session revoked or account suspended").into_response();
-    }
     let resume = match (q.seq, q.instance) {
         (Some(s), Some(i)) if i == state.hub.instance_id => Some(s),
         (Some(_), Some(_)) => None,
@@ -53,7 +64,7 @@ pub async fn ws_upgrade(
     };
     let platform = q.platform.as_deref().filter(|p| crate::ws::bus::PLATFORMS.contains(p)).unwrap_or("web").to_string();
     let idle = q.idle.unwrap_or(0) != 0;
-    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid, resume, platform, idle))
+    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid, resume, platform, idle, intents))
 }
 
 #[derive(Deserialize)]
@@ -78,7 +89,8 @@ enum ClientOp {
     VoiceReaction { emoji: String },
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid, resume_from: Option<u64>, platform: String, idle: bool) {
+#[allow(clippy::too_many_arguments)]
+async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid, resume_from: Option<u64>, platform: String, idle: bool, intents: Option<u32>) {
     let (mut tx, mut rx) = socket.split();
 
     // --- Resume: replay what this client missed if it is all still buffered ---
@@ -105,7 +117,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
                 return;
             }
             for ev in &relevant {
-                if tx.send(Message::Text(ev.payload.to_string())).await.is_err() {
+                let Some(payload) = crate::ws::intents::filter(intents, &ev.payload, user_id) else { continue };
+                if tx.send(Message::Text(payload.to_string())).await.is_err() {
                     crate::ws::bus::disconnect(&state, user_id, &platform, idle).await;
                     return;
                 }
@@ -113,7 +126,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             let _ = first;
             crate::ws::bus::announce(&state, user_id).await;
             let session = state.hub.next_session();
-            run_loop(&state, user_id, session_id, session, my_guilds, events, last, &mut tx, &mut rx, &platform, idle).await;
+            run_loop(&state, user_id, session_id, session, my_guilds, events, last, &mut tx, &mut rx, &platform, idle, intents).await;
             return;
         }
         tracing::debug!(user = %user_id, after, "resume gap not buffered; sending READY");
@@ -243,7 +256,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     let _ = first;
     crate::ws::bus::announce(&state, user_id).await;
 
-    run_loop(&state, user_id, session_id, session, my_guilds, events, seq_at_subscribe, &mut tx, &mut rx, &platform, idle).await;
+    run_loop(&state, user_id, session_id, session, my_guilds, events, seq_at_subscribe, &mut tx, &mut rx, &platform, idle, intents).await;
 }
 
 fn matches_target(target: &Target, user_id: Uuid, session_id: Uuid, my_guilds: &HashSet<Uuid>) -> bool {
@@ -270,6 +283,7 @@ async fn run_loop(
     rx: &mut futures::stream::SplitStream<WebSocket>,
     platform: &str,
     mut idle: bool,
+    intents: Option<u32>,
 ) {
     let mut last_seq = already_sent;
     loop {
@@ -281,7 +295,8 @@ async fn run_loop(
                         if !matches_target(&ev.target, user_id, session_id, &my_guilds) { continue; }
                         last_seq = ev.seq;
                         track_membership(&ev.payload, user_id, &mut my_guilds);
-                        if tx.send(Message::Text(ev.payload.to_string())).await.is_err() {
+                        let Some(payload) = crate::ws::intents::filter(intents, &ev.payload, user_id) else { continue };
+                        if tx.send(Message::Text(payload.to_string())).await.is_err() {
                             break;
                         }
                     }

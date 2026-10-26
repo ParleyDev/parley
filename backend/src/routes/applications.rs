@@ -36,8 +36,8 @@ pub fn hash(token: &str) -> String { format!("{:x}", Sha256::digest(token.as_byt
 fn secret(prefix: &str) -> String { format!("{prefix}_{}", crate::mail::new_token()) }
 
 #[derive(Serialize, sqlx::FromRow, Clone)]
-pub struct App { pub id: Uuid, pub owner_id: Uuid, pub name: String, pub description: String, pub client_id: String, pub redirect_uris: Vec<String>, pub bot_user_id: Option<Uuid>, pub created_at: chrono::DateTime<chrono::Utc> }
-const APP_COLS: &str = "id, owner_id, name, description, client_id, redirect_uris, bot_user_id, created_at";
+pub struct App { pub id: Uuid, pub owner_id: Uuid, pub name: String, pub description: String, pub client_id: String, pub redirect_uris: Vec<String>, pub bot_user_id: Option<Uuid>, pub created_at: chrono::DateTime<chrono::Utc>, #[sqlx(default)] pub privileged_intents: i32 }
+const APP_COLS: &str = "id, owner_id, name, description, client_id, redirect_uris, bot_user_id, created_at, privileged_intents";
 
 async fn own(state: &AppState, uid: Uuid, id: Uuid) -> AppResult<App> {
     sqlx::query_as::<_, App>(&format!("SELECT {APP_COLS} FROM applications WHERE id = $1 AND owner_id = $2")).bind(id).bind(uid).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Application not found".into()))
@@ -51,7 +51,14 @@ async fn list_apps(State(state): State<AppState>, AuthUser(uid): AuthUser) -> Ap
 }
 
 #[derive(Deserialize)]
-struct AppReq { name: Option<String>, description: Option<String>, redirect_uris: Option<Vec<String>> }
+struct AppReq {
+    name: Option<String>,
+    description: Option<String>,
+    redirect_uris: Option<Vec<String>>,
+    /// Privileged gateway intents the bot may ask for: server members (1<<1), presences (1<<8), message content (1<<15).
+    #[serde(default)]
+    privileged_intents: Option<u32>,
+}
 
 fn clean_uris(list: &[String]) -> AppResult<Vec<String>> {
     let mut out = Vec::new();
@@ -94,8 +101,9 @@ async fn update_app(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     own(&state, uid, id).await?;
     if let Some(n) = &req.name { if n.trim().is_empty() || n.chars().count() > 50 { return Err(AppError::BadRequest("Name must be 1–50 characters".into())) } }
     let uris = match &req.redirect_uris { Some(l) => Some(clean_uris(l)?), None => None };
-    let app = sqlx::query_as::<_, App>(&format!("UPDATE applications SET name = COALESCE($2, name), description = COALESCE($3, description), redirect_uris = COALESCE($4, redirect_uris) WHERE id = $1 RETURNING {APP_COLS}"))
-        .bind(id).bind(req.name.map(|n| n.trim().to_string())).bind(req.description.map(|d| d.trim().chars().take(400).collect::<String>())).bind(uris).fetch_one(&state.db).await?;
+    let app = sqlx::query_as::<_, App>(&format!("UPDATE applications SET name = COALESCE($2, name), description = COALESCE($3, description), redirect_uris = COALESCE($4, redirect_uris), privileged_intents = COALESCE($5, privileged_intents) WHERE id = $1 RETURNING {APP_COLS}"))
+        .bind(id).bind(req.name.map(|n| n.trim().to_string())).bind(req.description.map(|d| d.trim().chars().take(400).collect::<String>())).bind(uris)
+        .bind(req.privileged_intents.map(|i| (i & crate::ws::intents::PRIVILEGED) as i32)).fetch_one(&state.db).await?;
     if let Some(b) = app.bot_user_id { sqlx::query("UPDATE users SET display_name = $2 WHERE id = $1 AND bot").bind(b).bind(&app.name).execute(&state.db).await?; }
     Ok(Json(app))
 }
