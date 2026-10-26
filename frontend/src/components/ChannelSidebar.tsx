@@ -93,6 +93,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }
   const viewAs = useStore((s) => (s.viewAs?.guildId === guildId ? s.viewAs : null))
+  const myThreads = useStore((s) => s.myThreads)
+  const threadInfo = useStore((s) => s.threads)
   const allRoles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
@@ -193,6 +195,12 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
         extra={c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio' ? <VoiceTimer channelId={c.id} /> : undefined}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
       {c.voice_status && <div className="ml-8 mr-2 -mt-0.5 mb-0.5 truncate text-xs text-text-2" title={c.voice_status} data-voice-status={c.id}>{c.voice_status}</div>}
+      {c.kind === 'text' && Object.keys(myThreads).filter((tid) => channels[tid]?.parent_id === c.id && !threadInfo[tid]?.archived_at).map((tid) => (
+        <button key={tid} type="button" onClick={() => { navigate(`/channels/${guildId}/${c.id}`); useStore.getState().setOpenThread(tid); setMobilePane('content') }}
+          className="ml-6 mr-1 flex w-[calc(100%-1.75rem)] items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-sm text-text-2 hover:bg-bg-3 hover:text-text-0" data-sidebar-thread={tid}>
+          <span className="text-text-2/70">↳</span><span className="truncate">{channels[tid]?.name}</span>
+        </button>
+      ))}
       {(c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
     </div>
   )

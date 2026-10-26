@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, MessagesSquare, Pin, PinOff, Plus, X } from 'lucide-react'
+import { Archive, ArchiveRestore, Lock, LockOpen, MessagesSquare, Pin, PinOff, Plus, UserPlus, Users, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { Channel, Message, ThreadInfo } from '../lib/types'
@@ -18,6 +18,12 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
   const perms = useStore((s) => myChannelPerms(s, threadId))
   const [root, setRoot] = useState<Message | null>(null)
   const parentKind = useStore((s) => (thread?.parent_id ? s.channels[thread.parent_id]?.kind : undefined))
+  const joined = useStore((s) => !!s.myThreads[threadId])
+  const setMyThread = useStore((s) => s.setMyThread)
+  const guildMembers = useStore((s) => (thread?.guild_id ? s.members[thread.guild_id] : undefined))
+  const [people, setPeople] = useState<{ id: string; display_name: string; avatar_url: string | null }[] | null>(null)
+  const [addQ, setAddQ] = useState('')
+  const loadPeople = () => api.get<{ id: string; display_name: string; avatar_url: string | null }[]>(`/threads/${threadId}/members`).then(setPeople).catch(() => setPeople([]))
   useEffect(() => {
     if (!thread?.parent_id) return
     api.get<{ thread: ThreadInfo; root: Message | null }>(`/channels/${thread.parent_id}/threads/${threadId}`).then((r) => { upsertThread(r.thread); setRoot(r.root) }).catch(() => {})
@@ -28,12 +34,40 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
   const pinned = !!info?.pinned_at
   const togglePin = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { pinned: !pinned })) } catch (e) { pushToast((e as Error).message, 'error') } }
   const toggle = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { archived: !archived })) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const locked = !!info?.locked
+  const isMod = has(perms, P.MANAGE_MESSAGES)
+  const toggleLock = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { locked: !locked })) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const join = async (on: boolean) => {
+    try { if (on) await api.put(`/threads/${threadId}/members/${me}`); else await api.delete(`/threads/${threadId}/members/${me}`); setMyThread(threadId, on) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const addPerson = async (uid: string) => { try { await api.put(`/threads/${threadId}/members/${uid}`); setAddQ(''); void loadPeople() } catch (e) { pushToast((e as Error).message, 'error') } }
   return (
     <aside className="w-[460px] shrink-0 bg-bg-1 border-l border-line flex flex-col max-md:w-full max-md:border-l-0" data-thread-panel={threadId} data-thread-archived={archived ? '1' : '0'}>
       <div className="h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line">
         <MessagesSquare size={16} className="text-text-2 shrink-0" /><span className="font-bold truncate" data-thread-title>{thread.name}</span>
         {archived && <span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-2">ARCHIVED</span>}
+        {info?.private && <span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-2" data-thread-private-badge>PRIVATE</span>}
+        {locked && <Lock size={13} className="shrink-0 text-text-2" data-thread-locked />}
         <span className="ml-auto flex items-center gap-1">
+          <button onClick={() => join(!joined)} className="rounded-md px-2 py-1 text-xs font-semibold text-text-1 hover:bg-bg-3 hover:text-text-0" data-thread-join={joined ? 'leave' : 'join'}>{joined ? 'Leave' : 'Join'}</button>
+          <span className="relative">
+            <button onClick={() => (people ? setPeople(null) : void loadPeople())} title="Thread members" className="h-8 min-w-8 px-1 rounded-md flex items-center justify-center gap-1 text-xs text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-members-toggle><Users size={16} />{info?.member_count ?? ''}</button>
+            {people && (
+              <div className="pop absolute right-0 top-full z-40 mt-1 w-64 rounded-xl border border-line bg-bg-0 p-2 shadow-2xl" data-thread-members>
+                <div className="px-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">Members — {people.length}</div>
+                <div className="max-h-48 overflow-y-auto">{people.map((u) => <div key={u.id} className="flex items-center gap-2 px-1 py-1 text-sm" data-thread-member={u.id}><Avatar user={u} size={20} /><span className="truncate">{u.display_name}</span></div>)}</div>
+                {(joined || isMod) && (
+                  <div className="mt-2 border-t border-line pt-2">
+                    <div className="flex items-center gap-1"><UserPlus size={14} className="text-text-2" /><input className="input py-1 text-xs" placeholder="Add someone" value={addQ} onChange={(e) => setAddQ(e.target.value)} data-thread-add-search /></div>
+                    {addQ && Object.values(guildMembers ?? {}).filter((m) => !people.some((p) => p.id === m.user_id) && (m.nickname ?? m.display_name).toLowerCase().includes(addQ.toLowerCase())).slice(0, 6).map((m) => (
+                      <button key={m.user_id} type="button" onClick={() => addPerson(m.user_id)} className="mt-1 flex w-full items-center gap-2 rounded px-1 py-1 text-left text-sm hover:bg-bg-3" data-thread-add={m.user_id}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={18} /><span className="truncate">{m.nickname ?? m.display_name}</span></button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </span>
+          {isMod && <button onClick={toggleLock} title={locked ? 'Unlock thread' : 'Lock thread'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-lock>{locked ? <LockOpen size={16} /> : <Lock size={16} />}</button>}
           {parentKind === 'forum' && has(perms, P.MANAGE_MESSAGES) && <button onClick={togglePin} title={pinned ? 'Unpin post' : 'Pin post'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-pin>{pinned ? <PinOff size={16} /> : <Pin size={16} />}</button>}
           {canManage && <button onClick={toggle} title={archived ? 'Unarchive thread' : 'Archive thread'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-archive>{archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}</button>}
           <button onClick={onClose} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title="Close thread"><X size={18} /></button>
@@ -46,7 +80,7 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
         </div>
       )}
       <div className="flex-1 min-h-0 flex flex-col">
-        <ChatPane channel={thread as Channel} />
+        <ChatPane channel={thread as Channel} readOnly={locked && !isMod ? 'This thread is locked. Only moderators can post.' : undefined} />
       </div>
     </aside>
   )

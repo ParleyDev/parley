@@ -141,6 +141,10 @@ interface State {
   callIgnored: Record<string, true>
   /** View Server as Role: permissions in this server are worked out as if you only had these roles. */
   viewAs: { guildId: string; roleIds: string[] } | null
+  /** Threads you've joined (shown under their channel in the list while active). */
+  myThreads: Record<string, true>
+  setMyThread: (id: string, on: boolean) => void
+  loadMyThreads: () => Promise<void>
   setViewAs: (v: { guildId: string; roleIds: string[] } | null) => void
   setCallIgnored: (channelId: string, on: boolean) => void
   setVoiceInvite: (v: VoiceInvite | null) => void
@@ -336,6 +340,9 @@ export const useStore = create<State>((set, get) => ({
   voiceInvite: null,
   callIgnored: {},
   viewAs: null,
+  myThreads: {},
+  setMyThread: (id, on) => set((s) => { const myThreads = { ...s.myThreads }; if (on) myThreads[id] = true; else delete myThreads[id]; return { myThreads } }),
+  loadMyThreads: async () => { try { const ids = await api.get<string[]>('/users/@me/threads'); set({ myThreads: Object.fromEntries(ids.map((i) => [i, true as const])) }) } catch { /* ignore */ } },
   setViewAs: (viewAs) => set({ viewAs }),
   setCallIgnored: (channelId, on) => set((s) => { const callIgnored = { ...s.callIgnored }; if (on) callIgnored[channelId] = true; else delete callIgnored[channelId]; return { callIgnored } }),
   setVoiceInvite: (voiceInvite) => set({ voiceInvite }),

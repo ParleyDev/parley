@@ -18,7 +18,7 @@ import { dmName, isGroup } from '../lib/dm'
  * Message history + composer for any channel (text, DM, or a voice channel's chat).
  * No header: the parent decides how to frame it.
  */
-export default function ChatPane({ channel }: { channel: Channel | DmChannel }) {
+export default function ChatPane({ channel, readOnly }: { channel: Channel | DmChannel; /** Shown instead of the composer (e.g. a locked thread). */ readOnly?: string }) {
   const messages = useStore((s) => s.messages[channel.id])
   const hasMore = useStore((s) => s.hasMore[channel.id])
   const hasNewer = useStore((s) => s.hasNewer[channel.id])
@@ -220,7 +220,7 @@ export default function ChatPane({ channel }: { channel: Channel | DmChannel }) 
       )}
       </div>
 
-      {channel.guild_id === null && isRequest(channel as DmChannel) ? <RequestBanner dm={channel as DmChannel} /> : <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} />}
+      {readOnly ? <div className="mx-4 mb-4 rounded-lg bg-bg-3 px-4 py-3 text-sm text-text-2" data-readonly-note>{readOnly}</div> : channel.guild_id === null && isRequest(channel as DmChannel) ? <RequestBanner dm={channel as DmChannel} /> : <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} />}
     </>
   )
 }

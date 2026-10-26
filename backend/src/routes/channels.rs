@@ -483,6 +483,7 @@ async fn create_message(
     if c.kind == "forum" {
         return Err(AppError::BadRequest("Forum channels hold posts: create a post instead".into()));
     }
+    if c.kind == "thread" { crate::routes::threads::check_locked(&state.db, c.id, p).await?; }
     if let Some(gid) = c.guild_id { check_verification(&state.db, gid, uid).await?; }
     check_slowmode(&state.db, &c, p, uid).await?;
     let content = req.content.trim_end().to_string();
@@ -566,7 +567,7 @@ async fn create_message(
     state.hub.emit(target, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
     crate::push::after_message(state.clone(), msg.clone(), c.clone());
     if c.kind == "thread" {
-        crate::routes::threads::on_thread_message(&state, c.id).await?;
+        crate::routes::threads::on_thread_message(&state, c.id, uid).await?;
     }
     Ok((StatusCode::CREATED, Json(msg)))
 }

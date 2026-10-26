@@ -28,6 +28,9 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/threads", get(list).post(create))
         .route("/channels/:id/threads/:tid", get(show))
         .route("/threads/:tid", patch(update))
+        .route("/threads/:tid/members", get(members))
+        .route("/threads/:tid/members/:uid", axum::routing::put(add_member).delete(remove_member))
+        .route("/users/@me/threads", get(my_threads))
         .route("/channels/:id/tags", get(list_tags).post(create_tag))
         .route("/channels/:id/tags/:tag", patch(update_tag).delete(delete_tag))
 }
@@ -49,13 +52,18 @@ pub struct ThreadInfo {
     /// Forum posts: tag ids and the first message's text (list preview).
     pub tags: Vec<Uuid>,
     pub preview: Option<String>,
+    pub private: bool,
+    pub locked: bool,
+    pub auto_archive_minutes: i32,
+    pub member_count: i64,
 }
 
 const THREAD_SELECT: &str = "SELECT c.id, c.parent_id, c.guild_id, c.name, t.root_message_id, t.owner_id, u.username AS owner_username, t.archived_at, t.pinned_at, t.created_at,
     (SELECT COUNT(*) FROM messages m WHERE m.channel_id = c.id) AS message_count,
     (SELECT MAX(m.created_at) FROM messages m WHERE m.channel_id = c.id) AS last_message_at,
     ARRAY(SELECT tt.tag_id FROM thread_tags tt JOIN forum_tags ft ON ft.id = tt.tag_id WHERE tt.thread_id = c.id ORDER BY ft.position) AS tags,
-    (SELECT LEFT(m.content, 200) FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1) AS preview
+    (SELECT LEFT(m.content, 200) FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1) AS preview,
+    t.private, t.locked, t.auto_archive_minutes, (SELECT COUNT(*) FROM thread_members tm WHERE tm.thread_id = c.id) AS member_count
     FROM threads t JOIN channels c ON c.id = t.channel_id LEFT JOIN users u ON u.id = t.owner_id";
 
 /// Thread summaries keyed by root message, for a batch of messages (message hydration).
@@ -92,7 +100,14 @@ struct CreateThread {
     content: String,
     #[serde(default)]
     tags: Vec<Uuid>,
+    /// Text channels only: a private thread (members and moderators see it).
+    #[serde(default)]
+    private: bool,
+    /// Minutes of quiet before it archives itself: 60, 1440, 4320 or 10080.
+    auto_archive_minutes: Option<i32>,
 }
+
+pub const AUTO_ARCHIVE: [i32; 4] = [60, 1440, 4320, 10080];
 
 async fn check_tags(db: &PgPool, forum: Uuid, tags: &[Uuid]) -> AppResult<()> {
     for t in tags {
@@ -138,13 +153,35 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
             return Err(AppError::Conflict("That message already has a thread".into()));
         }
     }
+    if req.private && (is_forum || req.message_id.is_some()) { return Err(AppError::BadRequest("Only threads started from a channel can be private".into())) }
+    if req.auto_archive_minutes.map(|m| !AUTO_ARCHIVE.contains(&m)).unwrap_or(false) { return Err(AppError::BadRequest("auto_archive_minutes must be 60, 1440, 4320 or 10080".into())) }
     let tid = Uuid::now_v7();
     let mut tx = state.db.begin().await?;
     sqlx::query("INSERT INTO channels (id, guild_id, name, kind, topic, position, parent_id) VALUES ($1, $2, $3, 'thread', '', 0, $4)")
         .bind(tid).bind(parent.guild_id).bind(&name).bind(id)
         .execute(&mut *tx)
         .await?;
-    sqlx::query("INSERT INTO threads (channel_id, root_message_id, owner_id) VALUES ($1, $2, $3)").bind(tid).bind(req.message_id).bind(uid).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO threads (channel_id, root_message_id, owner_id, private, auto_archive_minutes) VALUES ($1, $2, $3, $4, COALESCE($5, 4320))")
+        .bind(tid).bind(req.message_id).bind(uid).bind(req.private).bind(req.auto_archive_minutes).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO thread_members (thread_id, user_id) VALUES ($1, $2)").bind(tid).bind(uid).execute(&mut *tx).await?;
+    if req.private {
+        // Private: the parent's effective permissions, minus View for @everyone, plus View for the creator and for
+        // roles that moderate messages (they can always see private threads, like Discord's Manage Threads).
+        let mut par = parent.clone();
+        perms::attach_overwrites(&state.db, std::slice::from_mut(&mut par)).await?;
+        let gid = parent.guild_id.ok_or(AppError::BadRequest("Not a server channel".into()))?;
+        let mut ows: Vec<(Uuid, String, i64, i64)> = par.overwrites.iter().map(|o| (o.target_id, o.target_kind.clone(), o.allow, o.deny)).collect();
+        match ows.iter_mut().find(|o| o.0 == gid) {
+            Some(e) => { e.2 &= !(perms::VIEW_CHANNEL as i64); e.3 |= perms::VIEW_CHANNEL as i64; }
+            None => ows.push((gid, "role".into(), 0, perms::VIEW_CHANNEL as i64)),
+        }
+        let mods: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM roles WHERE guild_id = $1 AND id <> guild_id AND (permissions & $2) <> 0").bind(gid).bind(perms::MANAGE_MESSAGES as i64).fetch_all(&mut *tx).await?;
+        for (r,) in mods { match ows.iter_mut().find(|o| o.0 == r) { Some(e) => { e.2 |= perms::VIEW_CHANNEL as i64; e.3 &= !(perms::VIEW_CHANNEL as i64); } None => ows.push((r, "role".into(), perms::VIEW_CHANNEL as i64, 0)) } }
+        match ows.iter_mut().find(|o| o.0 == uid) { Some(e) => { e.2 |= perms::VIEW_CHANNEL as i64; e.3 &= !(perms::VIEW_CHANNEL as i64); } None => ows.push((uid, "member".into(), perms::VIEW_CHANNEL as i64, 0)) }
+        for (target, kind, allow, deny) in ows {
+            sqlx::query("INSERT INTO channel_overwrites (channel_id, target_id, target_kind, allow, deny) VALUES ($1, $2, $3, $4, $5)").bind(tid).bind(target).bind(kind).bind(allow).bind(deny).execute(&mut *tx).await?;
+        }
+    }
     tx.commit().await?;
     if is_forum {
         set_tags(&state.db, id, tid, &req.tags).await?;
@@ -153,6 +190,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target.clone(), "CHANNEL_CREATE", json!(c));
+    state.hub.emit_users(vec![uid], "THREAD_MEMBER_UPDATE", json!({ "thread_id": tid, "joined": true }));
     if is_forum {
         // The post body is the thread's first message, by the poster.
         let mid = Uuid::now_v7();
@@ -171,7 +209,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
         let msg = fetch_message(&state.db, mid, uid).await?;
         state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": parent.guild_id }));
     }
-    if !is_forum {
+    if !is_forum && !req.private {
         crate::routes::channels::system_message(&state, &parent, uid, "thread_created", &format!("started a thread: {name}"), vec![], req.message_id, Some(tid)).await?;
     }
     if let Some(gid) = parent.guild_id {
@@ -228,6 +266,9 @@ struct UpdateThread {
     /// Forum posts: pin to the top (Manage Messages only).
     pinned: Option<bool>,
     tags: Option<Vec<Uuid>>,
+    /// Only moderators can post (or unarchive). Manage Messages only.
+    locked: Option<bool>,
+    auto_archive_minutes: Option<i32>,
 }
 
 /// Rename, (un)archive, retag: the thread's owner, or Manage Messages in the parent channel. Pinning is moderators only.
@@ -252,7 +293,17 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tid
         let name = clean_name(n)?;
         sqlx::query("UPDATE channels SET name = $2 WHERE id = $1").bind(tid).bind(&name).execute(&state.db).await?;
     }
+    if let Some(l) = req.locked {
+        perms::check(p, perms::MANAGE_MESSAGES)?;
+        sqlx::query("UPDATE threads SET locked = $2 WHERE channel_id = $1").bind(tid).bind(l).execute(&state.db).await?;
+    }
+    if let Some(m) = req.auto_archive_minutes {
+        if !AUTO_ARCHIVE.contains(&m) { return Err(AppError::BadRequest("auto_archive_minutes must be 60, 1440, 4320 or 10080".into())) }
+        sqlx::query("UPDATE threads SET auto_archive_minutes = $2 WHERE channel_id = $1").bind(tid).bind(m).execute(&state.db).await?;
+    }
     if let Some(a) = req.archived {
+        let (locked,): (bool,) = sqlx::query_as("SELECT locked FROM threads WHERE channel_id = $1").bind(tid).fetch_one(&state.db).await?;
+        if locked && !a && !has(p, perms::MANAGE_MESSAGES) { return Err(AppError::Forbidden) }
         sqlx::query("UPDATE threads SET archived_at = CASE WHEN $2 THEN COALESCE(archived_at, now()) ELSE NULL END WHERE channel_id = $1").bind(tid).bind(a).execute(&state.db).await?;
     }
     announce(&state, tid).await?;
@@ -275,9 +326,95 @@ pub async fn announce(state: &AppState, tid: Uuid) -> AppResult<()> {
 }
 
 /// Called when a message lands in a thread: wakes an archived thread and refreshes the root card's count.
-pub async fn on_thread_message(state: &AppState, tid: Uuid) -> AppResult<()> {
+pub async fn on_thread_message(state: &AppState, tid: Uuid, author: Uuid) -> AppResult<()> {
     sqlx::query("UPDATE threads SET archived_at = NULL WHERE channel_id = $1").bind(tid).execute(&state.db).await?;
+    // Posting in a thread joins it.
+    if sqlx::query("INSERT INTO thread_members (thread_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(tid).bind(author).execute(&state.db).await?.rows_affected() > 0 {
+        state.hub.emit_users(vec![author], "THREAD_MEMBER_UPDATE", json!({ "thread_id": tid, "joined": true }));
+    }
     announce(state, tid).await
+}
+
+/// Locked threads take posts from moderators only.
+pub async fn check_locked(db: &PgPool, tid: Uuid, p: u64) -> AppResult<()> {
+    let row: Option<(bool,)> = sqlx::query_as("SELECT locked FROM threads WHERE channel_id = $1").bind(tid).fetch_optional(db).await?;
+    if row.map(|r| r.0).unwrap_or(false) && !has(p, perms::MANAGE_MESSAGES) { return Err(AppError::Forbidden) }
+    Ok(())
+}
+
+/// Background task: archive threads quiet for longer than their auto-archive time.
+pub async fn auto_archive(state: AppState) {
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+        let due: Vec<(Uuid,)> = sqlx::query_as(
+            "UPDATE threads t SET archived_at = now() WHERE t.archived_at IS NULL AND t.pinned_at IS NULL
+               AND COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.channel_id = t.channel_id), t.created_at) < now() - make_interval(mins => t.auto_archive_minutes)
+             RETURNING t.channel_id")
+            .fetch_all(&state.db).await.unwrap_or_default();
+        for (tid,) in due { let _ = announce(&state, tid).await; }
+    }
+}
+
+/// `GET /threads/:tid/members`
+async fn members(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tid): Path<Uuid>) -> AppResult<Json<Vec<Value>>> {
+    let (t, _) = require_channel_perms(&state.db, tid, uid).await?;
+    if t.kind != "thread" { return Err(AppError::NotFound("Thread not found".into())) }
+    let rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as("SELECT u.id, u.display_name, u.avatar_url FROM thread_members tm JOIN users u ON u.id = tm.user_id WHERE tm.thread_id = $1 ORDER BY tm.joined_at LIMIT 500")
+        .bind(tid).fetch_all(&state.db).await?;
+    Ok(Json(rows.into_iter().map(|(id, name, av)| json!({ "id": id, "display_name": name, "avatar_url": av })).collect()))
+}
+
+/// `PUT /threads/:tid/members/:uid`: join (yourself), or add someone (a member of a private thread adds people).
+async fn add_member(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((tid, target)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
+    let (t, p) = require_channel_perms(&state.db, tid, uid).await?;
+    if t.kind != "thread" { return Err(AppError::NotFound("Thread not found".into())) }
+    let (private,): (bool,) = sqlx::query_as("SELECT private FROM threads WHERE channel_id = $1").bind(tid).fetch_one(&state.db).await?;
+    let gid = t.guild_id.ok_or(AppError::NotFound("Thread not found".into()))?;
+    if target != uid {
+        let mine: Option<(bool,)> = sqlx::query_as("SELECT true FROM thread_members WHERE thread_id = $1 AND user_id = $2").bind(tid).bind(uid).fetch_optional(&state.db).await?;
+        if mine.is_none() && !has(p, perms::MANAGE_MESSAGES) { return Err(AppError::Forbidden) }
+        let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
+        if !ctx.is_member(target) { return Err(AppError::NotFound("Member not found".into())) }
+        // They must be able to see the parent channel.
+        if require_channel_perms(&state.db, t.parent_id.unwrap_or(tid), target).await.is_err() { return Err(AppError::BadRequest("They can't see this channel".into())) }
+    }
+    if private {
+        let before = perms::visibility(&state.db, gid).await?;
+        sqlx::query("INSERT INTO channel_overwrites (channel_id, target_id, target_kind, allow, deny) VALUES ($1, $2, 'member', $3, 0)
+                     ON CONFLICT (channel_id, target_id) DO UPDATE SET allow = channel_overwrites.allow | $3, deny = channel_overwrites.deny & ~$3")
+            .bind(tid).bind(target).bind(perms::VIEW_CHANNEL as i64).execute(&state.db).await?;
+        perms::resync_visibility(&state, gid, &before).await?;
+    }
+    sqlx::query("INSERT INTO thread_members (thread_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(tid).bind(target).execute(&state.db).await?;
+    state.hub.emit_users(vec![target], "THREAD_MEMBER_UPDATE", json!({ "thread_id": tid, "joined": true }));
+    announce(&state, tid).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `DELETE /threads/:tid/members/:uid`: leave (yourself), or remove someone (the owner or a moderator).
+async fn remove_member(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((tid, target)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
+    let (t, p) = require_channel_perms(&state.db, tid, uid).await?;
+    if t.kind != "thread" { return Err(AppError::NotFound("Thread not found".into())) }
+    let (private, owner): (bool, Option<Uuid>) = sqlx::query_as("SELECT private, owner_id FROM threads WHERE channel_id = $1").bind(tid).fetch_one(&state.db).await?;
+    if target != uid && owner != Some(uid) && !has(p, perms::MANAGE_MESSAGES) { return Err(AppError::Forbidden) }
+    sqlx::query("DELETE FROM thread_members WHERE thread_id = $1 AND user_id = $2").bind(tid).bind(target).execute(&state.db).await?;
+    if private {
+        if let Some(gid) = t.guild_id {
+            let before = perms::visibility(&state.db, gid).await?;
+            sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_id = $2 AND target_kind = 'member'").bind(tid).bind(target).execute(&state.db).await?;
+            perms::resync_visibility(&state, gid, &before).await?;
+        }
+    }
+    state.hub.emit_users(vec![target], "THREAD_MEMBER_UPDATE", json!({ "thread_id": tid, "joined": false }));
+    announce(&state, tid).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `GET /users/@me/threads`: active threads you've joined (for the channel list).
+async fn my_threads(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Uuid>>> {
+    let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT tm.thread_id FROM thread_members tm JOIN threads t ON t.channel_id = tm.thread_id WHERE tm.user_id = $1 AND t.archived_at IS NULL")
+        .bind(uid).fetch_all(&state.db).await?;
+    Ok(Json(rows.into_iter().map(|r| r.0).collect()))
 }
 
 // ---------- forum tags ----------
