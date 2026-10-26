@@ -1,0 +1,69 @@
+// Profile extras: recent avatars (switch back; replaced avatars are kept, not deleted), friends-only profiles,
+// profile frames, nameplates and effects, the bio formatting bar, and LIVE in member lists and profiles.
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, raw, multi, pngFile, ok, finish } from '../lib.mjs'
+const a = await reg('alice'), b = await reg('bob'), c = await reg('carol')
+await call(b.token, 'POST', '/users/@me/relationships', { user_id: c.user.id }); await call(c.token, 'PUT', `/users/@me/relationships/${b.user.id}`)
+const g = await call(a.token, 'POST', '/guilds', { name: `Prof ${S}` })
+const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); for (const u of [b, c]) await call(u.token, 'POST', `/invites/${inv.code}`)
+const general = g.channels.find((x) => x.kind === 'text'), vc = g.channels.find((x) => x.kind === 'voice')
+
+console.log('-- avatar history')
+const img = async () => (await (await multi(b.token, '/images?kind=avatar', pngFile)).json()).url
+const av1 = await img(), av2 = await img(), av3 = await img()
+await call(b.token, 'PATCH', '/users/@me', { avatar_url: av1 }); await call(b.token, 'PATCH', '/users/@me', { avatar_url: av2 })
+let me = await call(b.token, 'PATCH', '/users/@me', { avatar_url: av3 })
+ok('replaced avatars are kept, newest first', JSON.stringify(me.avatar_history) === JSON.stringify([av2, av1]), JSON.stringify(me.avatar_history))
+ok('and still load', (await fetch(`${process.env.PARLEY_API_ORIGIN ?? 'http://localhost:18080'}${av1}`)).status === 200)
+me = await call(b.token, 'PATCH', '/users/@me', { avatar_url: av1 })
+ok('switching back moves it out of the history', JSON.stringify(me.avatar_history) === JSON.stringify([av3, av2]))
+
+console.log('-- private profiles')
+ok('unknown privacy values are refused', (await raw(b.token, 'PATCH', '/users/@me', { profile_privacy: 'nobody' })).status === 400)
+await call(b.token, 'PATCH', '/users/@me', { bio: `secret bio ${S}`, pronouns: 'they/them', profile_privacy: 'friends' })
+const asA = await call(a.token, 'GET', `/users/${b.user.id}`)
+ok('strangers get no bio or pronouns, and a private flag', asA.bio === '' && asA.pronouns === '' && asA.private_profile === true, JSON.stringify({ bio: asA.bio, p: asA.pronouns, f: asA.private_profile }))
+const asC = await call(c.token, 'GET', `/users/${b.user.id}`)
+ok('friends see the full profile', asC.bio === `secret bio ${S}` && asC.pronouns === 'they/them' && !asC.private_profile)
+const msg = await call(b.token, 'POST', `/channels/${general.id}/messages`, { content: 'hi' })
+ok('nothing leaks through messages', !msg.author.bio)
+
+console.log('-- cosmetics')
+ok('unknown frames are refused', (await raw(b.token, 'PATCH', '/users/@me', { profile_frame: 'lava' })).status === 400)
+const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] }); const errors = []
+const mk = async (tok, path) => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['microphone', 'camera'] })
+  await ctx.addInitScript(() => { navigator.mediaDevices.getDisplayMedia = async () => { const cv = document.createElement('canvas'); cv.width = 320; cv.height = 180; cv.getContext('2d').fillRect(0, 0, 320, 180); return cv.captureStream(5) } })
+  const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
+  await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok)
+  await p.goto(`${WEB}${path}`); await p.waitForTimeout(900)
+  return p
+}
+const pb = await mk(b.token, `/channels/${g.id}/${general.id}`)
+await pb.click('[data-control="User Settings"]'); await pb.click('button:has-text("Profiles")'); await pb.waitForSelector('[data-cosmetics]')
+ok('recent avatars are offered', await pb.locator('[data-avatar-history-item]').count() === 2)
+await pb.click('[data-frame-option="neon"]'); await pb.click('[data-nameplate-option="ocean"]'); await pb.click('[data-effect-option="sparkles"]')
+ok('the preview shows the frame and effect', await pb.locator('[data-profile-card][data-profile-frame="neon"] [data-profile-effect="sparkles"]').count() === 1)
+await pb.fill('[data-bio-input]', 'make this bold'); await pb.evaluate(() => { const t = document.querySelector('[data-bio-input]'); t.focus(); t.setSelectionRange(10, 14) })
+await pb.click('[data-bio-format="bold"]'); await pb.waitForTimeout(100)
+ok('the bio bar formats the selection', (await pb.inputValue('[data-bio-input]')) === 'make this **bold**', await pb.inputValue('[data-bio-input]'))
+await pb.click('button:has-text("Save Changes")'); await pb.waitForTimeout(700)
+me = await call(b.token, 'GET', '/users/@me')
+ok('cosmetics are saved', me.profile_frame === 'neon' && me.nameplate === 'ocean' && me.profile_effect === 'sparkles')
+await pb.keyboard.press('Escape'); await pb.waitForTimeout(300)
+const pa = await mk(a.token, `/channels/${g.id}/${general.id}`)
+ok('the nameplate shows behind their name in the member list', await pa.locator(`[data-member-row="${b.user.id}"][data-nameplate="ocean"]`).count() === 1)
+await pa.click(`[data-member-row="${b.user.id}"]`); await pa.waitForSelector('[data-profile-card]')
+ok('others see the frame and effect', await pa.locator('[data-profile-card][data-profile-frame="neon"] [data-profile-effect="sparkles"]').count() === 1)
+ok('and that the profile is private', await pa.locator('[data-private-profile]').count() === 1 && await pa.locator('[data-bio]').count() === 0)
+await pa.keyboard.press('Escape'); await pa.waitForTimeout(200)
+
+console.log('-- streaming')
+await pb.goto(`${WEB}/channels/${g.id}/${vc.id}`); await pb.click('text=Join Voice'); await pb.waitForSelector('[data-voice-leave]')
+await pb.click('button[aria-label="Share Your Screen"]'); await pa.waitForTimeout(1500)
+ok('streamers get LIVE in the member list', await pa.locator(`[data-member-row="${b.user.id}"] [data-member-live]`).count() === 1)
+await pa.click(`[data-member-row="${b.user.id}"]`); await pa.waitForSelector('[data-profile-card]')
+ok('and in their profile', await pa.locator('[data-profile-live]').count() === 1)
+ok('no page errors', errors.length === 0, errors.join(' | '))
+await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await browser.close(); await finish()

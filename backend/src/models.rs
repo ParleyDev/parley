@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, FromRow)]
+#[derive(Debug, Clone, Default, FromRow)]
 pub struct User {
     pub id: Uuid,
     pub username: String,
@@ -20,25 +20,94 @@ pub struct User {
     pub name_accent: Option<String>,
     /// A bot account (acts only through its token).
     #[sqlx(default)]
-    #[serde(default)]
     pub bot: bool,
     /// Display name style: {font, effect} (colours in name_primary / name_accent).
     #[sqlx(default)]
-    #[serde(default)]
     pub name_style: serde_json::Value,
     #[sqlx(default)]
-    #[serde(default)]
     pub custom_status: String,
     /// Profile flair: preset avatar frame ('' = none), short clan tag, optional panels (wishlist / games).
     #[sqlx(default)]
-    #[serde(default)]
     pub avatar_decoration: String,
     #[sqlx(default)]
-    #[serde(default)]
     pub clan_tag: String,
     #[sqlx(default)]
-    #[serde(default)]
     pub panels: serde_json::Value,
+    /// 'everyone' or 'friends': who sees bio, banner, pronouns and panels.
+    #[sqlx(default)]
+    pub profile_privacy: String,
+    #[sqlx(default)]
+    pub profile_frame: String,
+    #[sqlx(default)]
+    pub nameplate: String,
+    #[sqlx(default)]
+    pub profile_effect: String,
+    /// The viewer may see a private profile (themselves, or a friend): set by the profile endpoint.
+    #[sqlx(skip)]
+    pub reveal: bool,
+}
+
+/// What other people get: a private profile (friends only) leaves out bio, banner, pronouns and panels.
+#[derive(Serialize)]
+struct UserWire<'a> {
+    id: Uuid,
+    username: &'a str,
+    display_name: &'a str,
+    avatar_url: &'a Option<String>,
+    bio: &'a str,
+    status: &'a str,
+    created_at: DateTime<Utc>,
+    banner_url: Option<&'a String>,
+    theme_primary: &'a Option<String>,
+    theme_accent: &'a Option<String>,
+    pronouns: &'a str,
+    name_primary: &'a Option<String>,
+    name_accent: &'a Option<String>,
+    bot: bool,
+    name_style: &'a serde_json::Value,
+    custom_status: &'a str,
+    avatar_decoration: &'a str,
+    clan_tag: &'a str,
+    panels: &'a serde_json::Value,
+    #[serde(skip_serializing_if = "str::is_empty")]
+    profile_frame: &'a str,
+    #[serde(skip_serializing_if = "str::is_empty")]
+    nameplate: &'a str,
+    #[serde(skip_serializing_if = "str::is_empty")]
+    profile_effect: &'a str,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    private_profile: bool,
+}
+
+impl Serialize for User {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let hidden = self.profile_privacy == "friends" && !self.reveal;
+        static NULL: serde_json::Value = serde_json::Value::Null;
+        UserWire {
+            id: self.id, username: &self.username, display_name: &self.display_name, avatar_url: &self.avatar_url,
+            bio: if hidden { "" } else { &self.bio }, status: &self.status, created_at: self.created_at,
+            banner_url: if hidden { None } else { self.banner_url.as_ref() }, theme_primary: &self.theme_primary, theme_accent: &self.theme_accent,
+            pronouns: if hidden { "" } else { &self.pronouns }, name_primary: &self.name_primary, name_accent: &self.name_accent,
+            bot: self.bot, name_style: &self.name_style, custom_status: &self.custom_status, avatar_decoration: &self.avatar_decoration,
+            clan_tag: &self.clan_tag, panels: if hidden { &NULL } else { &self.panels },
+            profile_frame: &self.profile_frame, nameplate: &self.nameplate, profile_effect: &self.profile_effect,
+            private_profile: hidden,
+        }
+        .serialize(s)
+    }
+}
+
+impl From<&PrivateUser> for User {
+    fn from(u: &PrivateUser) -> Self {
+        User {
+            name_style: u.name_style.clone(), bot: u.bot, id: u.id, username: u.username.clone(), display_name: u.display_name.clone(), avatar_url: u.avatar_url.clone(), bio: u.bio.clone(),
+            status: u.status.clone(), custom_status: u.custom_status.clone(), created_at: u.created_at, banner_url: u.banner_url.clone(),
+            theme_primary: u.theme_primary.clone(), theme_accent: u.theme_accent.clone(), pronouns: u.pronouns.clone(), name_primary: u.name_primary.clone(),
+            name_accent: u.name_accent.clone(), avatar_decoration: u.avatar_decoration.clone(), clan_tag: u.clan_tag.clone(), panels: u.panels.clone(),
+            profile_privacy: u.profile_privacy.clone(), profile_frame: u.profile_frame.clone(), nameplate: u.nameplate.clone(), profile_effect: u.profile_effect.clone(),
+            reveal: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -146,6 +215,17 @@ pub struct PrivateUser {
     /// Friends you are told about when they come online.
     #[sqlx(default)]
     pub online_alerts: Vec<Uuid>,
+    /// Your last avatars (newest first, up to 6) for a quick switch back.
+    #[sqlx(default)]
+    pub avatar_history: Vec<String>,
+    #[sqlx(default)]
+    pub profile_privacy: String,
+    #[sqlx(default)]
+    pub profile_frame: String,
+    #[sqlx(default)]
+    pub nameplate: String,
+    #[sqlx(default)]
+    pub profile_effect: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -360,6 +440,10 @@ pub struct Member {
     #[sqlx(skip)]
     #[serde(default)]
     pub roles: Vec<Uuid>,
+    /// Their nameplate (drawn behind the name in the member list).
+    #[sqlx(default)]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub nameplate: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -639,6 +723,7 @@ impl MessageRow {
                 avatar_decoration: self.avatar_decoration,
                 clan_tag: self.clan_tag,
                 panels: serde_json::Value::Null,
+                ..Default::default()
             },
             reactions,
             attachments,

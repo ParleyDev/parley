@@ -237,3 +237,24 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 /* Profiles (cards and popouts) always play their name effect, like their avatar and decoration (lib/motion.ts). */
 :root[data-name-anim="hover"] [data-profile-card] [class*="ne-"] { animation-play-state: running; }
 :root[data-name-anim="never"] [class*="ne-"] { animation: none !important; }
+
+/* Profile frames (border around the profile card) and nameplates (behind names in lists). */
+.pf { position: relative; }
+.pf-gold { box-shadow: 0 0 0 3px #f6b53d, 0 0 18px rgb(246 181 61 / .45) !important; }
+.pf-neon { box-shadow: 0 0 0 2px #22d3ee, 0 0 0 4px #a855f7, 0 0 22px rgb(168 85 247 / .55) !important; }
+.pf-vines { box-shadow: 0 0 0 3px #3f8f4e, inset 0 0 0 1px #8bd17c !important; }
+.pf-pixel { box-shadow: 4px 0 0 #fff, -4px 0 0 #fff, 0 4px 0 #fff, 0 -4px 0 #fff !important; }
+.pf-frost { box-shadow: 0 0 0 3px #bae6fd, 0 0 16px rgb(186 230 253 / .6) !important; }
+.pf-ember { box-shadow: 0 0 0 3px #f97316, 0 0 20px rgb(239 68 68 / .55) !important; }
+.np { background-size: 200% 100%; }
+.np-dusk { background-image: linear-gradient(90deg, rgb(124 58 237 / .35), rgb(236 72 153 / .18) 70%, transparent); }
+.np-ocean { background-image: linear-gradient(90deg, rgb(14 116 144 / .4), rgb(56 189 248 / .15) 70%, transparent); }
+.np-forest { background-image: linear-gradient(90deg, rgb(21 128 61 / .4), rgb(132 204 22 / .14) 70%, transparent); }
+.np-candy { background-image: linear-gradient(90deg, rgb(244 114 182 / .4), rgb(253 224 71 / .16) 70%, transparent); }
+.np-aurora { background-image: linear-gradient(90deg, rgb(45 212 191 / .35), rgb(129 140 248 / .25) 50%, rgb(232 121 249 / .12) 80%, transparent); animation: np-shift 8s linear infinite; }
+.np-mono { background-image: linear-gradient(90deg, rgb(255 255 255 / .14), transparent 75%); }
+@keyframes np-shift { from { background-position: 0 0 } to { background-position: 200% 0 } }
+/* Profile effects: glyphs drifting up over the card. */
+.pe-bit { bottom: -20px; opacity: 0; animation-name: pe-rise; animation-iteration-count: infinite; animation-timing-function: linear; }
+@keyframes pe-rise { 0% { transform: translateY(0) rotate(0); opacity: 0 } 15% { opacity: .9 } 100% { transform: translateY(-420px) rotate(25deg); opacity: 0 } }
+:root[data-motion="reduced"] .pe-bit, :root[data-motion="reduced"] .np-aurora { animation: none !important; }

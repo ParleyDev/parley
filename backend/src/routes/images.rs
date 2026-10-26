@@ -265,7 +265,7 @@ pub async fn release_replaced(state: &AppState, old: Option<&str>, new: Option<&
 pub async fn orphan_image_ids(db: &sqlx::PgPool, min_age_secs: f64) -> Vec<Uuid> {
     sqlx::query_as::<_, (Uuid,)>(
         "SELECT i.id FROM images i WHERE i.created_at < now() - make_interval(secs => $1)
-           AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_url = '/api/images/' || i.id::text OR u.banner_url = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_url = '/api/images/' || i.id::text OR u.banner_url = '/api/images/' || i.id::text OR '/api/images/' || i.id::text = ANY(u.avatar_history))
            AND NOT EXISTS (SELECT 1 FROM guilds g WHERE g.icon_url = '/api/images/' || i.id::text OR g.banner_url = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM guild_discovery d WHERE d.banner_url = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM emojis e WHERE e.id = i.id)

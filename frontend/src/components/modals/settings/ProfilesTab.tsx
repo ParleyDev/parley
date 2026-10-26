@@ -12,6 +12,8 @@ import DecorationGallery from './DecorationGallery'
 import { colorFor } from '../../../lib/format'
 import { prepareImage, uploadImage } from '../../../lib/upload'
 import ImagePicker from '../ImagePicker'
+import { NAMEPLATES, PROFILE_EFFECTS, PROFILE_FRAMES, nameplateClass } from '../../../lib/cosmetics'
+import { FORMATS, toggleWrap } from '../../../lib/editor'
 import ProfileCard, { type ProfileEdit } from '../../ProfileCard'
 import Avatar from '../../Avatar'
 
@@ -42,6 +44,11 @@ export default function ProfilesTab() {
   const fromLines = (text: string): PanelItem[] => text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [title, url] = l.split('|').map((x) => x.trim()); return url ? { title, url } : { title } })
   const [wishlist, setWishlist] = useState(toLines(user?.panels?.wishlist))
   const [games, setGames] = useState(toLines(user?.panels?.games))
+  const [privacy, setPrivacy] = useState<'everyone' | 'friends'>(user?.profile_privacy ?? 'everyone')
+  const [frame, setFrame] = useState(user?.profile_frame ?? '')
+  const [plate, setPlate] = useState(user?.nameplate ?? '')
+  const [effect, setEffect] = useState(user?.profile_effect ?? '')
+  const bioRef = useRef<HTMLTextAreaElement>(null)
   const [busy, setBusy] = useState(false)
   const bannerRef = useRef<HTMLInputElement>(null)
   if (!user) return null
@@ -50,13 +57,15 @@ export default function ProfilesTab() {
     || decoration !== (user.avatar_decoration ?? '') || JSON.stringify(nameStyle) !== JSON.stringify(styleOfUser(user)) || clanTag !== (user.clan_tag ?? '') || wishlist !== toLines(user.panels?.wishlist) || games !== toLines(user.panels?.games)
     || (avatar ?? null) !== (user.avatar_url ?? null) || (banner ?? null) !== (user.banner_url ?? null)
     || (primary ?? null) !== (user.theme_primary ?? null) || (accent ?? null) !== (user.theme_accent ?? null)
-  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setCustomStatus(user.custom_status ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setDecoration(user.avatar_decoration ?? ''); setClanTag(user.clan_tag ?? ''); setNameStyle(styleOfUser(user)); setWishlist(toLines(user.panels?.wishlist)); setGames(toLines(user.panels?.games)) }
+    || privacy !== (user.profile_privacy ?? 'everyone') || frame !== (user.profile_frame ?? '') || plate !== (user.nameplate ?? '') || effect !== (user.profile_effect ?? '')
+  const reset = () => { setDisplay(user.display_name); setPronouns(user.pronouns ?? ''); setCustomStatus(user.custom_status ?? ''); setBio(user.bio); setAvatar(user.avatar_url); setBanner(user.banner_url ?? null); setPrimary(user.theme_primary ?? null); setAccent(user.theme_accent ?? null); setDecoration(user.avatar_decoration ?? ''); setClanTag(user.clan_tag ?? ''); setNameStyle(styleOfUser(user)); setWishlist(toLines(user.panels?.wishlist)); setGames(toLines(user.panels?.games)); setPrivacy(user.profile_privacy ?? 'everyone'); setFrame(user.profile_frame ?? ''); setPlate(user.nameplate ?? ''); setEffect(user.profile_effect ?? '') }
   const save = async () => {
     setBusy(true)
     try {
       const u = await api.patch<PrivateUser>('/users/@me', {
         display_name: display, pronouns, custom_status: customStatus, bio, avatar_url: avatar ?? '', banner_url: banner ?? '', theme_primary: primary ?? '', theme_accent: accent ?? '',
         avatar_decoration: decoration, clan_tag: clanTag, name_style: nameStyle, panels: { wishlist: fromLines(wishlist), games: fromLines(games) },
+        profile_privacy: privacy, profile_frame: frame, nameplate: plate, profile_effect: effect,
       })
       if (token) setAuth(token, u)
       pushToast('Profile saved')
@@ -103,6 +112,14 @@ export default function ProfilesTab() {
           <div>
             <label className="label">Avatar</label>
             <ImagePicker value={avatar} onChange={setAvatar} label={display} id={user.id} kind="avatar" />
+            {(user.avatar_history?.length ?? 0) > 0 && (
+              <div className="mt-2" data-avatar-history>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1">Recent avatars</div>
+                <div className="flex flex-wrap gap-2">
+                  {user.avatar_history!.map((url) => <button key={url} type="button" onClick={() => setAvatar(url)} className={`h-10 w-10 overflow-hidden rounded-full border-2 ${avatar === url ? 'border-accent' : 'border-transparent hover:border-text-2'}`} title="Use this avatar again" data-avatar-history-item={url}><img src={url} alt="" className="h-full w-full object-cover" /></button>)}
+                </div>
+              </div>
+            )}
             <p className="text-xs text-text-2 mt-1">PNG, JPEG, GIF or WebP up to 8 MB. Animated GIF, APNG and WebP stay animated.</p>
           </div>
           <div>
@@ -137,6 +154,35 @@ export default function ProfilesTab() {
               <button type="button" className="btn-ghost bg-bg-3 hover:bg-bg-4 ml-auto" onClick={() => setStyleOpen(true)} data-name-style-open>Change Display Name Style</button>
             </div>
           </div>
+          <div className="space-y-3 rounded-xl bg-bg-0/40 border border-line p-4" data-cosmetics>
+            <div>
+              <label className="label">Profile frame</label>
+              <div className="flex flex-wrap gap-2">
+                {[{ id: '', label: 'None' }, ...PROFILE_FRAMES].map((f) => <button key={f.id || 'none'} type="button" onClick={() => setFrame(f.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${frame === f.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-frame-option={f.id || 'none'} aria-pressed={frame === f.id}>{f.label}</button>)}
+              </div>
+            </div>
+            <div>
+              <label className="label">Nameplate</label>
+              <div className="flex flex-wrap gap-2">
+                {[{ id: '', label: 'None' }, ...NAMEPLATES].map((n) => <button key={n.id || 'none'} type="button" onClick={() => setPlate(n.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${nameplateClass(n.id)} ${plate === n.id ? 'border-accent' : 'border-line hover:border-text-2'}`} data-nameplate-option={n.id || 'none'} aria-pressed={plate === n.id}>{n.label}</button>)}
+              </div>
+              <p className="mt-1 text-xs text-text-2">Shown behind your name in member lists and DMs.</p>
+            </div>
+            <div>
+              <label className="label">Profile effect</label>
+              <div className="flex flex-wrap gap-2">
+                {[{ id: '', label: 'None', glyph: '' }, ...PROFILE_EFFECTS].map((e) => <button key={e.id || 'none'} type="button" onClick={() => setEffect(e.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${effect === e.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-effect-option={e.id || 'none'} aria-pressed={effect === e.id}>{e.glyph} {e.label}</button>)}
+              </div>
+            </div>
+            <div>
+              <label className="label" htmlFor="profile-privacy">Who can see your full profile</label>
+              <select id="profile-privacy" className="input w-auto" value={privacy} onChange={(e) => setPrivacy(e.target.value as 'everyone' | 'friends')} data-profile-privacy>
+                <option value="everyone">Everyone</option>
+                <option value="friends">Friends only</option>
+              </select>
+              <p className="mt-1 text-xs text-text-2">Friends only hides your about me, banner, pronouns and panels from everyone else.</p>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1" data-panels>
             <div><label className="label">Wishlist panel</label><textarea className="input resize-none font-mono text-[13px]" rows={4} value={wishlist} onChange={(e) => setWishlist(e.target.value)} placeholder={'One per line: Title | https://link (link optional)'} data-panel-wishlist /></div>
             <div><label className="label">Game collection panel</label><textarea className="input resize-none font-mono text-[13px]" rows={4} value={games} onChange={(e) => setGames(e.target.value)} placeholder={'One per line: Title | https://link (link optional)'} data-panel-games /></div>
@@ -144,14 +190,17 @@ export default function ProfilesTab() {
           </div>
           <div>
             <label className="label">About me</label>
-            <textarea className="input resize-none font-mono text-[13px]" rows={5} maxLength={MAX_BIO} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell people a bit about yourself" />
-            <div className="flex justify-between text-[11px] text-text-2 mt-1"><span>Supports **bold**, *italic*, __underline__, ~~strike~~, `code`, &gt; quotes and links.</span><span>{bio.length}/{MAX_BIO}</span></div>
+            <div className="mb-1 flex gap-0.5" data-bio-toolbar>
+              {FORMATS.map((f) => <button key={f.key} type="button" title={f.label} aria-label={f.label} onMouseDown={(e) => e.preventDefault()} onClick={() => { const el = bioRef.current; if (el) { el.focus(); setBio(toggleWrap(el, f)) } }} className="h-8 min-w-8 rounded-md px-2 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0" data-bio-format={f.key}>{f.label}</button>)}
+            </div>
+            <textarea ref={bioRef} className="input resize-none text-[14px]" rows={5} maxLength={MAX_BIO} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell people a bit about yourself" data-bio-input />
+            <div className="flex justify-between text-[11px] text-text-2 mt-1"><span>Select text and use the buttons above, or type **bold**, *italic*, __underline__, ~~strike~~ and links. The preview shows how it looks.</span><span>{bio.length}/{MAX_BIO}</span></div>
           </div>
         </div>
         <div className="w-[340px] max-lg:w-full shrink-0">
           <div className="label">Preview</div>
           <p className="-mt-1 mb-2 text-xs text-text-2">Click your name, pronouns, status, avatar or banner to change them here.</p>
-          <ProfileCard edit={edit} user={{ ...user, display_name: display || user.display_name, pronouns, custom_status: customStatus, bio, avatar_url: avatar, avatar_decoration: decoration, name_style: nameStyle, name_primary: nameStyle.colors?.[0] ?? null, name_accent: nameStyle.colors?.[1] ?? null, banner_url: banner, theme_primary: primary, theme_accent: accent}} />
+          <ProfileCard edit={edit} user={{ ...user, display_name: display || user.display_name, pronouns, custom_status: customStatus, bio, avatar_url: avatar, avatar_decoration: decoration, name_style: nameStyle, name_primary: nameStyle.colors?.[0] ?? null, name_accent: nameStyle.colors?.[1] ?? null, banner_url: banner, theme_primary: primary, theme_accent: accent, profile_frame: frame, profile_effect: effect}} />
         </div>
       </div>
       {dirty && (

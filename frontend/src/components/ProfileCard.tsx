@@ -9,9 +9,14 @@ import Avatar, { statusColor } from './Avatar'
 import { Badges, ClanTag } from './Flair'
 import { nameLook, type NameLook } from '../lib/nameStyle'
 import { useStore } from '../store'
+import { frameClass } from '../lib/cosmetics'
+import ProfileEffect from './ProfileEffect'
 
 export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> {
   banner_url?: string | null
+  profile_frame?: string
+  profile_effect?: string
+  private_profile?: boolean
   clan_tag?: string
   avatar_decoration?: string
   name_style?: { font?: string; effect?: string; colors?: string[] } | null
@@ -134,7 +139,8 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
   const ring = user.theme_primary ?? colorFor(user.id)
   const avatar = compact ? 64 : 80
   return (
-    <div className="overflow-hidden rounded-2xl flex flex-col max-h-full" style={{ background: theme, color: text }} data-profile-card>
+    <div className={`relative overflow-hidden rounded-2xl flex flex-col max-h-full ${frameClass(user.profile_frame)}`} style={{ background: theme, color: text }} data-profile-card data-profile-frame={user.profile_frame || undefined}>
+      <ProfileEffect id={user.profile_effect} />
       <div className={`group/banner relative ${compact ? 'h-20' : 'h-[105px]'} w-full shrink-0 bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: 'rgba(0,0,0,0.18)' }}>
         {edit && (
           <>

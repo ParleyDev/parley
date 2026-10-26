@@ -169,8 +169,13 @@ async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
     Ok(Json(out))
 }
 
-pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, avatar_decoration, clan_tag, panels";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts";
+/// Cosmetic presets the client draws (CSS); the server only checks the id.
+pub const PROFILE_FRAMES: &[&str] = &["gold", "neon", "vines", "pixel", "frost", "ember"];
+pub const NAMEPLATES: &[&str] = &["dusk", "ocean", "forest", "candy", "aurora", "mono"];
+pub const PROFILE_EFFECTS: &[&str] = &["sparkles", "snow", "hearts", "confetti", "bubbles"];
+
+pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, avatar_decoration, clan_tag, panels, profile_privacy, profile_frame, nameplate, profile_effect";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -239,6 +244,12 @@ struct UpdateMe {
     custom_status: Option<String>,
     /// Pinned channels and DMs, in order (up to 100).
     pinned_channels: Option<Vec<Uuid>>,
+    /// 'everyone' | 'friends'.
+    profile_privacy: Option<String>,
+    /// Cosmetics: a preset id from the client's list, or '' for none.
+    profile_frame: Option<String>,
+    nameplate: Option<String>,
+    profile_effect: Option<String>,
     /// Ignored people (up to 500).
     ignored_users: Option<Vec<Uuid>>,
     /// Friends to be told about when they come online (up to 200).
@@ -413,6 +424,16 @@ async fn update_me(
         Some((p, a)) => (Some(p.unwrap_or_default()), Some(a.unwrap_or_default())),
         None => (req.name_primary.clone(), req.name_accent.clone()),
     };
+    if req.profile_privacy.as_deref().map(|p| p != "everyone" && p != "friends").unwrap_or(false) {
+        return Err(AppError::BadRequest("profile_privacy must be 'everyone' or 'friends'".into()));
+    }
+    for (v, list, what) in [(&req.profile_frame, PROFILE_FRAMES, "frame"), (&req.nameplate, NAMEPLATES, "nameplate"), (&req.profile_effect, PROFILE_EFFECTS, "profile effect")] {
+        if let Some(v) = v { if !v.is_empty() && !list.contains(&v.as_str()) { return Err(AppError::BadRequest(format!("Unknown {what}"))) } }
+    }
+    if req.profile_privacy.is_some() || req.profile_frame.is_some() || req.nameplate.is_some() || req.profile_effect.is_some() {
+        sqlx::query("UPDATE users SET profile_privacy = COALESCE($2, profile_privacy), profile_frame = COALESCE($3, profile_frame), nameplate = COALESCE($4, nameplate), profile_effect = COALESCE($5, profile_effect) WHERE id = $1")
+            .bind(uid).bind(&req.profile_privacy).bind(&req.profile_frame).bind(&req.nameplate).bind(&req.profile_effect).execute(&state.db).await?;
+    }
     let before: (Option<String>, Option<String>) = sqlx::query_as("SELECT avatar_url, banner_url FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
 
     let u = sqlx::query_as::<_, PrivateUser>(
@@ -463,30 +484,19 @@ async fn update_me(
     .bind(&req.online_alerts)
     .fetch_one(&state.db)
     .await?;
-    crate::routes::images::release_replaced(&state, before.0.as_deref(), u.avatar_url.as_deref()).await;
+    // Avatar history: the one you replaced goes to the front (up to 6 kept); only avatars that fall off are deleted.
+    let mut u = u;
+    if u.avatar_url != before.0 {
+        let mut hist: Vec<String> = before.0.iter().cloned().chain(u.avatar_history.iter().cloned()).filter(|a| Some(a) != u.avatar_url.as_ref()).collect();
+        hist.dedup();
+        let dropped: Vec<String> = hist.split_off(hist.len().min(6));
+        sqlx::query("UPDATE users SET avatar_history = $2 WHERE id = $1").bind(uid).bind(&hist).execute(&state.db).await?;
+        for old in &dropped { crate::routes::images::release_replaced(&state, Some(old), u.avatar_url.as_deref()).await; }
+        u.avatar_history = hist;
+    }
     crate::routes::images::release_replaced(&state, before.1.as_deref(), u.banner_url.as_deref()).await;
 
-    let public = User {
-        name_style: u.name_style.clone(),
-        bot: u.bot,
-        id: u.id,
-        username: u.username.clone(),
-        display_name: u.display_name.clone(),
-        avatar_url: u.avatar_url.clone(),
-        bio: u.bio.clone(),
-        status: u.status.clone(),
-        custom_status: u.custom_status.clone(),
-        created_at: u.created_at,
-        banner_url: u.banner_url.clone(),
-        theme_primary: u.theme_primary.clone(),
-        theme_accent: u.theme_accent.clone(),
-        pronouns: u.pronouns.clone(),
-        name_primary: u.name_primary.clone(),
-        name_accent: u.name_accent.clone(),
-        avatar_decoration: u.avatar_decoration.clone(),
-        clan_tag: u.clan_tag.clone(),
-        panels: u.panels.clone(),
-    };
+    let public = User::from(&u);
     state.hub.emit_all("USER_UPDATE", json!(public));
     // Your other devices: settings only you see.
     if req.pinned_channels.is_some() { state.hub.emit_users(vec![uid], "USER_SETTINGS_UPDATE", json!({ "pinned_channels": u.pinned_channels })); }
@@ -550,11 +560,13 @@ async fn get_user(
     AuthUser(me): AuthUser,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<serde_json::Value>> {
-    let u = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1"))
+    let mut u = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1"))
         .bind(id)
         .fetch_optional(&state.db)
         .await?
         .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+    // Friends-only profiles show in full to you and your friends.
+    u.reveal = me == id || sqlx::query_as::<_, (bool,)>("SELECT true FROM relationships WHERE user_id = $1 AND target_id = $2 AND kind = 'friend'").bind(me).bind(id).fetch_optional(&state.db).await?.is_some();
     let mutual: Vec<(Uuid, String, Option<String>)> = if me == id {
         Vec::new()
     } else {

@@ -1,4 +1,4 @@
-import { Check, ChevronRight, Clock, Crown, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { Check, ChevronRight, Clock, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { nameLook } from '../lib/nameStyle'
 import { roleLook } from './StyledName'
 import { locale } from '../lib/i18n'
@@ -15,6 +15,8 @@ import Avatar from './Avatar'
 import { publicOrigin } from './InviteCard'
 import { Badges, ClanTag } from './Flair'
 import { colorRole } from './StyledName'
+import { frameClass } from '../lib/cosmetics'
+import ProfileEffect from './ProfileEffect'
 
 export const POPOUT_W = 300
 
@@ -36,6 +38,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const panel = variant === 'panel'
   const me = useStore((s) => s.user)
   const rel = useStore((s) => s.relationships[user.id]?.kind)
+  const live = useStore((s) => !!s.voiceStates[user.id]?.self_stream)
   const friendsSince = useStore((st) => st.relationships[user.id]?.created_at)
   const guild = useStore((s) => (guildId ? s.guilds[guildId] : undefined))
   const member = useStore((s) => (guildId ? s.members[guildId]?.[user.id] : undefined))
@@ -146,7 +149,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   }
 
   return (
-    <div className="relative w-full rounded-lg border text-[#dbdee1] shadow-2xl overflow-visible" style={cardStyle} data-profile-card>
+    <div className={`relative w-full rounded-lg border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined}>
+      <ProfileEffect id={user.profile_effect} />
       {/* Banner with overlaid buttons */}
       <div className="relative h-[105px] rounded-t-lg bg-cover bg-center" style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }}>
         <div className="absolute right-3 top-3 flex gap-2">
@@ -214,6 +218,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             )}
           </button>
         )}
+        {user.private_profile && <div className="flex items-center gap-1.5 text-xs text-[#b5bac1]" data-private-profile><Lock size={12} /> Private profile: only friends can see more</div>}
+        {live && <div className="flex items-center gap-1.5 text-xs" data-profile-live><span className="rounded bg-danger px-1 text-[10px] font-extrabold text-white">LIVE</span>Streaming in voice</div>}
         {user.bio && (
           <div>
             <div ref={bioRef} className="msg-content text-sm leading-[18px] whitespace-pre-wrap break-words overflow-hidden max-h-[54px]" data-bio>{renderMarkdown(user.bio, { blocks: false })}</div>

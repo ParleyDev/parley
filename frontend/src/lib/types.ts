@@ -22,6 +22,12 @@ export interface User {
   avatar_decoration?: string
   clan_tag?: string
   panels?: { wishlist?: PanelItem[]; games?: PanelItem[] } | null
+  /** Cosmetics: profile card frame, nameplate behind the name in lists, and an effect over the card. */
+  profile_frame?: string
+  nameplate?: string
+  profile_effect?: string
+  /** Their profile is friends-only and you aren't friends: bio, banner, pronouns and panels are hidden. */
+  private_profile?: boolean
 }
 export interface PanelItem { title: string; url?: string }
 /** Preset avatar frames (User Settings → Profiles). */
@@ -57,6 +63,8 @@ export interface PrivateUser extends User {
   spam_filter?: 'none' | 'non_friends' | 'all'
   /** Server-side notification preferences (Settings → Notifications). */
   notif_prefs?: NotifPrefsServer
+  avatar_history?: string[]
+  profile_privacy?: 'everyone' | 'friends'
 }
 export interface NotifPrefsServer { push_timeout_min?: number; email_dms?: boolean; email_friend_requests?: boolean; default_suppress_everyone?: boolean; default_suppress_roles?: boolean }
 /** GET /users/:id adds the servers you share with that user. */
@@ -209,6 +217,7 @@ export interface Member {
   /** Moderation timeout: read-only in this server until this instant. */
   timeout_until?: string | null
   roles: string[]
+  nameplate?: string
 }
 
 export interface Ban {

@@ -13,6 +13,7 @@ import { ClanTag } from './Flair'
 import ContextMenu, { useContextMenu } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { useT } from '../lib/i18n'
+import { nameplateClass } from '../lib/cosmetics'
 
 export default function MemberList({ guildId }: { guildId: string }) {
   const t = useT()
@@ -53,10 +54,10 @@ export default function MemberList({ guildId }: { guildId: string }) {
   const Row = ({ m, dim }: { m: Member; dim?: boolean }) => {
     const status = users[m.user_id]?.custom_status ?? m.custom_status ?? ''
     return (
-      <button data-motion-row onClick={(e) => openModal({ kind: 'profile', userId: m.user_id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu({ id: m.user_id, display_name: m.display_name, nickname: m.nickname }, e.currentTarget.getBoundingClientRect()))} data-member-row={m.user_id} className={`w-full flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3 text-left ${dim ? 'opacity-40 hover:opacity-100' : ''}`}>
+      <button data-motion-row onClick={(e) => openModal({ kind: 'profile', userId: m.user_id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu({ id: m.user_id, display_name: m.display_name, nickname: m.nickname }, e.currentTarget.getBoundingClientRect()))} data-member-row={m.user_id} data-nameplate={(m.nameplate ?? users[m.user_id]?.nameplate) || undefined} className={`w-full flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3 text-left ${nameplateClass(m.nameplate ?? users[m.user_id]?.nameplate)} ${dim ? 'opacity-40 hover:opacity-100' : ''}`}>
         <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={32} presence />
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId} className="truncate text-[15px] font-medium text-text-1">{m.nickname ?? m.display_name}</StyledName><RoleIcon guildId={guildId} userId={m.user_id} size={14} /><ClanTag userId={m.user_id} tag={m.clan_tag} />{guild?.owner_id === m.user_id && <Crown size={14} className="text-warn shrink-0" />}{isTimedOut(m) && <span title={`Timed out until ${new Date(m.timeout_until!).toLocaleString()}`} className="shrink-0 text-danger" data-member-timeout><TimerReset size={14} /></span>}</span>
+          <span className="flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId} className="truncate text-[15px] font-medium text-text-1">{m.nickname ?? m.display_name}</StyledName><RoleIcon guildId={guildId} userId={m.user_id} size={14} /><ClanTag userId={m.user_id} tag={m.clan_tag} />{guild?.owner_id === m.user_id && <Crown size={14} className="text-warn shrink-0" />}{voiceStates[m.user_id]?.self_stream && <span className="shrink-0 rounded bg-danger px-1 text-[9px] font-extrabold text-white" title="Streaming" data-member-live>LIVE</span>}{isTimedOut(m) && <span title={`Timed out until ${new Date(m.timeout_until!).toLocaleString()}`} className="shrink-0 text-danger" data-member-timeout><TimerReset size={14} /></span>}</span>
           {status && <span className="block truncate text-xs text-text-2" data-member-status>{status}</span>}
         </span>
       </button>
