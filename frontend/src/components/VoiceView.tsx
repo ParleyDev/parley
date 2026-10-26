@@ -18,7 +18,7 @@ import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
 import CallLock from './CallLock'
 import SoundboardPicker from './SoundboardPicker'
-import { InviteToVoice, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
+import { ConnQuality, InviteToVoice, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 import ChatPane from './ChatPane'
 import { MembersToggle, MobileBack } from './HeaderBits'
@@ -170,7 +170,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {isStudio && t.kind === 'camera' && !engineers.includes(t.userId) && !t.state.suppress && <span className="absolute left-2 top-2 z-10 rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-white" data-artist-badge>Artist</span>}
         {isStudio && t.kind === 'camera' && (isMod || t.isMe) && <span className="absolute right-2 top-2 z-10" onClick={(e) => e.stopPropagation()}><RoleMenu uid={t.userId} /></span>}
         {t.kind === 'screen' && !t.isMe && !watching[t.userId] ? (
-          <StreamGate user={t.user} big={big} canWatch={inThis} onWatch={() => voice.watch(t.userId, true)} />
+          <StreamGate user={t.user} big={big} canWatch={inThis} onWatch={() => voice.watch(t.userId, true)} channelId={channel.id} />
         ) : t.stream && t.kind === 'screen' ? (
           <ZoomPan><VideoTile stream={t.stream} mirror={false} contain /></ZoomPan>
         ) : t.stream ? (
@@ -196,6 +196,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           <span className={`absolute right-3 top-3 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase ${status === 'failed' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{status === 'failed' ? 'No route' : 'Connecting'}</span>
         )}
         <div className="absolute right-3 bottom-3 flex items-center gap-1">
+          {t.kind === 'camera' && !t.isMe && inThis && <ConnQuality userId={t.userId} />}
           {t.stream && t.kind === 'camera' && <FitToggle />}
           {t.kind === 'screen' && !t.isMe && watching[t.userId] && <StopWatching onStop={() => voice.watch(t.userId, false)} />}
           <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget.closest('[data-voice-tile]') as HTMLElement) }} title="Fullscreen" aria-label="Fullscreen" className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{document.fullscreenElement ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>

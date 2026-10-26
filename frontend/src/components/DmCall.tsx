@@ -9,7 +9,7 @@ import { useUserMenu } from './UserContextMenu'
 import { useUserAudioMap } from '../lib/userAudio'
 import type { DmChannel, User, VoiceState } from '../lib/types'
 import SoundboardPicker from './SoundboardPicker'
-import { ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
+import { ConnQuality, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
 import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
 import { useResizableHeight } from '../lib/resize'
 import { voice } from '../lib/voice'
@@ -48,6 +48,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const videoFit = useVideoFit()
   const stage = useResizableHeight('dmCall', DEFAULT_HEIGHT, 160, 0.8)
   const inThis = myChannel === channel.id
+  const notInCall = channel.recipients.filter((r) => !participants.some((p) => p.user_id === r.id))
 
   const tiles: Tile[] = []
   for (const p of participants) {
@@ -96,7 +97,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         data-call-tile={t.key} data-tile-big={big ? '1' : '0'} title={big ? 'Click to return to the grid · double-click for fullscreen' : 'Click to focus · double-click for fullscreen'}
         {...(t.kind === 'camera' ? { 'data-call-participant': t.userId } : { 'data-call-screen': t.userId })}>
         {t.kind === 'screen' && !t.isMe && !watching[t.userId] ? (
-          <StreamGate user={t.user} big={big} canWatch={inThis} onWatch={() => voice.watch(t.userId, true)} />
+          <StreamGate user={t.user} big={big} canWatch={inThis} onWatch={() => voice.watch(t.userId, true)} channelId={channel.id} />
         ) : t.stream && t.kind === 'screen' ? (
           <ZoomPan><VideoTile stream={t.stream} mirror={false} contain /></ZoomPan>
         ) : t.stream ? (
@@ -119,6 +120,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         {t.kind === 'screen' && <StreamViewers streamerId={t.userId} channelId={channel.id} />}
         {t.kind === 'camera' && <TileReactions userId={t.userId} />}
         <div className="absolute right-2 bottom-2 flex items-center gap-1">
+          {t.kind === 'camera' && !t.isMe && inThis && <ConnQuality userId={t.userId} />}
           {t.stream && t.kind === 'camera' && <FitToggle />}
           {t.kind === 'screen' && !t.isMe && watching[t.userId] && <StopWatching onStop={() => voice.watch(t.userId, false)} />}
           <button type="button" onClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget.closest('[data-call-tile]') as HTMLElement) }} title="Fullscreen" aria-label="Fullscreen" className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 hover:text-text-0" data-tile-fullscreen>{document.fullscreenElement ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
@@ -148,6 +150,17 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
           </div>
         )}
       </div>
+      {inThis && notInCall.length > 0 && (
+        <div className="mt-2 shrink-0 flex flex-wrap items-center justify-center gap-1.5 text-xs text-text-2" data-ring-row>
+          <span>Not here yet:</span>
+          {notInCall.map((r) => (
+            <button key={r.id} type="button" onClick={() => api.post(`/channels/${channel.id}/call/ring`, { user_ids: [r.id] }).then(() => useStore.getState().pushToast(`Ringing ${r.display_name}`)).catch((e: Error) => useStore.getState().pushToast(e.message, 'error'))}
+              className="flex items-center gap-1.5 rounded-full border border-line bg-bg-1 py-0.5 pl-0.5 pr-2 text-text-1 hover:bg-bg-3" data-ring={r.id} title={`Ring ${r.display_name}`}>
+              <Avatar user={users[r.id] ?? r} size={18} /><span className="max-w-[120px] truncate">{r.display_name}</span><Phone size={12} className="text-success" />
+            </button>
+          ))}
+        </div>
+      )}
       <div className="relative mt-2 shrink-0 flex justify-center pb-1">
         <span className="absolute left-0 top-1/2 -translate-y-1/2"><CallLock channelId={channel.id} /></span>
         {inThis ? (

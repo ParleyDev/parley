@@ -1,5 +1,6 @@
+import { fetchPreview } from '../lib/streamPreview'
 import { Expand, Eye, EyeOff, Shrink } from 'lucide-react'
-import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { STORAGE_PREFIX } from '../lib/brand'
 import Avatar from './Avatar'
 
@@ -49,10 +50,21 @@ export function FitToggle({ className = '' }: { className?: string }) {
  * A screen share you aren't watching yet: the streamer's avatar with Watch Stream, like Discord. Nothing is sent to you
  * until you click it (see voice.watch). `canWatch` is false while you aren't in the call.
  */
-export function StreamGate({ user, big, canWatch, onWatch }: { user: { id: string; display_name: string; avatar_url: string | null } | undefined; big: boolean; canWatch: boolean; onWatch: () => void }) {
+export function StreamGate({ user, big, canWatch, onWatch, channelId }: { user: { id: string; display_name: string; avatar_url: string | null } | undefined; big: boolean; canWatch: boolean; onWatch: () => void; channelId?: string }) {
+  // A recent still of the stream (refreshed every 20 s) instead of just the avatar.
+  const [preview, setPreview] = useState<string | null>(null)
+  useEffect(() => {
+    if (!channelId || !user) return
+    let alive = true, url: string | null = null
+    const load = () => fetchPreview(channelId, user.id).then((u) => { if (!alive) { if (u) URL.revokeObjectURL(u); return } if (u) { if (url) URL.revokeObjectURL(url); url = u; setPreview(u) } })
+    void load()
+    const t = setInterval(load, 20_000)
+    return () => { alive = false; clearInterval(t); if (url) URL.revokeObjectURL(url) }
+  }, [channelId, user])
   return (
-    <div className="relative h-full w-full flex flex-col items-center justify-center gap-3 overflow-hidden bg-bg-1 p-3 text-center" data-stream-gate>
-      {user?.avatar_url && <img src={user.avatar_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25 blur-2xl scale-110" aria-hidden />}
+    <div className="relative h-full w-full flex flex-col items-center justify-center gap-3 overflow-hidden bg-bg-1 p-3 text-center" data-stream-gate data-stream-preview={preview ? '1' : '0'}>
+      {preview ? <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" aria-hidden />
+        : user?.avatar_url && <img src={user.avatar_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25 blur-2xl scale-110" aria-hidden />}
       <div className="relative flex flex-col items-center gap-2">
         {user && <Avatar user={user} size={big ? 72 : 40} />}
         <span className={`font-semibold text-text-0 ${big ? 'text-base' : 'text-xs'}`}>{user?.display_name ?? 'Someone'} is streaming</span>

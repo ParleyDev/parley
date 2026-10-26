@@ -39,6 +39,12 @@ export default function AudioStats({ onClose }: { onClose: () => void }) {
                 <span title="Network round trip">rtt {fmt(r.rttMs, ' ms')}</span>
                 <span title="Packets lost">loss {fmt(r.lossPct, '%')}</span>
               </div>
+              {(r.videoIn || r.videoOut) && (
+                <div className="mt-1 grid grid-cols-2 gap-x-2 tabular-nums text-text-1" data-video-stat>
+                  {r.videoIn && <span title="Video you receive" data-video-in>video in {r.videoIn.width}×{r.videoIn.height}{r.videoIn.fps != null ? ` @${r.videoIn.fps}` : ''} · {fmt(r.videoIn.kbps, ' kbps')}</span>}
+                  {r.videoOut && <span title="Video you send" data-video-out>video out {r.videoOut.width}×{r.videoOut.height}{r.videoOut.fps != null ? ` @${r.videoOut.fps}` : ''} · {fmt(r.videoOut.kbps, ' kbps')}</span>}
+                </div>
+              )}
             </div>
           ))}
         </div>

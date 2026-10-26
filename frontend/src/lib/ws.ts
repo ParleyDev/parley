@@ -64,6 +64,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'VOICE_ERROR'; d: { message: string } }
   | { t: 'VOICE_MOVE'; d: { guild_id: string; channel_id: string } }
   | { t: 'VOICE_DISCONNECT'; d: { guild_id: string } }
+  | { t: 'CALL_DECLINE' | 'CALL_RING'; d: { channel_id: string; user_id: string } }
   | { t: 'MEMBER_WARNING'; d: { id: string; guild_id: string; guild_name: string; reason: string } }
   | { t: 'VOICE_REACTION'; d: { channel_id: string; user_id: string; emoji: string } }
   | { t: 'VOICE_INVITE'; d: VoiceInvite })
@@ -268,6 +269,13 @@ function handle(ev: Ev) {
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break
     case 'VOICE_MOVE': if (s.myVoiceChannelId) { s.pushToast('A moderator moved you to another voice channel'); voice.join(ev.d.channel_id) } break
+    case 'CALL_DECLINE': {
+      // You declined on another device: stop ringing here too. Someone else declined a call you're in: say so.
+      if (ev.d.user_id === s.user?.id) s.setCallIgnored(ev.d.channel_id, true)
+      else if (s.myVoiceChannelId === ev.d.channel_id) s.pushToast(`${s.users[ev.d.user_id]?.display_name ?? 'They'} declined the call`)
+      break
+    }
+    case 'CALL_RING': s.setCallIgnored(ev.d.channel_id, false); break
     case 'MEMBER_WARNING': if (!s.modal) s.openModal({ kind: 'warning', guildName: ev.d.guild_name, reason: ev.d.reason }); else s.pushToast(`Warning from ${ev.d.guild_name}: ${ev.d.reason}`, 'error'); break
     case 'VOICE_REACTION': if (s.myVoiceChannelId === ev.d.channel_id) emitCallReaction(ev.d.user_id, ev.d.emoji); break
     case 'VOICE_INVITE': if (!s.user?.ignored_users?.includes(ev.d.from.id)) { s.setVoiceInvite(ev.d); playSfx('invite_speak') } break

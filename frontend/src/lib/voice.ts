@@ -1,6 +1,7 @@
 import { useStore } from '../store'
 import { applySfxSink, playSfx } from './sfx'
 import type { VoiceState } from './types'
+import { startPreviews, stopPreviews } from './streamPreview'
 import { sendOp, type SignalData } from './ws'
 import { supportsSinkId, type VoiceSettings } from './settings'
 import { keepAwake } from './native'
@@ -305,6 +306,7 @@ class VoiceManager {
       this.peers.forEach((p) => this.replaceVideo(p.pc, 1, null))
       await this.sfuUnpublish('screen')
       s.setLocalMedia({ screen: null })
+      stopPreviews()
       playSfx('stream_stopped')
       this.pushState()
       return
@@ -326,6 +328,7 @@ class VoiceManager {
     await this.sfuPublish('screen', track)
     s.setLocalMedia({ screen: this.screen })
     this.pushState()
+    if (this.channelId) startPreviews(this.channelId, track)
   }
 
   // ---- settings ----

@@ -104,9 +104,13 @@ export interface AudioStat {
   jitterBufferMs: number | null
   rttMs: number | null
   lossPct: number | null
+  /** Video on this connection (camera or screen), when any is flowing. */
+  videoIn?: VideoStat | null
+  videoOut?: VideoStat | null
 }
+export interface VideoStat { width: number; height: number; fps: number | null; kbps: number | null }
 
-type Snap = { t: number; inBytes: number; outBytes: number; outPackets: number; jbDelay: number; jbCount: number }
+type Snap = { t: number; inBytes: number; outBytes: number; outPackets: number; jbDelay: number; jbCount: number; vIn: number; vOut: number }
 // Last sample and result per connection: rates need two samples, and callers polling close together (stats popover,
 // tests) reuse the last result instead of measuring over a sliver of time.
 const snaps = new WeakMap<object, { snap: Snap; result: AudioStat | null }>()
@@ -122,7 +126,12 @@ export async function measure(userId: string, source: { pc?: RTCPeerConnection; 
   const all = new Map<string, Record<string, unknown>>()
   for (const r of reports) r.forEach((v: Record<string, unknown>, k: string) => all.set(k, v))
   let inbound: Record<string, unknown> | undefined, outbound: Record<string, unknown> | undefined, pair: Record<string, unknown> | undefined
+  // Video: the busiest stream each way (camera or screen).
+  let vIn: Record<string, unknown> | undefined, vOut: Record<string, unknown> | undefined
+  const bytes = (r?: Record<string, unknown>, k = 'bytesReceived') => Number(r?.[k] ?? 0)
   all.forEach((v) => {
+    if (v.type === 'inbound-rtp' && v.kind === 'video' && Number(v.frameWidth ?? 0) > 0 && bytes(v) >= bytes(vIn)) vIn = v
+    if (v.type === 'outbound-rtp' && v.kind === 'video' && Number(v.frameWidth ?? 0) > 0 && bytes(v, 'bytesSent') >= bytes(vOut, 'bytesSent')) vOut = v
     if (v.type === 'inbound-rtp' && v.kind === 'audio') inbound = v
     if (v.type === 'outbound-rtp' && v.kind === 'audio') outbound = v
     if (v.type === 'candidate-pair' && (v.nominated || v.selected) && v.state === 'succeeded') pair = v
@@ -135,6 +144,7 @@ export async function measure(userId: string, source: { pc?: RTCPeerConnection; 
     t: performance.now(),
     inBytes: Number(inbound?.bytesReceived ?? 0), outBytes: Number(outbound?.bytesSent ?? 0), outPackets: Number(outbound?.packetsSent ?? 0),
     jbDelay: Number(inbound?.jitterBufferDelay ?? 0), jbCount: Number(inbound?.jitterBufferEmittedCount ?? 0),
+    vIn: bytes(vIn), vOut: bytes(vOut, 'bytesSent'),
   }
   const key = (source.pc ?? source.receiver ?? source.sender) as object
   const last = snaps.get(key)
@@ -154,7 +164,16 @@ export async function measure(userId: string, source: { pc?: RTCPeerConnection; 
     jitterBufferMs: jb == null ? null : Math.round(jb),
     rttMs: rtt == null ? null : Math.round(Number(rtt) * 1000),
     lossPct: got + lost > 0 ? Math.round((lost / (got + lost)) * 1000) / 10 : null,
+    videoIn: vIn ? { width: Number(vIn.frameWidth), height: Number(vIn.frameHeight), fps: vIn.framesPerSecond == null ? null : Math.round(Number(vIn.framesPerSecond)), kbps: (() => { const r = rate(now.vIn, prev?.vIn ?? 0); return r == null ? null : Math.round(r) })() } : null,
+    videoOut: vOut ? { width: Number(vOut.frameWidth), height: Number(vOut.frameHeight), fps: vOut.framesPerSecond == null ? null : Math.round(Number(vOut.framesPerSecond)), kbps: (() => { const r = rate(now.vOut, prev?.vOut ?? 0); return r == null ? null : Math.round(r) })() } : null,
   }
   snaps.set(key, { snap: now, result: prev ? result : null })
   return result
+}
+
+/** Rough connection quality from round trip and loss: what the tile's signal icon shows. */
+export function qualityOf(st: Pick<AudioStat, 'rttMs' | 'lossPct'>): 'good' | 'ok' | 'bad' | null {
+  if (st.rttMs == null && st.lossPct == null) return null
+  const rtt = st.rttMs ?? 0, loss = st.lossPct ?? 0
+  return loss > 5 || rtt > 400 ? 'bad' : loss > 1 || rtt > 200 ? 'ok' : 'good'
 }

@@ -1,4 +1,5 @@
-import { Eye, SmilePlus, UserPlus, Volume2 } from 'lucide-react'
+import { Eye, Signal, SmilePlus, UserPlus, Volume2 } from 'lucide-react'
+import { useConnQuality } from '../lib/connQuality'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { voice } from '../lib/voice'
@@ -194,4 +195,14 @@ export function ZoomPan({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   )
+}
+
+/* ---- connection quality ---- */
+
+/** Signal bars on a call tile: green, yellow or red by round trip and packet loss. */
+export function ConnQuality({ userId }: { userId: string }) {
+  const q = useConnQuality(userId)
+  if (!q) return null
+  const color = q === 'good' ? 'text-success' : q === 'ok' ? 'text-warn' : 'text-danger'
+  return <span className={`rounded-md bg-bg-0/80 p-1 ${color}`} title={q === 'good' ? 'Good connection' : q === 'ok' ? 'Unstable connection' : 'Poor connection'} data-conn-quality={q}><Signal size={12} /></span>
 }

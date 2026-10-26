@@ -1,7 +1,8 @@
 import { Phone, PhoneOff } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
+import { api } from '../lib/api'
 import { voice } from '../lib/voice'
 import { useNotifPrefs } from '../lib/notifPrefs'
 import { usePrefs } from '../lib/prefs'
@@ -17,7 +18,8 @@ export default function IncomingCall() {
   const users = useStore((s) => s.users)
   const myChannel = useStore((s) => s.myVoiceChannelId)
   const navigate = useNavigate()
-  const [ignored, setIgnored] = useState<Record<string, true>>({})
+  const ignored = useStore((s) => s.callIgnored)
+  const setIgnored = useStore((s) => s.setCallIgnored)
   // Where I am from any session (another tab, the phone): answering there must silence this one too.
   const mineElsewhere = me ? voiceStates[me.id]?.channel_id ?? null : null
   const ringing = Object.values(voiceStates).find((v) => v.guild_id === null && v.channel_id && dms[v.channel_id] && v.user_id !== me?.id && myChannel !== v.channel_id && mineElsewhere !== v.channel_id && !ignored[v.channel_id])
@@ -53,7 +55,7 @@ export default function IncomingCall() {
       </div>
       <div className="mt-3 flex gap-2">
         <button onClick={join} className="flex-1 btn-primary bg-success hover:bg-success/80 text-black py-1.5" data-call-join><Phone size={16} /> Join</button>
-        <button onClick={() => setIgnored((i) => ({ ...i, [dm.id]: true }))} className="flex-1 btn-danger py-1.5"><PhoneOff size={16} /> Ignore</button>
+        <button onClick={() => { setIgnored(dm.id, true); api.post(`/channels/${dm.id}/call/decline`).catch(() => {}) }} className="flex-1 btn-danger py-1.5" data-call-decline><PhoneOff size={16} /> Decline</button>
       </div>
     </div>
   )

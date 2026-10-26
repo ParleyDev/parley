@@ -137,6 +137,9 @@ interface State {
   bookmarks: Record<string, true>
   /** Someone asked you to join their voice channel (banner until joined or dismissed). */
   voiceInvite: VoiceInvite | null
+  /** DM calls whose ring you declined or ignored (on any of your devices), until someone rings you again. */
+  callIgnored: Record<string, true>
+  setCallIgnored: (channelId: string, on: boolean) => void
   setVoiceInvite: (v: VoiceInvite | null) => void
   /** Unread messages per channel that mention me (direct, role or @everyone). */
   mentionCounts: Record<string, number>
@@ -328,6 +331,8 @@ export const useStore = create<State>((set, get) => ({
   stickers: {},
   bookmarks: {},
   voiceInvite: null,
+  callIgnored: {},
+  setCallIgnored: (channelId, on) => set((s) => { const callIgnored = { ...s.callIgnored }; if (on) callIgnored[channelId] = true; else delete callIgnored[channelId]; return { callIgnored } }),
   setVoiceInvite: (voiceInvite) => set({ voiceInvite }),
   mentionCounts: {},
   notifSettings: {},

@@ -13,6 +13,7 @@ import Modals from '../components/modals'
 import ErrorBoundary from '../components/ErrorBoundary'
 import IncomingCall from '../components/IncomingCall'
 import { VoiceInviteBanner } from '../components/CallExtras'
+import MiniCall from '../components/MiniCall'
 import UserPanel from '../components/UserPanel'
 import { NavColumn } from '../components/SplitLayout'
 import VerifyBanner from '../components/VerifyBanner'
@@ -86,6 +87,7 @@ export default function AppShell() {
       <Modals />
       <IncomingCall />
       <VoiceInviteBanner />
+      <MiniCall />
       </div>
     </div>
   )
