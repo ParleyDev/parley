@@ -71,10 +71,13 @@ pub async fn accept_requests_between(db: &PgPool, a: Uuid, b: Uuid) -> AppResult
     Ok(rows)
 }
 
+/// id, guild, name, kind, topic, position, created, last message, owner, icon, request state, e2ee.
+type DmRow = (Uuid, Option<Uuid>, String, String, String, i32, DateTime<Utc>, Option<DateTime<Utc>>, Option<Uuid>, Option<String>, String, bool);
+
 pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel>> {
-    let channels: Vec<(Uuid, Option<Uuid>, String, String, String, i32, DateTime<Utc>, Option<DateTime<Utc>>, Option<Uuid>, Option<String>, String)> = sqlx::query_as(
+    let channels: Vec<DmRow> = sqlx::query_as(
         "SELECT c.id, c.guild_id, c.name, c.kind, c.topic, c.position, c.created_at,
-                (SELECT MAX(created_at) FROM messages WHERE channel_id = c.id), c.owner_id, c.icon_url, cm.request_state
+                (SELECT MAX(created_at) FROM messages WHERE channel_id = c.id), c.owner_id, c.icon_url, cm.request_state, c.e2ee
          FROM channels c JOIN channel_members cm ON cm.channel_id = c.id
          WHERE cm.user_id = $1 AND c.guild_id IS NULL
          ORDER BY 8 DESC NULLS LAST, c.created_at DESC",
@@ -83,10 +86,10 @@ pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel
     .fetch_all(db)
     .await?;
     let mut out = Vec::with_capacity(channels.len());
-    for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state) in channels {
+    for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state, e2ee) in channels {
         let recipients = recipients_for(db, id, uid).await?;
         out.push(DmChannel {
-            channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, engineer_ids: vec![], overwrites: vec![] },
+            channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, e2ee, engineer_ids: vec![], overwrites: vec![] },
             recipients,
             last_message_at: last,
             request_state,

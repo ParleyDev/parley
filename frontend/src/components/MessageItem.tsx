@@ -1,4 +1,4 @@
-import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions } from 'lucide-react'
+import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions } from 'lucide-react'
 import { locale } from '../lib/i18n'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
@@ -188,6 +188,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       : m.kind === 'recipient_remove' || m.kind === 'recipient_leave' ? <UserMinus size={16} className="text-danger" />
       : m.kind === 'channel_icon_change' ? <ImageIcon size={16} className="text-text-2" />
       : m.kind === 'pins_add' ? <Pin size={16} className="text-text-2" />
+      : m.kind === 'call_e2ee_change' ? <Lock size={16} className="text-success" />
       : m.kind === 'thread_created' ? <MessagesSquare size={16} className="text-text-2" />
       : m.kind === 'call_started' || m.kind === 'call_ended' ? <Phone size={16} className="text-success" />
       : m.kind === 'call_missed' ? <PhoneMissed size={16} className="text-danger" />

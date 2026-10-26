@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { Bookmark, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup, nameOf } from '../lib/dm'
 import { uploadImage } from '../lib/upload'
@@ -112,6 +112,10 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
     await voice.join(channel.id)
     if (video) voice.toggleCamera()
   }
+  // DM and group calls: any member can switch end-to-end encryption on or off (everyone in a call reconnects).
+  const toggleE2ee = async () => {
+    try { await api.patch(`/channels/${channel.id}`, { e2ee: !channel.e2ee }) } catch (e) { useStore.getState().pushToast((e as Error).message, 'error') }
+  }
   const onSearchKey = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && query.trim()) { e.preventDefault(); setSearch(query.trim()) }
     if (e.key === 'Escape') { setQuery(''); setSearch(null) }
@@ -155,6 +159,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               <>
                 <button onClick={() => startCall(false)} title="Start Voice Call" className={btn(myVoice === channel.id)} data-start-call><Phone size={20} /></button>
                 <button onClick={() => startCall(true)} title="Start Video Call" className={btn(false)} data-start-video><Video size={20} /></button>
+                <button onClick={toggleE2ee} title={channel.e2ee ? 'Calls here are end-to-end encrypted. Click to turn it off.' : 'Turn on end-to-end encryption for calls'} aria-pressed={!!channel.e2ee} className={btn(!!channel.e2ee)} data-dm-e2ee={channel.e2ee ? '1' : '0'}>{channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />}</button>
               </>
             )}
             {!isDm && channel.kind === 'text' && (

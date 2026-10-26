@@ -41,6 +41,9 @@ pub struct VoiceState {
     /// Stage channels: the member asked to speak (shown to moderators).
     #[serde(default)]
     pub request_to_speak: bool,
+    /// The client can encrypt media end to end (it said so when joining); end-to-end encrypted calls need it.
+    #[serde(skip)]
+    pub e2ee: bool,
     /// Which socket owns this state; another tab joining replaces it.
     #[serde(skip)]
     pub session: u64,

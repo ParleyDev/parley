@@ -7,6 +7,8 @@ import { keepAwake } from './native'
 import { api } from './api'
 import { captureConstraints, measure, profileOf, sameProfile, tuneAudioReceiver, tuneAudioSender, tuneOpusSdp, type AudioProfile, type AudioStat } from './audioProfile'
 import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant, type RemoteTrackPublication } from 'livekit-client'
+import E2EEWorker from 'livekit-client/e2ee-worker?worker'
+import { CallCrypto, e2eeSupported, legacyInsertableStreams, MeshCrypto, ParleyKeyProvider } from './e2ee'
 
 /**
  * Mesh WebRTC voice/video: every participant holds one RTCPeerConnection per other participant.
@@ -64,6 +66,9 @@ class VoiceManager {
   private screen: MediaStream | null = null
   /** Mesh: peers who clicked Watch Stream on our screen share; only they are sent its video. */
   private watchers = new Set<string>()
+  /** End-to-end encrypted call (channel `e2ee` on): key agreement, and the mesh frame worker. */
+  private crypto: CallCrypto | null = null
+  private meshCrypto: MeshCrypto | null = null
   private peers = new Map<string, Peer>()
   private channelId: string | null = null
   private joining = false
@@ -78,7 +83,7 @@ class VoiceManager {
   private sfuScreen: LocalVideoTrack | null = null
 
   /** Debug/test window: current transport and room state. */
-  get debug(): { mode: string; room: string | null; remote: number; channel: string | null } { return { mode: this.sfu ? 'sfu' : 'mesh', room: this.room ? String(this.room.state) : null, remote: this.room?.remoteParticipants.size ?? this.peers.size, channel: this.channelId } }
+  get debug(): { mode: string; room: string | null; remote: number; channel: string | null; e2ee: boolean } { return { mode: this.sfu ? 'sfu' : 'mesh', room: this.room ? String(this.room.state) : null, remote: this.room?.remoteParticipants.size ?? this.peers.size, channel: this.channelId, e2ee: this.room ? this.room.isE2EEEnabled : !!this.meshCrypto } }
   private get sfu(): boolean { return useStore.getState().instance.voice_mode === 'sfu' }
 
   constructor() {
@@ -89,7 +94,9 @@ class VoiceManager {
       // An admin changing the channel's audio profile mid-call applies to everyone in it without rejoining.
       useStore.subscribe((s, prev) => {
         const id = this.channelId
-        if (!id || s.channels[id] === prev.channels[id]) return
+        if (!id) return
+        if (this.syncE2ee()) return
+        if (s.channels[id] === prev.channels[id]) return
         const next = profileOf(s.channels[id])
         if (!sameProfile(next, this.profile)) this.applyProfile(next)
       })
@@ -174,19 +181,42 @@ class VoiceManager {
       const captureChanged = next.mode !== this.profile.mode || next.lowLatency !== this.profile.lowLatency
       this.profile = next
       if (this.raw && captureChanged) await this.reopenMicDevice()
+      const e2ee = !!(s.channels[channelId] ?? s.dms[channelId])?.e2ee
+      if (e2ee && !e2eeSupported()) {
+        s.pushToast("This call is end-to-end encrypted, and this browser can't encrypt calls. Use a current version of Chrome, Edge, Firefox or Safari.", 'error')
+        return
+      }
       if (!(await this.acquireMic('call'))) return
       // Moving channels: tear down old peers; camera/screen stay on and re-attach to new peers.
-      if (this.channelId) this.closeAllPeers()
+      if (this.channelId) { this.closeAllPeers(); await this.disconnectSfu() }
+      this.endCrypto()
+      if (e2ee) await this.startCrypto()
       this.channelId = channelId
       s.setMyVoice(channelId, true)
       s.setLocalMedia({ camera: this.camera, screen: this.screen })
-      if (!sendOp({ op: 'voice_join', channel_id: channelId })) {
+      if (!sendOp({ op: 'voice_join', channel_id: channelId, e2ee: e2eeSupported() })) {
         s.pushToast('Not connected to the server', 'error')
         this.leave()
       }
     } finally {
       this.joining = false
     }
+    this.syncE2ee()
+  }
+
+  /**
+   * Encryption switched on or off for the call we're in (possibly while we were still joining): rejoin so the call is
+   * rebuilt, and rekeyed, the new way. Returns true when it started a rejoin.
+   */
+  private syncE2ee(): boolean {
+    const s = useStore.getState()
+    const id = this.channelId
+    if (!id || this.joining) return false
+    const e2ee = !!(s.channels[id] ?? s.dms[id])?.e2ee
+    if (e2ee === !!this.crypto) return false
+    this.leave(); this.join(id)
+    s.pushToast(e2ee ? 'This call is now end-to-end encrypted. Reconnecting…' : 'End-to-end encryption was turned off. Reconnecting…')
+    return true
   }
 
   leave(evicted = false) {
@@ -196,6 +226,7 @@ class VoiceManager {
     this.channelId = null
     this.closeAllPeers()
     this.disconnectSfu()
+    this.endCrypto()
     this.releaseMic('call')
     this.stopTracks(this.camera); this.camera = null
     this.stopTracks(this.screen); this.screen = null
@@ -361,8 +392,9 @@ class VoiceManager {
           }
           if (this.camera || this.screen || s.selfMute || s.selfDeaf) this.pushState()
         }
-      } else if (v.channel_id === null) {
-        // Server evicted us (kicked, channel deleted, another tab took over).
+      } else if (v.channel_id === null && !useStore.getState().voiceConnecting) {
+        // Server evicted us (kicked, channel deleted, another tab took over). While a (re)join awaits its
+        // acknowledgement, a "left" state is the echo of our own earlier voice_leave, not an eviction.
         this.leave(true)
       }
       return
@@ -373,7 +405,9 @@ class VoiceManager {
   }
 
   async onSignal(from: string, channelId: string, data: SignalData) {
-    if (channelId !== this.channelId || this.sfu) return
+    if (channelId !== this.channelId) return
+    if (data.type === 'e2ee_hello' || data.type === 'e2ee_key') { this.crypto?.onSignal(from, data); return }
+    if (this.sfu) return
     if (data.type === 'watch') {
       if (data.on) this.watchers.add(from); else this.watchers.delete(from)
       const p = this.peers.get(from)
@@ -416,7 +450,7 @@ class VoiceManager {
       const ch = this.channelId
       this.closeAllPeers()
       useStore.getState().setMyVoice(ch, true)
-      sendOp({ op: 'voice_join', channel_id: ch })
+      sendOp({ op: 'voice_join', channel_id: ch, e2ee: e2eeSupported() })
     }
   }
 
@@ -619,7 +653,7 @@ class VoiceManager {
 
   private createPeer(userId: string, offerer: boolean): Peer {
     const s = useStore.getState()
-    const pc = new RTCPeerConnection({ iceServers: s.iceServers })
+    const pc = new RTCPeerConnection({ iceServers: s.iceServers, ...(this.meshCrypto && legacyInsertableStreams() ? { encodedInsertableStreams: true } : {}) } as RTCConfiguration)
     const audio = document.createElement('audio')
     audio.autoplay = true
     audio.muted = s.selfDeaf
@@ -637,10 +671,13 @@ class VoiceManager {
       pc.addTransceiver('video', { direction: 'sendrecv' })
       this.replaceVideo(pc, 0, this.camera?.getVideoTracks()[0] ?? null)
       this.replaceVideo(pc, 1, this.screenFor(userId))
+      this.meshCrypto?.secure(pc, userId)
     }
+    this.crypto?.hello(userId)
 
     pc.onicecandidate = (e) => sendOp({ op: 'voice_signal', to: userId, data: { type: 'candidate', candidate: e.candidate ? e.candidate.toJSON() : null } })
     pc.ontrack = (e) => {
+      this.meshCrypto?.secure(pc, userId)
       const stream = new MediaStream([e.track])
       if (e.track.kind === 'audio') {
         tuneAudioReceiver(e.receiver, this.profile)
@@ -675,6 +712,7 @@ class VoiceManager {
     videos.forEach((t) => (t.direction = 'sendrecv'))
     this.replaceVideo(pc, 0, this.camera?.getVideoTracks()[0] ?? null)
     this.replaceVideo(pc, 1, this.screenFor(userId))
+    this.meshCrypto?.secure(pc, userId)
   }
 
   /** Our screen share track for one peer: only peers watching it get the video, like Discord's Watch Stream. */
@@ -723,6 +761,7 @@ class VoiceManager {
     p.audio.srcObject = null; p.audio.remove()
     this.peers.delete(userId)
     this.watchers.delete(userId)
+    this.crypto?.remove(userId)
     const s = useStore.getState()
     s.setPeerStatus(userId, null)
     s.setSpeaking(userId, false)
@@ -744,7 +783,9 @@ class VoiceManager {
     if (this.room) await this.disconnectSfu()
     let grant: { url: string; token: string }
     try { grant = await api.post<{ url: string; token: string }>('/voice/token', { channel_id: channelId }) } catch (e) { s.pushToast(`Voice server refused: ${(e as Error).message}`, 'error'); this.leave(); return }
-    const room = new Room({ adaptiveStream: true, dynacast: true })
+    const keys = this.crypto && s.user ? new ParleyKeyProvider(s.user.id) : null
+    const room = new Room({ adaptiveStream: true, dynacast: true, ...(keys ? { e2ee: { keyProvider: keys, worker: new E2EEWorker() } } : {}) })
+    if (keys) this.crypto!.attach(keys)
     this.room = room
     room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub, participant: RemoteParticipant) => this.onSfuTrack(track, participant))
     // Screen shares are only subscribed once you click Watch Stream; everything else as soon as it is published.
@@ -753,8 +794,9 @@ class VoiceManager {
       if (track.kind === Track.Kind.Audio) { this.sfuAudio.get(participant.identity)?.remove(); this.sfuAudio.delete(participant.identity); this.sfuMeters.get(participant.identity)?.(); this.sfuMeters.delete(participant.identity) }
       else useStore.getState().setRemoteMedia(participant.identity, track.source === Track.Source.ScreenShare ? 'screen' : 'camera', null)
     })
-    room.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => useStore.getState().setPeerStatus(p.identity, 'connected'))
-    room.on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => { useStore.getState().setPeerStatus(p.identity, null); useStore.getState().setSpeaking(p.identity, false) })
+    room.on(RoomEvent.ParticipantConnected, (p: RemoteParticipant) => { useStore.getState().setPeerStatus(p.identity, 'connected'); this.crypto?.hello(p.identity) })
+    // Encrypted calls move to a new sender key when someone leaves, so they can't decrypt what follows.
+    room.on(RoomEvent.ParticipantDisconnected, (p: RemoteParticipant) => { useStore.getState().setPeerStatus(p.identity, null); useStore.getState().setSpeaking(p.identity, false); this.crypto?.remove(p.identity, true) })
     room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
       const st = useStore.getState(); const me = st.user?.id
       const ids = new Set(speakers.map((p) => p.identity))
@@ -763,7 +805,9 @@ class VoiceManager {
     })
     room.on(RoomEvent.Disconnected, () => { if (this.room === room) { this.room = null; if (this.channelId) useStore.getState().pushToast('Voice server connection lost', 'error') } })
     try {
+      if (keys) await room.setE2EEEnabled(true)
       await room.connect(grant.url, grant.token, { autoSubscribe: false })
+      room.remoteParticipants.forEach((p) => this.crypto?.hello(p.identity))
       room.remoteParticipants.forEach((p) => { useStore.getState().setPeerStatus(p.identity, 'connected'); p.trackPublications.forEach((pub) => this.sfuAutoSubscribe(pub, p)) })
       await this.sfuPublishMic()
       if (this.camera) await this.sfuPublish('camera', this.camera.getVideoTracks()[0])
@@ -835,6 +879,29 @@ class VoiceManager {
     if (!t) return
     if (kind === 'screen') this.sfuScreen = null; else this.sfuCamera = null
     try { await this.room?.localParticipant.unpublishTrack(t, false) } catch { /* already gone */ }
+  }
+
+  private async startCrypto() {
+    const s = useStore.getState()
+    const me = s.user?.id
+    if (!me) return
+    const c = await CallCrypto.create(me, (to, data) => { sendOp({ op: 'voice_signal', to, data }) }, () => this.publishCrypto())
+    this.crypto = c
+    if (!this.sfu) { this.meshCrypto = new MeshCrypto(); c.attach(this.meshCrypto) }
+    this.publishCrypto()
+  }
+
+  private endCrypto() {
+    this.crypto?.close(); this.crypto = null
+    this.meshCrypto?.close(); this.meshCrypto = null
+    useStore.getState().setCallE2ee(null)
+  }
+
+  /** Safety code and who we hold keys for → store, for the call's lock badge. */
+  private publishCrypto() {
+    const c = this.crypto
+    if (!c) return
+    c.safetyCode().then((code) => { if (this.crypto === c) useStore.getState().setCallE2ee({ code, keyed: c.keyedPeers }) }).catch(() => {})
   }
 
   private async disconnectSfu() {

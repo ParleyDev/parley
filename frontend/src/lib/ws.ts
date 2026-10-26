@@ -2,6 +2,7 @@ import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, User, VoiceState } from './types'
 import { voice } from './voice'
+import type { E2eeSignal } from './e2ee'
 import { playSfx } from './sfx'
 import { getNotifPrefs } from './notifPrefs'
 import { getPrefs, streamerHides } from './prefs'
@@ -57,6 +58,8 @@ type Ev = { s?: number; i?: string } & (
 export type SignalData = { type: 'offer' | 'answer'; sdp: string } | { type: 'candidate'; candidate: RTCIceCandidateInit | null }
   /** Mesh: ask a streamer to start (on) or stop sending us their screen share. */
   | { type: 'watch'; on: boolean }
+  /** End-to-end encrypted calls: key agreement (lib/e2ee.ts). */
+  | E2eeSignal
 
 let socket: WebSocket | null = null
 /** Where this client runs, for the presence indicator: the native apps say so; VR browsers by user agent; else web. */

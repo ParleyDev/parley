@@ -39,7 +39,7 @@ pub fn router() -> Router<AppState> {
 }
 
 pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required";
-pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency";
+pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
     let g = sqlx::query_as::<_, Guild>(&format!(

@@ -13,6 +13,7 @@ import StudioPanel from './StudioPanel'
 import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpButton, MenuControl, MenuDivider, MicMenu, SettingsRow, SplitControl } from './CallControls'
 import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
+import CallLock from './CallLock'
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 import ChatPane from './ChatPane'
 import { MembersToggle, MobileBack } from './HeaderBits'
@@ -199,6 +200,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         <MobileBack />
         {isStudio ? <Disc3 size={22} className="text-text-2 shrink-0" /> : isStage ? <Radio size={22} className="text-text-2 shrink-0" /> : <Volume2 size={22} className="text-text-2 shrink-0" />}<span className="font-bold truncate">{channel.name}</span>
         {isStudio && liveSession && <span className="flex items-center gap-1.5 rounded-full bg-danger/20 px-2 py-0.5 text-[11px] font-bold uppercase text-danger" data-studio-rec><span className="h-2 w-2 rounded-full bg-danger animate-pulse" />REC · {liveSession.name}</span>}
+        <CallLock channelId={channel.id} />
         <span className="text-xs text-text-2 whitespace-nowrap" data-voice-count>{isStage ? `${tiles.length} speaking · ${audience.length} listening` : `${count} connected`}</span>
         {inThis && suppressed && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase">Muted by server</span>}
         <span className="ml-auto flex items-center gap-1">

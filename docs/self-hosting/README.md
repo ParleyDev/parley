@@ -146,6 +146,10 @@ People can connect Claude, ChatGPT, Cursor and other MCP clients to your server 
 
 Registration and token requests are limited per IP by `RL_OAUTH` (default `300/60`); see the main README for what each permission allows.
 
+## End-to-end encrypted calls
+
+Voice channels (Channel Settings → End-to-end encryption) and DM or group calls (the lock in the conversation header) can be end-to-end encrypted. Nothing to configure: it works with peer-to-peer calls and with LiveKit, and your server only relays the encrypted key exchange. People compare the safety code in the call header to check nobody is in the middle. Members need a current browser or app (Chrome, Edge, Firefox or Safari from the last few years); older ones are told they can't join an encrypted call.
+
 ## Optional extras
 
 The root `docker-compose.yml` in the repository also has profiles for ClamAV upload scanning (`av`), voice-message transcription (`stt`), a LiveKit SFU (`sfu`), and a second backend (`cluster`). Each one is documented in the [main README](../../README.md). You can copy the service you need into your `compose.yaml`.

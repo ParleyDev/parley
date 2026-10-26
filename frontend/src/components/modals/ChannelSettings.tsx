@@ -60,14 +60,15 @@ function Overview({ channel }: { channel: Channel }) {
   const [audioMode, setAudioMode] = useState<AudioMode>(channel.audio_mode === 'music' ? 'music' : 'voice')
   const [bitrate, setBitrate] = useState(channel.audio_bitrate ?? 0)
   const [lowLatency, setLowLatency] = useState(!!channel.audio_low_latency)
+  const [e2ee, setE2ee] = useState(!!channel.e2ee)
   const [busy, setBusy] = useState(false)
   const isAudio = channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
-  const audioDirty = isAudio && (audioMode !== (channel.audio_mode === 'music' ? 'music' : 'voice') || bitrate !== (channel.audio_bitrate ?? 0) || lowLatency !== !!channel.audio_low_latency)
+  const audioDirty = isAudio && (audioMode !== (channel.audio_mode === 'music' ? 'music' : 'voice') || bitrate !== (channel.audio_bitrate ?? 0) || lowLatency !== !!channel.audio_low_latency || e2ee !== !!channel.e2ee)
   const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || audioDirty
-  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency) }
+  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
@@ -81,6 +82,12 @@ function Overview({ channel }: { channel: Channel }) {
         </label>
       )}
       {isAudio && <AudioSection mode={audioMode} setMode={setAudioMode} bitrate={bitrate} setBitrate={setBitrate} lowLatency={lowLatency} setLowLatency={setLowLatency} />}
+      {isAudio && (
+        <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-e2ee={e2ee ? '1' : '0'}>
+          <span><span className="flex items-center gap-1.5 text-[15px]"><Lock size={14} className="text-success" /> End-to-end encryption</span><span className="block text-xs text-text-2">Voice, video and screen shares are encrypted on each device with keys the server never sees. People compare a safety code in the call to check nobody is listening in. Members on an app or browser that can't encrypt can't join, and anyone in the call reconnects when you change this.</span></span>
+          <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={e2ee} onChange={(ev) => setE2ee(ev.target.checked)} />
+        </label>
+      )}
       {dirty && (
         <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
           <span className="text-sm flex-1">Careful — you have unsaved changes!</span>

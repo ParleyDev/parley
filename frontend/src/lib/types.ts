@@ -110,6 +110,8 @@ export interface Channel {
   audio_mode?: 'voice' | 'music'
   audio_bitrate?: number
   audio_low_latency?: boolean
+  /** Calls here are end-to-end encrypted (voice/stage/studio channels, DM and group calls). */
+  e2ee?: boolean
   /** Studio channels: the engineers (several allowed). */
   engineer_ids?: string[]
   overwrites?: Overwrite[]

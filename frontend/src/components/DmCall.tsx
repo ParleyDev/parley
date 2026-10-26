@@ -8,6 +8,7 @@ import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicM
 import { useResizableHeight } from '../lib/resize'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
+import CallLock from './CallLock'
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 
 type Tile = { key: string; userId: string; kind: 'camera' | 'screen'; user: User | undefined; state: VoiceState; stream: MediaStream | null; isMe: boolean }
@@ -129,7 +130,8 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
           </div>
         )}
       </div>
-      <div className="mt-2 shrink-0 flex justify-center pb-1">
+      <div className="relative mt-2 shrink-0 flex justify-center pb-1">
+        <span className="absolute left-0 top-1/2 -translate-y-1/2"><CallLock channelId={channel.id} /></span>
         {inThis ? (
           <ControlBar compact>
             <ControlGroup>

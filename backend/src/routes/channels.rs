@@ -117,6 +117,16 @@ struct UpdateChannel {
     /// Opus kbps, 8..510, or 0 for the mode's default.
     audio_bitrate: Option<i32>,
     audio_low_latency: Option<bool>,
+    /// Voice/stage/studio channels (Manage Channels) and DM / group calls (any member): end-to-end encrypted calls.
+    e2ee: Option<bool>,
+}
+
+/// Call encryption was switched on or off: anyone in the call whose client can't encrypt is dropped from it (their
+/// media would be readable, or unreadable to everyone else). Clients that can encrypt rejoin on their own to rekey.
+fn call_e2ee_changed(state: &AppState, channel_id: Uuid, on: bool) {
+    if on {
+        state.hub.voice_evict(|v| v.channel_id == channel_id && !v.e2ee);
+    }
 }
 
 async fn update_channel(
@@ -127,8 +137,19 @@ async fn update_channel(
 ) -> AppResult<Json<Channel>> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     if c.guild_id.is_none() {
+        // DM and group calls: any member may switch end-to-end encryption on or off.
+        if let Some(on) = req.e2ee.filter(|on| *on != c.e2ee) {
+            sqlx::query("UPDATE channels SET e2ee = $2 WHERE id = $1").bind(id).bind(on).execute(&state.db).await?;
+            call_e2ee_changed(&state, id, on);
+            crate::routes::dms::broadcast_group(&state, id).await?;
+            let text = if on { "turned on end-to-end encryption for calls." } else { "turned off end-to-end encryption for calls." };
+            crate::routes::dms::system_message(&state, id, uid, "call_e2ee_change", text, vec![]).await?;
+        }
         // Group DMs: any member may rename or change the icon.
         if c.kind != "group" {
+            if req.e2ee.is_some() && req.name.is_none() && req.icon_url.is_none() && req.owner_id.is_none() {
+                return Ok(Json(sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(id).fetch_one(&state.db).await?));
+            }
             return Err(AppError::BadRequest("Cannot edit DM channels".into()));
         }
         crate::routes::users::validate_image(&req.icon_url)?;
@@ -176,6 +197,9 @@ async fn update_channel(
             return Err(AppError::BadRequest("audio_bitrate must be 8-510 kbps (or 0 for the default)".into()));
         }
     }
+    if req.e2ee == Some(true) && !matches!(c.kind.as_str(), "voice" | "stage" | "studio") {
+        return Err(AppError::BadRequest("Only voice, stage and studio channels have calls to encrypt".into()));
+    }
     let name = match req.name {
         Some(n) => Some(normalize_channel_name(&n, &c.kind)?),
         None => None,
@@ -189,7 +213,7 @@ async fn update_channel(
     let mut updated = sqlx::query_as::<_, Channel>(&format!(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
          parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw),
-         audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency)
+         audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency), e2ee = COALESCE($11, e2ee)
          WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
@@ -202,11 +226,15 @@ async fn update_channel(
     .bind(&req.audio_mode)
     .bind(req.audio_bitrate)
     .bind(req.audio_low_latency)
+    .bind(req.e2ee)
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
     if let Some(before) = before {
         perms::resync_visibility(&state, gid, &before).await?;
+    }
+    if updated.e2ee != c.e2ee {
+        call_e2ee_changed(&state, id, updated.e2ee);
     }
     let target = perms::channel_audience(&state.db, &updated).await?;
     state.hub.emit(target, "CHANNEL_UPDATE", json!(updated));
@@ -217,6 +245,7 @@ async fn update_channel(
         if updated.audio_mode != c.audio_mode { d.insert("audio_mode".into(), json!(updated.audio_mode)); }
         if updated.audio_bitrate != c.audio_bitrate { d.insert("audio_bitrate".into(), json!(updated.audio_bitrate)); }
         if updated.audio_low_latency != c.audio_low_latency { d.insert("audio_low_latency".into(), json!(updated.audio_low_latency)); }
+        if updated.e2ee != c.e2ee { d.insert("e2ee".into(), json!(updated.e2ee)); }
         crate::audit::guild(&state, gid, uid, "channel.update", "channel", Some(id), &updated.name, serde_json::Value::Object(d)).await;
     }
     Ok(Json(updated))

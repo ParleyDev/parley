@@ -58,7 +58,8 @@ pub async fn ws_upgrade(
 enum ClientOp {
     Ping,
     Typing { channel_id: Uuid },
-    VoiceJoin { channel_id: Uuid },
+    /// `e2ee`: the client can encrypt media end to end (required to join a channel with `e2ee` on).
+    VoiceJoin { channel_id: Uuid, #[serde(default)] e2ee: bool },
     VoiceLeave,
     VoiceState { self_mute: bool, self_deaf: bool, #[serde(default)] self_video: bool, #[serde(default)] self_stream: bool },
     /// WebRTC signaling relayed verbatim to one peer in the same voice channel.
@@ -342,7 +343,7 @@ async fn handle_client_op(
     tx: &mut futures::stream::SplitSink<WebSocket, Message>,
 ) {
     match op {
-        ClientOp::VoiceJoin { channel_id } => {
+        ClientOp::VoiceJoin { channel_id, e2ee } => {
             // Guild voice channels need CONNECT; a DM channel is a 1:1/group call for its members.
             let (channel, p) = match crate::routes::channels::require_channel_perms(&state.db, channel_id, user_id).await {
                 Ok((c, p)) if c.guild_id.is_none() || ((c.kind == "voice" || c.kind == "stage" || c.kind == "studio") && has(p, perms::CONNECT)) => (c, p),
@@ -351,6 +352,10 @@ async fn handle_client_op(
                     return;
                 }
             };
+            if channel.e2ee && !e2ee {
+                let _ = tx.send(Message::Text(json!({"t":"VOICE_ERROR","d":{"message":"This call is end-to-end encrypted, and this app or browser can't encrypt calls. Update Parley or use a current browser to join."}}).to_string())).await;
+                return;
+            }
             let guild_id = channel.guild_id;
             let peers: Vec<Uuid> = if guild_id.is_none() {
                 sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM channel_members WHERE channel_id = $1").bind(channel_id).fetch_all(&state.db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default()
@@ -362,7 +367,7 @@ async fn handle_client_op(
             // Stage: everyone but moderators joins as audience. Studio: the engineer and moderators are in the band from the start.
             let crew = has(p, perms::MANAGE_CHANNELS) || (channel.kind == "studio" && perms::is_engineer(&state.db, channel_id, user_id).await.unwrap_or(false));
             let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew));
-            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, request_to_speak: false, session, peers };
+            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, request_to_speak: false, e2ee, session, peers };
             if let Some(prev) = state.hub.voice_join(vs.clone()) {
                 if prev.channel_id != channel_id || prev.guild_id != guild_id {
                     emit_voice_leave(state, &prev);

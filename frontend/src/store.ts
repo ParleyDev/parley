@@ -163,6 +163,8 @@ interface State {
   remoteMedia: Record<string, RemoteMedia>
   /** Screen shares you clicked Watch Stream on, by streamer; cleared when they stop or you leave the call. */
   watching: Record<string, true>
+  /** The end-to-end encrypted call you're in: its safety code and whose keys you hold. null when not encrypted. */
+  callE2ee: { code: string; keyed: string[] } | null
   voiceSettings: VoiceSettings
   /** Local mic level in dBFS (-100..0), published while the mic is open. */
   inputLevel: number
@@ -247,6 +249,7 @@ interface State {
   setLocalMedia: (m: { camera?: MediaStream | null; screen?: MediaStream | null }) => void
   setRemoteMedia: (userId: string, kind: 'camera' | 'screen', stream: MediaStream | null) => void
   setWatching: (userId: string, on: boolean) => void
+  setCallE2ee: (v: { code: string; keyed: string[] } | null) => void
   updateVoiceSettings: (patch: Partial<VoiceSettings>) => void
   setInputLevel: (level: number, transmitting: boolean) => void
   setPttHeld: (held: boolean) => void
@@ -331,6 +334,7 @@ export const useStore = create<State>((set, get) => ({
   localScreen: null,
   remoteMedia: {},
   watching: {},
+  callE2ee: null,
   voiceSettings: loadSettings(),
   inputLevel: -100,
   transmitting: false,
@@ -678,6 +682,7 @@ export const useStore = create<State>((set, get) => ({
   setInputLevel: (inputLevel, transmitting) => set((s) => (s.inputLevel === inputLevel && s.transmitting === transmitting ? {} : { inputLevel, transmitting })),
   setPttHeld: (pttHeld) => set((s) => (s.pttHeld === pttHeld ? {} : { pttHeld })),
   setLocalMedia: (m) => set((s) => ({ localCamera: m.camera === undefined ? s.localCamera : m.camera, localScreen: m.screen === undefined ? s.localScreen : m.screen })),
+  setCallE2ee: (callE2ee) => set({ callE2ee }),
   setWatching: (userId, on) => set((s) => { const watching = { ...s.watching }; if (on) watching[userId] = true; else delete watching[userId]; return { watching } }),
   setRemoteMedia: (userId, kind, stream) => set((s) => ({
     remoteMedia: { ...s.remoteMedia, [userId]: { ...(s.remoteMedia[userId] ?? { camera: null, screen: null }), [kind]: stream } },

@@ -186,6 +186,10 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub audio_low_latency: bool,
+    /// Calls here are end-to-end encrypted: media is encrypted per frame with keys the server never sees.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub e2ee: bool,
     /// Studio channels: the engineers (run recordings, manage the band); filled by `perms::attach_overwrites`.
     #[sqlx(skip)]
     #[serde(default)]
