@@ -1,5 +1,5 @@
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
-import { FONT_SCALES, setAppearance, useAppearance, type Density, type Theme } from '../../../lib/appearance'
+import { FONT_SCALES, PALETTES, resolvedTheme, setAppearance, useAppearance, type Density, type Theme, type UiDensity } from '../../../lib/appearance'
 import { renderMarkdown } from '../../../lib/markdown'
 import { useT } from '../../../lib/i18n'
 import { ACCENTS, setPrefs, usePrefs } from '../../../lib/prefs'
@@ -32,6 +32,19 @@ export default function AppearanceTab() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section>
+        <h3 className="label">Dark theme colours</h3>
+        <div className={`flex flex-wrap gap-3 ${resolvedTheme(a) === 'light' ? 'opacity-50' : ''}`} data-palette-options>
+          {PALETTES.map((x) => (
+            <button key={x.id} type="button" onClick={() => setAppearance({ palette: x.id })} className="flex flex-col items-center gap-1 text-xs" data-palette-option={x.id} aria-pressed={a.palette === x.id} title={x.label}>
+              <span className={`h-12 w-12 rounded-full border-2 ${a.palette === x.id ? 'border-accent' : 'border-line'}`} style={{ background: x.swatch }} />
+              <span className={a.palette === x.id ? 'text-text-0 font-semibold' : 'text-text-2'}>{x.label}</span>
+            </button>
+          ))}
+        </div>
+        {resolvedTheme(a) === 'light' && <p className="mt-2 text-xs text-text-2">These apply when the dark theme is showing.</p>}
       </section>
 
       <section>
@@ -68,6 +81,18 @@ export default function AppearanceTab() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section>
+        <h3 className="label">UI density</h3>
+        <div className="grid grid-cols-3 max-md:grid-cols-1 gap-2" data-ui-density-options>
+          {([['compact', 'Compact'], ['default', 'Default'], ['spacious', 'Spacious']] as [UiDensity, string][]).map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setAppearance({ uiDensity: id })} className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm ${a.uiDensity === id ? 'border-accent bg-accent/15 text-text-0' : 'border-line text-text-1 hover:bg-bg-3'}`} data-ui-density-option={id} aria-pressed={a.uiDensity === id}>
+              {label}{a.uiDensity === id && <Check size={16} className="text-accent" />}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-text-2">How much room the channel, DM and member lists get.</p>
       </section>
 
       <section>

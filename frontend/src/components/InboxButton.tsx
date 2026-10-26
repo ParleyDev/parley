@@ -1,19 +1,30 @@
-import { Inbox } from 'lucide-react'
+import { CheckCheck, Hash, Inbox, MessageSquare, X } from 'lucide-react'
+import { STORAGE_PREFIX } from '../lib/brand'
 import { locale } from '../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
-import { useStore } from '../store'
+import { showsUnread, useStore } from '../store'
 import type { Message } from '../lib/types'
 import Avatar from './Avatar'
 import { jumpToMessageAsync } from './ChatView'
 import { badgeCount } from '../lib/badge'
 
-/** Header Inbox: your recent mentions (last 30 days) with a jump to each. */
+const HIDDEN_KEY = `${STORAGE_PREFIX}inboxHidden`
+const loadHidden = (): string[] => { try { const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
+
+/** Header Inbox: Mentions (last 30 days, each removable) and Unreads (channels with new messages, mark read). */
 export default function InboxButton() {
   const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState<'mentions' | 'unreads'>('mentions')
   const [list, setList] = useState<Message[] | null>(null)
+  const [hidden, setHidden] = useState(loadHidden)
+  const hide = (id: string) => { const next = [...hidden, id].slice(-500); setHidden(next); try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(next)) } catch { /* ignore */ } }
+  const readStates = useStore((s) => s.readStates)
+  const lastMessageId = useStore((s) => s.lastMessageId)
+  const notifSettings = useStore((s) => s.notifSettings)
+  const markRead = useStore((s) => s.markRead)
   const channels = useStore((s) => s.channels)
   const dms = useStore((s) => s.dms)
   const guilds = useStore((s) => s.guilds)
@@ -46,6 +57,11 @@ export default function InboxButton() {
     const dm = dms[m.channel_id]
     return dm ? (dm.recipients.length > 1 ? 'Group' : 'Direct message') : 'Unknown channel'
   }
+  const unreads = Object.keys(lastMessageId).filter((id) => (channels[id] || dms[id]) && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds }, id))
+    .sort((a, b) => (lastMessageId[b] ?? '').localeCompare(lastMessageId[a] ?? ''))
+  const openChannel = (id: string) => { setOpen(false); navigate(`/channels/${channels[id]?.guild_id ?? '@me'}/${id}`) }
+  const nameOf = (id: string) => { const ch = channels[id]; if (ch) return ch.name; const dm = dms[id]; return dm ? (dm.name || dm.recipients.map((r) => r.display_name).join(', ')) : '' }
+  const shown = (list ?? []).filter((m) => !hidden.includes(m.id))
   const jump = (m: Message) => {
     setOpen(false)
     const ch = channels[m.channel_id]
@@ -60,20 +76,46 @@ export default function InboxButton() {
       </button>
       {open && pos && createPortal(
         <div ref={panel} style={{ top: pos.top, right: pos.right }} className="pop fixed z-50 w-[420px] max-w-[calc(100vw-16px)] rounded-xl border border-line bg-bg-1 shadow-2xl" data-inbox>
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-line"><Inbox size={16} className="text-text-2" /><span className="font-bold">Inbox</span><span className="text-xs text-text-2">Recent mentions</span></div>
+          <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-line">
+            <Inbox size={16} className="text-text-2" /><span className="font-bold mr-2">Inbox</span>
+            {(['mentions', 'unreads'] as const).map((id) => (
+              <button key={id} type="button" onClick={() => setTab(id)} className={`rounded-md px-2 py-0.5 text-sm ${tab === id ? 'bg-bg-4 text-text-0' : 'text-text-2 hover:text-text-0'}`} data-inbox-tab={id} aria-pressed={tab === id}>
+                {id === 'mentions' ? 'Mentions' : 'Unreads'}{id === 'unreads' && unreads.length > 0 && <span className="ml-1 text-[11px] text-text-2">{unreads.length}</span>}
+              </button>
+            ))}
+            {tab === 'unreads' && unreads.length > 0 && <button type="button" onClick={() => { for (const id of unreads) void markRead(id) }} className="ml-auto flex items-center gap-1 text-xs text-sky-400 hover:underline" data-inbox-read-all><CheckCheck size={14} /> Mark all read</button>}
+          </div>
+          {tab === 'unreads' ? (
+            <div className="max-h-[60vh] overflow-y-auto" data-inbox-unreads>
+              {unreads.length === 0 && <p className="px-4 py-6 text-sm text-text-2">You're all caught up.</p>}
+              {unreads.map((id) => (
+                <div key={id} className="group flex items-center gap-3 px-4 py-2 hover:bg-bg-3 border-b border-line/60" data-inbox-unread={id}>
+                  <button type="button" onClick={() => openChannel(id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                    {channels[id] ? <Hash size={16} className="shrink-0 text-text-2" /> : <MessageSquare size={16} className="shrink-0 text-text-2" />}
+                    <span className="min-w-0"><span className="block truncate font-semibold">{nameOf(id)}</span>{channels[id]?.guild_id && <span className="block truncate text-[11px] text-text-2">{guilds[channels[id].guild_id!]?.name}</span>}</span>
+                  </button>
+                  <button type="button" onClick={() => void markRead(id)} title="Mark as read" className="rounded p-1 text-text-2 hover:bg-bg-4 hover:text-text-0" data-inbox-mark-read={id}><CheckCheck size={16} /></button>
+                </div>
+              ))}
+            </div>
+          ) : (
           <div className="max-h-[60vh] overflow-y-auto">
             {list === null && <p className="px-4 py-6 text-sm text-text-2">Loading…</p>}
-            {list?.length === 0 && <p className="px-4 py-6 text-sm text-text-2">Nobody has mentioned you in the last 30 days.</p>}
-            {list?.map((m) => (
-              <button key={m.id} type="button" onClick={() => jump(m)} className="w-full text-left flex gap-3 px-4 py-2.5 hover:bg-bg-3 border-b border-line/60" data-inbox-item={m.id}>
+            {list !== null && shown.length === 0 && <p className="px-4 py-6 text-sm text-text-2">Nobody has mentioned you in the last 30 days.</p>}
+            {shown.map((m) => (
+              <div key={m.id} className="group relative" data-inbox-row={m.id}>
+              <button type="button" onClick={() => jump(m)} className="w-full text-left flex gap-3 px-4 py-2.5 pr-10 hover:bg-bg-3 border-b border-line/60" data-inbox-item={m.id}>
                 <Avatar user={m.author} size={32} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2"><span className="font-semibold truncate">{m.author.display_name}</span><span className="text-[11px] text-text-2 truncate">{whereOf(m)}</span><span className="ml-auto text-[11px] text-text-2 shrink-0">{new Date(m.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric' })}</span></span>
                   <span className="block text-sm text-text-1 truncate">{m.content || (m.attachments?.length ? '📎 Attachment' : '')}</span>
                 </span>
               </button>
+              <button type="button" onClick={() => hide(m.id)} title="Remove from inbox" className="absolute right-2 top-2 rounded p-1 text-text-2 opacity-0 hover:bg-bg-4 hover:text-text-0 group-hover:opacity-100 focus:opacity-100" data-inbox-remove={m.id}><X size={14} /></button>
+              </div>
             ))}
           </div>
+          )}
         </div>,
         document.body,
       )}

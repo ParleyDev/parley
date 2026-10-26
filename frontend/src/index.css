@@ -34,6 +34,20 @@
   --scrollbar-thumb: #c4c9d1;
 }
 :root { --scrollbar-thumb: #2c2f3b; --font-scale: 1; --msg-gap: 17px; }
+/* Dark palettes (ignored by the light theme). Gradients tint the window and let it show through the panels. */
+:root:not([data-theme="light"])[data-palette="ash"] { --color-bg-0: #1e1f22; --color-bg-1: #2b2d31; --color-bg-2: #313338; --color-bg-3: #383a40; --color-bg-4: #404249; --color-line: #3f4147; --scrollbar-thumb: #4e5058; }
+:root:not([data-theme="light"])[data-palette="onyx"] { --color-bg-0: #000000; --color-bg-1: #0a0a0b; --color-bg-2: #0f0f11; --color-bg-3: #18181b; --color-bg-4: #222226; --color-line: #1f1f23; --scrollbar-thumb: #26262b; }
+:root:not([data-theme="light"])[data-palette="midnight"] { --color-bg-0: #070a14; --color-bg-1: #0d1220; --color-bg-2: #121a2c; --color-bg-3: #1a2338; --color-bg-4: #232e47; --color-line: #1f2a42; --color-accent: #4f8cff; --color-accent-hover: #3b74e0; --scrollbar-thumb: #26314d; }
+:root:not([data-theme="light"])[data-palette="aurora"] { --color-bg-0: rgb(10 8 24 / .55); --color-bg-1: rgb(18 14 38 / .55); --color-bg-2: rgb(20 18 40 / .35); --color-bg-3: rgb(255 255 255 / .07); --color-bg-4: rgb(255 255 255 / .12); --color-line: rgb(255 255 255 / .09); --color-accent: #8b5cf6; --color-accent-hover: #7c3aed; }
+:root:not([data-theme="light"])[data-palette="sunset"] { --color-bg-0: rgb(24 8 14 / .55); --color-bg-1: rgb(36 12 24 / .55); --color-bg-2: rgb(36 14 30 / .35); --color-bg-3: rgb(255 255 255 / .07); --color-bg-4: rgb(255 255 255 / .12); --color-line: rgb(255 255 255 / .09); --color-accent: #f97362; --color-accent-hover: #e55a4a; }
+:root:not([data-theme="light"])[data-palette="aurora"] body { background: linear-gradient(135deg, #2b1a4f 0%, #14213d 50%, #0f3b46 100%) fixed; }
+:root:not([data-theme="light"])[data-palette="sunset"] body { background: linear-gradient(135deg, #4a1c2c 0%, #2c1838 55%, #3b2350 100%) fixed; }
+
+/* UI density: rows in the channel list, DM list and member list. */
+:root[data-ui-density="compact"] :is([data-channel-item] > a, aside a[data-dm-row], aside a[data-group-row], [data-member-row]) { padding-top: 2px !important; padding-bottom: 2px !important; }
+:root[data-ui-density="spacious"] :is([data-channel-item] > a, aside a[data-dm-row], aside a[data-group-row], [data-member-row]) { padding-top: 9px !important; padding-bottom: 9px !important; }
+:root[data-ui-density="spacious"] [data-member-row] { margin-bottom: 2px; }
+
 /* Client prefs (Appearance / Accessibility): message group spacing, link underlines, keyboard focus ring. */
 .msg-group-start { margin-top: var(--msg-gap, 17px); }
 :root[data-underline-links="1"] .msg-content a { text-decoration: underline; }

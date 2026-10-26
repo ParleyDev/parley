@@ -16,6 +16,8 @@ export const isNative = () => Capacitor.isNativePlatform()
 export const nativePlatform = () => Capacitor.getPlatform() as 'ios' | 'android' | 'web'
 let navigateTo: ((path: string) => void) | null = null
 export const setNativeNavigator = (fn: (path: string) => void) => { navigateTo = fn }
+/** Navigate from outside React (notification clicks, push taps). */
+export const appNavigate = (path: string) => navigateTo?.(path)
 
 /** Once at boot: status bar, hardware back button, push taps. */
 export async function initNative() {

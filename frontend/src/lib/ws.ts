@@ -11,6 +11,7 @@ import { log } from './log'
 import { studio } from './studio'
 import { isNative, registerPush } from './native'
 import { markJoined } from './welcome'
+import { desktopNotify, notifyMessage } from './desktopNotify'
 import { emitCallReaction } from './callReactions'
 
 type Ev = { s?: number; i?: string } & (
@@ -173,7 +174,7 @@ function handle(ev: Ev) {
         const mentioned = mentionsMe(s, ev.d.message)
         const hidden = document.visibilityState !== 'visible'
         if (!streamerHides('notifications') && shouldNotify(effective(s.notifSettings, ch, s.guilds), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {
-          if (hidden) notify(ev.d.message)
+          if (hidden) notifyMessage(ev.d.message, ev.d.guild_id)
           // A sound unless you are looking right at that channel in a focused window.
           if (hidden || !document.hasFocus() || s.activeChannelId !== ev.d.message.channel_id) playSfx(mentioned ? 'mention' : 'message')
           speak(ev.d.message, s.activeChannelId === ev.d.message.channel_id)
@@ -193,9 +194,7 @@ function handle(ev: Ev) {
       const body = `${m.author.display_name}: ${m.content || 'a message'}`.slice(0, 140)
       s.pushToast(`Reminder (${where}) — ${body}`)
       playSfx('mention')
-      try {
-        if (document.visibilityState !== 'visible' && getNotifPrefs().desktop && 'Notification' in window && Notification.permission === 'granted') new Notification(`Reminder from ${where}`, { body })
-      } catch { /* ignore */ }
+      if (document.visibilityState !== 'visible') desktopNotify(`Reminder from ${where}`, body, { icon: m.author.avatar_url, tag: `reminder:${m.id}`, path: `/channels/${ev.d.guild_id ?? '@me'}/${m.channel_id}?message=${m.id}` })
       break
     }
     case 'POLL_UPDATE': s.applyPollUpdate(ev.d.channel_id, ev.d.message_id, ev.d.poll); break
@@ -208,9 +207,7 @@ function handle(ev: Ev) {
       if (cameOnline && s.user?.online_alerts?.includes(ev.d.user_id) && s.relationships[ev.d.user_id]?.kind === 'friend') {
         const name = s.notes[ev.d.user_id]?.nickname || s.users[ev.d.user_id]?.display_name || s.relationships[ev.d.user_id].user.display_name
         s.pushToast(`${name} is now online`)
-        try {
-          if (document.visibilityState !== 'visible' && getNotifPrefs().desktop && 'Notification' in window && Notification.permission === 'granted') new Notification(`${name} is now online`)
-        } catch { /* ignore */ }
+        if (document.visibilityState !== 'visible') desktopNotify(`${name} is now online`, '', { icon: s.users[ev.d.user_id]?.avatar_url, tag: `online:${ev.d.user_id}`, path: '/channels/@me' })
       }
       break
     }
@@ -239,9 +236,7 @@ function handle(ev: Ev) {
         s.pushToast(`${ev.d.user.display_name} sent you a friend request`)
         playSfx('message')
         // A desktop notification when Parley isn't in front, like messages.
-        try {
-          if (document.visibilityState !== 'visible' && getNotifPrefs().desktop && 'Notification' in window && Notification.permission === 'granted') new Notification(`${ev.d.user.display_name} sent you a friend request`, { body: ev.d.note ?? 'Open Friends to accept it.' })
-        } catch { /* ignore */ }
+        if (document.visibilityState !== 'visible') desktopNotify(`${ev.d.user.display_name} sent you a friend request`, ev.d.note ?? 'Open Friends to accept it.', { icon: ev.d.user.avatar_url, tag: `friend:${ev.d.user.id}`, path: '/channels/@me' })
       }
       break
     }
@@ -334,14 +329,6 @@ if (typeof window !== 'undefined') {
   setInterval(checkIdle, 15_000)
 }
 
-function notify(m: Message) {
-  try {
-    if (getNotifPrefs().desktop && 'Notification' in window && Notification.permission === 'granted') {
-      const body = m.content ? m.content.slice(0, 120) : m.attachments?.length ? `Sent ${m.attachments.length === 1 ? 'an attachment' : `${m.attachments.length} attachments`}` : ''
-      new Notification(m.author.display_name, { body })
-    }
-  } catch { /* ignore */ }
-}
 
 setInterval(() => useStore.getState().pruneTyping(), 2000)
 
