@@ -49,7 +49,6 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
   const rel = useStore((s) => s.relationships[userId]?.kind)
   const me = useStore((s) => s.user)
   const upsertChannel = useStore((s) => s.upsertChannel)
-  const removeMember = useStore((s) => s.removeMember)
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const guild = useStore((s) => (inGuild ? s.guilds[inGuild] : undefined))

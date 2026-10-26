@@ -30,7 +30,6 @@ export function useUserMenu(guildId?: string | null) {
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const upsertChannel = useStore((s) => s.upsertChannel)
-  const removeMember = useStore((s) => s.removeMember)
   const upsertMember = useStore((s) => s.upsertMember)
   const navigate = useNavigate()
   const act = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }

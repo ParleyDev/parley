@@ -1,7 +1,6 @@
 import { Crown, Gavel, Search, UserMinus } from 'lucide-react'
 import { anchorOf } from '../../../lib/anchor'
 import { useEffect, useState } from 'react'
-import { api } from '../../../lib/api'
 import { myGuildPerms, useStore } from '../../../store'
 import { has, highestPosition, P, EMPTY_ROLES } from '../../../lib/perms'
 import StyledName from '../../StyledName'
@@ -17,8 +16,6 @@ export default function MembersTab({ guildId }: { guildId: string }) {
   const me = useStore((s) => s.user)
   const myPerms = useStore((s) => myGuildPerms(s, guildId))
   const openModal = useStore((s) => s.openModal)
-  const removeMember = useStore((s) => s.removeMember)
-  const pushToast = useStore((s) => s.pushToast)
   const [q, setQ] = useState('')
   useEffect(() => { if (!loaded) loadMembers(guildId) }, [guildId, loaded, loadMembers])
   if (!guild || !me) return null

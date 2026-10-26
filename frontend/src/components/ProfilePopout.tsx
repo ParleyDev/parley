@@ -46,7 +46,6 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const upsertChannel = useStore((s) => s.upsertChannel)
-  const removeMember = useStore((s) => s.removeMember)
   const sendMessage = useStore((s) => s.sendMessage)
   const navigate = useNavigate()
   const [quick, setQuick] = useState('')
