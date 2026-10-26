@@ -4,6 +4,7 @@ pub mod applications;
 pub mod assets;
 pub mod attachments;
 pub mod auth;
+pub mod badge;
 pub mod channels;
 pub mod connections;
 pub mod discovery;

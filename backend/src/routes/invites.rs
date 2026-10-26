@@ -2,11 +2,14 @@ use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
     models::Guild,
+    routes::badge,
     routes::guilds::{fetch_member, is_banned, GUILD_COLS},
     state::AppState,
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
+    http::header,
+    response::IntoResponse,
     routing::get,
     Json, Router,
 };
@@ -26,7 +29,50 @@ type PreviewRow = (Uuid, String, Option<String>, i64, bool, String, bool, String
 type AcceptRow = (Uuid, i32, Option<i32>, Option<chrono::DateTime<chrono::Utc>>, String);
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/invites/:code", get(preview).post(accept))
+    Router::new()
+        .route("/invites/:code", get(preview).post(accept))
+        .route("/invites/:code/badge.svg", get(badge))
+}
+
+#[derive(serde::Deserialize)]
+struct BadgeQuery {
+    style: Option<String>,
+    label: Option<String>,
+}
+
+/// A README badge for an invite, public like the link it sits on: "Parley | 12 online · 340 members" while the invite
+/// works, a grey "invite expired" once it doesn't. Invisible members aren't counted as online.
+async fn badge(State(state): State<AppState>, Path(code): Path<String>, Query(q): Query<BadgeQuery>) -> AppResult<impl IntoResponse> {
+    let row: Option<(bool, i64, i64)> = sqlx::query_as(&format!(
+        "SELECT {LIVE},
+            (SELECT COUNT(*) FROM guild_members WHERE guild_id = i.guild_id),
+            (SELECT COUNT(*) FROM guild_members m JOIN users u ON u.id = m.user_id
+              WHERE m.guild_id = i.guild_id AND u.status <> 'invisible'
+                AND EXISTS (SELECT 1 FROM presence p WHERE p.user_id = m.user_id AND p.sockets > 0
+                  AND p.updated_at > now() - make_interval(secs => $2)))
+         FROM invites i WHERE {MATCH} ORDER BY i.vanity LIMIT 1"
+    ))
+    .bind(&code)
+    .bind(crate::ws::bus::STALE_SECS as f64)
+    .fetch_optional(&state.db)
+    .await?;
+    let label = q.label.map(|l| l.trim().chars().take(32).collect::<String>()).filter(|l| !l.is_empty()).unwrap_or_else(|| "Parley".into());
+    let (message, color) = match row {
+        Some((true, members, online)) => (format!("{} online · {} {}", badge::compact(online), badge::compact(members), if members == 1 { "member" } else { "members" }), badge::COLOR),
+        Some((false, ..)) => ("invite expired".into(), badge::GREY),
+        None => ("invalid invite".into(), badge::GREY),
+    };
+    let svg = badge::render(&label, &message, color, badge::Style::parse(q.style.as_deref()));
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/svg+xml; charset=utf-8"),
+            // Long enough to spare the database when a README is popular, short enough to look live.
+            (header::CACHE_CONTROL, "public, max-age=300"),
+            (header::CONTENT_SECURITY_POLICY, "default-src 'none'; img-src data:; style-src 'unsafe-inline'"),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+        ],
+        svg,
+    ))
 }
 
 async fn preview(

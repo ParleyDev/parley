@@ -1,3 +1,4 @@
+import { publicOrigin } from '../components/InviteCard'
 import { locale } from './i18n'
 import type { Invite } from './types'
 
@@ -38,4 +39,22 @@ export function describeInvite(maxAge: number, maxUses: number): string {
   const exp = maxAge ? `expires in ${age}` : 'never expires'
   const uses = maxUses ? ` and can be used ${maxUses === 1 ? 'once' : `${maxUses} times`}` : ''
   return `Your invite link ${exp}${uses}.`
+}
+
+export type BadgeStyle = 'flat' | 'flat-square' | 'for-the-badge'
+export const BADGE_STYLES: { id: BadgeStyle; label: string }[] = [
+  { id: 'flat', label: 'Flat' }, { id: 'flat-square', label: 'Flat square' }, { id: 'for-the-badge', label: 'For the badge' },
+]
+/** The public badge image for an invite (served by the API, no login needed). */
+export function badgeUrl(code: string, style: BadgeStyle): string {
+  return `${publicOrigin()}/api/invites/${encodeURIComponent(code)}/badge.svg${style === 'flat' ? '' : `?style=${style}`}`
+}
+const inviteUrl = (code: string) => `${publicOrigin()}/invite/${code}`
+/** README Markdown: the badge, linking to the invite. */
+export function badgeMarkdown(code: string, style: BadgeStyle, guild: string): string {
+  return `[![Join ${guild.replace(/[[\]\\]/g, '')} on Parley](${badgeUrl(code, style)})](${inviteUrl(code)})`
+}
+export function badgeHtml(code: string, style: BadgeStyle, guild: string): string {
+  const alt = `Join ${guild} on Parley`.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+  return `<a href="${inviteUrl(code)}"><img src="${badgeUrl(code, style)}" alt="${alt}"></a>`
 }
