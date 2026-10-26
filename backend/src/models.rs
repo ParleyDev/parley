@@ -226,6 +226,9 @@ pub struct PrivateUser {
     pub nameplate: String,
     #[sqlx(default)]
     pub profile_effect: String,
+    /// Played when you join a voice channel: a sound id, 'builtin:<name>', or '' for none.
+    #[sqlx(default)]
+    pub entrance_sound: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -333,6 +336,10 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub spoiler: bool,
+    /// Voice channels: camera quality, 'auto' (720p) or 'full' (1080p).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub video_quality: String,
     /// Slowmode: seconds a member waits between messages here (0 = off).
     #[sqlx(default)]
     #[serde(default)]

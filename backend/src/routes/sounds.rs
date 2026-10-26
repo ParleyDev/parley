@@ -36,6 +36,23 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/soundboard/:sid", post(play))
 }
 
+/// Sounds every soundboard has, synthesised by the client: (id, name, emoji).
+pub const BUILTINS: &[(&str, &str, &str)] = &[
+    ("airhorn", "Airhorn", "📯"), ("crickets", "Crickets", "🦗"), ("rimshot", "Ba Dum Tss", "🥁"),
+    ("clap", "Golf Clap", "👏"), ("quack", "Quack", "🦆"), ("boing", "Boing", "🎈"), ("tada", "Tada", "🎉"), ("sadtrombone", "Sad Trombone", "🎺"),
+];
+
+/// A playable sound by id: `builtin:<name>`, or a sound from any server `uid` is in. JSON as SOUNDBOARD_PLAY sends it.
+pub async fn resolve(db: &PgPool, uid: Uuid, sid: &str) -> AppResult<Option<serde_json::Value>> {
+    if let Some(name) = sid.strip_prefix("builtin:") {
+        return Ok(BUILTINS.iter().find(|b| b.0 == name).map(|(id, label, emoji)| json!({ "id": format!("builtin:{id}"), "name": label, "emoji": emoji, "volume": 1.0, "url": "", "builtin": true })));
+    }
+    let Ok(id) = sid.parse::<Uuid>() else { return Ok(None) };
+    let s = sqlx::query_as::<_, Sound>(&format!("SELECT {SOUND_COLS} FROM sounds s WHERE id = $1 AND EXISTS (SELECT 1 FROM guild_members m WHERE m.guild_id = s.guild_id AND m.user_id = $2)"))
+        .bind(id).bind(uid).fetch_optional(db).await?;
+    Ok(s.map(|s| json!(with_url(s))))
+}
+
 #[derive(Debug, Serialize, FromRow)]
 pub struct Sound {
     pub id: Uuid,
@@ -158,18 +175,25 @@ async fn serve(State(state): State<AppState>, Path(sid): Path<Uuid>) -> AppResul
     Ok(resp.into_response())
 }
 
-/// `POST /channels/:id/soundboard/:sid`: play a sound into the voice channel the caller is connected to. Needs Speak
-/// there (and not to be server-suppressed); the sound must belong to that server.
-async fn play(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
+/// `POST /channels/:id/soundboard/:sid`: play a sound into the call the caller is in (a server voice channel, or a
+/// DM / group call). Needs Speak in a server (and not to be suppressed). The sound can be a built-in or come from any
+/// server the caller is in.
+async fn play(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, String)>) -> AppResult<StatusCode> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
-    let Some(gid) = c.guild_id else { return Err(AppError::BadRequest("Soundboard works in server voice channels".into())) };
-    if c.kind != "voice" { return Err(AppError::BadRequest("Not a voice channel".into())); }
-    perms::check(p, perms::SPEAK)?;
-    let vs = state.hub.voice_state(uid).filter(|v| v.channel_id == id).ok_or_else(|| AppError::BadRequest("Join the voice channel first".into()))?;
-    if vs.suppress { return Err(AppError::Forbidden); }
-    let sound = sqlx::query_as::<_, Sound>(&format!("SELECT {SOUND_COLS} FROM sounds WHERE id = $1 AND guild_id = $2")).bind(sid).bind(gid).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Sound not found".into()))?;
-    let sound = with_url(sound);
-    let target = perms::channel_audience(&state.db, &c).await?;
-    state.hub.emit(target, "SOUNDBOARD_PLAY", json!({ "channel_id": id, "guild_id": gid, "user_id": uid, "sound": sound }));
+    if c.guild_id.is_some() {
+        if c.kind != "voice" { return Err(AppError::BadRequest("Not a voice channel".into())); }
+        perms::check(p, perms::SPEAK)?;
+    }
+    let vs = state.hub.voice_state(uid).filter(|v| v.channel_id == id).ok_or_else(|| AppError::BadRequest("Join the call first".into()))?;
+    if vs.suppress || vs.mute { return Err(AppError::Forbidden); }
+    let sound = resolve(&state.db, uid, &sid).await?.ok_or_else(|| AppError::NotFound("Sound not found".into()))?;
+    emit_play(&state, &c, uid, sound, false).await
+}
+
+/// Tell everyone in the call to play `sound` (entrance sounds say so, so clients can respect their own setting).
+pub async fn emit_play(state: &AppState, c: &crate::models::Channel, uid: Uuid, sound: serde_json::Value, entrance: bool) -> AppResult<StatusCode> {
+    let d = json!({ "channel_id": c.id, "guild_id": c.guild_id, "user_id": uid, "sound": sound, "entrance": entrance });
+    let target = crate::routes::channels::target_for(&state.db, c).await?;
+    state.hub.emit(target, "SOUNDBOARD_PLAY", d);
     Ok(StatusCode::NO_CONTENT)
 }

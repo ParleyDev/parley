@@ -1,6 +1,6 @@
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useShallow } from 'zustand/react/shallow'
-import { Disc3, Hand, HeadphoneOff, ListMusic, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
+import { Disc3, Hand, Megaphone, HeadphoneOff, ListMusic, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
 import ContextMenu, { useContextMenu } from './ContextMenu'
@@ -17,6 +17,7 @@ import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpBu
 import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
 import CallLock from './CallLock'
+import SoundboardPicker from './SoundboardPicker'
 import { InviteToVoice, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 import ChatPane from './ChatPane'
@@ -47,6 +48,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const watching = useStore((s) => s.watching)
   const unread = useStore((s) => isUnread(s, channel.id))
   const perms = useStore((s) => myChannelPerms(s, channel.id))
+  const [priorityOn, setPriorityOn] = useState(() => voice.priorityOn)
   const canConnect = has(perms, P.CONNECT)
   const canStream = has(perms, P.STREAM)
   const suppressed = useStore((s) => !!(s.user && s.voiceStates[s.user.id]?.suppress))
@@ -295,6 +297,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                   {isStage && suppressed && <ControlButton label={handUp ? t('Lower Hand') : t('Raise Hand')} on={handUp} onClick={toggleHand}><Hand size={20} /></ControlButton>}
                   {isStage && !suppressed && !isMod && <ControlButton label={t('Leave the stage')} onClick={() => toAudience(me!.id)}><Hand size={20} /></ControlButton>}
                   <ReactButton />
+                  {channel.guild_id && channel.kind === 'voice' && has(perms, P.PRIORITY_SPEAKER) && <ControlButton label={priorityOn ? 'Priority Speaker: on' : 'Priority Speaker'} on={priorityOn} onClick={() => { voice.setPriority(!priorityOn); setPriorityOn(!priorityOn) }} data-priority-toggle=""><Megaphone size={20} /></ControlButton>}
                   {channel.guild_id && channel.kind === 'voice' && <InviteToVoice channelId={channel.id} guildId={channel.guild_id} />}
                   {canStream && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>}
                   {canSpeak && !suppressed && (
@@ -304,15 +307,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                         <>
                           <div className="fixed inset-0 z-30" onClick={() => setBoard(false)} />
                           <div className="pop absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-40 w-[320px] max-w-[calc(100vw-16px)] rounded-xl bg-bg-1 border border-line shadow-2xl p-3" data-soundboard>
-                            <div className="flex items-center justify-between mb-2"><span className="font-bold text-sm">Soundboard</span><span className="text-xs text-text-2">{sounds ? `${sounds.length} sound${sounds.length === 1 ? '' : 's'}` : 'Loading…'}</span></div>
-                            {sounds?.length === 0 && <p className="text-sm text-text-2 py-4 text-center">No sounds yet. Add some in Server Settings → Soundboard.</p>}
-                            <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                              {sounds?.map((snd) => (
-                                <button key={snd.id} type="button" onClick={() => playSound(snd.id)} className="rounded-lg bg-bg-3 hover:bg-accent hover:text-white px-2 py-2 text-xs font-semibold flex flex-col items-center gap-1" data-sound={snd.id} title={snd.name}>
-                                  <span className="text-xl leading-none">{snd.emoji || '🔊'}</span><span className="truncate max-w-full">{snd.name}</span>
-                                </button>
-                              ))}
-                            </div>
+                            <div className="flex items-center justify-between mb-2"><span className="font-bold text-sm">Soundboard</span><span className="text-xs text-text-2">{sounds ? `${sounds.length} server sound${sounds.length === 1 ? '' : 's'}` : 'Loading…'}</span></div>
+                            <SoundboardPicker guildId={channel.guild_id} onPlay={playSound} />
                           </div>
                         </>
                       )}

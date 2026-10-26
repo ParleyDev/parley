@@ -64,7 +64,8 @@ enum ClientOp {
     /// `e2ee`: the client can encrypt media end to end (required to join a channel with `e2ee` on).
     VoiceJoin { channel_id: Uuid, #[serde(default)] e2ee: bool },
     VoiceLeave,
-    VoiceState { self_mute: bool, self_deaf: bool, #[serde(default)] self_video: bool, #[serde(default)] self_stream: bool },
+    /// `priority`: Priority Speaker switched on (only counts with the permission).
+    VoiceState { self_mute: bool, self_deaf: bool, #[serde(default)] self_video: bool, #[serde(default)] self_stream: bool, #[serde(default)] priority: bool },
     /// WebRTC signaling relayed verbatim to one peer in the same voice channel.
     VoiceSignal { to: Uuid, data: Value },
     /// The user is active at the keyboard (sent at most once a minute while focused): feeds the push inactive timeout.
@@ -416,15 +417,21 @@ async fn handle_client_op(
             let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew) || is_afk_channel(&state.db, &channel).await);
             // The "active for" timer keeps counting across reconnects to the same channel.
             let joined_at = state.hub.voice_state(user_id).filter(|v| v.channel_id == channel_id).map(|v| v.joined_at).unwrap_or_else(chrono::Utc::now);
-            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, mute, deaf, request_to_speak: false, e2ee, session, peers, watching: Vec::new(), joined_at };
-            if let Some(prev) = state.hub.voice_join(vs.clone()) {
-                if prev.channel_id != channel_id || prev.guild_id != guild_id {
-                    emit_voice_leave(state, &prev);
-                }
-            }
+            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, mute, deaf, request_to_speak: false, e2ee, session, peers, watching: Vec::new(), joined_at, priority: false };
+            let moved_in = state.hub.voice_join(vs.clone()).map(|prev| {
+                if prev.channel_id != channel_id || prev.guild_id != guild_id { emit_voice_leave(state, &prev); true } else { false }
+            }).unwrap_or(true);
             if guild_id.is_some() {
                 let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Users(vec![user_id]));
                 state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
+                // Their entrance sound, if they have one and may make noise here.
+                if moved_in && !suppress && !mute && channel.kind == "voice" {
+                    if let Ok(Some((es,))) = sqlx::query_as::<_, (String,)>("SELECT entrance_sound FROM users WHERE id = $1 AND entrance_sound <> ''").bind(user_id).fetch_optional(&state.db).await {
+                        if let Ok(Some(sound)) = crate::routes::sounds::resolve(&state.db, user_id, &es).await {
+                            let _ = crate::routes::sounds::emit_play(state, &channel, user_id, sound, true).await;
+                        }
+                    }
+                }
             } else {
                 state.hub.emit_voice(&vs, json!(vs));
                 // First person in a DM call: leave a "started a call" notice in the conversation and remember the
@@ -444,7 +451,7 @@ async fn handle_client_op(
                 emit_voice_leave(state, &prev);
             }
         }
-        ClientOp::VoiceState { self_mute, self_deaf, self_video, self_stream } => {
+        ClientOp::VoiceState { self_mute, self_deaf, self_video, self_stream, priority } => {
             let Some(cur) = state.hub.voice_state(user_id) else { return };
             // Re-check channel permissions on every update so revoked STREAM/SPEAK take effect.
             let (channel, p) = match crate::routes::channels::require_channel_perms(&state.db, cur.channel_id, user_id).await {
@@ -461,6 +468,7 @@ async fn handle_client_op(
                 v.self_video = self_video && can_stream; v.self_stream = self_stream && can_stream;
                 // Stage audience stays suppressed across mute/deaf toggles; only a moderator lifts it.
                 v.suppress = suppress || ((channel.kind == "stage" || channel.kind == "studio") && v.suppress);
+                v.priority = priority && channel.guild_id.is_some() && has(p, perms::PRIORITY_SPEAKER);
             }) {
                 if channel.guild_id.is_some() {
                     let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Users(vec![user_id]));

@@ -175,7 +175,7 @@ pub const NAMEPLATES: &[&str] = &["dusk", "ocean", "forest", "candy", "aurora", 
 pub const PROFILE_EFFECTS: &[&str] = &["sparkles", "snow", "hearts", "confetti", "bubbles"];
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, avatar_decoration, clan_tag, panels, profile_privacy, profile_frame, nameplate, profile_effect";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect, entrance_sound";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -246,6 +246,8 @@ struct UpdateMe {
     pinned_channels: Option<Vec<Uuid>>,
     /// 'everyone' | 'friends'.
     profile_privacy: Option<String>,
+    /// A sound id from a server you're in, 'builtin:<name>', or '' for none.
+    entrance_sound: Option<String>,
     /// Cosmetics: a preset id from the client's list, or '' for none.
     profile_frame: Option<String>,
     nameplate: Option<String>,
@@ -429,6 +431,10 @@ async fn update_me(
     }
     for (v, list, what) in [(&req.profile_frame, PROFILE_FRAMES, "frame"), (&req.nameplate, NAMEPLATES, "nameplate"), (&req.profile_effect, PROFILE_EFFECTS, "profile effect")] {
         if let Some(v) = v { if !v.is_empty() && !list.contains(&v.as_str()) { return Err(AppError::BadRequest(format!("Unknown {what}"))) } }
+    }
+    if let Some(es) = &req.entrance_sound {
+        if !es.is_empty() && crate::routes::sounds::resolve(&state.db, uid, es).await?.is_none() { return Err(AppError::BadRequest("Pick a sound from one of your servers".into())) }
+        sqlx::query("UPDATE users SET entrance_sound = $2 WHERE id = $1").bind(uid).bind(es).execute(&state.db).await?;
     }
     if req.profile_privacy.is_some() || req.profile_frame.is_some() || req.nameplate.is_some() || req.profile_effect.is_some() {
         sqlx::query("UPDATE users SET profile_privacy = COALESCE($2, profile_privacy), profile_frame = COALESCE($3, profile_frame), nameplate = COALESCE($4, nameplate), profile_effect = COALESCE($5, profile_effect) WHERE id = $1")

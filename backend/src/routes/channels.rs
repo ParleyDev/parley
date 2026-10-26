@@ -118,6 +118,8 @@ struct UpdateChannel {
     nsfw: Option<bool>,
     /// Guild text channels: spoiler warning before viewing.
     spoiler: Option<bool>,
+    /// Voice channels: 'auto' or 'full'.
+    video_quality: Option<String>,
     /// Voice/stage/studio audio profile: 'voice' | 'music'.
     audio_mode: Option<String>,
     /// Opus kbps, 8..510, or 0 for the mode's default.
@@ -221,6 +223,9 @@ async fn update_channel(
         None => None,
     };
     let gid = c.guild_id.unwrap_or_default();
+    if req.video_quality.as_deref().map(|q| q != "auto" && q != "full").unwrap_or(false) {
+        return Err(AppError::BadRequest("video_quality must be 'auto' or 'full'".into()));
+    }
     let parent = match req.parent_id {
         Some(p) => Some(crate::routes::guilds::check_parent(&state.db, gid, &c.kind, p).await?),
         None => None,
@@ -230,7 +235,7 @@ async fn update_channel(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
          parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw),
          audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency), e2ee = COALESCE($11, e2ee),
-         rate_limit_per_user = COALESCE($12, rate_limit_per_user), user_limit = COALESCE($13, user_limit), spoiler = COALESCE($14, spoiler)
+         rate_limit_per_user = COALESCE($12, rate_limit_per_user), user_limit = COALESCE($13, user_limit), spoiler = COALESCE($14, spoiler), video_quality = COALESCE($15, video_quality)
          WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
@@ -247,6 +252,7 @@ async fn update_channel(
     .bind(req.rate_limit_per_user)
     .bind(req.user_limit)
     .bind(req.spoiler)
+    .bind(&req.video_quality)
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
@@ -263,6 +269,7 @@ async fn update_channel(
         if updated.name != c.name { d.insert("name".into(), json!(updated.name)); }
         if updated.topic != c.topic { d.insert("topic".into(), json!(updated.topic)); }
         if updated.spoiler != c.spoiler { d.insert("spoiler".into(), json!(updated.spoiler)); }
+        if updated.video_quality != c.video_quality { d.insert("video_quality".into(), json!(updated.video_quality)); }
         if updated.audio_mode != c.audio_mode { d.insert("audio_mode".into(), json!(updated.audio_mode)); }
         if updated.audio_bitrate != c.audio_bitrate { d.insert("audio_bitrate".into(), json!(updated.audio_bitrate)); }
         if updated.audio_low_latency != c.audio_low_latency { d.insert("audio_low_latency".into(), json!(updated.audio_low_latency)); }

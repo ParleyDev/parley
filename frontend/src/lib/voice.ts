@@ -237,6 +237,7 @@ class VoiceManager {
 
   leave(evicted = false) {
     keepAwake(false)
+    this.priorityOn = false
     const s = useStore.getState()
     if (this.channelId) { sendOp({ op: 'voice_leave' }); playSfx(evicted ? 'disconnect' : 'user_leave') }
     this.channelId = null
@@ -248,6 +249,10 @@ class VoiceManager {
     this.stopTracks(this.screen); this.screen = null
     s.setMyVoice(null)
   }
+
+  /** Priority Speaker switched on (needs the permission; the server ignores it otherwise). */
+  priorityOn = false
+  setPriority(on: boolean) { this.priorityOn = on; this.pushState() }
 
   setMute(mute: boolean) {
     const s = useStore.getState()
@@ -373,7 +378,9 @@ class VoiceManager {
   /** Camera stream for the settings preview, using the chosen device. Caller stops it. */
   async openCamera(): Promise<MediaStream | null> {
     const id = this.settings.cameraDeviceId
-    const video: MediaTrackConstraints = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }
+    // A voice channel set to Full quality asks for 1080p; otherwise (and in DMs and the settings preview) 720p.
+    const full = !!this.channelId && useStore.getState().channels[this.channelId]?.video_quality === 'full'
+    const video: MediaTrackConstraints = full ? { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 } } : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }
     if (id) video.deviceId = { exact: id }
     try {
       return await navigator.mediaDevices.getUserMedia({ video, audio: false })
@@ -669,11 +676,23 @@ class VoiceManager {
     el.play().catch(() => {})
   }
 
+  /** A priority speaker in our channel who is talking right now (not us), if any. */
+  priorityTalking(): string | null {
+    const s = useStore.getState()
+    if (!this.channelId) return null
+    for (const v of Object.values(s.voiceStates)) if (v.priority && v.channel_id === this.channelId && v.user_id !== s.user?.id && s.speaking[v.user_id]) return v.user_id
+    return null
+  }
+  /** Re-apply volumes (ducking changed). */
+  reapplyVolumes() { this.reapplyPeople() }
+
   private applyOutput(el: HTMLAudioElement) {
     const st = this.settings
     // A person's own volume (set in their user menu) scales the output volume; sounds have no data-peer.
     const who = el.dataset.peer ? userAudio(el.dataset.peer) : null
-    el.volume = Math.max(0, Math.min(1, (st.outputVolume / 100) * ((who?.volume ?? 100) / 100)))
+    // Priority speaker: while someone with it is talking here, everyone else is turned down to a quarter.
+    const duck = el.dataset.peer && this.priorityTalking() && this.priorityTalking() !== el.dataset.peer ? 0.25 : 1
+    el.volume = Math.max(0, Math.min(1, (st.outputVolume / 100) * ((who?.volume ?? 100) / 100) * duck))
     el.muted = useStore.getState().selfDeaf || this.serverDeaf() || !!who?.muted
     if (supportsSinkId) {
       (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(st.outputDeviceId || '').catch(() => {
@@ -687,7 +706,7 @@ class VoiceManager {
   private pushState() {
     if (!this.channelId) return
     const s = useStore.getState()
-    sendOp({ op: 'voice_state', self_mute: s.selfMute, self_deaf: s.selfDeaf, self_video: !!this.camera, self_stream: !!this.screen })
+    sendOp({ op: 'voice_state', self_mute: s.selfMute, self_deaf: s.selfDeaf, self_video: !!this.camera, self_stream: !!this.screen, priority: this.priorityOn })
   }
 
   private async offerTo(userId: string) {
@@ -1010,6 +1029,13 @@ if (typeof window !== 'undefined') setInterval(() => voice.checkAfk(), 15_000)
 if (typeof window !== 'undefined') (window as unknown as { __parleyAfk: (ms: number) => boolean }).__parleyAfk = (ms) => voice.checkAfk(Date.now() + ms)
 /** Debug/test hook: active audio profile, live stats and the Opus parameters each peer negotiated. */
 if (typeof window !== 'undefined') (window as unknown as { __parleyAudio: () => Promise<unknown> }).__parleyAudio = () => voice.audioDebug()
+
+// Priority speaker ducking: re-apply volumes whenever who-is-the-talking-priority-speaker changes.
+let prevPriority: string | null = null
+useStore.subscribe(() => { const now = voice.priorityTalking(); if (now !== prevPriority) { prevPriority = now; voice.reapplyVolumes() } })
+/** Test hooks: who is ducking everyone, and pretend someone is talking (no real speech in headless tests). */
+if (typeof window !== 'undefined') (window as unknown as { __parleyDuck: () => unknown }).__parleyDuck = () => ({ talking: voice.priorityTalking(), priority: Object.values(useStore.getState().voiceStates).filter((v) => v.priority).map((v) => v.user_id) })
+if (typeof window !== 'undefined') (window as unknown as { __parleySpeaking: (id: string, on: boolean) => void }).__parleySpeaking = (id, on) => useStore.getState().setSpeaking(id, on)
 
 // Apply setting changes live.
 let prevSettings = useStore.getState().voiceSettings

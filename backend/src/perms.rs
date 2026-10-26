@@ -21,6 +21,8 @@ pub const ADMINISTRATOR: u64 = 1 << 3;
 pub const MANAGE_CHANNELS: u64 = 1 << 4;
 pub const MANAGE_GUILD: u64 = 1 << 5;
 pub const ADD_REACTIONS: u64 = 1 << 6;
+/// While they speak, everyone else in the voice channel is turned down.
+pub const PRIORITY_SPEAKER: u64 = 1 << 8;
 pub const STREAM: u64 = 1 << 9;
 pub const VIEW_CHANNEL: u64 = 1 << 10;
 pub const SEND_MESSAGES: u64 = 1 << 11;
@@ -51,6 +53,7 @@ pub const ALL: u64 = CREATE_INVITE
     | MANAGE_CHANNELS
     | MANAGE_GUILD
     | ADD_REACTIONS
+    | PRIORITY_SPEAKER
     | STREAM
     | VIEW_CHANNEL
     | SEND_MESSAGES
@@ -405,6 +408,7 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
         ("VIEW_CHANNEL", VIEW_CHANNEL),
         ("SEND_MESSAGES", SEND_MESSAGES),
         ("SEND_TTS_MESSAGES", SEND_TTS_MESSAGES),
+        ("PRIORITY_SPEAKER", PRIORITY_SPEAKER),
         ("MANAGE_MESSAGES", MANAGE_MESSAGES),
         ("ATTACH_FILES", ATTACH_FILES),
         ("MENTION_EVERYONE", MENTION_EVERYONE),

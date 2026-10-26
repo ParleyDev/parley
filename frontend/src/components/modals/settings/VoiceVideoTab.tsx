@@ -4,6 +4,7 @@ import { useStore } from '../../../store'
 import { STREAM_QUALITY, voice } from '../../../lib/voice'
 import { keyLabel, supportsSinkId, type VoiceSettings } from '../../../lib/settings'
 import VideoTile from '../../VideoTile'
+import EntranceSound from '../../EntranceSound'
 
 interface Devices { inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[]; cameras: MediaDeviceInfo[]; labelsHidden: boolean }
 
@@ -148,6 +149,10 @@ export default function VoiceVideoTab() {
         <Toggle label="Automatic Gain Control" checked={st.autoGainControl} onChange={set('autoGainControl')} />
         <p className="text-xs text-text-2" data-hifi-processing-note>High-fidelity channels (set by the server) turn all three off and capture 48 kHz stereo, so instruments and music come through untouched.</p>
       </section>
+
+      <Divider />
+
+      <EntranceSound />
 
       <Divider />
 

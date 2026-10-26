@@ -61,6 +61,7 @@ function Overview({ channel }: { channel: Channel }) {
   const [spoiler, setSpoiler] = useState(!!channel.spoiler)
   const [slowmode, setSlowmode] = useState(channel.rate_limit_per_user ?? 0)
   const [userLimit, setUserLimit] = useState(channel.user_limit ?? 0)
+  const [videoQuality, setVideoQuality] = useState<'auto' | 'full'>(channel.video_quality === 'full' ? 'full' : 'auto')
   const hasSlowmode = channel.guild_id !== null && (channel.kind === 'text' || channel.kind === 'thread')
   const [audioMode, setAudioMode] = useState<AudioMode>(channel.audio_mode === 'music' ? 'music' : 'voice')
   const [bitrate, setBitrate] = useState(channel.audio_bitrate ?? 0)
@@ -69,11 +70,11 @@ function Overview({ channel }: { channel: Channel }) {
   const [busy, setBusy] = useState(false)
   const isAudio = channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
   const audioDirty = isAudio && (audioMode !== (channel.audio_mode === 'music' ? 'music' : 'voice') || bitrate !== (channel.audio_bitrate ?? 0) || lowLatency !== !!channel.audio_low_latency || e2ee !== !!channel.e2ee)
-  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || spoiler !== !!channel.spoiler || slowmode !== (channel.rate_limit_per_user ?? 0) || userLimit !== (channel.user_limit ?? 0) || audioDirty
-  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSpoiler(!!channel.spoiler); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
+  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || spoiler !== !!channel.spoiler || slowmode !== (channel.rate_limit_per_user ?? 0) || userLimit !== (channel.user_limit ?? 0) || (channel.kind === 'voice' && videoQuality !== (channel.video_quality === 'full' ? 'full' : 'auto')) || audioDirty
+  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSpoiler(!!channel.spoiler); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setVideoQuality(channel.video_quality === 'full' ? 'full' : 'auto'); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(channel.kind === 'text' || channel.kind === 'forum' ? { spoiler } : {}), ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(channel.kind === 'text' || channel.kind === 'forum' ? { spoiler } : {}), ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit, video_quality: videoQuality } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
@@ -109,6 +110,16 @@ function Overview({ channel }: { channel: Channel }) {
             <span className="w-24 text-right text-sm tabular-nums">{userLimit ? `${userLimit} user${userLimit === 1 ? '' : 's'}` : 'No limit'}</span>
           </div>
           <p className="mt-1 text-xs text-text-2">How many people can be in the channel at once. Members who can move members can still join a full channel.</p>
+        </div>
+      )}
+      {channel.kind === 'voice' && (
+        <div data-channel-video-quality>
+          <label className="label" htmlFor="video-quality">Video quality</label>
+          <select id="video-quality" className="input w-auto" value={videoQuality} onChange={(e) => setVideoQuality(e.target.value as 'auto' | 'full')} data-video-quality>
+            <option value="auto">Auto (720p)</option>
+            <option value="full">Full (1080p)</option>
+          </select>
+          <p className="mt-1 text-xs text-text-2">Camera resolution for everyone in this channel. Full uses more bandwidth.</p>
         </div>
       )}
       {isAudio && <AudioSection mode={audioMode} setMode={setAudioMode} bitrate={bitrate} setBitrate={setBitrate} lowLatency={lowLatency} setLowLatency={setLowLatency} />}

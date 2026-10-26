@@ -1,12 +1,14 @@
 import { useShallow } from 'zustand/react/shallow'
-import { HeadphoneOff, Maximize2, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, Phone, Video, VideoOff } from 'lucide-react'
+import { HeadphoneOff, Maximize2, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, Music2, Phone, Video, VideoOff } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { api } from '../lib/api'
 import { playSfx, sfxEnabled } from '../lib/sfx'
 import { useStore, voiceParticipants } from '../store'
 import ContextMenu, { useContextMenu } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { useUserAudioMap } from '../lib/userAudio'
 import type { DmChannel, User, VoiceState } from '../lib/types'
+import SoundboardPicker from './SoundboardPicker'
 import { ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
 import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
 import { useResizableHeight } from '../lib/resize'
@@ -42,6 +44,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const tileMenu = useContextMenu()
   const watching = useStore((s) => s.watching)
   const [focused, setFocused] = useState<string | null>(null)
+  const [board, setBoard] = useState(false)
   const videoFit = useVideoFit()
   const stage = useResizableHeight('dmCall', DEFAULT_HEIGHT, 160, 0.8)
   const inThis = myChannel === channel.id
@@ -159,6 +162,18 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
             </ControlGroup>
             <ControlGroup>
               <ReactButton />
+              <span className="relative flex">
+                <ControlButton label="Soundboard" on={board} onClick={() => setBoard((b) => !b)} data-dm-soundboard=""><Music2 size={18} /></ControlButton>
+                {board && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setBoard(false)} />
+                    <div className="pop absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-40 w-[320px] max-w-[calc(100vw-16px)] rounded-xl bg-bg-1 border border-line shadow-2xl p-3" data-soundboard>
+                      <div className="mb-2 font-bold text-sm">Soundboard</div>
+                      <SoundboardPicker onPlay={(id) => { api.post(`/channels/${channel.id}/soundboard/${id}`).catch((e: Error) => useStore.getState().pushToast(e.message, 'error')) }} />
+                    </div>
+                  </>
+                )}
+              </span>
               <ControlButton label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>
             </ControlGroup>
             <HangUpButton label="Leave Call" onClick={() => voice.leave()} />

@@ -65,6 +65,8 @@ export interface PrivateUser extends User {
   notif_prefs?: NotifPrefsServer
   avatar_history?: string[]
   profile_privacy?: 'everyone' | 'friends'
+  /** A sound id, 'builtin:<name>', or '' for none. */
+  entrance_sound?: string
 }
 export interface NotifPrefsServer { push_timeout_min?: number; email_dms?: boolean; email_friend_requests?: boolean; default_suppress_everyone?: boolean; default_suppress_roles?: boolean }
 /** GET /users/:id adds the servers you share with that user. */
@@ -158,6 +160,8 @@ export interface Channel {
   overwrites?: Overwrite[]
   /** Spoiler channel: a warning before you first see it; media stays blurred until clicked. */
   spoiler?: boolean
+  /** Voice channels: camera quality, 'auto' (720p) or 'full' (1080p). */
+  video_quality?: 'auto' | 'full' | ''
 }
 
 /** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */
@@ -381,6 +385,8 @@ export interface VoiceState {
   watching?: string[]
   /** When they joined this channel. */
   joined_at?: string
+  /** Priority Speaker here: others are turned down while they talk. */
+  priority?: boolean
 }
 
 /** Scheduled event (GET /guilds/:id/events). */

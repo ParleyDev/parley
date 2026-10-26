@@ -60,6 +60,9 @@ pub struct VoiceState {
     pub watching: Vec<Uuid>,
     /// When they joined this channel (the channel's "active for" timer starts at the earliest).
     pub joined_at: chrono::DateTime<chrono::Utc>,
+    /// Has Priority Speaker here: others are turned down while they talk.
+    #[serde(default)]
+    pub priority: bool,
 }
 
 impl VoiceState {
