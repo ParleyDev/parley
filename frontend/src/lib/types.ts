@@ -274,7 +274,8 @@ export interface Ban {
   avatar_url: string | null
 }
 
-export interface Reaction { emoji: string; count: number; me: boolean }
+/** `burst`: a super reaction (shown and counted apart from the normal one of the same emoji). */
+export interface Reaction { emoji: string; count: number; me: boolean; burst?: boolean }
 
 export interface Attachment {
   id: string

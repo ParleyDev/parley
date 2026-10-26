@@ -338,16 +338,16 @@ async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap
     if ids.is_empty() {
         return Ok(map);
     }
-    let rows: Vec<(Uuid, String, i64, bool)> = sqlx::query_as(
-        "SELECT message_id, emoji, COUNT(*), bool_or(user_id = $2) FROM reactions
-         WHERE message_id = ANY($1) GROUP BY message_id, emoji ORDER BY MIN(ctid)",
+    let rows: Vec<(Uuid, String, i64, bool, bool)> = sqlx::query_as(
+        "SELECT message_id, emoji, COUNT(*), bool_or(user_id = $2), burst FROM reactions
+         WHERE message_id = ANY($1) GROUP BY message_id, emoji, burst ORDER BY MIN(created_at), burst",
     )
     .bind(ids)
     .bind(me)
     .fetch_all(db)
     .await?;
-    for (mid, emoji, count, me) in rows {
-        map.entry(mid).or_default().push(Reaction { emoji, count, me });
+    for (mid, emoji, count, me, burst) in rows {
+        map.entry(mid).or_default().push(Reaction { emoji, count, me, burst });
     }
     Ok(map)
 }
@@ -935,10 +935,18 @@ fn valid_emoji(e: &str) -> bool {
     !e.is_empty() && e.chars().count() <= 8 && !e.chars().any(|c| c.is_ascii_alphanumeric() || c.is_whitespace())
 }
 
+/// `?burst=true`: a super reaction.
+#[derive(Deserialize, Default)]
+struct BurstQ { #[serde(default)] burst: bool }
+
+/// Super reactions a person can send in a rolling day.
+pub const SUPER_REACTIONS_PER_DAY: i64 = 5;
+
 async fn add_reaction(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path((id, mid, emoji)): Path<(Uuid, Uuid, String)>,
+    Query(q): Query<BurstQ>,
 ) -> AppResult<StatusCode> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::ADD_REACTIONS)?;
@@ -955,10 +963,16 @@ async fn add_reaction(
     if exists.is_none() {
         return Err(AppError::NotFound("Message not found".into()));
     }
-    sqlx::query("INSERT INTO reactions (message_id, user_id, emoji) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING")
-        .bind(mid).bind(uid).bind(&emoji).execute(&state.db).await?;
-    let target = target_for(&state.db, &c).await?;
-    state.hub.emit(target, "REACTION_ADD", json!({ "message_id": mid, "channel_id": id, "user_id": uid, "emoji": emoji }));
+    if q.burst {
+        let (used,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM reactions WHERE user_id = $1 AND burst AND created_at > now() - interval '1 day'").bind(uid).fetch_one(&state.db).await?;
+        if used >= SUPER_REACTIONS_PER_DAY { return Err(AppError::BadRequest(format!("You've used your {SUPER_REACTIONS_PER_DAY} super reactions for today"))) }
+    }
+    let added = sqlx::query("INSERT INTO reactions (message_id, user_id, emoji, burst) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING")
+        .bind(mid).bind(uid).bind(&emoji).bind(q.burst).execute(&state.db).await?.rows_affected();
+    if added > 0 {
+        let target = target_for(&state.db, &c).await?;
+        state.hub.emit(target, "REACTION_ADD", json!({ "message_id": mid, "channel_id": id, "user_id": uid, "emoji": emoji, "burst": q.burst }));
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -967,14 +981,16 @@ async fn list_reactors(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path((id, mid, emoji)): Path<(Uuid, Uuid, String)>,
+    Query(q): Query<BurstQ>,
 ) -> AppResult<Json<Vec<serde_json::Value>>> {
     require_channel(&state.db, id, uid).await?;
     let rows: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
         "SELECT u.id, u.display_name, u.avatar_url FROM reactions r JOIN users u ON u.id = r.user_id
-         WHERE r.message_id = $1 AND r.emoji = $2 ORDER BY r.ctid LIMIT 100",
+         WHERE r.message_id = $1 AND r.emoji = $2 AND r.burst = $3 ORDER BY r.created_at LIMIT 100",
     )
     .bind(mid)
     .bind(&emoji)
+    .bind(q.burst)
     .fetch_all(&state.db)
     .await?;
     Ok(Json(rows.into_iter().map(|(id, name, avatar)| json!({ "id": id, "display_name": name, "avatar_url": avatar })).collect()))
@@ -984,12 +1000,15 @@ async fn remove_reaction(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path((id, mid, emoji)): Path<(Uuid, Uuid, String)>,
+    Query(q): Query<BurstQ>,
 ) -> AppResult<StatusCode> {
     let c = require_channel(&state.db, id, uid).await?;
-    sqlx::query("DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3")
-        .bind(mid).bind(uid).bind(&emoji).execute(&state.db).await?;
-    let target = target_for(&state.db, &c).await?;
-    state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "user_id": uid, "emoji": emoji }));
+    let gone = sqlx::query("DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3 AND burst = $4")
+        .bind(mid).bind(uid).bind(&emoji).bind(q.burst).execute(&state.db).await?.rows_affected();
+    if gone > 0 {
+        let target = target_for(&state.db, &c).await?;
+        state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "user_id": uid, "emoji": emoji, "burst": q.burst }));
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -998,13 +1017,14 @@ async fn remove_user_reaction(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path((id, mid, emoji, user)): Path<(Uuid, Uuid, String, Uuid)>,
+    Query(q): Query<BurstQ>,
 ) -> AppResult<StatusCode> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     if user != uid && !(c.guild_id.is_some() && has(p, perms::MANAGE_MESSAGES)) { return Err(AppError::Forbidden) }
-    let gone = sqlx::query("DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3").bind(mid).bind(user).bind(&emoji).execute(&state.db).await?.rows_affected();
+    let gone = sqlx::query("DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3 AND burst = $4").bind(mid).bind(user).bind(&emoji).bind(q.burst).execute(&state.db).await?.rows_affected();
     if gone > 0 {
         let target = target_for(&state.db, &c).await?;
-        state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "user_id": user, "emoji": emoji }));
+        state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "user_id": user, "emoji": emoji, "burst": q.burst }));
     }
     Ok(StatusCode::NO_CONTENT)
 }

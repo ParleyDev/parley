@@ -17,17 +17,20 @@ export default function ReactionsModal({ onClose, channelId, messageId }: { onCl
   const guildChannel = useStore((s) => !!s.channels[channelId]?.guild_id)
   const pushToast = useStore((s) => s.pushToast)
   const reactions = msg?.reactions ?? []
-  const [emoji, setEmoji] = useState(reactions[0]?.emoji ?? '')
+  const keyOf = (x: { emoji: string; burst?: boolean }) => `${x.burst ? 'b' : 'n'}${x.emoji}`
+  const [tab, setTab] = useState(reactions[0] ? keyOf(reactions[0]) : '')
+  const emoji = tab.slice(1), burst = tab.startsWith('b')
+  const q = burst ? '?burst=true' : ''
   const [people, setPeople] = useState<Reactor[] | null>(null)
-  const count = reactions.map((r) => `${r.emoji}:${r.count}`).join(',')
+  const count = reactions.map((r) => `${keyOf(r)}:${r.count}`).join(',')
   useEffect(() => {
     if (!emoji) return
     setPeople(null)
-    api.get<Reactor[]>(`/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`).then(setPeople).catch(() => setPeople([]))
-  }, [channelId, messageId, emoji, count])
+    api.get<Reactor[]>(`/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}${q}`).then(setPeople).catch(() => setPeople([]))
+  }, [channelId, messageId, emoji, count, q])
   const canRemove = guildChannel && has(perms, P.MANAGE_MESSAGES)
   const remove = async (id: string) => {
-    try { await api.delete(`/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}/${id}`); setPeople((p) => (p ?? []).filter((x) => x.id !== id)) } catch (e) { pushToast((e as Error).message, 'error') }
+    try { await api.delete(`/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}/${id}${q}`); setPeople((p) => (p ?? []).filter((x) => x.id !== id)) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   return (
     <Modal title="Reactions" onClose={onClose} width="max-w-lg">
@@ -35,8 +38,8 @@ export default function ReactionsModal({ onClose, channelId, messageId }: { onCl
         <div className="flex min-h-[16rem] gap-3 max-sm:flex-col" data-reactions-modal>
           <div className="flex shrink-0 flex-col gap-1 max-sm:flex-row max-sm:overflow-x-auto" role="tablist" aria-label="Emoji">
             {reactions.map((r) => (
-              <button key={r.emoji} type="button" role="tab" aria-selected={r.emoji === emoji} onClick={() => setEmoji(r.emoji)}
-                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${r.emoji === emoji ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3'}`} data-reactions-tab={r.emoji}>
+              <button key={keyOf(r)} type="button" role="tab" aria-selected={keyOf(r) === tab} onClick={() => setTab(keyOf(r))}
+                className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${keyOf(r) === tab ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3'} ${r.burst ? 'super-reaction' : ''}`} data-reactions-tab={r.emoji} data-reactions-burst={r.burst ? '1' : undefined}>
                 <Emoji value={r.emoji} size={20} /><span className="tabular-nums">{r.count}</span>
               </button>
             ))}

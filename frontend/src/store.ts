@@ -258,7 +258,7 @@ interface State {
   removeMessage: (channelId: string, id: string) => void
   prependMessages: (channelId: string, ms: Message[], hasMore: boolean) => void
   setLoadingMessages: (channelId: string, v: boolean) => void
-  applyReaction: (channelId: string, messageId: string, emoji: string, userId: string, add: boolean) => void
+  applyReaction: (channelId: string, messageId: string, emoji: string, userId: string, add: boolean, burst?: boolean) => void
   /** Merge a POLL_UPDATE (counts/closed) while keeping this viewer's own `me` flags. */
   applyPollUpdate: (channelId: string, messageId: string, poll: Poll) => void
   sendPoll: (channelId: string, poll: { question: string; options: string[]; emojis?: (string | null)[]; multi: boolean; duration_hours: number | null }) => Promise<void>
@@ -644,7 +644,7 @@ export const useStore = create<State>((set, get) => ({
     get().addMessage(m)
     get().setReadState(channelId, m.id)
   },
-  applyReaction: (channelId, messageId, emoji, userId, add) => set((s) => {
+  applyReaction: (channelId, messageId, emoji, userId, add, burst = false) => set((s) => {
     const list = s.messages[channelId]
     if (!list) return {}
     const me = s.user?.id === userId
@@ -653,15 +653,16 @@ export const useStore = create<State>((set, get) => ({
         ...s.messages,
         [channelId]: list.map((m) => {
           if (m.id !== messageId) return m
-          const existing = m.reactions.find((r) => r.emoji === emoji)
+          const same = (r: { emoji: string; burst?: boolean }) => r.emoji === emoji && !!r.burst === burst
+          const existing = m.reactions.find(same)
           let reactions = m.reactions
           if (add) {
             reactions = existing
-              ? m.reactions.map((r) => (r.emoji === emoji ? { ...r, count: r.count + 1, me: r.me || me } : r))
-              : [...m.reactions, { emoji, count: 1, me }]
+              ? m.reactions.map((r) => (same(r) ? { ...r, count: r.count + 1, me: r.me || me } : r))
+              : [...m.reactions, { emoji, count: 1, me, ...(burst ? { burst } : {}) }]
           } else if (existing) {
             reactions = m.reactions
-              .map((r) => (r.emoji === emoji ? { ...r, count: r.count - 1, me: me ? false : r.me } : r))
+              .map((r) => (same(r) ? { ...r, count: r.count - 1, me: me ? false : r.me } : r))
               .filter((r) => r.count > 0)
           }
           return { ...m, reactions }

@@ -4,6 +4,8 @@ import { api } from '../../../lib/api'
 import { postMultipart } from '../../../lib/upload'
 import type { Emoji } from '../../../lib/types'
 import { useStore } from '../../../store'
+import Modal from '../../Modal'
+import ImageCrop from '../../ImageCrop'
 
 const MAX = 100
 const MAX_BYTES = 512 * 1024
@@ -25,13 +27,20 @@ export default function EmojiTab({ guildId }: { guildId: string }) {
   const [editing, setEditing] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
 
-  const upload = async (files: FileList | null) => {
-    if (!files?.length) return
+  // One still image: crop it first (and name it). Several files, or an animated GIF, upload as they are.
+  const [cropping, setCropping] = useState<{ file: File; name: string } | null>(null)
+  const pick = (files: FileList | null) => {
+    const list = Array.from(files ?? [])
+    if (list.length === 1 && /^image\/(png|jpeg|webp)$/.test(list[0].type)) { setCropping({ file: list[0], name: emojiNameFrom(list[0].name) }); return }
+    void upload(list)
+  }
+  const upload = async (files: File[], name?: string) => {
+    if (!files.length) return
     setBusy(true)
     let ok = 0
-    for (const f of Array.from(files)) {
+    for (const f of files) {
       if (f.size > MAX_BYTES) { pushToast(`${f.name}: emoji must be under 512 KB`, 'error'); continue }
-      try { await postMultipart<Emoji>(`/guilds/${guildId}/emojis`, f, { name: emojiNameFrom(f.name) }); ok++ } catch (e) { pushToast(`${f.name}: ${(e as Error).message}`, 'error') }
+      try { await postMultipart<Emoji>(`/guilds/${guildId}/emojis`, f, { name: name ?? emojiNameFrom(f.name) }); ok++ } catch (e) { pushToast(`${f.name}: ${(e as Error).message}`, 'error') }
     }
     if (ok) pushToast(ok === 1 ? 'Emoji uploaded' : `${ok} emoji uploaded`)
     setBusy(false)
@@ -54,7 +63,14 @@ export default function EmojiTab({ guildId }: { guildId: string }) {
         <h1 className="text-xl font-bold">Emoji</h1>
         <p className="text-sm text-text-2 mt-1">Add up to {MAX} custom emoji that anyone in this server can use. Emoji names must be 2-32 characters of letters, numbers or underscores. Files must be PNG, JPEG, GIF or WebP under 512 KB; GIF, APNG and WebP animations are kept.</p>
       </div>
-      <input ref={fileRef} type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/apng" className="hidden" onChange={(e) => { upload(e.target.files); e.target.value = '' }} data-emoji-file />
+      <input ref={fileRef} type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/apng" className="hidden" onChange={(e) => { pick(e.target.files); e.target.value = '' }} data-emoji-file />
+      {cropping && (
+        <Modal title="Crop emoji" onClose={() => setCropping(null)} width="max-w-sm">
+          <ImageCrop file={cropping.file} onCancel={() => setCropping(null)} onCrop={(f) => { const n = cropping.name; setCropping(null); void upload([f], n) }}>
+            <div><label className="label" htmlFor="crop-name">Name</label><input id="crop-name" className="input" value={cropping.name} maxLength={32} onChange={(e) => setCropping({ ...cropping, name: e.target.value.replace(/[^\w]/g, '_') })} data-crop-name /></div>
+          </ImageCrop>
+        </Modal>
+      )}
       <div className="flex items-center gap-3 flex-wrap">
         <button type="button" className="btn-primary" disabled={busy || emojis.length >= MAX} onClick={() => fileRef.current?.click()} data-upload-emoji><Upload size={16} /> {busy ? 'Uploading…' : 'Upload Emoji'}</button>
         <span className="text-sm text-text-2">{emojis.length} / {MAX} slots used</span>

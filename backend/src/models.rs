@@ -633,6 +633,9 @@ pub struct Reaction {
     pub emoji: String,
     pub count: i64,
     pub me: bool,
+    /// A super reaction (counted apart from the normal one of the same emoji).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub burst: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

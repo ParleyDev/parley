@@ -1,4 +1,4 @@
-import { AlarmClock, Megaphone, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import { AlarmClock, Megaphone, Sparkles, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
 import { isImage } from '../lib/upload'
 import RoleIcon from './RoleIcon'
 import { locale } from '../lib/i18n'
@@ -76,6 +76,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const editRef = useRef<HTMLTextAreaElement>(null)
   // The full emoji picker is portalled beside the hover bar so the scrolling list never clips it.
   const [picker, setPicker] = useState<DOMRect | null>(null)
+  const [superPicker, setSuperPicker] = useState<DOMRect | null>(null)
   const [pickerUp, setPickerUp] = useState(true)
   const pickerAnchor = useRef<HTMLDivElement>(null)
   const togglePicker = () => setPicker((p) => (p ? null : pickerAnchor.current?.getBoundingClientRect() ?? null))
@@ -154,9 +155,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     try { m.pinned_at ? await api.delete(`/channels/${m.channel_id}/pins/${m.id}`) : await api.put(`/channels/${m.channel_id}/pins/${m.id}`) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const copy = async (label: string, text: string) => { try { await navigator.clipboard.writeText(text); pushToast(`${label} copied`) } catch { pushToast('Clipboard unavailable', 'error') } }
-  const react = async (emoji: string, has: boolean) => {
-    setPicker(null)
-    const path = `/channels/${m.channel_id}/messages/${m.id}/reactions/${encodeURIComponent(emoji)}`
+  const react = async (emoji: string, has: boolean, burst = false) => {
+    setPicker(null); setSuperPicker(null)
+    const path = `/channels/${m.channel_id}/messages/${m.id}/reactions/${encodeURIComponent(emoji)}${burst ? '?burst=true' : ''}`
     if (!has) recordEmoji(emoji)
     try { has ? await api.delete(path) : await api.put(path) } catch (e) { pushToast((e as Error).message, 'error') }
   }
@@ -210,7 +211,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           {quick.map((q) => <button key={q} type="button" onClick={() => { ctx.close(); react(q, !!m.reactions.find((r) => r.emoji === q && r.me)) }} className="h-10 w-10 rounded-lg bg-[#2b2d31] hover:bg-[#3f4147] flex items-center justify-center" title={`React with ${q}`}><Emoji value={q} size={24} /></button>)}
         </div>
       ) }] : []),
-      ...(canReact ? [{ label: 'Add Reaction', icon: <SmilePlus size={16} />, onClick: () => setPicker(anchorRect) }] : []),
+      ...(canReact ? [{ label: 'Add Reaction', icon: <SmilePlus size={16} />, onClick: () => setPicker(anchorRect) }, { label: 'Add Super Reaction', icon: <Sparkles size={16} />, onClick: () => setSuperPicker(anchorRect) }] : []),
       'sep' as const,
       { label: 'Reply', icon: <Reply size={16} />, onClick: onReply },
       ...(guildId && chanKind === 'text' && !m.thread && m.kind !== 'default' ? [] : guildId && chanKind === 'text' && !m.thread ? [{ label: 'Create Thread', icon: <MessagesSquare size={16} />, onClick: () => openModal({ kind: 'createThread', channelId: m.channel_id, messageId: m.id, suggested: m.content.replace(/\s+/g, ' ').trim().slice(0, 60) }) }] : []),
@@ -388,7 +389,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           )}
           {m.reactions.length > 0 && prefs.showReactions && (
             <div className="mt-1.5 flex flex-wrap gap-1" data-reactions>
-              {m.reactions.map((r) => <ReactionChip key={r.emoji} r={r} message={m} canReact={canReact} onToggle={() => react(r.emoji, r.me)} />)}
+              {m.reactions.map((r) => <ReactionChip key={`${r.emoji}:${r.burst ? 1 : 0}`} r={r} message={m} canReact={canReact} onToggle={() => react(r.emoji, r.me, !!r.burst)} />)}
               {canReact && (
                 <button type="button" onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())} title="Add Reaction" data-add-reaction-chip
                   className="h-[26px] w-[34px] rounded-lg bg-[#2b2d31] border border-transparent text-text-2 hover:border-[#4e5058] hover:text-text-0 flex items-center justify-center">
@@ -409,6 +410,10 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           {canReact && frequent.map((e) => <button key={e} title={`React with ${e}`} onClick={() => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} className="h-8 w-8 flex items-center justify-center text-base hover:bg-bg-3 first:rounded-l-lg" data-quick-react><Emoji value={e} size={20} /></button>)}
           {canReact && <div className="relative" ref={pickerAnchor}>
             <Tool label="Add Reaction" onClick={togglePicker}><SmilePlus size={16} /></Tool>
+            {superPicker && (
+              <ExpressionPicker tabs={['emoji']} anchor={superPicker} guildId={guildId ?? null} onClose={() => setSuperPicker(null)}
+                onEmoji={(e) => react(e, !!m.reactions.find((r) => r.emoji === e && r.burst && r.me), true)} />
+            )}
             {picker && (
               <ExpressionPicker tabs={['emoji']} anchor={picker} guildId={guildId ?? null} onClose={() => setPicker(null)}
                 onEmoji={(e) => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} />
@@ -469,16 +474,23 @@ function MediaEmbed({ url }: { url: string }) {
 }
 
 /** Discord-style reaction chip: emoji + count, highlighted when it's yours; hovering lists who reacted. */
-function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: string; count: number; me: boolean }; message: Message; canReact: boolean; onToggle: () => void }) {
+function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: string; count: number; me: boolean; burst?: boolean }; message: Message; canReact: boolean; onToggle: () => void }) {
   const [rect, setRect] = useState<DOMRect | null>(null)
+  // Super reactions burst when someone adds one (not when the chip first appears with history).
+  const [bursting, setBursting] = useState(0)
+  const lastCount = useRef(r.count)
+  useEffect(() => {
+    if (r.burst && r.count > lastCount.current) { setBursting((n) => n + 1); const t = setTimeout(() => setBursting(0), 900); lastCount.current = r.count; return () => clearTimeout(t) }
+    lastCount.current = r.count
+  }, [r.burst, r.count])
   const [who, setWho] = useState<{ id: string; display_name: string }[] | null>(null)
   const me = useStore((s) => s.user)
   useEffect(() => {
     if (!rect) return
     let live = true
-    api.get<{ id: string; display_name: string }[]>(`/channels/${m.channel_id}/messages/${m.id}/reactions/${encodeURIComponent(r.emoji)}`).then((u) => { if (live) setWho(u) }).catch(() => { if (live) setWho([]) })
+    api.get<{ id: string; display_name: string }[]>(`/channels/${m.channel_id}/messages/${m.id}/reactions/${encodeURIComponent(r.emoji)}${r.burst ? '?burst=true' : ''}`).then((u) => { if (live) setWho(u) }).catch(() => { if (live) setWho([]) })
     return () => { live = false }
-  }, [rect, m.channel_id, m.id, r.emoji, r.count])
+  }, [rect, m.channel_id, m.id, r.emoji, r.count, r.burst])
   const c = parseCustom(r.emoji)
   const name = c ? `:${c.name}:` : emojiLabel(r.emoji)
   // The chip's own `me` flag is authoritative; the fetched list can lag a toggle by a round trip.
@@ -487,15 +499,16 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
   const text = names.length === 0 ? '' : names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : names.length === 3 ? `${names[0]}, ${names[1]}, and ${names[2]}` : `${names[0]}, ${names[1]}, and ${names.length - 2} others`
   return (
     <>
-      <button type="button" disabled={!canReact && !r.me} onClick={() => { setRect(null); onToggle() }} data-reaction={r.emoji} onMouseEnter={(e) => { if (canHover()) setRect(e.currentTarget.getBoundingClientRect()) }} onMouseLeave={() => setRect(null)} onTouchStart={() => setRect(null)}
-        className={`h-[26px] flex items-center gap-1.5 rounded-lg border px-1.5 text-sm transition ${r.me ? 'border-accent bg-accent/15 hover:bg-accent/25' : 'border-transparent bg-[#2b2d31] hover:border-[#4e5058]'}`}>
+      <button type="button" disabled={!canReact && !r.me} onClick={() => { setRect(null); onToggle() }} data-reaction={r.emoji} data-reaction-burst={r.burst ? '1' : undefined} onMouseEnter={(e) => { if (canHover()) setRect(e.currentTarget.getBoundingClientRect()) }} onMouseLeave={() => setRect(null)} onTouchStart={() => setRect(null)}
+        className={`relative h-[26px] flex items-center gap-1.5 rounded-lg border px-1.5 text-sm transition ${r.burst ? 'super-reaction ' : ''}${r.me ? 'border-accent bg-accent/15 hover:bg-accent/25' : 'border-transparent bg-[#2b2d31] hover:border-[#4e5058]'}`}>
         <Emoji value={r.emoji} size={16} /><span className={`text-[13px] font-semibold ${r.me ? 'text-text-0' : 'text-text-1'}`}>{r.count}</span>
+        {bursting > 0 && <span key={bursting} className="burst-fx pointer-events-none absolute inset-0" aria-hidden data-burst-fx>{Array.from({ length: 8 }, (_, i) => <span key={i} className="burst-particle" style={{ '--a': `${i * 45}deg` } as React.CSSProperties}><Emoji value={r.emoji} size={12} /></span>)}</span>}
       </button>
       {rect && who && createPortal(
         <div role="tooltip" data-reaction-tip className="pop pointer-events-none fixed z-[150] max-w-[280px] rounded-lg bg-[#111214] border border-white/5 shadow-2xl p-3 flex items-center gap-3 text-sm"
           style={{ left: Math.min(Math.max(8, rect.left + rect.width / 2 - 140), window.innerWidth - 288), ...(rect.top > 120 ? { bottom: window.innerHeight - rect.top + 8 } : { top: rect.bottom + 8 }) }}>
           <Emoji value={r.emoji} size={40} />
-          <div className="min-w-0"><span className="font-semibold text-text-0">{text}</span> <span className="text-text-1">reacted with {name}</span></div>
+          <div className="min-w-0"><span className="font-semibold text-text-0">{text}</span> <span className="text-text-1">{r.burst ? 'super reacted with' : 'reacted with'} {name}</span></div>
         </div>,
         document.body,
       )}
