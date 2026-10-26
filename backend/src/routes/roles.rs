@@ -21,6 +21,9 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/guilds/:id/roles", get(list_roles).post(create_role))
         .route("/guilds/:id/roles/:rid", patch(update_role).delete(delete_role))
+        .route("/guilds/:id/roles/:rid/duplicate", axum::routing::post(duplicate_role))
+        .route("/guilds/:id/roles/:rid/members", get(role_members))
+        .route("/guilds/:id/role-counts", get(role_counts))
         .route("/guilds/:id/members/:uid", patch(update_member))
         .route("/permissions", get(catalogue))
 }
@@ -127,6 +130,60 @@ struct UpdateRole {
     permissions: Option<i64>,
     hoist: Option<bool>,
     position: Option<i32>,
+    /// An emoji, or an uploaded image (/api/images/...); null removes it.
+    #[serde(default, deserialize_with = "deserialize_nullable")]
+    icon: Option<Option<String>>,
+    mentionable: Option<bool>,
+}
+
+/// A role icon is a short emoji or one of this instance's uploaded images.
+fn validate_icon(icon: &Option<Option<String>>) -> AppResult<()> {
+    if let Some(Some(i)) = icon {
+        let image = i.starts_with("/api/images/") && i.len() <= 64;
+        let emoji = i.chars().count() <= 8 && !i.chars().any(|c| c.is_ascii_alphanumeric() || c.is_ascii_punctuation());
+        if !image && !emoji { return Err(AppError::BadRequest("A role icon is an emoji or an uploaded image".into())) }
+    }
+    Ok(())
+}
+
+/// Copy a role (permissions, colours, style, icon, settings) as "<name> (copy)" at the bottom of the list.
+async fn duplicate_role(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, rid)): Path<(Uuid, Uuid)>) -> AppResult<(StatusCode, Json<Role>)> {
+    let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
+    perms::check(p, perms::MANAGE_ROLES)?;
+    let src = ctx.roles.get(&rid).filter(|r| r.id != id).cloned().ok_or_else(|| AppError::NotFound("Role not found".into()))?;
+    if !ctx.outranks_role(uid, &src) { return Err(AppError::Forbidden) }
+    check_bits_delta(p, 0, src.permissions as u64)?;
+    let name: String = format!("{} (copy)", src.name).chars().take(100).collect();
+    let mut tx = state.db.begin().await?;
+    sqlx::query("UPDATE roles SET position = position + 1 WHERE guild_id = $1 AND position >= 1").bind(id).execute(&mut *tx).await?;
+    let role = sqlx::query_as::<_, Role>(&format!(
+        "INSERT INTO roles (id, guild_id, name, color, color_accent, position, permissions, hoist, name_style, icon, mentionable)
+         VALUES ($1, $2, $3, $4, $5, 1, $6, $7, $8, $9, $10) RETURNING {ROLE_COLS}"))
+        .bind(Uuid::now_v7()).bind(id).bind(&name).bind(&src.color).bind(&src.color_accent).bind(src.permissions).bind(src.hoist)
+        .bind(&src.name_style).bind(&src.icon).bind(src.mentionable)
+        .fetch_one(&mut *tx).await?;
+    tx.commit().await?;
+    emit_roles(&state, id).await?;
+    crate::audit::guild(&state, id, uid, "role.create", "role", Some(role.id), &role.name, json!({ "duplicated_from": src.name })).await;
+    Ok((StatusCode::CREATED, Json(role)))
+}
+
+/// How many members hold each role (for Server Settings › Roles).
+async fn role_counts(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<std::collections::HashMap<Uuid, i64>>> {
+    perms::guild_perms(&state.db, id, uid).await?;
+    let rows: Vec<(Uuid, i64)> = sqlx::query_as("SELECT role_id, COUNT(*) FROM member_roles WHERE guild_id = $1 GROUP BY role_id").bind(id).fetch_all(&state.db).await?;
+    Ok(Json(rows.into_iter().collect()))
+}
+
+/// Members holding a role (clicking a @role mention shows them), up to 200.
+async fn role_members(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, rid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Vec<serde_json::Value>>> {
+    perms::guild_perms(&state.db, id, uid).await?;
+    let rows: Vec<(Uuid, String, Option<String>, Option<String>)> = sqlx::query_as(
+        "SELECT u.id, u.display_name, u.avatar_url, m.nickname FROM member_roles r JOIN users u ON u.id = r.user_id
+         JOIN guild_members m ON m.guild_id = r.guild_id AND m.user_id = r.user_id
+         WHERE r.guild_id = $1 AND r.role_id = $2 ORDER BY lower(COALESCE(m.nickname, u.display_name)) LIMIT 200")
+        .bind(id).bind(rid).fetch_all(&state.db).await?;
+    Ok(Json(rows.into_iter().map(|(id, name, avatar, nick)| json!({ "id": id, "display_name": name, "avatar_url": avatar, "nickname": nick })).collect()))
 }
 
 /// Distinguish "field absent" (None) from "field: null" (Some(None)).
@@ -162,6 +219,7 @@ async fn update_role(
     if let Some(c) = &req.color_accent {
         validate_color(c)?;
     }
+    validate_icon(&req.icon)?;
     let (set_style, name_style, color_req, accent_req) = match &req.name_style {
         Some(v) => { let (st, p, a) = crate::routes::users::validate_name_style(v)?; (true, st, Some(p), Some(a)) }
         None => (false, serde_json::json!({}), req.color.clone(), req.color_accent.clone()),
@@ -187,7 +245,8 @@ async fn update_role(
         "UPDATE roles SET name = COALESCE($2, name), color = CASE WHEN $3 THEN $4 ELSE color END,
             permissions = COALESCE($5, permissions), hoist = COALESCE($6, hoist),
             color_accent = CASE WHEN $7 THEN $8 ELSE color_accent END,
-            name_style = CASE WHEN $9 THEN $10 ELSE name_style END
+            name_style = CASE WHEN $9 THEN $10 ELSE name_style END,
+            icon = CASE WHEN $11 THEN $12 ELSE icon END, mentionable = COALESCE($13, mentionable)
          WHERE id = $1 RETURNING {ROLE_COLS}"
     ))
     .bind(rid)
@@ -200,6 +259,9 @@ async fn update_role(
     .bind(accent_req.clone().flatten())
     .bind(set_style)
     .bind(name_style)
+    .bind(req.icon.is_some())
+    .bind(req.icon.clone().flatten())
+    .bind(req.mentionable)
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -217,6 +279,8 @@ async fn update_role(
     if let Some(p) = permissions { changed.insert("permissions".into(), json!(p)); }
     if req.color.is_some() { changed.insert("color".into(), json!(role.color)); }
     if req.hoist.is_some() { changed.insert("hoist".into(), json!(role.hoist)); }
+    if req.icon.is_some() { changed.insert("icon".into(), json!(role.icon.is_some())); }
+    if req.mentionable.is_some() { changed.insert("mentionable".into(), json!(role.mentionable)); }
     if req.position.is_some() { changed.insert("position".into(), json!(role.position)); }
     crate::audit::guild(&state, id, uid, "role.update", "role", Some(rid), &role.name, serde_json::Value::Object(changed)).await;
     Ok(Json(role))

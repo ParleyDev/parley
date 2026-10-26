@@ -159,6 +159,10 @@ export interface Role {
   created_at: string
   /** Name style for members holding this role: {font, effect, colors}. */
   name_style?: { font?: string; effect?: string; colors?: string[] } | null
+  /** Shown next to members' names: an emoji, or an uploaded image's URL. */
+  icon?: string | null
+  /** Anyone may @mention it (otherwise only members with Mention Everyone). */
+  mentionable?: boolean
 }
 
 export interface DmChannel extends Channel {

@@ -495,6 +495,7 @@ async fn create_message(
     let (m_users, m_roles, m_everyone) = parse_mentions(&content);
     // @everyone only counts inside a server for members allowed to use it (it still renders as text otherwise).
     let m_everyone = m_everyone && c.guild_id.is_some() && has(p, perms::MENTION_EVERYONE);
+    let m_roles = mentionable_roles(&state.db, c.guild_id, m_roles, has(p, perms::MENTION_EVERYONE)).await?;
     let mut tx = state.db.begin().await?;
     sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
         .bind(mid)
@@ -590,6 +591,7 @@ async fn edit_message(
     }
     let (m_users, m_roles, m_everyone) = parse_mentions(&content);
     let m_everyone = m_everyone && c.guild_id.is_some() && has(p, perms::MENTION_EVERYONE);
+    let m_roles = mentionable_roles(&state.db, c.guild_id, m_roles, has(p, perms::MENTION_EVERYONE)).await?;
     let mut tx = state.db.begin().await?;
     // Keep what is being replaced (only when it actually changes) so readers can see the history.
     sqlx::query("INSERT INTO message_revisions (id, message_id, content) SELECT $1, id, content FROM messages WHERE id = $2 AND channel_id = $3 AND author_id = $4 AND content <> $5")
@@ -786,6 +788,14 @@ async fn bulk_delete(
         crate::audit::guild(&state, gid, uid, "message.bulk_delete", "channel", Some(id), &c.name, json!({ "count": deleted })).await;
     }
     Ok(Json(json!({ "deleted": deleted })))
+}
+
+/// Role mentions that notify: roles marked mentionable, or any role for members with Mention Everyone. Others
+/// still render as a mention, they just don't ping anyone.
+async fn mentionable_roles(db: &PgPool, guild: Option<Uuid>, roles: Vec<Uuid>, all: bool) -> AppResult<Vec<Uuid>> {
+    let Some(g) = guild else { return Ok(Vec::new()) };
+    if roles.is_empty() || all { return Ok(roles) }
+    Ok(sqlx::query_as::<_, (Uuid,)>("SELECT id FROM roles WHERE guild_id = $1 AND id = ANY($2) AND mentionable").bind(g).bind(&roles).fetch_all(db).await?.into_iter().map(|r| r.0).collect())
 }
 
 /// Mentions in Discord's wire syntax: `<@id>` users, `<@&id>` roles, `@everyone` / `@here`.

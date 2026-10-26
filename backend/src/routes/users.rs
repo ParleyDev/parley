@@ -269,7 +269,7 @@ pub fn validate_name_style(v: &serde_json::Value) -> AppResult<(serde_json::Valu
 }
 
 pub const NAME_FONTS: [&str; 12] = ["default", "serif", "mono", "rounded", "display", "script", "smallcaps", "condensed", "wide", "italic", "slab", "pixel"];
-pub const NAME_EFFECTS: [&str; 9] = ["solid", "gradient", "neon", "toon", "pop", "gummy", "prism", "glitch", "wave"];
+pub const NAME_EFFECTS: [&str; 10] = ["solid", "gradient", "neon", "toon", "pop", "gummy", "prism", "glitch", "wave", "holographic"];
 
 pub const DECORATIONS: [&str; 7] = ["", "gold", "rainbow", "glow", "ice", "dashed", "ember"];
 

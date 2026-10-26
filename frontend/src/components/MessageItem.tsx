@@ -1,5 +1,6 @@
 import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
 import { isImage } from '../lib/upload'
+import RoleIcon from './RoleIcon'
 import { locale } from '../lib/i18n'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
@@ -294,7 +295,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         <div className="min-w-0 flex-1">
           {!grouped && !compact && (
             <div className="flex items-baseline gap-2 leading-[1.375rem] h-[1.375rem]" data-msg-header>
-              <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
+              <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button><RoleIcon guildId={guildId} userId={m.author.id} />
               <ClanTag userId={m.author.id} tag={m.author.clan_tag} />
               {m.author.bot && <span className="rounded bg-accent px-1 py-px text-[10px] font-bold uppercase text-white" data-bot-tag>Bot</span>}
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
@@ -302,7 +303,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           )}
           {compact && prefs.compactAvatars && <span className="float-left mr-2 mt-0.5" data-compact-avatar><Avatar user={m.author} size={20} /></span>}
           {compact && (
-            <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="float-left mr-2 font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button>
+            <><button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="float-left mr-1.5 font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button><span className="float-left mr-1.5"><RoleIcon guildId={guildId} userId={m.author.id} /></span></>
           )}
           {editing ? (
             <div className="relative">

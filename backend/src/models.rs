@@ -279,6 +279,13 @@ pub struct Role {
     #[sqlx(default)]
     #[serde(default)]
     pub name_style: serde_json::Value,
+    /// Shown next to members' names: a unicode emoji, or an uploaded image's URL.
+    #[sqlx(default)]
+    pub icon: Option<String>,
+    /// Anyone may @mention it (otherwise only members with Mention Everyone).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub mentionable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
