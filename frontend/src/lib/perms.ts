@@ -55,14 +55,19 @@ export const EMPTY_ROLES: Record<string, Role> = {}
 
 export const has = (perms: number, bit: number) => (perms & bit) === bit
 
-interface Ctx { guild: Guild; roles: Record<string, Role>; member: Member | undefined }
+/** `mfa`: whether this member has two-factor authentication (known for yourself; undefined skips the 2FA rule). */
+interface Ctx { guild: Guild; roles: Record<string, Role>; member: Member | undefined; mfa?: boolean }
+
+/** Powers that need 2FA when the server requires it (mirrors perms::MFA_GATED). */
+export const MFA_GATED = P.ADMINISTRATOR | P.KICK_MEMBERS | P.BAN_MEMBERS | P.MANAGE_CHANNELS | P.MANAGE_GUILD | P.MANAGE_MESSAGES | P.MANAGE_ROLES | P.MODERATE_MEMBERS
 
 /** Guild-wide permissions for a member (0 if not a member). */
-export function guildPerms({ guild, roles, member }: Ctx, userId: string): number {
+export function guildPerms({ guild, roles, member, mfa }: Ctx, userId: string): number {
   if (guild.owner_id === userId) return ALL
   if (!member) return 0
   let p = roles[guild.id]?.permissions ?? 0
   for (const rid of member.roles) p |= roles[rid]?.permissions ?? 0
+  if (guild.mfa_level === 1 && mfa === false) p &= ~MFA_GATED
   return has(p, P.ADMINISTRATOR) ? ALL : p
 }
 

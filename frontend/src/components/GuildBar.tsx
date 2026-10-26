@@ -116,7 +116,7 @@ export default function GuildBar() {
         {ind === 'top' && <span className="absolute -top-1.5 left-2 right-2 h-0.5 rounded bg-white" data-drop-line="before" />}
         {ind === 'bottom' && <span className="absolute -bottom-1.5 left-2 right-2 h-0.5 rounded bg-white" data-drop-line="after" />}
         <NavLink to={`/channels/${g.id}`} className={`group relative block ${drag === g.id ? 'opacity-40' : ''}`} draggable onDragStart={startDrag(g.id)} onDragEnd={endDrag}
-          onContextMenu={(e) => ctx.open(e, [...guildMenu(g.id).slice(0, 2), ...notifEntries(g.id, 'Server', notifSettings, { suppress: true }), ...guildMenu(g.id).slice(2), ...layoutMenu(g.id)])} data-guild-icon={g.id} data-in-folder={inFolder ? 'true' : undefined} data-muted={mutedOf(g.id) ? 'true' : undefined}>
+          onContextMenu={(e) => ctx.open(e, [...guildMenu(g.id).slice(0, 2), ...notifEntries(g.id, 'Server', notifSettings, { suppress: true, fallback: g.default_notifications }), ...guildMenu(g.id).slice(2), ...layoutMenu(g.id)])} data-guild-icon={g.id} data-in-folder={inFolder ? 'true' : undefined} data-muted={mutedOf(g.id) ? 'true' : undefined}>
           <Pill active={active} unread={unreadOf(g.id)} tip={g.name}>
             <div className={`${inFolder ? 'h-10 w-10 text-sm rounded-xl' : 'h-12 w-12 rounded-2xl'} overflow-hidden flex items-center justify-center text-white font-semibold transition-all duration-200 ${active ? '' : 'group-hover:rounded-xl'} ${!active && !unreadOf(g.id) ? 'opacity-80 group-hover:opacity-100' : ''} ${mutedOf(g.id) ? 'opacity-50' : ''} ${ind === 'mid' && !inFolder ? 'ring-2 ring-success' : ''}`}
               style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>

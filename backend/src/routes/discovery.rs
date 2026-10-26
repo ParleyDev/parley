@@ -129,6 +129,9 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
     if is_banned(&state.db, gid, uid).await? {
         return Err(AppError::BadRequest("You are banned from this server".into()));
     }
+    if crate::routes::invites::invites_paused(&state.db, gid, uid).await? {
+        return Err(AppError::BadRequest("This server has paused new members right now".into()));
+    }
     let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
         .bind(gid)
         .bind(uid)

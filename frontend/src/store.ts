@@ -864,9 +864,9 @@ export function isUnread(s: Pick<State, 'readStates' | 'lastMessageId'>, channel
 }
 
 /** Unread AND allowed to show as such: not muted, and the level is "all messages". */
-export function showsUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'>, channelId: string): boolean {
+export function showsUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'> & Partial<Pick<State, 'guilds'>>, channelId: string): boolean {
   if (!isUnread(s, channelId)) return false
-  const e = effective(s.notifSettings, s.channels[channelId] ?? s.dms[channelId])
+  const e = effective(s.notifSettings, s.channels[channelId] ?? s.dms[channelId], s.guilds)
   return !e.muted && e.level === 'all'
 }
 
@@ -921,7 +921,7 @@ type PermState = Pick<State, 'guilds' | 'roles' | 'members' | 'user' | 'channels
 export function myGuildPerms(s: PermState, guildId: string): number {
   const guild = s.guilds[guildId]
   if (!guild || !s.user) return 0
-  return guildPerms({ guild, roles: s.roles[guildId] ?? {}, member: s.members[guildId]?.[s.user.id] }, s.user.id)
+  return guildPerms({ guild, roles: s.roles[guildId] ?? {}, member: s.members[guildId]?.[s.user.id], mfa: !!s.user.mfa_enabled }, s.user.id)
 }
 
 /** My permissions inside a channel. DMs grant everything. */
@@ -931,7 +931,7 @@ export function myChannelPerms(s: PermState, channelId: string): number {
   if (!c.guild_id) return ALL_PERMS
   const guild = s.guilds[c.guild_id]
   if (!guild || !s.user) return 0
-  return channelPerms({ guild, roles: s.roles[c.guild_id] ?? {}, member: s.members[c.guild_id]?.[s.user.id] }, s.user.id, c)
+  return channelPerms({ guild, roles: s.roles[c.guild_id] ?? {}, member: s.members[c.guild_id]?.[s.user.id], mfa: !!s.user.mfa_enabled }, s.user.id, c)
 }
 const ALL_PERMS = -1 >>> 1
 

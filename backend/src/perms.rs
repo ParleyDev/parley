@@ -79,7 +79,12 @@ pub struct GuildCtx {
     pub members: HashSet<Uuid>,
     /// Members whose timeout is still running (loaded with the context).
     pub timed_out: HashSet<Uuid>,
+    /// When the server requires 2FA for moderation: members without it, who lose moderator powers.
+    pub mfa_missing: HashSet<Uuid>,
 }
+
+/// Powers that need two-factor authentication when a server requires it (Discord's list, as far as Parley has them).
+pub const MFA_GATED: u64 = ADMINISTRATOR | KICK_MEMBERS | BAN_MEMBERS | MANAGE_CHANNELS | MANAGE_GUILD | MANAGE_MESSAGES | MANAGE_ROLES | MODERATE_MEMBERS;
 
 impl GuildCtx {
     pub async fn load(db: &PgPool, guild_id: Uuid) -> AppResult<Self> {
@@ -111,7 +116,11 @@ impl GuildCtx {
             .into_iter()
             .map(|r| r.0)
             .collect();
-        Ok(Self { guild, roles, member_roles, members, timed_out })
+        let mfa_missing: HashSet<Uuid> = if guild.mfa_level >= 1 {
+            sqlx::query_as::<_, (Uuid,)>("SELECT m.user_id FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND u.totp_secret IS NULL")
+                .bind(guild_id).fetch_all(db).await?.into_iter().map(|r| r.0).collect()
+        } else { HashSet::new() };
+        Ok(Self { guild, roles, member_roles, members, timed_out, mfa_missing })
     }
 
     pub fn is_member(&self, user: Uuid) -> bool {
@@ -141,6 +150,7 @@ impl GuildCtx {
                 p |= r.permissions as u64;
             }
         }
+        if self.mfa_missing.contains(&user) { p &= !MFA_GATED }
         if has(p, ADMINISTRATOR) { Some(ALL) } else { Some(p) }
     }
 
@@ -465,6 +475,15 @@ mod tests {
             banner_url: None,
             rules: String::new(),
             rules_required: false,
+            description: String::new(),
+            system_channel_id: None,
+            join_notices: true,
+            join_wave: true,
+            default_notifications: "all".into(),
+            verification_level: 0,
+            mfa_level: 0,
+            invites_paused: false,
+            dms_paused_until: None,
         };
         let mut everyone = role(gid, 0, DEFAULT_EVERYONE);
         everyone.id = gid; // @everyone shares the guild id
@@ -473,7 +492,7 @@ mod tests {
         let admin_role = role(gid, 3, ADMINISTRATOR);
         let (m, v, a) = (mod_role.id, vip_role.id, admin_role.id);
         let roles = [everyone, mod_role, vip_role, admin_role].into_iter().map(|r| (r.id, r)).collect();
-        let ctx = GuildCtx { guild, roles, member_roles: HashMap::new(), members: HashSet::from([owner]), timed_out: HashSet::new() };
+        let ctx = GuildCtx { guild, roles, member_roles: HashMap::new(), members: HashSet::from([owner]), timed_out: HashSet::new(), mfa_missing: HashSet::new() };
         Fx { ctx, owner, mod_role: m, vip_role: v, admin_role: a }
     }
 

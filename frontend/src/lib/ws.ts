@@ -161,7 +161,7 @@ function handle(ev: Ev) {
         if (dmReq && dmReq !== 'accepted') break // message requests wait quietly
         const mentioned = mentionsMe(s, ev.d.message)
         const hidden = document.visibilityState !== 'visible'
-        if (!streamerHides('notifications') && shouldNotify(effective(s.notifSettings, ch), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {
+        if (!streamerHides('notifications') && shouldNotify(effective(s.notifSettings, ch, s.guilds), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {
           if (hidden) notify(ev.d.message)
           // A sound unless you are looking right at that channel in a focused window.
           if (hidden || !document.hasFocus() || s.activeChannelId !== ev.d.message.channel_id) playSfx(mentioned ? 'mention' : 'message')

@@ -38,7 +38,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/owner", post(transfer_ownership))
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until";
 pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -94,10 +94,11 @@ pub async fn fetch_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResu
 }
 
 async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Guild>>> {
-    let gs = sqlx::query_as::<_, Guild>(
-        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at, g.banner_url FROM guilds g
+    let gs = sqlx::query_as::<_, Guild>(&format!(
+        "SELECT g.{} FROM guilds g
          JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at",
-    )
+        GUILD_COLS.replace(", ", ", g.")
+    ))
     .bind(uid)
     .fetch_all(&state.db)
     .await?;
@@ -183,6 +184,22 @@ struct UpdateGuild {
     /// Membership screening: rules markdown (up to 4000 chars) and whether accepting them is required to chat.
     rules: Option<String>,
     rules_required: Option<bool>,
+    /// Up to 300 characters.
+    description: Option<String>,
+    /// A text channel in this server, or null for the first one.
+    #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
+    system_channel_id: Option<Option<Uuid>>,
+    join_notices: Option<bool>,
+    join_wave: Option<bool>,
+    /// 'all' | 'mentions'
+    default_notifications: Option<String>,
+    /// 0-3
+    verification_level: Option<i16>,
+    /// 0 or 1; only the owner, who needs 2FA themselves to turn it on.
+    mfa_level: Option<i16>,
+    invites_paused: Option<bool>,
+    /// Pause DMs between members for this many hours (1-24); 0 resumes them.
+    pause_dms_hours: Option<i32>,
 }
 
 async fn update_guild(
@@ -200,13 +217,42 @@ async fn update_guild(
     }
     validate_image(&req.icon_url)?;
     crate::routes::users::validate_image_max(&req.banner_url, 1024 * 1024)?;
+    if req.description.as_ref().map(|d| d.chars().count() > 300).unwrap_or(false) {
+        return Err(AppError::BadRequest("Description must be at most 300 characters".into()));
+    }
+    if req.default_notifications.as_deref().map(|d| d != "all" && d != "mentions").unwrap_or(false) {
+        return Err(AppError::BadRequest("default_notifications must be 'all' or 'mentions'".into()));
+    }
+    if req.verification_level.map(|v| !(0..=3).contains(&v)).unwrap_or(false) {
+        return Err(AppError::BadRequest("verification_level must be 0 to 3".into()));
+    }
+    if req.pause_dms_hours.map(|h| !(0..=24).contains(&h)).unwrap_or(false) {
+        return Err(AppError::BadRequest("DMs can be paused for 1 to 24 hours".into()));
+    }
+    if let Some(level) = req.mfa_level {
+        if !(0..=1).contains(&level) { return Err(AppError::BadRequest("mfa_level must be 0 or 1".into())) }
+        // Like Discord: only the owner, and only with 2FA on their own account.
+        let (owner, mfa): (bool, bool) = sqlx::query_as("SELECT g.owner_id = $2, u.totp_secret IS NOT NULL FROM guilds g, users u WHERE g.id = $1 AND u.id = $2").bind(id).bind(uid).fetch_one(&state.db).await?;
+        if !owner { return Err(AppError::Forbidden) }
+        if level == 1 && !mfa { return Err(AppError::BadRequest("Turn on two-factor authentication for your own account first".into())) }
+    }
+    if let Some(Some(cid)) = req.system_channel_id {
+        let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind = 'text'").bind(cid).bind(id).fetch_optional(&state.db).await?;
+        if ok.is_none() { return Err(AppError::BadRequest("The system channel must be a text channel in this server".into())) }
+    }
     let (before_name, before): (String, (Option<String>, Option<String>)) = sqlx::query_as::<_, (String, Option<String>, Option<String>)>("SELECT name, icon_url, banner_url FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await.map(|r| (r.0, (r.1, r.2)))?;
     let rules = req.rules.map(|r| r.trim_end().chars().take(4000).collect::<String>());
     let g = sqlx::query_as::<_, Guild>(&format!(
         "UPDATE guilds SET name = COALESCE($2, name),
            icon_url = CASE WHEN $3::text IS NULL THEN icon_url WHEN $3 = '' THEN NULL ELSE $3 END,
            banner_url = CASE WHEN $4::text IS NULL THEN banner_url WHEN $4 = '' THEN NULL ELSE $4 END,
-           rules = COALESCE($5, rules), rules_required = COALESCE($6, rules_required)
+           rules = COALESCE($5, rules), rules_required = COALESCE($6, rules_required),
+           description = COALESCE($7, description),
+           system_channel_id = CASE WHEN $8 THEN $9 ELSE system_channel_id END,
+           join_notices = COALESCE($10, join_notices), join_wave = COALESCE($11, join_wave),
+           default_notifications = COALESCE($12, default_notifications), verification_level = COALESCE($13, verification_level),
+           mfa_level = COALESCE($14, mfa_level), invites_paused = COALESCE($15, invites_paused),
+           dms_paused_until = CASE WHEN $16::int IS NULL THEN dms_paused_until WHEN $16 = 0 THEN NULL ELSE now() + make_interval(hours => $16) END
          WHERE id = $1 RETURNING {GUILD_COLS}"
     ))
     .bind(id)
@@ -215,6 +261,16 @@ async fn update_guild(
     .bind(req.banner_url)
     .bind(&rules)
     .bind(req.rules_required)
+    .bind(req.description.as_ref().map(|d| d.trim().to_string()))
+    .bind(req.system_channel_id.is_some())
+    .bind(req.system_channel_id.flatten())
+    .bind(req.join_notices)
+    .bind(req.join_wave)
+    .bind(&req.default_notifications)
+    .bind(req.verification_level)
+    .bind(req.mfa_level)
+    .bind(req.invites_paused)
+    .bind(req.pause_dms_hours)
     .fetch_one(&state.db)
     .await?;
     crate::routes::images::release_replaced(&state, before.0.as_deref(), g.icon_url.as_deref()).await;
@@ -226,6 +282,15 @@ async fn update_guild(
     if g.banner_url != before.1 { changed.insert("banner".into(), json!(g.banner_url.is_some())); }
     if rules.is_some() { changed.insert("rules".into(), json!(!g.rules.is_empty())); }
     if let Some(r) = req.rules_required { changed.insert("rules_required".into(), json!(r)); }
+    if req.description.is_some() { changed.insert("description".into(), json!(g.description)); }
+    if req.system_channel_id.is_some() { changed.insert("system_channel".into(), json!(g.system_channel_id)); }
+    if let Some(v) = req.join_notices { changed.insert("join_notices".into(), json!(v)); }
+    if let Some(v) = req.join_wave { changed.insert("join_wave".into(), json!(v)); }
+    if let Some(v) = &req.default_notifications { changed.insert("default_notifications".into(), json!(v)); }
+    if let Some(v) = req.verification_level { changed.insert("verification_level".into(), json!(v)); }
+    if let Some(v) = req.mfa_level { changed.insert("mfa_required".into(), json!(v == 1)); }
+    if let Some(v) = req.invites_paused { changed.insert("invites_paused".into(), json!(v)); }
+    if let Some(h) = req.pause_dms_hours { changed.insert("dms_paused_hours".into(), json!(h)); }
     crate::audit::guild(&state, id, uid, "guild.update", "guild", Some(id), &g.name, serde_json::Value::Object(changed)).await;
     Ok(Json(g))
 }

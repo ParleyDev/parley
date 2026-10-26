@@ -130,7 +130,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     }
 
     let guilds = sqlx::query_as::<_, Guild>(
-        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at, g.banner_url, g.rules, g.rules_required FROM guilds g
+        "SELECT g.id, g.name, g.icon_url, g.owner_id, g.created_at, g.banner_url, g.rules, g.rules_required, g.description, g.system_channel_id, g.join_notices, g.join_wave, g.default_notifications, g.verification_level, g.mfa_level, g.invites_paused, g.dms_paused_until FROM guilds g
          JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at",
     )
     .bind(user_id)

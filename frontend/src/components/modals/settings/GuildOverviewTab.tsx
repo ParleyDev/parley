@@ -1,5 +1,5 @@
 import { Crown } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import ImagePicker from '../ImagePicker'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
@@ -17,13 +17,25 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
   const [banner, setBanner] = useState<string | null>(guild?.banner_url ?? null)
   const [rules, setRules] = useState(guild?.rules ?? '')
   const [rulesRequired, setRulesRequired] = useState(!!guild?.rules_required)
+  const [description, setDescription] = useState(guild?.description ?? '')
+  const [systemChannel, setSystemChannel] = useState(guild?.system_channel_id ?? '')
+  const [joinNotices, setJoinNotices] = useState(guild?.join_notices ?? true)
+  const [joinWave, setJoinWave] = useState(guild?.join_wave ?? true)
+  const [defaultNotif, setDefaultNotif] = useState<'all' | 'mentions'>(guild?.default_notifications ?? 'all')
+  const channels = useStore((s) => s.channels)
+  const textChannels = useMemo(() => Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'text').sort((a, b) => a.position - b.position), [channels, guildId])
   const [busy, setBusy] = useState(false)
   if (!guild) return null
-  const dirty = name !== guild.name || (icon ?? null) !== (guild.icon_url ?? null) || (banner ?? null) !== (guild.banner_url ?? null) || rules !== (guild.rules ?? '') || rulesRequired !== !!guild.rules_required
+  const extrasDirty = description !== (guild.description ?? '') || systemChannel !== (guild.system_channel_id ?? '') || joinNotices !== (guild.join_notices ?? true) || joinWave !== (guild.join_wave ?? true) || defaultNotif !== (guild.default_notifications ?? 'all')
+  const dirty = extrasDirty || name !== guild.name || (icon ?? null) !== (guild.icon_url ?? null) || (banner ?? null) !== (guild.banner_url ?? null) || rules !== (guild.rules ?? '') || rulesRequired !== !!guild.rules_required
+  const reset = () => {
+    setName(guild.name); setIcon(guild.icon_url); setBanner(guild.banner_url ?? null); setRules(guild.rules ?? ''); setRulesRequired(!!guild.rules_required)
+    setDescription(guild.description ?? ''); setSystemChannel(guild.system_channel_id ?? ''); setJoinNotices(guild.join_notices ?? true); setJoinWave(guild.join_wave ?? true); setDefaultNotif(guild.default_notifications ?? 'all')
+  }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
     try {
-      const g = await api.patch<Guild>(`/guilds/${guildId}`, { name, icon_url: icon ?? '', banner_url: banner ?? '', rules, rules_required: rulesRequired })
+      const g = await api.patch<Guild>(`/guilds/${guildId}`, { name, icon_url: icon ?? '', banner_url: banner ?? '', rules, rules_required: rulesRequired, description, system_channel_id: systemChannel || null, join_notices: joinNotices, join_wave: joinWave, default_notifications: defaultNotif })
       upsertGuild(g); pushToast('Server updated')
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
@@ -33,6 +45,11 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
       <div className="flex items-start gap-6 max-md:flex-col">
         <ImagePicker value={icon} onChange={setIcon} label={name} id={guildId} kind="icon" />
         <div className="flex-1 w-full"><label className="label">Server name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
+      </div>
+      <div>
+        <label className="label" htmlFor="guild-description">Description</label>
+        <textarea id="guild-description" className="input resize-none" rows={2} maxLength={300} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What's this server about?" data-guild-description />
+        <p className="mt-1 text-xs text-text-2">Shown on invites and in Discover. {300 - [...description].length} characters left.</p>
       </div>
       <div>
         <label className="label">Server banner</label>
@@ -45,6 +62,33 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
         </p>
         {guild.owner_id === me?.id && <button type="button" className="btn-ghost mt-3" onClick={() => openModal({ kind: 'transferOwnership', guildId })}><Crown size={16} /> Transfer Ownership</button>}
       </div>
+      <section className="space-y-3" data-system-messages>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2">System messages</h2>
+        <div>
+          <label className="label" htmlFor="system-channel">System messages channel</label>
+          <select id="system-channel" className="input" value={systemChannel} onChange={(e) => setSystemChannel(e.target.value)} data-system-channel>
+            <option value="">First text channel{textChannels[0] ? ` (#${textChannels[0].name})` : ''}</option>
+            {textChannels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}
+          </select>
+        </div>
+        <label className="flex items-center justify-between gap-4 rounded-xl border border-line bg-bg-1 p-3 cursor-pointer">
+          <span className="text-sm">Send a message when someone joins</span>
+          <input type="checkbox" checked={joinNotices} onChange={(e) => setJoinNotices(e.target.checked)} className="h-5 w-5 accent-accent" data-join-notices />
+        </label>
+        <label className={`flex items-center justify-between gap-4 rounded-xl border border-line bg-bg-1 p-3 ${joinNotices ? 'cursor-pointer' : 'opacity-50'}`}>
+          <span className="text-sm">Prompt members to wave hello to newcomers</span>
+          <input type="checkbox" checked={joinWave} disabled={!joinNotices} onChange={(e) => setJoinWave(e.target.checked)} className="h-5 w-5 accent-accent" data-join-wave />
+        </label>
+      </section>
+      <section className="space-y-2" data-default-notifications>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2">Default notification settings</h2>
+        <p className="text-xs text-text-2">What members get notified about until they choose for themselves. Busy servers usually pick Only @mentions.</p>
+        {([['all', 'All Messages'], ['mentions', 'Only @mentions']] as const).map(([v, label]) => (
+          <label key={v} className="flex items-center gap-3 rounded-xl border border-line bg-bg-1 p-3 cursor-pointer text-sm">
+            <input type="radio" name="default-notif" checked={defaultNotif === v} onChange={() => setDefaultNotif(v)} className="h-4 w-4 accent-accent" data-default-notif={v} />{label}
+          </label>
+        ))}
+      </section>
       <div className="space-y-2" data-guild-rules>
         <label className="label">Server rules</label>
         <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={6} maxLength={4000} placeholder={'1. Be kind.\n2. No spam.\nMarkdown works.'} className="input resize-y font-mono text-sm" data-guild-rules-text />
@@ -56,7 +100,7 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
       {dirty && (
         <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
           <span className="text-sm flex-1">Careful — you have unsaved changes!</span>
-          <button type="button" className="btn-ghost" onClick={() => { setName(guild.name); setIcon(guild.icon_url); setBanner(guild.banner_url ?? null); setRules(guild.rules ?? ''); setRulesRequired(!!guild.rules_required) }}>Reset</button>
+          <button type="button" className="btn-ghost" onClick={reset}>Reset</button>
           <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !name.trim()}>Save Changes</button>
         </div>
       )}

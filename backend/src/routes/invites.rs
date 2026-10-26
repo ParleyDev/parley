@@ -173,6 +173,14 @@ async fn badge_preview(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     Ok(([(header::CONTENT_TYPE, "image/svg+xml; charset=utf-8"), (header::CACHE_CONTROL, "no-store")], svg))
 }
 
+/// The server has paused invites (Safety settings) and `uid` isn't already in it.
+pub async fn invites_paused(db: &sqlx::PgPool, gid: Uuid, uid: Uuid) -> AppResult<bool> {
+    let (paused,): (bool,) = sqlx::query_as(
+        "SELECT g.invites_paused AND NOT EXISTS (SELECT 1 FROM guild_members m WHERE m.guild_id = g.id AND m.user_id = $2) FROM guilds g WHERE g.id = $1")
+        .bind(gid).bind(uid).fetch_one(db).await?;
+    Ok(paused)
+}
+
 async fn preview(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
@@ -199,6 +207,7 @@ async fn preview(
         "expired": !live,
         "already_member": already.is_some(),
         "banned": is_banned(&state.db, gid, uid).await?,
+        "paused": invites_paused(&state.db, gid, uid).await?,
     })))
 }
 
@@ -223,6 +232,9 @@ async fn accept(
     }
     if is_banned(&state.db, gid, uid).await? {
         return Err(AppError::BadRequest("You are banned from this server".into()));
+    }
+    if invites_paused(&state.db, gid, uid).await? {
+        return Err(AppError::BadRequest("Invites to this server are paused right now".into()));
     }
     let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
         .bind(gid)

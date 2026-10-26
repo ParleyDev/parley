@@ -4,14 +4,14 @@ import { useStore } from '../store'
 import type { MenuEntry, MenuItem } from './ContextMenu'
 
 /** "Mute X ›" / "Unmute X" and "Notification Settings ›" entries for a server, channel or DM. */
-export function notifEntries(target: string, what: 'Server' | 'Category' | 'Channel' | 'Conversation', settings: Record<string, NotifSetting>, opts: { serverDefault?: boolean; suppress?: boolean } = {}): MenuEntry[] {
+export function notifEntries(target: string, what: 'Server' | 'Category' | 'Channel' | 'Conversation', settings: Record<string, NotifSetting>, opts: { serverDefault?: boolean; suppress?: boolean; fallback?: 'all' | 'mentions' } = {}): MenuEntry[] {
   const update = useStore.getState().updateNotif
   const cur = settings[target]
   const level = cur?.level ?? 'default'
   const muted = mutedTarget(settings, target)
   const levels: MenuItem[] = [
     ...(opts.serverDefault ? [{ label: 'Use Server Default', icon: level === 'default' ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { level: 'default' }) }] : []),
-    ...(['all', 'mentions', 'nothing'] as const).map((l) => ({ label: LEVEL_LABELS[l], icon: level === l || (!opts.serverDefault && level === 'default' && l === 'all') ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { level: l }) })),
+    ...(['all', 'mentions', 'nothing'] as const).map((l) => ({ label: LEVEL_LABELS[l], icon: level === l || (!opts.serverDefault && level === 'default' && l === (opts.fallback ?? 'all')) ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { level: l }) })),
     ...(opts.suppress ? [
       { label: `${cur?.suppress_everyone ? 'Allow' : 'Suppress'} @everyone and @here`, icon: cur?.suppress_everyone ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { suppress_everyone: !cur?.suppress_everyone }) },
       { label: `${cur?.suppress_roles ? 'Allow' : 'Suppress'} role @mentions`, icon: cur?.suppress_roles ? <Check size={16} /> : <span className="w-4" />, onClick: () => update(target, { suppress_roles: !cur?.suppress_roles }) },

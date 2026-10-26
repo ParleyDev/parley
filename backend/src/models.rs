@@ -150,7 +150,39 @@ pub struct Guild {
     #[sqlx(default)]
     #[serde(default)]
     pub rules_required: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub description: String,
+    /// Where join notices go (else the first text channel).
+    #[sqlx(default)]
+    pub system_channel_id: Option<Uuid>,
+    #[sqlx(default)]
+    #[serde(default = "default_true")]
+    pub join_notices: bool,
+    /// Join notices offer a "Wave to say hi" button.
+    #[sqlx(default)]
+    #[serde(default = "default_true")]
+    pub join_wave: bool,
+    /// 'all' or 'mentions': what members get notified about until they choose.
+    #[sqlx(default)]
+    #[serde(default = "default_all")]
+    pub default_notifications: String,
+    /// 0 none, 1 verified email, 2 + account older than 5 minutes, 3 + member for 10 minutes.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub verification_level: i16,
+    /// 1: moderator powers need two-factor authentication.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub mfa_level: i16,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub invites_paused: bool,
+    #[sqlx(default)]
+    pub dms_paused_until: Option<DateTime<Utc>>,
 }
+
+fn default_all() -> String { "all".into() }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
 pub struct Channel {

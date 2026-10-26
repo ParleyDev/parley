@@ -97,6 +97,11 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const motion = hovering || flash || (tapped && !canHover())
   const blocked = useStore((s) => isBlocked(s, m.author.id))
   const [revealed, setRevealed] = useState(false)
+  // Join notices can offer "Wave to say hi" (Server Settings › Overview); a wave is a 👋 reply to the notice.
+  const joinWave = useStore((s) => (guildId ? s.guilds[guildId]?.join_wave ?? true : false))
+  const sendMessage = useStore((s) => s.sendMessage)
+  const [waved, setWaved] = useState(false)
+  const wave = async () => { setWaved(true); try { await sendMessage(m.channel_id, '👋', m.id) } catch (e) { setWaved(false); pushToast((e as Error).message, 'error') } }
 
   // Up arrow in an empty composer opens your last message here, with the caret at the end.
   const editRequested = useStore((s) => s.editTarget === m.id)
@@ -196,6 +201,25 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
 
   if (m.kind === 'ribbit') return <RibbitNotice m={m} />
+
+  if (m.kind === 'member_join') {
+    const [before, after] = joinGreeting(m.id)
+    const name = <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{m.author.display_name}</button>
+    return (
+      <div className="group px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
+        <span className="w-10 flex justify-center shrink-0"><UserPlus size={16} className="text-success" /></span>
+        <span className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span data-join-greeting>{before}{name}{after}</span>
+          {joinWave && !isOwn && canReact && (
+            <button type="button" onClick={wave} disabled={waved} className="inline-flex items-center gap-1 rounded-md border border-line bg-bg-3 px-2 py-0.5 text-sm text-text-1 hover:bg-bg-4 disabled:opacity-60" data-wave>
+              <span aria-hidden>👋</span> {waved ? 'Waved' : 'Wave to say hi!'}
+            </button>
+          )}
+        </span>
+        <span className="ml-auto text-xs text-text-2 shrink-0" title={new Date(m.created_at).toLocaleString()}>{new Date(m.created_at).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}</span>
+      </div>
+    )
+  }
 
   if (m.kind && m.kind !== 'default') {
     const icon = m.kind === 'recipient_add' || m.kind === 'member_join' ? <UserPlus size={16} className="text-success" />
@@ -481,4 +505,16 @@ function RibbitNotice({ m }: { m: Message }) {
       </div>
     </div>
   )
+}
+
+/** Join notices read like Discord's: one of a few greetings, picked by the message so everyone sees the same one. */
+const GREETINGS: [string, string][] = [
+  ['Welcome, ', '. We hope you brought pizza.'], ['', ' just showed up!'], ['', ' joined the party.'], ['Glad you\u2019re here, ', '.'],
+  ['', ' hopped into the server.'], ['Everyone welcome ', '!'], ['A wild ', ' appeared.'], ['', ' just landed.'], ['Good to see you, ', '.'],
+  ['Say hi to ', '!'],
+]
+export function joinGreeting(id: string): [string, string] {
+  let h = 0
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
+  return GREETINGS[h % GREETINGS.length]
 }

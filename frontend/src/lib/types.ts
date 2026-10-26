@@ -87,6 +87,20 @@ export interface Guild {
   /** Membership screening: rules markdown and whether members must accept it before chatting. */
   rules?: string
   rules_required?: boolean
+  description?: string
+  /** Where join notices go (null: the first text channel). */
+  system_channel_id?: string | null
+  join_notices?: boolean
+  /** Join notices offer "Wave to say hi". */
+  join_wave?: boolean
+  /** What members get notified about until they choose. */
+  default_notifications?: 'all' | 'mentions'
+  /** 0 none, 1 verified email, 2 + account older than 5 minutes, 3 + member for 10 minutes. */
+  verification_level?: number
+  /** 1: moderator powers need two-factor authentication. */
+  mfa_level?: number
+  invites_paused?: boolean
+  dms_paused_until?: string | null
 }
 
 /** One entry of the user's server bar: a server, or a folder of servers. */

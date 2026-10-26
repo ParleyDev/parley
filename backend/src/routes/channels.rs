@@ -348,10 +348,14 @@ pub async fn finish_call(state: &AppState, channel_id: Uuid, call: crate::ws::hu
     Ok(())
 }
 
-/// Post a server-wide notice ("X joined the server") to the guild's system channel: its first text channel.
+/// Post a server-wide notice ("X joined the server") to the guild's system channel: the one chosen in Server
+/// Settings, else its first text channel. Join notices can be switched off.
 pub async fn guild_system_message(state: &AppState, guild_id: Uuid, actor: Uuid, kind: &str, content: &str) -> AppResult<()> {
-    let Some(mut c) = sqlx::query_as::<_, Channel>(&format!("SELECT {} FROM channels WHERE guild_id = $1 AND kind = 'text' ORDER BY position, created_at LIMIT 1", crate::routes::guilds::CHANNEL_COLS))
-        .bind(guild_id).fetch_optional(&state.db).await? else { return Ok(()) };
+    let (chosen, joins): (Option<Uuid>, bool) = sqlx::query_as("SELECT system_channel_id, join_notices FROM guilds WHERE id = $1").bind(guild_id).fetch_one(&state.db).await?;
+    if kind == "member_join" && !joins { return Ok(()) }
+    let Some(mut c) = sqlx::query_as::<_, Channel>(&format!(
+        "SELECT {} FROM channels WHERE guild_id = $1 AND kind = 'text' ORDER BY (id = $2) DESC, position, created_at LIMIT 1", crate::routes::guilds::CHANNEL_COLS))
+        .bind(guild_id).bind(chosen).fetch_optional(&state.db).await? else { return Ok(()) };
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
     system_message(state, &c, actor, kind, content, vec![], None, None).await?;
     Ok(())
@@ -441,6 +445,7 @@ async fn create_message(
     if c.kind == "forum" {
         return Err(AppError::BadRequest("Forum channels hold posts: create a post instead".into()));
     }
+    if let Some(gid) = c.guild_id { check_verification(&state.db, gid, uid).await?; }
     check_slowmode(&state.db, &c, p, uid).await?;
     let content = req.content.trim_end().to_string();
     if (content.trim().is_empty() && req.attachment_ids.is_empty() && req.sticker_id.is_none() && req.poll.is_none()) || content.chars().count() > 2000 {
@@ -619,6 +624,27 @@ async fn delete_message(
         }
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Server verification level: members without a role must have a verified email (1), an account older than five
+/// minutes (2) and have been in the server ten minutes (3) before they can talk. The owner is exempt.
+pub async fn check_verification(db: &PgPool, guild_id: Uuid, uid: Uuid) -> AppResult<()> {
+    let row: Option<(i16, bool, bool, f64, f64, bool)> = sqlx::query_as(
+        "SELECT g.verification_level, g.owner_id = u.id, u.email_verified_at IS NOT NULL,
+                EXTRACT(EPOCH FROM now() - u.created_at)::float8, EXTRACT(EPOCH FROM now() - m.joined_at)::float8,
+                EXISTS (SELECT 1 FROM member_roles r WHERE r.guild_id = g.id AND r.user_id = u.id)
+         FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $2 JOIN users u ON u.id = $2 WHERE g.id = $1")
+        .bind(guild_id).bind(uid).fetch_optional(db).await?;
+    let Some((level, owner, verified, account_secs, member_secs, has_role)) = row else { return Ok(()) };
+    if level == 0 || owner || has_role { return Ok(()) }
+    if !verified { return Err(AppError::BadRequest("This server requires a verified email address. Check your inbox for the verification link.".into())) }
+    if level >= 2 && account_secs < 300.0 {
+        return Err(AppError::BadRequest(format!("This server requires an account older than 5 minutes. Try again in {} seconds.", (300.0 - account_secs).ceil() as i64)));
+    }
+    if level >= 3 && member_secs < 600.0 {
+        return Err(AppError::BadRequest(format!("This server requires members to wait 10 minutes before talking. Try again in {} seconds.", (600.0 - member_secs).ceil() as i64)));
+    }
+    Ok(())
 }
 
 /// Slowmode: refuse a message sent too soon after this member's last one here (system notices such as their join

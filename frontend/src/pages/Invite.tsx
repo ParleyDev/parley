@@ -7,7 +7,7 @@ import { useStore } from '../store'
 import type { Channel, Guild } from '../lib/types'
 import { colorFor, initials } from '../lib/format'
 
-interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; rules?: string; rules_required?: boolean }; expired: boolean; already_member: boolean; banned: boolean }
+interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; rules?: string; rules_required?: boolean }; expired: boolean; already_member: boolean; banned: boolean; paused?: boolean }
 
 export default function InvitePage() {
   const { code = '' } = useParams()
@@ -62,6 +62,8 @@ export default function InvitePage() {
               <p className="text-danger text-sm">You are banned from this server.</p>
             ) : p.expired ? (
               <p className="text-danger text-sm">This invite has expired.</p>
+            ) : p.paused ? (
+              <p className="text-warn text-sm" data-invite-paused>This server has paused new members for now. Try again later.</p>
             ) : (
               <button className="btn-primary w-full" disabled={busy} onClick={join}>{busy ? 'Joining…' : 'Accept Invite'}</button>
             )}

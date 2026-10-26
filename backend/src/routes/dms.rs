@@ -163,9 +163,11 @@ pub async fn can_dm(db: &PgPool, from: Uuid, to: Uuid) -> AppResult<bool> {
 }
 
 /// Do `from` and `to` share a server where `to` allows DMs from members (their per-server choice, else default)?
+/// Servers that have paused DMs between members don't count.
 pub async fn shares_guild_allowing_dms(db: &PgPool, from: Uuid, to: Uuid) -> AppResult<bool> {
     let row: Option<(bool,)> = sqlx::query_as(
         "SELECT true FROM guild_members x JOIN guild_members y ON y.guild_id = x.guild_id JOIN users u ON u.id = y.user_id
+         JOIN guilds g ON g.id = x.guild_id AND (g.dms_paused_until IS NULL OR g.dms_paused_until <= now())
          WHERE x.user_id = $1 AND y.user_id = $2 AND COALESCE(y.allow_dms, u.guild_dms_default) LIMIT 1").bind(from).bind(to).fetch_optional(db).await?;
     Ok(row.is_some())
 }
