@@ -45,16 +45,25 @@ export type BadgeStyle = 'flat' | 'flat-square' | 'for-the-badge'
 export const BADGE_STYLES: { id: BadgeStyle; label: string }[] = [
   { id: 'flat', label: 'Flat' }, { id: 'flat-square', label: 'Flat square' }, { id: 'for-the-badge', label: 'For the badge' },
 ]
-/** The public badge image for an invite (served by the API, no login needed). */
-export function badgeUrl(code: string, style: BadgeStyle): string {
-  return `${publicOrigin()}/api/invites/${encodeURIComponent(code)}/badge.svg${style === 'flat' ? '' : `?style=${style}`}`
+export type BadgeShow = 'both' | 'members' | 'online'
+export const BADGE_SHOW: { id: BadgeShow; label: string }[] = [
+  { id: 'both', label: 'Online and members' }, { id: 'members', label: 'Members only' }, { id: 'online', label: 'Online only' },
+]
+/** A server's README badge settings (Server Settings › Badge); an empty label or colour means the default. */
+export interface BadgeSettings { enabled: boolean; label: string; color: string; show: BadgeShow; style: BadgeStyle }
+export const BADGE_COLOR = '#6d5dfc'
+/** Shields.io's familiar colours, after Parley purple. */
+export const BADGE_COLORS = ['#6d5dfc', '#007ec6', '#44cc11', '#97ca00', '#dfb317', '#fe7d37', '#e05d44', '#555555']
+/** The public badge image for an invite (served by the API, no login needed). Without a style it uses the server's. */
+export function badgeUrl(code: string, style?: BadgeStyle): string {
+  return `${publicOrigin()}/api/invites/${encodeURIComponent(code)}/badge.svg${style ? `?style=${style}` : ''}`
 }
 const inviteUrl = (code: string) => `${publicOrigin()}/invite/${code}`
 /** README Markdown: the badge, linking to the invite. */
-export function badgeMarkdown(code: string, style: BadgeStyle, guild: string): string {
+export function badgeMarkdown(code: string, style: BadgeStyle | undefined, guild: string): string {
   return `[![Join ${guild.replace(/[[\]\\]/g, '')} on Parley](${badgeUrl(code, style)})](${inviteUrl(code)})`
 }
-export function badgeHtml(code: string, style: BadgeStyle, guild: string): string {
+export function badgeHtml(code: string, style: BadgeStyle | undefined, guild: string): string {
   const alt = `Join ${guild} on Parley`.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
   return `<a href="${inviteUrl(code)}"><img src="${badgeUrl(code, style)}" alt="${alt}"></a>`
 }

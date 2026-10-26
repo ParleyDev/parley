@@ -7,7 +7,7 @@ import { relativeTime } from '../../../lib/ua'
 interface Row { id: string; actor_id: string | null; actor_name: string; action: string; target_kind: string; target_id: string | null; target_name: string; details: Record<string, unknown>; created_at: string }
 
 const LABELS: Record<string, string> = {
-  'guild.update': 'updated the server', 'guild.transfer': 'transferred ownership to',
+  'guild.update': 'updated the server', 'guild.badge_update': 'changed the README badge of', 'guild.transfer': 'transferred ownership to',
   'channel.create': 'created channel', 'channel.update': 'edited channel', 'channel.delete': 'deleted channel', 'channel.overwrite': 'changed permissions in', 'channel.overwrite_delete': 'removed a permission overwrite in',
   'role.create': 'created role', 'role.update': 'edited role', 'role.delete': 'deleted role',
   'member.kick': 'kicked', 'member.ban': 'banned', 'member.unban': 'unbanned', 'member.timeout': 'timed out', 'member.timeout_clear': 'removed the timeout of', 'member.update': 'updated member',
@@ -24,7 +24,7 @@ const describe = (r: Row): string => {
     case 'member.ban': return typeof d.reason === 'string' && d.reason ? `reason: ${d.reason}` : ''
     case 'member.update': return [Array.isArray(d.roles) ? `roles: ${(d.roles as string[]).join(', ') || 'none'}` : '', 'nickname' in d ? `nickname: ${d.nickname ?? 'cleared'}` : ''].filter(Boolean).join(' · ')
     case 'message.delete': return `in #${d.channel}`
-    case 'guild.update': case 'role.update': case 'channel.update': return Object.entries(d).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' · ')
+    case 'guild.update': case 'guild.badge_update': case 'role.update': case 'channel.update': return Object.entries(d).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' · ')
     case 'channel.overwrite': return `${d.kind} overwrite · allow ${d.allow} · deny ${d.deny}`
     case 'discovery.submit': return `category: ${d.category}`
     default: return ''

@@ -1,4 +1,4 @@
-import { Compass, Crown, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Trash2, Users } from 'lucide-react'
+import { Award, Compass, Crown, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Trash2, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { myGuildPerms, useStore } from '../../store'
@@ -15,8 +15,9 @@ import SoundboardTab from './settings/SoundboardTab'
 import DiscoveryTab from './settings/DiscoveryTab'
 import AuditLogTab from './settings/AuditLogTab'
 import InvitesTab from './settings/InvitesTab'
+import BadgeTab from './settings/BadgeTab'
 
-type Tab = 'overview' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
+type Tab = 'overview' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
 
 export default function GuildSettingsModal({ onClose, guildId, tab: requested }: { onClose: () => void; guildId: string; tab?: Tab }) {
   const initial: Tab = requested ?? 'overview'
@@ -29,7 +30,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   const navigate = useNavigate()
   const canOverview = has(perms, P.MANAGE_GUILD)
   const canBans = has(perms, P.BAN_MEMBERS)
-  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'invites' || initial === 'emoji' || initial === 'stickers' || initial === 'discovery' || initial === 'audit') && !canOverview) || (initial === 'bans' && !canBans) ? 'roles' : initial)
+  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'invites' || initial === 'badge' || initial === 'emoji' || initial === 'stickers' || initial === 'discovery' || initial === 'audit') && !canOverview) || (initial === 'bans' && !canBans) ? 'roles' : initial)
   if (!guild) return null
   const isOwner = guild.owner_id === user?.id
 
@@ -44,7 +45,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   if (canOverview) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> })
   items.push({ id: 'roles', label: 'Roles', icon: <Shield size={16} /> })
   items.push({ id: 'members', label: 'Members', icon: <Users size={16} /> })
-  if (canOverview) items.push({ id: 'invites', label: 'Invites', icon: <Link2 size={16} /> })
+  if (canOverview) items.push({ id: 'invites', label: 'Invites', icon: <Link2 size={16} /> }, { id: 'badge', label: 'Badge', icon: <Award size={16} /> })
   if (canBans) items.push({ id: 'bans', label: 'Bans', icon: <Gavel size={16} /> })
   if (canOverview) items.push({ id: 'emoji', label: 'Emoji', icon: <Smile size={16} /> }, { id: 'stickers', label: 'Stickers', icon: <Sticker size={16} /> }, { id: 'soundboard', label: 'Soundboard', icon: <Music2 size={16} /> }, { id: 'discovery', label: 'Discovery', icon: <Compass size={16} /> }, { id: 'audit', label: 'Audit Log', icon: <ScrollText size={16} /> })
 
@@ -62,7 +63,8 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
       {tab === 'overview' && canOverview && <GuildOverviewTab guildId={guildId} />}
       {tab === 'roles' && <RolesTab guildId={guildId} />}
       {tab === 'members' && <MembersTab guildId={guildId} />}
-      {tab === 'invites' && canOverview && <InvitesTab guildId={guildId} onDiscovery={() => setTab('discovery')} />}
+      {tab === 'invites' && canOverview && <InvitesTab guildId={guildId} onDiscovery={() => setTab('discovery')} onBadge={() => setTab('badge')} />}
+      {tab === 'badge' && canOverview && <BadgeTab guildId={guildId} onInvites={() => setTab('invites')} />}
       {tab === 'bans' && canBans && <BansTab guildId={guildId} />}
       {tab === 'emoji' && canOverview && <EmojiTab guildId={guildId} />}
       {tab === 'stickers' && canOverview && <StickersTab guildId={guildId} />}

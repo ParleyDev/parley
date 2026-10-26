@@ -1,8 +1,8 @@
-import { Award, Check, Compass, Copy, Link2, Plus, Sparkles, X } from 'lucide-react'
+import { Award, Check, ChevronRight, Compass, Copy, Link2, Plus, Sparkles, X } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../../../lib/api'
 import type { Listing } from '../../../lib/discover'
-import { BADGE_STYLES, badgeHtml, badgeMarkdown, badgeUrl, EXPIRY, expiresIn, MAX_VANITY, USES, VANITY_RE, type BadgeStyle } from '../../../lib/invites'
+import { EXPIRY, expiresIn, MAX_VANITY, USES, VANITY_RE } from '../../../lib/invites'
 import type { Invite, InviteListing } from '../../../lib/types'
 import { useStore } from '../../../store'
 import Avatar from '../../Avatar'
@@ -10,9 +10,9 @@ import { publicOrigin } from '../../InviteCard'
 
 /**
  * Server Settings › Invites: every live invite with who made it, uses and expiry, to revoke; a quick form to make one
- * with an expiry and use limit; for servers approved for Discovery, up to three vanity links; and a README badge.
+ * with an expiry and use limit; for servers approved for Discovery, up to three vanity links; and a way to the badge.
  */
-export default function InvitesTab({ guildId, onDiscovery }: { guildId: string; onDiscovery: () => void }) {
+export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId: string; onDiscovery: () => void; onBadge: () => void }) {
   const guild = useStore((s) => s.guilds[guildId])
   const pushToast = useStore((s) => s.pushToast)
   const [list, setList] = useState<InviteListing[] | null>(null)
@@ -22,8 +22,6 @@ export default function InvitesTab({ guildId, onDiscovery }: { guildId: string; 
   const [vanity, setVanity] = useState('')
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
-  const [badgeCode, setBadgeCode] = useState<string | null>(null)
-  const [badgeStyle, setBadgeStyle] = useState<BadgeStyle>('flat')
   const [, tick] = useState(0)
   const load = () => api.get<InviteListing[]>(`/guilds/${guildId}/invites`).then(setList).catch((e) => { setList([]); pushToast((e as Error).message, 'error') })
   useEffect(() => {
@@ -36,8 +34,7 @@ export default function InvitesTab({ guildId, onDiscovery }: { guildId: string; 
   const me = useStore.getState().user
   const withCreator = (i: Invite): InviteListing => ({ ...i, creator_username: me?.username ?? '', creator_display_name: me?.display_name ?? '', creator_avatar_url: me?.avatar_url ?? null })
   const link = (code: string) => `${publicOrigin()}/invite/${code}`
-  const copyText = async (text: string, key: string) => { try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500) } catch { /* ignore */ } }
-  const copy = (code: string) => copyText(link(code), code)
+  const copy = async (code: string) => { try { await navigator.clipboard.writeText(link(code)); setCopied(code); setTimeout(() => setCopied((c) => (c === code ? null : c)), 1500) } catch { /* ignore */ } }
   const create = async (body: Record<string, unknown>) => {
     setBusy(true)
     try { const inv = await api.post<Invite>(`/guilds/${guildId}/invites`, body); setList((l) => [withCreator(inv), ...(l ?? [])]); return inv } catch (e) { pushToast((e as Error).message, 'error'); return null } finally { setBusy(false) }
@@ -54,8 +51,6 @@ export default function InvitesTab({ guildId, onDiscovery }: { guildId: string; 
   const vanities = (list ?? []).filter((i) => i.vanity)
   const regular = (list ?? []).filter((i) => !i.vanity)
   const vanityOk = VANITY_RE.test(vanity)
-  // The badge's invite: the one picked, else a vanity link, else one that never expires, else the newest.
-  const badgeInvite = (list ?? []).find((i) => i.code === badgeCode) ?? vanities[0] ?? regular.find((i) => !i.expires_at && !i.max_uses) ?? regular[0]
   const copyBtn = (code: string) => (
     <button type="button" onClick={() => copy(code)} className="rounded p-1.5 text-text-2 hover:bg-bg-3 hover:text-text-0" title="Copy link" data-invite-copy={code}>{copied === code ? <Check size={16} className="text-success" /> : <Copy size={16} />}</button>
   )
@@ -104,32 +99,11 @@ export default function InvitesTab({ guildId, onDiscovery }: { guildId: string; 
         )}
       </section>
 
-      {badgeInvite && (
-        <section data-badge-section>
-          <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2 flex items-center gap-1.5"><Award size={14} /> README badge</h2>
-          <p className="text-sm text-text-2 mb-3">Put a live badge on a GitHub README or a website. It shows who's online and how many members {guild.name} has, and opens the invite when clicked.</p>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[9rem] flex-1"><label className="label">Invite</label>
-              <select className="input" value={badgeInvite.code} onChange={(e) => setBadgeCode(e.target.value)} data-badge-invite>
-                {[...vanities, ...regular].map((i) => <option key={i.code} value={i.code}>{i.vanity ? `/invite/${i.code}` : `${i.code} · ${i.expires_at ? `expires ${expiresIn(i)}` : 'never expires'}`}</option>)}
-              </select></div>
-            <div className="min-w-[9rem] flex-1"><label className="label">Style</label>
-              <select className="input" value={badgeStyle} onChange={(e) => setBadgeStyle(e.target.value as BadgeStyle)} data-badge-style>
-                {BADGE_STYLES.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-              </select></div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-bg-0/40 p-3">
-            <img src={badgeUrl(badgeInvite.code, badgeStyle)} alt={`Join ${guild.name} on Parley`} className="max-w-full" data-badge-preview />
-            <div className="ml-auto flex gap-2">
-              <button type="button" className="btn-primary" onClick={() => copyText(badgeMarkdown(badgeInvite.code, badgeStyle, guild.name), 'badge-md')} data-badge-copy="markdown">
-                {copied === 'badge-md' ? <Check size={16} /> : <Copy size={16} />} Copy Markdown</button>
-              <button type="button" className="btn-ghost" onClick={() => copyText(badgeHtml(badgeInvite.code, badgeStyle, guild.name), 'badge-html')} data-badge-copy="html">
-                {copied === 'badge-html' ? <Check size={16} /> : <Copy size={16} />} HTML</button>
-            </div>
-          </div>
-          {(badgeInvite.expires_at || badgeInvite.max_uses) && <p className="mt-2 text-xs text-warn" data-badge-warn>This invite {badgeInvite.expires_at ? `expires ${expiresIn(badgeInvite)}` : 'has a use limit'}, and the badge turns grey when it stops working. Pick one that never expires.</p>}
-        </section>
-      )}
+      <button type="button" onClick={onBadge} className="w-full flex items-center gap-3 rounded-xl border border-line bg-bg-0/40 p-3 text-left hover:bg-bg-3/60" data-badge-link>
+        <Award size={20} className="text-text-2 shrink-0" />
+        <span className="min-w-0 flex-1 text-sm"><span className="font-semibold">README badge</span><span className="block text-text-2">Show off {guild.name} on GitHub or a website with a live badge.</span></span>
+        <ChevronRight size={18} className="text-text-2 shrink-0" />
+      </button>
 
       <section>
         <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">Create an invite</h2>
