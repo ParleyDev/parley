@@ -32,6 +32,8 @@ export type DmPrivacy = 'everyone' | 'friends_and_servers' | 'friends'
 export type FriendRequestSource = 'everyone' | 'friends_of_friends' | 'server_members'
 export interface PrivateUser extends User {
   email: string; is_admin?: boolean; email_verified_at?: string | null; mfa_enabled?: boolean
+  /** When the chosen status reverts to Online, and when the custom status clears (null: they don't). */
+  status_expires_at?: string | null; custom_status_expires_at?: string | null
   /** Content & Social (Settings): who may DM you, message requests from non-friends, who may send friend requests, who may add you to groups. */
   dm_privacy?: DmPrivacy
   message_requests?: boolean

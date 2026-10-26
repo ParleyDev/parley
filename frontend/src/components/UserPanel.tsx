@@ -1,8 +1,9 @@
-import { Activity, ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Settings, ShieldCheck, Signal, Smile } from 'lucide-react'
+import { Activity, ChevronDown, Clock, Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Settings, ShieldCheck, Signal, Smile } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { voice } from '../lib/voice'
 import { useState, type ReactNode } from 'react'
 import { useStore } from '../store'
+import type { PrivateUser } from '../lib/types'
 import { api } from '../lib/api'
 import { colorFor } from '../lib/format'
 import { dmName } from '../lib/dm'
@@ -13,6 +14,11 @@ import { profileOf } from '../lib/audioProfile'
 import StyledName from './StyledName'
 import AccountSwitcher from './AccountSwitcher'
 import { useT } from '../lib/i18n'
+
+const STATUS_DURATIONS = [
+  { label: 'For 15 minutes', secs: 15 * 60 }, { label: 'For 1 hour', secs: 3600 }, { label: 'For 8 hours', secs: 8 * 3600 },
+  { label: 'For 24 hours', secs: 86400 }, { label: 'For 3 days', secs: 3 * 86400 },
+]
 
 const STATUSES: { v: string; label: string; color: string }[] = [
   { v: 'online', label: 'Online', color: '#3ccf7d' },
@@ -43,13 +49,21 @@ export default function UserPanel() {
   const pttMode = useStore((s) => s.voiceSettings.inputMode === 'ptt')
   const pttHeld = useStore((s) => s.pttHeld)
   const [stats, setStats] = useState(false)
+  const [durations, setDurations] = useState<string | null>(null)
   if (!user) return null
   const prof = profileOf(voiceChannel)
 
-  const setStatus = async (v: string) => {
-    setOpen(false)
-    try { await api.patch('/users/@me', { status: v }) } catch { /* ignore */ }
+  // Idle, Do Not Disturb and Invisible can be set for a while, then go back to Online (Discord's durations).
+  const setStatus = async (v: string, forSecs?: number) => {
+    setOpen(false); setDurations(null)
+    try {
+      // Keep the returned account (it carries status_expires_at, which the public USER_UPDATE leaves out).
+      const u = await api.patch<PrivateUser>('/users/@me', { status: v, ...(forSecs ? { status_for_secs: forSecs } : {}) })
+      const st = useStore.getState(); if (st.token) st.setAuth(st.token, u)
+    } catch { /* ignore */ }
   }
+  const until = user.status !== 'online' && user.status_expires_at && new Date(user.status_expires_at).getTime() > Date.now()
+    ? new Date(user.status_expires_at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : null
   const themed = !!user.theme_primary
   const primary = user.theme_primary ?? colorFor(user.id)
   const cardStyle = themed
@@ -101,9 +115,21 @@ export default function UserPanel() {
               {user.is_admin && <button onClick={() => { setOpen(false); navigate('/admin') }} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-success hover:bg-accent hover:text-white" data-admin-console><ShieldCheck size={14} /> Admin Console</button>}
               <div className="h-px bg-line my-1" />
               {STATUSES.map((s) => (
-                <button key={s.v} onClick={() => setStatus(s.v)} className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-white ${user.status === s.v ? 'text-text-0' : 'text-text-1'}`}>
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />{s.label}
-                </button>
+                <div key={s.v}>
+                  <div className="flex items-center">
+                    <button onClick={() => setStatus(s.v)} className={`min-w-0 flex-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent hover:text-white ${user.status === s.v ? 'text-text-0' : 'text-text-1'}`} data-status-option={s.v}>
+                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+                      <span className="truncate">{s.label}</span>
+                      {user.status === s.v && until && <span className="ml-auto shrink-0 text-[11px] text-text-2" data-status-until>until {until}</span>}
+                    </button>
+                    {s.v !== 'online' && <button type="button" onClick={() => setDurations(durations === s.v ? null : s.v)} className="shrink-0 rounded-md p-1.5 text-text-2 hover:bg-bg-3 hover:text-text-0" title={`${s.label} for a while`} aria-label={`${s.label} for a while`} aria-expanded={durations === s.v} data-status-durations={s.v}><Clock size={14} /></button>}
+                  </div>
+                  {durations === s.v && (
+                    <div className="ml-6 mb-1 space-y-0.5" data-status-duration-list={s.v}>
+                      {STATUS_DURATIONS.map((d) => <button key={d.secs} type="button" onClick={() => setStatus(s.v, d.secs)} className="w-full rounded-md px-2 py-1 text-left text-xs text-text-1 hover:bg-accent hover:text-white" data-status-for={d.secs}>{d.label}</button>)}
+                    </div>
+                  )}
+                </div>
               ))}
               <div className="h-px bg-line my-1" />
               <div className="px-2 pt-1 pb-0.5 text-[11px] font-bold uppercase tracking-wide text-text-2">Switch account</div>

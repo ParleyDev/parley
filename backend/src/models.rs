@@ -132,6 +132,11 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub mfa_enabled: bool,
+    /// When the chosen status reverts to Online, and when the custom status clears (None: they don't).
+    #[sqlx(default)]
+    pub status_expires_at: Option<DateTime<Utc>>,
+    #[sqlx(default)]
+    pub custom_status_expires_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

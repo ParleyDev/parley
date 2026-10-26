@@ -170,7 +170,7 @@ async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
 }
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, avatar_decoration, clan_tag, panels";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -237,6 +237,10 @@ struct UpdateMe {
     /// {font, effect} from the style picker; unknown values are refused.
     name_style: Option<serde_json::Value>,
     custom_status: Option<String>,
+    /// With `status`: revert to Online after this many seconds (up to 3 days); without it the status stays.
+    status_for_secs: Option<i64>,
+    /// With `custom_status`: clear it after this many seconds (up to 7 days); without it the status stays.
+    custom_status_for_secs: Option<i64>,
     /// Flair: one of DECORATIONS or `asset:<id>` from the assets folder ('' clears), a 2–4 character tag ('' clears), panels {wishlist, games} of {title, url?}.
     avatar_decoration: Option<String>,
     clan_tag: Option<String>,
@@ -364,6 +368,12 @@ async fn update_me(
         }
     }
     validate_image_max(&req.banner_url, 1024 * 1024)?;
+    if req.status_for_secs.map(|s| !(60..=3 * 86400).contains(&s)).unwrap_or(false) {
+        return Err(AppError::BadRequest("A status can last from a minute to 3 days".into()));
+    }
+    if req.custom_status_for_secs.map(|s| !(60..=7 * 86400).contains(&s)).unwrap_or(false) {
+        return Err(AppError::BadRequest("A custom status can clear after a minute to 7 days".into()));
+    }
     if let Some(s) = &req.status {
         if !["online", "idle", "dnd", "invisible"].contains(&s.as_str()) {
             return Err(AppError::BadRequest("Invalid status".into()));
@@ -409,7 +419,9 @@ async fn update_me(
             avatar_decoration = COALESCE($13, avatar_decoration),
             clan_tag = COALESCE($14, clan_tag),
             panels = COALESCE($15, panels),
-            name_style = COALESCE($16, name_style)
+            name_style = COALESCE($16, name_style),
+            status_expires_at = CASE WHEN $5::text IS NULL THEN status_expires_at WHEN $17::bigint IS NULL OR $5 = 'online' THEN NULL ELSE now() + make_interval(secs => $17::float8) END,
+            custom_status_expires_at = CASE WHEN $12::text IS NULL THEN custom_status_expires_at WHEN $18::bigint IS NULL OR $12 = '' THEN NULL ELSE now() + make_interval(secs => $18::float8) END
          WHERE id = $1
          RETURNING {PRIVATE_USER_COLS}"),
     )
@@ -429,6 +441,8 @@ async fn update_me(
     .bind(clan_tag)
     .bind(panels)
     .bind(name_style)
+    .bind(req.status_for_secs)
+    .bind(req.custom_status_for_secs)
     .fetch_one(&state.db)
     .await?;
     crate::routes::images::release_replaced(&state, before.0.as_deref(), u.avatar_url.as_deref()).await;
@@ -457,6 +471,22 @@ async fn update_me(
     };
     state.hub.emit_all("USER_UPDATE", json!(public));
     Ok(Json(u))
+}
+
+/// Background task: statuses chosen "for 1 hour" go back to Online, and custom statuses with "Clear after" clear,
+/// when their time is up. Safe on every instance: each row is claimed by the UPDATE that resets it.
+pub async fn expire_statuses(state: AppState) {
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+        let mut ids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("UPDATE users SET status = 'online', status_expires_at = NULL WHERE status_expires_at <= now() RETURNING id")
+            .fetch_all(&state.db).await.unwrap_or_default().into_iter().map(|r| r.0).collect();
+        ids.extend(sqlx::query_as::<_, (Uuid,)>("UPDATE users SET custom_status = '', custom_status_expires_at = NULL WHERE custom_status_expires_at <= now() RETURNING id")
+            .fetch_all(&state.db).await.unwrap_or_default().into_iter().map(|r| r.0));
+        if ids.is_empty() { continue }
+        ids.sort(); ids.dedup();
+        let users = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = ANY($1)")).bind(&ids).fetch_all(&state.db).await.unwrap_or_default();
+        for u in users { state.hub.emit_all("USER_UPDATE", json!(u)); }
+    }
 }
 
 #[derive(Deserialize)]

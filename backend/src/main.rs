@@ -107,11 +107,13 @@ async fn main() -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn(metrics::track))
         .with_state(state);
 
+    let state_for_expiry = state_for_sweep.clone();
     tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep.clone()));
     tokio::spawn(voice_audio::convert_backlog(state_for_sweep.clone()));
     tokio::spawn(routes::storage::fix_orientation_backlog(state_for_sweep.clone()));
     tokio::spawn(routes::images::sweep_orphans(state_for_sweep));
     tokio::spawn(ratelimit::prune_loop());
+    tokio::spawn(routes::users::expire_statuses(state_for_expiry));
     let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
     tracing::info!("listening on {}", config.bind_addr);
     axum::serve(listener, app).await?;
