@@ -101,6 +101,9 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 .pill-try { color: var(--text); border-color: color-mix(in srgb, var(--violet) 55%, var(--rule)); background: color-mix(in srgb, var(--violet) 18%, var(--panel)); }
 .pill-try b { color: #cfc9ff; }
 .pill-try:hover { border-color: var(--violet); }
+.live-badge { display: inline-flex; line-height: 0; border-radius: 4px; }
+.live-badge img { height: 20px; width: auto; }
+.live-badge:hover { filter: brightness(1.12); }
 .hero h1 { font-size: var(--step-hero); font-weight: 900; line-height: .86; letter-spacing: -.045em; margin-top: 1.6rem; text-transform: uppercase; }
 .hero h1 .line2 { display: block; color: var(--violet); }
 .hero-copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2rem 3rem; align-items: end; margin-top: clamp(1.75rem, 4vw, 2.75rem); }
@@ -363,6 +366,7 @@ footer a:hover { color: var(--text); }
         <a class="pill" href="https://github.com/ParleyDev/parley/releases/latest" id="release-pill"><b>●</b> <span id="release-tag">v0.10.0</span> is out</a>
         <span class="pill">Open source · Apache-2.0</span>
         <a class="pill pill-try" href="https://app.runparley.com/register">Try it free: <b>app.runparley.com</b> →</a>
+        <a class="live-badge" href="https://app.runparley.com/invite/parley" title="Join the Parley server"><img src="https://app.runparley.com/api/invites/parley/badge.svg" alt="Join the Parley server" height="20"></a>
       </div>
       <h1 id="hero-title">Talk it out.<span class="line2">On your server.</span></h1>
       <div class="hero-copy">
@@ -508,7 +512,7 @@ footer a:hover { color: var(--text); }
         <article class="f w4">
           <span class="tag">Your community, your rules</span>
           <h3>Roles, permissions and the tools to run the place</h3>
-          <p>Coloured and gradient roles with a real hierarchy, per-channel overrides, private channels, timeouts, bans, member screening and an audit log. Custom emoji and stickers per server. Invite links that expire when you choose, from 30 minutes to never, with an optional use limit. List your server in Discover when you want new people to find it, and claim up to three vanity links like /invite/your-name.</p>
+          <p>Coloured and gradient roles with a real hierarchy, per-channel overrides, private channels, timeouts, bans, member screening and an audit log. Custom emoji and stickers per server. Invite links that expire when you choose, from 30 minutes to never, with an optional use limit. List your server in Discover when you want new people to find it, and claim up to three vanity links like /invite/your-name. Put a live badge on your README or site, like the one at the top of this page: it shows who's online and opens your invite.</p>
           <div class="mini roles"><span style="color:#f6b53d">Engineer</span><span style="color:#b6abff">Artist</span><span style="color:#5fbf8a">Regular</span><span style="color:#e0609a">Mod</span><span style="color:var(--muted)">@everyone</span></div>
         </article>
         <article class="f w2">
