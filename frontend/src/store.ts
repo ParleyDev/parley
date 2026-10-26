@@ -56,7 +56,7 @@ export type ModalKind =
   | { kind: 'warning'; guildName: string; reason: string }
   | { kind: 'timeout'; guildId: string; userId: string }
   | { kind: 'editHistory'; channelId: string; messageId: string }
-  | { kind: 'report'; messageId?: string; userId: string; name: string }
+  | { kind: 'report'; messageId?: string; userId: string; name: string; guildId?: string | null; server?: boolean }
   | { kind: 'createPoll'; channelId: string }
   | { kind: 'editCategory'; channelId: string }
   | { kind: 'createThread'; channelId: string; messageId?: string; suggested?: string }

@@ -93,7 +93,7 @@ async fn push(state: &AppState, guild_id: Uuid) {
 
 async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<EventInput>) -> AppResult<(StatusCode, Json<Event>)> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_GUILD)?;
+    perms::check_any(p, perms::MANAGE_GUILD | perms::MANAGE_EVENTS)?;
     let name = clean_name(req.name.as_deref().unwrap_or(""))?;
     let starts = req.starts_at.ok_or_else(|| AppError::BadRequest("starts_at is required".into()))?;
     if starts < Utc::now() - chrono::Duration::minutes(5) { return Err(AppError::BadRequest("Events start in the future".into())); }
@@ -116,7 +116,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
 
 async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, eid)): Path<(Uuid, Uuid)>, Json(req): Json<EventInput>) -> AppResult<Json<Event>> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_GUILD)?;
+    perms::check_any(p, perms::MANAGE_GUILD | perms::MANAGE_EVENTS)?;
     let cur = one(&state.db, eid, uid).await?;
     if cur.guild_id != id { return Err(AppError::NotFound("Event not found".into())); }
     let name = match &req.name { Some(n) => clean_name(n)?, None => cur.name.clone() };
@@ -137,7 +137,7 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id
 
 async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, eid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_GUILD)?;
+    perms::check_any(p, perms::MANAGE_GUILD | perms::MANAGE_EVENTS)?;
     let name: Option<(String,)> = sqlx::query_as("DELETE FROM guild_events WHERE id = $1 AND guild_id = $2 RETURNING name").bind(eid).bind(id).fetch_optional(&state.db).await?;
     let Some((name,)) = name else { return Err(AppError::NotFound("Event not found".into())) };
     crate::audit::guild(&state, id, uid, "event.delete", "event", Some(eid), &name, json!({})).await;

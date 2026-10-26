@@ -11,7 +11,7 @@ import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import { takeWelcome } from '../lib/welcome'
 import { VoiceTimer } from './CallExtras'
-import { BellOff, BookOpenCheck, DoorOpen, Eye, EyeOff, Pin, PinOff } from 'lucide-react'
+import { BellOff, BookOpenCheck, DoorOpen, Flag, Eye, EyeOff, Pin, PinOff } from 'lucide-react'
 import { togglePinned } from '../lib/pins'
 
 const NO_PINS: string[] = []
@@ -263,6 +263,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
               {canManageGuild && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>{t('Server Settings')}</MenuItem>}
               {canCreate && <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>{t('Create Channel')}</MenuItem>}
               <div className="h-px bg-line my-1" />
+              {!isOwner && <MenuItem icon={<Flag size={16} />} onClick={() => openModal({ kind: 'report', userId: guild.owner_id, name: guild.name, guildId, server: true })} danger>Report Server</MenuItem>}
               {isOwner
                 ? <MenuItem icon={<Trash2 size={16} />} onClick={del} danger>{t('Delete Server')}</MenuItem>
                 : <MenuItem icon={<LogOut size={16} />} onClick={leave} danger>{t('Leave Server')}</MenuItem>}

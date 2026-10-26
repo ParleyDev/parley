@@ -17,7 +17,7 @@ export default function EventsModal({ onClose, guildId }: { onClose: () => void;
   const loadEvents = useStore((s) => s.loadEvents)
   const channels = useStore((s) => Object.values(s.channels).filter((c) => c.guild_id === guildId && (c.kind === 'voice' || c.kind === 'stage')).sort((a, b) => a.position - b.position).map((c) => ({ id: c.id, name: c.name, kind: c.kind })).map((c) => JSON.stringify(c)).join('|'))
   const voiceChannels = channels ? channels.split('|').map((c) => JSON.parse(c) as { id: string; name: string; kind: string }) : []
-  const canManage = useStore((s) => has(myGuildPerms(s, guildId), P.MANAGE_GUILD))
+  const canManage = useStore((s) => has(myGuildPerms(s, guildId), P.MANAGE_GUILD) || has(myGuildPerms(s, guildId), P.MANAGE_EVENTS))
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
   const [creating, setCreating] = useState(false)

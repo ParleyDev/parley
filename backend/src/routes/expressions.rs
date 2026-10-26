@@ -102,7 +102,7 @@ pub fn parse_custom_emoji(token: &str) -> Option<(bool, &str, Uuid)> {
 
 async fn require_manage(db: &PgPool, guild_id: Uuid, uid: Uuid) -> AppResult<()> {
     let (_, p) = perms::guild_perms(db, guild_id, uid).await?;
-    perms::check(p, perms::MANAGE_GUILD)
+    perms::check_any(p, perms::MANAGE_GUILD | perms::MANAGE_EXPRESSIONS)
 }
 
 async fn broadcast_emojis(state: &AppState, guild_id: Uuid) -> AppResult<()> {

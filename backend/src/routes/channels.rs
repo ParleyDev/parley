@@ -422,7 +422,9 @@ async fn list_messages(
     Path(id): Path<Uuid>,
     Query(p): Query<Pagination>,
 ) -> AppResult<Json<Vec<Message>>> {
-    require_channel(&state.db, id, uid).await?;
+    let (c, perm) = require_channel_perms(&state.db, id, uid).await?;
+    // Without Read Message History you only see what arrives while you're looking.
+    if c.guild_id.is_some() && !has(perm, perms::READ_MESSAGE_HISTORY) { return Ok(Json(Vec::new())) }
     let limit = p.limit.unwrap_or(50).clamp(1, 100);
     if let Some(anchor) = p.around {
         let half = limit / 2;
@@ -539,7 +541,18 @@ async fn create_message(
     let m_roles = mentionable_roles(&state.db, c.guild_id, m_roles, has(p, perms::MENTION_EVERYONE)).await?;
     let mut tx = state.db.begin().await?;
     let tts = req.tts && !content.trim().is_empty() && (c.guild_id.is_none() || has(p, perms::SEND_TTS_MESSAGES));
-    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone, tts) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
+    // Without Embed Links, links don't unfurl; without Use External Emoji, only this server's custom emoji.
+    let no_embeds = c.guild_id.is_some() && !has(p, perms::EMBED_LINKS);
+    if let Some(gid) = c.guild_id {
+        if !has(p, perms::USE_EXTERNAL_EMOJIS) {
+            let ids = custom_emoji_ids(&content);
+            if !ids.is_empty() {
+                let (outside,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM emojis WHERE id = ANY($1) AND guild_id <> $2").bind(&ids).bind(gid).fetch_one(&state.db).await?;
+                if outside > 0 { return Err(AppError::Forbidden) }
+            }
+        }
+    }
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone, tts, suppress_embeds) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)")
         .bind(mid)
         .bind(id)
         .bind(uid)
@@ -550,6 +563,7 @@ async fn create_message(
         .bind(&m_roles)
         .bind(m_everyone)
         .bind(tts)
+        .bind(no_embeds)
         .execute(&mut *tx)
         .await?;
     link(&mut tx, mid, id, uid, &req.attachment_ids).await?;
@@ -1412,4 +1426,20 @@ async fn remove_bookmark(State(state): State<AppState>, AuthUser(uid): AuthUser,
 pub async fn bookmark_ids(db: &PgPool, uid: Uuid) -> AppResult<Vec<Uuid>> {
     let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT message_id FROM bookmarks WHERE user_id = $1").bind(uid).fetch_all(db).await?;
     Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
+/// Custom emoji ids in a message (`<:name:id>` / `<a:name:id>`).
+pub fn custom_emoji_ids(content: &str) -> Vec<Uuid> {
+    let mut out = Vec::new();
+    let mut rest = content;
+    while let Some(i) = rest.find('<') {
+        rest = &rest[i + 1..];
+        let Some(end) = rest.find('>') else { break };
+        let inner = &rest[..end];
+        let inner = inner.strip_prefix("a:").or_else(|| inner.strip_prefix(':'));
+        if let Some(inner) = inner {
+            if let Some((_, id)) = inner.rsplit_once(':') { if let Ok(u) = id.parse::<Uuid>() { out.push(u) } }
+        }
+    }
+    out
 }

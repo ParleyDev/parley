@@ -210,7 +210,7 @@ function StickerTab({ guildId, onPick }: { guildId?: string | null; onPick: (s: 
   const stickers = useStore((s) => s.stickers)
   const openModal = useStore((s) => s.openModal)
   const perms = useStore((s) => (guildId ? myGuildPerms(s, guildId) : 0))
-  const canManage = !!guildId && has(perms, P.MANAGE_GUILD)
+  const canManage = !!guildId && (has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_EXPRESSIONS))
   const ordered = useMemo(() => {
     const list = guilds.filter((g) => (stickers[g.id]?.length ?? 0) > 0)
     return guildId ? [...list.filter((g) => g.id === guildId), ...list.filter((g) => g.id !== guildId)] : list

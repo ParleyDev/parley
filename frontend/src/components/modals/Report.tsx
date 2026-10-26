@@ -6,20 +6,25 @@ import { useStore } from '../../store'
 const REASONS = ['Spam or scam', 'Harassment or hate', 'Explicit or disturbing content', 'Illegal activity', 'Something else']
 
 /** Report a message (with its author) or a user to the instance admins. */
-export default function ReportModal({ onClose, messageId, userId, name }: { onClose: () => void; messageId?: string; userId: string; name: string }) {
+export default function ReportModal({ onClose, messageId, userId, name, guildId, server }: { onClose: () => void; messageId?: string; userId: string; name: string; guildId?: string | null; server?: boolean }) {
   const pushToast = useStore((s) => s.pushToast)
   const [reason, setReason] = useState(REASONS[0])
   const [details, setDetails] = useState('')
   const [busy, setBusy] = useState(false)
+  // In a server, a message or member report can also go to that server's moderators.
+  const [toMods, setToMods] = useState(true)
+  const canMods = !!guildId && !server
   const submit = async () => {
     setBusy(true)
     try {
-      await api.post('/reports', messageId ? { kind: 'message', message_id: messageId, reason: [reason, details.trim()].filter(Boolean).join(' — ') } : { kind: 'user', user_id: userId, reason: [reason, details.trim()].filter(Boolean).join(' — ') })
-      pushToast('Thanks, your report was sent to the admins'); onClose()
+      const why = [reason, details.trim()].filter(Boolean).join(' — ')
+      const mods = canMods && toMods
+      await api.post('/reports', server ? { kind: 'guild', guild_id: guildId, reason: why } : messageId ? { kind: 'message', message_id: messageId, reason: why, to_mods: mods } : { kind: 'user', user_id: userId, guild_id: guildId ?? null, reason: why, to_mods: mods })
+      pushToast(mods ? "Thanks, your report was sent to the admins and this server's moderators" : 'Thanks, your report was sent to the admins'); onClose()
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
-    <Modal title={messageId ? 'Report Message' : `Report ${name}`} onClose={onClose} width="max-w-sm"
+    <Modal title={server ? `Report ${name}` : messageId ? 'Report Message' : `Report ${name}`} onClose={onClose} width="max-w-sm"
       footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button className="btn-danger" onClick={submit} disabled={busy} data-report-submit>Submit Report</button></>}>
       <div data-report-form>
         <p className="text-sm text-text-1">{messageId ? <>Report this message by <b className="text-text-0">{name}</b> to the admins of this Parley instance.</> : <>Report <b className="text-text-0">{name}</b> to the admins of this Parley instance.</>}</p>
@@ -33,6 +38,7 @@ export default function ReportModal({ onClose, messageId, userId, name }: { onCl
         </div>
         <label className="label mt-4">Anything else? <span className="normal-case font-normal text-text-2">(optional)</span></label>
         <textarea className="input resize-none" rows={3} maxLength={800} value={details} onChange={(e) => setDetails(e.target.value)} placeholder="Add context for the admins" data-report-details />
+        {canMods && <label className="mt-3 flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="h-4 w-4 accent-accent" checked={toMods} onChange={(e) => setToMods(e.target.checked)} data-report-to-mods /> Also tell this server's moderators</label>}
       </div>
     </Modal>
   )

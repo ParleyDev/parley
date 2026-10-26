@@ -30,12 +30,12 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
   }, [threadId, thread?.parent_id, upsertThread])
   if (!thread) return null
   const archived = !!info?.archived_at
-  const canManage = info?.owner_id === me || has(perms, P.MANAGE_MESSAGES)
+  const canManage = info?.owner_id === me || has(perms, P.MANAGE_MESSAGES) || has(perms, P.MANAGE_THREADS)
   const pinned = !!info?.pinned_at
   const togglePin = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { pinned: !pinned })) } catch (e) { pushToast((e as Error).message, 'error') } }
   const toggle = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { archived: !archived })) } catch (e) { pushToast((e as Error).message, 'error') } }
   const locked = !!info?.locked
-  const isMod = has(perms, P.MANAGE_MESSAGES)
+  const isMod = has(perms, P.MANAGE_MESSAGES) || has(perms, P.MANAGE_THREADS)
   const toggleLock = async () => { try { upsertThread(await api.patch<ThreadInfo>(`/threads/${threadId}`, { locked: !locked })) } catch (e) { pushToast((e as Error).message, 'error') } }
   const join = async (on: boolean) => {
     try { if (on) await api.put(`/threads/${threadId}/members/${me}`); else await api.delete(`/threads/${threadId}/members/${me}`); setMyThread(threadId, on) } catch (e) { pushToast((e as Error).message, 'error') }
@@ -68,7 +68,7 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
             )}
           </span>
           {isMod && <button onClick={toggleLock} title={locked ? 'Unlock thread' : 'Lock thread'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-lock>{locked ? <LockOpen size={16} /> : <Lock size={16} />}</button>}
-          {parentKind === 'forum' && has(perms, P.MANAGE_MESSAGES) && <button onClick={togglePin} title={pinned ? 'Unpin post' : 'Pin post'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-pin>{pinned ? <PinOff size={16} /> : <Pin size={16} />}</button>}
+          {parentKind === 'forum' && isMod && <button onClick={togglePin} title={pinned ? 'Unpin post' : 'Pin post'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-pin>{pinned ? <PinOff size={16} /> : <Pin size={16} />}</button>}
           {canManage && <button onClick={toggle} title={archived ? 'Unarchive thread' : 'Archive thread'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-archive>{archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}</button>}
           <button onClick={onClose} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title="Close thread"><X size={18} /></button>
         </span>

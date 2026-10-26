@@ -21,6 +21,8 @@ pub const ADMINISTRATOR: u64 = 1 << 3;
 pub const MANAGE_CHANNELS: u64 = 1 << 4;
 pub const MANAGE_GUILD: u64 = 1 << 5;
 pub const ADD_REACTIONS: u64 = 1 << 6;
+/// Read the server's audit log (Manage Server also can).
+pub const VIEW_AUDIT_LOG: u64 = 1 << 7;
 /// While they speak, everyone else in the voice channel is turned down.
 pub const PRIORITY_SPEAKER: u64 = 1 << 8;
 pub const STREAM: u64 = 1 << 9;
@@ -29,19 +31,31 @@ pub const SEND_MESSAGES: u64 = 1 << 11;
 /// Send /tts messages, read aloud to everyone viewing the channel.
 pub const SEND_TTS_MESSAGES: u64 = 1 << 12;
 pub const MANAGE_MESSAGES: u64 = 1 << 13;
+/// Links in their messages unfurl into previews.
+pub const EMBED_LINKS: u64 = 1 << 14;
 pub const ATTACH_FILES: u64 = 1 << 15;
+/// See messages sent before they opened the channel (without it, only new ones).
+pub const READ_MESSAGE_HISTORY: u64 = 1 << 16;
 pub const MENTION_EVERYONE: u64 = 1 << 17;
+/// Use custom emoji from other servers.
+pub const USE_EXTERNAL_EMOJIS: u64 = 1 << 18;
+/// Moderate threads: lock, archive, rename, see private threads (Manage Messages also can).
+pub const MANAGE_THREADS: u64 = 1 << 19;
 pub const CONNECT: u64 = 1 << 20;
 pub const SPEAK: u64 = 1 << 21;
 /// Voice moderation (Discord's bits): server mute, server deafen, move members between voice channels or disconnect them.
 pub const MUTE_MEMBERS: u64 = 1 << 22;
 pub const DEAFEN_MEMBERS: u64 = 1 << 23;
 pub const MOVE_MEMBERS: u64 = 1 << 24;
+/// Create, edit and cancel scheduled events (Manage Server also can).
+pub const MANAGE_EVENTS: u64 = 1 << 25;
 pub const CHANGE_NICKNAME: u64 = 1 << 26;
 pub const MANAGE_NICKNAMES: u64 = 1 << 27;
 pub const MANAGE_ROLES: u64 = 1 << 28;
 /// Time members out (Discord's MODERATE_MEMBERS). Kept below bit 31 so the web client can use plain JS bit ops.
 pub const MODERATE_MEMBERS: u64 = 1 << 29;
+/// Manage emoji, stickers and soundboard sounds (Manage Server also can).
+pub const MANAGE_EXPRESSIONS: u64 = 1 << 30;
 
 /// What a timed-out member loses in every channel: they can still read.
 pub const TIMEOUT_STRIP: u64 = SEND_MESSAGES | ADD_REACTIONS | ATTACH_FILES | CONNECT | SPEAK | STREAM | CREATE_INVITE | CHANGE_NICKNAME | MENTION_EVERYONE;
@@ -69,11 +83,26 @@ pub const ALL: u64 = CREATE_INVITE
     | CHANGE_NICKNAME
     | MANAGE_NICKNAMES
     | MANAGE_ROLES
-    | MODERATE_MEMBERS;
+    | MODERATE_MEMBERS
+    | VIEW_AUDIT_LOG
+    | EMBED_LINKS
+    | READ_MESSAGE_HISTORY
+    | USE_EXTERNAL_EMOJIS
+    | MANAGE_THREADS
+    | MANAGE_EVENTS
+    | MANAGE_EXPRESSIONS;
 
 /// What a fresh @everyone role gets (must match migration 0002).
 pub const DEFAULT_EVERYONE: u64 =
-    CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | SEND_TTS_MESSAGES | ATTACH_FILES | MENTION_EVERYONE | CONNECT | SPEAK | CHANGE_NICKNAME;
+    CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | SEND_TTS_MESSAGES | EMBED_LINKS | READ_MESSAGE_HISTORY | USE_EXTERNAL_EMOJIS | ATTACH_FILES | MENTION_EVERYONE | CONNECT | SPEAK | CHANGE_NICKNAME;
+
+/// Allowed when holding any one of `bits` (e.g. Manage Server or the narrower permission).
+pub fn check_any(perms: u64, bits: u64) -> AppResult<()> {
+    if perms & bits != 0 { Ok(()) } else { Err(AppError::Forbidden) }
+}
+
+/// Thread moderation: Manage Messages or Manage Threads.
+pub fn moderates_threads(p: u64) -> bool { has(p, MANAGE_MESSAGES) || has(p, MANAGE_THREADS) }
 
 pub fn has(perms: u64, bit: u64) -> bool {
     perms & bit == bit
@@ -410,6 +439,13 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
         ("SEND_MESSAGES", SEND_MESSAGES),
         ("SEND_TTS_MESSAGES", SEND_TTS_MESSAGES),
         ("PRIORITY_SPEAKER", PRIORITY_SPEAKER),
+        ("VIEW_AUDIT_LOG", VIEW_AUDIT_LOG),
+        ("EMBED_LINKS", EMBED_LINKS),
+        ("READ_MESSAGE_HISTORY", READ_MESSAGE_HISTORY),
+        ("USE_EXTERNAL_EMOJIS", USE_EXTERNAL_EMOJIS),
+        ("MANAGE_THREADS", MANAGE_THREADS),
+        ("MANAGE_EVENTS", MANAGE_EVENTS),
+        ("MANAGE_EXPRESSIONS", MANAGE_EXPRESSIONS),
         ("MANAGE_MESSAGES", MANAGE_MESSAGES),
         ("ATTACH_FILES", ATTACH_FILES),
         ("MENTION_EVERYONE", MENTION_EVERYONE),
@@ -433,7 +469,7 @@ mod tests {
     #[test]
     fn default_matches_migration() {
         // 70258241 from migration 0002, plus ATTACH_FILES (32768) from 0003 and MENTION_EVERYONE (131072) from 0018.
-        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768 + 131072 + 4096);
+        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768 + 131072 + 4096 + 16384 + 65536 + 262144);
     }
 
     #[test]

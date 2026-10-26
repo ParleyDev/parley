@@ -65,7 +65,7 @@ export default function Modals() {
     case 'kick': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} kick />
     case 'timeout': return <TimeoutMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'editHistory': return <EditHistoryModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} />
-    case 'report': return <ReportModal onClose={close} messageId={modal!.messageId} userId={modal!.userId} name={modal!.name} />
+    case 'report': return <ReportModal onClose={close} messageId={modal!.messageId} userId={modal!.userId} name={modal!.name} guildId={modal!.guildId} server={modal!.server} />
     case 'createPoll': return <CreatePollModal onClose={close} channelId={modal!.channelId} />
     case 'editCategory': return <EditCategoryModal onClose={close} channelId={modal!.channelId} />
     case 'newPost': return <NewPostModal onClose={close} channelId={modal!.channelId} />

@@ -985,7 +985,7 @@ async fn list_audit(
     axum::extract::Query(q): axum::extract::Query<AuditQuery>,
 ) -> AppResult<Json<Vec<GuildAuditRow>>> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_GUILD)?;
+    perms::check_any(p, perms::MANAGE_GUILD | perms::VIEW_AUDIT_LOG)?;
     let t = q.q.trim().replace('%', "\\%").replace('_', "\\_");
     let pat = if t.is_empty() { None } else { Some(format!("%{t}%")) };
     let rows = sqlx::query_as::<_, GuildAuditRow>(

@@ -88,7 +88,7 @@ async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): 
 
 async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, mut multipart: Multipart) -> AppResult<(StatusCode, Json<Sound>)> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_GUILD)?;
+    perms::check_any(p, perms::MANAGE_GUILD | perms::MANAGE_EXPRESSIONS)?;
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM sounds WHERE guild_id = $1").bind(id).fetch_one(&state.db).await?;
     if count >= MAX_SOUNDS_PER_GUILD {
         return Err(AppError::BadRequest(format!("A server can have at most {MAX_SOUNDS_PER_GUILD} sounds")));
@@ -152,7 +152,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
 
 async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_GUILD)?;
+    perms::check_any(p, perms::MANAGE_GUILD | perms::MANAGE_EXPRESSIONS)?;
     let name: Option<(String,)> = sqlx::query_as("DELETE FROM sounds WHERE id = $1 AND guild_id = $2 RETURNING name").bind(sid).bind(id).fetch_optional(&state.db).await?;
     let Some((name,)) = name else { return Err(AppError::NotFound("Sound not found".into())) };
     let _ = tokio::fs::remove_file(state.config.upload_dir.join(sid.to_string())).await;

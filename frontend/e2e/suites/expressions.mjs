@@ -17,7 +17,7 @@ r=await multi(a.token,'/images?kind=avatar',{name:'x.txt',mimeType:'text/plain',
 let me=await call(a.token,'PATCH','/users/@me',{avatar_url:img.url, banner_url:png.url}); ok('profile accepts /api/images urls', me.avatar_url===img.url && me.banner_url===png.url)
 ok('public user carries the gif avatar', (await call(b.token,'GET',`/users/${a.user.id}`)).avatar_url===img.url)
 r=await multi(a.token,'/images?kind=avatar',pngFile); const img2=await r.json(); me=await call(a.token,'PATCH','/users/@me',{avatar_url:img2.url})
-ok('replacing the avatar releases the old image', me.avatar_url===img2.url && (await fetch(API_ORIGIN+img.url)).status===404)
+ok('replacing the avatar keeps the old one in your recent avatars', me.avatar_url===img2.url && me.avatar_history?.[0]===img.url && (await fetch(API_ORIGIN+img.url)).status===200)
 ok('data URLs are no longer accepted', (await raw(a.token,'PATCH','/users/@me',{avatar_url:'data:image/png;base64,'+PNG.toString('base64')})).status===400)
 r=await multi(a.token,'/images?kind=icon',gifFile); const icon=await r.json(); const gu=await call(a.token,'PATCH',`/guilds/${g.id}`,{icon_url:icon.url}); ok('server icon accepts uploaded gif', gu.icon_url===icon.url)
 

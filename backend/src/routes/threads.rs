@@ -179,7 +179,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
             Some(e) => { e.2 &= !(perms::VIEW_CHANNEL as i64); e.3 |= perms::VIEW_CHANNEL as i64; }
             None => ows.push((gid, "role".into(), 0, perms::VIEW_CHANNEL as i64)),
         }
-        let mods: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM roles WHERE guild_id = $1 AND id <> guild_id AND (permissions & $2) <> 0").bind(gid).bind(perms::MANAGE_MESSAGES as i64).fetch_all(&mut *tx).await?;
+        let mods: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM roles WHERE guild_id = $1 AND id <> guild_id AND (permissions & $2) <> 0").bind(gid).bind((perms::MANAGE_MESSAGES | perms::MANAGE_THREADS) as i64).fetch_all(&mut *tx).await?;
         for (r,) in mods { match ows.iter_mut().find(|o| o.0 == r) { Some(e) => { e.2 |= perms::VIEW_CHANNEL as i64; e.3 &= !(perms::VIEW_CHANNEL as i64); } None => ows.push((r, "role".into(), perms::VIEW_CHANNEL as i64, 0)) } }
         match ows.iter_mut().find(|o| o.0 == uid) { Some(e) => { e.2 |= perms::VIEW_CHANNEL as i64; e.3 &= !(perms::VIEW_CHANNEL as i64); } None => ows.push((uid, "member".into(), perms::VIEW_CHANNEL as i64, 0)) }
         for (target, kind, allow, deny) in ows {
@@ -287,11 +287,11 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tid
         return Err(AppError::NotFound("Thread not found".into()));
     }
     let (owner,): (Option<Uuid>,) = sqlx::query_as("SELECT owner_id FROM threads WHERE channel_id = $1").bind(tid).fetch_one(&state.db).await?;
-    if owner != Some(uid) && !has(p, perms::MANAGE_MESSAGES) {
+    if owner != Some(uid) && !perms::moderates_threads(p) {
         return Err(AppError::Forbidden);
     }
     if let Some(pin) = req.pinned {
-        perms::check(p, perms::MANAGE_MESSAGES)?;
+        if !perms::moderates_threads(p) { return Err(AppError::Forbidden) }
         sqlx::query("UPDATE threads SET pinned_at = CASE WHEN $2 THEN COALESCE(pinned_at, now()) ELSE NULL END WHERE channel_id = $1").bind(tid).bind(pin).execute(&state.db).await?;
     }
     if let Some(tags) = &req.tags {
@@ -303,7 +303,7 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tid
         sqlx::query("UPDATE channels SET name = $2 WHERE id = $1").bind(tid).bind(&name).execute(&state.db).await?;
     }
     if let Some(l) = req.locked {
-        perms::check(p, perms::MANAGE_MESSAGES)?;
+        if !perms::moderates_threads(p) { return Err(AppError::Forbidden) }
         sqlx::query("UPDATE threads SET locked = $2 WHERE channel_id = $1").bind(tid).bind(l).execute(&state.db).await?;
     }
     if let Some(m) = req.auto_archive_minutes {
@@ -312,7 +312,7 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tid
     }
     if let Some(a) = req.archived {
         let (locked,): (bool,) = sqlx::query_as("SELECT locked FROM threads WHERE channel_id = $1").bind(tid).fetch_one(&state.db).await?;
-        if locked && !a && !has(p, perms::MANAGE_MESSAGES) { return Err(AppError::Forbidden) }
+        if locked && !a && !perms::moderates_threads(p) { return Err(AppError::Forbidden) }
         sqlx::query("UPDATE threads SET archived_at = CASE WHEN $2 THEN COALESCE(archived_at, now()) ELSE NULL END WHERE channel_id = $1").bind(tid).bind(a).execute(&state.db).await?;
     }
     announce(&state, tid).await?;
@@ -347,7 +347,7 @@ pub async fn on_thread_message(state: &AppState, tid: Uuid, author: Uuid) -> App
 /// Locked threads take posts from moderators only.
 pub async fn check_locked(db: &PgPool, tid: Uuid, p: u64) -> AppResult<()> {
     let row: Option<(bool,)> = sqlx::query_as("SELECT locked FROM threads WHERE channel_id = $1").bind(tid).fetch_optional(db).await?;
-    if row.map(|r| r.0).unwrap_or(false) && !has(p, perms::MANAGE_MESSAGES) { return Err(AppError::Forbidden) }
+    if row.map(|r| r.0).unwrap_or(false) && !perms::moderates_threads(p) { return Err(AppError::Forbidden) }
     Ok(())
 }
 
@@ -381,7 +381,7 @@ async fn add_member(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     let gid = t.guild_id.ok_or(AppError::NotFound("Thread not found".into()))?;
     if target != uid {
         let mine: Option<(bool,)> = sqlx::query_as("SELECT true FROM thread_members WHERE thread_id = $1 AND user_id = $2").bind(tid).bind(uid).fetch_optional(&state.db).await?;
-        if mine.is_none() && !has(p, perms::MANAGE_MESSAGES) { return Err(AppError::Forbidden) }
+        if mine.is_none() && !perms::moderates_threads(p) { return Err(AppError::Forbidden) }
         let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
         if !ctx.is_member(target) { return Err(AppError::NotFound("Member not found".into())) }
         // They must be able to see the parent channel.
@@ -405,7 +405,7 @@ async fn remove_member(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     let (t, p) = require_channel_perms(&state.db, tid, uid).await?;
     if t.kind != "thread" { return Err(AppError::NotFound("Thread not found".into())) }
     let (private, owner): (bool, Option<Uuid>) = sqlx::query_as("SELECT private, owner_id FROM threads WHERE channel_id = $1").bind(tid).fetch_one(&state.db).await?;
-    if target != uid && owner != Some(uid) && !has(p, perms::MANAGE_MESSAGES) { return Err(AppError::Forbidden) }
+    if target != uid && owner != Some(uid) && !perms::moderates_threads(p) { return Err(AppError::Forbidden) }
     sqlx::query("DELETE FROM thread_members WHERE thread_id = $1 AND user_id = $2").bind(tid).bind(target).execute(&state.db).await?;
     if private {
         if let Some(gid) = t.guild_id {
