@@ -1,0 +1,55 @@
+// Forum extras: post guidelines, default layout (gallery/list, switchable), default sort, required tags, a default
+// reaction on every post, and searching posts.
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, raw, ok, finish } from '../lib.mjs'
+const a = await reg('alice'), b = await reg('bob')
+const g = await call(a.token, 'POST', '/guilds', { name: `Forum ${S}` })
+const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`)
+const forum = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'help', kind: 'forum' })
+const tag = await call(a.token, 'POST', `/channels/${forum.id}/tags`, { name: 'Question', emoji: '❓' })
+const browser = await chromium.launch(); const errors = []
+const mk = async (tok) => {
+  const p = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage(); p.on('pageerror', (e) => errors.push(e.message))
+  await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok)
+  await p.goto(`${WEB}/channels/${g.id}/${forum.id}`); await p.waitForTimeout(1000)
+  return p
+}
+
+console.log('-- settings')
+ok('layouts are gallery or list', (await raw(a.token, 'PATCH', `/channels/${forum.id}`, { forum_layout: 'grid' })).status === 400)
+const pa = await mk(a.token)
+await pa.locator(`[data-channel-item="${forum.id}"] a`).click({ button: 'right' }); await pa.click('[data-menu-item="Edit Channel"]'); await pa.waitForSelector('[data-forum-settings]')
+await pa.fill('[data-forum-guidelines]', 'Be specific and include versions.'); await pa.selectOption('[data-forum-layout-setting]', 'list')
+await pa.selectOption('[data-forum-sort-setting]', 'created'); await pa.fill('[data-forum-reaction-setting]', '👍'); await pa.check('[data-forum-require-tag]')
+await pa.click('button:has-text("Save Changes")'); await pa.waitForTimeout(700)
+const fc = await call(a.token, 'GET', `/channels/${forum.id}`)
+ok('forum settings are saved', fc.forum_layout === 'list' && fc.forum_sort === 'created' && fc.forum_require_tag && fc.forum_default_reaction === '👍' && fc.topic.startsWith('Be specific'), JSON.stringify({ l: fc.forum_layout, s: fc.forum_sort, r: fc.forum_require_tag, d: fc.forum_default_reaction }))
+await pa.keyboard.press('Escape'); await pa.waitForTimeout(300)
+
+console.log('-- posting')
+const pb = await mk(b.token)
+ok('the forum shows its guidelines', /Be specific/.test(await pb.locator('[data-forum-guidelines-view]').innerText()))
+ok('and opens in its default layout', (await pb.getAttribute('[data-forum-layout]', 'data-forum-layout')) === 'list')
+ok('a post without a tag is refused', (await raw(b.token, 'POST', `/channels/${forum.id}/threads`, { name: 'x', content: 'y' })).status === 400)
+await pb.click('[data-forum-new]'); await pb.waitForSelector('[data-new-post]')
+await pb.fill('[data-post-title]', `Crash on start ${S}`); await pb.fill('[data-post-content]', 'It crashes when I open it')
+ok('Post waits for a tag', await pb.isDisabled('[data-post-submit]') && await pb.locator('[data-post-tag-required]').count() === 1)
+await pb.click(`[data-post-tag="${tag.id}"]`); await pb.click('[data-post-submit]'); await pb.waitForTimeout(800)
+await call(b.token, 'POST', `/channels/${forum.id}/threads`, { name: `Feature idea ${S}`, content: 'dark mode please', tags: [tag.id] }); await pb.waitForTimeout(600)
+await pb.keyboard.press('Escape').catch(() => {})
+await pb.goto(`${WEB}/channels/${g.id}/${forum.id}`); await pb.waitForTimeout(1000)
+ok('both posts are listed', await pb.locator('[data-forum-post]').count() === 2)
+await pb.fill('[data-forum-search]', 'crash'); await pb.waitForTimeout(800)
+ok('searching finds posts by title', await pb.locator('[data-forum-post]').count() === 1 && /Crash on start/.test(await pb.locator('[data-forum-post]').innerText()))
+await pb.fill('[data-forum-search]', 'dark mode'); await pb.waitForTimeout(800)
+ok('and by their first message', await pb.locator('[data-forum-post]').count() === 1 && /Feature idea/.test(await pb.locator('[data-forum-post]').innerText()))
+await pb.fill('[data-forum-search]', ''); await pb.waitForTimeout(600)
+await pb.click('[data-forum-layout-pick="gallery"]'); await pb.waitForTimeout(200)
+ok('you can switch the layout', (await pb.getAttribute('[data-forum-layout]', 'data-forum-layout')) === 'gallery')
+const post = (await call(b.token, 'GET', `/channels/${forum.id}/threads`)).find((t) => t.name.startsWith('Feature idea'))
+await pb.click(`[data-forum-react="${post.id}"]`); await pb.waitForTimeout(600)
+const first = (await call(b.token, 'GET', `/channels/${post.id}/messages?limit=5`)).find((m) => m.id === post.first_message_id)
+ok('the default reaction reacts to the post', first?.reactions?.some((r) => r.emoji === '👍' && r.me), JSON.stringify(first?.reactions))
+ok('no page errors', errors.length === 0, errors.join(' | '))
+await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await browser.close(); await finish()

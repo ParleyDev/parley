@@ -121,6 +121,11 @@ struct UpdateChannel {
     spoiler: Option<bool>,
     /// Voice channels: 'auto' or 'full'.
     video_quality: Option<String>,
+    /// Forums: 'gallery' | 'list', 'activity' | 'created', require a tag, default reaction ('' for none).
+    forum_layout: Option<String>,
+    forum_sort: Option<String>,
+    forum_require_tag: Option<bool>,
+    forum_default_reaction: Option<String>,
     /// Voice/stage/studio audio profile: 'voice' | 'music'.
     audio_mode: Option<String>,
     /// Opus kbps, 8..510, or 0 for the mode's default.
@@ -227,6 +232,10 @@ async fn update_channel(
     if req.video_quality.as_deref().map(|q| q != "auto" && q != "full").unwrap_or(false) {
         return Err(AppError::BadRequest("video_quality must be 'auto' or 'full'".into()));
     }
+    if req.forum_layout.as_deref().map(|q| q != "gallery" && q != "list").unwrap_or(false) || req.forum_sort.as_deref().map(|q| q != "activity" && q != "created").unwrap_or(false) {
+        return Err(AppError::BadRequest("forum_layout is 'gallery' or 'list'; forum_sort is 'activity' or 'created'".into()));
+    }
+    let reaction = req.forum_default_reaction.as_ref().map(|r| r.trim().chars().take(64).collect::<String>());
     let parent = match req.parent_id {
         Some(p) => Some(crate::routes::guilds::check_parent(&state.db, gid, &c.kind, p).await?),
         None => None,
@@ -236,7 +245,8 @@ async fn update_channel(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
          parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw),
          audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency), e2ee = COALESCE($11, e2ee),
-         rate_limit_per_user = COALESCE($12, rate_limit_per_user), user_limit = COALESCE($13, user_limit), spoiler = COALESCE($14, spoiler), video_quality = COALESCE($15, video_quality)
+         rate_limit_per_user = COALESCE($12, rate_limit_per_user), user_limit = COALESCE($13, user_limit), spoiler = COALESCE($14, spoiler), video_quality = COALESCE($15, video_quality),
+         forum_layout = COALESCE($16, forum_layout), forum_sort = COALESCE($17, forum_sort), forum_require_tag = COALESCE($18, forum_require_tag), forum_default_reaction = COALESCE($19, forum_default_reaction)
          WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
@@ -254,6 +264,10 @@ async fn update_channel(
     .bind(req.user_limit)
     .bind(req.spoiler)
     .bind(&req.video_quality)
+    .bind(&req.forum_layout)
+    .bind(&req.forum_sort)
+    .bind(req.forum_require_tag)
+    .bind(&reaction)
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;

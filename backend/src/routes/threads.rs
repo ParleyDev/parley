@@ -56,6 +56,8 @@ pub struct ThreadInfo {
     pub locked: bool,
     pub auto_archive_minutes: i32,
     pub member_count: i64,
+    /// The post's first message (forum default reactions go on it).
+    pub first_message_id: Option<Uuid>,
 }
 
 const THREAD_SELECT: &str = "SELECT c.id, c.parent_id, c.guild_id, c.name, t.root_message_id, t.owner_id, u.username AS owner_username, t.archived_at, t.pinned_at, t.created_at,
@@ -63,7 +65,8 @@ const THREAD_SELECT: &str = "SELECT c.id, c.parent_id, c.guild_id, c.name, t.roo
     (SELECT MAX(m.created_at) FROM messages m WHERE m.channel_id = c.id) AS last_message_at,
     ARRAY(SELECT tt.tag_id FROM thread_tags tt JOIN forum_tags ft ON ft.id = tt.tag_id WHERE tt.thread_id = c.id ORDER BY ft.position) AS tags,
     (SELECT LEFT(m.content, 200) FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1) AS preview,
-    t.private, t.locked, t.auto_archive_minutes, (SELECT COUNT(*) FROM thread_members tm WHERE tm.thread_id = c.id) AS member_count
+    t.private, t.locked, t.auto_archive_minutes, (SELECT COUNT(*) FROM thread_members tm WHERE tm.thread_id = c.id) AS member_count,
+    (SELECT m.id FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1) AS first_message_id
     FROM threads t JOIN channels c ON c.id = t.channel_id LEFT JOIN users u ON u.id = t.owner_id";
 
 /// Thread summaries keyed by root message, for a batch of messages (message hydration).
@@ -142,6 +145,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
     }
     if is_forum {
         check_tags(&state.db, id, &req.tags).await?;
+        if parent.forum_require_tag && req.tags.is_empty() { return Err(AppError::BadRequest("This forum needs at least one tag on new posts".into())) }
     }
     if let Some(mid) = req.message_id {
         let row: Option<(Uuid,)> = sqlx::query_as("SELECT channel_id FROM messages WHERE id = $1").bind(mid).fetch_optional(&state.db).await?;
@@ -231,6 +235,9 @@ struct ListQuery {
     /// "activity" (default) or "created".
     #[serde(default)]
     sort: String,
+    /// Search titles and first messages.
+    #[serde(default)]
+    q: String,
 }
 
 /// Threads of a text/forum channel: active by default, `?archived=true` for the archive; pinned posts first,
@@ -239,10 +246,12 @@ async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): 
     require_channel_perms(&state.db, id, uid).await?;
     let order = if q.sort == "created" { "c.created_at DESC" } else { "COALESCE((SELECT MAX(m.created_at) FROM messages m WHERE m.channel_id = c.id), c.created_at) DESC" };
     Ok(Json(
-        sqlx::query_as::<_, ThreadInfo>(&format!("{THREAD_SELECT} WHERE c.parent_id = $1 AND (t.archived_at IS NOT NULL) = $2 AND ($3::uuid IS NULL OR EXISTS (SELECT 1 FROM thread_tags tt WHERE tt.thread_id = c.id AND tt.tag_id = $3)) ORDER BY (t.pinned_at IS NOT NULL) DESC, {order} LIMIT 200"))
+        sqlx::query_as::<_, ThreadInfo>(&format!("{THREAD_SELECT} WHERE c.parent_id = $1 AND (t.archived_at IS NOT NULL) = $2 AND ($3::uuid IS NULL OR EXISTS (SELECT 1 FROM thread_tags tt WHERE tt.thread_id = c.id AND tt.tag_id = $3))
+            AND ($4 = '' OR c.name ILIKE '%' || $4 || '%' OR EXISTS (SELECT 1 FROM messages fm WHERE fm.channel_id = c.id AND fm.id = (SELECT m2.id FROM messages m2 WHERE m2.channel_id = c.id ORDER BY m2.id LIMIT 1) AND fm.content ILIKE '%' || $4 || '%')) ORDER BY (t.pinned_at IS NOT NULL) DESC, {order} LIMIT 200"))
             .bind(id)
             .bind(q.archived)
             .bind(q.tag)
+            .bind(q.q.trim().replace('%', "").replace('_', ""))
             .fetch_all(&state.db)
             .await?,
     ))

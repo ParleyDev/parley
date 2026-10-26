@@ -49,7 +49,7 @@ pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
 }
 
 pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url";
-pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality";
+pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality, forum_layout, forum_sort, forum_require_tag, forum_default_reaction";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
     let g = sqlx::query_as::<_, Guild>(&format!(

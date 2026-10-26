@@ -350,6 +350,20 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub video_quality: String,
+    /// Forums: default layout ('gallery' | 'list') and sort ('activity' | 'created'), tag required on new posts, and
+    /// the reaction offered on every post.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub forum_layout: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub forum_sort: String,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub forum_require_tag: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub forum_default_reaction: String,
     /// Slowmode: seconds a member waits between messages here (0 = off).
     #[sqlx(default)]
     #[serde(default)]

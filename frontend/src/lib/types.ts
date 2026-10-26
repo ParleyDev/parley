@@ -167,6 +167,11 @@ export interface Channel {
   video_quality?: 'auto' | 'full' | ''
   /** In a category: follows the category's permissions (no overwrites of its own). */
   permissions_synced?: boolean
+  /** Forums: default layout and sort, a tag required on new posts, and the reaction offered on every post. */
+  forum_layout?: 'gallery' | 'list' | ''
+  forum_sort?: 'activity' | 'created' | ''
+  forum_require_tag?: boolean
+  forum_default_reaction?: string
 }
 
 /** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */
@@ -335,7 +340,7 @@ export interface Sticker {
 }
 
 export interface ThreadRef { id: string; name: string; message_count: number; archived: boolean; last_message_at: string | null }
-export interface ThreadInfo { id: string; parent_id: string | null; guild_id: string | null; name: string; root_message_id: string | null; owner_id: string | null; owner_username: string | null; archived_at: string | null; pinned_at: string | null; created_at: string; message_count: number; last_message_at: string | null; tags: string[]; preview: string | null; private?: boolean; locked?: boolean; auto_archive_minutes?: number; member_count?: number }
+export interface ThreadInfo { id: string; parent_id: string | null; guild_id: string | null; name: string; root_message_id: string | null; owner_id: string | null; owner_username: string | null; archived_at: string | null; pinned_at: string | null; created_at: string; message_count: number; last_message_at: string | null; tags: string[]; preview: string | null; first_message_id?: string | null; private?: boolean; locked?: boolean; auto_archive_minutes?: number; member_count?: number }
 export interface ForumTag { id: string; channel_id: string; name: string; emoji: string; position: number }
 
 export interface PollOption { id: string; text: string; emoji?: string | null; votes: number; me: boolean }

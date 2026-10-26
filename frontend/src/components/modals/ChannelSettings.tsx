@@ -57,6 +57,11 @@ function Overview({ channel }: { channel: Channel }) {
   const pushToast = useStore((s) => s.pushToast)
   const [name, setName] = useState(channel.name)
   const [topic, setTopic] = useState(channel.topic)
+  const [forumLayout, setForumLayout] = useState<'gallery' | 'list'>(channel.forum_layout === 'list' ? 'list' : 'gallery')
+  const [forumSort, setForumSort] = useState<'activity' | 'created'>(channel.forum_sort === 'created' ? 'created' : 'activity')
+  const [requireTag, setRequireTag] = useState(!!channel.forum_require_tag)
+  const [defaultReaction, setDefaultReaction] = useState(channel.forum_default_reaction ?? '')
+  const forumDirty = channel.kind === 'forum' && (forumLayout !== (channel.forum_layout === 'list' ? 'list' : 'gallery') || forumSort !== (channel.forum_sort === 'created' ? 'created' : 'activity') || requireTag !== !!channel.forum_require_tag || defaultReaction !== (channel.forum_default_reaction ?? ''))
   const [nsfw, setNsfw] = useState(!!channel.nsfw)
   const [spoiler, setSpoiler] = useState(!!channel.spoiler)
   const [slowmode, setSlowmode] = useState(channel.rate_limit_per_user ?? 0)
@@ -70,16 +75,27 @@ function Overview({ channel }: { channel: Channel }) {
   const [busy, setBusy] = useState(false)
   const isAudio = channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
   const audioDirty = isAudio && (audioMode !== (channel.audio_mode === 'music' ? 'music' : 'voice') || bitrate !== (channel.audio_bitrate ?? 0) || lowLatency !== !!channel.audio_low_latency || e2ee !== !!channel.e2ee)
-  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || spoiler !== !!channel.spoiler || slowmode !== (channel.rate_limit_per_user ?? 0) || userLimit !== (channel.user_limit ?? 0) || (channel.kind === 'voice' && videoQuality !== (channel.video_quality === 'full' ? 'full' : 'auto')) || audioDirty
-  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSpoiler(!!channel.spoiler); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setVideoQuality(channel.video_quality === 'full' ? 'full' : 'auto'); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
+  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || spoiler !== !!channel.spoiler || slowmode !== (channel.rate_limit_per_user ?? 0) || userLimit !== (channel.user_limit ?? 0) || (channel.kind === 'voice' && videoQuality !== (channel.video_quality === 'full' ? 'full' : 'auto')) || audioDirty || forumDirty
+  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSpoiler(!!channel.spoiler); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setVideoQuality(channel.video_quality === 'full' ? 'full' : 'auto'); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee); setForumLayout(channel.forum_layout === 'list' ? 'list' : 'gallery'); setForumSort(channel.forum_sort === 'created' ? 'created' : 'activity'); setRequireTag(!!channel.forum_require_tag); setDefaultReaction(channel.forum_default_reaction ?? '') }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(channel.kind === 'text' || channel.kind === 'forum' ? { spoiler } : {}), ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit, video_quality: videoQuality } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(channel.kind === 'text' || channel.kind === 'forum' ? { spoiler } : {}), ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit, video_quality: videoQuality } : {}), ...(channel.kind === 'forum' ? { forum_layout: forumLayout, forum_sort: forumSort, forum_require_tag: requireTag, forum_default_reaction: defaultReaction } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
       <h1 className="text-xl font-bold">Overview</h1>
       <div><label className="label">Channel name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
+      {channel.kind === 'forum' && (
+        <div className="space-y-3" data-forum-settings>
+          <div><label className="label">Post guidelines</label><textarea className="input resize-none" rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} placeholder="What should people post here?" data-forum-guidelines /></div>
+          <div className="flex flex-wrap gap-3">
+            <label className="text-sm">Default layout <select className="input ml-1 w-auto py-1" value={forumLayout} onChange={(e) => setForumLayout(e.target.value as 'gallery' | 'list')} data-forum-layout-setting><option value="gallery">Gallery</option><option value="list">List</option></select></label>
+            <label className="text-sm">Default sort <select className="input ml-1 w-auto py-1" value={forumSort} onChange={(e) => setForumSort(e.target.value as 'activity' | 'created')} data-forum-sort-setting><option value="activity">Latest activity</option><option value="created">Newest posts</option></select></label>
+            <label className="text-sm">Default reaction <input className="input ml-1 inline-block w-14 py-1 text-center" value={defaultReaction} onChange={(e) => setDefaultReaction(e.target.value)} maxLength={16} placeholder="👍" data-forum-reaction-setting /></label>
+          </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="h-4 w-4 accent-accent" checked={requireTag} onChange={(e) => setRequireTag(e.target.checked)} data-forum-require-tag /> Require a tag on new posts</label>
+        </div>
+      )}
       {channel.kind === 'text' && <div><label className="label">Channel topic</label><textarea className="input resize-none" rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} placeholder="Let everyone know how to use this channel!" /></div>}
       {hasSlowmode && (
         <div data-channel-slowmode>
