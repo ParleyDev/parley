@@ -1,4 +1,4 @@
-import { getToken, setToken } from './api'
+import { getToken, setToken, TOKEN_KEY } from './api'
 import { STORAGE_PREFIX } from './brand'
 
 /**
@@ -21,7 +21,9 @@ const write = (list: SavedAccount[]) => { try { localStorage.setItem(KEY, JSON.s
 export function rememberAccount(user: { id: string; username: string; display_name: string; avatar_url: string | null }, token: string | null) {
   if (!token) return
   const entry: SavedAccount = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, token }
-  write([entry, ...savedAccounts().filter((a) => a.id !== user.id)].slice(0, MAX_ACCOUNTS))
+  // A token belongs to one account, so any other entry holding it is stale (older builds could save one account under
+  // another tab's token, which showed both as current and made switching do nothing); dropping it repairs the list.
+  write([entry, ...savedAccounts().filter((a) => a.id !== user.id && a.token !== token)].slice(0, MAX_ACCOUNTS))
 }
 
 /** Drop the account holding this token (logged out, revoked, or removed from the switcher). */
@@ -47,3 +49,24 @@ export function startAddAccount() {
 }
 
 export const isActive = (acc: SavedAccount) => acc.token === getToken()
+
+/** The account a session token belongs to (its `sub`), without verifying it: only to compare tabs. */
+function tokenUser(token: string): string | null {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub ?? null } catch { return null }
+}
+
+/**
+ * On the web every tab shares one session token (localStorage), so when another tab signs in, switches account or
+ * logs out, this tab follows it. Otherwise it would keep showing one account while its requests went out as another.
+ * A new token for the same account (say, after verifying an email) is just adopted.
+ */
+export function followOtherTabs(current: () => { token: string | null; userId: string | null }, adopt: (token: string) => void) {
+  window.addEventListener('storage', (e) => {
+    if (e.key !== TOKEN_KEY && e.key !== null) return
+    const next = getToken()
+    const { token, userId } = current()
+    if (next === token) return
+    if (next && userId && tokenUser(next) === userId) { adopt(next); return }
+    location.assign(next ? (location.pathname.startsWith('/login') || location.pathname.startsWith('/register') ? '/channels/@me' : location.href) : '/login')
+  })
+}

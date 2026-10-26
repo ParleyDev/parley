@@ -344,7 +344,8 @@ export const useStore = create<State>((set, get) => ({
   toast: [],
 
   setAuth: (token, user) => {
-    setToken(token)
+    // Profile refreshes pass this tab's own token back; writing it again would move every other tab onto this account.
+    if (token !== get().token) setToken(token)
     rememberAccount(user, token)
     set({ token, user })
   },
@@ -412,7 +413,8 @@ export const useStore = create<State>((set, get) => ({
       hasMore: {}, members, membersLoaded: {}, bans: {}, bansLoaded: {},
       readyCount: get().readyCount + 1,
     })
-    rememberAccount(r.user, getToken())
+    // This tab's token (the one the socket connected with), not localStorage's: another tab may have switched it.
+    rememberAccount(r.user, get().token)
   },
   setConnected: (connected) => set({ connected }),
 

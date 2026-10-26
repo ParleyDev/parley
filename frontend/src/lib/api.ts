@@ -10,7 +10,7 @@ export class ApiError extends Error {
   }
 }
 
-const TOKEN_KEY = `${STORAGE_PREFIX}token`
+export const TOKEN_KEY = `${STORAGE_PREFIX}token`
 
 export function getToken(): string | null {
   try {
