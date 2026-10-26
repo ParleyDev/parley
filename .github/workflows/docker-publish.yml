@@ -2,6 +2,8 @@ name: Publish Docker images
 
 # main: only when something that goes into the images changes (e2e tests, docs and media do not). Release tags always
 # publish: GitHub does not apply path filters to tag pushes. Run by hand to republish.
+# A release pushes its "Release X.Y.Z" commit to main and then tags that same commit, which would build it twice: the
+# main push skips release commits and the tag build publishes them, including `latest` when the tag is main's head.
 on:
   push:
     branches: [main]
@@ -21,6 +23,7 @@ permissions:
 
 jobs:
   check-token:
+    if: github.ref_type == 'tag' || !startsWith(github.event.head_commit.message, 'Release ')
     runs-on: ubuntu-latest
     outputs:
       configured: ${{ steps.check.outputs.configured }}
@@ -54,7 +57,14 @@ jobs:
         with: { fetch-depth: 0 }
       - name: Compute version
         id: ver
-        run: echo "display=$(node scripts/version.mjs)" >> "$GITHUB_OUTPUT" && echo "version=$(node scripts/version.mjs --version)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "display=$(node scripts/version.mjs)" >> "$GITHUB_OUTPUT"
+          echo "version=$(node scripts/version.mjs --version)" >> "$GITHUB_OUTPUT"
+          echo "channel=$(node scripts/version.mjs --json | node -pe 'JSON.parse(require("fs").readFileSync(0)).channel')" >> "$GITHUB_OUTPUT"
+      # `latest` follows main: a main build, or a release tag on main's current head (not an older commit tagged later).
+      - name: Is this main's head
+        id: head
+        run: echo "latest=$([ "$GITHUB_REF" = refs/heads/main ] || [ "$(git rev-parse origin/main)" = "$(git rev-parse HEAD)" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - name: Log in to Docker Hub
@@ -68,10 +78,11 @@ jobs:
         with:
           images: ${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ steps.head.outputs.latest == 'true' }}
             type=ref,event=tag
             type=sha,prefix=sha-
-            type=raw,value=${{ steps.ver.outputs.version }}
+            # The plain version (0.12.0) belongs to the release; main builds also report it but go out as latest and sha-.
+            type=raw,value=${{ steps.ver.outputs.version }},enable=${{ steps.ver.outputs.channel != 'production' }}
       - name: Build and push
         uses: docker/build-push-action@v7
         with:

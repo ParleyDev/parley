@@ -1,11 +1,15 @@
 #!/usr/bin/env node
-// One version for every artifact. The release version lives in /VERSION (semver). A build on a commit tagged
-// v<VERSION> is a release and uses it verbatim; any other build is a development build:
-//   <VERSION>-dev.<commits on this branch>   (+ ".dirty" when the tree has local changes)
-// and the short commit hash is appended as build metadata for display (+<sha>), never in package versions.
+// One version for every artifact. The release version lives in /VERSION (semver). Builds come in three channels:
+//   release      a commit tagged v<VERSION>: <VERSION>
+//   production   any other clean commit on main, which is what production runs: <VERSION> as well
+//   dev          everything else (other branches, local changes): <VERSION>-dev.<commits on this branch>
+//                (+ ".dirty" when the tree has local changes)
+// and the short commit hash is appended as build metadata for display (+<sha>), never in package versions, so a
+// production build reads 0.2.0+ab12cd3. Only releases count as releases for installers and Docker version tags.
+// Local changes that never reach a build (.beads, docs, website, Markdown) don't make a tree dirty.
 //
-//   node scripts/version.mjs            → prints the full display version (e.g. 0.2.0-dev.412+ab12cd3)
-//   node scripts/version.mjs --json     → {"base","version","bundle","display","code","sha","dirty","release"}
+//   node scripts/version.mjs            → prints the full display version (e.g. 0.2.0+ab12cd3, 0.2.0-dev.412+ab12cd3)
+//   node scripts/version.mjs --json     → {"base","version","bundle","display","code","sha","dirty","release","channel"}
 //   node scripts/version.mjs --bundle   → installer version (0.2.0 for releases, 0.2.0+412 for dev builds)
 //   node scripts/version.mjs --apply    → writes the version into mobile (package.json, Android, iOS) and desktop
 //                                         (tauri.conf.json, Cargo.toml); backend and web take PARLEY_VERSION at build
@@ -19,11 +23,15 @@ const base = readFileSync(join(root, 'VERSION'), 'utf8').trim()
 const git = (cmd) => { try { return execSync(`git ${cmd}`, { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim() } catch { return '' } }
 const sha = git('rev-parse --short=7 HEAD') || 'nogit'
 const count = Number(git('rev-list --count HEAD') || 0)
-const dirty = git('status --porcelain --untracked-files=no') !== ''
+const dirty = git("status --porcelain --untracked-files=no -- . ':!.beads' ':!docs' ':!website' ':!*.md'") !== ''
 const tagged = git('tag --points-at HEAD').split('\n').includes(`v${base}`)
 const release = tagged && !dirty && process.env.PARLEY_RELEASE !== '0'
-const version = release ? base : `${base}-dev.${count}${dirty ? '.dirty' : ''}`
-const display = release ? `${base}+${sha}` : `${version}+${sha}`
+// CI checks out the pushed ref (GITHUB_REF); a local build goes by the checked-out branch.
+const ref = process.env.GITHUB_REF ?? ''
+const branch = ref ? (ref.startsWith('refs/heads/') ? ref.slice(11) : '') : git('branch --show-current')
+const channel = release ? 'release' : branch === 'main' && !dirty ? 'production' : 'dev'
+const version = channel === 'dev' ? `${base}-dev.${count}${dirty ? '.dirty' : ''}` : base
+const display = `${version}+${sha}`
 // Android versionCode / iOS build number: monotonic with history, room for 99 releases a day of a given commit count.
 const code = count * 10 + (release ? 1 : 0)
 // PARLEY_VERSION overrides everything: containers without .git get the computed display version, and release
@@ -35,8 +43,8 @@ const fRelease = !!forced && !fVersion.includes('-')
 // Build codes stay monotonic with history whenever git is available; containers fall back to the dev counter.
 const fCount = count || Number((/dev\.(\d+)/.exec(fVersion) ?? [])[1] ?? 0)
 const info = forced
-  ? { base: fVersion.split('-')[0], version: fVersion, display: forced.includes('+') ? forced : `${fVersion}+${sha}`, code: fCount * 10 + (fRelease ? 1 : 0), sha: forced.split('+')[1] ?? sha, dirty: forced.includes('.dirty'), release: fRelease }
-  : { base, version, display, code, sha, dirty, release }
+  ? { base: fVersion.split('-')[0], version: fVersion, display: forced.includes('+') ? forced : `${fVersion}+${sha}`, code: fCount * 10 + (fRelease ? 1 : 0), sha: forced.split('+')[1] ?? sha, dirty: forced.includes('.dirty'), release: fRelease, channel: fRelease ? 'release' : 'dev' }
+  : { base, version, display, code, sha, dirty, release, channel }
 // Installer version (Tauri bundle): MSI needs a numeric-only suffix (<= 65535) and RPM forbids '-', so dev builds
 // use numeric build metadata: 0.2.0+412 (MSI 0.2.0.412). The app binary keeps the full semver `version`.
 // Pre-releases (rc, beta, dev) get <core>+<commit count>; MSI turns that into core.count.
