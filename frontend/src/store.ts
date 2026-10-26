@@ -28,6 +28,9 @@ import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
 import { channelPerms, guildPerms } from './lib/perms'
 
+/** A picture in the image viewer's gallery (the pictures of one message). */
+export interface GalleryItem { url: string; name: string; alt?: string }
+
 export type ModalKind =
   | { kind: 'createGuild' }
   | { kind: 'joinGuild'; code?: string }
@@ -38,9 +41,11 @@ export type ModalKind =
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' | 'keybinds' }
   | { kind: 'shortcuts' }
   | { kind: 'nickname'; guildId: string; userId: string }
+  | { kind: 'reactions'; channelId: string; messageId: string }
+  | { kind: 'altText'; message: Message }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string; anchor?: Anchor }
-  | { kind: 'image'; url: string; name: string }
+  | { kind: 'image'; url: string; name: string; items?: GalleryItem[]; index?: number }
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string }
   | { kind: 'ban'; guildId: string; userId: string }
   | { kind: 'kick'; guildId: string; userId: string }
@@ -279,7 +284,7 @@ interface State {
   loadMessages: (channelId: string, before?: string) => Promise<void>
   loadMembers: (guildId: string) => Promise<void>
   loadBans: (guildId: string) => Promise<void>
-  sendMessage: (channelId: string, content: string, replyTo?: string | null, attachmentIds?: string[], stickerId?: string | null) => Promise<void>
+  sendMessage: (channelId: string, content: string, replyTo?: string | null, attachmentIds?: string[], stickerId?: string | null, descriptions?: Record<string, string>) => Promise<void>
   markRead: (channelId: string) => Promise<void>
 }
 
@@ -841,8 +846,8 @@ export const useStore = create<State>((set, get) => ({
       get().setBans(guildId, bs)
     } catch { /* ignore */ }
   },
-  sendMessage: async (channelId, content, replyTo, attachmentIds = [], stickerId = null) => {
-    const m = await api.post<Message>(`/channels/${channelId}/messages`, { content, reply_to: replyTo ?? null, attachment_ids: attachmentIds, sticker_id: stickerId })
+  sendMessage: async (channelId, content, replyTo, attachmentIds = [], stickerId = null, descriptions) => {
+    const m = await api.post<Message>(`/channels/${channelId}/messages`, { content, reply_to: replyTo ?? null, attachment_ids: attachmentIds, sticker_id: stickerId, ...(descriptions && Object.keys(descriptions).length ? { attachment_descriptions: descriptions } : {}) })
     get().addMessage(m)
     get().setReadState(channelId, m.id)
   },

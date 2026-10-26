@@ -29,6 +29,8 @@ import GuildPrivacyModal from './GuildPrivacy'
 import LeaveLinkModal from './LeaveLink'
 import ShortcutsModal from './Shortcuts'
 import NicknameModal from './Nickname'
+import ReactionsModal from './Reactions'
+import AltTextModal from './AltText'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
@@ -53,7 +55,7 @@ export default function Modals() {
     case 'newDm': return <NewDmModal onClose={close} />
     case 'profile': return <ProfileModal onClose={close} userId={modal!.userId} anchor={modal!.anchor} />
     case 'confirm': return <ConfirmModal onClose={close} {...modal} />
-    case 'image': return <ImageLightbox onClose={close} url={modal!.url} name={modal!.name} />
+    case 'image': return <ImageLightbox onClose={close} url={modal!.url} name={modal!.name} items={modal!.items} index={modal!.index} />
     case 'ban': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'kick': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} kick />
     case 'timeout': return <TimeoutMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
@@ -74,6 +76,8 @@ export default function Modals() {
     case 'leaveLink': return <LeaveLinkModal onClose={close} url={modal!.url} text={modal!.text} />
     case 'shortcuts': return <ShortcutsModal onClose={close} />
     case 'nickname': return <NicknameModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
+    case 'reactions': return <ReactionsModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} />
+    case 'altText': return <AltTextModal onClose={close} message={modal!.message} />
   }
   }
 }

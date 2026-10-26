@@ -30,6 +30,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/voice-status", put(set_voice_status))
         .route("/channels/:id/messages/:mid/history", get(message_history))
         .route("/channels/:id/messages/:mid/reactions/:emoji", get(list_reactors).put(add_reaction).delete(remove_reaction))
+        .route("/channels/:id/messages/:mid/reactions/:emoji/:user", axum::routing::delete(remove_user_reaction))
         .route("/channels/:id/messages/:mid/forward", post(forward_message))
         .route("/users/@me/bookmarks", get(list_bookmarks))
         .route("/users/@me/bookmarks/:mid", put(add_bookmark).delete(remove_bookmark).patch(move_bookmark))
@@ -292,7 +293,7 @@ async fn delete_channel(
 
 pub const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
     u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from,
-    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, u.avatar_decoration, u.clan_tag, u.bot AS author_bot, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
+    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, m.suppress_embeds, u.avatar_decoration, u.clan_tag, u.bot AS author_bot, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
@@ -434,6 +435,9 @@ struct CreateMessage {
     attachment_ids: Vec<Uuid>,
     sticker_id: Option<Uuid>,
     poll: Option<crate::routes::polls::PollInput>,
+    /// Alt text for the attachments being sent, by attachment id.
+    #[serde(default)]
+    attachment_descriptions: HashMap<Uuid, String>,
 }
 
 async fn create_message(
@@ -509,6 +513,7 @@ async fn create_message(
         crate::routes::polls::insert(&mut tx, mid, poll).await?;
     }
     tx.commit().await?;
+    if !req.attachment_descriptions.is_empty() { set_descriptions(&state.db, mid, &req.attachment_descriptions).await?; }
     crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     // Author has implicitly read their own message.
     sqlx::query(
@@ -535,7 +540,21 @@ async fn create_message(
 
 #[derive(Deserialize)]
 struct EditMessage {
-    content: String,
+    content: Option<String>,
+    /// "Remove embeds" (the author, or anyone who can manage messages here).
+    suppress_embeds: Option<bool>,
+    /// Alt text for this message's attachments, by id (the author).
+    #[serde(default)]
+    attachment_descriptions: HashMap<Uuid, String>,
+}
+
+/// Alt text for a message's attachments (up to 1024 characters each; empty clears it).
+async fn set_descriptions(db: &PgPool, mid: Uuid, descs: &HashMap<Uuid, String>) -> AppResult<()> {
+    for (aid, d) in descs {
+        let d: String = d.trim().chars().take(1024).collect();
+        sqlx::query("UPDATE attachments SET description = NULLIF($3, '') WHERE id = $1 AND message_id = $2").bind(aid).bind(mid).bind(&d).execute(db).await?;
+    }
+    Ok(())
 }
 
 async fn edit_message(
@@ -545,7 +564,23 @@ async fn edit_message(
     Json(req): Json<EditMessage>,
 ) -> AppResult<Json<Message>> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
-    let content = req.content.trim_end().to_string();
+    let author: Option<(Uuid,)> = sqlx::query_as("SELECT author_id FROM messages WHERE id = $1 AND channel_id = $2").bind(mid).bind(id).fetch_optional(&state.db).await?;
+    let Some((author,)) = author else { return Err(AppError::NotFound("Message not found".into())) };
+    if let Some(on) = req.suppress_embeds {
+        if author != uid && !(c.guild_id.is_some() && has(p, perms::MANAGE_MESSAGES)) { return Err(AppError::Forbidden) }
+        sqlx::query("UPDATE messages SET suppress_embeds = $2 WHERE id = $1").bind(mid).bind(on).execute(&state.db).await?;
+    }
+    if !req.attachment_descriptions.is_empty() {
+        if author != uid { return Err(AppError::Forbidden) }
+        set_descriptions(&state.db, mid, &req.attachment_descriptions).await?;
+    }
+    let Some(content) = req.content else {
+        let msg = fetch_message(&state.db, mid, uid).await?;
+        let target = target_for(&state.db, &c).await?;
+        state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
+        return Ok(Json(msg));
+    };
+    let content = content.trim_end().to_string();
     if content.trim().is_empty() || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
     }
@@ -834,6 +869,22 @@ async fn remove_reaction(
         .bind(mid).bind(uid).bind(&emoji).execute(&state.db).await?;
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "user_id": uid, "emoji": emoji }));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Remove someone else's reaction (Manage Messages, server channels), from the reactions list.
+async fn remove_user_reaction(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path((id, mid, emoji, user)): Path<(Uuid, Uuid, String, Uuid)>,
+) -> AppResult<StatusCode> {
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    if user != uid && !(c.guild_id.is_some() && has(p, perms::MANAGE_MESSAGES)) { return Err(AppError::Forbidden) }
+    let gone = sqlx::query("DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3").bind(mid).bind(user).bind(&emoji).execute(&state.db).await?.rows_affected();
+    if gone > 0 {
+        let target = target_for(&state.db, &c).await?;
+        state.hub.emit(target, "REACTION_REMOVE", json!({ "message_id": mid, "channel_id": id, "user_id": user, "emoji": emoji }));
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 

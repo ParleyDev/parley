@@ -1,4 +1,5 @@
-import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions } from 'lucide-react'
+import { ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import { isImage } from '../lib/upload'
 import { locale } from '../lib/i18n'
 import { createPortal } from 'react-dom'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
@@ -103,6 +104,10 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const [waved, setWaved] = useState(false)
   const wave = async () => { setWaved(true); try { await sendMessage(m.channel_id, '👋', m.id) } catch (e) { setWaved(false); pushToast((e as Error).message, 'error') } }
 
+  // "Remove embeds": the author, or a moderator in a server.
+  const canSuppress = isOwn || (guildId !== undefined && has(perms, P.MANAGE_MESSAGES))
+  const setSuppressed = async (on: boolean) => { try { await api.patch(`/channels/${m.channel_id}/messages/${m.id}`, { suppress_embeds: on }) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const pictures = (m.attachments ?? []).filter((a) => isImage(a.content_type))
   // Up arrow in an empty composer opens your last message here, with the caret at the end.
   const editRequested = useStore((s) => s.editTarget === m.id)
   useEffect(() => {
@@ -186,6 +191,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       ...(guildId && chanKind === 'text' && !m.thread && m.kind !== 'default' ? [] : guildId && chanKind === 'text' && !m.thread ? [{ label: 'Create Thread', icon: <MessagesSquare size={16} />, onClick: () => openModal({ kind: 'createThread', channelId: m.channel_id, messageId: m.id, suggested: m.content.replace(/\s+/g, ' ').trim().slice(0, 60) }) }] : []),
       { label: 'Forward', icon: <Forward size={16} />, onClick: () => openModal({ kind: 'forward', message: m }) },
       ...(isOwn ? [{ label: 'Edit Message', icon: <Pencil size={16} />, onClick: () => { setDraft(m.content); setEditing(true) } }] : []),
+      ...(isOwn && pictures.length ? [{ label: 'Edit Alt Text', icon: <ImageIcon size={16} />, onClick: () => openModal({ kind: 'altText', message: m }) }] : []),
+      ...(m.reactions.length ? [{ label: 'View Reactions', icon: <SmilePlus size={16} />, onClick: () => openModal({ kind: 'reactions', channelId: m.channel_id, messageId: m.id }) }] : []),
+      ...(canSuppress && (link || media) ? [{ label: m.suppress_embeds ? 'Show Embeds' : 'Remove Embeds', icon: <EyeOff size={16} />, onClick: () => setSuppressed(!m.suppress_embeds) }] : []),
       'sep' as const,
       ...(voiceNeedingText.length ? [{ label: voiceNeedingText.some((a) => a.transcript_status === 'failed') ? 'Retry transcript' : 'Generate transcript', icon: <Captions size={16} />, disabled: transcriptionOn === false, onClick: () => { void Promise.all(voiceNeedingText.map((a) => api.post(`/attachments/${a.id}/transcribe`, {}))).then(() => pushToast('Transcribing…')).catch((e: Error) => pushToast(e.message, 'error')) } }] : []),
       { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => copy('Text', m.content) },
@@ -311,8 +319,13 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                   {m.edited_at && <button type="button" onClick={(e) => { e.stopPropagation(); openModal({ kind: 'editHistory', channelId: m.channel_id, messageId: m.id }) }} title={`Edited ${new Date(m.edited_at).toLocaleString()} — click to see the history`} className="ml-1 text-[10px] text-text-2 hover:underline" data-edited>(edited)</button>}
                 </div>
               )}
-              {media && (prefs.linkMedia ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
-              {link && prefs.embeds && <MaybeBlurred on={sensitive}><LinkEmbed url={link} /></MaybeBlurred>}
+              {media && (prefs.linkMedia && !m.suppress_embeds ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
+              {link && prefs.embeds && !m.suppress_embeds && (
+                <div className="group/embed relative w-fit max-w-full" data-embed-wrap>
+                  <MaybeBlurred on={sensitive}><LinkEmbed url={link} /></MaybeBlurred>
+                  {canSuppress && <button type="button" onClick={() => setSuppressed(true)} className="absolute right-1 top-1 rounded bg-bg-0/80 p-1 text-text-2 opacity-0 hover:text-text-0 group-hover/embed:opacity-100 focus:opacity-100" title="Remove embed" aria-label="Remove embed" data-remove-embed><X size={14} /></button>}
+                </div>
+              )}
               {inviteCodes(m.content, [appUrl]).map((code) => <InviteCard key={code} code={code} />)}
               {m.poll && <PollCard m={m} poll={m.poll} />}
               {m.thread && (

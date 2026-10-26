@@ -31,7 +31,8 @@ const charCount = (s: string) => [...s].length
 
 interface Props { channel: Channel | DmChannel; reply: Message | null; onCancelReply: () => void; onSent: () => void }
 
-interface Pending { key: number; file: File; preview: string | null; progress: number; done: Attachment | null; error: string | null; handle: UploadHandle | null }
+/** `alt`: a description for screen readers and hover, sent with the message. */
+interface Pending { key: number; file: File; preview: string | null; progress: number; done: Attachment | null; error: string | null; handle: UploadHandle | null; alt?: string }
 
 let pendingSeq = 1
 
@@ -153,6 +154,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     requestAnimationFrame(() => { el.focus(); const pos = mn.start + text.length + 1; el.setSelectionRange(pos, pos) })
   }
   const [pending, setPending] = useState<Pending[]>([])
+  const [altFor, setAltFor] = useState<number | null>(null)
   const [dragging, setDragging] = useState(false)
   const [sending, setSending] = useState(false)
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -279,11 +281,12 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     }
     const content = applyMentions(getPrefs().emoticons ? convertEmoticons(text) : text, picked)
     const ids = ready.map((p) => p.done!.id)
+    const descriptions = Object.fromEntries(ready.filter((p) => p.alt?.trim()).map((p) => [p.done!.id, p.alt!.trim()]))
     const snapshot = pending
     setValue(''); setPending([]); setPicked({}); setMention(null); onCancelReply(); setSending(true)
     clearTimeout(draftTimer.current); saveDraft(userId, channel.id, '', {})
     try {
-      await sendMessage(channel.id, content, reply?.id, ids)
+      await sendMessage(channel.id, content, reply?.id, ids, null, descriptions)
       snapshot.forEach((p) => { if (p.preview) URL.revokeObjectURL(p.preview) })
       startCooldown()
       onSent()
@@ -497,7 +500,14 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
                 <div className="h-24 flex items-center justify-center overflow-hidden rounded bg-bg-0/40">
                   {p.preview ? <img src={p.preview} alt="" className={`h-full w-full object-contain ${p.file.name.startsWith('SPOILER_') ? 'blur-md brightness-50' : ''}`} /> : <FileText size={36} className="text-text-2" />}
                 </div>
-                <div className="mt-1.5 text-xs truncate" title={p.file.name}>{p.file.name.replace(/^SPOILER_/, '')}</div>
+                <div className="mt-1.5 flex items-center gap-1">
+                  <span className="min-w-0 flex-1 text-xs truncate" title={p.file.name}>{p.file.name.replace(/^SPOILER_/, '')}</span>
+                  {p.preview && <button type="button" onClick={() => setAltFor(altFor === p.key ? null : p.key)} className={`shrink-0 rounded px-1 text-[10px] font-bold ${p.alt ? 'bg-accent text-white' : 'bg-bg-4 text-text-2 hover:text-text-0'}`} title={p.alt ? `Alt text: ${p.alt}` : 'Add alt text'} data-alt-toggle>ALT</button>}
+                </div>
+                {altFor === p.key && (
+                  <input autoFocus className="input mt-1 h-7 px-2 py-0 text-xs" maxLength={1024} value={p.alt ?? ''} placeholder="Describe the image" aria-label="Alt text"
+                    onChange={(e) => setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, alt: e.target.value } : x)))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); setAltFor(null); ref.current?.focus() } }} data-alt-input />
+                )}
                 <div className="text-[10px] text-text-2">{p.error ? <span className="text-danger">{p.error}</span> : p.done ? formatBytes(p.file.size) : `Uploading… ${Math.round(p.progress * 100)}%`}</div>
                 {!p.done && !p.error && <div className="mt-1 h-1 rounded bg-bg-4 overflow-hidden"><div className="h-full bg-accent transition-[width]" style={{ width: `${Math.round(p.progress * 100)}%` }} /></div>}
               </div>

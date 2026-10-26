@@ -221,6 +221,8 @@ export interface Attachment {
   transcript?: string
   transcript_status?: 'pending' | 'done' | 'failed'
   listened_by?: string[]
+  /** Alt text, set by the uploader. */
+  description?: string | null
 }
 
 export interface Message {
@@ -253,6 +255,8 @@ export interface Message {
   /** Client-only rows: 'failed' = your message the server refused to deliver (red, Retry / Delete);
    *  'notice' = the Ribbit explanation under it (kind 'ribbit'). Never sent by the server; gone on reload. */
   local?: 'failed' | 'notice'
+  /** "Remove embeds": no link previews for this message. */
+  suppress_embeds?: boolean
   /** What a failed message would send again on Retry. */
   draft?: Draft
 }

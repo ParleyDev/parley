@@ -365,6 +365,8 @@ pub struct MessageRow {
     pub author_name_accent: Option<String>,
     #[sqlx(default)]
     pub author_name_style: serde_json::Value,
+    #[sqlx(default)]
+    pub suppress_embeds: bool,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -437,6 +439,9 @@ pub struct Message {
     pub mention_roles: Vec<Uuid>,
     pub mention_everyone: bool,
     pub kind: String,
+    /// "Remove embeds": link previews are hidden for this message.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub suppress_embeds: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub poll: Option<Poll>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -482,6 +487,9 @@ pub struct Attachment {
     pub transcript: Option<String>,
     #[sqlx(default)]
     pub transcript_status: Option<String>,
+    /// Alt text, set by the uploader.
+    #[sqlx(default)]
+    pub description: Option<String>,
     /// Users who have listened to (most of) this voice message; filled by `attachments_for`.
     #[sqlx(default)]
     pub listened_by: Vec<Uuid>,
@@ -506,6 +514,8 @@ pub struct AttachmentJson {
     pub transcript: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transcript_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub listened_by: Vec<Uuid>,
 }
@@ -515,7 +525,7 @@ impl From<Attachment> for AttachmentJson {
         let url = a.url();
         // `?v=2`: thumbnails are cached as immutable, and v2 ones honour EXIF orientation; bump when they change.
         let thumb_url = a.thumb_type.as_ref().map(|_| format!("/api/attachments/{}/thumb?v=2", a.id));
-        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, listened_by: a.listened_by }
+        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, description: a.description, listened_by: a.listened_by }
     }
 }
 
@@ -552,6 +562,7 @@ impl MessageRow {
             mention_roles: self.mention_roles,
             mention_everyone: self.mention_everyone,
             kind: if self.kind.is_empty() { "default".into() } else { self.kind },
+            suppress_embeds: self.suppress_embeds,
             poll: None,
             thread: None,
             referenced: None,
