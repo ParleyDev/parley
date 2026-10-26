@@ -13,6 +13,7 @@ pub mod templates;
 pub mod announcements;
 pub mod group_invites;
 pub mod membership;
+pub mod insights;
 pub mod connections;
 pub mod discovery;
 pub mod dms;
@@ -81,6 +82,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(announcements::router())
         .merge(group_invites::router())
         .merge(membership::router())
+        .merge(insights::router())
         .merge(invites::router())
         .merge(roles::router())
         .merge(relationships::router())

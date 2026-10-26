@@ -52,6 +52,7 @@ export type ModalKind =
   | { kind: 'followChannel'; channelId: string }
   | { kind: 'serverProfile'; guildId: string }
   | { kind: 'application'; guildId: string }
+  | { kind: 'activity'; guildId: string }
   | { kind: 'altText'; message: Message }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string; anchor?: Anchor }

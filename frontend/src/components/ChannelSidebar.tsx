@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { anchorOf } from '../lib/anchor'
-import { CalendarDays, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, Image as ImageIcon, Megaphone, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
+import { CalendarDays, Flame, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, Image as ImageIcon, Megaphone, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
@@ -298,6 +298,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       <div ref={listRef} onScroll={measureUnread} className="relative flex-1 overflow-y-auto px-2 pt-3 space-y-4" data-channel-list {...listDropProps}>
         {target?.line !== undefined && <div className="pointer-events-none absolute left-2 right-2 z-10 h-0.5 rounded-full bg-accent" style={{ top: target.line - 1 }} data-drop-line />}
         <EventsRow guildId={guildId} />
+        <ActivityRow guildId={guildId} />
         {pinnedHere.length > 0 && (
           <div className="space-y-0.5" data-pinned-channels>
             <div className="px-1 pb-0.5 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-text-2"><Pin size={11} /> Pinned</div>
@@ -445,11 +446,21 @@ function EventsRow({ guildId }: { guildId: string }) {
   const openModal = useStore((s) => s.openModal)
   useEffect(() => { if (!events) loadEvents(guildId) }, [guildId, events, loadEvents])
   const n = events?.length ?? 0
-  const live = events?.some((e) => new Date(e.starts_at).getTime() <= Date.now()) ?? false
+  const live = events?.some((e) => e.status === 'active') ?? false
   return (
     <button type="button" onClick={() => openModal({ kind: 'events', guildId })} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-[15px] font-medium text-text-1 hover:bg-bg-3 hover:text-text-0" data-events-row data-events-count={n}>
       <CalendarDays size={18} className={live ? 'text-success' : 'text-text-2'} /><span className="flex-1 text-left">{t('Events')}</span>
       {n > 0 && <span className={`rounded-full px-1.5 text-[11px] font-bold ${live ? 'bg-success text-black' : 'bg-bg-4 text-text-1'}`}>{n}</span>}
+    </button>
+  )
+}
+
+/** "Activity" entry: the server's week at a glance. */
+function ActivityRow({ guildId }: { guildId: string }) {
+  const openModal = useStore((s) => s.openModal)
+  return (
+    <button type="button" onClick={() => openModal({ kind: 'activity', guildId })} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-[15px] font-medium text-text-1 hover:bg-bg-3 hover:text-text-0" data-activity-row>
+      <Flame size={18} className="text-text-2" /><span className="flex-1 text-left">Activity</span>
     </button>
   )
 }
