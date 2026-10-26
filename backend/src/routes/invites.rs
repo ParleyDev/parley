@@ -66,8 +66,11 @@ async fn badge(State(state): State<AppState>, Path(code): Path<String>, Query(q)
     Ok((
         [
             (header::CONTENT_TYPE, "image/svg+xml; charset=utf-8"),
-            // Long enough to spare the database when a README is popular, short enough to look live.
-            (header::CACHE_CONTROL, "public, max-age=300"),
+            // Viewers (and GitHub's image proxy) revalidate every time; a CDN in front may keep it for five minutes,
+            // which spares the database when a README is popular. A plain max-age would be stretched by CDNs that
+            // impose a longer browser TTL on images (Cloudflare's default is four hours).
+            (header::CACHE_CONTROL, "no-cache"),
+            (header::HeaderName::from_static("cdn-cache-control"), "public, max-age=300"),
             (header::CONTENT_SECURITY_POLICY, "default-src 'none'; img-src data:; style-src 'unsafe-inline'"),
             (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
         ],

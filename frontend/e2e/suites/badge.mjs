@@ -12,7 +12,7 @@ const message = (t) => [...t.matchAll(/<text x="[^"]+" y="\d+" transform="scale\
 console.log('-- public SVG')
 let { r, t } = await svg(`${forever.code}/badge.svg`)
 ok('served without logging in, as SVG', r.status === 200 && /^image\/svg\+xml/.test(r.headers.get('content-type')) && t.startsWith('<svg'))
-ok('cached for a few minutes, locked down', /max-age=300/.test(r.headers.get('cache-control')) && /default-src 'none'/.test(r.headers.get('content-security-policy')) && r.headers.get('x-content-type-options') === 'nosniff')
+ok('revalidated by viewers, cached briefly by CDNs, locked down', r.headers.get('cache-control') === 'no-cache' && /max-age=300/.test(r.headers.get('cdn-cache-control')) && /default-src 'none'/.test(r.headers.get('content-security-policy')) && r.headers.get('x-content-type-options') === 'nosniff')
 ok('shows the label and counts', JSON.stringify(message(t)) === JSON.stringify(['Parley', '0 online · 3 members']), JSON.stringify(message(t)))
 ok('carries the Parley logo', /<image [^>]*xlink:href="data:image\/svg\+xml;base64,/.test(t))
 
