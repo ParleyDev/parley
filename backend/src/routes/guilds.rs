@@ -39,7 +39,7 @@ pub fn router() -> Router<AppState> {
 }
 
 pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required";
-pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee";
+pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
     let g = sqlx::query_as::<_, Guild>(&format!(
@@ -357,10 +357,16 @@ async fn leave_guild(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[derive(Deserialize, Default)]
+struct KickReq {
+    reason: Option<String>,
+}
+
 async fn kick_member(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path((id, target)): Path<(Uuid, Uuid)>,
+    body: Option<Json<KickReq>>,
 ) -> AppResult<StatusCode> {
     let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::KICK_MEMBERS)?;
@@ -371,8 +377,9 @@ async fn kick_member(
         return Err(AppError::Forbidden);
     }
     let name = crate::audit::username(&state, target).await;
+    let reason: String = body.and_then(|Json(b)| b.reason).unwrap_or_default().trim().chars().take(512).collect();
     remove_member(&state, id, target).await?;
-    crate::audit::guild(&state, id, uid, "member.kick", "user", Some(target), &name, json!({})).await;
+    crate::audit::guild(&state, id, uid, "member.kick", "user", Some(target), &name, json!({ "reason": reason })).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -511,6 +518,9 @@ async fn list_bans(
 #[derive(Deserialize, Default)]
 struct BanReq {
     reason: Option<String>,
+    /// Also delete what they posted in this server in the last N seconds (0 to 7 days).
+    #[serde(default)]
+    delete_message_seconds: i64,
 }
 
 /// Ban a user: they are removed (if a member) and can no longer accept invites. Like Discord, a
@@ -533,7 +543,11 @@ async fn ban_member(
     if ctx.is_member(target) && !ctx.outranks_member(uid, target) {
         return Err(AppError::Forbidden);
     }
-    let reason: String = body.and_then(|Json(b)| b.reason).unwrap_or_default().trim().chars().take(512).collect();
+    let req = body.map(|Json(b)| b).unwrap_or_default();
+    if !(0..=7 * 86400).contains(&req.delete_message_seconds) {
+        return Err(AppError::BadRequest("delete_message_seconds must be 0 to 604800 (7 days)".into()));
+    }
+    let reason: String = req.reason.unwrap_or_default().trim().chars().take(512).collect();
     let inserted = sqlx::query(
         "INSERT INTO guild_bans (guild_id, user_id, moderator_id, reason) SELECT $1, $2, $3, $4 WHERE EXISTS (SELECT 1 FROM users WHERE id = $2)
          ON CONFLICT (guild_id, user_id) DO UPDATE SET moderator_id = EXCLUDED.moderator_id, reason = EXCLUDED.reason, created_at = now()",
@@ -551,7 +565,15 @@ async fn ban_member(
     try_remove_member(&state, id, target).await?;
     let ban = fetch_ban(&state.db, id, target).await?;
     state.hub.emit_guild(id, "GUILD_BAN_ADD", json!(ban));
-    crate::audit::guild(&state, id, uid, "member.ban", "user", Some(target), &ban.username, json!({ "reason": reason })).await;
+    let mut deleted = 0;
+    if req.delete_message_seconds > 0 {
+        let ids: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT m.id FROM messages m JOIN channels c ON c.id = m.channel_id
+             WHERE c.guild_id = $1 AND m.author_id = $2 AND m.created_at > now() - make_interval(secs => $3)")
+            .bind(id).bind(target).bind(req.delete_message_seconds as f64).fetch_all(&state.db).await?;
+        deleted = crate::routes::channels::delete_many(&state, &ids.into_iter().map(|r| r.0).collect::<Vec<_>>()).await?;
+    }
+    crate::audit::guild(&state, id, uid, "member.ban", "user", Some(target), &ban.username, json!({ "reason": reason, "messages_deleted": deleted })).await;
     Ok((StatusCode::CREATED, Json(ban)))
 }
 

@@ -190,6 +190,10 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub e2ee: bool,
+    /// Slowmode: seconds a member waits between messages here (0 = off).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub rate_limit_per_user: i32,
     /// Studio channels: the engineers (run recordings, manage the band); filled by `perms::attach_overwrites`.
     #[sqlx(skip)]
     #[serde(default)]

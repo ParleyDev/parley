@@ -112,6 +112,8 @@ export interface Channel {
   audio_low_latency?: boolean
   /** Calls here are end-to-end encrypted (voice/stage/studio channels, DM and group calls). */
   e2ee?: boolean
+  /** Slowmode: seconds between a member's messages (0 = off). */
+  rate_limit_per_user?: number
   /** Studio channels: the engineers (several allowed). */
   engineer_ids?: string[]
   overwrites?: Overwrite[]

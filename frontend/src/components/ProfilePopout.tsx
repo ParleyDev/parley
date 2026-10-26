@@ -92,7 +92,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     await sendMessage(c.id, `${publicOrigin()}/invite/${inv.code}`)
     pushToast(`Invite to ${g.name} sent`)
   })
-  const kick = () => { onClose(); openModal({ kind: 'confirm', title: `Kick ${user.display_name}`, body: `Are you sure you want to kick ${user.display_name} from ${guild?.name}? They can rejoin with a new invite.`, danger: true, confirmLabel: 'Kick', action: () => act(async () => { await api.delete(`/guilds/${guildId}/members/${user.id}`); removeMember(guildId!, user.id) }) }) }
+  const kick = () => { onClose(); openModal({ kind: 'kick', guildId: guildId!, userId: user.id }) }
   const ban = () => { onClose(); openModal({ kind: 'ban', guildId: guildId!, userId: user.id }) }
   const block = () => { onClose(); openModal({ kind: 'confirm', title: `Block ${user.display_name}`, body: `${user.display_name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.`, danger: true, confirmLabel: 'Block', action: () => act(() => api.put(`/users/@me/relationships/${user.id}/block`)) }) }
 

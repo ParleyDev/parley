@@ -11,20 +11,27 @@ const LABELS: Record<string, string> = {
   'channel.create': 'created channel', 'channel.update': 'edited channel', 'channel.delete': 'deleted channel', 'channel.overwrite': 'changed permissions in', 'channel.overwrite_delete': 'removed a permission overwrite in',
   'role.create': 'created role', 'role.update': 'edited role', 'role.delete': 'deleted role',
   'member.kick': 'kicked', 'member.ban': 'banned', 'member.unban': 'unbanned', 'member.timeout': 'timed out', 'member.timeout_clear': 'removed the timeout of', 'member.update': 'updated member',
-  'message.delete': 'deleted a message by', 'emoji.create': 'added emoji', 'emoji.update': 'renamed emoji', 'emoji.delete': 'deleted emoji',
+  'message.delete': 'deleted a message by', 'message.bulk_delete': 'bulk-deleted messages in', 'emoji.create': 'added emoji', 'emoji.update': 'renamed emoji', 'emoji.delete': 'deleted emoji',
   'sticker.create': 'added sticker', 'sticker.update': 'edited sticker', 'sticker.delete': 'deleted sticker',
   'discovery.submit': 'submitted to Discover', 'discovery.withdraw': 'withdrew from Discover',
   'invite.delete': 'revoked invite', 'invite.vanity_create': 'claimed vanity link', 'invite.vanity_delete': 'removed vanity link',
 }
 
+// Any action can carry a reason: typed in a kick or ban dialog, or sent by a bot in X-Audit-Log-Reason.
 const describe = (r: Row): string => {
   const d = r.details ?? {}
-  switch (r.action) {
+  const reason = typeof d.reason === 'string' && d.reason ? `reason: ${d.reason}` : ''
+  return [what(r.action, d), reason].filter(Boolean).join(' · ')
+}
+
+const what = (action: string, d: Record<string, unknown>): string => {
+  switch (action) {
     case 'member.timeout': return `for ${d.minutes} minute${d.minutes === 1 ? '' : 's'}`
-    case 'member.ban': return typeof d.reason === 'string' && d.reason ? `reason: ${d.reason}` : ''
+    case 'member.ban': return typeof d.messages_deleted === 'number' && d.messages_deleted > 0 ? `deleted ${d.messages_deleted} message${d.messages_deleted === 1 ? '' : 's'}` : ''
+    case 'message.bulk_delete': return `${d.count} message${d.count === 1 ? '' : 's'}`
     case 'member.update': return [Array.isArray(d.roles) ? `roles: ${(d.roles as string[]).join(', ') || 'none'}` : '', 'nickname' in d ? `nickname: ${d.nickname ?? 'cleared'}` : ''].filter(Boolean).join(' · ')
     case 'message.delete': return `in #${d.channel}`
-    case 'guild.update': case 'guild.badge_update': case 'role.update': case 'channel.update': return Object.entries(d).map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' · ')
+    case 'guild.update': case 'guild.badge_update': case 'role.update': case 'channel.update': return Object.entries(d).filter(([k]) => k !== 'reason').map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' · ')
     case 'channel.overwrite': return `${d.kind} overwrite · allow ${d.allow} · deny ${d.deny}`
     case 'discovery.submit': return `category: ${d.category}`
     default: return ''

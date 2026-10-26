@@ -43,6 +43,7 @@ export type ModalKind =
   | { kind: 'image'; url: string; name: string }
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string }
   | { kind: 'ban'; guildId: string; userId: string }
+  | { kind: 'kick'; guildId: string; userId: string }
   | { kind: 'timeout'; guildId: string; userId: string }
   | { kind: 'editHistory'; channelId: string; messageId: string }
   | { kind: 'report'; messageId?: string; userId: string; name: string }

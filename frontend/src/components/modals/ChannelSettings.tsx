@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { myChannelPerms, useStore } from '../../store'
+import { SLOWMODE } from '../../lib/slowmode'
 import type { Channel } from '../../lib/types'
 import { has, P } from '../../lib/perms'
 import SettingsShell from './SettingsShell'
@@ -57,6 +58,8 @@ function Overview({ channel }: { channel: Channel }) {
   const [name, setName] = useState(channel.name)
   const [topic, setTopic] = useState(channel.topic)
   const [nsfw, setNsfw] = useState(!!channel.nsfw)
+  const [slowmode, setSlowmode] = useState(channel.rate_limit_per_user ?? 0)
+  const hasSlowmode = channel.guild_id !== null && (channel.kind === 'text' || channel.kind === 'thread')
   const [audioMode, setAudioMode] = useState<AudioMode>(channel.audio_mode === 'music' ? 'music' : 'voice')
   const [bitrate, setBitrate] = useState(channel.audio_bitrate ?? 0)
   const [lowLatency, setLowLatency] = useState(!!channel.audio_low_latency)
@@ -64,17 +67,26 @@ function Overview({ channel }: { channel: Channel }) {
   const [busy, setBusy] = useState(false)
   const isAudio = channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
   const audioDirty = isAudio && (audioMode !== (channel.audio_mode === 'music' ? 'music' : 'voice') || bitrate !== (channel.audio_bitrate ?? 0) || lowLatency !== !!channel.audio_low_latency || e2ee !== !!channel.e2ee)
-  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || audioDirty
-  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
+  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || slowmode !== (channel.rate_limit_per_user ?? 0) || audioDirty
+  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSlowmode(channel.rate_limit_per_user ?? 0); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
       <h1 className="text-xl font-bold">Overview</h1>
       <div><label className="label">Channel name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
       {channel.kind === 'text' && <div><label className="label">Channel topic</label><textarea className="input resize-none" rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} placeholder="Let everyone know how to use this channel!" /></div>}
+      {hasSlowmode && (
+        <div data-channel-slowmode>
+          <label className="label" htmlFor="slowmode">Slowmode</label>
+          <select id="slowmode" className="input" value={slowmode} onChange={(e) => setSlowmode(Number(e.target.value))}>
+            {SLOWMODE.map((o) => <option key={o.seconds} value={o.seconds}>{o.label}</option>)}
+          </select>
+          <p className="mt-1 text-xs text-text-2">Members can send one message per this interval. Members who can manage messages or this channel are exempt.</p>
+        </div>
+      )}
       {(channel.kind === 'text' || channel.kind === 'forum') && (
         <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-nsfw={nsfw ? '1' : '0'}>
           <span><span className="block text-[15px]">Age-Restricted Channel</span><span className="block text-xs text-text-2">Members see a warning before opening it, and those who blur sensitive media get pictures and videos here blurred until clicked.</span></span>

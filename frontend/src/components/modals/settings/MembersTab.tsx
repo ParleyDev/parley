@@ -28,10 +28,7 @@ export default function MembersTab({ guildId }: { guildId: string }) {
     .filter((m) => !q || m.display_name.toLowerCase().includes(q.toLowerCase()) || m.username.toLowerCase().includes(q.toLowerCase()) || (m.nickname ?? '').toLowerCase().includes(q.toLowerCase()))
     .sort((a, b) => (a.nickname ?? a.display_name).localeCompare(b.nickname ?? b.display_name))
 
-  const kick = (userId: string, name: string) => openModal({
-    kind: 'confirm', title: `Kick ${name}`, body: `Are you sure you want to kick ${name} from ${guild.name}? They can rejoin with a new invite.`, danger: true, confirmLabel: 'Kick',
-    action: async () => { try { await api.delete(`/guilds/${guildId}/members/${userId}`); removeMember(guildId, userId) } catch (e) { pushToast((e as Error).message, 'error') } },
-  })
+  const kick = (userId: string) => openModal({ kind: 'kick', guildId, userId })
 
   return (
     <div>
@@ -57,7 +54,7 @@ export default function MembersTab({ guildId }: { guildId: string }) {
               </div>
               <div className="flex-1 min-w-0"><RolePicker guildId={guildId} member={m} compact /></div>
               {canTransfer && <button onClick={() => openModal({ kind: 'transferOwnership', guildId, userId: m.user_id })} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-warn" title="Transfer ownership"><Crown size={16} /></button>}
-              {canKick && <button onClick={() => kick(m.user_id, m.display_name)} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-danger/10 hover:text-danger" title="Kick"><UserMinus size={16} /></button>}
+              {canKick && <button onClick={() => kick(m.user_id)} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-danger/10 hover:text-danger" title="Kick"><UserMinus size={16} /></button>}
               {canBan && <button onClick={() => openModal({ kind: 'ban', guildId, userId: m.user_id })} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-danger/10 hover:text-danger" title="Ban"><Gavel size={16} /></button>}
             </div>
           )

@@ -89,7 +89,7 @@ pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel
     for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state, e2ee) in channels {
         let recipients = recipients_for(db, id, uid).await?;
         out.push(DmChannel {
-            channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, e2ee, engineer_ids: vec![], overwrites: vec![] },
+            channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, e2ee, rate_limit_per_user: 0, engineer_ids: vec![], overwrites: vec![] },
             recipients,
             last_message_at: last,
             request_state,

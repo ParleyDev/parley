@@ -73,7 +73,7 @@ export function useUserMenu(guildId?: string | null) {
       pushToast(`Invited ${name} to ${gname}`)
     })
     const inviteMenu = invitable.length ? [{ label: 'Invite to Server', icon: <Send size={16} />, children: invitable.map((g) => ({ label: g.name, onClick: () => invite(g.id, g.name) })) }] : []
-    const kick = () => openModal({ kind: 'confirm', title: `Kick ${name}`, body: `Are you sure you want to kick ${name} from ${guild?.name}? They can rejoin with a new invite.`, danger: true, confirmLabel: 'Kick', action: () => act(async () => { await api.delete(`/guilds/${guildId}/members/${u.id}`); removeMember(guildId!, u.id) }) })
+    const kick = () => openModal({ kind: 'kick', guildId: guildId!, userId: u.id })
     if (isMe) {
       return [
         { label: 'Profile', icon: <UserIcon size={16} />, onClick: profile },

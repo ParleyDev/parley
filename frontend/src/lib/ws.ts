@@ -17,6 +17,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'PONG'; d: unknown }
   | { t: 'MESSAGE_CREATE' | 'MESSAGE_UPDATE'; d: { message: Message; guild_id: string | null } }
   | { t: 'MESSAGE_DELETE'; d: { id: string; channel_id: string } }
+  | { t: 'MESSAGE_DELETE_BULK'; d: { ids: string[]; channel_id: string } }
   | { t: 'REACTION_ADD' | 'REACTION_REMOVE'; d: { message_id: string; channel_id: string; user_id: string; emoji: string } }
   | { t: 'POLL_UPDATE'; d: { channel_id: string; message_id: string; poll: Poll } }
   | { t: 'THREAD_UPDATE'; d: ThreadInfo }
@@ -171,6 +172,7 @@ function handle(ev: Ev) {
     }
     case 'MESSAGE_UPDATE': s.updateMessage(ev.d.message); break
     case 'MESSAGE_DELETE': s.removeMessage(ev.d.channel_id, ev.d.id); break
+    case 'MESSAGE_DELETE_BULK': for (const id of ev.d.ids) s.removeMessage(ev.d.channel_id, id); break
     case 'REACTION_ADD': s.applyReaction(ev.d.channel_id, ev.d.message_id, ev.d.emoji, ev.d.user_id, true); break
     case 'REACTION_REMOVE': s.applyReaction(ev.d.channel_id, ev.d.message_id, ev.d.emoji, ev.d.user_id, false); break
     case 'POLL_UPDATE': s.applyPollUpdate(ev.d.channel_id, ev.d.message_id, ev.d.poll); break

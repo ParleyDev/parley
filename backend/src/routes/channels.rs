@@ -26,6 +26,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id", get(get_channel).patch(update_channel).delete(delete_channel))
         .route("/channels/:id/messages", get(list_messages).post(create_message).route_layer(from_fn(rl_messages)))
         .route("/channels/:id/messages/:mid", axum::routing::patch(edit_message).delete(delete_message))
+        .route("/channels/:id/messages/bulk-delete", post(bulk_delete))
         .route("/channels/:id/messages/:mid/history", get(message_history))
         .route("/channels/:id/messages/:mid/reactions/:emoji", get(list_reactors).put(add_reaction).delete(remove_reaction))
         .route("/channels/:id/messages/:mid/forward", post(forward_message))
@@ -119,6 +120,8 @@ struct UpdateChannel {
     audio_low_latency: Option<bool>,
     /// Voice/stage/studio channels (Manage Channels) and DM / group calls (any member): end-to-end encrypted calls.
     e2ee: Option<bool>,
+    /// Server text channels, forums and threads: slowmode in seconds (0 to 21600).
+    rate_limit_per_user: Option<i32>,
 }
 
 /// Call encryption was switched on or off: anyone in the call whose client can't encrypt is dropped from it (their
@@ -197,6 +200,9 @@ async fn update_channel(
             return Err(AppError::BadRequest("audio_bitrate must be 8-510 kbps (or 0 for the default)".into()));
         }
     }
+    if let Some(s) = req.rate_limit_per_user {
+        if !(0..=21600).contains(&s) { return Err(AppError::BadRequest("Slowmode must be 0 to 21600 seconds (6 hours)".into())) }
+    }
     if req.e2ee == Some(true) && !matches!(c.kind.as_str(), "voice" | "stage" | "studio") {
         return Err(AppError::BadRequest("Only voice, stage and studio channels have calls to encrypt".into()));
     }
@@ -213,7 +219,8 @@ async fn update_channel(
     let mut updated = sqlx::query_as::<_, Channel>(&format!(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
          parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw),
-         audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency), e2ee = COALESCE($11, e2ee)
+         audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency), e2ee = COALESCE($11, e2ee),
+         rate_limit_per_user = COALESCE($12, rate_limit_per_user)
          WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
@@ -227,6 +234,7 @@ async fn update_channel(
     .bind(req.audio_bitrate)
     .bind(req.audio_low_latency)
     .bind(req.e2ee)
+    .bind(req.rate_limit_per_user)
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
@@ -246,6 +254,7 @@ async fn update_channel(
         if updated.audio_bitrate != c.audio_bitrate { d.insert("audio_bitrate".into(), json!(updated.audio_bitrate)); }
         if updated.audio_low_latency != c.audio_low_latency { d.insert("audio_low_latency".into(), json!(updated.audio_low_latency)); }
         if updated.e2ee != c.e2ee { d.insert("e2ee".into(), json!(updated.e2ee)); }
+        if updated.rate_limit_per_user != c.rate_limit_per_user { d.insert("slowmode".into(), json!(updated.rate_limit_per_user)); }
         crate::audit::guild(&state, gid, uid, "channel.update", "channel", Some(id), &updated.name, serde_json::Value::Object(d)).await;
     }
     Ok(Json(updated))
@@ -432,6 +441,7 @@ async fn create_message(
     if c.kind == "forum" {
         return Err(AppError::BadRequest("Forum channels hold posts: create a post instead".into()));
     }
+    check_slowmode(&state.db, &c, p, uid).await?;
     let content = req.content.trim_end().to_string();
     if (content.trim().is_empty() && req.attachment_ids.is_empty() && req.sticker_id.is_none() && req.poll.is_none()) || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
@@ -609,6 +619,75 @@ async fn delete_message(
         }
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Slowmode: refuse a message sent too soon after this member's last one here (system notices such as their join
+/// don't count). Members who can manage messages or the channel are exempt, as in Discord.
+pub async fn check_slowmode(db: &PgPool, c: &Channel, p: u64, uid: Uuid) -> AppResult<()> {
+    if c.rate_limit_per_user <= 0 || has(p, perms::MANAGE_MESSAGES) || has(p, perms::MANAGE_CHANNELS) { return Ok(()) }
+    // MAX() is NULL when they have never posted here.
+    let wait: Option<(Option<f64>,)> = sqlx::query_as(
+        "SELECT EXTRACT(EPOCH FROM (MAX(created_at) + make_interval(secs => $3) - now()))::float8 FROM messages WHERE channel_id = $1 AND author_id = $2 AND kind = 'default'")
+        .bind(c.id).bind(uid).bind(c.rate_limit_per_user as f64).fetch_optional(db).await?;
+    match wait {
+        Some((Some(secs),)) if secs > 0.0 => Err(AppError::TooMany(format!("Slowmode is on. You can send another message in {} second{}.", secs.ceil() as i64, if secs.ceil() as i64 == 1 { "" } else { "s" }))),
+        _ => Ok(()),
+    }
+}
+
+/// Delete messages that the caller may already delete, with their attachment files, and tell each channel's
+/// audience in one MESSAGE_DELETE_BULK per channel. Returns how many were deleted.
+pub async fn delete_many(state: &AppState, ids: &[Uuid]) -> AppResult<usize> {
+    if ids.is_empty() { return Ok(0) }
+    let files: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM attachments WHERE message_id = ANY($1)").bind(ids).fetch_all(&state.db).await?;
+    let gone: Vec<(Uuid, Uuid)> = sqlx::query_as("DELETE FROM messages WHERE id = ANY($1) RETURNING id, channel_id").bind(ids).fetch_all(&state.db).await?;
+    for (fid,) in files {
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
+    }
+    let mut by_channel: std::collections::HashMap<Uuid, Vec<Uuid>> = std::collections::HashMap::new();
+    for (mid, cid) in &gone { by_channel.entry(*cid).or_default().push(*mid); }
+    for (cid, mids) in by_channel {
+        let Ok(c) = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(cid).fetch_one(&state.db).await else { continue };
+        let target = target_for(&state.db, &c).await?;
+        state.hub.emit(target, "MESSAGE_DELETE_BULK", json!({ "ids": mids, "channel_id": cid, "guild_id": c.guild_id }));
+    }
+    Ok(gone.len())
+}
+
+#[derive(Deserialize)]
+struct BulkDelete {
+    /// Specific messages in this channel (up to 100)...
+    #[serde(default)]
+    messages: Vec<Uuid>,
+    /// ...or the newest `limit` messages (1 to 100), optionally only `author_id`'s.
+    limit: Option<i64>,
+    author_id: Option<Uuid>,
+}
+
+/// Bulk delete (Manage Messages, server channels): by id, or the newest N messages (`/purge`).
+async fn bulk_delete(
+    State(state): State<AppState>,
+    AuthUser(uid): AuthUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<BulkDelete>,
+) -> AppResult<Json<serde_json::Value>> {
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    let Some(gid) = c.guild_id else { return Err(AppError::BadRequest("Bulk delete is for server channels".into())) };
+    perms::check(p, perms::MANAGE_MESSAGES)?;
+    let ids: Vec<Uuid> = if !req.messages.is_empty() {
+        if req.messages.len() > 100 { return Err(AppError::BadRequest("At most 100 messages at a time".into())) }
+        sqlx::query_as::<_, (Uuid,)>("SELECT id FROM messages WHERE channel_id = $1 AND id = ANY($2)").bind(id).bind(&req.messages).fetch_all(&state.db).await?.into_iter().map(|r| r.0).collect()
+    } else {
+        let n = req.limit.unwrap_or(0);
+        if !(1..=100).contains(&n) { return Err(AppError::BadRequest("limit must be 1 to 100".into())) }
+        sqlx::query_as::<_, (Uuid,)>("SELECT id FROM messages WHERE channel_id = $1 AND ($2::uuid IS NULL OR author_id = $2) ORDER BY id DESC LIMIT $3")
+            .bind(id).bind(req.author_id).bind(n).fetch_all(&state.db).await?.into_iter().map(|r| r.0).collect()
+    };
+    let deleted = delete_many(&state, &ids).await?;
+    if deleted > 0 {
+        crate::audit::guild(&state, gid, uid, "message.bulk_delete", "channel", Some(id), &c.name, json!({ "count": deleted })).await;
+    }
+    Ok(Json(json!({ "deleted": deleted })))
 }
 
 /// Mentions in Discord's wire syntax: `<@id>` users, `<@&id>` roles, `@everyone` / `@here`.

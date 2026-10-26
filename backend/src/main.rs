@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
         ))
     }
     .allow_methods([Method::GET, Method::POST, Method::PUT, Method::PATCH, Method::DELETE, Method::OPTIONS])
-    .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE])
+    .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::HeaderName::from_static("x-audit-log-reason")])
     .allow_credentials(true);
 
     // MCP tools call the API in-process as the connected user (same checks, events and limits as the app).
@@ -99,7 +99,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/version", get(|| async { axum::Json(serde_json::json!({ "version": VERSION })) }))
         .route("/metrics", get(metrics::endpoint))
         .route("/ws", get(ws::handler::ws_upgrade))
-        .nest("/api", routes::api_router())
+        .nest("/api", routes::api_router().layer(axum::middleware::from_fn(audit::reason_scope)))
         .layer(axum::extract::DefaultBodyLimit::max(2 * 1024 * 1024))
         .layer(cors)
         .merge(mcp::public_router().layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)).layer(mcp_cors))

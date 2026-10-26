@@ -1,4 +1,4 @@
-import { BarChart3, Camera, Eye, Video, EyeOff, FileText, FolderOpen, ImagePlay, Images, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
+import { BarChart3, Camera, Eye, Timer, Video, EyeOff, FileText, FolderOpen, ImagePlay, Images, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
@@ -19,6 +19,10 @@ import { dmName, isGroup } from '../lib/dm'
 import { useT } from '../lib/i18n'
 import { commandMatches, runCommand, type SlashCommand } from '../lib/commands'
 import { getDraft, saveDraft } from '../lib/drafts'
+import { shortDuration } from '../lib/slowmode'
+
+/** When each channel's slowmode lets you send again (ms), kept across channel switches. */
+const cooldowns = new Map<string, number>()
 
 /** The server's limit, counted in characters like the backend does (not UTF-16 units). */
 const MAX_CHARS = 2000
@@ -68,7 +72,22 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   // `/` at the start of the box: built-in commands, with the highlighted row.
   const [cmdIdx, setCmdIdx] = useState(0)
   const [cmdDismissed, setCmdDismissed] = useState(false)
-  const commands = cmdDismissed ? [] : commandMatches(value, !!channel.guild_id)
+  const isMod = !!channel.guild_id && has(perms, P.MANAGE_MESSAGES)
+  const commands = cmdDismissed ? [] : commandMatches(value, !!channel.guild_id, isMod)
+  // Slowmode: one message per interval here unless you can manage messages or the channel.
+  const slow = channel.guild_id ? (channel as Channel).rate_limit_per_user ?? 0 : 0
+  const slowExempt = has(perms, P.MANAGE_MESSAGES) || has(perms, P.MANAGE_CHANNELS)
+  const [now, setNow] = useState(() => Date.now())
+  const coolUntil = cooldowns.get(channel.id) ?? 0
+  const cooling = coolUntil > now
+  useEffect(() => {
+    if (!cooling) return
+    const t = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(t)
+  }, [cooling, channel.id])
+  const startCooldown = (secs = slow) => { if (secs > 0 && !slowExempt) { cooldowns.set(channel.id, Date.now() + secs * 1000); setNow(Date.now()) } }
+  // A refusal from the server ("…in 12 seconds") also starts the countdown, e.g. after a reload.
+  const noteSlowmode = (e: unknown) => { const m = /in (\d+) seconds?/.exec((e as Error).message ?? ''); if (m) startCooldown(Number(m[1])) }
   const [picker, setPicker] = useState<PickerTab | null>(null)
   // `:shortcode` autocomplete: tracks the query at the caret, the highlighted row, and whether it was dismissed.
   const [shortcode, setShortcode] = useState<{ start: number; query: string } | null>(null)
@@ -218,7 +237,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const ready = pending.filter((p) => p.done)
   const chars = charCount(value)
   const tooLong = chars > MAX_CHARS
-  const canSubmit = (value.trim().length > 0 || ready.length > 0) && !uploading && !sending && !tooLong
+  const canSubmit = (value.trim().length > 0 || ready.length > 0) && !uploading && !sending && !tooLong && !cooling
   // Over the limit: offer to turn the text into a message.txt attachment instead of cutting it off.
   const sendAsFile = () => {
     addFiles([new File([value], 'message.txt', { type: 'text/plain' })])
@@ -230,8 +249,14 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     if (!canSubmit) return
     let text = value.trim()
     if (text.startsWith('/')) {
-      const res = await runCommand(text, { guildId: channel.guild_id, userId })
+      const res = await runCommand(applyMentions(text, picked), { guildId: channel.guild_id, userId, channelId: channel.id, moderator: isMod })
       if (res.kind === 'error') { pushToast(res.message, 'error'); return }
+      if (res.kind === 'confirm') {
+        openModal({ kind: 'confirm', title: res.title, body: res.body, danger: true, confirmLabel: res.label, action: async () => {
+          try { pushToast(await res.action()); setValue(''); setPicked({}); saveDraft(userId, channel.id, '', {}) } catch (e) { pushToast((e as Error).message, 'error') }
+        } })
+        return
+      }
       if (res.kind === 'done') { pushToast(res.toast); setValue(''); setPicked({}); saveDraft(userId, channel.id, '', {}); return }
       if (res.kind === 'send') text = res.content
     }
@@ -243,10 +268,11 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     try {
       await sendMessage(channel.id, content, reply?.id, ids)
       snapshot.forEach((p) => { if (p.preview) URL.revokeObjectURL(p.preview) })
+      startCooldown()
       onSent()
     } catch (e) {
       if (undeliverable(e, { content, reply_to: reply?.id ?? null, attachment_ids: ids, sticker_id: null })) { snapshot.forEach((p) => { if (p.preview) URL.revokeObjectURL(p.preview) }); return }
-      pushToast((e as Error).message, 'error'); setValue(content); setPending(snapshot)
+      noteSlowmode(e); pushToast((e as Error).message, 'error'); setValue(content); setPending(snapshot)
     } finally { setSending(false) }
   }
 
@@ -318,7 +344,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     setValue(v)
     scheduleDraft(v)
     if (!v.startsWith('/')) setCmdDismissed(false)
-    if (commandMatches(v, !!channel.guild_id).length !== commands.length) setCmdIdx(0)
+    if (commandMatches(v, !!channel.guild_id, isMod).length !== commands.length) setCmdIdx(0)
     updateShortcode(v, caret)
     const now = Date.now()
     if (v && now - lastTyping.current > 4000) { lastTyping.current = now; sendTyping(channel.id) }
@@ -342,7 +368,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   }
   const sendSticker = async (st: { id: string; name: string }) => {
     setSending(true)
-    try { await sendMessage(channel.id, '', reply?.id, [], st.id); onCancelReply(); onSent() } catch (e) { if (!undeliverable(e, { content: '', reply_to: reply?.id ?? null, attachment_ids: [], sticker_id: st.id })) pushToast((e as Error).message, 'error') } finally { setSending(false) }
+    try { await sendMessage(channel.id, '', reply?.id, [], st.id); startCooldown(); onCancelReply(); onSent() } catch (e) { if (!undeliverable(e, { content: '', reply_to: reply?.id ?? null, attachment_ids: [], sticker_id: st.id })) pushToast((e as Error).message, 'error') } finally { setSending(false) }
   }
   // Voice messages: hold state for the recorder bar that replaces the text box while recording.
   const recorder = useRef<VoiceRecorder | null>(null)
@@ -378,7 +404,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   ]
   const sendGif = async (g: { url: string }) => {
     setSending(true)
-    try { await sendMessage(channel.id, g.url, reply?.id); onCancelReply(); onSent() } catch (e) { if (!undeliverable(e, { content: g.url, reply_to: reply?.id ?? null, attachment_ids: [], sticker_id: null })) pushToast((e as Error).message, 'error') } finally { setSending(false) }
+    try { await sendMessage(channel.id, g.url, reply?.id); startCooldown(); onCancelReply(); onSent() } catch (e) { if (!undeliverable(e, { content: g.url, reply_to: reply?.id ?? null, attachment_ids: [], sticker_id: null })) pushToast((e as Error).message, 'error') } finally { setSending(false) }
   }
 
   if (!canSend) {
@@ -402,6 +428,11 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             <div className="text-xl font-bold">Upload to {name}</div>
             <div className="text-sm text-text-2 mt-1">Drop files to attach them to your message</div>
           </div>
+        </div>
+      )}
+      {slow > 0 && (
+        <div className={`absolute -top-5 right-5 h-5 z-10 flex items-center gap-1 text-xs ${cooling ? 'text-text-0 font-semibold' : 'text-text-2'}`} title={slowExempt ? `Slowmode is ${shortDuration(slow)}, but you are exempt` : `Slowmode is on: one message every ${shortDuration(slow)}`} data-slowmode={cooling ? 'cooling' : 'on'}>
+          <Timer size={13} />{cooling ? shortDuration((coolUntil - now) / 1000) : slowExempt ? 'Slowmode (exempt)' : `Slowmode ${shortDuration(slow)}`}
         </div>
       )}
       <div className="absolute -top-5 left-5 right-5 h-5 text-xs text-text-1 flex items-center gap-1.5 pointer-events-none" data-typing-row>

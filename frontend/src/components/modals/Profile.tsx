@@ -62,10 +62,7 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
   const dm = async () => {
     try { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: userId }); upsertChannel(c); onClose(); navigate(`/channels/@me/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') }
   }
-  const kick = () => openModal({
-    kind: 'confirm', title: `Kick ${user.display_name}`, body: `Are you sure you want to kick ${user.display_name} from ${guild?.name}? They can rejoin with a new invite.`, danger: true, confirmLabel: 'Kick',
-    action: async () => { try { await api.delete(`/guilds/${inGuild}/members/${userId}`); removeMember(inGuild!, userId) } catch (e) { pushToast((e as Error).message, 'error') } },
-  })
+  const kick = () => openModal({ kind: 'kick', guildId: inGuild!, userId })
   const ban = () => openModal({ kind: 'ban', guildId: inGuild!, userId })
   const relAct = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
   const addFriend = () => relAct(() => api.post('/users/@me/relationships', { user_id: userId }))
