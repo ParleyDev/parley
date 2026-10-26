@@ -901,6 +901,9 @@ pub struct DmChannel {
     /// This viewer closed it ("Close DM"): hidden from their list until a new message arrives.
     #[serde(default)]
     pub closed: bool,
+    /// Why the spam filter put it in Spam (only while request_state is 'spam').
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spam_reasons: Vec<String>,
 }
 
 fn default_everyone() -> String { "everyone".into() }

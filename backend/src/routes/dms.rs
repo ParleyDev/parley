@@ -49,25 +49,79 @@ async fn answer_request(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     Ok(Json(view))
 }
 
-/// Looks like spam: a link plus a brand-new sender account or the usual bait words.
-pub fn looks_spam(content: &str, sender_age_days: i64) -> bool {
-    let lower = content.to_lowercase();
-    let link = lower.contains("http://") || lower.contains("https://") || lower.contains("www.");
-    let bait = ["free nitro", "giveaway", "airdrop", "crypto", "claim your", "steam gift", "discord.gg/"].iter().any(|w| lower.contains(w));
-    link && (sender_age_days < 7 || bait)
+const SHORTENERS: [&str; 12] = ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "cutt.ly", "rb.gy", "ow.ly", "shorturl.at", "tiny.cc", "s.id", "v.gd"];
+const BAIT: [&str; 14] = ["free nitro", "giveaway", "airdrop", "crypto", "claim your", "steam gift", "gift card", "you won", "you've won", "investment", "double your", "verify your account", "account will be suspended", "click here"];
+
+/// The hosts of links in a message, lower-cased.
+fn hosts(content: &str) -> Vec<String> {
+    content.split(|c: char| c.is_whitespace() || c == '(' || c == ')' || c == '<' || c == '>').filter_map(|w| {
+        let w = w.trim_start_matches('[');
+        let rest = w.strip_prefix("https://").or_else(|| w.strip_prefix("http://")).or_else(|| w.strip_prefix("www."))?;
+        let h = rest.split(['/', '?', '#', ':', ']']).next()?.trim_start_matches("www.").to_lowercase();
+        h.contains('.').then_some(h)
+    }).collect()
 }
 
-/// DM spam filter: a suspicious first message from someone still in Message Requests moves the request to
-/// the recipient's Spam folder (filter 'non_friends'), or any suspicious DM does (filter 'all'). The message
-/// is still delivered; the recipient sees it under Spam and can mark it as not spam.
+/// Content signals, each with a weight: a message scoring 3 or more is spam. `sender_age_days` and the behaviour
+/// signals come from the caller.
+pub fn content_signals(content: &str, sender_age_days: i64) -> Vec<(u8, &'static str)> {
+    let lower = content.to_lowercase();
+    let hs = hosts(&lower);
+    let mut out = Vec::new();
+    if !hs.is_empty() { out.push((1, "It has a link")) }
+    if hs.iter().any(|h| SHORTENERS.contains(&h.as_str())) { out.push((2, "The link is shortened, hiding where it goes")) }
+    // [https://real.site](https://other.site): the text names one site, the link goes elsewhere.
+    let masked = lower.match_indices("](").any(|(i, _)| {
+        let text = &lower[lower[..i].rfind('[').map(|x| x + 1).unwrap_or(i)..i];
+        let shown = hosts(text); let real = hosts(&lower[i + 2..]);
+        matches!((shown.first(), real.first()), (Some(a), Some(b)) if a != b)
+    });
+    if masked { out.push((3, "The link text names a different site than the link")) }
+    if lower.contains("discord.gg/") || lower.contains("/invite/") { out.push((1, "It invites you to a server")) }
+    if BAIT.iter().any(|w| lower.contains(w)) { out.push((2, "It uses common scam wording")) }
+    if lower.contains("@everyone") || lower.contains("@here") { out.push((1, "It pings everyone, in a DM")) }
+    if !hs.is_empty() && sender_age_days < 7 { out.push((2, "A link from a brand-new account")) }
+    out
+}
+
+/// DM spam filter: a suspicious first message from someone still in Message Requests moves the request to the
+/// recipient's Spam folder (filter 'non_friends'), or any suspicious DM does (filter 'all'). Scores content (links,
+/// shorteners, masked links, scam wording) and behaviour (new account, the same text to many people, others
+/// marking this sender as spam). The message is still delivered; the recipient sees it under Spam with the reasons.
 pub async fn spam_check(state: &AppState, channel_id: Uuid, sender: Uuid, recipient: Uuid, content: &str) {
     let Ok((filter, st)) = sqlx::query_as::<_, (String, String)>(
         "SELECT u.spam_filter, cm.request_state FROM users u JOIN channel_members cm ON cm.user_id = u.id AND cm.channel_id = $2 WHERE u.id = $1").bind(recipient).bind(channel_id).fetch_one(&state.db).await else { return };
     let applies = match filter.as_str() { "all" => st != "spam" && st != "ignored", "non_friends" => st == "pending", _ => false };
     if !applies { return }
     let Ok((age,)) = sqlx::query_as::<_, (f64,)>("SELECT (EXTRACT(EPOCH FROM now() - created_at) / 86400)::float8 FROM users WHERE id = $1").bind(sender).fetch_one(&state.db).await else { return };
-    if !looks_spam(content, age as i64) { return }
-    let _ = sqlx::query("UPDATE channel_members SET request_state = 'spam' WHERE channel_id = $1 AND user_id = $2").bind(channel_id).bind(recipient).execute(&state.db).await;
+    let mut signals = content_signals(content, age as i64);
+    // Blocked domains (the instance's list of known scam and IP-logger sites).
+    let hs = hosts(&content.to_lowercase());
+    if !hs.is_empty() {
+        if let Ok((n,)) = sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM blocked_domains WHERE domain = ANY($1)").bind(&hs).fetch_one(&state.db).await {
+            if n > 0 { signals.push((3, "The link goes to a known harmful site")) }
+        }
+    }
+    // The same text to several other people in the last hour.
+    if content.trim().chars().count() >= 8 {
+        if let Ok((n,)) = sqlx::query_as::<_, (i64,)>(
+            "SELECT COUNT(DISTINCT m.channel_id) FROM messages m JOIN channels c ON c.id = m.channel_id
+             WHERE m.author_id = $1 AND c.guild_id IS NULL AND m.channel_id <> $2 AND m.content = $3 AND m.created_at > now() - interval '1 hour'")
+            .bind(sender).bind(channel_id).bind(content).fetch_one(&state.db).await {
+            if n >= 3 { signals.push((3, "The same message went to many people")) }
+        }
+    }
+    // Other people put this sender's DMs in Spam recently.
+    if let Ok((n,)) = sqlx::query_as::<_, (i64,)>(
+        "SELECT COUNT(DISTINCT r.user_id) FROM channel_members r JOIN channel_members s ON s.channel_id = r.channel_id AND s.user_id = $1
+         JOIN channels c ON c.id = r.channel_id WHERE c.kind = 'dm' AND r.user_id <> $1 AND r.request_state = 'spam' AND c.created_at > now() - interval '30 days'")
+        .bind(sender).fetch_one(&state.db).await {
+        if n >= 2 { signals.push((2, "Other people's DMs from them went to Spam")) }
+    }
+    let score: u32 = signals.iter().map(|s| s.0 as u32).sum();
+    if score < 3 { return }
+    let reasons: Vec<&str> = signals.iter().filter(|s| s.1 != "It has a link" || signals.len() == 1).map(|s| s.1).collect();
+    let _ = sqlx::query("UPDATE channel_members SET request_state = 'spam', spam_reasons = $3 WHERE channel_id = $1 AND user_id = $2").bind(channel_id).bind(recipient).bind(&reasons).execute(&state.db).await;
     if let Ok(v) = dm_view(&state.db, channel_id, recipient).await { state.hub.emit_users(vec![recipient], "CHANNEL_UPDATE", json!(v)); }
 }
 
@@ -83,12 +137,12 @@ pub async fn accept_requests_between(db: &PgPool, a: Uuid, b: Uuid) -> AppResult
 }
 
 /// id, guild, name, kind, topic, position, created, last message, owner, icon, request state, e2ee.
-type DmRow = (Uuid, Option<Uuid>, String, String, String, i32, DateTime<Utc>, Option<DateTime<Utc>>, Option<Uuid>, Option<String>, String, bool, bool);
+type DmRow = (Uuid, Option<Uuid>, String, String, String, i32, DateTime<Utc>, Option<DateTime<Utc>>, Option<Uuid>, Option<String>, String, bool, bool, Vec<String>);
 
 pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel>> {
     let channels: Vec<DmRow> = sqlx::query_as(
         "SELECT c.id, c.guild_id, c.name, c.kind, c.topic, c.position, c.created_at,
-                (SELECT MAX(created_at) FROM messages WHERE channel_id = c.id), c.owner_id, c.icon_url, cm.request_state, c.e2ee, cm.closed
+                (SELECT MAX(created_at) FROM messages WHERE channel_id = c.id), c.owner_id, c.icon_url, cm.request_state, c.e2ee, cm.closed, cm.spam_reasons
          FROM channels c JOIN channel_members cm ON cm.channel_id = c.id
          WHERE cm.user_id = $1 AND c.guild_id IS NULL
          ORDER BY 8 DESC NULLS LAST, c.created_at DESC",
@@ -97,7 +151,7 @@ pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel
     .fetch_all(db)
     .await?;
     let mut out = Vec::with_capacity(channels.len());
-    for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state, e2ee, closed) in channels {
+    for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state, e2ee, closed, spam_reasons) in channels {
         let recipients = recipients_for(db, id, uid).await?;
         out.push(DmChannel {
             channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, spoiler: false, video_quality: String::new(), permissions_synced: None, forum_layout: String::new(), forum_sort: String::new(), forum_require_tag: false, forum_default_reaction: String::new(), news: false, media: false, audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, e2ee, rate_limit_per_user: 0, user_limit: 0, voice_status: String::new(), engineer_ids: vec![], overwrites: vec![] },
@@ -105,6 +159,7 @@ pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel
             last_message_at: last,
             request_state,
             closed,
+            spam_reasons,
         });
     }
     Ok(out)
@@ -126,8 +181,8 @@ async fn recipients_for(db: &PgPool, channel_id: Uuid, uid: Uuid) -> AppResult<V
 pub async fn dm_view(db: &PgPool, channel_id: Uuid, uid: Uuid) -> AppResult<DmChannel> {
     let channel = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(channel_id).fetch_one(db).await?;
     let last: Option<(Option<DateTime<Utc>>,)> = sqlx::query_as("SELECT MAX(created_at) FROM messages WHERE channel_id = $1").bind(channel_id).fetch_optional(db).await?;
-    let closed: bool = sqlx::query_as::<_, (bool,)>("SELECT closed FROM channel_members WHERE channel_id = $1 AND user_id = $2").bind(channel_id).bind(uid).fetch_optional(db).await?.map(|r| r.0).unwrap_or(false);
-    Ok(DmChannel { channel, recipients: recipients_for(db, channel_id, uid).await?, last_message_at: last.and_then(|l| l.0), request_state: request_state_of(db, channel_id, uid).await?, closed })
+    let (closed, spam_reasons): (bool, Vec<String>) = sqlx::query_as("SELECT closed, spam_reasons FROM channel_members WHERE channel_id = $1 AND user_id = $2").bind(channel_id).bind(uid).fetch_optional(db).await?.unwrap_or((false, vec![]));
+    Ok(DmChannel { channel, recipients: recipients_for(db, channel_id, uid).await?, last_message_at: last.and_then(|l| l.0), request_state: request_state_of(db, channel_id, uid).await?, closed, spam_reasons })
 }
 
 /// accepted / pending / ignored for one member of a DM channel (accepted when not a member at all).
@@ -379,7 +434,7 @@ async fn open_dm(
 
     // Opening a DM you closed brings it back to your list.
     sqlx::query("UPDATE channel_members SET closed = false WHERE channel_id = $1 AND user_id = $2").bind(channel.id).bind(uid).execute(&state.db).await?;
-    let dm = DmChannel { channel: channel.clone(), recipients: vec![recipient], last_message_at: last.and_then(|l| l.0), request_state: "accepted".into(), closed: false };
+    let dm = DmChannel { spam_reasons: vec![], channel: channel.clone(), recipients: vec![recipient], last_message_at: last.and_then(|l| l.0), request_state: "accepted".into(), closed: false };
 
     if created {
         // Notify both sides; each side gets the channel with the *other* party as recipient.
@@ -388,8 +443,22 @@ async fn open_dm(
             .fetch_one(&state.db)
             .await?;
         state.hub.emit_users(vec![uid], "CHANNEL_CREATE", json!(dm));
-        let other_view = DmChannel { channel: channel.clone(), recipients: vec![me], last_message_at: None, request_state: request_state_of(&state.db, channel.id, req.recipient_id).await?, closed: false };
+        let other_view = DmChannel { spam_reasons: vec![], channel: channel.clone(), recipients: vec![me], last_message_at: None, request_state: request_state_of(&state.db, channel.id, req.recipient_id).await?, closed: false };
         state.hub.emit_users(vec![req.recipient_id], "CHANNEL_CREATE", json!(other_view));
     }
     Ok((if created { StatusCode::CREATED } else { StatusCode::OK }, Json(dm)))
+}
+
+#[cfg(test)]
+mod spam_tests {
+    use super::content_signals;
+    fn score(s: &str, age: i64) -> u32 { content_signals(s, age).iter().map(|x| x.0 as u32).sum() }
+    #[test]
+    fn scores() {
+        assert!(score("FREE NITRO here https://totally.legit/claim", 0) >= 3);
+        assert!(score("look https://bit.ly/abc", 365) >= 3);
+        assert!(score("[https://github.com/login](https://evil.example/steal)", 365) >= 3);
+        assert!(score("check out https://example.com/article", 365) < 3);
+        assert!(score("hello there!", 0) < 3);
+    }
 }

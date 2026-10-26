@@ -18,7 +18,7 @@ export default function RequestsView() {
       {u && <Avatar user={u} size={40} />}
       <button type="button" onClick={() => navigate(`/channels/@me/${d.id}`)} className="min-w-0 flex-1 text-left">
         <div className="font-semibold truncate">{u?.display_name ?? 'Unknown'}</div>
-        <div className="text-xs text-text-2 truncate">{isSpam ? 'Looks like spam: a link from a new or unknown account' : `@${u?.username} wants to send you a message`} · click to read it</div>
+        <div className="text-xs text-text-2 truncate" data-spam-reasons={isSpam ? (d.spam_reasons ?? []).join('|') : undefined}>{isSpam ? `Looks like spam: ${(d.spam_reasons?.length ? d.spam_reasons.join('; ') : 'a suspicious link').toLowerCase()}` : `@${u?.username} wants to send you a message`} · click to read it</div>
       </button>
       <RequestActions dm={d} compact />
     </div>

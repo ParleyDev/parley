@@ -222,6 +222,8 @@ export interface Role {
 export interface DmChannel extends Channel {
   /** Everyone except you. */
   recipients: User[]
+  /** Why the spam filter put it in Spam. */
+  spam_reasons?: string[]
   last_message_at: string | null
   /** Groups: who may remove members. */
   owner_id: string | null
