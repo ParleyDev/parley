@@ -124,6 +124,9 @@ export interface Guild {
   afk_timeout?: number
   rules_channel_id?: string | null
   welcome_screen?: WelcomeScreen
+  widget_enabled?: boolean
+  widget_invite?: string
+  invite_splash_url?: string | null
 }
 
 /** One entry of the user's server bar: a server, or a folder of servers. */
@@ -162,6 +165,8 @@ export interface Channel {
   spoiler?: boolean
   /** Voice channels: camera quality, 'auto' (720p) or 'full' (1080p). */
   video_quality?: 'auto' | 'full' | ''
+  /** In a category: follows the category's permissions (no overwrites of its own). */
+  permissions_synced?: boolean
 }
 
 /** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */

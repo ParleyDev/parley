@@ -1,3 +1,4 @@
+import WidgetPage from './pages/Widget'
 import { LogoNeon } from './components/Logo'
 import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/confirm-email" element={<VerifyPage mode="change" />} />
         <Route path="/forgot" element={token ? <Navigate to="/channels/@me" replace /> : <ForgotPage />} />
         <Route path="/reset" element={<ResetPage />} />
+        <Route path="/widget/:guildId" element={<WidgetPage />} />
         <Route path="/invite/:code" element={token ? <InvitePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/oauth2/authorize" element={token ? <OAuthPage /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />} />
         <Route path="/oauth2/mcp/authorize" element={token ? <McpAuthorizePage /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />} />

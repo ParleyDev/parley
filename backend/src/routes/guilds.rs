@@ -48,7 +48,7 @@ pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
     v
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url";
 pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -218,6 +218,11 @@ struct UpdateGuild {
     #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
     rules_channel_id: Option<Option<Uuid>>,
     welcome_screen: Option<WelcomeScreen>,
+    widget_enabled: Option<bool>,
+    /// An invite code of this server for the widget's Join button ('' for none).
+    widget_invite: Option<String>,
+    /// Empty string clears.
+    invite_splash_url: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -301,6 +306,21 @@ async fn update_guild(
         }
         None => None,
     };
+    if let Some(code) = req.widget_invite.as_deref().filter(|c| !c.is_empty()) {
+        let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM invites WHERE guild_id = $1 AND code = $2").bind(id).bind(code).fetch_optional(&state.db).await?;
+        if ok.is_none() { return Err(AppError::BadRequest("Pick one of this server's invites".into())) }
+    }
+    crate::routes::users::validate_image_max(&req.invite_splash_url, 2 * 1024 * 1024)?;
+    if req.widget_enabled.is_some() || req.widget_invite.is_some() || req.invite_splash_url.is_some() {
+        let old: (Option<String>,) = sqlx::query_as("SELECT invite_splash_url FROM guilds WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+        sqlx::query("UPDATE guilds SET widget_enabled = COALESCE($2, widget_enabled), widget_invite = COALESCE($3, widget_invite),
+                       invite_splash_url = CASE WHEN $4::text IS NULL THEN invite_splash_url WHEN $4 = '' THEN NULL ELSE $4 END WHERE id = $1")
+            .bind(id).bind(req.widget_enabled).bind(&req.widget_invite).bind(&req.invite_splash_url).execute(&state.db).await?;
+        if req.invite_splash_url.is_some() {
+            let new = req.invite_splash_url.as_deref().filter(|s| !s.is_empty());
+            crate::routes::images::release_replaced(&state, old.0.as_deref(), new).await;
+        }
+    }
     if req.afk_channel_id.is_some() || req.afk_timeout.is_some() || req.rules_channel_id.is_some() || welcome.is_some() {
         sqlx::query(
             "UPDATE guilds SET afk_channel_id = CASE WHEN $2 THEN $3 ELSE afk_channel_id END, afk_timeout = COALESCE($4, afk_timeout),
@@ -361,6 +381,8 @@ async fn update_guild(
     if let Some(v) = req.afk_timeout { changed.insert("afk_timeout".into(), json!(v)); }
     if req.rules_channel_id.is_some() { changed.insert("rules_channel".into(), json!(g.rules_channel_id)); }
     if welcome.is_some() { changed.insert("welcome_screen".into(), json!(true)); }
+    if let Some(v) = req.widget_enabled { changed.insert("widget".into(), json!(v)); }
+    if req.invite_splash_url.is_some() { changed.insert("invite_splash".into(), json!(g.invite_splash_url.is_some())); }
     if let Some(v) = req.mfa_level { changed.insert("mfa_required".into(), json!(v == 1)); }
     if let Some(v) = req.invites_paused { changed.insert("invites_paused".into(), json!(v)); }
     if let Some(h) = req.pause_dms_hours { changed.insert("dms_paused_hours".into(), json!(h)); }

@@ -26,6 +26,7 @@ export default function EditCategoryModal({ onClose, channelId }: { onClose: () 
       <form id="edit-category" onSubmit={save}>
         <label className="label">Category name</label>
         <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required data-category-name />
+        <button type="button" className="btn-ghost mt-3 w-full justify-center bg-bg-3" onClick={() => openModal({ kind: 'channelSettings', channelId, tab: 'permissions' })} data-category-perms>Edit Permissions</button>
       </form>
     </Modal>
   )

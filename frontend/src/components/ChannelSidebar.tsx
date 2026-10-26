@@ -15,7 +15,7 @@ import { BellOff, BookOpenCheck, DoorOpen, Eye, EyeOff, Pin, PinOff } from 'luci
 import { togglePinned } from '../lib/pins'
 
 const NO_PINS: string[] = []
-import { has, P } from '../lib/perms'
+import { EMPTY_ROLES, has, P } from '../lib/perms'
 import StyledName from './StyledName'
 import { api } from '../lib/api'
 import { getPrefs } from '../lib/prefs'
@@ -92,13 +92,17 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     const target = dir === 'above' ? rows.filter((a) => a.getBoundingClientRect().bottom < view.top + 8).pop() : rows.find((a) => a.getBoundingClientRect().top > view.bottom - 8)
     target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }
+  const viewAs = useStore((s) => (s.viewAs?.guildId === guildId ? s.viewAs : null))
+  const allRoles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
   const canInvite = has(perms, P.CREATE_INVITE)
   const canManageGuild = has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_ROLES)
   const canCreate = has(perms, P.MANAGE_CHANNELS)
   const canEditChannel = (id: string) => has(chanPerms[id] ?? 0, P.MANAGE_CHANNELS) || has(chanPerms[id] ?? 0, P.MANAGE_ROLES)
-  const all = Object.values(channels).filter((c) => c.guild_id === guildId).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+  // View Server as Role hides what those roles can't see (categories stay while something in them is visible).
+  const viewHidden = (c: Channel) => !!viewAs && c.kind !== 'category' && !has(myChannelPerms(useStore.getState(), c.id), P.VIEW_CHANNEL)
+  const all = Object.values(channels).filter((c) => c.guild_id === guildId && !viewHidden(c)).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
   const categories = all.filter((c) => c.kind === 'category')
   const list = all.filter((c) => c.kind !== 'category' && c.kind !== 'thread')
   const catIds = new Set(categories.map((c) => c.id))
@@ -259,6 +263,12 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
         )}
       </div>
 
+      {viewAs && (
+        <div className="flex items-center gap-2 bg-accent/90 px-3 py-2 text-xs text-white" data-view-as={viewAs.roleIds.join(',')}>
+          <span className="min-w-0 flex-1 truncate">Viewing as <b>{viewAs.roleIds.map((r) => allRoles[r]?.name ?? 'role').join(', ') || '@everyone'}</b></span>
+          <button type="button" onClick={() => useStore.getState().setViewAs(null)} className="shrink-0 rounded bg-white/20 px-2 py-0.5 font-semibold hover:bg-white/30" data-view-as-exit>Back</button>
+        </div>
+      )}
       <div className="relative flex-1 min-h-0 flex flex-col">
       {offscreen.above > 0 && <button type="button" onClick={() => jumpUnread('above')} className={`absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold shadow-lg ${offscreen.above === 2 ? 'bg-danger text-white' : 'bg-bg-4 text-text-0'}`} data-unread-pill="above">{offscreen.above === 2 ? 'New mentions' : 'Unread'} ↑</button>}
       {offscreen.below > 0 && <button type="button" onClick={() => jumpUnread('below')} className={`absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold shadow-lg ${offscreen.below === 2 ? 'bg-danger text-white' : 'bg-bg-4 text-text-0'}`} data-unread-pill="below">{offscreen.below === 2 ? 'New mentions' : 'Unread'} ↓</button>}

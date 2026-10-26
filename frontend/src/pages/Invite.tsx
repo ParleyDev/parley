@@ -8,7 +8,7 @@ import type { Channel, Guild } from '../lib/types'
 import { colorFor, initials } from '../lib/format'
 import { markJoined } from '../lib/welcome'
 
-interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; rules?: string; rules_required?: boolean }; expired: boolean; already_member: boolean; banned: boolean; paused?: boolean }
+interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; rules?: string; rules_required?: boolean; splash_url?: string | null; description?: string }; expired: boolean; already_member: boolean; banned: boolean; paused?: boolean }
 
 export default function InvitePage() {
   const { code = '' } = useParams()
@@ -33,7 +33,7 @@ export default function InvitePage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto flex items-center-safe justify-center bg-bg-0 p-4">
+    <div className="relative h-full overflow-y-auto flex items-center-safe justify-center bg-bg-0 bg-cover bg-center p-4" style={p?.guild.splash_url ? { backgroundImage: `linear-gradient(rgb(0 0 0 / .45), rgb(0 0 0 / .45)), url(${p.guild.splash_url})` } : undefined} data-invite-splash={p?.guild.splash_url ? '1' : '0'}>
       <div className="pop w-full max-w-sm rounded-2xl bg-bg-1 border border-line p-8 text-center shadow-2xl">
         {err ? (
           <>

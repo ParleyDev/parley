@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronUp, Copy, Plus, Shield, Trash2 } from 'lucide-react'
+import RoleMembers from './RoleMembers'
+import { ChevronDown, ChevronUp, Copy, Eye, Plus, Shield, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { prepareImage, uploadImage } from '../../../lib/upload'
@@ -44,6 +45,8 @@ export default function RolesTab({ guildId }: { guildId: string }) {
     try { setDraft({ ...draft, icon: (await uploadImage('icon', await prepareImage(f, 64, 64))).url }) } catch (e) { pushToast((e as Error).message, 'error') } finally { setIconBusy(false) }
   }
   const [busy, setBusy] = useState(false)
+  const [pane, setPane] = useState<'display' | 'members'>('display')
+  const [dragId, setDragId] = useState<string | null>(null)
   if (!guild || !ctx) return null
   const dirty = !!(role && draft && (draft.name !== role.name || JSON.stringify(draft.name_style) !== JSON.stringify(styleOfRole(role)) || draft.permissions !== role.permissions || draft.hoist !== role.hoist || draft.icon !== (role.icon ?? null) || draft.mentionable !== !!role.mentionable))
 
@@ -89,7 +92,11 @@ export default function RolesTab({ guildId }: { guildId: string }) {
             {list.map((r) => {
               const mine = canManage && me && canManageRole(ctx, me.id, r) && r.id !== guildId
               return (
-                <div key={r.id} className={`group flex items-center gap-2 rounded-md pl-2 pr-1 py-1.5 cursor-pointer ${selected === r.id ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3'}`} onClick={() => setSelected(r.id)}>
+                <div key={r.id} className={`group flex items-center gap-2 rounded-md pl-2 pr-1 py-1.5 cursor-pointer ${selected === r.id ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3'} ${dragId === r.id ? 'opacity-40' : ''}`} onClick={() => setSelected(r.id)}
+                  draggable={!!mine} onDragStart={(e) => { setDragId(r.id); e.dataTransfer.effectAllowed = 'move' }} onDragEnd={() => setDragId(null)}
+                  onDragOver={(e) => { if (dragId && dragId !== r.id && r.id !== guildId && me && canManageRole(ctx, me.id, r)) e.preventDefault() }}
+                  onDrop={(e) => { e.preventDefault(); const from = dragId && roles[dragId]; setDragId(null); if (from && from.position !== r.position) void api.patch(`/guilds/${guildId}/roles/${from.id}`, { position: r.position }).catch((err: Error) => pushToast(err.message, 'error')) }}
+                  data-role-row={r.id}>
                   <span className="h-3 w-3 rounded-full shrink-0" style={{ background: roleDot(r) }} />
                   {r.icon && (r.icon.startsWith('/api/images/') ? <img src={r.icon} alt="" className="h-4 w-4 shrink-0 object-contain" /> : <span className="shrink-0 text-sm leading-none">{r.icon}</span>)}
                   <span className={`truncate flex-1 text-sm font-medium ${roleLook(r).className}`} style={roleLook(r).style}>{r.name}</span>
@@ -113,10 +120,17 @@ export default function RolesTab({ guildId }: { guildId: string }) {
               <Shield size={18} style={{ color: role.color ?? undefined }} />
               <h2 className="text-lg font-bold truncate">{role.id === guildId ? '@everyone' : role.name}</h2>
               {!editable && <span className="ml-auto text-xs text-text-2 rounded bg-bg-3 px-2 py-0.5">Read only</span>}
+              <button onClick={() => { useStore.getState().setViewAs({ guildId, roleIds: role.id === guildId ? [] : [role.id] }); useStore.getState().closeModal(); pushToast(`Viewing the server as ${role.id === guildId ? '@everyone' : role.name}`) }} className={`${editable && role.id !== guildId ? '' : 'ml-auto'} text-text-2 hover:bg-bg-3 hover:text-text-0 rounded-md p-1.5 order-last`} title="View Server As Role" data-role-view-as><Eye size={16} /></button>
               {editable && role.id !== guildId && <button onClick={() => duplicate(role)} className="ml-auto text-text-2 hover:bg-bg-3 hover:text-text-0 rounded-md p-1.5" title="Duplicate Role" data-role-duplicate><Copy size={16} /></button>}
               {editable && role.id !== guildId && <button onClick={() => del(role)} className="text-danger hover:bg-danger/10 rounded-md p-1.5" title="Delete Role"><Trash2 size={16} /></button>}
             </div>
 
+            {role.id !== guildId && (
+              <div className="mb-5 flex gap-1 border-b border-line" data-role-panes>
+                {(['display', 'members'] as const).map((k) => <button key={k} type="button" onClick={() => setPane(k)} className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium ${pane === k ? 'border-accent text-text-0' : 'border-transparent text-text-2 hover:text-text-0'}`} data-role-pane={k}>{k === 'display' ? 'Display & Permissions' : `Members${counts[role.id] !== undefined ? ` (${counts[role.id]})` : ''}`}</button>)}
+              </div>
+            )}
+            {pane === 'members' && role.id !== guildId ? <RoleMembers guildId={guildId} roleId={role.id} editable={editable} /> : <>
             {role.id !== guildId && (
               <div className="space-y-5 mb-6">
                 <div><label className="label">Role name</label><input className="input" value={draft.name} disabled={!editable} onChange={(e) => setDraft({ ...draft, name: e.target.value })} maxLength={100} /></div>
@@ -171,6 +185,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
               </div>
             ))}
 
+            </>}
             {dirty && (
               <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
                 <span className="text-sm flex-1">Careful — you have unsaved changes!</span>

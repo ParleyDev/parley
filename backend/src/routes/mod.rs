@@ -34,6 +34,7 @@ pub mod storage;
 pub mod threads;
 pub mod users;
 pub mod voice;
+pub mod widget;
 
 use crate::state::AppState;
 use axum::Router;
@@ -63,6 +64,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(guilds::router())
         .merge(modtools::router())
         .merge(calls::router())
+        .merge(widget::router())
         .merge(invites::router())
         .merge(roles::router())
         .merge(relationships::router())

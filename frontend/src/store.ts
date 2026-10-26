@@ -139,6 +139,9 @@ interface State {
   voiceInvite: VoiceInvite | null
   /** DM calls whose ring you declined or ignored (on any of your devices), until someone rings you again. */
   callIgnored: Record<string, true>
+  /** View Server as Role: permissions in this server are worked out as if you only had these roles. */
+  viewAs: { guildId: string; roleIds: string[] } | null
+  setViewAs: (v: { guildId: string; roleIds: string[] } | null) => void
   setCallIgnored: (channelId: string, on: boolean) => void
   setVoiceInvite: (v: VoiceInvite | null) => void
   /** Unread messages per channel that mention me (direct, role or @everyone). */
@@ -332,6 +335,8 @@ export const useStore = create<State>((set, get) => ({
   bookmarks: {},
   voiceInvite: null,
   callIgnored: {},
+  viewAs: null,
+  setViewAs: (viewAs) => set({ viewAs }),
   setCallIgnored: (channelId, on) => set((s) => { const callIgnored = { ...s.callIgnored }; if (on) callIgnored[channelId] = true; else delete callIgnored[channelId]; return { callIgnored } }),
   setVoiceInvite: (voiceInvite) => set({ voiceInvite }),
   mentionCounts: {},
@@ -937,13 +942,23 @@ export function voiceParticipants(s: Pick<State, 'voiceStates'>, channelId: stri
   return Object.values(s.voiceStates).filter((v) => v.channel_id === channelId)
 }
 
-type PermState = Pick<State, 'guilds' | 'roles' | 'members' | 'user' | 'channels'>
+type PermState = Pick<State, 'guilds' | 'roles' | 'members' | 'user' | 'channels'> & Partial<Pick<State, 'viewAs'>>
+
+/** Permission context for me in a server, honouring View Server as Role (not owner, only those roles, no timeout). */
+function myCtx(s: PermState, guildId: string) {
+  const guild = s.guilds[guildId]
+  if (!guild || !s.user) return null
+  const member = s.members[guildId]?.[s.user.id]
+  const va = s.viewAs?.guildId === guildId ? s.viewAs : null
+  if (va) return { guild: { ...guild, owner_id: '' }, roles: s.roles[guildId] ?? {}, member: member ? { ...member, roles: va.roleIds, timeout_until: null } : ({ user_id: s.user.id, roles: va.roleIds } as unknown as Member), mfa: undefined }
+  return { guild, roles: s.roles[guildId] ?? {}, member, mfa: !!s.user.mfa_enabled }
+}
 
 /** My guild-wide permissions (0 when not a member or not loaded). */
 export function myGuildPerms(s: PermState, guildId: string): number {
-  const guild = s.guilds[guildId]
-  if (!guild || !s.user) return 0
-  return guildPerms({ guild, roles: s.roles[guildId] ?? {}, member: s.members[guildId]?.[s.user.id], mfa: !!s.user.mfa_enabled }, s.user.id)
+  const ctx = myCtx(s, guildId)
+  if (!ctx || !s.user) return 0
+  return guildPerms(ctx, s.user.id)
 }
 
 /** My permissions inside a channel. DMs grant everything. */
@@ -951,9 +966,9 @@ export function myChannelPerms(s: PermState, channelId: string): number {
   const c = s.channels[channelId]
   if (!c) return s.user ? ALL_PERMS : 0
   if (!c.guild_id) return ALL_PERMS
-  const guild = s.guilds[c.guild_id]
-  if (!guild || !s.user) return 0
-  return channelPerms({ guild, roles: s.roles[c.guild_id] ?? {}, member: s.members[c.guild_id]?.[s.user.id], mfa: !!s.user.mfa_enabled }, s.user.id, c)
+  const ctx = myCtx(s, c.guild_id)
+  if (!ctx || !s.user) return 0
+  return channelPerms(ctx, s.user.id, c)
 }
 const ALL_PERMS = -1 >>> 1
 

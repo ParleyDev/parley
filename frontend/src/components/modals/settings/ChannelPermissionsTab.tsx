@@ -70,10 +70,18 @@ export default function ChannelPermissionsTab({ channelId }: { channelId: string
     put(selected, sel.kind, allow, deny)
   }
 
+  const parent = channel.parent_id ? useStore.getState().channels[channel.parent_id] : undefined
+  const sync = async () => { try { await api.post(`/channels/${channelId}/permissions-sync`) ; pushToast(`Synced with ${parent?.name ?? 'the category'}`) } catch (e) { pushToast((e as Error).message, 'error') } }
   return (
     <div>
-      <h1 className="text-xl font-bold">Channel Permissions</h1>
-      <p className="text-sm text-text-2 mt-1">Use permissions to customise who can do what in this channel.</p>
+      <h1 className="text-xl font-bold">{channel.kind === 'category' ? 'Category Permissions' : 'Channel Permissions'}</h1>
+      <p className="text-sm text-text-2 mt-1">{channel.kind === 'category' ? 'Channels in this category that are synced follow these permissions.' : 'Use permissions to customise who can do what in this channel.'}</p>
+      {parent && (
+        <div className={`mt-4 flex items-center gap-3 rounded-xl border px-4 py-3 text-sm ${channel.permissions_synced ? 'border-success/40 bg-success/10' : 'border-warn/40 bg-warn/10'}`} data-perm-sync={channel.permissions_synced ? 'synced' : 'unsynced'}>
+          <span className="flex-1">{channel.permissions_synced ? <>Permissions synced with category: <b>{parent.name}</b></> : <>This channel has its own permissions, not <b>{parent.name}</b>'s.</>}</span>
+          {!channel.permissions_synced && has(myPerms, P.MANAGE_ROLES) && <button type="button" className="btn-primary py-1" onClick={sync} data-perm-sync-now>Sync Now</button>}
+        </div>
+      )}
 
       <div className="mt-5 rounded-xl bg-bg-0/50 border border-line p-4">
         <Toggle label="Private channel" checked={isPrivate} onChange={setPrivate} disabled={!isAdmin && !has(myPerms, P.VIEW_CHANNEL)} />

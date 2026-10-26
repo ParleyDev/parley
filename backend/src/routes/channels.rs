@@ -42,6 +42,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/typing", post(typing))
         .route("/channels/:id/read", put(mark_read))
         .route("/channels/:id/permissions/:target", put(set_overwrite).delete(delete_overwrite))
+        .route("/channels/:id/permissions-sync", post(sync_permissions))
 }
 
 /// Verify the user can access the channel. Returns the channel.
@@ -986,6 +987,19 @@ struct SetOverwrite {
 }
 
 /// Create or replace a permission overwrite for a role or member on a guild channel.
+/// `POST /channels/:id/permissions-sync`: drop this channel's own overwrites so it follows its category again.
+async fn sync_permissions(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("DM channels have no permissions".into()))?;
+    perms::check(p, perms::MANAGE_ROLES)?;
+    if c.parent_id.is_none() { return Err(AppError::BadRequest("This channel isn't in a category".into())) }
+    let before = perms::visibility(&state.db, gid).await?;
+    sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1").bind(id).execute(&state.db).await?;
+    perms::resync_visibility(&state, gid, &before).await?;
+    crate::audit::guild(&state, gid, uid, "channel.permissions_sync", "channel", Some(id), &c.name, json!({})).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn set_overwrite(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,

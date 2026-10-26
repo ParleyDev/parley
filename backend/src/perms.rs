@@ -266,6 +266,7 @@ pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResu
     }
     for c in channels.iter_mut() {
         let own = by_channel.get(&c.id).cloned().unwrap_or_default();
+        c.permissions_synced = c.parent_id.map(|_| own.is_empty());
         c.overwrites = if own.is_empty() {
             match c.parent_id.and_then(|p| by_channel.get(&p)) {
                 // Re-key so the client treats them as this channel's effective overwrites.
@@ -508,6 +509,9 @@ mod tests {
             afk_timeout: 300,
             rules_channel_id: None,
             welcome_screen: serde_json::json!({}),
+            widget_enabled: false,
+            widget_invite: String::new(),
+            invite_splash_url: None,
         };
         let mut everyone = role(gid, 0, DEFAULT_EVERYONE);
         everyone.id = gid; // @everyone shares the guild id

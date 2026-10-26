@@ -290,6 +290,16 @@ pub struct Guild {
     #[sqlx(default)]
     #[serde(default)]
     pub welcome_screen: serde_json::Value,
+    /// Public widget (JSON + embed) and the invite code its Join button uses.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub widget_enabled: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub widget_invite: String,
+    /// Background picture on the server's invite page.
+    #[sqlx(default)]
+    pub invite_splash_url: Option<String>,
 }
 
 fn default_all() -> String { "all".into() }
@@ -360,6 +370,10 @@ pub struct Channel {
     #[sqlx(skip)]
     #[serde(default)]
     pub overwrites: Vec<Overwrite>,
+    /// Channels in a category: whether they follow the category's permissions (no overwrites of their own).
+    #[sqlx(skip)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permissions_synced: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]

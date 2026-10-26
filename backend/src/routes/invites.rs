@@ -25,7 +25,7 @@ const MATCH: &str = "((NOT i.vanity AND i.code = $1) OR (i.vanity AND i.code = l
 const LIVE: &str = "((i.expires_at IS NULL OR i.expires_at > now()) AND (i.max_uses IS NULL OR i.uses < i.max_uses))";
 
 /// guild id, name, icon, member count, live, rules, rules required, invite code.
-type PreviewRow = (Uuid, String, Option<String>, i64, bool, String, bool, String);
+type PreviewRow = (Uuid, String, Option<String>, i64, bool, String, bool, String, Option<String>, String);
 /// guild id, uses, max uses, expiry, invite code.
 type AcceptRow = (Uuid, i32, Option<i32>, Option<chrono::DateTime<chrono::Utc>>, String, Uuid, bool);
 
@@ -187,13 +187,13 @@ async fn preview(
     Path(code): Path<String>,
 ) -> AppResult<Json<Value>> {
     let row: Option<PreviewRow> = sqlx::query_as(&format!(
-        "SELECT g.id, g.name, g.icon_url, (SELECT COUNT(*) FROM guild_members WHERE guild_id = g.id), {LIVE}, g.rules, g.rules_required, i.code
+        "SELECT g.id, g.name, g.icon_url, (SELECT COUNT(*) FROM guild_members WHERE guild_id = g.id), {LIVE}, g.rules, g.rules_required, i.code, g.invite_splash_url, g.description
          FROM invites i JOIN guilds g ON g.id = i.guild_id WHERE {MATCH} ORDER BY i.vanity LIMIT 1"
     ))
     .bind(&code)
     .fetch_optional(&state.db)
     .await?;
-    let (gid, name, icon, count, live, rules, rules_required, code) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
+    let (gid, name, icon, count, live, rules, rules_required, code, splash, description) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
     let already: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2")
         .bind(gid)
         .bind(uid)
@@ -203,7 +203,7 @@ async fn preview(
     let (online_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1 AND user_id = ANY($2)").bind(gid).bind(&online).fetch_one(&state.db).await?;
     Ok(Json(json!({
         "code": code,
-        "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count, "rules": rules, "rules_required": rules_required },
+        "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count, "rules": rules, "rules_required": rules_required, "splash_url": splash, "description": description },
         "expired": !live,
         "already_member": already.is_some(),
         "banned": is_banned(&state.db, gid, uid).await?,
