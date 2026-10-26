@@ -1,7 +1,7 @@
 import { Mic, Video, VideoOff } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '../../../store'
-import { voice } from '../../../lib/voice'
+import { STREAM_QUALITY, voice } from '../../../lib/voice'
 import { keyLabel, supportsSinkId, type VoiceSettings } from '../../../lib/settings'
 import VideoTile from '../../VideoTile'
 
@@ -158,6 +158,13 @@ export default function VoiceVideoTab() {
         </div>
         {preview && <button onClick={togglePreview} className="btn-ghost"><Video size={16} /> Stop Test</button>}
         <Select label="Camera" value={st.cameraDeviceId} onChange={set('cameraDeviceId')} options={devices.cameras} />
+        <div data-stream-quality>
+          <label className="label" htmlFor="stream-quality">Screen share quality</label>
+          <select id="stream-quality" className="input" value={st.streamQuality} onChange={(e) => update({ streamQuality: e.target.value })}>
+            {Object.entries(STREAM_QUALITY).map(([k, q]) => <option key={k} value={k}>{q.label}</option>)}
+          </select>
+          <p className="mt-1 text-xs text-text-2">Applies the next time you share your screen. Higher settings need a faster upload; viewers on slow connections may see it stutter.</p>
+        </div>
       </section>
     </div>
   )

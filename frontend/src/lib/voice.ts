@@ -4,6 +4,7 @@ import type { VoiceState } from './types'
 import { sendOp, type SignalData } from './ws'
 import { supportsSinkId, type VoiceSettings } from './settings'
 import { keepAwake } from './native'
+import { onUserAudio, userAudio } from './userAudio'
 import { api } from './api'
 import { captureConstraints, measure, profileOf, sameProfile, tuneAudioReceiver, tuneAudioSender, tuneOpusSdp, type AudioProfile, type AudioStat } from './audioProfile'
 import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant, type RemoteTrackPublication } from 'livekit-client'
@@ -34,6 +35,14 @@ interface Peer {
 
 const CAMERA_MAX_BITRATE = 1_500_000
 const SCREEN_MAX_BITRATE = 3_000_000
+/** Screen share choices: resolution (height; none keeps the source's), frame rate and the bitrate cap that goes with them. */
+export const STREAM_QUALITY: Record<string, { label: string; height?: number; fps: number; bitrate: number }> = {
+  auto: { label: 'Source resolution, 30 fps (default)', fps: 30, bitrate: SCREEN_MAX_BITRATE },
+  '720p30': { label: '720p, 30 fps (saves bandwidth)', height: 720, fps: 30, bitrate: 2_000_000 },
+  '1080p30': { label: '1080p, 30 fps', height: 1080, fps: 30, bitrate: 4_000_000 },
+  '1080p60': { label: '1080p, 60 fps (smooth motion)', height: 1080, fps: 60, bitrate: 6_000_000 },
+  source60: { label: 'Source resolution, 60 fps', fps: 60, bitrate: 8_000_000 },
+}
 const AUTO_THRESHOLD_DB = -45
 const VAD_HOLD_MS = 400
 const GATE_INTERVAL_MS = 50
@@ -66,6 +75,9 @@ class VoiceManager {
   private screen: MediaStream | null = null
   /** Mesh: peers who clicked Watch Stream on our screen share; only they are sent its video. */
   private watchers = new Set<string>()
+  /** The running screen share's quality (Settings › Voice & Video › Screen share quality). */
+  private screenBitrate = SCREEN_MAX_BITRATE
+  private screenFps = 30
   /** End-to-end encrypted call (channel `e2ee` on): key agreement, and the mesh frame worker. */
   private crypto: CallCrypto | null = null
   private meshCrypto: MeshCrypto | null = null
@@ -88,6 +100,7 @@ class VoiceManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
+      onUserAudio(this.reapplyPeople)
       window.addEventListener('keydown', (e) => this.onKey(e, true), true)
       window.addEventListener('keyup', (e) => this.onKey(e, false), true)
       window.addEventListener('blur', () => { this.pttDown = false; useStore.getState().setPttHeld(false) })
@@ -290,7 +303,9 @@ class VoiceManager {
     }
     if (!navigator.mediaDevices?.getDisplayMedia) { s.pushToast('Screen sharing is not supported in this browser', 'error'); return }
     try {
-      this.screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 30, max: 30 } }, audio: false })
+      const q = STREAM_QUALITY[this.settings.streamQuality] ?? STREAM_QUALITY.auto
+      this.screenBitrate = q.bitrate; this.screenFps = q.fps
+      this.screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: q.fps, max: q.fps }, ...(q.height ? { height: { ideal: q.height, max: q.height } } : {}) }, audio: false })
       playSfx('stream_started')
     } catch (e) {
       if ((e as Error).name !== 'NotAllowedError') s.pushToast(`Screen share failed: ${(e as Error).message}`, 'error')
@@ -622,7 +637,10 @@ class VoiceManager {
 
   private applyOutput(el: HTMLAudioElement) {
     const st = this.settings
-    el.volume = Math.max(0, Math.min(1, st.outputVolume / 100))
+    // A person's own volume (set in their user menu) scales the output volume; sounds have no data-peer.
+    const who = el.dataset.peer ? userAudio(el.dataset.peer) : null
+    el.volume = Math.max(0, Math.min(1, (st.outputVolume / 100) * ((who?.volume ?? 100) / 100)))
+    el.muted = useStore.getState().selfDeaf || !!who?.muted
     if (supportsSinkId) {
       (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(st.outputDeviceId || '').catch(() => {
         if (st.outputDeviceId) useStore.getState().updateVoiceSettings({ outputDeviceId: '' })
@@ -741,7 +759,7 @@ class VoiceManager {
     if (track) {
       const params = t.sender.getParameters()
       if (!params.encodings?.length) params.encodings = [{}]
-      params.encodings[0].maxBitrate = slot === 1 ? SCREEN_MAX_BITRATE : CAMERA_MAX_BITRATE
+      params.encodings[0].maxBitrate = slot === 1 ? this.screenBitrate : CAMERA_MAX_BITRATE
       if (slot === 1) params.degradationPreference = 'maintain-resolution'
       t.sender.setParameters(params).catch(() => {})
     }
@@ -774,7 +792,12 @@ class VoiceManager {
     this.mic?.getAudioTracks().forEach((t) => (t.enabled = !muted))
     if (this.recGain && this.ctx) this.recGain.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.015)
   }
-  private applyDeaf(deaf: boolean) { this.peers.forEach((p) => (p.audio.muted = deaf)); this.sfuAudio.forEach((a) => (a.muted = deaf)) }
+  private applyDeaf(deaf: boolean) {
+    const muted = (el: HTMLAudioElement) => deaf || (!!el.dataset.peer && userAudio(el.dataset.peer).muted)
+    this.peers.forEach((p) => (p.audio.muted = muted(p.audio))); this.sfuAudio.forEach((a) => (a.muted = muted(a)))
+  }
+  /** Someone's volume or local mute changed in their user menu: apply it to whatever is playing them. */
+  private reapplyPeople = () => { this.peers.forEach((p) => this.applyOutput(p.audio)); this.sfuAudio.forEach((a) => this.applyOutput(a)) }
 
   // ---- SFU (LiveKit) ----
 
@@ -869,7 +892,7 @@ class VoiceManager {
     await this.sfuUnpublish(kind)
     const local = new LocalVideoTrack(track, undefined, false)
     try {
-      await this.room.localParticipant.publishTrack(local, { source: kind === 'screen' ? Track.Source.ScreenShare : Track.Source.Camera, simulcast: kind === 'camera', videoEncoding: { maxBitrate: kind === 'screen' ? SCREEN_MAX_BITRATE : CAMERA_MAX_BITRATE, maxFramerate: 30 } })
+      await this.room.localParticipant.publishTrack(local, { source: kind === 'screen' ? Track.Source.ScreenShare : Track.Source.Camera, simulcast: kind === 'camera', videoEncoding: { maxBitrate: kind === 'screen' ? this.screenBitrate : CAMERA_MAX_BITRATE, maxFramerate: kind === 'screen' ? this.screenFps : 30 } })
       if (kind === 'screen') this.sfuScreen = local; else this.sfuCamera = local
     } catch (e) { useStore.getState().pushToast(`Could not publish ${kind}: ${(e as Error).message}`, 'error') }
   }

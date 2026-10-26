@@ -13,6 +13,8 @@ export interface VoiceSettings {
   echoCancellation: boolean
   noiseSuppression: boolean
   autoGainControl: boolean
+  /** Screen share quality (a key of STREAM_QUALITY in voice.ts). */
+  streamQuality: string
 }
 
 export const DEFAULT_SETTINGS: VoiceSettings = {
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   echoCancellation: true,
   noiseSuppression: true,
   autoGainControl: true,
+  streamQuality: 'auto',
 }
 
 const KEY = `${STORAGE_PREFIX}voiceSettings`

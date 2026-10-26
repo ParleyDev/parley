@@ -3,6 +3,9 @@ import { HeadphoneOff, Maximize2, Mic, MicOff, Minimize2, Monitor, MonitorOff, M
 import { useEffect, useState } from 'react'
 import { playSfx, sfxEnabled } from '../lib/sfx'
 import { useStore, voiceParticipants } from '../store'
+import ContextMenu, { useContextMenu } from './ContextMenu'
+import { useUserMenu } from './UserContextMenu'
+import { useUserAudioMap } from '../lib/userAudio'
 import type { DmChannel, User, VoiceState } from '../lib/types'
 import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
 import { useResizableHeight } from '../lib/resize'
@@ -32,6 +35,10 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const localCamera = useStore((s) => s.localCamera)
   const localScreen = useStore((s) => s.localScreen)
   const remoteMedia = useStore((s) => s.remoteMedia)
+  const hidden = useUserAudioMap()
+  // Right-click a tile: the person's menu, with their volume and local mute while you're in the call.
+  const userMenu = useUserMenu(null)
+  const tileMenu = useContextMenu()
   const watching = useStore((s) => s.watching)
   const [focused, setFocused] = useState<string | null>(null)
   const videoFit = useVideoFit()
@@ -44,7 +51,8 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
     const user = users[p.user_id] ?? (isMe && me ? me : undefined) ?? channel.recipients.find((r) => r.id === p.user_id)
     const media = isMe ? { camera: localCamera, screen: localScreen } : remoteMedia[p.user_id]
     if (p.self_stream) tiles.push({ key: `${p.user_id}:screen`, userId: p.user_id, kind: 'screen', user, state: p, stream: media?.screen ?? null, isMe })
-    tiles.push({ key: `${p.user_id}:camera`, userId: p.user_id, kind: 'camera', user, state: p, stream: p.self_video ? media?.camera ?? null : null, isMe })
+    // A camera you hid in their user menu shows their avatar instead.
+    tiles.push({ key: `${p.user_id}:camera`, userId: p.user_id, kind: 'camera', user, state: p, stream: p.self_video && !(!isMe && hidden[p.user_id]?.hideVideo) ? media?.camera ?? null : null, isMe })
   }
   const screenKeys = tiles.filter((t) => t.kind === 'screen').map((t) => t.key).join(',')
   // Auto-focus a newly started screen share; drop focus if that tile went away.
@@ -79,6 +87,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
     const name = t.user?.display_name ?? 'User'
     return (
       <div key={t.key} onClick={() => setFocused(focused === t.key ? null : t.key)} onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget) }}
+        onContextMenu={(e) => { if (!t.isMe || t.kind === 'camera') tileMenu.open(e, userMenu({ id: t.userId, display_name: name }, e.currentTarget.getBoundingClientRect())) }}
         className={`group relative min-h-0 min-w-0 overflow-hidden rounded-xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big || cell ? 'h-full w-full' : 'aspect-video'}`}
         data-call-tile={t.key} data-tile-big={big ? '1' : '0'} title={big ? 'Click to return to the grid · double-click for fullscreen' : 'Click to focus · double-click for fullscreen'}
         {...(t.kind === 'camera' ? { 'data-call-participant': t.userId } : { 'data-call-screen': t.userId })}>
@@ -116,6 +125,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const rowHeight = Math.max(80, (stage.height - 80 - (rows - 1) * 12) / rows)
   return (
     <section ref={(el) => stage.setContainer(el?.parentElement ?? null)} style={{ height: stage.height }} className="relative shrink-0 border-b border-line bg-bg-0 px-4 pt-3 pb-2 flex flex-col max-md:h-auto max-md:max-h-[55vh]" data-dm-call data-call-height={stage.height}>
+      {tileMenu.menu && <ContextMenu {...tileMenu.menu} onClose={tileMenu.close} label="Participant" />}
       <div className="flex-1 min-h-0 flex flex-col gap-2">
         {tiles.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-sm text-text-2">Connecting…</div>

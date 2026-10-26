@@ -3,6 +3,9 @@ import { useShallow } from 'zustand/react/shallow'
 import { Disc3, Hand, HeadphoneOff, ListMusic, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
+import ContextMenu, { useContextMenu } from './ContextMenu'
+import { useUserMenu } from './UserContextMenu'
+import { useUserAudioMap } from '../lib/userAudio'
 import { has, P } from '../lib/perms'
 import { api } from '../lib/api'
 import { isPhone } from '../lib/swipe'
@@ -39,6 +42,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const localCamera = useStore((s) => s.localCamera)
   const localScreen = useStore((s) => s.localScreen)
   const remoteMedia = useStore((s) => s.remoteMedia)
+  const hidden = useUserAudioMap()
   const watching = useStore((s) => s.watching)
   const unread = useStore((s) => isUnread(s, channel.id))
   const perms = useStore((s) => myChannelPerms(s, channel.id))
@@ -117,7 +121,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
     const user = users[p.user_id] ?? (isMe ? me ?? undefined : undefined)
     const media = isMe ? { camera: localCamera, screen: localScreen } : remoteMedia[p.user_id]
     if (p.self_stream) tiles.push({ key: `${p.user_id}:screen`, userId: p.user_id, kind: 'screen', user, state: p, stream: media?.screen ?? null, isMe })
-    tiles.push({ key: `${p.user_id}:camera`, userId: p.user_id, kind: 'camera', user, state: p, stream: p.self_video ? media?.camera ?? null : null, isMe })
+    // A camera you hid in their user menu shows their avatar instead.
+    tiles.push({ key: `${p.user_id}:camera`, userId: p.user_id, kind: 'camera', user, state: p, stream: p.self_video && !(!isMe && hidden[p.user_id]?.hideVideo) ? media?.camera ?? null : null, isMe })
   }
   const screenKeys = tiles.filter((t) => t.kind === 'screen').map((t) => t.key).join(',')
 
@@ -144,6 +149,9 @@ export default function VoiceView({ channel }: { channel: Channel }) {
 
   const phone = usePhone()
   const videoFit = useVideoFit()
+  // Right-click a tile: the person's menu, with their volume and local mute while you're in the call.
+  const userMenu = useUserMenu(channel.guild_id)
+  const tileMenu = useContextMenu()
   const toggleFullscreen = (el: HTMLElement) => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else el.requestFullscreen?.().catch(() => {}) }
   const renderTile = (t: Tile, big: boolean) => {
     const talking = t.kind === 'camera' && !!speaking[t.userId]
@@ -151,6 +159,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
     const name = t.user?.display_name ?? 'Unknown'
     return (
       <div key={t.key} onClick={() => setFocused(focused === t.key ? null : t.key)} onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget) }}
+        onContextMenu={(e) => { if (!t.isMe || t.kind === 'camera') tileMenu.open(e, userMenu({ id: t.userId, display_name: name }, e.currentTarget.getBoundingClientRect())) }}
         className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big ? 'h-full w-full' : 'aspect-video'}`} data-voice-tile={t.userId} data-tile-big={big ? '1' : '0'} title={big ? 'Click to return to the grid · double-click for fullscreen' : 'Click to focus · double-click for fullscreen'}>
         {isStage && isMod && inThis && !t.isMe && t.kind === 'camera' && <button type="button" onClick={(e) => { e.stopPropagation(); toAudience(t.userId) }} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 group-hover:opacity-100" data-to-audience>Move to audience</button>}
         {isStudio && t.kind === 'camera' && engineers.includes(t.userId) && <span className="absolute left-2 top-2 z-10 rounded-md bg-warn px-1.5 py-0.5 text-[10px] font-bold uppercase text-black" data-engineer-badge>Engineer</span>}
@@ -196,6 +205,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
 
   return (
     <main className="flex-1 min-w-0 flex flex-col bg-bg-0 relative">
+      {tileMenu.menu && <ContextMenu {...tileMenu.menu} onClose={tileMenu.close} label="Participant" />}
       <header className="h-12 shrink-0 px-4 max-md:px-2 flex items-center gap-2 border-b border-line">
         <MobileBack />
         {isStudio ? <Disc3 size={22} className="text-text-2 shrink-0" /> : isStage ? <Radio size={22} className="text-text-2 shrink-0" /> : <Volume2 size={22} className="text-text-2 shrink-0" />}<span className="font-bold truncate">{channel.name}</span>

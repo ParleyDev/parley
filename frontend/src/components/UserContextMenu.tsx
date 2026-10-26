@@ -1,15 +1,27 @@
-import { AtSign, Ban, Copy, Flag, Gavel, MessageSquare, NotebookPen, Pencil, Phone, Send, Shield, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { AtSign, Ban, VideoOff, VolumeX, Copy, Flag, Gavel, MessageSquare, NotebookPen, Pencil, Phone, Send, Shield, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { getPrefs } from '../lib/prefs'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { canManageRole, has, highestPosition, isTimedOut, P, EMPTY_ROLES } from '../lib/perms'
 import { voice } from '../lib/voice'
+import { setUserAudio, userAudio, useUserAudioMap } from '../lib/userAudio'
 import { publicOrigin } from './InviteCard'
 import type { DmChannel, Invite, Member } from '../lib/types'
 import { myGuildPerms, useStore } from '../store'
 import type { MenuEntry } from './ContextMenu'
 
 export interface MenuUser { id: string; display_name: string; nickname?: string | null; bot?: boolean }
+
+/** The volume slider at the top of a voice participant's menu (Discord's "User Volume"). */
+function UserVolume({ id }: { id: string }) {
+  const v = (useUserAudioMap()[id]?.volume ?? 100)
+  return (
+    <div className="px-2 py-1.5" onClick={(e) => e.stopPropagation()} data-user-volume={id}>
+      <div className="flex items-center justify-between text-xs font-semibold text-text-2"><span>User Volume</span><span className="tabular-nums">{v}%</span></div>
+      <input type="range" min={0} max={100} step={5} value={v} onChange={(e) => setUserAudio(id, { volume: Number(e.target.value) })} className="mt-1 w-full accent-accent" aria-label="User volume" />
+    </div>
+  )
+}
 
 /** Put `@name` in the open message box; the composer turns it into a mention on send (see Composer). */
 export function mentionInComposer(id: string, label: string) {
@@ -44,6 +56,7 @@ export function useUserMenu(guildId?: string | null) {
     const profile = () => openModal({ kind: 'profile', userId: u.id, anchor: anchor ? { x: anchor.left, y: anchor.top, w: anchor.width, h: anchor.height } : undefined })
     const message = () => act(async () => { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); navigate(`/channels/@me/${c.id}`) })
     const block = () => openModal({ kind: 'confirm', title: `Block ${name}`, body: `${name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.`, danger: true, confirmLabel: 'Block', action: () => act(() => api.put(`/users/@me/relationships/${u.id}/block`)) })
+    const st = useStore.getState()
     const call = () => act(async () => { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); navigate(`/channels/@me/${c.id}`); await voice.join(c.id) })
     const hasComposer = !!document.querySelector('textarea.composer-input')
     const mention = hasComposer ? [{ label: 'Mention', icon: <AtSign size={16} />, onClick: () => mentionInComposer(u.id, name) }] : []
@@ -63,7 +76,6 @@ export function useUserMenu(guildId?: string | null) {
       label: `${member!.roles.includes(r.id) ? '✓ ' : ''}${r.name}`, disabled: !canManageRole(ctx!, me!.id, r), onClick: () => toggleRole(r.id),
     })) }] : []
     // Invite to Server: a week-long invite to any server you can invite to, sent to them in a DM.
-    const st = useStore.getState()
     const invitable = isMe ? [] : Object.values(st.guilds).filter((g) => g.id !== guildId && has(myGuildPerms(st, g.id), P.CREATE_INVITE))
     const invite = (gid: string, gname: string) => act(async () => {
       const inv = await api.post<Invite>(`/guilds/${gid}/invites`, { max_age: 7 * 86400, max_uses: 0 })
@@ -73,6 +85,15 @@ export function useUserMenu(guildId?: string | null) {
     })
     const inviteMenu = invitable.length ? [{ label: 'Invite to Server', icon: <Send size={16} />, children: invitable.map((g) => ({ label: g.name, onClick: () => invite(g.id, g.name) })) }] : []
     const kick = () => openModal({ kind: 'kick', guildId: guildId!, userId: u.id })
+    // In a call together: their volume, and muting them or hiding their camera just for you.
+    const inMyCall = !isMe && !!st.myVoiceChannelId && st.voiceStates[u.id]?.channel_id === st.myVoiceChannelId
+    const ua = userAudio(u.id)
+    const voiceItems: MenuEntry[] = inMyCall ? [
+      { node: <UserVolume id={u.id} /> },
+      { label: ua.muted ? '✓ Mute' : 'Mute', icon: <VolumeX size={16} />, onClick: () => setUserAudio(u.id, { muted: !ua.muted }) },
+      { label: ua.hideVideo ? '✓ Hide Video' : 'Hide Video', icon: <VideoOff size={16} />, onClick: () => setUserAudio(u.id, { hideVideo: !ua.hideVideo }) },
+      'sep',
+    ] : []
     if (isMe) {
       return [
         { label: 'Profile', icon: <UserIcon size={16} />, onClick: profile },
@@ -84,6 +105,7 @@ export function useUserMenu(guildId?: string | null) {
       ]
     }
     return [
+      ...voiceItems,
       { label: 'Profile', icon: <UserIcon size={16} />, onClick: profile },
       ...mention,
       { label: 'Message', icon: <MessageSquare size={16} />, onClick: message },
