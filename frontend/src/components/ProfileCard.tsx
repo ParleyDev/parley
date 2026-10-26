@@ -8,6 +8,7 @@ import { LogoMark } from './Logo'
 import Avatar, { statusColor } from './Avatar'
 import { Badges, ClanTag } from './Flair'
 import { nameLook, type NameLook } from '../lib/nameStyle'
+import { useStore } from '../store'
 
 export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> {
   banner_url?: string | null
@@ -121,6 +122,8 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
   const avatarRef = useRef<HTMLInputElement>(null)
   const bannerRef = useRef<HTMLInputElement>(null)
   const [statusMenu, setStatusMenu] = useState(false)
+  // "Friends since": when the friend request was accepted.
+  const friendsSince = useStore((s) => (s.relationships[user.id]?.kind === 'friend' ? s.relationships[user.id].created_at : null))
   const look = nameLook_ ?? (nameStyle ? { className: '', style: nameStyle } : nameLook(user))
   const nameCssFinal = look.style
   const theme = themeBackground(user)
@@ -231,6 +234,12 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
               )}
             </div>
           </section>
+          {friendsSince && (
+            <section data-friends-since>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Friends since</h3>
+              <span>{fmtDate(friendsSince)}</span>
+            </section>
+          )}
           {(user.connections?.length ?? 0) > 0 && (
             <section data-profile-connections>
               <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Connections</h3>

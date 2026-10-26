@@ -9,7 +9,10 @@ import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { isUnread, myChannelPerms, myGuildPerms, showsMentions, showsUnread, useStore, voiceParticipants } from '../store'
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
-import { BellOff } from 'lucide-react'
+import { BellOff, Pin, PinOff } from 'lucide-react'
+import { togglePinned } from '../lib/pins'
+
+const NO_PINS: string[] = []
 import { has, P } from '../lib/perms'
 import StyledName from './StyledName'
 import { api } from '../lib/api'
@@ -35,6 +38,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const markRead = useStore((s) => s.markRead)
   const allGuilds = useStore((s) => s.guilds)
   const voiceStates = useStore((s) => s.voiceStates)
+  // Pinned channels (per account) also show in a Pinned section at the top, in the order they were pinned.
+  const pinnedIds = useStore((s) => s.user?.pinned_channels) ?? NO_PINS
+  const pinnedHere = pinnedIds.map((id) => channels[id]).filter((c): c is Channel => !!c && c.guild_id === guildId && c.kind !== 'category')
   const mentionCounts = useStore((s) => s.mentionCounts)
   const notifSettings = useStore((s) => s.notifSettings)
   const dms = useStore((s) => s.dms)
@@ -153,6 +159,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     const canEdit = canEditChannel(c.id)
     return [
       { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !unread, onClick: () => markRead(c.id) },
+      { label: pinnedIds.includes(c.id) ? 'Unpin Channel' : 'Pin Channel', icon: pinnedIds.includes(c.id) ? <PinOff size={16} /> : <Pin size={16} />, onClick: () => togglePinned(c.id) },
       'sep',
       ...notifEntries(c.id, 'Channel', notifSettings, { serverDefault: true }),
       'sep',
@@ -214,6 +221,18 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       <div ref={listRef} className="relative flex-1 overflow-y-auto px-2 pt-3 space-y-4" data-channel-list {...listDropProps}>
         {target?.line !== undefined && <div className="pointer-events-none absolute left-2 right-2 z-10 h-0.5 rounded-full bg-accent" style={{ top: target.line - 1 }} data-drop-line />}
         <EventsRow guildId={guildId} />
+        {pinnedHere.length > 0 && (
+          <div className="space-y-0.5" data-pinned-channels>
+            <div className="px-1 pb-0.5 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-text-2"><Pin size={11} /> Pinned</div>
+            {pinnedHere.map((c) => (
+              <div key={c.id} data-pinned-channel={c.id}>
+                <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name}
+                  unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)} onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+                  mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} />
+              </div>
+            ))}
+          </div>
+        )}
         <div className="space-y-0.5 min-h-2" data-channel-group="">
           {uncategorized.map(row)}
         </div>

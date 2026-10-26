@@ -24,6 +24,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'TYPING_START'; d: { channel_id: string; user_id: string } }
   | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean; platforms?: string[]; idle?: boolean } }
   | { t: 'USER_UPDATE'; d: User }
+  | { t: 'USER_SETTINGS_UPDATE'; d: Partial<PrivateUser> }
   | { t: 'GUILD_CREATE'; d: Guild & { channels: Channel[]; roles: Role[] } }
   | { t: 'GUILD_MEMBER_UPDATE'; d: Member }
   | { t: 'ROLE_UPDATE'; d: { guild_id: string; role: Role } }
@@ -156,6 +157,8 @@ function handle(ev: Ev) {
     case 'PONG': break
     case 'MESSAGE_CREATE': {
       s.addMessage(ev.d.message)
+      // A new message brings a closed DM back into the list.
+      { const dm = s.dms[ev.d.message.channel_id]; if (dm?.closed) s.upsertChannel({ ...dm, closed: false }) }
       const me = s.user?.id
       if (ev.d.message.author.id !== me && s.relationships[ev.d.message.author.id]?.kind !== 'blocked' && (!ev.d.message.kind || ev.d.message.kind === 'default')) {
         const ch = s.channels[ev.d.message.channel_id] ?? s.dms[ev.d.message.channel_id]
@@ -181,6 +184,7 @@ function handle(ev: Ev) {
     case 'THREAD_UPDATE': s.upsertThread(ev.d); break
     case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id); break
     case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online, ev.d.platforms ?? [], ev.d.idle); break
+    case 'USER_SETTINGS_UPDATE': if (s.user && s.token) s.setAuth(s.token, { ...s.user, ...ev.d } as PrivateUser); break
     case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
     case 'GUILD_CREATE': s.upsertGuild(ev.d); break
     case 'GUILD_UPDATE': s.upsertGuild(ev.d); break
@@ -200,7 +204,14 @@ function handle(ev: Ev) {
     case 'RELATIONSHIP_ADD': {
       const prev = s.relationships[ev.d.user.id]?.kind
       s.upsertRelationship(ev.d)
-      if (ev.d.kind === 'incoming' && prev !== 'incoming') s.pushToast(`${ev.d.user.display_name} sent you a friend request`)
+      if (ev.d.kind === 'incoming' && prev !== 'incoming') {
+        s.pushToast(`${ev.d.user.display_name} sent you a friend request`)
+        playSfx('message')
+        // A desktop notification when Parley isn't in front, like messages.
+        try {
+          if (document.visibilityState !== 'visible' && getNotifPrefs().desktop && 'Notification' in window && Notification.permission === 'granted') new Notification(`${ev.d.user.display_name} sent you a friend request`, { body: ev.d.note ?? 'Open Friends to accept it.' })
+        } catch { /* ignore */ }
+      }
       break
     }
     case 'RELATIONSHIP_REMOVE': s.removeRelationship(ev.d.user_id); break

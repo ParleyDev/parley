@@ -34,6 +34,8 @@ export interface PrivateUser extends User {
   email: string; is_admin?: boolean; email_verified_at?: string | null; mfa_enabled?: boolean
   /** When the chosen status reverts to Online, and when the custom status clears (null: they don't). */
   status_expires_at?: string | null; custom_status_expires_at?: string | null
+  /** Channels and DMs pinned to the top of their lists, in order. */
+  pinned_channels?: string[]
   /** Content & Social (Settings): who may DM you, message requests from non-friends, who may send friend requests, who may add you to groups. */
   dm_privacy?: DmPrivacy
   message_requests?: boolean
@@ -168,6 +170,8 @@ export interface DmChannel extends Channel {
   icon_url: string | null
   /** Your membership: a DM from a non-friend is a message request until you accept (pending) or ignore it. */
   request_state?: 'accepted' | 'pending' | 'ignored' | 'spam'
+  /** You closed it ("Close DM"): hidden from your list until a new message arrives. */
+  closed?: boolean
 }
 
 export interface Member {
@@ -351,7 +355,8 @@ export interface VoiceState {
 export interface GuildEvent { id: string; guild_id: string; name: string; description: string; starts_at: string; ends_at: string | null; channel_id: string | null; location: string; creator_id: string | null; created_at: string; rsvp_count: number; me_rsvp: boolean }
 
 export type RelationshipKind = 'friend' | 'outgoing' | 'incoming' | 'blocked'
-export interface Relationship { kind: RelationshipKind; user: User; created_at: string }
+/** `created_at`: when the request was sent, or for friends when it was accepted ("Friends since"). `note`: a request's note. */
+export interface Relationship { kind: RelationshipKind; user: User; created_at: string; note?: string }
 /** Your private nickname and note for another user (GET/PUT /users/@me/notes). */
 export interface UserNote { user_id: string; nickname: string; note: string }
 

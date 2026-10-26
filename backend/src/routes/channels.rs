@@ -528,6 +528,10 @@ async fn create_message(
     if !req.attachment_ids.is_empty() {
         crate::routes::attachments::queue_transcriptions(&state, mid, uid, &c).await?;
     }
+    // A new message brings a closed DM back to everyone's list.
+    if c.guild_id.is_none() {
+        sqlx::query("UPDATE channel_members SET closed = false WHERE channel_id = $1 AND closed").bind(id).execute(&state.db).await?;
+    }
     let msg = fetch_message(&state.db, mid, uid).await?;
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));

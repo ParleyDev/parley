@@ -99,6 +99,9 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
   const act = async (fn: () => Promise<unknown>) => { setMenu(false); try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
   const dm = () => act(async () => { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); navigate(`/channels/@me/${c.id}`) })
   const accept = () => act(() => api.put(`/users/@me/relationships/${u.id}`))
+  // New friends (the last day) get a one-tap wave: a 👋 in your DM with them.
+  const [waved, setWaved] = useState(false)
+  const wave = () => act(async () => { setWaved(true); const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); await api.post(`/channels/${c.id}/messages`, { content: '👋' }); pushToast(`You waved at ${u.display_name}`) })
   const remove = () => act(() => api.delete(`/users/@me/relationships/${u.id}`))
   const block = () => act(() => api.put(`/users/@me/relationships/${u.id}/block`))
   const sub = r.kind === 'incoming' ? 'Incoming Friend Request' : r.kind === 'outgoing' ? 'Outgoing Friend Request' : r.kind === 'blocked' ? 'Blocked' : online ? 'Online' : 'Offline'
@@ -111,8 +114,10 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
       <div className="min-w-0 flex-1">
         <div className="font-semibold truncate"><StyledName userId={u.id}>{u.display_name}</StyledName> <span className="text-text-2 font-normal text-sm opacity-0 group-hover:opacity-100 max-md:opacity-100">@{u.username}</span></div>
         <div className="text-xs text-text-2">{sub}</div>
+        {r.note && (r.kind === 'incoming' || r.kind === 'outgoing') && <div className="mt-0.5 truncate text-sm text-text-1" title={r.note} data-request-note>“{r.note}”</div>}
       </div>
       <div className="flex items-center gap-2 relative">
+        {r.kind === 'friend' && isNewFriend(r) && !waved && <button type="button" onClick={wave} className="rounded-full bg-bg-1 px-3 py-1.5 text-sm text-text-1 hover:text-text-0" title={`Say hi to ${u.display_name}`} data-wave-friend={u.id}>👋 Wave</button>}
         {r.kind === 'friend' && <Btn title="Message" onClick={dm}><MessageSquare size={18} /></Btn>}
         {r.kind === 'incoming' && <Btn title="Accept" onClick={accept}><Check size={18} className="text-success" /></Btn>}
         {r.kind === 'incoming' && <Btn title="Ignore" onClick={remove} danger><X size={18} /></Btn>}
@@ -144,6 +149,7 @@ function AddFriend() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [results, setResults] = useState<User[]>([])
   const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
 
   useEffect(() => {
     if (!name.trim()) { setResults([]); return }
@@ -154,7 +160,8 @@ function AddFriend() {
   const send = async (body: { username?: string; user_id?: string }, label: string) => {
     setBusy(true); setMsg(null)
     try {
-      await api.post('/users/@me/relationships', body)
+      await api.post('/users/@me/relationships', { ...body, ...(note.trim() ? { note: note.trim() } : {}) })
+      setNote('')
       setMsg({ ok: true, text: `Success! Your friend request to ${label} was sent.` })
       setName('')
     } catch (e) { setMsg({ ok: false, text: (e as Error).message }) } finally { setBusy(false) }
@@ -170,6 +177,7 @@ function AddFriend() {
           <input className="flex-1 bg-transparent text-[15px] outline-none py-1.5 placeholder:text-text-2" placeholder="You can add friends with their username." value={name} onChange={(e) => { setName(e.target.value); setMsg(null) }} autoFocus />
           <button className="btn-primary py-1.5 whitespace-nowrap" disabled={busy || !name.trim()}><UserPlus size={16} /> Send Friend Request</button>
         </form>
+        <input className="input mt-2 text-sm" maxLength={150} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note (optional), e.g. how you know them" aria-label="Note with the request" data-request-note-input />
         {msg && <p className={`mt-2 text-sm ${msg.ok ? 'text-success' : 'text-danger'}`}>{msg.text}</p>}
         {results.length > 0 && (
           <div className="mt-6">
@@ -197,3 +205,6 @@ function AddFriend() {
     </div>
   )
 }
+
+/** Friends for less than a day get the Wave button. */
+const isNewFriend = (r: Relationship) => Date.now() - new Date(r.created_at).getTime() < 86_400_000

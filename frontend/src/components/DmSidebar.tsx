@@ -1,10 +1,11 @@
-import { Inbox, LogOut, MailCheck, Plus, Users } from 'lucide-react'
+import { Inbox, LogOut, MailCheck, Pin, PinOff, Plus, Users, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup } from '../lib/dm'
 import { api } from '../lib/api'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { togglePinned } from '../lib/pins'
 import { isUnread, messageRequests, pendingCount, showsUnread, spamRequests, useStore } from '../store'
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
@@ -32,8 +33,18 @@ export default function DmSidebar() {
   const me = useStore((s) => s.user)
   const leave = (id: string, name: string) => openModal({ kind: 'confirm', title: `Leave '${name}'`, body: 'You will stop receiving messages from this group unless someone adds you back.', danger: true, confirmLabel: 'Leave Group',
     action: async () => { try { await api.delete(`/channels/${id}/recipients/${me?.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
+  const activeId = useStore((s) => s.activeChannelId)
+  const upsertChannel = useStore((s) => s.upsertChannel)
+  const navigate = useNavigate()
+  const pinnedIds = me?.pinned_channels ?? []
+  // "Close DM": out of the list until a new message arrives (nothing is deleted).
+  const closeDm = async (d: DmChannel) => {
+    try { upsertChannel(await api.post<DmChannel>(`/channels/${d.id}/close`)); if (activeId === d.id) navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
+  }
   const dmMenu = (d: DmChannel, other: { id: string; display_name: string } | undefined, e: React.MouseEvent<HTMLElement>): MenuEntry[] => [
     { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !isUnread({ readStates, lastMessageId }, d.id), onClick: () => markRead(d.id) },
+    { label: pinnedIds.includes(d.id) ? 'Unpin Conversation' : 'Pin Conversation', icon: pinnedIds.includes(d.id) ? <PinOff size={16} /> : <Pin size={16} />, onClick: () => togglePinned(d.id) },
+    ...(!isGroup(d) ? [{ label: 'Close DM', icon: <X size={16} />, onClick: () => closeDm(d) }] : []),
     'sep',
     ...notifEntries(d.id, 'Conversation', notifSettings),
     'sep',
@@ -41,7 +52,10 @@ export default function DmSidebar() {
       ? [{ label: 'Leave Group', icon: <LogOut size={16} />, danger: true, onClick: () => leave(d.id, dmName(d, users, notes)) }]
       : other ? userMenu(other, e.currentTarget.getBoundingClientRect()) : []),
   ]
-  const list = Object.values(dms).filter((d) => !d.request_state || d.request_state === 'accepted').sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at))
+  const all = Object.values(dms).filter((d) => (!d.request_state || d.request_state === 'accepted') && (!d.closed || d.id === activeId)).sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at))
+  // Pinned conversations sit on top, in the order they were pinned.
+  const pinned = all.filter((d) => pinnedIds.includes(d.id)).sort((a, b) => pinnedIds.indexOf(a.id) - pinnedIds.indexOf(b.id))
+  const list = all.filter((d) => !pinnedIds.includes(d.id))
   const requests = useStore((s) => messageRequests(s).length)
   const spam = useStore((s) => spamRequests(s).length)
 
@@ -65,34 +79,42 @@ export default function DmSidebar() {
           <span>{t('Direct Messages')}</span>
           <button onClick={() => openModal({ kind: 'newDm' })} title="Create DM" className="hover:text-text-0"><Plus size={16} /></button>
         </div>
+        {pinned.length > 0 && (
+          <div className="mb-2 space-y-0.5" data-pinned-dms>
+            <div className="px-2 pb-0.5 text-[11px] font-bold uppercase tracking-wider text-text-2 flex items-center gap-1"><Pin size={11} /> Pinned</div>
+            {pinned.map((d) => row(d))}
+          </div>
+        )}
         <div className="space-y-0.5">
-          {list.map((d) => {
-            const group = isGroup(d)
-            const other = !group && d.recipients[0] ? { ...d.recipients[0], ...users[d.recipients[0].id] } : undefined
-            const unread = showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, d.id)
-            const muted = mutedTarget(notifSettings, d.id)
-            return (
-              <NavLink key={d.id} to={`/channels/@me/${d.id}`} data-motion-row onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, dmMenu(d, other, e))} data-dm-row={group ? d.id : other?.id} data-group-row={group ? d.id : undefined} data-muted={muted ? 'true' : undefined} className={({ isActive }) => `group flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
-                {group ? <GroupIcon dm={d} size={32} /> : other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
-                {group ? (
-                  <span className="min-w-0 flex-1 leading-tight">
-                    <span className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{dmName(d, users, notes)}</span>
-                    <span className="block truncate text-xs text-text-2">{d.recipients.length + 1} Members</span>
-                  </span>
-                ) : other ? (
-                  <span className="min-w-0 flex-1 leading-tight">
-                    <StyledName userId={other.id} className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{other.display_name}</StyledName>
-                    {other.custom_status && <span className="block truncate text-xs text-text-2" data-dm-status>{other.custom_status}</span>}
-                  </span>
-                ) : <span className="truncate text-[15px]">Unknown</span>}
-                {unread && <span className="ml-auto h-2 w-2 rounded-full bg-white" />}
-              </NavLink>
-            )
-          })}
-          {list.length === 0 && <p className="px-2 py-4 text-sm text-text-2">No conversations yet. Start one!</p>}
+          {list.map((d) => row(d))}
+          {list.length === 0 && pinned.length === 0 && <p className="px-2 py-4 text-sm text-text-2">No conversations yet. Start one!</p>}
         </div>
       </div>
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
     </aside>
   )
+
+  function row(d: DmChannel) {
+    const group = isGroup(d)
+    const other = !group && d.recipients[0] ? { ...d.recipients[0], ...users[d.recipients[0].id] } : undefined
+    const unread = showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, d.id)
+    const muted = mutedTarget(notifSettings, d.id)
+    return (
+      <NavLink key={d.id} to={`/channels/@me/${d.id}`} data-motion-row onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, dmMenu(d, other, e))} data-dm-row={group ? d.id : other?.id} data-group-row={group ? d.id : undefined} data-muted={muted ? 'true' : undefined} className={({ isActive }) => `group flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+        {group ? <GroupIcon dm={d} size={32} /> : other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
+        {group ? (
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{dmName(d, users, notes)}</span>
+            <span className="block truncate text-xs text-text-2">{d.recipients.length + 1} Members</span>
+          </span>
+        ) : other ? (
+          <span className="min-w-0 flex-1 leading-tight">
+            <StyledName userId={other.id} className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{other.display_name}</StyledName>
+            {other.custom_status && <span className="block truncate text-xs text-text-2" data-dm-status>{other.custom_status}</span>}
+          </span>
+        ) : <span className="truncate text-[15px]">Unknown</span>}
+        {unread && <span className="ml-auto h-2 w-2 rounded-full bg-white" />}
+      </NavLink>
+    )
+  }
 }

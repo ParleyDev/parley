@@ -19,6 +19,17 @@ pub fn router() -> Router<AppState> {
         .route("/users/@me/channels", get(list).post(open_dm))
         .route("/channels/:id/recipients/:uid", put(add_recipient).delete(remove_recipient))
         .route("/channels/:id/request", post(answer_request))
+        .route("/channels/:id/close", post(close_dm))
+}
+
+/// "Close DM": hide a 1:1 conversation from your list until either of you sends a new message. Nothing is deleted.
+async fn close_dm(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<DmChannel>> {
+    let done = sqlx::query("UPDATE channel_members cm SET closed = true FROM channels c WHERE c.id = cm.channel_id AND cm.channel_id = $1 AND cm.user_id = $2 AND c.kind = 'dm'")
+        .bind(id).bind(uid).execute(&state.db).await?.rows_affected();
+    if done == 0 { return Err(AppError::NotFound("Conversation not found".into())) }
+    let v = dm_view(&state.db, id, uid).await?;
+    state.hub.emit_users(vec![uid], "CHANNEL_UPDATE", json!(v));
+    Ok(Json(v))
 }
 
 #[derive(Deserialize)]
@@ -72,12 +83,12 @@ pub async fn accept_requests_between(db: &PgPool, a: Uuid, b: Uuid) -> AppResult
 }
 
 /// id, guild, name, kind, topic, position, created, last message, owner, icon, request state, e2ee.
-type DmRow = (Uuid, Option<Uuid>, String, String, String, i32, DateTime<Utc>, Option<DateTime<Utc>>, Option<Uuid>, Option<String>, String, bool);
+type DmRow = (Uuid, Option<Uuid>, String, String, String, i32, DateTime<Utc>, Option<DateTime<Utc>>, Option<Uuid>, Option<String>, String, bool, bool);
 
 pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel>> {
     let channels: Vec<DmRow> = sqlx::query_as(
         "SELECT c.id, c.guild_id, c.name, c.kind, c.topic, c.position, c.created_at,
-                (SELECT MAX(created_at) FROM messages WHERE channel_id = c.id), c.owner_id, c.icon_url, cm.request_state, c.e2ee
+                (SELECT MAX(created_at) FROM messages WHERE channel_id = c.id), c.owner_id, c.icon_url, cm.request_state, c.e2ee, cm.closed
          FROM channels c JOIN channel_members cm ON cm.channel_id = c.id
          WHERE cm.user_id = $1 AND c.guild_id IS NULL
          ORDER BY 8 DESC NULLS LAST, c.created_at DESC",
@@ -86,13 +97,14 @@ pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel
     .fetch_all(db)
     .await?;
     let mut out = Vec::with_capacity(channels.len());
-    for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state, e2ee) in channels {
+    for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state, e2ee, closed) in channels {
         let recipients = recipients_for(db, id, uid).await?;
         out.push(DmChannel {
             channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, e2ee, rate_limit_per_user: 0, user_limit: 0, voice_status: String::new(), engineer_ids: vec![], overwrites: vec![] },
             recipients,
             last_message_at: last,
             request_state,
+            closed,
         });
     }
     Ok(out)
@@ -114,7 +126,8 @@ async fn recipients_for(db: &PgPool, channel_id: Uuid, uid: Uuid) -> AppResult<V
 pub async fn dm_view(db: &PgPool, channel_id: Uuid, uid: Uuid) -> AppResult<DmChannel> {
     let channel = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(channel_id).fetch_one(db).await?;
     let last: Option<(Option<DateTime<Utc>>,)> = sqlx::query_as("SELECT MAX(created_at) FROM messages WHERE channel_id = $1").bind(channel_id).fetch_optional(db).await?;
-    Ok(DmChannel { channel, recipients: recipients_for(db, channel_id, uid).await?, last_message_at: last.and_then(|l| l.0), request_state: request_state_of(db, channel_id, uid).await? })
+    let closed: bool = sqlx::query_as::<_, (bool,)>("SELECT closed FROM channel_members WHERE channel_id = $1 AND user_id = $2").bind(channel_id).bind(uid).fetch_optional(db).await?.map(|r| r.0).unwrap_or(false);
+    Ok(DmChannel { channel, recipients: recipients_for(db, channel_id, uid).await?, last_message_at: last.and_then(|l| l.0), request_state: request_state_of(db, channel_id, uid).await?, closed })
 }
 
 /// accepted / pending / ignored for one member of a DM channel (accepted when not a member at all).
@@ -364,7 +377,9 @@ async fn open_dm(
             .fetch_optional(&state.db)
             .await?;
 
-    let dm = DmChannel { channel: channel.clone(), recipients: vec![recipient], last_message_at: last.and_then(|l| l.0), request_state: "accepted".into() };
+    // Opening a DM you closed brings it back to your list.
+    sqlx::query("UPDATE channel_members SET closed = false WHERE channel_id = $1 AND user_id = $2").bind(channel.id).bind(uid).execute(&state.db).await?;
+    let dm = DmChannel { channel: channel.clone(), recipients: vec![recipient], last_message_at: last.and_then(|l| l.0), request_state: "accepted".into(), closed: false };
 
     if created {
         // Notify both sides; each side gets the channel with the *other* party as recipient.
@@ -373,7 +388,7 @@ async fn open_dm(
             .fetch_one(&state.db)
             .await?;
         state.hub.emit_users(vec![uid], "CHANNEL_CREATE", json!(dm));
-        let other_view = DmChannel { channel: channel.clone(), recipients: vec![me], last_message_at: None, request_state: request_state_of(&state.db, channel.id, req.recipient_id).await? };
+        let other_view = DmChannel { channel: channel.clone(), recipients: vec![me], last_message_at: None, request_state: request_state_of(&state.db, channel.id, req.recipient_id).await?, closed: false };
         state.hub.emit_users(vec![req.recipient_id], "CHANNEL_CREATE", json!(other_view));
     }
     Ok((if created { StatusCode::CREATED } else { StatusCode::OK }, Json(dm)))

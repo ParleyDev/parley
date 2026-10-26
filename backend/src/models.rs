@@ -137,6 +137,9 @@ pub struct PrivateUser {
     pub status_expires_at: Option<DateTime<Utc>>,
     #[sqlx(default)]
     pub custom_status_expires_at: Option<DateTime<Utc>>,
+    /// Channels and DMs pinned to the top of their lists, in order.
+    #[sqlx(default)]
+    pub pinned_channels: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -662,6 +665,9 @@ pub struct DmChannel {
     /// This viewer's membership: accepted, or a message request they have not accepted (pending) or ignored.
     #[serde(default = "default_accepted")]
     pub request_state: String,
+    /// This viewer closed it ("Close DM"): hidden from their list until a new message arrives.
+    #[serde(default)]
+    pub closed: bool,
 }
 
 fn default_everyone() -> String { "everyone".into() }
@@ -674,7 +680,11 @@ pub struct Relationship {
     /// friend | outgoing | incoming | blocked
     pub kind: String,
     pub user: User,
+    /// When the request was sent, or (friends) when it was accepted: "Friends since".
     pub created_at: DateTime<Utc>,
+    /// A friend request's note from the sender.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

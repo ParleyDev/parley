@@ -31,19 +31,20 @@ pub fn router() -> Router<AppState> {
 struct RelRow {
     kind: String,
     rel_created_at: chrono::DateTime<chrono::Utc>,
+    rel_note: Option<String>,
     #[sqlx(flatten)]
     user: User,
 }
 
 pub async fn list_for(db: &PgPool, uid: Uuid) -> AppResult<Vec<Relationship>> {
     let rows: Vec<RelRow> = sqlx::query_as(&format!(
-        "SELECT r.kind, r.created_at AS rel_created_at, {} FROM relationships r JOIN users u ON u.id = r.target_id WHERE r.user_id = $1 ORDER BY u.display_name",
+        "SELECT r.kind, r.created_at AS rel_created_at, r.note AS rel_note, {} FROM relationships r JOIN users u ON u.id = r.target_id WHERE r.user_id = $1 ORDER BY u.display_name",
         USER_COLS.split(", ").map(|c| format!("u.{c}")).collect::<Vec<_>>().join(", ")
     ))
     .bind(uid)
     .fetch_all(db)
     .await?;
-    Ok(rows.into_iter().map(|r| Relationship { kind: r.kind, created_at: r.rel_created_at, user: r.user }).collect())
+    Ok(rows.into_iter().map(|r| { let pending = r.kind == "incoming" || r.kind == "outgoing"; Relationship { kind: r.kind, created_at: r.rel_created_at, user: r.user, note: if pending { r.rel_note } else { None } } }).collect())
 }
 
 async fn one(db: &PgPool, uid: Uuid, target: Uuid) -> AppResult<Relationship> {
@@ -81,6 +82,8 @@ async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResu
 struct SendRequest {
     username: Option<String>,
     user_id: Option<Uuid>,
+    /// A short note to go with the request (up to 150 characters).
+    note: Option<String>,
 }
 
 async fn fetch_user(db: &PgPool, id: Uuid) -> AppResult<User> {
@@ -152,9 +155,11 @@ async fn send_request(
             .await?;
         StatusCode::OK
     } else {
-        sqlx::query("INSERT INTO relationships (user_id, target_id, kind) VALUES ($1, $2, 'outgoing'), ($2, $1, 'incoming') ON CONFLICT (user_id, target_id) DO UPDATE SET kind = EXCLUDED.kind, created_at = now()")
+        let note = req.note.as_deref().map(|n| n.trim().chars().take(150).collect::<String>()).filter(|n| !n.is_empty());
+        sqlx::query("INSERT INTO relationships (user_id, target_id, kind, note) VALUES ($1, $2, 'outgoing', $3), ($2, $1, 'incoming', $3) ON CONFLICT (user_id, target_id) DO UPDATE SET kind = EXCLUDED.kind, note = EXCLUDED.note, created_at = now()")
             .bind(uid)
             .bind(target.id)
+            .bind(note)
             .execute(&mut *tx)
             .await?;
         StatusCode::CREATED
@@ -162,7 +167,7 @@ async fn send_request(
     tx.commit().await?;
     emit_add(&state, uid, target.id).await?;
     if status == StatusCode::OK { settle_requests(&state, uid, target.id).await; }
-    else { mail_friend_request(&state, uid, target.id).await; }
+    else { mail_friend_request(&state, uid, target.id).await; push_friend_request(&state, uid, target.id).await; }
     Ok((status, Json(one(&state.db, uid, target.id).await?)))
 }
 
@@ -178,6 +183,13 @@ async fn accept(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tar
     emit_add(&state, uid, target).await?;
     settle_requests(&state, uid, target).await;
     Ok(Json(one(&state.db, uid, target).await?))
+}
+
+/// Push a new friend request to the target's phone when they have no socket open.
+async fn push_friend_request(state: &AppState, from: Uuid, target: Uuid) {
+    if crate::ws::bus::online_users(&state.db).await.contains(&target) { return }
+    let name: String = sqlx::query_as::<_, (String,)>("SELECT display_name FROM users WHERE id = $1").bind(from).fetch_optional(&state.db).await.ok().flatten().map(|r| r.0).unwrap_or_default();
+    crate::push::notify(state, &[target], "Friend request", &format!("{name} sent you a friend request"), json!({ "kind": "friend_request", "user_id": from })).await;
 }
 
 /// Email the target about a new friend request when they are offline and have not turned those mails off.

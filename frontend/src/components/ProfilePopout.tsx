@@ -36,6 +36,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const panel = variant === 'panel'
   const me = useStore((s) => s.user)
   const rel = useStore((s) => s.relationships[user.id]?.kind)
+  const friendsSince = useStore((st) => st.relationships[user.id]?.created_at)
   const guild = useStore((s) => (guildId ? s.guilds[guildId] : undefined))
   const member = useStore((s) => (guildId ? s.members[guildId]?.[user.id] : undefined))
   const myMember = useStore((s) => (guildId && me ? s.members[guildId]?.[me.id] : undefined))
@@ -241,6 +242,12 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           <div>
             <h3 className="text-xs font-bold mb-1">Member Since</h3>
             <p className="text-sm text-[#b5bac1]">{new Date(user.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+          </div>
+        )}
+        {rel === 'friend' && friendsSince && (
+          <div data-friends-since>
+            <h3 className="text-xs font-bold mb-1">Friends Since</h3>
+            <p className="text-sm text-[#b5bac1]">{new Date(friendsSince).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}</p>
           </div>
         )}
         {!panel && !isMe && rel !== 'blocked' && (
