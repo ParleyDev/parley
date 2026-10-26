@@ -539,6 +539,7 @@ async fn create_message(
     // @everyone only counts inside a server for members allowed to use it (it still renders as text otherwise).
     let m_everyone = m_everyone && c.guild_id.is_some() && has(p, perms::MENTION_EVERYONE);
     let m_roles = mentionable_roles(&state.db, c.guild_id, m_roles, has(p, perms::MENTION_EVERYONE)).await?;
+    crate::routes::automod::check_message(&state, &c, uid, p, &content, m_users.len() + m_roles.len() + usize::from(m_everyone)).await?;
     let mut tx = state.db.begin().await?;
     let tts = req.tts && !content.trim().is_empty() && (c.guild_id.is_none() || has(p, perms::SEND_TTS_MESSAGES));
     // Without Embed Links, links don't unfurl; without Use External Emoji, only this server's custom emoji.

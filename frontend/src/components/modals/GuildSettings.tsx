@@ -1,4 +1,4 @@
-import { Award, DoorOpen, Flag, PanelsTopLeft, Compass, Crown, ShieldAlert, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Trash2, Users } from 'lucide-react'
+import { Award, Bot, DoorOpen, Flag, PanelsTopLeft, Compass, Crown, ShieldAlert, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Trash2, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { myGuildPerms, useStore } from '../../store'
@@ -20,8 +20,9 @@ import SafetyTab from './settings/SafetyTab'
 import WelcomeTab from './settings/WelcomeTab'
 import WidgetTab from './settings/WidgetTab'
 import ReportsTab from './settings/ReportsTab'
+import AutomodTab from './settings/AutomodTab'
 
-type Tab = 'overview' | 'safety' | 'welcome' | 'widget' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
+type Tab = 'overview' | 'safety' | 'automod' | 'welcome' | 'widget' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
 
 export default function GuildSettingsModal({ onClose, guildId, tab: requested }: { onClose: () => void; guildId: string; tab?: Tab }) {
   const initial: Tab = requested ?? 'overview'
@@ -37,7 +38,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   const canAudit = canOverview || has(perms, P.VIEW_AUDIT_LOG)
   const canExpr = canOverview || has(perms, P.MANAGE_EXPRESSIONS)
   const canReports = canOverview || has(perms, P.MANAGE_MESSAGES) || has(perms, P.KICK_MEMBERS) || has(perms, P.BAN_MEMBERS) || has(perms, P.MODERATE_MEMBERS)
-  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'safety' || initial === 'welcome' || initial === 'widget' || initial === 'invites' || initial === 'badge' || initial === 'discovery') && !canOverview) || ((initial === 'emoji' || initial === 'stickers') && !canExpr) || (initial === 'audit' && !canAudit) || (initial === 'bans' && !canBans) ? 'roles' : initial)
+  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'safety' || initial === 'automod' || initial === 'welcome' || initial === 'widget' || initial === 'invites' || initial === 'badge' || initial === 'discovery') && !canOverview) || ((initial === 'emoji' || initial === 'stickers') && !canExpr) || (initial === 'audit' && !canAudit) || (initial === 'bans' && !canBans) ? 'roles' : initial)
   if (!guild) return null
   const isOwner = guild.owner_id === user?.id
 
@@ -49,7 +50,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   })
 
   const items: { id: Tab; label: string; icon: React.ReactNode }[] = []
-  if (canOverview) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> }, { id: 'safety', label: 'Safety', icon: <ShieldAlert size={16} /> }, { id: 'welcome', label: 'Welcome Screen', icon: <DoorOpen size={16} /> })
+  if (canOverview) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> }, { id: 'safety', label: 'Safety', icon: <ShieldAlert size={16} /> }, { id: 'automod', label: 'AutoMod', icon: <Bot size={16} /> }, { id: 'welcome', label: 'Welcome Screen', icon: <DoorOpen size={16} /> })
   items.push({ id: 'roles', label: 'Roles', icon: <Shield size={16} /> })
   items.push({ id: 'members', label: 'Members', icon: <Users size={16} /> })
   if (canOverview) items.push({ id: 'invites', label: 'Invites', icon: <Link2 size={16} /> }, { id: 'badge', label: 'Badge', icon: <Award size={16} /> }, { id: 'widget', label: 'Widget', icon: <PanelsTopLeft size={16} /> })
@@ -72,6 +73,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
     >
       {tab === 'overview' && canOverview && <GuildOverviewTab guildId={guildId} />}
       {tab === 'safety' && canOverview && <SafetyTab guildId={guildId} />}
+      {tab === 'automod' && canOverview && <AutomodTab guildId={guildId} />}
       {tab === 'welcome' && canOverview && <WelcomeTab guildId={guildId} />}
       {tab === 'widget' && canOverview && <WidgetTab guildId={guildId} />}
       {tab === 'roles' && <RolesTab guildId={guildId} />}

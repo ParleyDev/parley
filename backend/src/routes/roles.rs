@@ -384,6 +384,8 @@ async fn update_member(
         if nick.as_ref().map(|n| n.chars().count() > 32).unwrap_or(false) {
             return Err(AppError::BadRequest("Nickname must be at most 32 characters".into()));
         }
+        // AutoMod name filter: members choosing their own nickname (moderators setting one are trusted).
+        if let (Some(n), true) = (&nick, target == uid) { crate::routes::automod::check_name(&state, id, uid, p, n).await?; }
         sqlx::query("UPDATE guild_members SET nickname = $3 WHERE guild_id = $1 AND user_id = $2")
             .bind(id)
             .bind(target)

@@ -1,0 +1,51 @@
+// AutoMod: keyword/regex rules with allow lists and whole-word matching, mention spam, link spam with allowed sites,
+// the nickname filter, actions (block with a message, alert a channel, time out) and exemptions.
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, raw, ok, finish } from '../lib.mjs'
+const a = await reg('alice'), b = await reg('bob'), c = await reg('carol')
+const g = await call(a.token, 'POST', '/guilds', { name: `AutoMod ${S}` })
+const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); for (const u of [b, c]) await call(u.token, 'POST', `/invites/${inv.code}`)
+const ch = g.channels.find((x) => x.kind === 'text')
+const log = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'mod-log', kind: 'text' })
+const post = (u, content) => raw(u.token, 'POST', `/channels/${ch.id}/messages`, { content })
+const browser = await chromium.launch(); const errors = []
+const mk = async (tok, path) => { const p = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((x) => localStorage.setItem('parley.token', x), tok); await p.goto(`${WEB}${path}`); await p.waitForTimeout(1000); return p }
+
+console.log('-- keyword rule from the settings')
+const pa = await mk(a.token, `/channels/${g.id}/${log.id}`)
+await pa.locator(`button:has-text("AutoMod ${S}")`).first().click(); await pa.click('text=Server Settings'); await pa.click('[data-settings-tab="automod"]'); await pa.waitForSelector('[data-automod-tab]')
+await pa.click('[data-automod-new="keyword"]'); await pa.waitForSelector('[data-automod-keywords]')
+await pa.fill('[data-automod-keywords]', 'darn\n*spam*'); await pa.fill('[data-automod-allow]', 'darnell'); await pa.fill('[data-automod-block-message]', 'Keep it clean, please.')
+await pa.selectOption('[data-automod-alert]', log.id); await pa.click('[data-automod-save]'); await pa.waitForTimeout(600)
+let r = await post(b, 'well darn it')
+ok('a listed word is blocked with the server\'s message', r.status === 403 && (await r.json()).error === 'Keep it clean, please.')
+ok('whole words only, and the allow list wins', (await post(b, 'darned socks')).status === 201 && (await post(b, 'hi darnell')).status === 201)
+ok('*word* matches inside words', (await post(b, 'buy nospamhere')).status === 403)
+await pa.waitForTimeout(600)
+ok('the alert channel is told', await pa.locator('[data-system="automod_alert"]').count() >= 2 && /blocked/.test(await pa.locator('[data-system="automod_alert"]').first().innerText()))
+ok('owners are never filtered', (await post(a, 'darn')).status === 201)
+ok('bad regexes are refused', (await raw(a.token, 'POST', `/guilds/${g.id}/automod`, { trigger: 'keyword', regexes: ['(unclosed'] })).status === 400)
+ok('only managers see the rules', (await raw(b.token, 'GET', `/guilds/${g.id}/automod`)).status === 403)
+
+console.log('-- other triggers')
+const ms = await call(a.token, 'POST', `/guilds/${g.id}/automod`, { trigger: 'mention_spam' }); await call(a.token, 'PATCH', `/guilds/${g.id}/automod/${ms.id}`, { mention_limit: 3 })
+ok('mention spam is blocked at the limit', (await post(b, `<@${a.user.id}> <@${c.user.id}> <@${b.user.id}>`)).status === 403 && (await post(b, `<@${a.user.id}> <@${c.user.id}>`)).status === 201)
+const ls = await call(a.token, 'POST', `/guilds/${g.id}/automod`, { trigger: 'link_spam' }); await call(a.token, 'PATCH', `/guilds/${g.id}/automod/${ls.id}`, { allow: ['github.com'] })
+ok('links outside the allowed sites are blocked', (await post(b, 'see http://evil.example/win')).status === 403 && (await post(b, 'see https://gist.github.com/x')).status === 201)
+const nm = await call(a.token, 'POST', `/guilds/${g.id}/automod`, { trigger: 'name' }); await call(a.token, 'PATCH', `/guilds/${g.id}/automod/${nm.id}`, { keywords: ['admin*'] })
+ok('the nickname filter stops a matching nickname', (await raw(b.token, 'PATCH', `/guilds/${g.id}/members/${b.user.id}`, { nickname: 'AdminBob' })).status === 403 && (await raw(b.token, 'PATCH', `/guilds/${g.id}/members/${b.user.id}`, { nickname: 'Bobby' })).status === 200)
+
+console.log('-- actions and exemptions')
+const kw = (await call(a.token, 'GET', `/guilds/${g.id}/automod`)).find((x) => x.trigger === 'keyword')
+const vip = await call(a.token, 'POST', `/guilds/${g.id}/roles`, { name: 'VIP' }); await call(a.token, 'PATCH', `/guilds/${g.id}/members/${c.user.id}`, { roles: [vip.id] })
+await call(a.token, 'PATCH', `/guilds/${g.id}/automod/${kw.id}`, { exempt_roles: [vip.id], timeout_secs: 60 })
+ok('exempt roles aren\'t filtered', (await post(c, 'darn')).status === 201)
+await post(b, 'darn again')
+const bm = (await call(a.token, 'GET', `/guilds/${g.id}/members`)).find((m) => m.user_id === b.user.id)
+ok('a rule can time the member out', !!bm.timeout_until && new Date(bm.timeout_until) > new Date())
+await call(a.token, 'PATCH', `/guilds/${g.id}/automod/${kw.id}`, { enabled: false })
+await call(a.token, 'DELETE', `/guilds/${g.id}/members/${b.user.id}/timeout`)
+ok('disabled rules do nothing', (await post(b, 'darn')).status === 201)
+ok('no page errors', errors.length === 0, errors.join(' | '))
+await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await browser.close(); await finish()

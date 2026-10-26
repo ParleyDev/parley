@@ -1,4 +1,4 @@
-import { AlarmClock, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import { AlarmClock, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
 import { isImage } from '../lib/upload'
 import RoleIcon from './RoleIcon'
 import { locale } from '../lib/i18n'
@@ -259,6 +259,16 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       : <ArrowLeftFromLine size={16} className="text-text-2" />
     // thread_created: "started a thread: <name>" with the name as a link that opens the thread.
     const threadName = m.kind === 'thread_created' ? m.content.replace(/^started a thread: /, '') : null
+    // AutoMod alerts: the rule, who, where and what, with mentions rendered.
+    if (m.kind === 'automod_alert') {
+      return (
+        <div className="mx-4 max-md:mx-3 my-1 flex items-start gap-3 rounded-lg border-l-4 border-warn bg-warn/5 px-3 py-2 text-[15px] text-text-1" data-msg-id={m.id} data-system={m.kind}>
+          <ShieldAlert size={18} className="mt-0.5 shrink-0 text-warn" />
+          <span className="msg-content min-w-0 break-words">{renderMarkdown(m.content)}</span>
+          <span className="ml-auto text-xs text-text-2 shrink-0">{new Date(m.created_at).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}</span>
+        </div>
+      )
+    }
     // A missed call reads from the receiver's side: "You missed a call from Alice."
     if (m.kind === 'call_missed' && !isOwn) {
       return (

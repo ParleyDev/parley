@@ -5,6 +5,7 @@ license = "Apache-2.0"
 edition = "2021"
 
 [dependencies]
+regex = "1"
 axum = { version = "0.7", features = ["ws", "macros", "multipart"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.5", features = ["util"] }

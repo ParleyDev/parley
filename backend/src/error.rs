@@ -16,6 +16,9 @@ pub enum AppError {
     /// Membership screening: the member has not accepted the server rules yet (403, code "rules_required").
     #[error("rules_required")]
     RulesRequired,
+    /// AutoMod stopped it (403, code "automod", with the server's message).
+    #[error("{0}")]
+    Blocked(String),
     #[error("{0}")]
     NotFound(String),
     #[error("{0}")]
@@ -40,6 +43,9 @@ impl IntoResponse for AppError {
             }
             AppError::Undeliverable => {
                 return (StatusCode::FORBIDDEN, Json(json!({ "error": "Your message could not be delivered.", "code": "undeliverable" }))).into_response();
+            }
+            AppError::Blocked(m) => {
+                return (StatusCode::FORBIDDEN, Json(json!({ "error": m, "code": "automod" }))).into_response();
             }
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             AppError::Conflict(m) => (StatusCode::CONFLICT, m.clone()),

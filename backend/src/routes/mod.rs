@@ -3,6 +3,7 @@ pub mod admin;
 pub mod applications;
 pub mod assets;
 pub mod attachments;
+pub mod automod;
 pub mod auth;
 pub mod badge;
 pub mod calls;
@@ -65,6 +66,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(modtools::router())
         .merge(calls::router())
         .merge(widget::router())
+        .merge(automod::router())
         .merge(invites::router())
         .merge(roles::router())
         .merge(relationships::router())
