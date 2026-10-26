@@ -284,6 +284,12 @@ struct UpdateMember {
     #[serde(default, deserialize_with = "deserialize_nullable")]
     nickname: Option<Option<String>>,
     roles: Option<Vec<Uuid>>,
+    /// Server mute / deafen (Mute Members / Deafen Members); kept on the member until lifted.
+    mute: Option<bool>,
+    deaf: Option<bool>,
+    /// Move Members: a voice channel to move them to, or null to disconnect them from voice.
+    #[serde(default, deserialize_with = "deserialize_nullable_uuid")]
+    channel_id: Option<Option<Uuid>>,
 }
 
 async fn update_member(
@@ -317,6 +323,28 @@ async fn update_member(
             .await?;
     }
 
+    if req.mute.is_some() { perms::check(p, perms::MUTE_MEMBERS)?; }
+    if req.deaf.is_some() { perms::check(p, perms::DEAFEN_MEMBERS)?; }
+    if req.mute.is_some() || req.deaf.is_some() {
+        sqlx::query("UPDATE guild_members SET mute = COALESCE($3, mute), deaf = COALESCE($4, deaf) WHERE guild_id = $1 AND user_id = $2")
+            .bind(id).bind(target).bind(req.mute).bind(req.deaf).execute(&mut *tx).await?;
+    }
+    // Moving or disconnecting needs them in a voice channel of this server; a move also needs Connect to the destination.
+    let mut voice_action: Option<Option<Uuid>> = None;
+    if let Some(dest) = req.channel_id {
+        perms::check(p, perms::MOVE_MEMBERS)?;
+        let cur = state.hub.voice_state(target).filter(|v| v.guild_id == Some(id));
+        if cur.is_none() { return Err(AppError::BadRequest("They aren't in a voice channel here".into())) }
+        if let Some(cid) = dest {
+            let mut ch = sqlx::query_as::<_, crate::models::Channel>(&format!("SELECT {} FROM channels WHERE id = $1 AND guild_id = $2", crate::routes::guilds::CHANNEL_COLS))
+                .bind(cid).bind(id).fetch_optional(&state.db).await?.ok_or_else(|| AppError::BadRequest("Unknown voice channel".into()))?;
+            if !matches!(ch.kind.as_str(), "voice" | "stage" | "studio") { return Err(AppError::BadRequest("That isn't a voice channel".into())) }
+            perms::attach_overwrites(&state.db, std::slice::from_mut(&mut ch)).await?;
+            if !perms::has(ctx.in_channel(uid, p, &ch.overwrites), perms::CONNECT) { return Err(AppError::Forbidden) }
+        }
+        voice_action = Some(dest);
+    }
+
     if let Some(wanted) = &req.roles {
         perms::check(p, perms::MANAGE_ROLES)?;
         if target != uid && !ctx.outranks_member(uid, target) {
@@ -348,6 +376,24 @@ async fn update_member(
     }
     tx.commit().await?;
 
+    // Server mute/deafen applies at once if they are in voice; a move or disconnect is carried out by their app.
+    if req.mute.is_some() || req.deaf.is_some() {
+        if let Some(vs) = state.hub.voice_update(target, |v| { if v.guild_id == Some(id) { if let Some(m) = req.mute { v.mute = m } if let Some(d) = req.deaf { v.deaf = d } } }) {
+            if vs.guild_id == Some(id) { state.hub.emit_voice(&vs, json!(vs)); }
+        }
+    }
+    match voice_action {
+        Some(Some(cid)) => {
+            state.hub.moves.insert(target, cid);
+            state.hub.emit_users(vec![target], "VOICE_MOVE", json!({ "guild_id": id, "channel_id": cid }));
+        }
+        Some(None) => {
+            if let Some(prev) = state.hub.voice_leave(target, None) { crate::ws::handler::emit_voice_leave(&state, &prev); }
+            state.hub.emit_users(vec![target], "VOICE_DISCONNECT", json!({ "guild_id": id }));
+        }
+        None => {}
+    }
+
     let member = fetch_member(&state.db, id, target).await?;
     state.hub.emit_guild(id, "GUILD_MEMBER_UPDATE", json!(member));
     if req.roles.is_some() {
@@ -356,6 +402,9 @@ async fn update_member(
     if target != uid || req.roles.is_some() {
         let mut d = serde_json::Map::new();
         if req.nickname.is_some() { d.insert("nickname".into(), json!(member.nickname)); }
+        if let Some(m) = req.mute { d.insert("server_mute".into(), json!(m)); }
+        if let Some(v) = req.deaf { d.insert("server_deafen".into(), json!(v)); }
+        match voice_action { Some(Some(cid)) => { d.insert("moved_to".into(), json!(cid)); } Some(None) => { d.insert("disconnected".into(), json!(true)); } None => {} }
         if req.roles.is_some() { d.insert("roles".into(), json!(member.roles.iter().filter_map(|r| ctx.roles.get(r)).map(|r| r.name.clone()).collect::<Vec<_>>())); }
         crate::audit::guild(&state, id, uid, "member.update", "user", Some(target), &member.username, serde_json::Value::Object(d)).await;
     }

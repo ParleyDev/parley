@@ -149,7 +149,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
         channels.extend(perms::visible_channels(&state.db, *gid, user_id).await.unwrap_or_default());
         roles.extend(perms::list_roles(&state.db, *gid).await.unwrap_or_default());
         if let Ok(mut m) = sqlx::query_as::<_, Member>(
-            "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at, u.avatar_decoration, u.clan_tag
+            "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at, m.mute, m.deaf, u.avatar_decoration, u.clan_tag
              FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
         )
         .bind(gid)
@@ -318,8 +318,18 @@ async fn run_loop(
     crate::ws::bus::announce(state, user_id).await;
 }
 
-fn emit_voice_leave(state: &AppState, prev: &VoiceState) {
+pub fn emit_voice_leave(state: &AppState, prev: &VoiceState) {
     state.hub.emit_voice(prev, prev.leave_payload());
+    // Last one out of a server voice channel: its status goes with them.
+    if prev.guild_id.is_some() && state.hub.voice_in_channel(prev.channel_id) == 0 {
+        let st = state.clone();
+        let channel_id = prev.channel_id;
+        tokio::spawn(async move {
+            if let Err(e) = crate::routes::channels::set_voice_status_inner(&st, channel_id, "").await {
+                tracing::warn!(error = ?e, "voice status clear failed");
+            }
+        });
+    }
     // Last one out of a DM call: settle its notice.
     if prev.guild_id.is_none() && state.hub.voice_in_channel(prev.channel_id) == 0 {
         if let Some((_, call)) = state.hub.calls.remove(&prev.channel_id) {
@@ -373,6 +383,18 @@ async fn handle_client_op(
                 return;
             }
             let guild_id = channel.guild_id;
+            // A full channel turns people away, except those who may move members and someone a moderator just moved here.
+            let moved_here = state.hub.moves.remove(&user_id).map(|(_, c)| c == channel_id).unwrap_or(false);
+            let already_here = state.hub.voice_state(user_id).map(|v| v.channel_id == channel_id).unwrap_or(false);
+            if channel.user_limit > 0 && !already_here && !moved_here && !has(p, perms::MOVE_MEMBERS) && state.hub.voice_in_channel(channel_id) >= channel.user_limit as usize {
+                let _ = tx.send(Message::Text(json!({"t":"VOICE_ERROR","d":{"message":"This voice channel is full"}}).to_string())).await;
+                return;
+            }
+            // Server mute and deafen follow the member from channel to channel.
+            let (mute, deaf) = match guild_id {
+                Some(g) => sqlx::query_as::<_, (bool, bool)>("SELECT mute, deaf FROM guild_members WHERE guild_id = $1 AND user_id = $2").bind(g).bind(user_id).fetch_optional(&state.db).await.ok().flatten().unwrap_or((false, false)),
+                None => (false, false),
+            };
             let peers: Vec<Uuid> = if guild_id.is_none() {
                 sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM channel_members WHERE channel_id = $1").bind(channel_id).fetch_all(&state.db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default()
             } else { Vec::new() };
@@ -383,7 +405,7 @@ async fn handle_client_op(
             // Stage: everyone but moderators joins as audience. Studio: the engineer and moderators are in the band from the start.
             let crew = has(p, perms::MANAGE_CHANNELS) || (channel.kind == "studio" && perms::is_engineer(&state.db, channel_id, user_id).await.unwrap_or(false));
             let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew));
-            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, request_to_speak: false, e2ee, session, peers };
+            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, mute, deaf, request_to_speak: false, e2ee, session, peers };
             if let Some(prev) = state.hub.voice_join(vs.clone()) {
                 if prev.channel_id != channel_id || prev.guild_id != guild_id {
                     emit_voice_leave(state, &prev);

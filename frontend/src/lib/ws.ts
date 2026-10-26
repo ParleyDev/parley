@@ -54,7 +54,9 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'STUDIO_SESSION'; d: { channel_id: string; action: 'start' | 'stop'; session_id: string; name?: string; started_at?: string } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
-  | { t: 'VOICE_ERROR'; d: { message: string } })
+  | { t: 'VOICE_ERROR'; d: { message: string } }
+  | { t: 'VOICE_MOVE'; d: { guild_id: string; channel_id: string } }
+  | { t: 'VOICE_DISCONNECT'; d: { guild_id: string } })
 
 export type SignalData = { type: 'offer' | 'answer'; sdp: string } | { type: 'candidate'; candidate: RTCIceCandidateInit | null }
   /** Mesh: ask a streamer to start (on) or stop sending us their screen share. */
@@ -220,6 +222,8 @@ function handle(ev: Ev) {
     case 'STUDIO_SESSION': studio.onSession(ev.d); void s.loadStudio(ev.d.channel_id); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break
+    case 'VOICE_MOVE': if (s.myVoiceChannelId) { s.pushToast('A moderator moved you to another voice channel'); voice.join(ev.d.channel_id) } break
+    case 'VOICE_DISCONNECT': if (s.myVoiceChannelId) { s.pushToast('A moderator disconnected you from voice'); voice.leave(true) } break
   }
 }
 

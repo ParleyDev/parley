@@ -29,6 +29,10 @@ pub const ATTACH_FILES: u64 = 1 << 15;
 pub const MENTION_EVERYONE: u64 = 1 << 17;
 pub const CONNECT: u64 = 1 << 20;
 pub const SPEAK: u64 = 1 << 21;
+/// Voice moderation (Discord's bits): server mute, server deafen, move members between voice channels or disconnect them.
+pub const MUTE_MEMBERS: u64 = 1 << 22;
+pub const DEAFEN_MEMBERS: u64 = 1 << 23;
+pub const MOVE_MEMBERS: u64 = 1 << 24;
 pub const CHANGE_NICKNAME: u64 = 1 << 26;
 pub const MANAGE_NICKNAMES: u64 = 1 << 27;
 pub const MANAGE_ROLES: u64 = 1 << 28;
@@ -53,6 +57,9 @@ pub const ALL: u64 = CREATE_INVITE
     | MENTION_EVERYONE
     | CONNECT
     | SPEAK
+    | MUTE_MEMBERS
+    | DEAFEN_MEMBERS
+    | MOVE_MEMBERS
     | CHANGE_NICKNAME
     | MANAGE_NICKNAMES
     | MANAGE_ROLES
@@ -399,6 +406,9 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
         ("MENTION_EVERYONE", MENTION_EVERYONE),
         ("CONNECT", CONNECT),
         ("SPEAK", SPEAK),
+        ("MUTE_MEMBERS", MUTE_MEMBERS),
+        ("DEAFEN_MEMBERS", DEAFEN_MEMBERS),
+        ("MOVE_MEMBERS", MOVE_MEMBERS),
         ("CHANGE_NICKNAME", CHANGE_NICKNAME),
         ("MANAGE_NICKNAMES", MANAGE_NICKNAMES),
         ("MANAGE_ROLES", MANAGE_ROLES),

@@ -38,6 +38,11 @@ pub struct VoiceState {
     pub self_stream: bool,
     /// Server-side: the member lacks SPEAK here (or is in a stage audience), so the client must keep its mic gate closed.
     pub suppress: bool,
+    /// Server muted / deafened by a moderator (kept on the member until lifted). Deafened members can't speak either.
+    #[serde(default)]
+    pub mute: bool,
+    #[serde(default)]
+    pub deaf: bool,
     /// Stage channels: the member asked to speak (shown to moderators).
     #[serde(default)]
     pub request_to_speak: bool,
@@ -56,7 +61,8 @@ impl VoiceState {
     /// Same shape as a normal state update but with `channel_id: null`, meaning "left voice".
     pub fn leave_payload(&self) -> Value {
         json!({ "guild_id": self.guild_id, "channel_id": Value::Null, "user_id": self.user_id,
-                "self_mute": self.self_mute, "self_deaf": self.self_deaf, "self_video": self.self_video, "self_stream": self.self_stream, "suppress": self.suppress })
+                "self_mute": self.self_mute, "self_deaf": self.self_deaf, "self_video": self.self_video, "self_stream": self.self_stream, "suppress": self.suppress,
+                "mute": self.mute, "deaf": self.deaf })
     }
 }
 
@@ -83,6 +89,8 @@ pub struct Hub {
     voice: DashMap<Uuid, VoiceState>,
     /// DM channel -> the call in progress there (its notice message, who started it, whether anyone else picked up).
     pub calls: DashMap<Uuid, CallInfo>,
+    /// A moderator moved this user to this voice channel: their next join there skips the user limit.
+    pub moves: DashMap<Uuid, Uuid>,
     /// (user, session) -> when the DB last confirmed it live; see auth::check_session.
     session_ok: DashMap<(Uuid, Uuid), std::time::Instant>,
     session_seq: std::sync::atomic::AtomicU64,
@@ -108,6 +116,7 @@ impl Hub {
             online: DashMap::new(),
             voice: DashMap::new(),
             calls: DashMap::new(),
+            moves: DashMap::new(),
             session_ok: DashMap::new(),
             session_seq: std::sync::atomic::AtomicU64::new(1),
             seq: std::sync::atomic::AtomicU64::new(0),

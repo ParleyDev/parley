@@ -59,6 +59,7 @@ function Overview({ channel }: { channel: Channel }) {
   const [topic, setTopic] = useState(channel.topic)
   const [nsfw, setNsfw] = useState(!!channel.nsfw)
   const [slowmode, setSlowmode] = useState(channel.rate_limit_per_user ?? 0)
+  const [userLimit, setUserLimit] = useState(channel.user_limit ?? 0)
   const hasSlowmode = channel.guild_id !== null && (channel.kind === 'text' || channel.kind === 'thread')
   const [audioMode, setAudioMode] = useState<AudioMode>(channel.audio_mode === 'music' ? 'music' : 'voice')
   const [bitrate, setBitrate] = useState(channel.audio_bitrate ?? 0)
@@ -67,11 +68,11 @@ function Overview({ channel }: { channel: Channel }) {
   const [busy, setBusy] = useState(false)
   const isAudio = channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
   const audioDirty = isAudio && (audioMode !== (channel.audio_mode === 'music' ? 'music' : 'voice') || bitrate !== (channel.audio_bitrate ?? 0) || lowLatency !== !!channel.audio_low_latency || e2ee !== !!channel.e2ee)
-  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || slowmode !== (channel.rate_limit_per_user ?? 0) || audioDirty
-  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSlowmode(channel.rate_limit_per_user ?? 0); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
+  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || slowmode !== (channel.rate_limit_per_user ?? 0) || userLimit !== (channel.user_limit ?? 0) || audioDirty
+  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee) }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
@@ -92,6 +93,16 @@ function Overview({ channel }: { channel: Channel }) {
           <span><span className="block text-[15px]">Age-Restricted Channel</span><span className="block text-xs text-text-2">Members see a warning before opening it, and those who blur sensitive media get pictures and videos here blurred until clicked.</span></span>
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} />
         </label>
+      )}
+      {channel.kind === 'voice' && (
+        <div data-channel-user-limit>
+          <label className="label" htmlFor="user-limit">User limit</label>
+          <div className="flex items-center gap-3">
+            <input id="user-limit" type="range" min={0} max={99} value={userLimit} onChange={(e) => setUserLimit(Number(e.target.value))} className="flex-1 accent-accent" />
+            <span className="w-24 text-right text-sm tabular-nums">{userLimit ? `${userLimit} user${userLimit === 1 ? '' : 's'}` : 'No limit'}</span>
+          </div>
+          <p className="mt-1 text-xs text-text-2">How many people can be in the channel at once. Members who can move members can still join a full channel.</p>
+        </div>
       )}
       {isAudio && <AudioSection mode={audioMode} setMode={setAudioMode} bitrate={bitrate} setBitrate={setBitrate} lowLatency={lowLatency} setLowLatency={setLowLatency} />}
       {isAudio && (

@@ -128,6 +128,10 @@ export interface Channel {
   e2ee?: boolean
   /** Slowmode: seconds between a member's messages (0 = off). */
   rate_limit_per_user?: number
+  /** Voice channels: how many may be in it (0 = no limit). */
+  user_limit?: number
+  /** Voice channels: what's going on, set by people in it; cleared when it empties. */
+  voice_status?: string
   /** Studio channels: the engineers (several allowed). */
   engineer_ids?: string[]
   overwrites?: Overwrite[]
@@ -332,6 +336,9 @@ export interface VoiceState {
   suppress?: boolean
   /** Stage channels: raised hand. */
   request_to_speak?: boolean
+  /** Server muted / deafened by a moderator (deafened members can't speak either). */
+  mute?: boolean
+  deaf?: boolean
 }
 
 /** Scheduled event (GET /guilds/:id/events). */

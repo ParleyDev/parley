@@ -407,6 +407,8 @@ class VoiceManager {
           }
           if (this.camera || this.screen || s.selfMute || s.selfDeaf) this.pushState()
         }
+        // A moderator's server deafen (or its removal) takes effect on what we hear right away.
+        this.applyDeaf(useStore.getState().selfDeaf)
       } else if (v.channel_id === null && !useStore.getState().voiceConnecting) {
         // Server evicted us (kicked, channel deleted, another tab took over). While a (re)join awaits its
         // acknowledgement, a "left" state is the echo of our own earlier voice_leave, not an eviction.
@@ -579,8 +581,8 @@ class VoiceManager {
         if (db >= threshold) this.lastVoiceAt = now
         open = now - this.lastVoiceAt < VAD_HOLD_MS
       }
-      // Server-side "suppress" (no SPEAK permission) keeps the gate shut regardless of input mode.
-      if (s.user && s.voiceStates[s.user.id]?.suppress) open = false
+      // Server-side "suppress" (no SPEAK permission) and a moderator's server mute or deafen keep the gate shut.
+      if (this.serverSilenced()) open = false
       gate.gain.setTargetAtTime(open ? 1 : 0, ctx.currentTime, 0.015)
       const muted = s.selfMute || s.selfDeaf
       s.setInputLevel(Math.round(db), open && !muted)
@@ -621,7 +623,18 @@ class VoiceManager {
 
   private recordingSilenced() {
     const s = useStore.getState()
-    return s.selfMute || s.selfDeaf || !!(s.user && s.voiceStates[s.user.id]?.suppress)
+    return s.selfMute || s.selfDeaf || this.serverSilenced()
+  }
+  /** The server keeps us quiet: no Speak (or stage audience), or a moderator's server mute or deafen. */
+  private serverSilenced() {
+    const s = useStore.getState()
+    const v = s.user ? s.voiceStates[s.user.id] : undefined
+    return !!(v?.suppress || v?.mute || v?.deaf)
+  }
+  /** A moderator server-deafened us: we hear nobody until they lift it. */
+  private serverDeaf() {
+    const s = useStore.getState()
+    return !!(s.user && s.voiceStates[s.user.id]?.deaf)
   }
 
   /** Soundboard: play a short clip through the voice output device at the clip's volume (skipped while deafened). */
@@ -640,7 +653,7 @@ class VoiceManager {
     // A person's own volume (set in their user menu) scales the output volume; sounds have no data-peer.
     const who = el.dataset.peer ? userAudio(el.dataset.peer) : null
     el.volume = Math.max(0, Math.min(1, (st.outputVolume / 100) * ((who?.volume ?? 100) / 100)))
-    el.muted = useStore.getState().selfDeaf || !!who?.muted
+    el.muted = useStore.getState().selfDeaf || this.serverDeaf() || !!who?.muted
     if (supportsSinkId) {
       (el as HTMLAudioElement & { setSinkId(id: string): Promise<void> }).setSinkId(st.outputDeviceId || '').catch(() => {
         if (st.outputDeviceId) useStore.getState().updateVoiceSettings({ outputDeviceId: '' })
@@ -792,7 +805,8 @@ class VoiceManager {
     this.mic?.getAudioTracks().forEach((t) => (t.enabled = !muted))
     if (this.recGain && this.ctx) this.recGain.gain.setTargetAtTime(muted ? 0 : 1, this.ctx.currentTime, 0.015)
   }
-  private applyDeaf(deaf: boolean) {
+  private applyDeaf(selfDeaf: boolean) {
+    const deaf = selfDeaf || this.serverDeaf()
     const muted = (el: HTMLAudioElement) => deaf || (!!el.dataset.peer && userAudio(el.dataset.peer).muted)
     this.peers.forEach((p) => (p.audio.muted = muted(p.audio))); this.sfuAudio.forEach((a) => (a.muted = muted(a)))
   }

@@ -49,6 +49,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const canConnect = has(perms, P.CONNECT)
   const canStream = has(perms, P.STREAM)
   const suppressed = useStore((s) => !!(s.user && s.voiceStates[s.user.id]?.suppress))
+  const myVs = useStore((s) => (s.user ? s.voiceStates[s.user.id] : undefined))
   const [focused, setFocused] = useState<string | null>(null)
   const [chat, setChat] = useState(() => { try { return localStorage.getItem(CHAT_KEY) === '1' } catch { return false } })
   // Soundboard: the server's sounds, loaded when the picker first opens; playing is a REST call the server fans out.
@@ -212,7 +213,10 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {isStudio && liveSession && <span className="flex items-center gap-1.5 rounded-full bg-danger/20 px-2 py-0.5 text-[11px] font-bold uppercase text-danger" data-studio-rec><span className="h-2 w-2 rounded-full bg-danger animate-pulse" />REC · {liveSession.name}</span>}
         <CallLock channelId={channel.id} />
         <span className="text-xs text-text-2 whitespace-nowrap" data-voice-count>{isStage ? `${tiles.length} speaking · ${audience.length} listening` : `${count} connected`}</span>
+        {channel.kind === 'voice' && <VoiceStatus channel={channel} canSet={inThis || has(myChannelPerms(useStore.getState(), channel.id), P.MANAGE_CHANNELS)} />}
         {inThis && suppressed && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase">Muted by server</span>}
+        {inThis && !suppressed && myVs?.deaf && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-deafened>Deafened by a moderator</span>}
+        {inThis && !suppressed && !myVs?.deaf && myVs?.mute && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-muted>Muted by a moderator</span>}
         <span className="ml-auto flex items-center gap-1">
           {isStudio && <button onClick={() => setSessionsOpen((o) => !o)} title="Sessions" className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${sessionsOpen ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-studio-toggle><ListMusic size={20} /></button>}
           {chatToggle}<MembersToggle /></span>
@@ -401,4 +405,25 @@ function PreJoin({ channel, participants, users, canConnect, connecting, switchi
       </button>
     </div>
   )
+}
+
+/** A voice channel's status ("Watching the finals"): anyone in the channel (or who manages it) can set it; it clears when everyone leaves. */
+function VoiceStatus({ channel, canSet }: { channel: Channel; canSet: boolean }) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(channel.voice_status ?? '')
+  const pushToast = useStore((s) => s.pushToast)
+  useEffect(() => { if (!editing) setText(channel.voice_status ?? '') }, [channel.voice_status, editing])
+  const save = async () => {
+    setEditing(false)
+    if (text.trim() === (channel.voice_status ?? '')) return
+    try { await api.put(`/channels/${channel.id}/voice-status`, { status: text.trim() }) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  if (editing) {
+    return <input autoFocus value={text} maxLength={500} onChange={(e) => setText(e.target.value)} onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setText(channel.voice_status ?? ''); setEditing(false) } }}
+      placeholder="What's going on in here?" className="input h-7 min-w-0 max-w-xs flex-1 py-0 text-xs" aria-label="Channel status" data-voice-status-input />
+  }
+  if (channel.voice_status) {
+    return <button type="button" disabled={!canSet} onClick={() => setEditing(true)} className="min-w-0 truncate rounded-md px-1.5 text-xs text-text-1 hover:bg-bg-3 disabled:hover:bg-transparent" title={canSet ? 'Change the channel status' : channel.voice_status} data-voice-status-show>{channel.voice_status}</button>
+  }
+  return canSet ? <button type="button" onClick={() => setEditing(true)} className="shrink-0 rounded-md px-1.5 text-xs text-text-2 hover:bg-bg-3 hover:text-text-1" data-voice-status-set>Set a channel status</button> : null
 }

@@ -21,6 +21,9 @@ export const P = {
   MANAGE_NICKNAMES: 1 << 27,
   MANAGE_ROLES: 1 << 28,
   MODERATE_MEMBERS: 1 << 29,
+  MUTE_MEMBERS: 1 << 22,
+  DEAFEN_MEMBERS: 1 << 23,
+  MOVE_MEMBERS: 1 << 24,
 } as const
 
 export type PermKey = keyof typeof P
@@ -47,6 +50,9 @@ export const PERMS: PermInfo[] = [
   { key: 'CONNECT', label: 'Connect', desc: 'Allows members to join voice channels and hear others.', group: 'Voice', channel: 'voice' },
   { key: 'SPEAK', label: 'Speak', desc: 'Allows members to talk in voice channels.', group: 'Voice', channel: 'voice' },
   { key: 'STREAM', label: 'Video', desc: 'Allows members to share their video and screen in voice channels.', group: 'Voice', channel: 'voice' },
+  { key: 'MUTE_MEMBERS', label: 'Mute Members', desc: 'Allows members to mute other members in voice channels for everyone (a server mute).', group: 'Voice', channel: 'voice' },
+  { key: 'DEAFEN_MEMBERS', label: 'Deafen Members', desc: 'Allows members to deafen other members in voice channels, so they can neither hear nor speak.', group: 'Voice', channel: 'voice' },
+  { key: 'MOVE_MEMBERS', label: 'Move Members', desc: 'Allows members to move or disconnect other members between voice channels they can connect to, and to join full channels.', group: 'Voice', channel: 'voice' },
   { key: 'ADMINISTRATOR', label: 'Administrator', desc: 'Members with this permission have every permission and bypass all channel restrictions. This is a dangerous permission to grant.', group: 'General' },
 ]
 

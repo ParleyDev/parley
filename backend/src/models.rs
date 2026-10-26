@@ -226,6 +226,14 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub rate_limit_per_user: i32,
+    /// Voice channels: how many people may be in it (0 = no limit).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub user_limit: i32,
+    /// Voice channels: what's going on in there, set by the people in it; cleared when it empties.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub voice_status: String,
     /// Studio channels: the engineers (run recordings, manage the band); filled by `perms::attach_overwrites`.
     #[sqlx(skip)]
     #[serde(default)]
@@ -304,6 +312,13 @@ pub struct Member {
     #[sqlx(default)]
     #[serde(default)]
     pub rules_accepted_at: Option<DateTime<Utc>>,
+    /// Server muted / deafened by a moderator (voice).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub mute: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub deaf: bool,
     #[sqlx(skip)]
     #[serde(default)]
     pub roles: Vec<Uuid>,

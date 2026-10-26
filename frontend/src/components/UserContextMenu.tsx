@@ -1,4 +1,4 @@
-import { AtSign, Ban, VideoOff, VolumeX, Copy, Flag, Gavel, MessageSquare, NotebookPen, Pencil, Phone, Send, Shield, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { ArrowRightLeft, AtSign, Ban, HeadphoneOff, MicOff, PhoneOff, VideoOff, VolumeX, Copy, Flag, Gavel, MessageSquare, NotebookPen, Pencil, Phone, Send, Shield, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { getPrefs } from '../lib/prefs'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -7,7 +7,7 @@ import { voice } from '../lib/voice'
 import { setUserAudio, userAudio, useUserAudioMap } from '../lib/userAudio'
 import { publicOrigin } from './InviteCard'
 import type { DmChannel, Invite, Member } from '../lib/types'
-import { myGuildPerms, useStore } from '../store'
+import { myChannelPerms, myGuildPerms, useStore } from '../store'
 import type { MenuEntry } from './ContextMenu'
 
 export interface MenuUser { id: string; display_name: string; nickname?: string | null; bot?: boolean }
@@ -75,6 +75,19 @@ export function useUserMenu(guildId?: string | null) {
     const roleMenu = assignable.length ? [{ label: 'Roles', icon: <Shield size={16} />, children: assignable.map((r) => ({
       label: `${member!.roles.includes(r.id) ? '✓ ' : ''}${r.name}`, disabled: !canManageRole(ctx!, me!.id, r), onClick: () => toggleRole(r.id),
     })) }] : []
+    // Voice moderation (Discord's): server mute and deafen, Move To another voice channel, Disconnect.
+    const vs = guildId ? st.voiceStates[u.id] : undefined
+    const inVoiceHere = !!vs?.channel_id && vs.guild_id === guildId
+    const setVoice = (body: Record<string, unknown>, done: string) => act(async () => { upsertMember(await api.patch<Member>(`/guilds/${guildId}/members/${u.id}`, body)); pushToast(done) })
+    const moveTargets = inVoiceHere && has(myPerms, P.MOVE_MEMBERS)
+      ? Object.values(st.channels).filter((c) => c.guild_id === guildId && c.id !== vs!.channel_id && (c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio') && has(myChannelPerms(st, c.id), P.CONNECT)).sort((a, b) => a.position - b.position)
+      : []
+    const modVoice: MenuEntry[] = inVoiceHere && !isMe ? [
+      ...(has(myPerms, P.MUTE_MEMBERS) ? [{ label: vs!.mute ? '✓ Server Mute' : 'Server Mute', icon: <MicOff size={16} />, danger: !vs!.mute, onClick: () => setVoice({ mute: !vs!.mute }, vs!.mute ? `${name} can speak again` : `${name} is server muted`) }] : []),
+      ...(has(myPerms, P.DEAFEN_MEMBERS) ? [{ label: vs!.deaf ? '✓ Server Deafen' : 'Server Deafen', icon: <HeadphoneOff size={16} />, danger: !vs!.deaf, onClick: () => setVoice({ deaf: !vs!.deaf }, vs!.deaf ? `${name} can hear again` : `${name} is server deafened`) }] : []),
+      ...(moveTargets.length ? [{ label: 'Move To', icon: <ArrowRightLeft size={16} />, children: moveTargets.map((c) => ({ label: c.name, onClick: () => setVoice({ channel_id: c.id }, `Moved ${name} to ${c.name}`) })) }] : []),
+      ...(has(myPerms, P.MOVE_MEMBERS) ? [{ label: 'Disconnect', icon: <PhoneOff size={16} />, danger: true, onClick: () => setVoice({ channel_id: null }, `Disconnected ${name}`) }] : []),
+    ] : []
     // Invite to Server: a week-long invite to any server you can invite to, sent to them in a DM.
     const invitable = isMe ? [] : Object.values(st.guilds).filter((g) => g.id !== guildId && has(myGuildPerms(st, g.id), P.CREATE_INVITE))
     const invite = (gid: string, gname: string) => act(async () => {
@@ -115,6 +128,7 @@ export function useUserMenu(guildId?: string | null) {
       ...nickname,
       ...roleMenu,
       ...inviteMenu,
+      ...(modVoice.length ? ['sep' as const, ...modVoice] : []),
       'sep',
       ...(rel === undefined ? [{ label: 'Add Friend', icon: <UserPlus size={16} />, onClick: () => act(() => api.post('/users/@me/relationships', { user_id: u.id })) }] : []),
       ...(rel === 'incoming' ? [{ label: 'Accept Friend Request', icon: <UserCheck size={16} />, onClick: () => act(() => api.put(`/users/@me/relationships/${u.id}`)) }] : []),

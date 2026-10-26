@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/messages", get(list_messages).post(create_message).route_layer(from_fn(rl_messages)))
         .route("/channels/:id/messages/:mid", axum::routing::patch(edit_message).delete(delete_message))
         .route("/channels/:id/messages/bulk-delete", post(bulk_delete))
+        .route("/channels/:id/voice-status", put(set_voice_status))
         .route("/channels/:id/messages/:mid/history", get(message_history))
         .route("/channels/:id/messages/:mid/reactions/:emoji", get(list_reactors).put(add_reaction).delete(remove_reaction))
         .route("/channels/:id/messages/:mid/forward", post(forward_message))
@@ -122,6 +123,8 @@ struct UpdateChannel {
     e2ee: Option<bool>,
     /// Server text channels, forums and threads: slowmode in seconds (0 to 21600).
     rate_limit_per_user: Option<i32>,
+    /// Voice channels: most people allowed in at once (0 = no limit, up to 99).
+    user_limit: Option<i32>,
 }
 
 /// Call encryption was switched on or off: anyone in the call whose client can't encrypt is dropped from it (their
@@ -200,6 +203,9 @@ async fn update_channel(
             return Err(AppError::BadRequest("audio_bitrate must be 8-510 kbps (or 0 for the default)".into()));
         }
     }
+    if let Some(n) = req.user_limit {
+        if !(0..=99).contains(&n) { return Err(AppError::BadRequest("User limit must be 0 (none) to 99".into())) }
+    }
     if let Some(s) = req.rate_limit_per_user {
         if !(0..=21600).contains(&s) { return Err(AppError::BadRequest("Slowmode must be 0 to 21600 seconds (6 hours)".into())) }
     }
@@ -220,7 +226,7 @@ async fn update_channel(
         "UPDATE channels SET name = COALESCE($2, name), topic = COALESCE($3, topic), position = COALESCE($4, position),
          parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw),
          audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency), e2ee = COALESCE($11, e2ee),
-         rate_limit_per_user = COALESCE($12, rate_limit_per_user)
+         rate_limit_per_user = COALESCE($12, rate_limit_per_user), user_limit = COALESCE($13, user_limit)
          WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
@@ -235,6 +241,7 @@ async fn update_channel(
     .bind(req.audio_low_latency)
     .bind(req.e2ee)
     .bind(req.rate_limit_per_user)
+    .bind(req.user_limit)
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
@@ -255,6 +262,7 @@ async fn update_channel(
         if updated.audio_low_latency != c.audio_low_latency { d.insert("audio_low_latency".into(), json!(updated.audio_low_latency)); }
         if updated.e2ee != c.e2ee { d.insert("e2ee".into(), json!(updated.e2ee)); }
         if updated.rate_limit_per_user != c.rate_limit_per_user { d.insert("slowmode".into(), json!(updated.rate_limit_per_user)); }
+        if updated.user_limit != c.user_limit { d.insert("user_limit".into(), json!(updated.user_limit)); }
         crate::audit::guild(&state, gid, uid, "channel.update", "channel", Some(id), &updated.name, serde_json::Value::Object(d)).await;
     }
     Ok(Json(updated))
@@ -645,6 +653,31 @@ pub async fn check_verification(db: &PgPool, guild_id: Uuid, uid: Uuid) -> AppRe
         return Err(AppError::BadRequest(format!("This server requires members to wait 10 minutes before talking. Try again in {} seconds.", (600.0 - member_secs).ceil() as i64)));
     }
     Ok(())
+}
+
+#[derive(Deserialize)]
+struct VoiceStatusReq { status: String }
+
+/// Set a voice channel's status ("Watching the finals"): anyone in the channel, or who can manage it. Up to 500 characters.
+async fn set_voice_status(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<VoiceStatusReq>) -> AppResult<StatusCode> {
+    let (c, p) = require_channel_perms(&state.db, id, uid).await?;
+    if c.guild_id.is_none() || c.kind != "voice" { return Err(AppError::BadRequest("Only server voice channels have a status".into())) }
+    let inside = state.hub.voice_state(uid).map(|v| v.channel_id == id).unwrap_or(false);
+    if !inside && !has(p, perms::MANAGE_CHANNELS) { return Err(AppError::Forbidden) }
+    let status: String = req.status.trim().chars().take(500).collect();
+    set_voice_status_inner(&state, id, &status).await
+}
+
+/// Store a voice channel's status and tell everyone who can see the channel (no-op when unchanged).
+pub async fn set_voice_status_inner(state: &AppState, id: Uuid, status: &str) -> AppResult<StatusCode> {
+    let updated = sqlx::query_as::<_, Channel>(&format!("UPDATE channels SET voice_status = $2 WHERE id = $1 AND voice_status <> $2 RETURNING {CHANNEL_COLS}"))
+        .bind(id).bind(status).fetch_optional(&state.db).await?;
+    if let Some(mut c) = updated {
+        perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
+        let target = perms::channel_audience(&state.db, &c).await?;
+        state.hub.emit(target, "CHANNEL_UPDATE", json!(c));
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Slowmode: refuse a message sent too soon after this member's last one here (system notices such as their join

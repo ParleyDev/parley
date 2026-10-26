@@ -34,6 +34,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const [menu, setMenu] = useState(false)
   const markRead = useStore((s) => s.markRead)
   const allGuilds = useStore((s) => s.guilds)
+  const voiceStates = useStore((s) => s.voiceStates)
   const mentionCounts = useStore((s) => s.mentionCounts)
   const notifSettings = useStore((s) => s.notifSettings)
   const dms = useStore((s) => s.dms)
@@ -140,7 +141,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id && catIds.has(c.parent_id) ? c.parent_id : ''} className={drag === c.id ? 'opacity-40' : ''} {...dragProps(c)}>
       <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name} locked={!!c.e2ee} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
         unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)} onClick={() => setMobilePane('content')}
+        count={c.user_limit ? `${Object.values(voiceStates).filter((v) => v.channel_id === c.id).length}/${c.user_limit}` : undefined}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
+      {c.voice_status && <div className="ml-8 mr-2 -mt-0.5 mb-0.5 truncate text-xs text-text-2" title={c.voice_status} data-voice-status={c.id}>{c.voice_status}</div>}
       {(c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
     </div>
   )
@@ -308,7 +311,11 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
             <StyledName userId={p.user_id} guildId={guildId} className="truncate flex-1">{members?.[p.user_id]?.nickname ?? u.display_name}</StyledName>
             {p.self_stream && <span className="rounded bg-danger px-1 text-[9px] font-extrabold text-white">LIVE</span>}
             {p.self_video && <Video size={14} className="text-text-2" />}
-            {p.self_deaf ? <HeadphoneOff size={14} className="text-text-2" /> : p.self_mute ? <MicOff size={14} className="text-text-2" /> : null}
+            {/* A moderator's server deafen or mute shows in red; your own choices in grey. */}
+            {p.deaf ? <HeadphoneOff size={14} className="text-danger" aria-label="Server deafened" data-server-deaf />
+              : p.self_deaf ? <HeadphoneOff size={14} className="text-text-2" />
+              : p.mute ? <MicOff size={14} className="text-danger" aria-label="Server muted" data-server-mute />
+              : p.self_mute ? <MicOff size={14} className="text-text-2" /> : null}
           </button>
         )
       })}
@@ -316,12 +323,13 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
   )
 }
 
-function ChannelRow({ to, icon, name, unread, mentions = 0, muted, locked, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; mentions?: number; muted?: boolean; locked?: boolean; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
+function ChannelRow({ to, icon, name, unread, mentions = 0, muted, locked, count, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; mentions?: number; muted?: boolean; locked?: boolean; count?: string; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
   return (
     <NavLink to={to} onClick={onClick} onContextMenu={onContextMenu} data-channel-row={name} data-muted={muted ? 'true' : undefined} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'} ${muted ? 'opacity-50' : ''}`}>
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>
+      {count && <span className="shrink-0 rounded bg-bg-0/70 px-1 text-[10px] font-semibold tabular-nums text-text-2" title="People in the channel / its limit" data-user-limit>{count}</span>}
       {locked && <Lock size={12} className="text-text-2 shrink-0" aria-label="End-to-end encrypted calls" data-e2ee-icon />}
       {muted && <BellOff size={13} className="text-text-2 shrink-0" data-muted-icon />}
       {mentions > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center" data-mention-badge={mentions}>{mentions}</span>}
