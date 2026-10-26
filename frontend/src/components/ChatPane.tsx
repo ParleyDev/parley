@@ -20,6 +20,10 @@ import { dmName, isGroup } from '../lib/dm'
  */
 export default function ChatPane({ channel, readOnly }: { channel: Channel | DmChannel; /** Shown instead of the composer (e.g. a locked thread). */ readOnly?: string }) {
   const messages = useStore((s) => s.messages[channel.id])
+  // App commands here (the / menu and the Apps menus on messages and people).
+  const appCmdsLoaded = useStore((s) => !!s.appCommands[channel.id])
+  const loadAppCommands = useStore((s) => s.loadAppCommands)
+  useEffect(() => { if (!appCmdsLoaded) void loadAppCommands(channel.id) }, [appCmdsLoaded, channel.id, loadAppCommands])
   // Screen readers: announce messages from other people as they arrive.
   const myId = useStore((s) => s.user?.id)
   const lastMsg = messages?.[messages.length - 1]

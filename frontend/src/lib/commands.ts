@@ -17,7 +17,7 @@ export interface SlashCommand {
   app?: AppCommand
 }
 
-export interface CommandOption { type: number; name: string; description: string; required: boolean; choices: { name: string; value: string | number }[] }
+export interface CommandOption { type: number; name: string; description: string; required: boolean; choices: { name: string; value: string | number }[]; autocomplete?: boolean }
 /** A command an app registered (`type` 1 slash, 2 user, 3 message), as listed for a channel. */
 export interface AppCommand { id: string; application_id: string; type: 1 | 2 | 3; name: string; description: string; options: CommandOption[]; application: { name: string; icon_url: string | null } }
 

@@ -44,6 +44,7 @@ import FollowChannelModal from './FollowChannel'
 import ServerProfileModal from './ServerProfile'
 import ApplicationModal from './Application'
 import ActivityModal from './Activity'
+import AppModal from './AppModal'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
@@ -103,6 +104,7 @@ export default function Modals() {
     case 'welcome': return <WelcomeModal onClose={close} guildId={modal!.guildId} />
     case 'browseChannels': return <BrowseChannelsModal onClose={close} guildId={modal!.guildId} tab={modal!.tab} />
     case 'onboarding': return <OnboardingModal onClose={close} guildId={modal!.guildId} />
+    case 'appModal': return <AppModal onClose={close} interactionId={modal!.interactionId} modal={modal!.modal} />
     case 'activity': return <ActivityModal onClose={close} guildId={modal!.guildId} />
     case 'application': return <ApplicationModal onClose={close} guildId={modal!.guildId} />
     case 'serverProfile': return <ServerProfileModal onClose={close} guildId={modal!.guildId} />

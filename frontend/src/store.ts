@@ -54,6 +54,7 @@ export type ModalKind =
   | { kind: 'serverProfile'; guildId: string }
   | { kind: 'application'; guildId: string }
   | { kind: 'activity'; guildId: string }
+  | { kind: 'appModal'; interactionId: string; modal: import('./components/modals/AppModal').AppForm }
   | { kind: 'altText'; message: Message }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string; anchor?: Anchor }

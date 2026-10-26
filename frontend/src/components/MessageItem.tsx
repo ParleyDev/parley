@@ -1,4 +1,4 @@
-import { AlarmClock, Megaphone, Sparkles, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import { AlarmClock, AppWindow, Megaphone, Sparkles, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
 import { isImage } from '../lib/upload'
 import RoleIcon from './RoleIcon'
 import { locale } from '../lib/i18n'
@@ -32,6 +32,7 @@ import FrozenGif from './FrozenGif'
 import Emoji from './Emoji'
 import ExpressionPicker from './ExpressionPicker'
 import RichEmbed from './RichEmbed'
+import MessageComponents from './MessageComponents'
 import { isJumbo } from '../lib/emoji'
 import { api } from '../lib/api'
 import { shortcutFormat, toggleWrap } from '../lib/editor'
@@ -50,6 +51,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const chanKind = useStore((s) => s.channels[m.channel_id]?.kind)
   const chanNews = useStore((s) => !!s.channels[m.channel_id]?.news)
   const removeMessage = useStore((s) => s.removeMessage)
+  const msgApps = useStore((s) => s.appCommands[m.channel_id])?.filter((c) => c.type === 3) ?? []
   const pushToast = useStore((s) => s.pushToast)
   const setReadState = useStore((s) => s.setReadState)
   const bookmarked = useStore((s) => !!s.bookmarks[m.id])
@@ -218,6 +220,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       { label: 'Reply', icon: <Reply size={16} />, onClick: onReply },
       ...(guildId && chanKind === 'text' && !m.thread && m.kind !== 'default' ? [] : guildId && chanKind === 'text' && !m.thread ? [{ label: 'Create Thread', icon: <MessagesSquare size={16} />, onClick: () => openModal({ kind: 'createThread', channelId: m.channel_id, messageId: m.id, suggested: m.content.replace(/\s+/g, ' ').trim().slice(0, 60) }) }] : []),
       { label: 'Forward', icon: <Forward size={16} />, onClick: () => openModal({ kind: 'forward', message: m }) },
+      ...(msgApps.length ? [{ label: 'Apps', icon: <AppWindow size={16} />, children: msgApps.map((c) => ({ label: c.name, onClick: () => { void api.post('/interactions', { command_id: c.id, channel_id: m.channel_id, target_id: m.id }).catch((e: Error) => pushToast(e.message, 'error')) } })) }] : []),
       ...(canPublish ? [{ label: 'Publish', icon: <Megaphone size={16} />, onClick: publish }] : []),
       ...(isOwn ? [{ label: 'Edit Message', icon: <Pencil size={16} />, onClick: () => { setDraft(m.content); setEditing(true) } }] : []),
       ...(isOwn && pictures.length ? [{ label: 'Edit Attachments', icon: <ImageIcon size={16} />, onClick: () => openModal({ kind: 'altText', message: m }) }] : []),
@@ -371,6 +374,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               {media && !blockMedia && (prefs.linkMedia && !m.suppress_embeds ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
               {m.interaction?.deferred && <div className="flex items-center gap-1.5 text-sm italic text-text-2" data-interaction-thinking><span className="inline-flex gap-0.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2 [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2 [animation-delay:300ms]" /></span>{m.author.display_name} is thinking…</div>}
               {m.embeds?.map((e, i) => <RichEmbed key={i} e={e} />)}
+              {m.components && m.components.length > 0 && <MessageComponents m={m} />}
               {m.ephemeral && <div className="mt-1 flex items-center gap-1 text-xs text-text-2" data-ephemeral><EyeOff size={12} />Only you can see this · <button type="button" className="text-sky-400 hover:underline" onClick={() => removeMessage(m.channel_id, m.id)} data-ephemeral-dismiss>Dismiss message</button></div>}
               {link && !blockMedia && prefs.embeds && !m.suppress_embeds && (
                 <div className="group/embed relative w-fit max-w-full" data-embed-wrap>

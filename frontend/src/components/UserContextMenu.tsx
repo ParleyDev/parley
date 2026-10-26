@@ -1,7 +1,7 @@
-import { ArrowRightLeft, AtSign, Ban, BellRing, EyeOff, HeadphoneOff, MicOff, PhoneOff, VideoOff, VolumeX, Copy, Flag, Gavel, MessageSquare, NotebookPen, Pencil, Phone, Send, Shield, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { ArrowRightLeft, AppWindow, AtSign, Ban, BellRing, EyeOff, HeadphoneOff, MicOff, PhoneOff, VideoOff, VolumeX, Copy, Flag, Gavel, MessageSquare, NotebookPen, Pencil, Phone, Send, Shield, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { toggleIgnored, toggleOnlineAlert } from '../lib/userLists'
 import { getPrefs } from '../lib/prefs'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { canManageRole, has, highestPosition, isTimedOut, P, EMPTY_ROLES } from '../lib/perms'
 import { voice } from '../lib/voice'
@@ -45,6 +45,10 @@ export function useUserMenu(guildId?: string | null) {
   const upsertChannel = useStore((s) => s.upsertChannel)
   const upsertMember = useStore((s) => s.upsertMember)
   const navigate = useNavigate()
+  // User commands from the apps in the channel you're looking at.
+  const { channelId: here } = useParams()
+  const hereCommands = useStore((s) => (here ? s.appCommands[here] : undefined))
+  const userApps = (hereCommands ?? []).filter((c) => c.type === 2)
   const act = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
 
   return (u: MenuUser, anchor?: DOMRect | null): MenuEntry[] => {
@@ -126,6 +130,7 @@ export function useUserMenu(guildId?: string | null) {
       { label: 'Message', icon: <MessageSquare size={16} />, onClick: message },
       ...(rel !== 'blocked' && !u.bot ? [{ label: 'Call', icon: <Phone size={16} />, onClick: call }] : []),
       { label: 'Add Note', icon: <NotebookPen size={16} />, onClick: profile },
+      ...(userApps.length && here ? [{ label: 'Apps', icon: <AppWindow size={16} />, children: userApps.map((c) => ({ label: c.name, onClick: () => act(() => api.post('/interactions', { command_id: c.id, channel_id: here, target_id: u.id })) })) }] : []),
       ...(nickname.length || roleMenu.length || inviteMenu.length ? ['sep' as const] : []),
       ...nickname,
       ...roleMenu,

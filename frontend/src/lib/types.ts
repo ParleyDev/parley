@@ -340,6 +340,8 @@ export interface Message {
   /** A bot's answer to a command, and (ephemeral) only shown to you, never stored. */
   interaction?: { id: string; name: string; user: { id: string; display_name: string }; deferred?: boolean }
   ephemeral?: boolean
+  /** Buttons and select menus (action rows) on a bot's message. */
+  components?: import('../components/MessageComponents').ActionRow[]
   embeds?: import('../components/RichEmbed').Embed[]
   crosspost?: { published?: boolean; guild_id?: string; guild_name?: string; guild_icon?: string | null; channel_id?: string; channel_name?: string; message_id?: string }
   /** What a failed message would send again on Retry. */

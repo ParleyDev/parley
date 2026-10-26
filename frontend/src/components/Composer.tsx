@@ -18,7 +18,7 @@ import MentionSuggest, { applyMentions, mentionAt, useMentionItems, type Mention
 import { dmName, isGroup } from '../lib/dm'
 import { useT } from '../lib/i18n'
 import { api } from '../lib/api'
-import { commandMatches, runCommand, type SlashCommand } from '../lib/commands'
+import { optionHint, commandMatches, runCommand, type SlashCommand } from '../lib/commands'
 import { getDraft, saveDraft } from '../lib/drafts'
 import { shortDuration } from '../lib/slowmode'
 
@@ -98,6 +98,35 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const loadAppCommands = useStore((s) => s.loadAppCommands)
   useEffect(() => { if (!appCommands && value.startsWith('/')) void loadAppCommands(channel.id) }, [appCommands, value.startsWith('/'), channel.id, loadAppCommands]) // eslint-disable-line react-hooks/exhaustive-deps
   const commands = cmdDismissed ? [] : commandMatches(value, !!channel.guild_id, isMod, appCommands ?? [])
+  // An app command being filled in: its option hints, and suggestions for the option being typed (its choices, or
+  // the app's autocomplete).
+  const typingCmd = (() => {
+    const mm = /^\/([a-z0-9_-]+)\s([\s\S]*)$/i.exec(value)
+    const cmd = mm ? appCommands?.find((c) => c.type === 1 && c.name === mm[1].toLowerCase()) : undefined
+    if (!cmd || !mm) return null
+    const at = /(?:^|\s)([a-z0-9_-]+):([^:]*)$/i.exec(mm[2])
+    const opt = at ? cmd.options.find((o) => o.name === at[1].toLowerCase()) : undefined
+    return { cmd, rest: mm[2], opt, partial: at?.[2] ?? '' }
+  })()
+  const [autoChoices, setAutoChoices] = useState<{ name: string; value: string | number }[]>([])
+  const [autoIdx, setAutoIdx] = useState(0)
+  const optAuto = !!typingCmd?.opt?.autocomplete
+  useEffect(() => {
+    if (!typingCmd?.opt || !optAuto) { setAutoChoices([]); return }
+    const { cmd, opt, partial, rest } = typingCmd
+    const t = setTimeout(() => {
+      const opts = [...rest.matchAll(/(?:^|\s)([a-z0-9_-]+):([^:]*?)(?=\s[a-z0-9_-]+:|$)/gi)].map((x) => ({ name: x[1].toLowerCase(), value: x[2].trim() }))
+      api.post<{ choices: { name: string; value: string | number }[] }>('/interactions/autocomplete', { command_id: cmd.id, channel_id: channel.id, focused: opt.name, options: opts.length ? opts : [{ name: opt.name, value: partial }] })
+        .then((r) => { setAutoChoices(r.choices); setAutoIdx(0) }).catch(() => setAutoChoices([]))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [typingCmd?.cmd.id, typingCmd?.opt?.name, typingCmd?.partial, optAuto]) // eslint-disable-line react-hooks/exhaustive-deps
+  const optionSuggestions = !typingCmd?.opt ? [] : optAuto ? autoChoices : typingCmd.opt.choices.filter((c) => c.name.toLowerCase().startsWith(typingCmd.partial.trim().toLowerCase()))
+  const pickOption = (c: { name: string; value: string | number }) => {
+    const next = value.slice(0, value.length - (typingCmd?.partial.length ?? 0)) + (typingCmd?.opt?.choices.length ? c.name : String(c.value)) + ' '
+    setValue(next); setAutoChoices([]); scheduleDraft(next)
+    requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(next.length, next.length) } })
+  }
   // Slowmode: one message per interval here unless you can manage messages or the channel.
   const slow = channel.guild_id ? (channel as Channel).rate_limit_per_user ?? 0 : 0
   const slowExempt = has(perms, P.MANAGE_MESSAGES) || has(perms, P.MANAGE_CHANNELS)
@@ -332,6 +361,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(next.length, next.length) } })
   }
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (optionSuggestions.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setAutoIdx((i) => (i + (e.key === 'ArrowDown' ? 1 : optionSuggestions.length - 1)) % optionSuggestions.length); return }
+      if (e.key === 'Tab') { e.preventDefault(); pickOption(optionSuggestions[autoIdx] ?? optionSuggestions[0]); return }
+    }
     if (commands.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setCmdIdx((i) => (i + (e.key === 'ArrowDown' ? 1 : commands.length - 1)) % commands.length); return }
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickCommand(commands[cmdIdx] ?? commands[0]); return }
@@ -490,6 +523,18 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
       {mention && mentionItems.length > 0 && (
         <MentionSuggest items={mentionItems} active={mentionIdx} trigger={mention.trigger} query={mention.query} onPick={pickMention} onHover={setMentionIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
       )}
+      {typingCmd && (optionSuggestions.length > 0 ? (
+        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label="Suggestions" data-option-suggest>
+          <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{typingCmd.opt?.name}</div>
+          {optionSuggestions.map((c, i) => (
+            <button key={`${c.name}:${c.value}`} type="button" role="option" aria-selected={i === autoIdx} onMouseDown={(e) => { e.preventDefault(); pickOption(c) }} onMouseEnter={() => setAutoIdx(i)} className={`w-full px-3 py-1.5 text-left text-sm ${i === autoIdx ? 'bg-bg-3' : ''}`} data-option-choice={c.name}>{c.name}</button>
+          ))}
+        </div>
+      ) : typingCmd.cmd.options.length > 0 && (
+        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-lg border border-line bg-bg-1 px-3 py-1.5 text-xs text-text-2 shadow" data-option-hints>
+          <span className="font-semibold text-text-1">/{typingCmd.cmd.name}</span>{' '}{typingCmd.cmd.options.map((o) => <span key={o.name} className={`mr-2 ${o.required ? 'text-text-1' : ''}`}>{optionHint(o)}{o.required ? '' : '?'}</span>)}
+        </div>
+      ))}
       {commands.length > 0 && (
         <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label="Commands" data-command-suggest>
           <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">Commands</div>

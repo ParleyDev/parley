@@ -20,6 +20,9 @@ pub fn router() -> Router<AppState> {
         .route("/applications/:id/guilds/:gid/commands", get(list_guild).put(put_guild))
         .route("/channels/:id/commands", get(available))
         .route("/interactions", post(invoke))
+        .route("/interactions/component", post(component))
+        .route("/interactions/modal", post(modal_submit))
+        .route("/interactions/autocomplete", post(autocomplete))
         .route("/interactions/:id/:token/callback", post(callback))
         .route("/interactions/:id/:token/messages/@original", axum::routing::patch(edit_original).delete(delete_original))
         .route("/interactions/:id/:token/followup", post(followup))
@@ -130,33 +133,23 @@ struct OptionValue { name: String, value: Value }
 #[derive(Deserialize)]
 struct InvokeIn { command_id: Uuid, channel_id: Uuid, #[serde(default)] options: Vec<OptionValue>, target_id: Option<Uuid> }
 
-/// `POST /interactions`: use a command in a channel. The bot hears it as INTERACTION_CREATE. If it hasn't answered in
-/// 3 seconds, the user gets INTERACTION_FAILED.
-async fn invoke(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<InvokeIn>) -> AppResult<(StatusCode, Json<Value>)> {
-    let (c, p) = require_channel_perms(&state.db, req.channel_id, uid).await?;
-    perms::check(p, perms::SEND_MESSAGES)?;
-    let cmd = sqlx::query_as::<_, Command>(&format!("SELECT {CMD_COLS} FROM application_commands WHERE id = $1")).bind(req.command_id).fetch_optional(&state.db).await?
-        .ok_or_else(|| AppError::NotFound("Unknown command".into()))?;
-    // The command has to be usable here (same rule as `available`).
-    let (bot, app_name): (Option<Uuid>, String) = sqlx::query_as("SELECT bot_user_id, name FROM applications WHERE id = $1").bind(cmd.application_id).fetch_one(&state.db).await?;
-    let bot = bot.ok_or_else(|| AppError::BadRequest("That app has no bot".into()))?;
-    let here = match c.guild_id {
-        Some(gid) => (cmd.guild_id.is_none() || cmd.guild_id == Some(gid)) && sqlx::query_as::<_, (bool,)>("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2").bind(gid).bind(bot).fetch_optional(&state.db).await?.is_some(),
-        None => cmd.guild_id.is_none() && sqlx::query_as::<_, (bool,)>("SELECT true FROM channel_members WHERE channel_id = $1 AND user_id = $2").bind(c.id).bind(bot).fetch_optional(&state.db).await?.is_some(),
-    };
-    if !here { return Err(AppError::BadRequest("That command isn't available here".into())) }
-    // Options: known names, the right types, required ones present, choices respected.
+/// A command's option values: known names, the right types, required ones present, choices respected, ids resolved.
+/// With `focused` (autocomplete) the option being typed passes as typed and nothing is required yet.
+async fn read_options(state: &AppState, c: &Channel, cmd: &Command, given_all: &[OptionValue], focused: Option<&str>) -> AppResult<(Vec<Value>, serde_json::Map<String, Value>)> {
     let defs = cmd.options.as_array().cloned().unwrap_or_default();
     let mut options = Vec::new();
     let mut resolved = serde_json::Map::new();
     for d in &defs {
         let name = d["name"].as_str().unwrap_or("");
-        let Some(given) = req.options.iter().find(|o| o.name == name) else {
-            if d["required"].as_bool() == Some(true) { return Err(AppError::BadRequest(format!("/{} needs {name}", cmd.name))) }
+        let Some(given) = given_all.iter().find(|o| o.name == name) else {
+            if focused.is_none() && d["required"].as_bool() == Some(true) { return Err(AppError::BadRequest(format!("/{} needs {name}", cmd.name))) }
             continue;
         };
         let kind = d["type"].as_i64().unwrap_or(3);
         let v = &given.value;
+        // Autocomplete: the option being typed is passed through as typed.
+        if focused == Some(name) { options.push(json!({ "name": name, "type": kind, "value": v, "focused": true })); continue }
+        if focused.is_some() && v.as_str().map(|s| s.trim().is_empty()).unwrap_or(false) { continue }
         let value = match kind {
             3 => json!(v.as_str().ok_or_else(|| AppError::BadRequest(format!("{name} must be text")))?.chars().take(6000).collect::<String>()),
             4 => json!(v.as_i64().or_else(|| v.as_str().and_then(|s| s.trim().parse().ok())).ok_or_else(|| AppError::BadRequest(format!("{name} must be a whole number")))?),
@@ -175,50 +168,168 @@ async fn invoke(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req
                 json!(id)
             }
         };
-        if let Some(choices) = d["choices"].as_array().filter(|c| !c.is_empty()) {
+        if let Some(choices) = d["choices"].as_array().filter(|c| !c.is_empty() && focused.is_none()) {
             if !choices.iter().any(|ch| ch["value"] == value) { return Err(AppError::BadRequest(format!("{name}: pick one of the choices"))) }
         }
         options.push(json!({ "name": name, "type": kind, "value": value }));
     }
+    Ok((options, resolved))
+}
+
+/// `POST /interactions`: use a command in a channel. The bot hears it as INTERACTION_CREATE. If it hasn't answered in
+/// 3 seconds, the user gets INTERACTION_FAILED.
+async fn invoke(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<InvokeIn>) -> AppResult<(StatusCode, Json<Value>)> {
+    let (c, p) = require_channel_perms(&state.db, req.channel_id, uid).await?;
+    perms::check(p, perms::SEND_MESSAGES)?;
+    let cmd = sqlx::query_as::<_, Command>(&format!("SELECT {CMD_COLS} FROM application_commands WHERE id = $1")).bind(req.command_id).fetch_optional(&state.db).await?
+        .ok_or_else(|| AppError::NotFound("Unknown command".into()))?;
+    // The command has to be usable here (same rule as `available`).
+    let (bot, app_name): (Option<Uuid>, String) = sqlx::query_as("SELECT bot_user_id, name FROM applications WHERE id = $1").bind(cmd.application_id).fetch_one(&state.db).await?;
+    let bot = bot.ok_or_else(|| AppError::BadRequest("That app has no bot".into()))?;
+    let here = match c.guild_id {
+        Some(gid) => (cmd.guild_id.is_none() || cmd.guild_id == Some(gid)) && sqlx::query_as::<_, (bool,)>("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2").bind(gid).bind(bot).fetch_optional(&state.db).await?.is_some(),
+        None => cmd.guild_id.is_none() && sqlx::query_as::<_, (bool,)>("SELECT true FROM channel_members WHERE channel_id = $1 AND user_id = $2").bind(c.id).bind(bot).fetch_optional(&state.db).await?.is_some(),
+    };
+    if !here { return Err(AppError::BadRequest("That command isn't available here".into())) }
+    let (options, mut resolved) = read_options(&state, &c, &cmd, &req.options, None).await?;
     if cmd.kind != 1 && req.target_id.is_none() { return Err(AppError::BadRequest("User and message commands need a target".into())) }
     if cmd.kind == 3 {
         if let Some(t) = req.target_id { let m = fetch_message(&state.db, t, uid).await?; if m.channel_id != c.id { return Err(AppError::BadRequest("That message isn't in this channel".into())) } resolved.insert("messages".into(), json!({ t.to_string(): m })); }
     }
-    let id = Uuid::now_v7();
-    let token = crate::mail::new_token();
     let data = json!({ "id": cmd.id, "name": cmd.name, "type": cmd.kind, "options": options, "target_id": req.target_id, "resolved": resolved });
-    sqlx::query("INSERT INTO interactions (id, token_hash, application_id, user_id, channel_id, guild_id, kind, data) VALUES ($1, $2, $3, $4, $5, $6, 2, $7)")
-        .bind(id).bind(crate::routes::applications::hash(&token)).bind(cmd.application_id).bind(uid).bind(c.id).bind(c.guild_id).bind(&data).execute(&state.db).await?;
-    let user = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1")).bind(uid).fetch_one(&state.db).await?;
-    let member = match c.guild_id { Some(gid) => crate::routes::guilds::fetch_member(&state.db, gid, uid).await.ok().map(|m| json!({ "nickname": m.nickname, "roles": m.roles, "permissions": p.to_string() })), None => None };
-    state.hub.emit_users(vec![bot], "INTERACTION_CREATE", json!({ "id": id, "token": token, "application_id": cmd.application_id, "type": 2, "data": data, "guild_id": c.guild_id, "channel_id": c.id, "user": user, "member": member }));
-    // No answer in 3 seconds: tell the user.
-    let st = state.clone();
-    let (name, app_name2) = (cmd.name.clone(), app_name.clone());
-    tokio::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-        let done: Option<(bool,)> = sqlx::query_as("SELECT responded_at IS NOT NULL FROM interactions WHERE id = $1").bind(id).fetch_optional(&st.db).await.unwrap_or(None);
-        if done.map(|d| !d.0).unwrap_or(false) { st.hub.emit_users(vec![uid], "INTERACTION_FAILED", json!({ "id": id, "name": name, "application": app_name2 })); }
-    });
+    let id = deliver(&state, uid, p, &c, cmd.application_id, bot, 2, data, None, Some(format!("/{}", cmd.name)), &app_name).await?;
     Ok((StatusCode::ACCEPTED, Json(json!({ "id": id }))))
 }
 
-struct Live { app: Uuid, user: Uuid, channel: Channel, name: String, message_id: Option<Uuid>, ephemeral: Option<Value>, responded: bool, created: chrono::DateTime<Utc> }
+/// Record an interaction and send it to the app's bot. `fail_label` (what the user did, e.g. "/echo"): if the bot
+/// hasn't answered in 3 seconds, the user hears it didn't respond.
+#[allow(clippy::too_many_arguments)]
+async fn deliver(state: &AppState, uid: Uuid, p: u64, c: &Channel, app: Uuid, bot: Uuid, kind: i16, data: Value, source: Option<Uuid>, fail_label: Option<String>, app_name: &str) -> AppResult<Uuid> {
+    let id = Uuid::now_v7();
+    let token = crate::mail::new_token();
+    sqlx::query("INSERT INTO interactions (id, token_hash, application_id, user_id, channel_id, guild_id, kind, data, source_message_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+        .bind(id).bind(crate::routes::applications::hash(&token)).bind(app).bind(uid).bind(c.id).bind(c.guild_id).bind(kind).bind(&data).bind(source).execute(&state.db).await?;
+    let user = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1")).bind(uid).fetch_one(&state.db).await?;
+    let member = match c.guild_id { Some(gid) => crate::routes::guilds::fetch_member(&state.db, gid, uid).await.ok().map(|m| json!({ "nickname": m.nickname, "roles": m.roles, "permissions": p.to_string() })), None => None };
+    let message = match source { Some(m) => fetch_message(&state.db, m, bot).await.ok().map(|m| json!(m)), None => None };
+    state.hub.emit_users(vec![bot], "INTERACTION_CREATE", json!({ "id": id, "token": token, "application_id": app, "type": kind, "data": data, "guild_id": c.guild_id, "channel_id": c.id, "user": user, "member": member, "message": message }));
+    if let Some(label) = fail_label {
+        let st = state.clone();
+        let app_name = app_name.to_string();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            let done: Option<(bool,)> = sqlx::query_as("SELECT responded_at IS NOT NULL FROM interactions WHERE id = $1").bind(id).fetch_optional(&st.db).await.unwrap_or(None);
+            if done.map(|d| !d.0).unwrap_or(false) { st.hub.emit_users(vec![uid], "INTERACTION_FAILED", json!({ "id": id, "name": label.trim_start_matches('/'), "label": label, "application": app_name })); }
+        });
+    }
+    Ok(id)
+}
+
+/// The app behind a bot user, if any: (app id, name).
+async fn app_of_bot(state: &AppState, bot: Uuid) -> AppResult<(Uuid, String)> {
+    sqlx::query_as("SELECT id, name FROM applications WHERE bot_user_id = $1").bind(bot).fetch_optional(&state.db).await?.ok_or_else(|| AppError::BadRequest("That message isn't from an app".into()))
+}
+
+#[derive(Deserialize)]
+struct ComponentIn { channel_id: Uuid, message_id: Uuid, custom_id: String, #[serde(default)] values: Vec<String> }
+
+/// `POST /interactions/component`: a button press or a menu pick on an app's message (stored, or ephemeral to you).
+async fn component(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<ComponentIn>) -> AppResult<(StatusCode, Json<Value>)> {
+    let (c, p) = require_channel_perms(&state.db, req.channel_id, uid).await?;
+    // The message: a stored one in this channel, or an ephemeral answer someone sent you.
+    let (author, components, stored): (Uuid, Value, bool) = match fetch_message(&state.db, req.message_id, uid).await {
+        Ok(m) if m.channel_id == c.id => (m.author.id, m.components.clone().unwrap_or(Value::Null), true),
+        _ => {
+            let row: Option<(Value,)> = sqlx::query_as("SELECT ephemeral FROM interactions WHERE user_id = $1 AND channel_id = $2 AND ephemeral->>'id' = $3").bind(uid).bind(c.id).bind(req.message_id.to_string()).fetch_optional(&state.db).await?;
+            let (msg,) = row.ok_or_else(|| AppError::NotFound("Message not found".into()))?;
+            (msg["author"]["id"].as_str().and_then(|s| s.parse().ok()).unwrap_or_default(), msg["components"].clone(), false)
+        }
+    };
+    let comp = components.as_array().into_iter().flatten().flat_map(|row| row["components"].as_array().cloned().unwrap_or_default()).find(|x| x["custom_id"].as_str() == Some(req.custom_id.as_str()))
+        .ok_or_else(|| AppError::BadRequest("That button or menu isn't on the message".into()))?;
+    if comp["disabled"].as_bool() == Some(true) { return Err(AppError::BadRequest("That's disabled".into())) }
+    let kind = comp["type"].as_i64().unwrap_or(2);
+    if kind == 3 {
+        let allowed: Vec<&str> = comp["options"].as_array().into_iter().flatten().filter_map(|o| o["value"].as_str()).collect();
+        let (min, max) = (comp["min_values"].as_u64().unwrap_or(1) as usize, comp["max_values"].as_u64().unwrap_or(1) as usize);
+        if req.values.len() < min || req.values.len() > max || req.values.iter().any(|v| !allowed.contains(&v.as_str())) { return Err(AppError::BadRequest("Pick from the menu's options".into())) }
+    }
+    let (app, app_name) = app_of_bot(&state, author).await?;
+    let data = json!({ "custom_id": req.custom_id, "component_type": kind, "values": req.values });
+    let id = deliver(&state, uid, p, &c, app, author, 3, data, stored.then_some(req.message_id), Some(comp["label"].as_str().map(|l| format!("“{l}”")).unwrap_or_else(|| "that".into())), &app_name).await?;
+    Ok((StatusCode::ACCEPTED, Json(json!({ "id": id }))))
+}
+
+#[derive(Deserialize)]
+struct FieldIn { custom_id: String, #[serde(default)] value: String }
+#[derive(Deserialize)]
+struct ModalIn { interaction_id: Uuid, custom_id: String, #[serde(default)] fields: Vec<FieldIn> }
+
+/// `POST /interactions/modal`: the form an app opened for you (answering one of your interactions), filled in.
+async fn modal_submit(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<ModalIn>) -> AppResult<(StatusCode, Json<Value>)> {
+    let row: Option<(Uuid, Uuid, Option<Value>)> = sqlx::query_as("SELECT application_id, channel_id, choices FROM interactions WHERE id = $1 AND user_id = $2").bind(req.interaction_id).bind(uid).fetch_optional(&state.db).await?;
+    let (app, cid, modal) = row.ok_or_else(|| AppError::NotFound("No form to answer".into()))?;
+    let modal = modal.filter(|m| m["custom_id"].as_str() == Some(req.custom_id.as_str())).ok_or_else(|| AppError::BadRequest("That form isn't open".into()))?;
+    // Every required field filled, within its length limits.
+    let mut out = Vec::new();
+    for input in modal["components"].as_array().into_iter().flatten().flat_map(|r| r["components"].as_array().cloned().unwrap_or_default()) {
+        let id = input["custom_id"].as_str().unwrap_or("");
+        let v = req.fields.iter().find(|f| f.custom_id == id).map(|f| f.value.trim().to_string()).unwrap_or_default();
+        let label = input["label"].as_str().unwrap_or(id);
+        if input["required"].as_bool().unwrap_or(true) && v.is_empty() { return Err(AppError::BadRequest(format!("Fill in “{label}”"))) }
+        let (min, max) = (input["min_length"].as_u64().unwrap_or(0) as usize, input["max_length"].as_u64().unwrap_or(4000) as usize);
+        let n = v.chars().count();
+        if !v.is_empty() && (n < min || n > max) { return Err(AppError::BadRequest(format!("“{label}” must be {min}-{max} characters"))) }
+        out.push(json!({ "custom_id": id, "value": v }));
+    }
+    let (c, p) = require_channel_perms(&state.db, cid, uid).await?;
+    let bot = bot_of(&state, app).await?;
+    let (_, app_name) = app_of_bot(&state, bot).await?;
+    let data = json!({ "custom_id": req.custom_id, "components": out });
+    let id = deliver(&state, uid, p, &c, app, bot, 5, data, None, Some(modal["title"].as_str().unwrap_or("the form").to_string()), &app_name).await?;
+    Ok((StatusCode::ACCEPTED, Json(json!({ "id": id }))))
+}
+
+#[derive(Deserialize)]
+struct AutoIn { command_id: Uuid, channel_id: Uuid, #[serde(default)] options: Vec<OptionValue>, focused: String }
+
+/// `POST /interactions/autocomplete`: suggestions for the option being typed, from the app (waits up to 2.5 s).
+async fn autocomplete(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<AutoIn>) -> AppResult<Json<Value>> {
+    let (c, p) = require_channel_perms(&state.db, req.channel_id, uid).await?;
+    let cmd = sqlx::query_as::<_, Command>(&format!("SELECT {CMD_COLS} FROM application_commands WHERE id = $1")).bind(req.command_id).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Unknown command".into()))?;
+    let def = cmd.options.as_array().into_iter().flatten().find(|o| o["name"].as_str() == Some(req.focused.as_str())).cloned().ok_or_else(|| AppError::BadRequest("Unknown option".into()))?;
+    if def["autocomplete"].as_bool() != Some(true) { return Err(AppError::BadRequest("That option has no suggestions".into())) }
+    let bot = bot_of(&state, cmd.application_id).await?;
+    let (options, _) = read_options(&state, &c, &cmd, &req.options, Some(&req.focused)).await?;
+    let data = json!({ "id": cmd.id, "name": cmd.name, "type": cmd.kind, "options": options });
+    let id = deliver(&state, uid, p, &c, cmd.application_id, bot, 4, data, None, None, "").await?;
+    // The answer may arrive on any instance: poll the row.
+    for _ in 0..25 {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let (choices,): (Option<Value>,) = sqlx::query_as("SELECT choices FROM interactions WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+        if let Some(ch) = choices { return Ok(Json(json!({ "choices": ch }))) }
+    }
+    Ok(Json(json!({ "choices": [] })))
+}
+
+struct Live { app: Uuid, user: Uuid, channel: Channel, name: String, message_id: Option<Uuid>, ephemeral: Option<Value>, responded: bool, created: chrono::DateTime<Utc>, kind: i16, source: Option<Uuid> }
 
 /// The interaction a token names; 15 minutes to use it.
 async fn live(state: &AppState, id: Uuid, token: &str) -> AppResult<Live> {
-    let row: Option<(String, Uuid, Uuid, Uuid, Value, Option<Uuid>, Option<Value>, Option<chrono::DateTime<Utc>>, chrono::DateTime<Utc>)> = sqlx::query_as(
-        "SELECT token_hash, application_id, user_id, channel_id, data, message_id, ephemeral, responded_at, created_at FROM interactions WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
-    let Some((hash, app, user, cid, data, message_id, ephemeral, responded, created)) = row else { return Err(AppError::NotFound("Unknown interaction".into())) };
+    let row: Option<(String, Uuid, Uuid, Uuid, Value, Option<Uuid>, Option<Value>, Option<chrono::DateTime<Utc>>, chrono::DateTime<Utc>, i16, Option<Uuid>)> = sqlx::query_as(
+        "SELECT token_hash, application_id, user_id, channel_id, data, message_id, ephemeral, responded_at, created_at, kind, source_message_id FROM interactions WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    let Some((hash, app, user, cid, data, message_id, ephemeral, responded, created, kind, source)) = row else { return Err(AppError::NotFound("Unknown interaction".into())) };
     if hash != crate::routes::applications::hash(token) || created < Utc::now() - chrono::Duration::minutes(15) { return Err(AppError::NotFound("Unknown or expired interaction".into())) }
     let channel = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(cid).fetch_one(&state.db).await?;
-    Ok(Live { app, user, channel, name: data["name"].as_str().unwrap_or("").to_string(), message_id, ephemeral, responded: responded.is_some(), created })
+    // A command's name, or for a button / form the command that made the message is unknown: show its custom id.
+    let name = data["name"].as_str().or(data["custom_id"].as_str()).unwrap_or("").to_string();
+    Ok(Live { app, user, channel, name, message_id, ephemeral, responded: responded.is_some(), created, kind, source })
 }
 
 #[derive(Deserialize, Default)]
-struct ResponseData { #[serde(default)] content: String, embeds: Option<Value>, #[serde(default)] flags: u64 }
+struct ResponseData { #[serde(default)] content: String, embeds: Option<Value>, components: Option<Value>, #[serde(default)] flags: u64 }
 #[derive(Deserialize)]
-struct CallbackIn { #[serde(rename = "type")] kind: u8, #[serde(default)] data: Option<ResponseData> }
+struct CallbackIn { #[serde(rename = "type")] kind: u8, #[serde(default)] data: Option<Value> }
 
 async fn bot_of(state: &AppState, app: Uuid) -> AppResult<Uuid> {
     let (b,): (Option<Uuid>,) = sqlx::query_as("SELECT bot_user_id FROM applications WHERE id = $1").bind(app).fetch_one(&state.db).await?;
@@ -233,6 +344,7 @@ fn meta(l: &Live, user: &User, deferred: bool, interaction: Uuid) -> Value {
 async fn respond(state: &AppState, l: &Live, interaction: Uuid, d: &ResponseData, deferred: bool) -> AppResult<(Option<Uuid>, Option<Value>)> {
     let content: String = d.content.trim_end().chars().take(2000).collect();
     let embeds = match &d.embeds { Some(e) if e.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(crate::routes::webhooks::clean_embeds(e)?), _ => None };
+    let components = match &d.components { Some(v) if v.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(clean_components(v)?), _ => None };
     if !deferred && content.trim().is_empty() && embeds.is_none() { return Err(AppError::BadRequest("A response needs content or an embed".into())) }
     let bot = bot_of(state, l.app).await?;
     let user = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1")).bind(l.user).fetch_one(&state.db).await?;
@@ -240,14 +352,14 @@ async fn respond(state: &AppState, l: &Live, interaction: Uuid, d: &ResponseData
     if d.flags & EPHEMERAL != 0 {
         let author = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1")).bind(bot).fetch_one(&state.db).await?;
         let msg = json!({ "id": Uuid::now_v7(), "channel_id": l.channel.id, "author": author, "content": content, "created_at": Utc::now(), "edited_at": null, "pinned_at": null,
-            "reactions": [], "attachments": [], "mentions": [], "mention_roles": [], "mention_everyone": false, "kind": "default", "embeds": embeds, "interaction": m, "ephemeral": true });
+            "reactions": [], "attachments": [], "mentions": [], "mention_roles": [], "mention_everyone": false, "kind": "default", "embeds": embeds, "components": components, "interaction": m, "ephemeral": true });
         state.hub.emit_users(vec![l.user], "MESSAGE_CREATE", json!({ "message": msg, "guild_id": l.channel.guild_id }));
         return Ok((None, Some(msg)));
     }
     let mid = Uuid::now_v7();
     let (users, _, _) = crate::routes::channels::parse_mentions(&content);
-    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, mentions, embeds, interaction) VALUES ($1, $2, $3, $4, $5, $6, $7)")
-        .bind(mid).bind(l.channel.id).bind(bot).bind(&content).bind(&users).bind(&embeds).bind(&m).execute(&state.db).await?;
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, mentions, embeds, interaction, components) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
+        .bind(mid).bind(l.channel.id).bind(bot).bind(&content).bind(&users).bind(&embeds).bind(&m).bind(&components).execute(&state.db).await?;
     let msg: Message = fetch_message(&state.db, mid, bot).await?;
     state.hub.emit(target_for(&state.db, &l.channel).await?, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": l.channel.guild_id }));
     if !deferred { crate::push::after_message(state.clone(), msg, l.channel.clone()); }
@@ -255,22 +367,57 @@ async fn respond(state: &AppState, l: &Live, interaction: Uuid, d: &ResponseData
 }
 
 /// `POST /interactions/:id/:token/callback`: the first answer, within 3 seconds. Types: 4 = a message, 5 = "thinking"
-/// (fill it in with PATCH .../messages/@original). `flags: 64` makes it ephemeral.
+/// (fill it in with PATCH .../messages/@original), 6 = got it (buttons/menus: change nothing yet), 7 = update the
+/// message the button or menu is on, 8 = autocomplete suggestions, 9 = open a form. `flags: 64` makes it ephemeral.
 async fn callback(State(state): State<AppState>, Path((id, token)): Path<(Uuid, String)>, Json(req): Json<CallbackIn>) -> AppResult<StatusCode> {
     let l = live(&state, id, &token).await?;
     if l.responded { return Err(AppError::BadRequest("This interaction has already been answered".into())) }
     // 3 seconds, like Discord (plus a little for replies already on their way): after that the user was told it failed.
     if l.created < Utc::now() - chrono::Duration::milliseconds(3500) { return Err(AppError::BadRequest("Too late: answer within 3 seconds, or defer".into())) }
-    let d = req.data.unwrap_or_default();
-    let (mid, eph) = match req.kind {
-        4 => respond(&state, &l, id, &d, false).await?,
-        5 => respond(&state, &l, id, &ResponseData { content: String::new(), embeds: None, flags: d.flags }, true).await?,
-        1 => (None, None),
-        _ => return Err(AppError::BadRequest("Response type is 4 (message) or 5 (deferred)".into())),
-    };
-    let done = sqlx::query("UPDATE interactions SET responded_at = now(), message_id = $2, ephemeral = $3 WHERE id = $1 AND responded_at IS NULL").bind(id).bind(mid).bind(&eph).execute(&state.db).await?;
+    let raw = req.data.unwrap_or(Value::Null);
+    let d: ResponseData = serde_json::from_value(raw.clone()).unwrap_or_default();
+    let (mut mid, mut eph, mut choices) = (None, None, None);
+    match (req.kind, l.kind) {
+        (4, 2 | 3 | 5) => (mid, eph) = respond(&state, &l, id, &d, false).await?,
+        (5, 2 | 3 | 5) => (mid, eph) = respond(&state, &l, id, &ResponseData { flags: d.flags, ..Default::default() }, true).await?,
+        (6, 3) => {}
+        (7, 3) => update_source(&state, &l, &d).await?,
+        (8, 4) => {
+            let list: Vec<Value> = raw["choices"].as_array().cloned().unwrap_or_default().into_iter().take(25).filter_map(|c| {
+                let n: String = c["name"].as_str()?.trim().chars().take(100).collect();
+                (!n.is_empty()).then(|| json!({ "name": n, "value": c["value"] }))
+            }).collect();
+            choices = Some(json!(list));
+        }
+        (9, 2 | 3) => {
+            let modal = clean_modal(&raw)?;
+            choices = Some(modal.clone());
+            state.hub.emit_users(vec![l.user], "INTERACTION_MODAL", json!({ "interaction_id": id, "application_id": l.app, "channel_id": l.channel.id, "modal": modal }));
+        }
+        (1, _) => {}
+        _ => return Err(AppError::BadRequest("That response type doesn't fit this interaction".into())),
+    }
+    let done = sqlx::query("UPDATE interactions SET responded_at = now(), message_id = $2, ephemeral = $3, choices = COALESCE($4, choices) WHERE id = $1 AND responded_at IS NULL").bind(id).bind(mid).bind(&eph).bind(&choices).execute(&state.db).await?;
     if done.rows_affected() == 0 { return Err(AppError::BadRequest("This interaction has already been answered".into())) }
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Type 7: change the message whose button or menu was used (content, embeds and components given replace them).
+async fn update_source(state: &AppState, l: &Live, d: &ResponseData) -> AppResult<()> {
+    let content: String = d.content.trim_end().chars().take(2000).collect();
+    let embeds = match &d.embeds { Some(e) if e.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(crate::routes::webhooks::clean_embeds(e)?), _ => None };
+    let components = match &d.components { Some(v) if v.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(clean_components(v)?), _ => None };
+    let bot = bot_of(state, l.app).await?;
+    match l.source {
+        Some(mid) => {
+            sqlx::query("UPDATE messages SET content = $2, embeds = $3, components = $4, edited_at = now() WHERE id = $1 AND author_id = $5")
+                .bind(mid).bind(&content).bind(&embeds).bind(&components).bind(bot).execute(&state.db).await?;
+            let msg = fetch_message(&state.db, mid, bot).await?;
+            state.hub.emit(target_for(&state.db, &l.channel).await?, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": l.channel.guild_id }));
+        }
+        None => return Err(AppError::BadRequest("Ephemeral messages can't be updated this way; send a new one".into())),
+    }
+    Ok(())
 }
 
 /// `PATCH /interactions/:id/:token/messages/@original`: change (or fill in, after "thinking") the first answer.
@@ -315,4 +462,84 @@ async fn followup(State(state): State<AppState>, Path((id, token)): Path<(Uuid, 
     if !l.responded { return Err(AppError::BadRequest("Answer the interaction first".into())) }
     let (mid, eph) = respond(&state, &l, id, &d, false).await?;
     Ok(Json(json!({ "id": mid, "ephemeral": eph.is_some() })))
+}
+
+fn str_field(v: &Value, k: &str, max: usize) -> Option<String> { v[k].as_str().map(|s| s.trim().chars().take(max).collect::<String>()).filter(|s| !s.is_empty()) }
+
+/// Buttons and select menus, rebuilt from the known fields: up to 5 action rows; a row holds up to 5 buttons or one
+/// menu. Buttons: style 1 primary, 2 secondary, 3 success, 4 danger (need a custom_id), 5 link (need an https url).
+/// Menus (type 3): custom_id, up to 25 options, min/max values.
+pub fn clean_components(v: &Value) -> AppResult<Value> {
+    let rows = v.as_array().ok_or_else(|| AppError::BadRequest("components must be a list of action rows".into()))?;
+    if rows.len() > 5 { return Err(AppError::BadRequest("Up to 5 rows of components".into())) }
+    let mut ids = std::collections::HashSet::new();
+    let mut out = Vec::new();
+    for row in rows {
+        let items = row["components"].as_array().ok_or_else(|| AppError::BadRequest("each row needs components".into()))?;
+        if items.is_empty() || items.len() > 5 { return Err(AppError::BadRequest("a row holds 1 to 5 components".into())) }
+        let mut cleaned = Vec::new();
+        for c in items {
+            let kind = c["type"].as_i64().unwrap_or(0);
+            let custom = str_field(c, "custom_id", 100);
+            if let Some(id) = &custom { if !ids.insert(id.clone()) { return Err(AppError::BadRequest(format!("custom_id {id} is used twice"))) } }
+            match kind {
+                2 => {
+                    let style = c["style"].as_i64().unwrap_or(2);
+                    if !(1..=5).contains(&style) { return Err(AppError::BadRequest("button style is 1-5".into())) }
+                    let label = str_field(c, "label", 80);
+                    let emoji = str_field(c, "emoji", 64);
+                    if label.is_none() && emoji.is_none() { return Err(AppError::BadRequest("a button needs a label or an emoji".into())) }
+                    let url = if style == 5 { Some(c["url"].as_str().filter(|u| u.starts_with("https://") || u.starts_with("http://")).ok_or_else(|| AppError::BadRequest("link buttons need an http(s) url".into()))?.to_string()) } else { None };
+                    if style != 5 && custom.is_none() { return Err(AppError::BadRequest("buttons need a custom_id".into())) }
+                    cleaned.push(json!({ "type": 2, "style": style, "label": label, "emoji": emoji, "custom_id": if style == 5 { None } else { custom }, "url": url, "disabled": c["disabled"].as_bool().unwrap_or(false) }));
+                }
+                3 => {
+                    if items.len() != 1 { return Err(AppError::BadRequest("a select menu takes a whole row".into())) }
+                    let custom = custom.ok_or_else(|| AppError::BadRequest("select menus need a custom_id".into()))?;
+                    let opts: Vec<Value> = c["options"].as_array().cloned().unwrap_or_default().iter().take(25).filter_map(|o| {
+                        let label = str_field(o, "label", 100)?; let value = str_field(o, "value", 100)?;
+                        Some(json!({ "label": label, "value": value, "description": str_field(o, "description", 100), "emoji": str_field(o, "emoji", 64), "default": o["default"].as_bool().unwrap_or(false) }))
+                    }).collect();
+                    if opts.is_empty() { return Err(AppError::BadRequest("a select menu needs options".into())) }
+                    let min = c["min_values"].as_u64().unwrap_or(1).min(25);
+                    let max = c["max_values"].as_u64().unwrap_or(1).clamp(min.max(1), opts.len() as u64);
+                    cleaned.push(json!({ "type": 3, "custom_id": custom, "placeholder": str_field(c, "placeholder", 150), "options": opts, "min_values": min, "max_values": max, "disabled": c["disabled"].as_bool().unwrap_or(false) }));
+                }
+                _ => return Err(AppError::BadRequest("components are buttons (2) or select menus (3)".into())),
+            }
+        }
+        out.push(json!({ "type": 1, "components": cleaned }));
+    }
+    Ok(Value::Array(out))
+}
+
+/// A form (type 9 response): a title, a custom_id, and up to 5 text inputs (style 1 short, 2 paragraph).
+fn clean_modal(v: &Value) -> AppResult<Value> {
+    let title = str_field(v, "title", 45).ok_or_else(|| AppError::BadRequest("a form needs a title".into()))?;
+    let custom = str_field(v, "custom_id", 100).ok_or_else(|| AppError::BadRequest("a form needs a custom_id".into()))?;
+    let inputs: Vec<Value> = v["components"].as_array().into_iter().flatten().flat_map(|r| r["components"].as_array().cloned().unwrap_or_default()).collect();
+    if inputs.is_empty() || inputs.len() > 5 { return Err(AppError::BadRequest("a form has 1 to 5 text inputs".into())) }
+    let mut rows = Vec::new();
+    for i in inputs {
+        let id = str_field(&i, "custom_id", 100).ok_or_else(|| AppError::BadRequest("text inputs need a custom_id".into()))?;
+        let label = str_field(&i, "label", 45).ok_or_else(|| AppError::BadRequest("text inputs need a label".into()))?;
+        let max = i["max_length"].as_u64().unwrap_or(4000).clamp(1, 4000);
+        rows.push(json!({ "type": 1, "components": [{ "type": 4, "custom_id": id, "label": label, "style": if i["style"].as_i64() == Some(2) { 2 } else { 1 },
+            "required": i["required"].as_bool().unwrap_or(true), "min_length": i["min_length"].as_u64().unwrap_or(0).min(max), "max_length": max,
+            "placeholder": str_field(&i, "placeholder", 100), "value": str_field(&i, "value", max as usize) }] }));
+    }
+    Ok(json!({ "title": title, "custom_id": custom, "components": rows }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clean_components;
+    use serde_json::json;
+    #[test]
+    fn components() {
+        assert!(clean_components(&json!([{ "type": 1, "components": [{ "type": 2, "style": 1, "label": "Yes", "custom_id": "yes" }, { "type": 2, "style": 5, "label": "Docs", "url": "https://x.example" }] }])).is_ok());
+        assert!(clean_components(&json!([{ "type": 1, "components": [{ "type": 2, "style": 1, "label": "No id" }] }])).is_err());
+        assert!(clean_components(&json!([{ "type": 1, "components": [{ "type": 2, "style": 5, "label": "x", "url": "javascript:1" }] }])).is_err());
+        assert!(clean_components(&json!([{ "type": 1, "components": [{ "type": 2, "style": 1, "label": "a", "custom_id": "d" }, { "type": 2, "style": 1, "label": "b", "custom_id": "d" }] }])).is_err());
+    }
 }

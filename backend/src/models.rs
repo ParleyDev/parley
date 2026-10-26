@@ -598,6 +598,8 @@ pub struct MessageRow {
     pub embeds: Option<serde_json::Value>,
     #[sqlx(default)]
     pub interaction: Option<serde_json::Value>,
+    #[sqlx(default)]
+    pub components: Option<serde_json::Value>,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -694,6 +696,9 @@ pub struct Message {
     /// A bot's answer to a command: {id, name, user: {id, display_name}, deferred?}.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interaction: Option<serde_json::Value>,
+    /// Buttons and select menus (action rows) on a bot's message.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub components: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub poll: Option<Poll>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -820,6 +825,7 @@ impl MessageRow {
             webhook_id: self.webhook_id,
             embeds: self.embeds,
             interaction: self.interaction,
+            components: self.components,
             poll: None,
             thread: None,
             referenced: None,
