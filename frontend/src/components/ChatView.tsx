@@ -5,7 +5,8 @@ import { uploadImage } from '../lib/upload'
 import { anchorOf } from '../lib/anchor'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import type { Channel, DmChannel, Message } from '../lib/types'
+import type { Channel, DmChannel, Message, PrivateUser } from '../lib/types'
+import { BirthdateForm, TeenDmNotice } from './AgeSafety'
 import { api } from '../lib/api'
 import { myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
@@ -90,6 +91,8 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const group = isDm && isGroup(channel as DmChannel)
   const recipient = isDm && !group ? (channel as DmChannel).recipients[0] : null
   const other = recipient ? { ...recipient, ...users[recipient.id] } : null
+  const myAge = useStore((s) => (s.user as PrivateUser | null)?.age_group)
+  const relKind = useStore((s) => (recipient ? s.relationships[recipient.id]?.kind : undefined))
   const openModal = useStore((s) => s.openModal)
   const [renaming, setRenaming] = useState(false)
   const [datePick, setDatePick] = useState(false)
@@ -232,6 +235,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
           </span>
         </header>
         {isDm && <DmCall channel={channel as DmChannel} />}
+        {isDm && !group && other && myAge === 'teen' && relKind !== 'friend' && <TeenDmNotice name={other.display_name} onBlock={() => { void api.put(`/users/@me/relationships/${other.id}/block`).then(() => pushToast(`${other.display_name} blocked`)).catch((e: Error) => pushToast(e.message, 'error')) }} />}
         {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : <ChatPane channel={channel} />}
       </main>
       {search !== null ? (
@@ -276,6 +280,19 @@ function SpoilerGate({ channel, onOk }: { channel: Channel; onOk: () => void }) 
 /** The warning shown once before an age-restricted channel opens. */
 function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
   const navigate = useNavigate()
+  const age = useStore((s) => (s.user as PrivateUser | null)?.age_group ?? 'unknown')
+  if (age === 'teen') {
+    return (
+      <div className="flex-1 flex items-center justify-center p-6" data-age-gate="teen">
+        <div className="max-w-md text-center space-y-4">
+          <div className="mx-auto h-16 w-16 rounded-full bg-danger/15 text-danger flex items-center justify-center text-2xl font-extrabold">18+</div>
+          <h2 className="text-xl font-bold">You can't view this channel</h2>
+          <p className="text-sm text-text-2">#{channel.name} is age-restricted, and you need to be 18 or older to see it.</p>
+          <button type="button" className="btn-primary" onClick={() => navigate(-1)} data-age-nope>Go back</button>
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="flex-1 flex items-center justify-center p-6" data-age-gate>
       <div className="max-w-md text-center space-y-4">
@@ -284,8 +301,9 @@ function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
         <p className="text-sm text-text-2">#{channel.name} may contain content that is not suitable for everyone. You must be over 18 to continue. Pictures and videos here stay blurred until clicked if your sensitive-media setting says so.</p>
         <div className="flex justify-center gap-2">
           <button type="button" className="btn-ghost" onClick={() => navigate(-1)} data-age-nope>Nope</button>
-          <button type="button" className="btn-primary" onClick={() => { rememberNsfw(channel.id); onOk() }} data-age-continue>Continue</button>
+          {age === 'adult' && <button type="button" className="btn-primary" onClick={() => { rememberNsfw(channel.id); onOk() }} data-age-continue>Continue</button>}
         </div>
+        {age === 'unknown' && <div className="text-left"><BirthdateForm onDone={(u) => { if (u.age_group === 'adult') { rememberNsfw(channel.id); onOk() } }} /></div>}
       </div>
     </div>
   )

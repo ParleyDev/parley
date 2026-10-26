@@ -431,6 +431,9 @@ struct PatchUser {
     /// Largest single upload for this user in bytes; null restores the instance default.
     #[serde(default, deserialize_with = "deserialize_nullable_i64")]
     max_upload_bytes: Option<Option<i64>>,
+    /// Only `true` is meaningful: clears a birth date entered by mistake so the user can set it again.
+    #[serde(default)]
+    reset_birthdate: bool,
 }
 
 fn deserialize_nullable_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
@@ -474,6 +477,10 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
         if q.map(|v| v < 0).unwrap_or(false) { return Err(AppError::BadRequest("Quota cannot be negative".into())); }
         sqlx::query("UPDATE users SET upload_quota_bytes = $2 WHERE id = $1").bind(id).bind(q).execute(&state.db).await?;
         audit::record(&state, uid, "user.quota", "user", Some(id), &audit::username(&state, id).await, json!({ "upload_quota_bytes": q })).await;
+    }
+    if req.reset_birthdate {
+        sqlx::query("UPDATE users SET birthdate = NULL WHERE id = $1").bind(id).execute(&state.db).await?;
+        audit::record(&state, uid, "user.reset_birthdate", "user", Some(id), &audit::username(&state, id).await, json!({})).await;
     }
     match req.mfa {
         Some(false) => {

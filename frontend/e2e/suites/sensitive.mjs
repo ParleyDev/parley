@@ -4,6 +4,7 @@ import { B, WEB, S, FIX, reg, call, raw, ok, finish, openDms } from '../lib.mjs'
 import fs from 'node:fs'
 const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol')
 await openDms(a, b, c)
+for (const u of [a, b, c]) await call(u.token, 'PUT', '/users/@me/birthdate', { birthdate: '1990-01-01' }) // adults: 18+ channels need a birth date on file
 const g = await call(a.token, 'POST', '/guilds', { name: `Sens ${S}` }); const tc = g.channels.find((x) => x.kind === 'text')
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`)
 const up = async (t, ch, name, type, data) => { const f = new FormData(); f.append('file', new Blob([data], { type }), name); const r = await fetch(`${B}/channels/${ch}/attachments`, { method: 'POST', headers: { Authorization: 'Bearer ' + t }, body: f }); return r.json() }

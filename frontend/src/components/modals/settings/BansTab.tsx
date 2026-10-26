@@ -3,6 +3,7 @@ import { locale } from '../../../lib/i18n'
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
+import { BanAppeals } from '../../AgeSafety'
 import Avatar from '../../Avatar'
 
 export default function BansTab({ guildId }: { guildId: string }) {
@@ -29,6 +30,7 @@ export default function BansTab({ guildId }: { guildId: string }) {
     <div>
       <h1 className="text-xl font-bold">Bans</h1>
       <p className="text-sm text-text-2 mt-1">{loaded ? `${list.length} ban${list.length === 1 ? '' : 's'}` : 'Loading…'}</p>
+      <BanAppeals guildId={guildId} onAccepted={(id) => removeBan(guildId, id)} />
       <div className="relative mt-4 mb-4">
         <input className="input pl-9" placeholder="Search bans" value={q} onChange={(e) => setQ(e.target.value)} />
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />

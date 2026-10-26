@@ -232,6 +232,13 @@ pub struct PrivateUser {
     /// Device-independent client settings (appearance, prefs, sounds, keybinds) with a revision stamp.
     #[sqlx(default)]
     pub client_settings: serde_json::Value,
+    /// Set once by the user; gates 18+ channels.
+    #[sqlx(default)]
+    pub birthdate: Option<chrono::NaiveDate>,
+    /// 'unknown' (no birth date yet), 'teen' (13-17) or 'adult'.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub age_group: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

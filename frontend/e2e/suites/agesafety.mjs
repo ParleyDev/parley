@@ -1,0 +1,66 @@
+// Age verification for 18+ channels (a birth date, checked by the server), teen safety defaults, and ban appeals.
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, raw, ok, finish } from '../lib.mjs'
+const a = await reg('alice'), t = await reg('teen'), u = await reg('newbie'), x = await reg('stranger')
+const g = await call(a.token, 'POST', '/guilds', { name: `Age ${S}` })
+const tc = g.channels.find((c) => c.kind === 'text')
+const adult = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'grown-ups', kind: 'text' })
+await call(a.token, 'PATCH', `/channels/${adult.id}`, { nsfw: true })
+const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {})
+for (const m of [t, u]) await call(m.token, 'POST', `/invites/${inv.code}`)
+const ymd = (yearsAgo) => { const d = new Date(); d.setFullYear(d.getFullYear() - yearsAgo); return d.toISOString().slice(0, 10) }
+
+console.log('-- birth date')
+ok('under 13 is refused', (await raw(t.token, 'PUT', '/users/@me/birthdate', { birthdate: ymd(10) })).status === 400)
+const tu = await call(t.token, 'PUT', '/users/@me/birthdate', { birthdate: ymd(15) })
+ok('a teen gets the teen age group', tu.age_group === 'teen')
+ok('and safety defaults: friends-only DMs, blurred media', tu.dm_privacy === 'friends' && tu.sensitive_media?.servers === 'blur' && tu.sensitive_media?.non_friend_dms === 'block')
+ok('it can only be set once', (await raw(t.token, 'PUT', '/users/@me/birthdate', { birthdate: ymd(30) })).status === 409)
+ok('the birth date is never public', !('birthdate' in (await call(a.token, 'GET', `/users/${t.user.id}`))))
+
+console.log('-- 18+ channels')
+const r1 = await raw(u.token, 'GET', `/channels/${adult.id}/messages`)
+ok('no birth date: the server asks for one', r1.status === 403 && (await r1.json()).code === 'age_required')
+const r2 = await raw(t.token, 'GET', `/channels/${adult.id}/messages`)
+ok('teens are kept out by the server', r2.status === 403 && (await r2.json()).code === 'age_restricted')
+ok('even when sending', (await raw(t.token, 'POST', `/channels/${adult.id}/messages`, { content: 'hi' })).status === 403)
+
+const browser = await chromium.launch(); const errors = []
+const ctx = async (tok) => { const p = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((x) => localStorage.setItem('parley.token', x), tok); return p }
+const pu = await ctx(u.token)
+await pu.goto(`${WEB}/channels/${g.id}/${adult.id}`); await pu.waitForSelector('[data-age-gate]')
+ok('the gate asks for a birth date instead of a click-through', await pu.locator('[data-birthdate-form]').count() === 1 && await pu.locator('[data-age-continue]').count() === 0)
+await pu.fill('[data-birthdate-input]', ymd(25)); await pu.click('[data-birthdate-save]'); await pu.waitForTimeout(1000)
+ok('an adult birth date opens the channel', await pu.locator('[data-age-gate]').count() === 0 && (await raw(u.token, 'GET', `/channels/${adult.id}/messages`)).status === 200)
+const pt = await ctx(t.token)
+await pt.goto(`${WEB}/channels/${g.id}/${adult.id}`); await pt.waitForSelector('[data-age-gate="teen"]')
+ok('teens see a closed door', await pt.locator('[data-age-continue]').count() === 0)
+
+console.log('-- teen DM notice')
+const g2 = await call(x.token, 'POST', '/guilds', { name: `Meet ${S}` }); const inv2 = await call(x.token, 'POST', `/guilds/${g2.id}/invites`, {}); await call(t.token, 'POST', `/invites/${inv2.code}`)
+const tdm = await call(t.token, 'POST', '/users/@me/channels', { recipient_id: x.user.id })
+await pt.goto(`${WEB}/channels/@me/${tdm.id}`); await pt.waitForTimeout(1200)
+ok('a teen in a DM with a non-friend sees a safety notice', await pt.locator('[data-teen-notice]').count() === 1)
+
+console.log('-- appeals')
+await call(a.token, 'PUT', `/guilds/${g.id}/bans/${u.user.id}`, { reason: 'spamming' })
+await pu.goto(`${WEB}/channels/@me`); await pu.waitForTimeout(600)
+await pu.click('[data-control="User Settings"]'); await pu.waitForSelector(`[data-my-ban="${g.id}"]`)
+ok('your bans are listed with the reason', (await pu.locator(`[data-my-ban="${g.id}"]`).innerText()).includes('spamming'))
+await pu.click(`[data-appeal-open="${g.id}"]`); await pu.fill('[data-appeal-text]', 'Sorry, it was a mistake and it will not happen again.'); await pu.click('[data-appeal-send]')
+await pu.waitForSelector('[data-appeal-status="pending"]')
+ok('the appeal is pending', true)
+ok('one appeal per ban', (await raw(u.token, 'POST', `/guilds/${g.id}/appeal`, { text: 'please please please' })).status === 409)
+ok('only moderators see appeals', (await raw(t.token, 'GET', `/guilds/${g.id}/appeals`)).status === 403)
+const pa = await ctx(a.token)
+await pa.goto(`${WEB}/channels/${g.id}/${tc.id}`); await pa.waitForTimeout(800)
+await pa.locator(`button:has-text("Age ${S}")`).first().click(); await pa.click('text=Server Settings'); await pa.locator('button:has-text("Bans")').first().click()
+await pa.waitForSelector(`[data-ban-appeal="${u.user.id}"]`)
+ok('the Bans tab shows the appeal', (await pa.locator(`[data-ban-appeal="${u.user.id}"]`).innerText()).includes('mistake'))
+await pa.click(`[data-appeal-accept="${u.user.id}"]`); await pa.waitForTimeout(800)
+ok('accepting lifts the ban', !(await call(a.token, 'GET', `/guilds/${g.id}/bans`)).some((b) => (b.user_id ?? b.id) === u.user.id))
+ok('and tells them', await pu.locator('text=was accepted').count() >= 1)
+
+ok('no page errors', errors.length === 0, errors.join(' | '))
+for (const [tok, gg] of [[a, g], [x, g2]]) await call(tok.token, 'DELETE', `/guilds/${gg.id}`)
+await browser.close(); await finish()

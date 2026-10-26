@@ -68,6 +68,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'VOICE_DISCONNECT'; d: { guild_id: string } }
   | { t: 'GUILD_CUSTOMIZE_UPDATE'; d: { guild_id: string; hidden_channels: string[] } }
   | { t: 'THREAD_MEMBER_UPDATE'; d: { thread_id: string; joined: boolean } }
+  | { t: 'APPEAL_UPDATE'; d: { guild_id: string; guild_name: string; status: string; reason: string } }
   | { t: 'APPLICATION_UPDATE'; d: { guild_id: string; status: string; reason: string } }
   | { t: 'CALL_DECLINE' | 'CALL_RING'; d: { channel_id: string; user_id: string } }
   | { t: 'MEMBER_WARNING'; d: { id: string; guild_id: string; guild_name: string; reason: string } }
@@ -291,6 +292,7 @@ function handle(ev: Ev) {
     }
     case 'GUILD_CUSTOMIZE_UPDATE': s.setHidden(ev.d.guild_id, ev.d.hidden_channels); break
     case 'THREAD_MEMBER_UPDATE': s.setMyThread(ev.d.thread_id, ev.d.joined); break
+    case 'APPEAL_UPDATE': s.pushToast(ev.d.status === 'accepted' ? `Your appeal to ${ev.d.guild_name} was accepted: you can rejoin with an invite.` : `Your appeal to ${ev.d.guild_name} was denied${ev.d.reason ? `: ${ev.d.reason}` : '.'}`, ev.d.status === 'accepted' ? undefined : 'error'); break
     case 'APPLICATION_UPDATE': { const name = s.guilds[ev.d.guild_id]?.name ?? 'the server'; s.pushToast(ev.d.status === 'approved' ? `Your application to ${name} was approved. Welcome!` : `Your application to ${name} was rejected${ev.d.reason ? `: ${ev.d.reason}` : '.'}`, ev.d.status === 'approved' ? undefined : 'error'); break }
     case 'CALL_RING': s.setCallIgnored(ev.d.channel_id, false); break
     case 'MEMBER_WARNING': if (!s.modal) s.openModal({ kind: 'warning', guildName: ev.d.guild_name, reason: ev.d.reason }); else s.pushToast(`Warning from ${ev.d.guild_name}: ${ev.d.reason}`, 'error'); break

@@ -8,6 +8,7 @@ import PasskeysSection from './PasskeysSection'
 import StorageSection from './StorageSection'
 import DeleteAccountSection from './DeleteAccountSection'
 import { AccountChanges, StandingCard } from './AccountChanges'
+import { AgeSection, MyBans } from '../../AgeSafety'
 
 export default function AccountTab({ onClose, onEditProfile }: { onClose: () => void; onEditProfile: () => void }) {
   const user = useStore((s) => s.user)
@@ -43,6 +44,8 @@ export default function AccountTab({ onClose, onEditProfile }: { onClose: () => 
     </form>
     <AccountChanges />
     <StandingCard />
+    <MyBans />
+    <AgeSection />
     <MfaSection />
     <PasskeysSection />
     <StorageSection />

@@ -408,8 +408,20 @@ pub async fn guild_system_message(state: &AppState, guild_id: Uuid, actor: Uuid,
 }
 
 /// `GET /channels/:id/messages/:mid`: one message (message link previews).
+/// 18+ channels (or threads under one): only people with a birth date on file who are 18 or older.
+pub async fn check_age(db: &PgPool, c: &Channel, uid: Uuid) -> AppResult<()> {
+    let nsfw = c.nsfw || (c.kind == "thread" && match c.parent_id {
+        Some(p) => sqlx::query_as::<_, (bool,)>("SELECT nsfw FROM channels WHERE id = $1").bind(p).fetch_optional(db).await?.map(|r| r.0).unwrap_or(false),
+        None => false,
+    });
+    if !nsfw { return Ok(()) }
+    let (adult, known): (bool, bool) = sqlx::query_as("SELECT COALESCE(birthdate <= (now() - interval '18 years')::date, false), birthdate IS NOT NULL FROM users WHERE id = $1").bind(uid).fetch_one(db).await?;
+    if adult { Ok(()) } else { Err(AppError::AgeGate(known)) }
+}
+
 async fn get_message(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, mid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Message>> {
-    require_channel(&state.db, id, uid).await?;
+    let c = require_channel(&state.db, id, uid).await?;
+    check_age(&state.db, &c, uid).await?;
     let m = fetch_message(&state.db, mid, uid).await?;
     if m.channel_id != id {
         return Err(AppError::NotFound("Message not found".into()));
@@ -433,6 +445,7 @@ async fn list_messages(
     Query(p): Query<Pagination>,
 ) -> AppResult<Json<Vec<Message>>> {
     let (c, perm) = require_channel_perms(&state.db, id, uid).await?;
+    check_age(&state.db, &c, uid).await?;
     // Without Read Message History you only see what arrives while you're looking.
     if c.guild_id.is_some() && !has(perm, perms::READ_MESSAGE_HISTORY) { return Ok(Json(Vec::new())) }
     let limit = p.limit.unwrap_or(50).clamp(1, 100);
@@ -500,6 +513,7 @@ async fn create_message(
 ) -> AppResult<(StatusCode, Json<Message>)> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
+    check_age(&state.db, &c, uid).await?;
     if let Some(gid) = c.guild_id {
         crate::routes::guilds::check_rules(&state.db, gid, uid).await?;
     }

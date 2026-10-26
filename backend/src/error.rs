@@ -19,6 +19,9 @@ pub enum AppError {
     /// AutoMod stopped it (403, code "automod", with the server's message).
     #[error("{0}")]
     Blocked(String),
+    /// 18+ channel: no birth date on file yet (403, code "age_required") or under 18 (403, code "age_restricted").
+    #[error("age gate")]
+    AgeGate(bool),
     #[error("{0}")]
     NotFound(String),
     #[error("{0}")]
@@ -46,6 +49,10 @@ impl IntoResponse for AppError {
             }
             AppError::Blocked(m) => {
                 return (StatusCode::FORBIDDEN, Json(json!({ "error": m, "code": "automod" }))).into_response();
+            }
+            AppError::AgeGate(known) => {
+                return if *known { (StatusCode::FORBIDDEN, Json(json!({ "error": "You must be 18 or older to view this channel.", "code": "age_restricted" }))).into_response() }
+                else { (StatusCode::FORBIDDEN, Json(json!({ "error": "Confirm your birth date to view age-restricted channels.", "code": "age_required" }))).into_response() };
             }
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             AppError::Conflict(m) => (StatusCode::CONFLICT, m.clone()),

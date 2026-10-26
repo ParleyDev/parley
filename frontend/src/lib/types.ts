@@ -40,6 +40,8 @@ export type DmPrivacy = 'everyone' | 'friends_and_servers' | 'friends'
 export type FriendRequestSource = 'everyone' | 'friends_of_friends' | 'server_members'
 export interface PrivateUser extends User {
   email: string; is_admin?: boolean; email_verified_at?: string | null; mfa_enabled?: boolean
+  /** Set once; 'teen' (13-17) gets safety defaults and no 18+ channels. */
+  birthdate?: string | null; age_group?: 'unknown' | 'teen' | 'adult'
   /** When the chosen status reverts to Online, and when the custom status clears (null: they don't). */
   status_expires_at?: string | null; custom_status_expires_at?: string | null
   /** Channels and DMs pinned to the top of their lists, in order. */

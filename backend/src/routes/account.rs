@@ -8,7 +8,7 @@ use crate::{
     models::{PrivateUser, User},
     state::AppState,
 };
-use axum::{body::Body, extract::{Path, State}, http::header, middleware::from_fn, response::Response, routing::{get, patch, post}, Json, Router};
+use axum::{body::Body, extract::{Path, State}, http::header, middleware::from_fn, response::Response, routing::{get, patch, post, put}, Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -22,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/auth/confirm-email", post(confirm_email))
         .route("/users/@me/disable", post(disable_account))
         .route("/users/@me/privacy", patch(update_privacy))
+        .route("/users/@me/birthdate", put(set_birthdate))
         .route("/users/@me/notification-prefs", patch(update_notif_prefs))
         .route("/guilds/:id/members/@me/privacy", get(guild_privacy).patch(update_guild_privacy))
         .route("/users/@me/mentions", get(recent_mentions))
@@ -381,4 +382,25 @@ async fn update_guild_privacy(State(state): State<AppState>, AuthUser(uid): Auth
     let n = sqlx::query("UPDATE guild_members SET allow_dms = $3 WHERE guild_id = $1 AND user_id = $2").bind(gid).bind(uid).bind(req.allow_dms).execute(&state.db).await?.rows_affected();
     if n == 0 { return Err(AppError::NotFound("Not a member of that server".into())) }
     Ok(Json(guild_privacy_of(&state, uid, gid).await?))
+}
+
+#[derive(Deserialize)]
+struct BirthdateReq { birthdate: chrono::NaiveDate }
+
+/// `PUT /users/@me/birthdate`: set once (an administrator can correct it). You must be at least 13. Under 18 turns
+/// on teen safety defaults: DMs from friends only, every kind of sensitive media blurred (and 18+ channels closed).
+async fn set_birthdate(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<BirthdateReq>) -> AppResult<Json<PrivateUser>> {
+    let today = chrono::Utc::now().date_naive();
+    let age = today.years_since(req.birthdate).ok_or_else(|| AppError::BadRequest("That date is in the future".into()))?;
+    if age > 120 { return Err(AppError::BadRequest("Please enter your real birth date".into())) }
+    if age < 13 { return Err(AppError::BadRequest("You must be at least 13 years old".to_string())) }
+    let res = sqlx::query("UPDATE users SET birthdate = $2 WHERE id = $1 AND birthdate IS NULL").bind(uid).bind(req.birthdate).execute(&state.db).await?;
+    if res.rows_affected() == 0 { return Err(AppError::Conflict("Your birth date is already set. Ask an administrator to change it.".into())) }
+    if age < 18 {
+        sqlx::query("UPDATE users SET dm_privacy = 'friends', spam_filter = 'all', sensitive_media = '{\"non_friend_dms\": \"block\", \"friend_dms\": \"blur\", \"servers\": \"blur\", \"restricted\": \"block\"}'::jsonb WHERE id = $1")
+            .bind(uid).execute(&state.db).await?;
+    }
+    let u = private(&state, uid).await?;
+    state.hub.emit_users(vec![uid], "USER_UPDATE", json!(u));
+    Ok(Json(u))
 }
