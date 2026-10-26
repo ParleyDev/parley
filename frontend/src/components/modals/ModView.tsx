@@ -35,13 +35,19 @@ export default function ModViewModal({ onClose, guildId, userId }: { onClose: ()
   }
   const unwarn = async (id: string) => { try { await api.delete(`/guilds/${guildId}/members/${userId}/warnings/${id}`); await load() } catch (e) { pushToast((e as Error).message, 'error') } }
   const fresh = info && Date.now() - new Date(info.account_created_at).getTime() < 7 * 86_400_000
+  const quarantined = !!member?.quarantined
+  const quarantine = async (on: boolean) => { try { await api.post(`/guilds/${guildId}/members/${userId}/quarantine`, { on }); pushToast(on ? `${name} is quarantined` : `${name} is released`); await load() } catch (e) { pushToast((e as Error).message, 'error') } }
   return (
     <Modal title="Moderator View" onClose={onClose} width="max-w-lg">
       <div className="space-y-5" data-mod-view={userId}>
         <div className="flex items-center gap-3">
           <Avatar user={{ id: userId, display_name: name, avatar_url: member?.avatar_url ?? user?.avatar_url ?? null }} size={48} />
           <div className="min-w-0"><div className="font-bold truncate">{name}</div><div className="text-sm text-text-2 truncate">@{member?.username ?? user?.username}</div></div>
-          {fresh && <span className="ml-auto flex items-center gap-1 rounded-md bg-warn/15 px-2 py-0.5 text-xs font-semibold text-warn" data-mod-new-account><AlertTriangle size={13} /> New account</span>}
+          <span className="ml-auto flex flex-wrap justify-end gap-1">
+            {fresh && <span className="flex items-center gap-1 rounded-md bg-warn/15 px-2 py-0.5 text-xs font-semibold text-warn" data-mod-new-account><AlertTriangle size={13} /> New account</span>}
+            {member?.flags?.includes('raid') && <span className="rounded-md bg-warn/15 px-2 py-0.5 text-xs font-semibold text-warn" data-mod-flag="raid">Joined in a raid</span>}
+            {quarantined && <span className="rounded-md bg-danger/15 px-2 py-0.5 text-xs font-semibold text-danger" data-mod-quarantined>Quarantined</span>}
+          </span>
         </div>
         {!info ? <p className="text-sm text-text-2">Loading…</p> : (
           <>
@@ -53,6 +59,10 @@ export default function ModViewModal({ onClose, guildId, userId }: { onClose: ()
               <div><dt className="text-[11px] font-bold uppercase tracking-wider text-text-2">Email</dt><dd>{info.email_verified ? 'Verified' : 'Not verified'}</dd></div>
               {info.timeout_until && new Date(info.timeout_until) > new Date() && <div><dt className="text-[11px] font-bold uppercase tracking-wider text-text-2">Timed out until</dt><dd>{new Date(info.timeout_until).toLocaleString()}</dd></div>}
             </dl>
+            <div className="flex items-center gap-3 rounded-lg border border-line bg-bg-1 px-3 py-2 text-sm">
+              <span className="flex-1">{quarantined ? 'They can read but not post, react or join voice.' : 'Quarantine makes them read-only until you release them.'}</span>
+              <button type="button" className={quarantined ? 'btn-primary py-1' : 'btn-danger py-1'} onClick={() => quarantine(!quarantined)} data-mod-quarantine={quarantined ? 'release' : 'quarantine'}>{quarantined ? 'Release' : 'Quarantine'}</button>
+            </div>
             <section>
               <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-text-2">Warnings — {info.warnings.length}</h3>
               <div className="space-y-1.5" data-mod-warnings>

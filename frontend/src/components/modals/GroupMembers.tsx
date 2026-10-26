@@ -1,4 +1,4 @@
-import { Check, Search } from 'lucide-react'
+import { Check, Link2, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
@@ -25,6 +25,11 @@ export default function GroupMembersModal({ onClose, channelId, userIds }: { onC
   const [picked, setPicked] = useState<string[]>(userIds ?? [])
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
+  const [link, setLink] = useState('')
+  const makeLink = async () => {
+    if (!dm) return
+    try { const r = await api.post<{ code: string }>(`/channels/${dm.id}/group-invites`, {}); const url = `${location.origin}/invite/${r.code}`; setLink(url); void navigator.clipboard?.writeText(url).catch(() => {}) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
   const already = useMemo(() => new Set(dm ? dm.recipients.map((r) => r.id) : []), [dm])
   const existing = dm ? dm.recipients.length + 1 : 1
   const room = MAX - existing
@@ -72,6 +77,14 @@ export default function GroupMembersModal({ onClose, channelId, userIds }: { onC
         <button type="button" className="btn-primary w-full mt-4 justify-center" disabled={busy || picked.length === 0} onClick={submit} data-group-submit>
           {busy ? 'Working…' : dm && isGroup(dm) ? 'Add to Group' : creatingGroup ? 'Create Group DM' : 'Create DM'}
         </button>
+        {dm && isGroup(dm) && (
+          <div className="mt-4 border-t border-line pt-3" data-group-invite>
+            <div className="mb-1 text-xs font-bold uppercase tracking-wider text-text-2">Or, send an invite link to anyone</div>
+            {link ? <div className="flex gap-2"><input readOnly className="input flex-1 text-sm" value={link} data-group-invite-link /><button type="button" className="btn-primary" onClick={() => { void navigator.clipboard?.writeText(link).catch(() => {}); pushToast('Link copied') }}>Copy</button></div>
+              : <button type="button" className="btn-ghost flex items-center gap-1" onClick={makeLink} data-group-invite-create><Link2 size={16} />Create invite link</button>}
+            {link && <p className="mt-1 text-xs text-text-2">Expires in 24 hours.</p>}
+          </div>
+        )}
       </div>
     </Modal>
   )

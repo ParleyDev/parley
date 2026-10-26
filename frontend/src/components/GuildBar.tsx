@@ -170,7 +170,7 @@ export default function GuildBar() {
   }
 
   return (
-    <nav className="w-[72px] shrink-0 bg-bg-0 flex flex-col items-center py-3 gap-2 overflow-y-auto overflow-x-hidden" data-guild-bar>
+    <nav aria-label="Servers" className="w-[72px] shrink-0 bg-bg-0 flex flex-col items-center py-3 gap-2 overflow-y-auto overflow-x-hidden" data-guild-bar>
       {/* The desktop app has no browser chrome, so it gets its own back and forward buttons. */}
       {isDesktop() && (
         <div className="flex gap-1 -mt-1" data-history-nav>

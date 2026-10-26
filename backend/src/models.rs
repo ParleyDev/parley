@@ -229,6 +229,9 @@ pub struct PrivateUser {
     /// Played when you join a voice channel: a sound id, 'builtin:<name>', or '' for none.
     #[sqlx(default)]
     pub entrance_sound: String,
+    /// Device-independent client settings (appearance, prefs, sounds, keybinds) with a revision stamp.
+    #[sqlx(default)]
+    pub client_settings: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -300,6 +303,24 @@ pub struct Guild {
     /// Background picture on the server's invite page.
     #[sqlx(default)]
     pub invite_splash_url: Option<String>,
+    /// Raid protection: pause invites when more than `raid_threshold` people join in a minute; alerts go to
+    /// `safety_alerts_channel_id` (else the system channel).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub raid_protection: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub raid_threshold: i32,
+    #[sqlx(default)]
+    pub safety_alerts_channel_id: Option<Uuid>,
+    /// Onboarding questions: {enabled, questions: [{id, title, multi, required, options: [{id, label, emoji, role_ids, channel_ids}]}]}.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub onboarding: serde_json::Value,
+    /// Membership applications: {enabled, questions: [{id, title, paragraph, required}]}.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub applications: serde_json::Value,
 }
 
 fn default_all() -> String { "all".into() }
@@ -364,6 +385,14 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub forum_default_reaction: String,
+    /// Text channels: an announcement channel (posts can be published to channels that follow it).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub news: bool,
+    /// Forums: a media channel (posts lead with an image or video and list as a gallery).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub media: bool,
     /// Slowmode: seconds a member waits between messages here (0 = off).
     #[sqlx(default)]
     #[serde(default)]
@@ -424,6 +453,10 @@ pub struct Role {
     #[sqlx(default)]
     #[serde(default)]
     pub mentionable: bool,
+    /// Members can give themselves this role (Channels & Roles).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub self_assignable: bool,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -479,6 +512,27 @@ pub struct Member {
     #[sqlx(default)]
     #[serde(skip_serializing_if = "String::is_empty")]
     pub nameplate: String,
+    /// Quarantined by a moderator: read-only until released.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub quarantined: bool,
+    /// Safety flags (e.g. "raid": joined while a raid was detected).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub flags: Vec<String>,
+    /// Server profile: overrides of your avatar, banner, bio and pronouns in this server.
+    #[sqlx(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guild_avatar: Option<String>,
+    #[sqlx(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub guild_banner: Option<String>,
+    #[sqlx(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub guild_bio: String,
+    #[sqlx(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub guild_pronouns: String,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -526,6 +580,8 @@ pub struct MessageRow {
     pub suppress_embeds: bool,
     #[sqlx(default)]
     pub tts: bool,
+    #[sqlx(default)]
+    pub crosspost: Option<serde_json::Value>,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -607,6 +663,9 @@ pub struct Message {
     /// Sent with /tts: read aloud to people viewing the channel (who allow it).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tts: bool,
+    /// Announcements: {published: true} on a published original; on a copy, the server and channel it came from.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crosspost: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub poll: Option<Poll>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -729,6 +788,7 @@ impl MessageRow {
             kind: if self.kind.is_empty() { "default".into() } else { self.kind },
             suppress_embeds: self.suppress_embeds,
             tts: self.tts,
+            crosspost: self.crosspost,
             poll: None,
             thread: None,
             referenced: None,

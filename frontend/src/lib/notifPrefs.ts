@@ -74,6 +74,7 @@ export function setNotifPrefs(patch: Partial<NotifPrefs>) {
   current = { ...current, ...patch, sounds: { ...current.sounds, ...(patch.sounds ?? {}) } }
   try { localStorage.setItem(KEY, JSON.stringify(current)) } catch { /* ignore */ }
   listeners.forEach((l) => l())
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('parley:settings'))
 }
 export function setSound(key: SoundKey, on: boolean) { setNotifPrefs({ sounds: { ...current.sounds, [key]: on } }) }
 export function useNotifPrefs(): NotifPrefs {

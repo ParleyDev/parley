@@ -76,6 +76,7 @@ export function setAppearance(patch: Partial<Appearance>) {
   try { localStorage.setItem(KEY, JSON.stringify(current)) } catch { /* ignore */ }
   applyAppearance(current)
   listeners.forEach((l) => l())
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('parley:settings'))
 }
 
 export function getAppearance(): Appearance { return current }

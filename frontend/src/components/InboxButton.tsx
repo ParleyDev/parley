@@ -17,7 +17,8 @@ const loadHidden = (): string[] => { try { const v = JSON.parse(localStorage.get
 /** Header Inbox: Mentions (last 30 days, each removable) and Unreads (channels with new messages, mark read). */
 export default function InboxButton() {
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<'mentions' | 'unreads'>('mentions')
+  const [tab, setTab] = useState<'mentions' | 'unreads' | 'highlights'>('mentions')
+  const [highlights, setHighlights] = useState<(Message & { guild_name?: string; channel_name?: string })[] | null>(null)
   const [list, setList] = useState<Message[] | null>(null)
   const [hidden, setHidden] = useState(loadHidden)
   const hide = (id: string) => { const next = [...hidden, id].slice(-500); setHidden(next); try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(next)) } catch { /* ignore */ } }
@@ -43,6 +44,7 @@ export default function InboxButton() {
     setOpen(true)
   }
   useEffect(() => { if (open) api.get<Message[]>('/users/@me/mentions').then(setList).catch(() => setList([])) }, [open])
+  useEffect(() => { if (open && tab === 'highlights') { setHighlights(null); api.get<(Message & { guild_name?: string; channel_name?: string })[]>('/users/@me/highlights').then(setHighlights).catch(() => setHighlights([])) } }, [open, tab])
   useEffect(() => {
     if (!open) return
     const onDown = (e: PointerEvent) => { const t = e.target as Node; if (!ref.current?.contains(t) && !panel.current?.contains(t)) setOpen(false) }
@@ -78,14 +80,29 @@ export default function InboxButton() {
         <div ref={panel} style={{ top: pos.top, right: pos.right }} className="pop fixed z-50 w-[420px] max-w-[calc(100vw-16px)] rounded-xl border border-line bg-bg-1 shadow-2xl" data-inbox>
           <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-line">
             <Inbox size={16} className="text-text-2" /><span className="font-bold mr-2">Inbox</span>
-            {(['mentions', 'unreads'] as const).map((id) => (
+            {(['mentions', 'unreads', 'highlights'] as const).map((id) => (
               <button key={id} type="button" onClick={() => setTab(id)} className={`rounded-md px-2 py-0.5 text-sm ${tab === id ? 'bg-bg-4 text-text-0' : 'text-text-2 hover:text-text-0'}`} data-inbox-tab={id} aria-pressed={tab === id}>
-                {id === 'mentions' ? 'Mentions' : 'Unreads'}{id === 'unreads' && unreads.length > 0 && <span className="ml-1 text-[11px] text-text-2">{unreads.length}</span>}
+                {id === 'mentions' ? 'Mentions' : id === 'unreads' ? 'Unreads' : 'Highlights'}{id === 'unreads' && unreads.length > 0 && <span className="ml-1 text-[11px] text-text-2">{unreads.length}</span>}
               </button>
             ))}
             {tab === 'unreads' && unreads.length > 0 && <button type="button" onClick={() => { for (const id of unreads) void markRead(id) }} className="ml-auto flex items-center gap-1 text-xs text-sky-400 hover:underline" data-inbox-read-all><CheckCheck size={14} /> Mark all read</button>}
           </div>
-          {tab === 'unreads' ? (
+          {tab === 'highlights' ? (
+            <div className="max-h-[60vh] overflow-y-auto" data-inbox-highlights>
+              {highlights === null && <p className="px-4 py-6 text-sm text-text-2">Loading…</p>}
+              {highlights?.length === 0 && <p className="px-4 py-6 text-sm text-text-2">Nothing stood out in your servers in the last two days.</p>}
+              {highlights?.map((m) => (
+                <button key={m.id} type="button" onClick={() => jump(m)} className="w-full text-left flex gap-3 px-4 py-2.5 hover:bg-bg-3 border-b border-line/60" data-inbox-highlight={m.id}>
+                  <Avatar user={m.author} size={32} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2"><span className="font-semibold truncate">{m.author.display_name}</span><span className="text-[11px] text-text-2 truncate">#{m.channel_name} · {m.guild_name}</span></span>
+                    <span className="block text-sm text-text-1 truncate">{m.content || (m.attachments?.length ? '📎 Attachment' : '')}</span>
+                    <span className="text-[11px] text-text-2">{m.reactions.reduce((n, r) => n + r.count, 0)} reactions</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : tab === 'unreads' ? (
             <div className="max-h-[60vh] overflow-y-auto" data-inbox-unreads>
               {unreads.length === 0 && <p className="px-4 py-6 text-sm text-text-2">You're all caught up.</p>}
               {unreads.map((id) => (

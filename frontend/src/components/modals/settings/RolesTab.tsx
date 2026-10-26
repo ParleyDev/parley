@@ -30,9 +30,9 @@ export default function RolesTab({ guildId }: { guildId: string }) {
   const editable = !!(canManage && role && ctx && me && canManageRole(ctx, me.id, role))
 
   // Draft state for the selected role.
-  const [draft, setDraft] = useState<(Pick<Role, 'name' | 'color' | 'color_accent' | 'permissions' | 'hoist'> & { name_style: NameStyle; icon: string | null; mentionable: boolean }) | null>(null)
+  const [draft, setDraft] = useState<(Pick<Role, 'name' | 'color' | 'color_accent' | 'permissions' | 'hoist'> & { name_style: NameStyle; icon: string | null; mentionable: boolean; self_assignable: boolean }) | null>(null)
   const [styleOpen, setStyleOpen] = useState(false)
-  const fromRole = (r: Role) => ({ name: r.name, color: r.color, color_accent: r.color_accent, permissions: r.permissions, hoist: r.hoist, name_style: styleOfRole(r), icon: r.icon ?? null, mentionable: !!r.mentionable })
+  const fromRole = (r: Role) => ({ name: r.name, color: r.color, color_accent: r.color_accent, permissions: r.permissions, hoist: r.hoist, name_style: styleOfRole(r), icon: r.icon ?? null, mentionable: !!r.mentionable, self_assignable: !!r.self_assignable })
   useEffect(() => { setDraft(role ? fromRole(role) : null) }, [role?.id, role?.name, role?.color, role?.color_accent, role?.permissions, role?.hoist, role?.icon, role?.mentionable]) // eslint-disable-line react-hooks/exhaustive-deps
   // How many members hold each role, refreshed when roles change.
   const [counts, setCounts] = useState<Record<string, number>>({})
@@ -48,7 +48,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
   const [pane, setPane] = useState<'display' | 'members'>('display')
   const [dragId, setDragId] = useState<string | null>(null)
   if (!guild || !ctx) return null
-  const dirty = !!(role && draft && (draft.name !== role.name || JSON.stringify(draft.name_style) !== JSON.stringify(styleOfRole(role)) || draft.permissions !== role.permissions || draft.hoist !== role.hoist || draft.icon !== (role.icon ?? null) || draft.mentionable !== !!role.mentionable))
+  const dirty = !!(role && draft && (draft.name !== role.name || JSON.stringify(draft.name_style) !== JSON.stringify(styleOfRole(role)) || draft.permissions !== role.permissions || draft.hoist !== role.hoist || draft.icon !== (role.icon ?? null) || draft.mentionable !== !!role.mentionable || draft.self_assignable !== !!role.self_assignable))
 
   const create = async () => {
     try {
@@ -61,7 +61,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
     setBusy(true)
     try {
       const body: Record<string, unknown> = { permissions: draft.permissions, hoist: draft.hoist, name_style: draft.name_style }
-      if (role.id !== guildId) Object.assign(body, { name: draft.name, icon: draft.icon, mentionable: draft.mentionable })
+      if (role.id !== guildId) Object.assign(body, { name: draft.name, icon: draft.icon, mentionable: draft.mentionable, self_assignable: draft.self_assignable })
       await api.patch(`/guilds/${guildId}/roles/${role.id}`, body)
       pushToast('Role saved')
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
@@ -144,6 +144,10 @@ export default function RolesTab({ guildId }: { guildId: string }) {
                   <p className="text-xs text-text-2">Members with this role get this font, effect and colour on their name, like a user's own display name style.</p>
                 </div>
                 <Toggle label="Display role members separately from online members" checked={draft.hoist} disabled={!editable} onChange={(v) => setDraft({ ...draft, hoist: v })} />
+                <div data-role-self-assignable>
+                  <Toggle label="Let members pick this role themselves" checked={draft.self_assignable} disabled={!editable} onChange={(v) => setDraft({ ...draft, self_assignable: v })} />
+                  <p className="mt-1 text-xs text-text-2">It shows in Channels & Roles. Roles with moderation powers can't be self-assignable.</p>
+                </div>
                 <div data-role-mentionable>
                   <Toggle label="Allow anyone to @mention this role" checked={draft.mentionable} disabled={!editable} onChange={(v) => setDraft({ ...draft, mentionable: v })} />
                   <p className="mt-1 text-xs text-text-2">Members with Mention @everyone, @here and All Roles can always ping it.</p>

@@ -104,6 +104,9 @@ pub fn check_any(perms: u64, bits: u64) -> AppResult<()> {
 /// Thread moderation: Manage Messages or Manage Threads.
 pub fn moderates_threads(p: u64) -> bool { has(p, MANAGE_MESSAGES) || has(p, MANAGE_THREADS) }
 
+/// Powers a member must never be able to give themselves (self-assignable roles, onboarding answers).
+pub const SELF_GRANT_FORBIDDEN: u64 = ADMINISTRATOR | MANAGE_GUILD | MANAGE_ROLES | MANAGE_CHANNELS | KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS | MANAGE_MESSAGES | MANAGE_NICKNAMES | MANAGE_THREADS | MANAGE_EVENTS | MANAGE_EXPRESSIONS | VIEW_AUDIT_LOG | MENTION_EVERYONE | MUTE_MEMBERS | DEAFEN_MEMBERS | MOVE_MEMBERS;
+
 pub fn has(perms: u64, bit: u64) -> bool {
     perms & bit == bit
 }
@@ -151,7 +154,7 @@ impl GuildCtx {
         for (u, r) in rows {
             member_roles.entry(u).or_default().push(r);
         }
-        let timed_out: HashSet<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM guild_members WHERE guild_id = $1 AND timeout_until > now()")
+        let timed_out: HashSet<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM guild_members WHERE guild_id = $1 AND (timeout_until > now() OR quarantined)")
             .bind(guild_id)
             .fetch_all(db)
             .await?
@@ -263,7 +266,7 @@ pub async fn list_roles(db: &PgPool, guild_id: Uuid) -> AppResult<Vec<Role>> {
         .await?)
 }
 
-pub const ROLE_COLS: &str = "id, guild_id, name, color, color_accent, position, permissions, hoist, created_at, name_style, icon, mentionable";
+pub const ROLE_COLS: &str = "id, guild_id, name, color, color_accent, position, permissions, hoist, created_at, name_style, icon, mentionable, self_assignable";
 
 /// Fill `overwrites` on each channel in one query.
 pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResult<()> {
@@ -517,6 +520,7 @@ mod tests {
             name_style: serde_json::Value::Null,
             icon: None,
             mentionable: false,
+            self_assignable: false,
         }
     }
 
@@ -545,6 +549,10 @@ mod tests {
             afk_timeout: 300,
             rules_channel_id: None,
             welcome_screen: serde_json::json!({}),
+            raid_protection: true,
+            raid_threshold: 10,
+            safety_alerts_channel_id: None,
+            onboarding: serde_json::json!({}), applications: serde_json::json!({}),
             widget_enabled: false,
             widget_invite: String::new(),
             invite_splash_url: None,

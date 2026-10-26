@@ -108,7 +108,11 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
             // Ignoring the author: no push or email.
             let ignored: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND $2 = ANY(ignored_users)").bind(u).bind(msg.author.id).fetch_optional(&state.db).await.unwrap_or(None);
             if ignored.is_some() { continue; }
+            // Mobile push turned off for this server or channel: email may still go, push doesn't.
+            let no_push: Option<(bool,)> = sqlx::query_as("SELECT true FROM notification_settings WHERE user_id = $1 AND target_id = ANY($2) AND NOT mobile_push LIMIT 1")
+                .bind(u).bind(&[Some(channel.id), channel.parent_id, channel.guild_id].into_iter().flatten().collect::<Vec<Uuid>>()).fetch_optional(&state.db).await.unwrap_or(None);
             if online.contains(&u) {
+                if no_push.is_some() { continue; }
                 // Online somewhere: push only once they have been idle longer than their inactive timeout.
                 let idle: Option<(bool,)> = sqlx::query_as(
                     "SELECT COALESCE(active_at, now()) < now() - make_interval(mins => COALESCE((notif_prefs->>'push_timeout_min')::int, 10)) FROM users WHERE id = $1",
@@ -116,7 +120,7 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
                 if idle.map(|x| x.0).unwrap_or(false) { targets.push(u); }
                 continue;
             }
-            targets.push(u);
+            if no_push.is_none() { targets.push(u); }
             if mail_on {
                 let wants: Option<(bool,)> = sqlx::query_as(
                     "SELECT COALESCE((notif_prefs->>'email_dms')::bool, true) AND (notify_mailed_at IS NULL OR notify_mailed_at < now() - interval '1 hour') FROM users WHERE id = $1",

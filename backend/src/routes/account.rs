@@ -302,9 +302,9 @@ async fn update_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, 
             let Some(o) = v.as_object() else { return Err(AppError::BadRequest("sensitive_media must be an object".into())) };
             let mut clean = serde_json::Map::new();
             for (k, v) in o {
-                if !["non_friend_dms", "restricted"].contains(&k.as_str()) { return Err(AppError::BadRequest(format!("Unknown sensitive_media key {k}"))) }
-                let Some(s) = v.as_str() else { return Err(AppError::BadRequest("sensitive_media values must be show or blur".into())) };
-                if !["show", "blur"].contains(&s) { return Err(AppError::BadRequest("sensitive_media values must be show or blur".into())) }
+                if !["non_friend_dms", "friend_dms", "servers", "restricted"].contains(&k.as_str()) { return Err(AppError::BadRequest(format!("Unknown sensitive_media key {k}"))) }
+                let Some(s) = v.as_str() else { return Err(AppError::BadRequest("sensitive_media values must be show, blur or block".into())) };
+                if !["show", "blur", "block"].contains(&s) { return Err(AppError::BadRequest("sensitive_media values must be show, blur or block".into())) }
                 clean.insert(k.clone(), json!(s));
             }
             Some(Value::Object(clean))

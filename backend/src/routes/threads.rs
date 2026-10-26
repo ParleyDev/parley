@@ -58,6 +58,9 @@ pub struct ThreadInfo {
     pub member_count: i64,
     /// The post's first message (forum default reactions go on it).
     pub first_message_id: Option<Uuid>,
+    /// Media channels: the first image or video of the post (a thumbnail when there is one), and its type.
+    pub cover_url: Option<String>,
+    pub cover_type: Option<String>,
 }
 
 const THREAD_SELECT: &str = "SELECT c.id, c.parent_id, c.guild_id, c.name, t.root_message_id, t.owner_id, u.username AS owner_username, t.archived_at, t.pinned_at, t.created_at,
@@ -66,8 +69,12 @@ const THREAD_SELECT: &str = "SELECT c.id, c.parent_id, c.guild_id, c.name, t.roo
     ARRAY(SELECT tt.tag_id FROM thread_tags tt JOIN forum_tags ft ON ft.id = tt.tag_id WHERE tt.thread_id = c.id ORDER BY ft.position) AS tags,
     (SELECT LEFT(m.content, 200) FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1) AS preview,
     t.private, t.locked, t.auto_archive_minutes, (SELECT COUNT(*) FROM thread_members tm WHERE tm.thread_id = c.id) AS member_count,
-    (SELECT m.id FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1) AS first_message_id
-    FROM threads t JOIN channels c ON c.id = t.channel_id LEFT JOIN users u ON u.id = t.owner_id";
+    (SELECT m.id FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1) AS first_message_id,
+    cov.url AS cover_url, cov.content_type AS cover_type
+    FROM threads t JOIN channels c ON c.id = t.channel_id LEFT JOIN users u ON u.id = t.owner_id
+    LEFT JOIN LATERAL (SELECT '/api/attachments/' || a.id || CASE WHEN a.thumb_type IS NOT NULL THEN '/thumb?v=2' ELSE '/cover' END AS url, a.content_type
+        FROM attachments a WHERE a.channel_id = c.id AND (a.content_type LIKE 'image/%' OR a.content_type LIKE 'video/%') AND a.message_id = (SELECT m.id FROM messages m WHERE m.channel_id = c.id ORDER BY m.id LIMIT 1)
+        ORDER BY a.created_at LIMIT 1) cov ON true";
 
 /// Thread summaries keyed by root message, for a batch of messages (message hydration).
 pub async fn threads_for(db: &PgPool, message_ids: &[Uuid]) -> AppResult<HashMap<Uuid, ThreadRef>> {
@@ -108,6 +115,9 @@ struct CreateThread {
     private: bool,
     /// Minutes of quiet before it archives itself: 60, 1440, 4320 or 10080.
     auto_archive_minutes: Option<i32>,
+    /// Forum posts: files uploaded to the forum, attached to the first message. Media channels need at least one.
+    #[serde(default)]
+    attachment_ids: Vec<Uuid>,
 }
 
 pub const AUTO_ARCHIVE: [i32; 4] = [60, 1440, 4320, 10080];
@@ -140,9 +150,11 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
     let name = clean_name(&req.name)?;
     let is_forum = parent.kind == "forum";
     let content = req.content.trim_end().to_string();
-    if is_forum && (content.trim().is_empty() || content.chars().count() > 2000) {
+    if is_forum && ((content.trim().is_empty() && req.attachment_ids.is_empty()) || content.chars().count() > 2000) {
         return Err(AppError::BadRequest("A post needs a message of 1-2000 characters".into()));
     }
+    if is_forum && parent.media && req.attachment_ids.is_empty() { return Err(AppError::BadRequest("Posts in a media channel need an image or video".into())) }
+    if !req.attachment_ids.is_empty() && (!is_forum || !perms::has(p, perms::ATTACH_FILES)) { return Err(AppError::Forbidden) }
     if is_forum {
         check_tags(&state.db, id, &req.tags).await?;
         if parent.forum_require_tag && req.tags.is_empty() { return Err(AppError::BadRequest("This forum needs at least one tag on new posts".into())) }
@@ -199,10 +211,15 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
         // The post body is the thread's first message, by the poster.
         let mid = Uuid::now_v7();
         let (m_users, m_roles, _) = crate::routes::channels::parse_mentions(&content);
+        let mut tx = state.db.begin().await?;
         sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, mentions, mention_roles) VALUES ($1, $2, $3, $4, $5, $6)")
             .bind(mid).bind(tid).bind(uid).bind(&content).bind(&m_users).bind(&m_roles)
-            .execute(&state.db)
+            .execute(&mut *tx)
             .await?;
+        // Uploaded to the forum; they move into the post with its first message.
+        crate::routes::attachments::link(&mut tx, mid, id, uid, &req.attachment_ids).await?;
+        sqlx::query("UPDATE attachments SET channel_id = $2 WHERE message_id = $1").bind(mid).bind(tid).execute(&mut *tx).await?;
+        tx.commit().await?;
         crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let msg = fetch_message(&state.db, mid, uid).await?;
         state.hub.emit(target.clone(), "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));

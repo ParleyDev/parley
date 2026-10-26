@@ -1,7 +1,8 @@
 import { Ban, Check, Gavel, MessageSquare, Pencil, UserMinus, UserPlus, X } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { matchPath, useLocation, useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
+import { withServerProfile } from '../../lib/serverProfile'
 import { api } from '../../lib/api'
 import { myGuildPerms, useStore } from '../../store'
 import type { DmChannel, Review, UserProfile } from '../../lib/types'
@@ -28,7 +29,9 @@ export default function ProfileModal({ onClose, userId, anchor }: { onClose: () 
   const { pathname } = useLocation()
   const guildId = matchPath('/channels/:guildId/*', pathname)?.params.guildId
   const inGuild = guildId && guildId !== '@me' ? guildId : undefined
-  const [user, setUser] = useState<UserProfile | null>(cached ?? null)
+  const [fetched, setUser] = useState<UserProfile | null>(cached ?? null)
+  const serverMember = useStore((s) => (inGuild ? s.members[inGuild]?.[userId] : undefined))
+  const user = useMemo(() => (fetched ? withServerProfile(fetched, serverMember) : null), [fetched, serverMember])
   // The cached copy may be partial (built from a member row), so always fetch the full profile,
   // and refetch whenever the cached copy changes (USER_UPDATE, member list load).
   useEffect(() => { api.get<UserProfile>(`/users/${userId}`).then(setUser).catch(() => {}) }, [userId, cached])

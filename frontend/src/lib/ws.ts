@@ -11,6 +11,7 @@ import { log } from './log'
 import { studio } from './studio'
 import { isNative, registerPush } from './native'
 import { markJoined } from './welcome'
+import { receive as receiveSettings } from './settingsSync'
 import { builtinUrl } from './builtinSounds'
 import { desktopNotify, notifyMessage } from './desktopNotify'
 import { emitCallReaction } from './callReactions'
@@ -64,7 +65,9 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'VOICE_ERROR'; d: { message: string } }
   | { t: 'VOICE_MOVE'; d: { guild_id: string; channel_id: string } }
   | { t: 'VOICE_DISCONNECT'; d: { guild_id: string } }
+  | { t: 'GUILD_CUSTOMIZE_UPDATE'; d: { guild_id: string; hidden_channels: string[] } }
   | { t: 'THREAD_MEMBER_UPDATE'; d: { thread_id: string; joined: boolean } }
+  | { t: 'APPLICATION_UPDATE'; d: { guild_id: string; status: string; reason: string } }
   | { t: 'CALL_DECLINE' | 'CALL_RING'; d: { channel_id: string; user_id: string } }
   | { t: 'MEMBER_WARNING'; d: { id: string; guild_id: string; guild_name: string; reason: string } }
   | { t: 'VOICE_REACTION'; d: { channel_id: string; user_id: string; emoji: string } }
@@ -161,7 +164,7 @@ export function sendTyping(channelId: string) {
 function handle(ev: Ev) {
   const s = useStore.getState()
   switch (ev.t) {
-    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void s.loadNotes(); void s.loadMyThreads(); void registerPush(); voice.onReconnect(); break
+    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void s.loadNotes(); void s.loadMyThreads(); receiveSettings(ev.d.user.client_settings); void registerPush(); voice.onReconnect(); break
     // The server replayed everything we missed; state is already current, no need to rebuild it.
     case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); break
     case 'RESYNC': lastSeq = 0; instanceId = null; socket?.close(); break
@@ -216,7 +219,7 @@ function handle(ev: Ev) {
       }
       break
     }
-    case 'USER_SETTINGS_UPDATE': if (s.user && s.token) s.setAuth(s.token, { ...s.user, ...ev.d } as PrivateUser); break
+    case 'USER_SETTINGS_UPDATE': if (ev.d.client_settings) receiveSettings(ev.d.client_settings); if (s.user && s.token) s.setAuth(s.token, { ...s.user, ...ev.d } as PrivateUser); break
     case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
     // A server we weren't in yet (joined from any device or link): its welcome screen is owed.
     case 'GUILD_CREATE': if (!s.guilds[ev.d.id] && ev.d.owner_id !== s.user?.id) markJoined(ev.d.id); s.upsertGuild(ev.d); break
@@ -276,7 +279,9 @@ function handle(ev: Ev) {
       else if (s.myVoiceChannelId === ev.d.channel_id) s.pushToast(`${s.users[ev.d.user_id]?.display_name ?? 'They'} declined the call`)
       break
     }
+    case 'GUILD_CUSTOMIZE_UPDATE': s.setHidden(ev.d.guild_id, ev.d.hidden_channels); break
     case 'THREAD_MEMBER_UPDATE': s.setMyThread(ev.d.thread_id, ev.d.joined); break
+    case 'APPLICATION_UPDATE': { const name = s.guilds[ev.d.guild_id]?.name ?? 'the server'; s.pushToast(ev.d.status === 'approved' ? `Your application to ${name} was approved. Welcome!` : `Your application to ${name} was rejected${ev.d.reason ? `: ${ev.d.reason}` : '.'}`, ev.d.status === 'approved' ? undefined : 'error'); break }
     case 'CALL_RING': s.setCallIgnored(ev.d.channel_id, false); break
     case 'MEMBER_WARNING': if (!s.modal) s.openModal({ kind: 'warning', guildName: ev.d.guild_name, reason: ev.d.reason }); else s.pushToast(`Warning from ${ev.d.guild_name}: ${ev.d.reason}`, 'error'); break
     case 'VOICE_REACTION': if (s.myVoiceChannelId === ev.d.channel_id) emitCallReaction(ev.d.user_id, ev.d.emoji); break

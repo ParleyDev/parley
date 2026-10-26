@@ -134,6 +134,8 @@ struct UpdateRole {
     #[serde(default, deserialize_with = "deserialize_nullable")]
     icon: Option<Option<String>>,
     mentionable: Option<bool>,
+    /// Members may give themselves this role (not for roles with moderation powers).
+    self_assignable: Option<bool>,
 }
 
 /// A role icon is a short emoji or one of this instance's uploaded images.
@@ -209,6 +211,11 @@ async fn update_role(
     let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::MANAGE_ROLES)?;
     let role = ctx.roles.get(&rid).filter(|r| r.guild_id == id).cloned().ok_or_else(|| AppError::NotFound("Role not found".into()))?;
+    let will_be_self = req.self_assignable.unwrap_or(role.self_assignable);
+    if will_be_self && (req.permissions.unwrap_or(role.permissions) as u64) & perms::SELF_GRANT_FORBIDDEN != 0 {
+        return Err(AppError::BadRequest("Roles with moderation powers can't be self-assignable".into()));
+    }
+    if req.self_assignable == Some(true) && rid == id { return Err(AppError::BadRequest("@everyone can't be self-assignable".into())) }
     if !ctx.outranks_role(uid, &role) {
         return Err(AppError::Forbidden);
     }
@@ -251,7 +258,7 @@ async fn update_role(
             permissions = COALESCE($5, permissions), hoist = COALESCE($6, hoist),
             color_accent = CASE WHEN $7 THEN $8 ELSE color_accent END,
             name_style = CASE WHEN $9 THEN $10 ELSE name_style END,
-            icon = CASE WHEN $11 THEN $12 ELSE icon END, mentionable = COALESCE($13, mentionable)
+            icon = CASE WHEN $11 THEN $12 ELSE icon END, mentionable = COALESCE($13, mentionable), self_assignable = COALESCE($14, self_assignable)
          WHERE id = $1 RETURNING {ROLE_COLS}"
     ))
     .bind(rid)
@@ -267,6 +274,7 @@ async fn update_role(
     .bind(req.icon.is_some())
     .bind(req.icon.clone().flatten())
     .bind(req.mentionable)
+    .bind(req.self_assignable)
     .fetch_one(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -359,6 +367,13 @@ struct UpdateMember {
     /// Move Members: a voice channel to move them to, or null to disconnect them from voice.
     #[serde(default, deserialize_with = "deserialize_nullable_uuid")]
     channel_id: Option<Option<Uuid>>,
+    /// Your server profile (yourself only): image URLs from an upload (null or "" clears), bio and pronouns.
+    #[serde(default, deserialize_with = "deserialize_nullable")]
+    guild_avatar: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_nullable")]
+    guild_banner: Option<Option<String>>,
+    guild_bio: Option<String>,
+    guild_pronouns: Option<String>,
 }
 
 async fn update_member(
@@ -394,6 +409,18 @@ async fn update_member(
             .await?;
     }
 
+    let profile = req.guild_avatar.is_some() || req.guild_banner.is_some() || req.guild_bio.is_some() || req.guild_pronouns.is_some();
+    if profile {
+        if target != uid { return Err(AppError::Forbidden) }
+        let clean = |v: &Option<Option<String>>| v.as_ref().map(|x| x.clone().filter(|s| !s.is_empty()));
+        let (avatar, banner) = (clean(&req.guild_avatar), clean(&req.guild_banner));
+        for img in [&avatar, &banner].into_iter().flatten() { crate::routes::users::validate_image(img)?; }
+        let bio = req.guild_bio.as_ref().map(|b| b.trim().chars().take(190).collect::<String>());
+        let pronouns = req.guild_pronouns.as_ref().map(|b| b.trim().chars().take(40).collect::<String>());
+        sqlx::query("UPDATE guild_members SET guild_avatar = CASE WHEN $3 THEN $4 ELSE guild_avatar END, guild_banner = CASE WHEN $5 THEN $6 ELSE guild_banner END, guild_bio = COALESCE($7, guild_bio), guild_pronouns = COALESCE($8, guild_pronouns) WHERE guild_id = $1 AND user_id = $2")
+            .bind(id).bind(target).bind(avatar.is_some()).bind(avatar.clone().flatten()).bind(banner.is_some()).bind(banner.clone().flatten()).bind(bio).bind(pronouns)
+            .execute(&mut *tx).await?;
+    }
     if req.mute.is_some() { perms::check(p, perms::MUTE_MEMBERS)?; }
     if req.deaf.is_some() { perms::check(p, perms::DEAFEN_MEMBERS)?; }
     if req.mute.is_some() || req.deaf.is_some() {

@@ -40,9 +40,10 @@ export function spoofedHost(text: string | undefined, url: URL): string | null {
   return shown === real || real.endsWith(`.${shown}`) ? null : shown
 }
 
-/** Show the dialog, or open at once when the host is trusted. */
+/** Show the dialog, or open at once when the host is trusted (or the warning is off in Chat settings). Spoofed
+ * links always ask. */
 export function openLink(url: URL, text?: string) {
-  if (isTrusted(url) && !spoofedHost(text, url)) { openExternal(url.href); return }
+  if ((isTrusted(url) || !getPrefs().warnLinks) && !spoofedHost(text, url)) { openExternal(url.href); return }
   useStore.getState().openModal({ kind: 'leaveLink', url: url.href, text })
 }
 

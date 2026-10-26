@@ -153,6 +153,7 @@ async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
         if let Err(e) = crate::routes::channels::guild_system_message(&state, gid, uid, "member_join", "joined the server.").await {
             tracing::warn!(error = ?e, "join notice failed");
         }
+        crate::routes::safety::after_join(&state, gid, uid).await;
     }
     Ok(Json(payload))
 }

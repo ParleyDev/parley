@@ -1,3 +1,5 @@
+export type SensitiveLevel = 'show' | 'blur' | 'block'
+
 export interface User {
   id: string
   username: string
@@ -59,7 +61,7 @@ export interface PrivateUser extends User {
   show_read_receipts?: boolean
   show_typing?: boolean
   /** Sensitive media: blur images/videos from non-friends' DMs and in age-restricted channels until clicked. */
-  sensitive_media?: { non_friend_dms?: 'show' | 'blur'; restricted?: 'show' | 'blur' }
+  sensitive_media?: { non_friend_dms?: SensitiveLevel; friend_dms?: SensitiveLevel; servers?: SensitiveLevel; restricted?: SensitiveLevel }
   spam_filter?: 'none' | 'non_friends' | 'all'
   /** Server-side notification preferences (Settings → Notifications). */
   notif_prefs?: NotifPrefsServer
@@ -67,6 +69,8 @@ export interface PrivateUser extends User {
   profile_privacy?: 'everyone' | 'friends'
   /** A sound id, 'builtin:<name>', or '' for none. */
   entrance_sound?: string
+  /** Synced client settings (see lib/settingsSync). */
+  client_settings?: import('./settingsSync').SyncedSettings
 }
 export interface NotifPrefsServer { push_timeout_min?: number; email_dms?: boolean; email_friend_requests?: boolean; default_suppress_everyone?: boolean; default_suppress_roles?: boolean }
 /** GET /users/:id adds the servers you share with that user. */
@@ -94,6 +98,11 @@ export interface Review {
 }
 
 export interface WelcomeScreen { enabled?: boolean; description?: string; channels?: { channel_id: string; description: string; emoji?: string | null }[] }
+
+export interface OnboardingOption { id?: string; label: string; emoji: string; role_ids: string[]; channel_ids: string[] }
+export interface OnboardingQuestion { id?: string; title: string; multi: boolean; required: boolean; options: OnboardingOption[] }
+export interface ApplicationQuestion { id?: string; title: string; paragraph: boolean; required: boolean }
+export interface Onboarding { enabled?: boolean; questions?: OnboardingQuestion[] }
 
 export interface Guild {
   id: string
@@ -127,6 +136,11 @@ export interface Guild {
   widget_enabled?: boolean
   widget_invite?: string
   invite_splash_url?: string | null
+  raid_protection?: boolean
+  raid_threshold?: number
+  safety_alerts_channel_id?: string | null
+  onboarding?: Onboarding
+  applications?: { enabled?: boolean; questions?: ApplicationQuestion[] }
 }
 
 /** One entry of the user's server bar: a server, or a folder of servers. */
@@ -172,6 +186,9 @@ export interface Channel {
   forum_sort?: 'activity' | 'created' | ''
   forum_require_tag?: boolean
   forum_default_reaction?: string
+  /** Text channels: an announcement channel others can follow. Forums: a media channel (gallery of images and videos). */
+  news?: boolean
+  media?: boolean
 }
 
 /** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */
@@ -196,6 +213,8 @@ export interface Role {
   icon?: string | null
   /** Anyone may @mention it (otherwise only members with Mention Everyone). */
   mentionable?: boolean
+  /** Members may give themselves this role (Channels & Roles). */
+  self_assignable?: boolean
 }
 
 export interface DmChannel extends Channel {
@@ -232,6 +251,15 @@ export interface Member {
   timeout_until?: string | null
   roles: string[]
   nameplate?: string
+  /** Quarantined by a moderator: read-only. */
+  quarantined?: boolean
+  /** Safety flags, e.g. 'raid'. */
+  flags?: string[]
+  /** Server profile overrides. */
+  guild_avatar?: string | null
+  guild_banner?: string | null
+  guild_bio?: string
+  guild_pronouns?: string
 }
 
 export interface Ban {
@@ -301,6 +329,8 @@ export interface Message {
   local?: 'failed' | 'notice'
   /** "Remove embeds": no link previews for this message. */
   suppress_embeds?: boolean
+  /** Announcements: published original, or a copy with where it came from. */
+  crosspost?: { published?: boolean; guild_id?: string; guild_name?: string; guild_icon?: string | null; channel_id?: string; channel_name?: string; message_id?: string }
   /** What a failed message would send again on Retry. */
   draft?: Draft
   /** Sent with /tts: read aloud to people viewing the channel. */
@@ -340,7 +370,7 @@ export interface Sticker {
 }
 
 export interface ThreadRef { id: string; name: string; message_count: number; archived: boolean; last_message_at: string | null }
-export interface ThreadInfo { id: string; parent_id: string | null; guild_id: string | null; name: string; root_message_id: string | null; owner_id: string | null; owner_username: string | null; archived_at: string | null; pinned_at: string | null; created_at: string; message_count: number; last_message_at: string | null; tags: string[]; preview: string | null; first_message_id?: string | null; private?: boolean; locked?: boolean; auto_archive_minutes?: number; member_count?: number }
+export interface ThreadInfo { id: string; parent_id: string | null; guild_id: string | null; name: string; root_message_id: string | null; owner_id: string | null; owner_username: string | null; archived_at: string | null; pinned_at: string | null; created_at: string; message_count: number; last_message_at: string | null; tags: string[]; preview: string | null; first_message_id?: string | null; private?: boolean; locked?: boolean; auto_archive_minutes?: number; member_count?: number; cover_url?: string | null; cover_type?: string | null }
 export interface ForumTag { id: string; channel_id: string; name: string; emoji: string; position: number }
 
 export interface PollOption { id: string; text: string; emoji?: string | null; votes: number; me: boolean }

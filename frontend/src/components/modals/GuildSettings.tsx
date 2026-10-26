@@ -1,4 +1,4 @@
-import { Award, Bot, DoorOpen, Flag, PanelsTopLeft, Compass, Crown, ShieldAlert, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Trash2, Users } from 'lucide-react'
+import { Award, Bot, ClipboardList, DoorOpen, LayoutTemplate, ListChecks, Flag, PanelsTopLeft, Compass, Crown, ShieldAlert, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Trash2, Users } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { myGuildPerms, useStore } from '../../store'
@@ -21,8 +21,11 @@ import WelcomeTab from './settings/WelcomeTab'
 import WidgetTab from './settings/WidgetTab'
 import ReportsTab from './settings/ReportsTab'
 import AutomodTab from './settings/AutomodTab'
+import OnboardingTab from './settings/OnboardingTab'
+import TemplateTab from './settings/TemplateTab'
+import MemberApplicationsTab from './settings/MemberApplicationsTab'
 
-type Tab = 'overview' | 'safety' | 'automod' | 'welcome' | 'widget' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
+type Tab = 'overview' | 'safety' | 'automod' | 'welcome' | 'onboarding' | 'template' | 'applications' | 'widget' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
 
 export default function GuildSettingsModal({ onClose, guildId, tab: requested }: { onClose: () => void; guildId: string; tab?: Tab }) {
   const initial: Tab = requested ?? 'overview'
@@ -37,8 +40,9 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   const canBans = has(perms, P.BAN_MEMBERS)
   const canAudit = canOverview || has(perms, P.VIEW_AUDIT_LOG)
   const canExpr = canOverview || has(perms, P.MANAGE_EXPRESSIONS)
+  const canReview = canOverview || has(perms, P.KICK_MEMBERS)
   const canReports = canOverview || has(perms, P.MANAGE_MESSAGES) || has(perms, P.KICK_MEMBERS) || has(perms, P.BAN_MEMBERS) || has(perms, P.MODERATE_MEMBERS)
-  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'safety' || initial === 'automod' || initial === 'welcome' || initial === 'widget' || initial === 'invites' || initial === 'badge' || initial === 'discovery') && !canOverview) || ((initial === 'emoji' || initial === 'stickers') && !canExpr) || (initial === 'audit' && !canAudit) || (initial === 'bans' && !canBans) ? 'roles' : initial)
+  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'safety' || initial === 'automod' || initial === 'welcome' || initial === 'onboarding' || initial === 'template' || initial === 'widget' || initial === 'invites' || initial === 'badge' || initial === 'discovery') && !canOverview) || ((initial === 'emoji' || initial === 'stickers') && !canExpr) || (initial === 'audit' && !canAudit) || (initial === 'bans' && !canBans) ? 'roles' : initial)
   if (!guild) return null
   const isOwner = guild.owner_id === user?.id
 
@@ -50,9 +54,10 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   })
 
   const items: { id: Tab; label: string; icon: React.ReactNode }[] = []
-  if (canOverview) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> }, { id: 'safety', label: 'Safety', icon: <ShieldAlert size={16} /> }, { id: 'automod', label: 'AutoMod', icon: <Bot size={16} /> }, { id: 'welcome', label: 'Welcome Screen', icon: <DoorOpen size={16} /> })
+  if (canOverview) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> }, { id: 'safety', label: 'Safety', icon: <ShieldAlert size={16} /> }, { id: 'automod', label: 'AutoMod', icon: <Bot size={16} /> }, { id: 'welcome', label: 'Welcome Screen', icon: <DoorOpen size={16} /> }, { id: 'onboarding', label: 'Onboarding', icon: <ListChecks size={16} /> }, { id: 'template', label: 'Server Template', icon: <LayoutTemplate size={16} /> })
   items.push({ id: 'roles', label: 'Roles', icon: <Shield size={16} /> })
   items.push({ id: 'members', label: 'Members', icon: <Users size={16} /> })
+  if (canReview) items.push({ id: 'applications', label: 'Applications', icon: <ClipboardList size={16} /> })
   if (canOverview) items.push({ id: 'invites', label: 'Invites', icon: <Link2 size={16} /> }, { id: 'badge', label: 'Badge', icon: <Award size={16} /> }, { id: 'widget', label: 'Widget', icon: <PanelsTopLeft size={16} /> })
   if (canBans) items.push({ id: 'bans', label: 'Bans', icon: <Gavel size={16} /> })
   if (canExpr) items.push({ id: 'emoji', label: 'Emoji', icon: <Smile size={16} /> }, { id: 'stickers', label: 'Stickers', icon: <Sticker size={16} /> }, { id: 'soundboard', label: 'Soundboard', icon: <Music2 size={16} /> })
@@ -75,6 +80,9 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
       {tab === 'safety' && canOverview && <SafetyTab guildId={guildId} />}
       {tab === 'automod' && canOverview && <AutomodTab guildId={guildId} />}
       {tab === 'welcome' && canOverview && <WelcomeTab guildId={guildId} />}
+      {tab === 'onboarding' && canOverview && <OnboardingTab guildId={guildId} />}
+      {tab === 'template' && canOverview && <TemplateTab guildId={guildId} />}
+      {tab === 'applications' && canReview && <MemberApplicationsTab guildId={guildId} />}
       {tab === 'widget' && canOverview && <WidgetTab guildId={guildId} />}
       {tab === 'roles' && <RolesTab guildId={guildId} />}
       {tab === 'members' && <MembersTab guildId={guildId} />}

@@ -2,6 +2,8 @@ import { chromium } from 'playwright'
 import { WEB, S, reg, call, callS, raw, ok, finish, adminToken } from '../lib.mjs'
 
 const admin = await adminToken()
+// The admin queue is shared: start from an empty one so other suites' leftovers can't confuse the UI checks.
+for (const r of (await call(admin.token, 'GET', '/admin/reports')) ?? []) if (r.status === 'open') await call(admin.token, 'PATCH', `/admin/reports/${r.id}`, { status: 'dismissed' })
 const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol')
 const g = await call(a.token, 'POST', '/guilds', { name: `Reportville ${S}` })
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`)

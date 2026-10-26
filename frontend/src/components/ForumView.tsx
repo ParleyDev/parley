@@ -1,4 +1,4 @@
-import { LayoutGrid, List, MessageSquareText, Pin, Plus, Search } from 'lucide-react'
+import { ImageIcon, LayoutGrid, List, MessageSquareText, Pin, Plus, Search } from 'lucide-react'
 import Emoji from './Emoji'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
@@ -67,6 +67,17 @@ export default function ForumView({ channel }: { channel: Channel }) {
       )}
       {ids === null && <p className="text-sm text-text-2">Loading…</p>}
       {ids !== null && posts.length === 0 && <div className="rounded-xl border border-dashed border-line p-10 text-center text-sm text-text-2" data-forum-empty><MessageSquareText size={28} className="mx-auto mb-2 text-text-2" />No posts {archived ? 'archived' : 'yet'}. {has(perms, P.SEND_MESSAGES) && !archived ? 'Start the first one!' : ''}</div>}
+      {channel.media && layout === 'gallery' ? (
+        <div className="grid gap-2 grid-cols-[repeat(auto-fill,minmax(180px,1fr))]" data-media-grid>
+          {posts.map((t) => (
+            <button key={t.id} type="button" onClick={() => setOpenThread(t.id)} className="group relative aspect-square overflow-hidden rounded-xl border border-line bg-bg-1 text-left" data-forum-post={t.id} data-media-tile={t.id}>
+              {t.cover_url ? (t.cover_type?.startsWith('video/') && !t.cover_url.includes('/thumb') ? <video src={t.cover_url} muted className="h-full w-full object-cover" /> : <img src={t.cover_url} alt="" loading="lazy" className="h-full w-full object-cover transition-transform group-hover:scale-105" data-media-cover />) : <span className="flex h-full items-center justify-center text-text-2"><ImageIcon size={32} /></span>}
+              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 pt-6 text-sm font-semibold text-white"><span className="line-clamp-2">{t.name}</span><span className="text-[11px] font-normal opacity-80">{t.message_count} message{t.message_count === 1 ? '' : 's'}</span></span>
+              {t.pinned_at && <Pin size={14} className="absolute right-2 top-2 text-warn" />}
+            </button>
+          ))}
+        </div>
+      ) : (
       <div className={layout === 'list' ? 'flex flex-col gap-2' : 'grid gap-3 grid-cols-[repeat(auto-fill,minmax(280px,1fr))]'}>
         {posts.map((t) => (
           <div key={t.id} role="button" tabIndex={0} onClick={() => setOpenThread(t.id)} onKeyDown={(e) => { if (e.key === 'Enter') setOpenThread(t.id) }} className={`relative cursor-pointer rounded-xl border border-line bg-bg-1 text-left hover:border-text-2 flex flex-col gap-2 ${layout === 'list' ? 'p-3' : 'p-4 min-h-[120px]'}`} data-forum-post={t.id} data-forum-pinned={t.pinned_at ? '1' : '0'}>
@@ -81,6 +92,7 @@ export default function ForumView({ channel }: { channel: Channel }) {
           </div>
         ))}
       </div>
+      )}
     </div>
   )
 }

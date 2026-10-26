@@ -35,7 +35,14 @@ import WelcomeModal from './Welcome'
 import ModViewModal from './ModView'
 import Modal from '../Modal'
 import LeaveGroupsModal from './LeaveGroups'
+import SafetyCenterModal from './SafetyCenter'
+import GuildNotificationsModal from './GuildNotifications'
 import AltTextModal from './AltText'
+import BrowseChannelsModal from './BrowseChannels'
+import OnboardingModal from './Onboarding'
+import FollowChannelModal from './FollowChannel'
+import ServerProfileModal from './ServerProfile'
+import ApplicationModal from './Application'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
@@ -82,6 +89,8 @@ export default function Modals() {
     case 'shortcuts': return <ShortcutsModal onClose={close} />
     case 'quickSwitcher': return <QuickSwitcher onClose={close} />
     case 'nickname': return <NicknameModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
+    case 'guildNotifications': return <GuildNotificationsModal onClose={close} guildId={modal!.guildId} />
+    case 'safetyCenter': return <SafetyCenterModal onClose={close} />
     case 'leaveGroups': return <LeaveGroupsModal onClose={close} />
     case 'modView': return <ModViewModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'warning': return (
@@ -91,6 +100,11 @@ export default function Modals() {
       </Modal>
     )
     case 'welcome': return <WelcomeModal onClose={close} guildId={modal!.guildId} />
+    case 'browseChannels': return <BrowseChannelsModal onClose={close} guildId={modal!.guildId} tab={modal!.tab} />
+    case 'onboarding': return <OnboardingModal onClose={close} guildId={modal!.guildId} />
+    case 'application': return <ApplicationModal onClose={close} guildId={modal!.guildId} />
+    case 'serverProfile': return <ServerProfileModal onClose={close} guildId={modal!.guildId} />
+    case 'followChannel': return <FollowChannelModal onClose={close} channelId={modal!.channelId} />
     case 'reactions': return <ReactionsModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} />
     case 'altText': return <AltTextModal onClose={close} message={modal!.message} />
   }

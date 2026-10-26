@@ -19,6 +19,7 @@ pub const MAX_IMAGE_DATA_URL: usize = 512 * 1024;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/users/@me/client-settings", axum::routing::put(put_client_settings))
         .route("/users/@me", get(me).patch(update_me).delete(delete_me))
         .route("/users/search", get(search))
         .route("/users/:id", get(get_user))
@@ -41,7 +42,18 @@ pub struct NotifSetting {
     #[sqlx(default)]
     #[serde(default)]
     pub suppress_roles: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub mobile_push: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub suppress_highlights: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub mute_events: bool,
 }
+
+const NOTIF_COLS: &str = "target_id, level, muted_until, suppress_everyone, suppress_roles, mobile_push, suppress_highlights, mute_events";
 
 /// On joining a server, seed its notification setting from the user's defaults (suppress @everyone / role mentions).
 pub async fn apply_join_defaults(db: &sqlx::PgPool, uid: Uuid, guild_id: Uuid) {
@@ -54,7 +66,7 @@ pub async fn apply_join_defaults(db: &sqlx::PgPool, uid: Uuid, guild_id: Uuid) {
 }
 
 pub async fn notif_settings_for(db: &sqlx::PgPool, uid: Uuid) -> AppResult<Vec<NotifSetting>> {
-    Ok(sqlx::query_as::<_, NotifSetting>("SELECT target_id, level, muted_until, suppress_everyone, suppress_roles FROM notification_settings WHERE user_id = $1").bind(uid).fetch_all(db).await?)
+    Ok(sqlx::query_as::<_, NotifSetting>(&format!("SELECT {NOTIF_COLS} FROM notification_settings WHERE user_id = $1")).bind(uid).fetch_all(db).await?)
 }
 
 async fn list_notif(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<NotifSetting>>> {
@@ -70,6 +82,9 @@ struct PutNotif {
     unmute: bool,
     suppress_everyone: Option<bool>,
     suppress_roles: Option<bool>,
+    mobile_push: Option<bool>,
+    suppress_highlights: Option<bool>,
+    mute_events: Option<bool>,
 }
 
 /// Upsert the setting for a server or channel the user can see.
@@ -98,13 +113,16 @@ async fn put_notif(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(
         req.mute_minutes.map(|m| Some(if m <= 0 { chrono::Utc::now() + chrono::Duration::days(365 * 100) } else { chrono::Utc::now() + chrono::Duration::minutes(m.min(60 * 24 * 365)) }))
     };
     sqlx::query(
-        "INSERT INTO notification_settings (user_id, target_id, level, muted_until, suppress_everyone, suppress_roles)
-         VALUES ($1, $2, COALESCE($3, 'default'), $4, COALESCE($5, false), COALESCE($7, false))
+        "INSERT INTO notification_settings (user_id, target_id, level, muted_until, suppress_everyone, suppress_roles, mobile_push, suppress_highlights, mute_events)
+         VALUES ($1, $2, COALESCE($3, 'default'), $4, COALESCE($5, false), COALESCE($7, false), COALESCE($8, true), COALESCE($9, false), COALESCE($10, false))
          ON CONFLICT (user_id, target_id) DO UPDATE SET
            level = COALESCE($3, notification_settings.level),
            muted_until = CASE WHEN $6 THEN $4 ELSE notification_settings.muted_until END,
            suppress_everyone = COALESCE($5, notification_settings.suppress_everyone),
            suppress_roles = COALESCE($7, notification_settings.suppress_roles),
+           mobile_push = COALESCE($8, notification_settings.mobile_push),
+           suppress_highlights = COALESCE($9, notification_settings.suppress_highlights),
+           mute_events = COALESCE($10, notification_settings.mute_events),
            updated_at = now()",
     )
     .bind(uid)
@@ -114,9 +132,12 @@ async fn put_notif(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(
     .bind(req.suppress_everyone)
     .bind(muted_until.is_some())
     .bind(req.suppress_roles)
+    .bind(req.mobile_push)
+    .bind(req.suppress_highlights)
+    .bind(req.mute_events)
     .execute(&state.db)
     .await?;
-    let row = sqlx::query_as::<_, NotifSetting>("SELECT target_id, level, muted_until, suppress_everyone FROM notification_settings WHERE user_id = $1 AND target_id = $2").bind(uid).bind(target).fetch_one(&state.db).await?;
+    let row = sqlx::query_as::<_, NotifSetting>(&format!("SELECT {NOTIF_COLS} FROM notification_settings WHERE user_id = $1 AND target_id = $2")).bind(uid).bind(target).fetch_one(&state.db).await?;
     state.hub.emit_users(vec![uid], "NOTIFICATION_SETTINGS_UPDATE", json!(row));
     Ok(Json(row))
 }
@@ -175,7 +196,7 @@ pub const NAMEPLATES: &[&str] = &["dusk", "ocean", "forest", "candy", "aurora", 
 pub const PROFILE_EFFECTS: &[&str] = &["sparkles", "snow", "hearts", "confetti", "bubbles"];
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, avatar_decoration, clan_tag, panels, profile_privacy, profile_frame, nameplate, profile_effect";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect, entrance_sound";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect, entrance_sound, client_settings";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -782,5 +803,14 @@ async fn put_push_token(State(state): State<AppState>, AuthUser(uid): AuthUser, 
 struct DeletePushToken { token: String }
 async fn delete_push_token(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<DeletePushToken>) -> AppResult<StatusCode> {
     sqlx::query("DELETE FROM push_tokens WHERE token = $1 AND user_id = $2").bind(req.token.trim()).bind(uid).execute(&state.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `PUT /users/@me/client-settings`: the whole settings blob (up to 32 KB); your other sessions are told.
+async fn put_client_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(v): Json<serde_json::Value>) -> AppResult<StatusCode> {
+    if !v.is_object() { return Err(AppError::BadRequest("Settings must be an object".into())) }
+    if v.to_string().len() > 32 * 1024 { return Err(AppError::BadRequest("Settings are too large".into())) }
+    sqlx::query("UPDATE users SET client_settings = $2 WHERE id = $1").bind(uid).bind(&v).execute(&state.db).await?;
+    state.hub.emit_users(vec![uid], "USER_SETTINGS_UPDATE", json!({ "client_settings": v }));
     Ok(StatusCode::NO_CONTENT)
 }

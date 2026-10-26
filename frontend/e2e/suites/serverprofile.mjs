@@ -1,0 +1,65 @@
+// Per-server profiles (avatar, banner, bio, pronouns that override the main profile in one server) and invite links
+// for group DMs.
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, raw, ok, finish } from '../lib.mjs'
+const a = await reg('alice'), b = await reg('bob'), c = await reg('carol'), d = await reg('dave')
+const befriend = async (x, y) => { await call(x.token, 'POST', '/users/@me/relationships', { user_id: y.user.id }); await call(y.token, 'PUT', `/users/@me/relationships/${x.user.id}`) }
+await befriend(a, b); await befriend(a, d)
+const g = await call(a.token, 'POST', '/guilds', { name: `Prof ${S}` })
+const g2 = await call(a.token, 'POST', '/guilds', { name: `Other ${S}` })
+const ch = g.channels.find((x) => x.kind === 'text')
+const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`)
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+await call(a.token, 'POST', `/channels/${ch.id}/messages`, { content: `hello ${S}` })
+
+const browser = await chromium.launch(); const errors = []
+const ctx = async (t) => { const p = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage(); p.on('pageerror', (x) => errors.push(x.message)); await p.goto(`${WEB}/login`); await p.evaluate((x) => localStorage.setItem('parley.token', x), t); return p }
+
+console.log('-- server profile')
+ok('you can\'t edit someone else\'s server profile', (await raw(b.token, 'PATCH', `/guilds/${g.id}/members/${a.user.id}`, { guild_bio: 'x' })).status === 403)
+const pa = await ctx(a.token)
+await pa.goto(`${WEB}/channels/${g.id}/${ch.id}`); await pa.waitForTimeout(800)
+await pa.locator(`button:has-text("Prof ${S}")`).first().click(); await pa.click('text=Edit Server Profile'); await pa.waitForSelector('[data-server-profile]')
+await pa.fill('[data-sp-nick]', 'Captain'); await pa.fill('[data-sp-pronouns]', 'she/her'); await pa.fill('[data-sp-bio]', `Server bio ${S}`)
+await pa.setInputFiles('[data-sp-upload="avatar"]', { name: 'a.png', mimeType: 'image/png', buffer: PNG }); await pa.waitForTimeout(800)
+await pa.click('[data-sp-save]'); await pa.waitForTimeout(800)
+const me = (await call(a.token, 'GET', `/guilds/${g.id}/members`)).find((m) => m.user_id === a.user.id)
+ok('nickname, pronouns, bio and avatar are saved for this server', me.nickname === 'Captain' && me.guild_pronouns === 'she/her' && me.guild_bio === `Server bio ${S}` && /^\/api\/images\//.test(me.guild_avatar ?? ''), JSON.stringify(me))
+const other = (await call(a.token, 'GET', `/guilds/${g2.id}/members`)).find((m) => m.user_id === a.user.id)
+ok('other servers are untouched', !other.guild_avatar && !other.guild_bio)
+const pb = await ctx(b.token)
+await pb.goto(`${WEB}/channels/${g.id}/${ch.id}`); await pb.waitForTimeout(1200)
+const src = await pb.locator('[data-msg-avatar] img').first().getAttribute('src').catch(() => '')
+ok('messages show the server avatar', !!src && src.startsWith(me.guild_avatar), src)
+await pb.locator('[data-msg-avatar]').first().click(); await pb.waitForTimeout(800)
+const card = await pb.locator('body').innerText()
+ok('the profile shows the server bio and pronouns', card.includes(`Server bio ${S}`) && card.includes('she/her'))
+await pb.keyboard.press('Escape')
+await call(a.token, 'PATCH', `/guilds/${g.id}/members/${a.user.id}`, { guild_avatar: null, guild_bio: '' })
+const cleared = (await call(a.token, 'GET', `/guilds/${g.id}/members`)).find((m) => m.user_id === a.user.id)
+ok('clearing falls back to the main profile', !cleared.guild_avatar && !cleared.guild_bio && cleared.guild_pronouns === 'she/her')
+
+console.log('-- group invite links')
+const grp = await call(a.token, 'POST', '/users/@me/channels', { recipient_ids: [b.user.id, d.user.id], name: `Club ${S}` })
+await pa.goto(`${WEB}/channels/@me/${grp.id}`); await pa.waitForSelector('[data-add-to-group]')
+await pa.click('[data-add-to-group]'); await pa.click('[data-group-invite-create]'); await pa.waitForSelector('[data-group-invite-link]')
+const url = await pa.inputValue('[data-group-invite-link]')
+const link = { code: url.split('/').pop() }
+ok('Create invite link makes a link', /\/invite\/\w{10}$/.test(url), url)
+await pa.keyboard.press('Escape')
+ok('non-members can\'t make one', (await raw(c.token, 'POST', `/channels/${grp.id}/group-invites`, {})).status !== 201)
+const pc = await ctx(c.token)
+await pc.goto(`${WEB}/invite/${link.code}`); await pc.waitForSelector('[data-group-invite-page]')
+ok('the invite page shows the group', (await pc.locator('[data-group-invite-name]').innerText()) === `Club ${S}`)
+await pc.click('[data-group-invite-join]'); await pc.waitForURL(new RegExp(`/channels/@me/${grp.id}`), { timeout: 6000 }).catch(() => {})
+ok('joining opens the group', pc.url().includes(grp.id))
+const members = await call(a.token, 'GET', '/users/@me/channels')
+ok('and adds you to it', members.find((x) => x.id === grp.id)?.recipients.some((r) => r.id === c.user.id))
+await call(a.token, 'DELETE', `/group-invites/${link.code}`)
+ok('a revoked link stops working', (await raw(d.token, 'GET', `/group-invites/${link.code}`)).status === 404)
+const long = await call(b.token, 'POST', `/channels/${grp.id}/group-invites`, { max_age_hours: 500 })
+ok('links last at most a week', new Date(long.expires_at).getTime() - Date.now() < 169 * 3600e3)
+
+ok('no page errors', errors.length === 0, errors.join(' | '))
+for (const x of [g, g2]) await call(a.token, 'DELETE', `/guilds/${x.id}`)
+await browser.close(); await finish()

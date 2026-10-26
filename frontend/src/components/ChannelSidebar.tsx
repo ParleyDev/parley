@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { anchorOf } from '../lib/anchor'
-import { CalendarDays, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, Image as ImageIcon, Megaphone, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
@@ -11,7 +11,7 @@ import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import { takeWelcome } from '../lib/welcome'
 import { VoiceTimer } from './CallExtras'
-import { BellOff, BookOpenCheck, DoorOpen, Flag, Eye, EyeOff, Pin, PinOff } from 'lucide-react'
+import { Bell, BellOff, BookOpenCheck, ListChecks, Tags, DoorOpen, Flag, Eye, EyeOff, Pin, PinOff } from 'lucide-react'
 import { togglePinned } from '../lib/pins'
 
 const NO_PINS: string[] = []
@@ -27,7 +27,7 @@ import { useT } from '../lib/i18n'
 /** Channel-list icon by kind; the server's rules channel gets a rulebook. */
 function chanIcon(c: Channel, rulesId?: string | null) {
   if (c.id === rulesId) return <BookOpenCheck size={18} data-rules-icon />
-  return c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />
+  return c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? (c.media ? <ImageIcon size={18} /> : <MessageSquareText size={18} />) : c.news ? <Megaphone size={18} /> : <Hash size={18} />
 }
 export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const t = useT()
@@ -47,9 +47,19 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const allGuilds = useStore((s) => s.guilds)
   const [hideMuted, setHideMuted] = useState(() => { try { return localStorage.getItem(`${STORAGE_PREFIX}hideMuted.${guildId}`) === '1' } catch { return false } })
   useEffect(() => { try { setHideMuted(localStorage.getItem(`${STORAGE_PREFIX}hideMuted.${guildId}`) === '1') } catch { /* ignore */ } }, [guildId])
-  // Just joined: the server's welcome screen, once.
+  const hiddenIds = useStore((s) => s.customize[guildId]?.hidden)
+  const custLoaded = useStore((s) => !!s.customize[guildId])
+  // Just joined: onboarding questions first (if any and not answered yet), else the welcome screen, once.
   const welcomeOn = !!guild?.welcome_screen?.enabled
-  useEffect(() => { if (welcomeOn && takeWelcome(guildId)) openModal({ kind: 'welcome', guildId }) }, [guildId, welcomeOn, openModal])
+  const onboardingOn = !!guild?.onboarding?.enabled && (guild?.onboarding?.questions?.length ?? 0) > 0
+  useEffect(() => { void useStore.getState().loadCustomize(guildId) }, [guildId])
+  useEffect(() => {
+    if (!custLoaded) return
+    const c = useStore.getState().customize[guildId]
+    if (!(welcomeOn || onboardingOn) || !takeWelcome(guildId)) return
+    if (onboardingOn && c && !c.onboarded) openModal({ kind: 'onboarding', guildId })
+    else if (welcomeOn) openModal({ kind: 'welcome', guildId })
+  }, [guildId, welcomeOn, onboardingOn, custLoaded, openModal]) // eslint-disable-line react-hooks/exhaustive-deps
   const toggleHideMuted = () => setHideMuted((on) => { try { localStorage.setItem(`${STORAGE_PREFIX}hideMuted.${guildId}`, on ? '0' : '1') } catch { /* ignore */ } return !on })
   const voiceStates = useStore((s) => s.voiceStates)
   // Pinned channels (per account) also show in a Pinned section at the top, in the order they were pinned.
@@ -103,7 +113,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const canCreate = has(perms, P.MANAGE_CHANNELS)
   const canEditChannel = (id: string) => has(chanPerms[id] ?? 0, P.MANAGE_CHANNELS) || has(chanPerms[id] ?? 0, P.MANAGE_ROLES)
   // View Server as Role hides what those roles can't see (categories stay while something in them is visible).
-  const viewHidden = (c: Channel) => !!viewAs && c.kind !== 'category' && !has(myChannelPerms(useStore.getState(), c.id), P.VIEW_CHANNEL)
+  const viewHidden = (c: Channel) => (!!viewAs && c.kind !== 'category' && !has(myChannelPerms(useStore.getState(), c.id), P.VIEW_CHANNEL)) || (c.id !== channelId && !!hiddenIds?.includes(c.id))
   const all = Object.values(channels).filter((c) => c.guild_id === guildId && !viewHidden(c)).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
   const categories = all.filter((c) => c.kind === 'category')
   const list = all.filter((c) => c.kind !== 'category' && c.kind !== 'thread')
@@ -236,7 +246,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   })
 
   return (
-    <aside className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
+    <aside aria-label="Channels" className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="relative">
         {guild.banner_url ? (
           <div className="relative h-[135px] bg-cover bg-center" style={{ backgroundImage: `url(${guild.banner_url})` }} data-guild-banner>
@@ -257,6 +267,10 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             <div className="pop absolute left-2 right-2 top-full mt-1 z-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5 text-sm" onClick={() => setMenu(false)}>
               {canInvite && <MenuItem icon={<UserPlus size={16} />} onClick={() => openModal({ kind: 'invite', guildId })} accent>{t('Invite People')}</MenuItem>}
               <MenuItem icon={<BellOff size={16} />} onClick={(e) => { setMenu(false); ctx.open(e as React.MouseEvent, notifEntries(guildId, 'Server', notifSettings, { suppress: true, fallback: allGuilds[guildId]?.default_notifications })) }}>{mutedTarget(notifSettings, guildId) ? 'Unmute / Notifications' : 'Mute / Notifications'}</MenuItem>
+              <MenuItem icon={<Bell size={16} />} onClick={() => openModal({ kind: 'guildNotifications', guildId })}>Notification Settings</MenuItem>
+              <MenuItem icon={<Pencil size={16} />} onClick={() => openModal({ kind: 'serverProfile', guildId })}>Edit Server Profile</MenuItem>
+              <MenuItem icon={<ListChecks size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId })}>Browse Channels</MenuItem>
+              {(Object.values(allRoles).some((r) => r.self_assignable) || onboardingOn) && <MenuItem icon={<Tags size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId, tab: 'roles' })}>Channels &amp; Roles</MenuItem>}
               <MenuItem icon={hideMuted ? <Eye size={16} /> : <EyeOff size={16} />} onClick={() => { setMenu(false); toggleHideMuted() }}>{hideMuted ? 'Show Muted Channels' : 'Hide Muted Channels'}</MenuItem>
               {guild.welcome_screen?.enabled && <MenuItem icon={<DoorOpen size={16} />} onClick={() => openModal({ kind: 'welcome', guildId })}>Welcome Screen</MenuItem>}
               <MenuItem icon={<ShieldCheck size={16} />} onClick={() => openModal({ kind: 'guildPrivacy', guildId })}>{t('Privacy Settings')}</MenuItem>

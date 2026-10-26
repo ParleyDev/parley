@@ -64,7 +64,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   }, [myMember?.timeout_until])
   const timedOut = isTimedOut(myMember)
   const rulesGuild = useStore((s) => (channel.guild_id ? s.guilds[channel.guild_id] : undefined))
-  const rulesPending = !!rulesGuild?.rules_required && !!myMember && !myMember.rules_accepted_at
+  // Applications reuse the rules gate: pending until a moderator approves (new members only: turning it on admits everyone already here).
+  const applying = !!rulesGuild?.applications?.enabled
+  const rulesPending = (!!rulesGuild?.rules_required || applying) && !!myMember && !myMember.rules_accepted_at
   // Server verification level (Safety settings): members without a role wait for a verified email, an account older
   // than 5 minutes and/or 10 minutes in the server. The server enforces it; this explains it and counts down.
   const me = useStore((s) => s.user)
@@ -437,12 +439,16 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   if (!canSend) {
     return (
       <div className="shrink-0 px-4 pb-2 pt-1 max-md:px-2 max-md:pb-2">
-        {rulesPending
+        {rulesPending && applying
+          ? <div className="rounded-xl bg-accent/10 border border-accent/40 px-4 py-3 text-[15px] text-text-1 flex items-center gap-3" data-application-gate><span className="flex-1"><b>{rulesGuild?.name}</b> reviews new members. Apply to start chatting.</span><button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'application', guildId: channel.guild_id! })} data-application-open>Apply</button></div>
+          : rulesPending
           ? <div className="rounded-xl bg-accent/10 border border-accent/40 px-4 py-3 text-[15px] text-text-1 flex items-center gap-3" data-rules-gate><span className="flex-1">Read and accept the server rules to start chatting in <b>{rulesGuild?.name}</b>.</span><button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'rules', guildId: channel.guild_id! })} data-rules-open>View rules</button></div>
           : verifyBlock
           ? <div className="rounded-xl bg-warn/10 border border-warn/40 px-4 py-3 text-[15px] text-text-1" data-verification-gate>{verifyBlock}</div>
           : timedOut
-          ? <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-timed-out>You are timed out in this server until <b>{new Date(myMember!.timeout_until!).toLocaleString()}</b>. You can read, but not send messages, react or join voice.</div>
+          ? myMember?.quarantined
+            ? <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-quarantined>A moderator has limited your account in this server. You can read, but not send messages, react or join voice until they lift it.</div>
+            : <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-timed-out>You are timed out in this server until <b>{new Date(myMember!.timeout_until!).toLocaleString()}</b>. You can read, but not send messages, react or join voice.</div>
           : <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2">You do not have permission to send messages in this channel.</div>}
         <div className="h-5" />
       </div>

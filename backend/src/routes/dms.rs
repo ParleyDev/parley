@@ -100,7 +100,7 @@ pub async fn list_dm_channels(db: &PgPool, uid: Uuid) -> AppResult<Vec<DmChannel
     for (id, guild_id, name, kind, topic, position, created_at, last, owner_id, icon_url, request_state, e2ee, closed) in channels {
         let recipients = recipients_for(db, id, uid).await?;
         out.push(DmChannel {
-            channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, spoiler: false, video_quality: String::new(), permissions_synced: None, forum_layout: String::new(), forum_sort: String::new(), forum_require_tag: false, forum_default_reaction: String::new(), audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, e2ee, rate_limit_per_user: 0, user_limit: 0, voice_status: String::new(), engineer_ids: vec![], overwrites: vec![] },
+            channel: Channel { id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id: None, nsfw: false, spoiler: false, video_quality: String::new(), permissions_synced: None, forum_layout: String::new(), forum_sort: String::new(), forum_require_tag: false, forum_default_reaction: String::new(), news: false, media: false, audio_mode: "voice".into(), audio_bitrate: 0, audio_low_latency: false, e2ee, rate_limit_per_user: 0, user_limit: 0, voice_status: String::new(), engineer_ids: vec![], overwrites: vec![] },
             recipients,
             last_message_at: last,
             request_state,
@@ -190,7 +190,7 @@ pub async fn are_friends(db: &PgPool, a: Uuid, b: Uuid) -> AppResult<bool> {
     Ok(r.is_some())
 }
 
-async fn require_group_member(db: &PgPool, channel_id: Uuid, uid: Uuid) -> AppResult<Channel> {
+pub async fn require_group_member(db: &PgPool, channel_id: Uuid, uid: Uuid) -> AppResult<Channel> {
     let c = sqlx::query_as::<_, Channel>(&format!(
         "SELECT c.{} FROM channels c JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = $2 WHERE c.id = $1 AND c.kind = 'group'",
         CHANNEL_COLS.replace(", ", ", c.")

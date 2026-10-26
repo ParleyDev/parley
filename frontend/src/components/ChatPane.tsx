@@ -20,6 +20,16 @@ import { dmName, isGroup } from '../lib/dm'
  */
 export default function ChatPane({ channel, readOnly }: { channel: Channel | DmChannel; /** Shown instead of the composer (e.g. a locked thread). */ readOnly?: string }) {
   const messages = useStore((s) => s.messages[channel.id])
+  // Screen readers: announce messages from other people as they arrive.
+  const myId = useStore((s) => s.user?.id)
+  const lastMsg = messages?.[messages.length - 1]
+  const [announce, setAnnounce] = useState('')
+  const seen = useRef<string | null>(null)
+  useEffect(() => {
+    if (!lastMsg) return
+    if (seen.current !== null && lastMsg.id !== seen.current && lastMsg.author.id !== myId && (!lastMsg.kind || lastMsg.kind === 'default')) setAnnounce(`${lastMsg.author.display_name}: ${lastMsg.content || 'sent an attachment'}`)
+    seen.current = lastMsg.id
+  }, [lastMsg, myId])
   const hasMore = useStore((s) => s.hasMore[channel.id])
   const hasNewer = useStore((s) => s.hasNewer[channel.id])
   const loadNewer = useStore((s) => s.loadNewer)
@@ -173,7 +183,8 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
   return (
     <>
       <div className="relative flex-1 min-h-0 flex flex-col">
-      <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto">
+      <div aria-live="polite" aria-atomic="true" className="sr-only" data-live-region>{announce}</div>
+      <div ref={scrollRef} onScroll={onScroll} role="log" aria-label={`Messages in ${channel.name || 'this conversation'}`} tabIndex={0} className="flex-1 min-h-0 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>
         <div ref={contentRef} className="min-h-full flex flex-col justify-end">
           {hasMore === false || (messages && messages.length < 50 && !loading) ? (
             <ChannelIntro channel={channel} />

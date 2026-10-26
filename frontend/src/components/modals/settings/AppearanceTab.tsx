@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
+import { setSyncEnabled, syncEnabled } from '../../../lib/settingsSync'
 import { FONT_SCALES, PALETTES, resolvedTheme, setAppearance, useAppearance, type Density, type Theme, type UiDensity } from '../../../lib/appearance'
 import { renderMarkdown } from '../../../lib/markdown'
 import { useT } from '../../../lib/i18n'
@@ -16,12 +18,18 @@ export default function AppearanceTab() {
   const t = useT()
   const a = useAppearance()
   const p = usePrefs()
+  const [sync, setSync] = useState(syncEnabled)
   return (
     <div className="space-y-8" data-appearance>
       <div>
         <h2 className="text-xl font-bold">Appearance</h2>
-        <p className="text-sm text-text-2 mt-1">These settings are saved in this browser.</p>
+        <p className="text-sm text-text-2 mt-1">Saved on your account when sync is on (below), otherwise in this browser.</p>
       </div>
+
+      <label className="flex items-center justify-between gap-4 rounded-xl border border-line bg-bg-1 p-3 cursor-pointer" data-sync-row>
+        <span><span className="block text-sm font-semibold">Sync settings across devices</span><span className="block text-xs text-text-2">Appearance, chat and accessibility options, sounds and keybinds follow your account.</span></span>
+        <input type="checkbox" className="h-5 w-5 accent-accent" checked={sync} onChange={(e) => { setSyncEnabled(e.target.checked); setSync(e.target.checked) }} data-sync-settings />
+      </label>
 
       <section>
         <h3 className="label">{t('Theme')}</h3>

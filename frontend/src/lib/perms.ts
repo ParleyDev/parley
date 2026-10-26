@@ -98,7 +98,7 @@ export function guildPerms({ guild, roles, member, mfa }: Ctx, userId: string): 
 /** Bits a timed-out member loses everywhere (mirrors perms::TIMEOUT_STRIP). */
 export const TIMEOUT_STRIP = P.SEND_MESSAGES | P.ADD_REACTIONS | P.ATTACH_FILES | P.CONNECT | P.SPEAK | P.STREAM | P.CREATE_INVITE | P.CHANGE_NICKNAME | P.MENTION_EVERYONE
 
-export const isTimedOut = (m: Member | undefined, now = Date.now()) => !!m?.timeout_until && new Date(m.timeout_until).getTime() > now
+export const isTimedOut = (m: Member | undefined, now = Date.now()) => !!m?.quarantined || (!!m?.timeout_until && new Date(m.timeout_until).getTime() > now)
 
 /** Apply a channel's overwrites to guild permissions. */
 export function channelPerms(ctx: Ctx, userId: string, channel: Channel): number {

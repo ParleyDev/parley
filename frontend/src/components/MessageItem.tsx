@@ -1,4 +1,4 @@
-import { AlarmClock, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import { AlarmClock, Megaphone, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
 import { isImage } from '../lib/upload'
 import RoleIcon from './RoleIcon'
 import { locale } from '../lib/i18n'
@@ -23,7 +23,7 @@ import { suggestReactions } from '../lib/suggestReactions'
 import InviteCard, { inviteCodes } from './InviteCard'
 import StyledName from './StyledName'
 import { AvatarMotion, useHoverMotion } from '../lib/motion'
-import type { Message, ReplyRef } from '../lib/types'
+import type { SensitiveLevel, Message, ReplyRef } from '../lib/types'
 import { formatShortTime, formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
 import Attachments, { MaybeBlurred } from './Attachments'
@@ -47,11 +47,15 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const compact = useAppearance().density === 'compact'
   const setOpenThread = useStore((s) => s.setOpenThread)
   const chanKind = useStore((s) => s.channels[m.channel_id]?.kind)
+  const chanNews = useStore((s) => !!s.channels[m.channel_id]?.news)
   const pushToast = useStore((s) => s.pushToast)
   const setReadState = useStore((s) => s.setReadState)
   const bookmarked = useStore((s) => !!s.bookmarks[m.id])
   const setBookmark = useStore((s) => s.setBookmark)
   const { guildId } = useParams()
+  // Server profile avatar for the author, in this server.
+  const serverAvatar = useStore((s) => (guildId ? s.members[guildId]?.[m.author.id]?.guild_avatar : undefined))
+  const authorShown = serverAvatar ? { ...m.author, avatar_url: serverAvatar } : m.author
   const ctx = useContextMenu()
   const userMenu = useUserMenu(guildId ?? null)
   const emojiHover = useEmojiHover()
@@ -62,6 +66,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const canDelete = isOwn || (guildId !== undefined && has(perms, P.MANAGE_MESSAGES))
   const canReact = has(perms, P.ADD_REACTIONS)
   const canPin = m.channel_id && (guildId === undefined || has(perms, P.MANAGE_MESSAGES))
+  // Announcement channels: publish a post to the channels following this one (your own, or anyone's with Manage Messages).
+  const canPublish = chanNews && (!m.kind || m.kind === 'default') && !m.crosspost?.published && !m.local && (isOwn || has(perms, P.MANAGE_MESSAGES))
+  const publish = async () => { try { const r = await api.post<{ channels: number }>(`/channels/${m.channel_id}/messages/${m.id}/crosspost`); pushToast(r.channels ? `Published to ${r.channels} channel${r.channels === 1 ? '' : 's'}` : 'Published') } catch (e) { pushToast((e as Error).message, 'error') } }
   const [more, setMore] = useState(false)
   const frequent = useMemo(() => suggestReactions(m, 3, 1), [m])
   const [editing, setEditing] = useState(false)
@@ -170,13 +177,14 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   // Sensitive media: blur pictures and videos from non-friends in DMs, and in age-restricted channels, by preference.
   // Spoiler channels hide every picture and video behind a click.
   const spoilerChannel = useStore((s) => !!s.channels[m.channel_id]?.spoiler)
-  const sensitive = useStore((s) => {
-    if (isOwn) return false
+  const mediaLevel = useStore((s): SensitiveLevel => {
+    if (isOwn) return 'show'
     const pref = s.user?.sensitive_media ?? {}
-    const dm = s.dms[m.channel_id]
-    if (dm) return (pref.non_friend_dms ?? 'show') === 'blur' && s.relationships[m.author.id]?.kind !== 'friend'
-    return !!s.channels[m.channel_id]?.nsfw && (pref.restricted ?? 'show') === 'blur'
+    if (s.dms[m.channel_id]) return (s.relationships[m.author.id]?.kind === 'friend' ? pref.friend_dms : pref.non_friend_dms) ?? 'show'
+    return (s.channels[m.channel_id]?.nsfw ? pref.restricted : pref.servers) ?? 'show'
   })
+  const sensitive = mediaLevel === 'blur'
+  const blockMedia = mediaLevel === 'block'
 
   /** Right-click menu (Discord layout): quick reactions, Add Reaction, Reply, Edit, Copy Text, Pin, Mark Unread, Copy Link, Speak, Delete, Copy ID. */
   // Voice messages without a usable transcript (never attempted, failed, or empty) can be (re)transcribed.
@@ -207,6 +215,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       { label: 'Reply', icon: <Reply size={16} />, onClick: onReply },
       ...(guildId && chanKind === 'text' && !m.thread && m.kind !== 'default' ? [] : guildId && chanKind === 'text' && !m.thread ? [{ label: 'Create Thread', icon: <MessagesSquare size={16} />, onClick: () => openModal({ kind: 'createThread', channelId: m.channel_id, messageId: m.id, suggested: m.content.replace(/\s+/g, ' ').trim().slice(0, 60) }) }] : []),
       { label: 'Forward', icon: <Forward size={16} />, onClick: () => openModal({ kind: 'forward', message: m }) },
+      ...(canPublish ? [{ label: 'Publish', icon: <Megaphone size={16} />, onClick: publish }] : []),
       ...(isOwn ? [{ label: 'Edit Message', icon: <Pencil size={16} />, onClick: () => { setDraft(m.content); setEditing(true) } }] : []),
       ...(isOwn && pictures.length ? [{ label: 'Edit Attachments', icon: <ImageIcon size={16} />, onClick: () => openModal({ kind: 'altText', message: m }) }] : []),
       ...(m.reactions.length ? [{ label: 'View Reactions', icon: <SmilePlus size={16} />, onClick: () => openModal({ kind: 'reactions', channelId: m.channel_id, messageId: m.id }) }] : []),
@@ -254,6 +263,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       : m.kind === 'pins_add' ? <Pin size={16} className="text-text-2" />
       : m.kind === 'call_e2ee_change' ? <Lock size={16} className="text-success" />
       : m.kind === 'thread_created' ? <MessagesSquare size={16} className="text-text-2" />
+      : m.kind === 'channel_follow' ? <Megaphone size={16} className="text-text-2" />
       : m.kind === 'call_started' || m.kind === 'call_ended' ? <Phone size={16} className="text-success" />
       : m.kind === 'call_missed' ? <PhoneMissed size={16} className="text-danger" />
       : <ArrowLeftFromLine size={16} className="text-text-2" />
@@ -283,7 +293,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       <div className="px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
         <span className="w-10 flex justify-center shrink-0">{icon}</span>
         <span className="min-w-0"><button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{m.author.display_name}</button>{' '}
-          {threadName !== null ? (<>started a thread: <button type="button" className="font-medium text-text-0 hover:underline" onClick={() => m.ref_id && setOpenThread(m.ref_id)} data-system-thread={m.ref_id ?? ''}>{threadName}</button></>) : m.content}
+          {m.kind === 'channel_follow' ? <span className="msg-content">{renderMarkdown(m.content)}</span> : threadName !== null ? (<>started a thread: <button type="button" className="font-medium text-text-0 hover:underline" onClick={() => m.ref_id && setOpenThread(m.ref_id)} data-system-thread={m.ref_id ?? ''}>{threadName}</button></>) : m.content}
           {m.kind === 'pins_add' && m.reply_to && onJumpToReply && (
             <button type="button" onClick={onJumpToReply} className="ml-2 inline-flex items-center gap-0.5 text-xs text-sky-400 hover:underline" data-system-jump={m.reply_to}>See the message <ArrowRight size={12} /></button>
           )}
@@ -305,7 +315,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
   return (
     <AvatarMotion.Provider value={motion}>
-    <div ref={rowRef} {...motionBind} onPointerUp={onTap} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${m.author.display_name}: ${m.content.slice(0, 200)}`} onPointerUp={onTap} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {m.reply_to && (
         <div role="button" onClick={(e) => { if (onJumpToReply) { e.stopPropagation(); onJumpToReply() } }} data-reply-link={m.reply_to} className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 cursor-pointer hover:text-text-0 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" title="Jump to the original message">
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{replyTarget.content || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 Attachment' : '')}</span></>) : <i data-reply-preview="deleted">Original message was deleted</i>}
@@ -317,7 +327,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         ) : grouped ? (
           <div className="w-10 max-md:w-8 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
         ) : (
-          <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} className="shrink-0 self-start" data-msg-avatar><Avatar user={m.author} size={40} /></button>
+          <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} className="shrink-0 self-start" data-msg-avatar><Avatar user={authorShown} size={40} /></button>
         )}
         <div className="min-w-0 flex-1">
           {!grouped && !compact && (
@@ -328,7 +338,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
             </div>
           )}
-          {compact && prefs.compactAvatars && <span className="float-left mr-2 mt-0.5" data-compact-avatar><Avatar user={m.author} size={20} /></span>}
+          {compact && prefs.compactAvatars && <span className="float-left mr-2 mt-0.5" data-compact-avatar><Avatar user={authorShown} size={20} /></span>}
           {compact && (
             <><button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="float-left mr-1.5 font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button><span className="float-left mr-1.5"><RoleIcon guildId={guildId} userId={m.author.id} /></span></>
           )}
@@ -341,14 +351,17 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           ) : (
             <>
               {m.forwarded_from && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded><Forward size={13} /> Forwarded</div>}
+              {m.crosspost?.channel_name && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-crosspost-from={m.crosspost.channel_id}><Megaphone size={13} /><span className="rounded bg-accent/80 px-1 text-[10px] font-bold uppercase text-white">Server</span> {m.crosspost.guild_name} · #{m.crosspost.channel_name}</div>}
               {(m.content || m.edited_at) && !media && (
                 <div onClick={emojiHover.onClick} className={`msg-content text-[15px] leading-[1.375rem] break-words whitespace-pre-wrap ${m.local === 'failed' ? 'text-danger' : 'text-text-0'} ${isJumbo(m.content) ? 'jumbo' : ''}`}>
                   {renderMarkdown(m.content)}
+                  {m.crosspost?.published && <span className="ml-1 inline-flex items-center gap-0.5 text-[10px] text-text-2" title="Published to following channels" data-published><Megaphone size={10} />published</span>}
                   {m.edited_at && <button type="button" onClick={(e) => { e.stopPropagation(); openModal({ kind: 'editHistory', channelId: m.channel_id, messageId: m.id }) }} title={`Edited ${new Date(m.edited_at).toLocaleString()} — click to see the history`} className="ml-1 text-[10px] text-text-2 hover:underline" data-edited>(edited)</button>}
                 </div>
               )}
-              {media && (prefs.linkMedia && !m.suppress_embeds ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
-              {link && prefs.embeds && !m.suppress_embeds && (
+              {blockMedia && (media || links.length > 0 || (m.attachments ?? []).some((a) => /^(image|video)\//.test(a.content_type))) && <div className="mt-1 text-xs text-text-2 italic" data-media-blocked>Media hidden by your Content & Social settings.</div>}
+              {media && !blockMedia && (prefs.linkMedia && !m.suppress_embeds ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
+              {link && !blockMedia && prefs.embeds && !m.suppress_embeds && (
                 <div className="group/embed relative w-fit max-w-full" data-embed-wrap>
                   {links.map((l) => <MaybeBlurred key={l} on={sensitive}><LinkEmbed url={l} /></MaybeBlurred>)}
                   {canSuppress && <button type="button" onClick={() => setSuppressed(true)} className="absolute right-1 top-1 rounded bg-bg-0/80 p-1 text-text-2 opacity-0 hover:text-text-0 group-hover/embed:opacity-100 focus:opacity-100" title="Remove embed" aria-label="Remove embed" data-remove-embed><X size={14} /></button>}
@@ -370,7 +383,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                   ? <FrozenGif src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" mode={prefs.stickerAnimation === 'never' ? 'never' : 'hover'} data-msg-sticker={m.sticker.name} />
                   : <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
-              <Attachments items={spoilerChannel ? (m.attachments ?? []).map((a) => (/^(image|video)\//.test(a.content_type) && !a.filename.startsWith('SPOILER_') ? { ...a, filename: `SPOILER_${a.filename}` } : a)) : m.attachments ?? []} mine={isOwn} sensitive={sensitive} />
+              <Attachments items={blockMedia ? (m.attachments ?? []).filter((a) => !/^(image|video)\//.test(a.content_type)) : spoilerChannel ? (m.attachments ?? []).map((a) => (/^(image|video)\//.test(a.content_type) && !a.filename.startsWith('SPOILER_') ? { ...a, filename: `SPOILER_${a.filename}` } : a)) : m.attachments ?? []} mine={isOwn} sensitive={sensitive} />
             </>
           )}
           {m.reactions.length > 0 && prefs.showReactions && (
@@ -401,6 +414,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 onEmoji={(e) => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} />
             )}
           </div>}
+          {canPublish && <Tool label="Publish" onClick={publish}><span data-publish><Megaphone size={16} /></span></Tool>}
           <Tool label="Reply" onClick={onReply}><Reply size={16} /></Tool>
           {isOwn && <Tool label="Edit" onClick={() => { setDraft(m.content); setEditing(true) }}><Pencil size={16} /></Tool>}
           <div className="relative">

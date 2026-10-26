@@ -7,6 +7,7 @@ import { connectSocket, disconnectSocket } from './lib/ws'
 import AuthPage from './pages/Auth'
 import AppShell from './pages/AppShell'
 import InvitePage from './pages/Invite'
+import TemplatePage from './pages/Template'
 import DiscoverPage from './pages/Discover'
 import AdminPage from './pages/Admin'
 import GuildPreviewPage from './pages/GuildPreview'
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/forgot" element={token ? <Navigate to="/channels/@me" replace /> : <ForgotPage />} />
         <Route path="/reset" element={<ResetPage />} />
         <Route path="/widget/:guildId" element={<WidgetPage />} />
+        <Route path="/template/:code" element={token ? <TemplatePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/invite/:code" element={token ? <InvitePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/oauth2/authorize" element={token ? <OAuthPage /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />} />
         <Route path="/oauth2/mcp/authorize" element={token ? <McpAuthorizePage /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />} />

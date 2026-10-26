@@ -48,8 +48,8 @@ pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
     v
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url";
-pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality, forum_layout, forum_sort, forum_require_tag, forum_default_reaction";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications";
+pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality, forum_layout, forum_sort, forum_require_tag, forum_default_reaction, news, media";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
     let g = sqlx::query_as::<_, Guild>(&format!(
@@ -74,6 +74,8 @@ pub async fn require_owner(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppRes
 
 /// `POST /guilds/:id/rules/accept`: the caller accepts the server rules (membership screening).
 pub async fn accept_rules(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Member>> {
+    let (apps,): (bool,) = sqlx::query_as("SELECT COALESCE((applications->>'enabled')::boolean, false) FROM guilds WHERE id = $1").bind(id).fetch_optional(&state.db).await?.unwrap_or((false,));
+    if apps { return Err(AppError::BadRequest("This server reviews applications: apply to join instead".into())) }
     let res = sqlx::query("UPDATE guild_members SET rules_accepted_at = COALESCE(rules_accepted_at, now()) WHERE guild_id = $1 AND user_id = $2").bind(id).bind(uid).execute(&state.db).await?;
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("Not a member".into()));
@@ -85,14 +87,14 @@ pub async fn accept_rules(State(state): State<AppState>, AuthUser(uid): AuthUser
 
 /// Membership screening gate: Err(RulesRequired) when the guild requires rules the member has not accepted.
 pub async fn check_rules(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<()> {
-    let blocked: Option<(bool,)> = sqlx::query_as("SELECT g.rules_required AND m.rules_accepted_at IS NULL FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $2 WHERE g.id = $1")
+    let blocked: Option<(bool,)> = sqlx::query_as("SELECT (g.rules_required OR COALESCE((g.applications->>'enabled')::boolean, false)) AND m.rules_accepted_at IS NULL FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $2 WHERE g.id = $1")
         .bind(guild_id).bind(user_id).fetch_optional(db).await?;
     if blocked.map(|b| b.0).unwrap_or(false) { Err(AppError::RulesRequired) } else { Ok(()) }
 }
 
 pub async fn fetch_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Member> {
     let mut m = sqlx::query_as::<_, Member>(
-        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at, m.mute, m.deaf, u.avatar_decoration, u.clan_tag, u.name_primary, u.name_accent, u.name_style, u.nameplate, m.rules_accepted_at
+        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at, m.mute, m.deaf, u.avatar_decoration, u.clan_tag, u.name_primary, u.name_accent, u.name_style, u.nameplate, m.quarantined, m.flags, m.rules_accepted_at, m.guild_avatar, m.guild_banner, m.guild_bio, m.guild_pronouns
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND m.user_id = $2",
     )
     .bind(guild_id)
@@ -223,6 +225,11 @@ struct UpdateGuild {
     widget_invite: Option<String>,
     /// Empty string clears.
     invite_splash_url: Option<String>,
+    raid_protection: Option<bool>,
+    /// Joins per minute that count as a raid (3-100).
+    raid_threshold: Option<i32>,
+    #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
+    safety_alerts_channel_id: Option<Option<Uuid>>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -320,6 +327,15 @@ async fn update_guild(
             let new = req.invite_splash_url.as_deref().filter(|s| !s.is_empty());
             crate::routes::images::release_replaced(&state, old.0.as_deref(), new).await;
         }
+    }
+    if req.raid_threshold.map(|t| !(3..=100).contains(&t)).unwrap_or(false) { return Err(AppError::BadRequest("Raid threshold is 3 to 100 joins a minute".into())) }
+    if let Some(Some(cid)) = req.safety_alerts_channel_id {
+        let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind = 'text'").bind(cid).bind(id).fetch_optional(&state.db).await?;
+        if ok.is_none() { return Err(AppError::BadRequest("Safety alerts go to a text channel in this server".into())) }
+    }
+    if req.raid_protection.is_some() || req.raid_threshold.is_some() || req.safety_alerts_channel_id.is_some() {
+        sqlx::query("UPDATE guilds SET raid_protection = COALESCE($2, raid_protection), raid_threshold = COALESCE($3, raid_threshold), safety_alerts_channel_id = CASE WHEN $4 THEN $5 ELSE safety_alerts_channel_id END WHERE id = $1")
+            .bind(id).bind(req.raid_protection).bind(req.raid_threshold).bind(req.safety_alerts_channel_id.is_some()).bind(req.safety_alerts_channel_id.flatten()).execute(&state.db).await?;
     }
     if req.afk_channel_id.is_some() || req.afk_timeout.is_some() || req.rules_channel_id.is_some() || welcome.is_some() {
         sqlx::query(
@@ -443,6 +459,8 @@ async fn create_channel(
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::MANAGE_CHANNELS)?;
     let kind = req.kind.unwrap_or_else(|| "text".into());
+    // Announcement and media channels are text channels and forums with a flag.
+    let (kind, news, media) = match kind.as_str() { "announcement" => ("text".to_string(), true, false), "media" => ("forum".to_string(), false, true), _ => (kind, false, false) };
     if !["text", "voice", "stage", "studio", "category", "forum"].contains(&kind.as_str()) {
         return Err(AppError::BadRequest("kind must be text, voice, forum or category".into()));
     }
@@ -453,8 +471,8 @@ async fn create_channel(
         .fetch_one(&state.db)
         .await?;
     let mut c = sqlx::query_as::<_, Channel>(&format!(
-        "INSERT INTO channels (id, guild_id, name, kind, topic, position, parent_id, audio_mode, audio_low_latency)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $4 = 'studio' THEN 'music' ELSE 'voice' END, $4 = 'studio') RETURNING {CHANNEL_COLS}"
+        "INSERT INTO channels (id, guild_id, name, kind, topic, position, parent_id, audio_mode, audio_low_latency, news, media)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $4 = 'studio' THEN 'music' ELSE 'voice' END, $4 = 'studio', $8, $9) RETURNING {CHANNEL_COLS}"
     ))
     .bind(Uuid::now_v7())
     .bind(id)
@@ -463,6 +481,8 @@ async fn create_channel(
     .bind(req.topic.unwrap_or_default().chars().take(1024).collect::<String>())
     .bind(pos)
     .bind(parent)
+    .bind(news)
+    .bind(media)
     .fetch_one(&state.db)
     .await?;
     // Inherit the category's overwrites (so a private category yields a private channel).
@@ -494,7 +514,7 @@ async fn list_members(
 ) -> AppResult<Json<Vec<Member>>> {
     require_member(&state.db, id, uid).await?;
     let mut ms = sqlx::query_as::<_, Member>(
-        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at, m.mute, m.deaf, u.avatar_decoration, u.clan_tag, u.name_primary, u.name_accent, u.name_style, u.nameplate
+        "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at, m.mute, m.deaf, u.avatar_decoration, u.clan_tag, u.name_primary, u.name_accent, u.name_style, u.nameplate, m.quarantined, m.flags, m.guild_avatar, m.guild_banner, m.guild_bio, m.guild_pronouns
          FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 ORDER BY u.display_name",
     )
     .bind(id)
@@ -632,7 +652,7 @@ async fn member_joins(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     Ok(Json(rows.into_iter().map(|(user, via, inviter, inviter_name, temporary, created, warns)| json!({ "user_id": user, "joined_via": via, "inviter_id": inviter, "inviter_name": inviter_name, "temporary": temporary, "account_created_at": created, "warnings": warns })).collect()))
 }
 
-async fn remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppResult<()> {
+pub async fn remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppResult<()> {
     if !try_remove_member(state, guild_id, user_id).await? {
         return Err(AppError::NotFound("Member not found".into()));
     }

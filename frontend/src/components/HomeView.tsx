@@ -9,6 +9,7 @@ import { api } from '../lib/api'
 import { pendingCount, useStore } from '../store'
 import type { DmChannel, Relationship, User } from '../lib/types'
 import Avatar from './Avatar'
+import GettingStarted from './GettingStarted'
 import { toggleIgnored, toggleOnlineAlert } from '../lib/userLists'
 import { MobileBack } from './HeaderBits'
 import StyledName from './StyledName'
@@ -63,6 +64,7 @@ export default function HomeView() {
       {tab === 'add' ? <AddFriend /> : (
         <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
           <div className="p-6 max-md:p-3 w-full">
+            <GettingStarted onAddFriend={() => setTab('add')} />
             <div className="relative mb-5">
               <input className="input pl-9 py-2" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />

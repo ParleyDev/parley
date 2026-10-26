@@ -20,6 +20,8 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
   const upsertGuild = useStore((s) => s.upsertGuild)
   const pushToast = useStore((s) => s.pushToast)
   const [pauseFor, setPauseFor] = useState(24)
+  const channels = useStore((s) => s.channels)
+  const textChannels = Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'text').sort((a, b) => a.position - b.position)
   const [, tick] = useState(0)
   useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 30_000); return () => clearInterval(t) }, [])
   if (!guild) return null
@@ -55,6 +57,21 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
                   </select>
                   <button type="button" className="btn-ghost" onClick={() => save({ pause_dms_hours: pauseFor }, `DMs paused for ${pauseFor === 1 ? '1 hour' : `${pauseFor} hours`}`)} data-pause-dms="off"><Pause size={14} /> Pause</button>
                 </span>}
+          </div>
+        </div>
+      </section>
+
+      <section data-raid-protection>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">Raid protection</h2>
+        <div className="space-y-2 rounded-xl border border-line bg-bg-1 p-3">
+          <label className="flex items-center justify-between gap-4 cursor-pointer"><span><span className="block text-[15px] font-medium">Pause invites when joins spike</span><span className="block text-xs text-text-2">New members who arrive in the spike are flagged for review, and moderators get an alert.</span></span>
+            <input type="checkbox" className="h-5 w-5 accent-accent" checked={guild.raid_protection ?? true} onChange={(e) => save({ raid_protection: e.target.checked }, e.target.checked ? 'Raid protection on' : 'Raid protection off')} data-raid-toggle /></label>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-2">A spike is
+              <select className="input w-auto py-1" value={guild.raid_threshold ?? 10} onChange={(e) => save({ raid_threshold: Number(e.target.value) }, 'Raid threshold saved')} data-raid-threshold>{[3, 5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+              joins in a minute</label>
+            <label className="flex items-center gap-2">Alerts go to
+              <select className="input w-auto py-1" value={guild.safety_alerts_channel_id ?? ''} onChange={(e) => save({ safety_alerts_channel_id: e.target.value || null }, 'Alerts channel saved')} data-raid-alerts><option value="">the system channel</option>{textChannels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}</select></label>
           </div>
         </div>
       </section>

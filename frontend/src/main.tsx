@@ -9,6 +9,8 @@ import { initLog } from './lib/log'
 import { initLanguage } from './lib/i18n'
 import { initNative } from './lib/native'
 import { initViewport } from './lib/viewport'
+import { installSettingsSync } from './lib/settingsSync'
+import { installArrowNav } from './lib/arrowNav'
 import { followOtherTabs } from './lib/accounts'
 import { useStore } from './store'
 
@@ -18,6 +20,8 @@ initLog()
 initLanguage()
 void initNative()
 initViewport()
+installSettingsSync()
+installArrowNav()
 followOtherTabs(() => ({ token: useStore.getState().token, userId: useStore.getState().user?.id ?? null }), (token) => useStore.setState({ token }))
 
 createRoot(document.getElementById('root')!).render(

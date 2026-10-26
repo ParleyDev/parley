@@ -62,7 +62,7 @@ export default function DmSidebar() {
   const spam = useStore((s) => spamRequests(s).length)
 
   return (
-    <aside className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
+    <aside aria-label="Direct messages" className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="h-12 px-2.5 flex items-center border-b border-line">
         <button onClick={() => openModal({ kind: 'newDm' })} className="w-full rounded-md bg-bg-0/60 px-2 py-1.5 text-left text-sm text-text-2 hover:text-text-1">{t('Find or start a conversation')}</button>
       </div>

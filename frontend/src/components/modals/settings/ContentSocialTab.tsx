@@ -36,16 +36,16 @@ export default function ContentSocialTab() {
   )
   return (
     <div className="space-y-6" data-social-tab>
-      <h2 className="text-xl font-bold">Content & Social</h2>
+      <div className="flex items-center gap-3"><h2 className="text-xl font-bold">Content & Social</h2><button type="button" className="ml-auto btn-ghost bg-bg-3 py-1 text-sm" onClick={() => useStore.getState().openModal({ kind: 'safetyCenter' })} data-open-safety-center>Safety Center</button></div>
 
       <section className="space-y-2">
         <h3 className="label">Sensitive media</h3>
-        <p className="text-xs text-text-2">Blur pictures and videos until you click them. This server does not scan media, so "blur" covers everything from the sources below.</p>
-        {([['non_friend_dms', 'Direct messages from people who are not your friends'], ['restricted', 'Age-restricted channels']] as const).map(([k, label]) => (
-          <div key={k} className="flex items-center justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2" data-sensitive={k} data-on={(user.sensitive_media?.[k] ?? 'show') === 'blur' ? 'blur' : 'show'}>
+        <p className="text-xs text-text-2">Blur pictures and videos until you click them, or hide them completely. This server does not scan media, so these cover everything from each source.</p>
+        {([['friend_dms', 'Direct messages from friends'], ['non_friend_dms', 'Direct messages from people who are not your friends'], ['servers', 'Server channels'], ['restricted', 'Age-restricted channels']] as const).map(([k, label]) => (
+          <div key={k} className="flex items-center justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2" data-sensitive={k} data-on={user.sensitive_media?.[k] ?? 'show'}>
             <span className="text-[15px]">{label}</span>
             <span className="flex rounded-md border border-line overflow-hidden text-sm">
-              {(['show', 'blur'] as const).map((v) => <button key={v} type="button" onClick={() => save({ sensitive_media: { [k]: v } })} className={`px-3 py-1 capitalize ${(user.sensitive_media?.[k] ?? 'show') === v ? 'bg-accent text-white' : 'bg-bg-2 text-text-1 hover:bg-bg-3'}`}>{v}</button>)}
+              {(['show', 'blur', 'block'] as const).map((v) => <button key={v} type="button" onClick={() => save({ sensitive_media: { [k]: v } })} className={`px-3 py-1 capitalize ${(user.sensitive_media?.[k] ?? 'show') === v ? 'bg-accent text-white' : 'bg-bg-2 text-text-1 hover:bg-bg-3'}`} data-sensitive-option={v}>{v === 'block' ? 'Hide' : v}</button>)}
             </span>
           </div>
         ))}

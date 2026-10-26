@@ -51,6 +51,8 @@ export default function AppShell() {
   }, [])
   return (
     <div className="h-full flex flex-col overflow-hidden relative safe-area">
+      <a href="#messages" onClick={(e) => { e.preventDefault(); (document.querySelector<HTMLElement>('[data-message-list]') ?? document.querySelector<HTMLElement>('main'))?.focus() }}
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[300] focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-white" data-skip-link>Skip to messages</a>
       <Shortcuts />
       <VerifyBanner />
       <StreamerBanner />
@@ -237,7 +239,7 @@ function Shortcuts() {
     const tick = () => {
       const now = Date.now()
       for (const list of Object.values(events)) for (const e of list) {
-        if (!e.me_rsvp) continue
+        if (!e.me_rsvp || useStore.getState().notifSettings[e.guild_id]?.mute_events) continue
         const ms = new Date(e.starts_at).getTime() - now
         if (ms > 10 * 60 * 1000 || ms < -60 * 1000) continue
         const key = `parley.reminded.${e.id}`

@@ -8,6 +8,11 @@ pub mod auth;
 pub mod badge;
 pub mod calls;
 pub mod channels;
+pub mod customize;
+pub mod templates;
+pub mod announcements;
+pub mod group_invites;
+pub mod membership;
 pub mod connections;
 pub mod discovery;
 pub mod dms;
@@ -16,6 +21,7 @@ pub mod expressions;
 pub mod gifs;
 pub mod images;
 pub mod guilds;
+pub mod highlights;
 pub mod invites;
 pub mod mfa;
 pub mod moderation;
@@ -25,6 +31,7 @@ pub mod polls;
 pub mod relationships;
 pub mod reports;
 pub mod roles;
+pub mod safety;
 pub mod search;
 pub mod sessions;
 pub mod sounds;
@@ -67,6 +74,13 @@ pub fn api_router() -> Router<AppState> {
         .merge(calls::router())
         .merge(widget::router())
         .merge(automod::router())
+        .merge(safety::router())
+        .merge(highlights::router())
+        .merge(customize::router())
+        .merge(templates::router())
+        .merge(announcements::router())
+        .merge(group_invites::router())
+        .merge(membership::router())
         .merge(invites::router())
         .merge(roles::router())
         .merge(relationships::router())

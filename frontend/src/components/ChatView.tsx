@@ -1,4 +1,4 @@
-import { AlarmClock, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { AlarmClock, Megaphone, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup, nameOf } from '../lib/dm'
 import { uploadImage } from '../lib/upload'
@@ -186,6 +186,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
                 <button onClick={toggleE2ee} title={channel.e2ee ? 'Calls here are end-to-end encrypted. Click to turn it off.' : 'Turn on end-to-end encryption for calls'} aria-pressed={!!channel.e2ee} className={btn(!!channel.e2ee)} data-dm-e2ee={channel.e2ee ? '1' : '0'}>{channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />}</button>
               </>
             )}
+            {!isDm && channel.news && <button onClick={() => openModal({ kind: 'followChannel', channelId: channel.id })} title="Follow" className="flex items-center gap-1 rounded-md bg-bg-3 px-2 py-1 text-sm font-medium hover:bg-bg-4" data-follow-channel><Megaphone size={16} />Follow</button>}
             {!isDm && channel.kind === 'text' && (
               <span className="relative">
                 <button onClick={() => setThreads((t) => !t)} title="Threads" className={btn(threads)} data-threads-toggle><MessagesSquare size={20} /></button>

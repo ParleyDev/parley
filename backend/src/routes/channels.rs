@@ -126,6 +126,9 @@ struct UpdateChannel {
     forum_sort: Option<String>,
     forum_require_tag: Option<bool>,
     forum_default_reaction: Option<String>,
+    /// Text channels: announcement channel. Forums: media channel.
+    news: Option<bool>,
+    media: Option<bool>,
     /// Voice/stage/studio audio profile: 'voice' | 'music'.
     audio_mode: Option<String>,
     /// Opus kbps, 8..510, or 0 for the mode's default.
@@ -235,6 +238,8 @@ async fn update_channel(
     if req.forum_layout.as_deref().map(|q| q != "gallery" && q != "list").unwrap_or(false) || req.forum_sort.as_deref().map(|q| q != "activity" && q != "created").unwrap_or(false) {
         return Err(AppError::BadRequest("forum_layout is 'gallery' or 'list'; forum_sort is 'activity' or 'created'".into()));
     }
+    if req.news == Some(true) && c.kind != "text" { return Err(AppError::BadRequest("Only text channels can be announcement channels".into())) }
+    if req.media == Some(true) && c.kind != "forum" { return Err(AppError::BadRequest("Only forums can be media channels".into())) }
     let reaction = req.forum_default_reaction.as_ref().map(|r| r.trim().chars().take(64).collect::<String>());
     let parent = match req.parent_id {
         Some(p) => Some(crate::routes::guilds::check_parent(&state.db, gid, &c.kind, p).await?),
@@ -246,7 +251,8 @@ async fn update_channel(
          parent_id = CASE WHEN $5 THEN $6 ELSE parent_id END, nsfw = COALESCE($7, nsfw),
          audio_mode = COALESCE($8, audio_mode), audio_bitrate = COALESCE($9, audio_bitrate), audio_low_latency = COALESCE($10, audio_low_latency), e2ee = COALESCE($11, e2ee),
          rate_limit_per_user = COALESCE($12, rate_limit_per_user), user_limit = COALESCE($13, user_limit), spoiler = COALESCE($14, spoiler), video_quality = COALESCE($15, video_quality),
-         forum_layout = COALESCE($16, forum_layout), forum_sort = COALESCE($17, forum_sort), forum_require_tag = COALESCE($18, forum_require_tag), forum_default_reaction = COALESCE($19, forum_default_reaction)
+         forum_layout = COALESCE($16, forum_layout), forum_sort = COALESCE($17, forum_sort), forum_require_tag = COALESCE($18, forum_require_tag), forum_default_reaction = COALESCE($19, forum_default_reaction),
+         news = COALESCE($20, news), media = COALESCE($21, media)
          WHERE id = $1 RETURNING {CHANNEL_COLS}"
     ))
     .bind(id)
@@ -268,6 +274,8 @@ async fn update_channel(
     .bind(&req.forum_sort)
     .bind(req.forum_require_tag)
     .bind(&reaction)
+    .bind(req.news)
+    .bind(req.media)
     .fetch_one(&state.db)
     .await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut updated)).await?;
@@ -283,6 +291,8 @@ async fn update_channel(
         let mut d = serde_json::Map::new();
         if updated.name != c.name { d.insert("name".into(), json!(updated.name)); }
         if updated.topic != c.topic { d.insert("topic".into(), json!(updated.topic)); }
+        if updated.news != c.news { d.insert("news".into(), json!(updated.news)); }
+        if updated.media != c.media { d.insert("media".into(), json!(updated.media)); }
         if updated.spoiler != c.spoiler { d.insert("spoiler".into(), json!(updated.spoiler)); }
         if updated.video_quality != c.video_quality { d.insert("video_quality".into(), json!(updated.video_quality)); }
         if updated.audio_mode != c.audio_mode { d.insert("audio_mode".into(), json!(updated.audio_mode)); }
@@ -320,7 +330,7 @@ async fn delete_channel(
 
 pub const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
     u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from,
-    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, m.suppress_embeds, m.tts, u.avatar_decoration, u.clan_tag, u.bot AS author_bot, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
+    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, m.suppress_embeds, m.tts, m.crosspost, u.avatar_decoration, u.clan_tag, u.bot AS author_bot, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
@@ -540,6 +550,8 @@ async fn create_message(
     let m_everyone = m_everyone && c.guild_id.is_some() && has(p, perms::MENTION_EVERYONE);
     let m_roles = mentionable_roles(&state.db, c.guild_id, m_roles, has(p, perms::MENTION_EVERYONE)).await?;
     crate::routes::automod::check_message(&state, &c, uid, p, &content, m_users.len() + m_roles.len() + usize::from(m_everyone)).await?;
+    crate::routes::safety::check_links(&state, &content).await?;
+    if c.guild_id.is_none() { crate::routes::safety::check_dm_spam(&state, uid, id).await?; }
     let mut tx = state.db.begin().await?;
     let tts = req.tts && !content.trim().is_empty() && (c.guild_id.is_none() || has(p, perms::SEND_TTS_MESSAGES));
     // Without Embed Links, links don't unfurl; without Use External Emoji, only this server's custom emoji.

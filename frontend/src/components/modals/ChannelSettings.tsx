@@ -1,4 +1,4 @@
-import { AudioLines, Lock, Mic, SlidersHorizontal, Tag, Timer, Trash2 } from 'lucide-react'
+import { AudioLines, Blocks, Lock, Mic, SlidersHorizontal, Tag, Timer, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -9,9 +9,10 @@ import { has, P } from '../../lib/perms'
 import SettingsShell from './SettingsShell'
 import ChannelPermissionsTab from './settings/ChannelPermissionsTab'
 import ForumTagsTab from './settings/ForumTagsTab'
+import FollowersTab from './settings/FollowersTab'
 import { DEFAULT_BITRATE, MAX_BITRATE, MIN_BITRATE, type AudioMode } from '../../lib/audioProfile'
 
-type Tab = 'overview' | 'permissions' | 'tags'
+type Tab = 'overview' | 'permissions' | 'tags' | 'integrations'
 
 export default function ChannelSettingsModal({ onClose, channelId, tab: requested }: { onClose: () => void; channelId: string; tab?: Tab }) {
   const initial: Tab = requested ?? 'overview'
@@ -37,6 +38,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
   const items: { id: Tab; label: string; icon: React.ReactNode }[] = []
   if (canEdit) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> })
   if (canEdit && channel.kind === 'forum') items.push({ id: 'tags', label: 'Tags', icon: <Tag size={16} /> })
+  if (canEdit && channel.kind === 'text') items.push({ id: 'integrations', label: 'Integrations', icon: <Blocks size={16} /> })
   if (canPerms) items.push({ id: 'permissions', label: 'Permissions', icon: <Lock size={16} /> })
 
   return (
@@ -47,6 +49,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
     >
       {tab === 'overview' && canEdit && <Overview channel={channel} />}
       {tab === 'tags' && canEdit && <ForumTagsTab channelId={channelId} />}
+      {tab === 'integrations' && canEdit && <FollowersTab channelId={channelId} />}
       {tab === 'permissions' && canPerms && <ChannelPermissionsTab channelId={channelId} />}
     </SettingsShell>
   )
@@ -64,6 +67,8 @@ function Overview({ channel }: { channel: Channel }) {
   const forumDirty = channel.kind === 'forum' && (forumLayout !== (channel.forum_layout === 'list' ? 'list' : 'gallery') || forumSort !== (channel.forum_sort === 'created' ? 'created' : 'activity') || requireTag !== !!channel.forum_require_tag || defaultReaction !== (channel.forum_default_reaction ?? ''))
   const [nsfw, setNsfw] = useState(!!channel.nsfw)
   const [spoiler, setSpoiler] = useState(!!channel.spoiler)
+  const [news, setNews] = useState(!!channel.news)
+  const [media, setMedia] = useState(!!channel.media)
   const [slowmode, setSlowmode] = useState(channel.rate_limit_per_user ?? 0)
   const [userLimit, setUserLimit] = useState(channel.user_limit ?? 0)
   const [videoQuality, setVideoQuality] = useState<'auto' | 'full'>(channel.video_quality === 'full' ? 'full' : 'auto')
@@ -75,11 +80,11 @@ function Overview({ channel }: { channel: Channel }) {
   const [busy, setBusy] = useState(false)
   const isAudio = channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
   const audioDirty = isAudio && (audioMode !== (channel.audio_mode === 'music' ? 'music' : 'voice') || bitrate !== (channel.audio_bitrate ?? 0) || lowLatency !== !!channel.audio_low_latency || e2ee !== !!channel.e2ee)
-  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || spoiler !== !!channel.spoiler || slowmode !== (channel.rate_limit_per_user ?? 0) || userLimit !== (channel.user_limit ?? 0) || (channel.kind === 'voice' && videoQuality !== (channel.video_quality === 'full' ? 'full' : 'auto')) || audioDirty || forumDirty
-  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSpoiler(!!channel.spoiler); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setVideoQuality(channel.video_quality === 'full' ? 'full' : 'auto'); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee); setForumLayout(channel.forum_layout === 'list' ? 'list' : 'gallery'); setForumSort(channel.forum_sort === 'created' ? 'created' : 'activity'); setRequireTag(!!channel.forum_require_tag); setDefaultReaction(channel.forum_default_reaction ?? '') }
+  const dirty = name !== channel.name || topic !== channel.topic || nsfw !== !!channel.nsfw || spoiler !== !!channel.spoiler || news !== !!channel.news || media !== !!channel.media || slowmode !== (channel.rate_limit_per_user ?? 0) || userLimit !== (channel.user_limit ?? 0) || (channel.kind === 'voice' && videoQuality !== (channel.video_quality === 'full' ? 'full' : 'auto')) || audioDirty || forumDirty
+  const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSpoiler(!!channel.spoiler); setNews(!!channel.news); setMedia(!!channel.media); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setVideoQuality(channel.video_quality === 'full' ? 'full' : 'auto'); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee); setForumLayout(channel.forum_layout === 'list' ? 'list' : 'gallery'); setForumSort(channel.forum_sort === 'created' ? 'created' : 'activity'); setRequireTag(!!channel.forum_require_tag); setDefaultReaction(channel.forum_default_reaction ?? '') }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(channel.kind === 'text' || channel.kind === 'forum' ? { spoiler } : {}), ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit, video_quality: videoQuality } : {}), ...(channel.kind === 'forum' ? { forum_layout: forumLayout, forum_sort: forumSort, forum_require_tag: requireTag, forum_default_reaction: defaultReaction } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(channel.kind === 'text' || channel.kind === 'forum' ? { spoiler } : {}), ...(channel.kind === 'text' ? { news } : {}), ...(channel.kind === 'forum' ? { media } : {}), ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit, video_quality: videoQuality } : {}), ...(channel.kind === 'forum' ? { forum_layout: forumLayout, forum_sort: forumSort, forum_require_tag: requireTag, forum_default_reaction: defaultReaction } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
@@ -110,6 +115,18 @@ function Overview({ channel }: { channel: Channel }) {
         <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-nsfw={nsfw ? '1' : '0'}>
           <span><span className="block text-[15px]">Age-Restricted Channel</span><span className="block text-xs text-text-2">Members see a warning before opening it, and those who blur sensitive media get pictures and videos here blurred until clicked.</span></span>
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} />
+        </label>
+      )}
+      {channel.kind === 'text' && (
+        <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer">
+          <span><span className="block text-[15px]">Announcement Channel</span><span className="block text-xs text-text-2">Other servers can follow this channel, and posts you publish show up in their channels too.</span></span>
+          <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={news} onChange={(e) => setNews(e.target.checked)} data-channel-news />
+        </label>
+      )}
+      {channel.kind === 'forum' && (
+        <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer">
+          <span><span className="block text-[15px]">Media Channel</span><span className="block text-xs text-text-2">Every post leads with an image or video, and posts show as a picture gallery.</span></span>
+          <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={media} onChange={(e) => setMedia(e.target.checked)} data-channel-media />
         </label>
       )}
       {(channel.kind === 'text' || channel.kind === 'forum') && (

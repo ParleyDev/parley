@@ -61,8 +61,11 @@ export function setKeybind(action: KeybindAction, combo: string | null) {
   current = { ...current, [action]: combo ?? '' }
   try { localStorage.setItem(KEY, JSON.stringify(current)) } catch { /* ignore */ }
   listeners.forEach((l) => l())
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('parley:settings'))
 }
-export function resetKeybinds() { current = { ...DEFAULT_KEYBINDS }; try { localStorage.removeItem(KEY) } catch { /* ignore */ } listeners.forEach((l) => l()) }
+export function resetKeybinds() { current = { ...DEFAULT_KEYBINDS }; try { localStorage.removeItem(KEY) } catch { /* ignore */ } listeners.forEach((l) => l()); window.dispatchEvent(new Event('parley:settings')) }
+/** Replace the whole map (settings sync). */
+export function replaceKeybinds(map: Partial<Record<KeybindAction, string>>) { current = { ...DEFAULT_KEYBINDS, ...map }; try { localStorage.setItem(KEY, JSON.stringify(current)) } catch { /* ignore */ } listeners.forEach((l) => l()) }
 export function useKeybindMap() { return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l) }, getKeybinds) }
 
 /** Normalise a KeyboardEvent to the stored combo form; null for a lone modifier press. */

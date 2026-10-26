@@ -1,7 +1,7 @@
 import type { Channel, DmChannel, Guild, Message } from './types'
 
 export type NotifLevel = 'default' | 'all' | 'mentions' | 'nothing'
-export interface NotifSetting { target_id: string; level: NotifLevel; muted_until: string | null; suppress_everyone: boolean; suppress_roles?: boolean }
+export interface NotifSetting { target_id: string; level: NotifLevel; muted_until: string | null; suppress_everyone: boolean; suppress_roles?: boolean; mobile_push?: boolean; suppress_highlights?: boolean; mute_events?: boolean }
 export interface Effective { level: 'all' | 'mentions' | 'nothing'; muted: boolean; suppressEveryone: boolean; suppressRoles: boolean }
 
 const isMuted = (s?: NotifSetting) => !!s?.muted_until && new Date(s.muted_until).getTime() > Date.now()

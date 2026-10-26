@@ -36,7 +36,7 @@ export type ModalKind =
   | { kind: 'joinGuild'; code?: string }
   | { kind: 'createChannel'; guildId: string; parentId?: string | null }
   | { kind: 'invite'; guildId: string }
-  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'welcome' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
+  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'welcome' | 'onboarding' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' | 'keybinds' }
   | { kind: 'shortcuts' }
@@ -45,6 +45,13 @@ export type ModalKind =
   | { kind: 'reactions'; channelId: string; messageId: string }
   | { kind: 'welcome'; guildId: string }
   | { kind: 'leaveGroups' }
+  | { kind: 'safetyCenter' }
+  | { kind: 'guildNotifications'; guildId: string }
+  | { kind: 'browseChannels'; guildId: string; tab?: 'channels' | 'roles' }
+  | { kind: 'onboarding'; guildId: string }
+  | { kind: 'followChannel'; channelId: string }
+  | { kind: 'serverProfile'; guildId: string }
+  | { kind: 'application'; guildId: string }
   | { kind: 'altText'; message: Message }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string; anchor?: Anchor }
@@ -143,6 +150,10 @@ interface State {
   viewAs: { guildId: string; roleIds: string[] } | null
   /** Threads you've joined (shown under their channel in the list while active). */
   myThreads: Record<string, true>
+  /** Per server: channels you hid from your list (Browse Channels) and whether you've done onboarding. */
+  customize: Record<string, { hidden: string[]; onboarded: boolean }>
+  loadCustomize: (guildId: string) => Promise<void>
+  setHidden: (guildId: string, hidden: string[]) => void
   setMyThread: (id: string, on: boolean) => void
   loadMyThreads: () => Promise<void>
   setViewAs: (v: { guildId: string; roleIds: string[] } | null) => void
@@ -341,6 +352,9 @@ export const useStore = create<State>((set, get) => ({
   callIgnored: {},
   viewAs: null,
   myThreads: {},
+  customize: {},
+  loadCustomize: async (guildId) => { try { const r = await api.get<{ hidden_channels: string[]; onboarded: boolean }>(`/guilds/${guildId}/me/customize`); set((s) => ({ customize: { ...s.customize, [guildId]: { hidden: r.hidden_channels, onboarded: r.onboarded } } })) } catch { /* ignore */ } },
+  setHidden: (guildId, hidden) => set((s) => ({ customize: { ...s.customize, [guildId]: { onboarded: s.customize[guildId]?.onboarded ?? true, hidden } } })),
   setMyThread: (id, on) => set((s) => { const myThreads = { ...s.myThreads }; if (on) myThreads[id] = true; else delete myThreads[id]; return { myThreads } }),
   loadMyThreads: async () => { try { const ids = await api.get<string[]>('/users/@me/threads'); set({ myThreads: Object.fromEntries(ids.map((i) => [i, true as const])) }) } catch { /* ignore */ } },
   setViewAs: (viewAs) => set({ viewAs }),
