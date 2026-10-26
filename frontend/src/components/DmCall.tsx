@@ -7,6 +7,7 @@ import ContextMenu, { useContextMenu } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { useUserAudioMap } from '../lib/userAudio'
 import type { DmChannel, User, VoiceState } from '../lib/types'
+import { ReactButton, StreamViewers, TileReactions } from './CallExtras'
 import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
 import { useResizableHeight } from '../lib/resize'
 import { voice } from '../lib/voice'
@@ -110,6 +111,8 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
           {t.kind === 'camera' && (t.state.self_deaf ? <HeadphoneOff size={12} className="text-danger" /> : t.state.self_mute ? <MicOff size={12} className="text-danger" /> : null)}
         </span>
         {t.kind === 'screen' && <span className="absolute left-2 top-2 rounded-md bg-danger px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider text-white">LIVE</span>}
+        {t.kind === 'screen' && <StreamViewers streamerId={t.userId} channelId={channel.id} />}
+        {t.kind === 'camera' && <TileReactions userId={t.userId} />}
         <div className="absolute right-2 bottom-2 flex items-center gap-1">
           {t.stream && t.kind === 'camera' && <FitToggle />}
           {t.kind === 'screen' && !t.isMe && watching[t.userId] && <StopWatching onStop={() => voice.watch(t.userId, false)} />}
@@ -153,6 +156,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
               </SplitControl>
             </ControlGroup>
             <ControlGroup>
+              <ReactButton />
               <ControlButton label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>
             </ControlGroup>
             <HangUpButton label="Leave Call" onClick={() => voice.leave()} />

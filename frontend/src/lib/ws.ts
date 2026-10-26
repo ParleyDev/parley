@@ -1,5 +1,6 @@
 import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
+import type { VoiceInvite } from '../store'
 import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, User, VoiceState } from './types'
 import { voice } from './voice'
 import type { E2eeSignal } from './e2ee'
@@ -10,6 +11,7 @@ import { log } from './log'
 import { studio } from './studio'
 import { isNative, registerPush } from './native'
 import { markJoined } from './welcome'
+import { emitCallReaction } from './callReactions'
 
 type Ev = { s?: number; i?: string } & (
   | { t: 'READY'; d: ReadyPayload }
@@ -59,7 +61,9 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
   | { t: 'VOICE_ERROR'; d: { message: string } }
   | { t: 'VOICE_MOVE'; d: { guild_id: string; channel_id: string } }
-  | { t: 'VOICE_DISCONNECT'; d: { guild_id: string } })
+  | { t: 'VOICE_DISCONNECT'; d: { guild_id: string } }
+  | { t: 'VOICE_REACTION'; d: { channel_id: string; user_id: string; emoji: string } }
+  | { t: 'VOICE_INVITE'; d: VoiceInvite })
 
 export type SignalData = { type: 'offer' | 'answer'; sdp: string } | { type: 'candidate'; candidate: RTCIceCandidateInit | null }
   /** Mesh: ask a streamer to start (on) or stop sending us their screen share. */
@@ -261,6 +265,8 @@ function handle(ev: Ev) {
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break
     case 'VOICE_MOVE': if (s.myVoiceChannelId) { s.pushToast('A moderator moved you to another voice channel'); voice.join(ev.d.channel_id) } break
+    case 'VOICE_REACTION': if (s.myVoiceChannelId === ev.d.channel_id) emitCallReaction(ev.d.user_id, ev.d.emoji); break
+    case 'VOICE_INVITE': if (!s.user?.ignored_users?.includes(ev.d.from.id)) { s.setVoiceInvite(ev.d); playSfx('invite_speak') } break
     case 'VOICE_DISCONNECT': if (s.myVoiceChannelId) { s.pushToast('A moderator disconnected you from voice'); voice.leave(true) } break
   }
 }
@@ -275,6 +281,7 @@ function voiceSfx(s: ReturnType<typeof useStore.getState>, v: VoiceState) {
     if (was?.suppress && !v.suppress && v.channel_id === mine && s.channels[mine]?.kind === 'stage') playSfx('invite_speak')
     return
   }
+  if (v.channel_id === mine && was?.channel_id === mine && v.self_video && !was.self_video) playSfx('camera_on')
   if (v.channel_id === mine && (was?.channel_id ?? null) !== mine) playSfx('user_join')
   else if (was?.channel_id === mine && v.channel_id !== mine) playSfx('user_leave')
 }

@@ -29,7 +29,7 @@ await call(a.token, 'POST', `/channels/${tc.id}/messages`, { content: 'plain cha
 ok('an ordinary channel message plays the message sound', (await sfx(pb)).includes('message'), JSON.stringify(await sfx(pb)))
 // Per-sound switches live in Settings → Notifications → Sounds.
 await pb.click('button[title="User Settings"]'); await pb.click('text=Notifications'); await pb.waitForSelector('[data-sound-settings]')
-ok('every sound has its own switch, all on by default', await pb.locator('[data-sound-toggle][data-on="1"]').count() === 16 && await pb.locator('[data-sound-toggle]').count() === 16)
+ok('every sound has its own switch, all on by default', await pb.locator('[data-sound-toggle][data-on="1"]').count() === 17 && await pb.locator('[data-sound-toggle]').count() === 17)
 await pb.locator('[data-sound-toggle="mention"] [role=switch]').click(); await pb.waitForSelector('[data-sound-toggle="mention"][data-on="0"]')
 await pb.keyboard.press('Escape'); await pb.waitForSelector('textarea'); await clear(pb)
 await call(a.token, 'POST', `/channels/${tc.id}/messages`, { content: `quiet <@${b.user.id}>` }); await pb.waitForTimeout(800)
@@ -38,8 +38,8 @@ await call(a.token, 'POST', `/channels/${tc.id}/messages`, { content: 'still cha
 ok('…but the separate Message switch still plays', (await sfx(pb)).includes('message'), JSON.stringify(await sfx(pb)))
 await pb.reload(); await pb.waitForSelector('textarea'); await pb.click('button[title="User Settings"]'); await pb.click('text=Notifications'); await pb.waitForSelector('[data-sound-settings]')
 ok('the switch is remembered', await pb.locator('[data-sound-toggle="mention"][data-on="0"]').count() === 1)
-await pb.click('[data-sounds-all="0"]'); ok('Disable all turns every switch off', await pb.locator('[data-sound-toggle][data-on="0"]').count() === 16)
-await pb.click('[data-sounds-all="1"]'); ok('Enable all turns them back on', await pb.locator('[data-sound-toggle][data-on="1"]').count() === 16)
+await pb.click('[data-sounds-all="0"]'); ok('Disable all turns every switch off', await pb.locator('[data-sound-toggle][data-on="0"]').count() === 17)
+await pb.click('[data-sounds-all="1"]'); ok('Enable all turns them back on', await pb.locator('[data-sound-toggle][data-on="1"]').count() === 17)
 await pb.screenshot({ path: '160-sound-settings.png' }); await pb.keyboard.press('Escape')
 
 console.log('-- voice sounds')

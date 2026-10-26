@@ -778,9 +778,12 @@ class VoiceManager {
    */
   watch(userId: string, on: boolean) {
     useStore.getState().setWatching(userId, on)
+    this.announceWatch(userId, on)
     if (this.sfu) { this.sfuScreenPub(userId)?.setSubscribed(on); return }
     sendOp({ op: 'voice_signal', to: userId, data: { type: 'watch', on } })
   }
+  /** Tell the server who we watch (viewer lists); separate from the media plumbing above. */
+  private announceWatch(userId: string, on: boolean) { sendOp({ op: 'stream_watch', user_id: userId, on }) }
 
   private videoTransceivers(pc: RTCPeerConnection) {
     return pc.getTransceivers().filter((t) => t.receiver.track.kind === 'video')

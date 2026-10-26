@@ -151,6 +151,8 @@ body {
 .msg-flash { animation: msg-flash 1.8s ease-out both; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
 .fade-in { animation: fade-in .15s ease-out both; }
+@keyframes call-react { 0% { opacity: 0; transform: translateY(0) scale(.6) } 15% { opacity: 1; transform: translateY(-20px) scale(1.1) } 100% { opacity: 0; transform: translateY(-160px) scale(1) } }
+.call-react { animation: call-react 2.5s ease-out forwards }
 @keyframes pop { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: none } }
 .pop { animation: pop .14s ease-out both; }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0 } to { transform: none; opacity: 1 } }

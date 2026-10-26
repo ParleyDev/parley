@@ -55,6 +55,11 @@ pub struct VoiceState {
     /// DM calls only: who hears about this state (the DM's members).
     #[serde(skip)]
     pub peers: Vec<Uuid>,
+    /// Whose screen shares this member is watching (streamers' viewer lists come from this).
+    #[serde(default)]
+    pub watching: Vec<Uuid>,
+    /// When they joined this channel (the channel's "active for" timer starts at the earliest).
+    pub joined_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl VoiceState {
@@ -91,6 +96,10 @@ pub struct Hub {
     pub calls: DashMap<Uuid, CallInfo>,
     /// A moderator moved this user to this voice channel: their next join there skips the user limit.
     pub moves: DashMap<Uuid, Uuid>,
+    /// Last call reaction per user (a little flood control).
+    pub reacted: DashMap<Uuid, std::time::Instant>,
+    /// (from, to) -> last "join voice" invite, so nobody gets spammed.
+    pub voice_invites: DashMap<(Uuid, Uuid), std::time::Instant>,
     /// (user, session) -> when the DB last confirmed it live; see auth::check_session.
     session_ok: DashMap<(Uuid, Uuid), std::time::Instant>,
     session_seq: std::sync::atomic::AtomicU64,
@@ -117,6 +126,8 @@ impl Hub {
             voice: DashMap::new(),
             calls: DashMap::new(),
             moves: DashMap::new(),
+            reacted: DashMap::new(),
+            voice_invites: DashMap::new(),
             session_ok: DashMap::new(),
             session_seq: std::sync::atomic::AtomicU64::new(1),
             seq: std::sync::atomic::AtomicU64::new(0),

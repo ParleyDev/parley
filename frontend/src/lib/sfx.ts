@@ -27,6 +27,7 @@ const SOUNDS: Record<Sfx, Note[]> = {
   outgoing_ring: [{ f: 440, at: 0, dur: 0.4, gain: 0.6 }, { f: 480, at: 0, dur: 0.4, gain: 0.6 }, { f: 440, at: 0.6, dur: 0.4, gain: 0.6 }, { f: 480, at: 0.6, dur: 0.4, gain: 0.6 }],
   stream_started: [{ f: 659, at: 0, dur: 0.08, type: 'triangle' }, { f: 880, at: 0.09, dur: 0.08, type: 'triangle' }, { f: 1319, at: 0.18, dur: 0.16, type: 'triangle' }],
   stream_stopped: [{ f: 1319, at: 0, dur: 0.08, type: 'triangle' }, { f: 880, at: 0.09, dur: 0.08, type: 'triangle' }, { f: 659, at: 0.18, dur: 0.16, type: 'triangle' }],
+  camera_on: [{ f: 1047, at: 0, dur: 0.06, type: 'triangle', gain: 0.6 }, { f: 1397, at: 0.07, dur: 0.12, type: 'triangle', gain: 0.6 }],
   invite_speak: [{ f: 784, at: 0, dur: 0.1 }, { f: 988, at: 0.11, dur: 0.1 }, { f: 1175, at: 0.22, dur: 0.1 }, { f: 1568, at: 0.33, dur: 0.25 }],
 }
 

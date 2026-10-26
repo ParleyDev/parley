@@ -17,6 +17,7 @@ import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpBu
 import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
 import CallLock from './CallLock'
+import { InviteToVoice, ReactButton, StreamViewers, TileReactions } from './CallExtras'
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 import ChatPane from './ChatPane'
 import { MembersToggle, MobileBack } from './HeaderBits'
@@ -185,6 +186,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           {t.kind === 'camera' && (t.state.self_deaf ? <HeadphoneOff size={14} className="text-danger" /> : t.state.self_mute ? <MicOff size={14} className="text-danger" /> : null)}
         </div>
         {t.kind === 'screen' && <span className="absolute left-3 top-3 rounded-md bg-danger px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider text-white">LIVE</span>}
+        {t.kind === 'screen' && <StreamViewers streamerId={t.userId} channelId={channel.id} />}
+        {t.kind === 'camera' && <TileReactions userId={t.userId} />}
         {status && status !== 'connected' && (
           <span className={`absolute right-3 top-3 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase ${status === 'failed' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{status === 'failed' ? 'No route' : 'Connecting'}</span>
         )}
@@ -289,6 +292,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                   )}
                   {isStage && suppressed && <ControlButton label={handUp ? t('Lower Hand') : t('Raise Hand')} on={handUp} onClick={toggleHand}><Hand size={20} /></ControlButton>}
                   {isStage && !suppressed && !isMod && <ControlButton label={t('Leave the stage')} onClick={() => toAudience(me!.id)}><Hand size={20} /></ControlButton>}
+                  <ReactButton />
+                  {channel.guild_id && channel.kind === 'voice' && <InviteToVoice channelId={channel.id} guildId={channel.guild_id} />}
                   {canStream && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>}
                   {canSpeak && !suppressed && (
                     <span className="relative flex">

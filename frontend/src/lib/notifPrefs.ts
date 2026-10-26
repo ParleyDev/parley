@@ -10,6 +10,7 @@ export type SoundKey =
   | 'incoming_ring' | 'outgoing_ring'
   | 'stream_started' | 'stream_stopped'
   | 'invite_speak'
+  | 'camera_on'
 
 export const SOUND_LABELS: { key: SoundKey; label: string; hint?: string }[] = [
   { key: 'message', label: 'Message', hint: 'A new message you would be notified about, while you are not looking at it' },
@@ -28,6 +29,7 @@ export const SOUND_LABELS: { key: SoundKey; label: string; hint?: string }[] = [
   { key: 'stream_started', label: 'Stream Started' },
   { key: 'stream_stopped', label: 'Stream Stopped' },
   { key: 'invite_speak', label: 'Invited to Speak', hint: 'A stage moderator invites you to the stage' },
+  { key: 'camera_on', label: 'Camera On', hint: 'Someone in your call turns their camera on' },
 ]
 
 export type Tts = 'never' | 'current' | 'all'

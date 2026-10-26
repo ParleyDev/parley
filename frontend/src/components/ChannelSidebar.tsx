@@ -10,6 +10,7 @@ import { isUnread, myChannelPerms, myGuildPerms, showsMentions, showsUnread, use
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import { takeWelcome } from '../lib/welcome'
+import { VoiceTimer } from './CallExtras'
 import { BellOff, BookOpenCheck, DoorOpen, Eye, EyeOff, Pin, PinOff } from 'lucide-react'
 import { togglePinned } from '../lib/pins'
 
@@ -185,6 +186,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={chanIcon(c, guild?.rules_channel_id)} name={c.name} locked={!!c.e2ee} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
         unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)} onClick={() => setMobilePane('content')}
         count={c.user_limit ? `${Object.values(voiceStates).filter((v) => v.channel_id === c.id).length}/${c.user_limit}` : undefined}
+        extra={c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio' ? <VoiceTimer channelId={c.id} /> : undefined}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
       {c.voice_status && <div className="ml-8 mr-2 -mt-0.5 mb-0.5 truncate text-xs text-text-2" title={c.voice_status} data-voice-status={c.id}>{c.voice_status}</div>}
       {(c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
@@ -385,12 +387,13 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
   )
 }
 
-function ChannelRow({ to, icon, name, unread, mentions = 0, muted, locked, count, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; mentions?: number; muted?: boolean; locked?: boolean; count?: string; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
+function ChannelRow({ to, icon, name, unread, mentions = 0, muted, locked, count, extra, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; mentions?: number; muted?: boolean; locked?: boolean; count?: string; extra?: React.ReactNode; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
   return (
     <NavLink to={to} onClick={onClick} onContextMenu={onContextMenu} data-channel-row={name} data-muted={muted ? 'true' : undefined} data-unread={unread || mentions > 0 ? 'true' : undefined} data-has-mention={mentions > 0 ? 'true' : undefined} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'} ${muted ? 'opacity-50' : ''}`}>
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>
+      {extra}
       {count && <span className="shrink-0 rounded bg-bg-0/70 px-1 text-[10px] font-semibold tabular-nums text-text-2" title="People in the channel / its limit" data-user-limit>{count}</span>}
       {locked && <Lock size={12} className="text-text-2 shrink-0" aria-label="End-to-end encrypted calls" data-e2ee-icon />}
       {muted && <BellOff size={13} className="text-text-2 shrink-0" data-muted-icon />}

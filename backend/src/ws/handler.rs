@@ -71,6 +71,10 @@ enum ClientOp {
     Activity,
     /// The user went away from this client (no input for a while, or the app went to the background) or came back.
     Idle { idle: bool },
+    /// Started or stopped watching someone's screen share in the same call.
+    StreamWatch { user_id: Uuid, on: bool },
+    /// A floating emoji reaction in the call.
+    VoiceReaction { emoji: String },
 }
 
 async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid, resume_from: Option<u64>, platform: String, idle: bool) {
@@ -410,7 +414,9 @@ async fn handle_client_op(
             let crew = has(p, perms::MANAGE_CHANNELS) || (channel.kind == "studio" && perms::is_engineer(&state.db, channel_id, user_id).await.unwrap_or(false));
             // The server's inactive (AFK) channel is listen-only.
             let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew) || is_afk_channel(&state.db, &channel).await);
-            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, mute, deaf, request_to_speak: false, e2ee, session, peers };
+            // The "active for" timer keeps counting across reconnects to the same channel.
+            let joined_at = state.hub.voice_state(user_id).filter(|v| v.channel_id == channel_id).map(|v| v.joined_at).unwrap_or_else(chrono::Utc::now);
+            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, mute, deaf, request_to_speak: false, e2ee, session, peers, watching: Vec::new(), joined_at };
             if let Some(prev) = state.hub.voice_join(vs.clone()) {
                 if prev.channel_id != channel_id || prev.guild_id != guild_id {
                     emit_voice_leave(state, &prev);
@@ -462,6 +468,28 @@ async fn handle_client_op(
                 } else {
                     state.hub.emit_voice(&vs, json!(vs));
                 }
+            }
+        }
+        ClientOp::StreamWatch { user_id: streamer, on } => {
+            let Some(peer) = state.hub.voice_state(streamer) else { return };
+            let Some(vs) = state.hub.voice_update(user_id, |v| {
+                if v.channel_id != peer.channel_id { return }
+                v.watching.retain(|x| *x != streamer);
+                if on { v.watching.push(streamer) }
+            }) else { return };
+            broadcast_voice(state, &vs).await;
+        }
+        ClientOp::VoiceReaction { emoji } => {
+            let emoji: String = emoji.trim().chars().take(64).collect();
+            if emoji.is_empty() { return }
+            let Some(vs) = state.hub.voice_state(user_id) else { return };
+            let now = std::time::Instant::now();
+            if state.hub.reacted.get(&user_id).map(|t| now.duration_since(*t) < std::time::Duration::from_millis(250)).unwrap_or(false) { return }
+            state.hub.reacted.insert(user_id, now);
+            let d = json!({ "channel_id": vs.channel_id, "user_id": user_id, "emoji": emoji });
+            match vs.guild_id {
+                Some(g) => state.hub.emit_guild(g, "VOICE_REACTION", d),
+                None => state.hub.emit_users(vs.peers.clone(), "VOICE_REACTION", d),
             }
         }
         ClientOp::VoiceSignal { to, data } => {
@@ -524,4 +552,15 @@ async fn is_afk_channel(db: &sqlx::PgPool, channel: &crate::models::Channel) -> 
     let Some(g) = channel.guild_id else { return false };
     sqlx::query_as::<_, (bool,)>("SELECT afk_channel_id IS NOT DISTINCT FROM $2 FROM guilds WHERE id = $1").bind(g).bind(channel.id)
         .fetch_one(db).await.map(|r| r.0).unwrap_or(false)
+}
+
+/// Send a member's voice state to whoever can see that channel (or the DM's members).
+async fn broadcast_voice(state: &AppState, vs: &VoiceState) {
+    if vs.guild_id.is_some() {
+        let Ok(channel) = sqlx::query_as::<_, crate::models::Channel>(&format!("SELECT {} FROM channels WHERE id = $1", crate::routes::guilds::CHANNEL_COLS)).bind(vs.channel_id).fetch_one(&state.db).await else { return };
+        let target = perms::channel_audience(&state.db, &channel).await.unwrap_or(Target::Users(vec![vs.user_id]));
+        state.hub.emit(target, "VOICE_STATE_UPDATE", json!(vs));
+    } else {
+        state.hub.emit_voice(vs, json!(vs));
+    }
 }

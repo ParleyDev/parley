@@ -28,6 +28,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/messages/:mid", get(get_message).patch(edit_message).delete(delete_message))
         .route("/channels/:id/messages/bulk-delete", post(bulk_delete))
         .route("/channels/:id/voice-status", put(set_voice_status))
+        .route("/channels/:id/voice-invite", post(voice_invite))
         .route("/channels/:id/messages/:mid/history", get(message_history))
         .route("/channels/:id/messages/:mid/reactions/:emoji", get(list_reactors).put(add_reaction).delete(remove_reaction))
         .route("/channels/:id/messages/:mid/reactions/:emoji/:user", axum::routing::delete(remove_user_reaction))
@@ -717,6 +718,33 @@ async fn set_voice_status(State(state): State<AppState>, AuthUser(uid): AuthUser
     if !inside && !has(p, perms::MANAGE_CHANNELS) { return Err(AppError::Forbidden) }
     let status: String = req.status.trim().chars().take(500).collect();
     set_voice_status_inner(&state, id, &status).await
+}
+
+#[derive(Deserialize)]
+struct VoiceInviteReq { user_id: Uuid }
+
+/// `POST /channels/:id/voice-invite`: from inside a server voice channel, ask someone who can join it to hop in.
+async fn voice_invite(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<VoiceInviteReq>) -> AppResult<StatusCode> {
+    let (c, _) = require_channel_perms(&state.db, id, uid).await?;
+    if c.guild_id.is_none() || c.kind != "voice" { return Err(AppError::BadRequest("Only server voice channels".into())) }
+    if !state.hub.voice_state(uid).map(|v| v.channel_id == id).unwrap_or(false) { return Err(AppError::BadRequest("Join the voice channel first".into())) }
+    if req.user_id == uid { return Err(AppError::BadRequest("That's you".into())) }
+    let Ok((_, tp)) = require_channel_perms(&state.db, id, req.user_id).await else { return Err(AppError::BadRequest("They can't see this channel".into())) };
+    if !has(tp, perms::CONNECT) { return Err(AppError::BadRequest("They can't join this channel".into())) }
+    if crate::routes::relationships::blocked_either_way(&state.db, uid, req.user_id).await? { return Err(AppError::Forbidden) }
+    if state.hub.voice_state(req.user_id).map(|v| v.channel_id == id).unwrap_or(false) { return Err(AppError::BadRequest("They're already here".into())) }
+    let now = std::time::Instant::now();
+    let key = (uid, req.user_id);
+    if state.hub.voice_invites.get(&key).map(|t| now.duration_since(*t) < std::time::Duration::from_secs(30)).unwrap_or(false) {
+        return Err(AppError::TooMany("You just invited them. Give them a moment.".into()));
+    }
+    state.hub.voice_invites.insert(key, now);
+    let from: crate::models::User = sqlx::query_as::<_, crate::models::User>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::USER_COLS)).bind(uid).fetch_one(&state.db).await?;
+    state.hub.emit_users(vec![req.user_id], "VOICE_INVITE", json!({ "channel_id": id, "guild_id": c.guild_id, "channel_name": c.name, "from": from }));
+    if !crate::ws::bus::online_users(&state.db).await.contains(&req.user_id) {
+        crate::push::notify(&state, &[req.user_id], "Join voice?", &format!("{} invited you to 🔊 {}", from.display_name, c.name), json!({ "kind": "voice_invite", "channel_id": id, "guild_id": c.guild_id })).await;
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Store a voice channel's status and tell everyone who can see the channel (no-op when unchanged).

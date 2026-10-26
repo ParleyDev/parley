@@ -133,6 +133,9 @@ interface State {
   loadSounds: (guildId: string) => Promise<void>
   /** Message ids the user has bookmarked. */
   bookmarks: Record<string, true>
+  /** Someone asked you to join their voice channel (banner until joined or dismissed). */
+  voiceInvite: VoiceInvite | null
+  setVoiceInvite: (v: VoiceInvite | null) => void
   /** Unread messages per channel that mention me (direct, role or @everyone). */
   mentionCounts: Record<string, number>
   /** Per-server / per-channel notification settings, keyed by target id. */
@@ -322,6 +325,8 @@ export const useStore = create<State>((set, get) => ({
   emojis: {},
   stickers: {},
   bookmarks: {},
+  voiceInvite: null,
+  setVoiceInvite: (voiceInvite) => set({ voiceInvite }),
   mentionCounts: {},
   notifSettings: {},
   messages: {},
@@ -914,6 +919,8 @@ export const isRequest = (d: DmChannel | undefined) => !!d && !!d.request_state 
 export function pendingCount(s: Pick<State, 'relationships'>): number {
   return Object.values(s.relationships).filter((r) => r.kind === 'incoming').length
 }
+
+export interface VoiceInvite { channel_id: string; guild_id: string; channel_name: string; from: User }
 
 export function isBlocked(s: Pick<State, 'relationships'>, userId: string): boolean {
   return s.relationships[userId]?.kind === 'blocked'

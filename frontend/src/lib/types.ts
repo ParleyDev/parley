@@ -364,6 +364,10 @@ export interface VoiceState {
   /** Server muted / deafened by a moderator (deafened members can't speak either). */
   mute?: boolean
   deaf?: boolean
+  /** Whose screen shares they are watching. */
+  watching?: string[]
+  /** When they joined this channel. */
+  joined_at?: string
 }
 
 /** Scheduled event (GET /guilds/:id/events). */
