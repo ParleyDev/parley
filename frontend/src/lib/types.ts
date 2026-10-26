@@ -335,6 +335,9 @@ export interface Message {
   /** "Remove embeds": no link previews for this message. */
   suppress_embeds?: boolean
   /** Announcements: published original, or a copy with where it came from. */
+  /** Sent through a webhook, and bot/webhook rich embeds. */
+  webhook_id?: string
+  embeds?: import('../components/RichEmbed').Embed[]
   crosspost?: { published?: boolean; guild_id?: string; guild_name?: string; guild_icon?: string | null; channel_id?: string; channel_name?: string; message_id?: string }
   /** What a failed message would send again on Retry. */
   draft?: Draft

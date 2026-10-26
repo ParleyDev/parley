@@ -247,7 +247,7 @@ async fn put_mail_settings(State(state): State<AppState>, AuthUser(uid): AuthUse
 
 async fn stats(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
     require_admin(&state, uid).await?;
-    let (users,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users").fetch_one(&state.db).await?;
+    let (users,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE NOT webhook").fetch_one(&state.db).await?;
     let (admins,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE is_admin").fetch_one(&state.db).await?;
     let (suspended,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE suspended_at IS NOT NULL").fetch_one(&state.db).await?;
     let (guilds,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guilds").fetch_one(&state.db).await?;
@@ -321,7 +321,7 @@ async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Quer
     let limit = q.limit.unwrap_or(200).clamp(1, 200);
     let before: Option<DateTime<Utc>> = q.joined_before.and_then(|d| d.and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
     let after: Option<DateTime<Utc>> = q.joined_after.and_then(|d| (d + chrono::Duration::days(1)).and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
-    let where_sql = "($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR u.email ILIKE $1)
+    let where_sql = "NOT u.webhook AND ($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR u.email ILIKE $1)
          AND ($2::bool IS NULL OR u.is_admin = $2)
          AND ($3::bool IS NULL OR (u.suspended_at IS NOT NULL) = $3)
          AND ($4::bool IS NULL OR (u.email_verified_at IS NOT NULL) = $4)

@@ -37,7 +37,7 @@ export type ModalKind =
   | { kind: 'createChannel'; guildId: string; parentId?: string | null }
   | { kind: 'invite'; guildId: string }
   | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'welcome' | 'onboarding' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
-  | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
+  | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' | 'integrations' }
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' | 'keybinds' }
   | { kind: 'shortcuts' }
   | { kind: 'quickSwitcher' }

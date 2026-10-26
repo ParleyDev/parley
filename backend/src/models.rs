@@ -589,6 +589,13 @@ pub struct MessageRow {
     pub tts: bool,
     #[sqlx(default)]
     pub crosspost: Option<serde_json::Value>,
+    #[sqlx(default)]
+    pub webhook_id: Option<Uuid>,
+    /// Webhook messages: {name, avatar_url} shown instead of the webhook's own.
+    #[sqlx(default)]
+    pub author_override: Option<serde_json::Value>,
+    #[sqlx(default)]
+    pub embeds: Option<serde_json::Value>,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -676,6 +683,12 @@ pub struct Message {
     /// Announcements: {published: true} on a published original; on a copy, the server and channel it came from.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crosspost: Option<serde_json::Value>,
+    /// Sent through this webhook.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub webhook_id: Option<Uuid>,
+    /// Rich embeds from bots and webhooks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embeds: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub poll: Option<Poll>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -799,6 +812,8 @@ impl MessageRow {
             suppress_embeds: self.suppress_embeds,
             tts: self.tts,
             crosspost: self.crosspost,
+            webhook_id: self.webhook_id,
+            embeds: self.embeds,
             poll: None,
             thread: None,
             referenced: None,
@@ -813,8 +828,8 @@ impl MessageRow {
                 bot: self.author_bot,
                 id: self.author_id,
                 username: self.username,
-                display_name: self.display_name,
-                avatar_url: self.avatar_url,
+                display_name: self.author_override.as_ref().and_then(|o| o["name"].as_str()).map(str::to_string).unwrap_or(self.display_name),
+                avatar_url: match self.author_override.as_ref().map(|o| &o["avatar_url"]) { Some(serde_json::Value::String(a)) => Some(a.clone()), _ => self.avatar_url },
                 custom_status: String::new(),
                 bio: String::new(),
                 status: String::new(),

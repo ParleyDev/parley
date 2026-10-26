@@ -31,6 +31,7 @@ import { getPrefs, usePrefs } from '../lib/prefs'
 import FrozenGif from './FrozenGif'
 import Emoji from './Emoji'
 import ExpressionPicker from './ExpressionPicker'
+import RichEmbed from './RichEmbed'
 import { isJumbo } from '../lib/emoji'
 import { api } from '../lib/api'
 import { shortcutFormat, toggleWrap } from '../lib/editor'
@@ -362,6 +363,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               )}
               {blockMedia && (media || links.length > 0 || (m.attachments ?? []).some((a) => /^(image|video)\//.test(a.content_type))) && <div className="mt-1 text-xs text-text-2 italic" data-media-blocked>Media hidden by your Content & Social settings.</div>}
               {media && !blockMedia && (prefs.linkMedia && !m.suppress_embeds ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
+              {m.embeds?.map((e, i) => <RichEmbed key={i} e={e} />)}
               {link && !blockMedia && prefs.embeds && !m.suppress_embeds && (
                 <div className="group/embed relative w-fit max-w-full" data-embed-wrap>
                   {links.map((l) => <MaybeBlurred key={l} on={sensitive}><LinkEmbed url={l} /></MaybeBlurred>)}

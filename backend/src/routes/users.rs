@@ -566,7 +566,7 @@ async fn search(
     // opted in to being found, plus your existing friends; admins search everyone.
     let (admin,): (bool,) = sqlx::query_as("SELECT is_admin FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
     let users = sqlx::query_as::<_, User>(&format!(
-        "SELECT {USER_COLS} FROM users WHERE id <> $1 AND (
+        "SELECT {USER_COLS} FROM users WHERE id <> $1 AND NOT webhook AND (
              lower(username) = $3
              OR ((username ILIKE $2 OR display_name ILIKE $2)
                  AND ($4 OR searchable OR EXISTS (SELECT 1 FROM relationships r WHERE r.user_id = $1 AND r.target_id = users.id AND r.kind = 'friend'))))

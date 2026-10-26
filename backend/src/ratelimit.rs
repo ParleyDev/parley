@@ -4,7 +4,9 @@
 //! `RL_LOGIN`, `RL_LOGIN_FAIL`, `RL_MESSAGES`, `RL_UPLOADS`, `RL_GIFS`, `RL_MAIL`, `RL_OAUTH` (MCP client registration
 //! and tokens, per IP: AI services call from a few shared addresses for all their users). A bucket refills
 //! continuously (count tokens per window) so bursts up to `count` are allowed. Exhausted buckets
-//! answer 429 with a `Retry-After` header and a JSON error.
+//! answer 429 with a `Retry-After` header and a JSON error. Every limited response carries `X-RateLimit-Bucket`,
+//! `-Limit`, `-Remaining` and `-Reset-After` (seconds until the bucket is full again) so clients and bots can pace
+//! themselves. `RL_WEBHOOKS` limits each webhook's executions.
 
 use crate::auth::verify_token;
 use axum::{
@@ -26,7 +28,7 @@ pub struct Limit {
 }
 
 /// Buckets an admin may override from Instance Settings.
-pub const BUCKETS: [&str; 8] = ["register", "login", "login_fail", "messages", "uploads", "gifs", "mail", "oauth"];
+pub const BUCKETS: [&str; 9] = ["register", "login", "login_fail", "messages", "uploads", "gifs", "mail", "oauth", "webhooks"];
 
 impl Limit {
     /// `count/seconds`, both positive.
@@ -56,6 +58,7 @@ pub struct Limits {
     pub gifs: Limit,
     pub mail: Limit,
     pub oauth: Limit,
+    pub webhooks: Limit,
 }
 
 struct Bucket {
@@ -80,6 +83,7 @@ pub static LIMITER: LazyLock<RateLimiter> = LazyLock::new(|| RateLimiter {
         gifs: Limit::from_env("RL_GIFS", "60/60"),
         mail: Limit::from_env("RL_MAIL", "3/600"),
         oauth: Limit::from_env("RL_OAUTH", "300/60"),
+        webhooks: Limit::from_env("RL_WEBHOOKS", "30/60"),
     },
     overrides: std::sync::RwLock::new(std::collections::HashMap::new()),
     buckets: DashMap::new(),
@@ -95,6 +99,7 @@ impl RateLimiter {
             "uploads" => self.limits.uploads,
             "gifs" => self.limits.gifs,
             "oauth" => self.limits.oauth,
+            "webhooks" => self.limits.webhooks,
             _ => self.limits.mail,
         }
     }
@@ -113,6 +118,11 @@ impl RateLimiter {
 
     /// Take one token from `bucket` for `key`. Err carries the seconds until a token is back.
     pub fn take(&self, bucket: &'static str, key: &str, limit: Limit) -> Result<(), u64> {
+        self.take_counted(bucket, key, limit).map(|_| ())
+    }
+
+    /// Like `take`, returning the tokens left afterwards.
+    pub fn take_counted(&self, bucket: &'static str, key: &str, limit: Limit) -> Result<f64, u64> {
         let now = Instant::now();
         let mut b = self.buckets.entry((bucket, key.to_string())).or_insert(Bucket { tokens: limit.count, updated: now });
         let refill = now.duration_since(b.updated).as_secs_f64() * (limit.count / limit.secs);
@@ -120,7 +130,7 @@ impl RateLimiter {
         b.updated = now;
         if b.tokens >= 1.0 {
             b.tokens -= 1.0;
-            Ok(())
+            Ok(b.tokens)
         } else {
             Err(((1.0 - b.tokens) / (limit.count / limit.secs)).ceil().max(1.0) as u64)
         }
@@ -171,11 +181,28 @@ pub fn too_many(retry: u64) -> Response {
     resp
 }
 
-async fn limited(bucket: &'static str, limit: Limit, key: String, req: Request<Body>, next: Next) -> Response {
-    match LIMITER.take(bucket, &key, limit) {
-        Ok(()) => next.run(req).await,
-        Err(retry) => too_many(retry),
+/// X-RateLimit-* headers for a bucket with `remaining` tokens.
+pub fn rate_headers(resp: &mut Response, bucket: &str, limit: Limit, remaining: f64) {
+    let h = resp.headers_mut();
+    let reset = ((limit.count - remaining) / (limit.count / limit.secs)).max(0.0);
+    if let Ok(v) = HeaderValue::from_str(bucket) { h.insert("x-ratelimit-bucket", v); }
+    h.insert("x-ratelimit-limit", HeaderValue::from(limit.count as u64));
+    h.insert("x-ratelimit-remaining", HeaderValue::from(remaining.floor().max(0.0) as u64));
+    if let Ok(v) = HeaderValue::from_str(&format!("{reset:.3}")) { h.insert("x-ratelimit-reset-after", v); }
+}
+
+pub async fn limited(bucket: &'static str, limit: Limit, key: String, req: Request<Body>, next: Next) -> Response {
+    match LIMITER.take_counted(bucket, &key, limit) {
+        Ok(left) => { let mut resp = next.run(req).await; rate_headers(&mut resp, bucket, limit, left); resp }
+        Err(retry) => { let mut resp = too_many(retry); rate_headers(&mut resp, bucket, limit, 0.0); resp }
     }
+}
+
+/// Per webhook: executions (`POST /webhooks/:id/:token`), keyed by the webhook id in the path.
+pub async fn rl_webhooks(req: Request<Body>, next: Next) -> Response {
+    if req.method() != axum::http::Method::POST { return next.run(req).await }
+    let key = req.uri().path().trim_start_matches("/api").split('/').nth(2).unwrap_or("").to_string();
+    limited("webhooks", LIMITER.limit("webhooks"), key, req, next).await
 }
 
 /// Per-IP: registration.

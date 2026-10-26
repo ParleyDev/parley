@@ -330,7 +330,7 @@ async fn delete_channel(
 
 pub const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
     u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from,
-    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, m.suppress_embeds, m.tts, m.crosspost, u.avatar_decoration, u.clan_tag, u.bot AS author_bot, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
+    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, m.suppress_embeds, m.tts, m.crosspost, m.webhook_id, m.author_override, m.embeds, u.avatar_decoration, u.clan_tag, u.bot AS author_bot, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
@@ -503,6 +503,8 @@ struct CreateMessage {
     /// Read it aloud (needs Send TTS Messages in a server; quietly ignored without it).
     #[serde(default)]
     tts: bool,
+    /// Bots only: up to 10 rich embeds (see `webhooks::clean_embeds`).
+    embeds: Option<serde_json::Value>,
 }
 
 async fn create_message(
@@ -527,7 +529,15 @@ async fn create_message(
     if let Some(gid) = c.guild_id { check_verification(&state.db, gid, uid).await?; }
     check_slowmode(&state.db, &c, p, uid).await?;
     let content = req.content.trim_end().to_string();
-    if (content.trim().is_empty() && req.attachment_ids.is_empty() && req.sticker_id.is_none() && req.poll.is_none()) || content.chars().count() > 2000 {
+    let embeds = match &req.embeds {
+        Some(e) if !(e.is_array() && e.as_array().map(|a| a.is_empty()).unwrap_or(true)) => {
+            let (bot,): (bool,) = sqlx::query_as("SELECT bot FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+            if !bot { return Err(AppError::BadRequest("Only bots and webhooks can send embeds".into())) }
+            Some(crate::routes::webhooks::clean_embeds(e)?)
+        }
+        _ => None,
+    };
+    if (content.trim().is_empty() && req.attachment_ids.is_empty() && req.sticker_id.is_none() && req.poll.is_none() && embeds.is_none()) || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
     }
     if let Some(sid) = req.sticker_id {
@@ -579,7 +589,7 @@ async fn create_message(
             }
         }
     }
-    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone, tts, suppress_embeds) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)")
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone, tts, suppress_embeds, embeds) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)")
         .bind(mid)
         .bind(id)
         .bind(uid)
@@ -591,6 +601,7 @@ async fn create_message(
         .bind(m_everyone)
         .bind(tts)
         .bind(no_embeds)
+        .bind(&embeds)
         .execute(&mut *tx)
         .await?;
     link(&mut tx, mid, id, uid, &req.attachment_ids).await?;
