@@ -430,7 +430,7 @@ export interface VoiceState {
 }
 
 /** Scheduled event (GET /guilds/:id/events). */
-export interface GuildEvent { id: string; guild_id: string; name: string; description: string; starts_at: string; ends_at: string | null; channel_id: string | null; location: string; creator_id: string | null; created_at: string; rsvp_count: number; me_rsvp: boolean }
+export interface GuildEvent { id: string; guild_id: string; name: string; description: string; starts_at: string; ends_at: string | null; channel_id: string | null; location: string; creator_id: string | null; created_at: string; rsvp_count: number; me_rsvp: boolean; cover_url?: string | null; recurrence?: '' | 'daily' | 'weekly' | 'biweekly' | 'monthly'; status?: 'scheduled' | 'active' | 'completed' | 'canceled'; started_at?: string | null }
 
 export type RelationshipKind = 'friend' | 'outgoing' | 'incoming' | 'blocked'
 /** `created_at`: when the request was sent, or for friends when it was accepted ("Friends since"). `note`: a request's note. */

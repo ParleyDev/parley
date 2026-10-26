@@ -58,6 +58,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'SOUNDBOARD_PLAY'; d: { channel_id: string; guild_id: string | null; user_id: string; sound: Sound & { builtin?: boolean }; entrance?: boolean } }
   | { t: 'SOUNDBOARD_UPDATE'; d: { guild_id: string; sounds: Sound[] } }
   | { t: 'EVENT_UPDATE'; d: { guild_id: string } }
+  | { t: 'EVENT_START'; d: { id: string; guild_id: string; name: string; channel_id: string | null; location: string } }
   | { t: 'STUDIO_UPDATE'; d: { channel_id: string } }
   | { t: 'STUDIO_SESSION'; d: { channel_id: string; action: 'start' | 'stop'; session_id: string; name?: string; started_at?: string } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
@@ -268,6 +269,15 @@ function handle(ev: Ev) {
     }
     case 'SOUNDBOARD_UPDATE': s.setSounds(ev.d.guild_id, ev.d.sounds); break
     case 'EVENT_UPDATE': if (s.events[ev.d.guild_id]) void s.loadEvents(ev.d.guild_id); break
+    case 'EVENT_START': {
+      // An event you're interested in has started (a moderator pressed Start).
+      const where = ev.d.channel_id ? `#${s.channels[ev.d.channel_id]?.name ?? 'voice'}` : ev.d.location
+      s.pushToast(`${ev.d.name} is happening now${where ? ` in ${where}` : ''}`)
+      try { localStorage.setItem(`parley.reminded.${ev.d.id}`, '1') } catch { /* ignore */ }
+      try { if ('Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification(ev.d.name, { body: `Happening now${where ? ` in ${where}` : ''}` }) } catch { /* ignore */ }
+      void s.loadEvents(ev.d.guild_id)
+      break
+    }
     case 'STUDIO_UPDATE': void s.loadStudio(ev.d.channel_id); break
     case 'STUDIO_SESSION': studio.onSession(ev.d); void s.loadStudio(ev.d.channel_id); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
