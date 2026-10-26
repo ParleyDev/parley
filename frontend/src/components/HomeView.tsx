@@ -1,4 +1,4 @@
-import { Check, MessageSquare, MoreVertical, Search, UserPlus, Users, X } from 'lucide-react'
+import { Check, Volume2, MessageSquare, MoreVertical, Search, UserPlus, Users, X } from 'lucide-react'
 import { useEffect as useEffectCb } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import InboxButton from './InboxButton'
@@ -9,6 +9,7 @@ import { api } from '../lib/api'
 import { pendingCount, useStore } from '../store'
 import type { DmChannel, Relationship, User } from '../lib/types'
 import Avatar from './Avatar'
+import { toggleIgnored, toggleOnlineAlert } from '../lib/userLists'
 import { MobileBack } from './HeaderBits'
 import StyledName from './StyledName'
 
@@ -58,8 +59,9 @@ export default function HomeView() {
         <span className="ml-auto"><InboxButton /></span>
       </header>
 
+      <div className="flex flex-1 min-h-0">
       {tab === 'add' ? <AddFriend /> : (
-        <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
           <div className="p-6 max-md:p-3 w-full">
             <div className="relative mb-5">
               <input className="input pl-9 py-2" placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -75,7 +77,57 @@ export default function HomeView() {
           </div>
         </div>
       )}
+      <ActiveNow />
+      </div>
     </main>
+  )
+}
+
+/** Friends "Active Now": who is in a voice channel or streaming right now (in servers you share). */
+function ActiveNow() {
+  const relationships = useStore((s) => s.relationships)
+  const voiceStates = useStore((s) => s.voiceStates)
+  const channels = useStore((s) => s.channels)
+  const guilds = useStore((s) => s.guilds)
+  const users = useStore((s) => s.users)
+  const navigate = useNavigate()
+  const active = Object.values(relationships)
+    .filter((r) => r.kind === 'friend' && voiceStates[r.user.id]?.guild_id && channels[voiceStates[r.user.id].channel_id ?? ''])
+    .map((r) => ({ r, v: voiceStates[r.user.id] }))
+    .sort((a, b) => Number(b.v.self_stream) - Number(a.v.self_stream) || a.r.user.display_name.localeCompare(b.r.user.display_name))
+  return (
+    <aside className="w-[340px] shrink-0 border-l border-line p-4 overflow-y-auto max-xl:hidden" data-active-now>
+      <h2 className="mb-4 text-xl font-bold">Active Now</h2>
+      {active.length === 0 ? (
+        <div className="text-center px-4 py-6">
+          <p className="font-semibold">It's quiet for now…</p>
+          <p className="mt-1 text-sm text-text-2">When a friend joins a voice channel or starts streaming, it shows up here.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {active.map(({ r, v }) => {
+            const c = channels[v.channel_id ?? ''], g = c.guild_id ? guilds[c.guild_id] : undefined
+            const u = { ...r.user, ...users[r.user.id] }
+            return (
+              <div key={r.user.id} className="rounded-xl border border-line bg-bg-1 p-3" data-active-friend={r.user.id}>
+                <div className="flex items-center gap-2.5">
+                  <Avatar user={u} size={32} presence />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-semibold">{u.display_name}</div>
+                    <div className="truncate text-xs text-text-2">{v.self_stream ? 'Streaming in ' : 'In '}{g?.name ?? 'a server'}</div>
+                  </div>
+                  {v.self_stream && <span className="rounded bg-danger px-1.5 text-[10px] font-extrabold text-white" data-active-live>LIVE</span>}
+                </div>
+                <button type="button" onClick={() => navigate(`/channels/${c.guild_id}/${c.id}`)} className="mt-2.5 flex w-full items-center gap-2 rounded-lg bg-bg-3 px-2.5 py-2 text-left text-sm hover:bg-bg-4" data-active-channel={c.id}>
+                  <Volume2 size={16} className="shrink-0 text-text-2" /><span className="min-w-0 flex-1 truncate">{c.name}</span>
+                  <span className="text-xs text-text-2">{Object.values(voiceStates).filter((x) => x.channel_id === c.id).length} in voice</span>
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </aside>
   )
 }
 
@@ -96,6 +148,8 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
   const navigate = useNavigate()
   const [menu, setMenu] = useState(false)
   const u = r.user
+  const alerts = useStore((s) => !!s.user?.online_alerts?.includes(r.user.id))
+  const ignored = useStore((s) => !!s.user?.ignored_users?.includes(r.user.id))
   const act = async (fn: () => Promise<unknown>) => { setMenu(false); try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
   const dm = () => act(async () => { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); navigate(`/channels/@me/${c.id}`) })
   const accept = () => act(() => api.put(`/users/@me/relationships/${u.id}`))
@@ -130,6 +184,8 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
                 <div className="pop absolute right-0 top-full mt-1 z-40 w-44 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5 text-sm">
+                  <button onClick={() => { setMenu(false); void toggleOnlineAlert(u.id, u.display_name) }} className="w-full text-left rounded-md px-2.5 py-2 hover:bg-bg-3" data-friend-alert={u.id}>{alerts ? 'Stop Online Alerts' : 'Notify When Online'}</button>
+                  <button onClick={() => { setMenu(false); void toggleIgnored(u.id, u.display_name) }} className="w-full text-left rounded-md px-2.5 py-2 hover:bg-bg-3">{ignored ? 'Unignore' : 'Ignore'}</button>
                   <button onClick={remove} className="w-full text-left rounded-md px-2.5 py-2 text-danger hover:bg-danger hover:text-white">Remove Friend</button>
                   <button onClick={block} className="w-full text-left rounded-md px-2.5 py-2 text-danger hover:bg-danger hover:text-white">Block</button>
                 </div>

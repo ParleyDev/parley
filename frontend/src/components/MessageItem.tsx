@@ -100,6 +100,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   useEffect(() => () => { if (useStore.getState().tappedMessage === m.id) useStore.getState().setTappedMessage(null) }, [m.id])
   const motion = hovering || flash || (tapped && !canHover())
   const blocked = useStore((s) => isBlocked(s, m.author.id))
+  const ignored = useStore((s) => !!s.user?.ignored_users?.includes(m.author.id))
   const [revealed, setRevealed] = useState(false)
   // Join notices can offer "Wave to say hi" (Server Settings › Overview); a wave is a 👋 reply to the notice.
   const joinWave = useStore((s) => (guildId ? s.guilds[guildId]?.join_wave ?? true : false))
@@ -269,11 +270,11 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     )
   }
 
-  if (blocked && !revealed) {
+  if ((blocked || ignored) && !revealed) {
     return (
-      <div className="px-4 max-md:px-3 py-1 flex items-center gap-2 text-xs text-text-2" data-msg-id={m.id}>
+      <div className="px-4 max-md:px-3 py-1 flex items-center gap-2 text-xs text-text-2" data-msg-id={m.id} data-hidden-msg={blocked ? 'blocked' : 'ignored'}>
         <span className="flex-1 border-t border-line" />
-        <span>1 blocked message</span>
+        <span>1 {blocked ? 'blocked' : 'ignored'} message</span>
         <button onClick={() => setRevealed(true)} className="text-sky-400 hover:underline">Show message</button>
         <span className="flex-1 border-t border-line" />
       </div>

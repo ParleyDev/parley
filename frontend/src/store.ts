@@ -44,11 +44,12 @@ export type ModalKind =
   | { kind: 'nickname'; guildId: string; userId: string }
   | { kind: 'reactions'; channelId: string; messageId: string }
   | { kind: 'welcome'; guildId: string }
+  | { kind: 'leaveGroups' }
   | { kind: 'altText'; message: Message }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string; anchor?: Anchor }
   | { kind: 'image'; url: string; name: string; items?: GalleryItem[]; index?: number }
-  | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string }
+  | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string; /** Offer "Don't ask again", saved under this key. */ dontAskKey?: string }
   | { kind: 'ban'; guildId: string; userId: string }
   | { kind: 'kick'; guildId: string; userId: string }
   | { kind: 'timeout'; guildId: string; userId: string }

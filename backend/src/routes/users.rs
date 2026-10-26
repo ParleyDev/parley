@@ -170,7 +170,7 @@ async fn put_layout(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
 }
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, avatar_decoration, clan_tag, panels";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -239,6 +239,10 @@ struct UpdateMe {
     custom_status: Option<String>,
     /// Pinned channels and DMs, in order (up to 100).
     pinned_channels: Option<Vec<Uuid>>,
+    /// Ignored people (up to 500).
+    ignored_users: Option<Vec<Uuid>>,
+    /// Friends to be told about when they come online (up to 200).
+    online_alerts: Option<Vec<Uuid>>,
     /// With `status`: revert to Online after this many seconds (up to 3 days); without it the status stays.
     status_for_secs: Option<i64>,
     /// With `custom_status`: clear it after this many seconds (up to 7 days); without it the status stays.
@@ -373,6 +377,9 @@ async fn update_me(
     if req.pinned_channels.as_ref().map(|p| p.len() > 100).unwrap_or(false) {
         return Err(AppError::BadRequest("You can pin up to 100 channels and DMs".into()));
     }
+    if req.ignored_users.as_ref().map(|p| p.len() > 500).unwrap_or(false) || req.online_alerts.as_ref().map(|p| p.len() > 200).unwrap_or(false) {
+        return Err(AppError::BadRequest("That list is full".into()));
+    }
     if req.status_for_secs.map(|s| !(60..=3 * 86400).contains(&s)).unwrap_or(false) {
         return Err(AppError::BadRequest("A status can last from a minute to 3 days".into()));
     }
@@ -427,7 +434,9 @@ async fn update_me(
             name_style = COALESCE($16, name_style),
             status_expires_at = CASE WHEN $5::text IS NULL THEN status_expires_at WHEN $17::bigint IS NULL OR $5 = 'online' THEN NULL ELSE now() + make_interval(secs => $17::float8) END,
             custom_status_expires_at = CASE WHEN $12::text IS NULL THEN custom_status_expires_at WHEN $18::bigint IS NULL OR $12 = '' THEN NULL ELSE now() + make_interval(secs => $18::float8) END,
-            pinned_channels = COALESCE($19, pinned_channels)
+            pinned_channels = COALESCE($19, pinned_channels),
+            ignored_users = COALESCE($20, ignored_users),
+            online_alerts = COALESCE($21, online_alerts)
          WHERE id = $1
          RETURNING {PRIVATE_USER_COLS}"),
     )
@@ -450,6 +459,8 @@ async fn update_me(
     .bind(req.status_for_secs)
     .bind(req.custom_status_for_secs)
     .bind(&req.pinned_channels)
+    .bind(req.ignored_users.as_ref().map(|v| { let mut v: Vec<Uuid> = v.iter().copied().filter(|x| *x != uid).collect(); v.dedup(); v }))
+    .bind(&req.online_alerts)
     .fetch_one(&state.db)
     .await?;
     crate::routes::images::release_replaced(&state, before.0.as_deref(), u.avatar_url.as_deref()).await;
@@ -479,6 +490,7 @@ async fn update_me(
     state.hub.emit_all("USER_UPDATE", json!(public));
     // Your other devices: settings only you see.
     if req.pinned_channels.is_some() { state.hub.emit_users(vec![uid], "USER_SETTINGS_UPDATE", json!({ "pinned_channels": u.pinned_channels })); }
+    if req.ignored_users.is_some() || req.online_alerts.is_some() { state.hub.emit_users(vec![uid], "USER_SETTINGS_UPDATE", json!({ "ignored_users": u.ignored_users, "online_alerts": u.online_alerts })); }
     Ok(Json(u))
 }
 

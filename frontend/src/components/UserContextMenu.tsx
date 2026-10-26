@@ -1,4 +1,5 @@
-import { ArrowRightLeft, AtSign, Ban, HeadphoneOff, MicOff, PhoneOff, VideoOff, VolumeX, Copy, Flag, Gavel, MessageSquare, NotebookPen, Pencil, Phone, Send, Shield, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { ArrowRightLeft, AtSign, Ban, BellRing, EyeOff, HeadphoneOff, MicOff, PhoneOff, VideoOff, VolumeX, Copy, Flag, Gavel, MessageSquare, NotebookPen, Pencil, Phone, Send, Shield, TimerOff, TimerReset, User as UserIcon, UserCheck, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { toggleIgnored, toggleOnlineAlert } from '../lib/userLists'
 import { getPrefs } from '../lib/prefs'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -50,6 +51,7 @@ export function useUserMenu(guildId?: string | null) {
     const name = u.nickname ?? u.display_name
     const isMe = me?.id === u.id
     const rel = relationships[u.id]?.kind
+    const ignored = !!me?.ignored_users?.includes(u.id), alerts = !!me?.online_alerts?.includes(u.id)
     const member = members?.[u.id], myMember = me ? members?.[me.id] : undefined
     const outranks = !!(guild && me && !isMe && member && guild.owner_id !== u.id && (guild.owner_id === me.id || highestPosition({ guild, roles, member: myMember }, me.id) > highestPosition({ guild, roles, member }, u.id)))
     const copy = (label: string, text: string) => act(async () => { await navigator.clipboard.writeText(text); pushToast(`${label} copied`) })
@@ -134,6 +136,8 @@ export function useUserMenu(guildId?: string | null) {
       ...(rel === 'incoming' ? [{ label: 'Accept Friend Request', icon: <UserCheck size={16} />, onClick: () => act(() => api.put(`/users/@me/relationships/${u.id}`)) }] : []),
       ...(rel === 'outgoing' ? [{ label: 'Cancel Friend Request', icon: <UserX size={16} />, onClick: () => act(() => api.delete(`/users/@me/relationships/${u.id}`)) }] : []),
       ...(rel === 'friend' ? [{ label: 'Remove Friend', icon: <UserMinus size={16} />, danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${u.id}`)) }] : []),
+      ...(rel === 'friend' ? [{ label: alerts ? 'Stop Online Alerts' : 'Notify When Online', icon: <BellRing size={16} />, onClick: () => toggleOnlineAlert(u.id, name) }] : []),
+      ...(rel !== 'blocked' ? [{ label: ignored ? 'Unignore' : 'Ignore', icon: <EyeOff size={16} />, onClick: () => toggleIgnored(u.id, name) }] : []),
       rel === 'blocked' ? { label: 'Unblock', icon: <Ban size={16} />, onClick: () => act(() => api.delete(`/users/@me/relationships/${u.id}`)) } : { label: 'Block', icon: <Ban size={16} />, danger: true, onClick: block },
       { label: 'Report User', icon: <Flag size={16} />, danger: true, onClick: () => openModal({ kind: 'report', userId: u.id, name }) },
       ...(outranks && (has(myPerms, P.KICK_MEMBERS) || has(myPerms, P.BAN_MEMBERS) || has(myPerms, P.MODERATE_MEMBERS)) ? ['sep' as const] : []),

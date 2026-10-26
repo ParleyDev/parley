@@ -22,6 +22,7 @@ import DmProfilePanel from './DmProfilePanel'
 import { MembersToggle, MobileBack } from './HeaderBits'
 import { useT } from '../lib/i18n'
 import { remindLabel, setReminder } from '../lib/reminders'
+import { confirmSkipped } from './modals/Confirm'
 
 /** Scroll a loaded message into view and flash it. Returns false when it is not in the DOM. */
 export function jumpToMessage(id: string): boolean {
@@ -118,8 +119,15 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
 
   const startCall = async (video: boolean) => {
     if (myVoice === channel.id) return
-    await voice.join(channel.id)
-    if (video) voice.toggleCamera()
+    const go = async () => { await voice.join(channel.id); if (video) voice.toggleCamera() }
+    // Starting a group call rings everyone: ask first (unless they said not to, or a call is already going).
+    const live = Object.values(useStore.getState().voiceStates).some((v) => v.channel_id === channel.id)
+    if (group && !live && !confirmSkipped('ringGroup')) {
+      const n = (channel as DmChannel).recipients.length
+      openModal({ kind: 'confirm', title: 'Start a group call?', body: `This will ring all ${n} other member${n === 1 ? '' : 's'} of ${channel.name || 'this group'}.`, confirmLabel: video ? 'Start Video Call' : 'Start Call', dontAskKey: 'ringGroup', action: go })
+      return
+    }
+    await go()
   }
   // DM and group calls: any member can switch end-to-end encryption on or off (everyone in a call reconnects).
   const toggleE2ee = async () => {

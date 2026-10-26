@@ -162,7 +162,7 @@ function handle(ev: Ev) {
       // A new message brings a closed DM back into the list.
       { const dm = s.dms[ev.d.message.channel_id]; if (dm?.closed) s.upsertChannel({ ...dm, closed: false }) }
       const me = s.user?.id
-      if (ev.d.message.author.id !== me && s.relationships[ev.d.message.author.id]?.kind !== 'blocked' && (!ev.d.message.kind || ev.d.message.kind === 'default')) {
+      if (ev.d.message.author.id !== me && s.relationships[ev.d.message.author.id]?.kind !== 'blocked' && !s.user?.ignored_users?.includes(ev.d.message.author.id) && (!ev.d.message.kind || ev.d.message.kind === 'default')) {
         const ch = s.channels[ev.d.message.channel_id] ?? s.dms[ev.d.message.channel_id]
         const dmReq = s.dms[ev.d.message.channel_id]?.request_state
         if (dmReq && dmReq !== 'accepted') break // message requests wait quietly
@@ -197,7 +197,19 @@ function handle(ev: Ev) {
     case 'POLL_UPDATE': s.applyPollUpdate(ev.d.channel_id, ev.d.message_id, ev.d.poll); break
     case 'THREAD_UPDATE': s.upsertThread(ev.d); break
     case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id); break
-    case 'PRESENCE_UPDATE': s.setPresence(ev.d.user_id, ev.d.online, ev.d.platforms ?? [], ev.d.idle); break
+    case 'PRESENCE_UPDATE': {
+      // Friend-online alerts: only on the offline → online edge.
+      const cameOnline = ev.d.online && !s.online[ev.d.user_id]
+      s.setPresence(ev.d.user_id, ev.d.online, ev.d.platforms ?? [], ev.d.idle)
+      if (cameOnline && s.user?.online_alerts?.includes(ev.d.user_id) && s.relationships[ev.d.user_id]?.kind === 'friend') {
+        const name = s.notes[ev.d.user_id]?.nickname || s.users[ev.d.user_id]?.display_name || s.relationships[ev.d.user_id].user.display_name
+        s.pushToast(`${name} is now online`)
+        try {
+          if (document.visibilityState !== 'visible' && getNotifPrefs().desktop && 'Notification' in window && Notification.permission === 'granted') new Notification(`${name} is now online`)
+        } catch { /* ignore */ }
+      }
+      break
+    }
     case 'USER_SETTINGS_UPDATE': if (s.user && s.token) s.setAuth(s.token, { ...s.user, ...ev.d } as PrivateUser); break
     case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
     // A server we weren't in yet (joined from any device or link): its welcome screen is owed.
@@ -219,7 +231,7 @@ function handle(ev: Ev) {
     case 'RELATIONSHIP_ADD': {
       const prev = s.relationships[ev.d.user.id]?.kind
       s.upsertRelationship(ev.d)
-      if (ev.d.kind === 'incoming' && prev !== 'incoming') {
+      if (ev.d.kind === 'incoming' && prev !== 'incoming' && !s.user?.ignored_users?.includes(ev.d.user.id)) {
         s.pushToast(`${ev.d.user.display_name} sent you a friend request`)
         playSfx('message')
         // A desktop notification when Parley isn't in front, like messages.

@@ -105,6 +105,9 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
                 "SELECT true FROM notification_settings WHERE user_id = $1 AND target_id = ANY($2) AND (level = 'nothing' OR (muted_until IS NOT NULL AND muted_until > now())) LIMIT 1",
             ).bind(u).bind(&[Some(channel.id), channel.parent_id, channel.guild_id].into_iter().flatten().collect::<Vec<Uuid>>()).fetch_optional(&state.db).await.unwrap_or(None);
             if muted.is_some() { continue; }
+            // Ignoring the author: no push or email.
+            let ignored: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND $2 = ANY(ignored_users)").bind(u).bind(msg.author.id).fetch_optional(&state.db).await.unwrap_or(None);
+            if ignored.is_some() { continue; }
             if online.contains(&u) {
                 // Online somewhere: push only once they have been idle longer than their inactive timeout.
                 let idle: Option<(bool,)> = sqlx::query_as(

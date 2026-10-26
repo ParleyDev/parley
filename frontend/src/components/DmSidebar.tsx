@@ -56,6 +56,7 @@ export default function DmSidebar() {
   // Pinned conversations sit on top, in the order they were pinned.
   const pinned = all.filter((d) => pinnedIds.includes(d.id)).sort((a, b) => pinnedIds.indexOf(a.id) - pinnedIds.indexOf(b.id))
   const list = all.filter((d) => !pinnedIds.includes(d.id))
+  const hasGroups = Object.values(dms).some((d) => isGroup(d as DmChannel))
   const requests = useStore((s) => messageRequests(s).length)
   const spam = useStore((s) => spamRequests(s).length)
 
@@ -77,7 +78,10 @@ export default function DmSidebar() {
         )}
         <div className="mt-4 mb-1 flex items-center justify-between px-2 text-[11px] font-bold uppercase tracking-wider text-text-2">
           <span>{t('Direct Messages')}</span>
-          <button onClick={() => openModal({ kind: 'newDm' })} title="Create DM" className="hover:text-text-0"><Plus size={16} /></button>
+          <span className="flex items-center gap-1.5">
+            {hasGroups && <button onClick={() => openModal({ kind: 'leaveGroups' })} title="Leave group DMs" className="hover:text-text-0" data-leave-groups-open><LogOut size={14} /></button>}
+            <button onClick={() => openModal({ kind: 'newDm' })} title="Create DM" className="hover:text-text-0"><Plus size={16} /></button>
+          </span>
         </div>
         {pinned.length > 0 && (
           <div className="mb-2 space-y-0.5" data-pinned-dms>

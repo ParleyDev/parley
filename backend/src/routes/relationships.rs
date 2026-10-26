@@ -188,6 +188,8 @@ async fn accept(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tar
 /// Push a new friend request to the target's phone when they have no socket open.
 async fn push_friend_request(state: &AppState, from: Uuid, target: Uuid) {
     if crate::ws::bus::online_users(&state.db).await.contains(&target) { return }
+    let ignored: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND $2 = ANY(ignored_users)").bind(target).bind(from).fetch_optional(&state.db).await.ok().flatten();
+    if ignored.is_some() { return }
     let name: String = sqlx::query_as::<_, (String,)>("SELECT display_name FROM users WHERE id = $1").bind(from).fetch_optional(&state.db).await.ok().flatten().map(|r| r.0).unwrap_or_default();
     crate::push::notify(state, &[target], "Friend request", &format!("{name} sent you a friend request"), json!({ "kind": "friend_request", "user_id": from })).await;
 }

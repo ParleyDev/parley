@@ -36,6 +36,8 @@ export interface PrivateUser extends User {
   status_expires_at?: string | null; custom_status_expires_at?: string | null
   /** Channels and DMs pinned to the top of their lists, in order. */
   pinned_channels?: string[]
+  ignored_users?: string[]
+  online_alerts?: string[]
   /** Content & Social (Settings): who may DM you, message requests from non-friends, who may send friend requests, who may add you to groups. */
   dm_privacy?: DmPrivacy
   message_requests?: boolean

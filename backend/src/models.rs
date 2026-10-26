@@ -140,6 +140,12 @@ pub struct PrivateUser {
     /// Channels and DMs pinned to the top of their lists, in order.
     #[sqlx(default)]
     pub pinned_channels: Vec<Uuid>,
+    /// People whose messages are hidden and who never notify you (they aren't told).
+    #[sqlx(default)]
+    pub ignored_users: Vec<Uuid>,
+    /// Friends you are told about when they come online.
+    #[sqlx(default)]
+    pub online_alerts: Vec<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
