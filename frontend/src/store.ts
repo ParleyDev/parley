@@ -40,6 +40,7 @@ export type ModalKind =
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' | 'keybinds' }
   | { kind: 'shortcuts' }
+  | { kind: 'quickSwitcher' }
   | { kind: 'nickname'; guildId: string; userId: string }
   | { kind: 'reactions'; channelId: string; messageId: string }
   | { kind: 'altText'; message: Message }

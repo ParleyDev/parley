@@ -168,13 +168,21 @@ function Shortcuts() {
     onLeft: () => { if (pane === 'content' && inGuild && !membersOpen) setMembersOpen(true) },
   }), [membersOpen, pane, inGuild, setMembersOpen, setMobilePane])
   useSwipe(swipe, typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches)
-  const step = (dir: -1 | 1) => {
-    if (!inGuild || !channelId) return
-    const s = useStore.getState()
-    const list = Object.values(s.channels).filter((c) => c.guild_id === guildId && (c.kind === 'text' || c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio' || c.kind === 'forum')).sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : 1))
-    const i = list.findIndex((c) => c.id === channelId)
-    const next = list[i + dir]
-    if (next) navigate(`/channels/${guildId}/${next.id}`)
+  // Alt+↑/↓ walk the sidebar as it is shown (categories, collapsed ones, pins aside, or the DM list), so the
+  // order always matches what you see; the unread variants skip to the next row marked unread.
+  const step = (dir: -1 | 1, unreadOnly = false) => {
+    const rows = [...document.querySelectorAll<HTMLAnchorElement>('[data-channel-item] > a[href], aside a[data-dm-row][href], aside a[data-group-row][href]')]
+    const here = rows.findIndex((a) => a.getAttribute('href') === location.pathname)
+    for (let i = here + dir; i >= 0 && i < rows.length; i += dir) {
+      if (!unreadOnly || rows[i].dataset.unread === 'true') { navigate(rows[i].getAttribute('href')!); return }
+    }
+  }
+  // Ctrl+Alt+↑/↓: the next server in the server bar.
+  const stepServer = (dir: -1 | 1) => {
+    const ids = [...document.querySelectorAll<HTMLElement>('[data-guild-icon]')].map((el) => el.dataset.guildIcon!)
+    const i = ids.indexOf(guildId ?? '')
+    const next = ids[i < 0 ? (dir > 0 ? 0 : ids.length - 1) : i + dir]
+    if (next) navigate(`/channels/${next}`)
   }
   const handlers = useMemo(() => ({
     toggleMute: () => voice.setMute(!useStore.getState().selfMute),
@@ -186,6 +194,13 @@ function Shortcuts() {
     openSettings: () => openModal({ kind: 'userSettings', tab: 'account' }),
     jumpToDate: () => document.querySelector<HTMLButtonElement>('[data-jump-date-btn]')?.click(),
     toggleStreamer: () => { const on = !getPrefs().streamer; setPrefs({ streamer: on }); useStore.getState().pushToast(on ? 'Streamer Mode on' : 'Streamer Mode off') },
+    quickSwitcher: () => { const s = useStore.getState(); if (s.modal?.kind === 'quickSwitcher') s.closeModal(); else openModal({ kind: 'quickSwitcher' }) },
+    prevUnread: () => step(-1, true),
+    nextUnread: () => step(1, true),
+    prevServer: () => stepServer(-1),
+    nextServer: () => stepServer(1),
+    toggleInbox: () => document.querySelector<HTMLButtonElement>('[data-inbox-toggle]')?.click(),
+    togglePins: () => document.querySelector<HTMLButtonElement>('[data-pins-toggle]')?.click(),
     showShortcuts: () => { const s = useStore.getState(); if (s.modal?.kind === 'shortcuts') s.closeModal(); else openModal({ kind: 'shortcuts' }) },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [guildId, channelId, selfMute, selfDeaf])

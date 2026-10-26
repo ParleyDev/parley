@@ -59,6 +59,28 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const [drag, setDrag] = useState<string | null>(null)
   const [target, setTarget] = useState<DropTarget | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  // "Unread above / below" pills: whether unread rows are scrolled out of view, and whether any of them mention you.
+  const [offscreen, setOffscreen] = useState<{ above: 0 | 1 | 2; below: 0 | 1 | 2 }>({ above: 0, below: 0 })
+  const measureUnread = () => {
+    const box = listRef.current; if (!box) return
+    const view = box.getBoundingClientRect()
+    let above: 0 | 1 | 2 = 0, below: 0 | 1 | 2 = 0
+    for (const a of box.querySelectorAll<HTMLElement>('[data-channel-item] > a[data-unread]')) {
+      const r = a.getBoundingClientRect(); const level = a.dataset.hasMention ? 2 : 1
+      if (r.bottom < view.top + 8) above = Math.max(above, level) as 0 | 1 | 2
+      else if (r.top > view.bottom - 8) below = Math.max(below, level) as 0 | 1 | 2
+    }
+    setOffscreen((o) => (o.above === above && o.below === below ? o : { above, below }))
+  }
+  useEffect(() => { const t = requestAnimationFrame(measureUnread); return () => cancelAnimationFrame(t) }) // after every render: unread rows may have changed
+  useEffect(() => { const box = listRef.current; if (!box || typeof ResizeObserver === 'undefined') return; const ro = new ResizeObserver(() => measureUnread()); ro.observe(box); return () => ro.disconnect() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const jumpUnread = (dir: 'above' | 'below') => {
+    const box = listRef.current; if (!box) return
+    const view = box.getBoundingClientRect()
+    const rows = [...box.querySelectorAll<HTMLElement>('[data-channel-item] > a[data-unread]')]
+    const target = dir === 'above' ? rows.filter((a) => a.getBoundingClientRect().bottom < view.top + 8).pop() : rows.find((a) => a.getBoundingClientRect().top > view.bottom - 8)
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
   const canInvite = has(perms, P.CREATE_INVITE)
@@ -224,7 +246,10 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
         )}
       </div>
 
-      <div ref={listRef} className="relative flex-1 overflow-y-auto px-2 pt-3 space-y-4" data-channel-list {...listDropProps}>
+      <div className="relative flex-1 min-h-0 flex flex-col">
+      {offscreen.above > 0 && <button type="button" onClick={() => jumpUnread('above')} className={`absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold shadow-lg ${offscreen.above === 2 ? 'bg-danger text-white' : 'bg-bg-4 text-text-0'}`} data-unread-pill="above">{offscreen.above === 2 ? 'New mentions' : 'Unread'} ↑</button>}
+      {offscreen.below > 0 && <button type="button" onClick={() => jumpUnread('below')} className={`absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold shadow-lg ${offscreen.below === 2 ? 'bg-danger text-white' : 'bg-bg-4 text-text-0'}`} data-unread-pill="below">{offscreen.below === 2 ? 'New mentions' : 'Unread'} ↓</button>}
+      <div ref={listRef} onScroll={measureUnread} className="relative flex-1 overflow-y-auto px-2 pt-3 space-y-4" data-channel-list {...listDropProps}>
         {target?.line !== undefined && <div className="pointer-events-none absolute left-2 right-2 z-10 h-0.5 rounded-full bg-accent" style={{ top: target.line - 1 }} data-drop-line />}
         <EventsRow guildId={guildId} />
         {pinnedHere.length > 0 && (
@@ -249,6 +274,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
           </Category>
         ))}
         {canCreate && <div><button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title="Create Channel" className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> Create channel or category</button></div>}
+      </div>
       </div>
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
     </aside>
@@ -350,7 +376,7 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
 
 function ChannelRow({ to, icon, name, unread, mentions = 0, muted, locked, count, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; mentions?: number; muted?: boolean; locked?: boolean; count?: string; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
   return (
-    <NavLink to={to} onClick={onClick} onContextMenu={onContextMenu} data-channel-row={name} data-muted={muted ? 'true' : undefined} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'} ${muted ? 'opacity-50' : ''}`}>
+    <NavLink to={to} onClick={onClick} onContextMenu={onContextMenu} data-channel-row={name} data-muted={muted ? 'true' : undefined} data-unread={unread || mentions > 0 ? 'true' : undefined} data-has-mention={mentions > 0 ? 'true' : undefined} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'} ${muted ? 'opacity-50' : ''}`}>
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>

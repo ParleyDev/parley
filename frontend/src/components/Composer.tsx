@@ -2,7 +2,7 @@ import { BarChart3, Camera, Eye, Timer, Video, EyeOff, FileText, FolderOpen, Ima
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { myChannelPerms, useStore } from '../store'
+import { isUnread, myChannelPerms, useStore } from '../store'
 import { sendTyping } from '../lib/ws'
 import { convertEmoticons, getPrefs } from '../lib/prefs'
 import type { Attachment, Channel, DmChannel, Draft, Message } from '../lib/types'
@@ -344,6 +344,12 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); return }
     if (e.key === 'Escape' && reply) onCancelReply()
+    // Escape marks this channel read; Shift+Escape every channel in the server (Discord's keys).
+    else if (e.key === 'Escape' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const st = useStore.getState()
+      if (e.shiftKey && channel.guild_id) Object.values(st.channels).filter((c) => c.guild_id === channel.guild_id && isUnread(st, c.id)).forEach((c) => st.markRead(c.id))
+      else st.markRead(channel.id)
+    }
     const f = shortcutFormat(e)
     if (f && ref.current) { e.preventDefault(); setValue(toggleWrap(ref.current, f)) }
   }

@@ -28,6 +28,7 @@ import FolderSettingsModal from './FolderSettings'
 import GuildPrivacyModal from './GuildPrivacy'
 import LeaveLinkModal from './LeaveLink'
 import ShortcutsModal from './Shortcuts'
+import QuickSwitcher from './QuickSwitcher'
 import NicknameModal from './Nickname'
 import ReactionsModal from './Reactions'
 import AltTextModal from './AltText'
@@ -75,6 +76,7 @@ export default function Modals() {
     case 'guildPrivacy': return <GuildPrivacyModal onClose={close} guildId={modal!.guildId} />
     case 'leaveLink': return <LeaveLinkModal onClose={close} url={modal!.url} text={modal!.text} />
     case 'shortcuts': return <ShortcutsModal onClose={close} />
+    case 'quickSwitcher': return <QuickSwitcher onClose={close} />
     case 'nickname': return <NicknameModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'reactions': return <ReactionsModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} />
     case 'altText': return <AltTextModal onClose={close} message={modal!.message} />

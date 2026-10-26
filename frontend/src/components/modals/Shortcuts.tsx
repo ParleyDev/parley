@@ -8,7 +8,7 @@ import { useStore } from '../../store'
 const FIXED: { group: string; rows: [string, string][] }[] = [
   { group: 'Messages', rows: [
     ['Enter', 'Send message'], ['Shift + Enter', 'New line'], ['Arrow Up', 'Edit your last message (empty box)'],
-    ['Escape', 'Cancel reply or edit'], ['/', 'Built-in commands (start of the box)'], ['Any letter', 'Start typing in the message box'],
+    ['Escape', 'Cancel a reply, or mark the channel read'], ['Shift + Escape', 'Mark the whole server read'], ['/', 'Built-in commands (start of the box)'], ['Any letter', 'Start typing in the message box'],
   ] },
   { group: 'Formatting', rows: FORMATS.filter((f) => f.keys).map((f) => [prettyCombo(f.keys!), f.label]) },
   { group: 'Navigation', rows: [
