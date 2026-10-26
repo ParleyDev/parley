@@ -16,7 +16,7 @@ import { isBlocked, mentionsMe, myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
 import { useAppearance } from '../lib/appearance'
 import PollCard from './PollCard'
-import LinkEmbed, { firstLink } from './LinkEmbed'
+import LinkEmbed, { previewLinks } from './LinkEmbed'
 import { remindLabel, remindPresets, setReminder } from '../lib/reminders'
 import MessageLinkPreview, { messageLinks } from './MessageLinkPreview'
 import { suggestReactions } from '../lib/suggestReactions'
@@ -165,7 +165,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     else lastTap.current = now
   }
   const media = soleMediaUrl(m.content)
-  const link = media ? null : firstLink(m.content)
+  const links = media ? [] : previewLinks(m.content)
+  const link = links[0] ?? null
   // Sensitive media: blur pictures and videos from non-friends in DMs, and in age-restricted channels, by preference.
   // Spoiler channels hide every picture and video behind a click.
   const spoilerChannel = useStore((s) => !!s.channels[m.channel_id]?.spoiler)
@@ -339,7 +340,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               {media && (prefs.linkMedia && !m.suppress_embeds ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
               {link && prefs.embeds && !m.suppress_embeds && (
                 <div className="group/embed relative w-fit max-w-full" data-embed-wrap>
-                  <MaybeBlurred on={sensitive}><LinkEmbed url={link} /></MaybeBlurred>
+                  {links.map((l) => <MaybeBlurred key={l} on={sensitive}><LinkEmbed url={l} /></MaybeBlurred>)}
                   {canSuppress && <button type="button" onClick={() => setSuppressed(true)} className="absolute right-1 top-1 rounded bg-bg-0/80 p-1 text-text-2 opacity-0 hover:text-text-0 group-hover/embed:opacity-100 focus:opacity-100" title="Remove embed" aria-label="Remove embed" data-remove-embed><X size={14} /></button>}
                 </div>
               )}

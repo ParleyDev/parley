@@ -29,6 +29,12 @@ pub struct SearchParams {
     pub channel_id: Option<Uuid>,
     #[serde(default)]
     pub offset: i64,
+    /// 'newest' (default), 'oldest' or 'relevant' (best text match first).
+    #[serde(default)]
+    pub sort: Option<String>,
+    /// Include the message before and after each hit.
+    #[serde(default)]
+    pub context: bool,
 }
 
 #[derive(Serialize)]
@@ -37,6 +43,11 @@ pub struct Hit {
     pub message: Message,
     pub guild_id: Option<Uuid>,
     pub channel_name: String,
+    /// With `context`: the messages just before and after this one in its channel.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_before: Option<Message>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_after: Option<Message>,
 }
 
 #[derive(Serialize)]
@@ -57,6 +68,8 @@ pub struct Filters {
     pub mentions: Vec<String>,
     pub before: Option<NaiveDate>,
     pub after: Option<NaiveDate>,
+    /// A single day: on or after its start and before the next day.
+    pub during: Option<NaiveDate>,
     pub pinned: Option<bool>,
 }
 
@@ -74,11 +87,12 @@ pub fn parse(q: &str) -> Filters {
             "in" => f.r#in.push(v.trim_start_matches('#').to_lowercase()),
             "has" => match v.to_ascii_lowercase().as_str() {
                 "link" | "embed" => f.has.push("link".into()),
-                "image" | "video" | "file" | "sticker" => f.has.push(v.to_ascii_lowercase()),
+                "image" | "video" | "file" | "sticker" | "poll" | "sound" => f.has.push(v.to_ascii_lowercase()),
                 _ => text.push(tok),
             },
             "before" => match NaiveDate::parse_from_str(v, "%Y-%m-%d") { Ok(d) => f.before = Some(d), Err(_) => text.push(tok) },
             "after" => match NaiveDate::parse_from_str(v, "%Y-%m-%d") { Ok(d) => f.after = Some(d), Err(_) => text.push(tok) },
+            "during" | "on" => match NaiveDate::parse_from_str(v, "%Y-%m-%d") { Ok(d) => f.during = Some(d), Err(_) => text.push(tok) },
             "pinned" => f.pinned = Some(matches!(v.to_ascii_lowercase().as_str(), "true" | "yes" | "1")),
             _ => text.push(tok),
         }
@@ -146,7 +160,7 @@ pub async fn run(state: &AppState, uid: Uuid, p: &SearchParams) -> AppResult<Sea
         return Ok(SearchResult { filters, ..empty });
     }
     // Nothing to look for: an empty query must not dump a channel's history.
-    let any_filter = tsq.is_some() || !filters.from.is_empty() || !filters.mentions.is_empty() || !filters.has.is_empty() || filters.before.is_some() || filters.after.is_some() || filters.pinned.is_some();
+    let any_filter = tsq.is_some() || !filters.from.is_empty() || !filters.mentions.is_empty() || !filters.has.is_empty() || filters.before.is_some() || filters.after.is_some() || filters.during.is_some() || filters.pinned.is_some();
     if !any_filter {
         return Ok(SearchResult { filters, ..empty });
     }
@@ -156,8 +170,12 @@ pub async fn run(state: &AppState, uid: Uuid, p: &SearchParams) -> AppResult<Sea
         return Ok(SearchResult { filters, ..empty });
     }
     let ids: Vec<Uuid> = channels.iter().map(|c| c.0).collect();
-    let before: Option<DateTime<Utc>> = filters.before.and_then(|d| d.and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
-    let after: Option<DateTime<Utc>> = filters.after.and_then(|d| (d + Duration::days(1)).and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
+    let mut before: Option<DateTime<Utc>> = filters.before.and_then(|d| d.and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
+    let mut after: Option<DateTime<Utc>> = filters.after.and_then(|d| (d + Duration::days(1)).and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
+    if let Some(d) = filters.during {
+        after = d.and_hms_opt(0, 0, 0).map(|t| t.and_utc());
+        before = (d + Duration::days(1)).and_hms_opt(0, 0, 0).map(|t| t.and_utc());
+    }
     let has = |k: &str| filters.has.iter().any(|h| h == k);
     let where_sql = "m.channel_id = ANY($1) AND m.kind = 'default'
         AND ($2::text IS NULL OR m.search @@ to_tsquery('simple', $2))
@@ -170,25 +188,52 @@ pub async fn run(state: &AppState, uid: Uuid, p: &SearchParams) -> AppResult<Sea
         AND (NOT $9 OR EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id AND a.content_type LIKE 'image/%'))
         AND (NOT $10 OR EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id AND a.content_type LIKE 'video/%'))
         AND (NOT $11 OR EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id))
-        AND (NOT $12 OR m.sticker_id IS NOT NULL)";
+        AND (NOT $12 OR m.sticker_id IS NOT NULL)
+        AND (NOT $14 OR EXISTS (SELECT 1 FROM polls pl WHERE pl.message_id = m.id))
+        AND (NOT $15 OR EXISTS (SELECT 1 FROM attachments a WHERE a.message_id = m.id AND a.content_type LIKE 'audio/%'))";
     macro_rules! bind_all {
         ($q:expr) => {
             $q.bind(&ids).bind(&tsq).bind(&from_ids).bind(&mention_ids).bind(before).bind(after).bind(filters.pinned)
                 .bind(has("link")).bind(has("image")).bind(has("video")).bind(has("file")).bind(has("sticker"))
         };
     }
-    let (total,): (i64,) = bind_all!(sqlx::query_as(&format!("SELECT COUNT(*) FROM messages m WHERE {where_sql}"))).fetch_one(&state.db).await?;
-    let rows = bind_all!(sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE {where_sql} ORDER BY m.id DESC LIMIT 25 OFFSET $13")))
+    let order = match p.sort.as_deref() {
+        Some("oldest") => "m.id ASC".to_string(),
+        Some("relevant") if tsq.is_some() => "ts_rank(m.search, to_tsquery('simple', $2)) DESC, m.id DESC".to_string(),
+        _ => "m.id DESC".to_string(),
+    };
+    // $13 (the offset) is only used by the page query; the count binds it too so $14/$15 line up.
+    let (total,): (i64,) = bind_all!(sqlx::query_as(&format!("SELECT COUNT(*) FROM messages m WHERE {where_sql} AND $13::bigint >= 0"))).bind(p.offset.max(0)).bind(has("poll")).bind(has("sound")).fetch_one(&state.db).await?;
+    let rows = bind_all!(sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE {where_sql} ORDER BY {order} LIMIT 25 OFFSET $13")))
         .bind(p.offset.max(0))
+        .bind(has("poll")).bind(has("sound"))
         .fetch_all(&state.db)
         .await?;
     let names: HashMap<Uuid, (Option<Uuid>, String)> = channels.into_iter().map(|(id, g, n)| (id, (g, n))).collect();
-    let results = hydrate(&state.db, rows, uid, false)
-        .await?
+    let msgs = hydrate(&state.db, rows, uid, false).await?;
+    // Context: the neighbours of every hit, fetched in one go.
+    let mut around: HashMap<Uuid, (Option<Uuid>, Option<Uuid>)> = HashMap::new();
+    let mut ctx_msgs: HashMap<Uuid, Message> = HashMap::new();
+    if p.context && !msgs.is_empty() {
+        let hit_ids: Vec<Uuid> = msgs.iter().map(|m| m.id).collect();
+        let hit_chs: Vec<Uuid> = msgs.iter().map(|m| m.channel_id).collect();
+        let pairs: Vec<(Uuid, Option<Uuid>, Option<Uuid>)> = sqlx::query_as(
+            "SELECT h.id,
+               (SELECT m.id FROM messages m WHERE m.channel_id = h.cid AND m.id < h.id AND m.kind = 'default' ORDER BY m.id DESC LIMIT 1),
+               (SELECT m.id FROM messages m WHERE m.channel_id = h.cid AND m.id > h.id AND m.kind = 'default' ORDER BY m.id ASC LIMIT 1)
+             FROM unnest($1::uuid[], $2::uuid[]) AS h(id, cid)")
+            .bind(&hit_ids).bind(&hit_chs).fetch_all(&state.db).await?;
+        let want: Vec<Uuid> = pairs.iter().flat_map(|(_, b, a)| [*b, *a]).flatten().collect();
+        let rows = sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE m.id = ANY($1)")).bind(&want).fetch_all(&state.db).await?;
+        for m in hydrate(&state.db, rows, uid, false).await? { ctx_msgs.insert(m.id, m); }
+        around = pairs.into_iter().map(|(id, b, a)| (id, (b, a))).collect();
+    }
+    let results = msgs
         .into_iter()
         .map(|m| {
             let (guild_id, channel_name) = names.get(&m.channel_id).cloned().unwrap_or((None, String::new()));
-            Hit { message: m, guild_id, channel_name }
+            let (b, a) = around.get(&m.id).cloned().unwrap_or((None, None));
+            Hit { context_before: b.and_then(|id| ctx_msgs.get(&id).cloned()), context_after: a.and_then(|id| ctx_msgs.get(&id).cloned()), message: m, guild_id, channel_name }
         })
         .collect();
     Ok(SearchResult { total, offset: p.offset.max(0), results, filters })

@@ -291,6 +291,13 @@ function Spoiler({ children }: { children: ReactNode }) {
 
 const LANG_LABELS: Record<string, string> = { javascript: 'JavaScript', typescript: 'TypeScript', json: 'JSON', bash: 'Shell', python: 'Python', rust: 'Rust', go: 'Go', java: 'Java', csharp: 'C#', c: 'C', cpp: 'C++', css: 'CSS', xml: 'HTML', sql: 'SQL', yaml: 'YAML', markdown: 'Markdown', diff: 'Diff' }
 
+/** Highlighted HTML for `code` in `lang` (a name or alias), or null when the language isn't loaded/known. */
+export function highlightHtml(code: string, lang: string): string | null {
+  const name = hljs.getLanguage(lang)?.name
+  if (!name) return null
+  try { return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value } catch { return null }
+}
+
 function CodeBlock({ code, lang }: { code: string; lang: string }) {
   const [copied, setCopied] = useState(false)
   // Lazy languages: render plain first, re-render once the chunk has registered itself.

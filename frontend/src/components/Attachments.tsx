@@ -1,3 +1,4 @@
+import { isPdf, isTextFile, PdfCard, TextPreview } from './FilePreview'
 import { Download, FileText } from 'lucide-react'
 import { useState } from 'react'
 import { useStore } from '../store'
@@ -130,6 +131,8 @@ function One({ a, mine, gallery = [] }: { a: Attachment; mine?: boolean; gallery
             </div>
           )
         }
+        if (inline && isTextFile(a)) return <TextPreview key={a.id} a={a} />
+        if (isPdf(a)) return <PdfCard key={a.id} a={a} />
         return (
           <a key={a.id} href={a.url} download={a.filename} className="flex items-center gap-3 rounded-lg border border-line bg-bg-3 px-3 py-2.5 w-full max-w-[400px] hover:bg-bg-4 group" data-attachment-card>
             <FileText size={28} className="text-text-2 shrink-0" />

@@ -1227,7 +1227,7 @@ async fn search_messages(
     Path(id): Path<Uuid>,
     Query(q): Query<SearchQuery>,
 ) -> AppResult<Json<Vec<Message>>> {
-    let params = crate::routes::search::SearchParams { q: q.q, guild_id: None, channel_id: Some(id), offset: 0 };
+    let params = crate::routes::search::SearchParams { q: q.q, guild_id: None, channel_id: Some(id), offset: 0, sort: None, context: false };
     Ok(Json(crate::routes::search::run(&state, uid, &params).await?.results.into_iter().map(|h| h.message).collect()))
 }
 

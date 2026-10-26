@@ -33,6 +33,15 @@ pub struct Embed {
     pub image: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub site_name: Option<String>,
+    /// The page's theme colour (`<meta name="theme-color">`), drawn as the embed's edge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// Show the picture large (Twitter's summary_large_image, or a wide og:image).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub large_image: bool,
+    /// A playable video file (og:video), https only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -166,7 +175,14 @@ pub fn embed_from_html(url: &Url, html: &str) -> Option<Embed> {
     if title.is_none() && description.is_none() && image.is_none() {
         return None;
     }
-    Some(Embed { url: url.to_string(), title, description, image, site_name })
+    let color = pick(&["theme-color"]).map(|c| c.trim().to_string()).filter(|c| c.len() <= 9 && c.starts_with('#') && c[1..].chars().all(|x| x.is_ascii_hexdigit()));
+    let wide = pick(&["og:image:width"]).and_then(|w| w.parse::<u32>().ok()).map(|w| w >= 600).unwrap_or(false);
+    let large_image = image.is_some() && (pick(&["twitter:card"]).as_deref() == Some("summary_large_image") || wide);
+    let video = pick(&["og:video:secure_url", "og:video:url", "og:video"])
+        .and_then(|v| url.join(&v).ok())
+        .filter(|v| v.scheme() == "https" && pick(&["og:video:type"]).map(|t| t.starts_with("video/")).unwrap_or(true))
+        .map(|v| v.to_string());
+    Some(Embed { url: url.to_string(), title, description, image, site_name, color, large_image, video })
 }
 
 /// Fetch with manual redirects (each hop re-validated) and a body cap. Returns None for non-HTML or on failure.
@@ -253,6 +269,20 @@ mod tests {
         assert!(check_url("http://[::1]/", &[]).is_err());
         assert!(check_url("not a url", &[]).is_err());
         assert!(check_url("http://127.0.0.1:8080/health", &["127.0.0.1".into()]).is_ok(), "allow-list wins");
+    }
+
+    #[test]
+    fn rich_fields() {
+        let url = Url::parse("https://example.com/post").unwrap();
+        let html = r##"<meta property="og:title" content="Clip"><meta name="theme-color" content="#ff6600">
+            <meta name="twitter:card" content="summary_large_image"><meta property="og:image" content="/big.jpg">
+            <meta property="og:video:secure_url" content="https://cdn.example.com/v.mp4"><meta property="og:video:type" content="video/mp4">"##;
+        let e = embed_from_html(&url, html).unwrap();
+        assert_eq!(e.color.as_deref(), Some("#ff6600"));
+        assert!(e.large_image);
+        assert_eq!(e.video.as_deref(), Some("https://cdn.example.com/v.mp4"));
+        let plain = embed_from_html(&url, r#"<meta property="og:title" content="x"><meta name="theme-color" content="red; background:url(x)"><meta property="og:video" content="http://insecure/v.mp4">"#).unwrap();
+        assert!(plain.color.is_none() && !plain.large_image && plain.video.is_none(), "bad colours and http videos are dropped");
     }
 
     #[test]

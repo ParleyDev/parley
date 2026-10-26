@@ -22,6 +22,7 @@ import DmProfilePanel from './DmProfilePanel'
 import { MembersToggle, MobileBack } from './HeaderBits'
 import { useT } from '../lib/i18n'
 import { remindLabel, setReminder } from '../lib/reminders'
+import { applySuggestion, useSearchSuggestions } from './SearchSuggest'
 import { confirmSkipped } from './modals/Confirm'
 
 /** Scroll a loaded message into view and flash it. Returns false when it is not in the DOM. */
@@ -117,6 +118,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const openThreadChannel = useStore((s) => (s.openThread ? s.channels[s.openThread] : undefined))
   const threadHere = !!openThread && openThreadChannel?.parent_id === channel.id
   const [search, setSearch] = useState<string | null>(null)
+  const [searchFocus, setSearchFocus] = useState(false)
   useEffect(() => { setPins(false); setSearch(null); setQuery(''); setThreads(false) }, [channel.id])
 
   const startCall = async (video: boolean) => {
@@ -135,8 +137,11 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const toggleE2ee = async () => {
     try { await api.patch(`/channels/${channel.id}`, { e2ee: !channel.e2ee }) } catch (e) { useStore.getState().pushToast((e as Error).message, 'error') }
   }
+  const suggestions = useSearchSuggestions(query, channel)
   const onSearchKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && query.trim()) { e.preventDefault(); setSearch(query.trim()) }
+    // Tab takes the first suggestion (a filter name, person, channel or date).
+    if (e.key === 'Tab' && suggestions.length > 0) { e.preventDefault(); setQuery(applySuggestion(query, suggestions[0].value)); return }
+    if (e.key === 'Enter' && query.trim()) { e.preventDefault(); setSearch(query.trim()); setSearchFocus(false) }
     if (e.key === 'Escape') { setQuery(''); setSearch(null) }
   }
   const btn = (active: boolean) => `h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${active ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`
@@ -210,9 +215,18 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
             {group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? 'Hide Member List' : 'Show Member List'} className={`${btn(dmProfileOpen)} max-md:hidden`} data-group-members-toggle><Users size={20} /></button>}
             {!isDm && <MembersToggle />}
             <span className="relative ml-1 max-md:hidden">
-              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder={isDm && other ? `Search ${other.username}` : 'Search'} title="Filters: from:user in:channel has:link|image|file before:date after:date pinned:true" aria-label="Search messages" data-search-input
+              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} onFocus={() => setSearchFocus(true)} onBlur={() => setTimeout(() => setSearchFocus(false), 150)} placeholder={isDm && other ? `Search ${other.username}` : 'Search'} title="Filters: from:user in:channel has:link|image|file before:date after:date pinned:true" aria-label="Search messages" data-search-input
                 className="h-7 w-36 focus:w-56 transition-[width] rounded-md bg-bg-0 border border-line pl-2 pr-7 text-sm outline-none focus:border-accent/60" />
               <Search size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-2 pointer-events-none" />
+              {searchFocus && suggestions.length > 0 && (
+                <div className="pop absolute right-0 top-full z-40 mt-1 w-64 rounded-lg border border-line bg-bg-0 p-1 shadow-2xl" data-search-suggest>
+                  {suggestions.map((sg, i) => (
+                    <button key={sg.value} type="button" onMouseDown={(e) => { e.preventDefault(); setQuery(applySuggestion(query, sg.value)) }} className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-bg-3 ${i === 0 ? 'bg-bg-3/60' : ''}`} data-search-suggestion={sg.value}>
+                      <span className="truncate font-medium">{sg.label}</span>{sg.detail && <span className="ml-auto truncate text-xs text-text-2">{sg.detail}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </span>
           </span>
         </header>
@@ -274,6 +288,11 @@ function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
       </div>
     </div>
   )
+}
+
+/** A neighbouring message shown faintly around a search result. */
+function ContextLine({ m }: { m: Message }) {
+  return <div className="truncate px-3 py-0.5 text-xs text-text-2" data-search-context-line={m.id}><span className="font-semibold">{m.author.display_name}</span> {m.content || (m.attachments?.length ? '📎' : '')}</div>
 }
 
 /** A compact rendering of a message for the pins and search lists, with Jump. */
@@ -443,9 +462,9 @@ function PinnedPanel({ channel, onClose }: { channel: Channel | DmChannel; onClo
 }
 
 type SearchScope = 'channel' | 'guild' | 'all'
-type SearchHit = Message & { guild_id: string | null; channel_name: string }
+type SearchHit = Message & { guild_id: string | null; channel_name: string; context_before?: Message; context_after?: Message }
 interface SearchResult { total: number; offset: number; results: SearchHit[] }
-const SEARCH_HINTS = ['from:user', 'in:channel', 'has:link', 'has:image', 'has:file', 'before:2026-01-31', 'after:2026-01-01', 'pinned:true']
+const SEARCH_HINTS = ['from:user', 'in:channel', 'has:link', 'has:image', 'has:file', 'has:poll', 'during:2026-01-15', 'before:2026-01-31', 'after:2026-01-01', 'pinned:true']
 
 /** Global search: this channel, this server or everywhere, with Discord-style filters parsed server-side. */
 function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | DmChannel; query: string; onClose: () => void; onMiss: () => void }) {
@@ -454,8 +473,10 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
   const [res, setRes] = useState<SearchResult | null>(null)
   const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
-  const url = (offset: number) => `/search?q=${encodeURIComponent(query)}&offset=${offset}${scope === 'channel' ? `&channel_id=${channel.id}` : scope === 'guild' ? `&guild_id=${channel.guild_id}` : ''}`
-  useEffect(() => { setRes(null); api.get<SearchResult>(url(0)).then(setRes).catch(() => setRes({ total: 0, offset: 0, results: [] })) }, [channel.id, query, scope]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [sort, setSort] = useState<'newest' | 'oldest' | 'relevant'>('newest')
+  const [context, setContext] = useState(false)
+  const url = (offset: number) => `/search?q=${encodeURIComponent(query)}&offset=${offset}&sort=${sort}${context ? '&context=true' : ''}${scope === 'channel' ? `&channel_id=${channel.id}` : scope === 'guild' ? `&guild_id=${channel.guild_id}` : ''}`
+  useEffect(() => { setRes(null); api.get<SearchResult>(url(0)).then(setRes).catch(() => setRes({ total: 0, offset: 0, results: [] })) }, [channel.id, query, scope, sort, context]) // eslint-disable-line react-hooks/exhaustive-deps
   const more = async () => {
     if (!res) return
     setBusy(true)
@@ -477,6 +498,10 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
         {chip('channel', isDm ? 'This conversation' : 'This channel')}
         {!isDm && chip('guild', 'This server')}
         {chip('all', 'Everywhere')}
+        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-xs text-text-1" aria-label="Sort results" data-search-sort>
+          <option value="newest">Newest</option><option value="oldest">Oldest</option><option value="relevant">Most relevant</option>
+        </select>
+        <label className="flex items-center gap-1 text-xs text-text-2 cursor-pointer" title="Show the message before and after each result"><input type="checkbox" className="h-3.5 w-3.5 accent-accent" checked={context} onChange={(e) => setContext(e.target.checked)} data-search-context /> Context</label>
       </div>
       <div className="overflow-y-auto p-3 space-y-2">
         {res === null && <p className="text-sm text-text-2 p-3">Searching…</p>}
@@ -489,7 +514,9 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
         {res?.results.map((m) => (
           <div key={m.id} data-search-hit={m.id} data-search-channel={m.channel_id}>
             <div className="px-1 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-text-2 truncate" data-search-hit-channel>{m.guild_id ? `# ${m.channel_name}` : m.channel_name || 'Direct message'}</div>
+            {m.context_before && <ContextLine m={m.context_before} />}
             <MessageCard m={m} onJump={() => jump(m)} />
+            {m.context_after && <ContextLine m={m.context_after} />}
           </div>
         ))}
         {res && res.results.length < res.total && <button type="button" className="btn-ghost w-full" disabled={busy} onClick={more} data-search-more>Load more ({res.total - res.results.length} left)</button>}
