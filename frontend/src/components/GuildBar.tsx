@@ -1,5 +1,5 @@
 import { LogoMark } from './Logo'
-import { ArrowDown, ArrowUp, Compass, Copy, Folder, FolderInput, FolderMinus, FolderPlus, LogOut, MailCheck, Plus, Settings, Trash2, UserPlus } from 'lucide-react'
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Compass, Copy, Folder, FolderInput, FolderMinus, FolderPlus, LogOut, MailCheck, Plus, Settings, Trash2, UserPlus } from 'lucide-react'
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
@@ -17,6 +17,7 @@ import { getPrefs } from '../lib/prefs'
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import { useT } from '../lib/i18n'
+import { isDesktop } from '../lib/native'
 
 type FolderItem = Extract<LayoutItem, { kind: 'folder' }>
 const OPEN_KEY = 'parley.folderOpen'
@@ -170,6 +171,13 @@ export default function GuildBar() {
 
   return (
     <nav className="w-[72px] shrink-0 bg-bg-0 flex flex-col items-center py-3 gap-2 overflow-y-auto overflow-x-hidden" data-guild-bar>
+      {/* The desktop app has no browser chrome, so it gets its own back and forward buttons. */}
+      {isDesktop() && (
+        <div className="flex gap-1 -mt-1" data-history-nav>
+          <button type="button" onClick={() => history.back()} className="h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title="Back (Alt+Left)" aria-label="Back" data-history-back><ArrowLeft size={14} /></button>
+          <button type="button" onClick={() => history.forward()} className="h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title="Forward (Alt+Right)" aria-label="Forward" data-history-forward><ArrowRight size={14} /></button>
+        </div>
+      )}
       <NavLink to="/channels/@me" className={({ isActive }) => `group relative ${isActive ? 'active' : ''}`}>
         {({ isActive }) => (
           <Pill active={isActive} unread={pending > 0} tip={t('Direct Messages')}>

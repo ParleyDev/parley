@@ -4,7 +4,7 @@ import { useStore } from '../store'
 import type { MenuEntry, MenuItem } from './ContextMenu'
 
 /** "Mute X ›" / "Unmute X" and "Notification Settings ›" entries for a server, channel or DM. */
-export function notifEntries(target: string, what: 'Server' | 'Channel' | 'Conversation', settings: Record<string, NotifSetting>, opts: { serverDefault?: boolean; suppress?: boolean } = {}): MenuEntry[] {
+export function notifEntries(target: string, what: 'Server' | 'Category' | 'Channel' | 'Conversation', settings: Record<string, NotifSetting>, opts: { serverDefault?: boolean; suppress?: boolean } = {}): MenuEntry[] {
   const update = useStore.getState().updateNotif
   const cur = settings[target]
   const level = cur?.level ?? 'default'

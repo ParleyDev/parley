@@ -17,6 +17,12 @@ import ShortcodeSuggest, { shortcodeAt, useShortcodeSuggestions, type Suggestion
 import MentionSuggest, { applyMentions, mentionAt, useMentionItems, type MentionItem } from './MentionSuggest'
 import { dmName, isGroup } from '../lib/dm'
 import { useT } from '../lib/i18n'
+import { commandMatches, runCommand, type SlashCommand } from '../lib/commands'
+import { getDraft, saveDraft } from '../lib/drafts'
+
+/** The server's limit, counted in characters like the backend does (not UTF-16 units). */
+const MAX_CHARS = 2000
+const charCount = (s: string) => [...s].length
 
 
 interface Props { channel: Channel | DmChannel; reply: Message | null; onCancelReply: () => void; onSent: () => void }
@@ -57,6 +63,12 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const canSend = has(perms, P.SEND_MESSAGES) && !timedOut && !rulesPending
   const canAttach = canSend && (channel.guild_id === null || has(perms, P.ATTACH_FILES))
   const [value, setValue] = useState('')
+  const userId = useStore((s) => s.user?.id)
+  const setEditTarget = useStore((s) => s.setEditTarget)
+  // `/` at the start of the box: built-in commands, with the highlighted row.
+  const [cmdIdx, setCmdIdx] = useState(0)
+  const [cmdDismissed, setCmdDismissed] = useState(false)
+  const commands = cmdDismissed ? [] : commandMatches(value, !!channel.guild_id)
   const [picker, setPicker] = useState<PickerTab | null>(null)
   // `:shortcode` autocomplete: tracks the query at the caret, the highlighted row, and whether it was dismissed.
   const [shortcode, setShortcode] = useState<{ start: number; query: string } | null>(null)
@@ -66,6 +78,33 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const [mention, setMention] = useState<{ start: number; trigger: '@' | '#'; query: string } | null>(null)
   const [mentionIdx, setMentionIdx] = useState(0)
   const [picked, setPicked] = useState<Record<string, MentionItem>>({})
+  // Each channel keeps its own unsent text (lib/drafts): restored on the way in, saved on the way out and while typing.
+  const valueRef = useRef(value); valueRef.current = value
+  const pickedRef = useRef(picked); pickedRef.current = picked
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => {
+    const d = getDraft(userId, channel.id)
+    setValue(d?.text ?? ''); setPicked(d?.picked ?? {})
+    return () => { clearTimeout(draftTimer.current); saveDraft(userId, channel.id, valueRef.current, pickedRef.current) }
+  }, [channel.id, userId])
+  // "Mention" in a user's menu: add `@name` to this box (the main channel's, not a side thread's).
+  useEffect(() => {
+    const on = (e: Event) => {
+      if (useStore.getState().activeChannelId !== channel.id) return
+      const { id, label } = (e as CustomEvent<{ id: string; label: string }>).detail
+      const text = `@${label}`
+      setValue((v) => `${v && !/\s$/.test(v) ? `${v} ` : v}${text} `)
+      setPicked((p) => ({ ...p, [text]: { kind: 'user', id, label } }))
+      requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) } })
+    }
+    window.addEventListener('parley:mention', on)
+    return () => window.removeEventListener('parley:mention', on)
+  }, [channel.id])
+  const scheduleDraft = (v: string) => {
+    clearTimeout(draftTimer.current)
+    const id = channel.id
+    draftTimer.current = setTimeout(() => saveDraft(userId, id, v, pickedRef.current), 400)
+  }
   const mentionItems = useMentionItems(mention?.trigger ?? null, mention?.query ?? '', channel.id, channel.guild_id)
   const pickMention = (it: MentionItem) => {
     const el = ref.current
@@ -177,14 +216,30 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
 
   const uploading = pending.some((p) => !p.done && !p.error)
   const ready = pending.filter((p) => p.done)
-  const canSubmit = (value.trim().length > 0 || ready.length > 0) && !uploading && !sending
+  const chars = charCount(value)
+  const tooLong = chars > MAX_CHARS
+  const canSubmit = (value.trim().length > 0 || ready.length > 0) && !uploading && !sending && !tooLong
+  // Over the limit: offer to turn the text into a message.txt attachment instead of cutting it off.
+  const sendAsFile = () => {
+    addFiles([new File([value], 'message.txt', { type: 'text/plain' })])
+    setValue(''); setPicked({}); saveDraft(userId, channel.id, '', {})
+  }
 
   const submit = async () => {
+    if (tooLong) { pushToast(`Your message is ${chars - MAX_CHARS} characters too long. Shorten it or send it as a file.`, 'error'); return }
     if (!canSubmit) return
-    const content = applyMentions(getPrefs().emoticons ? convertEmoticons(value.trim()) : value.trim(), picked)
+    let text = value.trim()
+    if (text.startsWith('/')) {
+      const res = await runCommand(text, { guildId: channel.guild_id, userId })
+      if (res.kind === 'error') { pushToast(res.message, 'error'); return }
+      if (res.kind === 'done') { pushToast(res.toast); setValue(''); setPicked({}); saveDraft(userId, channel.id, '', {}); return }
+      if (res.kind === 'send') text = res.content
+    }
+    const content = applyMentions(getPrefs().emoticons ? convertEmoticons(text) : text, picked)
     const ids = ready.map((p) => p.done!.id)
     const snapshot = pending
     setValue(''); setPending([]); setPicked({}); setMention(null); onCancelReply(); setSending(true)
+    clearTimeout(draftTimer.current); saveDraft(userId, channel.id, '', {})
     try {
       await sendMessage(channel.id, content, reply?.id, ids)
       snapshot.forEach((p) => { if (p.preview) URL.revokeObjectURL(p.preview) })
@@ -214,7 +269,23 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     if (!sc || sc.start !== shortcode?.start) setSuggestIdx(0)
   }
 
+  const pickCommand = (c: SlashCommand) => {
+    const next = `/${c.name} `
+    setValue(next); setCmdIdx(0); scheduleDraft(next)
+    requestAnimationFrame(() => { const el = ref.current; if (el) { el.focus(); el.setSelectionRange(next.length, next.length) } })
+  }
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (commands.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setCmdIdx((i) => (i + (e.key === 'ArrowDown' ? 1 : commands.length - 1)) % commands.length); return }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickCommand(commands[cmdIdx] ?? commands[0]); return }
+      if (e.key === 'Escape') { e.preventDefault(); setCmdDismissed(true); return }
+    }
+    // Up arrow in an empty box edits your last message, as in Discord.
+    if (e.key === 'ArrowUp' && !value && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && userId) {
+      const list = useStore.getState().messages[channel.id] ?? []
+      const last = [...list].reverse().find((x) => x.author.id === userId && !x.local && (!x.kind || x.kind === 'default') && !x.poll && !x.sticker)
+      if (last) { e.preventDefault(); setEditTarget(last.id); return }
+    }
     if (mention && mentionItems.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setMentionIdx((i) => (i + (e.key === 'ArrowDown' ? 1 : mentionItems.length - 1)) % mentionItems.length); return }
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(mentionItems[mentionIdx] ?? mentionItems[0]); return }
@@ -245,6 +316,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
       }
     }
     setValue(v)
+    scheduleDraft(v)
+    if (!v.startsWith('/')) setCmdDismissed(false)
+    if (commandMatches(v, !!channel.guild_id).length !== commands.length) setCmdIdx(0)
     updateShortcode(v, caret)
     const now = Date.now()
     if (v && now - lastTyping.current > 4000) { lastTyping.current = now; sendTyping(channel.id) }
@@ -342,6 +416,18 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
       {mention && mentionItems.length > 0 && (
         <MentionSuggest items={mentionItems} active={mentionIdx} trigger={mention.trigger} query={mention.query} onPick={pickMention} onHover={setMentionIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
       )}
+      {commands.length > 0 && (
+        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label="Commands" data-command-suggest>
+          <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">Commands</div>
+          {commands.map((c, i) => (
+            <button key={c.name} type="button" role="option" aria-selected={i === cmdIdx} onMouseDown={(e) => { e.preventDefault(); pickCommand(c) }} onMouseEnter={() => setCmdIdx(i)}
+              className={`w-full flex items-baseline gap-2 px-3 py-1.5 text-left ${i === cmdIdx ? 'bg-bg-3' : ''}`} data-command={c.name}>
+              <span className="font-semibold shrink-0">/{c.name}</span>{c.args && <span className="text-xs text-text-2 shrink-0">{c.args}</span>}
+              <span className="min-w-0 truncate text-sm text-text-2 ml-auto">{c.description}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {shortcode && suggestions.length > 0 && !mention && (
         <ShortcodeSuggest query={shortcode.query} items={suggestions} active={suggestIdx} onPick={pickSuggestion} onHover={setSuggestIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
       )}
@@ -391,7 +477,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           }} aria-haspopup="menu" data-composer-plus><PlusCircle size={22} /></button>
           <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={t('Message {name}', { name })}
             onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
-            className="composer-input flex-1 min-w-0 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" maxLength={2000} />
+            className="composer-input flex-1 min-w-0 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" />
                     <div className="relative pb-1 flex shrink-0 items-center gap-2.5">
             {!narrow && <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title="GIF" data-gif-button><ImagePlay size={22} /></button>}
             {!narrow && <button className={`${picker === 'sticker' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'sticker' ? null : 'sticker'))} title="Sticker" data-sticker-button><Sticker size={22} /></button>}
@@ -405,6 +491,13 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         </div>
         )}
       </div>
+      {chars > MAX_CHARS - 200 && (
+        <div className={`flex items-center justify-end gap-3 px-1 pt-1 text-xs ${tooLong ? 'text-danger' : 'text-text-2'}`} data-char-count>
+          {tooLong
+            ? <><span>{chars - MAX_CHARS} characters over the {MAX_CHARS} limit</span>{canAttach && <button type="button" className="font-semibold text-sky-400 hover:underline" onClick={sendAsFile} data-send-as-file>Send as file</button>}</>
+            : <span>{MAX_CHARS - chars} characters left</span>}
+        </div>
+      )}
       {plus.menu && <ContextMenu {...plus.menu} onClose={plus.close} label="Add to message" />}
       {sheet && (
         <AttachSheet onClose={() => setSheet(false)} canAttach={canAttach} canRecord={typeof MediaRecorder !== 'undefined'}

@@ -18,7 +18,7 @@ import VerifyBanner from '../components/VerifyBanner'
 import { lastChannel, rememberChannel } from '../lib/dm'
 import { useSwipe } from '../lib/swipe'
 import { useKeybinds } from '../lib/keybinds'
-import { setNativeNavigator } from '../lib/native'
+import { isDesktop, setNativeNavigator } from '../lib/native'
 import { voice } from '../lib/voice'
 import { initBadge } from '../lib/badge'
 import { installLinkGuard } from '../lib/links'
@@ -186,9 +186,31 @@ function Shortcuts() {
     openSettings: () => openModal({ kind: 'userSettings', tab: 'account' }),
     jumpToDate: () => document.querySelector<HTMLButtonElement>('[data-jump-date-btn]')?.click(),
     toggleStreamer: () => { const on = !getPrefs().streamer; setPrefs({ streamer: on }); useStore.getState().pushToast(on ? 'Streamer Mode on' : 'Streamer Mode off') },
+    showShortcuts: () => { const s = useStore.getState(); if (s.modal?.kind === 'shortcuts') s.closeModal(); else openModal({ kind: 'shortcuts' }) },
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [guildId, channelId, selfMute, selfDeaf])
   useKeybinds(handlers)
+  // Typing a letter with nothing focused starts a message, as in Discord.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1 || e.key === ' ') return
+      const el = document.activeElement as HTMLElement | null
+      if (el && el !== document.body && (el.matches('input, textarea, select, [contenteditable="true"]') || el.closest('[role=dialog], [role=menu], [data-context-menu]'))) return
+      if (useStore.getState().modal) return
+      document.querySelector<HTMLTextAreaElement>('textarea.composer-input')?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  // The desktop app has no browser chrome: Alt+Left/Right and the mouse's back/forward buttons move through history.
+  useEffect(() => {
+    if (!isDesktop()) return
+    // Not while typing: Alt/Option+arrows move the caret by word there.
+    const onKey = (e: KeyboardEvent) => { if (e.altKey && !e.ctrlKey && !e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !document.activeElement?.matches('input, textarea, [contenteditable="true"]')) { e.preventDefault(); if (e.key === 'ArrowLeft') history.back(); else history.forward() } }
+    const onMouse = (e: MouseEvent) => { if (e.button === 3 || e.button === 4) { e.preventDefault(); if (e.button === 3) history.back(); else history.forward() } }
+    window.addEventListener('keydown', onKey); window.addEventListener('mouseup', onMouse)
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('mouseup', onMouse) }
+  }, [])
   // Event reminders: ten minutes before an event you RSVPed to (once per event per browser).
   const events = useStore((s) => s.events)
   const pushToast = useStore((s) => s.pushToast)

@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { anchorOf } from '../lib/anchor'
-import { CalendarDays, ChevronDown, Copy, Disc3, FolderPlus, Hash, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
@@ -115,14 +115,29 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       endDrag()
     },
   } : {}
-  const categoryMenu = (c: Channel): MenuEntry[] => [
+  // Collapse or expand every category at once (remembered per server, like single toggles).
+  const setAllCollapsed = (on: boolean) => setCollapsed(() => {
+    const n = Object.fromEntries(categories.map((c) => [c.id, on]))
+    try { localStorage.setItem(`${STORAGE_PREFIX}collapsed.${guildId}`, JSON.stringify(n)) } catch { /* ignore */ }
+    return n
+  })
+  const categoryMenu = (c: Channel): MenuEntry[] => {
+    const unreadKids = childrenOf(c.id).filter((k) => isUnread({ readStates, lastMessageId }, k.id))
+    return [
+    { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !unreadKids.length, onClick: () => { unreadKids.forEach((k) => markRead(k.id)) } },
+    'sep',
     { label: collapsed[c.id] ? 'Expand Category' : 'Collapse Category', icon: <ChevronDown size={16} />, onClick: () => toggleCollapsed(c.id) },
+    { label: 'Collapse All Categories', icon: <ChevronsDownUp size={16} />, onClick: () => setAllCollapsed(true) },
+    { label: 'Expand All Categories', icon: <ChevronsUpDown size={16} />, onClick: () => setAllCollapsed(false) },
+    'sep',
+    ...notifEntries(c.id, 'Category', notifSettings, { serverDefault: true }),
     ...(canCreate ? ['sep' as const, { label: 'Create Channel', icon: <Plus size={16} />, onClick: () => openModal({ kind: 'createChannel', guildId, parentId: c.id }) }, { label: 'Edit Category', icon: <Pencil size={16} />, onClick: () => openModal({ kind: 'editCategory', channelId: c.id }) }, { label: 'Delete Category', icon: <Trash2 size={16} />, danger: true, onClick: () => openModal({ kind: 'confirm', title: `Delete '${c.name}'`, body: `The channels inside ${c.name} are kept and move to the top of the list.`, danger: true, confirmLabel: 'Delete Category', action: async () => { try { await api.delete(`/channels/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } }) }] : []),
     ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Category ID', icon: <Copy size={16} />, onClick: () => copyText('Category ID', c.id) }] : []),
   ]
+  }
   const row = (c: Channel) => (
     <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id && catIds.has(c.parent_id) ? c.parent_id : ''} className={drag === c.id ? 'opacity-40' : ''} {...dragProps(c)}>
-      <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name} locked={!!c.e2ee} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id)} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+      <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />} name={c.name} locked={!!c.e2ee} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
         unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings }, c.id)} onClick={() => setMobilePane('content')}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
       {(c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}

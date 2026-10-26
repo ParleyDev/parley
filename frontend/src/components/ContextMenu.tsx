@@ -63,7 +63,7 @@ function MenuRow({ item, onClose }: { item: MenuItem; onClose: () => void }) {
   if (item.children) {
     return (
       <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-        <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`w-full flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm font-medium text-left ${tone}`}>
+        <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`w-full flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm font-medium text-left ${tone}`} data-menu-item={item.label}>
           <span className="flex items-center gap-2">{item.icon}{item.label}</span><ChevronRight size={16} />
         </button>
         {open && (

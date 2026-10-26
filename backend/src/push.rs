@@ -86,7 +86,7 @@ pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, d
 }
 
 /// After a message is created: push to DM recipients and mentioned members who have no socket open and have not
-/// muted the channel or server. Runs in the background; never blocks the request.
+/// muted the channel, its category (or a thread's parent channel) or the server. Runs in the background; never blocks the request.
 pub fn after_message(state: AppState, msg: crate::models::Message, channel: crate::models::Channel) {
     tokio::spawn(async move {
         let push_on = enabled(&state).await;
@@ -103,7 +103,7 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
         for u in candidates {
             let muted: Option<(bool,)> = sqlx::query_as(
                 "SELECT true FROM notification_settings WHERE user_id = $1 AND target_id = ANY($2) AND (level = 'nothing' OR (muted_until IS NOT NULL AND muted_until > now())) LIMIT 1",
-            ).bind(u).bind(&[Some(channel.id), channel.guild_id].into_iter().flatten().collect::<Vec<Uuid>>()).fetch_optional(&state.db).await.unwrap_or(None);
+            ).bind(u).bind(&[Some(channel.id), channel.parent_id, channel.guild_id].into_iter().flatten().collect::<Vec<Uuid>>()).fetch_optional(&state.db).await.unwrap_or(None);
             if muted.is_some() { continue; }
             if online.contains(&u) {
                 // Online somewhere: push only once they have been idle longer than their inactive timeout.

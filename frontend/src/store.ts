@@ -35,7 +35,9 @@ export type ModalKind =
   | { kind: 'invite'; guildId: string }
   | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' }
-  | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' }
+  | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' | 'keybinds' }
+  | { kind: 'shortcuts' }
+  | { kind: 'nickname'; guildId: string; userId: string }
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string; anchor?: Anchor }
   | { kind: 'image'; url: string; name: string }
@@ -145,6 +147,8 @@ interface State {
   readStates: Record<string, string | null>
   lastMessageId: Record<string, string>
   activeChannelId: string | null
+  /** A message the composer asked to open for editing (Up arrow in an empty box); the message clears it. */
+  editTarget: string | null
   /** How many READY payloads this session has applied; bumps on every full (re)connect. */
   readyCount: number
   /** Mobile only: which pane is on screen. */
@@ -242,6 +246,7 @@ interface State {
   /** Load older pages (up to 60) until `messageId` is in the list (jumping to pins, bookmarks, search hits, reply originals). Returns whether it is loaded. */
   loadUntil: (channelId: string, messageId: string) => Promise<boolean>
   setActiveChannel: (id: string | null) => void
+  setEditTarget: (id: string | null) => void
   setMobilePane: (p: 'nav' | 'content') => void
   setMembersOpen: (open: boolean) => void
   setDmProfileOpen: (open: boolean) => void
@@ -323,6 +328,7 @@ export const useStore = create<State>((set, get) => ({
   receipts: {},
   lastMessageId: {},
   activeChannelId: null,
+  editTarget: null,
   readyCount: 0,
   mobilePane: initialPane(),
   membersOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
@@ -659,6 +665,7 @@ export const useStore = create<State>((set, get) => ({
   }),
   setReadState: (channelId, msgId) => set((s) => { const mentionCounts = { ...s.mentionCounts }; if (msgId && msgId === s.lastMessageId[channelId]) delete mentionCounts[channelId]; return { readStates: { ...s.readStates, [channelId]: msgId }, mentionCounts } }),
   setActiveChannel: (id) => set({ activeChannelId: id }),
+  setEditTarget: (id) => set({ editTarget: id }),
   setMobilePane: (mobilePane) => set({ mobilePane }),
   setMembersOpen: (membersOpen) => set({ membersOpen }),
   setDmProfileOpen: (open) => { try { localStorage.setItem(STORAGE_PREFIX + 'dmProfile', open ? '1' : '0') } catch { /* ignore */ } set({ dmProfileOpen: open }) },

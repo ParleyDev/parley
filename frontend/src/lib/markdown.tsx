@@ -5,6 +5,7 @@ import { Check, Copy } from 'lucide-react'
 import hljs from 'highlight.js/lib/core'
 import { CUSTOM_TOKEN_SRC, PICTO_SRC, customUrl, parseCustom } from './emoji'
 import { ChannelMention, EveryoneMention, RoleMention, UserMention } from '../components/Mentions'
+import Timestamp, { TIMESTAMP_SRC } from '../components/Timestamp'
 import javascript from 'highlight.js/lib/languages/javascript'
 import typescript from 'highlight.js/lib/languages/typescript'
 import json from 'highlight.js/lib/languages/json'
@@ -207,6 +208,7 @@ const INLINE_SRC = [
   '\\|\\|[\\s\\S]+?\\|\\|',                     // spoiler
   CUSTOM_TOKEN_SRC,                             // custom emoji <:name:id>
   '<@&?[0-9a-f-]{36}>|<#[0-9a-f-]{36}>',        // user / role / channel mentions
+  TIMESTAMP_SRC,                                // <t:unix:style> in the reader's time zone
   '@everyone|@here',
   '\\*\\*\\*(?=\\S)[\\s\\S]+?(?<=\\S)\\*\\*\\*', // bold italic
   '\\*\\*(?=\\S)[\\s\\S]+?(?<=\\S)\\*\\*',      // bold
@@ -237,6 +239,7 @@ export function renderInline(text: string, opts: { noLinks?: boolean } = {}): Re
     else if (t.startsWith('``')) nodes.push(<code key={k}>{t.slice(2, -2)}</code>)
     else if (t.startsWith('`')) nodes.push(<code key={k}>{t.slice(1, -1)}</code>)
     else if (t.startsWith('||')) nodes.push(<Spoiler key={k}>{renderInline(t.slice(2, -2))}</Spoiler>)
+    else if (t.startsWith('<t:')) nodes.push(<Timestamp key={k} token={t} />)
     else if (t.startsWith('<@&')) nodes.push(<RoleMention key={k} id={t.slice(3, -1)} />)
     else if (t.startsWith('<@')) nodes.push(<UserMention key={k} id={t.slice(2, -1)} />)
     else if (t.startsWith('<#')) nodes.push(<ChannelMention key={k} id={t.slice(2, -1)} />)

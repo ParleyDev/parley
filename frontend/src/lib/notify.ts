@@ -6,12 +6,12 @@ export interface Effective { level: 'all' | 'mentions' | 'nothing'; muted: boole
 
 const isMuted = (s?: NotifSetting) => !!s?.muted_until && new Date(s.muted_until).getTime() > Date.now()
 
-/** Channel setting overrides the server's; DMs default to all messages. */
+/** Channel setting overrides its category's (or a thread's parent channel's), which overrides the server's; DMs default to all messages. */
 export function effective(settings: Record<string, NotifSetting>, channel: (Pick<Channel | DmChannel, 'id' | 'guild_id'> & { parent_id?: string | null; kind?: string }) | undefined): Effective {
   if (!channel) return { level: 'all', muted: false, suppressEveryone: false, suppressRoles: false }
-  // A thread without its own setting follows its parent channel, which follows the server.
+  // Without its own setting, a thread follows its parent channel and a channel its category; then the server.
   const own = settings[channel.id]
-  const parent = channel.kind === 'thread' && channel.parent_id ? settings[channel.parent_id] : undefined
+  const parent = channel.parent_id ? settings[channel.parent_id] : undefined
   const ch = own?.level && own.level !== 'default' ? own : parent?.level && parent.level !== 'default' ? parent : own ?? parent
   const g = channel.guild_id ? settings[channel.guild_id] : undefined
   const level = (ch?.level && ch.level !== 'default' ? ch.level : g?.level && g.level !== 'default' ? g.level : 'all') as Effective['level']

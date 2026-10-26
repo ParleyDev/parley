@@ -98,6 +98,20 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const blocked = useStore((s) => isBlocked(s, m.author.id))
   const [revealed, setRevealed] = useState(false)
 
+  // Up arrow in an empty composer opens your last message here, with the caret at the end.
+  const editRequested = useStore((s) => s.editTarget === m.id)
+  useEffect(() => {
+    if (!editRequested) return
+    useStore.getState().setEditTarget(null)
+    setDraft(m.content); setEditing(true)
+    requestAnimationFrame(() => {
+      const el = editRef.current; if (!el) return
+      el.focus(); el.setSelectionRange(el.value.length, el.value.length)
+      rowRef.current?.scrollIntoView({ block: 'nearest' })
+    })
+  }, [editRequested, m.content])
+  // Finishing an edit from the keyboard goes back to the composer, as it does in Discord.
+  const backToComposer = () => requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('[data-composer-box] textarea')?.focus())
   const saveEdit = async () => {
     const c = draft.trim()
     setEditing(false)
@@ -105,8 +119,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     try { await api.patch(`/channels/${m.channel_id}/messages/${m.id}`, { content: c }) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const onEditKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit() }
-    if (e.key === 'Escape') { setEditing(false); setDraft(m.content) }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); backToComposer() }
+    if (e.key === 'Escape') { setEditing(false); setDraft(m.content); backToComposer() }
     const f = shortcutFormat(e)
     if (f && editRef.current) { e.preventDefault(); setDraft(toggleWrap(editRef.current, f)) }
   }

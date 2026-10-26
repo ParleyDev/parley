@@ -27,6 +27,8 @@ import GroupMembersModal from './GroupMembers'
 import FolderSettingsModal from './FolderSettings'
 import GuildPrivacyModal from './GuildPrivacy'
 import LeaveLinkModal from './LeaveLink'
+import ShortcutsModal from './Shortcuts'
+import NicknameModal from './Nickname'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
@@ -69,6 +71,8 @@ export default function Modals() {
     case 'folderSettings': return <FolderSettingsModal onClose={close} folderId={modal!.folderId} />
     case 'guildPrivacy': return <GuildPrivacyModal onClose={close} guildId={modal!.guildId} />
     case 'leaveLink': return <LeaveLinkModal onClose={close} url={modal!.url} text={modal!.text} />
+    case 'shortcuts': return <ShortcutsModal onClose={close} />
+    case 'nickname': return <NicknameModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
   }
   }
 }

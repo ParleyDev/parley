@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { STORAGE_PREFIX } from './brand'
 
 /** Actions a user can bind. Combos are stored as "Ctrl+Shift+M" (modifier names + KeyboardEvent.key, upper-cased). */
-export type KeybindAction = 'toggleMute' | 'toggleDeafen' | 'toggleMembers' | 'focusComposer' | 'prevChannel' | 'nextChannel' | 'openSettings' | 'jumpToDate' | 'toggleStreamer'
+export type KeybindAction = 'toggleMute' | 'toggleDeafen' | 'toggleMembers' | 'focusComposer' | 'prevChannel' | 'nextChannel' | 'openSettings' | 'jumpToDate' | 'toggleStreamer' | 'showShortcuts'
 
 export const KEYBIND_LABELS: Record<KeybindAction, string> = {
   toggleMute: 'Toggle mute',
@@ -14,18 +14,20 @@ export const KEYBIND_LABELS: Record<KeybindAction, string> = {
   openSettings: 'Open user settings',
   jumpToDate: 'Jump to date',
   toggleStreamer: 'Toggle Streamer Mode',
+  showShortcuts: 'Show keyboard shortcuts',
 }
 
 export const DEFAULT_KEYBINDS: Record<KeybindAction, string> = {
   toggleMute: 'Ctrl+Shift+M',
   toggleDeafen: 'Ctrl+Shift+D',
   toggleMembers: 'Ctrl+U',
-  focusComposer: 'Ctrl+/',
+  focusComposer: 'Ctrl+Shift+E',
   prevChannel: 'Alt+ArrowUp',
   nextChannel: 'Alt+ArrowDown',
   openSettings: 'Ctrl+,',
   jumpToDate: 'Ctrl+Shift+J',
   toggleStreamer: 'Ctrl+Shift+X',
+  showShortcuts: 'Ctrl+/',
 }
 
 const KEY = `${STORAGE_PREFIX}keybinds`
@@ -33,7 +35,12 @@ let current: Record<KeybindAction, string> = load()
 const listeners = new Set<() => void>()
 
 function load(): Record<KeybindAction, string> {
-  try { return { ...DEFAULT_KEYBINDS, ...(JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Record<KeybindAction, string>>) } } catch { return { ...DEFAULT_KEYBINDS } }
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Record<KeybindAction, string>>
+    // Ctrl+/ used to focus the message box; it now shows the shortcuts, as in Discord. Saved maps from before move along.
+    if (saved.focusComposer === 'Ctrl+/' && saved.showShortcuts === undefined) delete saved.focusComposer
+    return { ...DEFAULT_KEYBINDS, ...saved }
+  } catch { return { ...DEFAULT_KEYBINDS } }
 }
 export const getKeybinds = () => current
 export function setKeybind(action: KeybindAction, combo: string | null) {
@@ -65,6 +72,8 @@ const typingIn = (el: Element | null) => !!el && (el.tagName === 'INPUT' || el.t
 export function useKeybinds(handlers: Partial<Record<KeybindAction, () => void>>) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // A focused control that already handled the key (Ctrl+U underlines in the message box) keeps it.
+      if (e.defaultPrevented) return
       const combo = comboOf(e)
       if (!combo) return
       const modified = e.ctrlKey || e.metaKey || e.altKey

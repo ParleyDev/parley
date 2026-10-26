@@ -6,6 +6,8 @@ import type { Attachment } from '../lib/types'
 import { formatBytes, isAudio, isImage, isVideo } from '../lib/upload'
 import { MEDIA_SIZES, usePrefs } from '../lib/prefs'
 import FrozenGif from './FrozenGif'
+import ContextMenu, { useContextMenu } from './ContextMenu'
+import { imageMenu } from '../lib/imageMenu'
 
 
 export const isSpoiler = (a: Pick<Attachment, 'filename'>) => a.filename.startsWith('SPOILER_')
@@ -49,15 +51,17 @@ function One({ a, mine }: { a: Attachment; mine?: boolean }) {
   const prefs = usePrefs()
   const { w: MAX_W, h: MAX_H } = MEDIA_SIZES[prefs.mediaSize]
   const inline = prefs.inlineAttachments
+  const menu = useContextMenu()
   return (
     <>
+      {menu.menu && <ContextMenu {...menu.menu} onClose={menu.close} label="Image" />}
       {[a].map((a) => {
         if (isImage(a.content_type) && inline) {
           // Size the box from the known dimensions so the chat doesn't jump while loading.
           const w = a.width ?? MAX_W, h = a.height ?? MAX_H
           const scale = Math.min(1, MAX_W / w, MAX_H / h)
           return (
-            <button key={a.id} onClick={() => openModal({ kind: 'image', url: a.url, name: a.filename })} className="block overflow-hidden rounded-lg bg-bg-0/40 border border-line hover:border-text-2 max-w-full" style={{ width: Math.round(w * scale), aspectRatio: `${w} / ${h}` }} title={a.filename}>
+            <button key={a.id} onClick={() => openModal({ kind: 'image', url: a.url, name: a.filename })} onContextMenu={(e) => menu.open(e, imageMenu(a.url, a.filename))} className="block overflow-hidden rounded-lg bg-bg-0/40 border border-line hover:border-text-2 max-w-full" style={{ width: Math.round(w * scale), aspectRatio: `${w} / ${h}` }} title={a.filename}>
               {a.content_type === 'image/gif' && !prefs.autoplayGifs
                 ? <FrozenGif src={a.url} alt={a.filename} className="h-full w-full object-cover" data-attachment-img="gif" />
                 : <img src={a.thumb_url ?? a.url} alt={a.filename} loading="lazy" className="h-full w-full object-cover" data-attachment-img={a.thumb_url ? 'thumb' : 'full'} />}

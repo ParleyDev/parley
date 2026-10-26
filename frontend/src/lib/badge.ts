@@ -1,5 +1,7 @@
 import { useStore, messageRequests, pendingCount } from '../store'
 import { getNotifPrefs } from './notifPrefs'
+import { APP_NAME } from './brand'
+import { dmName, isGroup } from './dm'
 
 /**
  * Unread badge: the number of things waiting for you (unread mentions, friend requests, message requests)
@@ -39,8 +41,23 @@ function draw(n: number) {
   paint()
 }
 
+/** The tab title: the unread count, then where you are, e.g. "(3) #general | My Server | Parley". */
+let lastTitle = ''
+export function pageTitle(n: number): string {
+  const s = useStore.getState()
+  const id = s.activeChannelId
+  const ch = id ? s.channels[id] : undefined
+  const dm = id ? s.dms[id] : undefined
+  const where = ch ? [`#${ch.name}`, ch.guild_id ? s.guilds[ch.guild_id]?.name : undefined].filter(Boolean).join(' | ')
+    : dm ? (isGroup(dm) ? dmName(dm, s.users, s.notes) : `@${dmName(dm, s.users, s.notes)}`)
+    : ''
+  return `${n > 0 ? `(${n > 99 ? '99+' : n}) ` : ''}${where ? `${where} | ` : ''}${APP_NAME}`
+}
+
 function apply() {
   const n = getNotifPrefs().badge ? badgeCount() : 0
+  const title = useStore.getState().token ? pageTitle(n) : APP_NAME
+  if (title !== lastTitle) { lastTitle = title; document.title = title }
   if (n === last) return
   last = n
   draw(n)
