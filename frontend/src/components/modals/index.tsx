@@ -32,6 +32,8 @@ import QuickSwitcher from './QuickSwitcher'
 import NicknameModal from './Nickname'
 import ReactionsModal from './Reactions'
 import WelcomeModal from './Welcome'
+import ModViewModal from './ModView'
+import Modal from '../Modal'
 import LeaveGroupsModal from './LeaveGroups'
 import AltTextModal from './AltText'
 import ErrorBoundary from '../ErrorBoundary'
@@ -81,6 +83,13 @@ export default function Modals() {
     case 'quickSwitcher': return <QuickSwitcher onClose={close} />
     case 'nickname': return <NicknameModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'leaveGroups': return <LeaveGroupsModal onClose={close} />
+    case 'modView': return <ModViewModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
+    case 'warning': return (
+      <Modal title={`A warning from ${modal!.guildName}`} onClose={close} width="max-w-sm" footer={<button className="btn-primary" onClick={close} data-warning-ack>Understood</button>}>
+        <p className="text-sm text-text-1" data-warning-reason>{modal!.reason}</p>
+        <p className="mt-3 text-xs text-text-2">The server's moderators sent you this. Warnings count toward your account standing for 90 days.</p>
+      </Modal>
+    )
     case 'welcome': return <WelcomeModal onClose={close} guildId={modal!.guildId} />
     case 'reactions': return <ReactionsModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} />
     case 'altText': return <AltTextModal onClose={close} message={modal!.message} />

@@ -140,7 +140,7 @@ export function useUserMenu(guildId?: string | null) {
       ...(rel !== 'blocked' ? [{ label: ignored ? 'Unignore' : 'Ignore', icon: <EyeOff size={16} />, onClick: () => toggleIgnored(u.id, name) }] : []),
       rel === 'blocked' ? { label: 'Unblock', icon: <Ban size={16} />, onClick: () => act(() => api.delete(`/users/@me/relationships/${u.id}`)) } : { label: 'Block', icon: <Ban size={16} />, danger: true, onClick: block },
       { label: 'Report User', icon: <Flag size={16} />, danger: true, onClick: () => openModal({ kind: 'report', userId: u.id, name }) },
-      ...(outranks && (has(myPerms, P.KICK_MEMBERS) || has(myPerms, P.BAN_MEMBERS) || has(myPerms, P.MODERATE_MEMBERS)) ? ['sep' as const] : []),
+      ...(outranks && (has(myPerms, P.KICK_MEMBERS) || has(myPerms, P.BAN_MEMBERS) || has(myPerms, P.MODERATE_MEMBERS)) ? ['sep' as const, { label: 'Moderator View', icon: <Shield size={16} />, onClick: () => openModal({ kind: 'modView', guildId: guildId!, userId: u.id }) }] : []),
       ...(outranks && has(myPerms, P.MODERATE_MEMBERS) ? [isTimedOut(member)
         ? { label: 'Remove Timeout', icon: <TimerOff size={16} />, onClick: () => act(async () => { upsertMember(await api.delete(`/guilds/${guildId}/members/${u.id}/timeout`)); pushToast(`Timeout removed for ${name}`) }) }
         : { label: `Timeout ${name}`, icon: <TimerReset size={16} />, danger: true, onClick: () => openModal({ kind: 'timeout', guildId: guildId!, userId: u.id }) }] : []),

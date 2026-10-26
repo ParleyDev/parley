@@ -52,6 +52,8 @@ export type ModalKind =
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string; /** Offer "Don't ask again", saved under this key. */ dontAskKey?: string }
   | { kind: 'ban'; guildId: string; userId: string }
   | { kind: 'kick'; guildId: string; userId: string }
+  | { kind: 'modView'; guildId: string; userId: string }
+  | { kind: 'warning'; guildName: string; reason: string }
   | { kind: 'timeout'; guildId: string; userId: string }
   | { kind: 'editHistory'; channelId: string; messageId: string }
   | { kind: 'report'; messageId?: string; userId: string; name: string }

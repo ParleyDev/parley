@@ -84,7 +84,7 @@ export function AccountChanges() {
   )
 }
 
-interface Standing { level: 'all_good' | 'limited' | 'very_limited' | 'at_risk' | 'suspended'; actioned_reports: number; bans: number; active_timeouts: number }
+interface Standing { level: 'all_good' | 'limited' | 'very_limited' | 'at_risk' | 'suspended'; actioned_reports: number; bans: number; active_timeouts: number; warnings?: number }
 const LEVELS: Record<Standing['level'], { title: string; blurb: string; color: string }> = {
   all_good: { title: 'All good', blurb: 'Your account has no recent moderation action against it.', color: 'text-success' },
   limited: { title: 'Limited', blurb: 'There has been some moderation action against your account recently. Keep to the server rules and this clears in 90 days.', color: 'text-warn' },
@@ -105,7 +105,7 @@ export function StandingCard() {
       <div className="flex items-center gap-2">{st.level === 'all_good' ? <ShieldCheck size={18} className="text-success" /> : <ShieldAlert size={18} className={l.color} />}<h3 className="font-bold">Account Standing</h3><span className={`ml-auto text-sm font-semibold ${l.color}`}>{l.title}</span></div>
       <div className="flex gap-1">{steps.map((s, i) => <span key={s} className={`h-1.5 flex-1 rounded-full ${i <= steps.indexOf(st.level) ? (st.level === 'all_good' ? 'bg-success' : i >= 3 ? 'bg-danger' : 'bg-warn') : 'bg-bg-4'}`} />)}</div>
       <p className="text-sm text-text-2">{l.blurb}</p>
-      {st.level !== 'all_good' && <p className="text-xs text-text-2">{st.actioned_reports} actioned report{st.actioned_reports === 1 ? '' : 's'} in the last 90 days · {st.bans} server ban{st.bans === 1 ? '' : 's'} · {st.active_timeouts} active timeout{st.active_timeouts === 1 ? '' : 's'}</p>}
+      {st.level !== 'all_good' && <p className="text-xs text-text-2">{st.actioned_reports} actioned report{st.actioned_reports === 1 ? '' : 's'} in the last 90 days · {st.bans} server ban{st.bans === 1 ? '' : 's'} · {st.active_timeouts} active timeout{st.active_timeouts === 1 ? '' : 's'} · {st.warnings ?? 0} warning{st.warnings === 1 ? '' : 's'}</p>}
     </section>
   )
 }

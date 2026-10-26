@@ -12,8 +12,8 @@ await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parl
 
 console.log('-- friends')
 await p.goto(`${WEB}/channels/@me`); await p.waitForSelector('input[placeholder="Search"]')
-const widths = await p.evaluate(() => { const main = document.querySelector('main').getBoundingClientRect().width; const box = document.querySelector('input[placeholder="Search"]').getBoundingClientRect().width; return { main, box } })
-ok('the friends list stretches across the pane', widths.box > widths.main - 80, JSON.stringify(widths))
+const widths = await p.evaluate(() => { const main = document.querySelector('main').getBoundingClientRect().width; const side = document.querySelector('[data-active-now]')?.getBoundingClientRect().width ?? 0; const box = document.querySelector('input[placeholder="Search"]').getBoundingClientRect().width; return { main, side, box } })
+ok('the friends list stretches across the pane (beside Active Now)', widths.box > widths.main - widths.side - 80, JSON.stringify(widths))
 
 console.log('-- inbox')
 await p.click('[data-inbox-toggle]'); await p.waitForSelector('[data-inbox]')

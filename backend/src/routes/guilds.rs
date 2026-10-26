@@ -601,11 +601,13 @@ pub async fn drop_temporary(state: &AppState, user_id: Uuid) {
 /// whether the membership is temporary.
 async fn member_joins(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<serde_json::Value>>> {
     let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_GUILD)?;
-    let rows: Vec<(Uuid, Option<String>, Option<Uuid>, Option<String>, bool)> = sqlx::query_as(
-        "SELECT m.user_id, m.joined_via, m.inviter_id, u.display_name, m.temporary FROM guild_members m LEFT JOIN users u ON u.id = m.inviter_id WHERE m.guild_id = $1")
+    if !(perms::has(p, perms::MANAGE_GUILD) || perms::has(p, perms::KICK_MEMBERS) || perms::has(p, perms::BAN_MEMBERS) || perms::has(p, perms::MODERATE_MEMBERS)) { return Err(AppError::Forbidden) }
+    let rows: Vec<(Uuid, Option<String>, Option<Uuid>, Option<String>, bool, chrono::DateTime<chrono::Utc>, i64)> = sqlx::query_as(
+        "SELECT m.user_id, m.joined_via, m.inviter_id, u.display_name, m.temporary, me.created_at,
+                (SELECT count(*) FROM member_warnings w WHERE w.guild_id = m.guild_id AND w.user_id = m.user_id)
+         FROM guild_members m JOIN users me ON me.id = m.user_id LEFT JOIN users u ON u.id = m.inviter_id WHERE m.guild_id = $1")
         .bind(id).fetch_all(&state.db).await?;
-    Ok(Json(rows.into_iter().map(|(user, via, inviter, inviter_name, temporary)| json!({ "user_id": user, "joined_via": via, "inviter_id": inviter, "inviter_name": inviter_name, "temporary": temporary })).collect()))
+    Ok(Json(rows.into_iter().map(|(user, via, inviter, inviter_name, temporary, created, warns)| json!({ "user_id": user, "joined_via": via, "inviter_id": inviter, "inviter_name": inviter_name, "temporary": temporary, "account_created_at": created, "warnings": warns })).collect()))
 }
 
 async fn remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> AppResult<()> {
@@ -693,6 +695,14 @@ async fn ban_member(
     Path((id, target)): Path<(Uuid, Uuid)>,
     body: Option<Json<BanReq>>,
 ) -> AppResult<(StatusCode, Json<Ban>)> {
+    let req = body.map(|Json(b)| b).unwrap_or_default();
+    let ban = ban_one(&state, uid, id, target, req.reason, req.delete_message_seconds).await?;
+    Ok((StatusCode::CREATED, Json(ban)))
+}
+
+/// One ban, with every check (used by the single and bulk endpoints).
+pub async fn ban_one(state: &AppState, uid: Uuid, id: Uuid, target: Uuid, reason: Option<String>, delete_message_seconds: i64) -> AppResult<Ban> {
+    let req = BanReq { reason, delete_message_seconds };
     let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::BAN_MEMBERS)?;
     if target == uid {
@@ -704,7 +714,6 @@ async fn ban_member(
     if ctx.is_member(target) && !ctx.outranks_member(uid, target) {
         return Err(AppError::Forbidden);
     }
-    let req = body.map(|Json(b)| b).unwrap_or_default();
     if !(0..=7 * 86400).contains(&req.delete_message_seconds) {
         return Err(AppError::BadRequest("delete_message_seconds must be 0 to 604800 (7 days)".into()));
     }
@@ -723,7 +732,7 @@ async fn ban_member(
     if inserted == 0 {
         return Err(AppError::NotFound("User not found".into()));
     }
-    try_remove_member(&state, id, target).await?;
+    try_remove_member(state, id, target).await?;
     let ban = fetch_ban(&state.db, id, target).await?;
     state.hub.emit_guild(id, "GUILD_BAN_ADD", json!(ban));
     let mut deleted = 0;
@@ -732,10 +741,10 @@ async fn ban_member(
             "SELECT m.id FROM messages m JOIN channels c ON c.id = m.channel_id
              WHERE c.guild_id = $1 AND m.author_id = $2 AND m.created_at > now() - make_interval(secs => $3)")
             .bind(id).bind(target).bind(req.delete_message_seconds as f64).fetch_all(&state.db).await?;
-        deleted = crate::routes::channels::delete_many(&state, &ids.into_iter().map(|r| r.0).collect::<Vec<_>>()).await?;
+        deleted = crate::routes::channels::delete_many(state, &ids.into_iter().map(|r| r.0).collect::<Vec<_>>()).await?;
     }
-    crate::audit::guild(&state, id, uid, "member.ban", "user", Some(target), &ban.username, json!({ "reason": reason, "messages_deleted": deleted })).await;
-    Ok((StatusCode::CREATED, Json(ban)))
+    crate::audit::guild(state, id, uid, "member.ban", "user", Some(target), &ban.username, json!({ "reason": reason, "messages_deleted": deleted })).await;
+    Ok(ban)
 }
 
 async fn unban_member(

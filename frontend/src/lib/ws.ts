@@ -63,6 +63,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'VOICE_ERROR'; d: { message: string } }
   | { t: 'VOICE_MOVE'; d: { guild_id: string; channel_id: string } }
   | { t: 'VOICE_DISCONNECT'; d: { guild_id: string } }
+  | { t: 'MEMBER_WARNING'; d: { id: string; guild_id: string; guild_name: string; reason: string } }
   | { t: 'VOICE_REACTION'; d: { channel_id: string; user_id: string; emoji: string } }
   | { t: 'VOICE_INVITE'; d: VoiceInvite })
 
@@ -260,6 +261,7 @@ function handle(ev: Ev) {
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break
     case 'VOICE_MOVE': if (s.myVoiceChannelId) { s.pushToast('A moderator moved you to another voice channel'); voice.join(ev.d.channel_id) } break
+    case 'MEMBER_WARNING': if (!s.modal) s.openModal({ kind: 'warning', guildName: ev.d.guild_name, reason: ev.d.reason }); else s.pushToast(`Warning from ${ev.d.guild_name}: ${ev.d.reason}`, 'error'); break
     case 'VOICE_REACTION': if (s.myVoiceChannelId === ev.d.channel_id) emitCallReaction(ev.d.user_id, ev.d.emoji); break
     case 'VOICE_INVITE': if (!s.user?.ignored_users?.includes(ev.d.from.id)) { s.setVoiceInvite(ev.d); playSfx('invite_speak') } break
     case 'VOICE_DISCONNECT': if (s.myVoiceChannelId) { s.pushToast('A moderator disconnected you from voice'); voice.leave(true) } break

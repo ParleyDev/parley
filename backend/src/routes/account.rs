@@ -174,9 +174,10 @@ async fn standing(State(state): State<AppState>, AuthUser(uid): AuthUser) -> App
     let (actioned,): (i64,) = sqlx::query_as("SELECT count(*) FROM reports WHERE target_user_id = $1 AND status = 'resolved' AND created_at > now() - interval '90 days'").bind(uid).fetch_one(&state.db).await?;
     let (bans,): (i64,) = sqlx::query_as("SELECT count(*) FROM guild_bans WHERE user_id = $1").bind(uid).fetch_one(&state.db).await?;
     let (timeouts,): (i64,) = sqlx::query_as("SELECT count(*) FROM guild_members WHERE user_id = $1 AND timeout_until > now()").bind(uid).fetch_one(&state.db).await?;
-    let score = actioned + bans + timeouts;
+    let (warnings,): (i64,) = sqlx::query_as("SELECT count(*) FROM member_warnings WHERE user_id = $1 AND created_at > now() - interval '90 days'").bind(uid).fetch_one(&state.db).await?;
+    let score = actioned + bans + timeouts + warnings;
     let level = if suspended { "suspended" } else if score >= 5 { "at_risk" } else if score >= 3 { "very_limited" } else if score >= 1 { "limited" } else { "all_good" };
-    Ok(Json(json!({ "level": level, "actioned_reports": actioned, "bans": bans, "active_timeouts": timeouts, "suspended": suspended })))
+    Ok(Json(json!({ "level": level, "actioned_reports": actioned, "bans": bans, "active_timeouts": timeouts, "warnings": warnings, "suspended": suspended })))
 }
 
 #[derive(Deserialize)]
