@@ -5,7 +5,7 @@ import Emoji from '../Emoji'
 import Modal from '../Modal'
 
 interface Recap {
-  year: number; messages: number; active_days: number; characters: number; dm_messages: number
+  year: number; years?: number[]; messages: number; active_days: number; characters: number; dm_messages: number
   months: { month: number; messages: number }[]; busiest_day: { day: string; messages: number } | null
   top_servers: { id: string; name: string; icon_url: string | null; messages: number }[]
   top_channels: { id: string; name: string; guild: string | null; messages: number }[]
@@ -20,13 +20,15 @@ export default function RecapModal({ onClose, year: initial }: { onClose: () => 
   const [year, setYear] = useState(initial ?? new Date().getFullYear())
   const [r, setR] = useState<Recap | null>(null)
   const [hover, setHover] = useState<number | null>(null)
-  useEffect(() => { setR(null); api.get<Recap>(`/users/@me/recap?year=${year}`).then(setR).catch(() => setR(null)) }, [year])
+  // Years with activity (from the server), kept while another year loads so the picker never loses its way back.
+  const [years, setYears] = useState<number[]>([new Date().getFullYear()])
+  useEffect(() => { setR(null); api.get<Recap>(`/users/@me/recap?year=${year}`).then((x) => { setR(x); if (x.years?.length) setYears(x.years) }).catch(() => setR(null)) }, [year])
   const max = Math.max(1, ...(r?.months.map((m) => m.messages) ?? [1]))
   const big = (n: number, label: string, key: string) => <div className="rounded-xl bg-bg-0/60 p-3" data-recap-stat={key}><div className="text-2xl font-black tabular-nums">{n.toLocaleString()}</div><div className="text-xs text-text-2">{label}</div></div>
   return (
     <Modal title={t('Your {year} in review', { year })} subtitle={t('Only you can see this.')} onClose={onClose} width="max-w-lg">
       <div className="space-y-4" data-recap>
-        <div className="flex gap-1">{[year - 1, year].filter((y) => y <= new Date().getFullYear()).map((y) => <button key={y} type="button" onClick={() => setYear(y)} className={`rounded-full px-3 py-0.5 text-xs font-semibold ${y === year ? 'bg-accent text-white' : 'bg-bg-3'}`}>{y}</button>)}</div>
+        {years.length > 1 && <div className="flex flex-wrap gap-1" data-recap-years>{[...years].sort((a, b) => a - b).map((y) => <button key={y} type="button" onClick={() => setYear(y)} aria-pressed={y === year} className={`rounded-full px-3 py-0.5 text-xs font-semibold ${y === year ? 'bg-accent text-white' : 'bg-bg-3'}`} data-recap-year={y}>{y}</button>)}</div>}
         {!r ? <p className="text-sm text-text-2">{t('Counting…')}</p> : r.messages === 0 ? <p className="text-sm text-text-2" data-recap-empty>{t('No messages in {year} yet.', { year: r.year })}</p> : <>
           <div className="grid grid-cols-3 gap-2">{big(r.messages, t('messages sent'), 'messages')}{big(r.active_days, t('days you chatted'), 'days')}{big(r.reactions_received, t('reactions you got'), 'reactions')}</div>
           <figure className="rounded-xl bg-bg-0/60 p-3" data-recap-months>

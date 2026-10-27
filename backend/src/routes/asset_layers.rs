@@ -61,6 +61,9 @@ pub struct Layered {
     pub still: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reduced_motion: Option<String>,
+    /// Effects: the shop thumbnail, the picker's resting picture.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<String>,
     #[serde(skip)]
     dir: PathBuf,
     #[serde(skip)]
@@ -153,7 +156,7 @@ pub fn scan_layered(dir: &std::path::Path) -> LayerIndex {
         idx.by_id.insert(id.clone(), idx.list.len());
         idx.list.push(Layered {
             id, name, description: m["description"].as_str().unwrap_or_default().trim().to_string(), layers, layout: m["layout"].clone(),
-            still: pick("static.png"), reduced_motion: pick("reduced_motion.png"), tag: format!("{newest:x}-{total:x}"), dir: path, files,
+            still: pick("static.png"), reduced_motion: pick("reduced_motion.png"), thumbnail: pick("thumbnail.png"), tag: format!("{newest:x}-{total:x}"), dir: path, files,
         });
     }
     idx

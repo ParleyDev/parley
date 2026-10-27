@@ -3,13 +3,16 @@ import ProfileEffect from '../ProfileEffect'
 import { useT } from '../../lib/i18n'
 import { assetFile, useCatalog, type LayeredItem, type LayeredKind } from '../../lib/assetCatalog'
 
-/** The picture shown for a catalogue entry: an effect's still, or a frame's composed preview. */
-export const layeredThumb = (kind: LayeredKind, item: LayeredItem) =>
-  kind === 'profile-frames' ? `/api/assets/profile-frames/${encodeURIComponent(item.id)}/preview` : item.still ? assetFile(kind, item.id, item.still) : null
+/** The picture shown for a catalogue entry: an effect's thumbnail (else its still), or a frame's composed preview. */
+export const layeredThumb = (kind: LayeredKind, item: LayeredItem) => {
+  if (kind === 'profile-frames') return `/api/assets/profile-frames/${encodeURIComponent(item.id)}/preview`
+  const f = item.thumbnail ?? item.still
+  return f ? assetFile(kind, item.id, f) : null
+}
 
 /**
  * Profile editor: the instance's profile effects or frames (assets folder), searchable by name and description,
- * as a grid of previews that load as they scroll in. Hovering (or focusing) an effect plays it; the description
+ * as a grid of thumbnails that load as they scroll in. Hovering (or focusing) an effect plays it; the description
  * shows in the tooltip.
  */
 export default function LayeredPicker({ kind, value, onPick }: { kind: LayeredKind; value: string; onPick: (v: string) => void }) {
@@ -35,9 +38,10 @@ export default function LayeredPicker({ kind, value, onPick }: { kind: LayeredKi
               onFocus={frames ? undefined : () => setLive(v)} onBlur={frames ? undefined : () => setLive((c) => (c === v ? null : c))} title={x.description ? `${x.name}: ${x.description}` : x.name}
               className={`group relative overflow-hidden rounded-lg border bg-[#232428] text-left ${value === v ? 'border-accent ring-2 ring-accent/40' : 'border-line hover:border-text-2'}`} data-layered-option={v}>
               <span className={`block ${frames ? 'aspect-[4/5]' : 'aspect-[9/16]'} w-full`}>
-                {src && <img src={src} alt="" loading="lazy" className={`h-full w-full transition-opacity ${frames ? 'object-contain' : 'object-cover object-top'} ${live === v ? 'opacity-25' : ''}`} />}
+                {/* Hidden, not removed, while playing: removing the element under the pointer would lose the tile's mouseleave. */}
+                {src && <img src={src} alt="" loading="lazy" className={`h-full w-full ${frames ? 'object-contain' : 'object-cover object-top'} ${live === v ? 'opacity-0' : ''}`} data-layered-thumb />}
               </span>
-              {live === v && <span className="absolute inset-0" data-effect-tile-live><ProfileEffect id={v} /></span>}
+              {live === v && <span className="absolute inset-0" data-effect-tile-live>{x.still && <img src={assetFile(kind, x.id, x.still)} alt="" className="absolute inset-0 h-full w-full object-cover object-top opacity-25" />}<ProfileEffect id={v} /></span>}
               <span className="absolute z-10 inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1 pt-4 text-[11px] font-semibold leading-tight text-white line-clamp-2">{x.name}</span>
             </button>
           )

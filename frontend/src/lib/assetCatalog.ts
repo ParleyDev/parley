@@ -5,7 +5,7 @@ export type LayeredKind = 'profile-effects' | 'profile-frames'
 export interface EffectLayer { file: string; start_ms: number; duration_ms: number; loop: boolean; loop_delay_ms: number; z_index: number; random_variants?: string[]; width?: number; height?: number }
 export interface FrameLayer { file: string; order: 'front' | 'back'; type: 'staple' | 'rail' | 'border'; anchor: 'top' | 'bottom' | 'center'; responsive?: boolean; width?: number; height?: number }
 export interface FrameLayout { inner_width: number; overflow_top: number; overflow_bottom: number; overflow_horizontal: number }
-export interface LayeredItem<L = EffectLayer | FrameLayer> { id: string; name: string; description: string; layers: L[]; layout?: FrameLayout; still?: string; reduced_motion?: string }
+export interface LayeredItem<L = EffectLayer | FrameLayer> { id: string; name: string; description: string; layers: L[]; layout?: FrameLayout; still?: string; reduced_motion?: string; thumbnail?: string }
 export type EffectItem = LayeredItem<EffectLayer>
 export type FrameItem = LayeredItem<FrameLayer>
 

@@ -33,8 +33,14 @@ async fn recap(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q):
     let (reactions_got,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM reactions r JOIN messages m ON m.id = r.message_id WHERE m.author_id = $1 AND r.user_id <> $1 AND EXTRACT(YEAR FROM m.created_at) = $2").bind(uid).bind(year as f64).fetch_one(db).await?;
     let (friends,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM relationships WHERE user_id = $1 AND kind = 'friend' AND EXTRACT(YEAR FROM created_at) = $2").bind(uid).bind(year as f64).fetch_one(db).await?;
     let (joined,): (i64,) = sqlx::query_as("SELECT COUNT(DISTINCT guild_id) FROM guild_member_log WHERE user_id = $1 AND kind = 'join' AND EXTRACT(YEAR FROM at) = $2").bind(uid).bind(year as f64).fetch_one(db).await?;
+    // Years there is something to show for (the current one always), newest first, for the year picker.
+    let now = chrono::Utc::now().year();
+    let mut years: Vec<i32> = sqlx::query_scalar("SELECT DISTINCT EXTRACT(YEAR FROM created_at)::int FROM messages WHERE author_id = $1").bind(uid).fetch_all(db).await?;
+    if !years.contains(&now) { years.push(now) }
+    years.retain(|y| *y <= now);
+    years.sort_unstable_by(|a, b| b.cmp(a));
     Ok(Json(json!({
-        "year": year, "messages": messages, "active_days": days, "characters": chars, "dm_messages": dms,
+        "year": year, "years": years, "messages": messages, "active_days": days, "characters": chars, "dm_messages": dms,
         "months": (1..=12).map(|m| json!({ "month": m, "messages": months.iter().find(|x| x.0 == m).map(|x| x.1).unwrap_or(0) })).collect::<Vec<_>>(),
         "busiest_day": busiest_day.map(|(d, n)| json!({ "day": d, "messages": n })),
         "top_servers": servers.iter().map(|(id, n, i, c)| json!({ "id": id, "name": n, "icon_url": i, "messages": c })).collect::<Vec<_>>(),
