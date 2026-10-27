@@ -1,3 +1,4 @@
+import { useT } from './lib/i18n'
 import WidgetPage from './pages/Widget'
 import { LogoNeon } from './components/Logo'
 import { useEffect } from 'react'
@@ -23,6 +24,8 @@ import Toasts from './components/Toasts'
 import { useParams } from 'react-router-dom'
 
 export default function App() {
+  // Re-render everything when the language changes or its catalogue finishes loading.
+  useT()
   const token = useStore((s) => s.token)
   const ready = useStore((s) => s.ready)
   const location = useLocation()

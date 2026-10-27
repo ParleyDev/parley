@@ -18,7 +18,7 @@ import { useStore } from './store'
 initAppearance()
 initPrefs()
 initLog()
-initLanguage()
+const languageReady = initLanguage()
 void initNative()
 initPwa()
 initViewport()
@@ -26,10 +26,12 @@ installSettingsSync()
 installArrowNav()
 followOtherTabs(() => ({ token: useStore.getState().token, userId: useStore.getState().user?.id ?? null }), (token) => useStore.setState({ token }))
 
-createRoot(document.getElementById('root')!).render(
+// First paint waits (briefly) for the chosen language's catalogue, so a non-English UI doesn't flash English.
+const render = () => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <App />
     </BrowserRouter>
   </StrictMode>,
 )
+void Promise.race([languageReady, new Promise((r) => setTimeout(r, 1500))]).finally(render)

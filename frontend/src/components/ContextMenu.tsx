@@ -1,3 +1,4 @@
+import { useT } from '../lib/i18n'
 import { ChevronRight } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -77,6 +78,7 @@ export default function ContextMenu({ x, y, items, above, onClose, label }: Menu
 }
 
 function MenuRow({ item, onClose, sheet }: { item: MenuItem; onClose: () => void; sheet?: boolean }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [flip, setFlip] = useState(false)
   const subRef = useRef<HTMLDivElement>(null)
@@ -88,7 +90,7 @@ function MenuRow({ item, onClose, sheet }: { item: MenuItem; onClose: () => void
     return (
       <div>
         <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`w-full flex items-center justify-between gap-3 rounded-lg ${size} font-medium text-left ${tone}`} data-menu-item={item.label}>
-          <span className="flex items-center gap-3">{item.icon}{item.label}</span><ChevronRight size={16} className={open ? 'rotate-90' : ''} />
+          <span className="flex items-center gap-3">{item.icon}{t(item.label)}</span><ChevronRight size={16} className={open ? 'rotate-90' : ''} />
         </button>
         {open && <div role="menu" className="ml-4 border-l border-white/10 pl-1">{item.children.map((c, i) => <MenuRow key={i} item={c} onClose={onClose} sheet />)}</div>}
       </div>
@@ -98,7 +100,7 @@ function MenuRow({ item, onClose, sheet }: { item: MenuItem; onClose: () => void
     return (
       <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
         <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`w-full flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm font-medium text-left ${tone}`} data-menu-item={item.label}>
-          <span className="flex items-center gap-2">{item.icon}{item.label}</span><ChevronRight size={16} />
+          <span className="flex items-center gap-2">{item.icon}{t(item.label)}</span><ChevronRight size={16} />
         </button>
         {open && (
           <div ref={subRef} role="menu" className={`pop absolute top-0 z-[140] min-w-[190px] rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1.5 ${flip ? 'right-full mr-1' : 'left-full ml-1'}`}>
@@ -110,7 +112,7 @@ function MenuRow({ item, onClose, sheet }: { item: MenuItem; onClose: () => void
   }
   return (
     <button type="button" role="menuitem" disabled={item.disabled} onClick={() => { onClose(); item.onClick?.() }} className={`w-full flex items-center ${sheet ? 'gap-3 rounded-lg' : 'gap-2 rounded'} ${size} font-medium text-left ${tone}`} data-menu-item={item.label}>
-      {item.icon}{item.label}
+      {item.icon}{t(item.label)}
     </button>
   )
 }

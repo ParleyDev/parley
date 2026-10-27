@@ -1,3 +1,4 @@
+import { t } from '../lib/i18n'
 import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronUp, Eye, PhoneOff, Settings } from 'lucide-react'
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
@@ -34,7 +35,7 @@ export function ControlButton({ label, on = false, tone = 'active', onClick, dis
   const compact = useContext(Compact)
   const state = !on ? 'text-text-0 hover:bg-bg-3' : tone === 'danger' ? 'bg-danger/15 text-danger hover:bg-danger/25' : 'bg-text-0 text-bg-0 hover:bg-text-1'
   return (
-    <button type="button" title={label} aria-label={label} aria-pressed={on} onClick={onClick} disabled={disabled} className={`${compact ? 'h-9 w-9' : 'h-10 w-10'} shrink-0 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50 ${state}`} {...data}>
+    <button type="button" title={t(label)} aria-label={t(label)} aria-pressed={on} onClick={onClick} disabled={disabled} className={`${compact ? 'h-9 w-9' : 'h-10 w-10'} shrink-0 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50 ${state}`} {...data}>
       {children}
     </button>
   )

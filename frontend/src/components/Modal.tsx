@@ -1,3 +1,4 @@
+import { t } from '../lib/i18n'
 import { X } from 'lucide-react'
 import { useEffect, type ReactNode } from 'react'
 
@@ -22,7 +23,7 @@ export default function Modal({ title, subtitle, onClose, children, width = 'max
       <div className={`pop w-full ${width} rounded-2xl bg-bg-1 border border-line shadow-2xl overflow-hidden`} role="dialog" aria-modal>
         {(title || subtitle) && (
           <div className="px-6 pt-6 pb-2 relative">
-            {title && <h2 className="text-xl font-bold">{title}</h2>}
+            {title && <h2 className="text-xl font-bold">{t(title)}</h2>}
             {subtitle && <p className="text-sm text-text-2 mt-1">{subtitle}</p>}
             <button onClick={onClose} className="absolute right-4 top-4 text-text-2 hover:text-text-0 rounded-md p-1 hover:bg-bg-3"><X size={18} /></button>
           </div>

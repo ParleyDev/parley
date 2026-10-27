@@ -628,7 +628,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             if (window.matchMedia('(pointer: coarse)').matches) { setSheet(true); return }
             const r = (e.currentTarget.closest('[data-composer-box]') ?? e.currentTarget).getBoundingClientRect(); plus.open({ clientX: r.left, clientY: r.top - 8 }, plusItems, { above: true })
           }} aria-haspopup="menu" data-composer-plus><PlusCircle size={22} /></button>
-          <textarea ref={ref} rows={1} spellCheck={spellcheck} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={t('Message {name}', { name })}
+          <textarea ref={ref} rows={1} dir="auto" spellCheck={spellcheck} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={t('Message {name}', { name })}
             onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
             className="composer-input flex-1 min-w-0 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" />
                     <div className="relative pb-1 flex shrink-0 items-center gap-2.5">
