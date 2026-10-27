@@ -1,6 +1,7 @@
 // Drives a debug build of the desktop shell (Linux, under Xvfb and a private D-Bus session) against a local page:
 // the page calls the shell's commands through the remote capability, a second launch hands over a parley:// link,
-// and startup settings land on disk. Build first: (cd src-tauri && cargo build)
+// startup settings land on disk, and push to talk is heard while the window is in the background (keys pressed
+// through XTest with a tiny helper: XKEY=/path/to/xkey, built from tests/xkey.c). Build first: (cd src-tauri && cargo build)
 //   dbus-run-session -- xvfb-run -a node tests/shell.mjs
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
@@ -30,13 +31,18 @@ const page = (step) => `<!doctype html><meta charset=utf-8><title>shell test</ti
     await t('after', () => inv('set_desktop_settings', { autostart: true, startMinimized: true, hardwareAcceleration: false }))
     await t('opener', () => inv('plugin:opener|open_url', { url: 'https://example.com' }))
     await t('notify', () => inv('plugin:notification|notify', { options: { title: 'x' } }))
+    window.__parleyPtt = (down) => fetch('/ptt/' + down, { method: 'POST', body: '{}' })
+    await t('pttBad', () => inv('set_ptt_key', { code: 'MediaPlay' }))
+    await t('ptt', () => inv('set_ptt_key', { code: 'Backquote' }))
   }
   if (inv && ${step} === 2) await t('off', () => inv('set_desktop_settings', { autostart: false }))
   await fetch('/result/${step}', { method: 'POST', body: JSON.stringify(out) })
 })()
 </script>`
+const ptt = []
 const srv = createServer((req, res) => {
   hits.push(req.url)
+  if (req.url.startsWith('/ptt/')) { ptt.push(req.url.slice(5)); res.end(); return }
   if (req.method === 'POST') { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { results[req.url.split('/').pop()] = JSON.parse(b); res.end() }); return }
   res.setHeader('Content-Type', 'text/html')
   res.end(page(req.url.startsWith('/invite/') ? 2 : 1))
@@ -60,6 +66,20 @@ ok('and are kept for the next launch', existsSync(prefsFile) && JSON.parse(readF
 const autostartFile = join(home, '.config/autostart/Parley.desktop')
 ok('an autostart entry is written, launching minimised', existsSync(autostartFile) && /--autostart/.test(readFileSync(autostartFile, 'utf8')))
 ok('plugin APIs stay out of reach of the server page', String(r.opener).startsWith('error') && String(r.notify).startsWith('error'), JSON.stringify({ opener: r.opener, notify: r.notify }))
+
+console.log('-- push to talk in the background')
+ok('the shell watches a known key, and refuses one it cannot', r.ptt === true && r.pttBad === false, JSON.stringify({ ptt: r.ptt, pttBad: r.pttBad }))
+const xkey = process.env.XKEY
+if (xkey) {
+  const key = (down) => spawn(xkey, ['grave', down ? '1' : '0'], { stdio: 'inherit' })
+  key(true); await new Promise((r) => setTimeout(r, 400)); key(false)
+  ok('in the foreground the page hears the key itself', ptt.length === 0, JSON.stringify(ptt))
+  spawn(xkey, ['blur'], { stdio: 'inherit' }); await new Promise((r) => setTimeout(r, 500))
+  key(true); ok('holding the key tells the page', await wait(() => ptt.includes('true'), 3000), JSON.stringify(ptt))
+  key(false); ok('letting go too', await wait(() => ptt.includes('false'), 3000), JSON.stringify(ptt))
+  key(true); await new Promise((r) => setTimeout(r, 300)); key(false); await new Promise((r) => setTimeout(r, 300))
+  ok('every press, once each', ptt.join() === 'true,false,true,false', JSON.stringify(ptt))
+} else console.log('  skip  keys (set XKEY)')
 
 console.log('-- parley:// links')
 const second = spawn(bin, ['parley://invite/abc123'], { env, stdio: 'inherit' })

@@ -23,5 +23,7 @@ export const desktop = {
   /** Native zoom (true page zoom, crisper than CSS zoom). False when the shell can't. */
   zoom(factor: number): boolean { const i = invoke(); if (!i) return false; i('set_zoom', { factor }).catch(() => {}); return true },
   settings: () => invoke()?.<DesktopSettings>('desktop_settings') ?? Promise.reject(new Error('Not in the desktop app')),
+  /** Watch this key for push to talk while the window is in the background (null stops). False when the shell can't. */
+  pttKey: (code: string | null): Promise<boolean> => invoke()?.<boolean>('set_ptt_key', { code }).catch(() => false) ?? Promise.resolve(false),
   setSettings: (s: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean }) => invoke()?.<DesktopSettings>('set_desktop_settings', s) ?? Promise.reject(new Error('Not in the desktop app')),
 }

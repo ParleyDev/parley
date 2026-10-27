@@ -12,9 +12,16 @@
 //! badge, an attention flash, zoom, and the startup settings. `parley://invite/<code>` and
 //! `parley://channels/<server>/<channel>` links open in the app, on whichever server it is connected to.
 //! Window size and position are remembered between launches.
+//!
+//! Global push-to-talk: while the page is in a call with push to talk on, it names its key (`set_ptt_key`). The
+//! shell then reads that key's state (it never grabs the key, so it still types in other apps) and, while the
+//! window is in the background, tells the page through `window.__parleyPtt(down)`. In the foreground the page
+//! sees the key itself.
 
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use device_query::{DeviceQuery, DeviceState, Keycode};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Manager, UserAttentionType, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
@@ -112,6 +119,69 @@ fn set_zoom(window: WebviewWindow, factor: f64) -> Result<(), String> {
     window.set_zoom(factor.clamp(0.5, 2.0)).map_err(|e| e.to_string())
 }
 
+/// The browser's `KeyboardEvent.code` for a key the shell can watch.
+fn keycode(code: &str) -> Option<Keycode> {
+    use Keycode::*;
+    if let Some(d) = code.strip_prefix("Digit") { return Some([Key0, Key1, Key2, Key3, Key4, Key5, Key6, Key7, Key8, Key9][d.parse::<usize>().ok().filter(|n| *n < 10)?]); }
+    if let Some(n) = code.strip_prefix("Numpad").and_then(|d| d.parse::<usize>().ok()) { return [Numpad0, Numpad1, Numpad2, Numpad3, Numpad4, Numpad5, Numpad6, Numpad7, Numpad8, Numpad9].get(n).cloned(); }
+    if let Some(n) = code.strip_prefix('F').and_then(|d| d.parse::<usize>().ok()) {
+        return [F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15, F16, F17, F18, F19, F20].get(n.checked_sub(1)?).cloned();
+    }
+    if let Some(l) = code.strip_prefix("Key").filter(|l| l.len() == 1) { return l.parse().ok(); }
+    let mac = cfg!(target_os = "macos");
+    Some(match code {
+        "Backquote" => Grave, "Minus" => Minus, "Equal" => Equal, "BracketLeft" => LeftBracket, "BracketRight" => RightBracket,
+        "Backslash" => BackSlash, "Semicolon" => Semicolon, "Quote" => Apostrophe, "Comma" => Comma, "Period" => Dot, "Slash" => Slash,
+        "Space" => Space, "Tab" => Tab, "CapsLock" => CapsLock, "Escape" => Escape, "Enter" => Enter, "Backspace" => Backspace,
+        "ArrowUp" => Up, "ArrowDown" => Down, "ArrowLeft" => Left, "ArrowRight" => Right,
+        "Home" => Home, "End" => End, "PageUp" => PageUp, "PageDown" => PageDown, "Insert" => Insert, "Delete" => Delete,
+        "NumpadAdd" => NumpadAdd, "NumpadSubtract" => NumpadSubtract, "NumpadMultiply" => NumpadMultiply, "NumpadDivide" => NumpadDivide,
+        "NumpadDecimal" => NumpadDecimal, "NumpadEnter" => NumpadEnter, "NumpadEqual" => NumpadEquals,
+        "ShiftLeft" => LShift, "ShiftRight" => RShift, "ControlLeft" => LControl, "ControlRight" => RControl,
+        "AltLeft" => if mac { LOption } else { LAlt }, "AltRight" => if mac { ROption } else { RAlt },
+        "MetaLeft" => if mac { Command } else { LMeta }, "MetaRight" => if mac { RCommand } else { RMeta },
+        _ => return None,
+    })
+}
+
+/// The push-to-talk key being watched, if any.
+#[derive(Default)]
+struct Ptt { key: Arc<Mutex<Option<Keycode>>>, started: Mutex<bool> }
+
+/// Watch `code` for push to talk while the window is in the background (None stops). Returns whether the shell
+/// can: false for a key it doesn't know, or where key state can't be read (no X display, macOS without Input
+/// Monitoring).
+#[tauri::command]
+fn set_ptt_key(app: AppHandle, code: Option<String>) -> bool {
+    let key = match code.as_deref() { Some(c) => match keycode(c) { Some(k) => Some(k), None => return false }, None => None };
+    let state = app.state::<Ptt>();
+    if let Ok(mut k) = state.key.lock() { *k = key; }
+    if key.is_none() { return true; }
+    let mut started = match state.started.lock() { Ok(s) => s, Err(_) => return false };
+    if !*started {
+        // Probe once on this thread so the answer is honest, then poll on a thread of our own.
+        if DeviceState::checked_new().is_none() { return false; }
+        *started = true;
+        let (key, h) = (state.key.clone(), app.clone());
+        std::thread::spawn(move || {
+            let Some(dev) = DeviceState::checked_new() else { return };
+            let mut down = false;
+            loop {
+                let want = key.lock().ok().and_then(|k| *k);
+                let held = want.is_some_and(|k| dev.get_keys().contains(&k));
+                let w = h.get_webview_window("main");
+                let now = held && !w.as_ref().and_then(|w| w.is_focused().ok()).unwrap_or(true);
+                if now != down {
+                    down = now;
+                    if let Some(w) = w { let _ = w.eval(&format!("window.__parleyPtt && window.__parleyPtt({down})")); }
+                }
+                std::thread::sleep(Duration::from_millis(if want.is_some() { 15 } else { 200 }));
+            }
+        });
+    }
+    true
+}
+
 /// A deep link waiting for the app to reach a server (it was opened on the connect screen).
 struct Pending(Mutex<Option<String>>);
 
@@ -150,7 +220,8 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .manage(Pending(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, desktop_settings, set_desktop_settings])
+        .manage(Ptt::default())
+        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, desktop_settings, set_desktop_settings, set_ptt_key])
         .setup(|app| {
             let handle = app.handle().clone();
             // AppImages and dev builds aren't registered for parley:// by an installer.
@@ -228,7 +299,20 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::deep_path;
+    use super::{deep_path, keycode};
+    use device_query::Keycode;
+    #[test]
+    fn keycodes() {
+        assert_eq!(keycode("Backquote"), Some(Keycode::Grave));
+        assert_eq!(keycode("KeyV"), Some(Keycode::V));
+        assert_eq!(keycode("Digit7"), Some(Keycode::Key7));
+        assert_eq!(keycode("F13"), Some(Keycode::F13));
+        assert_eq!(keycode("F0"), None);
+        assert_eq!(keycode("Numpad3"), Some(Keycode::Numpad3));
+        assert_eq!(keycode("CapsLock"), Some(Keycode::CapsLock));
+        assert_eq!(keycode("MediaPlay"), None);
+        assert_eq!(keycode("KeyAB"), None);
+    }
     fn p(s: &str) -> Option<String> { deep_path(&url::Url::parse(s).unwrap()) }
     #[test]
     fn deep_links() {

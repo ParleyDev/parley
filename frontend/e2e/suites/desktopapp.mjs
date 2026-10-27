@@ -1,5 +1,5 @@
 // The web client inside the desktop shell: startup and hardware-acceleration settings, the unread badge, native
-// zoom and its keys, spellcheck, and the invite page's "Open in the desktop app" link. The shell's commands are
+// zoom and its keys, spellcheck, push to talk in the background, and the invite page's "Open in the desktop app" link. The shell's commands are
 // faked here (desktop/tests/shell.mjs drives the real one).
 import { chromium } from 'playwright'
 import { WEB, S, reg, call, ok, openDms, finish } from '../lib.mjs'
@@ -10,19 +10,20 @@ const inv = await call(b.token, 'POST', `/guilds/${g.id}/invites`, {})
 await call(a.token, 'POST', `/invites/${inv.code}`)
 const ch = g.channels.find((c) => c.kind === 'text')
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 ParleyDesktop/0.13.0'
-const browser = await chromium.launch(); const errors = []
+const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] }); const errors = []
 const fake = () => {
   window.__calls = []
   const st = { autostart: false, start_minimized: false, hardware_acceleration: true, version: '0.13.0' }
   window.__TAURI_INTERNALS__ = { invoke: async (cmd, args) => {
     window.__calls.push([cmd, args ?? null])
     if (cmd === 'desktop_settings') return { ...st }
+    if (cmd === 'set_ptt_key') return window.__pttOk ?? true
     if (cmd === 'set_desktop_settings') { if (args.autostart !== undefined) st.autostart = args.autostart; if (args.startMinimized !== undefined) st.start_minimized = args.startMinimized; if (args.hardwareAcceleration !== undefined) st.hardware_acceleration = args.hardwareAcceleration; return { ...st } }
     return null
   } }
 }
 const mk = async (ua, withShell) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, ...(ua ? { userAgent: ua } : {}) })
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, permissions: ['microphone'], ...(ua ? { userAgent: ua } : {}) })
   if (withShell) await ctx.addInitScript(fake)
   const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
   await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
@@ -67,6 +68,30 @@ await p.waitForFunction(() => window.__calls.some((c) => c[0] === 'set_badge' &&
 ok('a mention puts a count on the app icon', (await calls(p, 'set_badge')).some((x) => x.count === 1), JSON.stringify(await calls(p, 'set_badge')))
 await p.goto(`${WEB}/channels/${g.id}/${ch.id}`); await p.waitForTimeout(1500)
 ok('reading it clears the badge', (await calls(p, 'set_badge')).at(-1)?.count === 0, JSON.stringify(await calls(p, 'set_badge')))
+
+console.log('-- push to talk')
+const vc = g.channels.find((c) => c.kind === 'voice')
+const pp = await mk(UA, true)
+await pp.evaluate(() => localStorage.setItem('parley.voiceSettings', JSON.stringify({ inputMode: 'ptt', pttKey: 'F8' })))
+await pp.goto(`${WEB}/channels/${g.id}/${vc.id}`); await pp.waitForSelector('text=Join Voice')
+ok('nothing is watched outside a call', (await calls(pp, 'set_ptt_key')).length === 0)
+await pp.click('text=Join Voice'); await pp.waitForSelector('[data-voice-leave]')
+await pp.waitForFunction(() => window.__calls.some((c) => c[0] === 'set_ptt_key'))
+ok('joining a call hands the shell the key', JSON.stringify(await calls(pp, 'set_ptt_key')) === '[{"code":"F8"}]')
+const badge = () => pp.locator('span[title="Push to talk"]').getAttribute('class')
+await pp.evaluate(() => window.__parleyPtt(true)); await pp.waitForTimeout(150)
+ok('the shell holding it transmits', /bg-success/.test(await badge()))
+await pp.evaluate(() => window.__parleyPtt(false)); await pp.waitForTimeout(150)
+ok('and letting go stops', !/bg-success/.test(await badge()))
+await pp.evaluate(() => { window.__pttOk = false })
+await pp.click('button[title="User Settings"]'); await pp.click('[data-settings-tab="voice"]').catch(() => {})
+ok('settings say it works in the background', await pp.locator('text=Works while Parley is in the background').count() === 1)
+await pp.keyboard.press('Escape')
+await pp.click('[data-voice-leave]'); await pp.waitForTimeout(400)
+ok('leaving stops the watch', JSON.stringify((await calls(pp, 'set_ptt_key')).at(-1)) === '{"code":null}')
+await pp.click('text=Join Voice'); await pp.waitForSelector('text=only works while Parley is in front', { timeout: 5000 }).catch(() => {})
+ok('a shell that cannot read keys says so', await pp.locator('text=only works while Parley is in front').count() >= 1)
+await pp.click('[data-voice-leave]')
 
 console.log('-- browsers')
 const w = await mk(null, false)

@@ -3,7 +3,8 @@ import { applySfxSink, playSfx } from './sfx'
 import type { VoiceState } from './types'
 import { startPreviews, stopPreviews } from './streamPreview'
 import { sendOp, type SignalData } from './ws'
-import { supportsSinkId, type VoiceSettings } from './settings'
+import { keyLabel, supportsSinkId, type VoiceSettings } from './settings'
+import { desktop, desktopBridge } from './desktop'
 import { keepAwake } from './native'
 import { onUserAudio, userAudio } from './userAudio'
 import { api } from './api'
@@ -116,6 +117,20 @@ class VoiceManager {
       window.addEventListener('keydown', (e) => this.onKey(e, true), true)
       window.addEventListener('keyup', (e) => this.onKey(e, false), true)
       window.addEventListener('blur', () => { this.pttDown = false; useStore.getState().setPttHeld(false) })
+      // Desktop app: the shell watches the key while Parley is in the background, only during a call.
+      const shell = window as unknown as { __parleyPtt?: (down: boolean) => void }
+      shell.__parleyPtt = (down) => { if (this.settings.inputMode === 'ptt') this.setPtt(!!down) }
+      if (desktopBridge()) {
+        let watched: string | null = null
+        useStore.subscribe((s) => {
+          const want = s.myVoiceChannelId && s.voiceSettings.inputMode === 'ptt' ? s.voiceSettings.pttKey : null
+          if (want === watched) return
+          watched = want
+          void desktop.pttKey(want).then((ok) => {
+            if (!ok && want && watched === want) useStore.getState().pushToast(`Push to talk with ${keyLabel(want)} only works while Parley is in front: the app can't read the keyboard in the background${navigator.userAgent.includes('Mac') ? ' (allow Parley under System Settings → Privacy & Security → Accessibility)' : ''}.`, 'error')
+          })
+        })
+      }
       // An admin changing the channel's audio profile mid-call applies to everyone in it without rejoining.
       useStore.subscribe((s, prev) => {
         const id = this.channelId
@@ -653,6 +668,10 @@ class VoiceManager {
     if (typing && !modifier) return
     if (!typing) e.preventDefault()
     if (down && e.repeat) return
+    this.setPtt(down)
+  }
+
+  private setPtt(down: boolean) {
     if (this.pttDown !== down) playSfx(down ? 'ptt_activate' : 'ptt_deactivate')
     this.pttDown = down
     if (!down) this.pttUpAt = Date.now()

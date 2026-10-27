@@ -5,6 +5,7 @@ import { STREAM_QUALITY, voice } from '../../../lib/voice'
 import { keyLabel, supportsSinkId, type VoiceSettings } from '../../../lib/settings'
 import VideoTile from '../../VideoTile'
 import EntranceSound from '../../EntranceSound'
+import { desktopBridge } from '../../../lib/desktop'
 
 interface Devices { inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[]; cameras: MediaDeviceInfo[]; labelsHidden: boolean }
 
@@ -134,7 +135,7 @@ export default function VoiceVideoTab() {
               <button onClick={() => setRecording(true)} className="btn-ghost whitespace-nowrap">Record Keybind</button>
               <span className={`ml-auto rounded-md px-2 py-1 text-xs font-bold ${pttHeld ? 'bg-success text-black' : 'bg-bg-3 text-text-2'}`}>{pttHeld ? 'TRANSMITTING' : 'IDLE'}</span>
             </div>
-            <p className="mt-1.5 text-xs text-text-2">Push to talk only works while this tab is focused (browser limitation). Modifier keys work even while typing.</p>
+            <p className="mt-1.5 text-xs text-text-2">{desktopBridge() ? 'Works while Parley is in the background too, during a call. Modifier keys work even while typing.' : 'Push to talk only works while this tab is focused (browser limitation); the desktop app also hears it in the background. Modifier keys work even while typing.'}</p>
           </div>
           <Slider label="Push to Talk Release Delay" value={st.pttRelease} min={0} max={2000} step={20} onChange={set('pttRelease')} format={(v) => `${(v / 1000).toFixed(2)}s`} />
         </section>
