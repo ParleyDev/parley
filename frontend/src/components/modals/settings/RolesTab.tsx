@@ -9,6 +9,7 @@ import { canManageRole, has, P, PERMS, sortedRoles, EMPTY_ROLES } from '../../..
 import { Toggle } from '../SettingsShell'
 import { roleLook } from '../../StyledName'
 import { colorsOf, EFFECTS, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../../lib/nameStyle'
+import { RequirementsEditor } from '../../LinkedRoles'
 import NameStyleModal from '../NameStyle'
 
 const styleOfRole = (r: Role): NameStyle => ({ font: (r.name_style?.font as NameFont) ?? 'default', effect: (r.name_style?.effect as NameEffect) ?? (r.color_accent ? 'gradient' : 'solid'), colors: colorsOf({ name_primary: r.color, name_accent: r.color_accent, name_style: r.name_style }) })
@@ -148,6 +149,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
                   <Toggle label="Let members pick this role themselves" checked={draft.self_assignable} disabled={!editable} onChange={(v) => setDraft({ ...draft, self_assignable: v })} />
                   <p className="mt-1 text-xs text-text-2">It shows in Channels & Roles. Roles with moderation powers can't be self-assignable.</p>
                 </div>
+                {role.id !== guildId && !role.managed_app_id && <RequirementsEditor guildId={guildId} role={role} editable={editable} />}
                 <div data-role-mentionable>
                   <Toggle label="Allow anyone to @mention this role" checked={draft.mentionable} disabled={!editable} onChange={(v) => setDraft({ ...draft, mentionable: v })} />
                   <p className="mt-1 text-xs text-text-2">Members with Mention @everyone, @here and All Roles can always ping it.</p>

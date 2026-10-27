@@ -266,7 +266,7 @@ pub async fn list_roles(db: &PgPool, guild_id: Uuid) -> AppResult<Vec<Role>> {
         .await?)
 }
 
-pub const ROLE_COLS: &str = "id, guild_id, name, color, color_accent, position, permissions, hoist, created_at, name_style, icon, mentionable, self_assignable, managed_app_id";
+pub const ROLE_COLS: &str = "id, guild_id, name, color, color_accent, position, permissions, hoist, created_at, name_style, icon, mentionable, self_assignable, managed_app_id, requirements";
 
 /// Fill `overwrites` on each channel in one query.
 pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResult<()> {
@@ -522,6 +522,7 @@ mod tests {
             mentionable: false,
             self_assignable: false,
             managed_app_id: None,
+            requirements: None,
         }
     }
 

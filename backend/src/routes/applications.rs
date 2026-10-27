@@ -29,7 +29,7 @@ pub fn router() -> Router<AppState> {
 }
 
 /// Scopes an app may ask for, with what each lets it do.
-pub const SCOPES: [(&str, &str); 9] = [
+pub const SCOPES: [(&str, &str); 10] = [
     ("identify", "Read your username, display name and avatar"),
     ("email", "Read your email address"),
     ("guilds", "See which servers you are in"),
@@ -39,6 +39,7 @@ pub const SCOPES: [(&str, &str); 9] = [
     ("applications.commands", "Add the app's commands"),
     ("guilds.join", "Add you to servers the app's bot is in"),
     ("connections", "See the accounts you have linked"),
+    ("role_connections.write", "Report facts about you that servers can use for linked roles"),
 ];
 
 pub fn hash(token: &str) -> String { format!("{:x}", Sha256::digest(token.as_bytes())) }
@@ -352,6 +353,7 @@ fn scope_allows(scopes: &[String], method: &axum::http::Method, path: &str) -> b
     if path.starts_with("/api/users/@me/guilds") || (path == "/api/guilds" && get) { return has("guilds") }
     if path.starts_with("/api/channels/") && path.contains("/messages") { return if get { has("messages.read") } else { has("messages.write") } }
     if path == "/api/users/@me/connections" && get { return has("connections") }
+    if path.starts_with("/api/users/@me/applications/") && path.ends_with("/role-connection") { return has("role_connections.write") }
     if path.starts_with("/api/users/") && get { return has("identify") }
     false
 }

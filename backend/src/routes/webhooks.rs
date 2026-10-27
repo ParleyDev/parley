@@ -250,8 +250,8 @@ mod tests {
 async fn integrations(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Json<Value>> {
     let (_, p) = perms::guild_perms(&state.db, gid, uid).await?;
     perms::check(p, perms::MANAGE_GUILD)?;
-    let bots: Vec<(Uuid, String, Option<String>, chrono::DateTime<chrono::Utc>, Option<String>)> = sqlx::query_as(
-        "SELECT u.id, u.display_name, u.avatar_url, m.joined_at, a.name FROM guild_members m JOIN users u ON u.id = m.user_id
+    let bots: Vec<(Uuid, String, Option<String>, chrono::DateTime<chrono::Utc>, Option<String>, Option<Uuid>)> = sqlx::query_as(
+        "SELECT u.id, u.display_name, u.avatar_url, m.joined_at, a.name, a.id FROM guild_members m JOIN users u ON u.id = m.user_id
          LEFT JOIN applications a ON a.bot_user_id = u.id WHERE m.guild_id = $1 AND u.bot AND NOT u.webhook ORDER BY m.joined_at")
         .bind(gid).fetch_all(&state.db).await?;
     let hooks: Vec<(Uuid, String, Option<String>, Uuid, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
@@ -262,7 +262,7 @@ async fn integrations(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
          WHERE t.guild_id = $1 ORDER BY t.position")
         .bind(gid).fetch_all(&state.db).await?;
     Ok(Json(json!({
-        "bots": bots.iter().map(|(id, name, avatar, at, app)| json!({ "id": id, "display_name": name, "avatar_url": avatar, "joined_at": at, "application": app })).collect::<Vec<_>>(),
+        "bots": bots.iter().map(|(id, name, avatar, at, app, app_id)| json!({ "id": id, "display_name": name, "avatar_url": avatar, "joined_at": at, "application": app, "application_id": app_id })).collect::<Vec<_>>(),
         "webhooks": hooks.iter().map(|(id, name, avatar, cid, cname, at)| json!({ "id": id, "name": name, "avatar_url": avatar, "channel_id": cid, "channel_name": cname, "created_at": at })).collect::<Vec<_>>(),
         "follows": follows.iter().map(|(tid, tname, sid, sname, gname)| json!({ "channel_id": tid, "channel_name": tname, "source_id": sid, "source_name": sname, "source_guild": gname })).collect::<Vec<_>>(),
     })))

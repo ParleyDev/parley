@@ -270,7 +270,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
               <MenuItem icon={<Bell size={16} />} onClick={() => openModal({ kind: 'guildNotifications', guildId })}>Notification Settings</MenuItem>
               <MenuItem icon={<Pencil size={16} />} onClick={() => openModal({ kind: 'serverProfile', guildId })}>Edit Server Profile</MenuItem>
               <MenuItem icon={<ListChecks size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId })}>Browse Channels</MenuItem>
-              {(Object.values(allRoles).some((r) => r.self_assignable) || onboardingOn) && <MenuItem icon={<Tags size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId, tab: 'roles' })}>Channels &amp; Roles</MenuItem>}
+              {(Object.values(allRoles).some((r) => r.self_assignable || r.requirements) || onboardingOn) && <MenuItem icon={<Tags size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId, tab: 'roles' })}>Channels &amp; Roles</MenuItem>}
               <MenuItem icon={hideMuted ? <Eye size={16} /> : <EyeOff size={16} />} onClick={() => { setMenu(false); toggleHideMuted() }}>{hideMuted ? 'Show Muted Channels' : 'Hide Muted Channels'}</MenuItem>
               {guild.welcome_screen?.enabled && <MenuItem icon={<DoorOpen size={16} />} onClick={() => openModal({ kind: 'welcome', guildId })}>Welcome Screen</MenuItem>}
               <MenuItem icon={<ShieldCheck size={16} />} onClick={() => openModal({ kind: 'guildPrivacy', guildId })}>{t('Privacy Settings')}</MenuItem>

@@ -360,8 +360,8 @@ function SettingsPane() {
         <div className="text-xs text-text-2">Push: <b data-admin-push-state>{fcm.trim() ? 'on' : 'off'}</b></div>
       </div>
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-oauth>
-        <div><span className="block font-semibold">Linked accounts (OAuth)</span><span className="block text-sm text-text-2">Let members connect GitHub and Twitch from Settings → Connections. Register an OAuth app at each provider with the callback URL <code>{instance.app_url ?? ''}/api/connections/&lt;provider&gt;/callback</code> and paste its keys.</span></div>
-        {(['github', 'twitch'] as const).map((p) => (
+        <div><span className="block font-semibold">Linked accounts (OAuth)</span><span className="block text-sm text-text-2">Let members connect GitHub, GitLab, Twitch, Reddit and Spotify from Settings → Connections. Register an OAuth app at each provider with the callback URL <code>{instance.app_url ?? ''}/api/connections/&lt;provider&gt;/callback</code> and paste its keys.</span></div>
+        {(['github', 'gitlab', 'twitch', 'reddit', 'spotify'] as const).map((p) => (
           <div key={p} className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
             <div><label className="label capitalize">{p} client ID</label><input className="input" value={oauth[p]?.client_id ?? ''} onChange={(e) => setOauth({ ...oauth, [p]: { client_id: e.target.value, client_secret: oauth[p]?.client_secret ?? '' } })} autoComplete="off" data-admin-oauth-id={p} /></div>
             <div><label className="label capitalize">{p} client secret</label><input className="input" type="password" value={oauth[p]?.client_secret ?? ''} onChange={(e) => setOauth({ ...oauth, [p]: { client_id: oauth[p]?.client_id ?? '', client_secret: e.target.value } })} autoComplete="off" data-admin-oauth-secret={p} /></div>

@@ -203,6 +203,9 @@ export interface Overwrite { id: string; kind: 'role' | 'member'; allow: number;
 
 export interface Role {
   id: string
+  /** A bot's own role, and a linked role's requirements. */
+  managed_app_id?: string | null
+  requirements?: import('../components/LinkedRoles').Requirements | null
   guild_id: string
   name: string
   color: string | null

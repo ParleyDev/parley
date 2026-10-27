@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import { EMPTY_ROLES, has, P, sortedRoles } from '../../lib/perms'
 import { myChannelPerms, useStore } from '../../store'
 import Modal from '../Modal'
+import { LinkedRolesList } from '../LinkedRoles'
 
 /** Browse Channels (show or hide channels in your list) and Channels & Roles (roles you can pick yourself). */
 export default function BrowseChannelsModal({ onClose, guildId, tab: initial = 'channels' }: { onClose: () => void; guildId: string; tab?: 'channels' | 'roles' }) {
@@ -49,6 +50,7 @@ export default function BrowseChannelsModal({ onClose, guildId, tab: initial = '
         </div>
       ) : (
         <div className="space-y-3" data-browse-roles>
+          <LinkedRolesList guildId={guildId} />
           {pickable.length === 0 ? <p className="text-sm text-text-2">This server has no roles you can pick yourself.</p> : pickable.map((r) => (
             <label key={r.id} className="flex items-center gap-2 rounded-lg border border-line bg-bg-1 px-3 py-2 text-sm cursor-pointer" data-browse-role={r.id}>
               <span className="h-3 w-3 rounded-full" style={{ background: r.color ?? '#99aab5' }} /><span className="flex-1">{r.name}</span>

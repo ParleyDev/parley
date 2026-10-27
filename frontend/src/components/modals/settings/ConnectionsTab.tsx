@@ -5,7 +5,7 @@ import { useStore } from '../../../store'
 import type { Connection } from '../../../lib/types'
 import { Toggle } from '../SettingsShell'
 
-const LABELS: Record<string, string> = { github: 'GitHub', twitch: 'Twitch' }
+const LABELS: Record<string, string> = { github: 'GitHub', gitlab: 'GitLab', twitch: 'Twitch', reddit: 'Reddit', spotify: 'Spotify' }
 
 /** Settings → Connections: link external accounts and choose which show on your profile. */
 export default function ConnectionsTab() {

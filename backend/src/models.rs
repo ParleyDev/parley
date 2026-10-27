@@ -474,6 +474,10 @@ pub struct Role {
     #[sqlx(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub managed_app_id: Option<Uuid>,
+    /// Linked role: what a member needs to claim it ({account_age_days, verified_email, connection, app}).
+    #[sqlx(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requirements: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]

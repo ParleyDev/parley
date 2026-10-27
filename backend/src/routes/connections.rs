@@ -1,4 +1,5 @@
-//! Settings → Connections: link GitHub / Twitch accounts with OAuth and show them on the profile.
+//! Settings → Connections: link GitHub, GitLab, Twitch, Reddit and Spotify accounts with OAuth and show them on the
+//! profile (and use them for linked roles).
 //! Provider credentials live in Instance Settings (`oauth_providers`); `oauth_endpoint_override` points every
 //! provider URL at a stub for tests.
 
@@ -20,12 +21,16 @@ pub fn router() -> Router<AppState> {
 pub struct Connection { pub id: Uuid, pub provider: String, pub external_id: String, pub name: String, pub url: String, pub visible: bool, pub created_at: chrono::DateTime<chrono::Utc> }
 
 /// Everything about a provider: where to send the user, where to swap the code, where to read the profile.
-struct Provider { authorize: &'static str, token: &'static str, profile: &'static str, scope: &'static str, label: &'static str }
-const GITHUB: Provider = Provider { authorize: "https://github.com/login/oauth/authorize", token: "https://github.com/login/oauth/access_token", profile: "https://api.github.com/user", scope: "read:user", label: "GitHub" };
-const TWITCH: Provider = Provider { authorize: "https://id.twitch.tv/oauth2/authorize", token: "https://id.twitch.tv/oauth2/token", profile: "https://api.twitch.tv/helix/users", scope: "", label: "Twitch" };
-pub const PROVIDERS: [&str; 2] = ["github", "twitch"];
+/// `basic`: the token endpoint wants the client id and secret as HTTP Basic auth (Reddit, Spotify).
+struct Provider { authorize: &'static str, token: &'static str, profile: &'static str, scope: &'static str, label: &'static str, basic: bool }
+const GITHUB: Provider = Provider { authorize: "https://github.com/login/oauth/authorize", token: "https://github.com/login/oauth/access_token", profile: "https://api.github.com/user", scope: "read:user", label: "GitHub", basic: false };
+const TWITCH: Provider = Provider { authorize: "https://id.twitch.tv/oauth2/authorize", token: "https://id.twitch.tv/oauth2/token", profile: "https://api.twitch.tv/helix/users", scope: "", label: "Twitch", basic: false };
+const GITLAB: Provider = Provider { authorize: "https://gitlab.com/oauth/authorize", token: "https://gitlab.com/oauth/token", profile: "https://gitlab.com/api/v4/user", scope: "read_user", label: "GitLab", basic: false };
+const REDDIT: Provider = Provider { authorize: "https://www.reddit.com/api/v1/authorize", token: "https://www.reddit.com/api/v1/access_token", profile: "https://oauth.reddit.com/api/v1/me", scope: "identity", label: "Reddit", basic: true };
+const SPOTIFY: Provider = Provider { authorize: "https://accounts.spotify.com/authorize", token: "https://accounts.spotify.com/api/token", profile: "https://api.spotify.com/v1/me", scope: "user-read-private", label: "Spotify", basic: true };
+pub const PROVIDERS: [&str; 5] = ["github", "gitlab", "twitch", "reddit", "spotify"];
 
-fn provider(name: &str) -> Option<&'static Provider> { match name { "github" => Some(&GITHUB), "twitch" => Some(&TWITCH), _ => None } }
+fn provider(name: &str) -> Option<&'static Provider> { match name { "github" => Some(&GITHUB), "twitch" => Some(&TWITCH), "gitlab" => Some(&GITLAB), "reddit" => Some(&REDDIT), "spotify" => Some(&SPOTIFY), _ => None } }
 
 /// Replace a provider URL's origin with the test override, when set.
 fn with_override(url: &str, over: &str) -> String {
@@ -65,6 +70,8 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
 async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
     let n = sqlx::query("DELETE FROM connections WHERE id = $1 AND user_id = $2").bind(id).bind(uid).execute(&state.db).await?.rows_affected();
     if n == 0 { return Err(AppError::NotFound("Connection not found".into())) }
+    // Linked roles that needed this account go with it.
+    crate::routes::linked_roles::recheck_user(&state, uid).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -99,7 +106,9 @@ async fn callback(State(state): State<AppState>, Path(name): Path<String>, Query
 async fn link(state: &AppState, p: &Provider, name: &str, uid: Uuid, code: &str) -> AppResult<()> {
     let c = creds(state, name).await?;
     let client = reqwest::Client::builder().user_agent("parley").timeout(std::time::Duration::from_secs(15)).build().map_err(|e| AppError::Other(e.into()))?;
-    let tok: Value = client.post(with_override(p.token, &c.over)).header("Accept", "application/json")
+    let mut tokreq = client.post(with_override(p.token, &c.over)).header("Accept", "application/json");
+    if p.basic { tokreq = tokreq.basic_auth(&c.client_id, Some(&c.client_secret)); }
+    let tok: Value = tokreq
         .form(&[("client_id", c.client_id.as_str()), ("client_secret", c.client_secret.as_str()), ("code", code), ("grant_type", "authorization_code"), ("redirect_uri", &redirect_uri(state, name))])
         .send().await.map_err(|e| AppError::BadRequest(format!("token exchange failed: {e}")))?.json().await.map_err(|e| AppError::BadRequest(format!("token response unreadable: {e}")))?;
     let access = tok.get("access_token").and_then(|v| v.as_str()).ok_or_else(|| AppError::BadRequest("the provider returned no access token".into()))?.to_string();
@@ -108,6 +117,9 @@ async fn link(state: &AppState, p: &Provider, name: &str, uid: Uuid, code: &str)
     let prof: Value = req.send().await.map_err(|e| AppError::BadRequest(format!("profile fetch failed: {e}")))?.json().await.map_err(|e| AppError::BadRequest(format!("profile unreadable: {e}")))?;
     let (external_id, display, url) = match name {
         "github" => (prof.get("id").map(|v| v.to_string().trim_matches('"').to_string()).unwrap_or_default(), prof.get("login").and_then(|v| v.as_str()).unwrap_or("").to_string(), prof.get("html_url").and_then(|v| v.as_str()).unwrap_or("").to_string()),
+        "gitlab" => (prof.get("id").map(|v| v.to_string().trim_matches('"').to_string()).unwrap_or_default(), prof.get("username").and_then(|v| v.as_str()).unwrap_or("").to_string(), prof.get("web_url").and_then(|v| v.as_str()).unwrap_or("").to_string()),
+        "reddit" => { let n = prof.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(); (prof.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(), n.clone(), if n.is_empty() { String::new() } else { format!("https://www.reddit.com/user/{n}") }) }
+        "spotify" => (prof.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(), prof.get("display_name").and_then(|v| v.as_str()).or(prof.get("id").and_then(|v| v.as_str())).unwrap_or("").to_string(), prof["external_urls"]["spotify"].as_str().unwrap_or("").to_string()),
         _ => { let u = prof.get("data").and_then(|d| d.get(0)).cloned().unwrap_or(Value::Null); let login = u.get("login").and_then(|v| v.as_str()).unwrap_or("").to_string(); (u.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(), u.get("display_name").and_then(|v| v.as_str()).unwrap_or(&login).to_string(), if login.is_empty() { String::new() } else { format!("https://twitch.tv/{login}") }) }
     };
     if external_id.is_empty() || display.is_empty() { return Err(AppError::BadRequest("the provider returned no account".into())) }
