@@ -146,12 +146,42 @@ pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, d
             .header("TTL", "86400").header("Urgency", "high").header("Authorization", format!("vapid t={jwt}, k={}", v.public));
         if let Some(c) = cid { req = req.header("Topic", c.simple().to_string()); }
         match req.body(enc).send().await {
-            Ok(r) if r.status().is_success() => { crate::metrics::METRICS.push_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed); }
+            Ok(r) if r.status().is_success() => {
+                crate::metrics::METRICS.push_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if let Some(c) = cid { let _ = sqlx::query("INSERT INTO web_push_sent (session_id, channel_id) VALUES ($1, $2) ON CONFLICT (session_id, channel_id) DO UPDATE SET sent_at = now()").bind(sid).bind(c).execute(&state.db).await; }
+            }
             Ok(r) if matches!(r.status().as_u16(), 404 | 410) => { let _ = sqlx::query("DELETE FROM web_push_subs WHERE endpoint = $1").bind(&endpoint).execute(&state.db).await; }
             Ok(r) => tracing::warn!(status = %r.status(), "web push failed"),
             Err(e) => tracing::warn!("web push failed: {e}"),
         }
     }
+}
+
+/// The user read `cid` (on session `except`, if known): close its notifications on their other browsers. Only
+/// sessions that were sent one for it in the last two days get a push; it carries the same Topic, so a notification
+/// still waiting at the push service is replaced rather than delivered.
+pub fn clear_elsewhere(state: &AppState, uid: Uuid, except: Option<Uuid>, cid: Uuid) {
+    let st = state.clone();
+    tokio::spawn(async move {
+        let Some(v) = vapid(&st).await else { return };
+        let rows: Vec<(String, String, String)> = sqlx::query_as(
+            "DELETE FROM web_push_sent p USING web_push_subs w WHERE p.session_id = w.session_id AND w.user_id = $1 AND p.channel_id = $2
+               AND ($3::uuid IS NULL OR p.session_id <> $3) AND p.sent_at > now() - interval '2 days'
+             RETURNING w.endpoint, w.p256dh, w.auth",
+        ).bind(uid).bind(cid).bind(except).fetch_all(&st.db).await.unwrap_or_default();
+        let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).redirect(reqwest::redirect::Policy::none()).build().unwrap_or_default();
+        for (endpoint, p256dh, auth) in rows {
+            let Ok(url) = url::Url::parse(&endpoint) else { continue };
+            let aud = url.origin().ascii_serialization();
+            let sub = if st.config.app_url.starts_with("https://") { st.config.app_url.clone() } else { "mailto:admin@localhost".to_string() };
+            let Ok(jwt) = jsonwebtoken::encode(&jsonwebtoken::Header::new(jsonwebtoken::Algorithm::ES256), &VapidClaims { aud: &aud, exp: chrono::Utc::now().timestamp() + 12 * 3600, sub: &sub }, &v.key) else { continue };
+            let (Ok(k), Ok(a)) = (B64.decode(p256dh.trim_end_matches('=')), B64.decode(auth.trim_end_matches('='))) else { continue };
+            let Ok(enc) = encrypt(&k, &a, json!({ "clear": cid }).to_string().as_bytes()) else { continue };
+            let _ = client.post(url).header("Content-Encoding", "aes128gcm").header("Content-Type", "application/octet-stream")
+                .header("TTL", "86400").header("Urgency", "normal").header("Topic", cid.simple().to_string())
+                .header("Authorization", format!("vapid t={jwt}, k={}", v.public)).body(enc).send().await;
+        }
+    });
 }
 
 #[cfg(test)]

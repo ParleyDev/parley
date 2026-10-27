@@ -50,6 +50,8 @@ async function badge() {
 self.addEventListener('push', (e) => {
   let p = {}
   try { p = e.data ? e.data.json() : {} } catch { p = { title: 'Parley', body: e.data ? e.data.text() : '' } }
+  // Read on another device: close this channel's notifications here and show nothing.
+  if (p.clear) { e.waitUntil(closeChannel(p.clear).then(badge)); return }
   const d = p.data || {}
   const actions = p.action_token ? [{ action: 'reply', title: 'Reply', type: 'text', placeholder: 'Reply…' }, { action: 'read', title: 'Mark as Read' }] : []
   e.waitUntil((async () => {

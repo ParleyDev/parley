@@ -1181,7 +1181,7 @@ pub(crate) struct MarkRead {
 
 pub(crate) async fn mark_read(
     State(state): State<AppState>,
-    AuthUser(uid): AuthUser,
+    crate::auth::AuthSession(uid, sid): crate::auth::AuthSession,
     Path(id): Path<Uuid>,
     Json(req): Json<MarkRead>,
 ) -> AppResult<StatusCode> {
@@ -1193,6 +1193,7 @@ pub(crate) async fn mark_read(
     )
     .bind(uid).bind(id).bind(req.message_id).execute(&state.db).await?;
     state.hub.emit_users(vec![uid], "READ_STATE_UPDATE", json!({ "channel_id": id, "last_read_msg": req.message_id }));
+    crate::webpush::clear_elsewhere(&state, uid, Some(sid), id);
     // Read receipt for everyone else in the channel, only when the pointer actually moved forward and the
     // reader has not turned receipts off.
     let advanced = prev.and_then(|p| p.0).map(|p| req.message_id > p).unwrap_or(true);

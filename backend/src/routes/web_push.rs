@@ -67,7 +67,7 @@ async fn action(State(state): State<AppState>, Json(req): Json<ActionReq>) -> Ap
         "read" => {
             let last: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM messages WHERE channel_id = $1 ORDER BY id DESC LIMIT 1").bind(cid).fetch_optional(&state.db).await?;
             let Some((mid,)) = last else { return Ok(StatusCode::NO_CONTENT) };
-            crate::routes::channels::mark_read(State(state), AuthUser(uid), axum::extract::Path(cid), Json(serde_json::from_value(json!({ "message_id": mid })).map_err(|e| AppError::Other(e.into()))?)).await
+            crate::routes::channels::mark_read(State(state), crate::auth::AuthSession(uid, sid), axum::extract::Path(cid), Json(serde_json::from_value(json!({ "message_id": mid })).map_err(|e| AppError::Other(e.into()))?)).await
         }
         "reply" => {
             if req.content.trim().is_empty() { return Err(AppError::BadRequest("Write a reply".into())); }

@@ -5,7 +5,7 @@ import { createServer } from 'node:http'
 import { createECDH, createHmac, createPublicKey, createVerify, randomBytes, createDecipheriv } from 'node:crypto'
 import { execSync } from 'node:child_process'
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, raw, ok, openDms, finish } from '../lib.mjs'
+import { WEB, S, reg, call, raw, ok, openDms, finish, login } from '../lib.mjs'
 
 const DB = process.env.PARLEY_TEST_DB ?? 'parley-inv-db'
 const sql = (q) => execSync(`docker exec ${DB} psql -U parley -tAc "${q}"`).toString().trim()
@@ -73,6 +73,23 @@ ok('Reply sends a reply', (await act({ action: 'reply', content: `pong ${S}`, me
 const msgs = await call(alice.token, 'GET', `/channels/${dm.id}/messages`)
 ok('as Bob, replying to the message', msgs.some((m) => m.content === `pong ${S}` && m.author.id === bob.user.id && (m.reply_to === m1.id || m.referenced_message?.id === m1.id)))
 
+console.log('-- read on another device')
+// Bob's browser (session 1) got the DM; he reads it on his other device (session 2).
+const m2 = await call(alice.token, 'POST', `/channels/${dm.id}/messages`, { content: `again ${S}` })
+const atNotify = got.length
+await wait(atNotify + 1)
+const other = await login(bob.user.username)
+const beforeRead = got.length
+await call(other.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m2.id })
+ok('the browser that was notified gets a push', await wait(beforeRead + 1))
+let cl = null; try { cl = decrypt(k1, got.at(-1).body) } catch { /* not ours */ }
+ok('that only says to clear the channel', cl?.clear === dm.id && !cl.title && !cl.body, JSON.stringify(cl))
+ok('under the same topic, so a waiting notification is replaced', got.at(-1).headers.topic === dm.id.replace(/-/g, ''))
+const settled = got.length
+await call(other.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m2.id })
+await new Promise((r) => setTimeout(r, 1500))
+ok('reading again sends nothing more (nothing left to clear)', got.length === settled)
+
 console.log('-- dead endpoints and sign-out')
 const k2 = browserKeys(); const ep2 = `http://${HOST}:${PORT}/push/${S}-gone`; status[`/push/${S}-gone`] = 410
 await raw(bob.token, 'PUT', '/users/@me/web-push', sub(ep2, k2))
@@ -124,6 +141,12 @@ ok('with Reply and Mark as Read', JSON.stringify(shown[0]?.actions) === '["reply
 await page.evaluate(() => navigator.serviceWorker.controller.postMessage({ type: 'parley-read', channel_id: 'chan-1' }))
 await new Promise((r) => setTimeout(r, 500))
 ok('reading the channel clears it', JSON.stringify(await sw.evaluate(() => self.__closed)) === '["chan-1"]')
+await cdp.send('ServiceWorker.deliverPushMessage', { origin: new URL(WEB).origin, registrationId: await regId, data: JSON.stringify({ title: 'Dana', body: 'more', tag: 'chan-2', data: { channel_id: 'chan-2' } }) })
+await new Promise((r) => setTimeout(r, 500))
+await cdp.send('ServiceWorker.deliverPushMessage', { origin: new URL(WEB).origin, registrationId: await regId, data: JSON.stringify({ clear: 'chan-2' }) })
+await new Promise((r) => setTimeout(r, 500))
+const after = await sw.evaluate(() => ({ shown: self.__shown.length, closed: self.__closed }))
+ok('a clear push from another device closes that channel and shows nothing', after.shown === 2 && after.closed.includes('chan-2'), JSON.stringify(after))
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await browser.close(); srv.close()
 await finish()
