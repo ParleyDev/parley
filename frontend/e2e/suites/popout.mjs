@@ -94,7 +94,7 @@ await p.goto(`${WEB}/login`); await p.evaluate((t)=>localStorage.setItem('parley
 await p.goto(`${WEB}/channels/${g.id}/${tc}`); await p.waitForTimeout(900)
 console.log('-- mobile sheet')
 await p.click('button[title="Member List"]'); await p.waitForTimeout(300)
-await p.locator('button:has-text("Bobby")').first().tap(); await p.waitForTimeout(500)
+await p.locator(`[data-member-row="${b.user.id}"]`).first().tap(); await p.waitForTimeout(500)
 const sheet=p.locator('[data-profile-sheet]'); const sb=await sheet.boundingBox()
 ok('mobile: bottom sheet full width, flush with bottom, same popout content', await sheet.count()===1 && sb && Math.round(sb.width)===390 && Math.round(sb.y+sb.height)===844 && await sheet.locator('[data-quick-message]').count()===1 && await sheet.locator('button[title="More"]').count()===1, JSON.stringify(sb))
 await p.screenshot({ path: '46-popout-mobile.png' })

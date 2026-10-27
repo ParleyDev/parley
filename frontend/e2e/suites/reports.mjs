@@ -46,7 +46,12 @@ await pa.click('[data-report-reason="Spam or scam"]'); await pa.fill('[data-repo
 ok('reporting from the message menu works', (await call(admin.token, 'GET', '/admin/reports')).some((x) => x.message_id === bad2.id && x.reason === 'Spam or scam — keeps posting ads'))
 await pa.click(`[data-member-row="${b.user.id}"]`, { button: 'right' }); await pa.waitForSelector('[data-context-menu] [data-menu-item="Report User"]')
 await pa.click('[data-context-menu] [data-menu-item="Report User"]'); await pa.waitForSelector('[data-report-form]'); await pa.click('[data-report-reason="Something else"]'); await pa.click('[data-report-submit]'); await pa.waitForSelector('text=your report was sent')
-ok('reporting a user from the member menu works', (await call(admin.token, 'GET', '/admin/reports')).some((x) => x.kind === 'user' && x.target_user_id === b.user.id && x.status === 'open'))
+{
+  // The confirmation shows as the request goes out; give the report a moment to land.
+  const found = async () => (await call(admin.token, 'GET', '/admin/reports')).some((x) => x.kind === 'user' && x.target_user_id === b.user.id && x.status === 'open')
+  let yes = false; for (let i = 0; i < 20 && !(yes = await found()); i++) await pa.waitForTimeout(150)
+  ok('reporting a user from the member menu works', yes)
+}
 await pa.close()
 const pad = await mk(admin.token); await pad.goto(`${WEB}/admin/reports`); await pad.waitForSelector('[data-admin-report]')
 const row = pad.locator(`[data-admin-report][data-report-kind="message"]`).first()

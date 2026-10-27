@@ -47,6 +47,7 @@ console.log('-- inbox')
 await p.goto(`${WEB}/channels/${g.id}/${general.id}`); await p.waitForTimeout(900)
 await call(b.token, 'POST', `/channels/${other.id}/messages`, { content: 'something new' }); await p.waitForTimeout(700)
 await p.click('[data-inbox-toggle]'); await p.waitForSelector('[data-inbox]')
+await p.waitForSelector(`[data-inbox-item="${m1.id}"]`, { timeout: 5000 }).catch(() => {}) // the list loads after the panel opens
 ok('Mentions lists the mention', await p.locator(`[data-inbox-item="${m1.id}"]`).count() === 1)
 await p.hover(`[data-inbox-row="${m1.id}"]`); await p.click(`[data-inbox-remove="${m1.id}"]`)
 ok('a mention can be removed from the inbox', await p.locator(`[data-inbox-item="${m1.id}"]`).count() === 0)
