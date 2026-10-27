@@ -54,6 +54,14 @@ ok('shown on hover', Number(await visible()) > 0)
 await dmRow.click(); await pb.mouse.move(5, 5); await pb.waitForTimeout(300)
 ok('and on the open conversation', Number(await visible()) > 0)
 
+console.log('-- group chat members')
+for (const u of [a, c]) { await call(b.token, 'POST', '/users/@me/relationships', { user_id: u.user.id }); await call(u.token, 'PUT', `/users/@me/relationships/${b.user.id}`) }
+const grp = await call(b.token, 'POST', '/users/@me/channels', { recipient_ids: [a.user.id, c.user.id] })
+await pb.goto(`${WEB}/channels/@me/${grp.id}`); await pb.waitForSelector('[data-group-members]'); await pb.waitForTimeout(600)
+const gm = pb.locator(`[data-group-members] [data-group-member="${a.user.id}"]`)
+ok('the group member list shows nameplates', await gm.locator('[data-nameplate-video="e2e_wave"]').count() === 1, String(grp?.id))
+ok('but not for someone who appears offline', await pb.locator(`[data-group-members] [data-group-member="${c.user.id}"]`).getAttribute('data-nameplate') === null)
+
 console.log('-- profile effects')
 await call(a.token, 'PATCH', '/users/@me', { profile_effect: 'snow' })
 await pb.goto(`${WEB}/channels/${g.id}/${ch.id}`); await pb.waitForTimeout(1200)

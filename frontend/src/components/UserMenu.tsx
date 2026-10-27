@@ -41,22 +41,28 @@ export function StatusDot({ v, size = 10 }: { v: string; size?: number }) {
  * gets clipped: beside the menu on the right, on the left when there is no room, over the menu on narrow screens.
  * React events still bubble through the portal, so hovering from the row into it keeps it open.
  */
+/** Space between the menu and a flyout, like Discord's. */
+const GAP = 6
+
 function Flyout({ anchor, width, children }: { anchor: HTMLElement | null; width: number; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ left: number; top: number; pad: number; side: 'right' | 'left' | 'over' } | null>(null)
   useLayoutEffect(() => {
     if (!anchor) return
     const row = anchor.getBoundingClientRect()
-    const menu = (anchor.closest('[data-frame-room]') ?? anchor.closest('[data-user-menu]') ?? anchor).getBoundingClientRect()
+    // Beside the menu card itself (a frame around it may reach a little past; the flyout sits over that).
+    const menu = (anchor.closest('[data-user-menu]') ?? anchor).getBoundingClientRect()
     const h = ref.current?.offsetHeight ?? 0
     const top = Math.max(8, Math.min(row.top, window.innerHeight - h - 8))
-    if (menu.right + 8 + width <= window.innerWidth - 8) setPos({ left: row.right, top, pad: menu.right - row.right + 8, side: 'right' })
-    else if (menu.left - 8 - width >= 8) setPos({ left: menu.left - 8 - width, top, pad: 0, side: 'left' })
+    if (menu.right + GAP + width <= window.innerWidth - 8) setPos({ left: row.right, top, pad: menu.right - row.right + GAP, side: 'right' })
+    else if (menu.left - GAP - width >= 8) setPos({ left: menu.left - GAP - width, top, pad: 0, side: 'left' })
     else setPos({ left: Math.max(8, Math.min(row.left, window.innerWidth - width - 8)), top: Math.min(row.bottom + 4, window.innerHeight - h - 8), pad: 0, side: 'over' })
   }, [anchor, width])
   return createPortal(
-    <div ref={ref} className="pop fixed z-[130]" style={pos ? { left: pos.left, top: pos.top, paddingLeft: pos.pad, paddingRight: pos.side === 'left' ? 8 : 0 } : { left: -9999, top: 0 }} role="menu" data-flyout-side={pos?.side}>
-      <div className="rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5" style={{ width }}>{children}</div>
+    // The outer box only positions (its padding bridges the gap for the pointer) and stays see-through; the panel is
+    // the floating surface, so themes that give floating surfaces a solid background colour only the panel.
+    <div ref={ref} className="fixed z-[130]" style={pos ? { left: pos.left, top: pos.top, paddingLeft: pos.pad, paddingRight: pos.side === 'left' ? GAP : 0 } : { left: -9999, top: 0 }} role="menu" data-flyout-side={pos?.side}>
+      <div className="pop rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5" style={{ width }} data-flyout-panel>{children}</div>
     </div>,
     document.body,
   )
@@ -146,8 +152,8 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
                   {s.v !== 'online' && <button type="button" onClick={() => setDurations(s.v)} className="shrink-0 rounded-md p-2 text-[#b5bac1] hover:text-white" title={t('{status} for a while', { status: s.label })} aria-label={t('{status} for a while', { status: s.label })} aria-expanded={durations === s.v} data-status-durations={s.v}><ChevronRight size={16} /></button>}
                 </div>
                 {durations === s.v && (
-                  <div className="pop absolute left-full top-0 z-50 pl-2 max-sm:static max-sm:pl-6 [[data-flyout-side=left]_&]:left-auto [[data-flyout-side=left]_&]:right-full [[data-flyout-side=left]_&]:pl-0 [[data-flyout-side=left]_&]:pr-2" role="menu">
-                    <div className="w-44 max-sm:w-full rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5 space-y-0.5" data-status-duration-list={s.v}>
+                  <div className="absolute left-full top-0 z-50 pl-1.5 max-sm:static max-sm:pl-6 [[data-flyout-side=left]_&]:left-auto [[data-flyout-side=left]_&]:right-full [[data-flyout-side=left]_&]:pl-0 [[data-flyout-side=left]_&]:pr-1.5" role="menu">
+                    <div className="pop w-44 max-sm:w-full rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5 space-y-0.5" data-status-duration-list={s.v}>
                       {statusDurations().map((d) => <button key={d.secs} type="button" onClick={() => setStatus(s.v, d.secs)} className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-white/[.06]" data-status-for={d.secs}>{d.label}</button>)}
                       <button type="button" onClick={() => setStatus(s.v)} className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-white/[.06]">{t('Forever')}</button>
                     </div>

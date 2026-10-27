@@ -1,3 +1,5 @@
+import { nameplateClass } from '../lib/cosmetics'
+import { isAssetNameplate, NameplateVideo } from './Nameplate'
 import SummariesButton from './Summaries'
 import { AlarmClock, Megaphone, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
@@ -344,10 +346,13 @@ function GroupMembersPanel({ dm }: { dm: DmChannel }) {
   const me = useStore((s) => s.user)
   const users = useStore((s) => s.users)
   const notes = useStore((s) => s.notes)
+  const online = useStore((s) => s.online)
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const t = useT()
   const isOwner = dm.owner_id === me?.id
+  // Like the server member list: nameplates behind members who show as online, not those who appear offline.
+  const plateOf = (u: { id: string; nameplate?: string | null; status?: string }) => (online[u.id] && u.status !== 'invisible' ? u.nameplate ?? null : null)
   const members = [...(me ? [me as unknown as typeof dm.recipients[number]] : []), ...dm.recipients].map((u) => users[u.id] ?? u)
   const remove = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: t('Remove {name}', { name: u.display_name }), body: t('Remove {name} from the group? They can be added back later.', { name: u.display_name }), danger: true, confirmLabel: t('Remove'),
     action: async () => { try { await api.delete(`/channels/${dm.id}/recipients/${u.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
@@ -360,7 +365,8 @@ function GroupMembersPanel({ dm }: { dm: DmChannel }) {
       <h3 className="px-2 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Members')} — {members.length}</h3>
       <div className="space-y-0.5">
         {members.map((u) => (
-          <div key={u.id} className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3" data-group-member={u.id}>
+          <div key={u.id} className={`group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3 ${nameplateClass(plateOf(u))} ${isAssetNameplate(plateOf(u)) ? 'relative isolate overflow-hidden' : ''}`} data-group-member={u.id} data-nameplate={plateOf(u) || undefined}>
+            <NameplateVideo value={plateOf(u)} />
             <button onClick={(e) => openModal({ kind: 'profile', userId: u.id, anchor: anchorOf(e) })} className="flex items-center gap-3 min-w-0 flex-1 text-left">
               <Avatar user={u} size={32} presence />
               <span className="truncate text-[15px] font-medium text-text-1">{nameOf(u, notes)}</span>
