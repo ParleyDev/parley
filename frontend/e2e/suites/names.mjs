@@ -1,5 +1,5 @@
 import { chromium } from 'playwright'
-import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track } from '../lib.mjs'
+import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track, openProfileEditor } from '../lib.mjs'
 import { regLower, callS } from '../lib.mjs'
 const a=await regLower('alice'), b=await regLower('bob')
 const g=(await callS(a.token,'POST','/guilds',{name:'Names'})).body; const inv=(await callS(a.token,'POST',`/guilds/${g.id}/invites`,{})).body; await callS(b.token,'POST',`/invites/${inv.code}`)
@@ -38,7 +38,7 @@ await callS(a.token,'PATCH',`/guilds/${g.id}/roles/${role.id}`,{color_accent:nul
 st=await styleOf(pb,'main button:has-text("alice") span'); ok('solid role colour when accent removed', st.bg==='none' && st.color==='rgb(241, 196, 15)')
 // Profiles tab UI: set name colour + gradient and see preview
 const pa=await open(a.token,'A',`${WEB}/channels/@me`)
-await pa.waitForSelector('text=Add Friend'); await pa.click('button[title="User Settings"]'); await pa.click('[role=dialog] nav button:has-text("Profiles")'); await pa.waitForSelector('[data-name-style-open]')
+await pa.waitForSelector('text=Add Friend'); await openProfileEditor(pa); await pa.waitForSelector('[data-name-style-open]')
 await pa.click('[data-name-style-open]'); await pa.waitForSelector('[data-name-style-modal]')
 ok('name style picker opens with Gradient selected for a two-colour name', await pa.locator('[data-effect="gradient"][aria-pressed="true"]').count()===1)
 await pa.click('[data-name-style-modal] >> xpath=ancestor::*[@role="dialog"][1] >> button:has-text("Cancel")').catch(() => pa.click('button:has-text("Cancel")')); await pa.waitForSelector('[data-name-style-card]')

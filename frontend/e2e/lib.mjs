@@ -110,3 +110,16 @@ export function testContainer(kind) {
   const file = fileURLToPath(new URL('../../docker-compose.yml', import.meta.url))
   return _execSync(`docker compose -f ${file} ps -q ${kind === 'db' ? 'db' : 'backend'}`).toString().trim().split('\n')[0]
 }
+
+/** Open the profile editor from the user menu; `section` opens one of its pickers (nameplate, avatar, decoration,
+ *  theme, banner, effect, frame, tag, badges) and `tab` one of its right-hand tabs (about, activity, wishlist, games). */
+export async function openProfileEditor(p, { section, tab } = {}) {
+  if (!(await p.locator('[data-profile-editor]').count())) {
+    await p.keyboard.press('Escape').catch(() => {})
+    await p.click('[data-panel-self]'); await p.click('[data-user-menu-edit]'); await p.waitForSelector('[data-profile-editor]')
+  }
+  if (tab) await p.click(`[data-editor-tab="${tab}"]`)
+  if (section) { await p.click(`[data-editor-section="${section}"]`); await p.waitForSelector(`[data-editor-panel="${section}"]`) }
+}
+/** Close the editor's open picker panel, if any. */
+export async function closeEditorPanel(p) { if (await p.locator('[data-editor-panel-close]').count()) await p.click('[data-editor-panel-close]') }

@@ -1,6 +1,6 @@
 // Profile flair: badges (computed), avatar decorations, clan tags and wishlist / game panels.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, ok, finish, adminToken } from '../lib.mjs'
+import { WEB, S, reg, call, callS, ok, finish, adminToken, openProfileEditor, closeEditorPanel } from '../lib.mjs'
 
 const admin = await adminToken()
 const a = await reg('alice'); const b = await reg('bob')
@@ -41,8 +41,8 @@ await p.keyboard.press('Escape')
 // Settings: pick a decoration and a tag from the UI.
 await p.evaluate((t) => localStorage.setItem('parley.token', t), b.token); await p.reload(); await p.waitForSelector('textarea')
 await p.click('button[title="User Settings"]')
-await p.click('button:has-text("Profiles")'); await p.waitForSelector('[data-decoration-options]')
-await p.click('[data-decoration-option="rainbow"]'); await p.fill('[data-clan-tag-input]', 'b0b'); await p.fill('[data-panel-games]', 'Tetris | https://example.com/tetris\nSnake')
+await openProfileEditor(p, { section: 'decoration' })
+await p.click('[data-decoration-option="rainbow"]'); await openProfileEditor(p, { section: 'tag' }); await p.fill('[data-clan-tag-input]', 'b0b'); await closeEditorPanel(p); await openProfileEditor(p, { tab: 'games' }); await p.fill('[data-panel-games]', 'Tetris | https://example.com/tetris\nSnake')
 await p.click('button:has-text("Save Changes")'); await p.waitForTimeout(600)
 const me = await call(b.token, 'GET', '/users/@me')
 ok('settings save decoration, tag and panels', me.avatar_decoration === 'rainbow' && me.clan_tag === 'B0B' && me.panels.games.length === 2 && me.panels.games[0].url === 'https://example.com/tetris', JSON.stringify([me.avatar_decoration, me.clan_tag, me.panels]))

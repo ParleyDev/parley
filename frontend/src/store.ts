@@ -77,6 +77,7 @@ export type ModalKind =
   | { kind: 'events'; guildId: string }
   | { kind: 'customStatus' }
   | { kind: 'whatsNew' }
+  | { kind: 'editProfile' }
   | { kind: 'forward'; message: Message }
   | { kind: 'groupMembers'; channelId?: string; userIds?: string[] }
   | { kind: 'folderSettings'; folderId: string }
@@ -604,10 +605,12 @@ export const useStore = create<State>((set, get) => ({
     if (list?.some((x) => x.id === m.id)) return {}
     const users = { ...s.users, [m.author.id]: { ...s.users[m.author.id], ...m.author, bio: s.users[m.author.id]?.bio ?? '', status: s.users[m.author.id]?.status ?? '' } }
     const lastMessageId = { ...s.lastMessageId, [m.channel_id]: m.id }
-    // Your own messages (sent, forwarded, from any device) never count as unread for you.
-    const readStates = m.author.id === s.user?.id ? { ...s.readStates, [m.channel_id]: m.id } : s.readStates
+    // Your own messages (sent, forwarded, from any device) never count as unread for you. A webhook's posts carry
+    // its creator as author but weren't sent by you (and the server doesn't mark them read for you): they count.
+    const own = m.author.id === s.user?.id && !m.webhook_id
+    const readStates = own ? { ...s.readStates, [m.channel_id]: m.id } : s.readStates
     // Every message in an accepted DM counts like a mention (Discord), which badges the DM in the server bar.
-    const counts = m.author.id !== s.user?.id && (mentionsMe(s, m) || (!!s.dms[m.channel_id] && !isRequest(s.dms[m.channel_id])))
+    const counts = !own && (mentionsMe(s, m) || (!!s.dms[m.channel_id] && !isRequest(s.dms[m.channel_id])))
     const mentionCounts = counts ? { ...s.mentionCounts, [m.channel_id]: (s.mentionCounts[m.channel_id] ?? 0) + 1 } : s.mentionCounts
     const typing = { ...s.typing }
     if (typing[m.channel_id]?.[m.author.id]) {

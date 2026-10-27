@@ -1,5 +1,5 @@
 import { chromium } from 'playwright'
-import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track } from '../lib.mjs'
+import { API_ORIGIN, B, WEB, S, reg, login, loginRaw, call, raw, multi, ok, pass, fail, finish, PNG, GIF, pngFile, gifFile, adminToken, track, openProfileEditor } from '../lib.mjs'
 import { FIX } from '../lib.mjs'
 import { regLower, callS } from '../lib.mjs'
 const a=await regLower('alice'), b=await regLower('bob')
@@ -22,11 +22,11 @@ const pa=await open(a.token,'A',`${WEB}/channels/${g.id}/${tc}`)
 const pb=await open(b.token,'B',`${WEB}/channels/${g.id}/${tc}`)
 await pa.waitForSelector('textarea'); await pb.waitForSelector('textarea')
 // Alice edits in Profiles tab: upload banner, toggle gradient, set bio
-await pa.click('button[title="User Settings"]'); await pa.click('[role=dialog] nav button:has-text("Profiles")'); await pa.waitForSelector('h1:has-text("Profiles")')
+await openProfileEditor(pa)
 await pa.setInputFiles('[data-banner-input]', `${FIX}/pic.png`)
 await pa.waitForSelector('[role=dialog] img[src^="/api/images/"]'); ok('banner preview appears (uploaded)', true)
 const bannerUrl = await pa.evaluate(()=>document.querySelector('[role=dialog] img[src^="/api/images/"]').getAttribute('src')); const bl=Number((await fetch(`${WEB}`+bannerUrl)).headers.get('content-length')); ok('banner resized under 900KB ('+Math.round(bl/1024)+'KB)', bl>0 && bl < 900*1024)
-await pa.fill('input[placeholder="Add your pronouns"]','they/them')
+await pa.click('[data-inline-edit="pronouns"]'); await pa.fill('[data-inline-input="pronouns"]','they/them'); await pa.keyboard.press('Enter')
 await pa.fill('[role=dialog] textarea[placeholder^="Tell people"]','__underlined__ ~~gone~~ > quoted')
 ok('preview card shows pronouns live', await pa.locator('text=they/them').count()>=1)
 ok('preview renders markdown', await pa.locator('main, [role=dialog] >> s:has-text("gone")').count()>=1 || await pa.locator('s:has-text("gone")').count()>=1)

@@ -1,7 +1,7 @@
-// User Settings › Profiles: edit display name, pronouns, custom status, presence, avatar and banner right on the preview
-// card; changes join the unsaved-changes bar like the form fields.
+// The profile editor: edit display name, pronouns, custom status, presence, avatar and banner right on the preview
+// card; changes join the unsaved-changes bar like everything else in the editor.
 import { chromium } from 'playwright'
-import { WEB, reg, call, ok, finish, pngFile } from '../lib.mjs'
+import { WEB, reg, call, ok, finish, pngFile, openProfileEditor } from '../lib.mjs'
 const a = await reg('alice')
 const browser = await chromium.launch()
 const errors = []
@@ -9,7 +9,7 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
 await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await p.goto(`${WEB}/channels/@me`); await p.waitForSelector('text=Add Friend')
-await p.click('button[title="User Settings"]'); await p.click('[role=dialog] nav button:has-text("Profiles")'); await p.waitForSelector('[data-profile-editable]')
+await openProfileEditor(p); await p.waitForSelector('[data-profile-editable]')
 const card = p.locator('[data-profile-editable]').locator('xpath=ancestor::*[@data-profile-card]')
 
 console.log('-- text fields')
@@ -17,7 +17,7 @@ ok('preview is editable', await p.locator('[data-inline-edit="display_name"]').c
 await p.click('[data-inline-edit="display_name"]')
 await p.fill('[data-inline-input="display_name"]', 'Ally Cat'); await p.keyboard.press('Enter')
 ok('name updates on the card', (await p.locator('[data-profile-editable] [data-profile-name]').innerText()) === 'Ally Cat')
-ok('and in the form field', (await p.inputValue('input[maxlength="32"]')) === 'Ally Cat')
+ok('and in the editor\'s name style preview', (await p.locator('[data-name-preview]').innerText()) === 'Ally Cat')
 ok('unsaved bar appears', await p.locator('text=you have unsaved changes').count() === 1)
 await p.click('[data-inline-edit="display_name"]'); await p.fill('[data-inline-input="display_name"]', ''); await p.keyboard.press('Enter')
 ok('an empty name is ignored', (await p.locator('[data-profile-editable] [data-profile-name]').innerText()) === 'Ally Cat')
@@ -27,7 +27,7 @@ ok('pronouns show a placeholder', /Add pronouns/.test(await p.locator('[data-inl
 await p.click('[data-inline-edit="pronouns"]'); await p.fill('[data-inline-input="pronouns"]', 'she/her'); await p.locator('[data-inline-input="pronouns"]').blur()
 ok('pronouns commit on blur', (await p.locator('[data-inline-edit="pronouns"]').innerText()).includes('she/her'))
 await p.click('[data-inline-edit="custom_status"]'); await p.fill('[data-inline-input="custom_status"]', '🎧 mixing'); await p.keyboard.press('Enter')
-ok('custom status set inline', (await p.locator('[data-inline-edit="custom_status"]').innerText()).includes('🎧 mixing') && (await p.inputValue('[data-profile-custom-status]')) === '🎧 mixing')
+ok('custom status set inline', (await p.locator('[data-inline-edit="custom_status"]').innerText()).includes('🎧 mixing'))
 
 console.log('-- images')
 await p.locator('[data-inline-avatar-input]').setInputFiles(pngFile)
@@ -67,8 +67,7 @@ console.log('-- phone')
 const m = await (await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true })).newPage(); m.on('pageerror', (e) => errors.push(e.message))
 await m.goto(`${WEB}/login`); await m.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await m.goto(`${WEB}/channels/@me`); await m.waitForTimeout(1200)
-await m.click('button[title="User Settings"]'); await m.waitForTimeout(400)
-await m.click('[role=dialog] button:has-text("Profiles")'); await m.waitForTimeout(800)
+await openProfileEditor(m); await m.waitForTimeout(500)
 ok('phone: editable preview shows', await m.locator('[data-profile-editable]').count() === 1)
 await m.click('[data-inline-edit="pronouns"]'); await m.fill('[data-inline-input="pronouns"]', 'they/them'); await m.keyboard.press('Enter')
 ok('phone: inline edit works', (await m.locator('[data-inline-edit="pronouns"]').innerText()).includes('they/them'))

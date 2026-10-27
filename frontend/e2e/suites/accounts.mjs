@@ -6,7 +6,7 @@ const browser = await launchBrowser(); const errors = []
 const p = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage(); p.on('pageerror', (e) => errors.push(e.message))
 const saved = () => p.evaluate(() => JSON.parse(localStorage.getItem('parley.accounts') || '[]').map((x) => x.username))
 const panelName = () => p.locator('[data-panel-self] .text-\\[16px\\]').innerText()
-const openPanel = async () => { await p.click('[data-panel-self]'); await p.waitForSelector('[data-account-switcher]') }
+const openPanel = async () => { await p.click('[data-panel-self]'); await p.click('[data-switch-accounts]'); await p.waitForSelector('[data-account-switcher]') }
 
 await p.goto(`${WEB}/login`); await p.waitForSelector('[data-login-input]')
 ok('login page shows no saved accounts on a fresh device', await p.locator('[data-saved-accounts]').count() === 0)

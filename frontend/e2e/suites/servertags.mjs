@@ -1,6 +1,6 @@
 // Server tags (wear a server's official tag), the partnered badge, and the year in review.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, raw, ok, finish, adminToken } from '../lib.mjs'
+import { WEB, S, reg, call, raw, ok, finish, adminToken, openProfileEditor } from '../lib.mjs'
 const owner = await reg('owner'), a = await reg('alice'), b = await reg('bob')
 const g = await call(owner.token, 'POST', '/guilds', { name: `Tags ${S}` })
 const ch = g.channels.find((x) => x.kind === 'text')
@@ -19,7 +19,7 @@ await po.fill('[data-server-tag-badge]', '🦊'); await po.fill('[data-server-ta
 ok('the owner sets the tag in Overview', (await call(owner.token, 'GET', `/guilds/${g.id}`)).tag === 'FOX')
 await po.keyboard.press('Escape')
 const pa = await ctx(a.token)
-await pa.goto(`${WEB}/channels/@me`); await pa.click('[data-control="User Settings"]'); await pa.locator('button:has-text("Profiles")').first().click()
+await pa.goto(`${WEB}/channels/@me`); await openProfileEditor(pa, { section: 'tag' })
 await pa.waitForSelector('[data-wear-tag-select]'); await pa.selectOption('[data-wear-tag-select]', g.id); await pa.waitForTimeout(600)
 let me = await call(a.token, 'GET', '/users/@me')
 ok('a member wears it from Profiles', me.clan_tag === 'FOX' && me.clan_tag_guild === g.id)

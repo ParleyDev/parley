@@ -89,7 +89,7 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
   const icon = 'h-8 w-8 p-0! rounded-md'
   const ghostIcon = `${ghostBase} ${icon}`
   const actions = isMe ? (
-    <button onClick={() => { onClose(); openModal({ kind: 'userSettings', tab: 'profile' }) }} className={ghost} title={t('Edit Profile')}><Pencil size={16} /> {t('Edit Profile')}</button>
+    <button onClick={() => { onClose(); openModal({ kind: 'editProfile' }) }} className={ghost} title={t('Edit Profile')}><Pencil size={16} /> {t('Edit Profile')}</button>
   ) : (
     <>
       {rel !== 'blocked' && <button onClick={dm} className={`btn-primary ${icon}`} title={t('Message')}><MessageSquare size={16} /></button>}

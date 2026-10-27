@@ -44,7 +44,7 @@ const pa = await (await browser.newContext({ viewport: { width: 1280, height: 86
 await pa.goto(`${WEB}/login`); await pa.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await pa.goto(`${WEB}/channels/${g.id}/${ch.id}`); await pa.waitForSelector('[data-user-panel-bar]'); await pa.waitForTimeout(500)
 await pa.click('[data-panel-self]')
-await pa.click('[data-status-durations="idle"]'); await pa.click('[data-status-duration-list="idle"] [data-status-for="28800"]'); await pa.waitForTimeout(600)
+await pa.click('[data-status-menu]'); await pa.click('[data-status-durations="idle"]'); await pa.click('[data-status-duration-list="idle"] [data-status-for="28800"]'); await pa.waitForTimeout(600)
 u = await me()
 ok('the menu sets Idle for 8 hours', u.status === 'idle' && Math.abs(mins(u.status_expires_at) - 480) < 2)
 await pa.click('[data-panel-self]')

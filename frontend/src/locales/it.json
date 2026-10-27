@@ -3268,5 +3268,21 @@
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Durante le chiamate una piccola finestra resta sopra i giochi e le altre app e mostra chi è in chiamata e chi sta parlando. Mostrala o nascondila con {combo}. Disattiva il clic passante per spostarla dalla barra in alto.",
 "In-game overlay": "Overlay in gioco",
 "Not in a call": "Non sei in chiamata",
-"Search {n} nameplates": "Cerca tra {n} targhette"
+"Search {n} nameplates": "Cerca tra {n} targhette",
+"A different nickname, avatar, banner or bio in one server.": "Un altro nickname, avatar, banner o bio in un server.",
+"About Me": "Chi sono",
+"Avatar & Decoration": "Avatar e decorazione",
+"Badges": "Badge",
+"Display Name Style": "Stile del nome visualizzato",
+"Forever": "Per sempre",
+"Games": "Giochi",
+"Main Profile": "Profilo principale",
+"Manage Accounts": "Gestisci account",
+"Profile Effect & Frame": "Effetto e cornice del profilo",
+"Server Profiles": "Profili del server",
+"Switch Accounts": "Cambia account",
+"Tags & Badges": "Tag e badge",
+"Theme & Banner": "Tema e banner",
+"What's your hot take?": "Qual è la tua opinione scomoda?",
+"Your avatar, banner, name style, theme, nameplate, effects, badges and About Me all live in the profile editor, with a live preview.": "Avatar, banner, stile del nome, tema, targhetta, effetti, badge e Chi sono si trovano nell'editor del profilo, con anteprima dal vivo."
 }

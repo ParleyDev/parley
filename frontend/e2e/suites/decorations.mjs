@@ -1,7 +1,7 @@
 // Image avatar decorations from the mounted assets folder (ASSETS_PATH → /data/assets/avatar-decorations). CI mounts
 // e2e/fixtures/assets (one still ring, one two-frame APNG); any folder with at least one still and one animated file works.
 import { chromium } from 'playwright'
-import { B, WEB, reg, call, callS, ok, finish } from '../lib.mjs'
+import { B, WEB, reg, call, callS, ok, finish, openProfileEditor } from '../lib.mjs'
 
 console.log('-- API')
 const list = await (await fetch(`${B}/assets/avatar-decorations`)).json()
@@ -26,7 +26,7 @@ console.log('-- UI')
 const browser = await chromium.launch(); const errors = []
 const p = await browser.newPage({ viewport: { width: 1440, height: 900 } }); p.on('pageerror', (e) => errors.push(e.message))
 await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token); await p.goto(`${WEB}/channels/@me`); await p.waitForSelector('[data-panel-self]')
-await p.click('button[title="User Settings"]'); await p.click('button:has-text("Profiles")'); await p.waitForSelector('[data-decoration-gallery]')
+await openProfileEditor(p, { section: 'decoration' }); await p.waitForSelector('[data-decoration-gallery]')
 ok('Profiles shows the gallery under the preset frames', await p.locator('[data-decoration-options] [data-decoration-option="gold"]').count() === 1 && await p.locator('[data-decoration-grid] [data-decoration-option]').count() >= 2)
 await p.fill('[data-decoration-search]', moving.name)
 ok('search narrows the grid', await p.locator(`[data-decoration-grid] [data-decoration-option="asset:${moving.id}"]`).count() === 1 && await p.locator('[data-decoration-grid] [data-decoration-option]').count() < list.length)
@@ -38,7 +38,7 @@ ok('the preview card plays it', true)
 await p.screenshot({ path: 'decorations-1-settings.png' })
 await p.click('button:has-text("Save Changes")'); await p.waitForTimeout(600)
 ok('saving stores asset:<id>', (await call(a.token, 'GET', '/users/@me')).avatar_decoration === `asset:${moving.id}`)
-await p.keyboard.press('Escape'); await p.waitForTimeout(300)
+await p.keyboard.press('Escape'); await p.waitForTimeout(200); await p.keyboard.press('Escape'); await p.waitForTimeout(300)
 const panelImg = p.locator('[data-panel-self] img[data-decoration]')
 ok('the self panel avatar wears it, still', await panelImg.count() === 1 && (await panelImg.getAttribute('src')).endsWith('/static'))
 const box = await panelImg.boundingBox(); const av = await p.locator('[data-panel-self] .rounded-full').first().boundingBox()

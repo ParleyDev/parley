@@ -2,7 +2,7 @@
 // member list row and playing on hover; not for members who appear offline; in the DM list only on hover or for
 // the open conversation. Also: snow and confetti profile effects fall, hearts rise.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, raw, ok, finish, openDms } from '../lib.mjs'
+import { WEB, S, reg, call, raw, ok, finish, openDms, openProfileEditor } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob'), c = await reg('carol')
 await openDms(a, b, c)
 const g = await call(a.token, 'POST', '/guilds', { name: `Plates ${S}` }); const ch = g.channels.find((x) => x.kind === 'text')
@@ -22,7 +22,7 @@ ok('the instance lists its nameplate files', list.some((n) => n.id === 'e2e_wave
 ok('and serves them as video', (await fetch(`${WEB}/api/assets/nameplates/e2e_wave`)).headers.get('content-type') === 'video/webm')
 ok('unknown asset nameplates are refused', (await raw(a.token, 'PATCH', '/users/@me', { nameplate: 'asset:nope' })).status === 400)
 const pa = await mk(a, `/channels/${g.id}/${ch.id}`)
-await pa.click('button[title="User Settings"]'); await pa.click('[data-settings-tab="profile"]'); await pa.waitForSelector('[data-asset-nameplates]')
+await openProfileEditor(pa, { section: 'nameplate' }); await pa.waitForSelector('[data-asset-nameplates]')
 await pa.click('[data-nameplate-option="asset:e2e_wave"]')
 await pa.locator('button:has-text("Save Changes"), button[type="submit"]:has-text("Save")').first().click().catch(() => {})
 ok('Profiles picks one', await (async () => { for (let i = 0; i < 20; i++) { if ((await call(a.token, 'GET', '/users/@me')).nameplate === 'asset:e2e_wave') return true; await new Promise((r) => setTimeout(r, 250)) } return false })())

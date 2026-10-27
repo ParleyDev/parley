@@ -3268,5 +3268,21 @@
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Tijdens gesprekken blijft een klein venster boven games en andere apps staan en laat zien wie er in het gesprek zit en wie praat. Schakel het met {combo}. Zet doorklikken uit om het aan de bovenbalk te verslepen.",
 "In-game overlay": "In-game-overlay",
 "Not in a call": "Niet in een gesprek",
-"Search {n} nameplates": "Zoek in {n} naambordjes"
+"Search {n} nameplates": "Zoek in {n} naambordjes",
+"A different nickname, avatar, banner or bio in one server.": "Een andere bijnaam, avatar, banner of bio op één server.",
+"About Me": "Over mij",
+"Avatar & Decoration": "Avatar en decoratie",
+"Badges": "Badges",
+"Display Name Style": "Stijl van weergavenaam",
+"Forever": "Voor altijd",
+"Games": "Games",
+"Main Profile": "Hoofdprofiel",
+"Manage Accounts": "Accounts beheren",
+"Profile Effect & Frame": "Profieleffect en -frame",
+"Server Profiles": "Serverprofielen",
+"Switch Accounts": "Van account wisselen",
+"Tags & Badges": "Tags en badges",
+"Theme & Banner": "Thema en banner",
+"What's your hot take?": "Wat is jouw onpopulaire mening?",
+"Your avatar, banner, name style, theme, nameplate, effects, badges and About Me all live in the profile editor, with a live preview.": "Je avatar, banner, naamstijl, thema, naamplaatje, effecten, badges en Over mij vind je in de profielbewerker, met live voorbeeld."
 }

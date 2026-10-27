@@ -3268,5 +3268,21 @@
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Во время звонков небольшое окно остаётся поверх игр и других приложений и показывает, кто в звонке и кто говорит. Переключайте его сочетанием {combo}. Отключите сквозные клики, чтобы перемещать его за верхнюю панель.",
 "In-game overlay": "Внутриигровой оверлей",
 "Not in a call": "Не в звонке",
-"Search {n} nameplates": "Поиск среди табличек: {n}"
+"Search {n} nameplates": "Поиск среди табличек: {n}",
+"A different nickname, avatar, banner or bio in one server.": "Другой ник, аватар, баннер или описание на одном сервере.",
+"About Me": "Обо мне",
+"Avatar & Decoration": "Аватар и украшение",
+"Badges": "Значки",
+"Display Name Style": "Стиль отображаемого имени",
+"Forever": "Навсегда",
+"Games": "Игры",
+"Main Profile": "Основной профиль",
+"Manage Accounts": "Управление аккаунтами",
+"Profile Effect & Frame": "Эффект и рамка профиля",
+"Server Profiles": "Профили на серверах",
+"Switch Accounts": "Сменить аккаунт",
+"Tags & Badges": "Теги и значки",
+"Theme & Banner": "Тема и баннер",
+"What's your hot take?": "Какое у тебя непопулярное мнение?",
+"Your avatar, banner, name style, theme, nameplate, effects, badges and About Me all live in the profile editor, with a live preview.": "Аватар, баннер, стиль имени, тема, плашка с именем, эффекты, значки и «Обо мне» находятся в редакторе профиля, с предпросмотром в реальном времени."
 }

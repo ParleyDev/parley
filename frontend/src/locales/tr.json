@@ -3268,5 +3268,21 @@
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Aramalarda küçük bir pencere oyunların ve diğer uygulamaların üstünde kalır, aramada kimin olduğunu ve kimin konuştuğunu gösterir. {combo} ile aç/kapat. Üst çubuğundan taşımak için tıklama geçirmeyi kapat.",
 "In-game overlay": "Oyun içi katman",
 "Not in a call": "Aramada değil",
-"Search {n} nameplates": "{n} isim plakasında ara"
+"Search {n} nameplates": "{n} isim plakasında ara",
+"A different nickname, avatar, banner or bio in one server.": "Bir sunucuda farklı bir takma ad, avatar, banner veya biyografi.",
+"About Me": "Hakkımda",
+"Avatar & Decoration": "Avatar ve Süs",
+"Badges": "Rozetler",
+"Display Name Style": "Görünen Ad Stili",
+"Forever": "Sonsuza kadar",
+"Games": "Oyunlar",
+"Main Profile": "Ana Profil",
+"Manage Accounts": "Hesapları Yönet",
+"Profile Effect & Frame": "Profil Efekti ve Çerçevesi",
+"Server Profiles": "Sunucu Profilleri",
+"Switch Accounts": "Hesap Değiştir",
+"Tags & Badges": "Etiketler ve Rozetler",
+"Theme & Banner": "Tema ve Banner",
+"What's your hot take?": "Tartışmalı fikrin ne?",
+"Your avatar, banner, name style, theme, nameplate, effects, badges and About Me all live in the profile editor, with a live preview.": "Avatarın, bannerın, ad stilin, temanın, isim plakanın, efektlerin, rozetlerin ve Hakkımda profil düzenleyicisinde, canlı önizlemeyle birlikte."
 }

@@ -1,7 +1,7 @@
 // Display name styles: font + effect + colours saved on the profile, painted in chat/DMs/profile, picker modal;
 // and the admin's per-user upload size limit.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, raw, ok, finish, adminToken } from '../lib.mjs'
+import { WEB, S, reg, call, raw, ok, finish, adminToken, openProfileEditor } from '../lib.mjs'
 const admin = await adminToken(); const a = await reg('alice'); const b = await reg('bob')
 await call(a.token, 'POST', '/users/@me/relationships', { user_id: b.user.id }); await call(b.token, 'PUT', `/users/@me/relationships/${a.user.id}`)
 const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
@@ -39,7 +39,7 @@ await pc.close()
 
 console.log('-- picker')
 const pa = await mk(a.token, `${WEB}/channels/@me`); await pa.waitForSelector('[data-user-panel-bar]')
-await pa.click('button[title="User Settings"]'); await pa.click('text=Profiles'); await pa.waitForSelector('[data-name-style-card]')
+await openProfileEditor(pa); await pa.waitForSelector('[data-name-style-card]')
 ok('Profiles shows the current style and a Change button', (await pa.locator('[data-name-preview]').getAttribute('class')).includes('ne-neon') && await pa.locator('[data-name-style-open]').count() === 1)
 await pa.click('[data-name-style-open]'); await pa.waitForSelector('[data-name-style-modal]')
 ok('the modal offers 12 fonts, 10 effects and 8 colours for a one-colour effect', await pa.locator('[data-font]').count() === 12 && await pa.locator('[data-effect]').count() === 10 && await pa.locator('[data-name-color]').count() === 8 && (await pa.getAttribute('[data-name-style-modal]', 'data-name-mode')) === 'one')
@@ -57,7 +57,7 @@ await pa.click('[data-name-surprise]'); await pa.waitForTimeout(100)
 ok('Surprise Me picks something', await pa.locator('[data-font][aria-pressed="true"]').count() === 1 && await pa.locator('[data-effect][aria-pressed="true"]').count() === 1)
 await pa.click('[data-font="slab"]'); await pa.click('[data-effect="gradient"]'); await pa.locator('[data-name-preset="#ff5c3b,#f6c86b"]').click()
 await pa.click('[data-name-apply]'); await pa.waitForFunction(() => !document.querySelector('[data-name-style-modal]'))
-await pa.waitForSelector('[data-theme-box]')
+await openProfileEditor(pa, { section: 'theme' })
 ok('the profile theme is a gradient box with two pickers and no toggle', await pa.locator('[data-theme-primary]').count() === 1 && await pa.locator('[data-theme-accent]').count() === 1 && await pa.locator('text=Gradient (add a second colour)').count() === 0)
 await pa.click('button:has-text("Save Changes")'); await pa.waitForTimeout(600)
 const saved = await call(b.token, 'GET', `/users/${a.user.id}`)

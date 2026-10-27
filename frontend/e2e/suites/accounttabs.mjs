@@ -17,7 +17,7 @@ await p1.goto(`${WEB}/channels/@me`); await p1.waitForSelector('[data-panel-self
 // A second tab adds bob, the way people do: Add an account, then log in.
 const p2 = await tab()
 await p2.goto(`${WEB}/channels/@me`); await p2.waitForSelector('[data-panel-self]')
-await p2.click('[data-panel-self]'); await p2.click('[data-account-add]'); await p2.waitForSelector('[data-login-input]')
+await p2.click('[data-panel-self]'); await p2.click('[data-switch-accounts]'); await p2.click('[data-account-add]'); await p2.waitForSelector('[data-login-input]')
 await p2.fill('[data-login-input]', b.user.username); await p2.fill('input[type=password]', PASSWORD); await p2.click('button:has-text("Log In")')
 await p2.waitForSelector('[data-panel-self]'); await p2.waitForTimeout(1500)
 ok('second tab is bob', await panelName(p2) === 'Bob')
@@ -28,7 +28,7 @@ ok('both saved with their own tokens', consistent(await saved(p2)), JSON.stringi
 execSync(`docker restart ${testContainer('backend')}`)
 await p1.waitForTimeout(9000)
 ok('after a reconnect, still one token per account', consistent(await saved(p1)), JSON.stringify(await saved(p1)))
-await p2.click('[data-panel-self]'); await p2.waitForSelector('[data-account-switcher]')
+await p2.click('[data-panel-self]'); await p2.click('[data-switch-accounts]'); await p2.waitForSelector('[data-account-switcher]')
 ok('the switcher marks only one account as current', await p2.locator('[data-account-switcher] svg.text-success').count() === 1)
 await p2.click(`[data-account-switcher] [data-account-row="${a.user.username}"] button >> nth=0`)
 await p2.waitForFunction(() => document.querySelector('[data-panel-self]')?.textContent?.includes('Alice'), null, { timeout: 10000 }).catch(() => {})

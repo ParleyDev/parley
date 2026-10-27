@@ -3268,5 +3268,21 @@
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "通话期间，一个小窗口会显示在游戏和其他应用上方，显示谁在通话中以及谁在说话。用 {combo} 切换。关闭点击穿透后可拖动其顶部栏移动。",
 "In-game overlay": "游戏内浮层",
 "Not in a call": "未在通话中",
-"Search {n} nameplates": "搜索 {n} 个名牌"
+"Search {n} nameplates": "搜索 {n} 个名牌",
+"A different nickname, avatar, banner or bio in one server.": "在某个服务器中使用不同的昵称、头像、横幅或简介。",
+"About Me": "关于我",
+"Avatar & Decoration": "头像与装饰",
+"Badges": "徽章",
+"Display Name Style": "显示名称样式",
+"Forever": "永久",
+"Games": "游戏",
+"Main Profile": "主个人资料",
+"Manage Accounts": "管理账号",
+"Profile Effect & Frame": "个人资料特效与边框",
+"Server Profiles": "服务器个人资料",
+"Switch Accounts": "切换账号",
+"Tags & Badges": "标签与徽章",
+"Theme & Banner": "主题与横幅",
+"What's your hot take?": "你有什么不一样的看法？",
+"Your avatar, banner, name style, theme, nameplate, effects, badges and About Me all live in the profile editor, with a live preview.": "头像、横幅、名称样式、主题、名牌、特效、徽章和“关于我”都在个人资料编辑器中，并带有实时预览。"
 }

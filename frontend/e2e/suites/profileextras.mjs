@@ -1,7 +1,7 @@
 // Profile extras: recent avatars (switch back; replaced avatars are kept, not deleted), friends-only profiles,
 // profile frames, nameplates and effects, the bio formatting bar, and LIVE in member lists and profiles.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, raw, multi, pngFile, ok, finish } from '../lib.mjs'
+import { WEB, S, reg, call, raw, multi, pngFile, ok, finish, openProfileEditor, closeEditorPanel } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob'), c = await reg('carol')
 await call(b.token, 'POST', '/users/@me/relationships', { user_id: c.user.id }); await call(c.token, 'PUT', `/users/@me/relationships/${b.user.id}`)
 const g = await call(a.token, 'POST', '/guilds', { name: `Prof ${S}` })
@@ -40,9 +40,9 @@ const mk = async (tok, path) => {
   return p
 }
 const pb = await mk(b.token, `/channels/${g.id}/${general.id}`)
-await pb.click('[data-control="User Settings"]'); await pb.click('button:has-text("Profiles")'); await pb.waitForSelector('[data-cosmetics]')
+await openProfileEditor(pb, { section: 'avatar' })
 ok('recent avatars are offered', await pb.locator('[data-avatar-history-item]').count() === 2)
-await pb.click('[data-frame-option="neon"]'); await pb.click('[data-nameplate-option="ocean"]'); await pb.click('[data-effect-option="sparkles"]')
+await openProfileEditor(pb, { section: 'frame' }); await pb.click('[data-frame-option="neon"]'); await openProfileEditor(pb, { section: 'nameplate' }); await pb.click('[data-nameplate-option="ocean"]'); await openProfileEditor(pb, { section: 'effect' }); await pb.click('[data-effect-option="sparkles"]'); await closeEditorPanel(pb)
 ok('the preview shows the frame and effect', await pb.locator('[data-profile-card][data-profile-frame="neon"] [data-profile-effect="sparkles"]').count() === 1)
 await pb.fill('[data-bio-input]', 'make this bold'); await pb.evaluate(() => { const t = document.querySelector('[data-bio-input]'); t.focus(); t.setSelectionRange(10, 14) })
 await pb.click('[data-bio-format="bold"]'); await pb.waitForTimeout(100)

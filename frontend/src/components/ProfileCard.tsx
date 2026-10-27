@@ -1,3 +1,4 @@
+import { statuses, StatusDot } from './UserMenu'
 import { Camera, ChevronDown, Pencil, Trash2 } from 'lucide-react'
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { locale, useT } from '../lib/i18n'
@@ -47,11 +48,6 @@ export function contrastText(hex: string): string {
   const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
   return lum > 0.4 ? '#0b0c10' : '#fff'
 }
-
-/** Presence choices, as in the user panel's menu. */
-export const PRESENCE: { v: string; label: string }[] = [
-  { v: 'online', label: 'Online' }, { v: 'idle', label: 'Idle' }, { v: 'dnd', label: 'Do Not Disturb' }, { v: 'invisible', label: 'Invisible' },
-]
 
 /** Makes the card editable in place (User Settings › Profiles): each handler receives the new value. */
 export interface ProfileEdit {
@@ -185,15 +181,15 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
             {edit.onStatus && (
               <div className="relative shrink-0">
                 <button type="button" onClick={() => setStatusMenu((o) => !o)} className="flex items-center gap-1.5 rounded-full bg-black/25 px-2 py-0.5 text-xs font-medium hover:bg-black/35" aria-haspopup="menu" aria-expanded={statusMenu} data-inline-presence={edit.status ?? 'online'}>
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(edit.status, true) }} />{t(PRESENCE.find((p) => p.v === (edit.status ?? 'online'))?.label ?? 'Online')}<ChevronDown size={12} />
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(edit.status, true) }} />{statuses().find((p) => p.v === (edit.status ?? 'online'))?.label ?? t('Online')}<ChevronDown size={12} />
                 </button>
                 {statusMenu && (
                   <>
                     <div className="fixed inset-0 z-[60]" onClick={() => setStatusMenu(false)} />
                     <div role="menu" className="pop absolute left-0 top-full z-[70] mt-1 w-44 rounded-lg border border-line bg-bg-0 p-1 text-text-0 shadow-2xl">
-                      {PRESENCE.map((p) => (
+                      {statuses().map((p) => (
                         <button key={p.v} type="button" role="menuitem" onClick={() => { setStatusMenu(false); edit.onStatus!(p.v) }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-bg-3" data-presence-option={p.v}>
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(p.v, true) }} />{t(p.label)}
+                          <StatusDot v={p.v} />{p.label}
                         </button>
                       ))}
                     </div>

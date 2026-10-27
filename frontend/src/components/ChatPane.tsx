@@ -61,15 +61,24 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
   // Where the reader was when they opened the channel: everything after it is "new" until they leave.
   const [readAtOpen, setReadAtOpen] = useState<string | null | undefined>(undefined)
   const initialScrollDone = useRef(false)
+  // Opened on a stale window that is being replaced by the newest page: land once that page is here, not on the old one.
+  const relanding = useRef(false)
 
   useEffect(() => {
     setActiveChannel(channel.id)
     setReply(null)
     stickBottom.current = true
     initialScrollDone.current = false
+    relanding.current = false
     // Capture before the mark-read effect below moves the pointer to the newest message.
     setReadAtOpen(useStore.getState().readStates[channel.id] ?? null)
     if (!messages) loadMessages(channel.id)
+    // A window kept from earlier that stops short of the newest messages (opened at an old message before): start
+    // from the newest again, unless this visit follows a link to a particular message.
+    else if (useStore.getState().hasNewer[channel.id] && !new URLSearchParams(location.search).has('message')) {
+      relanding.current = true
+      void loadLatest(channel.id).finally(() => { relanding.current = false })
+    }
     api.get<{ user_id: string; message_id: string }[]>(`/channels/${channel.id}/receipts`).then((l) => setReceipts(channel.id, l)).catch(() => {})
     return () => setActiveChannel(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,7 +107,7 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
   // First message the reader has not seen (from someone else), if any is loaded.
   const firstUnreadId = (() => {
     if (readAtOpen === undefined || !messages?.length) return null
-    const m = messages.find((x) => (readAtOpen === null || x.id > readAtOpen) && x.author.id !== user?.id && !x.local)
+    const m = messages.find((x) => (readAtOpen === null || x.id > readAtOpen) && (x.author.id !== user?.id || !!x.webhook_id) && !x.local)
     // With no read state at all (never opened), everything is "new"; only mark when there is history before it.
     if (!m || (readAtOpen === null && messages[0].id === m.id)) return null
     return m.id
@@ -118,7 +127,9 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
   useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    if (!initialScrollDone.current && messages) {
+    if (!initialScrollDone.current && messages && relanding.current && hasNewer) {
+      // wait for the newest page
+    } else if (!initialScrollDone.current && messages) {
       initialScrollDone.current = true
       const divider = firstUnreadId ? el.querySelector<HTMLElement>('[data-unread-divider]') : null
       if (divider) {
@@ -141,7 +152,7 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
     }
     prevHeight.current = el.scrollHeight
     prevFirst.current = messages?.[0]?.id ?? null
-  }, [messages, firstUnreadId])
+  }, [messages, firstUnreadId, hasNewer])
 
   // Late-loading content (thumbnails, link cards, poll results) grows the list after the first paint;
   // when pinned to the bottom, follow it so the view never drifts up.

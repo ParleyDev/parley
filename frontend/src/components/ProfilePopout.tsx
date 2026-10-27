@@ -17,6 +17,7 @@ import { Badges, ClanTag } from './Flair'
 import { colorRole } from './StyledName'
 import { frameClass } from '../lib/cosmetics'
 import ProfileEffect from './ProfileEffect'
+import { profileCardStyle, profileColors } from '../lib/profileLook'
 import { ActivityCard } from './SpotifyActivity'
 
 export const POPOUT_W = 300
@@ -74,12 +75,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const look = roleForName ? roleLook(roleForName) : nameLook(user)
   const nameStyle = look.style
 
-  const themed = !!user.theme_primary
-  const primary = user.theme_primary ?? colorFor(user.id)
-  const gradient = `linear-gradient(135deg, ${primary}, ${user.theme_accent ?? primary})`
-  const cardStyle = themed
-    ? { background: `linear-gradient(rgba(17,18,20,0.78), rgba(17,18,20,0.78)), ${gradient}`, borderColor: primary }
-    : { background: '#232428', borderColor: 'rgba(255,255,255,0.06)' }
+  const { themed, gradient } = profileColors(user)
+  const cardStyle = profileCardStyle(user)
 
   const act = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
   const openDm = async () => { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: user.id }); upsertChannel(c); return c }
@@ -123,7 +120,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
 
   const menuItems: MenuEntry[] = isMe
     ? [
-      { label: t('Edit Profile'), icon: <Pencil size={16} />, onClick: () => { onClose(); openModal({ kind: 'userSettings', tab: 'profile' }) } },
+      { label: t('Edit Profile'), icon: <Pencil size={16} />, onClick: () => { onClose(); openModal({ kind: 'editProfile' }) } },
       'sep',
       copyMenu(),
     ]

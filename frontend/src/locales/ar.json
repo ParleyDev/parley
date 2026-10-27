@@ -3268,5 +3268,21 @@
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "أثناء المكالمات تبقى نافذة صغيرة فوق الألعاب والتطبيقات الأخرى وتعرض من في المكالمة ومن يتحدث. بدّلها باستخدام {combo}. أوقف تمرير النقرات لتحريكها من شريطها العلوي.",
 "In-game overlay": "الواجهة العائمة داخل اللعبة",
 "Not in a call": "لست في مكالمة",
-"Search {n} nameplates": "ابحث في {n} من لوحات الأسماء"
+"Search {n} nameplates": "ابحث في {n} من لوحات الأسماء",
+"A different nickname, avatar, banner or bio in one server.": "لقب أو صورة رمزية أو لافتة أو نبذة مختلفة في خادم واحد.",
+"About Me": "نبذة عني",
+"Avatar & Decoration": "الصورة الرمزية والزخرفة",
+"Badges": "الشارات",
+"Display Name Style": "نمط الاسم المعروض",
+"Forever": "إلى الأبد",
+"Games": "الألعاب",
+"Main Profile": "الملف الشخصي الرئيسي",
+"Manage Accounts": "إدارة الحسابات",
+"Profile Effect & Frame": "تأثير الملف الشخصي والإطار",
+"Server Profiles": "ملفات الخوادم الشخصية",
+"Switch Accounts": "تبديل الحساب",
+"Tags & Badges": "الوسوم والشارات",
+"Theme & Banner": "السمة واللافتة",
+"What's your hot take?": "ما رأيك الجريء؟",
+"Your avatar, banner, name style, theme, nameplate, effects, badges and About Me all live in the profile editor, with a live preview.": "صورتك الرمزية ولافتتك ونمط اسمك وسمتك ولوحة اسمك وتأثيراتك وشاراتك ونبذة عنك كلها في محرر الملف الشخصي، مع معاينة مباشرة."
 }

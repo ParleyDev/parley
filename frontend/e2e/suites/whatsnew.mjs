@@ -1,8 +1,8 @@
 // What's New: release notes pop up once when a new entry lands (never on a device's first visit), and Settings
-// opens them any time. House badges: pick one in Profiles, it shows on your profile for everyone, click again to
+// opens them any time. House badges: pick one in the profile editor, it shows on your profile for everyone, click again to
 // leave.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, raw, ok, finish } from '../lib.mjs'
+import { WEB, S, reg, call, raw, ok, finish, openProfileEditor } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob')
 const g = await call(a.token, 'POST', '/guilds', { name: `News ${S}` }); const ch = g.channels.find((c) => c.kind === 'text')
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`)
@@ -29,7 +29,7 @@ await p.click('[data-whats-new-close]')
 
 console.log('-- house badges')
 ok('only the three houses', (await raw(a.token, 'PATCH', '/users/@me', { house: 'slytherin' })).status === 400)
-await p.click('button[title="User Settings"]'); await p.click('[data-settings-tab="profile"]'); await p.waitForSelector('[data-house-picker]')
+await openProfileEditor(p, { section: 'badges' }); await p.waitForSelector('[data-house-picker]')
 await p.click('[data-house-option="ember"]')
 await p.waitForSelector('[data-house-option="ember"][aria-pressed="true"]', { timeout: 5000 }).catch(() => {})
 ok('picking a house saves it', await p.locator('[data-house-option="ember"][aria-pressed="true"]').count() === 1 && (await call(a.token, 'GET', '/users/@me')).house === 'ember')

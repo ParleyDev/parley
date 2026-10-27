@@ -3268,5 +3268,21 @@
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "통화 중에는 작은 창이 게임과 다른 앱 위에 떠서 누가 통화 중이고 누가 말하는지 보여 줘요. {combo}(으)로 켜고 끌 수 있어요. 위쪽 막대로 옮기려면 클릭 통과를 꺼 주세요.",
 "In-game overlay": "게임 내 오버레이",
 "Not in a call": "통화 중이 아님",
-"Search {n} nameplates": "이름표 {n}개 검색"
+"Search {n} nameplates": "이름표 {n}개 검색",
+"A different nickname, avatar, banner or bio in one server.": "서버 하나에서만 다른 닉네임, 아바타, 배너, 소개를 사용할 수 있어요.",
+"About Me": "자기소개",
+"Avatar & Decoration": "아바타 및 장식",
+"Badges": "배지",
+"Display Name Style": "표시 이름 스타일",
+"Forever": "영원히",
+"Games": "게임",
+"Main Profile": "메인 프로필",
+"Manage Accounts": "계정 관리하기",
+"Profile Effect & Frame": "프로필 효과 및 프레임",
+"Server Profiles": "서버 프로필",
+"Switch Accounts": "계정 전환하기",
+"Tags & Badges": "태그 및 배지",
+"Theme & Banner": "테마 및 배너",
+"What's your hot take?": "당신의 소신 발언은?",
+"Your avatar, banner, name style, theme, nameplate, effects, badges and About Me all live in the profile editor, with a live preview.": "아바타, 배너, 이름 스타일, 테마, 네임플레이트, 효과, 배지, 자기소개는 모두 프로필 편집기에서 실시간 미리보기와 함께 바꿀 수 있어요."
 }

@@ -119,7 +119,7 @@ export function useUserMenu(guildId?: string | null) {
       return [
         { label: 'Profile', icon: <UserIcon size={16} />, onClick: profile },
         ...mention,
-        { label: 'Edit Profile', onClick: () => openModal({ kind: 'userSettings', tab: 'profile' }) },
+        { label: 'Edit Profile', onClick: () => openModal({ kind: 'editProfile' }) },
         ...nickname,
         ...roleMenu,
         ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy User ID', icon: <Copy size={16} />, onClick: () => copy(t('User ID'), u.id) }] : []),
