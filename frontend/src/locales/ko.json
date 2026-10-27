@@ -3236,5 +3236,6 @@
 "While Clips are on, your device keeps recording the call in the background so a clip is always ready. Nothing is uploaded.": "클립이 켜져 있는 동안 기기가 백그라운드에서 통화를 계속 녹화하므로 언제나 클립을 저장할 수 있습니다. 아무것도 업로드되지 않습니다.",
 "Your clips": "내 클립",
 "{name} in {channel}": "{channel}의 {name}",
-"{n}s": "{n}초"
+"{n}s": "{n}초",
+"Off: this server's members don't see what you're playing or listening to. Friends and people you DM with still do.": "끄면 이 서버 멤버에게는 플레이 중이거나 듣는 중인 항목이 보이지 않아요. 친구와 DM 상대에게는 계속 보여요."
 }

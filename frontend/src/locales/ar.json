@@ -3236,5 +3236,6 @@
 "While Clips are on, your device keeps recording the call in the background so a clip is always ready. Nothing is uploaded.": "أثناء تفعيل المقاطع، يواصل جهازك تسجيل المكالمة في الخلفية ليكون هناك مقطع جاهز دائماً. لا يتم رفع أي شيء.",
 "Your clips": "مقاطعك",
 "{name} in {channel}": "{name} في {channel}",
-"{n}s": "{n} ث"
+"{n}s": "{n} ث",
+"Off: this server's members don't see what you're playing or listening to. Friends and people you DM with still do.": "عند الإيقاف: لا يرى أعضاء هذا الخادم ما تلعبه أو تستمع إليه. يظل أصدقاؤك ومن تراسلهم مباشرةً يرونه."
 }

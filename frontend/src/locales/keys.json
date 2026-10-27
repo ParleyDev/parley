@@ -1664,6 +1664,7 @@
 "Off: nobody sees a \"Seen\" marker on messages you read. You will still see theirs if they allow it.",
 "Off: posted badges turn grey and say \"badge disabled\", with no counts.",
 "Off: the \"… is typing\" line never shows for you. Your online status is controlled from the status picker (choose Invisible to appear offline).",
+"Off: this server's members don't see what you're playing or listening to. Friends and people you DM with still do.",
 "Offer Summaries in this server's text channels",
 "Offline",
 "Oldest",

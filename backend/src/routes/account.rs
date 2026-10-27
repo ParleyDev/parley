@@ -362,13 +362,13 @@ async fn recent_mentions(State(state): State<AppState>, AuthUser(uid): AuthUser,
 }
 
 #[derive(serde::Serialize)]
-struct GuildPrivacy { allow_dms: Option<bool>, effective: bool, default: bool }
+struct GuildPrivacy { allow_dms: Option<bool>, effective: bool, default: bool, share_activity: bool }
 
 async fn guild_privacy_of(state: &AppState, uid: Uuid, gid: Uuid) -> AppResult<GuildPrivacy> {
-    let row: Option<(Option<bool>, bool)> = sqlx::query_as("SELECT gm.allow_dms, u.guild_dms_default FROM guild_members gm JOIN users u ON u.id = gm.user_id WHERE gm.guild_id = $1 AND gm.user_id = $2")
+    let row: Option<(Option<bool>, bool, bool)> = sqlx::query_as("SELECT gm.allow_dms, u.guild_dms_default, gm.share_activity FROM guild_members gm JOIN users u ON u.id = gm.user_id WHERE gm.guild_id = $1 AND gm.user_id = $2")
         .bind(gid).bind(uid).fetch_optional(&state.db).await?;
-    let (allow, default) = row.ok_or_else(|| AppError::NotFound("Not a member of that server".into()))?;
-    Ok(GuildPrivacy { allow_dms: allow, effective: allow.unwrap_or(default), default })
+    let (allow, default, share_activity) = row.ok_or_else(|| AppError::NotFound("Not a member of that server".into()))?;
+    Ok(GuildPrivacy { allow_dms: allow, effective: allow.unwrap_or(default), default, share_activity })
 }
 
 /// Your privacy choices for one server: allow DMs from its members (null = your default).
@@ -376,12 +376,19 @@ async fn guild_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     Ok(Json(guild_privacy_of(&state, uid, gid).await?))
 }
 
-#[derive(Deserialize)]
-struct GuildPrivacyReq { allow_dms: Option<bool> }
-
-async fn update_guild_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>, Json(req): Json<GuildPrivacyReq>) -> AppResult<Json<GuildPrivacy>> {
-    let n = sqlx::query("UPDATE guild_members SET allow_dms = $3 WHERE guild_id = $1 AND user_id = $2").bind(gid).bind(uid).bind(req.allow_dms).execute(&state.db).await?.rows_affected();
-    if n == 0 { return Err(AppError::NotFound("Not a member of that server".into())) }
+/// Each field only when present: `allow_dms` (null = your default) and `share_activity`.
+async fn update_guild_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>, Json(req): Json<Value>) -> AppResult<Json<GuildPrivacy>> {
+    guild_privacy_of(&state, uid, gid).await?;
+    if let Some(v) = req.get("allow_dms") {
+        let allow = if v.is_null() { None } else { Some(v.as_bool().ok_or_else(|| AppError::BadRequest("allow_dms is true, false or null".into()))?) };
+        sqlx::query("UPDATE guild_members SET allow_dms = $3 WHERE guild_id = $1 AND user_id = $2").bind(gid).bind(uid).bind(allow).execute(&state.db).await?;
+    }
+    if let Some(v) = req.get("share_activity") {
+        let on = v.as_bool().ok_or_else(|| AppError::BadRequest("share_activity is true or false".into()))?;
+        let before = crate::routes::spotify::audience(&state.db, uid).await;
+        sqlx::query("UPDATE guild_members SET share_activity = $3 WHERE guild_id = $1 AND user_id = $2").bind(gid).bind(uid).bind(on).execute(&state.db).await?;
+        crate::routes::spotify::reshare(&state, uid, before).await;
+    }
     Ok(Json(guild_privacy_of(&state, uid, gid).await?))
 }
 

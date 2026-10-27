@@ -3236,5 +3236,6 @@
 "While Clips are on, your device keeps recording the call in the background so a clip is always ready. Nothing is uploaded.": "Finché Clip è attivo, il dispositivo continua a registrare la chiamata in background così una clip è sempre pronta. Non viene caricato nulla.",
 "Your clips": "Le tue clip",
 "{name} in {channel}": "{name} in {channel}",
-"{n}s": "{n} s"
+"{n}s": "{n} s",
+"Off: this server's members don't see what you're playing or listening to. Friends and people you DM with still do.": "Disattivato: i membri di questo server non vedono a cosa giochi o cosa ascolti. Amici e persone con cui hai messaggi diretti continuano a vederlo."
 }

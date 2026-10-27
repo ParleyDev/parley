@@ -8,7 +8,8 @@
 //!
 //! People can also set an activity by hand ("Playing Factorio", `users.custom_activity`); it shows whenever Spotify
 //! isn't. Nothing is shared while someone is offline, invisible, or has turned off "Share my activity"
-//! (`users.share_activity`).
+//! (`users.share_activity`). Who sees it: friends, people you share a DM or group with, and members of servers where
+//! you share it (`guild_members.share_activity`, Server menu → Privacy Settings).
 
 use crate::{auth::AuthUser, error::{AppError, AppResult}, state::AppState};
 use axum::{extract::{Path, State}, http::StatusCode, routing::post, Json, Router};
@@ -93,7 +94,7 @@ async fn publish(state: &AppState, uid: Uuid, activity: Option<Value>) {
         Some(a) => { let _ = sqlx::query("INSERT INTO activities (user_id, activity) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET activity = $2, updated_at = now()").bind(uid).bind(a).execute(&state.db).await; }
         None => { let _ = sqlx::query("DELETE FROM activities WHERE user_id = $1").bind(uid).execute(&state.db).await; }
     }
-    state.hub.emit_all("ACTIVITY_UPDATE", json!({ "user_id": uid, "activity": activity }));
+    emit(state, uid, json!({ "user_id": uid, "activity": activity })).await;
 }
 
 /// The host's activity again, with its listeners as they are now.
@@ -159,7 +160,7 @@ pub async fn poll_loop(state: AppState) {
         ).bind(crate::ws::bus::STALE_SECS as f64).fetch_all(&state.db).await.unwrap_or_default();
         for (uid,) in stale {
             end_party(&state, uid).await;
-            state.hub.emit_all("ACTIVITY_UPDATE", json!({ "user_id": uid, "activity": null }));
+            emit(&state, uid, json!({ "user_id": uid, "activity": null })).await;
         }
         // Back: a hand-set activity for someone online with nothing showing (they came online, Spotify stopped).
         let back: Vec<(Uuid, Value)> = sqlx::query_as(
@@ -169,7 +170,7 @@ pub async fn poll_loop(state: AppState) {
                AND NOT EXISTS (SELECT 1 FROM activities a WHERE a.user_id = u.id)
              ON CONFLICT (user_id) DO NOTHING RETURNING user_id, activity",
         ).bind(crate::ws::bus::STALE_SECS as f64).fetch_all(&state.db).await.unwrap_or_default();
-        for (uid, a) in back { state.hub.emit_all("ACTIVITY_UPDATE", json!({ "user_id": uid, "activity": a })); }
+        for (uid, a) in back { emit(&state, uid, json!({ "user_id": uid, "activity": a })).await; }
         let due: Vec<(Uuid, Uuid)> = sqlx::query_as(
             "UPDATE connections SET polled_at = now() WHERE id IN (
                SELECT c.id FROM connections c JOIN users u ON u.id = c.user_id
@@ -191,21 +192,53 @@ pub async fn poll_loop(state: AppState) {
 pub async fn reannounce(state: &AppState, uid: Uuid) {
     let row: Option<(Value,)> = sqlx::query_as("SELECT a.activity FROM activities a JOIN users u ON u.id = a.user_id WHERE a.user_id = $1 AND u.status <> 'invisible' AND u.share_activity")
         .bind(uid).fetch_optional(&state.db).await.ok().flatten();
-    if let Some((a,)) = row { state.hub.emit_all("ACTIVITY_UPDATE", json!({ "user_id": uid, "activity": a })); }
+    if let Some((a,)) = row { emit(state, uid, json!({ "user_id": uid, "activity": a })).await; }
 }
 
-/// Activities of everyone online and visible, for READY.
-pub async fn ready_activities(db: &sqlx::PgPool) -> serde_json::Map<String, Value> {
+/// Who may see `uid`'s activity: themselves, friends, people they share a DM or group with, and members of servers
+/// where they share it. Nobody on either side of a block.
+pub async fn audience(db: &sqlx::PgPool, uid: Uuid) -> Vec<Uuid> {
+    sqlx::query_as::<_, (Uuid,)>(
+        "SELECT x FROM (
+           SELECT $1 AS x
+           UNION SELECT target_id FROM relationships WHERE user_id = $1 AND kind = 'friend'
+           UNION SELECT c2.user_id FROM channel_members c1 JOIN channel_members c2 ON c2.channel_id = c1.channel_id WHERE c1.user_id = $1
+           UNION SELECT g2.user_id FROM guild_members g1 JOIN guild_members g2 ON g2.guild_id = g1.guild_id WHERE g1.user_id = $1 AND g1.share_activity
+         ) s WHERE NOT EXISTS (SELECT 1 FROM relationships r WHERE r.kind = 'blocked' AND ((r.user_id = $1 AND r.target_id = s.x) OR (r.user_id = s.x AND r.target_id = $1)))",
+    ).bind(uid).fetch_all(db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default()
+}
+
+async fn emit(state: &AppState, uid: Uuid, d: Value) {
+    state.hub.emit_users(audience(&state.db, uid).await, "ACTIVITY_UPDATE", d);
+}
+
+/// Sharing in a server changed: tell the people who can now see the activity, and clear it for those who can't.
+pub async fn reshare(state: &AppState, uid: Uuid, before: Vec<Uuid>) {
+    let after = audience(&state.db, uid).await;
+    let Some(a) = current(&state.db, uid).await else { return };
+    let gone: Vec<Uuid> = before.iter().filter(|u| !after.contains(u)).copied().collect();
+    let new: Vec<Uuid> = after.iter().filter(|u| !before.contains(u)).copied().collect();
+    if !gone.is_empty() { state.hub.emit_users(gone, "ACTIVITY_UPDATE", json!({ "user_id": uid, "activity": null })); }
+    if !new.is_empty() { state.hub.emit_users(new, "ACTIVITY_UPDATE", json!({ "user_id": uid, "activity": a })); }
+}
+
+/// Activities this viewer may see of everyone online and visible, for READY.
+pub async fn ready_activities(db: &sqlx::PgPool, viewer: Uuid) -> serde_json::Map<String, Value> {
     sqlx::query_as::<_, (Uuid, Value)>("SELECT a.user_id, a.activity FROM activities a JOIN users u ON u.id = a.user_id WHERE u.status <> 'invisible' AND u.share_activity
-        AND EXISTS (SELECT 1 FROM presence p WHERE p.user_id = a.user_id AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1))")
-        .bind(crate::ws::bus::STALE_SECS as f64).fetch_all(db).await.unwrap_or_default().into_iter().map(|(u, a)| (u.to_string(), a)).collect()
+        AND EXISTS (SELECT 1 FROM presence p WHERE p.user_id = a.user_id AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1))
+        AND (a.user_id = $2
+          OR EXISTS (SELECT 1 FROM relationships r WHERE r.user_id = a.user_id AND r.target_id = $2 AND r.kind = 'friend')
+          OR EXISTS (SELECT 1 FROM channel_members c1 JOIN channel_members c2 ON c2.channel_id = c1.channel_id WHERE c1.user_id = a.user_id AND c2.user_id = $2)
+          OR EXISTS (SELECT 1 FROM guild_members g1 JOIN guild_members g2 ON g2.guild_id = g1.guild_id WHERE g1.user_id = a.user_id AND g1.share_activity AND g2.user_id = $2))
+        AND NOT EXISTS (SELECT 1 FROM relationships r WHERE r.kind = 'blocked' AND ((r.user_id = a.user_id AND r.target_id = $2) OR (r.user_id = $2 AND r.target_id = a.user_id)))")
+        .bind(crate::ws::bus::STALE_SECS as f64).bind(viewer).fetch_all(db).await.unwrap_or_default().into_iter().map(|(u, a)| (u.to_string(), a)).collect()
 }
 
 /// Listen along with `host`: their track starts on your Spotify where they are in it.
 async fn listen(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(host): Path<Uuid>) -> AppResult<Json<Value>> {
     if host == uid { return Err(AppError::BadRequest("You can't listen along with yourself".into())) }
     let Some(a) = current(&state.db, host).await.filter(|a| a["name"] == "Spotify") else { return Err(AppError::BadRequest("They aren't listening to Spotify right now".into())) };
-    if crate::routes::relationships::blocked_either_way(&state.db, uid, host).await? { return Err(AppError::BadRequest("They aren't listening to Spotify right now".into())) }
+    if !audience(&state.db, host).await.contains(&uid) { return Err(AppError::BadRequest("They aren't listening to Spotify right now".into())) }
     let Some(cid) = account(&state.db, uid).await? else {
         let linked = sqlx::query_as::<_, (bool,)>("SELECT EXISTS (SELECT 1 FROM connections WHERE user_id = $1 AND provider = 'spotify')").bind(uid).fetch_one(&state.db).await?.0;
         return Err(AppError::BadRequest(if linked { "Link Spotify again (Settings → Connections) to listen along".into() } else { "Link your Spotify account in Settings → Connections to listen along".into() }));
