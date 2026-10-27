@@ -1,4 +1,6 @@
-import { Gamepad2, LogOut, Maximize2, Rocket } from 'lucide-react'
+import { Gamepad2, LogOut, Maximize2, Rocket, Scissors } from 'lucide-react'
+import { usePrefs } from '../lib/prefs'
+import { saveClip } from '../lib/clips'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { leaveActivity, onSessionEvent, startActivity, useActivities, useCallActivities, type CallActivity, type CatalogEntry } from '../lib/activities'
@@ -45,6 +47,13 @@ export function ActivitiesButton({ channelId }: { channelId: string }) {
       )}
     </span>
   )
+}
+
+/** Save a clip (only while Clips are on, Settings → Clips). */
+export function ClipButton() {
+  const on = usePrefs().clips
+  if (!on) return null
+  return <ControlButton label="Save Clip" onClick={() => { void saveClip() }} data-clip-save=""><Scissors size={20} /></ControlButton>
 }
 
 /** Activities running in the call that you aren't in: who's playing, and Join. */

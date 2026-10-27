@@ -694,6 +694,15 @@ class VoiceManager {
 
   releaseRecordingStream() { this.recGain?.disconnect(); this.recGain = null }
 
+  /** Clips: the call's sound playing here (each person, and the stream sound you're watching), and your own voice as
+   *  the others hear it. */
+  clipAudio(): { remote: MediaStream[]; mine: MediaStream | null } {
+    const remote: MediaStream[] = []
+    const add = (el?: HTMLAudioElement | null) => { const st = el?.srcObject; if (st instanceof MediaStream && st.getAudioTracks().some((tr) => tr.readyState === 'live')) remote.push(st) }
+    this.peers.forEach((p) => add(p.audio)); this.sfuAudio.forEach(add); this.streamAudio.forEach(add)
+    return { remote, mine: this.mic }
+  }
+
   private recordingSilenced() {
     const s = useStore.getState()
     return s.selfMute || s.selfDeaf || this.serverSilenced()

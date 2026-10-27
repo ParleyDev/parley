@@ -14,7 +14,7 @@ import type { Channel, User, VoiceState } from '../lib/types'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 import StudioPanel from './StudioPanel'
-import { ActivitiesButton, ActivityChips, ActivityFrame } from './Activities'
+import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Activities'
 import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
 import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpButton, MenuControl, MenuDivider, MicMenu, SettingsRow, SplitControl } from './CallControls'
 import { useResizablePanel } from '../lib/resize'
@@ -319,6 +319,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                   {channel.guild_id && channel.kind === 'voice' && has(perms, P.PRIORITY_SPEAKER) && <ControlButton label={priorityOn ? t('Priority Speaker: on') : t('Priority Speaker')} on={priorityOn} onClick={() => { voice.setPriority(!priorityOn); setPriorityOn(!priorityOn) }} data-priority-toggle=""><Megaphone size={20} /></ControlButton>}
                   {channel.guild_id && channel.kind === 'voice' && <InviteToVoice channelId={channel.id} guildId={channel.guild_id} />}
                   {!isStage && <ActivitiesButton channelId={channel.id} />}
+                  <ClipButton />
                   {canStream && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>}
                   {canSpeak && !suppressed && (
                     <span className="relative flex">

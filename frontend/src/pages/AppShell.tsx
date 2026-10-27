@@ -1,3 +1,4 @@
+import { saveClip } from '../lib/clips'
 import { unseenEntry } from '../lib/changelog'
 import MobileTabBar from '../components/MobileTabBar'
 import { useEffect } from 'react'
@@ -207,6 +208,7 @@ function Shortcuts() {
     nextChannel: () => step(1),
     openSettings: () => openModal({ kind: 'userSettings', tab: 'account' }),
     jumpToDate: () => document.querySelector<HTMLButtonElement>('[data-jump-date-btn]')?.click(),
+    saveClip: () => { void saveClip() },
     toggleStreamer: () => { const on = !getPrefs().streamer; setPrefs({ streamer: on }); useStore.getState().pushToast(on ? t('Streamer Mode on') : t('Streamer Mode off')) },
     quickSwitcher: () => { const s = useStore.getState(); if (s.modal?.kind === 'quickSwitcher') s.closeModal(); else openModal({ kind: 'quickSwitcher' }) },
     prevUnread: () => step(-1, true),

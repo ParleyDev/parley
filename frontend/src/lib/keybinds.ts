@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { STORAGE_PREFIX } from './brand'
 
 /** Actions a user can bind. Combos are stored as "Ctrl+Shift+M" (modifier names + KeyboardEvent.key, upper-cased). */
-export type KeybindAction = 'toggleMute' | 'toggleDeafen' | 'toggleMembers' | 'focusComposer' | 'prevChannel' | 'nextChannel' | 'openSettings' | 'jumpToDate' | 'toggleStreamer' | 'showShortcuts' | 'quickSwitcher' | 'prevUnread' | 'nextUnread' | 'prevServer' | 'nextServer' | 'toggleInbox' | 'togglePins'
+export type KeybindAction = 'toggleMute' | 'toggleDeafen' | 'toggleMembers' | 'focusComposer' | 'prevChannel' | 'nextChannel' | 'openSettings' | 'jumpToDate' | 'toggleStreamer' | 'showShortcuts' | 'quickSwitcher' | 'prevUnread' | 'nextUnread' | 'prevServer' | 'nextServer' | 'toggleInbox' | 'togglePins' | 'saveClip'
 
 export const KEYBIND_LABELS: Record<KeybindAction, string> = {
   toggleMute: 'Toggle mute',
@@ -22,6 +22,7 @@ export const KEYBIND_LABELS: Record<KeybindAction, string> = {
   nextServer: 'Next server',
   toggleInbox: 'Open the inbox',
   togglePins: 'Show pinned messages',
+  saveClip: 'Save a clip of the call',
 }
 
 export const DEFAULT_KEYBINDS: Record<KeybindAction, string> = {
@@ -42,6 +43,7 @@ export const DEFAULT_KEYBINDS: Record<KeybindAction, string> = {
   nextServer: 'Ctrl+Alt+ArrowDown',
   toggleInbox: 'Ctrl+I',
   togglePins: 'Ctrl+P',
+  saveClip: 'Ctrl+Alt+C',
 }
 
 const KEY = `${STORAGE_PREFIX}keybinds`

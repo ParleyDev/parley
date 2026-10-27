@@ -10,7 +10,7 @@ import { useUserAudioMap } from '../lib/userAudio'
 import type { DmChannel, User, VoiceState } from '../lib/types'
 import SoundboardPicker from './SoundboardPicker'
 import { ConnQuality, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
-import { ActivitiesButton, ActivityChips, ActivityFrame } from './Activities'
+import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Activities'
 import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
 import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
 import { useResizableHeight } from '../lib/resize'
@@ -202,6 +202,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
                 )}
               </span>
               <ActivitiesButton channelId={channel.id} />
+              <ClipButton />
               <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>
             </ControlGroup>
             <HangUpButton label={t('Leave Call')} onClick={() => voice.leave()} />

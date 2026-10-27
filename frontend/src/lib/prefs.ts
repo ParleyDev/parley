@@ -65,6 +65,12 @@ export interface ClientPrefs {
   streamerMuteNotifications: boolean
   /** Desktop app: Streamer Mode follows OBS / XSplit running. */
   streamerAuto: boolean
+  /** Clips: keep the last few seconds of calls ready to save (Settings → Clips). */
+  clips: boolean
+  clipSeconds: 15 | 30 | 60
+  /** Include the call's voices, and your own, in clips. */
+  clipVoices: boolean
+  clipMyVoice: boolean
   // Advanced
   /** Developer Mode: "Copy … ID" entries in context menus. */
   developerMode: boolean
@@ -76,7 +82,7 @@ export const DEFAULT_PREFS: ClientPrefs = {
   accent: null, messageGap: 17, zoom: 100, compactAvatars: false, roleColors: 'name',
   saturation: 100, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, ttsPlayback: true, entranceSounds: true, warnLinks: true, spellcheck: true, doubleTapReact: true, quickReaction: '❤️', focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
   inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
-  streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true, streamerAuto: false,
+  streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true, streamerAuto: false, clips: false, clipSeconds: 30, clipVoices: true, clipMyVoice: true,
   developerMode: true,
   trustedHosts: [],
 }
@@ -85,7 +91,7 @@ export const MEDIA_SIZES: Record<ClientPrefs['mediaSize'], { w: number; h: numbe
 
 const KEY = `${STORAGE_PREFIX}prefs`
 const clamp = (n: unknown, lo: number, hi: number, d: number) => { const v = Number(n); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d }
-const oneOf = <T extends string>(v: unknown, opts: readonly T[], d: T): T => (opts.includes(v as T) ? (v as T) : d)
+const oneOf = <T extends string | number>(v: unknown, opts: readonly T[], d: T): T => (opts.includes(v as T) ? (v as T) : d)
 const bool = (v: unknown, d: boolean) => (typeof v === 'boolean' ? v : d)
 
 function load(): ClientPrefs {
@@ -99,6 +105,7 @@ function load(): ClientPrefs {
       inlineAttachments: bool(p.inlineAttachments, true), linkMedia: bool(p.linkMedia, true), embeds: bool(p.embeds, true), emoticons: bool(p.emoticons, true), showReactions: bool(p.showReactions, true),
       spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'),
       streamer: bool(p.streamer, false), streamerHideInfo: bool(p.streamerHideInfo, true), streamerHideInvites: bool(p.streamerHideInvites, true), streamerMuteSounds: bool(p.streamerMuteSounds, true), streamerMuteNotifications: bool(p.streamerMuteNotifications, true), streamerAuto: bool(p.streamerAuto, false),
+      clips: bool(p.clips, false), clipSeconds: oneOf(p.clipSeconds, [15, 30, 60] as const, 30), clipVoices: bool(p.clipVoices, true), clipMyVoice: bool(p.clipMyVoice, true),
       developerMode: bool(p.developerMode, true),
       trustedHosts: Array.isArray(p.trustedHosts) ? p.trustedHosts.filter((h): h is string => typeof h === 'string').slice(0, 500) : [],
     }
@@ -139,6 +146,7 @@ export const streamerHides = (what: 'info' | 'invites' | 'sounds' | 'notificatio
 }
 
 export function getPrefs(): ClientPrefs { return current }
+export function subscribePrefs(f: () => void) { listeners.add(f); return () => { listeners.delete(f) } }
 export function setPrefs(patch: Partial<ClientPrefs>) {
   current = { ...current, ...patch }
   try { localStorage.setItem(KEY, JSON.stringify(current)) } catch { /* ignore */ }
