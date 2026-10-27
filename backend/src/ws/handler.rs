@@ -125,8 +125,8 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
                     return;
                 }
             }
-            let _ = first;
             crate::ws::bus::announce(&state, user_id).await;
+            if first { crate::routes::spotify::reannounce(&state, user_id).await; }
             let session = state.hub.next_session();
             run_loop(&state, user_id, session_id, session, my_guilds, events, last, &mut tx, &mut rx, &platform, idle, intents).await;
             return;
@@ -257,8 +257,9 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     }
     crate::metrics::METRICS.ws_connects.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-    let _ = first;
     crate::ws::bus::announce(&state, user_id).await;
+    // Others dropped this person's activity when they went offline; send it again.
+    if first { crate::routes::spotify::reannounce(&state, user_id).await; }
 
     run_loop(&state, user_id, session_id, session, my_guilds, events, seq_at_subscribe, &mut tx, &mut rx, &platform, idle, intents).await;
 }

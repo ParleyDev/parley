@@ -1,8 +1,8 @@
-import { Headphones, Music } from 'lucide-react'
+import { Eye, Gamepad2, Headphones, Music, Trophy } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { useT, tn } from '../lib/i18n'
-import type { Activity } from '../lib/types'
+import type { Activity, ManualActivity, SpotifyActivity } from '../lib/types'
 import { useStore } from '../store'
 import Avatar from './Avatar'
 
@@ -17,7 +17,7 @@ function useNow(on: boolean) {
 }
 
 /** "Listening to Spotify" on a profile: the song, how far in, and Play on Spotify / Listen Along. */
-export function SpotifyCard({ userId, activity: a, dark }: { userId: string; activity: Activity; dark?: boolean }) {
+export function SpotifyCard({ userId, activity: a, dark }: { userId: string; activity: SpotifyActivity; dark?: boolean }) {
   const t = useT()
   const me = useStore((s) => s.user?.id)
   const users = useStore((s) => s.users)
@@ -65,7 +65,44 @@ export function SpotifyCard({ userId, activity: a, dark }: { userId: string; act
   )
 }
 
-/** One line for lists: "Listening to Spotify". */
+/** The verb line for any activity: "Playing **Factorio**", "Listening to **Spotify**". */
+function verb(a: Activity, name: React.ReactNode) {
+  const vars = { name }
+  return a.type === 'playing' ? tn('Playing {name}', vars) : a.type === 'watching' ? tn('Watching {name}', vars) : a.type === 'competing' ? tn('Competing in {name}', vars) : tn('Listening to {name}', vars)
+}
+
+/** One line for lists. */
 export function ActivityLine({ activity: a }: { activity: Activity }) {
-  return <span className="block truncate text-xs text-text-2" data-member-activity={a.name}>{tn('Listening to {name}', { name: <b className="font-semibold">{a.name}</b> })}</span>
+  return <span className="block truncate text-xs text-text-2" data-member-activity={a.name}>{verb(a, <b className="font-semibold">{a.name}</b>)}</span>
+}
+
+/** "for 12 minutes" / "for 2 hours". */
+function since(t: ReturnType<typeof useT>, from: number, now: number) {
+  const m = Math.max(0, Math.floor((now - from) / 60000))
+  if (m < 1) return t('just started')
+  if (m < 60) return m === 1 ? t('for 1 minute') : t('for {n} minutes', { n: m })
+  const h = Math.floor(m / 60)
+  return h === 1 ? t('for 1 hour') : t('for {n} hours', { n: h })
+}
+
+/** A hand-set activity on a profile. */
+function ManualCard({ activity: a, dark }: { activity: ManualActivity; dark?: boolean }) {
+  const t = useT()
+  const now = useNow(true)
+  const Icon = a.type === 'watching' ? Eye : a.type === 'competing' ? Trophy : a.type === 'listening' ? Headphones : Gamepad2
+  const heading = a.type === 'playing' ? t('Playing') : a.type === 'watching' ? t('Watching') : a.type === 'competing' ? t('Competing in') : t('Listening to')
+  return (
+    <div className="rounded-lg p-3 space-y-2" style={{ background: dark ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-activity="manual" data-activity-type={a.type}>
+      <h3 className="text-xs font-bold">{heading}</h3>
+      <div className="flex items-center gap-3">
+        <div className="h-12 w-12 rounded-md bg-black/30 flex items-center justify-center shrink-0"><Icon size={22} /></div>
+        <div className="min-w-0 text-sm leading-5"><div className="font-semibold truncate" data-activity-name>{a.name}</div><div className="text-[#b5bac1]">{since(t, a.started_at, now)}</div></div>
+      </div>
+    </div>
+  )
+}
+
+/** Whatever the person is doing, as a profile card. */
+export function ActivityCard({ userId, activity, dark }: { userId: string; activity: Activity; dark?: boolean }) {
+  return activity.manual ? <ManualCard activity={activity} dark={dark} /> : <SpotifyCard userId={userId} activity={activity} dark={dark} />
 }

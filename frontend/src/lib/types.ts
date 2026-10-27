@@ -66,6 +66,9 @@ export interface PrivateUser extends User {
   /** Data & Privacy: others see Seen on your DMs / see you typing. */
   show_read_receipts?: boolean
   show_typing?: boolean
+  /** Share Spotify and hand-set activities (default on). */
+  share_activity?: boolean
+  custom_activity?: ManualActivity | null
   /** Sensitive media: blur images/videos from non-friends' DMs and in age-restricted channels until clicked. */
   sensitive_media?: { non_friend_dms?: SensitiveLevel; friend_dms?: SensitiveLevel; servers?: SensitiveLevel; restricted?: SensitiveLevel }
   spam_filter?: 'none' | 'non_friends' | 'all'
@@ -92,10 +95,13 @@ export interface UserProfile extends User {
 export interface Connection { id: string; provider: string; name: string; url: string; visible: boolean; show_activity?: boolean; live?: boolean; created_at?: string }
 
 /** What someone is doing right now (Spotify: the song, and who listens along). Times are epoch ms. */
-export interface Activity {
+export interface SpotifyActivity {
   type: 'listening'; name: 'Spotify'; track_id: string; title: string; artists: string[]; album: string; art: string; url: string
-  started_at: number; duration_ms: number; party?: string[]
+  started_at: number; duration_ms: number; party?: string[]; manual?: undefined
 }
+/** One set by hand: "Playing Factorio". */
+export interface ManualActivity { type: 'playing' | 'watching' | 'listening' | 'competing'; name: string; started_at: number; manual: true }
+export type Activity = SpotifyActivity | ManualActivity
 
 export interface Review {
   id: string

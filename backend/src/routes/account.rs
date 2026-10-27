@@ -291,7 +291,7 @@ async fn download_export(State(state): State<AppState>, AuthUser(uid): AuthUser,
 }
 
 #[derive(Deserialize)]
-struct PrivacyReq { dm_privacy: Option<String>, message_requests: Option<bool>, friend_request_from: Option<Vec<String>>, group_dm_privacy: Option<String>, guild_dms_default: Option<bool>, show_read_receipts: Option<bool>, show_typing: Option<bool>, sensitive_media: Option<Value>, spam_filter: Option<String>, searchable: Option<bool> }
+struct PrivacyReq { dm_privacy: Option<String>, message_requests: Option<bool>, friend_request_from: Option<Vec<String>>, group_dm_privacy: Option<String>, guild_dms_default: Option<bool>, show_read_receipts: Option<bool>, show_typing: Option<bool>, sensitive_media: Option<Value>, spam_filter: Option<String>, searchable: Option<bool>, share_activity: Option<bool> }
 
 /// Content & Social settings.
 async fn update_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<PrivacyReq>) -> AppResult<Json<PrivateUser>> {
@@ -321,8 +321,8 @@ async fn update_privacy(State(state): State<AppState>, AuthUser(uid): AuthUser, 
         }
         None => None,
     };
-    sqlx::query("UPDATE users SET dm_privacy = COALESCE($2, dm_privacy), message_requests = COALESCE($3, message_requests), friend_request_from = COALESCE($4, friend_request_from), group_dm_privacy = COALESCE($5, group_dm_privacy), guild_dms_default = COALESCE($6, guild_dms_default), show_read_receipts = COALESCE($7, show_read_receipts), show_typing = COALESCE($8, show_typing), sensitive_media = CASE WHEN $9::jsonb IS NULL THEN sensitive_media ELSE sensitive_media || $9 END, spam_filter = COALESCE($10, spam_filter), searchable = COALESCE($11, searchable) WHERE id = $1")
-        .bind(uid).bind(req.dm_privacy).bind(req.message_requests).bind(from).bind(req.group_dm_privacy).bind(req.guild_dms_default).bind(req.show_read_receipts).bind(req.show_typing).bind(sensitive).bind(req.spam_filter).bind(req.searchable).execute(&state.db).await?;
+    sqlx::query("UPDATE users SET dm_privacy = COALESCE($2, dm_privacy), message_requests = COALESCE($3, message_requests), friend_request_from = COALESCE($4, friend_request_from), group_dm_privacy = COALESCE($5, group_dm_privacy), guild_dms_default = COALESCE($6, guild_dms_default), show_read_receipts = COALESCE($7, show_read_receipts), show_typing = COALESCE($8, show_typing), sensitive_media = CASE WHEN $9::jsonb IS NULL THEN sensitive_media ELSE sensitive_media || $9 END, spam_filter = COALESCE($10, spam_filter), searchable = COALESCE($11, searchable), share_activity = COALESCE($12, share_activity) WHERE id = $1")
+        .bind(uid).bind(req.dm_privacy).bind(req.message_requests).bind(from).bind(req.group_dm_privacy).bind(req.guild_dms_default).bind(req.show_read_receipts).bind(req.show_typing).bind(sensitive).bind(req.spam_filter).bind(req.searchable).bind(req.share_activity).execute(&state.db).await?;
     let u = private(&state, uid).await?;
     state.hub.emit_users(vec![uid], "USER_UPDATE", json!(u));
     Ok(Json(u))

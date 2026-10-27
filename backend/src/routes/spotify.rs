@@ -5,6 +5,10 @@
 //! Listen Along: someone else with Spotify (Premium, with Spotify open on a device) asks to follow the host; the
 //! server starts the host's track at the host's position on the listener's account, and moves them along whenever
 //! the host changes track or seeks. The host's activity lists the listeners (`party`). It ends when either stops.
+//!
+//! People can also set an activity by hand ("Playing Factorio", `users.custom_activity`); it shows whenever Spotify
+//! isn't. Nothing is shared while someone is offline, invisible, or has turned off "Share my activity"
+//! (`users.share_activity`).
 
 use crate::{auth::AuthUser, error::{AppError, AppResult}, state::AppState};
 use axum::{extract::{Path, State}, http::StatusCode, routing::post, Json, Router};
@@ -16,6 +20,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/users/@me/listen-along", axum::routing::delete(stop))
         .route("/users/:id/listen-along", post(listen))
+        .route("/users/@me/activity", axum::routing::put(set_custom).delete(clear_custom))
 }
 
 const NOW_PLAYING: &str = "https://api.spotify.com/v1/me/player/currently-playing";
@@ -106,10 +111,13 @@ async fn poll_one(state: &AppState, uid: Uuid, cid: Uuid) {
         Err(e) => { tracing::debug!(error = %e, "spotify poll failed"); return }
     };
     let prev = current(&state.db, uid).await;
+    let prev_spotify = prev.as_ref().is_some_and(|p| p["name"] == "Spotify");
     let Some(mut next) = next else {
-        if prev.is_some() { end_party(state, uid).await; publish(state, uid, None).await; }
+        // The loop brings back a hand-set activity, if there is one.
+        if prev_spotify { end_party(state, uid).await; publish(state, uid, None).await; }
         return
     };
+    let prev = prev.filter(|_| prev_spotify);
     let same_track = prev.as_ref().map(|p| p["track_id"] == next["track_id"]).unwrap_or(false);
     let drift = prev.as_ref().map(|p| (p["started_at"].as_i64().unwrap_or(0) - next["started_at"].as_i64().unwrap_or(0)).abs()).unwrap_or(i64::MAX);
     if same_track && drift < DRIFT_MS { return }
@@ -140,21 +148,32 @@ async fn leave(state: &AppState, listener: Uuid) {
 pub async fn poll_loop(state: AppState) {
     loop {
         tokio::time::sleep(Duration::from_secs(2)).await;
+        // Gone: offline, invisible, sharing off; Spotify unlinked or hidden; a hand-set one cleared.
         let stale: Vec<(Uuid,)> = sqlx::query_as(
-            "DELETE FROM activities a WHERE a.activity->>'name' = 'Spotify' AND NOT EXISTS (
-               SELECT 1 FROM connections c JOIN users u ON u.id = c.user_id
-               WHERE c.user_id = a.user_id AND c.provider = 'spotify' AND c.show_activity AND c.access_token IS NOT NULL AND u.status <> 'invisible'
-                 AND EXISTS (SELECT 1 FROM presence p WHERE p.user_id = a.user_id AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1)))
+            "DELETE FROM activities a USING users u WHERE u.id = a.user_id AND (
+               u.status = 'invisible' OR NOT u.share_activity
+               OR NOT EXISTS (SELECT 1 FROM presence p WHERE p.user_id = a.user_id AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1))
+               OR (a.activity->>'name' = 'Spotify' AND NOT EXISTS (SELECT 1 FROM connections c WHERE c.user_id = a.user_id AND c.provider = 'spotify' AND c.show_activity AND c.access_token IS NOT NULL))
+               OR (a.activity ? 'manual' AND u.custom_activity IS DISTINCT FROM a.activity))
              RETURNING a.user_id",
         ).bind(crate::ws::bus::STALE_SECS as f64).fetch_all(&state.db).await.unwrap_or_default();
         for (uid,) in stale {
             end_party(&state, uid).await;
             state.hub.emit_all("ACTIVITY_UPDATE", json!({ "user_id": uid, "activity": null }));
         }
+        // Back: a hand-set activity for someone online with nothing showing (they came online, Spotify stopped).
+        let back: Vec<(Uuid, Value)> = sqlx::query_as(
+            "INSERT INTO activities (user_id, activity) SELECT u.id, u.custom_activity FROM users u
+             WHERE u.custom_activity IS NOT NULL AND u.share_activity AND u.status <> 'invisible'
+               AND EXISTS (SELECT 1 FROM presence p WHERE p.user_id = u.id AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1))
+               AND NOT EXISTS (SELECT 1 FROM activities a WHERE a.user_id = u.id)
+             ON CONFLICT (user_id) DO NOTHING RETURNING user_id, activity",
+        ).bind(crate::ws::bus::STALE_SECS as f64).fetch_all(&state.db).await.unwrap_or_default();
+        for (uid, a) in back { state.hub.emit_all("ACTIVITY_UPDATE", json!({ "user_id": uid, "activity": a })); }
         let due: Vec<(Uuid, Uuid)> = sqlx::query_as(
             "UPDATE connections SET polled_at = now() WHERE id IN (
                SELECT c.id FROM connections c JOIN users u ON u.id = c.user_id
-               WHERE c.provider = 'spotify' AND c.show_activity AND c.access_token IS NOT NULL AND u.status <> 'invisible'
+               WHERE c.provider = 'spotify' AND c.show_activity AND c.access_token IS NOT NULL AND u.status <> 'invisible' AND u.share_activity
                  AND (c.polled_at IS NULL OR c.polled_at < now() - make_interval(secs => $2))
                  AND EXISTS (SELECT 1 FROM presence p WHERE p.user_id = c.user_id AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1))
                ORDER BY c.polled_at NULLS FIRST LIMIT 100 FOR UPDATE OF c SKIP LOCKED)
@@ -167,10 +186,19 @@ pub async fn poll_loop(state: AppState) {
     }
 }
 
+/// Someone just came online: clients dropped their activity when they went offline, so send it again (if it is
+/// still there and shared; otherwise the loop sorts it out).
+pub async fn reannounce(state: &AppState, uid: Uuid) {
+    let row: Option<(Value,)> = sqlx::query_as("SELECT a.activity FROM activities a JOIN users u ON u.id = a.user_id WHERE a.user_id = $1 AND u.status <> 'invisible' AND u.share_activity")
+        .bind(uid).fetch_optional(&state.db).await.ok().flatten();
+    if let Some((a,)) = row { state.hub.emit_all("ACTIVITY_UPDATE", json!({ "user_id": uid, "activity": a })); }
+}
+
 /// Activities of everyone online and visible, for READY.
 pub async fn ready_activities(db: &sqlx::PgPool) -> serde_json::Map<String, Value> {
-    sqlx::query_as::<_, (Uuid, Value)>("SELECT a.user_id, a.activity FROM activities a JOIN users u ON u.id = a.user_id WHERE u.status <> 'invisible'")
-        .fetch_all(db).await.unwrap_or_default().into_iter().map(|(u, a)| (u.to_string(), a)).collect()
+    sqlx::query_as::<_, (Uuid, Value)>("SELECT a.user_id, a.activity FROM activities a JOIN users u ON u.id = a.user_id WHERE u.status <> 'invisible' AND u.share_activity
+        AND EXISTS (SELECT 1 FROM presence p WHERE p.user_id = a.user_id AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1))")
+        .bind(crate::ws::bus::STALE_SECS as f64).fetch_all(db).await.unwrap_or_default().into_iter().map(|(u, a)| (u.to_string(), a)).collect()
 }
 
 /// Listen along with `host`: their track starts on your Spotify where they are in it.
@@ -193,5 +221,27 @@ async fn listen(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(hos
 
 async fn stop(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<StatusCode> {
     leave(&state, uid).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(serde::Deserialize)]
+struct CustomReq { #[serde(rename = "type")] kind: String, name: String }
+
+/// Set an activity by hand: playing, watching, listening to or competing in something. Shows when Spotify isn't.
+async fn set_custom(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<CustomReq>) -> AppResult<Json<Value>> {
+    if !["playing", "watching", "listening", "competing"].contains(&req.kind.as_str()) { return Err(AppError::BadRequest("type is playing, watching, listening or competing".into())) }
+    let name = req.name.trim();
+    if name.is_empty() || name.chars().count() > 128 { return Err(AppError::BadRequest("Name it in 1–128 characters".into())) }
+    if name.eq_ignore_ascii_case("spotify") { return Err(AppError::BadRequest("Link Spotify in Connections to show what you're listening to".into())) }
+    let a = json!({ "type": req.kind, "name": name, "started_at": now_ms(), "manual": true });
+    sqlx::query("UPDATE users SET custom_activity = $2 WHERE id = $1").bind(uid).bind(&a).execute(&state.db).await?;
+    // Replace whatever hand-set one is showing now (Spotify stays on top); the loop shows it if nothing is.
+    if current(&state.db, uid).await.is_some_and(|c| c.get("manual").is_some()) { publish(&state, uid, Some(a.clone())).await; }
+    Ok(Json(a))
+}
+
+async fn clear_custom(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<StatusCode> {
+    sqlx::query("UPDATE users SET custom_activity = NULL WHERE id = $1").bind(uid).execute(&state.db).await?;
+    if current(&state.db, uid).await.is_some_and(|c| c.get("manual").is_some()) { publish(&state, uid, None).await; }
     Ok(StatusCode::NO_CONTENT)
 }

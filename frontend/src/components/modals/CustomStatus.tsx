@@ -3,7 +3,7 @@ import { useState } from 'react'
 import Modal from '../Modal'
 import { api } from '../../lib/api'
 import { useStore } from '../../store'
-import type { PrivateUser } from '../../lib/types'
+import type { ManualActivity, PrivateUser } from '../../lib/types'
 import { QUICK_EMOJI } from '../../lib/emoji'
 import { useT } from '../../lib/i18n'
 
@@ -21,6 +21,18 @@ export default function CustomStatusModal({ onClose }: { onClose: () => void }) 
     if (clearAfter === 'never') return undefined
     if (clearAfter === 'today') { const end = new Date(); end.setHours(24, 0, 0, 0); return Math.max(60, Math.round((end.getTime() - Date.now()) / 1000)) }
     return Number(clearAfter)
+  }
+  // An activity next to your name ("Playing Factorio"), shown while Spotify isn't.
+  const [actType, setActType] = useState<ManualActivity['type']>(user?.custom_activity?.type ?? 'playing')
+  const [actName, setActName] = useState(user?.custom_activity?.name ?? '')
+  const saveActivity = async (clear: boolean) => {
+    setBusy(true)
+    try {
+      if (clear) await api.delete('/users/@me/activity'); else await api.put('/users/@me/activity', { type: actType, name: actName.trim() })
+      const u = await api.get<PrivateUser>('/users/@me'); const st = useStore.getState(); if (st.token) st.setAuth(st.token, u)
+      if (clear) setActName('')
+      pushToast(clear ? t('Activity cleared') : t('Activity set'))
+    } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   const save = async (value: string) => {
     setBusy(true)
@@ -57,6 +69,22 @@ export default function CustomStatusModal({ onClose }: { onClose: () => void }) 
         <option value="never">{t("Don't clear")}</option>
       </select>
       {user?.custom_status && user.custom_status_expires_at && <p className="mt-1 text-xs text-text-2" data-clears-at>{t('Your current status clears {when}.', { when: new Date(user.custom_status_expires_at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) })}</p>}
+      <div className="h-px bg-line my-4" />
+      <label className="label" htmlFor="activity-name">{t('Activity')}</label>
+      <div className="flex gap-2" data-custom-activity>
+        <select className="input w-36 shrink-0" value={actType} onChange={(e) => setActType(e.target.value as ManualActivity['type'])} aria-label={t('Activity type')} data-activity-type-select>
+          <option value="playing">{t('Playing')}</option>
+          <option value="watching">{t('Watching')}</option>
+          <option value="listening">{t('Listening to')}</option>
+          <option value="competing">{t('Competing in')}</option>
+        </select>
+        <input id="activity-name" className="input" value={actName} onChange={(e) => setActName(e.target.value)} maxLength={128} placeholder="Factorio" data-activity-name-input />
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <button type="button" className="btn-ghost bg-bg-3" onClick={() => saveActivity(false)} disabled={busy || !actName.trim()} data-activity-save>{t('Set activity')}</button>
+        {user?.custom_activity && <button type="button" className="btn-ghost" onClick={() => saveActivity(true)} disabled={busy} data-activity-clear>{t('Clear activity')}</button>}
+      </div>
+      <p className="mt-1 text-xs text-text-2">{user?.share_activity === false ? t('Activity sharing is off in Data & Privacy, so nobody sees it.') : t('Shown under your name while Spotify isn\'t playing.')}</p>
     </Modal>
   )
 }

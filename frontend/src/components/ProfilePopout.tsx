@@ -17,7 +17,7 @@ import { Badges, ClanTag } from './Flair'
 import { colorRole } from './StyledName'
 import { frameClass } from '../lib/cosmetics'
 import ProfileEffect from './ProfileEffect'
-import { SpotifyCard } from './SpotifyActivity'
+import { ActivityCard } from './SpotifyActivity'
 
 export const POPOUT_W = 300
 
@@ -223,7 +223,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         )}
         {user.private_profile && <div className="flex items-center gap-1.5 text-xs text-[#b5bac1]" data-private-profile><Lock size={12} /> {t('Private profile: only friends can see more')}</div>}
         {live && <div className="flex items-center gap-1.5 text-xs" data-profile-live><span className="rounded bg-danger px-1 text-[10px] font-extrabold text-white">{t('LIVE')}</span>{t('Streaming in voice')}</div>}
-        {activity && <SpotifyCard userId={user.id} activity={activity} dark={themed} />}
+        {activity && <ActivityCard userId={user.id} activity={activity} dark={themed} />}
         {user.bio && (
           <div>
             <div ref={bioRef} className="msg-content text-sm leading-[18px] whitespace-pre-wrap break-words overflow-hidden max-h-[54px]" data-bio>{renderMarkdown(user.bio, { blocks: false })}</div>

@@ -251,7 +251,13 @@ pub struct PrivateUser {
     pub age_group: String,
     #[sqlx(default)]
     pub clan_tag_guild: Option<Uuid>,
+    #[sqlx(default)]
+    pub custom_activity: Option<serde_json::Value>,
+    #[sqlx(default)]
+    #[serde(default = "yes")]
+    pub share_activity: bool,
 }
+fn yes() -> bool { true }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
 pub struct Guild {
