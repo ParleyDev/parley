@@ -40,12 +40,12 @@ export default function ContentSocialTab() {
 
       <section className="space-y-2">
         <h3 className="label">Sensitive media</h3>
-        <p className="text-xs text-text-2">Blur pictures and videos until you click them, or hide them completely. This server does not scan media, so these cover everything from each source.</p>
+        <p className="text-xs text-text-2">Show media, blur only what looks explicit (Filter: checked on this device, nothing is uploaded), blur everything until clicked, or hide it all. Filter covers uploaded pictures and videos; link previews follow Show.</p>
         {([['friend_dms', 'Direct messages from friends'], ['non_friend_dms', 'Direct messages from people who are not your friends'], ['servers', 'Server channels'], ['restricted', 'Age-restricted channels']] as const).map(([k, label]) => (
           <div key={k} className="flex items-center justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2" data-sensitive={k} data-on={user.sensitive_media?.[k] ?? 'show'}>
             <span className="text-[15px]">{label}</span>
             <span className="flex rounded-md border border-line overflow-hidden text-sm">
-              {(['show', 'blur', 'block'] as const).map((v) => <button key={v} type="button" onClick={() => save({ sensitive_media: { [k]: v } })} className={`px-3 py-1 capitalize ${(user.sensitive_media?.[k] ?? 'show') === v ? 'bg-accent text-white' : 'bg-bg-2 text-text-1 hover:bg-bg-3'}`} data-sensitive-option={v}>{v === 'block' ? 'Hide' : v}</button>)}
+              {(['show', 'filter', 'blur', 'block'] as const).map((v) => <button key={v} type="button" title={v === 'filter' ? 'Blur only pictures and videos that look explicit (checked on this device)' : undefined} onClick={() => save({ sensitive_media: { [k]: v } })} className={`px-3 py-1 capitalize ${(user.sensitive_media?.[k] ?? 'show') === v ? 'bg-accent text-white' : 'bg-bg-2 text-text-1 hover:bg-bg-3'}`} data-sensitive-option={v}>{v === 'block' ? 'Hide' : v}</button>)}
             </span>
           </div>
         ))}

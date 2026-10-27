@@ -76,6 +76,18 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
         </div>
       </section>
 
+      <section data-explicit-filter>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">Explicit image filter</h2>
+        <p className="mb-2 text-xs text-text-2">Pictures and videos that look explicit are kept out: members' apps refuse to upload them and hide any that arrive. Checked on each member's device; nothing is sent anywhere to be scanned.</p>
+        <div className="space-y-1.5">
+          {([['off', "Don't filter"], ['no_roles', 'Filter media from members without roles'], ['all', 'Filter media from all members']] as const).map(([v, label]) => (
+            <label key={v} className={`flex items-center gap-3 rounded-lg border px-3 py-2 text-sm cursor-pointer ${(guild.explicit_filter ?? 'off') === v ? 'border-accent bg-accent/10' : 'border-line bg-bg-1 hover:border-text-2'}`} data-explicit-filter-option={v}>
+              <input type="radio" name="explicit_filter" className="accent-accent" checked={(guild.explicit_filter ?? 'off') === v} onChange={() => save({ explicit_filter: v }, 'Explicit image filter updated')} />{label}
+            </label>
+          ))}
+        </div>
+      </section>
+
       <section data-verification-level>
         <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">Verification level</h2>
         <p className="text-sm text-text-2 mb-3">What members without a role need before they can send messages.</p>

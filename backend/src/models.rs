@@ -349,6 +349,10 @@ pub struct Guild {
     #[sqlx(default)]
     #[serde(default)]
     pub partnered: bool,
+    /// Explicit image filter: 'off', 'no_roles' (members without roles) or 'all'.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub explicit_filter: String,
 }
 
 fn default_all() -> String { "all".into() }

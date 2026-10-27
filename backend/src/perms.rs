@@ -562,7 +562,7 @@ mod tests {
             raid_protection: true,
             raid_threshold: 10,
             safety_alerts_channel_id: None,
-            onboarding: serde_json::json!({}), applications: serde_json::json!({}), tag: None, tag_badge: None, partnered: false,
+            onboarding: serde_json::json!({}), applications: serde_json::json!({}), tag: None, tag_badge: None, partnered: false, explicit_filter: String::new(),
             widget_enabled: false,
             widget_invite: String::new(),
             invite_splash_url: None,

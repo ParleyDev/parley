@@ -1,6 +1,6 @@
 import { isPdf, isTextFile, PdfCard, TextPreview } from './FilePreview'
 import { Download, FileText } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import VoiceMessage from './VoiceMessage'
 import type { Attachment } from '../lib/types'
@@ -9,6 +9,7 @@ import { MEDIA_SIZES, usePrefs } from '../lib/prefs'
 import FrozenGif from './FrozenGif'
 import ContextMenu, { useContextMenu } from './ContextMenu'
 import { imageMenu } from '../lib/imageMenu'
+import { isExplicit } from '../lib/explicit'
 
 
 export const isSpoiler = (a: Pick<Attachment, 'filename'>) => a.filename.startsWith('SPOILER_')
@@ -16,17 +17,20 @@ export const displayName = (a: Pick<Attachment, 'filename'>) => a.filename.repla
 
 /** Renders a message's attachments: images inline (several in a mosaic; click opens a gallery of them), video/audio
  *  players, file cards. Spoilers stay blurred until clicked. */
-export default function Attachments({ items, mine, sensitive }: { items: Attachment[]; mine?: boolean; sensitive?: boolean }) {
+/** Personal sensitive-media level for this message: blur everything (true), blur what looks explicit ('filter'). */
+type Sens = boolean | 'filter'
+
+export default function Attachments({ items, mine, sensitive, enforced }: { items: Attachment[]; mine?: boolean; sensitive?: Sens; enforced?: boolean }) {
   const prefs = usePrefs()
   if (!items.length) return null
   const pictures = prefs.inlineAttachments ? items.filter((a) => isImage(a.content_type)) : []
   const rest = items.filter((a) => !pictures.includes(a))
   return (
     <div className="mt-1 flex flex-col gap-2">
-      {pictures.length > 1 ? <Mosaic items={pictures} sensitive={sensitive} /> : null}
+      {pictures.length > 1 ? <Mosaic items={pictures} sensitive={sensitive} enforced={enforced} /> : null}
       {(pictures.length === 1 || rest.length > 0) && (
         <div className="flex flex-wrap gap-2">
-          {(pictures.length === 1 ? [...pictures, ...rest] : rest).map((a) => <Spoilered key={a.id} a={a} sensitive={sensitive && (isImage(a.content_type) || isVideo(a.content_type))}><One a={{ ...a, filename: displayName(a) }} mine={mine} gallery={pictures} /></Spoilered>)}
+          {(pictures.length === 1 ? [...pictures, ...rest] : rest).map((a) => <Spoilered key={a.id} a={a} sensitive={isImage(a.content_type) || isVideo(a.content_type) ? sensitive : false} enforced={enforced && (isImage(a.content_type) || isVideo(a.content_type))}><One a={{ ...a, filename: displayName(a) }} mine={mine} gallery={pictures} /></Spoilered>)}
         </div>
       )}
     </div>
@@ -37,7 +41,7 @@ export default function Attachments({ items, mine, sensitive }: { items: Attachm
 const galleryOf = (pictures: Attachment[]) => pictures.map((p) => ({ url: p.url, name: displayName(p), alt: p.description ?? undefined }))
 
 /** Two to ten pictures in a grid, Discord-style: 2 side by side, 3 as one big and two small, 4 as 2x2, more in rows of three. */
-function Mosaic({ items, sensitive }: { items: Attachment[]; sensitive?: boolean }) {
+function Mosaic({ items, sensitive, enforced }: { items: Attachment[]; sensitive?: Sens; enforced?: boolean }) {
   const openModal = useStore((s) => s.openModal)
   const prefs = usePrefs()
   const { w: MAX_W } = MEDIA_SIZES[prefs.mediaSize]
@@ -49,7 +53,7 @@ function Mosaic({ items, sensitive }: { items: Attachment[]; sensitive?: boolean
       {menu.menu && <ContextMenu {...menu.menu} onClose={menu.close} label="Image" />}
       {items.map((a, i) => (
         <div key={a.id} className={`relative ${n === 3 && i === 0 ? 'row-span-2' : ''} ${n === 3 && i === 0 ? 'h-full' : 'aspect-square'} min-h-0`}>
-          <Spoilered a={a} sensitive={sensitive}>
+          <Spoilered a={a} sensitive={sensitive} enforced={enforced}>
             <button type="button" onClick={() => openModal({ kind: 'image', url: a.url, name: displayName(a), items: galleryOf(items), index: i })} onContextMenu={(e) => menu.open(e, imageMenu(a.url, displayName(a)))}
               className="block h-full w-full bg-bg-0/40 hover:brightness-110" title={a.description || displayName(a)} data-mosaic-item={i}>
               {a.content_type === 'image/gif' && !prefs.autoplayGifs
@@ -69,16 +73,40 @@ function AltBadge({ text }: { text: string }) {
   return <span tabIndex={0} title={text} aria-label={`Alt text: ${text}`} className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1 text-[10px] font-bold text-white" data-alt-badge>ALT</span>
 }
 
-function Spoilered({ a, children, sensitive }: { a: Attachment; children: React.ReactNode; sensitive?: boolean }) {
+/** Explicit check for one picture or video (on-device); 'pending' until it answers, null when it can't tell. */
+function useExplicit(a: Attachment | null): boolean | null | 'pending' {
+  const [v, setV] = useState<boolean | null | 'pending'>(a ? 'pending' : null)
+  const url = a ? (isVideo(a.content_type) ? a.url : a.thumb_url ?? a.url) : null
+  useEffect(() => {
+    if (!a || !url) { setV(null); return }
+    let live = true
+    setV('pending')
+    void isExplicit(url, isVideo(a.content_type) ? 'video' : 'image').then((r) => { if (live) setV(r) })
+    return () => { live = false }
+  }, [url]) // eslint-disable-line react-hooks/exhaustive-deps
+  return v
+}
+
+/**
+ * Spoilers, the sensitive-media preference, and explicit-image filters. `enforced`: the server's filter applies to
+ * this author, so a picture found explicit stays hidden (no reveal); a personal 'filter' blurs it until clicked.
+ */
+function Spoilered({ a, children, sensitive, enforced }: { a: Attachment; children: React.ReactNode; sensitive?: Sens; enforced?: boolean }) {
   const [shown, setShown] = useState(false)
-  if ((!isSpoiler(a) && !sensitive) || shown) return <>{children}</>
-  return <Blurred label={isSpoiler(a) ? 'SPOILER' : 'SENSITIVE'} onShow={() => setShown(true)}>{children}</Blurred>
+  const check = useExplicit((sensitive === 'filter' || enforced) && !isSpoiler(a) ? a : null)
+  if (enforced && check === true) return <div className="flex h-24 w-64 max-w-full items-center justify-center rounded-lg border border-line bg-bg-1 px-3 text-center text-xs text-text-2" data-explicit-removed>Explicit image hidden by this server's filter</div>
+  if (shown) return <>{children}</>
+  if (isSpoiler(a)) return <Blurred label="SPOILER" onShow={() => setShown(true)}>{children}</Blurred>
+  if (check === 'pending') return <Blurred label="CHECKING" onShow={() => {}}>{children}</Blurred>
+  if (sensitive === true) return <Blurred label="SENSITIVE" onShow={() => setShown(true)}>{children}</Blurred>
+  if (sensitive === 'filter' && check === true) return <Blurred label="EXPLICIT" onShow={() => setShown(true)}>{children}</Blurred>
+  return <>{children}</>
 }
 
 /** Blur-until-clicked overlay used for spoilers and for media the sensitive-media preference hides. */
-export function Blurred({ label, onShow, children }: { label: 'SPOILER' | 'SENSITIVE'; onShow: () => void; children: React.ReactNode }) {
+export function Blurred({ label, onShow, children }: { label: 'SPOILER' | 'SENSITIVE' | 'EXPLICIT' | 'CHECKING'; onShow: () => void; children: React.ReactNode }) {
   return (
-    <div className="relative overflow-hidden rounded-lg cursor-pointer" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShow() }} data-spoiler-attachment data-blur={label.toLowerCase()}>
+    <div className={`relative overflow-hidden rounded-lg ${label === 'CHECKING' ? 'cursor-wait' : 'cursor-pointer'}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShow() }} data-spoiler-attachment data-blur={label.toLowerCase()}>
       <div className="pointer-events-none blur-xl brightness-50 select-none" aria-hidden>{children}</div>
       <span className="absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-black/70 px-3 py-1 text-xs font-extrabold tracking-wider text-white">{label}</span></span>
     </div>

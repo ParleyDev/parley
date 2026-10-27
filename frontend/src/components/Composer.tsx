@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { isUnread, myChannelPerms, useStore } from '../store'
 import { sendTyping } from '../lib/ws'
 import { convertEmoticons, getPrefs, usePrefs } from '../lib/prefs'
+import { isExplicit } from '../lib/explicit'
 import type { Attachment, Channel, DmChannel, Draft, Message } from '../lib/types'
 import type { ApiError } from '../lib/api'
 import { has, isTimedOut, P } from '../lib/perms'
@@ -234,10 +235,34 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   // Switching channels drops the draft attachments (and cancels in-flight uploads).
   useEffect(() => () => { setPending((ps) => { ps.forEach((p) => { p.handle?.abort(); if (p.preview) URL.revokeObjectURL(p.preview) }); return [] }) }, [channel.id])
 
+  // The server's explicit image filter covers my uploads: check pictures and videos here before sending.
+  const filtered = useStore((s) => {
+    const gid = channel.guild_id
+    if (!gid || !s.user) return false
+    const f = s.guilds[gid]?.explicit_filter
+    return f === 'all' || (f === 'no_roles' && !(s.members[gid]?.[s.user.id]?.roles?.length))
+  })
   const addFiles = (files: FileList | File[]) => {
     if (!canAttach) { pushToast('You do not have permission to attach files here', 'error'); return }
     const list = Array.from(files)
     if (!list.length) return
+    if (filtered && list.some((f) => isImage(f.type) || f.type.startsWith('video/'))) {
+      void (async () => {
+        const ok: File[] = []
+        for (const f of list) {
+          if (!isImage(f.type) && !f.type.startsWith('video/')) { ok.push(f); continue }
+          const url = URL.createObjectURL(f)
+          const bad = await isExplicit(url, isImage(f.type) ? 'image' : 'video', f.name)
+          URL.revokeObjectURL(url)
+          if (bad) pushToast(`${f.name} looks explicit, and this server filters explicit media`, 'error'); else ok.push(f)
+        }
+        if (ok.length) addFilesNow(ok)
+      })()
+      return
+    }
+    addFilesNow(list)
+  }
+  const addFilesNow = (list: File[]) => {
     setPending((ps) => {
       const room = MAX_PER_MESSAGE - ps.length
       if (list.length > room) pushToast(`You can attach up to ${MAX_PER_MESSAGE} files per message`, 'error')

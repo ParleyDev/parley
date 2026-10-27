@@ -1,4 +1,4 @@
-export type SensitiveLevel = 'show' | 'blur' | 'block'
+export type SensitiveLevel = 'show' | 'filter' | 'blur' | 'block'
 
 export interface User {
   id: string
@@ -150,6 +150,8 @@ export interface Guild {
   tag?: string | null
   tag_badge?: string | null
   partnered?: boolean
+  /** Explicit image filter: off, for members without roles, or for everyone. */
+  explicit_filter?: 'off' | 'no_roles' | 'all'
   applications?: { enabled?: boolean; questions?: ApplicationQuestion[] }
 }
 

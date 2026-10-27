@@ -197,6 +197,13 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   })
   const sensitive = mediaLevel === 'blur'
   const blockMedia = mediaLevel === 'block'
+  // The server's explicit image filter: for everyone, or for members without roles.
+  const enforcedFilter = useStore((s) => {
+    const gid = s.channels[m.channel_id]?.guild_id
+    if (!gid || isOwn) return false
+    const f = s.guilds[gid]?.explicit_filter
+    return f === 'all' || (f === 'no_roles' && !(s.members[gid]?.[m.author.id]?.roles?.length))
+  })
 
   /** Right-click menu (Discord layout): quick reactions, Add Reaction, Reply, Edit, Copy Text, Pin, Mark Unread, Copy Link, Speak, Delete, Copy ID. */
   // Voice messages without a usable transcript (never attempted, failed, or empty) can be (re)transcribed.
@@ -405,7 +412,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                   ? <FrozenGif src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" mode={prefs.stickerAnimation === 'never' ? 'never' : 'hover'} data-msg-sticker={m.sticker.name} />
                   : <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
-              <Attachments items={blockMedia ? (m.attachments ?? []).filter((a) => !/^(image|video)\//.test(a.content_type)) : spoilerChannel ? (m.attachments ?? []).map((a) => (/^(image|video)\//.test(a.content_type) && !a.filename.startsWith('SPOILER_') ? { ...a, filename: `SPOILER_${a.filename}` } : a)) : m.attachments ?? []} mine={isOwn} sensitive={sensitive} />
+              <Attachments items={blockMedia ? (m.attachments ?? []).filter((a) => !/^(image|video)\//.test(a.content_type)) : spoilerChannel ? (m.attachments ?? []).map((a) => (/^(image|video)\//.test(a.content_type) && !a.filename.startsWith('SPOILER_') ? { ...a, filename: `SPOILER_${a.filename}` } : a)) : m.attachments ?? []} mine={isOwn} sensitive={mediaLevel === 'filter' ? 'filter' : sensitive} enforced={enforcedFilter} />
             </>
           )}
           {m.reactions.length > 0 && prefs.showReactions && (
