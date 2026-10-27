@@ -402,9 +402,14 @@ async fn transcribe(state: AppState, id: Uuid, mid: Uuid, author: Uuid, c: crate
 async fn transcribe_once(state: &AppState, id: Uuid, url: &str, key: &str, model: &str) -> Result<String, String> {
     let (filename, content_type): (String, String) = sqlx::query_as("SELECT filename, content_type FROM attachments WHERE id = $1").bind(id).fetch_one(&state.db).await.map_err(|e| e.to_string())?;
     let bytes = tokio::fs::read(state.config.upload_dir.join(id.to_string())).await.map_err(|e| e.to_string())?;
-    let part = reqwest::multipart::Part::bytes(bytes).file_name(filename).mime_str(&content_type).map_err(|e| e.to_string())?;
+    stt(bytes, filename, &content_type, url, key, model, 300).await
+}
+
+/// One OpenAI-compatible `/v1/audio/transcriptions` call: the recognised text (trimmed, at most 4000 characters).
+pub async fn stt(bytes: Vec<u8>, filename: String, content_type: &str, url: &str, key: &str, model: &str, timeout_secs: u64) -> Result<String, String> {
+    let part = reqwest::multipart::Part::bytes(bytes).file_name(filename).mime_str(content_type).map_err(|e| e.to_string())?;
     let form = reqwest::multipart::Form::new().text("model", model.to_string()).text("response_format", "json").part("file", part);
-    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(300)).build().map_err(|e| e.to_string())?;
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(timeout_secs)).build().map_err(|e| e.to_string())?;
     let mut req = client.post(format!("{}/v1/audio/transcriptions", url.trim_end_matches('/'))).multipart(form);
     if !key.is_empty() { req = req.bearer_auth(key); }
     let resp = req.send().await.map_err(|e| e.to_string())?;

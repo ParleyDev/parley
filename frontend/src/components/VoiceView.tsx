@@ -1,3 +1,4 @@
+import { CaptionsButton, CaptionsOverlay } from './Captions'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useShallow } from 'zustand/react/shallow'
 import { Disc3, Hand, Megaphone, HeadphoneOff, ListMusic, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
@@ -258,6 +259,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 </div>
               </div>
             )}
+            <CaptionsOverlay guildId={channel.guild_id} />
             {isStage && audience.length > 0 && (
               <div className="shrink-0 rounded-xl border border-line bg-bg-2/60 px-3 py-2 max-h-[40%] overflow-y-auto" data-stage-audience data-studio-audience={isStudio ? '1' : undefined}>
                 <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-2">Audience — {audience.length}</div>
@@ -299,6 +301,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                   {isStage && suppressed && <ControlButton label={handUp ? t('Lower Hand') : t('Raise Hand')} on={handUp} onClick={toggleHand}><Hand size={20} /></ControlButton>}
                   {isStage && !suppressed && !isMod && <ControlButton label={t('Leave the stage')} onClick={() => toAudience(me!.id)}><Hand size={20} /></ControlButton>}
                   <ReactButton />
+                  {inThis && <CaptionsButton channelId={channel.id} />}
                   {channel.guild_id && channel.kind === 'voice' && has(perms, P.PRIORITY_SPEAKER) && <ControlButton label={priorityOn ? 'Priority Speaker: on' : 'Priority Speaker'} on={priorityOn} onClick={() => { voice.setPriority(!priorityOn); setPriorityOn(!priorityOn) }} data-priority-toggle=""><Megaphone size={20} /></ControlButton>}
                   {channel.guild_id && channel.kind === 'voice' && <InviteToVoice channelId={channel.id} guildId={channel.guild_id} />}
                   {canStream && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>}

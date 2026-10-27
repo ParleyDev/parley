@@ -63,6 +63,9 @@ pub struct VoiceState {
     /// Has Priority Speaker here: others are turned down while they talk.
     #[serde(default)]
     pub priority: bool,
+    /// Wants live captions in this call: speakers' clients send their speech for transcription while anyone does.
+    #[serde(default)]
+    pub captions: bool,
 }
 
 impl VoiceState {

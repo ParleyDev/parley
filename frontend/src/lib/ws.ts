@@ -1,3 +1,4 @@
+import { pushCaption } from './captions'
 import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { VoiceInvite } from '../store'
@@ -78,6 +79,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'CALL_DECLINE' | 'CALL_RING'; d: { channel_id: string; user_id: string } }
   | { t: 'MEMBER_WARNING'; d: { id: string; guild_id: string; guild_name: string; reason: string } }
   | { t: 'VOICE_REACTION'; d: { channel_id: string; user_id: string; emoji: string } }
+  | { t: 'CALL_CAPTION'; d: { channel_id: string; user_id: string; text: string } }
   | { t: 'VOICE_INVITE'; d: VoiceInvite })
 
 export type SignalData = { type: 'offer' | 'answer'; sdp: string } | { type: 'candidate'; candidate: RTCIceCandidateInit | null }
@@ -315,6 +317,7 @@ function handle(ev: Ev) {
     case 'CALL_RING': s.setCallIgnored(ev.d.channel_id, false); break
     case 'MEMBER_WARNING': if (!s.modal) s.openModal({ kind: 'warning', guildName: ev.d.guild_name, reason: ev.d.reason }); else s.pushToast(`Warning from ${ev.d.guild_name}: ${ev.d.reason}`, 'error'); break
     case 'VOICE_REACTION': if (s.myVoiceChannelId === ev.d.channel_id) emitCallReaction(ev.d.user_id, ev.d.emoji); break
+    case 'CALL_CAPTION': if (s.myVoiceChannelId === ev.d.channel_id) pushCaption(ev.d.user_id, ev.d.text); break
     case 'VOICE_INVITE': if (!s.user?.ignored_users?.includes(ev.d.from.id)) { s.setVoiceInvite(ev.d); playSfx('invite_speak') } break
     case 'VOICE_DISCONNECT': if (s.myVoiceChannelId) { s.pushToast('A moderator disconnected you from voice'); voice.leave(true) } break
   }

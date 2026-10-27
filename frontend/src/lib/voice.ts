@@ -11,6 +11,7 @@ import { captureConstraints, measure, profileOf, sameProfile, tuneAudioReceiver,
 import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, type RemoteParticipant, type RemoteTrackPublication } from 'livekit-client'
 import E2EEWorker from 'livekit-client/e2ee-worker?worker'
 import { CallCrypto, e2eeSupported, legacyInsertableStreams, MeshCrypto, ParleyKeyProvider } from './e2ee'
+import { CaptionSender, clearCaptions } from './captions'
 
 /**
  * Mesh WebRTC voice/video: every participant holds one RTCPeerConnection per other participant.
@@ -63,6 +64,8 @@ class VoiceManager {
   private analyser: AnalyserNode | null = null
   private dest: MediaStreamAudioDestinationNode | null = null
   private gateTimer: ReturnType<typeof setInterval> | null = null
+  private captionSender = new CaptionSender(() => this.mic?.getAudioTracks()[0] ?? null)
+  private captionTimer: ReturnType<typeof setInterval> | null = null
   private lastVoiceAt = 0
   /** Last time we were heard in a call (or joined one): the server's inactive timeout counts from here. */
   private lastSpokeAt = Date.now()
@@ -247,6 +250,8 @@ class VoiceManager {
     // Leaving a DM or group call that's still going must not ring you back in: it stays quiet (rejoin from the DM)
     // until it ends.
     if (this.channelId && s.dms[this.channelId]) s.setCallIgnored(this.channelId, true)
+    if (this.captionTimer) { clearInterval(this.captionTimer); this.captionTimer = null }
+    this.captionSender.stop(); clearCaptions()
     this.channelId = null
     this.closeAllPeers()
     this.disconnectSfu()
@@ -260,6 +265,14 @@ class VoiceManager {
   /** Priority Speaker switched on (needs the permission; the server ignores it otherwise). */
   priorityOn = false
   setPriority(on: boolean) { this.priorityOn = on; this.pushState() }
+
+  /** Live captions for yourself in this call (remembered for the next call). */
+  setCaptions(on: boolean) {
+    try { localStorage.setItem('parley.captions', on ? '1' : '0') } catch { /* ignore */ }
+    if (!on) clearCaptions()
+    sendOp({ op: 'voice_captions', on })
+  }
+  captionsWanted() { try { return localStorage.getItem('parley.captions') === '1' } catch { return false } }
 
   setMute(mute: boolean) {
     const s = useStore.getState()
@@ -417,6 +430,8 @@ class VoiceManager {
           // Server acknowledged our join: offer to everyone already here (mesh) or join the SFU room,
           // then re-announce media flags.
           s.setMyVoice(this.channelId, false)
+          if (this.captionsWanted()) sendOp({ op: 'voice_captions', on: true })
+          if (!this.captionTimer) this.captionTimer = setInterval(() => this.captionSender.tick(), 1000)
           playSfx('user_join')
           if (this.sfu) {
             this.connectSfu(this.channelId)

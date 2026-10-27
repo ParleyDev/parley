@@ -451,6 +451,8 @@ export interface VoiceState {
   joined_at?: string
   /** Priority Speaker here: others are turned down while they talk. */
   priority?: boolean
+  /** Has live captions on in this call. */
+  captions?: boolean
 }
 
 /** Scheduled event (GET /guilds/:id/events). */

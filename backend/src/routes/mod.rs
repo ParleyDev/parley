@@ -25,6 +25,7 @@ pub mod recap;
 pub mod directory;
 pub mod integrations;
 pub mod web_push;
+pub mod captions;
 pub mod connections;
 pub mod discovery;
 pub mod dms;
@@ -64,6 +65,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(auth::router())
         .merge(users::router())
         .merge(web_push::router())
+        .merge(captions::router())
         .merge(account::router())
         .merge(connections::router())
         .merge(integrations::router())

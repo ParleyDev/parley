@@ -87,6 +87,8 @@ enum ClientOp {
     StreamWatch { user_id: Uuid, on: bool },
     /// A floating emoji reaction in the call.
     VoiceReaction { emoji: String },
+    /// Turn live captions on or off for yourself in the current call.
+    VoiceCaptions { on: bool },
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -431,7 +433,7 @@ async fn handle_client_op(
             let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew) || is_afk_channel(&state.db, &channel).await);
             // The "active for" timer keeps counting across reconnects to the same channel.
             let joined_at = state.hub.voice_state(user_id).filter(|v| v.channel_id == channel_id).map(|v| v.joined_at).unwrap_or_else(chrono::Utc::now);
-            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, mute, deaf, request_to_speak: false, e2ee, session, peers, watching: Vec::new(), joined_at, priority: false };
+            let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, mute, deaf, request_to_speak: false, e2ee, session, peers, watching: Vec::new(), joined_at, priority: false, captions: false };
             let moved_in = state.hub.voice_join(vs.clone()).map(|prev| {
                 if prev.channel_id != channel_id || prev.guild_id != guild_id { emit_voice_leave(state, &prev); true } else { false }
             }).unwrap_or(true);
@@ -499,6 +501,10 @@ async fn handle_client_op(
                 v.watching.retain(|x| *x != streamer);
                 if on { v.watching.push(streamer) }
             }) else { return };
+            broadcast_voice(state, &vs).await;
+        }
+        ClientOp::VoiceCaptions { on } => {
+            let Some(vs) = state.hub.voice_update(user_id, |v| v.captions = on) else { return };
             broadcast_voice(state, &vs).await;
         }
         ClientOp::VoiceReaction { emoji } => {
