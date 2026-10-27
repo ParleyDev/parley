@@ -1,3 +1,4 @@
+import { isOverlay } from './desktop'
 import { pushCaption } from './captions'
 import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
@@ -303,7 +304,7 @@ function handle(ev: Ev) {
       const where = ev.d.channel_id ? `#${s.channels[ev.d.channel_id]?.name ?? t('voice')}` : ev.d.location
       s.pushToast(where ? t('{name} is happening now in {where}', { name: ev.d.name, where }) : t('{name} is happening now', { name: ev.d.name }))
       try { localStorage.setItem(`parley.reminded.${ev.d.id}`, '1') } catch { /* ignore */ }
-      try { if ('Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification(ev.d.name, { body: where ? t('Happening now in {where}', { where }) : t('Happening now') }) } catch { /* ignore */ }
+      try { if (!isOverlay() && 'Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification(ev.d.name, { body: where ? t('Happening now in {where}', { where }) : t('Happening now') }) } catch { /* ignore */ }
       void s.loadEvents(ev.d.guild_id)
       break
     }
@@ -357,7 +358,7 @@ function speakTts(m: Message) {
   if (!getPrefs().ttsPlayback || s.selfDeaf || s.activeChannelId !== m.channel_id || document.visibilityState !== 'visible' || s.user?.ignored_users?.includes(m.author.id)) return
   const text = `${m.author.display_name} says ${m.content.slice(0, 300)}`
   ;(window.__parleyTts ??= []).push(text)
-  try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = getPrefs().ttsRate; speechSynthesis.speak(u) } } catch { /* ignore */ }
+  try { if (!isOverlay() && 'speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = getPrefs().ttsRate; speechSynthesis.speak(u) } } catch { /* ignore */ }
 }
 
 function speak(m: Message, current: boolean) {
@@ -365,7 +366,7 @@ function speak(m: Message, current: boolean) {
   if (mode === 'never' || (mode === 'current' && !current) || useStore.getState().selfDeaf) return
   const text = `${m.author.display_name} said ${m.content ? m.content.slice(0, 200) : 'sent an attachment'}`
   ;(window.__parleyTts ??= []).push(text)
-  try { if ('speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = getPrefs().ttsRate; speechSynthesis.speak(u) } } catch { /* ignore */ }
+  try { if (!isOverlay() && 'speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = getPrefs().ttsRate; speechSynthesis.speak(u) } } catch { /* ignore */ }
 }
 
 // Activity pings: tell the server we are at the keyboard (at most once a minute) so push notifications wait

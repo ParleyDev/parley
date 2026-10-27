@@ -3263,5 +3263,9 @@
 "Classic": "클래식",
 "Mint": "민트",
 "Paper": "페이퍼",
-"Violet": "바이올렛"
+"Violet": "바이올렛",
+"Clicks go through the overlay": "클릭이 오버레이를 통과",
+"During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "통화 중에는 작은 창이 게임과 다른 앱 위에 떠서 누가 통화 중이고 누가 말하는지 보여 줘요. {combo}(으)로 켜고 끌 수 있어요. 위쪽 막대로 옮기려면 클릭 통과를 꺼 주세요.",
+"In-game overlay": "게임 내 오버레이",
+"Not in a call": "통화 중이 아님"
 }

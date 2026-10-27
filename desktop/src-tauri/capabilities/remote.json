@@ -4,5 +4,5 @@
   "description": "The connected server's web client: only the shell's own small commands (badge, attention flash, zoom, startup settings, the push-to-talk key). No plugin or core APIs.",
   "windows": ["main"],
   "remote": { "urls": ["https://*/*", "https://*:*/*", "http://*/*", "http://*:*/*"] },
-  "permissions": ["allow-set-badge", "allow-flash", "allow-set-zoom", "allow-desktop-settings", "allow-set-desktop-settings", "allow-set-ptt-key", "allow-streaming-apps", "allow-set-app-icon"]
+  "permissions": ["allow-set-badge", "allow-flash", "allow-set-zoom", "allow-desktop-settings", "allow-set-desktop-settings", "allow-set-ptt-key", "allow-streaming-apps", "allow-set-app-icon", "allow-overlay"]
 }

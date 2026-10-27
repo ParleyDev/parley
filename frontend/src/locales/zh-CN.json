@@ -3263,5 +3263,9 @@
 "Classic": "经典",
 "Mint": "薄荷",
 "Paper": "纸张",
-"Violet": "紫罗兰"
+"Violet": "紫罗兰",
+"Clicks go through the overlay": "点击可穿透浮层",
+"During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "通话期间，一个小窗口会显示在游戏和其他应用上方，显示谁在通话中以及谁在说话。用 {combo} 切换。关闭点击穿透后可拖动其顶部栏移动。",
+"In-game overlay": "游戏内浮层",
+"Not in a call": "未在通话中"
 }

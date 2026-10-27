@@ -3263,5 +3263,9 @@
 "Classic": "Classique",
 "Mint": "Menthe",
 "Paper": "Papier",
-"Violet": "Violet"
+"Violet": "Violet",
+"Clicks go through the overlay": "Les clics traversent l'overlay",
+"During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Pendant les appels, une petite fenêtre reste au-dessus des jeux et des autres apps et montre qui est dans l'appel et qui parle. Affiche-la ou masque-la avec {combo}. Désactive le clic à travers pour la déplacer par sa barre du haut.",
+"In-game overlay": "Overlay en jeu",
+"Not in a call": "Pas en appel"
 }

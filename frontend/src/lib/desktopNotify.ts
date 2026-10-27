@@ -1,7 +1,7 @@
 import { useStore } from '../store'
 import { getNotifPrefs } from './notifPrefs'
 import { appNavigate } from './native'
-import { desktop } from './desktop'
+import { desktop, isOverlay } from './desktop'
 import type { DmChannel, Message } from './types'
 
 /** Message text as it reads in the app: mentions, channels, roles and custom emoji by name; markdown marks dropped. */
@@ -21,6 +21,7 @@ export function notificationText(content: string, guildId: string | null): strin
 
 /** A desktop notification that jumps to `path` when clicked (and brings the window forward). Same `tag` replaces. */
 export function desktopNotify(title: string, body: string, opts: { icon?: string | null; tag?: string; path?: string } = {}) {
+  if (isOverlay()) return
   try {
     if (!getNotifPrefs().desktop || !('Notification' in window) || Notification.permission !== 'granted') return
     const n = new Notification(title, { body, icon: opts.icon ?? undefined, tag: opts.tag, renotify: !!opts.tag } as NotificationOptions)

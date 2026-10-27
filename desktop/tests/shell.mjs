@@ -44,14 +44,19 @@ const page = (step) => `<!doctype html><meta charset=utf-8><title>shell test</ti
     await t('iconBad', () => inv('set_app_icon', { png: [1, 2, 3] }))
   }
   if (inv && ${step} === 2) await t('off', () => inv('set_desktop_settings', { autostart: false }))
+  if (inv && ${step} === 2) await t('overlayLocked', () => inv('overlay', { show: true, locked: true }))
   await fetch('/result/${step}', { method: 'POST', body: JSON.stringify(out) })
 })()
 </script>`
 const ptt = [], obs = []
+let overlayResult = null
 const srv = createServer((req, res) => {
   hits.push(req.url)
   if (req.url.startsWith('/ptt/')) { ptt.push(req.url.slice(5)); res.end(); return }
   if (req.url.startsWith('/obs/')) { obs.push(req.url.slice(5)); res.end(); return }
+  // The overlay window: may it reach the shell's commands? (It shouldn't.)
+  if (req.url === '/overlay') { res.setHeader('Content-Type', 'text/html'); res.end(`<!doctype html><script>(async () => { const inv = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke; let r = 'no-ipc'; if (inv) { try { await inv('flash'); r = 'reached' } catch (e) { r = 'refused' } } fetch('/overlay-result/' + r, { method: 'POST', body: '{}' }) })()</script>`); return }
+  if (req.url.startsWith('/overlay-result/')) { overlayResult = req.url.split('/').pop(); res.end(); return }
   if (req.method === 'POST') { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { results[req.url.split('/').pop()] = JSON.parse(b); res.end() }); return }
   res.setHeader('Content-Type', 'text/html')
   res.end(page(req.url.startsWith('/invite/') ? 2 : 1))
@@ -109,6 +114,9 @@ ok('a second launch hands its link to the running app', await wait(() => hits.in
 await wait(() => second.exitCode !== null, 5000)
 ok('and exits', second.exitCode !== null)
 ok('turning it off removes the entry', await wait(() => results['2']) && results['2'].off?.autostart === false && !existsSync(autostartFile), JSON.stringify(results['2']))
+console.log('-- in-game overlay')
+ok('the overlay opens the server\'s /overlay page in its own window', results['2']?.overlayLocked === true && await wait(() => hits.includes('/overlay'), 8000), JSON.stringify({ r: results['2']?.overlayLocked, hits }))
+ok('which cannot use the shell\'s commands', await wait(() => overlayResult, 8000) && overlayResult !== 'reached', String(overlayResult))
 const bogus = spawn(bin, ['parley://settings/../../etc'], { env, stdio: 'inherit' })
 await wait(() => bogus.exitCode !== null, 5000); await new Promise((r) => setTimeout(r, 1000))
 ok('other parley:// paths are ignored', !hits.some((h) => h.includes('settings') || h.includes('etc')))

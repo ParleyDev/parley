@@ -3263,5 +3263,9 @@
 "Classic": "Klasik",
 "Mint": "Nane",
 "Paper": "Kâğıt",
-"Violet": "Mor"
+"Violet": "Mor",
+"Clicks go through the overlay": "Tıklamalar katmandan geçer",
+"During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Aramalarda küçük bir pencere oyunların ve diğer uygulamaların üstünde kalır, aramada kimin olduğunu ve kimin konuştuğunu gösterir. {combo} ile aç/kapat. Üst çubuğundan taşımak için tıklama geçirmeyi kapat.",
+"In-game overlay": "Oyun içi katman",
+"Not in a call": "Aramada değil"
 }

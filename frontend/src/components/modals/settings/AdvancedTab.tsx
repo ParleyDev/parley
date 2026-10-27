@@ -5,12 +5,14 @@ import { isNative } from '../../../lib/native'
 import { desktop, desktopBridge, type DesktopSettings } from '../../../lib/desktop'
 import { useStore } from '../../../store'
 import { Toggle } from '../SettingsShell'
-import { useT } from '../../../lib/i18n'
+import { tn, useT } from '../../../lib/i18n'
+import { prettyCombo, useKeybindMap } from '../../../lib/keybinds'
 
 /** Settings → Advanced: developer mode, debug logging and log download, platform-only switches. */
 export default function AdvancedTab() {
   const t = useT()
   const p = usePrefs()
+  const kb = useKeybindMap()
   const [debug, setDebug] = useState(debugLogging())
   const pushToast = useStore((s) => s.pushToast)
   const [ds, setDs] = useState<DesktopSettings | null>(null)
@@ -36,6 +38,9 @@ export default function AdvancedTab() {
           <label className="label">{t('Desktop app')}</label>
           <span data-desktop-autostart><Toggle label={t('Open Parley when you sign in to your computer')} checked={ds.autostart} onChange={(v) => change({ autostart: v })} /></span>
           <span data-desktop-minimized><Toggle label={t('Start minimized')} checked={ds.start_minimized} onChange={(v) => change({ startMinimized: v })} disabled={!ds.autostart} /></span>
+          <span data-desktop-overlay><Toggle label={t('In-game overlay')} checked={p.overlay} onChange={(v) => setPrefs({ overlay: v })} /></span>
+          <span data-desktop-overlay-locked><Toggle label={t('Clicks go through the overlay')} checked={p.overlayLocked} onChange={(v) => setPrefs({ overlayLocked: v })} disabled={!p.overlay} /></span>
+          <p className="text-xs text-text-2">{tn('During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.', { combo: <b>{prettyCombo(kb.toggleOverlay)}</b> })}</p>
           {ds.tray && <>
             <span data-desktop-close-tray><Toggle label={t('Close to tray')} checked={ds.close_to_tray ?? true} onChange={(v) => change({ closeToTray: v })} /></span>
             <span data-desktop-minimize-tray><Toggle label={t('Minimize to tray')} checked={!!ds.minimize_to_tray} onChange={(v) => change({ minimizeToTray: v })} /></span>

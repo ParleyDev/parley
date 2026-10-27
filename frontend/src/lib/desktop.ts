@@ -1,4 +1,6 @@
 // No imports: prefs.ts uses this at boot, before the store exists.
+/** This page is the desktop app's in-game overlay: it shows, it doesn't notify, ring or badge. */
+export const isOverlay = () => typeof location !== 'undefined' && location.pathname === '/overlay'
 const isDesktop = () => typeof navigator !== 'undefined' && /ParleyDesktop\//.test(navigator.userAgent)
 
 /**
@@ -18,8 +20,10 @@ export interface DesktopSettings { autostart: boolean; start_minimized: boolean;
 
 let lastBadge = -1
 export const desktop = {
-  badge(count: number) { const i = invoke(); if (!i || count === lastBadge) return; lastBadge = count; i('set_badge', { count: Math.max(0, Math.min(count, 9999)) }).catch(() => {}) },
-  flash() { invoke()?.('flash').catch(() => {}) },
+  badge(count: number) { const i = invoke(); if (!i || isOverlay() || count === lastBadge) return; lastBadge = count; i('set_badge', { count: Math.max(0, Math.min(count, 9999)) }).catch(() => {}) },
+  flash() { if (!isOverlay()) invoke()?.('flash').catch(() => {}) },
+  /** Show or hide the in-game overlay; `locked` makes it click-through. False when the shell can't. */
+  overlay: (show: boolean, locked?: boolean): Promise<boolean> => invoke()?.<boolean>('overlay', { show, locked }).catch(() => false) ?? Promise.resolve(false),
   /** Native zoom (true page zoom, crisper than CSS zoom). False when the shell can't. */
   zoom(factor: number): boolean { const i = invoke(); if (!i) return false; i('set_zoom', { factor }).catch(() => {}); return true },
   settings: () => invoke()?.<DesktopSettings>('desktop_settings') ?? Promise.reject(new Error('Not in the desktop app')),

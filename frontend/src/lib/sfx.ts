@@ -1,3 +1,4 @@
+import { isOverlay } from './desktop'
 import { useStore } from '../store'
 import { getNotifPrefs, type SoundKey } from './notifPrefs'
 import { streamerHides } from './prefs'
@@ -58,6 +59,7 @@ export function sfxEnabled(kind: Sfx): boolean {
 
 /** Play an effect (if enabled). `force` ignores the settings, for the preview buttons. */
 export function playSfx(kind: Sfx, force = false) {
+  if (isOverlay()) return
   const w = window as unknown as { __parleySfx?: Sfx[] }
   if (!force && !sfxEnabled(kind)) return
   // Debounce bursts: a flood of messages makes one sound, not a machine gun.

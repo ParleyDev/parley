@@ -126,6 +126,35 @@ fn flash(window: WebviewWindow) {
     if !window.is_focused().unwrap_or(true) { let _ = window.request_user_attention(Some(UserAttentionType::Informational)); }
 }
 
+/// The in-game overlay: a small always-on-top window showing who's in your call and who's talking, loaded from the
+/// connected server's `/overlay` page. `locked` makes it click-through so games keep the mouse.
+#[tauri::command]
+fn overlay(app: AppHandle, show: bool, locked: Option<bool>) -> Result<bool, String> {
+    if !show {
+        if let Some(w) = app.get_webview_window("overlay") { let _ = w.close(); }
+        return Ok(false)
+    }
+    let w = match app.get_webview_window("overlay") {
+        Some(w) => w,
+        None => {
+            let main = app.get_webview_window("main").ok_or("no main window")?;
+            let origin = main.url().map_err(|e| e.to_string())?;
+            if !matches!(origin.scheme(), "http" | "https") { return Err("Connect to a server first".into()) }
+            let url = origin.join("/overlay").map_err(|e| e.to_string())?;
+            let b = WebviewWindowBuilder::new(&app, "overlay", WebviewUrl::External(url))
+                .title("Parley overlay").inner_size(280.0, 360.0).position(24.0, 24.0)
+                .decorations(false).always_on_top(true).skip_taskbar(true).resizable(true).focused(false).shadow(false)
+                .user_agent(&user_agent());
+            #[cfg(not(target_os = "macos"))]
+            let b = b.transparent(true);
+            b.build().map_err(|e| e.to_string())?
+        }
+    };
+    if let Some(l) = locked { w.set_ignore_cursor_events(l).map_err(|e| e.to_string())?; }
+    let _ = w.show();
+    Ok(true)
+}
+
 /// Settings → Appearance → App icon: the window, taskbar and tray icon (a PNG the page draws). Empty resets it.
 #[tauri::command]
 fn set_app_icon(app: AppHandle, window: WebviewWindow, png: Vec<u8>) -> Result<(), String> {
@@ -293,7 +322,7 @@ pub fn run() {
         .manage(Pending(Mutex::new(None)))
         .manage(Ptt::default())
         .manage(Tray(std::sync::atomic::AtomicBool::new(false)))
-        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon])
+        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon, overlay])
         .setup(|app| {
             let handle = app.handle().clone();
             // AppImages and dev builds aren't registered for parley:// by an installer.

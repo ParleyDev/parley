@@ -18,6 +18,7 @@ import GuildPreviewPage from './pages/GuildPreview'
 import VerifyPage from './pages/Verify'
 import OAuthPage from './pages/OAuth'
 import McpAuthorizePage from './pages/McpAuthorize'
+import OverlayPage from './pages/Overlay'
 import { ForgotPage, ResetPage } from './pages/PasswordReset'
 import { api } from './lib/api'
 import Toasts from './components/Toasts'
@@ -49,6 +50,7 @@ export default function App() {
         <Route path="/forgot" element={token ? <Navigate to="/channels/@me" replace /> : <ForgotPage />} />
         <Route path="/reset" element={<ResetPage />} />
         <Route path="/widget/:guildId" element={<WidgetPage />} />
+        <Route path="/overlay" element={token ? (ready ? <OverlayPage /> : null) : <Navigate to="/login" replace />} />
         <Route path="/developers" element={<DevelopersPage />} />
         <Route path="/login/qr/:id" element={token ? <QrApprovePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/template/:code" element={token ? <TemplatePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />

@@ -73,6 +73,9 @@ export interface ClientPrefs {
   clipMyVoice: boolean
   /** Settings → Appearance → App icon: the tab icon, and the desktop app's window and tray icon. */
   appIcon: string
+  /** Desktop app: the in-game overlay during calls, and whether clicks go through it. */
+  overlay: boolean
+  overlayLocked: boolean
   // Advanced
   /** Developer Mode: "Copy … ID" entries in context menus. */
   developerMode: boolean
@@ -84,7 +87,7 @@ export const DEFAULT_PREFS: ClientPrefs = {
   accent: null, messageGap: 17, zoom: 100, compactAvatars: false, roleColors: 'name',
   saturation: 100, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, ttsPlayback: true, entranceSounds: true, warnLinks: true, spellcheck: true, doubleTapReact: true, quickReaction: '❤️', focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
   inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
-  streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true, streamerAuto: false, clips: false, clipSeconds: 30, clipVoices: true, clipMyVoice: true, appIcon: 'default',
+  streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true, streamerAuto: false, clips: false, clipSeconds: 30, clipVoices: true, clipMyVoice: true, appIcon: 'default', overlay: false, overlayLocked: true,
   developerMode: true,
   trustedHosts: [],
 }
@@ -108,6 +111,7 @@ function load(): ClientPrefs {
       spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'),
       streamer: bool(p.streamer, false), streamerHideInfo: bool(p.streamerHideInfo, true), streamerHideInvites: bool(p.streamerHideInvites, true), streamerMuteSounds: bool(p.streamerMuteSounds, true), streamerMuteNotifications: bool(p.streamerMuteNotifications, true), streamerAuto: bool(p.streamerAuto, false),
       clips: bool(p.clips, false), clipSeconds: oneOf(p.clipSeconds, [15, 30, 60] as const, 30), clipVoices: bool(p.clipVoices, true), clipMyVoice: bool(p.clipMyVoice, true), appIcon: typeof p.appIcon === 'string' && /^[a-z]{1,20}$/.test(p.appIcon) ? p.appIcon : 'default',
+      overlay: bool(p.overlay, false), overlayLocked: bool(p.overlayLocked, true),
       developerMode: bool(p.developerMode, true),
       trustedHosts: Array.isArray(p.trustedHosts) ? p.trustedHosts.filter((h): h is string => typeof h === 'string').slice(0, 500) : [],
     }

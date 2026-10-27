@@ -3263,5 +3263,9 @@
 "Classic": "كلاسيكي",
 "Mint": "نعناعي",
 "Paper": "ورقي",
-"Violet": "بنفسجي"
+"Violet": "بنفسجي",
+"Clicks go through the overlay": "النقرات تمر عبر الواجهة العائمة",
+"During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "أثناء المكالمات تبقى نافذة صغيرة فوق الألعاب والتطبيقات الأخرى وتعرض من في المكالمة ومن يتحدث. بدّلها باستخدام {combo}. أوقف تمرير النقرات لتحريكها من شريطها العلوي.",
+"In-game overlay": "الواجهة العائمة داخل اللعبة",
+"Not in a call": "لست في مكالمة"
 }

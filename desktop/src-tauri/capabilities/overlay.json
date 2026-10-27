@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.tauri.app/config/2/capability",
+  "identifier": "overlay",
+  "description": "The in-game overlay window (the server's /overlay page): it may only be dragged by its top bar.",
+  "windows": ["overlay"],
+  "remote": { "urls": ["https://*/*", "https://*:*/*", "http://*/*", "http://*:*/*"] },
+  "permissions": ["core:window:allow-start-dragging"]
+}

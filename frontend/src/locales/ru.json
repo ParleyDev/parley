@@ -3263,5 +3263,9 @@
 "Classic": "Классический",
 "Mint": "Мятный",
 "Paper": "Бумага",
-"Violet": "Фиолетовый"
+"Violet": "Фиолетовый",
+"Clicks go through the overlay": "Клики проходят сквозь оверлей",
+"During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Во время звонков небольшое окно остаётся поверх игр и других приложений и показывает, кто в звонке и кто говорит. Переключайте его сочетанием {combo}. Отключите сквозные клики, чтобы перемещать его за верхнюю панель.",
+"In-game overlay": "Внутриигровой оверлей",
+"Not in a call": "Не в звонке"
 }
