@@ -307,6 +307,9 @@ interface State {
   updateVoiceSettings: (patch: Partial<VoiceSettings>) => void
   setInputLevel: (level: number, transmitting: boolean) => void
   setPttHeld: (held: boolean) => void
+  /** Which noise suppression the mic is actually running (Enhanced falls back to standard where RNNoise can't run). */
+  noiseEngine: 'enhanced' | 'standard' | 'off'
+  setNoiseEngine: (e: 'enhanced' | 'standard' | 'off') => void
   openModal: (m: ModalKind) => void
   /** Thread shown in the side panel (a channel of kind 'thread'), or null. */
   openThread: string | null
@@ -761,6 +764,8 @@ export const useStore = create<State>((set, get) => ({
   }),
   setInputLevel: (inputLevel, transmitting) => set((s) => (s.inputLevel === inputLevel && s.transmitting === transmitting ? {} : { inputLevel, transmitting })),
   setPttHeld: (pttHeld) => set((s) => (s.pttHeld === pttHeld ? {} : { pttHeld })),
+  noiseEngine: 'standard',
+  setNoiseEngine: (noiseEngine) => set((s) => (s.noiseEngine === noiseEngine ? {} : { noiseEngine })),
   setLocalMedia: (m) => set((s) => ({ localCamera: m.camera === undefined ? s.localCamera : m.camera, localScreen: m.screen === undefined ? s.localScreen : m.screen })),
   setCallE2ee: (callE2ee) => set({ callE2ee }),
   setWatching: (userId, on) => set((s) => { const watching = { ...s.watching }; if (on) watching[userId] = true; else delete watching[userId]; return { watching } }),

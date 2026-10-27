@@ -146,6 +146,15 @@ export default function VoiceVideoTab() {
         <label className="label">Voice Processing</label>
         <Toggle label="Echo Cancellation" checked={st.echoCancellation} onChange={set('echoCancellation')} />
         <Toggle label="Noise Suppression" checked={st.noiseSuppression} onChange={set('noiseSuppression')} />
+        {st.noiseSuppression && (
+          <div className="ml-1 flex flex-wrap gap-2" data-ns-mode>
+            {([['standard', 'Standard', "Your browser's suppressor"], ['enhanced', 'Enhanced', 'Removes keyboard, fans and background chatter (RNNoise, runs on this device)']] as const).map(([v, label, hint]) => (
+              <button key={v} type="button" title={hint} onClick={() => update({ noiseSuppressionMode: v })} className={`rounded-md border px-3 py-1.5 text-sm text-left ${st.noiseSuppressionMode === v ? 'border-accent bg-accent/15 text-text-0' : 'border-line bg-bg-1 text-text-1 hover:border-text-2'}`} data-ns-mode-option={v} data-on={st.noiseSuppressionMode === v ? '1' : '0'}>
+                <span className="block font-semibold">{label}</span><span className="block text-xs text-text-2">{hint}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <Toggle label="Automatic Gain Control" checked={st.autoGainControl} onChange={set('autoGainControl')} />
         <p className="text-xs text-text-2" data-hifi-processing-note>High-fidelity channels (set by the server) turn all three off and capture 48 kHz stereo, so instruments and music come through untouched.</p>
       </section>

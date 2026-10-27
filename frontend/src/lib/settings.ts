@@ -12,6 +12,8 @@ export interface VoiceSettings {
   sensitivity: number              // dBFS threshold, -100..0, used when !autoSensitivity
   echoCancellation: boolean
   noiseSuppression: boolean
+  /** With noise suppression on: the browser's ('standard') or RNNoise ('enhanced', removes keyboard, fans, barking). */
+  noiseSuppressionMode: 'standard' | 'enhanced'
   autoGainControl: boolean
   /** Screen share quality (a key of STREAM_QUALITY in voice.ts). */
   streamQuality: string
@@ -30,6 +32,7 @@ export const DEFAULT_SETTINGS: VoiceSettings = {
   sensitivity: -50,
   echoCancellation: true,
   noiseSuppression: true,
+  noiseSuppressionMode: 'standard',
   autoGainControl: true,
   streamQuality: 'auto',
 }

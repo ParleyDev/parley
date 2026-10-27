@@ -12,6 +12,7 @@ import { LocalAudioTrack, LocalVideoTrack, RemoteTrack, Room, RoomEvent, Track, 
 import E2EEWorker from 'livekit-client/e2ee-worker?worker'
 import { CallCrypto, e2eeSupported, legacyInsertableStreams, MeshCrypto, ParleyKeyProvider } from './e2ee'
 import { CaptionSender, clearCaptions } from './captions'
+import { createRnnoise } from './rnnoise'
 
 /**
  * Mesh WebRTC voice/video: every participant holds one RTCPeerConnection per other participant.
@@ -64,6 +65,8 @@ class VoiceManager {
   private analyser: AnalyserNode | null = null
   private dest: MediaStreamAudioDestinationNode | null = null
   private gateTimer: ReturnType<typeof setInterval> | null = null
+  /** RNNoise between the device and the input gain (Enhanced noise suppression). */
+  private ns: AudioWorkletNode | null = null
   private captionSender = new CaptionSender(() => this.mic?.getAudioTracks()[0] ?? null)
   private captionTimer: ReturnType<typeof setInterval> | null = null
   private lastVoiceAt = 0
@@ -358,7 +361,7 @@ class VoiceManager {
     if (this.inputGain) this.inputGain.gain.value = cur.inputVolume / 100
     if (prev.outputDeviceId !== cur.outputDeviceId || prev.outputVolume !== cur.outputVolume) { this.peers.forEach((p) => this.applyOutput(p.audio)); this.sfuAudio.forEach((a) => this.applyOutput(a)); this.streamAudio.forEach((a) => this.applyOutput(a)); applySfxSink(cur.outputDeviceId) }
     const micChanged = prev.inputDeviceId !== cur.inputDeviceId || prev.echoCancellation !== cur.echoCancellation
-      || prev.noiseSuppression !== cur.noiseSuppression || prev.autoGainControl !== cur.autoGainControl
+      || prev.noiseSuppression !== cur.noiseSuppression || prev.autoGainControl !== cur.autoGainControl || prev.noiseSuppressionMode !== cur.noiseSuppressionMode
     if (micChanged && this.raw) await this.reopenMicDevice()
     if (prev.cameraDeviceId !== cur.cameraDeviceId && this.camera) {
       const stream = await this.openCamera()
@@ -513,7 +516,8 @@ class VoiceManager {
 
   private micConstraints(): MediaStreamConstraints {
     const st = this.settings
-    const audio: MediaTrackConstraints = captureConstraints(this.profile, st)
+    // Enhanced suppression replaces the browser's: running both muffles speech.
+    const audio: MediaTrackConstraints = captureConstraints(this.profile, { ...st, noiseSuppression: st.noiseSuppression && st.noiseSuppressionMode !== 'enhanced' })
     if (st.inputDeviceId) audio.deviceId = { exact: st.inputDeviceId }
     return { audio, video: false }
   }
@@ -554,7 +558,7 @@ class VoiceManager {
       this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 1024
       this.dest = ctx.createMediaStreamDestination()
       this.source = ctx.createMediaStreamSource(raw)
-      this.source.connect(this.inputGain)
+      await this.wireSource()
       this.inputGain.connect(this.analyser)
       this.inputGain.connect(this.gate)
       this.gate.connect(this.dest)
@@ -572,6 +576,7 @@ class VoiceManager {
     if (this.holders.size) return
     if (this.gateTimer) { clearInterval(this.gateTimer); this.gateTimer = null }
     this.source?.disconnect(); this.inputGain?.disconnect(); this.gate?.disconnect(); this.analyser?.disconnect()
+    if (this.ns) { this.ns.disconnect(); (this.ns as AudioWorkletNode & { destroy?: () => void }).destroy?.(); this.ns = null }
     this.source = this.inputGain = this.gate = this.analyser = this.dest = null
     this.stopTracks(this.raw); this.raw = null
     this.stopTracks(this.mic); this.mic = null
@@ -589,7 +594,20 @@ class VoiceManager {
     this.stopTracks(this.raw)
     this.raw = raw
     this.source = this.ctx.createMediaStreamSource(raw)
-    this.source.connect(this.inputGain)
+    await this.wireSource()
+  }
+
+  /** device → (RNNoise, when Enhanced suppression is on and can run) → input gain. */
+  private async wireSource() {
+    const ctx = this.ctx, source = this.source, gain = this.inputGain
+    if (!ctx || !source || !gain) return
+    const want = this.settings.noiseSuppression && this.settings.noiseSuppressionMode === 'enhanced' && this.profile.mode !== 'music'
+    if (want && !this.ns) this.ns = await createRnnoise(ctx)
+    if (!want && this.ns) { this.ns.disconnect(); (this.ns as AudioWorkletNode & { destroy?: () => void }).destroy?.(); this.ns = null }
+    if (this.source !== source) return // replaced while loading
+    source.disconnect()
+    if (this.ns) { this.ns.disconnect(); source.connect(this.ns); this.ns.connect(gain) } else source.connect(gain)
+    useStore.getState().setNoiseEngine(this.ns ? 'enhanced' : this.settings.noiseSuppression ? 'standard' : 'off')
   }
 
   private startGate() {
