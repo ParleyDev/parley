@@ -10,6 +10,7 @@ import InvitePage from './pages/Invite'
 import TemplatePage from './pages/Template'
 import AppDirectoryPage from './pages/AppDirectory'
 import DevelopersPage from './pages/Developers'
+import QrApprovePage from './pages/QrApprove'
 import DiscoverPage from './pages/Discover'
 import AdminPage from './pages/Admin'
 import GuildPreviewPage from './pages/GuildPreview'
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/reset" element={<ResetPage />} />
         <Route path="/widget/:guildId" element={<WidgetPage />} />
         <Route path="/developers" element={<DevelopersPage />} />
+        <Route path="/login/qr/:id" element={token ? <QrApprovePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/template/:code" element={token ? <TemplatePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/invite/:code" element={token ? <InvitePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/oauth2/authorize" element={token ? <OAuthPage /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />} />

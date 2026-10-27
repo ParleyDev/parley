@@ -219,7 +219,8 @@ async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Jso
     }
     if mfa {
         // Password is right but the account needs its second factor: hand back a ticket for /auth/mfa, not a session.
-        return Ok(Json(json!({ "mfa": true, "ticket": issue_mfa_ticket(&state.config.jwt_secret, id)? })));
+        let (keys,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM passkeys WHERE user_id = $1").bind(id).fetch_one(&state.db).await?;
+        return Ok(Json(json!({ "mfa": true, "ticket": issue_mfa_ticket(&state.config.jwt_secret, id)?, "security_keys": keys > 0 })));
     }
     session(&state, id, &headers).await
 }

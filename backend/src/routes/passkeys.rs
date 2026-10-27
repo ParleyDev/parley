@@ -38,6 +38,8 @@ pub fn router() -> Router<AppState> {
         .route("/users/@me/passkeys/:id", patch(rename).delete(remove))
         .route("/auth/passkey/begin", post(auth_begin).route_layer(from_fn(rl_login)))
         .route("/auth/passkey/finish", post(auth_finish).route_layer(from_fn(rl_login)))
+        .route("/auth/mfa/key/begin", post(mfa_begin).route_layer(from_fn(rl_login)))
+        .route("/auth/mfa/key/finish", post(mfa_finish).route_layer(from_fn(rl_login)))
 }
 
 /// The relying party for this instance, or None when `APP_URL` cannot be one (an IP address, a bad URL).
@@ -233,5 +235,41 @@ async fn auth_finish(State(state): State<AppState>, headers: HeaderMap, Json(req
     let (suspended, bot): (bool, bool) = sqlx::query_as("SELECT suspended_at IS NOT NULL, bot FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
     if bot { return Err(fail(&headers)); }
     if suspended { return Err(AppError::BadRequest("This account has been suspended.".into())); }
+    session(&state, uid, &headers).await
+}
+
+// ---- a security key (any registered passkey) as the second factor ----
+
+#[derive(Deserialize)]
+struct MfaKeyBegin { ticket: String }
+
+/// `POST /auth/mfa/key/begin`: after the password, prove it's you with one of your security keys instead of a code.
+async fn mfa_begin(State(state): State<AppState>, Json(req): Json<MfaKeyBegin>) -> AppResult<Json<Value>> {
+    let wa = relying_party(&state)?;
+    let uid = crate::auth::verify_mfa_ticket(&state.config.jwt_secret, &req.ticket).ok_or(AppError::BadRequest("Your login expired, start again".into()))?;
+    let keys: Vec<Passkey> = passkeys_of(&state, uid).await?.into_iter().map(|(_, p)| p).collect();
+    if keys.is_empty() { return Err(AppError::BadRequest("No security keys on this account".into())) }
+    let (options, auth) = wa.start_passkey_authentication(&keys).map_err(wa_err)?;
+    let id = save_challenge(&state, Some(uid), "mfa", serde_json::to_value(&auth).map_err(|e| AppError::Other(e.into()))?).await?;
+    Ok(Json(json!({ "id": id, "options": options })))
+}
+
+#[derive(Deserialize)]
+struct MfaKeyFinish { ticket: String, id: Uuid, credential: PublicKeyCredential }
+
+async fn mfa_finish(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<MfaKeyFinish>) -> AppResult<Json<Value>> {
+    let wa = relying_party(&state)?;
+    let uid = crate::auth::verify_mfa_ticket(&state.config.jwt_secret, &req.ticket).ok_or(AppError::BadRequest("Your login expired, start again".into()))?;
+    let fail = |headers: &HeaderMap| { let _ = LIMITER.take("login_fail", &client_ip(headers), LIMITER.limit("login_fail")); AppError::BadRequest("That security key could not be verified.".into()) };
+    let (owner, kind, st) = take_challenge(&state, req.id).await?;
+    if kind != "mfa" || owner != Some(uid) { return Err(fail(&headers)) }
+    let auth: PasskeyAuthentication = serde_json::from_value(st).map_err(|e| AppError::Other(e.into()))?;
+    let result = wa.finish_passkey_authentication(&req.credential, &auth).map_err(|_| fail(&headers))?;
+    let keys = passkeys_of(&state, uid).await?;
+    let Some((pid, mut pk)) = keys.into_iter().find(|(_, p)| p.cred_id() == result.cred_id()) else { return Err(fail(&headers)) };
+    pk.update_credential(&result);
+    sqlx::query("UPDATE passkeys SET passkey = $2, last_used_at = now() WHERE id = $1").bind(pid).bind(serde_json::to_value(&pk).map_err(|e| AppError::Other(e.into()))?).execute(&state.db).await?;
+    let (suspended,): (bool,) = sqlx::query_as("SELECT suspended_at IS NOT NULL FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    if suspended { return Err(AppError::BadRequest("This account has been suspended.".into())) }
     session(&state, uid, &headers).await
 }

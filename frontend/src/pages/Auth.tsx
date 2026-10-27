@@ -1,7 +1,8 @@
 import { LogoNeon } from '../components/Logo'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { KeyRound } from 'lucide-react'
-import { passkeyError, passkeysSupported, signInWithPasskey } from '../lib/passkey'
+import { getPasskey, passkeyError, passkeysSupported, signInWithPasskey } from '../lib/passkey'
+import QrLogin from '../components/QrLogin'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useStore } from '../store'
@@ -21,6 +22,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [busy, setBusy] = useState(false)
   // Set when the password was right but the account has 2FA: the ticket proves step one to /auth/mfa.
   const [mfaTicket, setMfaTicket] = useState<string | null>(null)
+  const [mfaKeys, setMfaKeys] = useState(false)
   const [code, setCode] = useState('')
   const registrationOpen = useStore((s) => s.instance.registration_enabled)
   const mailEnabled = useStore((s) => s.instance.mail_enabled !== false)
@@ -58,11 +60,11 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setErr(null); setBusy(true)
     try {
       const res = mode === 'login'
-        ? await api.post<{ token: string; user: PrivateUser; reenabled?: boolean } | { mfa: true; ticket: string }>('/auth/login', { login: form.login, password: form.password })
+        ? await api.post<{ token: string; user: PrivateUser; reenabled?: boolean } | { mfa: true; ticket: string; security_keys?: boolean }>('/auth/login', { login: form.login, password: form.password })
         : await api.post<{ token: string; user: PrivateUser }>('/auth/register', {
             email: form.email, username: form.username, display_name: form.display_name || undefined, password: form.password,
           })
-      if ('mfa' in res) { setMfaTicket(res.ticket); setCode(''); return }
+      if ('mfa' in res) { setMfaTicket(res.ticket); setMfaKeys(!!res.security_keys); setCode(''); return }
       setAuth(res.token, res.user)
       if ('reenabled' in res && res.reenabled) useStore.getState().pushToast('Welcome back! Your account has been re-enabled.')
       navigate(from, { replace: true })
@@ -73,6 +75,17 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     }
   }
 
+  // A security key (any passkey on the account) instead of the code.
+  const useKey = async () => {
+    setErr(null); setBusy(true)
+    try {
+      const begin = await api.post<{ id: string; options: Parameters<typeof getPasskey>[0] }>('/auth/mfa/key/begin', { ticket: mfaTicket })
+      const credential = await getPasskey(begin.options)
+      const res = await api.post<{ token: string; user: PrivateUser }>('/auth/mfa/key/finish', { ticket: mfaTicket, id: begin.id, credential })
+      setAuth(res.token, res.user); navigate(from, { replace: true })
+    } catch (e) { const m = passkeyError(e); if (m) setErr(m) } finally { setBusy(false) }
+  }
+  const qrSession = useCallback((token: string, user: PrivateUser) => { setAuth(token, user); navigate(from, { replace: true }) }, [setAuth, navigate, from])
   const submitMfa = async (e: FormEvent) => {
     e.preventDefault()
     setErr(null); setBusy(true)
@@ -109,6 +122,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             <input className="input tracking-widest" autoFocus autoComplete="one-time-code" inputMode="text" required value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456 or abcde-fghij" data-mfa-code />
           </div>
           <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || !code.trim()}>{busy ? t('Please wait…') : t('Log In')}</button>
+          {mfaKeys && passkeysSupported() && <button type="button" className="btn-ghost mt-2 w-full py-2.5" disabled={busy} onClick={useKey} data-mfa-key><KeyRound size={16} /> Use a security key instead</button>}
           <p className="mt-4 text-sm text-text-2"><button type="button" className="text-sky-400 hover:underline" onClick={() => { setMfaTicket(null); setErr(null) }} data-mfa-back>Back to login</button></p>
         </form>
       </div>
@@ -118,7 +132,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   return (
     <div className="h-full overflow-y-auto flex items-center-safe justify-center p-4 relative bg-bg-0">
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden><div className="absolute -top-40 -left-40 h-[500px] w-[500px] rounded-full bg-accent/25 blur-[120px]" /><div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-sky-500/15 blur-[120px]" /></div>
-      <form onSubmit={submit} className="pop relative w-full max-w-md rounded-2xl bg-bg-1/90 backdrop-blur border border-line p-8 shadow-2xl">
+      <div className="relative flex w-full max-w-3xl items-stretch justify-center gap-4">
+      <form onSubmit={submit} className="pop relative w-full max-w-md flex-1 rounded-2xl bg-bg-1/90 backdrop-blur border border-line p-8 shadow-2xl">
         <div className="flex items-center gap-3 mb-6">
           <LogoNeon className="h-10 w-10 rounded-xl shadow-lg shadow-accent/30" />
           <div>
@@ -170,6 +185,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           )}
         </p>
       </form>
+      {mode === 'login' && <div className="pop hidden w-64 shrink-0 items-center justify-center rounded-2xl border border-line bg-bg-1/90 p-6 shadow-2xl backdrop-blur md:flex"><QrLogin onSession={qrSession} /></div>}
+      </div>
     </div>
   )
 }
