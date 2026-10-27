@@ -153,6 +153,7 @@ function Browse() {
         <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.35), transparent 40%), radial-gradient(circle at 20% 90%, rgba(120,180,255,0.4), transparent 45%)' }} />
         <h1 className="relative text-4xl max-md:text-2xl font-black uppercase tracking-tight leading-[1.05] text-white max-w-[640px]">Find your community on Parley</h1>
         <p className="relative mt-3 text-white/80">From gaming, to music, to learning, there's a place for you.</p>
+        <a href="/app-directory" className="relative mt-4 inline-flex rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white hover:bg-white/25" data-discover-apps>Looking for bots? Browse the App Directory →</a>
       </div>
       <div className="px-10 py-8 max-md:px-5">
         <h2 className="text-xl font-bold mb-4">{term ? `Results for "${term}"` : category === 'home' ? 'Featured Servers' : `${categoryLabel(category)} Servers`}</h2>

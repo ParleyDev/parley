@@ -92,6 +92,10 @@ export default function ApplicationsTab() {
             </div>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-accent" checked={open.bot_public !== false} onChange={async (e) => { try { const a = await api.patch<Application>(`/applications/${open.id}`, { bot_public: e.target.checked }); setOpen({ ...open, ...a }) } catch (err) { pushToast((err as Error).message, 'error') } }} data-app-public />Public bot <span className="text-xs text-text-2">(off: only you can add it to servers)</span></label>
             {open.verified && <p className="text-xs text-accent">✓ Verified by an administrator</p>}
+            {open.bot && <>
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-accent" checked={!!open.listed} disabled={open.bot_public === false} onChange={async (e) => { try { const a = await api.patch<Application>(`/applications/${open.id}`, { listed: e.target.checked }); setOpen({ ...open, ...a }) } catch (err) { pushToast((err as Error).message, 'error') } }} data-app-listed />List in the App Directory</label>
+              {open.listed && <input className="input text-sm" defaultValue={(open.tags ?? []).join(', ')} placeholder="Tags, e.g. music, games, moderation" onBlur={async (e) => { const a = await api.patch<Application>(`/applications/${open.id}`, { tags: e.target.value.split(',') }); setOpen({ ...open, ...a }) }} data-app-tags />}
+            </>}
           </div>
           {open.bot && (
             <div className="rounded-lg border border-line bg-bg-1 p-3 space-y-2" data-app-invite>
@@ -102,7 +106,8 @@ export default function ApplicationsTab() {
                 {PERMS.map((p) => <label key={p.key} className="flex items-center gap-1.5 text-xs" title={p.desc}><input type="checkbox" className="accent-accent" checked={has(botPerms, P[p.key])} onChange={(e) => setBotPerms(e.target.checked ? botPerms | P[p.key] : botPerms & ~P[p.key])} data-perm-pick={p.key} />{p.label}</label>)}
               </div>
               <code className="block break-all rounded bg-bg-0 px-2 py-1 text-xs" data-app-invite-url>{inviteUrl}</code>
-              <button type="button" className="btn-ghost text-xs" onClick={() => copy('Invite link', inviteUrl)}><Copy size={12} /> Copy link</button>
+              <div className="flex gap-2"><button type="button" className="btn-ghost text-xs" onClick={() => copy('Invite link', inviteUrl)}><Copy size={12} /> Copy link</button>
+              <button type="button" className="btn-ghost text-xs" onClick={async () => { const a = await api.patch<Application>(`/applications/${open.id}`, { install_permissions: String(botPerms) }); setOpen({ ...open, ...a }); pushToast('The App Directory will ask for these permissions') }} data-app-save-perms>Use for the App Directory</button></div>
             </div>
           )}
           <div className="rounded-lg border border-line bg-bg-1 p-3 space-y-2" data-app-oauth>

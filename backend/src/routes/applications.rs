@@ -21,6 +21,9 @@ pub fn router() -> Router<AppState> {
         .route("/users/@me/authorized-apps", get(authorized_apps))
         .route("/guilds/:id/members/:uid", axum::routing::put(join_member))
         .route("/admin/applications", get(admin_list))
+        .route("/users/@me/app-installs", get(my_installs))
+        .route("/users/@me/app-installs/:app", axum::routing::delete(uninstall))
+        .route("/app-directory", get(directory))
         .route("/admin/applications/:id", axum::routing::patch(admin_verify))
         .route("/users/@me/authorized-apps/:app", axum::routing::delete(deauthorize))
 }
@@ -42,8 +45,8 @@ pub fn hash(token: &str) -> String { format!("{:x}", Sha256::digest(token.as_byt
 fn secret(prefix: &str) -> String { format!("{prefix}_{}", crate::mail::new_token()) }
 
 #[derive(Serialize, sqlx::FromRow, Clone)]
-pub struct App { pub id: Uuid, pub owner_id: Uuid, pub name: String, pub description: String, pub client_id: String, pub redirect_uris: Vec<String>, pub bot_user_id: Option<Uuid>, pub created_at: chrono::DateTime<chrono::Utc>, #[sqlx(default)] pub privileged_intents: i32, #[sqlx(default)] pub icon_url: Option<String>, #[sqlx(default)] pub bot_public: bool, #[sqlx(default)] pub verified: bool }
-const APP_COLS: &str = "id, owner_id, name, description, client_id, redirect_uris, bot_user_id, created_at, privileged_intents, icon_url, bot_public, verified";
+pub struct App { pub id: Uuid, pub owner_id: Uuid, pub name: String, pub description: String, pub client_id: String, pub redirect_uris: Vec<String>, pub bot_user_id: Option<Uuid>, pub created_at: chrono::DateTime<chrono::Utc>, #[sqlx(default)] pub privileged_intents: i32, #[sqlx(default)] pub icon_url: Option<String>, #[sqlx(default)] pub bot_public: bool, #[sqlx(default)] pub verified: bool, #[sqlx(default)] pub listed: bool, #[sqlx(default)] pub install_permissions: i64, #[sqlx(default)] pub tags: Vec<String> }
+const APP_COLS: &str = "id, owner_id, name, description, client_id, redirect_uris, bot_user_id, created_at, privileged_intents, icon_url, bot_public, verified, listed, install_permissions, tags";
 
 async fn own(state: &AppState, uid: Uuid, id: Uuid) -> AppResult<App> {
     sqlx::query_as::<_, App>(&format!("SELECT {APP_COLS} FROM applications WHERE id = $1 AND owner_id = $2")).bind(id).bind(uid).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Application not found".into()))
@@ -68,6 +71,10 @@ struct AppReq {
     icon_url: Option<String>,
     /// Anyone can add the bot (true), or only you.
     bot_public: Option<bool>,
+    /// Show it in the App Directory (needs a public bot), with what it asks for when added and up to 5 tags.
+    listed: Option<bool>,
+    install_permissions: Option<serde_json::Value>,
+    tags: Option<Vec<String>>,
 }
 
 fn clean_uris(list: &[String]) -> AppResult<Vec<String>> {
@@ -112,9 +119,13 @@ async fn update_app(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     if let Some(n) = &req.name { if n.trim().is_empty() || n.chars().count() > 50 { return Err(AppError::BadRequest("Name must be 1–50 characters".into())) } }
     let uris = match &req.redirect_uris { Some(l) => Some(clean_uris(l)?), None => None };
     let app = sqlx::query_as::<_, App>(&format!("UPDATE applications SET name = COALESCE($2, name), description = COALESCE($3, description), redirect_uris = COALESCE($4, redirect_uris), privileged_intents = COALESCE($5, privileged_intents),
-        icon_url = CASE WHEN $6 THEN NULLIF($7, '') ELSE icon_url END, bot_public = COALESCE($8, bot_public) WHERE id = $1 RETURNING {APP_COLS}"))
+        icon_url = CASE WHEN $6 THEN NULLIF($7, '') ELSE icon_url END, bot_public = COALESCE($8, bot_public),
+        listed = COALESCE($9, listed), install_permissions = COALESCE($10, install_permissions), tags = COALESCE($11, tags) WHERE id = $1 RETURNING {APP_COLS}"))
         .bind(id).bind(req.name.map(|n| n.trim().to_string())).bind(req.description.map(|d| d.trim().chars().take(400).collect::<String>())).bind(uris)
-        .bind(req.privileged_intents.map(|i| (i & crate::ws::intents::PRIVILEGED) as i32)).bind(req.icon_url.is_some()).bind(req.icon_url.clone().unwrap_or_default()).bind(req.bot_public).fetch_one(&state.db).await?;
+        .bind(req.privileged_intents.map(|i| (i & crate::ws::intents::PRIVILEGED) as i32)).bind(req.icon_url.is_some()).bind(req.icon_url.clone().unwrap_or_default()).bind(req.bot_public)
+        .bind(req.listed).bind(req.install_permissions.as_ref().map(|p| perm_value(Some(p)) as i64))
+        .bind(req.tags.as_ref().map(|t| t.iter().map(|x| x.trim().to_lowercase().chars().take(20).collect::<String>()).filter(|x| !x.is_empty()).take(5).collect::<Vec<_>>()))
+        .fetch_one(&state.db).await?;
     if let Some(i) = &req.icon_url { crate::routes::users::validate_image(&Some(i.clone()).filter(|x| !x.is_empty()))?; }
     if let Some(b) = app.bot_user_id { sqlx::query("UPDATE users SET display_name = $2, avatar_url = $3 WHERE id = $1 AND bot").bind(b).bind(&app.name).bind(&app.icon_url).execute(&state.db).await?; }
     Ok(Json(app))
@@ -244,7 +255,12 @@ async fn authorize(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(
             crate::audit::guild(&state, gid, uid, "bot.add", "user", Some(bot), &app.name, json!({ "permissions": wanted.to_string() })).await;
         }
     }
-    let Some(redirect) = redirect else { return Ok(Json(json!({ "redirect": null, "guild_id": req.guild_id }))) };
+    // applications.commands without a server: install the app to your account (its commands work for you anywhere).
+    if scopes.iter().any(|s| s == "applications.commands") && !scopes.iter().any(|s| s == "bot") {
+        sqlx::query("INSERT INTO user_app_installs (user_id, app_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(uid).bind(app.id).execute(&state.db).await?;
+        state.hub.emit_users(vec![uid], "APPLICATION_COMMANDS_UPDATE", json!({ "application_id": app.id, "guild_id": null }));
+    }
+    let Some(redirect) = redirect else { return Ok(Json(json!({ "redirect": null, "guild_id": req.guild_id, "installed": req.guild_id.is_none() }))) };
     let code = crate::mail::new_token();
     sqlx::query("INSERT INTO oauth_codes (code, app_id, user_id, scopes, redirect_uri, expires_at) VALUES ($1, $2, $3, $4, $5, now() + interval '1 minute')")
         .bind(&code).bind(app.id).bind(uid).bind(&scopes).bind(&redirect).execute(&state.db).await?;
@@ -416,4 +432,37 @@ async fn admin_verify(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     }
     crate::audit::record(&state, uid, if req.verified { "app.verify" } else { "app.unverify" }, "application", Some(id), &name, json!({})).await;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// `GET /users/@me/app-installs`: apps you installed to your account.
+async fn my_installs(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Value>>> {
+    let rows: Vec<(Uuid, String, String, Option<String>, bool, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        "SELECT a.id, a.name, a.description, a.icon_url, a.verified, i.created_at FROM user_app_installs i JOIN applications a ON a.id = i.app_id WHERE i.user_id = $1 ORDER BY i.created_at DESC")
+        .bind(uid).fetch_all(&state.db).await?;
+    Ok(Json(rows.into_iter().map(|(id, name, desc, icon, verified, at)| json!({ "id": id, "name": name, "description": desc, "icon_url": icon, "verified": verified, "installed_at": at })).collect()))
+}
+
+async fn uninstall(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(app): Path<Uuid>) -> AppResult<StatusCode> {
+    sqlx::query("DELETE FROM user_app_installs WHERE user_id = $1 AND app_id = $2").bind(uid).bind(app).execute(&state.db).await?;
+    state.hub.emit_users(vec![uid], "APPLICATION_COMMANDS_UPDATE", json!({ "application_id": app, "guild_id": null }));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+struct DirQ { #[serde(default)] q: String, tag: Option<String> }
+
+/// `GET /app-directory?q=&tag=`: listed public apps, verified and popular first.
+async fn directory(State(state): State<AppState>, AuthUser(_): AuthUser, Query(q): Query<DirQ>) -> AppResult<Json<Vec<Value>>> {
+    let like = format!("%{}%", q.q.trim().replace('%', "").replace('_', ""));
+    let rows: Vec<(Uuid, String, String, Option<String>, bool, String, i64, Vec<String>, i64, i64)> = sqlx::query_as(
+        "SELECT a.id, a.name, a.description, a.icon_url, a.verified, a.client_id, a.install_permissions, a.tags,
+                (SELECT COUNT(*) FROM guild_members m WHERE m.user_id = a.bot_user_id),
+                (SELECT COUNT(*) FROM application_commands c WHERE c.application_id = a.id AND c.guild_id IS NULL)
+         FROM applications a WHERE a.listed AND a.bot_public AND a.bot_user_id IS NOT NULL
+           AND (a.name ILIKE $1 OR a.description ILIKE $1) AND ($2::text IS NULL OR $2 = ANY(a.tags))
+         ORDER BY a.verified DESC, 9 DESC, a.name LIMIT 100")
+        .bind(&like).bind(q.tag.as_deref().filter(|t| !t.is_empty())).fetch_all(&state.db).await?;
+    Ok(Json(rows.into_iter().map(|(id, name, desc, icon, verified, client_id, perms, tags, servers, commands)| json!({
+        "id": id, "name": name, "description": desc, "icon_url": icon, "verified": verified, "client_id": client_id,
+        "install_permissions": perms.to_string(), "tags": tags, "servers": servers, "commands": commands })).collect()))
 }

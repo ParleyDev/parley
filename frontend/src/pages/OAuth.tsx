@@ -21,12 +21,13 @@ export default function OAuthPage() {
   const [busy, setBusy] = useState(false)
   const [perms, setPerms] = useState(0)
   const [added, setAdded] = useState<string | null>(null)
+  const [installed, setInstalled] = useState(false)
   const navigate = useNavigate()
   const q = Object.fromEntries(params.entries())
   useEffect(() => { api.get<Info>(`/oauth2/authorize?${params.toString()}`).then((i) => { setInfo(i); setGuild(i.guilds[0]?.id ?? ''); setPerms(i.permissions ?? 0) }).catch((e: Error) => setErr(e.message)) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const approve = async () => {
     setBusy(true); setErr(null)
-    try { const r = await api.post<{ redirect: string | null }>('/oauth2/authorize', { client_id: q.client_id, redirect_uri: q.redirect_uri, scope: q.scope, state: q.state, guild_id: guild || undefined, permissions: String(perms & mine) }); if (r.redirect) window.location.href = r.redirect; else { setAdded(guild); setBusy(false) } } catch (e) { setErr((e as Error).message); setBusy(false) }
+    try { const r = await api.post<{ redirect: string | null }>('/oauth2/authorize', { client_id: q.client_id, redirect_uri: q.redirect_uri, scope: q.scope, state: q.state, guild_id: guild || undefined, permissions: String(perms & mine) }); if (r.redirect) window.location.href = r.redirect; else if (wantsBot) { setAdded(guild); setBusy(false) } else { setInstalled(true); setBusy(false) } } catch (e) { setErr((e as Error).message); setBusy(false) }
   }
   const cancel = () => { if (info?.redirect_uri) { try { const u = new URL(info.redirect_uri); u.searchParams.set('error', 'access_denied'); if (info.state) u.searchParams.set('state', info.state); window.location.href = u.toString(); return } catch { /* fall through */ } } history.back() }
   const wantsBot = info?.scopes.some((s) => s.id === 'bot')
@@ -72,7 +73,12 @@ export default function OAuthPage() {
               </div>
             )}
             {err && <p className="mt-3 text-sm text-danger" data-oauth-error>{err}</p>}
-            {added ? (
+            {installed ? (
+              <div className="mt-4 rounded-xl border border-success/40 bg-success/10 p-3 text-center text-sm" data-oauth-installed>
+                <b>{info.app.name}</b> was added to your apps: its commands now work for you in any server or DM.
+                <button type="button" className="btn-primary mt-3 w-full" onClick={() => navigate('/channels/@me')}>Done</button>
+              </div>
+            ) : added ? (
               <div className="mt-4 rounded-xl border border-success/40 bg-success/10 p-3 text-center text-sm" data-oauth-added>
                 <b>{info.app.name}</b> was added to <b>{info.guilds.find((g) => g.id === added)?.name}</b>.
                 <button type="button" className="btn-primary mt-3 w-full" onClick={() => navigate(`/channels/${added}`)}>Go to the server</button>

@@ -125,7 +125,13 @@ async fn available(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(
              JOIN channel_members m ON m.user_id = a.bot_user_id AND m.channel_id = $1
              WHERE ac.guild_id IS NULL ORDER BY ac.name").bind(cid).fetch_all(&state.db).await?,
     };
-    Ok(Json(rows.into_iter().map(|(id, app, guild, kind, name, description, options, app_name, icon)| json!({ "id": id, "application_id": app, "guild_id": guild, "type": kind, "name": name, "description": description, "options": options, "application": { "name": app_name, "icon_url": icon } })).collect()))
+    // Plus the global commands of apps you installed to your account (they work for you anywhere).
+    let mine: Vec<(Uuid, Uuid, Option<Uuid>, i16, String, String, Value, String, Option<String>)> = sqlx::query_as(
+        "SELECT ac.id, ac.application_id, ac.guild_id, ac.kind, ac.name, ac.description, ac.options, a.name, u.avatar_url FROM application_commands ac
+         JOIN applications a ON a.id = ac.application_id LEFT JOIN users u ON u.id = a.bot_user_id
+         JOIN user_app_installs i ON i.app_id = a.id AND i.user_id = $1 WHERE ac.guild_id IS NULL ORDER BY ac.name").bind(uid).fetch_all(&state.db).await?;
+    let mut seen = std::collections::HashSet::new();
+    Ok(Json(rows.into_iter().map(|r| (r, false)).chain(mine.into_iter().map(|r| (r, true))).filter(|(r, _)| seen.insert(r.0)).map(|((id, app, guild, kind, name, description, options, app_name, icon), user_installed)| json!({ "id": id, "application_id": app, "guild_id": guild, "type": kind, "name": name, "description": description, "options": options, "application": { "name": app_name, "icon_url": icon }, "user_installed": user_installed })).collect()))
 }
 
 #[derive(Deserialize)]
@@ -190,13 +196,17 @@ async fn invoke(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req
         Some(gid) => (cmd.guild_id.is_none() || cmd.guild_id == Some(gid)) && sqlx::query_as::<_, (bool,)>("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2").bind(gid).bind(bot).fetch_optional(&state.db).await?.is_some(),
         None => cmd.guild_id.is_none() && sqlx::query_as::<_, (bool,)>("SELECT true FROM channel_members WHERE channel_id = $1 AND user_id = $2").bind(c.id).bind(bot).fetch_optional(&state.db).await?.is_some(),
     };
-    if !here { return Err(AppError::BadRequest("That command isn't available here".into())) }
+    // Apps you installed to your account work anywhere (global commands).
+    let installed = cmd.guild_id.is_none() && sqlx::query_as::<_, (bool,)>("SELECT true FROM user_app_installs WHERE user_id = $1 AND app_id = $2").bind(uid).bind(cmd.application_id).fetch_optional(&state.db).await?.is_some();
+    if !here && !installed { return Err(AppError::BadRequest("That command isn't available here".into())) }
+    let data_external = !here;
     let (options, mut resolved) = read_options(&state, &c, &cmd, &req.options, None).await?;
     if cmd.kind != 1 && req.target_id.is_none() { return Err(AppError::BadRequest("User and message commands need a target".into())) }
     if cmd.kind == 3 {
         if let Some(t) = req.target_id { let m = fetch_message(&state.db, t, uid).await?; if m.channel_id != c.id { return Err(AppError::BadRequest("That message isn't in this channel".into())) } resolved.insert("messages".into(), json!({ t.to_string(): m })); }
     }
-    let data = json!({ "id": cmd.id, "name": cmd.name, "type": cmd.kind, "options": options, "target_id": req.target_id, "resolved": resolved });
+    // `external`: a user-installed app in a place its bot isn't; in servers its answers are only shown to the user.
+    let data = json!({ "id": cmd.id, "name": cmd.name, "type": cmd.kind, "options": options, "target_id": req.target_id, "resolved": resolved, "external": data_external });
     let id = deliver(&state, uid, p, &c, cmd.application_id, bot, 2, data, None, Some(format!("/{}", cmd.name)), &app_name).await?;
     Ok((StatusCode::ACCEPTED, Json(json!({ "id": id }))))
 }
@@ -312,7 +322,7 @@ async fn autocomplete(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     Ok(Json(json!({ "choices": [] })))
 }
 
-struct Live { app: Uuid, user: Uuid, channel: Channel, name: String, message_id: Option<Uuid>, ephemeral: Option<Value>, responded: bool, created: chrono::DateTime<Utc>, kind: i16, source: Option<Uuid> }
+struct Live { app: Uuid, user: Uuid, channel: Channel, name: String, message_id: Option<Uuid>, ephemeral: Option<Value>, responded: bool, created: chrono::DateTime<Utc>, kind: i16, source: Option<Uuid>, external: bool }
 
 /// The interaction a token names; 15 minutes to use it.
 async fn live(state: &AppState, id: Uuid, token: &str) -> AppResult<Live> {
@@ -323,7 +333,7 @@ async fn live(state: &AppState, id: Uuid, token: &str) -> AppResult<Live> {
     let channel = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(cid).fetch_one(&state.db).await?;
     // A command's name, or for a button / form the command that made the message is unknown: show its custom id.
     let name = data["name"].as_str().or(data["custom_id"].as_str()).unwrap_or("").to_string();
-    Ok(Live { app, user, channel, name, message_id, ephemeral, responded: responded.is_some(), created, kind, source })
+    Ok(Live { app, user, channel, name, message_id, ephemeral, responded: responded.is_some(), created, kind, source, external: data["external"].as_bool().unwrap_or(false) })
 }
 
 #[derive(Deserialize, Default)]
@@ -349,7 +359,7 @@ async fn respond(state: &AppState, l: &Live, interaction: Uuid, d: &ResponseData
     let bot = bot_of(state, l.app).await?;
     let user = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1")).bind(l.user).fetch_one(&state.db).await?;
     let m = meta(l, &user, deferred, interaction);
-    if d.flags & EPHEMERAL != 0 {
+    if d.flags & EPHEMERAL != 0 || (l.external && l.channel.guild_id.is_some()) {
         let author = sqlx::query_as::<_, User>(&format!("SELECT {USER_COLS} FROM users WHERE id = $1")).bind(bot).fetch_one(&state.db).await?;
         let msg = json!({ "id": Uuid::now_v7(), "channel_id": l.channel.id, "author": author, "content": content, "created_at": Utc::now(), "edited_at": null, "pinned_at": null,
             "reactions": [], "attachments": [], "mentions": [], "mention_roles": [], "mention_everyone": false, "kind": "default", "embeds": embeds, "components": components, "interaction": m, "ephemeral": true });
