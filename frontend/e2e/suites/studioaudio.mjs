@@ -58,7 +58,13 @@ const cap = await pa.evaluate(async () => { const s = window.__gum.at(-1); retur
 ok('the mic is captured in stereo', cap.ch === 2 && stereo(cap.lr), `channelCount=${cap.ch} ${fmt(cap.lr)}`)
 
 console.log('-- live call')
-const live = await pb.evaluate(async () => { const s = window.__remote.filter((x) => x.getAudioTracks().some((t) => t.readyState === 'live')).at(-1); return s ? await window.__lr(s) : null })
+// Each peer has two audio transceivers (microphone, and screen-share audio, silent here): measure the loudest.
+const live = await pb.evaluate(async () => {
+  const live = window.__remote.filter((x) => x.getAudioTracks().some((t) => t.readyState === 'live'))
+  let best = null
+  for (const s of live) { const lr = await window.__lr(s); if (!best || lr[0] + lr[1] > best[0] + best[1]) best = lr }
+  return best
+})
 ok('bob hears alice in stereo', !!live && stereo(live), live ? fmt(live) : 'no remote stream')
 
 console.log('-- recording')
