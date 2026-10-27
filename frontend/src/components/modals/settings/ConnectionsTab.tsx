@@ -18,6 +18,7 @@ export default function ConnectionsTab() {
     try { const r = await api.get<{ url: string }>(`/connections/${p}/start`); window.location.href = r.url } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const setVisible = async (c: Connection, visible: boolean) => { try { await api.patch(`/users/@me/connections/${c.id}`, { visible }); await load() } catch (e) { pushToast((e as Error).message, 'error') } }
+  const setActivity = async (c: Connection, show_activity: boolean) => { try { await api.patch(`/users/@me/connections/${c.id}`, { show_activity }); await load() } catch (e) { pushToast((e as Error).message, 'error') } }
   const remove = async (c: Connection) => { try { await api.delete(`/users/@me/connections/${c.id}`); pushToast('Connection removed'); await load() } catch (e) { pushToast((e as Error).message, 'error') } }
   return (
     <div className="space-y-6" data-connections-tab>
@@ -44,6 +45,9 @@ export default function ConnectionsTab() {
                 <button type="button" onClick={() => remove(c)} title="Remove" className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:text-danger hover:bg-bg-3" data-connection-remove><Trash2 size={16} /></button>
               </div>
               <span data-connection-visible={c.visible ? '1' : '0'}><Toggle label="Display on profile" checked={c.visible} onChange={(v) => setVisible(c, v)} /></span>
+              {c.provider === 'spotify' && (c.live
+                ? <span data-connection-activity={c.show_activity ? '1' : '0'}><Toggle label="Display Spotify as your status" checked={!!c.show_activity} onChange={(v) => setActivity(c, v)} /></span>
+                : <p className="text-xs text-text-2" data-connection-relink>Link Spotify again to show what you're listening to and let friends listen along.</p>)}
             </li>
           ))}
         </ul>

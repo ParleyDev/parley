@@ -1,5 +1,5 @@
 //! Settings → Connections: link GitHub, GitLab, Twitch, Reddit and Spotify accounts with OAuth and show them on the
-//! profile (and use them for linked roles).
+//! profile (and use them for linked roles). Spotify also shows what you're listening to (routes/spotify.rs).
 //! Provider credentials live in Instance Settings (`oauth_providers`); `oauth_endpoint_override` points every
 //! provider URL at a stub for tests.
 
@@ -18,7 +18,15 @@ pub fn router() -> Router<AppState> {
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow, Clone)]
-pub struct Connection { pub id: Uuid, pub provider: String, pub external_id: String, pub name: String, pub url: String, pub visible: bool, pub creator: bool, pub created_at: chrono::DateTime<chrono::Utc> }
+pub struct Connection {
+    pub id: Uuid, pub provider: String, pub external_id: String, pub name: String, pub url: String, pub visible: bool, pub creator: bool,
+    /// Spotify: share what's playing as the user's status.
+    pub show_activity: bool,
+    /// Spotify: the link has the access needed for that (links made before it was asked for don't).
+    pub live: bool,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+const COLS: &str = "id, provider, external_id, name, url, visible, creator, show_activity, (access_token IS NOT NULL) AS live, created_at";
 
 /// Everything about a provider: where to send the user, where to swap the code, where to read the profile.
 /// `basic`: the token endpoint wants the client id and secret as HTTP Basic auth (Reddit, Spotify).
@@ -27,7 +35,7 @@ const GITHUB: Provider = Provider { authorize: "https://github.com/login/oauth/a
 const TWITCH: Provider = Provider { authorize: "https://id.twitch.tv/oauth2/authorize", token: "https://id.twitch.tv/oauth2/token", profile: "https://api.twitch.tv/helix/users", scope: "", label: "Twitch", basic: false };
 const GITLAB: Provider = Provider { authorize: "https://gitlab.com/oauth/authorize", token: "https://gitlab.com/oauth/token", profile: "https://gitlab.com/api/v4/user", scope: "read_user", label: "GitLab", basic: false };
 const REDDIT: Provider = Provider { authorize: "https://www.reddit.com/api/v1/authorize", token: "https://www.reddit.com/api/v1/access_token", profile: "https://oauth.reddit.com/api/v1/me", scope: "identity", label: "Reddit", basic: true };
-const SPOTIFY: Provider = Provider { authorize: "https://accounts.spotify.com/authorize", token: "https://accounts.spotify.com/api/token", profile: "https://api.spotify.com/v1/me", scope: "user-read-private", label: "Spotify", basic: true };
+const SPOTIFY: Provider = Provider { authorize: "https://accounts.spotify.com/authorize", token: "https://accounts.spotify.com/api/token", profile: "https://api.spotify.com/v1/me", scope: "user-read-private user-read-currently-playing user-modify-playback-state", label: "Spotify", basic: true };
 const YOUTUBE: Provider = Provider { authorize: "https://accounts.google.com/o/oauth2/v2/auth", token: "https://oauth2.googleapis.com/token", profile: "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true", scope: "https://www.googleapis.com/auth/youtube.readonly", label: "YouTube", basic: false };
 pub const PROVIDERS: [&str; 6] = ["github", "gitlab", "twitch", "youtube", "reddit", "spotify"];
 
@@ -62,19 +70,19 @@ pub(crate) async fn creds(state: &AppState, name: &str) -> AppResult<Creds> {
 fn redirect_uri(state: &AppState, name: &str) -> String { format!("{}/api/connections/{name}/callback", state.config.app_url.trim_end_matches('/')) }
 
 async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Connection>>> {
-    Ok(Json(sqlx::query_as::<_, Connection>("SELECT id, provider, external_id, name, url, visible, creator, created_at FROM connections WHERE user_id = $1 ORDER BY created_at").bind(uid).fetch_all(&state.db).await?))
+    Ok(Json(sqlx::query_as::<_, Connection>(&format!("SELECT {COLS} FROM connections WHERE user_id = $1 ORDER BY created_at")).bind(uid).fetch_all(&state.db).await?))
 }
 
 /// Visible connections of a user, for their profile.
 pub async fn visible_for(db: &sqlx::PgPool, uid: Uuid, include_hidden: bool) -> AppResult<Vec<Connection>> {
-    Ok(sqlx::query_as::<_, Connection>("SELECT id, provider, external_id, name, url, visible, creator, created_at FROM connections WHERE user_id = $1 AND (visible OR $2) ORDER BY created_at").bind(uid).bind(include_hidden).fetch_all(db).await?)
+    Ok(sqlx::query_as::<_, Connection>(&format!("SELECT {COLS} FROM connections WHERE user_id = $1 AND (visible OR $2) ORDER BY created_at")).bind(uid).bind(include_hidden).fetch_all(db).await?)
 }
 
 #[derive(Deserialize)]
-struct UpdateReq { visible: bool }
+struct UpdateReq { visible: Option<bool>, show_activity: Option<bool> }
 async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<UpdateReq>) -> AppResult<Json<Connection>> {
-    let row = sqlx::query_as::<_, Connection>("UPDATE connections SET visible = $3 WHERE id = $1 AND user_id = $2 RETURNING id, provider, external_id, name, url, visible, creator, created_at")
-        .bind(id).bind(uid).bind(req.visible).fetch_optional(&state.db).await?;
+    let row = sqlx::query_as::<_, Connection>(&format!("UPDATE connections SET visible = COALESCE($3, visible), show_activity = COALESCE($4, show_activity), polled_at = NULL WHERE id = $1 AND user_id = $2 RETURNING {COLS}"))
+        .bind(id).bind(uid).bind(req.visible).bind(req.show_activity).fetch_optional(&state.db).await?;
     row.map(Json).ok_or_else(|| AppError::NotFound("Connection not found".into()))
 }
 async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
@@ -147,7 +155,9 @@ async fn link(state: &AppState, p: &Provider, name: &str, uid: Uuid, code: &str,
         _ => { let u = prof.get("data").and_then(|d| d.get(0)).cloned().unwrap_or(Value::Null); let login = u.get("login").and_then(|v| v.as_str()).unwrap_or("").to_string(); (u.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(), u.get("display_name").and_then(|v| v.as_str()).unwrap_or(&login).to_string(), if login.is_empty() { String::new() } else { format!("https://twitch.tv/{login}") }) }
     };
     if external_id.is_empty() || display.is_empty() { return Err(AppError::BadRequest("the provider returned no account".into())) }
-    // Only creator links keep tokens (for syncing subscribers); a plain link stores none.
+    // Only creator links (for syncing subscribers) and Spotify (for the listening status) keep tokens; other links
+    // store none.
+    let keep = creator || name == "spotify";
     let refresh = tok.get("refresh_token").and_then(|v| v.as_str()).map(str::to_string);
     let expires = tok.get("expires_in").and_then(|v| v.as_i64()).map(|s| chrono::Utc::now() + chrono::Duration::seconds(s));
     sqlx::query(
@@ -155,10 +165,10 @@ async fn link(state: &AppState, p: &Provider, name: &str, uid: Uuid, code: &str,
          ON CONFLICT (user_id, provider, external_id) DO UPDATE SET name = EXCLUDED.name, url = EXCLUDED.url,
            creator = connections.creator OR EXCLUDED.creator,
            access_token = COALESCE(EXCLUDED.access_token, connections.access_token), refresh_token = COALESCE(EXCLUDED.refresh_token, connections.refresh_token),
-           token_expires_at = CASE WHEN EXCLUDED.access_token IS NULL THEN connections.token_expires_at ELSE EXCLUDED.token_expires_at END",
+           token_expires_at = CASE WHEN EXCLUDED.access_token IS NULL THEN connections.token_expires_at ELSE EXCLUDED.token_expires_at END, polled_at = NULL",
     )
     .bind(Uuid::now_v7()).bind(uid).bind(name).bind(&external_id).bind(&display).bind(&url).bind(creator)
-    .bind(if creator { Some(access.clone()) } else { None }).bind(if creator { refresh } else { None }).bind(if creator { expires } else { None })
+    .bind(if keep { Some(access.clone()) } else { None }).bind(if keep { refresh } else { None }).bind(if keep { expires } else { None })
     .execute(&state.db).await?;
     // Their new account may make them a subscriber in servers they're in.
     crate::routes::integrations::after_link(state.clone(), uid, name.to_string());

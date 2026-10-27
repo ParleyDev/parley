@@ -217,6 +217,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     let first = crate::ws::bus::connect(&state, user_id, &platform, idle).await;
     let online = crate::ws::bus::online_users(&state.db).await;
     let idle_users = crate::ws::bus::idle_users(&state.db).await;
+    let activities = crate::routes::spotify::ready_activities(&state.db).await;
     let platforms: serde_json::Map<String, Value> = crate::ws::bus::online_platforms(&state.db).await.into_iter().map(|(u, p)| (u.to_string(), json!(p))).collect();
     let mut voice_states = state.hub.voice_states_for_guilds(&guild_ids);
     voice_states.extend(state.hub.voice_states_for_channels(&dms.iter().map(|d| d.channel.id).collect::<Vec<_>>()));
@@ -243,6 +244,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             "online": online,
             "platforms": platforms,
             "idle": idle_users,
+            "activities": activities,
             "read_states": read_states.iter().map(|(c, m)| json!({"channel_id": c, "last_read_msg": m})).collect::<Vec<_>>(),
             "last_message_ids": last_ids.iter().map(|(c, m)| json!({"channel_id": c, "message_id": m})).collect::<Vec<_>>(),
             "voice_states": voice_states,

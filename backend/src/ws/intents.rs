@@ -48,7 +48,7 @@ fn needs(t: &str, dm: bool) -> Option<u32> {
         "GUILD_BAN_ADD" | "GUILD_BAN_REMOVE" => GUILD_MODERATION,
         "GUILD_EMOJIS_UPDATE" | "GUILD_STICKERS_UPDATE" | "SOUNDBOARD_UPDATE" => GUILD_EXPRESSIONS,
         "VOICE_STATE_UPDATE" => GUILD_VOICE_STATES,
-        "PRESENCE_UPDATE" => GUILD_PRESENCES,
+        "PRESENCE_UPDATE" | "ACTIVITY_UPDATE" => GUILD_PRESENCES,
         "EVENT_UPDATE" | "EVENT_START" => GUILD_SCHEDULED_EVENTS,
         t if t.starts_with("GUILD_") || t.starts_with("CHANNEL_") || t.starts_with("ROLE") || t.starts_with("THREAD_") => GUILDS,
         _ => return None,

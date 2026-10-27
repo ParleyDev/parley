@@ -2,7 +2,7 @@ import { pushCaption } from './captions'
 import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { VoiceInvite } from '../store'
-import type { Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, User, VoiceState } from './types'
+import type { Activity, Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, User, VoiceState } from './types'
 import { voice } from './voice'
 import type { E2eeSignal } from './e2ee'
 import { playSfx } from './sfx'
@@ -32,6 +32,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'THREAD_UPDATE'; d: ThreadInfo }
   | { t: 'TYPING_START'; d: { channel_id: string; user_id: string } }
   | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean; platforms?: string[]; idle?: boolean } }
+  | { t: 'ACTIVITY_UPDATE'; d: { user_id: string; activity: Activity | null } }
   | { t: 'USER_UPDATE'; d: User }
   | { t: 'USER_SETTINGS_UPDATE'; d: Partial<PrivateUser> }
   | { t: 'GUILD_CREATE'; d: Guild & { channels: Channel[]; roles: Role[] } }
@@ -228,6 +229,7 @@ function handle(ev: Ev) {
       }
       break
     }
+    case 'ACTIVITY_UPDATE': s.setActivity(ev.d.user_id, ev.d.activity); break
     case 'USER_SETTINGS_UPDATE': if (ev.d.client_settings) receiveSettings(ev.d.client_settings); if (s.user && s.token) s.setAuth(s.token, { ...s.user, ...ev.d } as PrivateUser); break
     case 'USER_UPDATE': s.upsertUser(ev.d); if (ev.d.id === s.user?.id && s.token) s.setAuth(s.token, { ...s.user, ...(ev.d as object) } as PrivateUser); break
     // A server we weren't in yet (joined from any device or link): its welcome screen is owed.

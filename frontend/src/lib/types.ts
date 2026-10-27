@@ -89,7 +89,13 @@ export interface UserProfile extends User {
   /** Linked external accounts the user shows on their profile. */
   connections?: Connection[]
 }
-export interface Connection { id: string; provider: string; name: string; url: string; visible: boolean; created_at?: string }
+export interface Connection { id: string; provider: string; name: string; url: string; visible: boolean; show_activity?: boolean; live?: boolean; created_at?: string }
+
+/** What someone is doing right now (Spotify: the song, and who listens along). Times are epoch ms. */
+export interface Activity {
+  type: 'listening'; name: 'Spotify'; track_id: string; title: string; artists: string[]; album: string; art: string; url: string
+  started_at: number; duration_ms: number; party?: string[]
+}
 
 export interface Review {
   id: string

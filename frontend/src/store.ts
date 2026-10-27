@@ -23,7 +23,7 @@ const writeLocal = (uid: string, channelId: string, rows: Message[]) => {
 /** The in-app "system app" that explains undelivered messages: a friendly frog. */
 const FROG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#57c26b"/><circle cx="20" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="44" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="20" cy="22" r="6" fill="#fff"/><circle cx="44" cy="22" r="6" fill="#fff"/><circle cx="21.5" cy="23" r="3" fill="#1f2937"/><circle cx="45.5" cy="23" r="3" fill="#1f2937"/><circle cx="22.5" cy="21.5" r="1" fill="#fff"/><circle cx="46.5" cy="21.5" r="1" fill="#fff"/><path d="M18 40q14 12 28 0" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/><circle cx="14" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/><circle cx="50" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/></svg>`)
 export const RIBBIT = { id: 'ribbit', username: 'ribbit', display_name: 'Ribbit', avatar_url: FROG, bio: '', status: '', created_at: new Date(0).toISOString(), banner_url: null, theme_primary: null, theme_accent: null, pronouns: '', name_primary: null } as unknown as User
-import type { Poll, ThreadInfo } from './lib/types'
+import type { Activity, Poll, ThreadInfo } from './lib/types'
 import type { Ban, Channel, DmChannel, Draft, Emoji, Guild, GuildEvent, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sound, Sticker, StudioSession, User, UserNote, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
@@ -99,6 +99,7 @@ export interface ReadyPayload {
   platforms?: Record<string, string[]>
   /** Online users who are away on every device (shown as Idle unless they picked a status). */
   idle?: string[]
+  activities?: Record<string, Activity>
   read_states: ReadState[]
   last_message_ids: { channel_id: string; message_id: string }[]
   voice_states: VoiceState[]
@@ -187,6 +188,9 @@ interface State {
   platforms: Record<string, string[]>
   /** Online users away on every device: no input for a while, or the mobile app in the background. */
   idle: Record<string, true>
+  /** What online users are doing (listening to Spotify). */
+  activities: Record<string, Activity>
+  setActivity: (userId: string, activity: Activity | null) => void
   users: Record<string, User>
   typing: Record<string, Record<string, number>>
   readStates: Record<string, string | null>
@@ -386,6 +390,7 @@ export const useStore = create<State>((set, get) => ({
   loadingMessages: {},
   online: {},
   platforms: {},
+  activities: {},
   idle: {},
   users: {},
   typing: {},
@@ -483,7 +488,7 @@ export const useStore = create<State>((set, get) => ({
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
       // READY is a snapshot taken when the socket connected; a verification that landed in between must not be undone.
-      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, platforms, idle, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
+      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, platforms, idle, activities: r.activities ?? {}, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events. The channel on screen keeps its
       // rows so nothing goes blank; ChatPane refreshes it when readyCount changes.
@@ -691,7 +696,13 @@ export const useStore = create<State>((set, get) => ({
     const online = { ...s.online }; const platforms = { ...s.platforms }; const idle = { ...s.idle }
     if (isOnline) { online[userId] = true; platforms[userId] = plats ?? s.platforms[userId] ?? [] } else { delete online[userId]; delete platforms[userId] }
     if (isOnline && away) idle[userId] = true; else delete idle[userId]
+    if (!isOnline && s.activities[userId]) { const activities = { ...s.activities }; delete activities[userId]; return { online, platforms, idle, activities } }
     return { online, platforms, idle }
+  }),
+  setActivity: (userId, a) => set((s) => {
+    const activities = { ...s.activities }
+    if (a) activities[userId] = a; else delete activities[userId]
+    return { activities }
   }),
   upsertUser: (u) => set((s) => {
     const members = { ...s.members }

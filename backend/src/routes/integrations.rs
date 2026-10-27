@@ -109,20 +109,23 @@ pub async fn is_managed(db: &sqlx::PgPool, rid: Uuid) -> AppResult<bool> {
     Ok(sqlx::query_as::<_, (bool,)>("SELECT EXISTS (SELECT 1 FROM guild_integrations WHERE role_id = $1)").bind(rid).fetch_one(db).await?.0)
 }
 
-/// A fresh access token for a creator connection, refreshing (and saving) it when it has expired.
-async fn token(state: &AppState, provider: &str, cid: Uuid) -> Result<(String, crate::routes::connections::Creds), String> {
+/// A fresh access token for a connection that keeps one (creator links, Spotify), refreshing (and saving) it when
+/// it has expired.
+pub(crate) async fn token(state: &AppState, provider: &str, cid: Uuid) -> Result<(String, crate::routes::connections::Creds), String> {
     let c = crate::routes::connections::creds(state, provider).await.map_err(|e| e.to_string())?;
     let (access, refresh, exp): (Option<String>, Option<String>, Option<chrono::DateTime<chrono::Utc>>) =
         sqlx::query_as("SELECT access_token, refresh_token, token_expires_at FROM connections WHERE id = $1").bind(cid).fetch_one(&state.db).await.map_err(|e| e.to_string())?;
     let fresh = exp.map(|e| e > chrono::Utc::now() + chrono::Duration::seconds(60)).unwrap_or(true);
     if let (Some(a), true) = (&access, fresh) { return Ok((a.clone(), c)); }
-    let Some(r) = refresh else { return Err("The channel's access expired: link it again".into()) };
-    let url = crate::routes::connections::with_override(if provider == "twitch" { "https://id.twitch.tv/oauth2/token" } else { "https://oauth2.googleapis.com/token" }, &c.over);
-    let tok: Value = reqwest::Client::new().post(url).form(&[("client_id", c.client_id.as_str()), ("client_secret", c.client_secret.as_str()), ("grant_type", "refresh_token"), ("refresh_token", r.as_str())])
+    let Some(r) = refresh else { return Err("The account's access expired: link it again".into()) };
+    let url = crate::routes::connections::with_override(match provider { "twitch" => "https://id.twitch.tv/oauth2/token", "spotify" => "https://accounts.spotify.com/api/token", _ => "https://oauth2.googleapis.com/token" }, &c.over);
+    let mut req = reqwest::Client::new().post(url);
+    if provider == "spotify" { req = req.basic_auth(&c.client_id, Some(&c.client_secret)); }
+    let tok: Value = req.form(&[("client_id", c.client_id.as_str()), ("client_secret", c.client_secret.as_str()), ("grant_type", "refresh_token"), ("refresh_token", r.as_str())])
         .send().await.map_err(|e| e.to_string())?.json().await.map_err(|e| e.to_string())?;
-    let Some(a) = tok.get("access_token").and_then(|v| v.as_str()) else { return Err("The channel's access was revoked: link it again".into()) };
+    let Some(a) = tok.get("access_token").and_then(|v| v.as_str()) else { return Err("The account's access was revoked: link it again".into()) };
     let exp = tok.get("expires_in").and_then(|v| v.as_i64()).map(|s| chrono::Utc::now() + chrono::Duration::seconds(s));
-    // Twitch rotates refresh tokens; Google keeps the old one.
+    // Twitch (and sometimes Spotify) rotate refresh tokens; Google keeps the old one.
     sqlx::query("UPDATE connections SET access_token = $2, token_expires_at = $3, refresh_token = COALESCE($4, refresh_token) WHERE id = $1")
         .bind(cid).bind(a).bind(exp).bind(tok.get("refresh_token").and_then(|v| v.as_str())).execute(&state.db).await.map_err(|e| e.to_string())?;
     Ok((a.to_string(), c))
