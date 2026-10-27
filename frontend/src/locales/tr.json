@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "Şablon bağlantısı, kodu veya JSON",
 "Upload .json": ".json yükle",
 "{n} channels": "{n} kanal",
-"{n} roles": "{n} rol"
+"{n} roles": "{n} rol",
+"Search {n} effects": "{n} efekt içinde ara",
+"Search {n} frames": "{n} çerçeve içinde ara"
 }

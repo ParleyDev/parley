@@ -1,0 +1,41 @@
+{
+ "source": "e2e",
+ "category": "Profile Frame",
+ "item_count": 1,
+ "items": [
+  {
+   "folder": "e2e_frame",
+   "name": "E2E Frame",
+   "description": "An orange tab on top, purple band below, green rails.",
+   "layout": {
+    "inner_width": 1200,
+    "overflow_top": 304,
+    "overflow_bottom": 212,
+    "overflow_horizontal": 56
+   },
+   "layers": [
+    {
+     "file": "front_staple_top.png",
+     "order": "front",
+     "type": "staple",
+     "anchor": "top",
+     "responsive": false
+    },
+    {
+     "file": "back_staple_bottom.png",
+     "order": "back",
+     "type": "staple",
+     "anchor": "bottom",
+     "responsive": false
+    },
+    {
+     "file": "front_rail_center.png",
+     "order": "front",
+     "type": "rail",
+     "anchor": "center",
+     "responsive": true
+    }
+   ]
+  }
+ ]
+}

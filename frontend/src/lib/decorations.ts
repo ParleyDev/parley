@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
  * `avatar_decoration` is either a CSS preset ("gold", see DECORATIONS) or `asset:<id>` for one of these.
  * Animated files are large, so lists draw the still first frame and only animate on hover or in profile cards.
  */
-export type AssetDecoration = { id: string; name: string; animated: boolean }
+export type AssetDecoration = { id: string; name: string; description?: string; animated: boolean }
 
 export const ASSET_PREFIX = 'asset:'
 export const assetDecorationId = (v: string | undefined | null) => (v?.startsWith(ASSET_PREFIX) ? v.slice(ASSET_PREFIX.length) : null)

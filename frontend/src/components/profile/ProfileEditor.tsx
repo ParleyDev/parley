@@ -13,6 +13,8 @@ import { useStore } from '../../store'
 import Avatar from '../Avatar'
 import { badgeIcon, HOUSES } from '../Flair'
 import { AssetNameplatePicker, isAssetNameplate, NameplateVideo } from '../Nameplate'
+import LayeredPicker, { layeredThumb } from './LayeredPicker'
+import { useAssetItem, type EffectItem, type FrameItem } from '../../lib/assetCatalog'
 import ProfileCard, { type ProfileEdit } from '../ProfileCard'
 import { WearServerTag } from '../ServerTag'
 import ImagePicker from '../modals/ImagePicker'
@@ -105,6 +107,8 @@ export default function ProfileEditor() {
   const base = d.primary ?? colorFor(user.id)
   const look = nameLook({ name_style: d.nameStyle })
   const draftUser = { ...user, display_name: d.display || user.display_name, pronouns: d.pronouns, custom_status: d.customStatus, bio: d.bio, avatar_url: d.avatar, avatar_decoration: d.decoration, name_style: d.nameStyle, name_primary: d.nameStyle.colors?.[0] ?? null, name_accent: d.nameStyle.colors?.[1] ?? null, banner_url: d.banner, theme_primary: d.primary, theme_accent: d.accent, profile_frame: d.frame, profile_effect: d.effect }
+  const effectItem = useAssetItem<EffectItem>('profile-effects', d.effect)
+  const frameItem = useAssetItem<FrameItem>('profile-frames', d.frame)
   const edit: ProfileEdit = {
     onDisplayName: set('display'), onPronouns: set('pronouns'), onCustomStatus: set('customStatus'),
     onAvatarFile: (f) => void upload('avatar', f), onAvatarRemove: () => set('avatar')(null), onBannerFile: (f) => void upload('banner', f), onBannerRemove: () => set('banner')(null),
@@ -176,11 +180,13 @@ export default function ProfileEditor() {
     effect: { title: t('Profile effect'), body: (
       <div className="flex flex-wrap gap-2">
         {[{ id: '', label: t('None'), glyph: '' }, ...PROFILE_EFFECTS].map((e) => <button key={e.id || 'none'} type="button" onClick={() => set('effect')(e.id)} className={chip(d.effect === e.id)} data-effect-option={e.id || 'none'} aria-pressed={d.effect === e.id}>{e.glyph} {e.label}</button>)}
+        <div className="w-full"><LayeredPicker kind="profile-effects" value={d.effect} onPick={set('effect')} /></div>
       </div>
     ) },
     frame: { title: t('Profile frame'), body: (
       <div className="flex flex-wrap gap-2">
         {[{ id: '', label: t('None') }, ...PROFILE_FRAMES].map((f) => <button key={f.id || 'none'} type="button" onClick={() => set('frame')(f.id)} className={chip(d.frame === f.id)} data-frame-option={f.id || 'none'} aria-pressed={d.frame === f.id}>{f.label}</button>)}
+        <div className="w-full"><LayeredPicker kind="profile-frames" value={d.frame} onPick={set('frame')} /></div>
       </div>
     ) },
     tag: { title: t('Clan tag'), body: (
@@ -236,8 +242,8 @@ export default function ProfileEditor() {
         <div>
           <Heading>{t('Profile Effect & Frame')}</Heading>
           <div className="grid grid-cols-2 gap-2">
-            <Tile section="effect" open={section} onOpen={setSection} label={t('Profile effect')} className="aspect-square flex items-center justify-center text-2xl">{PROFILE_EFFECTS.find((e) => e.id === d.effect)?.glyph ?? <span className="text-sm text-text-2">{t('None')}</span>}</Tile>
-            <Tile section="frame" open={section} onOpen={setSection} label={t('Profile frame')} className="aspect-square flex items-center justify-center text-sm">{PROFILE_FRAMES.find((f) => f.id === d.frame)?.label ?? <span className="text-text-2">{t('None')}</span>}</Tile>
+            <Tile section="effect" open={section} onOpen={setSection} label={t('Profile effect')} className="aspect-square flex items-center justify-center text-2xl">{PROFILE_EFFECTS.find((e) => e.id === d.effect)?.glyph ?? (effectItem && layeredThumb('profile-effects', effectItem) ? <img src={layeredThumb('profile-effects', effectItem)!} alt={effectItem.name} className="absolute inset-0 h-full w-full object-cover object-top" /> : <span className="text-sm text-text-2">{t('None')}</span>)}</Tile>
+            <Tile section="frame" open={section} onOpen={setSection} label={t('Profile frame')} className="aspect-square flex items-center justify-center text-sm">{PROFILE_FRAMES.find((f) => f.id === d.frame)?.label ?? (frameItem ? <img src={layeredThumb('profile-frames', frameItem)!} alt={frameItem.name} className="absolute inset-1 h-[calc(100%-8px)] w-[calc(100%-8px)] object-contain" /> : <span className="text-text-2">{t('None')}</span>)}</Tile>
           </div>
         </div>
         <div>

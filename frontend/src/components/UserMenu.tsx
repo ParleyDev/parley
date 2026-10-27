@@ -13,6 +13,7 @@ import AccountSwitcher from './AccountSwitcher'
 import Avatar from './Avatar'
 import { Badges } from './Flair'
 import ProfileEffect from './ProfileEffect'
+import ProfileFrame from './ProfileFrame'
 import StyledName from './StyledName'
 
 const statusDurations = () => [
@@ -113,6 +114,7 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
   return (
     <div className={`pop absolute bottom-full left-0 mb-2 z-40 w-[300px] max-w-[calc(100vw-16px)] rounded-xl border shadow-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={profileCardStyle(user)} data-user-menu data-profile-frame={user.profile_frame || undefined}>
       <ProfileEffect id={user.profile_effect} />
+      <ProfileFrame value={user.profile_frame} />
       <div className="relative h-[100px] rounded-t-xl bg-cover bg-center" style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }} />
       <div className="relative px-4 -mt-10 flex items-end gap-2">
         <div className="inline-block rounded-full" style={{ boxShadow: '0 0 0 5px #232428' }}><Avatar user={user} size={80} presence animate /></div>

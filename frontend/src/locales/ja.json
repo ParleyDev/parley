@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "テンプレートのリンク、コード、またはJSON",
 "Upload .json": ".jsonをアップロード",
 "{n} channels": "{n}件のチャンネル",
-"{n} roles": "{n}件のロール"
+"{n} roles": "{n}件のロール",
+"Search {n} effects": "{n} 件のエフェクトを検索",
+"Search {n} frames": "{n} 件のフレームを検索"
 }

@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "Link, código ou JSON do modelo",
 "Upload .json": "Enviar .json",
 "{n} channels": "{n} canais",
-"{n} roles": "{n} cargos"
+"{n} roles": "{n} cargos",
+"Search {n} effects": "Pesquisar {n} efeitos",
+"Search {n} frames": "Pesquisar {n} molduras"
 }

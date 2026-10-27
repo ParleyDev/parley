@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "رابط القالب أو رمزه أو JSON",
 "Upload .json": "رفع ملف .json",
 "{n} channels": "{n} قنوات",
-"{n} roles": "{n} أدوار"
+"{n} roles": "{n} أدوار",
+"Search {n} effects": "ابحث في {n} تأثيرًا",
+"Search {n} frames": "ابحث في {n} إطارًا"
 }

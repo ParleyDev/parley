@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "Sjabloonlink, code of JSON",
 "Upload .json": ".json uploaden",
 "{n} channels": "{n} kanalen",
-"{n} roles": "{n} rollen"
+"{n} roles": "{n} rollen",
+"Search {n} effects": "{n} effecten doorzoeken",
+"Search {n} frames": "{n} kaders doorzoeken"
 }

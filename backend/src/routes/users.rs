@@ -456,8 +456,12 @@ async fn update_me(
     }
     for (v, list, what) in [(&req.profile_frame, PROFILE_FRAMES, "frame"), (&req.nameplate, NAMEPLATES, "nameplate"), (&req.profile_effect, PROFILE_EFFECTS, "profile effect")] {
         if let Some(v) = v {
-            // Nameplates can also be files from the instance's assets folder (`asset:<id>`).
-            let asset = what == "nameplate" && crate::routes::assets::nameplate_exists(&state.config, v).await;
+            // Each can also come from the instance's assets folder (`asset:<id>`).
+            let asset = v.starts_with(crate::routes::assets::ASSET_PREFIX) && match what {
+                "nameplate" => crate::routes::assets::nameplate_exists(&state.config, v).await,
+                "frame" => crate::routes::asset_layers::frame_exists(&state.config, v).await,
+                _ => crate::routes::asset_layers::effect_exists(&state.config, v).await,
+            };
             if !v.is_empty() && !asset && !list.contains(&v.as_str()) { return Err(AppError::BadRequest(format!("Unknown {what}"))) }
         }
     }

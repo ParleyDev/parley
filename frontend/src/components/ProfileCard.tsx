@@ -12,6 +12,7 @@ import { nameLook, type NameLook } from '../lib/nameStyle'
 import { useStore } from '../store'
 import { frameClass } from '../lib/cosmetics'
 import ProfileEffect from './ProfileEffect'
+import ProfileFrame from './ProfileFrame'
 
 export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> {
   banner_url?: string | null
@@ -137,7 +138,8 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
   const ring = user.theme_primary ?? colorFor(user.id)
   const avatar = compact ? 64 : 80
   return (
-    <div className={`relative overflow-hidden rounded-2xl flex flex-col max-h-full ${frameClass(user.profile_frame)}`} style={{ background: theme, color: text }} data-profile-card data-profile-frame={user.profile_frame || undefined}>
+    <div className="relative flex flex-col max-h-full min-h-0">
+    <div className={`relative overflow-hidden rounded-2xl flex flex-col min-h-0 flex-1 ${frameClass(user.profile_frame)}`} style={{ background: theme, color: text }} data-profile-card data-profile-frame={user.profile_frame || undefined}>
       <ProfileEffect id={user.profile_effect} />
       <div className={`group/banner relative ${compact ? 'h-20' : 'h-[105px]'} w-full shrink-0 bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: 'rgba(0,0,0,0.18)' }}>
         {edit && (
@@ -273,6 +275,8 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
         </div>
         {footer && <div className="mt-3">{footer}</div>}
       </div>
+    </div>
+    <ProfileFrame value={user.profile_frame} />
     </div>
   )
 }

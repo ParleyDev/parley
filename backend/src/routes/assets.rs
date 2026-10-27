@@ -48,6 +48,9 @@ pub fn router() -> Router<AppState> {
 pub struct Decoration {
     pub id: String,
     pub name: String,
+    /// From the folder's `metadata.json` when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub animated: bool,
     #[serde(skip)]
     path: PathBuf,
@@ -133,9 +136,21 @@ fn is_animated(path: &FsPath, ct: &str) -> bool {
 
 pub fn scan(dir: &FsPath) -> Index { scan_kind(dir, false) }
 
-/// Index a kind's folder; `video` also takes WebM / MP4 loops.
+/// A kind's `metadata.json` (`{items: [{file | folder, name, description, ...}]}`), keyed by file or folder name.
+pub fn read_metadata(dir: &FsPath) -> HashMap<String, serde_json::Value> {
+    let Ok(text) = std::fs::read_to_string(dir.join("metadata.json")) else { return HashMap::new() };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { tracing::warn!(dir = %dir.display(), "metadata.json is not valid JSON"); return HashMap::new() };
+    v["items"].as_array().map(|items| items.iter().filter_map(|it| {
+        let key = it["file"].as_str().or_else(|| it["folder"].as_str())?;
+        Some((key.to_string(), it.clone()))
+    }).collect()).unwrap_or_default()
+}
+
+/// Index a kind's folder; `video` also takes WebM / MP4 loops. Names and descriptions come from `metadata.json`
+/// when the folder has one, else from the file name.
 pub fn scan_kind(dir: &FsPath, video: bool) -> Index {
     let Ok(rd) = std::fs::read_dir(dir) else { return Index::default() };
+    let meta_by_file = read_metadata(dir);
     let mut files: Vec<_> = rd.flatten().filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false)).collect();
     files.sort_by_key(|e| e.file_name());
     let mut idx = Index::default();
@@ -150,7 +165,10 @@ pub fn scan_kind(dir: &FsPath, video: bool) -> Index {
         let id = asset_id(&stem);
         if id.is_empty() || idx.by_id.contains_key(&id) { continue; }
         let mtime = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
-        let d = Decoration { animated: is_animated(&path, ct), name: display_name(&stem), tag: format!("{mtime:x}-{:x}", meta.len()), id: id.clone(), path, content_type: ct };
+        let m = meta_by_file.get(&name);
+        let title = m.and_then(|m| m["name"].as_str()).map(str::trim).filter(|n| !n.is_empty()).map(|n| { let mut c = n.chars(); c.next().map(|f| f.to_uppercase().chain(c).collect::<String>()).unwrap_or_default() });
+        let description = m.and_then(|m| m["description"].as_str()).map(str::trim).filter(|d| !d.is_empty()).map(str::to_string);
+        let d = Decoration { animated: is_animated(&path, ct), name: title.unwrap_or_else(|| display_name(&stem)), description, tag: format!("{mtime:x}-{:x}", meta.len()), id: id.clone(), path, content_type: ct };
         idx.by_id.insert(id, idx.list.len());
         idx.list.push(d);
     }

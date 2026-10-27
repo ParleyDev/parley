@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "Ссылка на шаблон, код или JSON",
 "Upload .json": "Загрузить .json",
 "{n} channels": "Каналов: {n}",
-"{n} roles": "Ролей: {n}"
+"{n} roles": "Ролей: {n}",
+"Search {n} effects": "Искать среди эффектов ({n})",
+"Search {n} frames": "Искать среди рамок ({n})"
 }

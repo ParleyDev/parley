@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "模板链接、代码或 JSON",
 "Upload .json": "上传 .json",
 "{n} channels": "{n} 个频道",
-"{n} roles": "{n} 个身份组"
+"{n} roles": "{n} 个身份组",
+"Search {n} effects": "搜索 {n} 个特效",
+"Search {n} frames": "搜索 {n} 个头像框"
 }

@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "Enlace, código o JSON de la plantilla",
 "Upload .json": "Subir .json",
 "{n} channels": "{n} canales",
-"{n} roles": "{n} roles"
+"{n} roles": "{n} roles",
+"Search {n} effects": "Buscar {n} efectos",
+"Search {n} frames": "Buscar {n} marcos"
 }

@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "Link, codice o JSON del modello",
 "Upload .json": "Carica .json",
 "{n} channels": "{n} canali",
-"{n} roles": "{n} ruoli"
+"{n} roles": "{n} ruoli",
+"Search {n} effects": "Cerca tra {n} effetti",
+"Search {n} frames": "Cerca tra {n} cornici"
 }

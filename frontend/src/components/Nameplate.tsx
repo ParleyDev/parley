@@ -25,7 +25,7 @@ export function NameplateVideo({ value, hoverRoot }: { value?: string | null; ho
   return <video ref={ref} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />
 }
 
-interface AssetNameplate { id: string; name: string }
+interface AssetNameplate { id: string; name: string; description?: string }
 
 /** Settings: the instance's nameplates (assets folder), as previews that play on hover. Loads them as they scroll in. */
 export function AssetNameplatePicker({ value, onPick }: { value: string; onPick: (v: string) => void }) {
@@ -34,7 +34,7 @@ export function AssetNameplatePicker({ value, onPick }: { value: string; onPick:
   const [q, setQ] = useState('')
   useEffect(() => { fetch('/api/assets/nameplates').then((r) => r.json()).then(setList).catch(() => setList([])) }, [])
   if (!list || list.length === 0) return null
-  const shown = list.filter((n) => !q || n.name.toLowerCase().includes(q.toLowerCase()))
+  const shown = list.filter((n) => !q || n.name.toLowerCase().includes(q.toLowerCase()) || !!n.description?.toLowerCase().includes(q.toLowerCase()))
   return (
     <div className="mt-2 space-y-2" data-asset-nameplates={list.length}>
       <input className="input h-8 text-sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search {n} nameplates', { n: list.length })} data-asset-nameplate-search />
@@ -42,7 +42,7 @@ export function AssetNameplatePicker({ value, onPick }: { value: string; onPick:
         {shown.map((n) => {
           const v = `asset:${n.id}`
           return (
-            <button key={n.id} type="button" onClick={() => onPick(v)} aria-pressed={value === v} title={n.name}
+            <button key={n.id} type="button" onClick={() => onPick(v)} aria-pressed={value === v} title={n.description ? `${n.name}: ${n.description}` : n.name}
               className={`relative isolate overflow-hidden h-11 rounded-lg border text-left px-2.5 text-sm font-semibold ${value === v ? 'border-accent ring-2 ring-accent/40' : 'border-line hover:border-text-2'}`} data-nameplate-option={v}>
               <LazyVideo src={nameplateSrc(v)} />
               <span className="relative truncate block" style={{ textShadow: '0 1px 2px rgba(0,0,0,.8)' }}>{n.name}</span>

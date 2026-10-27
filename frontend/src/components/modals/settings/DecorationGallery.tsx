@@ -13,7 +13,7 @@ export default function DecorationGallery({ user, value, onChange }: { user: { i
   const all = useAssetDecorations()
   const [q, setQ] = useState('')
   const [shown, setShown] = useState(PAGE)
-  const matches = useMemo(() => { const n = q.trim().toLowerCase(); return (all ?? []).filter((d) => !n || d.name.toLowerCase().includes(n) || d.id.includes(n)) }, [all, q])
+  const matches = useMemo(() => { const n = q.trim().toLowerCase(); return (all ?? []).filter((d) => !n || d.name.toLowerCase().includes(n) || d.id.includes(n) || !!d.description?.toLowerCase().includes(n)) }, [all, q])
   if (!all?.length) return null
   // Keep the saved one visible even when it sits beyond the first page.
   const page = matches.slice(0, shown)
@@ -31,7 +31,7 @@ export default function DecorationGallery({ user, value, onChange }: { user: { i
         {page.map((d) => {
           const v = ASSET_PREFIX + d.id
           return (
-            <button key={d.id} type="button" onClick={() => onChange(v)} title={d.name} aria-label={d.name} aria-pressed={value === v} data-decoration-option={v}
+            <button key={d.id} type="button" onClick={() => onChange(v)} title={d.description ? `${d.name}: ${d.description}` : d.name} aria-label={d.name} aria-pressed={value === v} data-decoration-option={v}
               className={`flex flex-col items-center gap-1 rounded-lg border p-2 ${value === v ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`}>
               <span className="p-1.5"><Avatar user={user} decoration={v} size={40} /></span>
               <span className="w-full truncate text-center text-[11px] text-text-2">{d.name}</span>

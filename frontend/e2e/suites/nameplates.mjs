@@ -18,7 +18,7 @@ const mk = async (u, path) => {
 
 console.log('-- from the assets folder')
 const list = await fetch(`${WEB}/api/assets/nameplates`).then((r) => r.json())
-ok('the instance lists its nameplate files', list.some((n) => n.id === 'e2e_wave' && n.name === 'E2e Wave' && n.animated), JSON.stringify(list))
+ok('the instance lists its nameplate files, named by metadata.json', list.some((n) => n.id === 'e2e_wave' && n.name === 'Ocean wave' && n.description === 'A gentle test wave.' && n.animated), JSON.stringify(list))
 ok('and serves them as video', (await fetch(`${WEB}/api/assets/nameplates/e2e_wave`)).headers.get('content-type') === 'video/webm')
 ok('unknown asset nameplates are refused', (await raw(a.token, 'PATCH', '/users/@me', { nameplate: 'asset:nope' })).status === 400)
 const pa = await mk(a, `/channels/${g.id}/${ch.id}`)

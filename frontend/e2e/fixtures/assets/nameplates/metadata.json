@@ -1,0 +1,12 @@
+{
+ "source": "e2e",
+ "category": "Nameplate",
+ "item_count": 1,
+ "items": [
+  {
+   "file": "e2e_wave.webm",
+   "name": "ocean wave",
+   "description": "A gentle test wave."
+  }
+ ]
+}

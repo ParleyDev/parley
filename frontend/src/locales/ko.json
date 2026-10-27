@@ -3322,5 +3322,7 @@
 "Template link, code or JSON": "템플릿 링크, 코드 또는 JSON",
 "Upload .json": ".json 업로드",
 "{n} channels": "채널 {n}개",
-"{n} roles": "역할 {n}개"
+"{n} roles": "역할 {n}개",
+"Search {n} effects": "효과 {n}개 검색",
+"Search {n} frames": "프레임 {n}개 검색"
 }

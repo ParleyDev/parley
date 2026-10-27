@@ -17,6 +17,7 @@ import { Badges, ClanTag } from './Flair'
 import { colorRole } from './StyledName'
 import { frameClass } from '../lib/cosmetics'
 import ProfileEffect from './ProfileEffect'
+import ProfileFrame from './ProfileFrame'
 import { profileCardStyle, profileColors } from '../lib/profileLook'
 import { ActivityCard } from './SpotifyActivity'
 import ContextMenu, { type MenuEntry, type MenuState } from './ContextMenu'
@@ -162,6 +163,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   return (
     <div className={`relative w-full rounded-lg border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined}>
       <ProfileEffect id={user.profile_effect} />
+      <ProfileFrame value={user.profile_frame} />
       {/* Banner with overlaid buttons */}
       <div className="relative h-[105px] rounded-t-lg bg-cover bg-center" style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }}>
         <div className="absolute right-3 top-3 flex gap-2">
