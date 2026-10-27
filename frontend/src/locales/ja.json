@@ -3257,5 +3257,11 @@
 "Show activity": "アクティビティを表示",
 "Unlink": "リンク解除",
 "What they can see": "見られる内容",
-"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "保護者がこれをスキャンするか、ファミリーセンターでコードを入力します。1回のみ有効で、{time}まで使えます。"
+"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "保護者がこれをスキャンするか、ファミリーセンターでコードを入力します。1回のみ有効で、{time}まで使えます。",
+"App icon": "アプリアイコン",
+"Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.": "ブラウザのタブのアイコンと、デスクトップアプリではウィンドウ・タスクバー・トレイのアイコンを変更します。インストール済みのWebアプリはインストール時のアイコンのままです。",
+"Classic": "クラシック",
+"Mint": "ミント",
+"Paper": "ペーパー",
+"Violet": "バイオレット"
 }

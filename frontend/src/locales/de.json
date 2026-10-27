@@ -3257,5 +3257,11 @@
 "Show activity": "Aktivität anzeigen",
 "Unlink": "Verknüpfung aufheben",
 "What they can see": "Das kann man sehen",
-"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Dein Elternteil scannt das oder gibt den Code im Familienzentrum ein. Er funktioniert nur einmal, bis {time}."
+"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Dein Elternteil scannt das oder gibt den Code im Familienzentrum ein. Er funktioniert nur einmal, bis {time}.",
+"App icon": "App-Symbol",
+"Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.": "Ändert das Symbol im Browser-Tab und in der Desktop-App das Fenster-, Taskleisten- und Infobereichssymbol. Eine installierte Web-App behält das Symbol, mit dem sie installiert wurde.",
+"Classic": "Klassisch",
+"Mint": "Minze",
+"Paper": "Papier",
+"Violet": "Violett"
 }

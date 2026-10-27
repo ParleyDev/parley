@@ -3257,5 +3257,11 @@
 "Show activity": "显示活动",
 "Unlink": "解除关联",
 "What they can see": "可见内容",
-"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "你的家长扫描此码，或在其家庭中心输入代码。仅可使用一次，有效期至 {time}。"
+"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "你的家长扫描此码，或在其家庭中心输入代码。仅可使用一次，有效期至 {time}。",
+"App icon": "应用图标",
+"Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.": "更改浏览器标签页图标；在桌面应用中还会更改窗口、任务栏和托盘图标。已安装的网页应用会保留安装时的图标。",
+"Classic": "经典",
+"Mint": "薄荷",
+"Paper": "纸张",
+"Violet": "紫罗兰"
 }

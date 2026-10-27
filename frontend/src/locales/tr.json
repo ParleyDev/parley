@@ -3257,5 +3257,11 @@
 "Show activity": "Etkinliği göster",
 "Unlink": "Bağlantıyı kaldır",
 "What they can see": "Neleri görebilir",
-"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Ebeveynin bunu tarar ya da kodu kendi Aile Merkezi'ne girer. Bir kez çalışır, {time} saatine kadar."
+"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Ebeveynin bunu tarar ya da kodu kendi Aile Merkezi'ne girer. Bir kez çalışır, {time} saatine kadar.",
+"App icon": "Uygulama simgesi",
+"Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.": "Tarayıcı sekmesindeki simgeyi, masaüstü uygulamasında ise pencere, görev çubuğu ve tepsi simgesini değiştirir. Yüklenmiş bir web uygulaması yüklendiği simgeyi korur.",
+"Classic": "Klasik",
+"Mint": "Nane",
+"Paper": "Kâğıt",
+"Violet": "Mor"
 }

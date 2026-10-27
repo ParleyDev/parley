@@ -3257,5 +3257,11 @@
 "Show activity": "활동 보기",
 "Unlink": "연결 해제",
 "What they can see": "볼 수 있는 내용",
-"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "부모님이 이 코드를 스캔하거나 가족 센터에서 코드를 입력해요. 한 번만 사용할 수 있으며 {time}까지 유효해요."
+"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "부모님이 이 코드를 스캔하거나 가족 센터에서 코드를 입력해요. 한 번만 사용할 수 있으며 {time}까지 유효해요.",
+"App icon": "앱 아이콘",
+"Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.": "브라우저 탭 아이콘과, 데스크톱 앱에서는 창·작업 표시줄·트레이 아이콘을 바꿔요. 설치된 웹 앱은 설치할 때의 아이콘을 유지해요.",
+"Classic": "클래식",
+"Mint": "민트",
+"Paper": "페이퍼",
+"Violet": "바이올렛"
 }

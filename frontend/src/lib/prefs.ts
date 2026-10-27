@@ -71,6 +71,8 @@ export interface ClientPrefs {
   /** Include the call's voices, and your own, in clips. */
   clipVoices: boolean
   clipMyVoice: boolean
+  /** Settings → Appearance → App icon: the tab icon, and the desktop app's window and tray icon. */
+  appIcon: string
   // Advanced
   /** Developer Mode: "Copy … ID" entries in context menus. */
   developerMode: boolean
@@ -82,7 +84,7 @@ export const DEFAULT_PREFS: ClientPrefs = {
   accent: null, messageGap: 17, zoom: 100, compactAvatars: false, roleColors: 'name',
   saturation: 100, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, ttsPlayback: true, entranceSounds: true, warnLinks: true, spellcheck: true, doubleTapReact: true, quickReaction: '❤️', focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
   inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
-  streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true, streamerAuto: false, clips: false, clipSeconds: 30, clipVoices: true, clipMyVoice: true,
+  streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true, streamerAuto: false, clips: false, clipSeconds: 30, clipVoices: true, clipMyVoice: true, appIcon: 'default',
   developerMode: true,
   trustedHosts: [],
 }
@@ -105,7 +107,7 @@ function load(): ClientPrefs {
       inlineAttachments: bool(p.inlineAttachments, true), linkMedia: bool(p.linkMedia, true), embeds: bool(p.embeds, true), emoticons: bool(p.emoticons, true), showReactions: bool(p.showReactions, true),
       spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'),
       streamer: bool(p.streamer, false), streamerHideInfo: bool(p.streamerHideInfo, true), streamerHideInvites: bool(p.streamerHideInvites, true), streamerMuteSounds: bool(p.streamerMuteSounds, true), streamerMuteNotifications: bool(p.streamerMuteNotifications, true), streamerAuto: bool(p.streamerAuto, false),
-      clips: bool(p.clips, false), clipSeconds: oneOf(p.clipSeconds, [15, 30, 60] as const, 30), clipVoices: bool(p.clipVoices, true), clipMyVoice: bool(p.clipMyVoice, true),
+      clips: bool(p.clips, false), clipSeconds: oneOf(p.clipSeconds, [15, 30, 60] as const, 30), clipVoices: bool(p.clipVoices, true), clipMyVoice: bool(p.clipMyVoice, true), appIcon: typeof p.appIcon === 'string' && /^[a-z]{1,20}$/.test(p.appIcon) ? p.appIcon : 'default',
       developerMode: bool(p.developerMode, true),
       trustedHosts: Array.isArray(p.trustedHosts) ? p.trustedHosts.filter((h): h is string => typeof h === 'string').slice(0, 500) : [],
     }

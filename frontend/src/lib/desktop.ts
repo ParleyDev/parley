@@ -25,6 +25,8 @@ export const desktop = {
   settings: () => invoke()?.<DesktopSettings>('desktop_settings') ?? Promise.reject(new Error('Not in the desktop app')),
   /** Watch this key for push to talk while the window is in the background (null stops). False when the shell can't. */
   pttKey: (code: string | null): Promise<boolean> => invoke()?.<boolean>('set_ptt_key', { code }).catch(() => false) ?? Promise.resolve(false),
+  /** The window, taskbar and tray icon (PNG bytes); empty resets it. */
+  appIcon(png: Uint8Array) { invoke()?.('set_app_icon', { png: Array.from(png) }).catch(() => {}) },
   /** Is OBS or XSplit running? Null when the shell can't tell (older shells, browsers). */
   streamingApps: (): Promise<boolean | null> => invoke()?.<boolean>('streaming_apps').catch(() => null) ?? Promise.resolve(null),
   setSettings: (s: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean; closeToTray?: boolean; minimizeToTray?: boolean }) => invoke()?.<DesktopSettings>('set_desktop_settings', s) ?? Promise.reject(new Error('Not in the desktop app')),

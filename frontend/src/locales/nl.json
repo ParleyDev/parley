@@ -3257,5 +3257,11 @@
 "Show activity": "Activiteit tonen",
 "Unlink": "Ontkoppelen",
 "What they can see": "Wat ze kunnen zien",
-"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Je ouder scant dit of voert de code in bij zijn of haar Gezinscentrum. Werkt één keer, tot {time}."
+"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Je ouder scant dit of voert de code in bij zijn of haar Gezinscentrum. Werkt één keer, tot {time}.",
+"App icon": "App-pictogram",
+"Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.": "Verandert het pictogram in je browsertabblad en in de desktop-app het venster-, taakbalk- en systeemvakpictogram. Een geïnstalleerde web-app houdt het pictogram waarmee hij is geïnstalleerd.",
+"Classic": "Klassiek",
+"Mint": "Mint",
+"Paper": "Papier",
+"Violet": "Violet"
 }

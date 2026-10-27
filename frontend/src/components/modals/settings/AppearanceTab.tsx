@@ -6,6 +6,7 @@ import { renderMarkdown } from '../../../lib/markdown'
 import { t, useT } from '../../../lib/i18n'
 import { ACCENTS, setPrefs, usePrefs } from '../../../lib/prefs'
 import { Toggle } from '../SettingsShell'
+import { APP_ICONS, iconUrl } from '../../../lib/appIcon'
 
 const themes = (): { id: Theme; label: string; icon: React.ReactNode }[] => [
   { id: 'dark', label: t('Dark'), icon: <Moon size={16} /> },
@@ -54,6 +55,8 @@ export default function AppearanceTab() {
         </div>
         {resolvedTheme(a) === 'light' && <p className="mt-2 text-xs text-text-2">{t('These apply when the dark theme is showing.')}</p>}
       </section>
+
+      <AppIconPicker />
 
       <section>
         <h3 className="label">{t('Accent colour')}</h3>
@@ -127,5 +130,25 @@ export default function AppearanceTab() {
 
       <p className="text-xs text-text-2">{t('Reduced motion and high contrast moved to the Accessibility tab.')}</p>
     </div>
+  )
+}
+
+/** App icon: the tab icon (and the desktop app's window, taskbar and tray icon). */
+function AppIconPicker() {
+  const t = useT()
+  const cur = usePrefs().appIcon
+  return (
+    <section data-app-icons>
+      <h3 className="label">{t('App icon')}</h3>
+      <div className="flex flex-wrap gap-3">
+        {APP_ICONS.map((i) => (
+          <button key={i.id} type="button" onClick={() => setPrefs({ appIcon: i.id })} className="flex flex-col items-center gap-1 text-xs" data-app-icon={i.id} aria-pressed={cur === i.id} title={t(i.label)}>
+            <span className={`h-14 w-14 rounded-2xl border-2 p-0.5 ${cur === i.id ? 'border-accent' : 'border-transparent'}`}><img src={iconUrl(i)} alt="" className="h-full w-full" /></span>
+            <span className={cur === i.id ? 'text-text-0 font-semibold' : 'text-text-2'}>{t(i.label)}</span>
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-text-2">{t('Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.')}</p>
+    </section>
   )
 }

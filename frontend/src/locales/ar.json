@@ -3257,5 +3257,11 @@
 "Show activity": "عرض النشاط",
 "Unlink": "إلغاء الربط",
 "What they can see": "ما يمكنهم رؤيته",
-"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "يمسح والدك هذا الرمز أو يدخله في مركز العائلة الخاص به. يعمل مرة واحدة فقط، حتى {time}."
+"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "يمسح والدك هذا الرمز أو يدخله في مركز العائلة الخاص به. يعمل مرة واحدة فقط، حتى {time}.",
+"App icon": "أيقونة التطبيق",
+"Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.": "تغيّر أيقونة علامة التبويب في المتصفح، وفي تطبيق سطح المكتب أيقونة النافذة وشريط المهام وشريط النظام. يحتفظ تطبيق الويب المثبّت بالأيقونة التي ثُبّت بها.",
+"Classic": "كلاسيكي",
+"Mint": "نعناعي",
+"Paper": "ورقي",
+"Violet": "بنفسجي"
 }

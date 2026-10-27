@@ -3257,5 +3257,11 @@
 "Show activity": "Pokaż aktywność",
 "Unlink": "Rozłącz",
 "What they can see": "Co mogą zobaczyć",
-"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Twój rodzic skanuje to lub wpisuje kod w swoim Centrum rodzinnym. Działa raz, do {time}."
+"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Twój rodzic skanuje to lub wpisuje kod w swoim Centrum rodzinnym. Działa raz, do {time}.",
+"App icon": "Ikona aplikacji",
+"Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.": "Zmienia ikonę karty przeglądarki, a w aplikacji desktopowej ikonę okna, paska zadań i zasobnika. Zainstalowana aplikacja webowa zachowuje ikonę z instalacji.",
+"Classic": "Klasyczna",
+"Mint": "Miętowa",
+"Paper": "Papier",
+"Violet": "Fioletowa"
 }

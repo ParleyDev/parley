@@ -126,6 +126,16 @@ fn flash(window: WebviewWindow) {
     if !window.is_focused().unwrap_or(true) { let _ = window.request_user_attention(Some(UserAttentionType::Informational)); }
 }
 
+/// Settings → Appearance → App icon: the window, taskbar and tray icon (a PNG the page draws). Empty resets it.
+#[tauri::command]
+fn set_app_icon(app: AppHandle, window: WebviewWindow, png: Vec<u8>) -> Result<(), String> {
+    if png.len() > 512 * 1024 { return Err("icon too large".into()) }
+    let icon = if png.is_empty() { app.default_window_icon().cloned().ok_or("no default icon")? } else { tauri::image::Image::from_bytes(&png).map_err(|e| e.to_string())?.to_owned() };
+    window.set_icon(icon.clone()).map_err(|e| e.to_string())?;
+    if let Some(tray) = app.tray_by_id("main") { let _ = tray.set_icon(Some(icon)); }
+    Ok(())
+}
+
 #[tauri::command]
 fn set_zoom(window: WebviewWindow, factor: f64) -> Result<(), String> {
     if !factor.is_finite() { return Err("bad zoom".into()); }
@@ -283,7 +293,7 @@ pub fn run() {
         .manage(Pending(Mutex::new(None)))
         .manage(Ptt::default())
         .manage(Tray(std::sync::atomic::AtomicBool::new(false)))
-        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps])
+        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon])
         .setup(|app| {
             let handle = app.handle().clone();
             // AppImages and dev builds aren't registered for parley:// by an installer.

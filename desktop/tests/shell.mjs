@@ -37,6 +37,11 @@ const page = (step) => `<!doctype html><meta charset=utf-8><title>shell test</ti
     await t('tray', () => inv('set_desktop_settings', { closeToTray: false, minimizeToTray: true }))
     setInterval(() => inv('streaming_apps').then((v) => fetch('/obs/' + v, { method: 'POST', body: '{}' })), 400)
     await t('obs', () => inv('streaming_apps'))
+    const c = document.createElement('canvas'); c.width = c.height = 64; c.getContext('2d').fillRect(0, 0, 64, 64)
+    const png = new Uint8Array(await (await new Promise((r) => c.toBlob(r, 'image/png'))).arrayBuffer())
+    await t('icon', () => inv('set_app_icon', { png: Array.from(png) }))
+    await t('iconReset', () => inv('set_app_icon', { png: [] }))
+    await t('iconBad', () => inv('set_app_icon', { png: [1, 2, 3] }))
   }
   if (inv && ${step} === 2) await t('off', () => inv('set_desktop_settings', { autostart: false }))
   await fetch('/result/${step}', { method: 'POST', body: JSON.stringify(out) })
@@ -81,6 +86,8 @@ ok('OBS running is seen', await wait(() => obs.slice(seen).includes('true'), 500
 obsProc.kill()
 const gone = obs.length
 ok('and its quitting too', await wait(() => obs.slice(gone + 1).includes('false'), 5000))
+
+ok('the app icon can change, reset, and refuses junk', r.icon === 'ok' && r.iconReset === 'ok' && String(r.iconBad).startsWith('error'), JSON.stringify({ icon: r.icon, reset: r.iconReset, bad: r.iconBad }))
 
 console.log('-- push to talk in the background')
 ok('the shell watches a known key, and refuses one it cannot', r.ptt === true && r.pttBad === false, JSON.stringify({ ptt: r.ptt, pttBad: r.pttBad }))

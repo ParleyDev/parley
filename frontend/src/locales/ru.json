@@ -3257,5 +3257,11 @@
 "Show activity": "Показать активность",
 "Unlink": "Отвязать",
 "What they can see": "Что можно увидеть",
-"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Твой родитель сканирует это или вводит код в своём Семейном центре. Работает один раз, до {time}."
+"Your parent scans this or enters the code in their Family Center. It works once, until {time}.": "Твой родитель сканирует это или вводит код в своём Семейном центре. Работает один раз, до {time}.",
+"App icon": "Значок приложения",
+"Changes the icon in your browser tab, and in the desktop app the window, taskbar and tray icon. An installed web app keeps the icon it was installed with.": "Меняет значок вкладки браузера, а в настольном приложении — значок окна, панели задач и трея. Установленное веб-приложение сохраняет значок, с которым его установили.",
+"Classic": "Классический",
+"Mint": "Мятный",
+"Paper": "Бумага",
+"Violet": "Фиолетовый"
 }
