@@ -1,8 +1,8 @@
-import { Check, ChevronRight, Clock, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { Check, Clock, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { nameLook } from '../lib/nameStyle'
 import { roleLook } from './StyledName'
 import { locale, useT } from '../lib/i18n'
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
@@ -19,6 +19,9 @@ import { frameClass } from '../lib/cosmetics'
 import ProfileEffect from './ProfileEffect'
 import { profileCardStyle, profileColors } from '../lib/profileLook'
 import { ActivityCard } from './SpotifyActivity'
+import ContextMenu, { type MenuEntry, type MenuState } from './ContextMenu'
+import ImageLightbox from './modals/ImageLightbox'
+import { createPortal } from 'react-dom'
 
 export const POPOUT_W = 300
 
@@ -59,8 +62,16 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const [quick, setQuick] = useState('')
   const [sending, setSending] = useState(false)
   const [emoji, setEmoji] = useState<DOMRect | null>(null)
-  const [menu, setMenu] = useState(false)
-  const [friendMenu, setFriendMenu] = useState(false)
+  const [menu, setMenu] = useState<MenuState | null>(null)
+  const [friendMenu, setFriendMenu] = useState<MenuState | null>(null)
+  const [viewAvatar, setViewAvatar] = useState(false)
+  // The avatar viewer sits over this card: Escape closes it first.
+  useLayoutEffect(() => {
+    if (!viewAvatar) return
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); setViewAvatar(false) } }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [viewAvatar])
   const [bioClamped, setBioClamped] = useState(false)
   const bioRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -100,7 +111,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const block = () => { onClose(); openModal({ kind: 'confirm', title: t('Block {name}', { name: user.display_name }), body: t('{name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.', { name: user.display_name }), danger: true, confirmLabel: t('Block'), action: () => act(() => api.put(`/users/@me/relationships/${user.id}/block`)) }) }
 
   const friendBtn = !isMe && (
-    rel === 'friend' ? { title: t('Friend'), icon: <UserCheck size={18} />, fn: () => setFriendMenu((m) => !m) }
+    rel === 'friend' ? { title: t('Friend'), icon: <UserCheck size={18} />, fn: (e: React.MouseEvent) => { const r = e.currentTarget.getBoundingClientRect(); setFriendMenu((m) => m ? null : { x: r.left, y: r.bottom + 4, items: [{ label: t('Remove Friend'), danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] }) } }
     : rel === undefined ? { title: t('Add Friend'), icon: <UserPlus size={18} />, fn: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }
     : rel === 'incoming' ? { title: t('Accept Friend Request'), icon: <Check size={18} />, fn: () => act(() => api.put(`/users/@me/relationships/${user.id}`)) }
     : rel === 'outgoing' ? { title: t('Cancel Friend Request'), icon: <Clock size={18} />, fn: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }
@@ -156,13 +167,13 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         <div className="absolute right-3 top-3 flex gap-2">
           {friendBtn && (
             <div className="relative">
-              <button onClick={friendBtn.fn} title={friendBtn.title} aria-label={friendBtn.title} aria-expanded={rel === 'friend' ? friendMenu : undefined} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center" data-friend-badge={rel === 'friend' ? '' : undefined}>{friendBtn.icon}</button>
-              {friendMenu && <Menu items={[{ label: t('Remove Friend'), danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }]} onClose={() => setFriendMenu(false)} className="top-[calc(100%+4px)] right-0" />}
+              <button onClick={friendBtn.fn} title={friendBtn.title} aria-label={friendBtn.title} aria-expanded={rel === 'friend' ? !!friendMenu : undefined} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center" data-friend-badge={rel === 'friend' ? '' : undefined}>{friendBtn.icon}</button>
+              {friendMenu && <ContextMenu {...friendMenu} onClose={() => setFriendMenu(null)} />}
             </div>
           )}
           <div className="relative">
-            <button onClick={() => setMenu((m) => !m)} title={t('More')} aria-label={t('More')} aria-expanded={menu} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center"><MoreHorizontal size={18} /></button>
-            {menu && <Menu items={menuItems} onClose={() => setMenu(false)} className="top-0 left-[calc(100%+8px)]" />}
+            <button onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu(menu ? null : { x: r.right + 8, y: r.top, items: menuItems }) }} title={t('More')} aria-label={t('More')} aria-expanded={!!menu} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center"><MoreHorizontal size={18} /></button>
+            {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
           </div>
         </div>
         {user.custom_status && (
@@ -171,7 +182,12 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
       </div>
       {/* Avatar */}
       <div className="px-4 -mt-[42px]">
-        <div className="inline-block rounded-full" style={{ boxShadow: `0 0 0 6px ${themed ? '#1a1527' : '#232428'}` }}><Avatar user={user} size={80} presence animate /></div>
+        <div className="inline-block rounded-full" style={{ boxShadow: `0 0 0 6px ${themed ? '#1a1527' : '#232428'}` }}>
+          {user.avatar_url
+            ? <button type="button" onClick={() => setViewAvatar(true)} className="block rounded-full cursor-zoom-in" title={t('View Avatar')} aria-label={t('View Avatar')} data-view-avatar><Avatar user={user} size={80} presence animate /></button>
+            : <Avatar user={user} size={80} presence animate />}
+        </div>
+        {viewAvatar && user.avatar_url && createPortal(<div className="relative z-[160]"><ImageLightbox url={user.avatar_url} name={user.display_name} onClose={() => setViewAvatar(false)} /></div>, document.body)}
       </div>
       <div className="px-4 pt-3 pb-4 space-y-3">
         <div>
@@ -284,64 +300,3 @@ function GuildDot({ g, ring }: { g: Pick<Guild, 'id' | 'name' | 'icon_url'>; rin
     : <span title={g.name} className={`${cls} text-white text-[8px] font-bold flex items-center justify-center`} style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>
 }
 
-type MenuItem = { label: string; icon?: ReactNode; danger?: boolean; onClick?: () => void; children?: MenuItem[] }
-type MenuEntry = MenuItem | 'sep'
-
-/** Discord-style context menu: opens to the right of the "…" button (left if no room), submenus fly out sideways. */
-function Menu({ items, onClose, className = '' }: { items: MenuEntry[]; onClose: () => void; className?: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [flip, setFlip] = useState(false)
-  useLayoutEffect(() => { const r = ref.current?.getBoundingClientRect(); if (r && r.right > window.innerWidth - 8) setFlip(true) }, [])
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
-  return (
-    <>
-      <div className="fixed inset-0 z-[60]" onMouseDown={(e) => { e.stopPropagation(); onClose() }} />
-      <div ref={ref} role="menu" data-profile-menu className={`pop absolute z-[70] min-w-[190px] rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1.5 ${flip ? 'top-0 right-[calc(100%+8px)] left-auto' : className}`}>
-        {items.map((it, i) => it === 'sep'
-          ? <div key={i} className="my-1 h-px bg-white/10" />
-          : <MenuRow key={i} item={it} onClose={onClose} flip={flip} />)}
-      </div>
-    </>
-  )
-}
-
-function MenuRow({ item, onClose, flip }: { item: MenuItem; onClose: () => void; flip: boolean }) {
-  const [open, setOpen] = useState(false)
-  const danger = item.danger ? 'text-[#f23f43] hover:bg-[#f23f43] hover:text-white' : 'text-[#dbdee1] hover:bg-accent hover:text-white'
-  if (item.children) {
-    return (
-      <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-        <button type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`w-full flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm font-medium text-left ${danger}`}>
-          <span className="flex items-center gap-2">{item.icon}{item.label}</span><ChevronRight size={16} />
-        </button>
-        {open && <SubMenu items={item.children} onClose={onClose} parentFlip={flip} />}
-      </div>
-    )
-  }
-  return (
-    <button type="button" role="menuitem" onClick={() => { onClose(); item.onClick?.() }} className={`w-full flex items-center gap-2 rounded px-2 py-1.5 text-sm font-medium text-left ${danger}`}>
-      {item.icon}{item.label}
-    </button>
-  )
-}
-
-/** Flies out to the right of its row, or to the left when that would leave the viewport. */
-function SubMenu({ items, onClose, parentFlip }: { items: MenuItem[]; onClose: () => void; parentFlip: boolean }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [flip, setFlip] = useState(parentFlip)
-  useLayoutEffect(() => {
-    const r = ref.current?.getBoundingClientRect()
-    if (!r) return
-    if (!flip && r.right > window.innerWidth - 8) setFlip(true)
-    else if (flip && r.left < 8) setFlip(false)
-  }, [flip])
-  return (
-    <div ref={ref} role="menu" className={`pop absolute top-0 z-[80] min-w-[190px] rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1.5 ${flip ? 'right-full mr-1' : 'left-full ml-1'}`}>
-      {items.map((c, i) => <MenuRow key={i} item={c} onClose={onClose} flip={flip} />)}
-    </div>
-  )
-}

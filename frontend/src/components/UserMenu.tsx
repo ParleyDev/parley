@@ -1,8 +1,10 @@
 import { Award, ChevronRight, IdCard, Pencil, Plus, ShieldCheck, UserCircle } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
-import { frameClass } from '../lib/cosmetics'
+import { frameClass, nameplateClass } from '../lib/cosmetics'
+import { NameplateVideo } from './Nameplate'
 import { renderMarkdown } from '../lib/format'
 import { t as tr, useT } from '../lib/i18n'
 import { profileCardStyle, profileColors } from '../lib/profileLook'
@@ -34,10 +36,37 @@ export function StatusDot({ v, size = 10 }: { v: string; size?: number }) {
   return <span className="inline-block shrink-0 rounded-full" style={{ width: size, height: size, background: c }} />
 }
 
+/**
+ * A side menu next to a row, rendered over everything (a portal, fixed position) so it never stretches the menu or
+ * gets clipped: beside the menu on the right, on the left when there is no room, over the menu on narrow screens.
+ * React events still bubble through the portal, so hovering from the row into it keeps it open.
+ */
+function Flyout({ anchor, width, children }: { anchor: HTMLElement | null; width: number; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number; pad: number; side: 'right' | 'left' | 'over' } | null>(null)
+  useLayoutEffect(() => {
+    if (!anchor) return
+    const row = anchor.getBoundingClientRect()
+    const menu = (anchor.closest('[data-user-menu]') ?? anchor).getBoundingClientRect()
+    const h = ref.current?.offsetHeight ?? 0
+    const top = Math.max(8, Math.min(row.top, window.innerHeight - h - 8))
+    if (menu.right + 8 + width <= window.innerWidth - 8) setPos({ left: row.right, top, pad: menu.right - row.right + 8, side: 'right' })
+    else if (menu.left - 8 - width >= 8) setPos({ left: menu.left - 8 - width, top, pad: 0, side: 'left' })
+    else setPos({ left: Math.max(8, Math.min(row.left, window.innerWidth - width - 8)), top: Math.min(row.bottom + 4, window.innerHeight - h - 8), pad: 0, side: 'over' })
+  }, [anchor, width])
+  return createPortal(
+    <div ref={ref} className="pop fixed z-[130]" style={pos ? { left: pos.left, top: pos.top, paddingLeft: pos.pad, paddingRight: pos.side === 'left' ? 8 : 0 } : { left: -9999, top: 0 }} role="menu" data-flyout-side={pos?.side}>
+      <div className="rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5" style={{ width }}>{children}</div>
+    </div>,
+    document.body,
+  )
+}
+
 /** A row of the menu's grouped lists; `flyout` opens a side menu on hover or click. */
 function Row({ icon, label, extra, onClick, flyout, open, onOpen, ...data }: { icon: ReactNode; label: ReactNode; extra?: ReactNode; onClick?: () => void; flyout?: ReactNode; open?: boolean; onOpen?: (o: boolean) => void } & Record<`data-${string}`, string | undefined>) {
+  const [el, setEl] = useState<HTMLDivElement | null>(null)
   return (
-    <div className="relative" onMouseEnter={flyout ? () => onOpen?.(true) : undefined} onMouseLeave={flyout ? () => onOpen?.(false) : undefined}>
+    <div ref={setEl} onMouseEnter={flyout ? () => onOpen?.(true) : undefined} onMouseLeave={flyout ? () => onOpen?.(false) : undefined}>
       <button type="button" onClick={flyout ? () => onOpen?.(true) : onClick} aria-haspopup={flyout ? 'menu' : undefined} aria-expanded={flyout ? !!open : undefined}
         className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] text-left text-[#dbdee1] hover:bg-white/[.06] ${open ? 'bg-white/[.06]' : ''}`} {...data}>
         <span className="w-5 shrink-0 flex items-center justify-center text-[#b5bac1]">{icon}</span>
@@ -45,11 +74,7 @@ function Row({ icon, label, extra, onClick, flyout, open, onOpen, ...data }: { i
         {extra}
         {flyout && <ChevronRight size={16} className="shrink-0 text-[#b5bac1]" />}
       </button>
-      {flyout && open && (
-        <div className="pop absolute left-full top-0 z-50 pl-2 max-md:static max-md:pl-0 max-md:mt-1" role="menu">
-          <div className="w-64 max-md:w-full rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5">{flyout}</div>
-        </div>
-      )}
+      {flyout && open && <Flyout anchor={el} width={256}>{flyout}</Flyout>}
     </div>
   )
 }
@@ -97,7 +122,8 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <div className="relative px-4 pt-2 pb-3 space-y-2">
-        <div>
+        <div className={`relative isolate overflow-hidden -mx-2 px-2 py-1 rounded-lg ${nameplateClass(user.nameplate)}`} data-user-menu-nameplate={user.nameplate || undefined}>
+          <NameplateVideo value={user.nameplate} />
           <div className="text-xl font-bold leading-6 truncate flex items-center gap-1.5"><StyledName userId={user.id}>{user.display_name}</StyledName></div>
           <div className="text-sm flex flex-wrap items-center gap-x-1.5"><span>{user.username}</span>{user.pronouns ? <><span className="opacity-60">•</span><span>{user.pronouns}</span></> : null}<Badges badges={profile?.badges} /></div>
         </div>
@@ -119,8 +145,8 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
                   {s.v !== 'online' && <button type="button" onClick={() => setDurations(s.v)} className="shrink-0 rounded-md p-2 text-[#b5bac1] hover:text-white" title={t('{status} for a while', { status: s.label })} aria-label={t('{status} for a while', { status: s.label })} aria-expanded={durations === s.v} data-status-durations={s.v}><ChevronRight size={16} /></button>}
                 </div>
                 {durations === s.v && (
-                  <div className="pop absolute left-full top-0 z-50 pl-2 max-md:static max-md:pl-6" role="menu">
-                    <div className="w-44 max-md:w-full rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5 space-y-0.5" data-status-duration-list={s.v}>
+                  <div className="pop absolute left-full top-0 z-50 pl-2 max-sm:static max-sm:pl-6 [[data-flyout-side=left]_&]:left-auto [[data-flyout-side=left]_&]:right-full [[data-flyout-side=left]_&]:pl-0 [[data-flyout-side=left]_&]:pr-2" role="menu">
+                    <div className="w-44 max-sm:w-full rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5 space-y-0.5" data-status-duration-list={s.v}>
                       {statusDurations().map((d) => <button key={d.secs} type="button" onClick={() => setStatus(s.v, d.secs)} className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-white/[.06]" data-status-for={d.secs}>{d.label}</button>)}
                       <button type="button" onClick={() => setStatus(s.v)} className="w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-white/[.06]">{t('Forever')}</button>
                     </div>

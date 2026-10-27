@@ -46,7 +46,7 @@ ok('own message menu has Edit Message', await p.locator('[data-context-menu] [da
 
 console.log('-- reactions')
 const chip=p.locator(`[data-msg-id="${m1.id}"] [data-reaction="👍"]`)
-ok('chip is 26px tall, rounded 8px, with the add-reaction chip after it', (await chip.boundingBox()).height===26 && (await chip.evaluate(n=>getComputedStyle(n).borderRadius))==='8px' && await p.locator(`[data-msg-id="${m1.id}"] [data-add-reaction-chip]`).count()===1)
+ok('chip is 30px tall (20px emoji), rounded 8px, with the add-reaction chip after it', (await chip.boundingBox()).height===30 && (await chip.evaluate(n=>getComputedStyle(n).borderRadius))==='8px' && await p.locator(`[data-msg-id="${m1.id}"] [data-add-reaction-chip]`).count()===1)
 await chip.hover(); await p.waitForTimeout(500)
 ok('hovering a chip shows who reacted', await p.locator('[data-reaction-tip]:has-text("Bob")').count()===1 && await p.locator('[data-reaction-tip]:has-text("reacted with :thumbs_up:")').count()===1)
 await p.screenshot({ path: '60-reaction-tip.png' })

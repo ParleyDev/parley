@@ -21,7 +21,7 @@ export function NameplateVideo({ value }: { value?: string | null }) {
     return () => { row.removeEventListener('mouseenter', on); row.removeEventListener('mouseleave', off) }
   }, [value])
   if (!isAssetNameplate(value)) return null
-  return <video ref={ref} className="np-video pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />
+  return <video ref={ref} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />
 }
 
 interface AssetNameplate { id: string; name: string }
@@ -68,5 +68,5 @@ function LazyVideo({ src }: { src: string }) {
     row?.addEventListener('mouseenter', on); row?.addEventListener('mouseleave', off)
     return () => { io.disconnect(); row?.removeEventListener('mouseenter', on); row?.removeEventListener('mouseleave', off) }
   }, [])
-  return <video ref={ref} className="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover" src={seen ? src : undefined} muted loop playsInline preload="metadata" aria-hidden />
+  return <video ref={ref} className="np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={seen ? src : undefined} muted loop playsInline preload="metadata" aria-hidden />
 }

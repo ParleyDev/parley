@@ -283,6 +283,8 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 .np-hover:not(:hover):not([aria-current="page"]) { background-image: none; }
 .np-hover:not(:hover):not([aria-current="page"]) .np-video { opacity: 0; }
 .np-video { opacity: .75; transition: opacity .15s; }
+/* Asset nameplates keep their aspect: as tall as the row, pinned to its right edge, fading out to the left. */
+.np-fit { -webkit-mask-image: linear-gradient(90deg, transparent, #000 35%); mask-image: linear-gradient(90deg, transparent, #000 35%); }
 .np-dusk { background-image: linear-gradient(90deg, rgb(124 58 237 / .35), rgb(236 72 153 / .18) 70%, transparent); }
 .np-ocean { background-image: linear-gradient(90deg, rgb(14 116 144 / .4), rgb(56 189 248 / .15) 70%, transparent); }
 .np-forest { background-image: linear-gradient(90deg, rgb(21 128 61 / .4), rgb(132 204 22 / .14) 70%, transparent); }
@@ -299,7 +301,11 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 :root[data-motion="reduced"] .pe-bit, :root[data-motion="reduced"] .np-aurora { animation: none !important; }
 
 /* Super reactions: a shimmering chip, and a burst of the emoji when someone adds one. */
-.super-reaction { background-image: linear-gradient(120deg, rgb(255 115 250 / .18), rgb(96 165 250 / .18), rgb(250 204 21 / .18)); box-shadow: 0 0 0 1px rgb(255 115 250 / .45) inset; }
+.super-reaction { background-image: linear-gradient(120deg, rgb(255 115 250 / .18), rgb(96 165 250 / .18), rgb(250 204 21 / .18), rgb(255 115 250 / .18)); background-size: 300% 100%; box-shadow: 0 0 0 1px rgb(255 115 250 / .45) inset; animation: super-shimmer 4s linear infinite; }
+/* Super reactions are always alive: a shimmering chip and a gently pulsing emoji (plus a burst on hover and when added). */
+.super-emoji { animation: super-pulse 1.6s ease-in-out infinite; filter: drop-shadow(0 0 3px rgb(255 115 250 / .6)); }
+@keyframes super-shimmer { from { background-position: 0 0 } to { background-position: 150% 0 } }
+@keyframes super-pulse { 0%, 100% { transform: scale(1) rotate(0) } 25% { transform: scale(1.15) rotate(-6deg) } 50% { transform: scale(1) rotate(0) } 75% { transform: scale(1.1) rotate(5deg) } }
 .burst-particle { position: absolute; left: 50%; top: 50%; margin: -6px 0 0 -6px; animation: burst-fly .85s ease-out forwards; }
 @keyframes burst-fly { from { transform: rotate(var(--a)) translateY(0) scale(.6); opacity: 1; } to { transform: rotate(var(--a)) translateY(-26px) scale(1.1); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .burst-fx { display: none; } }

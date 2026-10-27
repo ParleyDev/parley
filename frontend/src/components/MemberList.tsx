@@ -31,13 +31,16 @@ export default function MemberList({ guildId }: { guildId: string }) {
   const ctx = useContextMenu()
   const userMenu = useUserMenu(guildId)
   const { channelId } = useParams()
-  const channel = useStore((s) => (channelId ? s.channels[channelId] : undefined))
+  // A thread shows the members of the channel it lives in.
+  const channel = useStore((s) => { const c = channelId ? s.channels[channelId] : undefined; return c?.kind === 'thread' && c.parent_id ? s.channels[c.parent_id] ?? c : c })
   const voiceStates = useStore((s) => s.voiceStates)
-  const list = Object.values(members ?? {}).sort((a, b) => (a.nickname ?? a.display_name).localeCompare(b.nickname ?? b.display_name))
+  const all = Object.values(members ?? {})
   const visible = (id: string) => online[id] && (users[id]?.status ?? '') !== 'invisible'
   // Header totals: who can read the current channel and is online, everyone, and who is in voice here.
   const canView = (m: Member) => !guild || !channel || channel.guild_id !== guildId || has(channelPerms({ guild, roles, member: m }, m.user_id, channel), P.VIEW_CHANNEL)
-  const onlineHere = list.filter((m) => visible(m.user_id) && canView(m)).length
+  // Like Discord, only members who can see this channel are listed.
+  const list = all.filter(canView).sort((a, b) => (a.nickname ?? a.display_name).localeCompare(b.nickname ?? b.display_name))
+  const onlineHere = list.filter((m) => visible(m.user_id)).length
   const inVoice = Object.values(voiceStates).filter((v) => v.guild_id === guildId && v.channel_id).length
 
   // Discord grouping: online members under their highest hoisted role, the rest under "Online", offline all together.
@@ -78,7 +81,7 @@ export default function MemberList({ guildId }: { guildId: string }) {
       </div>
       <div className="mb-4 flex items-center gap-4 px-1 text-sm font-semibold" data-member-stats>
         <Tooltip tip={t('{n} online in this channel', { n: onlineHere })}><span className="flex items-center gap-1.5 text-success" data-member-stat="online-here" data-member-stat-value={onlineHere}><Circle size={12} className="fill-current" />{onlineHere}</span></Tooltip>
-        <Tooltip tip={t('{n} total server members', { n: list.length })}><span className="flex items-center gap-1.5 text-text-2" data-member-stat="total" data-member-stat-value={list.length}><Circle size={12} />{list.length}</span></Tooltip>
+        <Tooltip tip={t('{n} total server members', { n: all.length })}><span className="flex items-center gap-1.5 text-text-2" data-member-stat="total" data-member-stat-value={all.length}><Circle size={12} />{all.length}</span></Tooltip>
         <Tooltip tip={t('{n} members in voice', { n: inVoice })}><span className="flex items-center gap-1.5 text-text-2" data-member-stat="voice" data-member-stat-value={inVoice}><Mic size={13} />{inVoice}</span></Tooltip>
       </div>
       {sections.map((g) => (

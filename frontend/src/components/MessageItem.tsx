@@ -438,7 +438,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               {m.reactions.map((r) => <ReactionChip key={`${r.emoji}:${r.burst ? 1 : 0}`} r={r} message={m} canReact={canReact} onToggle={() => react(r.emoji, r.me, !!r.burst)} />)}
               {canReact && (
                 <button type="button" onClick={(e) => setPicker(e.currentTarget.getBoundingClientRect())} title={t('Add Reaction')} data-add-reaction-chip
-                  className="h-[26px] w-[34px] rounded-lg bg-[#2b2d31] border border-transparent text-text-2 hover:border-[#4e5058] hover:text-text-0 flex items-center justify-center">
+                  className="h-[30px] w-[38px] rounded-lg bg-[#2b2d31] border border-transparent text-text-2 hover:border-[#4e5058] hover:text-text-0 flex items-center justify-center">
                   <SmilePlus size={16} />
                 </button>
               )}
@@ -546,9 +546,9 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
   const text = names.length === 0 ? '' : names.length === 1 ? names[0] : names.length === 2 ? t('{a} and {b}', { a: names[0], b: names[1] }) : names.length === 3 ? t('{a}, {b}, and {c}', { a: names[0], b: names[1], c: names[2] }) : t('{a}, {b}, and {n} others', { a: names[0], b: names[1], n: names.length - 2 })
   return (
     <>
-      <button type="button" disabled={!canReact && !r.me} onClick={() => { setRect(null); onToggle() }} data-reaction={r.emoji} data-reaction-burst={r.burst ? '1' : undefined} onMouseEnter={(e) => { if (canHover()) setRect(e.currentTarget.getBoundingClientRect()) }} onMouseLeave={() => setRect(null)} onTouchStart={() => setRect(null)}
-        className={`relative h-[26px] flex items-center gap-1.5 rounded-lg border px-1.5 text-sm transition ${r.burst ? 'super-reaction ' : ''}${r.me ? 'border-accent bg-accent/15 hover:bg-accent/25' : 'border-transparent bg-[#2b2d31] hover:border-[#4e5058]'}`}>
-        <Emoji value={r.emoji} size={16} /><span className={`text-[13px] font-semibold ${r.me ? 'text-text-0' : 'text-text-1'}`}>{r.count}</span>
+      <button type="button" disabled={!canReact && !r.me} onClick={() => { setRect(null); onToggle() }} data-reaction={r.emoji} data-reaction-burst={r.burst ? '1' : undefined} onMouseEnter={(e) => { if (canHover()) setRect(e.currentTarget.getBoundingClientRect()); if (r.burst) setBursting((n) => n + 1) }} onMouseLeave={() => setRect(null)} onTouchStart={() => setRect(null)}
+        className={`relative h-[30px] flex items-center gap-1.5 rounded-lg border px-1.5 text-sm transition ${r.burst ? 'super-reaction ' : ''}${r.me ? 'border-accent bg-accent/15 hover:bg-accent/25' : 'border-transparent bg-[#2b2d31] hover:border-[#4e5058]'}`}>
+        <span className={r.burst ? 'super-emoji flex' : 'flex'}><Emoji value={r.emoji} size={20} /></span><span className={`text-[14px] font-semibold ${r.me ? 'text-text-0' : 'text-text-1'}`}>{r.count}</span>
         {bursting > 0 && <span key={bursting} className="burst-fx pointer-events-none absolute inset-0" aria-hidden data-burst-fx>{Array.from({ length: 8 }, (_, i) => <span key={i} className="burst-particle" style={{ '--a': `${i * 45}deg` } as React.CSSProperties}><Emoji value={r.emoji} size={12} /></span>)}</span>}
       </button>
       {rect && who && createPortal(
