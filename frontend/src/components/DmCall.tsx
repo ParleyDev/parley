@@ -10,6 +10,8 @@ import { useUserAudioMap } from '../lib/userAudio'
 import type { DmChannel, User, VoiceState } from '../lib/types'
 import SoundboardPicker from './SoundboardPicker'
 import { ConnQuality, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
+import { ActivitiesButton, ActivityChips, ActivityFrame } from './Activities'
+import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
 import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
 import { useResizableHeight } from '../lib/resize'
 import { voice } from '../lib/voice'
@@ -48,6 +50,10 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const videoFit = useVideoFit()
   const stage = useResizableHeight('dmCall', DEFAULT_HEIGHT, 160, 0.8)
   const inThis = myChannel === channel.id
+  const activities = useCallActivities(channel.id)
+  const openActivity = useActivities((s) => s.open)
+  const activity = inThis ? activities.find((a) => a.id === openActivity) : undefined
+  useEffect(() => { if (inThis) void loadActivities(channel.id) }, [channel.id, inThis])
   const notInCall = channel.recipients.filter((r) => !participants.some((p) => p.user_id === r.id))
 
   const tiles: Tile[] = []
@@ -137,7 +143,13 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
     <section ref={(el) => stage.setContainer(el?.parentElement ?? null)} style={{ height: stage.height }} className="relative shrink-0 border-b border-line bg-bg-0 px-4 pt-3 pb-2 flex flex-col max-md:h-auto max-md:max-h-[55vh]" data-dm-call data-call-height={stage.height}>
       {tileMenu.menu && <ContextMenu {...tileMenu.menu} onClose={tileMenu.close} label="Participant" />}
       <div className="flex-1 min-h-0 flex flex-col gap-2">
-        {tiles.length === 0 ? (
+        {inThis && <ActivityChips channelId={channel.id} inCall />}
+        {activity ? (
+          <>
+            <div className="flex-1 min-h-0"><ActivityFrame session={activity} /></div>
+            <div className="shrink-0 flex gap-2 overflow-x-auto">{tiles.map((t) => <div key={t.key} className="w-32 shrink-0">{renderTile(t, false)}</div>)}</div>
+          </>
+        ) : tiles.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-sm text-text-2">Connecting…</div>
         ) : focusTile ? (
           <>
@@ -187,6 +199,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
                   </>
                 )}
               </span>
+              <ActivitiesButton channelId={channel.id} />
               <ControlButton label={localScreen ? 'Stop Sharing' : 'Share Your Screen'} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>
             </ControlGroup>
             <HangUpButton label="Leave Call" onClick={() => voice.leave()} />

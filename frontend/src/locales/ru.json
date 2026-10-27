@@ -540,5 +540,18 @@
 "Turkish": "Турецкий",
 "by {artists}": "исполнитель: {artists}",
 "on {album}": "альбом: {album}",
-"{n} listening along": "Слушают вместе: {n}"
+"{n} listening along": "Слушают вместе: {n}",
+"Activities": "Активности",
+"Authorize": "Разрешить",
+"Fullscreen": "Во весь экран",
+"It will see your username and avatar.": "Оно увидит ваше имя пользователя и аватар.",
+"It will see your username, avatar and the servers you are in.": "Оно увидит ваше имя пользователя, аватар и ваши серверы.",
+"Join": "Присоединиться",
+"Leave Activity": "Выйти из активности",
+"Loading…": "Загрузка…",
+"Tic-Tac-Toe": "Крестики-нолики",
+"Two players take X and O; everyone else watches.": "Двое играют за X и O, остальные смотрят.",
+"Watch Together": "Смотреть вместе",
+"Watch YouTube together, in sync.": "Смотрите YouTube вместе и синхронно.",
+"{app} wants to know who you are": "{app} хочет знать, кто вы"
 }

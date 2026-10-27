@@ -540,5 +540,18 @@
 "Turkish": "土耳其语",
 "by {artists}": "{artists}",
 "on {album}": "专辑：{album}",
-"{n} listening along": "{n} 人一起听"
+"{n} listening along": "{n} 人一起听",
+"Activities": "活动",
+"Authorize": "授权",
+"Fullscreen": "全屏",
+"It will see your username and avatar.": "它将看到你的用户名和头像。",
+"It will see your username, avatar and the servers you are in.": "它将看到你的用户名、头像以及你所在的服务器。",
+"Join": "加入",
+"Leave Activity": "离开活动",
+"Loading…": "正在加载…",
+"Tic-Tac-Toe": "井字棋",
+"Two players take X and O; everyone else watches.": "两名玩家执 X 和 O，其他人观战。",
+"Watch Together": "一起看",
+"Watch YouTube together, in sync.": "同步一起看 YouTube。",
+"{app} wants to know who you are": "{app} 想知道你是谁"
 }

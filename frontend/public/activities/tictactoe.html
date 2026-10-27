@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tic-Tac-Toe</title>
+<style>
+  :root { color-scheme: dark; --bg: #1e1f22; --cell: #2b2d31; --line: #3f4147; --text: #f2f3f5; --muted: #b5bac1; --x: #5865f2; --o: #f0b232; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, sans-serif; padding: 16px; }
+  #status { font-size: 18px; font-weight: 600; min-height: 1.4em; text-align: center; }
+  #board { display: grid; grid-template-columns: repeat(3, min(22vmin, 120px)); gap: 8px; }
+  .cell { aspect-ratio: 1; border: 0; border-radius: 12px; background: var(--cell); color: var(--text); font-size: min(14vmin, 72px); font-weight: 800; cursor: pointer; }
+  .cell:disabled { cursor: default; }
+  .cell[data-mark="X"] { color: var(--x); } .cell[data-mark="O"] { color: var(--o); }
+  .cell.win { outline: 3px solid #23a55a; }
+  #seats { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  button.seat, #reset { border: 1px solid var(--line); background: var(--cell); color: var(--text); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; }
+  button.seat:disabled { opacity: .6; cursor: default; }
+  .muted { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="status">Connecting…</div>
+<div id="board"></div>
+<div id="seats"></div>
+<button id="reset" type="button">New game</button>
+<div class="muted" id="who"></div>
+<script src="sdk.js"></script>
+<script>
+'use strict'
+var LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]]
+var me = null, people = [], state = fresh()
+function fresh() { return { board: ['', '', '', '', '', '', '', '', ''], X: null, O: null, turn: 'X' } }
+function valid(s) { return s && Array.isArray(s.board) && s.board.length === 9 }
+function winner(b) {
+  for (var i = 0; i < LINES.length; i++) { var l = LINES[i]; if (b[l[0]] && b[l[0]] === b[l[1]] && b[l[0]] === b[l[2]]) return { mark: b[l[0]], line: l } }
+  return b.every(function (c) { return c }) ? { mark: 'draw', line: [] } : null
+}
+function nameOf(id) { var p = people.find(function (x) { return x.id === id }); return p ? (p.display_name || p.username) : 'someone' }
+function myMark() { return state.X === me.id ? 'X' : state.O === me.id ? 'O' : null }
+function save(next) { state = next; render(); ParleyActivity.setState(next).catch(function (e) { document.getElementById('status').textContent = e.message }) }
+
+function render() {
+  var board = document.getElementById('board'), status = document.getElementById('status'), seats = document.getElementById('seats')
+  var w = winner(state.board), mine = myMark()
+  board.textContent = ''
+  state.board.forEach(function (c, i) {
+    var b = document.createElement('button')
+    b.className = 'cell' + (w && w.line.indexOf(i) >= 0 ? ' win' : '')
+    b.textContent = c; b.dataset.cell = String(i); if (c) b.dataset.mark = c
+    b.disabled = !!c || !!w || !mine || state.turn !== mine || !state.X || !state.O
+    b.onclick = function () {
+      var next = JSON.parse(JSON.stringify(state)); next.board[i] = mine; next.turn = mine === 'X' ? 'O' : 'X'; save(next)
+    }
+    board.appendChild(b)
+  })
+  seats.textContent = ''
+  ;['X', 'O'].forEach(function (m) {
+    var b = document.createElement('button'); b.className = 'seat'; b.dataset.seat = m
+    var taken = state[m]
+    b.textContent = taken ? m + ': ' + nameOf(taken) : 'Play as ' + m
+    b.disabled = !!taken || !!mine
+    b.onclick = function () { var next = JSON.parse(JSON.stringify(state)); next[m] = me.id; save(next) }
+    seats.appendChild(b)
+  })
+  if (w) status.textContent = w.mark === 'draw' ? 'Draw!' : nameOf(state[w.mark]) + ' (' + w.mark + ') wins!'
+  else if (!state.X || !state.O) status.textContent = 'Waiting for players'
+  else status.textContent = (state[state.turn] === me.id ? 'Your turn' : nameOf(state[state.turn]) + "'s turn") + ' (' + state.turn + ')'
+  status.dataset.status = w ? (w.mark === 'draw' ? 'draw' : 'win-' + w.mark) : 'turn-' + state.turn
+  document.getElementById('who').textContent = people.length + ' here: ' + people.map(function (p) { return p.display_name || p.username }).join(', ')
+}
+
+document.getElementById('reset').onclick = function () { var next = fresh(); next.X = state.X; next.O = state.O; save(next) }
+ParleyActivity.ready().then(function (ctx) {
+  me = ctx.user; people = ctx.participants || []
+  if (valid(ctx.state)) state = ctx.state
+  render()
+  ParleyActivity.on('state', function (e) { if (valid(e.state)) { state = e.state; render() } })
+  ParleyActivity.on('participants', function (p) {
+    people = p
+    // A player who left frees their seat.
+    var ids = p.map(function (x) { return x.id }), next = null
+    ;['X', 'O'].forEach(function (m) { if (state[m] && ids.indexOf(state[m]) < 0) { next = next || JSON.parse(JSON.stringify(state)); next[m] = null } })
+    if (next && ids[0] === me.id) save(next); else render()
+  })
+}).catch(function (e) { document.getElementById('status').textContent = 'Could not start: ' + e.message })
+</script>
+</body>
+</html>

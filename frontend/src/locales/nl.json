@@ -540,5 +540,18 @@
 "Turkish": "Turks",
 "by {artists}": "door {artists}",
 "on {album}": "op {album}",
-"{n} listening along": "{n} luisteren mee"
+"{n} listening along": "{n} luisteren mee",
+"Activities": "Activiteiten",
+"Authorize": "Autoriseren",
+"Fullscreen": "Volledig scherm",
+"It will see your username and avatar.": "Ze ziet je gebruikersnaam en avatar.",
+"It will see your username, avatar and the servers you are in.": "Ze ziet je gebruikersnaam, avatar en de servers waarin je zit.",
+"Join": "Deelnemen",
+"Leave Activity": "Activiteit verlaten",
+"Loading…": "Laden…",
+"Tic-Tac-Toe": "Boter-kaas-en-eieren",
+"Two players take X and O; everyone else watches.": "Twee spelers nemen X en O; de rest kijkt mee.",
+"Watch Together": "Samen kijken",
+"Watch YouTube together, in sync.": "Kijk samen YouTube, synchroon.",
+"{app} wants to know who you are": "{app} wil weten wie je bent"
 }

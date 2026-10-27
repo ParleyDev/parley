@@ -479,6 +479,6 @@ export interface RemoteMedia { camera: MediaStream | null; screen: MediaStream |
 export type PeerStatus = 'connecting' | 'connected' | 'failed'
 
 /** A developer application (Settings → Applications). */
-export interface Application { id: string; owner_id: string; name: string; description: string; client_id: string; redirect_uris: string[]; bot_user_id: string | null; created_at: string; privileged_intents?: number; icon_url?: string | null; bot_public?: boolean; verified?: boolean; listed?: boolean; install_permissions?: number; tags?: string[]; client_secret?: string; bot?: User | null; authorized_users?: number }
+export interface Application { id: string; owner_id: string; name: string; description: string; client_id: string; redirect_uris: string[]; bot_user_id: string | null; created_at: string; privileged_intents?: number; icon_url?: string | null; bot_public?: boolean; verified?: boolean; listed?: boolean; install_permissions?: number; tags?: string[]; activity_url?: string | null; client_secret?: string; bot?: User | null; authorized_users?: number }
 /** An app holding a token for you (Settings → Authorized Apps). */
 export interface AuthorizedApp { id: string; name: string; description: string; owner: string | null; scopes: string[]; since: string }

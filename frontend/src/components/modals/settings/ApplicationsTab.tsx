@@ -19,6 +19,7 @@ export default function ApplicationsTab() {
   const [secret, setSecret] = useState<{ label: string; value: string } | null>(null)
   const [uris, setUris] = useState('')
   const [desc, setDesc] = useState('')
+  const [activityUrl, setActivityUrl] = useState('')
   const [scopes, setScopes] = useState<string[]>(['identify'])
   // Bot invite link: scopes and the permissions the bot asks for.
   const [botScopes, setBotScopes] = useState<string[]>(['bot', 'applications.commands'])
@@ -30,8 +31,8 @@ export default function ApplicationsTab() {
     e.preventDefault()
     try { const a = await api.post<Application>('/applications', { name }); setSecret({ label: `Client secret for ${a.name} (shown once)`, value: a.client_secret! }); setName(''); await load(); await show(a.id) } catch (err) { pushToast((err as Error).message, 'error') }
   }
-  const show = async (id: string) => { try { const a = await api.get<Application>(`/applications/${id}`); setOpen(a); setUris(a.redirect_uris.join('\n')); setDesc(a.description) } catch (err) { pushToast((err as Error).message, 'error') } }
-  const save = async () => { if (!open) return; try { const a = await api.patch<Application>(`/applications/${open.id}`, { description: desc, redirect_uris: uris.split('\n').map((x) => x.trim()).filter(Boolean) }); pushToast('Saved'); setOpen({ ...open, ...a }); await load() } catch (err) { pushToast((err as Error).message, 'error') } }
+  const show = async (id: string) => { try { const a = await api.get<Application>(`/applications/${id}`); setOpen(a); setUris(a.redirect_uris.join('\n')); setDesc(a.description); setActivityUrl(a.activity_url ?? '') } catch (err) { pushToast((err as Error).message, 'error') } }
+  const save = async () => { if (!open) return; try { const a = await api.patch<Application>(`/applications/${open.id}`, { description: desc, redirect_uris: uris.split('\n').map((x) => x.trim()).filter(Boolean), activity_url: activityUrl.trim() }); pushToast('Saved'); setOpen({ ...open, ...a }); await load() } catch (err) { pushToast((err as Error).message, 'error') } }
   const resetSecret = async () => { if (!open) return; try { const r = await api.post<{ client_secret: string }>(`/applications/${open.id}/reset-secret`, {}); setSecret({ label: 'New client secret (shown once)', value: r.client_secret }) } catch (err) { pushToast((err as Error).message, 'error') } }
   const createBot = async () => { if (!open) return; try { const r = await api.post<{ token: string }>(`/applications/${open.id}/bot`, {}); setSecret({ label: 'Bot token (shown once)', value: r.token }); await show(open.id) } catch (err) { pushToast((err as Error).message, 'error') } }
   const setIntents = async (v: number) => { if (!open) return; try { const a = await api.patch<Application>(`/applications/${open.id}`, { privileged_intents: v }); setOpen({ ...open, ...a }) } catch (err) { pushToast((err as Error).message, 'error') } }
@@ -66,6 +67,11 @@ export default function ApplicationsTab() {
           </div>
           <div><label className="label">Description</label><textarea className="input resize-none" rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={400} /></div>
           <div><label className="label">Redirect URIs (one per line)</label><textarea className="input resize-none font-mono text-xs" rows={3} value={uris} onChange={(e) => setUris(e.target.value)} placeholder="https://example.com/callback" data-app-uris /></div>
+          <div>
+            <label className="label">Activity URL</label>
+            <input className="input font-mono text-xs" value={activityUrl} onChange={(e) => setActivityUrl(e.target.value)} placeholder="https://example.com/activity" data-app-activity-url />
+            <p className="mt-1 text-xs text-text-2">A page people can open together in calls (Activities). Load <code>{publicOrigin()}/activities/sdk.js</code> in it to talk to the call; codes from <code>ParleyActivity.authorize()</code> use this URL as their redirect URI.</p>
+          </div>
           <button type="button" className="btn-primary" onClick={save} data-app-save>Save</button>
           <div className="rounded-lg border border-line bg-bg-1 p-3 space-y-2" data-app-bot>
             <div className="font-semibold">Bot</div>

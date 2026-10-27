@@ -540,5 +540,18 @@
 "Turkish": "トルコ語",
 "by {artists}": "{artists}",
 "on {album}": "{album}",
-"{n} listening along": "{n}人が一緒に聴いています"
+"{n} listening along": "{n}人が一緒に聴いています",
+"Activities": "アクティビティ",
+"Authorize": "許可する",
+"Fullscreen": "全画面表示",
+"It will see your username and avatar.": "ユーザー名とアバターが共有されます。",
+"It will see your username, avatar and the servers you are in.": "ユーザー名、アバター、参加しているサーバーが共有されます。",
+"Join": "参加",
+"Leave Activity": "アクティビティを退出",
+"Loading…": "読み込み中…",
+"Tic-Tac-Toe": "三目並べ",
+"Two players take X and O; everyone else watches.": "2人がXとOを担当し、他の人は観戦します。",
+"Watch Together": "一緒に観る",
+"Watch YouTube together, in sync.": "YouTubeをみんなで同期して観られます。",
+"{app} wants to know who you are": "{app}があなたが誰かを知りたがっています"
 }

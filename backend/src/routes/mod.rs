@@ -28,6 +28,7 @@ pub mod web_push;
 pub mod captions;
 pub mod ai;
 pub mod spotify;
+pub mod activities;
 pub mod connections;
 pub mod discovery;
 pub mod dms;
@@ -70,6 +71,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(captions::router())
         .merge(ai::router())
         .merge(spotify::router())
+        .merge(activities::router())
         .merge(account::router())
         .merge(connections::router())
         .merge(integrations::router())

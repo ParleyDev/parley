@@ -14,6 +14,8 @@ import type { Channel, User, VoiceState } from '../lib/types'
 import { voice } from '../lib/voice'
 import Avatar from './Avatar'
 import StudioPanel from './StudioPanel'
+import { ActivitiesButton, ActivityChips, ActivityFrame } from './Activities'
+import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
 import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpButton, MenuControl, MenuDivider, MicMenu, SettingsRow, SplitControl } from './CallControls'
 import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
@@ -115,6 +117,10 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   useEffect(() => { if (board && channel.guild_id && !sounds) loadSounds(channel.guild_id) }, [board, channel.guild_id, sounds, loadSounds])
   const playSound = async (id: string) => { try { await api.post(`/channels/${channel.id}/soundboard/${id}`) } catch (e) { pushToast((e as Error).message, 'error') } }
   const inThis = myChannel === channel.id
+  const activities = useCallActivities(channel.id)
+  const openActivity = useActivities((s) => s.open)
+  const activity = inThis ? activities.find((a) => a.id === openActivity) : undefined
+  useEffect(() => { void loadActivities(channel.id) }, [channel.id, inThis])
   // Every voice, stage and studio channel shows a join splash until you connect.
   const preJoin = !inThis
   const toggleChat = () => setChat((c) => { try { localStorage.setItem(CHAT_KEY, c ? '0' : '1') } catch { /* ignore */ } return !c })
@@ -237,12 +243,20 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         <div className="flex-1 min-w-0 flex flex-col">
           {preJoin ? <PreJoin channel={channel} participants={participants} users={users} canConnect={canConnect} connecting={connecting} switching={!!myChannel} recording={liveSession?.name} /> : (
           <div className="flex-1 min-h-0 overflow-hidden p-4 max-md:p-2 flex flex-col gap-3">
+            {!isStage && <ActivityChips channelId={channel.id} inCall={inThis} />}
             {count === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
                 <div className="h-20 w-20 rounded-full bg-bg-3 flex items-center justify-center mb-4"><Volume2 size={36} className="text-text-1" /></div>
                 <h2 className="text-2xl font-bold">{channel.name}</h2>
                 <p className="text-text-2 mt-2 max-w-sm">No one is here yet. Join to start a call, or say something in chat.</p>
               </div>
+            ) : activity ? (
+              <>
+                <div className="flex-1 min-h-0"><ActivityFrame session={activity} /></div>
+                <div className="shrink-0 flex gap-3 overflow-x-auto pb-1">
+                  {shown.map((t) => <div key={t.key} className="w-40 max-md:w-28 shrink-0">{renderTile(t, false)}</div>)}
+                </div>
+              </>
             ) : focusTile ? (
               <>
                 <div className="flex-1 min-h-0">{renderTile(focusTile, true)}</div>
@@ -304,6 +318,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                   {inThis && <CaptionsButton channelId={channel.id} />}
                   {channel.guild_id && channel.kind === 'voice' && has(perms, P.PRIORITY_SPEAKER) && <ControlButton label={priorityOn ? 'Priority Speaker: on' : 'Priority Speaker'} on={priorityOn} onClick={() => { voice.setPriority(!priorityOn); setPriorityOn(!priorityOn) }} data-priority-toggle=""><Megaphone size={20} /></ControlButton>}
                   {channel.guild_id && channel.kind === 'voice' && <InviteToVoice channelId={channel.id} guildId={channel.guild_id} />}
+                  {!isStage && <ActivitiesButton channelId={channel.id} />}
                   {canStream && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>}
                   {canSpeak && !suppressed && (
                     <span className="relative flex">

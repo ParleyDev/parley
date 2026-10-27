@@ -348,6 +348,7 @@ async fn run_loop(
 
 pub fn emit_voice_leave(state: &AppState, prev: &VoiceState) {
     state.hub.emit_voice(prev, prev.leave_payload());
+    crate::routes::activities::on_voice_leave(state, prev.user_id, prev.channel_id);
     // Last one out of a server voice channel: its status goes with them.
     if prev.guild_id.is_some() && state.hub.voice_in_channel(prev.channel_id) == 0 {
         let st = state.clone();

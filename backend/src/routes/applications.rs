@@ -46,8 +46,8 @@ pub fn hash(token: &str) -> String { format!("{:x}", Sha256::digest(token.as_byt
 fn secret(prefix: &str) -> String { format!("{prefix}_{}", crate::mail::new_token()) }
 
 #[derive(Serialize, sqlx::FromRow, Clone)]
-pub struct App { pub id: Uuid, pub owner_id: Uuid, pub name: String, pub description: String, pub client_id: String, pub redirect_uris: Vec<String>, pub bot_user_id: Option<Uuid>, pub created_at: chrono::DateTime<chrono::Utc>, #[sqlx(default)] pub privileged_intents: i32, #[sqlx(default)] pub icon_url: Option<String>, #[sqlx(default)] pub bot_public: bool, #[sqlx(default)] pub verified: bool, #[sqlx(default)] pub listed: bool, #[sqlx(default)] pub install_permissions: i64, #[sqlx(default)] pub tags: Vec<String> }
-const APP_COLS: &str = "id, owner_id, name, description, client_id, redirect_uris, bot_user_id, created_at, privileged_intents, icon_url, bot_public, verified, listed, install_permissions, tags";
+pub struct App { pub id: Uuid, pub owner_id: Uuid, pub name: String, pub description: String, pub client_id: String, pub redirect_uris: Vec<String>, pub bot_user_id: Option<Uuid>, pub created_at: chrono::DateTime<chrono::Utc>, #[sqlx(default)] pub privileged_intents: i32, #[sqlx(default)] pub icon_url: Option<String>, #[sqlx(default)] pub bot_public: bool, #[sqlx(default)] pub verified: bool, #[sqlx(default)] pub listed: bool, #[sqlx(default)] pub install_permissions: i64, #[sqlx(default)] pub tags: Vec<String>, #[sqlx(default)] pub activity_url: Option<String> }
+const APP_COLS: &str = "id, owner_id, name, description, client_id, redirect_uris, bot_user_id, created_at, privileged_intents, icon_url, bot_public, verified, listed, install_permissions, tags, activity_url";
 
 async fn own(state: &AppState, uid: Uuid, id: Uuid) -> AppResult<App> {
     sqlx::query_as::<_, App>(&format!("SELECT {APP_COLS} FROM applications WHERE id = $1 AND owner_id = $2")).bind(id).bind(uid).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Application not found".into()))
@@ -76,6 +76,8 @@ struct AppReq {
     listed: Option<bool>,
     install_permissions: Option<serde_json::Value>,
     tags: Option<Vec<String>>,
+    /// The page that runs as an activity in calls (http(s)); "" removes it.
+    activity_url: Option<String>,
 }
 
 fn clean_uris(list: &[String]) -> AppResult<Vec<String>> {
@@ -119,13 +121,19 @@ async fn update_app(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     own(&state, uid, id).await?;
     if let Some(n) = &req.name { if n.trim().is_empty() || n.chars().count() > 50 { return Err(AppError::BadRequest("Name must be 1–50 characters".into())) } }
     let uris = match &req.redirect_uris { Some(l) => Some(clean_uris(l)?), None => None };
+    let activity_url = req.activity_url.as_ref().map(|u| u.trim().to_string());
+    if let Some(u) = activity_url.as_deref().filter(|u| !u.is_empty()) {
+        if !(u.starts_with("https://") || u.starts_with("http://")) || u.len() > 500 || url::Url::parse(u).is_err() { return Err(AppError::BadRequest("The activity URL must be an http(s) address".into())) }
+    }
     let app = sqlx::query_as::<_, App>(&format!("UPDATE applications SET name = COALESCE($2, name), description = COALESCE($3, description), redirect_uris = COALESCE($4, redirect_uris), privileged_intents = COALESCE($5, privileged_intents),
         icon_url = CASE WHEN $6 THEN NULLIF($7, '') ELSE icon_url END, bot_public = COALESCE($8, bot_public),
-        listed = COALESCE($9, listed), install_permissions = COALESCE($10, install_permissions), tags = COALESCE($11, tags) WHERE id = $1 RETURNING {APP_COLS}"))
+        listed = COALESCE($9, listed), install_permissions = COALESCE($10, install_permissions), tags = COALESCE($11, tags),
+        activity_url = CASE WHEN $12::text IS NULL THEN activity_url ELSE NULLIF($12, '') END WHERE id = $1 RETURNING {APP_COLS}"))
         .bind(id).bind(req.name.map(|n| n.trim().to_string())).bind(req.description.map(|d| d.trim().chars().take(400).collect::<String>())).bind(uris)
         .bind(req.privileged_intents.map(|i| (i & crate::ws::intents::PRIVILEGED) as i32)).bind(req.icon_url.is_some()).bind(req.icon_url.clone().unwrap_or_default()).bind(req.bot_public)
         .bind(req.listed).bind(req.install_permissions.as_ref().map(|p| perm_value(Some(p)) as i64))
         .bind(req.tags.as_ref().map(|t| t.iter().map(|x| x.trim().to_lowercase().chars().take(20).collect::<String>()).filter(|x| !x.is_empty()).take(5).collect::<Vec<_>>()))
+        .bind(activity_url)
         .fetch_one(&state.db).await?;
     if let Some(i) = &req.icon_url { crate::routes::users::validate_image(&Some(i.clone()).filter(|x| !x.is_empty()))?; }
     if let Some(b) = app.bot_user_id { sqlx::query("UPDATE users SET display_name = $2, avatar_url = $3 WHERE id = $1 AND bot").bind(b).bind(&app.name).bind(&app.icon_url).execute(&state.db).await?; }

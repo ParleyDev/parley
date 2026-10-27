@@ -540,5 +540,18 @@
 "Turkish": "Turco",
 "by {artists}": "di {artists}",
 "on {album}": "in {album}",
-"{n} listening along": "{n} ascoltano insieme"
+"{n} listening along": "{n} ascoltano insieme",
+"Activities": "Attività",
+"Authorize": "Autorizza",
+"Fullscreen": "Schermo intero",
+"It will see your username and avatar.": "Vedrà il tuo nome utente e il tuo avatar.",
+"It will see your username, avatar and the servers you are in.": "Vedrà il tuo nome utente, il tuo avatar e i server in cui sei.",
+"Join": "Unisciti",
+"Leave Activity": "Esci dall'attività",
+"Loading…": "Caricamento…",
+"Tic-Tac-Toe": "Tris",
+"Two players take X and O; everyone else watches.": "Due giocatori prendono X e O; gli altri guardano.",
+"Watch Together": "Guarda insieme",
+"Watch YouTube together, in sync.": "Guardate YouTube insieme, in sincronia.",
+"{app} wants to know who you are": "{app} vuole sapere chi sei"
 }

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watch Together</title>
+<style>
+  :root { color-scheme: dark; --bg: #111214; --panel: #1e1f22; --line: #3f4147; --text: #f2f3f5; --muted: #b5bac1; --accent: #5865f2; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+  form { display: flex; gap: 8px; padding: 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 8px; padding: 6px 10px; font: inherit; }
+  button { border: 0; background: var(--accent); color: #fff; border-radius: 8px; padding: 6px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+  #stage { position: relative; flex: 1; min-height: 0; }
+  #player, #empty { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--muted); text-align: center; padding: 16px; }
+  #bar { padding: 6px 10px; color: var(--muted); font-size: 12px; background: var(--panel); border-top: 1px solid var(--line); display: flex; gap: 12px; }
+  #bar b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<form id="pick"><input id="url" placeholder="Paste a YouTube link" autocomplete="off" aria-label="YouTube link"><button type="submit">Play</button></form>
+<div id="stage"><div id="player"></div><div id="empty"><div style="font-size:18px;font-weight:600;color:var(--text)">Watch Together</div><div>Paste a YouTube link above. Everyone here sees the same video, in sync.</div></div></div>
+<div id="bar"><span id="now" data-video="">Nothing playing</span><span id="by"></span></div>
+<script src="sdk.js"></script>
+<script>
+'use strict'
+var people = [], state = { video: '', playing: false, t: 0, at: 0 }
+var player = null, playerReady = false, applyingUntil = 0
+var ID = /^[A-Za-z0-9_-]{11}$/
+
+function videoId(s) {
+  s = String(s || '').trim()
+  if (ID.test(s)) return s
+  try {
+    var u = new URL(s)
+    var host = u.hostname.replace(/^www\.|^m\.|^music\./, '')
+    var id = host === 'youtu.be' ? u.pathname.slice(1).split('/')[0]
+      : host === 'youtube.com' || host === 'youtube-nocookie.com' ? (u.searchParams.get('v') || (u.pathname.match(/^\/(?:shorts|embed|live)\/([^/?#]+)/) || [])[1]) : ''
+    return ID.test(id || '') ? id : ''
+  } catch (e) { return '' }
+}
+function position(s) { return s.playing ? s.t + Math.max(0, Date.now() - s.at) / 1000 : s.t }
+function nameOf(id) { var p = people.find(function (x) { return x.id === id }); return p ? (p.display_name || p.username) : '' }
+function save(next) { state = next; label(); ParleyActivity.setState(next).catch(function () {}) }
+
+function label() {
+  var now = document.getElementById('now')
+  now.dataset.video = state.video || ''
+  now.dataset.playing = state.playing ? '1' : '0'
+  now.textContent = state.video ? (state.playing ? 'Playing ' : 'Paused ') + state.video : 'Nothing playing'
+  document.getElementById('by').textContent = state.by ? 'by ' + nameOf(state.by) : ''
+  document.getElementById('empty').style.display = state.video && playerReady ? 'none' : 'flex'
+}
+
+/** Bring the player in line with the shared state. */
+function apply() {
+  label()
+  if (!playerReady || !state.video) return
+  applyingUntil = Date.now() + 1500
+  var pos = position(state)
+  var cur = player.getVideoData && player.getVideoData().video_id
+  if (cur !== state.video) {
+    if (state.playing) player.loadVideoById({ videoId: state.video, startSeconds: pos }); else player.cueVideoById({ videoId: state.video, startSeconds: pos })
+    return
+  }
+  if (Math.abs(player.getCurrentTime() - pos) > 2) player.seekTo(pos, true)
+  if (state.playing) player.playVideo(); else player.pauseVideo()
+}
+
+/** The person here pressed play / pause / seeked: share it. */
+function onPlayerState(e) {
+  if (Date.now() < applyingUntil || !state.video) return
+  var YTS = window.YT.PlayerState
+  if (e.data === YTS.PLAYING || e.data === YTS.PAUSED) {
+    var playing = e.data === YTS.PLAYING, t = player.getCurrentTime()
+    if (playing === state.playing && Math.abs(t - position(state)) < 2) return
+    save({ video: state.video, playing: playing, t: t, at: Date.now(), by: me && me.id })
+  }
+}
+
+var me = null
+document.getElementById('pick').onsubmit = function (e) {
+  e.preventDefault()
+  var id = videoId(document.getElementById('url').value)
+  if (!id) { document.getElementById('url').setCustomValidity('That isn’t a YouTube link'); document.getElementById('url').reportValidity(); return }
+  document.getElementById('url').setCustomValidity(''); document.getElementById('url').value = ''
+  save({ video: id, playing: true, t: 0, at: Date.now(), by: me && me.id }); apply()
+}
+document.getElementById('url').oninput = function () { this.setCustomValidity('') }
+
+window.onYouTubeIframeAPIReady = function () {
+  player = new window.YT.Player('player', {
+    width: '100%', height: '100%', playerVars: { playsinline: 1, rel: 0 },
+    events: { onReady: function () { playerReady = true; apply() }, onStateChange: onPlayerState },
+  })
+}
+var s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'
+s.onerror = function () { document.getElementById('empty').lastChild.textContent = 'The YouTube player couldn’t load. Check your connection.' }
+document.head.appendChild(s)
+
+ParleyActivity.ready().then(function (ctx) {
+  me = ctx.user; people = ctx.participants || []
+  if (ctx.state && ID.test(ctx.state.video || '')) state = ctx.state
+  apply()
+  ParleyActivity.on('state', function (e) { if (e.state && (e.state.video === '' || ID.test(e.state.video || ''))) { state = e.state; apply() } })
+  ParleyActivity.on('participants', function (p) { people = p; label() })
+}).catch(function (e) { document.getElementById('now').textContent = 'Could not start: ' + e.message })
+</script>
+</body>
+</html>

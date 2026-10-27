@@ -540,5 +540,18 @@
 "Turkish": "Türkçe",
 "by {artists}": "{artists} tarafından",
 "on {album}": "{album} albümünde",
-"{n} listening along": "{n} kişi birlikte dinliyor"
+"{n} listening along": "{n} kişi birlikte dinliyor",
+"Activities": "Etkinlikler",
+"Authorize": "Yetkilendir",
+"Fullscreen": "Tam ekran",
+"It will see your username and avatar.": "Kullanıcı adını ve avatarını görecek.",
+"It will see your username, avatar and the servers you are in.": "Kullanıcı adını, avatarını ve bulunduğun sunucuları görecek.",
+"Join": "Katıl",
+"Leave Activity": "Etkinlikten ayrıl",
+"Loading…": "Yükleniyor…",
+"Tic-Tac-Toe": "XOX",
+"Two players take X and O; everyone else watches.": "İki oyuncu X ve O olur; diğerleri izler.",
+"Watch Together": "Birlikte İzle",
+"Watch YouTube together, in sync.": "YouTube'u birlikte, eş zamanlı izleyin.",
+"{app} wants to know who you are": "{app} kim olduğunu bilmek istiyor"
 }
