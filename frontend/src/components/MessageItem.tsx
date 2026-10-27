@@ -59,6 +59,10 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const { guildId } = useParams()
   // Server profile avatar for the author, in this server.
   const serverAvatar = useStore((s) => (guildId ? s.members[guildId]?.[m.author.id]?.guild_avatar : undefined))
+  // In a server, people show under their server nickname (like the member list).
+  const serverNick = useStore((s) => (guildId ? s.members[guildId]?.[m.author.id]?.nickname : undefined))
+  const authorName = serverNick || m.author.display_name
+  const replyNick = useStore((s) => (guildId && replyTarget ? s.members[guildId]?.[replyTarget.author.id]?.nickname : undefined))
   const authorShown = serverAvatar ? { ...m.author, avatar_url: serverAvatar } : m.author
   const ctx = useContextMenu()
   const userMenu = useUserMenu(guildId ?? null)
@@ -234,9 +238,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       { label: 'Remind Me', icon: <AlarmClock size={16} />, children: remindPresets().map((p) => ({ label: p.label, onClick: () => { setReminder(m.id, p.at).then((at) => pushToast(`I'll remind you ${at ? remindLabel(at) : ''}`)).catch((err: Error) => pushToast(err.message, 'error')) } })) },
       { label: 'Mark Unread', icon: <MailOpen size={16} />, onClick: markUnread },
       { label: 'Copy Message Link', icon: <Link2 size={16} />, onClick: () => copy('Message link', link) },
-      ...(m.content && 'speechSynthesis' in window ? [{ label: 'Speak Message', icon: <Volume2 size={16} />, onClick: () => { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(`${m.author.display_name} said ${m.content}`)) } }] : []),
+      ...(m.content && 'speechSynthesis' in window ? [{ label: 'Speak Message', icon: <Volume2 size={16} />, onClick: () => { speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(`${authorName} said ${m.content}`)) } }] : []),
       ...(canDelete ? ['sep' as const, { label: 'Delete Message', icon: <Trash2 size={16} />, danger: true, onClick: del }] : []),
-      ...(!isOwn ? [{ label: 'Report Message', icon: <Flag size={16} />, danger: true, onClick: () => openModal({ kind: 'report', messageId: m.id, userId: m.author.id, name: m.author.display_name, guildId: guildId ?? null }) }] : []),
+      ...(!isOwn ? [{ label: 'Report Message', icon: <Flag size={16} />, danger: true, onClick: () => openModal({ kind: 'report', messageId: m.id, userId: m.author.id, name: authorName, guildId: guildId ?? null }) }] : []),
       ...(prefs.developerMode ? ['sep' as const, { label: 'Copy Message ID', icon: <Hash size={16} />, onClick: () => copy('Message ID', m.id) }] : []),
     ]
   }
@@ -245,7 +249,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
 
   if (m.kind === 'member_join') {
     const [before, after] = joinGreeting(m.id)
-    const name = <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{m.author.display_name}</button>
+    const name = <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>
     return (
       <div className="group px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
         <span className="w-10 flex justify-center shrink-0"><UserPlus size={16} className="text-success" /></span>
@@ -290,7 +294,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       return (
         <div className="px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
           <span className="w-10 flex justify-center shrink-0">{icon}</span>
-          <span className="min-w-0">You missed a call from <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{m.author.display_name}</button>.</span>
+          <span className="min-w-0">You missed a call from <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>.</span>
           <span className="ml-auto text-xs text-text-2 shrink-0" title={new Date(m.created_at).toLocaleString()}>{new Date(m.created_at).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}</span>
         </div>
       )
@@ -298,7 +302,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     return (
       <div className="px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
         <span className="w-10 flex justify-center shrink-0">{icon}</span>
-        <span className="min-w-0"><button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{m.author.display_name}</button>{' '}
+        <span className="min-w-0"><button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>{' '}
           {m.kind === 'channel_follow' ? <span className="msg-content">{renderMarkdown(m.content)}</span> : threadName !== null ? (<>started a thread: <button type="button" className="font-medium text-text-0 hover:underline" onClick={() => m.ref_id && setOpenThread(m.ref_id)} data-system-thread={m.ref_id ?? ''}>{threadName}</button></>) : m.content}
           {m.kind === 'pins_add' && m.reply_to && onJumpToReply && (
             <button type="button" onClick={onJumpToReply} className="ml-2 inline-flex items-center gap-0.5 text-xs text-sky-400 hover:underline" data-system-jump={m.reply_to}>See the message <ArrowRight size={12} /></button>
@@ -321,7 +325,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
   return (
     <AvatarMotion.Provider value={motion}>
-    <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${m.author.display_name}: ${m.content.slice(0, 200)}`} onPointerUp={onTap} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local || m.ephemeral) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${authorName}: ${m.content.slice(0, 200)}`} onPointerUp={onTap} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local || m.ephemeral) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {m.interaction && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" data-interaction-header={m.interaction.name}>
           <span className="font-semibold text-text-1">{m.interaction.user.display_name}</span> used <span className="font-semibold text-sky-400">/{m.interaction.name}</span>
@@ -329,7 +333,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       )}
       {m.reply_to && (
         <div role="button" onClick={(e) => { if (onJumpToReply) { e.stopPropagation(); onJumpToReply() } }} data-reply-link={m.reply_to} className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 cursor-pointer hover:text-text-0 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" title="Jump to the original message">
-          {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{replyTarget.content || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 Attachment' : '')}</span></>) : <i data-reply-preview="deleted">Original message was deleted</i>}
+          {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyNick || replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{replyTarget.content || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 Attachment' : '')}</span></>) : <i data-reply-preview="deleted">Original message was deleted</i>}
         </div>
       )}
       <div className={`flex ${compact ? 'gap-2' : 'gap-4 max-md:gap-3'}`}>
@@ -343,7 +347,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         <div className="min-w-0 flex-1">
           {!grouped && !compact && (
             <div className="flex items-baseline gap-2 leading-[1.375rem] h-[1.375rem]" data-msg-header>
-              <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button><RoleIcon guildId={guildId} userId={m.author.id} />
+              <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{authorName}</StyledName></button><RoleIcon guildId={guildId} userId={m.author.id} />
               <ClanTag userId={m.author.id} tag={m.author.clan_tag} />
               {m.author.bot && <span className="inline-flex items-center gap-0.5 rounded bg-accent px-1 py-px text-[10px] font-bold uppercase text-white" data-bot-tag={m.author.verified_bot ? 'verified' : ''} title={m.author.verified_bot ? 'Verified bot' : undefined}>{m.author.verified_bot && <Check size={10} strokeWidth={3} />}Bot</span>}
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
@@ -351,7 +355,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           )}
           {compact && prefs.compactAvatars && <span className="float-left mr-2 mt-0.5" data-compact-avatar><Avatar user={authorShown} size={20} /></span>}
           {compact && (
-            <><button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="float-left mr-1.5 font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button><span className="float-left mr-1.5"><RoleIcon guildId={guildId} userId={m.author.id} /></span></>
+            <><button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="float-left mr-1.5 font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{authorName}</StyledName></button><span className="float-left mr-1.5"><RoleIcon guildId={guildId} userId={m.author.id} /></span></>
           )}
           {editing ? (
             <div className="relative">
@@ -372,7 +376,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               )}
               {blockMedia && (media || links.length > 0 || (m.attachments ?? []).some((a) => /^(image|video)\//.test(a.content_type))) && <div className="mt-1 text-xs text-text-2 italic" data-media-blocked>Media hidden by your Content & Social settings.</div>}
               {media && !blockMedia && (prefs.linkMedia && !m.suppress_embeds ? <MaybeBlurred on={sensitive}><MediaEmbed url={media} /></MaybeBlurred> : <a href={media} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline break-all" data-media-link>{media}</a>)}
-              {m.interaction?.deferred && <div className="flex items-center gap-1.5 text-sm italic text-text-2" data-interaction-thinking><span className="inline-flex gap-0.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2 [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2 [animation-delay:300ms]" /></span>{m.author.display_name} is thinking…</div>}
+              {m.interaction?.deferred && <div className="flex items-center gap-1.5 text-sm italic text-text-2" data-interaction-thinking><span className="inline-flex gap-0.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2 [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-2 [animation-delay:300ms]" /></span>{authorName} is thinking…</div>}
               {m.embeds?.map((e, i) => <RichEmbed key={i} e={e} />)}
               {m.components && m.components.length > 0 && <MessageComponents m={m} />}
               {m.ephemeral && <div className="mt-1 flex items-center gap-1 text-xs text-text-2" data-ephemeral><EyeOff size={12} />Only you can see this · <button type="button" className="text-sky-400 hover:underline" onClick={() => removeMessage(m.channel_id, m.id)} data-ephemeral-dismiss>Dismiss message</button></div>}
