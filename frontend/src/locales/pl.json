@@ -3267,5 +3267,6 @@
 "Clicks go through the overlay": "Kliknięcia przechodzą przez nakładkę",
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Podczas rozmów małe okno pozostaje nad grami i innymi aplikacjami i pokazuje, kto jest w rozmowie i kto mówi. Przełączaj je skrótem {combo}. Wyłącz przepuszczanie kliknięć, aby przesunąć je za górny pasek.",
 "In-game overlay": "Nakładka w grze",
-"Not in a call": "Nie jesteś w rozmowie"
+"Not in a call": "Nie jesteś w rozmowie",
+"Search {n} nameplates": "Szukaj wśród {n} tabliczek"
 }

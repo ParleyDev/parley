@@ -1,10 +1,10 @@
 //! Instance-wide assets from a mounted folder (`ASSETS_DIR`, read-only is fine). Each kind lives in its own
-//! subfolder; today that is `avatar-decorations/`: PNG / APNG / GIF / WebP overlays drawn around an avatar
-//! (Discord-style, square with a transparent middle). Dropping files in or removing them needs no restart: the
+//! subfolder: `avatar-decorations/` (PNG / APNG / GIF / WebP overlays drawn around an avatar, Discord-style, square
+//! with a transparent middle) and `nameplates/` (short WebM / MP4 loops or images shown behind a name in lists). Dropping files in or removing them needs no restart: the
 //! index is rebuilt from the folder at most every `RESCAN` seconds.
 //!
 //! A decoration's id is its file name without the extension, lower-cased, with anything outside `a-z0-9_-`
-//! turned into `_`. Users store `asset:<id>` in `users.avatar_decoration`. Animated files are big, so each one
+//! turned into `_`. Users store `asset:<id>` in `users.avatar_decoration` or `users.nameplate`. Animated files are big, so each one
 //! also has a still first frame (`…/:id/static`), made once and cached under `UPLOAD_DIR/asset-cache/`.
 use crate::{
     config::Config,
@@ -28,6 +28,7 @@ use std::{
 };
 
 pub const DECORATIONS_DIR: &str = "avatar-decorations";
+pub const NAMEPLATES_DIR: &str = "nameplates";
 /// Stored-value prefix for a decoration from the assets folder (presets are bare names like "gold").
 pub const ASSET_PREFIX: &str = "asset:";
 const RESCAN: Duration = Duration::from_secs(30);
@@ -39,6 +40,8 @@ pub fn router() -> Router<AppState> {
         .route("/assets/avatar-decorations", get(list))
         .route("/assets/avatar-decorations/:id", get(serve))
         .route("/assets/avatar-decorations/:id/static", get(serve_static))
+        .route("/assets/nameplates", get(list_nameplates))
+        .route("/assets/nameplates/:id", get(serve_nameplate))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,19 +66,30 @@ impl Index {
     pub fn get(&self, id: &str) -> Option<&Decoration> { self.by_id.get(id).map(|&i| &self.list[i]) }
 }
 
-/// When the index was built, and the index.
-type Cached = Option<(Instant, Arc<Index>)>;
-static INDEX: LazyLock<RwLock<Cached>> = LazyLock::new(|| RwLock::new(None));
+/// Per kind: when the index was built, and the index.
+static INDEX: LazyLock<RwLock<HashMap<&'static str, (Instant, Arc<Index>)>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
 
-/// The current decoration index, rescanning the folder when the cached one is older than `RESCAN`.
-pub async fn decorations(config: &Config) -> Arc<Index> {
-    if let Some((at, idx)) = INDEX.read().unwrap().as_ref() {
+/// A kind's current index, rescanning its folder when the cached one is older than `RESCAN`.
+async fn index_of(config: &Config, kind: &'static str) -> Arc<Index> {
+    if let Some((at, idx)) = INDEX.read().unwrap().get(kind) {
         if at.elapsed() < RESCAN { return idx.clone(); }
     }
-    let dir = config.assets_dir.join(DECORATIONS_DIR);
-    let idx = Arc::new(tokio::task::spawn_blocking(move || scan(&dir)).await.unwrap_or_default());
-    *INDEX.write().unwrap() = Some((Instant::now(), idx.clone()));
+    let dir = config.assets_dir.join(kind);
+    let video = kind == NAMEPLATES_DIR;
+    let idx = Arc::new(tokio::task::spawn_blocking(move || scan_kind(&dir, video)).await.unwrap_or_default());
+    INDEX.write().unwrap().insert(kind, (Instant::now(), idx.clone()));
     idx
+}
+
+pub async fn decorations(config: &Config) -> Arc<Index> { index_of(config, DECORATIONS_DIR).await }
+pub async fn nameplates(config: &Config) -> Arc<Index> { index_of(config, NAMEPLATES_DIR).await }
+
+/// Whether a stored `nameplate` value names a nameplate file that exists right now.
+pub async fn nameplate_exists(config: &Config, value: &str) -> bool {
+    match value.strip_prefix(ASSET_PREFIX) {
+        Some(id) => nameplates(config).await.get(id).is_some(),
+        None => false,
+    }
 }
 
 /// Whether a stored `avatar_decoration` value names a decoration that exists right now.
@@ -95,18 +109,20 @@ pub fn display_name(file_stem: &str) -> String {
     file_stem.split(['_', '-', ' ']).filter(|w| !w.is_empty()).map(|w| { let mut c = w.chars(); c.next().map(|f| f.to_uppercase().chain(c).collect::<String>()).unwrap_or_default() }).collect::<Vec<_>>().join(" ")
 }
 
-fn content_type(ext: &str) -> Option<&'static str> {
+fn content_type(ext: &str, video: bool) -> Option<&'static str> {
     match ext {
         "png" | "apng" => Some("image/png"),
         "gif" => Some("image/gif"),
         "webp" => Some("image/webp"),
+        "webm" if video => Some("video/webm"),
+        "mp4" if video => Some("video/mp4"),
         _ => None,
     }
 }
 
 /// Animated PNGs carry an `acTL` chunk before the image data; animated WebP an `ANIM` chunk; GIFs count as animated.
 fn is_animated(path: &FsPath, ct: &str) -> bool {
-    if ct == "image/gif" { return true; }
+    if ct == "image/gif" || ct.starts_with("video/") { return true; }
     let Ok(mut f) = std::fs::File::open(path) else { return false };
     let mut head = vec![0u8; 4096];
     let n = std::io::Read::read(&mut f, &mut head).unwrap_or(0);
@@ -115,7 +131,10 @@ fn is_animated(path: &FsPath, ct: &str) -> bool {
     head.windows(4).any(|w| w == needle)
 }
 
-pub fn scan(dir: &FsPath) -> Index {
+pub fn scan(dir: &FsPath) -> Index { scan_kind(dir, false) }
+
+/// Index a kind's folder; `video` also takes WebM / MP4 loops.
+pub fn scan_kind(dir: &FsPath, video: bool) -> Index {
     let Ok(rd) = std::fs::read_dir(dir) else { return Index::default() };
     let mut files: Vec<_> = rd.flatten().filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false)).collect();
     files.sort_by_key(|e| e.file_name());
@@ -125,7 +144,7 @@ pub fn scan(dir: &FsPath) -> Index {
         let name = e.file_name().to_string_lossy().to_string();
         if name.starts_with('.') { continue; }
         let (Some(stem), Some(ext)) = (path.file_stem().map(|s| s.to_string_lossy().to_string()), path.extension().map(|s| s.to_string_lossy().to_lowercase())) else { continue };
-        let Some(ct) = content_type(&ext) else { continue };
+        let Some(ct) = content_type(&ext, video) else { continue };
         let Ok(meta) = e.metadata() else { continue };
         if meta.len() == 0 || meta.len() > MAX_FILE { continue; }
         let id = asset_id(&stem);
@@ -140,6 +159,18 @@ pub fn scan(dir: &FsPath) -> Index {
 
 async fn list(State(state): State<AppState>) -> Json<Vec<Decoration>> {
     Json(decorations(&state.config).await.list.clone())
+}
+
+async fn list_nameplates(State(state): State<AppState>) -> Json<Vec<Decoration>> {
+    Json(nameplates(&state.config).await.list.clone())
+}
+
+async fn serve_nameplate(State(state): State<AppState>, Path(id): Path<String>, headers: HeaderMap) -> AppResult<Response> {
+    let d = nameplates(&state.config).await.get(&id).cloned().ok_or_else(|| AppError::NotFound("Unknown nameplate".into()))?;
+    let etag = format!("\"{}\"", d.tag);
+    if not_modified(&headers, &etag) { return Ok(StatusCode::NOT_MODIFIED.into_response()); }
+    let file = tokio::fs::File::open(&d.path).await.map_err(|_| AppError::NotFound("Nameplate file missing".into()))?;
+    Ok(image_response(Body::from_stream(tokio_util::io::ReaderStream::new(file)), d.content_type, &etag))
 }
 
 /// Shared headers; the ETag follows the file's mtime and size so a replaced file is picked up after max-age.
@@ -227,6 +258,20 @@ mod tests {
         assert!(!idx.get("still_one").unwrap().animated);
         assert_eq!(idx.get("still_one").unwrap().name, "Still One");
         assert!(scan(&dir.join("missing")).list.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn nameplates_take_video_and_decorations_do_not() {
+        let dir = std::env::temp_dir().join(format!("parley-assets-video-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Aurora.webm"), b"\x1a\x45\xdf\xa3webm").unwrap();
+        std::fs::write(dir.join("clip.mp4"), b"\0\0\0\x18ftypmp42").unwrap();
+        let plates = scan_kind(&dir, true);
+        assert_eq!(plates.list.iter().map(|d| d.id.as_str()).collect::<Vec<_>>(), ["aurora", "clip"]);
+        assert!(plates.get("aurora").unwrap().animated && plates.get("aurora").unwrap().content_type == "video/webm");
+        assert!(scan(&dir).list.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

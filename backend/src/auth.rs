@@ -199,3 +199,26 @@ where
         AuthSession::from_request_parts(parts, state).await.map(|AuthSession(uid, _)| AuthUser(uid))
     }
 }
+
+/// Extractor: the user, and their session when the caller has one (app and bot tokens have none). For routes any
+/// token may use that still care which session made the call (marking read clears notifications on the others).
+#[derive(Debug, Clone, Copy)]
+pub struct AuthAny(pub Uuid, pub Option<Uuid>);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for AuthAny
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let st = AppState::from_ref(state);
+        let header = parts.headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+        if let Some(uid) = crate::routes::applications::resolve_token(&st, &header, &parts.method, parts.uri.path()).await? {
+            return Ok(AuthAny(uid, None));
+        }
+        AuthSession::from_request_parts(parts, state).await.map(|AuthSession(uid, sid)| AuthAny(uid, Some(sid)))
+    }
+}

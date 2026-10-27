@@ -1,6 +1,7 @@
 // Undeliverable DMs (red message + Ribbit notice with Retry / Delete / Dismiss) and the "viewing older messages" bar.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, raw, ok, finish, openDms } from '../lib.mjs'
+import { execSync } from 'node:child_process'
+import { WEB, S, reg, call, callS, raw, ok, finish, openDms, testContainer } from '../lib.mjs'
 
 const a = await reg('alice'); const b = await reg('bob')
 await openDms(a, b)
@@ -59,7 +60,14 @@ const delivered = (await call(b.token, 'GET', `/channels/${dm.id}/messages?limit
 ok('after unblocking, Retry delivers and the row becomes a normal message', !!delivered && await pa.locator(`[data-msg-id="${delivered.id}"]`).count() === 1 && !(await pa.locator(`[data-msg-id="${delivered.id}"] .msg-content`).getAttribute('class')).includes('text-danger'))
 
 console.log('-- older messages bar')
-for (let i = 0; i < 80; i++) await call(b.token, 'POST', `/channels/${dm.id}/messages`, { content: `scroll filler ${i}` })
+let lastFiller = null
+for (let i = 0; i < 80; i++) lastFiller = await call(b.token, 'POST', `/channels/${dm.id}/messages`, { content: `scroll filler ${i}` })
+// Alice is watching, so she reads them as they arrive; let that catch up before reloading (otherwise she rightly
+// lands on the NEW line, above the bottom).
+for (let i = 0; i < 60; i++) {
+  if (execSync(`docker exec ${testContainer('db')} psql -U parley -tAc "SELECT last_read_msg FROM read_states WHERE user_id = '${a.user.id}' AND channel_id = '${dm.id}'"`).toString().trim() === lastFiller.id) break
+  await new Promise((r) => setTimeout(r, 250))
+}
 await pa.reload(); await pa.waitForSelector('textarea'); await pa.waitForFunction(() => document.querySelectorAll('[data-msg-id]').length > 40)
 await pa.waitForFunction(() => !document.querySelector('[data-older-bar]'), null, { timeout: 10000 }).catch(() => {})
 ok('no bar at the bottom', await pa.locator('[data-older-bar]').count() === 0)

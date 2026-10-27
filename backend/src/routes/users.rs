@@ -455,7 +455,11 @@ async fn update_me(
         return Err(AppError::BadRequest("profile_privacy must be 'everyone' or 'friends'".into()));
     }
     for (v, list, what) in [(&req.profile_frame, PROFILE_FRAMES, "frame"), (&req.nameplate, NAMEPLATES, "nameplate"), (&req.profile_effect, PROFILE_EFFECTS, "profile effect")] {
-        if let Some(v) = v { if !v.is_empty() && !list.contains(&v.as_str()) { return Err(AppError::BadRequest(format!("Unknown {what}"))) } }
+        if let Some(v) = v {
+            // Nameplates can also be files from the instance's assets folder (`asset:<id>`).
+            let asset = what == "nameplate" && crate::routes::assets::nameplate_exists(&state.config, v).await;
+            if !v.is_empty() && !asset && !list.contains(&v.as_str()) { return Err(AppError::BadRequest(format!("Unknown {what}"))) }
+        }
     }
     if let Some(h) = &req.house {
         if !["", "ember", "tide", "grove"].contains(&h.as_str()) { return Err(AppError::BadRequest("house is ember, tide, grove or empty".into())) }

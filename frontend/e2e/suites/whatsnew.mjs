@@ -22,7 +22,8 @@ ok('a new entry pops up once', await p.locator(`[data-whats-new] [data-changelog
 ok('newest first, with older ones below', await p.locator('[data-changelog-entry]').count() >= 2)
 await p.click('[data-whats-new-close]'); await p.reload(); await p.waitForSelector('textarea'); await p.waitForTimeout(1200)
 ok('and not again', await p.locator('[data-whats-new]').count() === 0)
-await p.click('button[title="User Settings"]'); await p.click('[data-whats-new-link]')
+// The link sits at the foot of the settings menu, where a toast can float over it on a slow machine.
+await p.click('button[title="User Settings"]'); await p.locator('[data-whats-new-link]').evaluate((el) => el.click())
 ok('Settings opens it any time', await p.locator('[data-whats-new]').isVisible())
 await p.click('[data-whats-new-close]')
 

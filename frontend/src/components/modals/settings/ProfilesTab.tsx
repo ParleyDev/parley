@@ -19,6 +19,7 @@ import { WearServerTag } from '../../ServerTag'
 import Avatar from '../../Avatar'
 import { useT } from '../../../lib/i18n'
 import { badgeIcon, HOUSES } from '../../Flair'
+import { AssetNameplatePicker } from '../../Nameplate'
 
 const MAX_BIO = 400
 
@@ -173,6 +174,7 @@ export default function ProfilesTab() {
               <div className="flex flex-wrap gap-2">
                 {[{ id: '', label: t('None') }, ...NAMEPLATES].map((n) => <button key={n.id || 'none'} type="button" onClick={() => setPlate(n.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${nameplateClass(n.id)} ${plate === n.id ? 'border-accent' : 'border-line hover:border-text-2'}`} data-nameplate-option={n.id || 'none'} aria-pressed={plate === n.id}>{n.label}</button>)}
               </div>
+              <AssetNameplatePicker value={plate} onPick={setPlate} />
               <p className="mt-1 text-xs text-text-2">{t('Shown behind your name in member lists and DMs.')}</p>
             </div>
             <div>

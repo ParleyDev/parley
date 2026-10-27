@@ -8,8 +8,9 @@ export const NAMEPLATES = [
   { id: 'candy', label: 'Candy' }, { id: 'aurora', label: 'Aurora' }, { id: 'mono', label: 'Mono' },
 ] as const
 export const PROFILE_EFFECTS = [
-  { id: 'sparkles', label: 'Sparkles', glyph: '✨' }, { id: 'snow', label: 'Snowfall', glyph: '❄️' }, { id: 'hearts', label: 'Hearts', glyph: '💖' },
-  { id: 'confetti', label: 'Confetti', glyph: '🎊' }, { id: 'bubbles', label: 'Bubbles', glyph: '🫧' },
+  // `fall`: drifts down from the top (snow, confetti); otherwise floats up from the bottom (hearts, bubbles).
+  { id: 'sparkles', label: 'Sparkles', glyph: '✨', fall: true }, { id: 'snow', label: 'Snowfall', glyph: '❄️', fall: true }, { id: 'hearts', label: 'Hearts', glyph: '💖', fall: false },
+  { id: 'confetti', label: 'Confetti', glyph: '🎊', fall: true }, { id: 'bubbles', label: 'Bubbles', glyph: '🫧', fall: false },
 ] as const
 
 /** Class for a nameplate background behind a list row ('' = none). */

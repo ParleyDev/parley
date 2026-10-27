@@ -3267,5 +3267,6 @@
 "Clicks go through the overlay": "Klicks gehen durch das Overlay",
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Während Anrufen bleibt ein kleines Fenster über Spielen und anderen Apps und zeigt, wer im Anruf ist und wer spricht. Mit {combo} ein- und ausblenden. Schalte das Durchklicken aus, um es an der oberen Leiste zu verschieben.",
 "In-game overlay": "Ingame-Overlay",
-"Not in a call": "Nicht in einem Anruf"
+"Not in a call": "Nicht in einem Anruf",
+"Search {n} nameplates": "{n} Namensschilder durchsuchen"
 }

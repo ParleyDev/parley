@@ -3267,5 +3267,6 @@
 "Clicks go through the overlay": "Los clics atraviesan la superposición",
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "Durante las llamadas, una pequeña ventana se mantiene sobre los juegos y otras apps y muestra quién está en la llamada y quién habla. Actívala o desactívala con {combo}. Desactiva el clic a través para moverla desde su barra superior.",
 "In-game overlay": "Superposición en el juego",
-"Not in a call": "No estás en una llamada"
+"Not in a call": "No estás en una llamada",
+"Search {n} nameplates": "Buscar entre {n} placas de nombre"
 }

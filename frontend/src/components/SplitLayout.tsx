@@ -45,7 +45,7 @@ export function NavColumn({ hidden, children }: { hidden: boolean; children: Rea
   const t = useT()
   const { width, handleProps } = useResizableSidebar('sidebar', 272, 224, 450)
   return (
-    <div style={{ '--sidebar-w': `${width}px` } as CSSProperties} className={`relative flex flex-col h-full shrink-0 w-[calc(72px_+_var(--sidebar-w))] tab:w-[296px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${hidden ? 'max-md:hidden' : ''}`}>
+    <div style={{ '--sidebar-w': `${width}px` } as CSSProperties} className={`relative flex flex-col h-full shrink-0 w-[calc(72px_+_var(--sidebar-w))] tab:w-[296px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${hidden ? 'max-md:hidden' : ''}`} data-layer="md">
       {children}
       <div {...handleProps} aria-label={t('Resize sidebar')} data-sidebar-resizer />
     </div>

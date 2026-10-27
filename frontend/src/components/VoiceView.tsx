@@ -353,7 +353,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {isStudio && sessionsOpen && <StudioPanel channelId={channel.id} canManage={isMod} onClose={() => setSessionsOpen(false)} width={sessionsPanel.width} handle={<div {...sessionsPanel.handleProps} />} />}
         {/* Chat: side panel on wide screens, full overlay on phones. */}
         {chat && (
-          <section className="relative flex flex-col bg-bg-2 border-l border-line shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10" style={{ width: chatPanel.width }} data-voice-chat-panel>
+          <section className="relative flex flex-col bg-bg-2 border-l border-line shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10" data-layer="md" style={{ width: chatPanel.width }} data-voice-chat-panel>
             <div {...chatPanel.handleProps} />
             <div className="h-12 shrink-0 px-3 flex items-center gap-2 border-b border-line">
               <MessageSquare size={18} className="text-text-2" />

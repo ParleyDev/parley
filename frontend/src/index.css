@@ -50,6 +50,14 @@
 :root:not([data-theme="light"])[data-palette="sunset"] .pop:not([data-profile-popout]),
 :root:not([data-theme="light"])[data-palette="aurora"] [data-profile-popout] > *,
 :root:not([data-theme="light"])[data-palette="sunset"] [data-profile-popout] > * { background-color: var(--color-float) !important; }
+/* Phones and tablets: panes that cover the rest of the app (navigation, member list, side panels) get the solid
+   surface too, or the hidden content underneath shows through them. */
+@media (max-width: 767px) {
+  :root:not([data-theme="light"]):is([data-palette="aurora"], [data-palette="sunset"]) [data-layer] { background-color: var(--color-float) !important; }
+}
+@media (max-width: 1023px) {
+  :root:not([data-theme="light"]):is([data-palette="aurora"], [data-palette="sunset"]) [data-layer="lg"] { background-color: var(--color-float) !important; }
+}
 /* Inside a floating surface, the translucent layers stack on solid ground: keep them readable but distinct. */
 :root:not([data-theme="light"])[data-palette="aurora"] .pop .bg-bg-1,
 :root:not([data-theme="light"])[data-palette="sunset"] .pop .bg-bg-1,
@@ -81,6 +89,15 @@ html, body, #root { height: 100%; }
 /* lib/viewport.ts: the visible height, so the on-screen keyboard shrinks the app instead of scrolling the header away. */
 #root { height: var(--app-height, 100dvh); }
 html, body { overflow: hidden; }
+/* Never wider than the screen: a stray wide row must not let a phone pan sideways. */
+html, body, #root { max-width: 100vw; overflow-x: hidden; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* Phones zoom the whole page into a field whose text is under 16px when it gets focus (iOS Safari and installed
+   web apps), and the page then pans sideways: the message box keeps at least 16px there, whatever the chat scale. */
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  textarea.composer-input { font-size: max(16px, calc(15px * var(--font-scale))) !important; }
+  [contenteditable="true"] { font-size: 16px !important; }
+}
 body {
   @apply bg-bg-2 text-text-0 font-sans antialiased;
   overscroll-behavior: none;
@@ -262,6 +279,10 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 .pf-frost { box-shadow: 0 0 0 3px #bae6fd, 0 0 16px rgb(186 230 253 / .6) !important; }
 .pf-ember { box-shadow: 0 0 0 3px #f97316, 0 0 20px rgb(239 68 68 / .55) !important; }
 .np { background-size: 200% 100%; }
+/* DM list rows: the nameplate only shows on the open conversation and under the pointer. */
+.np-hover:not(:hover):not([aria-current="page"]) { background-image: none; }
+.np-hover:not(:hover):not([aria-current="page"]) .np-video { opacity: 0; }
+.np-video { opacity: .75; transition: opacity .15s; }
 .np-dusk { background-image: linear-gradient(90deg, rgb(124 58 237 / .35), rgb(236 72 153 / .18) 70%, transparent); }
 .np-ocean { background-image: linear-gradient(90deg, rgb(14 116 144 / .4), rgb(56 189 248 / .15) 70%, transparent); }
 .np-forest { background-image: linear-gradient(90deg, rgb(21 128 61 / .4), rgb(132 204 22 / .14) 70%, transparent); }
@@ -272,6 +293,9 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 /* Profile effects: glyphs drifting up over the card. */
 .pe-bit { bottom: -20px; opacity: 0; animation-name: pe-rise; animation-iteration-count: infinite; animation-timing-function: linear; }
 @keyframes pe-rise { 0% { transform: translateY(0) rotate(0); opacity: 0 } 15% { opacity: .9 } 100% { transform: translateY(-420px) rotate(25deg); opacity: 0 } }
+/* Falling kinds (snow, confetti): from just above the card down past its bottom, swaying side to side. */
+.pe-bit.pe-fall { bottom: auto; top: -20px; animation-name: pe-fall; }
+@keyframes pe-fall { 0% { transform: translate(0, 0) rotate(0); opacity: 0 } 12% { opacity: .9 } 50% { transform: translate(12px, 210px) rotate(90deg) } 85% { opacity: .8 } 100% { transform: translate(-6px, 440px) rotate(180deg); opacity: 0 } }
 :root[data-motion="reduced"] .pe-bit, :root[data-motion="reduced"] .np-aurora { animation: none !important; }
 
 /* Super reactions: a shimmering chip, and a burst of the emoji when someone adds one. */

@@ -3267,5 +3267,6 @@
 "Clicks go through the overlay": "クリックをオーバーレイに通す",
 "During calls, a small window stays on top of games and other apps showing who is in the call and who is talking. Toggle it with {combo}. Turn off click-through to move it by its top bar.": "通話中、小さなウィンドウがゲームや他のアプリの上に表示され、通話中の人と話している人がわかります。{combo} で切り替えます。上部のバーで移動するにはクリックの透過をオフにしてください。",
 "In-game overlay": "ゲーム内オーバーレイ",
-"Not in a call": "通話していません"
+"Not in a call": "通話していません",
+"Search {n} nameplates": "{n} 件のネームプレートを検索"
 }
