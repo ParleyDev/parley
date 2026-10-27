@@ -353,6 +353,9 @@ pub struct Guild {
     pub tag: Option<String>,
     #[sqlx(default)]
     pub tag_badge: Option<String>,
+    /// The tag pill's colour (#rrggbb), or none for the default.
+    #[sqlx(default)]
+    pub tag_color: Option<String>,
     /// Partnered with this instance (set by admins).
     #[sqlx(default)]
     #[serde(default)]

@@ -53,7 +53,7 @@ await hold(`[data-msg-id="${mine.id}"] .msg-content`, 650); await p.waitForTimeo
 const sheet = p.locator('[data-menu-sheet]')
 ok('holding a message opens its action sheet', await sheet.isVisible())
 const sb = await sheet.boundingBox()
-ok('docked to the bottom, full width', sb && Math.abs(sb.y + sb.height - 844) <= 2 && sb.width >= 388)
+ok('docked to the bottom, full width', sb && Math.abs(sb.y + sb.height - 844) <= 2 && sb.width >= 388, JSON.stringify(sb))
 ok('with the message actions', await sheet.locator('[data-menu-item="Reply"]').count() === 1 && await sheet.locator('[data-menu-item="Copy Text"]').count() === 1)
 ok('without also opening the tap bar', !(await p.locator(`[data-msg-id="${mine.id}"] button[title="Reply"]`).isVisible()))
 await sheet.locator('[data-menu-item="Reply"]').tap(); await p.waitForTimeout(200)

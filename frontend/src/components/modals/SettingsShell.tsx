@@ -37,16 +37,17 @@ export default function SettingsShell<T extends string>({ sections, tab, onTab, 
 
   return (
     <div className="fixed inset-0 z-50 bg-bg-1 flex max-md:flex-col pop safe-area" role="dialog" aria-modal data-settings-view={menu ? 'menu' : 'section'}>
-      <nav className={`w-[232px] shrink-0 bg-bg-0/60 flex justify-end max-md:w-full max-md:flex-1 max-md:min-h-0 max-md:flex-col max-md:justify-start max-md:bg-bg-1 ${menu ? '' : 'max-md:hidden'}`} data-settings-nav>
+      <nav className={`md:flex-[1_0_232px] shrink-0 bg-bg-0/60 flex justify-end max-md:w-full max-md:flex-1 max-md:min-h-0 max-md:flex-col max-md:justify-start max-md:bg-bg-1 ${menu ? '' : 'max-md:hidden'}`} data-settings-nav>
         <div className="md:hidden h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line"><span className="font-bold text-lg truncate">{t(title)}</span>{closeBtn}</div>
-        <div className="w-[200px] py-14 pr-2 space-y-0.5 max-md:w-full max-md:flex-1 max-md:overflow-y-auto max-md:px-3 max-md:py-3 max-md:space-y-0">
+        <div className="w-[218px] py-14 pr-2 pl-5 space-y-0.5 overflow-y-auto max-md:w-full max-md:pl-3 max-md:flex-1 max-md:overflow-y-auto max-md:px-3 max-md:py-3 max-md:space-y-0">
           {sections.map((sec, i) => (
             <div key={i} className="max-md:mb-4">
-              {sec.title && <h3 className={`px-2.5 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2 truncate ${i > 0 ? 'mt-5 max-md:mt-0' : ''}`}>{t(sec.title)}</h3>}
+              {i > 0 && <div className="h-px bg-line/70 mx-2.5 my-2.5 max-md:hidden" />}
+              {sec.title && <h3 className="px-2.5 mb-1 pt-0.5 text-[12px] font-semibold text-text-2 truncate max-md:uppercase max-md:text-[11px] max-md:font-bold max-md:tracking-wider" data-settings-section>{t(sec.title)}</h3>}
               <div className="max-md:rounded-xl max-md:bg-bg-0/60 max-md:overflow-hidden">
                 {sec.items.map((it) => (
-                  <button key={it.id} onClick={() => pick(it.id)} data-settings-tab={it.id} className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-left max-md:rounded-none max-md:gap-3 max-md:px-3 max-md:py-3 max-md:border-b max-md:border-line/60 max-md:last:border-b-0 ${tab === it.id ? 'bg-bg-4 text-text-0 max-md:bg-transparent' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>
-                    {it.icon}<span className="flex-1 truncate">{t(it.label)}</span><ChevronRight size={16} className="md:hidden text-text-2" />
+                  <button key={it.id} onClick={() => pick(it.id)} data-settings-tab={it.id} className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[15px] font-medium text-left max-md:rounded-none max-md:gap-3 max-md:px-3 max-md:py-3 max-md:border-b max-md:border-line/60 max-md:last:border-b-0 ${tab === it.id ? 'bg-bg-4 text-text-0 max-md:bg-transparent' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>
+                    <span className="md:hidden flex">{it.icon}</span><span className="flex-1 truncate">{t(it.label)}</span><ChevronRight size={16} className="md:hidden text-text-2" />
                   </button>
                 ))}
               </div>
@@ -55,7 +56,7 @@ export default function SettingsShell<T extends string>({ sections, tab, onTab, 
           {footer && <div className="max-md:rounded-xl max-md:bg-bg-0/60 max-md:overflow-hidden max-md:p-1"><div className="h-px bg-line my-3 mx-2 max-md:hidden" />{footer}</div>}
         </div>
       </nav>
-      <div className={`flex-1 min-w-0 min-h-0 flex flex-col ${menu ? 'max-md:hidden' : ''}`}>
+      <div className={`md:flex-[1_1_800px] max-md:flex-1 min-w-0 min-h-0 flex flex-col ${menu ? 'max-md:hidden' : ''}`}>
         <div className="md:hidden h-12 shrink-0 flex items-center gap-1 pl-1 pr-3 border-b border-line">
           <button onClick={() => setMenu(true)} className="h-9 flex items-center gap-0.5 rounded-md pl-1 pr-2 text-text-1 hover:bg-bg-3 hover:text-text-0" data-settings-back><ChevronLeft size={22} /><span className="text-[15px]">{t(title)}</span></button>
           <span className="min-w-0 flex-1 truncate text-center font-semibold" data-settings-title>{current?.label ? t(current.label) : ''}</span>

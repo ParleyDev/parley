@@ -3,7 +3,6 @@ import { useMemo, useState, type FormEvent } from 'react'
 import ImagePicker from '../ImagePicker'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
-import { ServerTagEditor } from '../../ServerTag'
 import type { Guild } from '../../../lib/types'
 import { useT } from '../../../lib/i18n'
 
@@ -131,7 +130,6 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
           <input type="checkbox" checked={rulesRequired} onChange={(e) => setRulesRequired(e.target.checked)} className="h-5 w-5 accent-accent" data-guild-rules-required />
         </label>
       </div>
-      <ServerTagEditor guild={guild} />
       {dirty && (
         <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
           <span className="text-sm flex-1">{t('Careful — you have unsaved changes!')}</span>

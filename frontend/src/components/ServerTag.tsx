@@ -1,29 +1,6 @@
-import { useState } from 'react'
 import { api } from '../lib/api'
-import type { Guild } from '../lib/types'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
-
-/** Server Settings › Overview: the server's official tag (2-4 letters) and badge, which members can wear. */
-export function ServerTagEditor({ guild }: { guild: Guild }) {
-  const t = useT()
-  const pushToast = useStore((s) => s.pushToast)
-  const upsertGuild = useStore((s) => s.upsertGuild)
-  const [tag, setTag] = useState(guild.tag ?? '')
-  const [badge, setBadge] = useState(guild.tag_badge ?? '')
-  const save = async () => { try { upsertGuild(await api.put<Guild>(`/guilds/${guild.id}/tag`, { tag: tag || null, badge })); pushToast(tag ? t('Server tag saved') : t('Server tag removed')) } catch (e) { pushToast((e as Error).message, 'error') } }
-  return (
-    <div className="rounded-xl border border-line bg-bg-1 p-3 space-y-2" data-server-tag-editor>
-      <div className="font-semibold">{t('Server tag')}</div>
-      <p className="text-xs text-text-2">{t("A short tag members can wear next to their name, everywhere. Changing it changes everyone's; removing it takes it off.")}</p>
-      <div className="flex flex-wrap items-center gap-2">
-        <input className="input w-14 px-0 text-center text-lg" value={badge} maxLength={8} onChange={(e) => setBadge(e.target.value)} placeholder="✨" aria-label={t('Badge')} data-server-tag-badge />
-        <input className="input w-28 uppercase" value={tag} maxLength={4} onChange={(e) => setTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))} placeholder="TAG" data-server-tag-input />
-        <button type="button" className="btn-primary py-1.5" onClick={save} disabled={!!tag && tag.length < 2} data-server-tag-save>{t('Save tag')}</button>
-      </div>
-    </div>
-  )
-}
 
 /** Profile: wear one of your servers' tags instead of typing your own. */
 export function WearServerTag() {

@@ -38,7 +38,7 @@ export type ModalKind =
   | { kind: 'joinGuild'; code?: string }
   | { kind: 'createChannel'; guildId: string; parentId?: string | null }
   | { kind: 'invite'; guildId: string }
-  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'welcome' | 'onboarding' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
+  | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'tag' | 'welcome' | 'onboarding' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' | 'integrations' }
   | { kind: 'userSettings'; tab?: 'account' | 'profile' | 'voice' | 'appearance' | 'keybinds' | 'connections' | 'family' }
   | { kind: 'shortcuts' }
@@ -141,6 +141,9 @@ interface State {
   sounds: Record<string, Sound[]>
   /** Scheduled events per server (upcoming + ongoing), loaded on demand and refreshed on EVENT_UPDATE. */
   events: Record<string, GuildEvent[]>
+  /** Events running right now in any of my servers, by server (the live badge on server icons). */
+  liveEvents: Record<string, GuildEvent[]>
+  loadLiveEvents: () => Promise<void>
   loadEvents: (guildId: string) => Promise<void>
   /** Recording Studio sessions per studio channel; refreshed on STUDIO_UPDATE / STUDIO_SESSION. */
   studio: Record<string, StudioSession[]>
@@ -520,6 +523,15 @@ export const useStore = create<State>((set, get) => ({
   studio: {},
   loadStudio: async (channelId) => { try { const list = await api.get<StudioSession[]>(`/channels/${channelId}/studio/sessions`); set((s) => ({ studio: { ...s.studio, [channelId]: list } })) } catch { /* ignore */ } },
   events: {},
+  liveEvents: {},
+  loadLiveEvents: async () => {
+    try {
+      const list = await api.get<GuildEvent[]>('/users/@me/events/active')
+      const by: Record<string, GuildEvent[]> = {}
+      for (const e of list) (by[e.guild_id] ??= []).push(e)
+      set({ liveEvents: by })
+    } catch { /* ignore */ }
+  },
   loadEvents: async (guildId) => { try { const list = await api.get<GuildEvent[]>(`/guilds/${guildId}/events`); set((s) => ({ events: { ...s.events, [guildId]: list } })) } catch { /* ignore */ } },
   setSounds: (guildId, sounds) => set((s) => ({ sounds: { ...s.sounds, [guildId]: sounds } })),
   loadSounds: async (guildId) => { try { const list = await api.get<Sound[]>(`/guilds/${guildId}/sounds`); get().setSounds(guildId, list) } catch { /* ignore */ } },

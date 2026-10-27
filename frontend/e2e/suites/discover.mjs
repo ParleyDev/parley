@@ -35,7 +35,7 @@ const mk=async(tok)=>{ const p=await browser.newPage({viewport:{width:1440,heigh
 const pb=await mk(b.token)
 await pb.goto(`${WEB}/channels/@me`); await pb.waitForTimeout(1000)
 await pb.click('nav button:has(svg.lucide-plus)'); await pb.waitForTimeout(400)
-ok('Create Your Server: Create My Own + 6 templates + Join a Server link', await pb.locator('[role=dialog] h2:has-text("Create Your Server"), [role=dialog] :text("Create Your Server")').count()>=1 && await pb.locator('[data-template="own"]').count()===1 && await pb.locator('[data-template]').count()===7 && await pb.locator('[data-join-link]').count()===1)
+ok('Create Your Server: Create My Own + Discord import + 6 templates + Join a Server link', await pb.locator('[role=dialog] h2:has-text("Create Your Server"), [role=dialog] :text("Create Your Server")').count()>=1 && await pb.locator('[data-template="own"]').count()===1 && await pb.locator('[data-template]').count()===8 && await pb.locator('[data-join-link]').count()===1)
 await pb.screenshot({ path: '73-create-server.png' })
 await pb.click('[data-join-link]'); await pb.waitForTimeout(300)
 ok('Join a Server opens the invite dialog; Back returns to Create', await pb.locator('[role=dialog]:has-text("Join a Server")').count()===1 && (await (async()=>{ await pb.click('[data-join-back]'); await pb.waitForTimeout(300); return await pb.locator('[data-template="own"]').count() })())===1)

@@ -17,6 +17,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/events/:eid/rsvps", get(rsvps))
         .route("/guilds/:id/events/:eid/start", axum::routing::post(start))
         .route("/guilds/:id/events/:eid/end", axum::routing::post(end))
+        .route("/users/@me/events/active", get(active_mine))
 }
 
 #[derive(Debug, Serialize, FromRow)]
@@ -65,6 +66,12 @@ async fn one(db: &PgPool, eid: Uuid, me: Uuid) -> AppResult<Event> {
 async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<Event>>> {
     require_member(&state.db, id, uid).await?;
     Ok(Json(events_for(&state.db, id, uid).await?))
+}
+
+/// Events running right now in any of my servers (for the live indicator on server icons).
+async fn active_mine(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Event>>> {
+    Ok(Json(sqlx::query_as::<_, Event>(&format!("{EVENT_SELECT} WHERE e.status = 'active' AND e.guild_id IN (SELECT guild_id FROM guild_members WHERE user_id = $1) ORDER BY e.started_at LIMIT 200"))
+        .bind(uid).bind(uid).fetch_all(&state.db).await?))
 }
 
 #[derive(Deserialize)]

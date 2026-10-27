@@ -1,19 +1,39 @@
 import { Award, BadgeCheck, Flame, Server, ShieldCheck, Sparkles, Sprout, Waves, Zap } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type HTMLAttributes, type ReactNode } from 'react'
+import ServerTagCard from './ServerTagCard'
 import { useStore } from '../store'
 import Tooltip from './Tooltip'
 import { useT } from '../lib/i18n'
 
-/** The user's clan tag as a small chip next to their name, or nothing. */
+/** A tag chip: the badge, then the tag, tinted with the server's tag colour if it has one. */
+export function TagPill({ tag, badge, color, className = '', ...rest }: { tag: string; badge?: string | null; color?: string | null; className?: string } & Omit<HTMLAttributes<HTMLSpanElement>, 'color'>) {
+  return (
+    <span className={`inline-flex shrink-0 items-center gap-0.5 rounded px-1 text-[10px] font-bold leading-4 tracking-wide ${color ? 'text-white' : 'bg-bg-4 text-text-1'} ${className}`}
+      style={color ? { background: `color-mix(in srgb, ${color} 55%, #111214)`, boxShadow: `inset 0 0 0 1px ${color}` } : undefined} {...rest}>
+      {badge && <span className="text-[11px] leading-none">{badge}</span>}{tag}
+    </span>
+  )
+}
+
+/** The user's clan tag as a small chip next to their name, or nothing. A server's tag opens that server's card. */
 export function ClanTag({ userId, tag, tagGuild, className = '' }: { userId: string; tag?: string; tagGuild?: string | null; className?: string }) {
   const live = useStore((s) => s.users[userId]?.clan_tag)
   // A server's official tag: its badge, and its name on hover (when you're in it too).
   const liveGid = useStore((s) => s.users[userId]?.clan_tag_guild)
   const gid = liveGid !== undefined ? liveGid : tagGuild
   const guild = useStore((s) => (gid ? s.guilds[gid] : undefined))
+  const [card, setCard] = useState<DOMRect | null>(null)
   const t = live ?? tag ?? ''
   if (!t) return null
-  return <span className={`inline-flex shrink-0 items-center gap-0.5 rounded bg-bg-4 px-1 text-[10px] font-bold leading-4 tracking-wide text-text-1 ${className}`} title={gid ? `Server tag${guild ? ` of ${guild.name}` : ''}` : undefined} data-clan-tag={t} data-server-tag={gid ?? undefined}>{guild?.tag_badge && <span className="text-[11px] leading-none">{guild.tag_badge}</span>}{t}</span>
+  if (!gid) return <TagPill tag={t} className={className} data-clan-tag={t} />
+  const open = (e: React.MouseEvent | React.KeyboardEvent) => { e.stopPropagation(); e.preventDefault(); setCard(card ? null : (e.currentTarget as HTMLElement).getBoundingClientRect()) }
+  return (
+    <>
+      <TagPill tag={t} badge={guild?.tag_badge} color={guild?.tag_color} className={`cursor-pointer hover:brightness-125 ${className}`} title={`Server tag${guild ? ` of ${guild.name}` : ''}`}
+        role="button" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') open(e) }} data-clan-tag={t} data-server-tag={gid} />
+      {card && <ServerTagCard guildId={gid} anchor={card} onClose={() => setCard(null)} />}
+    </>
+  )
 }
 
 const BADGES: Record<string, { label: string; icon: ReactNode; color: string }> = {

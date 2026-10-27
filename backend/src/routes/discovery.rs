@@ -165,20 +165,26 @@ async fn live_stages(State(state): State<AppState>, AuthUser(uid): AuthUser) -> 
 
 /// Join an approved server from Discover (no invite needed).
 async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Json<Value>> {
-    crate::routes::users::require_verified(&state, uid).await?;
     let approved: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_discovery WHERE guild_id = $1 AND status = 'approved'").bind(gid).fetch_optional(&state.db).await?;
     if approved.is_none() {
         return Err(AppError::NotFound("Server not found in Discover".into()));
     }
+    join_guild(&state, gid, uid, "discover").await
+}
+
+/// Add a member who found the server themselves (Discover, a server tag): bans and paused invites apply.
+pub async fn join_guild(state: &AppState, gid: Uuid, uid: Uuid, via: &str) -> AppResult<Json<Value>> {
+    crate::routes::users::require_verified(state, uid).await?;
     if is_banned(&state.db, gid, uid).await? {
         return Err(AppError::BadRequest("You are banned from this server".into()));
     }
     if crate::routes::invites::invites_paused(&state.db, gid, uid).await? {
         return Err(AppError::BadRequest("This server has paused new members right now".into()));
     }
-    let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id, joined_via) VALUES ($1, $2, 'discover') ON CONFLICT DO NOTHING")
+    let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id, joined_via) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING")
         .bind(gid)
         .bind(uid)
+        .bind(via)
         .execute(&state.db)
         .await?
         .rows_affected();

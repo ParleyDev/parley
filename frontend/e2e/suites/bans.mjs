@@ -42,8 +42,8 @@ try {
   await bp.goto(`${WEB}/channels/${g.id}/${general.id}`); await bp.waitForTimeout(600)
   await bp.click('aside >> text=Carol'); await bp.waitForTimeout(300)
   await bp.click('[data-profile-popout] button[title="More"]'); await bp.waitForTimeout(200)
-  check('popout menu shows Ban for mod', await bp.locator('[data-profile-menu] [role=menuitem]:has-text("Ban Carol")').count() === 1)
-  await bp.click('[data-profile-menu] [role=menuitem]:has-text("Ban Carol")'); await bp.waitForTimeout(300)
+  check('popout menu shows Ban for mod', await bp.locator('[data-context-menu] [role=menuitem]:has-text("Ban Carol")').count() === 1)
+  await bp.click('[data-context-menu] [role=menuitem]:has-text("Ban Carol")'); await bp.waitForTimeout(300)
   check('ban modal opened', await bp.locator('[role=dialog] h2:has-text("Ban Carol")').count() === 1)
   await bp.fill('[role=dialog] textarea', 'spamming invites')
   await bp.click('[role=dialog] button:has-text("Ban")'); await bp.waitForTimeout(600)
@@ -81,7 +81,7 @@ try {
   // UI: alice opens Server Settings → Transfer Ownership → pick bob → ack → transfer.
   // The revoke confirm replaced the settings modal, so reopen it.
   await ap.click('aside button:has-text("Ban Land")'); await ap.click('button:has-text("Server Settings")'); await ap.waitForTimeout(400)
-  await ap.click('[role=dialog] button:has-text("Overview")'); await ap.waitForTimeout(300)
+  await ap.click('[data-settings-tab="overview"]'); await ap.waitForTimeout(300)
   check('overview shows owner card', await ap.locator('[role=dialog] >> text=You own this server').count() === 1)
   await ap.click('[role=dialog] button:has-text("Transfer Ownership")'); await ap.waitForTimeout(400)
   check('transfer modal opened', await ap.locator('[role=dialog] h2:has-text("Transfer Ownership")').count() === 1)

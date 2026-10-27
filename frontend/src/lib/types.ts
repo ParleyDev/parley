@@ -163,6 +163,7 @@ export interface Guild {
   /** The server's official tag (members can wear it) and its badge; partnered with this instance. */
   tag?: string | null
   tag_badge?: string | null
+  tag_color?: string | null
   partnered?: boolean
   /** Explicit image filter: off, for members without roles, or for everyone. */
   explicit_filter?: 'off' | 'no_roles' | 'all'

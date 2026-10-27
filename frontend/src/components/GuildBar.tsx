@@ -18,6 +18,7 @@ import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import { useT } from '../lib/i18n'
 import { isDesktop } from '../lib/native'
+import { ActivityBadge, GuildActivityCard, hasActivity, useGuildActivity } from './GuildActivity'
 
 type FolderItem = Extract<LayoutItem, { kind: 'folder' }>
 const OPEN_KEY = 'parley.folderOpen'
@@ -117,13 +118,13 @@ export default function GuildBar() {
         {ind === 'bottom' && <span className="absolute -bottom-1.5 left-2 right-2 h-0.5 rounded bg-white" data-drop-line="after" />}
         <NavLink to={`/channels/${g.id}`} className={`group relative block ${drag === g.id ? 'opacity-40' : ''}`} draggable onDragStart={startDrag(g.id)} onDragEnd={endDrag}
           onContextMenu={(e) => ctx.open(e, [...guildMenu(g.id).slice(0, 2), ...notifEntries(g.id, 'Server', notifSettings, { suppress: true, fallback: g.default_notifications }), ...guildMenu(g.id).slice(2), ...layoutMenu(g.id)])} data-guild-icon={g.id} data-in-folder={inFolder ? 'true' : undefined} data-muted={mutedOf(g.id) ? 'true' : undefined}>
-          <Pill active={active} unread={unreadOf(g.id)} tip={g.name}>
+          <GuildPill guild={g} active={active} unread={unreadOf(g.id)} mentions={mentionsOf(g.id)}>
             <div className={`${inFolder ? 'h-10 w-10 text-sm rounded-xl' : 'h-12 w-12 rounded-2xl'} overflow-hidden flex items-center justify-center text-white font-semibold transition-all duration-200 ${active ? '' : 'group-hover:rounded-xl'} ${!active && !unreadOf(g.id) ? 'opacity-80 group-hover:opacity-100' : ''} ${mutedOf(g.id) ? 'opacity-50' : ''} ${ind === 'mid' && !inFolder ? 'ring-2 ring-success' : ''}`}
               style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>
               {g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" draggable={false} /> : initials(g.name)}
             </div>
             {mentionsOf(g.id) > 0 && <Badge n={mentionsOf(g.id)} data-guild-mentions={String(mentionsOf(g.id))} />}
-          </Pill>
+          </GuildPill>
         </NavLink>
       </div>
     )
@@ -198,7 +199,7 @@ export default function GuildBar() {
         return renderGuild(g, g.id, (zone) => (zone === 'top' ? { type: 'before', id: g.id } : zone === 'bottom' ? { type: 'after', id: g.id } : { type: 'combine', guildId: g.id }))
       })}
 
-      <button onClick={() => openModal({ kind: 'createGuild' })} className="group relative">
+      <button onClick={() => openModal({ kind: 'createGuild' })} className="group relative" aria-label={t('Add a Server')} data-add-server>
         <Pill tip={t('Add a Server')}>
           <div className="h-12 w-12 rounded-2xl bg-bg-3 text-success flex items-center justify-center transition-all duration-200 group-hover:bg-success group-hover:text-white"><Plus size={24} /></div>
         </Pill>
@@ -254,7 +255,7 @@ export function useGuildMenu() {
  * The white indicator pill at the nav's edge (Discord: tall when selected, a stub when unread,
  * medium on hover) plus a tooltip rendered in a portal so it never widens the nav.
  */
-function Pill({ active, unread, tip, children }: { active?: boolean; unread?: boolean; tip: string; children: ReactNode }) {
+function Pill({ active, unread, tip, card, children }: { active?: boolean; unread?: boolean; tip: string; card?: ReactNode; children: ReactNode }) {
   const [rect, setRect] = useState<DOMRect | null>(null)
   // Touch screens fire synthetic mouseenter on tap and never mouseleave, which would pin the tooltip.
   return (
@@ -263,11 +264,23 @@ function Pill({ active, unread, tip, children }: { active?: boolean; unread?: bo
       {children}
       {rect && createPortal(
         <span role="tooltip" className="pointer-events-none fixed z-[150] whitespace-nowrap rounded-lg bg-bg-0 border border-line px-3 py-1.5 text-sm font-semibold text-text-0 shadow-xl pop" style={{ left: rect.right + 14, top: rect.top + rect.height / 2, transform: 'translateY(-50%)' }} data-guild-tip>
-          {tip}
+          {card ?? tip}
         </span>,
         document.body,
       )}
     </div>
+  )
+}
+
+/** A server's pill with its live activity: a corner badge (voice, streaming, live event) and a hover card listing it. */
+function GuildPill({ guild, active, unread, mentions, children }: { guild: Guild; active: boolean; unread: boolean; mentions: number; children: ReactNode }) {
+  const a = useGuildActivity(guild.id)
+  const live = hasActivity(a)
+  return (
+    <Pill active={active} unread={unread} tip={guild.name} card={live ? <GuildActivityCard guild={guild} a={a} /> : undefined}>
+      {children}
+      {live && <ActivityBadge a={a} top={mentions > 0} />}
+    </Pill>
   )
 }
 

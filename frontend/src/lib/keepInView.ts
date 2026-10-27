@@ -7,7 +7,11 @@
 const SELECTOR = '.pop, [role="tooltip"], [role="menu"], [data-context-menu], [data-keep-in-view]'
 const MARGIN = 8
 
+/** Bottom sheets dock to the screen edge and slide in from below: measuring them mid-slide would lift them. */
+const DOCKED = '[data-menu-sheet], .sheet-up'
+
 function fit(el: HTMLElement) {
+  if (el.matches(DOCKED)) return
   el.style.translate = ''
   const r = el.getBoundingClientRect()
   if (!r.width || !r.height) return
