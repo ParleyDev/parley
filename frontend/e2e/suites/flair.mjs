@@ -34,8 +34,11 @@ ok('popout shows badges with tooltips and the tag', await pop.locator('[data-bad
 await pop.locator('[data-badge="host"]').hover(); await p.waitForSelector('[role=tooltip]'); ok('badge tooltip explains it', (await p.locator('[role=tooltip]').textContent()).includes('owns a server'))
 await p.keyboard.press('Escape')
 await p.click(`[data-msg-id="${msg.id}"] [data-msg-author]`); await p.waitForSelector('[role=dialog] [data-mutual]'); await p.click('[role=dialog] [data-mutual]')
-await p.waitForSelector('[data-profile-card]')
-ok('full profile card lists the wishlist and game panels', await p.locator('[data-profile-card] [data-panel="wishlist"] li').count() === 2 && (await p.locator('[data-profile-card] [data-panel="games"]').textContent()).includes('Chess') && (await p.locator('[data-profile-card] [data-panel="wishlist"] a').getAttribute('href')) === 'https://example.com/bike')
+await p.waitForSelector('[data-full-profile]')
+await p.click('[data-full-profile] [data-profile-tab="wishlist"]')
+ok('the full profile has a Wishlist tab', await p.locator('[data-full-profile] [data-panel-wishlist] li').count() === 2 && (await p.locator('[data-full-profile] [data-panel-wishlist] a').getAttribute('href')) === 'https://example.com/bike')
+await p.click('[data-full-profile] [data-profile-tab="games"]')
+ok('and a Games tab', (await p.locator('[data-full-profile] [data-panel-games]').textContent()).includes('Chess'))
 await p.screenshot({ path: '148-flair-card.png' })
 await p.keyboard.press('Escape')
 // Settings: pick a decoration and a tag from the UI.

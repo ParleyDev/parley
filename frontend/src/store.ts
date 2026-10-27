@@ -58,7 +58,7 @@ export type ModalKind =
   | { kind: 'appModal'; interactionId: string; modal: import('./components/modals/AppModal').AppForm }
   | { kind: 'altText'; message: Message }
   | { kind: 'newDm' }
-  | { kind: 'profile'; userId: string; anchor?: Anchor; tab?: 'roles' | 'friends' | 'servers' | 'reviews' }
+  | { kind: 'profile'; userId: string; anchor?: Anchor; tab?: 'activity' | 'roles' | 'friends' | 'servers' | 'wishlist' | 'games' | 'reviews' }
   | { kind: 'image'; url: string; name: string; items?: GalleryItem[]; index?: number }
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string; /** Offer "Don't ask again", saved under this key. */ dontAskKey?: string }
   | { kind: 'ban'; guildId: string; userId: string }

@@ -3331,5 +3331,16 @@
 "Mutual Servers — {n}": "Ortak Sunucular — {n}",
 "No mutual friends": "Ortak arkadaş yok",
 "No mutual servers": "Ortak sunucu yok",
-"Reviews": "Değerlendirmeler"
+"Reviews": "Değerlendirmeler",
+"1 device": "1 cihaz",
+"Account": "Hesap",
+"Account Info": "Hesap Bilgileri",
+"Account Status": "Hesap Durumu",
+"Display Name": "Görünen Ad",
+"Edit Profiles": "Profilleri Düzenle",
+"Logged-in Devices": "Oturum Açık Cihazlar",
+"Password & Security": "Şifre ve Güvenlik",
+"Search settings": "Ayarlarda ara",
+"Year in Review": "Yıllık Özet",
+"{n} devices": "{n} cihaz"
 }

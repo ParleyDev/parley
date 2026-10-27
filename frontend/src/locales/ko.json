@@ -3331,5 +3331,16 @@
 "Mutual Servers — {n}": "함께 있는 서버 — {n}",
 "No mutual friends": "함께 아는 친구가 없어요",
 "No mutual servers": "함께 있는 서버가 없어요",
-"Reviews": "리뷰"
+"Reviews": "리뷰",
+"1 device": "기기 1대",
+"Account": "계정",
+"Account Info": "계정 정보",
+"Account Status": "계정 상태",
+"Display Name": "표시 이름",
+"Edit Profiles": "프로필 편집",
+"Logged-in Devices": "로그인된 기기",
+"Password & Security": "비밀번호 및 보안",
+"Search settings": "설정 검색",
+"Year in Review": "올해의 요약",
+"{n} devices": "기기 {n}대"
 }

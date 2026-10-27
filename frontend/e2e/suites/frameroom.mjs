@@ -80,14 +80,31 @@ u = await unclipped(pb, '[data-dm-profile]')
 ok('the side panel leaves room for the frame (not cut off at the top or sides)', u.ok, JSON.stringify(u))
 
 console.log('-- full profile')
-await pb.click('[data-dm-profile] [data-view-full-profile]'); await pb.waitForSelector('[data-modal-bare] [data-profile-frame-layers]'); await pb.waitForTimeout(500)
-u = await unclipped(pb, '[data-modal-bare]')
+await pb.click('[data-dm-profile] [data-view-full-profile]'); await pb.waitForSelector('[data-full-profile] [data-profile-frame-layers]'); await pb.waitForTimeout(500)
+// The full profile's frame reaches over the window's edge (Discord does this): every frame image must be on screen
+// and nothing between it and the page may clip it.
+const fr = () => pb.evaluate(() => {
+  const imgs = [...document.querySelectorAll('[data-full-profile] [data-frame-layer^="front_staple"]')]
+  const cut = []
+  for (const im of imgs) {
+    const r = im.getBoundingClientRect()
+    if (r.top < -1 || r.bottom > innerHeight + 1 || r.left < -1 || r.right > innerWidth + 1) cut.push('viewport:' + im.dataset.frameLayer)
+    for (let el = im.closest('[data-profile-frame-layers]').parentElement; el && el !== document.body; el = el.parentElement) {
+      const cs = getComputedStyle(el)
+      if (/(hidden|auto|scroll|clip)/.test(cs.overflow + cs.overflowX + cs.overflowY)) { const e = el.getBoundingClientRect(); if (r.top < e.top - 1 || r.bottom > e.bottom + 1) cut.push(im.dataset.frameLayer + ' in ' + el.className.split(' ').slice(0, 3).join('.')) }
+      if (cs.position === 'fixed') break
+    }
+  }
+  return { ok: imgs.length > 0 && cut.length === 0, n: imgs.length, cut }
+})
+u = await fr()
 ok('the full profile shows the whole frame', u.ok, JSON.stringify(u))
-const full = await pb.evaluate(() => { const c = document.querySelector('[data-modal-bare] [data-profile-card]'); const r = c.getBoundingClientRect(); return { variant: c.dataset.profileVariant, w: Math.round(r.width), avatar: Math.round(c.querySelector('.inline-block.rounded-full')?.getBoundingClientRect().width ?? 0), tabs: document.querySelectorAll('[data-modal-bare] [data-profile-tab]').length, tabsVisible: [...document.querySelectorAll('[data-modal-bare] [data-profile-tab]')].every((x) => { const t = x.getBoundingClientRect(), p = x.parentElement.getBoundingClientRect(); return t.right <= p.right + 1 && t.left >= p.left - 1 }), bg: c.style.background } })
-ok('in the new wide layout (big avatar, tabs) with the popout\'s colours', full.variant === 'full' && full.w >= 600 && full.avatar >= 110 && full.tabs >= 3 && full.tabsVisible && full.bg.includes('linear-gradient'), JSON.stringify(full))
-await pb.setViewportSize({ width: 1400, height: 560 }); await pb.waitForTimeout(300)
-const sc = await pb.evaluate(() => { const box = document.querySelector('[data-modal-bare]'), room = box.querySelector('[data-frame-room]'); box.scrollTop = 0; const b = box.getBoundingClientRect(), r = room.getBoundingClientRect(); return { scrolls: box.scrollHeight > box.clientHeight + 4, topIn: r.top >= b.top - 1, sides: r.left >= b.left - 1 && r.right <= b.right + 1 } })
-ok('a short window scrolls the profile instead of cutting the frame', sc.scrolls && sc.topIn && sc.sides, JSON.stringify(sc))
+const full = await pb.evaluate(() => { const box = document.querySelector('[data-full-profile]'), c = box.querySelector('[data-profile-card]'); const r = c.getBoundingClientRect(); return { variant: c.dataset.profileVariant, w: Math.round(r.width), win: Math.round(box.getBoundingClientRect().width), avatar: Math.round(c.querySelector('.inline-block.rounded-full')?.getBoundingClientRect().width ?? 0), tabs: box.querySelectorAll('[data-profile-tab]').length, bg: c.style.background, tabsBeside: box.querySelector('[data-full-profile-tabs]').getBoundingClientRect().left >= r.right } })
+ok('the window: card (big avatar, the popout\'s colours) with tabs beside it, not too wide', full.variant === 'full' && full.w === 400 && full.win <= 1000 && full.avatar >= 110 && full.tabs >= 3 && full.tabsBeside && full.bg.includes('linear-gradient'), JSON.stringify(full))
+await pb.setViewportSize({ width: 1400, height: 620 }); await pb.waitForTimeout(300)
+const sc = await pb.evaluate(() => { const body = document.querySelector('[data-full-profile] [data-profile-body]'); return { scrolls: body.scrollHeight >= body.clientHeight, inView: document.querySelector('[data-full-profile]').getBoundingClientRect().bottom <= innerHeight } })
+u = await fr()
+ok('a short window keeps the frame whole and scrolls the card inside', u.ok && sc.inView, JSON.stringify({ u, sc }))
 await pb.setViewportSize({ width: 1400, height: 900 })
 await pb.keyboard.press('Escape')
 

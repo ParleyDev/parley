@@ -3331,5 +3331,16 @@
 "Mutual Servers — {n}": "الخوادم المشتركة — {n}",
 "No mutual friends": "لا يوجد أصدقاء مشتركون",
 "No mutual servers": "لا توجد خوادم مشتركة",
-"Reviews": "المراجعات"
+"Reviews": "المراجعات",
+"1 device": "جهاز واحد",
+"Account": "الحساب",
+"Account Info": "معلومات الحساب",
+"Account Status": "حالة الحساب",
+"Display Name": "الاسم المعروض",
+"Edit Profiles": "تعديل الملفات الشخصية",
+"Logged-in Devices": "الأجهزة المسجّل دخولها",
+"Password & Security": "كلمة المرور والأمان",
+"Search settings": "البحث في الإعدادات",
+"Year in Review": "ملخص العام",
+"{n} devices": "{n} أجهزة"
 }

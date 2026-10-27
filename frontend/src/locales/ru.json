@@ -3331,5 +3331,16 @@
 "Mutual Servers — {n}": "Общие серверы — {n}",
 "No mutual friends": "Нет общих друзей",
 "No mutual servers": "Нет общих серверов",
-"Reviews": "Отзывы"
+"Reviews": "Отзывы",
+"1 device": "1 устройство",
+"Account": "Учётная запись",
+"Account Info": "Информация об учётной записи",
+"Account Status": "Статус учётной записи",
+"Display Name": "Отображаемое имя",
+"Edit Profiles": "Редактировать профили",
+"Logged-in Devices": "Устройства с выполненным входом",
+"Password & Security": "Пароль и безопасность",
+"Search settings": "Поиск по настройкам",
+"Year in Review": "Итоги года",
+"{n} devices": "Устройств: {n}"
 }

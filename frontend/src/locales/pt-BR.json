@@ -3331,5 +3331,16 @@
 "Mutual Servers — {n}": "Servidores em comum — {n}",
 "No mutual friends": "Nenhum amigo em comum",
 "No mutual servers": "Nenhum servidor em comum",
-"Reviews": "Avaliações"
+"Reviews": "Avaliações",
+"1 device": "1 dispositivo",
+"Account": "Conta",
+"Account Info": "Informações da conta",
+"Account Status": "Status da conta",
+"Display Name": "Nome de exibição",
+"Edit Profiles": "Editar perfis",
+"Logged-in Devices": "Dispositivos conectados",
+"Password & Security": "Senha e segurança",
+"Search settings": "Pesquisar configurações",
+"Year in Review": "Retrospectiva do ano",
+"{n} devices": "{n} dispositivos"
 }

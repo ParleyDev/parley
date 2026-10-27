@@ -3331,5 +3331,16 @@
 "Mutual Servers — {n}": "Gezamenlijke servers — {n}",
 "No mutual friends": "Geen gezamenlijke vrienden",
 "No mutual servers": "Geen gezamenlijke servers",
-"Reviews": "Beoordelingen"
+"Reviews": "Beoordelingen",
+"1 device": "1 apparaat",
+"Account": "Account",
+"Account Info": "Accountgegevens",
+"Account Status": "Accountstatus",
+"Display Name": "Weergavenaam",
+"Edit Profiles": "Profielen bewerken",
+"Logged-in Devices": "Ingelogde apparaten",
+"Password & Security": "Wachtwoord en beveiliging",
+"Search settings": "Instellingen doorzoeken",
+"Year in Review": "Jaaroverzicht",
+"{n} devices": "{n} apparaten"
 }

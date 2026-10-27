@@ -8,8 +8,8 @@ import { t, useT } from '../../../lib/i18n'
 
 type Kind = 'username' | 'email' | 'password'
 
-/** Username / Email / Password rows with their Edit dialogs (each asks for the current password). */
-export function AccountChanges() {
+/** Username / Email / Password rows with their Edit dialogs (each asks for the current password); `only` picks rows. */
+export function AccountChanges({ only = ['username', 'email', 'password'] }: { only?: Kind[] } = {}) {
   useT() // re-render when the language changes
   const user = useStore((s) => s.user)
   const token = useStore((s) => s.token)
@@ -42,18 +42,20 @@ export function AccountChanges() {
       setOpen(null)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
+  // Settings-window rows: the name on the left, the value and Edit on the right.
   const Row = ({ label, value, kind, hint }: { label: string; value: ReactNode; kind: Kind; hint?: string }) => (
-    <div className="flex items-center gap-3" data-account-row={kind}>
-      <div className="min-w-0 flex-1"><div className="label">{label}</div><div className="text-sm truncate" data-account-value={kind}>{value}</div>{hint && <div className="text-xs text-text-2">{hint}</div>}</div>
-      <button type="button" onClick={() => setOpen(kind)} className="btn-ghost bg-bg-3 hover:bg-bg-4 py-1.5" data-account-edit={kind}>{kind === 'password' ? t('Change Password') : t('Edit')}</button>
+    <div className="flex items-center gap-4 min-h-10" data-account-row={kind}>
+      <div className="min-w-0 flex-1"><div className="text-[15px] font-semibold text-text-0">{label}</div>{hint && <div className="text-xs text-text-2 mt-0.5">{hint}</div>}</div>
+      <div className="min-w-0 truncate text-[15px] text-text-1" data-account-value={kind}>{value}</div>
+      <button type="button" onClick={() => setOpen(kind)} className="h-10 shrink-0 rounded-lg bg-bg-3 hover:bg-bg-4 px-5 text-sm font-semibold text-text-0" data-account-edit={kind}>{t('Edit')}</button>
     </div>
   )
   return (
     <>
-      <div className="rounded-xl bg-bg-0/50 p-4 space-y-4">
-        <Row label={t('Username')} value={user.username} kind="username" />
-        <Row label={t('Email')} value={streamer ? <span data-streamer-masked title={t('Hidden by Streamer Mode')}>{user.email.replace(/^(.).*(@).*$/, '$1••••••$2••••••')}</span> : user.email} kind="email" hint={pending ? t('Waiting for you to confirm {email}', { email: pending }) : user.email_verified_at ? undefined : t('Not verified yet')} />
-        <Row label={t('Password')} value="••••••••••" kind="password" />
+      <div className="space-y-5">
+        {only.includes('username') && <Row label={t('Username')} value={user.username} kind="username" />}
+        {only.includes('email') && <Row label={t('Email')} value={streamer ? <span data-streamer-masked title={t('Hidden by Streamer Mode')}>{user.email.replace(/^(.).*(@).*$/, '$1••••••$2••••••')}</span> : user.email} kind="email" hint={pending ? t('Waiting for you to confirm {email}', { email: pending }) : user.email_verified_at ? undefined : t('Not verified yet')} />}
+        {only.includes('password') && <Row label={t('Password')} value="" kind="password" />}
       </div>
       {open && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 safe-pad" onClick={() => !busy && setOpen(null)} data-account-dialog={open}>

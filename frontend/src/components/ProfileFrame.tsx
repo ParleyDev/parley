@@ -70,7 +70,7 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
  * card and its frame inside. Whatever positions, nudges, scrolls or clips the card then sees the whole framed area,
  * so a frame is never cut off by a scroll box or pushed off screen. Without an asset frame it adds nothing.
  */
-export function FrameRoom({ value, className = '', innerClassName = '', style, children, ...rest }: { value?: string | null; className?: string; innerClassName?: string; style?: CSSProperties; children: ReactNode } & Record<`data-${string}`, string | boolean | undefined>) {
+export function FrameRoom({ value, className = '', innerClassName = '', style, bleed, children, ...rest }: { value?: string | null; className?: string; innerClassName?: string; style?: CSSProperties; children: ReactNode; /** Reserve no room: the frame reaches over whatever is around the card (the full profile's window). */ bleed?: boolean } & Record<`data-${string}`, string | boolean | undefined>) {
   const item = useAssetItem<FrameItem>('profile-frames', value)
   const ref = useRef<HTMLDivElement>(null)
   const [w, setW] = useState(0)
@@ -85,7 +85,7 @@ export function FrameRoom({ value, className = '', innerClassName = '', style, c
   }, [item])
   const L = item?.layout
   const s = L && w ? w / (L.inner_width || 1200) : 0
-  const pad: CSSProperties = L && s ? { paddingTop: L.overflow_top * s, paddingBottom: L.overflow_bottom * s, paddingLeft: L.overflow_horizontal * s, paddingRight: L.overflow_horizontal * s } : {}
+  const pad: CSSProperties = !L || !s || bleed ? {} : { paddingTop: L.overflow_top * s, paddingBottom: L.overflow_bottom * s, paddingLeft: L.overflow_horizontal * s, paddingRight: L.overflow_horizontal * s }
   return (
     <div className={className} style={{ ...style, ...pad }} data-frame-wrap data-frame-room={item ? item.id : undefined} {...rest}>
       <div ref={ref} className={`relative ${innerClassName}`}>

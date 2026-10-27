@@ -6,10 +6,12 @@ import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import type { Review, UserProfile } from '../../lib/types'
 import type { Anchor } from '../../lib/anchor'
-import RolePicker from '../RolePicker'
 import ProfilePopout, { POPOUT_W } from '../ProfilePopout'
 import { colorFor, initials, formatTime, renderMarkdown } from '../../lib/format'
 import Avatar from '../Avatar'
+import VoiceCard from '../VoiceCard'
+import { ActivityCard } from '../SpotifyActivity'
+import { X } from 'lucide-react'
 import { useT } from '../../lib/i18n'
 
 const GAP = 8
@@ -21,7 +23,7 @@ const PAD = 8
  * "View Full Profile") it is the full profile modal: card with Member Since, roles, mutual
  * servers and the action buttons.
  */
-export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose: () => void; userId: string; anchor?: Anchor; tab?: 'roles' | 'friends' | 'servers' | 'reviews' }) {
+export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose: () => void; userId: string; anchor?: Anchor; tab?: FullTab | 'roles' }) {
   const t = useT()
   const cached = useStore((s) => s.users[userId])
   const { pathname } = useLocation()
@@ -45,65 +47,107 @@ export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose
   return <FullProfile user={user} inGuild={inGuild} onClose={onClose} initialTab={tab} />
 }
 
-function FullProfile({ user, inGuild, onClose, initialTab }: { user: UserProfile; inGuild?: string; onClose: () => void; initialTab?: 'roles' | 'friends' | 'servers' | 'reviews' }) {
+type FullTab = 'activity' | 'friends' | 'servers' | 'wishlist' | 'games' | 'reviews'
+
+/**
+ * Discord's full profile: a window with the profile card on the left (its frame free to reach past the window's
+ * edge) and tabs on the right: what they're doing (voice, activity), mutual friends and servers, their wishlist and
+ * games when they have some, and reviews. In a server the card carries that server's roles and join date.
+ */
+function FullProfile({ user, inGuild, onClose, initialTab }: { user: UserProfile; inGuild?: string; onClose: () => void; initialTab?: FullTab | 'roles' }) {
   const t = useT()
   const userId = user.id
   const me = useStore((s) => s.user)
   const openModal = useStore((s) => s.openModal)
-  const member = useStore((s) => (inGuild ? s.members[inGuild]?.[userId] : undefined))
+  const activity = useStore((s) => s.activities[userId])
   const navigate = useNavigate()
   const isMe = me?.id === userId
   const mutual = user.mutual_guilds ?? []
   const friends = user.mutual_friends ?? []
-  const showRoles = !!(inGuild && member)
-  type Tab = 'roles' | 'friends' | 'servers' | 'reviews'
-  const tabs: { id: Tab; label: string }[] = [
-    ...(showRoles ? [{ id: 'roles' as Tab, label: t('Roles') }] : []),
-    { id: 'friends' as Tab, label: friends.length ? t('Mutual Friends — {n}', { n: friends.length }) : t('Mutual Friends') },
-    { id: 'servers' as Tab, label: mutual.length ? t('Mutual Servers — {n}', { n: mutual.length }) : t('Mutual Servers') },
-    { id: 'reviews' as Tab, label: t('Reviews') },
-  ].filter((x) => !(isMe && (x.id === 'friends' || x.id === 'servers')))
-  const [tab, setTab] = useState<Tab>(initialTab ?? tabs[0].id)
-  const empty = (msg: string) => <p className="py-8 text-center text-sm text-[#b5bac1]">{msg}</p>
+  const wishlist = user.panels?.wishlist ?? []
+  const games = user.panels?.games ?? []
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[data-context-menu], [data-lightbox], [data-account-dialog]')) { e.stopImmediatePropagation(); onClose() } }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
+  const tabs: { id: FullTab; label: string }[] = [
+    { id: 'activity', label: t('Activity') },
+    ...(isMe ? [] : [
+      { id: 'friends' as FullTab, label: friends.length === 0 ? t('No Mutual Friends') : friends.length === 1 ? t('1 Mutual Friend') : t('{n} Mutual Friends', { n: friends.length }) },
+      { id: 'servers' as FullTab, label: mutual.length === 0 ? t('No Mutual Servers') : mutual.length === 1 ? t('1 Mutual Server') : t('{n} Mutual Servers', { n: mutual.length }) },
+    ]),
+    ...(wishlist.length ? [{ id: 'wishlist' as FullTab, label: t('Wishlist') }] : []),
+    ...(games.length ? [{ id: 'games' as FullTab, label: t('Games') }] : []),
+    { id: 'reviews', label: t('Reviews') },
+  ]
+  const [tab, setTab] = useState<FullTab>(initialTab && initialTab !== 'roles' && tabs.some((x) => x.id === initialTab) ? initialTab : 'activity')
+  const empty = (msg: string) => <p className="py-10 text-center text-sm text-[#b5bac1]">{msg}</p>
   const row = 'w-full flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-white/[.06]'
-  const aside = (
-    <div className="flex flex-col min-h-[260px]" data-full-profile-tabs>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 border-b border-white/10 mb-3" role="tablist">
-        {tabs.map((x) => (
-          <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}
-            className={`shrink-0 pb-2 -mb-px border-b-2 text-sm font-medium ${tab === x.id ? 'border-white text-white' : 'border-transparent text-[#b5bac1] hover:text-[#dbdee1]'}`} data-profile-tab={x.id}>{x.label}</button>
-        ))}
+  const panel = 'rounded-xl bg-black/25 p-3'
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="flex-1 min-w-0 h-full flex items-center justify-center md:px-10 md:py-14 max-md:p-2" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+        <div className="pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1] max-md:flex-col max-md:p-4 max-md:gap-4 max-md:overflow-y-auto" role="dialog" aria-modal aria-label={user.display_name} data-full-profile>
+          <button type="button" onClick={onClose} className="absolute right-3 top-3 z-20 h-9 w-9 rounded-lg bg-black/30 hover:bg-black/50 flex items-center justify-center" title={t('Close')} aria-label={t('Close')} data-full-profile-close><X size={20} /></button>
+          <div className="w-[400px] shrink-0 md:h-full max-md:w-full" data-full-profile-card>
+            <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" />
+          </div>
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col md:pt-2" data-full-profile-tabs>
+            <div className="flex flex-wrap gap-x-6 gap-y-1 border-b border-white/10 mb-4 pr-10" role="tablist">
+              {tabs.map((x) => (
+                <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}
+                  className={`shrink-0 pb-2.5 -mb-px border-b-2 text-[15px] font-semibold ${tab === x.id ? 'border-white text-white' : 'border-transparent text-[#b5bac1] hover:text-[#dbdee1]'}`} data-profile-tab={x.id}>{x.label}</button>
+              ))}
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3">
+              {tab === 'activity' && (
+                <div className="space-y-3" data-profile-activity>
+                  <VoiceCard userId={userId} onJoin={onClose} dark />
+                  {activity && <div><div className="text-xs font-bold text-[#b5bac1] mb-2">{t('Current activity')}</div><ActivityCard userId={userId} activity={activity} dark /></div>}
+                  {!activity && <ActivityEmpty userId={userId} />}
+                </div>
+              )}
+              {tab === 'friends' && (friends.length === 0 ? empty(t('No mutual friends')) : (
+                <ul className="space-y-0.5" data-mutual-friends>
+                  {friends.map((f) => (
+                    <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className={row}><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={40} /><span className="truncate font-semibold">{f.display_name}</span></button></li>
+                  ))}
+                </ul>
+              ))}
+              {tab === 'servers' && (mutual.length === 0 ? empty(t('No mutual servers')) : (
+                <ul className="space-y-0.5" data-mutual-list>
+                  {mutual.map((g) => (
+                    <li key={g.id}>
+                      <button onClick={() => { onClose(); navigate(`/channels/${g.id}`) }} className={row}>
+                        {g.icon_url ? <img src={g.icon_url} alt="" className="h-10 w-10 rounded-xl object-cover" /> : <span className="h-10 w-10 rounded-xl text-white text-xs font-bold flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>}
+                        <span className="truncate font-semibold">{g.name}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+              {tab === 'wishlist' && (
+                <ul className={`${panel} space-y-1`} data-panel-wishlist>{wishlist.map((it, i) => <li key={i} className="truncate">{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="hover:underline">{it.title}</a> : it.title}</li>)}</ul>
+              )}
+              {tab === 'games' && (
+                <ul className="flex flex-wrap gap-2" data-panel-games>{games.map((it, i) => <li key={i} className="rounded-lg bg-black/25 px-3 py-1.5 text-sm">{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="hover:underline">{it.title}</a> : it.title}</li>)}</ul>
+              )}
+              {tab === 'reviews' && <div className={panel}><Reviews userId={userId} light isMe={isMe} /></div>}
+            </div>
+          </div>
+        </div>
       </div>
-      {tab === 'roles' && showRoles && <section data-profile-roles><RolePicker guildId={inGuild!} member={member!} /></section>}
-      {tab === 'friends' && (friends.length === 0 ? empty(t('No mutual friends')) : (
-        <ul className="space-y-0.5" data-mutual-friends>
-          {friends.map((f) => (
-            <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className={row}><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={36} /><span className="truncate font-medium">{f.display_name}</span></button></li>
-          ))}
-        </ul>
-      ))}
-      {tab === 'servers' && (mutual.length === 0 ? empty(t('No mutual servers')) : (
-        <ul className="space-y-0.5" data-mutual-list>
-          {mutual.map((g) => (
-            <li key={g.id}>
-              <button onClick={() => { onClose(); navigate(`/channels/${g.id}`) }} className={row}>
-                {g.icon_url ? <img src={g.icon_url} alt="" className="h-9 w-9 rounded-xl object-cover" /> : <span className="h-9 w-9 rounded-xl text-white text-xs font-bold flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>}
-                <span className="truncate font-medium">{g.name}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ))}
-      {tab === 'reviews' && <Reviews userId={userId} light isMe={isMe} />}
     </div>
   )
-  // Discord's full profile: the wide card (big banner and avatar, profile on the left, tabs on the right), in the
-  // same colours as the popout, its frame and effect around it. The card scrolls inside the room its frame needs.
-  return (
-    <Modal onClose={onClose} width="max-w-[720px]" bare>
-      <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" aside={aside} />
-    </Modal>
-  )
+}
+
+/** The Activity tab when there's no game or music: say so, unless they're in voice (the card above covers it). */
+function ActivityEmpty({ userId }: { userId: string }) {
+  const t = useT()
+  const inVoice = useStore((s) => !!s.voiceStates[userId]?.channel_id)
+  if (inVoice) return null
+  return <p className="py-10 text-center text-sm text-[#b5bac1]" data-profile-no-activity>{t('Nothing going on right now.')}</p>
 }
 
 /** "User Reviews": short notes other users leave on a profile. One per author; only the author can remove theirs. On your own profile you read them but cannot post. */

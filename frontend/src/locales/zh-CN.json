@@ -3331,5 +3331,16 @@
 "Mutual Servers — {n}": "共同服务器 — {n}",
 "No mutual friends": "没有共同好友",
 "No mutual servers": "没有共同服务器",
-"Reviews": "评价"
+"Reviews": "评价",
+"1 device": "1 台设备",
+"Account": "账号",
+"Account Info": "账号信息",
+"Account Status": "账号状态",
+"Display Name": "显示名称",
+"Edit Profiles": "编辑个人资料",
+"Logged-in Devices": "已登录的设备",
+"Password & Security": "密码与安全",
+"Search settings": "搜索设置",
+"Year in Review": "年度回顾",
+"{n} devices": "{n} 台设备"
 }

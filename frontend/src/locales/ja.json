@@ -3331,5 +3331,16 @@
 "Mutual Servers — {n}": "共通のサーバー — {n}",
 "No mutual friends": "共通のフレンドはいません",
 "No mutual servers": "共通のサーバーはありません",
-"Reviews": "レビュー"
+"Reviews": "レビュー",
+"1 device": "1台のデバイス",
+"Account": "アカウント",
+"Account Info": "アカウント情報",
+"Account Status": "アカウントのステータス",
+"Display Name": "表示名",
+"Edit Profiles": "プロフィールを編集",
+"Logged-in Devices": "ログイン中のデバイス",
+"Password & Security": "パスワードとセキュリティ",
+"Search settings": "設定を検索",
+"Year in Review": "年間振り返り",
+"{n} devices": "{n}台のデバイス"
 }
