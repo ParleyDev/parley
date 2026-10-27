@@ -3324,5 +3324,12 @@
 "{n} channels": "채널 {n}개",
 "{n} roles": "역할 {n}개",
 "Search {n} effects": "효과 {n}개 검색",
-"Search {n} frames": "프레임 {n}개 검색"
+"Search {n} frames": "프레임 {n}개 검색",
+"Mutual Friends": "함께 아는 친구",
+"Mutual Friends — {n}": "함께 아는 친구 — {n}",
+"Mutual Servers": "함께 있는 서버",
+"Mutual Servers — {n}": "함께 있는 서버 — {n}",
+"No mutual friends": "함께 아는 친구가 없어요",
+"No mutual servers": "함께 있는 서버가 없어요",
+"Reviews": "리뷰"
 }

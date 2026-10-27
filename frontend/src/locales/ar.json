@@ -3324,5 +3324,12 @@
 "{n} channels": "{n} قنوات",
 "{n} roles": "{n} أدوار",
 "Search {n} effects": "ابحث في {n} تأثيرًا",
-"Search {n} frames": "ابحث في {n} إطارًا"
+"Search {n} frames": "ابحث في {n} إطارًا",
+"Mutual Friends": "الأصدقاء المشتركون",
+"Mutual Friends — {n}": "الأصدقاء المشتركون — {n}",
+"Mutual Servers": "الخوادم المشتركة",
+"Mutual Servers — {n}": "الخوادم المشتركة — {n}",
+"No mutual friends": "لا يوجد أصدقاء مشتركون",
+"No mutual servers": "لا توجد خوادم مشتركة",
+"Reviews": "المراجعات"
 }

@@ -3324,5 +3324,12 @@
 "{n} channels": "{n} 个频道",
 "{n} roles": "{n} 个身份组",
 "Search {n} effects": "搜索 {n} 个特效",
-"Search {n} frames": "搜索 {n} 个头像框"
+"Search {n} frames": "搜索 {n} 个头像框",
+"Mutual Friends": "共同好友",
+"Mutual Friends — {n}": "共同好友 — {n}",
+"Mutual Servers": "共同服务器",
+"Mutual Servers — {n}": "共同服务器 — {n}",
+"No mutual friends": "没有共同好友",
+"No mutual servers": "没有共同服务器",
+"Reviews": "评价"
 }

@@ -3324,5 +3324,12 @@
 "{n} channels": "{n} kanal",
 "{n} roles": "{n} rol",
 "Search {n} effects": "{n} efekt içinde ara",
-"Search {n} frames": "{n} çerçeve içinde ara"
+"Search {n} frames": "{n} çerçeve içinde ara",
+"Mutual Friends": "Ortak Arkadaşlar",
+"Mutual Friends — {n}": "Ortak Arkadaşlar — {n}",
+"Mutual Servers": "Ortak Sunucular",
+"Mutual Servers — {n}": "Ortak Sunucular — {n}",
+"No mutual friends": "Ortak arkadaş yok",
+"No mutual servers": "Ortak sunucu yok",
+"Reviews": "Değerlendirmeler"
 }

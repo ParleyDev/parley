@@ -16,7 +16,8 @@ interface Props {
 export default function Modal({ title, subtitle, onClose, children, width = 'max-w-md', footer, bare }: Props) {
   useEffect(() => {
     // Capture phase, and stop it there: a modal over Settings closes on its own without closing Settings too.
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose() } }
+    // A menu or image viewer open over the modal takes the Escape for itself.
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[data-context-menu], [data-lightbox]')) { e.stopImmediatePropagation(); onClose() } }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])

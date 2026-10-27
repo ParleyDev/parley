@@ -1,8 +1,8 @@
-import { Check, Clock, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { Check, Clock, MessageSquare, X, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { nameLook } from '../lib/nameStyle'
 import { roleLook } from './StyledName'
 import { locale, useT } from '../lib/i18n'
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
@@ -31,8 +31,11 @@ interface Props {
   /** Server the popout was opened in, if any. */
   guildId?: string
   onClose: () => void
-  /** 'panel': the DM side panel — no message box, adds Member Since and a View Full Profile button. */
-  variant?: 'popout' | 'panel'
+  /** 'panel': the DM side panel — no message box, adds Member Since and a View Full Profile button.
+   *  'full': the full profile — a wide card: big banner and avatar, Message / Edit Profile on the banner, the
+   *  profile on the left and `aside` (tabs: mutual friends and servers, reviews, roles) on the right. */
+  variant?: 'popout' | 'panel' | 'full'
+  aside?: ReactNode
 }
 
 /**
@@ -40,8 +43,9 @@ interface Props {
  * "username • pronouns", a clamped bio with "View Full Bio", mutual servers, and a
  * "Message @user" box. Everything else lives in the full profile ("View Full Profile").
  */
-export default function ProfilePopout({ user, guildId, onClose, variant = 'popout' }: Props) {
+export default function ProfilePopout({ user, guildId, onClose, variant = 'popout', aside }: Props) {
   const panel = variant === 'panel'
+  const full = variant === 'full'
   const me = useStore((s) => s.user)
   const rel = useStore((s) => s.relationships[user.id]?.kind)
   const live = useStore((s) => !!s.voiceStates[user.id]?.self_stream)
@@ -76,7 +80,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const [bioClamped, setBioClamped] = useState(false)
   const bioRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  useLayoutEffect(() => { const el = bioRef.current; if (el) setBioClamped(el.scrollHeight > el.clientHeight + 1) }, [user.bio])
+  useLayoutEffect(() => { const el = bioRef.current; if (el && !full) setBioClamped(el.scrollHeight > el.clientHeight + 1) }, [user.bio, full])
 
   const isMe = me?.id === user.id
   const ctx = guild ? { guild, roles, member: myMember } : null
@@ -100,7 +104,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   }
   const onQuickKey = (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') { e.preventDefault(); sendQuick() } }
   const copy = (label: string, text: string) => act(async () => { await navigator.clipboard.writeText(text); pushToast(t('{label} copied', { label })) })
-  const fullProfile = () => { onClose(); openModal({ kind: 'profile', userId: user.id }) }
+  const fullProfile = (tab?: 'friends' | 'servers' | 'reviews') => { onClose(); openModal({ kind: 'profile', userId: user.id, tab }) }
   const invite = (g: Guild) => act(async () => {
     const inv = await api.post<{ code: string }>(`/guilds/${g.id}/invites`, {})
     const c = await openDm()
@@ -162,11 +166,17 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
 
   return (
     <FrameRoom value={user.profile_frame}>
-    <div className={`relative w-full rounded-lg border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined}>
+    <div className={`relative w-full ${full ? 'rounded-xl' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
       <ProfileEffect id={user.profile_effect} />
       {/* Banner with overlaid buttons */}
-      <div className="relative h-[105px] rounded-t-lg bg-cover bg-center" style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }}>
+      <div className={`relative ${full ? 'h-[212px] rounded-t-xl max-md:h-[150px]' : 'h-[105px] rounded-t-lg'} bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }}>
         <div className="absolute right-3 top-3 flex gap-2">
+          {full && !isMe && rel !== 'blocked' && (
+            <button onClick={() => act(async () => { const c = await openDm(); onClose(); navigate(`/channels/@me/${c.id}`) })} className="h-8 rounded-full bg-accent hover:brightness-110 px-3.5 text-sm font-semibold text-white flex items-center gap-1.5" data-full-message><MessageSquare size={16} />{t('Message')}</button>
+          )}
+          {full && isMe && (
+            <button onClick={() => { onClose(); openModal({ kind: 'editProfile' }) }} className="h-8 rounded-full bg-black/55 hover:bg-black/75 px-3.5 text-sm font-semibold text-white flex items-center gap-1.5" data-full-edit-profile><Pencil size={15} />{t('Edit Profile')}</button>
+          )}
           {friendBtn && (
             <div className="relative">
               <button onClick={friendBtn.fn} title={friendBtn.title} aria-label={friendBtn.title} aria-expanded={rel === 'friend' ? !!friendMenu : undefined} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center" data-friend-badge={rel === 'friend' ? '' : undefined}>{friendBtn.icon}</button>
@@ -177,23 +187,25 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             <button onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu(menu ? null : { x: r.right + 8, y: r.top, items: menuItems }) }} title={t('More')} aria-label={t('More')} aria-expanded={!!menu} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center"><MoreHorizontal size={18} /></button>
             {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
           </div>
+          {full && <button onClick={onClose} title={t('Close')} aria-label={t('Close')} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center" data-full-profile-close><X size={18} /></button>}
         </div>
         {user.custom_status && (
-          <div className="absolute left-[104px] bottom-[-14px] max-w-[180px] rounded-xl px-3 py-1.5 text-sm shadow-lg truncate" style={{ background: themed ? '#1a1527' : '#232428' }} data-custom-status title={user.custom_status}>{user.custom_status}</div>
+          <div className={`absolute ${full ? 'left-[156px] max-w-[260px]' : 'left-[104px] max-w-[180px]'} bottom-[-14px] rounded-xl px-3 py-1.5 text-sm shadow-lg truncate`} style={{ background: themed ? '#1a1527' : '#232428' }} data-custom-status title={user.custom_status}>{user.custom_status}</div>
         )}
       </div>
       {/* Avatar */}
-      <div className="px-4 -mt-[42px]">
-        <div className="inline-block rounded-full" style={{ boxShadow: `0 0 0 6px ${themed ? '#1a1527' : '#232428'}` }}>
+      <div className={full ? 'px-5 -mt-[64px]' : 'px-4 -mt-[42px]'}>
+        <div className="inline-block rounded-full" style={{ boxShadow: `0 0 0 ${full ? 8 : 6}px ${themed ? '#1a1527' : '#232428'}` }}>
           {user.avatar_url
-            ? <button type="button" onClick={() => setViewAvatar(true)} className="block rounded-full cursor-zoom-in" title={t('View Avatar')} aria-label={t('View Avatar')} data-view-avatar><Avatar user={user} size={80} presence animate /></button>
-            : <Avatar user={user} size={80} presence animate />}
+            ? <button type="button" onClick={() => setViewAvatar(true)} className="block rounded-full cursor-zoom-in" title={t('View Avatar')} aria-label={t('View Avatar')} data-view-avatar><Avatar user={user} size={full ? 120 : 80} presence animate /></button>
+            : <Avatar user={user} size={full ? 120 : 80} presence animate />}
         </div>
         {viewAvatar && user.avatar_url && createPortal(<div className="relative z-[160]"><ImageLightbox url={user.avatar_url} name={user.display_name} onClose={() => setViewAvatar(false)} /></div>, document.body)}
       </div>
-      <div className="px-4 pt-3 pb-4 space-y-3">
+      <div className={full ? 'flex gap-6 px-5 pt-3 pb-5 max-md:flex-col' : 'px-4 pt-3 pb-4'}>
+      <div className={full ? 'w-[280px] max-md:w-full shrink-0 space-y-3' : 'space-y-3'} data-profile-main>
         <div>
-          <h2 className="text-[20px] font-bold leading-6 truncate flex items-center gap-1.5">
+          <h2 className={`${full ? 'text-[24px] leading-7' : 'text-[20px] leading-6'} font-bold truncate flex items-center gap-1.5`}>
             {nickEdit !== null ? (
               <input autoFocus value={nickEdit} maxLength={32} onChange={(e) => setNickEdit(e.target.value)} onBlur={saveNick} onKeyDown={(e) => { if (e.key === 'Enter') saveNick(); if (e.key === 'Escape') setNickEdit(null) }} placeholder={user.display_name}
                 className="h-7 w-48 rounded-md bg-black/30 border border-white/20 px-2 text-sm font-bold outline-none" data-friend-nick-input />
@@ -219,8 +231,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
               className="w-full resize-none rounded-md bg-black/20 px-2 py-1 text-sm outline-none placeholder:text-[#b5bac1]/70 focus:bg-black/30" data-profile-note />
           </div>
         )}
-        {(friends.length > 0 || mutual.length > 0) && (
-          <button onClick={fullProfile} className="flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px] leading-4 text-[#b5bac1] hover:text-[#dbdee1]" data-mutual>
+        {!full && (friends.length > 0 || mutual.length > 0) && (
+          <button onClick={() => fullProfile(friends.length ? 'friends' : 'servers')} className="flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px] leading-4 text-[#b5bac1] hover:text-[#dbdee1]" data-mutual>
             {friends.length > 0 && (
               <span className="flex items-center gap-1">
                 <span className="flex -space-x-2">{friends.slice(0, 3).map((f) => <span key={f.id} className="rounded-full ring-2 ring-[#232428]"><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={16} /></span>)}</span>
@@ -241,15 +253,15 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         {activity && <ActivityCard userId={user.id} activity={activity} dark={themed} />}
         {user.bio && (
           <div>
-            <div ref={bioRef} className="msg-content text-sm leading-[18px] whitespace-pre-wrap break-words overflow-hidden max-h-[54px]" data-bio>{renderMarkdown(user.bio, { blocks: false })}</div>
+            <div ref={bioRef} className={`msg-content text-sm leading-[18px] whitespace-pre-wrap break-words ${full ? '' : 'overflow-hidden max-h-[54px]'}`} data-bio>{renderMarkdown(user.bio, { blocks: false })}</div>
             {bioClamped && <div className="text-sm leading-[18px] text-[#b5bac1]" aria-hidden>…</div>}
-            {bioClamped && <button onClick={fullProfile} className="mt-3 block text-xs font-medium text-[#dbdee1] hover:underline" data-view-full-bio>{t('View Full Bio')}</button>}
+            {bioClamped && <button onClick={() => fullProfile()} className="mt-3 block text-xs font-medium text-[#dbdee1] hover:underline" data-view-full-bio>{t('View Full Bio')}</button>}
           </div>
         )}
-        <button onClick={fullProfile} className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold text-left hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-reviews>
+        {!full && <button onClick={() => fullProfile('reviews')} className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold text-left hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-reviews>
           <span>{t('User Reviews')}</span>
           <span className="font-normal text-[#b5bac1]">{reviewCount === 0 ? t('No reviews yet') : reviewCount === 1 ? t('{n} review', { n: reviewCount }) : t('{n} reviews', { n: reviewCount })}</span>
-        </button>
+        </button>}
         {(user.connections?.length ?? 0) > 0 && (
           <div data-profile-connections>
             <h3 className="text-xs font-bold mb-1">{t('Connections')}</h3>
@@ -263,7 +275,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             </div>
           </div>
         )}
-        {panel && (
+        {(panel || full) && (
           <div>
             <h3 className="text-xs font-bold mb-1">{t('Member Since')}</h3>
             <p className="text-sm text-[#b5bac1]">{new Date(user.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}</p>
@@ -275,7 +287,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             <p className="text-sm text-[#b5bac1]">{new Date(friendsSince).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}</p>
           </div>
         )}
-        {!panel && !isMe && rel !== 'blocked' && (
+        {!panel && !full && !isMe && rel !== 'blocked' && (
           <div className="relative">
             <input ref={inputRef} value={quick} onChange={(e) => setQuick(e.target.value)} onKeyDown={onQuickKey} disabled={sending} maxLength={2000}
               placeholder={t('Message @{name}', { name: nickname ?? user.display_name })} aria-label={t('Message @{name}', { name: user.username })} data-quick-message
@@ -289,7 +301,9 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           </div>
         )}
         {rel === 'blocked' && <div className="flex items-center gap-2 text-sm text-text-2"><UserX size={16} /> {t('You blocked this user.')}</div>}
-        {panel && <button onClick={fullProfile} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-view-full-profile>{t('View Full Profile')}</button>}
+        {panel && <button onClick={() => fullProfile()} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-view-full-profile>{t('View Full Profile')}</button>}
+      </div>
+      {full && <div className="flex-1 min-w-0" data-full-profile-aside>{aside}</div>}
       </div>
     </div>
     </FrameRoom>

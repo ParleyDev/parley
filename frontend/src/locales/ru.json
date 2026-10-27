@@ -3324,5 +3324,12 @@
 "{n} channels": "Каналов: {n}",
 "{n} roles": "Ролей: {n}",
 "Search {n} effects": "Искать среди эффектов ({n})",
-"Search {n} frames": "Искать среди рамок ({n})"
+"Search {n} frames": "Искать среди рамок ({n})",
+"Mutual Friends": "Общие друзья",
+"Mutual Friends — {n}": "Общие друзья — {n}",
+"Mutual Servers": "Общие серверы",
+"Mutual Servers — {n}": "Общие серверы — {n}",
+"No mutual friends": "Нет общих друзей",
+"No mutual servers": "Нет общих серверов",
+"Reviews": "Отзывы"
 }

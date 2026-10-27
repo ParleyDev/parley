@@ -46,10 +46,12 @@
    popovers, tooltips, settings) gets a solid surface so what's underneath doesn't bleed through and hurt legibility. */
 :root:not([data-theme="light"])[data-palette="aurora"] { --color-float: #171230; --color-float-2: #1f1a3d; }
 :root:not([data-theme="light"])[data-palette="sunset"] { --color-float: #26121f; --color-float-2: #321a2b; }
-:root:not([data-theme="light"])[data-palette="aurora"] .pop:not([data-profile-popout]),
-:root:not([data-theme="light"])[data-palette="sunset"] .pop:not([data-profile-popout]),
-:root:not([data-theme="light"])[data-palette="aurora"] [data-profile-popout] > *,
-:root:not([data-theme="light"])[data-palette="sunset"] [data-profile-popout] > * { background-color: var(--color-float) !important; }
+/* A profile frame's wrapper is only room for the frame: it stays see-through and the card inside gets the surface. */
+:root:not([data-theme="light"])[data-palette="aurora"] .pop:not([data-profile-popout]):not([data-frame-wrap]):not([data-modal-bare]),
+:root:not([data-theme="light"])[data-palette="sunset"] .pop:not([data-profile-popout]):not([data-frame-wrap]):not([data-modal-bare]),
+:root:not([data-theme="light"])[data-palette="aurora"] [data-profile-popout] > *:not([data-frame-wrap]),
+:root:not([data-theme="light"])[data-palette="sunset"] [data-profile-popout] > *:not([data-frame-wrap]),
+:root:not([data-theme="light"]):is([data-palette="aurora"], [data-palette="sunset"]) [data-frame-wrap] > div > :is([data-profile-card], [data-user-menu]) { background-color: var(--color-float) !important; }
 /* Phones and tablets: panes that cover the rest of the app (navigation, member list, side panels) get the solid
    surface too, or the hidden content underneath shows through them. */
 @media (max-width: 767px) {

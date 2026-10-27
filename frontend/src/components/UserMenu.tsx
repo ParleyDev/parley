@@ -129,7 +129,7 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
           <div className="text-sm flex flex-wrap items-center gap-x-1.5"><span>{user.username}</span>{user.pronouns ? <><span className="opacity-60">•</span><span>{user.pronouns}</span></> : null}<Badges badges={profile?.badges} /></div>
         </div>
         {user.bio && <div className="msg-content text-sm leading-[18px] whitespace-pre-wrap break-words max-h-[54px] overflow-hidden" data-user-menu-bio>{renderMarkdown(user.bio, { blocks: false })}</div>}
-        <button type="button" onClick={() => { onClose(); openModal({ kind: 'profile', userId: user.id }) }} className="w-full flex items-center justify-between rounded-lg bg-black/25 px-3 py-2 text-[13px] font-semibold hover:bg-black/35" data-user-menu-reviews>
+        <button type="button" onClick={() => { onClose(); openModal({ kind: 'profile', userId: user.id, tab: 'reviews' }) }} className="w-full flex items-center justify-between rounded-lg bg-black/25 px-3 py-2 text-[13px] font-semibold hover:bg-black/35" data-user-menu-reviews>
           <span>{t('User Reviews')}</span><span className="font-normal text-[#b5bac1]">{reviews === 0 ? t('No reviews yet') : reviews === 1 ? t('{n} review', { n: reviews }) : t('{n} reviews', { n: reviews })}</span>
         </button>
         <Group>

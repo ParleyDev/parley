@@ -3324,5 +3324,12 @@
 "{n} channels": "{n} kanalen",
 "{n} roles": "{n} rollen",
 "Search {n} effects": "{n} effecten doorzoeken",
-"Search {n} frames": "{n} kaders doorzoeken"
+"Search {n} frames": "{n} kaders doorzoeken",
+"Mutual Friends": "Gezamenlijke vrienden",
+"Mutual Friends — {n}": "Gezamenlijke vrienden — {n}",
+"Mutual Servers": "Gezamenlijke servers",
+"Mutual Servers — {n}": "Gezamenlijke servers — {n}",
+"No mutual friends": "Geen gezamenlijke vrienden",
+"No mutual servers": "Geen gezamenlijke servers",
+"Reviews": "Beoordelingen"
 }

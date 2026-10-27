@@ -45,7 +45,16 @@ ok('Copy Profile Link copies /users/<id>', (await p.evaluate(()=>navigator.clipb
 ok('menu closed after choosing', await p.locator('[data-context-menu]').count()===0)
 // View Full Profile → centred modal with Member Since, roles, mutual list
 await card.locator('button[title="More"]').click(); await p.locator('[role=menuitem]:has-text("View Full Profile")').click(); await p.waitForTimeout(500)
-ok('full profile modal: Member since, Roles, mutual friends + servers, reviews, action icons', await p.locator('[data-profile-popout]').count()===0 && await p.locator('[role=dialog] h3:has-text("Member since")').count()===1 && await p.locator('[role=dialog] button[title="Add role"]').count()===1 && await p.locator('[role=dialog] [data-mutual-list] li').count()===2 && await p.locator('[role=dialog] [data-mutual-friends] li:has-text("Carol")').count()===1 && await p.locator('[role=dialog] [data-reviews-list]').count()===1 && await p.locator('[role=dialog] button[title="Kick"]').count()===1)
+ok('full profile: the wide card with Member Since, opening on Roles', await p.locator('[data-profile-popout]').count()===0 && await p.locator('[role=dialog] [data-profile-variant="full"]').count()===1 && await p.locator('[role=dialog] h3:has-text("Member since")').count()===1 && await p.locator('[role=dialog] [data-profile-tab="roles"][aria-selected="true"]').count()===1 && await p.locator('[role=dialog] button[title="Add role"]').count()===1)
+await p.click('[role=dialog] [data-profile-tab="friends"]')
+ok('Mutual Friends tab', await p.locator('[role=dialog] [data-mutual-friends] li:has-text("Carol")').count()===1)
+await p.click('[role=dialog] [data-profile-tab="servers"]')
+ok('Mutual Servers tab', await p.locator('[role=dialog] [data-mutual-list] li').count()===2)
+await p.click('[role=dialog] button[title="More"]'); await p.waitForTimeout(200)
+ok('moderation lives in the More menu (Kick)', await p.locator('[data-context-menu] [role=menuitem]:has-text("Kick")').count()===1)
+await p.keyboard.press('Escape'); await p.waitForTimeout(150)
+await p.click('[role=dialog] [data-profile-tab="reviews"]')
+ok('Reviews tab', await p.locator('[role=dialog] [data-reviews-list]').count()===1)
 // reviews: post, replace, list, count in popout, delete
 await p.fill('[data-review-input]', 'great builder'); await p.keyboard.press('Enter'); await p.waitForTimeout(500)
 ok('review posted', await p.locator('[role=dialog] [data-review]:has-text("great builder")').count()===1)

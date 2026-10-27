@@ -3324,5 +3324,12 @@
 "{n} channels": "{n} canales",
 "{n} roles": "{n} roles",
 "Search {n} effects": "Buscar {n} efectos",
-"Search {n} frames": "Buscar {n} marcos"
+"Search {n} frames": "Buscar {n} marcos",
+"Mutual Friends": "Amigos en común",
+"Mutual Friends — {n}": "Amigos en común — {n}",
+"Mutual Servers": "Servidores en común",
+"Mutual Servers — {n}": "Servidores en común — {n}",
+"No mutual friends": "No hay amigos en común",
+"No mutual servers": "No hay servidores en común",
+"Reviews": "Reseñas"
 }

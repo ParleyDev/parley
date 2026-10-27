@@ -1,16 +1,12 @@
-import { Ban, Check, Gavel, MessageSquare, Pencil, UserMinus, UserPlus, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { matchPath, useLocation, useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
 import { withServerProfile } from '../../lib/serverProfile'
 import { api } from '../../lib/api'
-import { myGuildPerms, useStore } from '../../store'
-import type { DmChannel, Review, UserProfile } from '../../lib/types'
-import { has, highestPosition, P, EMPTY_ROLES } from '../../lib/perms'
+import { useStore } from '../../store'
+import type { Review, UserProfile } from '../../lib/types'
 import type { Anchor } from '../../lib/anchor'
-import { colorRole, roleLook } from '../StyledName'
 import RolePicker from '../RolePicker'
-import ProfileCard, { contrastText } from '../ProfileCard'
 import ProfilePopout, { POPOUT_W } from '../ProfilePopout'
 import { colorFor, initials, formatTime, renderMarkdown } from '../../lib/format'
 import Avatar from '../Avatar'
@@ -25,7 +21,7 @@ const PAD = 8
  * "View Full Profile") it is the full profile modal: card with Member Since, roles, mutual
  * servers and the action buttons.
  */
-export default function ProfileModal({ onClose, userId, anchor }: { onClose: () => void; userId: string; anchor?: Anchor }) {
+export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose: () => void; userId: string; anchor?: Anchor; tab?: 'roles' | 'friends' | 'servers' | 'reviews' }) {
   const t = useT()
   const cached = useStore((s) => s.users[userId])
   const { pathname } = useLocation()
@@ -46,104 +42,66 @@ export default function ProfileModal({ onClose, userId, anchor }: { onClose: () 
     )
   }
   if (!user) return <Modal onClose={onClose}><p className="text-text-2">{t('Loading…')}</p></Modal>
-  return <FullProfile user={user} inGuild={inGuild} onClose={onClose} />
+  return <FullProfile user={user} inGuild={inGuild} onClose={onClose} initialTab={tab} />
 }
 
-function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: string; onClose: () => void }) {
+function FullProfile({ user, inGuild, onClose, initialTab }: { user: UserProfile; inGuild?: string; onClose: () => void; initialTab?: 'roles' | 'friends' | 'servers' | 'reviews' }) {
   const t = useT()
   const userId = user.id
-  const rel = useStore((s) => s.relationships[userId]?.kind)
   const me = useStore((s) => s.user)
-  const upsertChannel = useStore((s) => s.upsertChannel)
   const openModal = useStore((s) => s.openModal)
-  const pushToast = useStore((s) => s.pushToast)
-  const guild = useStore((s) => (inGuild ? s.guilds[inGuild] : undefined))
   const member = useStore((s) => (inGuild ? s.members[inGuild]?.[userId] : undefined))
-  const myMember = useStore((s) => (inGuild && me ? s.members[inGuild]?.[me.id] : undefined))
-  const roles = useStore((s) => (inGuild ? s.roles[inGuild] : undefined) ?? EMPTY_ROLES)
-  const myPerms = useStore((s) => (inGuild ? myGuildPerms(s, inGuild) : 0))
   const navigate = useNavigate()
   const isMe = me?.id === userId
-  const dm = async () => {
-    try { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: userId }); upsertChannel(c); onClose(); navigate(`/channels/@me/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') }
-  }
-  const kick = () => openModal({ kind: 'kick', guildId: inGuild!, userId })
-  const ban = () => openModal({ kind: 'ban', guildId: inGuild!, userId })
-  const relAct = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
-  const addFriend = () => relAct(() => api.post('/users/@me/relationships', { user_id: userId }))
-  const acceptFriend = () => relAct(() => api.put(`/users/@me/relationships/${userId}`))
-  const removeRel = () => relAct(() => api.delete(`/users/@me/relationships/${userId}`))
-  const blockUser = () => openModal({ kind: 'confirm', title: t('Block {name}', { name: user.display_name }), body: t('{name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.', { name: user.display_name }), danger: true, confirmLabel: t('Block'), action: () => relAct(() => api.put(`/users/@me/relationships/${userId}/block`)) })
-
-  const ctx = guild ? { guild, roles, member: myMember } : null
-  const outranks = !!(guild && ctx && me && !isMe && member && guild.owner_id !== userId && (guild.owner_id === me.id || highestPosition(ctx, me.id) > highestPosition({ ...ctx, member }, userId)))
-  const canKick = outranks && has(myPerms, P.KICK_MEMBERS)
-  const canBan = outranks && has(myPerms, P.BAN_MEMBERS)
-  const roleForName = colorRole(roles, member)
-  const roleNameLook = roleForName ? roleLook(roleForName) : undefined
-
-  const text = contrastText(user.theme_primary ?? colorFor(user.id))
-  const light = text === '#fff'
-  const ghostBase = `btn border ${light ? 'border-white/30 bg-black/30 text-white hover:bg-black/50' : 'border-black/20 bg-white/40 text-black hover:bg-white/60'}`
-  const ghost = `${ghostBase} px-3! py-1.5`
-  const icon = 'h-8 w-8 p-0! rounded-md'
-  const ghostIcon = `${ghostBase} ${icon}`
-  const actions = isMe ? (
-    <button onClick={() => { onClose(); openModal({ kind: 'editProfile' }) }} className={ghost} title={t('Edit Profile')}><Pencil size={16} /> {t('Edit Profile')}</button>
-  ) : (
-    <>
-      {rel !== 'blocked' && <button onClick={dm} className={`btn-primary ${icon}`} title={t('Message')}><MessageSquare size={16} /></button>}
-      {!rel && <button onClick={addFriend} className={`btn-primary bg-success hover:bg-success/80 text-black ${icon}`} title={t('Add Friend')}><UserPlus size={16} /></button>}
-      {rel === 'incoming' && <button onClick={acceptFriend} className="btn-primary bg-success hover:bg-success/80 text-black px-3! py-1.5" title={t('Accept Friend Request')}><Check size={16} /> {t('Accept')}</button>}
-      {rel === 'outgoing' && <button onClick={removeRel} className={ghost} title={t('Cancel Friend Request')}><X size={16} /> {t('Pending')}</button>}
-      {rel === 'friend' && <button onClick={removeRel} className={ghost} title={t('Remove Friend')}><Check size={16} /> {t('Friends')}</button>}
-      {rel === 'blocked' && <button onClick={removeRel} className={ghost} title={t('Unblock')}><Ban size={16} /> {t('Unblock')}</button>}
-      {rel !== 'blocked' && <button onClick={blockUser} className={ghostIcon} title={t('Block')}><Ban size={16} /></button>}
-      {canKick && <button onClick={kick} className={`btn-danger ${icon}`} title={t('Kick')}><UserMinus size={16} /></button>}
-      {canBan && <button onClick={ban} className={`btn-danger ${icon}`} title={t('Ban')}><Gavel size={16} /></button>}
-    </>
-  )
   const mutual = user.mutual_guilds ?? []
   const friends = user.mutual_friends ?? []
-  return (
-    <Modal onClose={onClose} width="max-w-sm" bare>
-      <div>
-        <ProfileCard user={user} actions={actions} nameOverride={member?.nickname ? member.nickname : null} nameLook={roleNameLook}
-          server={guild && member ? { id: guild.id, name: guild.name, icon_url: guild.icon_url, joined_at: member.joined_at } : undefined}>
-          {inGuild && member && (
-            <section className="w-full">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">{t('Roles')}</h3>
-              <RolePicker guildId={inGuild} member={member} />
-            </section>
-          )}
-          {friends.length > 0 && (
-            <section data-mutual-friends>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">{t('Mutual friends — {n}', { n: friends.length })}</h3>
-              <ul className="space-y-1">
-                {friends.map((f) => (
-                  <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className="flex items-center gap-2 hover:underline text-left"><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={20} /><span className="truncate">{f.display_name}</span></button></li>
-                ))}
-              </ul>
-            </section>
-          )}
-          {mutual.length > 0 && (
-            <section data-mutual-list>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">{t('Mutual servers — {n}', { n: mutual.length })}</h3>
-              <ul className="space-y-1">
-                {mutual.map((g) => (
-                  <li key={g.id}>
-                    <button onClick={() => { onClose(); navigate(`/channels/${g.id}`) }} className="flex items-center gap-2 hover:underline text-left">
-                      {g.icon_url ? <img src={g.icon_url} alt="" className="h-5 w-5 rounded-full object-cover" /> : <span className="h-5 w-5 rounded-full text-white text-[9px] font-bold flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>}
-                      <span className="truncate">{g.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          <Reviews userId={userId} light={light} isMe={isMe} />
-        </ProfileCard>
+  const showRoles = !!(inGuild && member)
+  type Tab = 'roles' | 'friends' | 'servers' | 'reviews'
+  const tabs: { id: Tab; label: string }[] = [
+    ...(showRoles ? [{ id: 'roles' as Tab, label: t('Roles') }] : []),
+    { id: 'friends' as Tab, label: friends.length ? t('Mutual Friends — {n}', { n: friends.length }) : t('Mutual Friends') },
+    { id: 'servers' as Tab, label: mutual.length ? t('Mutual Servers — {n}', { n: mutual.length }) : t('Mutual Servers') },
+    { id: 'reviews' as Tab, label: t('Reviews') },
+  ].filter((x) => !(isMe && (x.id === 'friends' || x.id === 'servers')))
+  const [tab, setTab] = useState<Tab>(initialTab ?? tabs[0].id)
+  const empty = (msg: string) => <p className="py-8 text-center text-sm text-[#b5bac1]">{msg}</p>
+  const row = 'w-full flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-white/[.06]'
+  const aside = (
+    <div className="flex flex-col min-h-[260px]" data-full-profile-tabs>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 border-b border-white/10 mb-3" role="tablist">
+        {tabs.map((x) => (
+          <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}
+            className={`shrink-0 pb-2 -mb-px border-b-2 text-sm font-medium ${tab === x.id ? 'border-white text-white' : 'border-transparent text-[#b5bac1] hover:text-[#dbdee1]'}`} data-profile-tab={x.id}>{x.label}</button>
+        ))}
       </div>
+      {tab === 'roles' && showRoles && <section data-profile-roles><RolePicker guildId={inGuild!} member={member!} /></section>}
+      {tab === 'friends' && (friends.length === 0 ? empty(t('No mutual friends')) : (
+        <ul className="space-y-0.5" data-mutual-friends>
+          {friends.map((f) => (
+            <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className={row}><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={36} /><span className="truncate font-medium">{f.display_name}</span></button></li>
+          ))}
+        </ul>
+      ))}
+      {tab === 'servers' && (mutual.length === 0 ? empty(t('No mutual servers')) : (
+        <ul className="space-y-0.5" data-mutual-list>
+          {mutual.map((g) => (
+            <li key={g.id}>
+              <button onClick={() => { onClose(); navigate(`/channels/${g.id}`) }} className={row}>
+                {g.icon_url ? <img src={g.icon_url} alt="" className="h-9 w-9 rounded-xl object-cover" /> : <span className="h-9 w-9 rounded-xl text-white text-xs font-bold flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>}
+                <span className="truncate font-medium">{g.name}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ))}
+      {tab === 'reviews' && <Reviews userId={userId} light isMe={isMe} />}
+    </div>
+  )
+  // Discord's full profile: the wide card (big banner and avatar, profile on the left, tabs on the right), in the
+  // same colours as the popout, its frame and effect around it. The card scrolls inside the room its frame needs.
+  return (
+    <Modal onClose={onClose} width="max-w-[720px]" bare>
+      <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" aside={aside} />
     </Modal>
   )
 }

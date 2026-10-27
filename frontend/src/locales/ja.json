@@ -3324,5 +3324,12 @@
 "{n} channels": "{n}件のチャンネル",
 "{n} roles": "{n}件のロール",
 "Search {n} effects": "{n} 件のエフェクトを検索",
-"Search {n} frames": "{n} 件のフレームを検索"
+"Search {n} frames": "{n} 件のフレームを検索",
+"Mutual Friends": "共通のフレンド",
+"Mutual Friends — {n}": "共通のフレンド — {n}",
+"Mutual Servers": "共通のサーバー",
+"Mutual Servers — {n}": "共通のサーバー — {n}",
+"No mutual friends": "共通のフレンドはいません",
+"No mutual servers": "共通のサーバーはありません",
+"Reviews": "レビュー"
 }

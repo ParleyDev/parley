@@ -87,7 +87,7 @@ export function FrameRoom({ value, className = '', innerClassName = '', style, c
   const s = L && w ? w / (L.inner_width || 1200) : 0
   const pad: CSSProperties = L && s ? { paddingTop: L.overflow_top * s, paddingBottom: L.overflow_bottom * s, paddingLeft: L.overflow_horizontal * s, paddingRight: L.overflow_horizontal * s } : {}
   return (
-    <div className={className} style={{ ...style, ...pad }} data-frame-room={item ? item.id : undefined} {...rest}>
+    <div className={className} style={{ ...style, ...pad }} data-frame-wrap data-frame-room={item ? item.id : undefined} {...rest}>
       <div ref={ref} className={`relative ${innerClassName}`}>
         {children}
         <ProfileFrame value={value} />
