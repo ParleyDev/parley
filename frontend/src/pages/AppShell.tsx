@@ -1,3 +1,4 @@
+import { FAMILY_CODE_KEY } from '../components/modals/settings/FamilyTab'
 import { saveClip } from '../lib/clips'
 import { unseenEntry } from '../lib/changelog'
 import MobileTabBar from '../components/MobileTabBar'
@@ -42,6 +43,14 @@ export default function AppShell() {
   useT() // re-render when the language changes
   useEffect(() => { initBadge() }, [])
   useEffect(() => installLinkGuard(), [])
+  // A parent scanned their teen's Family Center QR code: open Family Center with the code filled in.
+  useEffect(() => {
+    const u = new URL(location.href); const code = u.searchParams.get('family')
+    if (!code) return
+    try { sessionStorage.setItem(FAMILY_CODE_KEY, code) } catch { /* ignore */ }
+    u.searchParams.delete('family'); history.replaceState(history.state, '', u.pathname + u.search + u.hash)
+    useStore.getState().openModal({ kind: 'userSettings', tab: 'family' })
+  }, [])
   // What's New: once per new changelog entry, after the first connection.
   const ready = useStore((s) => !!s.user && s.connected)
   useEffect(() => { if (ready && unseenEntry()) useStore.getState().openModal({ kind: 'whatsNew' }) }, [ready])

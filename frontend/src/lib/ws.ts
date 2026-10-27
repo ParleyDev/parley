@@ -35,6 +35,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'TYPING_START'; d: { channel_id: string; user_id: string } }
   | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean; platforms?: string[]; idle?: boolean } }
   | { t: 'ACTIVITY_UPDATE'; d: { user_id: string; activity: Activity | null } }
+  | { t: 'FAMILY_UPDATE'; d: Record<string, never> }
   | { t: 'CALL_ACTIVITY_UPDATE'; d: CallActivity | { id: string; channel_id: string; ended: true } }
   | { t: 'CALL_ACTIVITY_STATE'; d: { id: string; state: unknown; user_id: string } }
   | { t: 'CALL_ACTIVITY_MESSAGE'; d: { id: string; data: unknown; user_id: string } }
@@ -234,6 +235,7 @@ function handle(ev: Ev) {
       }
       break
     }
+    case 'FAMILY_UPDATE': window.dispatchEvent(new Event('parley:family')); break
     case 'ACTIVITY_UPDATE': s.setActivity(ev.d.user_id, ev.d.activity); break
     case 'CALL_ACTIVITY_UPDATE': applyActivityUpdate(ev.d); break
     case 'CALL_ACTIVITY_STATE': dispatchSessionEvent({ t: 'state', id: ev.d.id, data: ev.d.state, user_id: ev.d.user_id }); break
