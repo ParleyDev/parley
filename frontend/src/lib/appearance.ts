@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { STORAGE_PREFIX } from './brand'
+import { t } from './i18n'
 
 export type Theme = 'dark' | 'light' | 'system'
 export type Density = 'cozy' | 'compact'
@@ -7,11 +8,11 @@ export type Density = 'cozy' | 'compact'
 export type Palette = 'default' | 'ash' | 'onyx' | 'midnight' | 'aurora' | 'sunset'
 export const PALETTES: { id: Palette; label: string; swatch: string }[] = [
   { id: 'default', label: 'Parley', swatch: '#1a1b23' },
-  { id: 'ash', label: 'Ash', swatch: '#313338' },
-  { id: 'onyx', label: 'Onyx', swatch: '#0f0f11' },
-  { id: 'midnight', label: 'Midnight', swatch: '#121a2c' },
-  { id: 'aurora', label: 'Aurora', swatch: 'linear-gradient(135deg, #2b1a4f, #0f3b46)' },
-  { id: 'sunset', label: 'Sunset', swatch: 'linear-gradient(135deg, #4a1c2c, #3b2350)' },
+  { id: 'ash', get label() { return t('Ash') }, swatch: '#313338' },
+  { id: 'onyx', get label() { return t('Onyx') }, swatch: '#0f0f11' },
+  { id: 'midnight', get label() { return t('Midnight') }, swatch: '#121a2c' },
+  { id: 'aurora', get label() { return t('Aurora') }, swatch: 'linear-gradient(135deg, #2b1a4f, #0f3b46)' },
+  { id: 'sunset', get label() { return t('Sunset') }, swatch: 'linear-gradient(135deg, #4a1c2c, #3b2350)' },
 ]
 /** Spacing around the app (channel, DM and member rows), separate from message density. */
 export type UiDensity = 'compact' | 'default' | 'spacious'

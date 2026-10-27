@@ -112,9 +112,9 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   const linked = params.get('message')
   useEffect(() => {
     if (!linked) return
-    void jumpToMessageAsync(channel.id, linked).then((found) => { if (!found) pushToast('That message could not be found', 'error') })
+    void jumpToMessageAsync(channel.id, linked).then((found) => { if (!found) pushToast(t('That message could not be found'), 'error') })
     setParams((p) => { p.delete('message'); return p }, { replace: true })
-  }, [linked, channel.id, pushToast, setParams])
+  }, [linked, channel.id, pushToast, setParams, t])
   const [bookmarks, setBookmarks] = useState(false)
   const [query, setQuery] = useState('')
   const [threads, setThreads] = useState(false)
@@ -133,7 +133,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
     const live = Object.values(useStore.getState().voiceStates).some((v) => v.channel_id === channel.id)
     if (group && !live && !confirmSkipped('ringGroup')) {
       const n = (channel as DmChannel).recipients.length
-      openModal({ kind: 'confirm', title: 'Start a group call?', body: `This will ring all ${n} other member${n === 1 ? '' : 's'} of ${channel.name || 'this group'}.`, confirmLabel: video ? 'Start Video Call' : 'Start Call', dontAskKey: 'ringGroup', action: go })
+      openModal({ kind: 'confirm', title: t('Start a group call?'), body: n === 1 ? t('This will ring all {n} other member of {name}.', { n, name: channel.name || t('this group') }) : t('This will ring all {n} other members of {name}.', { n, name: channel.name || t('this group') }), confirmLabel: video ? t('Start Video Call') : t('Start Call'), dontAskKey: 'ringGroup', action: go })
       return
     }
     await go()
@@ -158,15 +158,15 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
           <MobileBack />
           {group ? (
             <>
-              <button type="button" title="Change group icon" className="rounded-full hover:opacity-80" onClick={() => iconRef.current?.click()} data-group-icon-btn><GroupIcon dm={channel as DmChannel} size={24} /></button>
+              <button type="button" title={t('Change group icon')} className="rounded-full hover:opacity-80" onClick={() => iconRef.current?.click()} data-group-icon-btn><GroupIcon dm={channel as DmChannel} size={24} /></button>
               <input ref={iconRef} type="file" accept="image/*" className="hidden" data-group-icon-input onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; try { const img = await uploadImage('icon', f); await api.patch(`/channels/${channel.id}`, { icon_url: img.url }) } catch (err) { pushToast((err as Error).message, 'error') } }} />
               {renaming ? (
-                <input autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} onBlur={saveName} onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setRenaming(false) }} maxLength={100} placeholder="Group name" data-group-rename
+                <input autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} onBlur={saveName} onKeyDown={(e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setRenaming(false) }} maxLength={100} placeholder={t('Group name')} data-group-rename
                   className="h-7 w-56 rounded-md bg-bg-0 border border-accent/60 px-2 text-sm font-bold outline-none" />
               ) : (
-                <button onClick={() => { setNameDraft(channel.name ?? ''); setRenaming(true) }} title="Rename group" className="font-bold truncate hover:underline text-left" data-group-name>{dmName(channel as DmChannel, users, notes)}</button>
+                <button onClick={() => { setNameDraft(channel.name ?? ''); setRenaming(true) }} title={t('Rename group')} className="font-bold truncate hover:underline text-left" data-group-name>{dmName(channel as DmChannel, users, notes)}</button>
               )}
-              <span className="text-xs text-text-2 whitespace-nowrap max-md:hidden" data-group-count>{(channel as DmChannel).recipients.length + 1} members</span>
+              <span className="text-xs text-text-2 whitespace-nowrap max-md:hidden" data-group-count>{t('{n} members', { n: (channel as DmChannel).recipients.length + 1 })}</span>
             </>
           ) : isDm && other ? (
             <>
@@ -178,7 +178,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
             <>
               {channel.kind === 'forum' ? <MessageSquareText size={22} className="text-text-2 shrink-0" /> : <Hash size={22} className="text-text-2 shrink-0" />}
               <span className="font-bold truncate">{channel.name}</span>
-              {channel.nsfw && <span className="ml-1 rounded bg-danger/20 px-1.5 py-0.5 text-[10px] font-bold text-danger" title="Age-restricted channel" data-nsfw-badge>18+</span>}
+              {channel.nsfw && <span className="ml-1 rounded bg-danger/20 px-1.5 py-0.5 text-[10px] font-bold text-danger" title={t('Age-restricted channel')} data-nsfw-badge>18+</span>}
               {channel.topic && <><span className="mx-2 h-6 w-px bg-line max-md:hidden" /><span className="text-sm text-text-2 truncate max-md:hidden">{channel.topic}</span></>}
             </>
           )}
@@ -187,15 +187,15 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
             <InboxButton />
             {isDm && (
               <>
-                <button onClick={() => startCall(false)} title="Start Voice Call" className={btn(myVoice === channel.id)} data-start-call><Phone size={20} /></button>
-                <button onClick={() => startCall(true)} title="Start Video Call" className={btn(false)} data-start-video><Video size={20} /></button>
-                <button onClick={toggleE2ee} title={channel.e2ee ? 'Calls here are end-to-end encrypted. Click to turn it off.' : 'Turn on end-to-end encryption for calls'} aria-pressed={!!channel.e2ee} className={btn(!!channel.e2ee)} data-dm-e2ee={channel.e2ee ? '1' : '0'}>{channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />}</button>
+                <button onClick={() => startCall(false)} title={t('Start Voice Call')} className={btn(myVoice === channel.id)} data-start-call><Phone size={20} /></button>
+                <button onClick={() => startCall(true)} title={t('Start Video Call')} className={btn(false)} data-start-video><Video size={20} /></button>
+                <button onClick={toggleE2ee} title={channel.e2ee ? t('Calls here are end-to-end encrypted. Click to turn it off.') : t('Turn on end-to-end encryption for calls')} aria-pressed={!!channel.e2ee} className={btn(!!channel.e2ee)} data-dm-e2ee={channel.e2ee ? '1' : '0'}>{channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />}</button>
               </>
             )}
-            {!isDm && channel.news && <button onClick={() => openModal({ kind: 'followChannel', channelId: channel.id })} title="Follow" className="flex items-center gap-1 rounded-md bg-bg-3 px-2 py-1 text-sm font-medium hover:bg-bg-4" data-follow-channel><Megaphone size={16} />Follow</button>}
+            {!isDm && channel.news && <button onClick={() => openModal({ kind: 'followChannel', channelId: channel.id })} title={t('Follow')} className="flex items-center gap-1 rounded-md bg-bg-3 px-2 py-1 text-sm font-medium hover:bg-bg-4" data-follow-channel><Megaphone size={16} />{t('Follow')}</button>}
             {!isDm && channel.kind === 'text' && (
               <span className="relative">
-                <button onClick={() => setThreads((t) => !t)} title="Threads" className={btn(threads)} data-threads-toggle><MessagesSquare size={20} /></button>
+                <button onClick={() => setThreads((v) => !v)} title={t('Threads')} className={btn(threads)} data-threads-toggle><MessagesSquare size={20} /></button>
                 {threads && <ThreadsPanel channel={channel as Channel} onClose={() => setThreads(false)} />}
               </span>
             )}
@@ -203,9 +203,9 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               <button onClick={() => setDatePick((d) => !d)} title={t('Jump to date')} className={btn(datePick)} data-jump-date-btn><CalendarDays size={20} /></button>
               {datePick && (
                 <form className="pop absolute right-0 top-full mt-2 z-40 flex items-center gap-2 rounded-xl bg-bg-1 border border-line shadow-2xl p-3" data-jump-date-pop
-                  onSubmit={async (e) => { e.preventDefault(); const d = (e.currentTarget.elements.namedItem('date') as HTMLInputElement).value; if (!d) return; setDatePick(false); const found = await jumpToDate(channel.id, d); if (!found) pushToast('No messages on or after that date', 'error') }}>
+                  onSubmit={async (e) => { e.preventDefault(); const d = (e.currentTarget.elements.namedItem('date') as HTMLInputElement).value; if (!d) return; setDatePick(false); const found = await jumpToDate(channel.id, d); if (!found) pushToast(t('No messages on or after that date'), 'error') }}>
                   <input name="date" type="date" required className="input py-1 text-sm" max={new Date().toISOString().slice(0, 10)} data-jump-date />
-                  <button className="btn-primary py-1 text-sm" data-jump-date-go>Go</button>
+                  <button className="btn-primary py-1 text-sm" data-jump-date-go>{t('Go')}</button>
                 </form>
               )}
             </span>
@@ -217,12 +217,12 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               <button onClick={() => setBookmarks((b) => !b)} title={t('Bookmarks')} className={btn(bookmarks)} data-bookmarks-toggle><Bookmark size={20} /></button>
               {bookmarks && <BookmarksPanel channelId={channel.id} onClose={() => setBookmarks(false)} />}
             </span>
-            {isDm && <button onClick={() => openModal({ kind: 'groupMembers', channelId: channel.id })} title={group ? 'Add Friends to Group' : 'Add Friends to DM'} className={btn(false)} data-add-to-group><UserPlus size={20} /></button>}
-            {isDm && !group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? 'Hide User Profile' : 'Show User Profile'} className={`${btn(dmProfileOpen)} max-md:hidden`} data-profile-toggle><CircleUserRound size={20} /></button>}
-            {group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? 'Hide Member List' : 'Show Member List'} className={`${btn(dmProfileOpen)} max-md:hidden`} data-group-members-toggle><Users size={20} /></button>}
+            {isDm && <button onClick={() => openModal({ kind: 'groupMembers', channelId: channel.id })} title={group ? t('Add Friends to Group') : t('Add Friends to DM')} className={btn(false)} data-add-to-group><UserPlus size={20} /></button>}
+            {isDm && !group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? t('Hide User Profile') : t('Show User Profile')} className={`${btn(dmProfileOpen)} max-md:hidden`} data-profile-toggle><CircleUserRound size={20} /></button>}
+            {group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? t('Hide Member List') : t('Show Member List')} className={`${btn(dmProfileOpen)} max-md:hidden`} data-group-members-toggle><Users size={20} /></button>}
             {!isDm && <MembersToggle />}
             <span className="relative ml-1 max-md:hidden">
-              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} onFocus={() => setSearchFocus(true)} onBlur={() => setTimeout(() => setSearchFocus(false), 150)} placeholder={isDm && other ? `Search ${other.username}` : 'Search'} title="Filters: from:user in:channel has:link|image|file before:date after:date pinned:true" aria-label="Search messages" data-search-input
+              <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} onFocus={() => setSearchFocus(true)} onBlur={() => setTimeout(() => setSearchFocus(false), 150)} placeholder={isDm && other ? t('Search {name}', { name: other.username }) : t('Search')} title={t('Filters: from:user in:channel has:link|image|file before:date after:date pinned:true')} aria-label={t('Search messages')} data-search-input
                 className="h-7 w-36 focus:w-56 transition-[width] rounded-md bg-bg-0 border border-line pl-2 pr-7 text-sm outline-none focus:border-accent/60" />
               <Search size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-2 pointer-events-none" />
               {searchFocus && suggestions.length > 0 && (
@@ -238,11 +238,11 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
           </span>
         </header>
         {isDm && <DmCall channel={channel as DmChannel} />}
-        {isDm && !group && other && myAge === 'teen' && relKind !== 'friend' && <TeenDmNotice name={other.display_name} onBlock={() => { void api.put(`/users/@me/relationships/${other.id}/block`).then(() => pushToast(`${other.display_name} blocked`)).catch((e: Error) => pushToast(e.message, 'error')) }} />}
+        {isDm && !group && other && myAge === 'teen' && relKind !== 'friend' && <TeenDmNotice name={other.display_name} onBlock={() => { void api.put(`/users/@me/relationships/${other.id}/block`).then(() => pushToast(t('{name} blocked', { name: other.display_name }))).catch((e: Error) => pushToast(e.message, 'error')) }} />}
         {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : channel.kind === 'directory' ? <DirectoryView channel={channel as Channel} /> : <ChatPane channel={channel} />}
       </main>
       {search !== null ? (
-        <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast('That message could not be found', 'error')} />
+        <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast(t('That message could not be found'), 'error')} />
       ) : threadHere ? (
         <ThreadPanel threadId={openThread!} onClose={() => setOpenThread(null)} />
       ) : isDm && other && dmProfileOpen ? (
@@ -265,15 +265,16 @@ function rememberGate(key: string, id: string) { try { const l = JSON.parse(loca
 /** The spoiler warning shown once before a spoiler channel opens (its topic says what it spoils). */
 function SpoilerGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
   const navigate = useNavigate()
+  const t = useT()
   return (
     <div className="flex-1 flex items-center justify-center p-6" data-spoiler-gate>
       <div className="max-w-md text-center space-y-4">
         <div className="mx-auto h-16 w-16 rounded-full bg-warn/15 text-warn flex items-center justify-center"><EyeOff size={30} /></div>
-        <h2 className="text-xl font-bold">Spoilers ahead</h2>
-        <p className="text-sm text-text-2">#{channel.name} is a spoiler channel{channel.topic ? `: ${channel.topic}` : ''}. Pictures and videos stay hidden until you click them.</p>
+        <h2 className="text-xl font-bold">{t('Spoilers ahead')}</h2>
+        <p className="text-sm text-text-2">{channel.topic ? t('#{name} is a spoiler channel: {topic}. Pictures and videos stay hidden until you click them.', { name: channel.name, topic: channel.topic }) : t('#{name} is a spoiler channel. Pictures and videos stay hidden until you click them.', { name: channel.name })}</p>
         <div className="flex justify-center gap-2">
-          <button type="button" className="btn-ghost" onClick={() => navigate(-1)} data-spoiler-back>Go Back</button>
-          <button type="button" className="btn-primary" onClick={() => { rememberGate(SPOILER_KEY, channel.id); onOk() }} data-spoiler-continue>Show Me</button>
+          <button type="button" className="btn-ghost" onClick={() => navigate(-1)} data-spoiler-back>{t('Go Back')}</button>
+          <button type="button" className="btn-primary" onClick={() => { rememberGate(SPOILER_KEY, channel.id); onOk() }} data-spoiler-continue>{t('Show Me')}</button>
         </div>
       </div>
     </div>
@@ -284,14 +285,15 @@ function SpoilerGate({ channel, onOk }: { channel: Channel; onOk: () => void }) 
 function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
   const navigate = useNavigate()
   const age = useStore((s) => (s.user as PrivateUser | null)?.age_group ?? 'unknown')
+  const t = useT()
   if (age === 'teen') {
     return (
       <div className="flex-1 flex items-center justify-center p-6" data-age-gate="teen">
         <div className="max-w-md text-center space-y-4">
           <div className="mx-auto h-16 w-16 rounded-full bg-danger/15 text-danger flex items-center justify-center text-2xl font-extrabold">18+</div>
-          <h2 className="text-xl font-bold">You can't view this channel</h2>
-          <p className="text-sm text-text-2">#{channel.name} is age-restricted, and you need to be 18 or older to see it.</p>
-          <button type="button" className="btn-primary" onClick={() => navigate(-1)} data-age-nope>Go back</button>
+          <h2 className="text-xl font-bold">{t('You can\'t view this channel')}</h2>
+          <p className="text-sm text-text-2">{t('#{name} is age-restricted, and you need to be 18 or older to see it.', { name: channel.name })}</p>
+          <button type="button" className="btn-primary" onClick={() => navigate(-1)} data-age-nope>{t('Go back')}</button>
         </div>
       </div>
     )
@@ -300,11 +302,11 @@ function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
     <div className="flex-1 flex items-center justify-center p-6" data-age-gate>
       <div className="max-w-md text-center space-y-4">
         <div className="mx-auto h-16 w-16 rounded-full bg-danger/15 text-danger flex items-center justify-center text-2xl font-extrabold">18+</div>
-        <h2 className="text-xl font-bold">Age-Restricted Channel</h2>
-        <p className="text-sm text-text-2">#{channel.name} may contain content that is not suitable for everyone. You must be over 18 to continue. Pictures and videos here stay blurred until clicked if your sensitive-media setting says so.</p>
+        <h2 className="text-xl font-bold">{t('Age-Restricted Channel')}</h2>
+        <p className="text-sm text-text-2">{t('#{name} may contain content that is not suitable for everyone. You must be over 18 to continue. Pictures and videos here stay blurred until clicked if your sensitive-media setting says so.', { name: channel.name })}</p>
         <div className="flex justify-center gap-2">
-          <button type="button" className="btn-ghost" onClick={() => navigate(-1)} data-age-nope>Nope</button>
-          {age === 'adult' && <button type="button" className="btn-primary" onClick={() => { rememberNsfw(channel.id); onOk() }} data-age-continue>Continue</button>}
+          <button type="button" className="btn-ghost" onClick={() => navigate(-1)} data-age-nope>{t('Nope')}</button>
+          {age === 'adult' && <button type="button" className="btn-primary" onClick={() => { rememberNsfw(channel.id); onOk() }} data-age-continue>{t('Continue')}</button>}
         </div>
         {age === 'unknown' && <div className="text-left"><BirthdateForm onDone={(u) => { if (u.age_group === 'adult') { rememberNsfw(channel.id); onOk() } }} /></div>}
       </div>
@@ -319,6 +321,7 @@ function ContextLine({ m }: { m: Message }) {
 
 /** A compact rendering of a message for the pins and search lists, with Jump. */
 function MessageCard({ m, onJump, action }: { m: Message; onJump: () => void; action?: React.ReactNode }) {
+  const t = useT()
   return (
     <div className="rounded-lg border border-line bg-bg-2 p-3" data-msg-card={m.id}>
       <div className="flex items-center gap-2 mb-1">
@@ -327,7 +330,7 @@ function MessageCard({ m, onJump, action }: { m: Message; onJump: () => void; ac
         <span className="text-[11px] text-text-2 shrink-0">{formatTime(m.created_at)}</span>
         <span className="ml-auto flex items-center gap-1">
           {action}
-          <button onClick={onJump} className="rounded bg-bg-3 px-2 py-0.5 text-[11px] font-semibold text-text-1 hover:bg-bg-4 hover:text-text-0" data-jump>Jump</button>
+          <button onClick={onJump} className="rounded bg-bg-3 px-2 py-0.5 text-[11px] font-semibold text-text-1 hover:bg-bg-4 hover:text-text-0" data-jump>{t('Jump')}</button>
         </span>
       </div>
       <div className="msg-content text-sm whitespace-pre-wrap break-words line-clamp-4">{renderMarkdown(m.content)}</div>
@@ -343,33 +346,34 @@ function GroupMembersPanel({ dm }: { dm: DmChannel }) {
   const notes = useStore((s) => s.notes)
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
+  const t = useT()
   const isOwner = dm.owner_id === me?.id
   const members = [...(me ? [me as unknown as typeof dm.recipients[number]] : []), ...dm.recipients].map((u) => users[u.id] ?? u)
-  const remove = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: `Remove ${u.display_name}`, body: `Remove ${u.display_name} from the group? They can be added back later.`, danger: true, confirmLabel: 'Remove',
+  const remove = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: t('Remove {name}', { name: u.display_name }), body: t('Remove {name} from the group? They can be added back later.', { name: u.display_name }), danger: true, confirmLabel: t('Remove'),
     action: async () => { try { await api.delete(`/channels/${dm.id}/recipients/${u.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
-  const transfer = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: `Transfer ownership to ${nameOf(u, notes)}`, body: `${nameOf(u, notes)} will be able to rename the group, change its icon and remove members. You stay in the group as a member.`, confirmLabel: 'Transfer',
+  const transfer = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: t('Transfer ownership to {name}', { name: nameOf(u, notes) }), body: t('{name} will be able to rename the group, change its icon and remove members. You stay in the group as a member.', { name: nameOf(u, notes) }), confirmLabel: t('Transfer'),
     action: async () => { try { await api.patch(`/channels/${dm.id}`, { owner_id: u.id }) } catch (e) { pushToast((e as Error).message, 'error') } } })
-  const leave = () => openModal({ kind: 'confirm', title: `Leave '${dmName(dm, users, notes)}'`, body: 'You will stop receiving messages from this group unless someone adds you back.', danger: true, confirmLabel: 'Leave Group',
+  const leave = () => openModal({ kind: 'confirm', title: t('Leave \'{name}\'', { name: dmName(dm, users, notes) }), body: t('You will stop receiving messages from this group unless someone adds you back.'), danger: true, confirmLabel: t('Leave Group'),
     action: async () => { try { await api.delete(`/channels/${dm.id}/recipients/${me?.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
   return (
     <aside className="w-60 shrink-0 bg-bg-1 border-l border-line overflow-y-auto px-2 pt-4 max-md:hidden flex flex-col" data-group-members>
-      <h3 className="px-2 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">Members — {members.length}</h3>
+      <h3 className="px-2 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Members')} — {members.length}</h3>
       <div className="space-y-0.5">
         {members.map((u) => (
           <div key={u.id} className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3" data-group-member={u.id}>
             <button onClick={(e) => openModal({ kind: 'profile', userId: u.id, anchor: anchorOf(e) })} className="flex items-center gap-3 min-w-0 flex-1 text-left">
               <Avatar user={u} size={32} presence />
               <span className="truncate text-[15px] font-medium text-text-1">{nameOf(u, notes)}</span>
-              {dm.owner_id === u.id && <span title="Group owner" className="shrink-0 flex"><Crown size={14} className="text-warn" /></span>}
+              {dm.owner_id === u.id && <span title={t('Group owner')} className="shrink-0 flex"><Crown size={14} className="text-warn" /></span>}
             </button>
-            {isOwner && u.id !== me?.id && <button onClick={() => transfer(u)} title="Transfer ownership" className="opacity-0 group-hover:opacity-100 text-text-2 hover:text-warn" data-transfer-owner><Crown size={16} /></button>}
-            {isOwner && u.id !== me?.id && <button onClick={() => remove(u)} title="Remove from group" className="opacity-0 group-hover:opacity-100 text-text-2 hover:text-danger" data-remove-member><X size={16} /></button>}
+            {isOwner && u.id !== me?.id && <button onClick={() => transfer(u)} title={t('Transfer ownership')} className="opacity-0 group-hover:opacity-100 text-text-2 hover:text-warn" data-transfer-owner><Crown size={16} /></button>}
+            {isOwner && u.id !== me?.id && <button onClick={() => remove(u)} title={t('Remove from group')} className="opacity-0 group-hover:opacity-100 text-text-2 hover:text-danger" data-remove-member><X size={16} /></button>}
           </div>
         ))}
       </div>
       <div className="mt-auto p-2 space-y-1">
-        <button onClick={() => openModal({ kind: 'groupMembers', channelId: dm.id })} className="w-full btn-ghost justify-center"><UserPlus size={16} /> Add Friends</button>
-        <button onClick={leave} className="w-full btn-ghost justify-center text-danger" data-leave-group><LogOut size={16} /> Leave Group</button>
+        <button onClick={() => openModal({ kind: 'groupMembers', channelId: dm.id })} className="w-full btn-ghost justify-center"><UserPlus size={16} /> {t('Add Friends')}</button>
+        <button onClick={leave} className="w-full btn-ghost justify-center text-danger" data-leave-group><LogOut size={16} /> {t('Leave Group')}</button>
       </div>
     </aside>
   )
@@ -383,6 +387,7 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
   const pushToast = useStore((s) => s.pushToast)
   const setBookmark = useStore((s) => s.setBookmark)
   const navigate = useNavigate()
+  const t = useT()
   useEscape(onClose)
   useEffect(() => { api.get<BookmarkedMessage[]>('/users/@me/bookmarks').then(setList).catch(() => setList([])) }, [])
   const remove = async (m: Message) => {
@@ -391,7 +396,7 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
   const jump = (m: BookmarkedMessage) => {
     onClose()
     if (m.channel_id !== channelId) navigate(`/channels/${m.guild_id ?? '@me'}/${m.channel_id}`)
-    void jumpToMessageAsync(m.channel_id, m.id).then((found) => { if (!found) pushToast('That message could not be found', 'error') })
+    void jumpToMessageAsync(m.channel_id, m.id).then((found) => { if (!found) pushToast(t('That message could not be found'), 'error') })
   }
   // Folders: group by name ('' = loose bookmarks first), manual order inside each.
   const folders = useMemo(() => { const names = Array.from(new Set((list ?? []).map((m) => m.folder))).filter(Boolean).sort((a, b) => a.localeCompare(b)); return ['', ...names] }, [list])
@@ -414,10 +419,10 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl" data-bookmarks-panel>
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-line"><Bookmark size={16} className="text-text-2" /><span className="font-bold">Bookmarks</span><button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0"><X size={16} /></button></div>
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-line"><Bookmark size={16} className="text-text-2" /><span className="font-bold">{t('Bookmarks')}</span><button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0"><X size={16} /></button></div>
         <div className="overflow-y-auto p-3 space-y-2">
-          {list === null && <p className="text-sm text-text-2 p-3">Loading…</p>}
-          {list?.length === 0 && <div className="p-6 text-center text-sm text-text-2">No bookmarks yet.<br />Right-click a message and choose Bookmark Message.</div>}
+          {list === null && <p className="text-sm text-text-2 p-3">{t('Loading…')}</p>}
+          {list?.length === 0 && <div className="p-6 text-center text-sm text-text-2">{t('No bookmarks yet.')}<br />{t('Right-click a message and choose Bookmark Message.')}</div>}
           {list && list.length > 0 && folders.map((f) => (
             <div key={f || '__loose'} data-bookmark-folder={f}>
               {f && (
@@ -428,24 +433,24 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
               {!collapsed[f] && inFolder(f).map((m, i, arr) => (
                 <div key={m.id} className="mb-2" data-bookmark={m.id} data-bookmark-position={i}>
                   <div className="px-1 mb-0.5 flex items-center gap-1 text-[11px] text-text-2">
-                    <span className="truncate flex-1">{m.guild_id ? `#${m.channel_name}` : 'Direct Message'}</span>
-                    {m.remind_at && <button type="button" onClick={() => setReminder(m.id, null).then(() => setList((l) => (l ?? []).map((x) => (x.id === m.id ? { ...x, remind_at: null } : x)))).catch((e: Error) => pushToast(e.message, 'error'))} title="Clear reminder" className="flex items-center gap-1 rounded bg-bg-3 px-1.5 py-0.5 text-text-1 hover:text-danger" data-bookmark-reminder={m.remind_at}><AlarmClock size={11} />{remindLabel(m.remind_at)}</button>}
+                    <span className="truncate flex-1">{m.guild_id ? `#${m.channel_name}` : t('Direct Message')}</span>
+                    {m.remind_at && <button type="button" onClick={() => setReminder(m.id, null).then(() => setList((l) => (l ?? []).map((x) => (x.id === m.id ? { ...x, remind_at: null } : x)))).catch((e: Error) => pushToast(e.message, 'error'))} title={t('Clear reminder')} className="flex items-center gap-1 rounded bg-bg-3 px-1.5 py-0.5 text-text-1 hover:text-danger" data-bookmark-reminder={m.remind_at}><AlarmClock size={11} />{remindLabel(m.remind_at)}</button>}
                     {newFolderFor === m.id ? (
                       <form onSubmit={(e) => { e.preventDefault(); const name = newFolder.trim(); setNewFolderFor(null); if (name) patch(m, { folder: name, position: inFolder(name).length }) }} className="flex items-center gap-1">
-                        <input autoFocus value={newFolder} onChange={(e) => setNewFolder(e.target.value)} maxLength={40} placeholder="Folder name" className="input w-32 py-0.5 text-xs" data-bookmark-new-folder />
-                        <button className="btn-ghost py-0.5 text-xs" data-bookmark-new-folder-save>Save</button>
+                        <input autoFocus value={newFolder} onChange={(e) => setNewFolder(e.target.value)} maxLength={40} placeholder={t('Folder name')} className="input w-32 py-0.5 text-xs" data-bookmark-new-folder />
+                        <button className="btn-ghost py-0.5 text-xs" data-bookmark-new-folder-save>{t('Save')}</button>
                       </form>
                     ) : (
-                      <select value={m.folder} onChange={(e) => moveTo(m, e.target.value)} title="Move to folder" className="rounded bg-bg-0 border border-line px-1 py-0.5 text-[11px] text-text-1" data-bookmark-move>
-                        <option value="">No folder</option>
+                      <select value={m.folder} onChange={(e) => moveTo(m, e.target.value)} title={t('Move to folder')} className="rounded bg-bg-0 border border-line px-1 py-0.5 text-[11px] text-text-1" data-bookmark-move>
+                        <option value="">{t('No folder')}</option>
                         {folders.filter(Boolean).map((n) => <option key={n} value={n}>{n}</option>)}
-                        <option value="__new__">New folder…</option>
+                        <option value="__new__">{t('New folder…')}</option>
                       </select>
                     )}
-                    <button type="button" onClick={() => shift(m, -1)} disabled={i === 0} title="Move up" className="rounded px-1 text-text-2 hover:text-text-0 disabled:opacity-30" data-bookmark-up>▲</button>
-                    <button type="button" onClick={() => shift(m, 1)} disabled={i === arr.length - 1} title="Move down" className="rounded px-1 text-text-2 hover:text-text-0 disabled:opacity-30" data-bookmark-down>▼</button>
+                    <button type="button" onClick={() => shift(m, -1)} disabled={i === 0} title={t('Move up')} className="rounded px-1 text-text-2 hover:text-text-0 disabled:opacity-30" data-bookmark-up>▲</button>
+                    <button type="button" onClick={() => shift(m, 1)} disabled={i === arr.length - 1} title={t('Move down')} className="rounded px-1 text-text-2 hover:text-text-0 disabled:opacity-30" data-bookmark-down>▼</button>
                   </div>
-                  <MessageCard m={m} onJump={() => jump(m)} action={<button onClick={() => remove(m)} title="Remove bookmark" className="rounded p-0.5 text-text-2 hover:text-danger" data-unbookmark><BookmarkMinus size={14} /></button>} />
+                  <MessageCard m={m} onJump={() => jump(m)} action={<button onClick={() => remove(m)} title={t('Remove bookmark')} className="rounded p-0.5 text-text-2 hover:text-danger" data-unbookmark><BookmarkMinus size={14} /></button>} />
                 </div>
               ))}
             </div>
@@ -461,6 +466,7 @@ function PinnedPanel({ channel, onClose }: { channel: Channel | DmChannel; onClo
   const perms = useStore((s) => myChannelPerms(s, channel.id))
   const pushToast = useStore((s) => s.pushToast)
   const canUnpin = channel.guild_id === null || has(perms, P.MANAGE_MESSAGES)
+  const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   useEscape(onClose)
   useEffect(() => { api.get<Message[]>(`/channels/${channel.id}/pins`).then(setPins).catch(() => setPins([])) }, [channel.id])
@@ -471,12 +477,12 @@ function PinnedPanel({ channel, onClose }: { channel: Channel | DmChannel; onClo
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div ref={ref} className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl" data-pins-panel>
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-line"><Pin size={16} className="text-text-2" /><span className="font-bold">Pinned Messages</span><button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0"><X size={16} /></button></div>
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-line"><Pin size={16} className="text-text-2" /><span className="font-bold">{t('Pinned Messages')}</span><button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0"><X size={16} /></button></div>
         <div className="overflow-y-auto p-3 space-y-2">
-          {pins === null && <p className="text-sm text-text-2 p-3">Loading…</p>}
-          {pins?.length === 0 && <div className="p-6 text-center text-sm text-text-2">This channel doesn't have any pinned messages yet.<br />Pin one from a message's "⋯" menu.</div>}
-          {pins?.map((m) => <MessageCard key={m.id} m={m} onJump={() => { onClose(); void jumpToMessageAsync(channel.id, m.id).then((found) => { if (!found) pushToast('That message could not be found', 'error') }) }}
-            action={canUnpin ? <button onClick={() => unpin(m)} title="Unpin" className="rounded p-0.5 text-text-2 hover:text-danger" data-unpin><PinOff size={14} /></button> : undefined} />)}
+          {pins === null && <p className="text-sm text-text-2 p-3">{t('Loading…')}</p>}
+          {pins?.length === 0 && <div className="p-6 text-center text-sm text-text-2">{t('This channel doesn\'t have any pinned messages yet.')}<br />{t('Pin one from a message\'s "⋯" menu.')}</div>}
+          {pins?.map((m) => <MessageCard key={m.id} m={m} onJump={() => { onClose(); void jumpToMessageAsync(channel.id, m.id).then((found) => { if (!found) pushToast(t('That message could not be found'), 'error') }) }}
+            action={canUnpin ? <button onClick={() => unpin(m)} title={t('Unpin')} className="rounded p-0.5 text-text-2 hover:text-danger" data-unpin><PinOff size={14} /></button> : undefined} />)}
         </div>
       </div>
     </>
@@ -497,6 +503,7 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
   const navigate = useNavigate()
   const [sort, setSort] = useState<'newest' | 'oldest' | 'relevant'>('newest')
   const [context, setContext] = useState(false)
+  const t = useT()
   const url = (offset: number) => `/search?q=${encodeURIComponent(query)}&offset=${offset}&sort=${sort}${context ? '&context=true' : ''}${scope === 'channel' ? `&channel_id=${channel.id}` : scope === 'guild' ? `&guild_id=${channel.guild_id}` : ''}`
   useEffect(() => { setRes(null); api.get<SearchResult>(url(0)).then(setRes).catch(() => setRes({ total: 0, offset: 0, results: [] })) }, [channel.id, query, scope, sort, context]) // eslint-disable-line react-hooks/exhaustive-deps
   const more = async () => {
@@ -512,36 +519,36 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
   return (
     <aside className="w-[420px] shrink-0 bg-bg-1 border-l border-line flex flex-col max-md:hidden" data-search-panel>
       <div className="h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line">
-        <Search size={16} className="text-text-2" /><span className="font-bold truncate">Results for "{query}"</span>
+        <Search size={16} className="text-text-2" /><span className="font-bold truncate">{t('Results for "{query}"', { query })}</span>
         {res && <span className="text-xs text-text-2" data-search-total>{res.total}</span>}
-        <button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0" title="Close search"><X size={18} /></button>
+        <button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0" title={t('Close search')}><X size={18} /></button>
       </div>
       <div className="flex items-center gap-1.5 px-4 py-2 border-b border-line">
-        {chip('channel', isDm ? 'This conversation' : 'This channel')}
-        {!isDm && chip('guild', 'This server')}
-        {chip('all', 'Everywhere')}
-        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-xs text-text-1" aria-label="Sort results" data-search-sort>
-          <option value="newest">Newest</option><option value="oldest">Oldest</option><option value="relevant">Most relevant</option>
+        {chip('channel', isDm ? t('This conversation') : t('This channel'))}
+        {!isDm && chip('guild', t('This server'))}
+        {chip('all', t('Everywhere'))}
+        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-xs text-text-1" aria-label={t('Sort results')} data-search-sort>
+          <option value="newest">{t('Newest')}</option><option value="oldest">{t('Oldest')}</option><option value="relevant">{t('Most relevant')}</option>
         </select>
-        <label className="flex items-center gap-1 text-xs text-text-2 cursor-pointer" title="Show the message before and after each result"><input type="checkbox" className="h-3.5 w-3.5 accent-accent" checked={context} onChange={(e) => setContext(e.target.checked)} data-search-context /> Context</label>
+        <label className="flex items-center gap-1 text-xs text-text-2 cursor-pointer" title={t('Show the message before and after each result')}><input type="checkbox" className="h-3.5 w-3.5 accent-accent" checked={context} onChange={(e) => setContext(e.target.checked)} data-search-context /> {t('Context')}</label>
       </div>
       <div className="overflow-y-auto p-3 space-y-2">
-        {res === null && <p className="text-sm text-text-2 p-3">Searching…</p>}
+        {res === null && <p className="text-sm text-text-2 p-3">{t('Searching…')}</p>}
         {res?.results.length === 0 && (
           <div className="p-6 text-center text-sm text-text-2" data-search-empty>
-            No results found.
-            <div className="mt-3 text-left text-xs">Try a filter: {SEARCH_HINTS.map((h) => <code key={h} className="mr-1.5 rounded bg-bg-0 px-1 py-0.5">{h}</code>)}</div>
+            {t('No results found.')}
+            <div className="mt-3 text-left text-xs">{t('Try a filter:')} {SEARCH_HINTS.map((h) => <code key={h} className="mr-1.5 rounded bg-bg-0 px-1 py-0.5">{h}</code>)}</div>
           </div>
         )}
         {res?.results.map((m) => (
           <div key={m.id} data-search-hit={m.id} data-search-channel={m.channel_id}>
-            <div className="px-1 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-text-2 truncate" data-search-hit-channel>{m.guild_id ? `# ${m.channel_name}` : m.channel_name || 'Direct message'}</div>
+            <div className="px-1 pb-0.5 text-[11px] font-semibold uppercase tracking-wider text-text-2 truncate" data-search-hit-channel>{m.guild_id ? `# ${m.channel_name}` : m.channel_name || t('Direct message')}</div>
             {m.context_before && <ContextLine m={m.context_before} />}
             <MessageCard m={m} onJump={() => jump(m)} />
             {m.context_after && <ContextLine m={m.context_after} />}
           </div>
         ))}
-        {res && res.results.length < res.total && <button type="button" className="btn-ghost w-full" disabled={busy} onClick={more} data-search-more>Load more ({res.total - res.results.length} left)</button>}
+        {res && res.results.length < res.total && <button type="button" className="btn-ghost w-full" disabled={busy} onClick={more} data-search-more>{t('Load more ({n} left)', { n: res.total - res.results.length })}</button>}
       </div>
     </aside>
   )

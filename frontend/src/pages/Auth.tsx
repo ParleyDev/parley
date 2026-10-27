@@ -35,7 +35,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const autofill = useRef<AbortController | null>(null)
   const signedIn = (res: { token: string; user: PrivateUser; reenabled?: boolean }) => {
     setAuth(res.token, res.user)
-    if (res.reenabled) useStore.getState().pushToast('Welcome back! Your account has been re-enabled.')
+    if (res.reenabled) useStore.getState().pushToast(t('Welcome back! Your account has been re-enabled.'))
     navigate(from, { replace: true })
   }
   useEffect(() => {
@@ -66,7 +66,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           })
       if ('mfa' in res) { setMfaTicket(res.ticket); setMfaKeys(!!res.security_keys); setCode(''); return }
       setAuth(res.token, res.user)
-      if ('reenabled' in res && res.reenabled) useStore.getState().pushToast('Welcome back! Your account has been re-enabled.')
+      if ('reenabled' in res && res.reenabled) useStore.getState().pushToast(t('Welcome back! Your account has been re-enabled.'))
       navigate(from, { replace: true })
     } catch (e) {
       setErr((e as Error).message)
@@ -112,18 +112,18 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           <div className="flex items-center gap-3 mb-6">
             <LogoNeon className="h-10 w-10 rounded-xl shadow-lg shadow-accent/30" />
             <div>
-              <h1 className="text-xl font-bold leading-tight">Two-factor authentication</h1>
-              <p className="text-sm text-text-2">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+              <h1 className="text-xl font-bold leading-tight">{t('Two-factor authentication')}</h1>
+              <p className="text-sm text-text-2">{t('Enter the 6-digit code from your authenticator app, or one of your backup codes.')}</p>
             </div>
           </div>
           {err && <div className="mb-4 rounded-lg bg-danger/15 border border-danger/40 px-3 py-2 text-sm" data-mfa-error>{err}</div>}
           <div>
             <label className="label">{t('Authentication code')}</label>
-            <input className="input tracking-widest" autoFocus autoComplete="one-time-code" inputMode="text" required value={code} onChange={(e) => setCode(e.target.value)} placeholder="123456 or abcde-fghij" data-mfa-code />
+            <input className="input tracking-widest" autoFocus autoComplete="one-time-code" inputMode="text" required value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('123456 or abcde-fghij')} data-mfa-code />
           </div>
           <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || !code.trim()}>{busy ? t('Please wait…') : t('Log In')}</button>
-          {mfaKeys && passkeysSupported() && <button type="button" className="btn-ghost mt-2 w-full py-2.5" disabled={busy} onClick={useKey} data-mfa-key><KeyRound size={16} /> Use a security key instead</button>}
-          <p className="mt-4 text-sm text-text-2"><button type="button" className="text-sky-400 hover:underline" onClick={() => { setMfaTicket(null); setErr(null) }} data-mfa-back>Back to login</button></p>
+          {mfaKeys && passkeysSupported() && <button type="button" className="btn-ghost mt-2 w-full py-2.5" disabled={busy} onClick={useKey} data-mfa-key><KeyRound size={16} /> {t('Use a security key instead')}</button>}
+          <p className="mt-4 text-sm text-text-2"><button type="button" className="text-sky-400 hover:underline" onClick={() => { setMfaTicket(null); setErr(null) }} data-mfa-back>{t('Back to login')}</button></p>
         </form>
       </div>
     )
@@ -138,19 +138,19 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           <LogoNeon className="h-10 w-10 rounded-xl shadow-lg shadow-accent/30" />
           <div>
             <h1 className="text-xl font-bold leading-tight">{mode === 'login' ? t('Welcome back!') : t('Create an account')}</h1>
-            <p className="text-sm text-text-2">{mode === 'login' ? "We're so excited to see you again!" : 'Join the conversation.'}</p>
+            <p className="text-sm text-text-2">{mode === 'login' ? t("We're so excited to see you again!") : t('Join the conversation.')}</p>
           </div>
         </div>
 
         {mode === 'login' && savedAccounts().length > 0 && (
           <div className="mb-5" data-saved-accounts>
-            <div className="label">Continue as</div>
+            <div className="label">{t('Continue as')}</div>
             <div className="rounded-lg border border-line p-1"><AccountSwitcher signedIn={false} /></div>
-            <div className="mt-4 flex items-center gap-3 text-xs uppercase tracking-wider text-text-2"><span className="h-px flex-1 bg-line" />or sign in<span className="h-px flex-1 bg-line" /></div>
+            <div className="mt-4 flex items-center gap-3 text-xs uppercase tracking-wider text-text-2"><span className="h-px flex-1 bg-line" />{t('or sign in')}<span className="h-px flex-1 bg-line" /></div>
           </div>
         )}
         {err && <div className="mb-4 rounded-lg bg-danger/15 border border-danger/40 px-3 py-2 text-sm" data-auth-error>{err}</div>}
-        {closed && <div className="mb-4 rounded-lg bg-warn/15 border border-warn/40 px-3 py-2 text-sm" data-registration-closed>Registration is closed on this Parley instance right now. If you already have an account, log in instead.</div>}
+        {closed && <div className="mb-4 rounded-lg bg-warn/15 border border-warn/40 px-3 py-2 text-sm" data-registration-closed>{t('Registration is closed on this Parley instance right now. If you already have an account, log in instead.')}</div>}
 
         <div className="space-y-4">
           {mode === 'login' ? (
@@ -158,28 +158,28 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           ) : (
             <>
               <div><label className="label">{t('Email')}</label><input className="input" type="email" autoFocus autoComplete="email" required {...f('email')} /></div>
-              <div><label className="label">{t('Username')}</label><input className="input" autoComplete="username" required minLength={2} maxLength={32} pattern="[A-Za-z0-9_.]+" title="Letters, numbers, _ or ." {...f('username')} /></div>
+              <div><label className="label">{t('Username')}</label><input className="input" autoComplete="username" required minLength={2} maxLength={32} pattern="[A-Za-z0-9_.]+" title={t('Letters, numbers, _ or .')} {...f('username')} /></div>
               <div><label className="label">{t('Display name')} <span className="normal-case font-normal text-text-2">{t('(optional)')}</span></label><input className="input" maxLength={32} {...f('display_name')} /></div>
             </>
           )}
           <div>
             <label className="label">{t('Password')}</label>
             <input className="input" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={8} {...f('password')} />
-            {mode === 'login' && mailEnabled && <Link to="/forgot" className="mt-1.5 inline-block text-xs text-sky-400 hover:underline" data-forgot-link>Forgot your password?</Link>}
+            {mode === 'login' && mailEnabled && <Link to="/forgot" className="mt-1.5 inline-block text-xs text-sky-400 hover:underline" data-forgot-link>{t('Forgot your password?')}</Link>}
           </div>
         </div>
 
         <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || closed}>{busy ? t('Please wait…') : mode === 'login' ? t('Log In') : t('Continue')}</button>
         {canPasskey && (
           <>
-            <div className="my-3 flex items-center gap-3 text-xs uppercase tracking-wider text-text-2"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
-            <button type="button" onClick={passkey} disabled={busy} className="btn-ghost w-full py-2.5 border border-line" data-passkey-login><KeyRound size={16} /> Sign in with a passkey</button>
+            <div className="my-3 flex items-center gap-3 text-xs uppercase tracking-wider text-text-2"><span className="h-px flex-1 bg-line" />{t('or')}<span className="h-px flex-1 bg-line" /></div>
+            <button type="button" onClick={passkey} disabled={busy} className="btn-ghost w-full py-2.5 border border-line" data-passkey-login><KeyRound size={16} /> {t('Sign in with a passkey')}</button>
           </>
         )}
 
         <p className="mt-4 text-sm text-text-2">
           {mode === 'login' ? (
-            registrationOpen ? <>{t('Need an account?')} <Link to="/register" className="text-sky-400 hover:underline">{t('Register')}</Link></> : <span data-registration-closed-note>Registration is currently closed.</span>
+            registrationOpen ? <>{t('Need an account?')} <Link to="/register" className="text-sky-400 hover:underline">{t('Register')}</Link></> : <span data-registration-closed-note>{t('Registration is currently closed.')}</span>
           ) : (
             <><Link to="/login" className="text-sky-400 hover:underline">{t('Already have an account?')}</Link></>
           )}

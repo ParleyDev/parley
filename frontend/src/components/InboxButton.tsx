@@ -1,6 +1,6 @@
 import { Bell, CheckCheck, Hash, Inbox, MessageSquare, X } from 'lucide-react'
 import { STORAGE_PREFIX } from '../lib/brand'
-import { locale } from '../lib/i18n'
+import { locale, useT } from '../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
@@ -16,6 +16,7 @@ const loadHidden = (): string[] => { try { const v = JSON.parse(localStorage.get
 
 /** Header Inbox: Mentions (last 30 days, each removable) and Unreads (channels with new messages, mark read). */
 export default function InboxButton({ variant = 'header' }: { variant?: 'header' | 'tab' } = {}) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'mentions' | 'unreads' | 'highlights'>('mentions')
   const [highlights, setHighlights] = useState<(Message & { guild_name?: string; channel_name?: string })[] | null>(null)
@@ -48,7 +49,7 @@ export default function InboxButton({ variant = 'header' }: { variant?: 'header'
   useEffect(() => { if (open && tab === 'highlights') { setHighlights(null); api.get<(Message & { guild_name?: string; channel_name?: string })[]>('/users/@me/highlights').then(setHighlights).catch(() => setHighlights([])) } }, [open, tab])
   useEffect(() => {
     if (!open) return
-    const onDown = (e: PointerEvent) => { const t = e.target as Node; if (!ref.current?.contains(t) && !panel.current?.contains(t)) setOpen(false) }
+    const onDown = (e: PointerEvent) => { const node = e.target as Node; if (!ref.current?.contains(node) && !panel.current?.contains(node)) setOpen(false) }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     const onResize = () => setOpen(false)
     window.addEventListener('pointerdown', onDown); window.addEventListener('keydown', onKey); window.addEventListener('resize', onResize)
@@ -58,7 +59,7 @@ export default function InboxButton({ variant = 'header' }: { variant?: 'header'
     const ch = channels[m.channel_id]
     if (ch) return `#${ch.name}${ch.guild_id && guilds[ch.guild_id] ? ` · ${guilds[ch.guild_id].name}` : ''}`
     const dm = dms[m.channel_id]
-    return dm ? (dm.recipients.length > 1 ? 'Group' : 'Direct message') : 'Unknown channel'
+    return dm ? (dm.recipients.length > 1 ? t('Group') : t('Direct message')) : t('Unknown channel')
   }
   const unreads = Object.keys(lastMessageId).filter((id) => (channels[id] || dms[id]) && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds }, id))
     .sort((a, b) => (lastMessageId[b] ?? '').localeCompare(lastMessageId[a] ?? ''))
@@ -69,71 +70,71 @@ export default function InboxButton({ variant = 'header' }: { variant?: 'header'
     setOpen(false)
     const ch = channels[m.channel_id]
     navigate(`/channels/${ch?.guild_id ?? '@me'}/${m.channel_id}`)
-    void jumpToMessageAsync(m.channel_id, m.id).then((found) => { if (!found) pushToast('That message could not be found', 'error') })
+    void jumpToMessageAsync(m.channel_id, m.id).then((found) => { if (!found) pushToast(t('That message could not be found'), 'error') })
   }
   return (
     <div ref={ref} className={variant === 'tab' ? 'contents' : 'relative'}>
       {variant === 'tab'
         ? <button onClick={toggle} className={`w-full flex flex-col items-center gap-0.5 ${open ? 'text-text-0' : ''}`} data-inbox-toggle="tab">
-            <span className="relative"><Bell size={22} />{count > 0 && <span className="absolute -right-2 -top-1 min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-bg-0" data-inbox-count>{count > 99 ? '99+' : count}</span>}</span>Notifications
+            <span className="relative"><Bell size={22} />{count > 0 && <span className="absolute -right-2 -top-1 min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-bg-0" data-inbox-count>{count > 99 ? '99+' : count}</span>}</span>{t('Notifications')}
           </button>
-        : <button onClick={toggle} title="Inbox" className={`relative h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${open ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-inbox-toggle>
+        : <button onClick={toggle} title={t('Inbox')} className={`relative h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${open ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-inbox-toggle>
             <Inbox size={20} />
             {count > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-bg-1" data-inbox-count>{count > 99 ? '99+' : count}</span>}
           </button>}
       {open && pos && createPortal(
         <div ref={panel} style={{ top: pos.top, right: pos.right }} className={`pop fixed z-50 w-[420px] max-w-[calc(100vw-16px)] rounded-xl border border-line bg-bg-1 shadow-2xl ${variant === 'tab' ? 'left-2 !w-auto bottom-[calc(64px+env(safe-area-inset-bottom))] flex flex-col' : ''}`} data-inbox>
           <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-line">
-            <Inbox size={16} className="text-text-2" /><span className="font-bold mr-2">Inbox</span>
+            <Inbox size={16} className="text-text-2" /><span className="font-bold mr-2">{t('Inbox')}</span>
             {(['mentions', 'unreads', 'highlights'] as const).map((id) => (
               <button key={id} type="button" onClick={() => setTab(id)} className={`rounded-md px-2 py-0.5 text-sm ${tab === id ? 'bg-bg-4 text-text-0' : 'text-text-2 hover:text-text-0'}`} data-inbox-tab={id} aria-pressed={tab === id}>
-                {id === 'mentions' ? 'Mentions' : id === 'unreads' ? 'Unreads' : 'Highlights'}{id === 'unreads' && unreads.length > 0 && <span className="ml-1 text-[11px] text-text-2">{unreads.length}</span>}
+                {id === 'mentions' ? t('Mentions') : id === 'unreads' ? t('Unreads') : t('Highlights')}{id === 'unreads' && unreads.length > 0 && <span className="ml-1 text-[11px] text-text-2">{unreads.length}</span>}
               </button>
             ))}
-            {tab === 'unreads' && unreads.length > 0 && <button type="button" onClick={() => { for (const id of unreads) void markRead(id) }} className="ml-auto flex items-center gap-1 text-xs text-sky-400 hover:underline" data-inbox-read-all><CheckCheck size={14} /> Mark all read</button>}
+            {tab === 'unreads' && unreads.length > 0 && <button type="button" onClick={() => { for (const id of unreads) void markRead(id) }} className="ml-auto flex items-center gap-1 text-xs text-sky-400 hover:underline" data-inbox-read-all><CheckCheck size={14} /> {t('Mark all read')}</button>}
           </div>
           {tab === 'highlights' ? (
             <div className={`${variant === 'tab' ? 'flex-1 min-h-0' : 'max-h-[60vh]'} overflow-y-auto`} data-inbox-highlights>
-              {highlights === null && <p className="px-4 py-6 text-sm text-text-2">Loading…</p>}
-              {highlights?.length === 0 && <p className="px-4 py-6 text-sm text-text-2">Nothing stood out in your servers in the last two days.</p>}
+              {highlights === null && <p className="px-4 py-6 text-sm text-text-2">{t('Loading…')}</p>}
+              {highlights?.length === 0 && <p className="px-4 py-6 text-sm text-text-2">{t('Nothing stood out in your servers in the last two days.')}</p>}
               {highlights?.map((m) => (
                 <button key={m.id} type="button" onClick={() => jump(m)} className="w-full text-left flex gap-3 px-4 py-2.5 hover:bg-bg-3 border-b border-line/60" data-inbox-highlight={m.id}>
                   <Avatar user={m.author} size={32} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2"><span className="font-semibold truncate">{m.author.display_name}</span><span className="text-[11px] text-text-2 truncate">#{m.channel_name} · {m.guild_name}</span></span>
-                    <span className="block text-sm text-text-1 truncate">{m.content || (m.attachments?.length ? '📎 Attachment' : '')}</span>
-                    <span className="text-[11px] text-text-2">{m.reactions.reduce((n, r) => n + r.count, 0)} reactions</span>
+                    <span className="block text-sm text-text-1 truncate">{m.content || (m.attachments?.length ? `📎 ${t('Attachment')}` : '')}</span>
+                    <span className="text-[11px] text-text-2">{t('{n} reactions', { n: m.reactions.reduce((n, r) => n + r.count, 0) })}</span>
                   </span>
                 </button>
               ))}
             </div>
           ) : tab === 'unreads' ? (
             <div className={`${variant === 'tab' ? 'flex-1 min-h-0' : 'max-h-[60vh]'} overflow-y-auto`} data-inbox-unreads>
-              {unreads.length === 0 && <p className="px-4 py-6 text-sm text-text-2">You're all caught up.</p>}
+              {unreads.length === 0 && <p className="px-4 py-6 text-sm text-text-2">{t("You're all caught up.")}</p>}
               {unreads.map((id) => (
                 <div key={id} className="group flex items-center gap-3 px-4 py-2 hover:bg-bg-3 border-b border-line/60" data-inbox-unread={id}>
                   <button type="button" onClick={() => openChannel(id)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
                     {channels[id] ? <Hash size={16} className="shrink-0 text-text-2" /> : <MessageSquare size={16} className="shrink-0 text-text-2" />}
                     <span className="min-w-0"><span className="block truncate font-semibold">{nameOf(id)}</span>{channels[id]?.guild_id && <span className="block truncate text-[11px] text-text-2">{guilds[channels[id].guild_id!]?.name}</span>}</span>
                   </button>
-                  <button type="button" onClick={() => void markRead(id)} title="Mark as read" className="rounded p-1 text-text-2 hover:bg-bg-4 hover:text-text-0" data-inbox-mark-read={id}><CheckCheck size={16} /></button>
+                  <button type="button" onClick={() => void markRead(id)} title={t('Mark as read')} className="rounded p-1 text-text-2 hover:bg-bg-4 hover:text-text-0" data-inbox-mark-read={id}><CheckCheck size={16} /></button>
                 </div>
               ))}
             </div>
           ) : (
           <div className={`${variant === 'tab' ? 'flex-1 min-h-0' : 'max-h-[60vh]'} overflow-y-auto`}>
-            {list === null && <p className="px-4 py-6 text-sm text-text-2">Loading…</p>}
-            {list !== null && shown.length === 0 && <p className="px-4 py-6 text-sm text-text-2">Nobody has mentioned you in the last 30 days.</p>}
+            {list === null && <p className="px-4 py-6 text-sm text-text-2">{t('Loading…')}</p>}
+            {list !== null && shown.length === 0 && <p className="px-4 py-6 text-sm text-text-2">{t('Nobody has mentioned you in the last 30 days.')}</p>}
             {shown.map((m) => (
               <div key={m.id} className="group relative" data-inbox-row={m.id}>
               <button type="button" onClick={() => jump(m)} className="w-full text-left flex gap-3 px-4 py-2.5 pr-10 hover:bg-bg-3 border-b border-line/60" data-inbox-item={m.id}>
                 <Avatar user={m.author} size={32} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2"><span className="font-semibold truncate">{m.author.display_name}</span><span className="text-[11px] text-text-2 truncate">{whereOf(m)}</span><span className="ml-auto text-[11px] text-text-2 shrink-0">{new Date(m.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric' })}</span></span>
-                  <span className="block text-sm text-text-1 truncate">{m.content || (m.attachments?.length ? '📎 Attachment' : '')}</span>
+                  <span className="block text-sm text-text-1 truncate">{m.content || (m.attachments?.length ? `📎 ${t('Attachment')}` : '')}</span>
                 </span>
               </button>
-              <button type="button" onClick={() => hide(m.id)} title="Remove from inbox" className="absolute right-2 top-2 rounded p-1 text-text-2 opacity-0 hover:bg-bg-4 hover:text-text-0 group-hover:opacity-100 focus:opacity-100" data-inbox-remove={m.id}><X size={14} /></button>
+              <button type="button" onClick={() => hide(m.id)} title={t('Remove from inbox')} className="absolute right-2 top-2 rounded p-1 text-text-2 opacity-0 hover:bg-bg-4 hover:text-text-0 group-hover:opacity-100 focus:opacity-100" data-inbox-remove={m.id}><X size={14} /></button>
               </div>
             ))}
           </div>

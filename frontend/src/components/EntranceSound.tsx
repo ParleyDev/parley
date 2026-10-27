@@ -5,9 +5,11 @@ import { BUILTIN_SOUNDS, builtinUrl } from '../lib/builtinSounds'
 import { setPrefs, usePrefs } from '../lib/prefs'
 import type { PrivateUser } from '../lib/types'
 import { useStore } from '../store'
+import { useT } from '../lib/i18n'
 
 /** Voice & Video: the sound everyone in the channel hears when you join, and whether you hear other people's. */
 export default function EntranceSound() {
+  const t = useT()
   const me = useStore((s) => s.user)
   const token = useStore((s) => s.token)
   const setAuth = useStore((s) => s.setAuth)
@@ -30,16 +32,16 @@ export default function EntranceSound() {
   const groups = [...new Set(options.map((o) => o.group))]
   return (
     <section className="space-y-2" data-entrance-sound>
-      <h3 className="text-base font-bold">Entrance Sound</h3>
-      <p className="text-sm text-text-2">Played to everyone in a server voice channel when you join it. Pick a default sound or one from any of your servers.</p>
+      <h3 className="text-base font-bold">{t('Entrance Sound')}</h3>
+      <p className="text-sm text-text-2">{t('Played to everyone in a server voice channel when you join it. Pick a default sound or one from any of your servers.')}</p>
       <div className="flex items-center gap-2">
-        <select className="input w-auto max-w-full" value={me.entrance_sound ?? ''} disabled={busy} onChange={(e) => save(e.target.value)} aria-label="Entrance sound" data-entrance-select>
-          <option value="">None</option>
-          {groups.map((g) => <optgroup key={g} label={g}>{options.filter((o) => o.group === g).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>)}
+        <select className="input w-auto max-w-full" value={me.entrance_sound ?? ''} disabled={busy} onChange={(e) => save(e.target.value)} aria-label={t('Entrance sound')} data-entrance-select>
+          <option value="">{t('None')}</option>
+          {groups.map((g) => <optgroup key={g} label={g === 'Default' ? t('Default') : g}>{options.filter((o) => o.group === g).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>)}
         </select>
-        {me.entrance_sound && <button type="button" className="btn-ghost" onClick={preview}>Preview</button>}
+        {me.entrance_sound && <button type="button" className="btn-ghost" onClick={preview}>{t('Preview')}</button>}
       </div>
-      <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="h-4 w-4 accent-accent" checked={prefs.entranceSounds} onChange={(e) => setPrefs({ entranceSounds: e.target.checked })} data-entrance-hear /> Play other people's entrance sounds</label>
+      <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="h-4 w-4 accent-accent" checked={prefs.entranceSounds} onChange={(e) => setPrefs({ entranceSounds: e.target.checked })} data-entrance-hear /> {t("Play other people's entrance sounds")}</label>
     </section>
   )
 }

@@ -9,9 +9,11 @@ import { CATEGORIES, categoryLabel, type Listing } from '../lib/discover'
 import { colorFor, initials } from '../lib/format'
 import type { Channel, Guild } from '../lib/types'
 import { useStore } from '../store'
+import { useLanguage, useT } from '../lib/i18n'
 
 /** Discord's Discover: browse approved servers by category, search, and join with one click. Admins also get a review queue. */
 export default function DiscoverPage() {
+  const t = useT()
   const isAdmin = useStore((s) => !!s.user?.is_admin)
   // /discover/review is routed to this page separately (the preview route owns /discover/:guildId).
   const isReview = !!useMatch('/discover/review/*')
@@ -23,13 +25,13 @@ export default function DiscoverPage() {
   return (
     <SplitLayout defaultPane="content" testid={{ 'data-discover': '' }} sidebar={
           <aside className="w-[var(--sidebar-w)] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
-            <div className="h-12 px-4 flex items-center font-bold text-lg border-b border-line">Discover</div>
+            <div className="h-12 px-4 flex items-center font-bold text-lg border-b border-line">{t('Discover')}</div>
             <nav className="p-2 space-y-0.5">
-              <NavLink to="/discover" end onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-servers><Server size={20} /> Servers</NavLink>
-              <NavLink to="/discover/stages" onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-stages><Radio size={20} /> Stages</NavLink>
+              <NavLink to="/discover" end onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-servers><Server size={20} /> {t('Servers')}</NavLink>
+              <NavLink to="/discover/stages" onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-stages><Radio size={20} /> {t('Stages')}</NavLink>
               {isAdmin && (
                 <NavLink to="/discover/review" onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-review>
-                  <ShieldCheck size={20} /> Review Queue
+                  <ShieldCheck size={20} /> {t('Review Queue')}
                   {pending ? <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center" data-review-count>{pending}</span> : null}
                 </NavLink>
               )}
@@ -44,12 +46,14 @@ export default function DiscoverPage() {
 }
 
 function Browse() {
+  const t = useT()
+  const lang = useLanguage()
   const [category, setCategory] = useState<string>('home')
   const [q, setQ] = useState('')
   const [term, setTerm] = useState('')
   const [list, setList] = useState<Listing[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  useEffect(() => { const t = setTimeout(() => setTerm(q.trim()), 300); return () => clearTimeout(t) }, [q])
+  useEffect(() => { const timer = setTimeout(() => setTerm(q.trim()), 300); return () => clearTimeout(timer) }, [q])
   useEffect(() => {
     setList(null); setError(null)
     const params = new URLSearchParams()
@@ -57,7 +61,7 @@ function Browse() {
     if (term) params.set('q', term)
     api.get<Listing[]>(`/discover?${params}`).then(setList).catch((e: Error) => { setError(e.message); setList([]) })
   }, [category, term])
-  const tabs = useMemo(() => [{ id: 'home', label: 'Home' }, ...CATEGORIES.filter((c) => c.id !== 'community'), { id: 'community', label: 'Community' }], [])
+  const tabs = useMemo(() => [{ id: 'home', label: t('Home') }, ...CATEGORIES.filter((c) => c.id !== 'community').map((c) => ({ ...c, label: t(c.label) })), { id: 'community', label: t('Community') }], [lang]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabCls = (active: boolean) => `px-2.5 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px ${active ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`
   // Priority nav: measure every tab, then on each bar resize decide how many fit.
@@ -85,7 +89,7 @@ function Browse() {
       return ws
     }
     const layout = () => {
-      const all = measure([...tabs.map((t) => t.label), 'More ▾'])
+      const all = measure([...tabs.map((tb) => tb.label), `${t('More')} ▾`])
       const widths = all.slice(0, -1)
       const more = all[all.length - 1]
       const fixed = 22 + 8 + 32 // compass + its margin + bar padding slack
@@ -112,7 +116,7 @@ function Browse() {
     return () => { ro.disconnect(); window.removeEventListener('resize', layout) }
   }, [tabs, searchOpen, q])
   const shown = tabs.slice(0, visibleCount), hidden = tabs.slice(visibleCount)
-  const activeHidden = hidden.some((t) => t.id === category)
+  const activeHidden = hidden.some((tb) => tb.id === category)
 
   return (
     <div className="min-h-full flex flex-col">
@@ -121,18 +125,18 @@ function Browse() {
         <Compass size={22} className="text-text-2 mr-2 shrink-0 max-md:hidden" />
         {/* Offscreen copy used only for measuring natural tab widths. */}
         <div className="flex-1 min-w-0 flex items-center gap-0.5 h-full" data-tab-strip>
-          {shown.map((t) => <button key={t.id} type="button" onClick={() => setCategory(t.id)} data-discover-tab={t.id} className={tabCls(category === t.id)}>{t.label}</button>)}
+          {shown.map((tb) => <button key={tb.id} type="button" onClick={() => setCategory(tb.id)} data-discover-tab={tb.id} className={tabCls(category === tb.id)}>{tb.label}</button>)}
           {hidden.length > 0 && (
             <div className="relative h-full flex items-center">
               <button type="button" onClick={() => setMoreOpen((o) => !o)} aria-haspopup="menu" aria-expanded={moreOpen} data-discover-more className={`${tabCls(activeHidden)} flex items-center gap-1`}>
-                More <ChevronDown size={14} className={`transition ${moreOpen ? 'rotate-180' : ''}`} />
+                {t('More')} <ChevronDown size={14} className={`transition ${moreOpen ? 'rotate-180' : ''}`} />
               </button>
               {moreOpen && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setMoreOpen(false)} />
                   <div role="menu" className="pop absolute left-0 top-full mt-1 z-30 min-w-[180px] rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1.5" data-discover-more-menu>
-                    {hidden.map((t) => (
-                      <button key={t.id} type="button" role="menuitem" onClick={() => { setCategory(t.id); setMoreOpen(false) }} data-discover-tab={t.id} className={`w-full flex items-center gap-2 rounded px-2 py-1.5 text-sm font-medium text-left ${category === t.id ? 'bg-accent text-white' : 'text-[#dbdee1] hover:bg-accent hover:text-white'}`}>{t.label}</button>
+                    {hidden.map((tb) => (
+                      <button key={tb.id} type="button" role="menuitem" onClick={() => { setCategory(tb.id); setMoreOpen(false) }} data-discover-tab={tb.id} className={`w-full flex items-center gap-2 rounded px-2 py-1.5 text-sm font-medium text-left ${category === tb.id ? 'bg-accent text-white' : 'text-[#dbdee1] hover:bg-accent hover:text-white'}`}>{tb.label}</button>
                     ))}
                   </div>
                 </>
@@ -144,28 +148,28 @@ function Browse() {
           {searchExpanded ? (
             <>
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-2" />
-              <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} onBlur={() => { if (!q) setSearchOpen(false) }} onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); setSearchOpen(false) } }} placeholder="Search" data-discover-search className="h-8 w-[232px] rounded-md bg-bg-0 border border-line pl-8 pr-2 text-sm outline-none focus:border-accent/60" />
+              <input ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} onBlur={() => { if (!q) setSearchOpen(false) }} onKeyDown={(e) => { if (e.key === 'Escape') { setQ(''); setSearchOpen(false) } }} placeholder={t('Search')} data-discover-search className="h-8 w-[232px] rounded-md bg-bg-0 border border-line pl-8 pr-2 text-sm outline-none focus:border-accent/60" />
             </>
           ) : (
-            <button type="button" onClick={() => setSearchOpen(true)} title="Search" data-discover-search-button className="h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><Search size={18} /></button>
+            <button type="button" onClick={() => setSearchOpen(true)} title={t('Search')} data-discover-search-button className="h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><Search size={18} /></button>
           )}
         </div>
       </div>
       <div className="relative overflow-hidden px-10 py-16 max-md:px-5 max-md:py-10" style={{ background: 'linear-gradient(110deg, #1b1f6b 0%, #2a2f9b 45%, #1a3a8a 100%)' }} data-discover-hero>
         <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.35), transparent 40%), radial-gradient(circle at 20% 90%, rgba(120,180,255,0.4), transparent 45%)' }} />
-        <h1 className="relative text-4xl max-md:text-2xl font-black uppercase tracking-tight leading-[1.05] text-white max-w-[640px]">Find your community on Parley</h1>
-        <p className="relative mt-3 text-white/80">From gaming, to music, to learning, there's a place for you.</p>
-        <a href="/app-directory" className="relative mt-4 inline-flex rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white hover:bg-white/25" data-discover-apps>Looking for bots? Browse the App Directory →</a>
+        <h1 className="relative text-4xl max-md:text-2xl font-black uppercase tracking-tight leading-[1.05] text-white max-w-[640px]">{t('Find your community on Parley')}</h1>
+        <p className="relative mt-3 text-white/80">{t("From gaming, to music, to learning, there's a place for you.")}</p>
+        <a href="/app-directory" className="relative mt-4 inline-flex rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white hover:bg-white/25" data-discover-apps>{t('Looking for bots? Browse the App Directory →')}</a>
       </div>
       <div className="px-10 py-8 max-md:px-5">
-        <h2 className="text-xl font-bold mb-4">{term ? `Results for "${term}"` : category === 'home' ? 'Featured Servers' : `${categoryLabel(category)} Servers`}</h2>
+        <h2 className="text-xl font-bold mb-4">{term ? t('Results for "{term}"', { term }) : category === 'home' ? t('Featured Servers') : t('{category} Servers', { category: t(categoryLabel(category)) })}</h2>
         {error && <p className="text-sm text-danger">{error}</p>}
-        {list === null && <p className="text-sm text-text-2">Loading…</p>}
+        {list === null && <p className="text-sm text-text-2">{t('Loading…')}</p>}
         {list?.length === 0 && !error && (
           <div className="rounded-xl border border-dashed border-line p-10 text-center text-text-2" data-discover-empty>
             <Compass size={32} className="mx-auto mb-2" />
-            <div className="font-semibold text-text-1">No servers here yet</div>
-            <div className="text-sm mt-1">Servers appear once their owners submit them from Server Settings → Discovery and a Parley admin approves.</div>
+            <div className="font-semibold text-text-1">{t('No servers here yet')}</div>
+            <div className="text-sm mt-1">{t('Servers appear once their owners submit them from Server Settings → Discovery and a Parley admin approves.')}</div>
           </div>
         )}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
@@ -178,6 +182,7 @@ function Browse() {
 
 /** Listing card: banner, overlapping icon, verified name, description, online/member counts. Click joins (or opens if joined). */
 function ServerCard({ l }: { l: Listing }) {
+  const t = useT()
   const navigate = useNavigate()
   const upsertGuild = useStore((s) => s.upsertGuild)
   const pushToast = useStore((s) => s.pushToast)
@@ -189,26 +194,26 @@ function ServerCard({ l }: { l: Listing }) {
     e.stopPropagation(); setBusy(true)
     try {
       const g = await api.post<Guild & { channels: Channel[] }>(`/discover/${l.guild_id}/join`, {})
-      upsertGuild(g); markJoined(g.id); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`)
+      upsertGuild(g); markJoined(g.id); pushToast(t('Welcome to {name}!', { name: g.name })); navigate(`/channels/${g.id}`)
     } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <div role="button" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open() }} data-server-card={l.guild_id} className="group text-left rounded-xl bg-bg-1 border border-line hover:border-text-2 hover:-translate-y-0.5 transition overflow-visible flex flex-col cursor-pointer">
       <div className="relative h-[140px] rounded-t-xl bg-cover bg-center" style={l.banner_url ? { backgroundImage: `url(${l.banner_url})` } : { background: `linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }}>
-        {l.featured_order !== null && <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow" data-featured>Featured</span>}
+        {l.featured_order !== null && <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow" data-featured>{t('Featured')}</span>}
         <span className="absolute left-3 -bottom-6 h-12 w-12 rounded-2xl ring-4 ring-bg-1 overflow-hidden flex items-center justify-center text-white font-bold" style={{ background: l.icon_url ? undefined : colorFor(l.guild_id) }}>
           {l.icon_url ? <img src={l.icon_url} alt="" className="h-full w-full object-cover" /> : initials(l.name)}
         </span>
       </div>
       <div className="px-3 pt-8 pb-3 flex-1 flex flex-col">
-        <div className="flex items-center gap-1.5 font-bold text-[15px]">{l.verified && <span title="Verified by this instance's admins" className="flex shrink-0" data-verified><BadgeCheck size={16} className="text-success" /></span>}{l.partnered && <span title="Partnered server" className="flex shrink-0" data-partnered><Handshake size={16} className="text-accent" /></span>}<span className="truncate">{l.name}</span>
-          {joined ? <span className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-1" data-joined>JOINED</span>
-            : <button type="button" onClick={quickJoin} disabled={busy} className="ml-auto rounded-md bg-success text-black px-2 py-0.5 text-[11px] font-bold opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-success/80" data-quick-join>{busy ? 'Joining…' : 'Join'}</button>}
+        <div className="flex items-center gap-1.5 font-bold text-[15px]">{l.verified && <span title={t("Verified by this instance's admins")} className="flex shrink-0" data-verified><BadgeCheck size={16} className="text-success" /></span>}{l.partnered && <span title={t('Partnered server')} className="flex shrink-0" data-partnered><Handshake size={16} className="text-accent" /></span>}<span className="truncate">{l.name}</span>
+          {joined ? <span className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-1" data-joined>{t('JOINED')}</span>
+            : <button type="button" onClick={quickJoin} disabled={busy} className="ml-auto rounded-md bg-success text-black px-2 py-0.5 text-[11px] font-bold opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-success/80" data-quick-join>{busy ? t('Joining…') : t('Join')}</button>}
         </div>
         <p className="mt-1 text-sm text-text-1 line-clamp-3 flex-1">{l.description}</p>
         <div className="mt-3 flex items-center gap-3 text-xs text-text-2">
-          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />{l.online_count.toLocaleString()} Online</span>
-          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-text-2" />{l.member_count.toLocaleString()} Members</span>
+          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />{t('{n} Online', { n: l.online_count.toLocaleString() })}</span>
+          <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-text-2" />{t('{n} Members', { n: l.member_count.toLocaleString() })}</span>
         </div>
       </div>
     </div>
@@ -217,6 +222,7 @@ function ServerCard({ l }: { l: Listing }) {
 
 /** Admin: pending submissions with Approve / Reject (optional note), plus tabs for the other states. */
 function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
+  const t = useT()
   const [status, setStatus] = useState<'pending' | 'approved' | 'rejected'>('pending')
   const [list, setList] = useState<Listing[] | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -224,40 +230,40 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
   const load = useMemo(() => () => api.get<Listing[]>(`/admin/discovery?status=${status}`).then((l) => { setList(l); if (status === 'pending') onChange(l.length) }).catch(() => setList([])), [status, onChange])
   useEffect(() => { setList(null); load() }, [load])
   const decide = async (l: Listing, next: 'approved' | 'rejected' | 'pending') => {
-    try { await api.post(`/admin/discovery/${l.guild_id}/review`, { status: next, note: notes[l.guild_id] ?? '' }); pushToast(`${l.name} ${next}`); load() } catch (e) { pushToast((e as Error).message, 'error') }
+    try { await api.post(`/admin/discovery/${l.guild_id}/review`, { status: next, note: notes[l.guild_id] ?? '' }); pushToast(t('{name} {status}', { name: l.name, status: t(next) })); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const flag = async (l: Listing, patch: { featured_order?: number | null; verified?: boolean; partnered?: boolean }) => {
     try { await api.patch(`/admin/discovery/${l.guild_id}`, patch); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
   return (
     <div className="px-10 py-8 max-md:px-4" data-review-queue>
-      <div className="flex items-center gap-2"><MobileBack /><h1 className="text-2xl font-bold">Discovery review</h1></div>
-      <p className="text-sm text-text-2 mt-1">Servers submitted for Discover. Approved servers are public to everyone on this Parley instance.</p>
+      <div className="flex items-center gap-2"><MobileBack /><h1 className="text-2xl font-bold">{t('Discovery review')}</h1></div>
+      <p className="text-sm text-text-2 mt-1">{t('Servers submitted for Discover. Approved servers are public to everyone on this Parley instance.')}</p>
       <div className="mt-4 flex gap-1 border-b border-line">
-        {(['pending', 'approved', 'rejected'] as const).map((s) => <button key={s} type="button" onClick={() => setStatus(s)} data-review-tab={s} className={`px-3 py-2 text-sm font-semibold capitalize border-b-2 -mb-px ${status === s ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`}>{s}</button>)}
+        {(['pending', 'approved', 'rejected'] as const).map((s) => <button key={s} type="button" onClick={() => setStatus(s)} data-review-tab={s} className={`px-3 py-2 text-sm font-semibold capitalize border-b-2 -mb-px ${status === s ? 'text-text-0 border-text-0' : 'text-text-1 border-transparent hover:text-text-0'}`}>{t(s)}</button>)}
       </div>
       <div className="mt-4 space-y-3">
-        {list === null && <p className="text-sm text-text-2">Loading…</p>}
-        {list?.length === 0 && <p className="text-sm text-text-2 py-6">Nothing {status} right now.</p>}
+        {list === null && <p className="text-sm text-text-2">{t('Loading…')}</p>}
+        {list?.length === 0 && <p className="text-sm text-text-2 py-6">{t('Nothing {status} right now.', { status: t(status) })}</p>}
         {list?.map((l) => (
           <div key={l.guild_id} className="rounded-xl border border-line bg-bg-1 p-4 flex gap-4 max-md:flex-col" data-review-item={l.guild_id}>
             <div className="h-20 w-32 shrink-0 rounded-lg bg-cover bg-center" style={l.banner_url ? { backgroundImage: `url(${l.banner_url})` } : { background: `linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }} />
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 font-bold">{l.name}<span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold uppercase text-text-1">{categoryLabel(l.category)}</span><span className="text-xs font-normal text-text-2">{l.member_count} members</span></div>
+              <div className="flex items-center gap-2 font-bold">{l.name}<span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold uppercase text-text-1">{t(categoryLabel(l.category))}</span><span className="text-xs font-normal text-text-2">{t('{n} members', { n: l.member_count })}</span></div>
               <p className="text-sm text-text-1 mt-1">{l.description}</p>
-              <p className="text-xs text-text-2 mt-1">Submitted {new Date(l.submitted_at).toLocaleString()}{l.note ? ` · Note: ${l.note}` : ''}</p>
+              <p className="text-xs text-text-2 mt-1">{t('Submitted {date}', { date: new Date(l.submitted_at).toLocaleString() })}{l.note ? ` · ${t('Note: {note}', { note: l.note })}` : ''}</p>
               <div className="mt-3 flex items-center gap-2 flex-wrap">
-                <input value={notes[l.guild_id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [l.guild_id]: e.target.value }))} placeholder="Note to the server owner (optional)" maxLength={500} data-review-note className="input py-1.5 text-sm flex-1 min-w-[200px]" />
-                {status !== 'approved' && <button type="button" onClick={() => decide(l, 'approved')} className="btn-primary bg-success hover:bg-success/80 text-black py-1.5" data-approve><Check size={16} /> Approve</button>}
-                {status !== 'rejected' && <button type="button" onClick={() => decide(l, 'rejected')} className="btn-danger py-1.5" data-reject><X size={16} /> Reject</button>}
-                {status !== 'pending' && <button type="button" onClick={() => decide(l, 'pending')} className="btn-ghost py-1.5">Back to pending</button>}
+                <input value={notes[l.guild_id] ?? ''} onChange={(e) => setNotes((n) => ({ ...n, [l.guild_id]: e.target.value }))} placeholder={t('Note to the server owner (optional)')} maxLength={500} data-review-note className="input py-1.5 text-sm flex-1 min-w-[200px]" />
+                {status !== 'approved' && <button type="button" onClick={() => decide(l, 'approved')} className="btn-primary bg-success hover:bg-success/80 text-black py-1.5" data-approve><Check size={16} /> {t('Approve')}</button>}
+                {status !== 'rejected' && <button type="button" onClick={() => decide(l, 'rejected')} className="btn-danger py-1.5" data-reject><X size={16} /> {t('Reject')}</button>}
+                {status !== 'pending' && <button type="button" onClick={() => decide(l, 'pending')} className="btn-ghost py-1.5">{t('Back to pending')}</button>}
               </div>
               {status === 'approved' && (
                 <div className="mt-3 flex items-center gap-4 flex-wrap text-sm" data-review-flags>
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={l.verified} onChange={(e) => flag(l, { verified: e.target.checked })} className="h-4 w-4 accent-accent" data-review-verified /> Verified badge</label>
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={!!l.partnered} onChange={(e) => flag(l, { partnered: e.target.checked })} className="h-4 w-4 accent-accent" data-review-partnered /> Partnered</label>
-                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={l.featured_order !== null} onChange={(e) => flag(l, { featured_order: e.target.checked ? 0 : null })} className="h-4 w-4 accent-accent" data-review-featured /> Featured</label>
-                  {l.featured_order !== null && <label className="flex items-center gap-2">order <input type="number" min={0} max={1000} defaultValue={l.featured_order} onBlur={(e) => { const n = Number(e.target.value); if (Number.isInteger(n) && n !== l.featured_order) flag(l, { featured_order: n }) }} className="input w-20 py-1 text-xs" data-review-featured-order /></label>}
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={l.verified} onChange={(e) => flag(l, { verified: e.target.checked })} className="h-4 w-4 accent-accent" data-review-verified /> {t('Verified badge')}</label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={!!l.partnered} onChange={(e) => flag(l, { partnered: e.target.checked })} className="h-4 w-4 accent-accent" data-review-partnered /> {t('Partnered')}</label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={l.featured_order !== null} onChange={(e) => flag(l, { featured_order: e.target.checked ? 0 : null })} className="h-4 w-4 accent-accent" data-review-featured /> {t('Featured')}</label>
+                  {l.featured_order !== null && <label className="flex items-center gap-2">{t('order')} <input type="number" min={0} max={1000} defaultValue={l.featured_order} onBlur={(e) => { const n = Number(e.target.value); if (Number.isInteger(n) && n !== l.featured_order) flag(l, { featured_order: n }) }} className="input w-20 py-1 text-xs" data-review-featured-order /></label>}
                 </div>
               )}
             </div>
@@ -272,13 +278,14 @@ interface LiveStage { guild: { id: string; name: string; icon_url: string | null
 
 /** Discover › Stages: stages live right now in your servers and in Discover servers, most listeners first. */
 function LiveStages() {
+  const t = useT()
   const [list, setList] = useState<LiveStage[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const navigate = useNavigate()
   const pushToast = useStore((s) => s.pushToast)
   useEffect(() => {
     const load = () => api.get<LiveStage[]>('/discover/stages').then(setList).catch(() => setList([]))
-    void load(); const t = setInterval(load, 30_000); return () => clearInterval(t)
+    void load(); const timer = setInterval(load, 30_000); return () => clearInterval(timer)
   }, [])
   const open = async (st: LiveStage) => {
     if (!st.member) {
@@ -289,14 +296,14 @@ function LiveStages() {
   }
   return (
     <div className="px-10 py-8 max-md:px-5" data-live-stages>
-      <div className="flex items-center gap-2 mb-1"><MobileBack /><h1 className="text-2xl font-bold">Live Stages</h1></div>
-      <p className="text-sm text-text-2 mb-5">Talks, shows and Q&amp;As happening now in your servers and across Discover.</p>
-      {list === null && <p className="text-sm text-text-2">Loading…</p>}
+      <div className="flex items-center gap-2 mb-1"><MobileBack /><h1 className="text-2xl font-bold">{t('Live Stages')}</h1></div>
+      <p className="text-sm text-text-2 mb-5">{t('Talks, shows and Q&As happening now in your servers and across Discover.')}</p>
+      {list === null && <p className="text-sm text-text-2">{t('Loading…')}</p>}
       {list?.length === 0 && (
         <div className="rounded-xl border border-dashed border-line p-10 text-center text-text-2" data-live-stages-empty>
           <Radio size={32} className="mx-auto mb-2" />
-          <div className="font-semibold text-text-1">Nothing live right now</div>
-          <div className="text-sm mt-1">Stages show up here while someone is speaking.</div>
+          <div className="font-semibold text-text-1">{t('Nothing live right now')}</div>
+          <div className="text-sm mt-1">{t('Stages show up here while someone is speaking.')}</div>
         </div>
       )}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
@@ -305,14 +312,14 @@ function LiveStages() {
             <div className="flex items-center gap-2 text-xs text-text-2">
               {st.guild.icon_url ? <img src={st.guild.icon_url} alt="" className="h-5 w-5 rounded-md object-cover" /> : <span className="h-5 w-5 rounded-md text-[9px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(st.guild.id) }}>{initials(st.guild.name)}</span>}
               <span className="truncate">{st.guild.name}</span>
-              <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 font-semibold text-success"><Radio size={12} /> LIVE</span>
+              <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 font-semibold text-success"><Radio size={12} /> {t('LIVE')}</span>
             </div>
             <div><div className="font-bold text-lg leading-snug">{st.channel.topic || st.channel.name}</div>{st.channel.topic && <div className="text-xs text-text-2">{st.channel.name}</div>}</div>
             <div className="flex items-center gap-2">
               <div className="flex -space-x-2">{st.speakers.map((p) => p.avatar_url ? <img key={p.id} src={p.avatar_url} alt="" title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 object-cover" /> : <span key={p.id} title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 text-[10px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(p.id) }}>{initials(p.display_name)}</span>)}</div>
-              <span className="text-xs text-text-2" data-live-stage-counts>{st.speaker_count} speaking · {st.listeners} {st.listeners === 1 ? 'person' : 'people'}</span>
+              <span className="text-xs text-text-2" data-live-stage-counts>{t('{n} speaking', { n: st.speaker_count })} · {st.listeners} {st.listeners === 1 ? t('person') : t('people')}</span>
             </div>
-            <button type="button" className="btn-primary mt-auto" disabled={busy === st.channel.id} onClick={() => void open(st)} data-live-stage-open={st.channel.id}>{st.member ? 'Listen' : busy === st.channel.id ? 'Joining…' : 'Join Server & Listen'}</button>
+            <button type="button" className="btn-primary mt-auto" disabled={busy === st.channel.id} onClick={() => void open(st)} data-live-stage-open={st.channel.id}>{st.member ? t('Listen') : busy === st.channel.id ? t('Joining…') : t('Join Server & Listen')}</button>
           </div>
         ))}
       </div>

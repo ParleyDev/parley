@@ -32,7 +32,7 @@ export default function DmSidebar() {
   const userMenu = useUserMenu(null)
   const pushToast = useStore((s) => s.pushToast)
   const me = useStore((s) => s.user)
-  const leave = (id: string, name: string) => openModal({ kind: 'confirm', title: `Leave '${name}'`, body: 'You will stop receiving messages from this group unless someone adds you back.', danger: true, confirmLabel: 'Leave Group',
+  const leave = (id: string, name: string) => openModal({ kind: 'confirm', title: t("Leave '{name}'", { name }), body: t('You will stop receiving messages from this group unless someone adds you back.'), danger: true, confirmLabel: t('Leave Group'),
     action: async () => { try { await api.delete(`/channels/${id}/recipients/${me?.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
   const activeId = useStore((s) => s.activeChannelId)
   const upsertChannel = useStore((s) => s.upsertChannel)
@@ -43,14 +43,14 @@ export default function DmSidebar() {
     try { upsertChannel(await api.post<DmChannel>(`/channels/${d.id}/close`)); if (activeId === d.id) navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const dmMenu = (d: DmChannel, other: { id: string; display_name: string } | undefined, e: React.MouseEvent<HTMLElement>): MenuEntry[] => [
-    { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !isUnread({ readStates, lastMessageId }, d.id), onClick: () => markRead(d.id) },
-    { label: pinnedIds.includes(d.id) ? 'Unpin Conversation' : 'Pin Conversation', icon: pinnedIds.includes(d.id) ? <PinOff size={16} /> : <Pin size={16} />, onClick: () => togglePinned(d.id) },
-    ...(!isGroup(d) ? [{ label: 'Close DM', icon: <X size={16} />, onClick: () => closeDm(d) }] : []),
+    { label: t('Mark As Read'), icon: <MailCheck size={16} />, disabled: !isUnread({ readStates, lastMessageId }, d.id), onClick: () => markRead(d.id) },
+    { label: pinnedIds.includes(d.id) ? t('Unpin Conversation') : t('Pin Conversation'), icon: pinnedIds.includes(d.id) ? <PinOff size={16} /> : <Pin size={16} />, onClick: () => togglePinned(d.id) },
+    ...(!isGroup(d) ? [{ label: t('Close DM'), icon: <X size={16} />, onClick: () => closeDm(d) }] : []),
     'sep',
     ...notifEntries(d.id, 'Conversation', notifSettings),
     'sep',
     ...(isGroup(d)
-      ? [{ label: 'Leave Group', icon: <LogOut size={16} />, danger: true, onClick: () => leave(d.id, dmName(d, users, notes)) }]
+      ? [{ label: t('Leave Group'), icon: <LogOut size={16} />, danger: true, onClick: () => leave(d.id, dmName(d, users, notes)) }]
       : other ? userMenu(other, e.currentTarget.getBoundingClientRect()) : []),
   ]
   const all = Object.values(dms).filter((d) => (!d.request_state || d.request_state === 'accepted') && (!d.closed || d.id === activeId)).sort((a, b) => (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at))
@@ -62,7 +62,7 @@ export default function DmSidebar() {
   const spam = useStore((s) => spamRequests(s).length)
 
   return (
-    <aside aria-label="Direct messages" className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
+    <aside aria-label={t('Direct messages')} className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="h-12 px-2.5 flex items-center border-b border-line">
         <button onClick={() => openModal({ kind: 'newDm' })} className="w-full rounded-md bg-bg-0/60 px-2 py-1.5 text-left text-sm text-text-2 hover:text-text-1">{t('Find or start a conversation')}</button>
       </div>
@@ -73,26 +73,26 @@ export default function DmSidebar() {
         </NavLink>
         {(requests > 0 || spam > 0) && (
           <NavLink to="/channels/@me/requests" onClick={() => setMobilePane('content')} className={({ isActive }) => `mt-0.5 flex items-center gap-3 rounded-md px-2 py-2 text-[15px] font-medium ${isActive ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`} data-message-requests={requests}>
-            <Inbox size={20} /> Message Requests
+            <Inbox size={20} /> {t('Message Requests')}
             {requests > 0 && <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center">{requests}</span>}
           </NavLink>
         )}
         <div className="mt-4 mb-1 flex items-center justify-between px-2 text-[11px] font-bold uppercase tracking-wider text-text-2">
           <span>{t('Direct Messages')}</span>
           <span className="flex items-center gap-1.5">
-            {hasGroups && <button onClick={() => openModal({ kind: 'leaveGroups' })} title="Leave group DMs" className="hover:text-text-0" data-leave-groups-open><LogOut size={14} /></button>}
-            <button onClick={() => openModal({ kind: 'newDm' })} title="Create DM" className="hover:text-text-0"><Plus size={16} /></button>
+            {hasGroups && <button onClick={() => openModal({ kind: 'leaveGroups' })} title={t('Leave group DMs')} className="hover:text-text-0" data-leave-groups-open><LogOut size={14} /></button>}
+            <button onClick={() => openModal({ kind: 'newDm' })} title={t('Create DM')} className="hover:text-text-0"><Plus size={16} /></button>
           </span>
         </div>
         {pinned.length > 0 && (
           <div className="mb-2 space-y-0.5" data-pinned-dms>
-            <div className="px-2 pb-0.5 text-[11px] font-bold uppercase tracking-wider text-text-2 flex items-center gap-1"><Pin size={11} /> Pinned</div>
+            <div className="px-2 pb-0.5 text-[11px] font-bold uppercase tracking-wider text-text-2 flex items-center gap-1"><Pin size={11} /> {t('Pinned')}</div>
             {pinned.map((d) => row(d))}
           </div>
         )}
         <div className="space-y-0.5">
           {list.map((d) => row(d))}
-          {list.length === 0 && pinned.length === 0 && <p className="px-2 py-4 text-sm text-text-2">No conversations yet. Start one!</p>}
+          {list.length === 0 && pinned.length === 0 && <p className="px-2 py-4 text-sm text-text-2">{t('No conversations yet. Start one!')}</p>}
         </div>
       </div>
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
@@ -110,14 +110,14 @@ export default function DmSidebar() {
         {group ? (
           <span className="min-w-0 flex-1 leading-tight">
             <span className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{dmName(d, users, notes)}</span>
-            <span className="block truncate text-xs text-text-2">{d.recipients.length + 1} Members</span>
+            <span className="block truncate text-xs text-text-2">{t('{n} Members', { n: d.recipients.length + 1 })}</span>
           </span>
         ) : other ? (
           <span className="min-w-0 flex-1 leading-tight">
             <StyledName userId={other.id} className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{other.display_name}</StyledName>
             {other.custom_status && <span className="block truncate text-xs text-text-2" data-dm-status>{other.custom_status}</span>}
           </span>
-        ) : <span className="truncate text-[15px]">Unknown</span>}
+        ) : <span className="truncate text-[15px]">{t('Unknown')}</span>}
         {unread && <span className="ml-auto h-2 w-2 rounded-full bg-white" />}
       </NavLink>
     )

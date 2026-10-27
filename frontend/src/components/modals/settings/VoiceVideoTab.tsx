@@ -6,10 +6,12 @@ import { keyLabel, supportsSinkId, type VoiceSettings } from '../../../lib/setti
 import VideoTile from '../../VideoTile'
 import EntranceSound from '../../EntranceSound'
 import { desktopBridge } from '../../../lib/desktop'
+import { useT } from '../../../lib/i18n'
 
 interface Devices { inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[]; cameras: MediaDeviceInfo[]; labelsHidden: boolean }
 
 export default function VoiceVideoTab() {
+  const t = useT()
   const st = useStore((s) => s.voiceSettings)
   const update = useStore((s) => s.updateVoiceSettings)
   const level = useStore((s) => s.inputLevel)
@@ -42,7 +44,7 @@ export default function VoiceVideoTab() {
       alive = false
       navigator.mediaDevices?.removeEventListener?.('devicechange', enumerate)
       voice.stopMicTest(); voice.stopMeter()
-      previewRef.current?.getTracks().forEach((t) => t.stop())
+      previewRef.current?.getTracks().forEach((tr) => tr.stop())
     }
   }, [enumerate])
 
@@ -64,14 +66,14 @@ export default function VoiceVideoTab() {
   }
 
   const togglePreview = async () => {
-    if (preview) { preview.getTracks().forEach((t) => t.stop()); previewRef.current = null; setPreview(null); return }
+    if (preview) { preview.getTracks().forEach((tr) => tr.stop()); previewRef.current = null; setPreview(null); return }
     const s = await voice.openCamera()
     if (s) { previewRef.current = s; setPreview(s); enumerate() }
   }
   // Re-open the preview when the chosen camera changes.
   useEffect(() => {
     if (!previewRef.current) return
-    previewRef.current.getTracks().forEach((t) => t.stop())
+    previewRef.current.getTracks().forEach((tr) => tr.stop())
     voice.openCamera().then((s) => { previewRef.current = s; setPreview(s) })
   }, [st.cameraDeviceId])
 
@@ -81,22 +83,22 @@ export default function VoiceVideoTab() {
 
   return (
     <div className="space-y-8">
-      <h2 className="text-xl font-bold">Voice & Video</h2>
+      <h2 className="text-xl font-bold">{t('Voice & Video')}</h2>
 
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <Select label="Input Device" value={st.inputDeviceId} onChange={set('inputDeviceId')} options={devices.inputs} />
-        <Select label="Output Device" value={st.outputDeviceId} onChange={set('outputDeviceId')} options={devices.outputs}
-          disabled={!supportsSinkId} note={!supportsSinkId ? 'Output selection is not supported by this browser' : undefined} />
-        {devices.labelsHidden && <p className="sm:col-span-2 text-xs text-text-2">Device names appear once microphone access has been granted.</p>}
-        <Slider label="Input Volume" value={st.inputVolume} min={0} max={200} onChange={set('inputVolume')} format={(v) => `${v}%`} />
-        <Slider label="Output Volume" value={st.outputVolume} min={0} max={100} onChange={set('outputVolume')} format={(v) => `${v}%`} />
+        <Select label={t('Input Device')} value={st.inputDeviceId} onChange={set('inputDeviceId')} options={devices.inputs} />
+        <Select label={t('Output Device')} value={st.outputDeviceId} onChange={set('outputDeviceId')} options={devices.outputs}
+          disabled={!supportsSinkId} note={!supportsSinkId ? t('Output selection is not supported by this browser') : undefined} />
+        {devices.labelsHidden && <p className="sm:col-span-2 text-xs text-text-2">{t('Device names appear once microphone access has been granted.')}</p>}
+        <Slider label={t('Input Volume')} value={st.inputVolume} min={0} max={200} onChange={set('inputVolume')} format={(v) => `${v}%`} />
+        <Slider label={t('Output Volume')} value={st.outputVolume} min={0} max={100} onChange={set('outputVolume')} format={(v) => `${v}%`} />
       </section>
 
       <section>
-        <label className="label">Mic Test</label>
-        <p className="text-sm text-text-2 mb-3">Having mic issues? Start a test and say something fun — we'll play your voice back to you.</p>
+        <label className="label">{t('Mic Test')}</label>
+        <p className="text-sm text-text-2 mb-3">{t("Having mic issues? Start a test and say something fun — we'll play your voice back to you.")}</p>
         <div className="flex items-center gap-4">
-          <button onClick={toggleTest} className={`btn ${testing ? 'bg-danger text-white hover:bg-danger/80' : 'bg-accent text-white hover:bg-accent-hover'} px-5`}>{testing ? 'Stop Testing' : "Let's Check"}</button>
+          <button onClick={toggleTest} className={`btn ${testing ? 'bg-danger text-white hover:bg-danger/80' : 'bg-accent text-white hover:bg-accent-hover'} px-5`}>{testing ? t('Stop Testing') : t("Let's Check")}</button>
           <Meter pct={pct} active={transmitting} />
         </div>
       </section>
@@ -104,60 +106,60 @@ export default function VoiceVideoTab() {
       <Divider />
 
       <section>
-        <label className="label">Input Mode</label>
+        <label className="label">{t('Input Mode')}</label>
         <div className="space-y-2">
-          <Radio checked={st.inputMode === 'vad'} onClick={() => update({ inputMode: 'vad' })} title="Voice Activity" />
-          <Radio checked={st.inputMode === 'ptt'} onClick={() => update({ inputMode: 'ptt' })} title="Push to Talk" />
-          <Radio checked={st.inputMode === 'open'} onClick={() => update({ inputMode: 'open' })} title="Always Transmit" />
+          <Radio checked={st.inputMode === 'vad'} onClick={() => update({ inputMode: 'vad' })} title={t('Voice Activity')} />
+          <Radio checked={st.inputMode === 'ptt'} onClick={() => update({ inputMode: 'ptt' })} title={t('Push to Talk')} />
+          <Radio checked={st.inputMode === 'open'} onClick={() => update({ inputMode: 'open' })} title={t('Always Transmit')} />
         </div>
-        {st.inputMode === 'open' && <p className="mt-1.5 text-xs text-text-2" data-input-open-note>Your mic is always live (unless muted). Best for music: voice activity detection can cut off quiet notes and tails.</p>}
+        {st.inputMode === 'open' && <p className="mt-1.5 text-xs text-text-2" data-input-open-note>{t('Your mic is always live (unless muted). Best for music: voice activity detection can cut off quiet notes and tails.')}</p>}
       </section>
 
       {st.inputMode === 'vad' ? (
         <section>
-          <Toggle label="Automatically determine input sensitivity" checked={st.autoSensitivity} onChange={set('autoSensitivity')} />
+          <Toggle label={t('Automatically determine input sensitivity')} checked={st.autoSensitivity} onChange={set('autoSensitivity')} />
           <div className="mt-4">
-            <label className="label">Input Sensitivity</label>
+            <label className="label">{t('Input Sensitivity')}</label>
             <div className="relative h-7 rounded-md bg-bg-0/60 border border-line overflow-hidden">
               <div className={`absolute inset-y-0 left-0 transition-[width] duration-75 ${level >= threshold ? 'bg-success' : 'bg-warn'}`} style={{ width: `${pct}%` }} />
               <input type="range" min={-100} max={0} value={threshold} disabled={st.autoSensitivity} onChange={(e) => update({ sensitivity: Number(e.target.value) })}
                 className="absolute inset-0 w-full h-full appearance-none bg-transparent cursor-pointer disabled:cursor-default [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-7 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:rounded-sm [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:shadow" />
             </div>
-            <p className="mt-1.5 text-xs text-text-2">{st.autoSensitivity ? 'Transmits when the meter turns green.' : `Threshold ${threshold} dB — the bar turns green when you'd be heard.`}</p>
+            <p className="mt-1.5 text-xs text-text-2">{st.autoSensitivity ? t('Transmits when the meter turns green.') : t("Threshold {threshold} dB — the bar turns green when you'd be heard.", { threshold })}</p>
           </div>
         </section>
       ) : st.inputMode === 'ptt' ? (
         <section className="space-y-4">
           <div>
-            <label className="label">Shortcut</label>
+            <label className="label">{t('Shortcut')}</label>
             <div className="flex items-center gap-3">
-              <button onClick={() => setRecording((r) => !r)} className={`input w-56 text-left font-mono ${recording ? 'border-danger ring-2 ring-danger/30' : ''}`}>{recording ? 'Press a key…' : keyLabel(st.pttKey)}</button>
-              <button onClick={() => setRecording(true)} className="btn-ghost whitespace-nowrap">Record Keybind</button>
-              <span className={`ml-auto rounded-md px-2 py-1 text-xs font-bold ${pttHeld ? 'bg-success text-black' : 'bg-bg-3 text-text-2'}`}>{pttHeld ? 'TRANSMITTING' : 'IDLE'}</span>
+              <button onClick={() => setRecording((r) => !r)} className={`input w-56 text-left font-mono ${recording ? 'border-danger ring-2 ring-danger/30' : ''}`}>{recording ? t('Press a key…') : keyLabel(st.pttKey)}</button>
+              <button onClick={() => setRecording(true)} className="btn-ghost whitespace-nowrap">{t('Record Keybind')}</button>
+              <span className={`ml-auto rounded-md px-2 py-1 text-xs font-bold ${pttHeld ? 'bg-success text-black' : 'bg-bg-3 text-text-2'}`}>{pttHeld ? t('TRANSMITTING') : t('IDLE')}</span>
             </div>
-            <p className="mt-1.5 text-xs text-text-2">{desktopBridge() ? 'Works while Parley is in the background too, during a call. Modifier keys work even while typing.' : 'Push to talk only works while this tab is focused (browser limitation); the desktop app also hears it in the background. Modifier keys work even while typing.'}</p>
+            <p className="mt-1.5 text-xs text-text-2">{desktopBridge() ? t('Works while Parley is in the background too, during a call. Modifier keys work even while typing.') : t('Push to talk only works while this tab is focused (browser limitation); the desktop app also hears it in the background. Modifier keys work even while typing.')}</p>
           </div>
-          <Slider label="Push to Talk Release Delay" value={st.pttRelease} min={0} max={2000} step={20} onChange={set('pttRelease')} format={(v) => `${(v / 1000).toFixed(2)}s`} />
+          <Slider label={t('Push to Talk Release Delay')} value={st.pttRelease} min={0} max={2000} step={20} onChange={set('pttRelease')} format={(v) => `${(v / 1000).toFixed(2)}s`} />
         </section>
       ) : null}
 
       <Divider />
 
       <section className="space-y-3">
-        <label className="label">Voice Processing</label>
-        <Toggle label="Echo Cancellation" checked={st.echoCancellation} onChange={set('echoCancellation')} />
-        <Toggle label="Noise Suppression" checked={st.noiseSuppression} onChange={set('noiseSuppression')} />
+        <label className="label">{t('Voice Processing')}</label>
+        <Toggle label={t('Echo Cancellation')} checked={st.echoCancellation} onChange={set('echoCancellation')} />
+        <Toggle label={t('Noise Suppression')} checked={st.noiseSuppression} onChange={set('noiseSuppression')} />
         {st.noiseSuppression && (
           <div className="ml-1 flex flex-wrap gap-2" data-ns-mode>
-            {([['standard', 'Standard', "Your browser's suppressor"], ['enhanced', 'Enhanced', 'Removes keyboard, fans and background chatter (RNNoise, runs on this device)']] as const).map(([v, label, hint]) => (
+            {([['standard', t('Standard'), t("Your browser's suppressor")], ['enhanced', t('Enhanced'), t('Removes keyboard, fans and background chatter (RNNoise, runs on this device)')]] as const).map(([v, label, hint]) => (
               <button key={v} type="button" title={hint} onClick={() => update({ noiseSuppressionMode: v })} className={`rounded-md border px-3 py-1.5 text-sm text-left ${st.noiseSuppressionMode === v ? 'border-accent bg-accent/15 text-text-0' : 'border-line bg-bg-1 text-text-1 hover:border-text-2'}`} data-ns-mode-option={v} data-on={st.noiseSuppressionMode === v ? '1' : '0'}>
                 <span className="block font-semibold">{label}</span><span className="block text-xs text-text-2">{hint}</span>
               </button>
             ))}
           </div>
         )}
-        <Toggle label="Automatic Gain Control" checked={st.autoGainControl} onChange={set('autoGainControl')} />
-        <p className="text-xs text-text-2" data-hifi-processing-note>High-fidelity channels (set by the server) turn all three off and capture 48 kHz stereo, so instruments and music come through untouched.</p>
+        <Toggle label={t('Automatic Gain Control')} checked={st.autoGainControl} onChange={set('autoGainControl')} />
+        <p className="text-xs text-text-2" data-hifi-processing-note>{t('High-fidelity channels (set by the server) turn all three off and capture 48 kHz stereo, so instruments and music come through untouched.')}</p>
       </section>
 
       <Divider />
@@ -167,18 +169,18 @@ export default function VoiceVideoTab() {
       <Divider />
 
       <section className="space-y-4">
-        <h3 className="text-base font-bold">Video Settings</h3>
+        <h3 className="text-base font-bold">{t('Video Settings')}</h3>
         <div className="aspect-video w-full max-w-md rounded-xl bg-bg-0 border border-line overflow-hidden flex items-center justify-center">
-          {preview ? <VideoTile stream={preview} mirror /> : <div className="text-center text-text-2"><VideoOff size={40} className="mx-auto mb-2" /><button onClick={togglePreview} className="btn-primary">Test Video</button></div>}
+          {preview ? <VideoTile stream={preview} mirror /> : <div className="text-center text-text-2"><VideoOff size={40} className="mx-auto mb-2" /><button onClick={togglePreview} className="btn-primary">{t('Test Video')}</button></div>}
         </div>
-        {preview && <button onClick={togglePreview} className="btn-ghost"><Video size={16} /> Stop Test</button>}
-        <Select label="Camera" value={st.cameraDeviceId} onChange={set('cameraDeviceId')} options={devices.cameras} />
+        {preview && <button onClick={togglePreview} className="btn-ghost"><Video size={16} /> {t('Stop Test')}</button>}
+        <Select label={t('Camera')} value={st.cameraDeviceId} onChange={set('cameraDeviceId')} options={devices.cameras} />
         <div data-stream-quality>
-          <label className="label" htmlFor="stream-quality">Screen share quality</label>
+          <label className="label" htmlFor="stream-quality">{t('Screen share quality')}</label>
           <select id="stream-quality" className="input" value={st.streamQuality} onChange={(e) => update({ streamQuality: e.target.value })}>
-            {Object.entries(STREAM_QUALITY).map(([k, q]) => <option key={k} value={k}>{q.label}</option>)}
+            {Object.entries(STREAM_QUALITY).map(([k, q]) => <option key={k} value={k}>{t(q.label)}</option>)}
           </select>
-          <p className="mt-1 text-xs text-text-2">Applies the next time you share your screen. Higher settings need a faster upload; viewers on slow connections may see it stutter.</p>
+          <p className="mt-1 text-xs text-text-2">{t('Applies the next time you share your screen. Higher settings need a faster upload; viewers on slow connections may see it stutter.')}</p>
         </div>
       </section>
     </div>
@@ -186,11 +188,12 @@ export default function VoiceVideoTab() {
 }
 
 function Select({ label, value, onChange, options, disabled, note }: { label: string; value: string; onChange: (v: string) => void; options: MediaDeviceInfo[]; disabled?: boolean; note?: string }) {
+  const t = useT()
   return (
     <div>
       <label className="label">{label}</label>
       <select className="input" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Default</option>
+        <option value="">{t('Default')}</option>
         {options.filter((d) => d.deviceId && d.deviceId !== 'default').map((d, i) => <option key={d.deviceId} value={d.deviceId}>{d.label || `${label} ${i + 1}`}</option>)}
       </select>
       {note && <p className="mt-1 text-xs text-text-2">{note}</p>}

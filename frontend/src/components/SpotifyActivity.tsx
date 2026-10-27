@@ -1,7 +1,7 @@
 import { Headphones, Music } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { useT } from '../lib/i18n'
+import { useT, tn } from '../lib/i18n'
 import type { Activity } from '../lib/types'
 import { useStore } from '../store'
 import Avatar from './Avatar'
@@ -67,6 +67,5 @@ export function SpotifyCard({ userId, activity: a, dark }: { userId: string; act
 
 /** One line for lists: "Listening to Spotify". */
 export function ActivityLine({ activity: a }: { activity: Activity }) {
-  const t = useT()
-  return <span className="block truncate text-xs text-text-2" data-member-activity={a.name}>{t('Listening to')} <b className="font-semibold">{a.name}</b></span>
+  return <span className="block truncate text-xs text-text-2" data-member-activity={a.name}>{tn('Listening to {name}', { name: <b className="font-semibold">{a.name}</b> })}</span>
 }

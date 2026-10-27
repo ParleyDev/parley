@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { publicOrigin } from './InviteCard'
+import { useT } from '../lib/i18n'
 
 export interface Embed { url: string; title?: string; description?: string; image?: string; site_name?: string; color?: string; large_image?: boolean; video?: string }
 
@@ -60,6 +61,7 @@ export function playerFor(url: string): { src: string; height: number; kind: 'yo
 /** OpenGraph card under a message for a link (with an inline player for YouTube, Spotify and Twitch, a video for
  *  og:video, a large picture when the page asks for one and its theme colour). Renders nothing until there's data. */
 export default function LinkEmbed({ url }: { url: string }) {
+  const t = useT()
   const [embed, setEmbed] = useState<Embed | null | undefined>(undefined)
   const [playing, setPlaying] = useState(false)
   useEffect(() => { let live = true; lookup(url).then((e) => { if (live) setEmbed(e) }); return () => { live = false } }, [url])
@@ -80,7 +82,7 @@ export default function LinkEmbed({ url }: { url: string }) {
           <a href={url} target="_blank" rel="noopener noreferrer" className="block truncate font-semibold text-sky-400 hover:underline" data-embed-title>{title}</a>
           {embed?.description && <div className="mt-0.5 text-sm text-text-1 line-clamp-2">{embed.description}</div>}
         </div>
-        <button type="button" onClick={() => setPlaying(true)} className="group relative block w-full bg-black" style={{ aspectRatio: '16 / 9' }} title="Play" data-link-play>
+        <button type="button" onClick={() => setPlaying(true)} className="group relative block w-full bg-black" style={{ aspectRatio: '16 / 9' }} title={t('Play')} data-link-play>
           {thumb && <img src={thumb} alt="" className="h-full w-full object-cover opacity-90" loading="lazy" />}
           <span className="absolute inset-0 m-auto flex h-14 w-14 items-center justify-center rounded-full bg-black/70 text-2xl text-white group-hover:bg-danger">▶</span>
         </button>

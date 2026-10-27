@@ -1,3 +1,4 @@
+import { t } from './i18n'
 /** Human label for a session's user agent: "Chrome on Windows", "Safari on iPhone", "Parley e2e"... */
 export function describeUa(ua: string): string {
   if (!ua) return 'Unknown device'
@@ -20,18 +21,18 @@ export function describeUa(ua: string): string {
   if (browser) return browser
   if (os) return os
   // Not a browser: show the first token (curl/7.88, node, a script's own name).
-  return ua.split(/[\s/(]/)[0]?.slice(0, 40) || 'Unknown device'
+  return ua.split(/[\s/(]/)[0]?.slice(0, 40) || t('Unknown device')
 }
 
 export function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const m = Math.round(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m} min ago`
+  if (m < 1) return t('just now')
+  if (m < 60) return t('{n} min ago', { n: m })
   const h = Math.round(m / 60)
-  if (h < 24) return `${h} h ago`
+  if (h < 24) return t('{n} h ago', { n: h })
   const d = Math.round(h / 24)
-  if (d < 30) return `${d} d ago`
+  if (d < 30) return t('{n} d ago', { n: d })
   return new Date(iso).toLocaleDateString()
 }
 

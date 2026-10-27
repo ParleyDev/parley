@@ -4,6 +4,7 @@ import Modals from './modals'
 import UserPanel from './UserPanel'
 import { useStore } from '../store'
 import { useResizableSidebar } from '../lib/resize'
+import { useT } from '../lib/i18n'
 
 /**
  * The app's two-column frame (server bar + sidebar on the left, content on the right) for pages
@@ -41,11 +42,12 @@ export function useShowContent() {
  * (224–450 px) and reaches the sidebars through `--sidebar-w`; tablets and phones keep their fixed layouts.
  */
 export function NavColumn({ hidden, children }: { hidden: boolean; children: ReactNode }) {
+  const t = useT()
   const { width, handleProps } = useResizableSidebar('sidebar', 272, 224, 450)
   return (
     <div style={{ '--sidebar-w': `${width}px` } as CSSProperties} className={`relative flex flex-col h-full shrink-0 w-[calc(72px_+_var(--sidebar-w))] tab:w-[296px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${hidden ? 'max-md:hidden' : ''}`}>
       {children}
-      <div {...handleProps} aria-label="Resize sidebar" data-sidebar-resizer />
+      <div {...handleProps} aria-label={t('Resize sidebar')} data-sidebar-resizer />
     </div>
   )
 }

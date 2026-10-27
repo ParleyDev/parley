@@ -8,6 +8,7 @@ import type { DmChannel } from '../../lib/types'
 import { useStore } from '../../store'
 import Avatar from '../Avatar'
 import Modal from '../Modal'
+import { useT } from '../../lib/i18n'
 
 const MAX = 10
 
@@ -16,6 +17,7 @@ const MAX = 10
  * (several). In a 1:1 DM it starts a new group with that person plus the picks; in a group it adds.
  */
 export default function GroupMembersModal({ onClose, channelId, userIds }: { onClose: () => void; channelId?: string; userIds?: string[] }) {
+  const t = useT()
   const friends = useStore(useShallow((s) => Object.values(s.relationships).filter((r) => r.kind === 'friend').map((r) => s.users[r.user.id] ?? r.user)))
   const dm = useStore((s) => (channelId ? s.dms[channelId] : undefined))
   const upsertChannel = useStore((s) => s.upsertChannel)
@@ -42,7 +44,7 @@ export default function GroupMembersModal({ onClose, channelId, userIds }: { onC
     try {
       if (dm && isGroup(dm)) {
         for (const id of picked) await api.put(`/channels/${dm.id}/recipients/${id}`)
-        pushToast(picked.length === 1 ? 'Friend added' : `${picked.length} friends added`)
+        pushToast(picked.length === 1 ? t('Friend added') : t('{n} friends added', { n: picked.length }))
       } else {
         const ids = [...(dm ? dm.recipients.map((r) => r.id) : []), ...picked]
         const c = await api.post<DmChannel>('/users/@me/channels', ids.length === 1 ? { recipient_id: ids[0] } : { recipient_ids: ids, name: name.trim() })
@@ -53,14 +55,14 @@ export default function GroupMembersModal({ onClose, channelId, userIds }: { onC
   }
   const creatingGroup = !(dm && isGroup(dm)) && (dm ? dm.recipients.length : 0) + picked.length >= 2
   return (
-    <Modal title="Select Friends" subtitle={`You can add ${room} more friend${room === 1 ? '' : 's'}.`} onClose={onClose}>
+    <Modal title={t('Select Friends')} subtitle={room === 1 ? t('You can add 1 more friend.') : t('You can add {n} more friends.', { n: room })} onClose={onClose}>
       <div data-group-members-modal>
         <div className="relative">
-          <input className="input pl-9" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type the username of a friend" data-friend-search />
+          <input className="input pl-9" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Type the username of a friend')} data-friend-search />
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />
         </div>
         <div className="mt-3 max-h-64 overflow-y-auto -mx-2">
-          {list.length === 0 && <p className="px-2 py-4 text-sm text-text-2">{friends.length === 0 ? 'Add some friends first; only friends can be added to groups.' : 'No friends match.'}</p>}
+          {list.length === 0 && <p className="px-2 py-4 text-sm text-text-2">{friends.length === 0 ? t('Add some friends first; only friends can be added to groups.') : t('No friends match.')}</p>}
           {list.map((u) => {
             const on = picked.includes(u.id)
             return (
@@ -72,17 +74,17 @@ export default function GroupMembersModal({ onClose, channelId, userIds }: { onC
           })}
         </div>
         {creatingGroup && (
-          <div className="mt-3"><label className="label">Group name (optional)</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder="Leave blank to use member names" data-group-name-input /></div>
+          <div className="mt-3"><label className="label">{t('Group name (optional)')}</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} placeholder={t('Leave blank to use member names')} data-group-name-input /></div>
         )}
         <button type="button" className="btn-primary w-full mt-4 justify-center" disabled={busy || picked.length === 0} onClick={submit} data-group-submit>
-          {busy ? 'Working…' : dm && isGroup(dm) ? 'Add to Group' : creatingGroup ? 'Create Group DM' : 'Create DM'}
+          {busy ? t('Working…') : dm && isGroup(dm) ? t('Add to Group') : creatingGroup ? t('Create Group DM') : t('Create DM')}
         </button>
         {dm && isGroup(dm) && (
           <div className="mt-4 border-t border-line pt-3" data-group-invite>
-            <div className="mb-1 text-xs font-bold uppercase tracking-wider text-text-2">Or, send an invite link to anyone</div>
-            {link ? <div className="flex gap-2"><input readOnly className="input flex-1 text-sm" value={link} data-group-invite-link /><button type="button" className="btn-primary" onClick={() => { void navigator.clipboard?.writeText(link).catch(() => {}); pushToast('Link copied') }}>Copy</button></div>
-              : <button type="button" className="btn-ghost flex items-center gap-1" onClick={makeLink} data-group-invite-create><Link2 size={16} />Create invite link</button>}
-            {link && <p className="mt-1 text-xs text-text-2">Expires in 24 hours.</p>}
+            <div className="mb-1 text-xs font-bold uppercase tracking-wider text-text-2">{t('Or, send an invite link to anyone')}</div>
+            {link ? <div className="flex gap-2"><input readOnly className="input flex-1 text-sm" value={link} data-group-invite-link /><button type="button" className="btn-primary" onClick={() => { void navigator.clipboard?.writeText(link).catch(() => {}); pushToast(t('Link copied')) }}>{t('Copy')}</button></div>
+              : <button type="button" className="btn-ghost flex items-center gap-1" onClick={makeLink} data-group-invite-create><Link2 size={16} />{t('Create invite link')}</button>}
+            {link && <p className="mt-1 text-xs text-text-2">{t('Expires in 24 hours.')}</p>}
           </div>
         )}
       </div>

@@ -7,9 +7,11 @@ import { has, P } from '../lib/perms'
 import { formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
 import ChatPane from './ChatPane'
+import { useT } from '../lib/i18n'
 
 /** Side panel showing one thread: root message, its messages and composer, archive controls. */
 export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: () => void }) {
+  const t = useT()
   const thread = useStore((s) => s.channels[threadId])
   const info = useStore((s) => s.threads[threadId])
   const me = useStore((s) => s.user?.id)
@@ -45,20 +47,20 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
     <aside className="w-[460px] shrink-0 bg-bg-1 border-l border-line flex flex-col max-md:w-full max-md:border-l-0" data-thread-panel={threadId} data-thread-archived={archived ? '1' : '0'}>
       <div className="h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line">
         <MessagesSquare size={16} className="text-text-2 shrink-0" /><span className="font-bold truncate" data-thread-title>{thread.name}</span>
-        {archived && <span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-2">ARCHIVED</span>}
-        {info?.private && <span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-2" data-thread-private-badge>PRIVATE</span>}
+        {archived && <span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-2">{t('ARCHIVED')}</span>}
+        {info?.private && <span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-2" data-thread-private-badge>{t('PRIVATE')}</span>}
         {locked && <Lock size={13} className="shrink-0 text-text-2" data-thread-locked />}
         <span className="ml-auto flex items-center gap-1">
-          <button onClick={() => join(!joined)} className="rounded-md px-2 py-1 text-xs font-semibold text-text-1 hover:bg-bg-3 hover:text-text-0" data-thread-join={joined ? 'leave' : 'join'}>{joined ? 'Leave' : 'Join'}</button>
+          <button onClick={() => join(!joined)} className="rounded-md px-2 py-1 text-xs font-semibold text-text-1 hover:bg-bg-3 hover:text-text-0" data-thread-join={joined ? 'leave' : 'join'}>{joined ? t('Leave') : t('Join')}</button>
           <span className="relative">
-            <button onClick={() => (people ? setPeople(null) : void loadPeople())} title="Thread members" className="h-8 min-w-8 px-1 rounded-md flex items-center justify-center gap-1 text-xs text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-members-toggle><Users size={16} />{info?.member_count ?? ''}</button>
+            <button onClick={() => (people ? setPeople(null) : void loadPeople())} title={t('Thread members')} className="h-8 min-w-8 px-1 rounded-md flex items-center justify-center gap-1 text-xs text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-members-toggle><Users size={16} />{info?.member_count ?? ''}</button>
             {people && (
               <div className="pop absolute right-0 top-full z-40 mt-1 w-64 rounded-xl border border-line bg-bg-0 p-2 shadow-2xl" data-thread-members>
-                <div className="px-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">Members — {people.length}</div>
+                <div className="px-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Members')} — {people.length}</div>
                 <div className="max-h-48 overflow-y-auto">{people.map((u) => <div key={u.id} className="flex items-center gap-2 px-1 py-1 text-sm" data-thread-member={u.id}><Avatar user={u} size={20} /><span className="truncate">{u.display_name}</span></div>)}</div>
                 {(joined || isMod) && (
                   <div className="mt-2 border-t border-line pt-2">
-                    <div className="flex items-center gap-1"><UserPlus size={14} className="text-text-2" /><input className="input py-1 text-xs" placeholder="Add someone" value={addQ} onChange={(e) => setAddQ(e.target.value)} data-thread-add-search /></div>
+                    <div className="flex items-center gap-1"><UserPlus size={14} className="text-text-2" /><input className="input py-1 text-xs" placeholder={t('Add someone')} value={addQ} onChange={(e) => setAddQ(e.target.value)} data-thread-add-search /></div>
                     {addQ && Object.values(guildMembers ?? {}).filter((m) => !people.some((p) => p.id === m.user_id) && (m.nickname ?? m.display_name).toLowerCase().includes(addQ.toLowerCase())).slice(0, 6).map((m) => (
                       <button key={m.user_id} type="button" onClick={() => addPerson(m.user_id)} className="mt-1 flex w-full items-center gap-2 rounded px-1 py-1 text-left text-sm hover:bg-bg-3" data-thread-add={m.user_id}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={18} /><span className="truncate">{m.nickname ?? m.display_name}</span></button>
                     ))}
@@ -67,10 +69,10 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
               </div>
             )}
           </span>
-          {isMod && <button onClick={toggleLock} title={locked ? 'Unlock thread' : 'Lock thread'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-lock>{locked ? <LockOpen size={16} /> : <Lock size={16} />}</button>}
-          {parentKind === 'forum' && isMod && <button onClick={togglePin} title={pinned ? 'Unpin post' : 'Pin post'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-pin>{pinned ? <PinOff size={16} /> : <Pin size={16} />}</button>}
-          {canManage && <button onClick={toggle} title={archived ? 'Unarchive thread' : 'Archive thread'} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-archive>{archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}</button>}
-          <button onClick={onClose} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title="Close thread"><X size={18} /></button>
+          {isMod && <button onClick={toggleLock} title={locked ? t('Unlock thread') : t('Lock thread')} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-lock>{locked ? <LockOpen size={16} /> : <Lock size={16} />}</button>}
+          {parentKind === 'forum' && isMod && <button onClick={togglePin} title={pinned ? t('Unpin post') : t('Pin post')} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-pin>{pinned ? <PinOff size={16} /> : <Pin size={16} />}</button>}
+          {canManage && <button onClick={toggle} title={archived ? t('Unarchive thread') : t('Archive thread')} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-thread-archive>{archived ? <ArchiveRestore size={16} /> : <Archive size={16} />}</button>}
+          <button onClick={onClose} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title={t('Close thread')}><X size={18} /></button>
         </span>
       </div>
       {root && (
@@ -80,7 +82,7 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
         </div>
       )}
       <div className="flex-1 min-h-0 flex flex-col">
-        <ChatPane channel={thread as Channel} readOnly={locked && !isMod ? 'This thread is locked. Only moderators can post.' : undefined} />
+        <ChatPane channel={thread as Channel} readOnly={locked && !isMod ? t('This thread is locked. Only moderators can post.') : undefined} />
       </div>
     </aside>
   )
@@ -88,6 +90,7 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
 
 /** Popover listing a channel's threads (active, or archived) with a button to start one. */
 export function ThreadsPanel({ channel, onClose }: { channel: Channel; onClose: () => void }) {
+  const t = useT()
   const [archived, setArchived] = useState(false)
   const [list, setList] = useState<ThreadInfo[] | null>(null)
   const openModal = useStore((s) => s.openModal)
@@ -100,18 +103,18 @@ export function ThreadsPanel({ channel, onClose }: { channel: Channel; onClose: 
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <div className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl" data-threads-panel>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
-          <MessagesSquare size={16} className="text-text-2" /><span className="font-bold">Threads</span>
-          <button type="button" onClick={() => setArchived((a) => !a)} className="ml-2 rounded-full bg-bg-3 px-2 py-0.5 text-xs font-semibold text-text-1 hover:text-text-0" data-threads-archived-toggle>{archived ? 'Showing archived' : 'Show archived'}</button>
-          {has(perms, P.SEND_MESSAGES) && <button type="button" onClick={() => { onClose(); openModal({ kind: 'createThread', channelId: channel.id }) }} className="ml-auto flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-xs font-semibold text-white hover:bg-accent-hover" data-threads-create><Plus size={14} /> Create</button>}
+          <MessagesSquare size={16} className="text-text-2" /><span className="font-bold">{t('Threads')}</span>
+          <button type="button" onClick={() => setArchived((a) => !a)} className="ml-2 rounded-full bg-bg-3 px-2 py-0.5 text-xs font-semibold text-text-1 hover:text-text-0" data-threads-archived-toggle>{archived ? t('Showing archived') : t('Show archived')}</button>
+          {has(perms, P.SEND_MESSAGES) && <button type="button" onClick={() => { onClose(); openModal({ kind: 'createThread', channelId: channel.id }) }} className="ml-auto flex items-center gap-1 rounded-md bg-accent px-2 py-1 text-xs font-semibold text-white hover:bg-accent-hover" data-threads-create><Plus size={14} /> {t('Create')}</button>}
           <button onClick={onClose} className="text-text-2 hover:text-text-0 ml-1"><X size={16} /></button>
         </div>
         <div className="overflow-y-auto p-2 space-y-1">
-          {list === null && <p className="text-sm text-text-2 p-3">Loading…</p>}
-          {list?.length === 0 && <div className="p-6 text-center text-sm text-text-2">{archived ? 'No archived threads.' : 'No threads yet. Start one from a message\'s menu or with Create.'}</div>}
-          {list?.map((t) => (
-            <button key={t.id} type="button" onClick={() => { setOpenThread(t.id); onClose() }} className="w-full rounded-lg border border-line bg-bg-2 px-3 py-2 text-left hover:border-text-2" data-thread-row={t.id}>
-              <div className="font-semibold truncate">{t.name}</div>
-              <div className="text-xs text-text-2">{t.message_count} message{t.message_count === 1 ? '' : 's'} · started by @{t.owner_username ?? 'unknown'}{t.last_message_at ? ` · last ${formatTime(t.last_message_at)}` : ''}</div>
+          {list === null && <p className="text-sm text-text-2 p-3">{t('Loading…')}</p>}
+          {list?.length === 0 && <div className="p-6 text-center text-sm text-text-2">{archived ? t('No archived threads.') : t("No threads yet. Start one from a message's menu or with Create.")}</div>}
+          {list?.map((th) => (
+            <button key={th.id} type="button" onClick={() => { setOpenThread(th.id); onClose() }} className="w-full rounded-lg border border-line bg-bg-2 px-3 py-2 text-left hover:border-text-2" data-thread-row={th.id}>
+              <div className="font-semibold truncate">{th.name}</div>
+              <div className="text-xs text-text-2">{th.message_count === 1 ? t('1 message') : t('{n} messages', { n: th.message_count })} · {t('started by @{name}', { name: th.owner_username ?? t('unknown') })}{th.last_message_at ? ` · ${t('last {time}', { time: formatTime(th.last_message_at) })}` : ''}</div>
             </button>
           ))}
         </div>

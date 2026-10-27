@@ -9,6 +9,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { sendOp } from '../lib/ws'
 import { callReactionListeners, type CallReactionListener } from '../lib/callReactions'
 import { useStore } from '../store'
+import { useT } from '../lib/i18n'
 import { ControlButton } from './CallControls'
 import Emoji from './Emoji'
 
@@ -40,16 +41,17 @@ export function TileReactions({ userId }: { userId: string }) {
 
 /** Control-bar button: pick an emoji to float over your tile for everyone in the call. */
 export function ReactButton() {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const send = (emoji: string) => { sendOp({ op: 'voice_reaction', emoji }); setOpen(false) }
   return (
     <span className="relative flex">
-      <ControlButton label="Send a Reaction" on={open} onClick={() => setOpen((o) => !o)} data-call-react-open=""><SmilePlus size={20} /></ControlButton>
+      <ControlButton label={t('Send a Reaction')} on={open} onClick={() => setOpen((o) => !o)} data-call-react-open=""><SmilePlus size={20} /></ControlButton>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="pop absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-40 flex gap-0.5 rounded-xl bg-bg-1 border border-line shadow-2xl p-1.5" data-call-react-menu>
-            {QUICK.map((e) => <button key={e} type="button" onClick={() => send(e)} className="h-10 w-10 rounded-lg hover:bg-bg-3 flex items-center justify-center" data-call-react={e} title={`React with ${e}`}><Emoji value={e} size={26} /></button>)}
+            {QUICK.map((e) => <button key={e} type="button" onClick={() => send(e)} className="h-10 w-10 rounded-lg hover:bg-bg-3 flex items-center justify-center" data-call-react={e} title={t('React with {emoji}', { emoji: e })}><Emoji value={e} size={26} /></button>)}
           </div>
         </>
       )}
@@ -61,16 +63,18 @@ export function ReactButton() {
 
 /** Who is watching `streamerId`'s screen share (from everyone's voice state). */
 export function useStreamViewers(streamerId: string, channelId: string | null) {
+  const t = useT()
   const ids = useStore(useShallow((s) => Object.values(s.voiceStates).filter((v) => v.channel_id === channelId && v.user_id !== streamerId && v.watching?.includes(streamerId)).map((v) => v.user_id)))
   const users = useStore((s) => s.users)
-  return useMemo(() => ids.map((id) => users[id]?.display_name ?? 'Someone'), [ids, users])
+  return useMemo(() => ids.map((id) => users[id]?.display_name ?? t('Someone')), [ids, users, t])
 }
 
 /** Eye + count on a screen-share tile; hover lists the viewers. */
 export function StreamViewers({ streamerId, channelId }: { streamerId: string; channelId: string | null }) {
+  const t = useT()
   const names = useStreamViewers(streamerId, channelId)
   return (
-    <span className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-semibold text-white" title={names.length ? `Watching: ${names.join(', ')}` : 'Nobody is watching yet'} data-stream-viewers={names.length}>
+    <span className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-md bg-black/60 px-1.5 py-0.5 text-[11px] font-semibold text-white" title={names.length ? t('Watching: {names}', { names: names.join(', ') }) : t('Nobody is watching yet')} data-stream-viewers={names.length}>
       <Eye size={12} />{names.length}
     </span>
   )
@@ -85,21 +89,23 @@ const fmt = (ms: number) => {
 
 /** How long a voice channel has had people in it (since the longest-staying member joined). */
 export function VoiceTimer({ channelId }: { channelId: string }) {
+  const t = useT()
   const since = useStore((s) => {
     let min = Infinity
     for (const v of Object.values(s.voiceStates)) if (v.channel_id === channelId && v.joined_at) min = Math.min(min, new Date(v.joined_at).getTime())
     return Number.isFinite(min) ? min : null
   })
   const [, tick] = useState(0)
-  useEffect(() => { if (!since) return; const t = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(t) }, [since])
+  useEffect(() => { if (!since) return; const h = setInterval(() => tick((n) => n + 1), 1000); return () => clearInterval(h) }, [since])
   if (!since) return null
-  return <span className="text-[11px] tabular-nums text-text-2" title="Active for" data-voice-timer={channelId}>{fmt(Date.now() - since)}</span>
+  return <span className="text-[11px] tabular-nums text-text-2" title={t('Active for')} data-voice-timer={channelId}>{fmt(Date.now() - since)}</span>
 }
 
 /* ---- invite to voice ---- */
 
 /** Control-bar button: suggest online friends and members who aren't here yet, and ping them to join. */
 export function InviteToVoice({ channelId, guildId }: { channelId: string; guildId: string }) {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [sent, setSent] = useState<Record<string, true>>({})
   const me = useStore((s) => s.user?.id)
@@ -118,17 +124,17 @@ export function InviteToVoice({ channelId, guildId }: { channelId: string; guild
   }
   return (
     <span className="relative flex">
-      <ControlButton label="Invite to Voice" on={open} onClick={() => setOpen((o) => !o)} data-voice-invite-open=""><UserPlus size={20} /></ControlButton>
+      <ControlButton label={t('Invite to Voice')} on={open} onClick={() => setOpen((o) => !o)} data-voice-invite-open=""><UserPlus size={20} /></ControlButton>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
           <div className="pop absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-40 w-72 rounded-xl bg-bg-1 border border-line shadow-2xl p-2" data-voice-invite>
-            <div className="px-2 pb-1.5 pt-0.5 text-[11px] font-bold uppercase tracking-wider text-text-2">Invite to voice</div>
-            {!members ? <p className="px-2 py-3 text-sm text-text-2">Loading…</p> : picks.length === 0 ? <p className="px-2 py-3 text-sm text-text-2">Nobody else is online right now.</p> : picks.map((m) => (
+            <div className="px-2 pb-1.5 pt-0.5 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Invite to voice')}</div>
+            {!members ? <p className="px-2 py-3 text-sm text-text-2">{t('Loading…')}</p> : picks.length === 0 ? <p className="px-2 py-3 text-sm text-text-2">{t('Nobody else is online right now.')}</p> : picks.map((m) => (
               <div key={m.user_id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-bg-3" data-voice-invite-row={m.user_id}>
                 <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={24} />
-                <span className="min-w-0 flex-1 truncate text-sm">{m.nickname ?? m.display_name}{relationships[m.user_id]?.kind === 'friend' && <span className="ml-1 text-[10px] text-text-2">friend</span>}</span>
-                <button type="button" disabled={!!sent[m.user_id]} onClick={() => invite(m.user_id)} className="rounded-md bg-success px-2 py-0.5 text-xs font-semibold text-black hover:bg-success/80 disabled:bg-bg-4 disabled:text-text-2" data-voice-invite-send={m.user_id}>{sent[m.user_id] ? 'Invited' : 'Invite'}</button>
+                <span className="min-w-0 flex-1 truncate text-sm">{m.nickname ?? m.display_name}{relationships[m.user_id]?.kind === 'friend' && <span className="ml-1 text-[10px] text-text-2">{t('friend')}</span>}</span>
+                <button type="button" disabled={!!sent[m.user_id]} onClick={() => invite(m.user_id)} className="rounded-md bg-success px-2 py-0.5 text-xs font-semibold text-black hover:bg-success/80 disabled:bg-bg-4 disabled:text-text-2" data-voice-invite-send={m.user_id}>{sent[m.user_id] ? t('Invited') : t('Invite')}</button>
               </div>
             ))}
           </div>
@@ -140,22 +146,23 @@ export function InviteToVoice({ channelId, guildId }: { channelId: string; guild
 
 /** Bottom-right banner: someone invited you to their voice channel. */
 export function VoiceInviteBanner() {
+  const t = useT()
   const inv = useStore((s) => s.voiceInvite)
   const setInv = useStore((s) => s.setVoiceInvite)
   const myChannel = useStore((s) => s.myVoiceChannelId)
   const navigate = useNavigate()
-  useEffect(() => { if (!inv) return; const t = setTimeout(() => setInv(null), 60_000); return () => clearTimeout(t) }, [inv, setInv])
+  useEffect(() => { if (!inv) return; const h = setTimeout(() => setInv(null), 60_000); return () => clearTimeout(h) }, [inv, setInv])
   if (!inv || myChannel === inv.channel_id) return null
   const join = () => { setInv(null); navigate(`/channels/${inv.guild_id}/${inv.channel_id}`); void voice.join(inv.channel_id) }
   return (
     <div className="pop fixed safe-corner z-40 w-72 rounded-xl bg-bg-1 border border-line shadow-2xl p-4" role="alert" data-voice-invite-banner={inv.channel_id}>
       <div className="flex items-center gap-3">
         <Avatar user={inv.from} size={40} />
-        <div className="min-w-0"><div className="font-bold truncate">{inv.from.display_name}</div><div className="text-xs text-text-2 truncate">invited you to 🔊 {inv.channel_name}</div></div>
+        <div className="min-w-0"><div className="font-bold truncate">{inv.from.display_name}</div><div className="text-xs text-text-2 truncate">{t('invited you to 🔊 {name}', { name: inv.channel_name })}</div></div>
       </div>
       <div className="mt-3 flex gap-2">
-        <button onClick={join} className="flex-1 btn-primary bg-success hover:bg-success/80 text-black py-1.5" data-voice-invite-join><Volume2 size={16} /> Join</button>
-        <button onClick={() => setInv(null)} className="flex-1 btn-ghost py-1.5" data-voice-invite-dismiss>Not now</button>
+        <button onClick={join} className="flex-1 btn-primary bg-success hover:bg-success/80 text-black py-1.5" data-voice-invite-join><Volume2 size={16} /> {t('Join')}</button>
+        <button onClick={() => setInv(null)} className="flex-1 btn-ghost py-1.5" data-voice-invite-dismiss>{t('Not now')}</button>
       </div>
     </div>
   )
@@ -165,6 +172,7 @@ export function VoiceInviteBanner() {
 
 /** Wheel or the +/− buttons zoom a screen share (up to 4×); drag to pan while zoomed; reset with the 1:1 button. */
 export function ZoomPan({ children }: { children: React.ReactNode }) {
+  const t = useT()
   const [z, setZ] = useState({ scale: 1, x: 0, y: 0 })
   const drag = useRef<{ x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null)
   const box = useRef<HTMLDivElement>(null)
@@ -189,9 +197,9 @@ export function ZoomPan({ children }: { children: React.ReactNode }) {
       onClickCapture={(e) => { if ((e.target as HTMLElement).closest('[data-zoom-controls]')) return; if (drag.current?.moved || z.scale > 1) e.stopPropagation() }}>
       <div className="h-full w-full origin-center transition-transform duration-75" style={{ transform: `translate(${z.x}px, ${z.y}px) scale(${z.scale})` }}>{children}</div>
       <div data-zoom-controls className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-md bg-black/60 p-0.5 text-white opacity-0 group-hover:opacity-100 focus-within:opacity-100" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
-        <button type="button" onClick={() => zoomBy(1 / 1.25)} className="h-6 w-6 rounded hover:bg-white/20" title="Zoom out" aria-label="Zoom out" data-zoom-out>−</button>
-        <button type="button" onClick={() => setZ({ scale: 1, x: 0, y: 0 })} className="h-6 min-w-8 rounded px-1 text-[11px] tabular-nums hover:bg-white/20" title="Reset zoom" aria-label="Reset zoom" data-zoom-reset>{Math.round(z.scale * 100)}%</button>
-        <button type="button" onClick={() => zoomBy(1.25)} className="h-6 w-6 rounded hover:bg-white/20" title="Zoom in" aria-label="Zoom in" data-zoom-in>+</button>
+        <button type="button" onClick={() => zoomBy(1 / 1.25)} className="h-6 w-6 rounded hover:bg-white/20" title={t('Zoom out')} aria-label={t('Zoom out')} data-zoom-out>−</button>
+        <button type="button" onClick={() => setZ({ scale: 1, x: 0, y: 0 })} className="h-6 min-w-8 rounded px-1 text-[11px] tabular-nums hover:bg-white/20" title={t('Reset zoom')} aria-label={t('Reset zoom')} data-zoom-reset>{Math.round(z.scale * 100)}%</button>
+        <button type="button" onClick={() => zoomBy(1.25)} className="h-6 w-6 rounded hover:bg-white/20" title={t('Zoom in')} aria-label={t('Zoom in')} data-zoom-in>+</button>
       </div>
     </div>
   )
@@ -201,8 +209,9 @@ export function ZoomPan({ children }: { children: React.ReactNode }) {
 
 /** Signal bars on a call tile: green, yellow or red by round trip and packet loss. */
 export function ConnQuality({ userId }: { userId: string }) {
+  const t = useT()
   const q = useConnQuality(userId)
   if (!q) return null
   const color = q === 'good' ? 'text-success' : q === 'ok' ? 'text-warn' : 'text-danger'
-  return <span className={`rounded-md bg-bg-0/80 p-1 ${color}`} title={q === 'good' ? 'Good connection' : q === 'ok' ? 'Unstable connection' : 'Poor connection'} data-conn-quality={q}><Signal size={12} /></span>
+  return <span className={`rounded-md bg-bg-0/80 p-1 ${color}`} title={q === 'good' ? t('Good connection') : q === 'ok' ? t('Unstable connection') : t('Poor connection')} data-conn-quality={q}><Signal size={12} /></span>
 }

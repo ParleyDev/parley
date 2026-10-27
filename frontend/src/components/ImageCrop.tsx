@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
+import { useT } from '../lib/i18n'
 
 const BOX = 240
 
@@ -9,6 +10,7 @@ const BOX = 240
 export default function ImageCrop({ file, size = 128, onCrop, onCancel, children }: { file: File; size?: number; onCrop: (out: File) => void; onCancel: () => void; children?: React.ReactNode }) {
   const [img, setImg] = useState<HTMLImageElement | null>(null)
   const [zoom, setZoom] = useState(1)
+  const t = useT()
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
   useEffect(() => {
@@ -43,9 +45,9 @@ export default function ImageCrop({ file, size = 128, onCrop, onCancel, children
         {img && <img src={img.src} alt="" draggable={false} className="absolute max-w-none cursor-grab active:cursor-grabbing" style={{ left: pos.x, top: pos.y, width: w, height: h }} />}
         <div className="pointer-events-none absolute inset-0 rounded-xl ring-2 ring-inset ring-white/70" />
       </div>
-      <label className="flex items-center gap-2 text-xs text-text-2">Zoom<input type="range" min={1} max={4} step={0.01} value={zoom} onChange={(e) => setZoomAround(Number(e.target.value))} className="flex-1 accent-accent" data-crop-zoom /></label>
+      <label className="flex items-center gap-2 text-xs text-text-2">{t('Zoom')}<input type="range" min={1} max={4} step={0.01} value={zoom} onChange={(e) => setZoomAround(Number(e.target.value))} className="flex-1 accent-accent" data-crop-zoom /></label>
       {children}
-      <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button><button type="button" className="btn-primary" disabled={!img} onClick={done} data-crop-apply>Apply</button></div>
+      <div className="flex justify-end gap-2"><button type="button" className="btn-ghost" onClick={onCancel}>{t('Cancel')}</button><button type="button" className="btn-primary" disabled={!img} onClick={done} data-crop-apply>{t('Apply')}</button></div>
     </div>
   )
 }

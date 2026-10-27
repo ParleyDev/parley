@@ -11,6 +11,7 @@ import { formatDateDivider, sameDay, colorFor, initials } from '../lib/format'
 import type { Channel, Guild, Message } from '../lib/types'
 import { useStore } from '../store'
 import { markJoined } from '../lib/welcome'
+import { useT } from '../lib/i18n'
 
 interface Preview { guild: Guild; channels: Channel[]; listing: Listing | null; joined: boolean }
 
@@ -19,6 +20,7 @@ interface Preview { guild: Guild; channels: Channel[]; listing: Listing | null; 
  * "preview mode" bar in place of the composer. Members are sent to the real server view.
  */
 export default function GuildPreviewPage() {
+  const t = useT()
   const { guildId = '', channelId } = useParams()
   const navigate = useNavigate()
   const member = useStore((s) => !!s.guilds[guildId])
@@ -34,7 +36,7 @@ export default function GuildPreviewPage() {
   if (pv && channel && channel.id !== channelId) return <Navigate to={`/discover/${guildId}/${channel.id}`} replace />
   const join = async () => {
     setJoining(true)
-    try { const g = await api.post<Guild & { channels: Channel[] }>(`/discover/${guildId}/join`, {}); upsertGuild(g); markJoined(g.id); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`) } catch (e) { pushToast((e as Error).message, 'error'); setJoining(false) }
+    try { const g = await api.post<Guild & { channels: Channel[] }>(`/discover/${guildId}/join`, {}); upsertGuild(g); markJoined(g.id); pushToast(t('Welcome to {name}!', { name: g.name })); navigate(`/channels/${g.id}`) } catch (e) { pushToast((e as Error).message, 'error'); setJoining(false) }
   }
   return (
     <SplitLayout defaultPane="content" testid={{ 'data-guild-preview': guildId }} sidebar={
@@ -46,31 +48,31 @@ export default function GuildPreviewPage() {
                     <div className="absolute inset-x-0 top-0 h-12 px-4 flex items-center font-bold text-white bg-gradient-to-b from-black/60 to-transparent drop-shadow truncate">{pv.guild.name}</div>
                   </div>
                 ) : <div className="h-12 px-4 flex items-center font-bold border-b border-line truncate">{pv.guild.name}</div>}
-                <div className="px-4 py-3 border-b border-line flex items-center gap-2 text-xs text-text-2" data-preview-badge><Compass size={14} /> Previewing from Discover</div>
+                <div className="px-4 py-3 border-b border-line flex items-center gap-2 text-xs text-text-2" data-preview-badge><Compass size={14} /> {t('Previewing from Discover')}</div>
                 <div className="flex-1 overflow-y-auto px-2 pt-3">
-                  <div className="px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">Text Channels</div>
+                  <div className="px-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Text Channels')}</div>
                   <div className="space-y-0.5">
                     {pv.channels.map((c) => (
                       <button key={c.id} type="button" onClick={() => { navigate(`/discover/${guildId}/${c.id}`); showContent() }} data-preview-channel={c.name} className={`w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] text-left ${c.id === channel?.id ? 'bg-bg-4 text-text-0' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
                         <Hash size={18} className="text-text-2" /><span className="truncate">{c.name}</span>
                       </button>
                     ))}
-                    {pv.channels.length === 0 && <p className="px-2 py-4 text-sm text-text-2">This server has no public channels to preview.</p>}
+                    {pv.channels.length === 0 && <p className="px-2 py-4 text-sm text-text-2">{t('This server has no public channels to preview.')}</p>}
                   </div>
                 </div>
               </>
-            ) : <div className="p-4 text-sm text-text-2">Loading…</div>}
+            ) : <div className="p-4 text-sm text-text-2">{t('Loading…')}</div>}
           </aside>
     }>
         <header className="h-12 shrink-0 px-4 max-md:px-2 flex items-center gap-2 border-b border-line shadow-sm">
           <MobileBack />
-          <button type="button" onClick={() => navigate('/discover')} className="h-8 w-8 -ml-2 max-md:ml-0 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title="Back to Discover"><ChevronLeft size={20} /></button>
-          {channel ? <><Hash size={22} className="text-text-2 shrink-0" /><span className="font-bold truncate">{channel.name}</span>{channel.topic && <><span className="mx-2 h-6 w-px bg-line" /><span className="text-sm text-text-2 truncate">{channel.topic}</span></>}</> : <span className="font-bold">Preview</span>}
-          {pv?.listing && <span className="ml-auto flex items-center gap-3 text-xs text-text-2 max-md:hidden"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />{pv.listing.online_count.toLocaleString()} Online</span><span className="flex items-center gap-1.5"><Users size={12} />{pv.listing.member_count.toLocaleString()} Members</span></span>}
+          <button type="button" onClick={() => navigate('/discover')} className="h-8 w-8 -ml-2 max-md:ml-0 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title={t('Back to Discover')}><ChevronLeft size={20} /></button>
+          {channel ? <><Hash size={22} className="text-text-2 shrink-0" /><span className="font-bold truncate">{channel.name}</span>{channel.topic && <><span className="mx-2 h-6 w-px bg-line" /><span className="text-sm text-text-2 truncate">{channel.topic}</span></>}</> : <span className="font-bold">{t('Preview')}</span>}
+          {pv?.listing && <span className="ml-auto flex items-center gap-3 text-xs text-text-2 max-md:hidden"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />{t('{n} Online', { n: pv.listing.online_count.toLocaleString() })}</span><span className="flex items-center gap-1.5"><Users size={12} />{t('{n} Members', { n: pv.listing.member_count.toLocaleString() })}</span></span>}
         </header>
         {pv?.guild.rules && (
           <details className="shrink-0 mx-4 mt-3 rounded-xl border border-line bg-bg-1 px-4 py-2 text-sm" data-preview-rules>
-            <summary className="cursor-pointer font-semibold">Server rules{pv.guild.rules_required ? ' (accepting them is required to chat)' : ''}</summary>
+            <summary className="cursor-pointer font-semibold">{t('Server rules')}{pv.guild.rules_required ? ` ${t('(accepting them is required to chat)')}` : ''}</summary>
             <div className="msg-content mt-2 text-text-1 max-h-40 overflow-y-auto">{renderMarkdown(pv.guild.rules)}</div>
           </details>
         )}
@@ -78,16 +80,17 @@ export default function GuildPreviewPage() {
         <div className="shrink-0 m-4 mt-0 rounded-xl bg-bg-1 border border-line px-4 py-3 flex items-center gap-4 max-md:flex-col max-md:items-stretch" data-preview-bar>
           <span className="h-10 w-10 rounded-xl overflow-hidden flex items-center justify-center text-white font-bold shrink-0" style={{ background: pv?.guild.icon_url ? undefined : colorFor(guildId) }}>{pv?.guild.icon_url ? <img src={pv.guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(pv?.guild.name ?? '?')}</span>
           <div className="min-w-0 flex-1">
-            <div className="font-bold">You are currently in preview mode.</div>
-            <div className="text-sm text-text-2">Join this server to start chatting{pv?.listing?.description ? ` — ${pv.listing.description}` : '.'}{pv?.guild.rules_required ? ' You will be asked to accept its rules first.' : ''}</div>
+            <div className="font-bold">{t('You are currently in preview mode.')}</div>
+            <div className="text-sm text-text-2">{t('Join this server to start chatting')}{pv?.listing?.description ? ` — ${pv.listing.description}` : '.'}{pv?.guild.rules_required ? ` ${t('You will be asked to accept its rules first.')}` : ''}</div>
           </div>
-          <button type="button" onClick={join} disabled={joining || !pv} className="btn-primary bg-success hover:bg-success/80 text-black whitespace-nowrap max-md:justify-center" data-preview-join>{joining ? 'Joining…' : `Join ${pv?.guild.name ?? 'Server'}`}</button>
+          <button type="button" onClick={join} disabled={joining || !pv} className="btn-primary bg-success hover:bg-success/80 text-black whitespace-nowrap max-md:justify-center" data-preview-join>{joining ? t('Joining…') : t('Join {name}', { name: pv?.guild.name ?? t('Server') })}</button>
         </div>
     </SplitLayout>
   )
 }
 
 function PreviewMessages({ guildId, channel, guild }: { guildId: string; channel: Channel; guild: Guild }) {
+  const t = useT()
   const me = useStore((s) => s.user)
   const [messages, setMessages] = useState<Message[] | null>(null)
   const [more, setMore] = useState(false)
@@ -104,14 +107,14 @@ function PreviewMessages({ guildId, channel, guild }: { guildId: string; channel
   }
   return (
     <div className="flex-1 min-h-0 overflow-y-auto" data-preview-scroll>
-      {messages === null && <p className="p-4 text-sm text-text-2">Loading…</p>}
+      {messages === null && <p className="p-4 text-sm text-text-2">{t('Loading…')}</p>}
       {messages && (
         <>
-          {more ? <div className="p-3 text-center"><button type="button" onClick={loadMore} disabled={loading} className="btn-ghost">{loading ? 'Loading…' : 'Load older messages'}</button></div> : (
+          {more ? <div className="p-3 text-center"><button type="button" onClick={loadMore} disabled={loading} className="btn-ghost">{loading ? t('Loading…') : t('Load older messages')}</button></div> : (
             <div className="px-4 pt-12 pb-4">
               <div className="h-16 w-16 rounded-full bg-bg-4 flex items-center justify-center text-text-1"><Hash size={34} /></div>
-              <h1 className="mt-3 text-3xl font-extrabold">Welcome to #{channel.name}!</h1>
-              <p className="text-text-2">This is the start of the #{channel.name} channel in {guild.name}.</p>
+              <h1 className="mt-3 text-3xl font-extrabold">{t('Welcome to #{name}!', { name: channel.name })}</h1>
+              <p className="text-text-2">{t('This is the start of the #{name} channel in {guild}.', { name: channel.name, guild: guild.name })}</p>
             </div>
           )}
           {messages.map((m, i) => {
@@ -125,7 +128,7 @@ function PreviewMessages({ guildId, channel, guild }: { guildId: string; channel
               </div>
             )
           })}
-          {messages.length === 0 && <p className="px-4 pb-6 text-sm text-text-2">No messages here yet.</p>}
+          {messages.length === 0 && <p className="px-4 pb-6 text-sm text-text-2">{t('No messages here yet.')}</p>}
         </>
       )}
     </div>

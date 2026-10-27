@@ -29,6 +29,7 @@ import { getPrefs, setPrefs } from '../lib/prefs'
 import StreamerBanner from '../components/StreamerBanner'
 import UpdateBanner from '../components/UpdateBanner'
 import { useMemo } from 'react'
+import { t, useT } from '../lib/i18n'
 
 /**
  * Two route trees share the URL: one picks the sidebar, one picks the main content.
@@ -36,6 +37,7 @@ import { useMemo } from 'react'
  * guild bar + sidebar + content + member list sit side by side.
  */
 export default function AppShell() {
+  useT() // re-render when the language changes
   useEffect(() => { initBadge() }, [])
   useEffect(() => installLinkGuard(), [])
   const connected = useStore((s) => s.connected)
@@ -53,14 +55,14 @@ export default function AppShell() {
   return (
     <div className="h-full flex flex-col overflow-hidden relative safe-area">
       <a href="#messages" onClick={(e) => { e.preventDefault(); (document.querySelector<HTMLElement>('[data-message-list]') ?? document.querySelector<HTMLElement>('main'))?.focus() }}
-        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[300] focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-white" data-skip-link>Skip to messages</a>
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[300] focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-white" data-skip-link>{t('Skip to messages')}</a>
       <Shortcuts />
       <VerifyBanner />
       <StreamerBanner />
       <UpdateBanner />
       <div className="flex-1 min-h-0 flex overflow-hidden relative">
       {!connected && (
-        <div className="absolute top-0 inset-x-0 z-40 bg-warn text-black text-xs font-semibold text-center py-1">Reconnecting…</div>
+        <div className="absolute top-0 inset-x-0 z-40 bg-warn text-black text-xs font-semibold text-center py-1">{t('Reconnecting…')}</div>
       )}
       {announcement && connected && (
         <div className="absolute top-0 inset-x-0 z-40 bg-accent text-white text-xs font-semibold text-center py-1 px-3 truncate" data-announcement>{announcement}</div>
@@ -201,7 +203,7 @@ function Shortcuts() {
     nextChannel: () => step(1),
     openSettings: () => openModal({ kind: 'userSettings', tab: 'account' }),
     jumpToDate: () => document.querySelector<HTMLButtonElement>('[data-jump-date-btn]')?.click(),
-    toggleStreamer: () => { const on = !getPrefs().streamer; setPrefs({ streamer: on }); useStore.getState().pushToast(on ? 'Streamer Mode on' : 'Streamer Mode off') },
+    toggleStreamer: () => { const on = !getPrefs().streamer; setPrefs({ streamer: on }); useStore.getState().pushToast(on ? t('Streamer Mode on') : t('Streamer Mode off')) },
     quickSwitcher: () => { const s = useStore.getState(); if (s.modal?.kind === 'quickSwitcher') s.closeModal(); else openModal({ kind: 'quickSwitcher' }) },
     prevUnread: () => step(-1, true),
     nextUnread: () => step(1, true),
@@ -246,12 +248,12 @@ function Shortcuts() {
         if (ms > 10 * 60 * 1000 || ms < -60 * 1000) continue
         const key = `parley.reminded.${e.id}`
         try { if (localStorage.getItem(key)) continue; localStorage.setItem(key, '1') } catch { /* ignore */ }
-        const when = ms <= 0 ? 'is starting now' : `starts in ${Math.max(1, Math.round(ms / 60000))} min`
-        pushToast(`${e.name} ${when}`)
-        try { if ('Notification' in window && Notification.permission === 'granted') new Notification(e.name, { body: `Event ${when}` }) } catch { /* ignore */ }
+        const mins = Math.max(1, Math.round(ms / 60000))
+        pushToast(ms <= 0 ? t('{name} is starting now', { name: e.name }) : t('{name} starts in {n} min', { name: e.name, n: mins }))
+        try { if ('Notification' in window && Notification.permission === 'granted') new Notification(e.name, { body: ms <= 0 ? t('Event is starting now') : t('Event starts in {n} min', { n: mins }) }) } catch { /* ignore */ }
       }
     }
-    tick(); const t = setInterval(tick, 30 * 1000); return () => clearInterval(t)
+    tick(); const timer = setInterval(tick, 30 * 1000); return () => clearInterval(timer)
   }, [events, pushToast])
   return null
 }

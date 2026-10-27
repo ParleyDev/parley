@@ -10,6 +10,7 @@ import FrozenGif from './FrozenGif'
 import ContextMenu, { useContextMenu } from './ContextMenu'
 import { imageMenu } from '../lib/imageMenu'
 import { isExplicit } from '../lib/explicit'
+import { useT } from '../lib/i18n'
 
 
 export const isSpoiler = (a: Pick<Attachment, 'filename'>) => a.filename.startsWith('SPOILER_')
@@ -42,6 +43,7 @@ const galleryOf = (pictures: Attachment[]) => pictures.map((p) => ({ url: p.url,
 
 /** Two to ten pictures in a grid, Discord-style: 2 side by side, 3 as one big and two small, 4 as 2x2, more in rows of three. */
 function Mosaic({ items, sensitive, enforced }: { items: Attachment[]; sensitive?: Sens; enforced?: boolean }) {
+  const t = useT()
   const openModal = useStore((s) => s.openModal)
   const prefs = usePrefs()
   const { w: MAX_W } = MEDIA_SIZES[prefs.mediaSize]
@@ -50,7 +52,7 @@ function Mosaic({ items, sensitive, enforced }: { items: Attachment[]; sensitive
   const cols = n === 2 || n === 4 ? 'grid-cols-2' : n === 3 ? 'grid-cols-2 grid-rows-2' : 'grid-cols-3'
   return (
     <div className={`grid gap-1 overflow-hidden rounded-lg ${cols}`} style={{ width: MAX_W, maxWidth: '100%' }} data-mosaic={n}>
-      {menu.menu && <ContextMenu {...menu.menu} onClose={menu.close} label="Image" />}
+      {menu.menu && <ContextMenu {...menu.menu} onClose={menu.close} label={t('Image')} />}
       {items.map((a, i) => (
         <div key={a.id} className={`relative ${n === 3 && i === 0 ? 'row-span-2' : ''} ${n === 3 && i === 0 ? 'h-full' : 'aspect-square'} min-h-0`}>
           <Spoilered a={a} sensitive={sensitive} enforced={enforced}>
@@ -70,7 +72,8 @@ function Mosaic({ items, sensitive, enforced }: { items: Attachment[]; sensitive
 
 /** "ALT" on a described picture: hover or focus shows the description. */
 function AltBadge({ text }: { text: string }) {
-  return <span tabIndex={0} title={text} aria-label={`Alt text: ${text}`} className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1 text-[10px] font-bold text-white" data-alt-badge>ALT</span>
+  const t = useT()
+  return <span tabIndex={0} title={text} aria-label={t('Alt text: {text}', { text })} className="absolute bottom-1.5 left-1.5 rounded bg-black/70 px-1 text-[10px] font-bold text-white" data-alt-badge>{t('ALT')}</span>
 }
 
 /** Explicit check for one picture or video (on-device); 'pending' until it answers, null when it can't tell. */
@@ -92,9 +95,10 @@ function useExplicit(a: Attachment | null): boolean | null | 'pending' {
  * this author, so a picture found explicit stays hidden (no reveal); a personal 'filter' blurs it until clicked.
  */
 function Spoilered({ a, children, sensitive, enforced }: { a: Attachment; children: React.ReactNode; sensitive?: Sens; enforced?: boolean }) {
+  const t = useT()
   const [shown, setShown] = useState(false)
   const check = useExplicit((sensitive === 'filter' || enforced) && !isSpoiler(a) ? a : null)
-  if (enforced && check === true) return <div className="flex h-24 w-64 max-w-full items-center justify-center rounded-lg border border-line bg-bg-1 px-3 text-center text-xs text-text-2" data-explicit-removed>Explicit image hidden by this server's filter</div>
+  if (enforced && check === true) return <div className="flex h-24 w-64 max-w-full items-center justify-center rounded-lg border border-line bg-bg-1 px-3 text-center text-xs text-text-2" data-explicit-removed>{t("Explicit image hidden by this server's filter")}</div>
   if (shown) return <>{children}</>
   if (isSpoiler(a)) return <Blurred label="SPOILER" onShow={() => setShown(true)}>{children}</Blurred>
   if (check === 'pending') return <Blurred label="CHECKING" onShow={() => {}}>{children}</Blurred>
@@ -105,10 +109,11 @@ function Spoilered({ a, children, sensitive, enforced }: { a: Attachment; childr
 
 /** Blur-until-clicked overlay used for spoilers and for media the sensitive-media preference hides. */
 export function Blurred({ label, onShow, children }: { label: 'SPOILER' | 'SENSITIVE' | 'EXPLICIT' | 'CHECKING'; onShow: () => void; children: React.ReactNode }) {
+  const t = useT()
   return (
     <div className={`relative overflow-hidden rounded-lg ${label === 'CHECKING' ? 'cursor-wait' : 'cursor-pointer'}`} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onShow() }} data-spoiler-attachment data-blur={label.toLowerCase()}>
       <div className="pointer-events-none blur-xl brightness-50 select-none" aria-hidden>{children}</div>
-      <span className="absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-black/70 px-3 py-1 text-xs font-extrabold tracking-wider text-white">{label}</span></span>
+      <span className="absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-black/70 px-3 py-1 text-xs font-extrabold tracking-wider text-white">{({ SPOILER: t('SPOILER'), SENSITIVE: t('SENSITIVE'), EXPLICIT: t('EXPLICIT'), CHECKING: t('CHECKING') })[label]}</span></span>
     </div>
   )
 }
@@ -121,6 +126,7 @@ export function MaybeBlurred({ on, children }: { on: boolean; children: React.Re
 }
 
 function One({ a, mine, gallery = [] }: { a: Attachment; mine?: boolean; gallery?: Attachment[] }) {
+  const t = useT()
   const openModal = useStore((s) => s.openModal)
   const prefs = usePrefs()
   const { w: MAX_W, h: MAX_H } = MEDIA_SIZES[prefs.mediaSize]
@@ -128,7 +134,7 @@ function One({ a, mine, gallery = [] }: { a: Attachment; mine?: boolean; gallery
   const menu = useContextMenu()
   return (
     <>
-      {menu.menu && <ContextMenu {...menu.menu} onClose={menu.close} label="Image" />}
+      {menu.menu && <ContextMenu {...menu.menu} onClose={menu.close} label={t('Image')} />}
       {[a].map((a) => {
         if (isImage(a.content_type) && inline) {
           // Size the box from the known dimensions so the chat doesn't jump while loading.

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { applyTone, customToken, getSkinTone, loadEmojiGroups, searchEmoji, type EmojiGroup } from '../lib/emoji'
 import { useStore } from '../store'
+import { useT } from '../lib/i18n'
 import Emoji from './Emoji'
 
 export interface Suggestion { token: string; label: string }
@@ -31,10 +32,11 @@ export function useShortcodeSuggestions(query: string | null, guildId: string | 
 
 /** Discord-style popup above the composer listing emoji whose shortcode matches what is being typed. */
 export default function ShortcodeSuggest({ query, items, active, onPick, onHover, className = '' }: { query: string; items: Suggestion[]; active: number; onPick: (s: Suggestion) => void; onHover: (i: number) => void; className?: string }) {
+  const t = useT()
   if (!items.length) return null
   return (
     <div className={`pop absolute z-40 rounded-lg bg-[#2b2d31] border border-white/10 shadow-2xl overflow-hidden ${className}`} role="listbox" data-shortcode-suggest>
-      <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-text-2 border-b border-white/5">Emoji matching <span className="text-text-0">:{query}</span></div>
+      <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-text-2 border-b border-white/5">{t('Emoji matching')} <span className="text-text-0">:{query}</span></div>
       <div className="p-1.5 max-h-[300px] overflow-y-auto">
         {items.map((s, i) => (
           <button key={s.token} type="button" role="option" aria-selected={i === active} data-suggestion={s.label}

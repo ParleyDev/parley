@@ -2,9 +2,11 @@ import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { BUILTIN_SOUNDS } from '../lib/builtinSounds'
 import { useStore } from '../store'
+import { useT } from '../lib/i18n'
 
 /** The soundboard grid: built-ins, this server's sounds, then sounds from your other servers. */
 export default function SoundboardPicker({ guildId, onPlay }: { guildId?: string | null; onPlay: (id: string) => void }) {
+  const t = useT()
   const guilds = useStore(useShallow((s) => s.guildOrder.map((id) => s.guilds[id]).filter(Boolean)))
   const sounds = useStore((s) => s.sounds)
   useEffect(() => { for (const g of guilds) if (!sounds[g.id]) void useStore.getState().loadSounds(g.id) }, [guilds]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -17,7 +19,7 @@ export default function SoundboardPicker({ guildId, onPlay }: { guildId?: string
   return (
     <div className="max-h-72 overflow-y-auto space-y-3" data-soundboard-picker>
       <section>
-        <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">Default</div>
+        <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Default')}</div>
         <div className="grid grid-cols-3 gap-2">{BUILTIN_SOUNDS.map((b) => cell(`builtin:${b.id}`, b.emoji, b.name))}</div>
       </section>
       {order.filter((g) => (sounds[g.id]?.length ?? 0) > 0).map((g) => (

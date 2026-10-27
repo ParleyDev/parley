@@ -13,12 +13,14 @@ import { isRequest } from '../store'
 import Avatar from './Avatar'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup } from '../lib/dm'
+import { useT, tn } from '../lib/i18n'
 
 /**
  * Message history + composer for any channel (text, DM, or a voice channel's chat).
  * No header: the parent decides how to frame it.
  */
 export default function ChatPane({ channel, readOnly }: { channel: Channel | DmChannel; /** Shown instead of the composer (e.g. a locked thread). */ readOnly?: string }) {
+  const t = useT()
   const messages = useStore((s) => s.messages[channel.id])
   // App commands here (the / menu and the Apps menus on messages and people).
   const appCmdsLoaded = useStore((s) => !!s.appCommands[channel.id])
@@ -31,7 +33,7 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
   const seen = useRef<string | null>(null)
   useEffect(() => {
     if (!lastMsg) return
-    if (seen.current !== null && lastMsg.id !== seen.current && lastMsg.author.id !== myId && (!lastMsg.kind || lastMsg.kind === 'default')) setAnnounce(`${lastMsg.author.display_name}: ${lastMsg.content || 'sent an attachment'}`)
+    if (seen.current !== null && lastMsg.id !== seen.current && lastMsg.author.id !== myId && (!lastMsg.kind || lastMsg.kind === 'default')) setAnnounce(`${lastMsg.author.display_name}: ${lastMsg.content || t('sent an attachment')}`)
     seen.current = lastMsg.id
   }, [lastMsg, myId])
   const hasMore = useStore((s) => s.hasMore[channel.id])
@@ -178,7 +180,7 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
   const jumpTo = async (id: string) => {
     if (jumpToMessage(id)) return
     stickBottom.current = false
-    if (!(await jumpToMessageAsync(channel.id, id))) pushToast('The original message could not be found', 'error')
+    if (!(await jumpToMessageAsync(channel.id, id))) pushToast(t('The original message could not be found'), 'error')
   }
   // Read receipts: for each message, who has read exactly up to it (one marker per reader).
   const readersOf = (id: string) => Object.entries(receipts ?? {}).filter(([uid, mid]) => mid === id && uid !== user?.id).map(([uid]) => uid)
@@ -188,12 +190,12 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
     <>
       <div className="relative flex-1 min-h-0 flex flex-col">
       <div aria-live="polite" aria-atomic="true" className="sr-only" data-live-region>{announce}</div>
-      <div ref={scrollRef} onScroll={onScroll} role="log" aria-label={`Messages in ${channel.name || 'this conversation'}`} tabIndex={0} className="flex-1 min-h-0 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>
+      <div ref={scrollRef} onScroll={onScroll} role="log" aria-label={t('Messages in {name}', { name: channel.name || t('this conversation') })} tabIndex={0} className="flex-1 min-h-0 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>
         <div ref={contentRef} className="min-h-full flex flex-col justify-end">
           {hasMore === false || (messages && messages.length < 50 && !loading) ? (
             <ChannelIntro channel={channel} />
           ) : loading ? (
-            <div className="py-4 text-center text-xs text-text-2">Loading history…</div>
+            <div className="py-4 text-center text-xs text-text-2">{t('Loading history…')}</div>
           ) : null}
           <div className="pb-4">
             {messages?.map((m, i) => {
@@ -210,13 +212,13 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
                   )}
                   {firstUnreadId === m.id && (
                     <div className="relative mx-4 my-1 flex items-center" data-unread-divider>
-                      <div className="h-px flex-1 bg-danger" /><span className="rounded-sm bg-danger px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">New</span>
+                      <div className="h-px flex-1 bg-danger" /><span className="rounded-sm bg-danger px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">{t('New')}</span>
                     </div>
                   )}
                   <MessageItem message={m} grouped={grouped} isOwn={m.author.id === user?.id} onReply={() => setReply(m)} replyTarget={m.reply_to ? messages.find((x) => x.id === m.reply_to) ?? m.referenced ?? null : null} onJumpToReply={m.reply_to ? () => jumpTo(m.reply_to!) : undefined} />
-                  {(() => { const r = readersOf(m.id); if (!r.length) return null; const names = r.map((id) => users[id]?.display_name ?? 'Someone'); return (
+                  {(() => { const r = readersOf(m.id); if (!r.length) return null; const names = r.map((id) => users[id]?.display_name ?? t('Someone')); return (
                     <div className="flex items-center justify-end gap-1 px-4 pb-1 -mt-0.5" data-read-by={r.join(',')}>
-                      <Tooltip tip={`Seen by ${names.join(', ')}`}><span className="flex items-center gap-1 text-[11px] text-text-2">{isDm ? 'Seen' : null}<span className="flex -space-x-1">{r.slice(0, 4).map((id) => { const u = users[id]; return u ? <Avatar key={id} user={u} size={14} /> : null })}</span>{r.length > 4 ? <span>+{r.length - 4}</span> : null}</span></Tooltip>
+                      <Tooltip tip={t('Seen by {names}', { names: names.join(', ') })}><span className="flex items-center gap-1 text-[11px] text-text-2">{isDm ? t('Seen') : null}<span className="flex -space-x-1">{r.slice(0, 4).map((id) => { const u = users[id]; return u ? <Avatar key={id} user={u} size={14} /> : null })}</span>{r.length > 4 ? <span>+{r.length - 4}</span> : null}</span></Tooltip>
                     </div>) })()}
                 </div>
               )
@@ -228,8 +230,8 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
         <div className="pointer-events-none absolute inset-x-4 bottom-2 flex justify-center" data-older-bar>
           <button type="button" onClick={async () => { if (hasNewer) { await loadLatest(channel.id); stickBottom.current = true; requestAnimationFrame(() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }); return } const el = scrollRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); stickBottom.current = true }}
             className="pointer-events-auto pop flex items-center gap-3 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white shadow-xl hover:bg-accent-hover" data-jump-present>
-            <span>You're viewing older messages</span>
-            <span className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-xs">Jump to Present <ArrowDown size={12} /></span>
+            <span>{t("You're viewing older messages")}</span>
+            <span className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-xs">{t('Jump to Present')} <ArrowDown size={12} /></span>
           </button>
         </div>
       )}
@@ -241,6 +243,7 @@ export default function ChatPane({ channel, readOnly }: { channel: Channel | DmC
 }
 
 function ChannelIntro({ channel }: { channel: Channel | DmChannel }) {
+  const t = useT()
   const isDm = channel.guild_id === null
   const group = isDm && isGroup(channel as DmChannel)
   const other = isDm && !group ? (channel as DmChannel).recipients[0] : null
@@ -253,26 +256,26 @@ function ChannelIntro({ channel }: { channel: Channel | DmChannel }) {
         <>
           <GroupIcon dm={channel as DmChannel} size={80} />
           <h1 className="mt-3 text-3xl font-extrabold">{dmName(channel as DmChannel, users, notes)}</h1>
-          <p className="mt-2 text-text-2 text-sm">Welcome to the beginning of the <b>{dmName(channel as DmChannel, users, notes)}</b> group.</p>
+          <p className="mt-2 text-text-2 text-sm">{tn('Welcome to the beginning of the {name} group.', { name: <b>{dmName(channel as DmChannel, users, notes)}</b> })}</p>
         </>
       ) : other ? (
         <>
           <Avatar user={other} size={80} />
           <h1 className="mt-3 text-3xl font-extrabold">{other.display_name}</h1>
           <p className="text-text-1">@{other.username}</p>
-          <p className="mt-2 text-text-2 text-sm">This is the beginning of your direct message history with <b>{other.display_name}</b>.</p>
+          <p className="mt-2 text-text-2 text-sm">{tn('This is the beginning of your direct message history with {name}.', { name: <b>{other.display_name}</b> })}</p>
         </>
       ) : isVoice ? (
         <>
           <div className="h-16 w-16 rounded-full bg-bg-4 flex items-center justify-center"><Volume2 size={36} /></div>
           <h1 className="mt-3 text-2xl font-extrabold">{channel.name}</h1>
-          <p className="text-text-2 text-sm">This is the start of the chat for the <b>{channel.name}</b> voice channel. Messages here stay even after everyone leaves.</p>
+          <p className="text-text-2 text-sm">{tn('This is the start of the chat for the {name} voice channel. Messages here stay even after everyone leaves.', { name: <b>{channel.name}</b> })}</p>
         </>
       ) : (
         <>
           <div className="h-16 w-16 rounded-full bg-bg-4 flex items-center justify-center"><Hash size={40} /></div>
-          <h1 className="mt-3 text-3xl font-extrabold">Welcome to #{channel.name}!</h1>
-          <p className="text-text-2">This is the start of the #{channel.name} channel.{channel.topic ? ` ${channel.topic}` : ''}</p>
+          <h1 className="mt-3 text-3xl font-extrabold">{t('Welcome to #{name}!', { name: channel.name })}</h1>
+          <p className="text-text-2">{t('This is the start of the #{name} channel.', { name: channel.name })}{channel.topic ? ` ${channel.topic}` : ''}</p>
         </>
       )}
     </div>

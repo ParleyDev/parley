@@ -7,8 +7,10 @@ import Modal from '../Modal'
 import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import type { Channel } from '../../lib/types'
+import { useT } from '../../lib/i18n'
 
 export default function CreateChannelModal({ onClose, guildId, parentId = null }: { onClose: () => void; guildId: string; parentId?: string | null }) {
+  const t = useT()
   const [name, setName] = useState('')
   const [kind, setKind] = useState<'text' | 'announcement' | 'voice' | 'stage' | 'studio' | 'category' | 'forum' | 'media' | 'directory'>('text')
   const [parent, setParent] = useState<string>(parentId ?? '')
@@ -36,15 +38,15 @@ export default function CreateChannelModal({ onClose, guildId, parentId = null }
 
   return (
     <Modal title="Create Channel" onClose={onClose}
-      footer={<><button className="btn-ghost" onClick={onClose}>Cancel</button><button form="create-channel" className="btn-primary" disabled={busy || !name.trim()}>Create Channel</button></>}>
+      footer={<><button className="btn-ghost" onClick={onClose}>{t('Cancel')}</button><button form="create-channel" className="btn-primary" disabled={busy || !name.trim()}>{t('Create Channel')}</button></>}>
       <form id="create-channel" onSubmit={submit} className="space-y-4">
         <div>
-          <label className="label">Channel type</label>
+          <label className="label">{t('Channel type')}</label>
           <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1" data-channel-kinds>
-            {([['text', 'Text', 'Send messages, images, GIFs, emoji, opinions, and puns', Hash], ['announcement', 'Announcement', 'Important updates people can follow into their own servers', Megaphone], ['voice', 'Voice', 'Hang out together with voice, video, and screen share', Volume2], ['stage', 'Stage', 'Speakers on stage, everyone else listens and can raise a hand', Radio], ['studio', 'Recording Studio', 'An engineer records the band as separate tracks while the audience listens', Disc3], ['forum', 'Forum', 'Organised posts with tags instead of a running chat', MessageSquareText], ['media', 'Media', 'A gallery of posts that each lead with an image or video', ImageIcon], ['directory', 'Directory', 'A list of servers members can browse and join', LayoutGrid], ['category', 'Category', 'Group channels under a collapsible heading', FolderOpen]] as const).map(([v, t, d, Icon]) => (
+            {([['text', t('Text'), t('Send messages, images, GIFs, emoji, opinions, and puns'), Hash], ['announcement', t('Announcement'), t('Important updates people can follow into their own servers'), Megaphone], ['voice', t('Voice'), t('Hang out together with voice, video, and screen share'), Volume2], ['stage', t('Stage'), t('Speakers on stage, everyone else listens and can raise a hand'), Radio], ['studio', t('Recording Studio'), t('An engineer records the band as separate tracks while the audience listens'), Disc3], ['forum', t('Forum'), t('Organised posts with tags instead of a running chat'), MessageSquareText], ['media', t('Media'), t('A gallery of posts that each lead with an image or video'), ImageIcon], ['directory', t('Directory'), t('A list of servers members can browse and join'), LayoutGrid], ['category', t('Category'), t('Group channels under a collapsible heading'), FolderOpen]] as const).map(([v, label, d, Icon]) => (
               <button type="button" key={v} onClick={() => setKind(v)} data-channel-kind={v} className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left ${kind === v ? 'border-accent bg-accent/10' : 'border-line bg-bg-3 hover:bg-bg-4'}`}>
                 <Icon size={22} className="text-text-1" />
-                <div><div className="font-semibold">{t}</div><div className="text-xs text-text-2">{d}</div></div>
+                <div><div className="font-semibold">{label}</div><div className="text-xs text-text-2">{d}</div></div>
                 <span className={`ml-auto h-5 w-5 rounded-full border-2 ${kind === v ? 'border-accent bg-accent' : 'border-text-2'}`} />
               </button>
             ))}
@@ -52,24 +54,24 @@ export default function CreateChannelModal({ onClose, guildId, parentId = null }
         </div>
         {err && <p className="text-sm text-danger">{err}</p>}
         <div>
-          <label className="label">Channel name</label>
+          <label className="label">{t('Channel name')}</label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2">{kind === 'text' || kind === 'forum' || kind === 'announcement' || kind === 'media' || kind === 'directory' ? <Hash size={16} /> : kind === 'voice' ? <Volume2 size={16} /> : <FolderOpen size={16} />}</span>
-            <input className="input pl-9" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'category' ? 'New Category' : 'new-channel'} maxLength={100} required data-channel-name />
+            <input className="input pl-9" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'category' ? t('New Category') : 'new-channel'} maxLength={100} required data-channel-name />
           </div>
         </div>
         {kind !== 'category' && categories.length > 0 && (
           <div>
-            <label className="label">Category</label>
+            <label className="label">{t('Category')}</label>
             <select className="input" value={parent} onChange={(e) => setParent(e.target.value)} data-channel-parent>
-              <option value="">No category</option>
+              <option value="">{t('No category')}</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
         )}
         <div className="rounded-lg border border-line bg-bg-3 p-3">
           <Toggle label={kind === 'category' ? 'Private category' : 'Private channel'} checked={isPrivate} onChange={setPrivate} />
-          <p className="text-xs text-text-2 mt-1 flex items-center gap-1"><Lock size={12} /> Only you and roles you add in channel permissions will see it.</p>
+          <p className="text-xs text-text-2 mt-1 flex items-center gap-1"><Lock size={12} /> {t('Only you and roles you add in channel permissions will see it.')}</p>
         </div>
       </form>
     </Modal>

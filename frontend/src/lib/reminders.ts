@@ -1,16 +1,17 @@
 import { api } from './api'
 import { useStore } from '../store'
+import { t } from './i18n'
 
 /** "Remind me" presets, as in Discord's Save for Later. */
 export function remindPresets(now = new Date()): { label: string; at: Date }[] {
   const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1); tomorrow.setHours(9, 0, 0, 0)
   const monday = new Date(now); monday.setDate(now.getDate() + (((8 - now.getDay()) % 7) || 7)); monday.setHours(9, 0, 0, 0)
   return [
-    { label: 'In 20 minutes', at: new Date(now.getTime() + 20 * 60_000) },
-    { label: 'In 1 hour', at: new Date(now.getTime() + 3600_000) },
-    { label: 'In 3 hours', at: new Date(now.getTime() + 3 * 3600_000) },
-    { label: 'Tomorrow', at: tomorrow },
-    { label: 'Next week', at: monday },
+    { label: t('In 20 minutes'), at: new Date(now.getTime() + 20 * 60_000) },
+    { label: t('In 1 hour'), at: new Date(now.getTime() + 3600_000) },
+    { label: t('In 3 hours'), at: new Date(now.getTime() + 3 * 3600_000) },
+    { label: t('Tomorrow'), at: tomorrow },
+    { label: t('Next week'), at: monday },
   ]
 }
 

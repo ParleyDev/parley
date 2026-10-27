@@ -18,6 +18,7 @@ import { receive as receiveSettings } from './settingsSync'
 import { builtinUrl } from './builtinSounds'
 import { desktopNotify, notifyMessage } from './desktopNotify'
 import { emitCallReaction } from './callReactions'
+import { t } from './i18n'
 
 type Ev = { s?: number; i?: string } & (
   | { t: 'READY'; d: ReadyPayload }
@@ -212,11 +213,11 @@ function handle(ev: Ev) {
     case 'BOOKMARK_REMINDER': {
       // A "Remind me" bookmark came due: toast, sound, and a desktop notification when Parley is in the background.
       const m = ev.d.message
-      const where = ev.d.guild_id ? `#${ev.d.channel_name}` : 'a DM'
-      const body = `${m.author.display_name}: ${m.content || 'a message'}`.slice(0, 140)
-      s.pushToast(`Reminder (${where}) — ${body}`)
+      const where = ev.d.guild_id ? `#${ev.d.channel_name}` : t('a DM')
+      const body = `${m.author.display_name}: ${m.content || t('a message')}`.slice(0, 140)
+      s.pushToast(t('Reminder ({where}) — {body}', { where, body }))
       playSfx('mention')
-      if (document.visibilityState !== 'visible') desktopNotify(`Reminder from ${where}`, body, { icon: m.author.avatar_url, tag: `reminder:${m.id}`, path: `/channels/${ev.d.guild_id ?? '@me'}/${m.channel_id}?message=${m.id}` })
+      if (document.visibilityState !== 'visible') desktopNotify(t('Reminder from {where}', { where }), body, { icon: m.author.avatar_url, tag: `reminder:${m.id}`, path: `/channels/${ev.d.guild_id ?? '@me'}/${m.channel_id}?message=${m.id}` })
       break
     }
     case 'POLL_UPDATE': s.applyPollUpdate(ev.d.channel_id, ev.d.message_id, ev.d.poll); break
@@ -228,8 +229,8 @@ function handle(ev: Ev) {
       s.setPresence(ev.d.user_id, ev.d.online, ev.d.platforms ?? [], ev.d.idle)
       if (cameOnline && s.user?.online_alerts?.includes(ev.d.user_id) && s.relationships[ev.d.user_id]?.kind === 'friend') {
         const name = s.notes[ev.d.user_id]?.nickname || s.users[ev.d.user_id]?.display_name || s.relationships[ev.d.user_id].user.display_name
-        s.pushToast(`${name} is now online`)
-        if (document.visibilityState !== 'visible') desktopNotify(`${name} is now online`, '', { icon: s.users[ev.d.user_id]?.avatar_url, tag: `online:${ev.d.user_id}`, path: '/channels/@me' })
+        s.pushToast(t('{name} is now online', { name }))
+        if (document.visibilityState !== 'visible') desktopNotify(t('{name} is now online', { name }), '', { icon: s.users[ev.d.user_id]?.avatar_url, tag: `online:${ev.d.user_id}`, path: '/channels/@me' })
       }
       break
     }
@@ -259,10 +260,10 @@ function handle(ev: Ev) {
       const prev = s.relationships[ev.d.user.id]?.kind
       s.upsertRelationship(ev.d)
       if (ev.d.kind === 'incoming' && prev !== 'incoming' && !s.user?.ignored_users?.includes(ev.d.user.id)) {
-        s.pushToast(`${ev.d.user.display_name} sent you a friend request`)
+        s.pushToast(t('{name} sent you a friend request', { name: ev.d.user.display_name }))
         playSfx('message')
         // A desktop notification when Parley isn't in front, like messages.
-        if (document.visibilityState !== 'visible') desktopNotify(`${ev.d.user.display_name} sent you a friend request`, ev.d.note ?? 'Open Friends to accept it.', { icon: ev.d.user.avatar_url, tag: `friend:${ev.d.user.id}`, path: '/channels/@me' })
+        if (document.visibilityState !== 'visible') desktopNotify(t('{name} sent you a friend request', { name: ev.d.user.display_name }), ev.d.note ?? t('Open Friends to accept it.'), { icon: ev.d.user.avatar_url, tag: `friend:${ev.d.user.id}`, path: '/channels/@me' })
       }
       break
     }
@@ -297,10 +298,10 @@ function handle(ev: Ev) {
     case 'EVENT_UPDATE': if (s.events[ev.d.guild_id]) void s.loadEvents(ev.d.guild_id); break
     case 'EVENT_START': {
       // An event you're interested in has started (a moderator pressed Start).
-      const where = ev.d.channel_id ? `#${s.channels[ev.d.channel_id]?.name ?? 'voice'}` : ev.d.location
-      s.pushToast(`${ev.d.name} is happening now${where ? ` in ${where}` : ''}`)
+      const where = ev.d.channel_id ? `#${s.channels[ev.d.channel_id]?.name ?? t('voice')}` : ev.d.location
+      s.pushToast(where ? t('{name} is happening now in {where}', { name: ev.d.name, where }) : t('{name} is happening now', { name: ev.d.name }))
       try { localStorage.setItem(`parley.reminded.${ev.d.id}`, '1') } catch { /* ignore */ }
-      try { if ('Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification(ev.d.name, { body: `Happening now${where ? ` in ${where}` : ''}` }) } catch { /* ignore */ }
+      try { if ('Notification' in window && Notification.permission === 'granted' && document.hidden) new Notification(ev.d.name, { body: where ? t('Happening now in {where}', { where }) : t('Happening now') }) } catch { /* ignore */ }
       void s.loadEvents(ev.d.guild_id)
       break
     }
@@ -308,27 +309,27 @@ function handle(ev: Ev) {
     case 'STUDIO_SESSION': studio.onSession(ev.d); void s.loadStudio(ev.d.channel_id); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break
-    case 'VOICE_MOVE': if (s.myVoiceChannelId) { s.pushToast('A moderator moved you to another voice channel'); voice.join(ev.d.channel_id) } break
+    case 'VOICE_MOVE': if (s.myVoiceChannelId) { s.pushToast(t('A moderator moved you to another voice channel')); voice.join(ev.d.channel_id) } break
     case 'CALL_DECLINE': {
       // You declined on another device: stop ringing here too. Someone else declined a call you're in: say so.
       if (ev.d.user_id === s.user?.id) s.setCallIgnored(ev.d.channel_id, true)
-      else if (s.myVoiceChannelId === ev.d.channel_id) s.pushToast(`${s.users[ev.d.user_id]?.display_name ?? 'They'} declined the call`)
+      else if (s.myVoiceChannelId === ev.d.channel_id) s.pushToast(t('{name} declined the call', { name: s.users[ev.d.user_id]?.display_name ?? t('They') }))
       break
     }
     case 'GUILD_CUSTOMIZE_UPDATE': s.setHidden(ev.d.guild_id, ev.d.hidden_channels); break
     case 'THREAD_MEMBER_UPDATE': s.setMyThread(ev.d.thread_id, ev.d.joined); break
     case 'APPLICATION_COMMANDS_UPDATE': s.clearAppCommands(); break
     case 'DIRECTORY_UPDATE': s.bumpDirectory(ev.d.channel_id); break
-    case 'INTERACTION_FAILED': s.pushToast(`${ev.d.application} didn't respond to ${ev.d.label ?? `/${ev.d.name}`}.`, 'error'); break
+    case 'INTERACTION_FAILED': s.pushToast(t("{app} didn't respond to {command}.", { app: ev.d.application, command: ev.d.label ?? `/${ev.d.name}` }), 'error'); break
     case 'INTERACTION_MODAL': s.openModal({ kind: 'appModal', interactionId: ev.d.interaction_id, modal: ev.d.modal }); break
-    case 'APPEAL_UPDATE': s.pushToast(ev.d.status === 'accepted' ? `Your appeal to ${ev.d.guild_name} was accepted: you can rejoin with an invite.` : `Your appeal to ${ev.d.guild_name} was denied${ev.d.reason ? `: ${ev.d.reason}` : '.'}`, ev.d.status === 'accepted' ? undefined : 'error'); break
-    case 'APPLICATION_UPDATE': { const name = s.guilds[ev.d.guild_id]?.name ?? 'the server'; s.pushToast(ev.d.status === 'approved' ? `Your application to ${name} was approved. Welcome!` : `Your application to ${name} was rejected${ev.d.reason ? `: ${ev.d.reason}` : '.'}`, ev.d.status === 'approved' ? undefined : 'error'); break }
+    case 'APPEAL_UPDATE': s.pushToast(ev.d.status === 'accepted' ? t('Your appeal to {guild} was accepted: you can rejoin with an invite.', { guild: ev.d.guild_name }) : ev.d.reason ? t('Your appeal to {guild} was denied: {reason}', { guild: ev.d.guild_name, reason: ev.d.reason }) : t('Your appeal to {guild} was denied.', { guild: ev.d.guild_name }), ev.d.status === 'accepted' ? undefined : 'error'); break
+    case 'APPLICATION_UPDATE': { const name = s.guilds[ev.d.guild_id]?.name ?? t('the server'); s.pushToast(ev.d.status === 'approved' ? t('Your application to {name} was approved. Welcome!', { name }) : ev.d.reason ? t('Your application to {name} was rejected: {reason}', { name, reason: ev.d.reason }) : t('Your application to {name} was rejected.', { name }), ev.d.status === 'approved' ? undefined : 'error'); break }
     case 'CALL_RING': s.setCallIgnored(ev.d.channel_id, false); break
-    case 'MEMBER_WARNING': if (!s.modal) s.openModal({ kind: 'warning', guildName: ev.d.guild_name, reason: ev.d.reason }); else s.pushToast(`Warning from ${ev.d.guild_name}: ${ev.d.reason}`, 'error'); break
+    case 'MEMBER_WARNING': if (!s.modal) s.openModal({ kind: 'warning', guildName: ev.d.guild_name, reason: ev.d.reason }); else s.pushToast(t('Warning from {guild}: {reason}', { guild: ev.d.guild_name, reason: ev.d.reason }), 'error'); break
     case 'VOICE_REACTION': if (s.myVoiceChannelId === ev.d.channel_id) emitCallReaction(ev.d.user_id, ev.d.emoji); break
     case 'CALL_CAPTION': if (s.myVoiceChannelId === ev.d.channel_id) pushCaption(ev.d.user_id, ev.d.text); break
     case 'VOICE_INVITE': if (!s.user?.ignored_users?.includes(ev.d.from.id)) { s.setVoiceInvite(ev.d); playSfx('invite_speak') } break
-    case 'VOICE_DISCONNECT': if (s.myVoiceChannelId) { s.pushToast('A moderator disconnected you from voice'); voice.leave(true) } break
+    case 'VOICE_DISCONNECT': if (s.myVoiceChannelId) { s.pushToast(t('A moderator disconnected you from voice')); voice.leave(true) } break
   }
 }
 

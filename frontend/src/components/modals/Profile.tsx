@@ -14,6 +14,7 @@ import ProfileCard, { contrastText } from '../ProfileCard'
 import ProfilePopout, { POPOUT_W } from '../ProfilePopout'
 import { colorFor, initials, formatTime, renderMarkdown } from '../../lib/format'
 import Avatar from '../Avatar'
+import { useT } from '../../lib/i18n'
 
 const GAP = 8
 const PAD = 8
@@ -25,6 +26,7 @@ const PAD = 8
  * servers and the action buttons.
  */
 export default function ProfileModal({ onClose, userId, anchor }: { onClose: () => void; userId: string; anchor?: Anchor }) {
+  const t = useT()
   const cached = useStore((s) => s.users[userId])
   const { pathname } = useLocation()
   const guildId = matchPath('/channels/:guildId/*', pathname)?.params.guildId
@@ -39,15 +41,16 @@ export default function ProfileModal({ onClose, userId, anchor }: { onClose: () 
   if (anchor) {
     return (
       <Popout anchor={anchor} onClose={onClose}>
-        {user ? <ProfilePopout user={user} guildId={inGuild} onClose={onClose} /> : <div className="rounded-lg bg-[#232428] p-6 text-text-2">Loading…</div>}
+        {user ? <ProfilePopout user={user} guildId={inGuild} onClose={onClose} /> : <div className="rounded-lg bg-[#232428] p-6 text-text-2">{t('Loading…')}</div>}
       </Popout>
     )
   }
-  if (!user) return <Modal onClose={onClose}><p className="text-text-2">Loading…</p></Modal>
+  if (!user) return <Modal onClose={onClose}><p className="text-text-2">{t('Loading…')}</p></Modal>
   return <FullProfile user={user} inGuild={inGuild} onClose={onClose} />
 }
 
 function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: string; onClose: () => void }) {
+  const t = useT()
   const userId = user.id
   const rel = useStore((s) => s.relationships[userId]?.kind)
   const me = useStore((s) => s.user)
@@ -70,7 +73,7 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
   const addFriend = () => relAct(() => api.post('/users/@me/relationships', { user_id: userId }))
   const acceptFriend = () => relAct(() => api.put(`/users/@me/relationships/${userId}`))
   const removeRel = () => relAct(() => api.delete(`/users/@me/relationships/${userId}`))
-  const blockUser = () => openModal({ kind: 'confirm', title: `Block ${user.display_name}`, body: `${user.display_name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.`, danger: true, confirmLabel: 'Block', action: () => relAct(() => api.put(`/users/@me/relationships/${userId}/block`)) })
+  const blockUser = () => openModal({ kind: 'confirm', title: t('Block {name}', { name: user.display_name }), body: t('{name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.', { name: user.display_name }), danger: true, confirmLabel: t('Block'), action: () => relAct(() => api.put(`/users/@me/relationships/${userId}/block`)) })
 
   const ctx = guild ? { guild, roles, member: myMember } : null
   const outranks = !!(guild && ctx && me && !isMe && member && guild.owner_id !== userId && (guild.owner_id === me.id || highestPosition(ctx, me.id) > highestPosition({ ...ctx, member }, userId)))
@@ -86,18 +89,18 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
   const icon = 'h-8 w-8 p-0! rounded-md'
   const ghostIcon = `${ghostBase} ${icon}`
   const actions = isMe ? (
-    <button onClick={() => { onClose(); openModal({ kind: 'userSettings', tab: 'profile' }) }} className={ghost} title="Edit Profile"><Pencil size={16} /> Edit Profile</button>
+    <button onClick={() => { onClose(); openModal({ kind: 'userSettings', tab: 'profile' }) }} className={ghost} title={t('Edit Profile')}><Pencil size={16} /> {t('Edit Profile')}</button>
   ) : (
     <>
-      {rel !== 'blocked' && <button onClick={dm} className={`btn-primary ${icon}`} title="Message"><MessageSquare size={16} /></button>}
-      {!rel && <button onClick={addFriend} className={`btn-primary bg-success hover:bg-success/80 text-black ${icon}`} title="Add Friend"><UserPlus size={16} /></button>}
-      {rel === 'incoming' && <button onClick={acceptFriend} className="btn-primary bg-success hover:bg-success/80 text-black px-3! py-1.5" title="Accept Friend Request"><Check size={16} /> Accept</button>}
-      {rel === 'outgoing' && <button onClick={removeRel} className={ghost} title="Cancel Friend Request"><X size={16} /> Pending</button>}
-      {rel === 'friend' && <button onClick={removeRel} className={ghost} title="Remove Friend"><Check size={16} /> Friends</button>}
-      {rel === 'blocked' && <button onClick={removeRel} className={ghost} title="Unblock"><Ban size={16} /> Unblock</button>}
-      {rel !== 'blocked' && <button onClick={blockUser} className={ghostIcon} title="Block"><Ban size={16} /></button>}
-      {canKick && <button onClick={kick} className={`btn-danger ${icon}`} title="Kick"><UserMinus size={16} /></button>}
-      {canBan && <button onClick={ban} className={`btn-danger ${icon}`} title="Ban"><Gavel size={16} /></button>}
+      {rel !== 'blocked' && <button onClick={dm} className={`btn-primary ${icon}`} title={t('Message')}><MessageSquare size={16} /></button>}
+      {!rel && <button onClick={addFriend} className={`btn-primary bg-success hover:bg-success/80 text-black ${icon}`} title={t('Add Friend')}><UserPlus size={16} /></button>}
+      {rel === 'incoming' && <button onClick={acceptFriend} className="btn-primary bg-success hover:bg-success/80 text-black px-3! py-1.5" title={t('Accept Friend Request')}><Check size={16} /> {t('Accept')}</button>}
+      {rel === 'outgoing' && <button onClick={removeRel} className={ghost} title={t('Cancel Friend Request')}><X size={16} /> {t('Pending')}</button>}
+      {rel === 'friend' && <button onClick={removeRel} className={ghost} title={t('Remove Friend')}><Check size={16} /> {t('Friends')}</button>}
+      {rel === 'blocked' && <button onClick={removeRel} className={ghost} title={t('Unblock')}><Ban size={16} /> {t('Unblock')}</button>}
+      {rel !== 'blocked' && <button onClick={blockUser} className={ghostIcon} title={t('Block')}><Ban size={16} /></button>}
+      {canKick && <button onClick={kick} className={`btn-danger ${icon}`} title={t('Kick')}><UserMinus size={16} /></button>}
+      {canBan && <button onClick={ban} className={`btn-danger ${icon}`} title={t('Ban')}><Gavel size={16} /></button>}
     </>
   )
   const mutual = user.mutual_guilds ?? []
@@ -109,13 +112,13 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
           server={guild && member ? { id: guild.id, name: guild.name, icon_url: guild.icon_url, joined_at: member.joined_at } : undefined}>
           {inGuild && member && (
             <section className="w-full">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">Roles</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">{t('Roles')}</h3>
               <RolePicker guildId={inGuild} member={member} />
             </section>
           )}
           {friends.length > 0 && (
             <section data-mutual-friends>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">Mutual friends — {friends.length}</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">{t('Mutual friends — {n}', { n: friends.length })}</h3>
               <ul className="space-y-1">
                 {friends.map((f) => (
                   <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className="flex items-center gap-2 hover:underline text-left"><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={20} /><span className="truncate">{f.display_name}</span></button></li>
@@ -125,7 +128,7 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
           )}
           {mutual.length > 0 && (
             <section data-mutual-list>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">Mutual servers — {mutual.length}</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">{t('Mutual servers — {n}', { n: mutual.length })}</h3>
               <ul className="space-y-1">
                 {mutual.map((g) => (
                   <li key={g.id}>
@@ -147,6 +150,7 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
 
 /** "User Reviews": short notes other users leave on a profile. One per author; only the author can remove theirs. On your own profile you read them but cannot post. */
 function Reviews({ userId, light, isMe }: { userId: string; light: boolean; isMe: boolean }) {
+  const t = useT()
   const me = useStore((s) => s.user)
   const pushToast = useStore((s) => s.pushToast)
   const [reviews, setReviews] = useState<Review[] | null>(null)
@@ -161,7 +165,7 @@ function Reviews({ userId, light, isMe }: { userId: string; light: boolean; isMe
     try {
       const r = await api.put<Review>(`/users/${userId}/reviews`, { content })
       setReviews((rs) => [r, ...(rs ?? []).filter((x) => x.author_id !== r.author_id)])
-      setDraft(''); pushToast(mine ? 'Review updated' : 'Review posted')
+      setDraft(''); pushToast(mine ? t('Review updated') : t('Review posted'))
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   const remove = async (r: Review) => {
@@ -170,21 +174,21 @@ function Reviews({ userId, light, isMe }: { userId: string; light: boolean; isMe
   const field = light ? 'bg-black/35 border-white/15 text-white placeholder:text-white/60 focus:border-white/40' : 'bg-white/45 border-black/15 text-black placeholder:text-black/55 focus:border-black/40'
   return (
     <section data-reviews-list>
-      <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">User reviews{reviews ? ` — ${reviews.length}` : ''}</h3>
+      <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1 opacity-70">{t('User reviews')}{reviews ? ` — ${reviews.length}` : ''}</h3>
       {!isMe && <div className="flex gap-2 mb-2">
         <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit() } }} maxLength={500}
-          placeholder={mine ? 'Update your review' : 'Leave a review'} aria-label="Leave a review" data-review-input className={`flex-1 min-w-0 rounded-lg px-3 py-1.5 text-sm outline-none border transition ${field}`} />
-        <button onClick={submit} disabled={busy || !draft.trim()} className="btn-primary px-3! py-1.5">Post</button>
+          placeholder={mine ? t('Update your review') : t('Leave a review')} aria-label={t('Leave a review')} data-review-input className={`flex-1 min-w-0 rounded-lg px-3 py-1.5 text-sm outline-none border transition ${field}`} />
+        <button onClick={submit} disabled={busy || !draft.trim()} className="btn-primary px-3! py-1.5">{t('Post')}</button>
       </div>}
       {reviews === null && <p className="opacity-70">Loading…</p>}
-      {reviews?.length === 0 && <p className="opacity-70">{isMe ? 'No one has reviewed you yet.' : 'No reviews yet. Be the first!'}</p>}
+      {reviews?.length === 0 && <p className="opacity-70">{isMe ? t('No one has reviewed you yet.') : t('No reviews yet. Be the first!')}</p>}
       <ul className="space-y-2">
         {reviews?.map((r) => (
           <li key={r.id} className="flex gap-2" data-review>
             <Avatar user={{ id: r.author_id, display_name: r.author_display_name, avatar_url: r.author_avatar_url }} size={24} />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-2"><span className="font-semibold truncate">{r.author_display_name}</span><span className="text-[11px] opacity-70 shrink-0">{formatTime(r.created_at)}</span>
-                {r.author_id === me?.id && <button onClick={() => remove(r)} className="ml-auto text-[11px] opacity-70 hover:opacity-100 hover:underline" title="Delete review">Delete</button>}
+                {r.author_id === me?.id && <button onClick={() => remove(r)} className="ml-auto text-[11px] opacity-70 hover:opacity-100 hover:underline" title={t('Delete review')}>{t('Delete')}</button>}
               </div>
               <div className="msg-content whitespace-pre-wrap break-words leading-snug">{renderMarkdown(r.content, { blocks: false })}</div>
             </div>

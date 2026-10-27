@@ -12,6 +12,7 @@ import ForumTagsTab from './settings/ForumTagsTab'
 import FollowersTab from './settings/FollowersTab'
 import StageModeratorsTab from './settings/StageModeratorsTab'
 import { DEFAULT_BITRATE, MAX_BITRATE, MIN_BITRATE, type AudioMode } from '../../lib/audioProfile'
+import { useT } from '../../lib/i18n'
 
 type Tab = 'overview' | 'permissions' | 'tags' | 'integrations' | 'stageMods'
 
@@ -23,6 +24,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
   const removeChannel = useStore((s) => s.removeChannel)
   const pushToast = useStore((s) => s.pushToast)
   const navigate = useNavigate()
+  const t = useT()
   const canEdit = has(perms, P.MANAGE_CHANNELS)
   const canPerms = has(perms, P.MANAGE_ROLES)
   const [tab, setTab] = useState<Tab>(initial === 'overview' && !canEdit && canPerms ? 'permissions' : initial)
@@ -30,7 +32,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
   const prefix = channel.kind === 'text' ? '#' : ''
 
   const del = () => openModal({
-    kind: 'confirm', title: 'Delete Channel', body: `Are you sure you want to delete ${prefix}${channel.name}? This cannot be undone.`, danger: true, confirmLabel: 'Delete Channel',
+    kind: 'confirm', title: t('Delete Channel'), body: t('Are you sure you want to delete {name}? This cannot be undone.', { name: `${prefix}${channel.name}` }), danger: true, confirmLabel: t('Delete Channel'),
     action: async () => {
       try { await api.delete(`/channels/${channelId}`); removeChannel(channelId); onClose(); navigate(`/channels/${channel.guild_id}`) } catch (e) { pushToast((e as Error).message, 'error') }
     },
@@ -45,9 +47,9 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
 
   return (
     <SettingsShell<Tab>
-      tab={tab} onTab={setTab} onClose={onClose} wide={tab === 'permissions'} title="Channel Settings" startOnMenu={!requested}
+      tab={tab} onTab={setTab} onClose={onClose} wide={tab === 'permissions'} title={t('Channel Settings')} startOnMenu={!requested}
       sections={[{ title: `${prefix}${channel.name}`, items }]}
-      footer={canEdit ? <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Channel"><span>Delete Channel</span><Trash2 size={16} /></button> : undefined}
+      footer={canEdit ? <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title={t('Delete Channel')}><span>{t('Delete Channel')}</span><Trash2 size={16} /></button> : undefined}
     >
       {tab === 'overview' && canEdit && <Overview channel={channel} />}
       {tab === 'tags' && canEdit && <ForumTagsTab channelId={channelId} />}
@@ -59,6 +61,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
 }
 
 function Overview({ channel }: { channel: Channel }) {
+  const t = useT()
   const upsertChannel = useStore((s) => s.upsertChannel)
   const pushToast = useStore((s) => s.pushToast)
   const [name, setName] = useState(channel.name)
@@ -87,89 +90,89 @@ function Overview({ channel }: { channel: Channel }) {
   const reset = () => { setName(channel.name); setTopic(channel.topic); setNsfw(!!channel.nsfw); setSpoiler(!!channel.spoiler); setNews(!!channel.news); setMedia(!!channel.media); setSlowmode(channel.rate_limit_per_user ?? 0); setUserLimit(channel.user_limit ?? 0); setVideoQuality(channel.video_quality === 'full' ? 'full' : 'auto'); setAudioMode(channel.audio_mode === 'music' ? 'music' : 'voice'); setBitrate(channel.audio_bitrate ?? 0); setLowLatency(!!channel.audio_low_latency); setE2ee(!!channel.e2ee); setForumLayout(channel.forum_layout === 'list' ? 'list' : 'gallery'); setForumSort(channel.forum_sort === 'created' ? 'created' : 'activity'); setRequireTag(!!channel.forum_require_tag); setDefaultReaction(channel.forum_default_reaction ?? '') }
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(channel.kind === 'text' || channel.kind === 'forum' ? { spoiler } : {}), ...(channel.kind === 'text' ? { news } : {}), ...(channel.kind === 'forum' ? { media } : {}), ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit, video_quality: videoQuality } : {}), ...(channel.kind === 'forum' ? { forum_layout: forumLayout, forum_sort: forumSort, forum_require_tag: requireTag, forum_default_reaction: defaultReaction } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast('Channel updated') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const c = await api.patch<Channel>(`/channels/${channel.id}`, { name, topic, nsfw, ...(channel.kind === 'text' || channel.kind === 'forum' ? { spoiler } : {}), ...(channel.kind === 'text' ? { news } : {}), ...(channel.kind === 'forum' ? { media } : {}), ...(hasSlowmode ? { rate_limit_per_user: slowmode } : {}), ...(channel.kind === 'voice' ? { user_limit: userLimit, video_quality: videoQuality } : {}), ...(channel.kind === 'forum' ? { forum_layout: forumLayout, forum_sort: forumSort, forum_require_tag: requireTag, forum_default_reaction: defaultReaction } : {}), ...(isAudio ? { audio_mode: audioMode, audio_bitrate: bitrate, audio_low_latency: lowLatency, e2ee } : {}) }); upsertChannel(c); pushToast(t('Channel updated')) } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={submit} className="space-y-5">
-      <h1 className="text-xl font-bold">Overview</h1>
-      <div><label className="label">Channel name</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
+      <h1 className="text-xl font-bold">{t('Overview')}</h1>
+      <div><label className="label">{t('Channel name')}</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
       {channel.kind === 'forum' && (
         <div className="space-y-3" data-forum-settings>
-          <div><label className="label">Post guidelines</label><textarea className="input resize-none" rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} placeholder="What should people post here?" data-forum-guidelines /></div>
+          <div><label className="label">{t('Post guidelines')}</label><textarea className="input resize-none" rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} placeholder={t('What should people post here?')} data-forum-guidelines /></div>
           <div className="flex flex-wrap gap-3">
-            <label className="text-sm">Default layout <select className="input ml-1 w-auto py-1" value={forumLayout} onChange={(e) => setForumLayout(e.target.value as 'gallery' | 'list')} data-forum-layout-setting><option value="gallery">Gallery</option><option value="list">List</option></select></label>
-            <label className="text-sm">Default sort <select className="input ml-1 w-auto py-1" value={forumSort} onChange={(e) => setForumSort(e.target.value as 'activity' | 'created')} data-forum-sort-setting><option value="activity">Latest activity</option><option value="created">Newest posts</option></select></label>
-            <label className="text-sm">Default reaction <input className="input ml-1 inline-block w-14 py-1 text-center" value={defaultReaction} onChange={(e) => setDefaultReaction(e.target.value)} maxLength={16} placeholder="👍" data-forum-reaction-setting /></label>
+            <label className="text-sm">{t('Default layout')} <select className="input ml-1 w-auto py-1" value={forumLayout} onChange={(e) => setForumLayout(e.target.value as 'gallery' | 'list')} data-forum-layout-setting><option value="gallery">{t('Gallery')}</option><option value="list">{t('List')}</option></select></label>
+            <label className="text-sm">{t('Default sort')} <select className="input ml-1 w-auto py-1" value={forumSort} onChange={(e) => setForumSort(e.target.value as 'activity' | 'created')} data-forum-sort-setting><option value="activity">{t('Latest activity')}</option><option value="created">{t('Newest posts')}</option></select></label>
+            <label className="text-sm">{t('Default reaction')} <input className="input ml-1 inline-block w-14 py-1 text-center" value={defaultReaction} onChange={(e) => setDefaultReaction(e.target.value)} maxLength={16} placeholder="👍" data-forum-reaction-setting /></label>
           </div>
-          <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="h-4 w-4 accent-accent" checked={requireTag} onChange={(e) => setRequireTag(e.target.checked)} data-forum-require-tag /> Require a tag on new posts</label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="h-4 w-4 accent-accent" checked={requireTag} onChange={(e) => setRequireTag(e.target.checked)} data-forum-require-tag /> {t('Require a tag on new posts')}</label>
         </div>
       )}
-      {channel.kind === 'text' && <div><label className="label">Channel topic</label><textarea className="input resize-none" rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} placeholder="Let everyone know how to use this channel!" /></div>}
+      {channel.kind === 'text' && <div><label className="label">{t('Channel topic')}</label><textarea className="input resize-none" rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} placeholder={t('Let everyone know how to use this channel!')} /></div>}
       {hasSlowmode && (
         <div data-channel-slowmode>
-          <label className="label" htmlFor="slowmode">Slowmode</label>
+          <label className="label" htmlFor="slowmode">{t('Slowmode')}</label>
           <select id="slowmode" className="input" value={slowmode} onChange={(e) => setSlowmode(Number(e.target.value))}>
-            {SLOWMODE.map((o) => <option key={o.seconds} value={o.seconds}>{o.label}</option>)}
+            {SLOWMODE.map((o) => <option key={o.seconds} value={o.seconds}>{t(o.label)}</option>)}
           </select>
-          <p className="mt-1 text-xs text-text-2">Members can send one message per this interval. Members who can manage messages or this channel are exempt.</p>
+          <p className="mt-1 text-xs text-text-2">{t('Members can send one message per this interval. Members who can manage messages or this channel are exempt.')}</p>
         </div>
       )}
       {(channel.kind === 'text' || channel.kind === 'forum') && (
         <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-nsfw={nsfw ? '1' : '0'}>
-          <span><span className="block text-[15px]">Age-Restricted Channel</span><span className="block text-xs text-text-2">Members see a warning before opening it, and those who blur sensitive media get pictures and videos here blurred until clicked.</span></span>
+          <span><span className="block text-[15px]">{t('Age-Restricted Channel')}</span><span className="block text-xs text-text-2">{t('Members see a warning before opening it, and those who blur sensitive media get pictures and videos here blurred until clicked.')}</span></span>
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={nsfw} onChange={(e) => setNsfw(e.target.checked)} />
         </label>
       )}
       {channel.kind === 'text' && (
         <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer">
-          <span><span className="block text-[15px]">Announcement Channel</span><span className="block text-xs text-text-2">Other servers can follow this channel, and posts you publish show up in their channels too.</span></span>
+          <span><span className="block text-[15px]">{t('Announcement Channel')}</span><span className="block text-xs text-text-2">{t('Other servers can follow this channel, and posts you publish show up in their channels too.')}</span></span>
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={news} onChange={(e) => setNews(e.target.checked)} data-channel-news />
         </label>
       )}
       {channel.kind === 'forum' && (
         <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer">
-          <span><span className="block text-[15px]">Media Channel</span><span className="block text-xs text-text-2">Every post leads with an image or video, and posts show as a picture gallery.</span></span>
+          <span><span className="block text-[15px]">{t('Media Channel')}</span><span className="block text-xs text-text-2">{t('Every post leads with an image or video, and posts show as a picture gallery.')}</span></span>
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={media} onChange={(e) => setMedia(e.target.checked)} data-channel-media />
         </label>
       )}
       {(channel.kind === 'text' || channel.kind === 'forum') && (
         <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-spoiler={spoiler ? '1' : '0'}>
-          <span><span className="block text-[15px]">Spoiler Channel</span><span className="block text-xs text-text-2">Members see a spoiler warning (with the topic) before opening it, and pictures and videos here stay hidden until clicked.</span></span>
+          <span><span className="block text-[15px]">{t('Spoiler Channel')}</span><span className="block text-xs text-text-2">{t('Members see a spoiler warning (with the topic) before opening it, and pictures and videos here stay hidden until clicked.')}</span></span>
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={spoiler} onChange={(e) => setSpoiler(e.target.checked)} data-channel-spoiler-toggle />
         </label>
       )}
       {channel.kind === 'voice' && (
         <div data-channel-user-limit>
-          <label className="label" htmlFor="user-limit">User limit</label>
+          <label className="label" htmlFor="user-limit">{t('User limit')}</label>
           <div className="flex items-center gap-3">
             <input id="user-limit" type="range" min={0} max={99} value={userLimit} onChange={(e) => setUserLimit(Number(e.target.value))} className="flex-1 accent-accent" />
-            <span className="w-24 text-right text-sm tabular-nums">{userLimit ? `${userLimit} user${userLimit === 1 ? '' : 's'}` : 'No limit'}</span>
+            <span className="w-24 text-right text-sm tabular-nums">{userLimit ? (userLimit === 1 ? t('{n} user', { n: userLimit }) : t('{n} users', { n: userLimit })) : t('No limit')}</span>
           </div>
-          <p className="mt-1 text-xs text-text-2">How many people can be in the channel at once. Members who can move members can still join a full channel.</p>
+          <p className="mt-1 text-xs text-text-2">{t('How many people can be in the channel at once. Members who can move members can still join a full channel.')}</p>
         </div>
       )}
       {channel.kind === 'voice' && (
         <div data-channel-video-quality>
-          <label className="label" htmlFor="video-quality">Video quality</label>
+          <label className="label" htmlFor="video-quality">{t('Video quality')}</label>
           <select id="video-quality" className="input w-auto" value={videoQuality} onChange={(e) => setVideoQuality(e.target.value as 'auto' | 'full')} data-video-quality>
-            <option value="auto">Auto (720p)</option>
-            <option value="full">Full (1080p)</option>
+            <option value="auto">{t('Auto (720p)')}</option>
+            <option value="full">{t('Full (1080p)')}</option>
           </select>
-          <p className="mt-1 text-xs text-text-2">Camera resolution for everyone in this channel. Full uses more bandwidth.</p>
+          <p className="mt-1 text-xs text-text-2">{t('Camera resolution for everyone in this channel. Full uses more bandwidth.')}</p>
         </div>
       )}
       {isAudio && <AudioSection mode={audioMode} setMode={setAudioMode} bitrate={bitrate} setBitrate={setBitrate} lowLatency={lowLatency} setLowLatency={setLowLatency} />}
       {isAudio && (
         <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-channel-e2ee={e2ee ? '1' : '0'}>
-          <span><span className="flex items-center gap-1.5 text-[15px]"><Lock size={14} className="text-success" /> End-to-end encryption</span><span className="block text-xs text-text-2">Voice, video and screen shares are encrypted on each device with keys the server never sees. People compare a safety code in the call to check nobody is listening in. Members on an app or browser that can't encrypt can't join, and anyone in the call reconnects when you change this.</span></span>
+          <span><span className="flex items-center gap-1.5 text-[15px]"><Lock size={14} className="text-success" /> {t('End-to-end encryption')}</span><span className="block text-xs text-text-2">{t('Voice, video and screen shares are encrypted on each device with keys the server never sees. People compare a safety code in the call to check nobody is listening in. Members on an app or browser that can\'t encrypt can\'t join, and anyone in the call reconnects when you change this.')}</span></span>
           <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={e2ee} onChange={(ev) => setE2ee(ev.target.checked)} />
         </label>
       )}
       {dirty && (
         <div className="sticky bottom-4 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
-          <span className="text-sm flex-1">Careful — you have unsaved changes!</span>
-          <button type="button" className="btn-ghost" onClick={reset}>Reset</button>
-          <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !name.trim()}>Save Changes</button>
+          <span className="text-sm flex-1">{t('Careful — you have unsaved changes!')}</span>
+          <button type="button" className="btn-ghost" onClick={reset}>{t('Reset')}</button>
+          <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !name.trim()}>{t('Save Changes')}</button>
         </div>
       )}
     </form>
@@ -180,6 +183,7 @@ function Overview({ channel }: { channel: Channel }) {
 function AudioSection({ mode, setMode, bitrate, setBitrate, lowLatency, setLowLatency }: {
   mode: AudioMode; setMode: (m: AudioMode) => void; bitrate: number; setBitrate: (b: number) => void; lowLatency: boolean; setLowLatency: (v: boolean) => void
 }) {
+  const t = useT()
   const effective = bitrate || DEFAULT_BITRATE[mode]
   const card = (m: AudioMode, icon: React.ReactNode, title: string, body: string) => (
     <button type="button" onClick={() => setMode(m)} aria-pressed={mode === m} data-audio-mode={m}
@@ -190,28 +194,28 @@ function AudioSection({ mode, setMode, bitrate, setBitrate, lowLatency, setLowLa
   )
   return (
     <section className="space-y-4" data-audio-settings>
-      <h2 className="text-base font-bold">Audio</h2>
+      <h2 className="text-base font-bold">{t('Audio')}</h2>
       <div className="flex flex-wrap gap-2">
-        {card('voice', <Mic size={16} />, 'Voice', 'Clear speech. Uses each member\'s echo cancellation, noise suppression and auto gain; mono.')}
-        {card('music', <AudioLines size={16} />, 'High fidelity', 'Music and instruments: 48 kHz stereo with all voice processing off. Members should wear headphones (no echo cancellation).')}
+        {card('voice', <Mic size={16} />, t('Voice'), t('Clear speech. Uses each member\'s echo cancellation, noise suppression and auto gain; mono.'))}
+        {card('music', <AudioLines size={16} />, t('High fidelity'), t('Music and instruments: 48 kHz stereo with all voice processing off. Members should wear headphones (no echo cancellation).'))}
       </div>
       <div>
         <div className="flex items-center justify-between">
-          <label className="label mb-0">Bitrate</label>
-          <span className="text-sm font-semibold tabular-nums" data-audio-bitrate-value>{effective} kbps{bitrate ? '' : ' (default)'}</span>
+          <label className="label mb-0">{t('Bitrate')}</label>
+          <span className="text-sm font-semibold tabular-nums" data-audio-bitrate-value>{effective} kbps{bitrate ? '' : t(' (default)')}</span>
         </div>
         <input type="range" min={MIN_BITRATE} max={MAX_BITRATE} step={1} value={effective} onChange={(e) => setBitrate(Number(e.target.value))} className="w-full accent-accent" data-audio-bitrate />
         <div className="flex items-center justify-between text-xs text-text-2">
           <span>{MIN_BITRATE} kbps</span>
-          {bitrate ? <button type="button" className="hover:underline" onClick={() => setBitrate(0)} data-audio-bitrate-default>Use default ({DEFAULT_BITRATE[mode]} kbps)</button> : <span>Opus, up to {MAX_BITRATE} kbps</span>}
+          {bitrate ? <button type="button" className="hover:underline" onClick={() => setBitrate(0)} data-audio-bitrate-default>{t('Use default ({n} kbps)', { n: DEFAULT_BITRATE[mode] })}</button> : <span>{t('Opus, up to {n} kbps', { n: MAX_BITRATE })}</span>}
           <span>{MAX_BITRATE} kbps</span>
         </div>
-        <p className="mt-1 text-xs text-text-2">Each member uploads this much per listener in peer-to-peer calls (once to the voice server when one is configured). 64 kbps is plenty for speech; 192-320 kbps is transparent for music.</p>
+        <p className="mt-1 text-xs text-text-2">{t('Each member uploads this much per listener in peer-to-peer calls (once to the voice server when one is configured). 64 kbps is plenty for speech; 192-320 kbps is transparent for music.')}</p>
       </div>
       <label className="flex items-start justify-between gap-4 rounded-lg border border-line bg-bg-1 px-3 py-2.5 cursor-pointer" data-audio-low-latency={lowLatency ? '1' : '0'}>
         <span>
-          <span className="flex items-center gap-2 text-[15px]"><Timer size={16} /> Ultra-low latency</span>
-          <span className="block text-xs text-text-2">10 ms audio frames (half the usual) and the smallest jitter buffer the network allows: around 20-60 ms less delay, for playing together. Best on wired or strong connections; packet loss is more audible.</span>
+          <span className="flex items-center gap-2 text-[15px]"><Timer size={16} /> {t('Ultra-low latency')}</span>
+          <span className="block text-xs text-text-2">{t('10 ms audio frames (half the usual) and the smallest jitter buffer the network allows: around 20-60 ms less delay, for playing together. Best on wired or strong connections; packet loss is more audible.')}</span>
         </span>
         <input type="checkbox" className="mt-1 h-4 w-4 accent-accent" checked={lowLatency} onChange={(e) => setLowLatency(e.target.checked)} />
       </label>

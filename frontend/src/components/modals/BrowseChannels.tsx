@@ -5,6 +5,7 @@ import { EMPTY_ROLES, has, P, sortedRoles } from '../../lib/perms'
 import { myChannelPerms, useStore } from '../../store'
 import Modal from '../Modal'
 import { LinkedRolesList } from '../LinkedRoles'
+import { useT } from '../../lib/i18n'
 
 /** Browse Channels (show or hide channels in your list) and Channels & Roles (roles you can pick yourself). */
 export default function BrowseChannelsModal({ onClose, guildId, tab: initial = 'channels' }: { onClose: () => void; guildId: string; tab?: 'channels' | 'roles' }) {
@@ -18,10 +19,11 @@ export default function BrowseChannelsModal({ onClose, guildId, tab: initial = '
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const [tab, setTab] = useState(initial)
+  const t = useT()
   const all = useMemo(() => Object.values(channels).filter((c) => c.guild_id === guildId && c.kind !== 'thread').sort((a, b) => a.position - b.position), [channels, guildId])
   const cats = all.filter((c) => c.kind === 'category')
   const visible = all.filter((c) => c.kind !== 'category' && has(myChannelPerms(useStore.getState(), c.id), P.VIEW_CHANNEL))
-  const groups = [{ id: '', name: 'No category' }, ...cats].map((g) => ({ ...g, list: visible.filter((c) => (c.parent_id ?? '') === g.id) })).filter((g) => g.list.length)
+  const groups = [{ id: '', name: t('No category') }, ...cats].map((g) => ({ ...g, list: visible.filter((c) => (c.parent_id ?? '') === g.id) })).filter((g) => g.list.length)
   const save = async (next: string[]) => { setHidden(guildId, next); try { await api.put(`/guilds/${guildId}/me/hidden-channels`, { channel_ids: next }) } catch (e) { pushToast((e as Error).message, 'error') } }
   const toggle = (id: string) => save(hidden.includes(id) ? hidden.filter((x) => x !== id) : [...hidden, id])
   const pickable = sortedRoles(roles).filter((r) => r.self_assignable)
@@ -29,13 +31,13 @@ export default function BrowseChannelsModal({ onClose, guildId, tab: initial = '
   if (!guild) return null
   const icon = (k: string) => (k === 'voice' || k === 'stage' ? <Volume2 size={16} /> : k === 'forum' ? <MessageSquareText size={16} /> : <Hash size={16} />)
   return (
-    <Modal title={tab === 'channels' ? 'Browse Channels' : 'Channels & Roles'} subtitle={guild.name} onClose={onClose} width="max-w-lg">
+    <Modal title={tab === 'channels' ? t('Browse Channels') : t('Channels & Roles')} subtitle={guild.name} onClose={onClose} width="max-w-lg">
       <div className="mb-3 flex gap-1.5">
-        {(['channels', 'roles'] as const).map((t) => <button key={t} type="button" onClick={() => setTab(t)} className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${tab === t ? 'bg-accent text-white' : 'bg-bg-3 text-text-1'}`} data-browse-tab={t}>{t === 'channels' ? 'Browse Channels' : 'Roles'}</button>)}
+        {(['channels', 'roles'] as const).map((k) => <button key={k} type="button" onClick={() => setTab(k)} className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${tab === k ? 'bg-accent text-white' : 'bg-bg-3 text-text-1'}`} data-browse-tab={k}>{k === 'channels' ? t('Browse Channels') : t('Roles')}</button>)}
       </div>
       {tab === 'channels' ? (
         <div className="max-h-[55vh] space-y-3 overflow-y-auto" data-browse-channels>
-          <p className="text-xs text-text-2">Untick channels you don't want in your channel list. You can still open them from here or with a link.</p>
+          <p className="text-xs text-text-2">{t('Untick channels you don\'t want in your channel list. You can still open them from here or with a link.')}</p>
           {groups.map((g) => (
             <section key={g.id || 'none'}>
               <div className="mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{g.name}</div>
@@ -51,13 +53,13 @@ export default function BrowseChannelsModal({ onClose, guildId, tab: initial = '
       ) : (
         <div className="space-y-3" data-browse-roles>
           <LinkedRolesList guildId={guildId} />
-          {pickable.length === 0 ? <p className="text-sm text-text-2">This server has no roles you can pick yourself.</p> : pickable.map((r) => (
+          {pickable.length === 0 ? <p className="text-sm text-text-2">{t('This server has no roles you can pick yourself.')}</p> : pickable.map((r) => (
             <label key={r.id} className="flex items-center gap-2 rounded-lg border border-line bg-bg-1 px-3 py-2 text-sm cursor-pointer" data-browse-role={r.id}>
               <span className="h-3 w-3 rounded-full" style={{ background: r.color ?? '#99aab5' }} /><span className="flex-1">{r.name}</span>
               <input type="checkbox" className="h-4 w-4 accent-accent" checked={myRoles.includes(r.id)} onChange={(e) => toggleRole(r.id, e.target.checked)} />
             </label>
           ))}
-          {(guild.onboarding?.questions?.length ?? 0) > 0 && guild.onboarding?.enabled && <button type="button" className="text-sm text-sky-400 hover:underline" onClick={() => openModal({ kind: 'onboarding', guildId })} data-browse-onboarding>Answer the server's questions again</button>}
+          {(guild.onboarding?.questions?.length ?? 0) > 0 && guild.onboarding?.enabled && <button type="button" className="text-sm text-sky-400 hover:underline" onClick={() => openModal({ kind: 'onboarding', guildId })} data-browse-onboarding>{t('Answer the server\'s questions again')}</button>}
         </div>
       )}
     </Modal>

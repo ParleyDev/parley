@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState
 import { createPortal } from 'react-dom'
 import { useStore } from '../store'
 import { voice } from '../lib/voice'
-import { DeviceOptions, deviceLabel, TITLES, useCurrentDevice, useDevices, type DeviceKind } from './DeviceMenu'
+import { DeviceOptions, deviceLabel, titles, useCurrentDevice, useDevices, type DeviceKind } from './DeviceMenu'
 import VideoTile from './VideoTile'
 
 /**
@@ -49,7 +49,7 @@ export function SplitControl({ chevronLabel, menuKind, menu, align = 'start', ch
   return (
     <span ref={ref} className="flex items-center">
       {children}
-      <button type="button" title={chevronLabel} aria-label={chevronLabel} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`${compact ? 'h-9' : 'h-10'} w-6 shrink-0 rounded-lg flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0 ${open ? 'bg-bg-3 text-text-0' : ''}`} data-device-chevron={menuKind}>
+      <button type="button" title={t(chevronLabel)} aria-label={t(chevronLabel)} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`${compact ? 'h-9' : 'h-10'} w-6 shrink-0 rounded-lg flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0 ${open ? 'bg-bg-3 text-text-0' : ''}`} data-device-chevron={menuKind}>
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
       {open && <CallMenu anchor={ref} align={align} onClose={() => setOpen(false)}>{menu(() => setOpen(false))}</CallMenu>}
@@ -72,7 +72,7 @@ export function MenuControl({ label, icon, align = 'end', menu }: { label: strin
 export function HangUpButton({ label, onClick, ...data }: { label: string; onClick: () => void } & Record<`data-${string}`, string | undefined>) {
   const compact = useContext(Compact)
   return (
-    <button type="button" title={label} aria-label={label} onClick={onClick} className={`${compact ? 'h-11 w-14' : 'h-[54px] w-16'} shrink-0 rounded-xl bg-danger text-white flex items-center justify-center shadow-sm hover:bg-danger/80`} {...data}>
+    <button type="button" title={t(label)} aria-label={t(label)} onClick={onClick} className={`${compact ? 'h-11 w-14' : 'h-[54px] w-16'} shrink-0 rounded-xl bg-danger text-white flex items-center justify-center shadow-sm hover:bg-danger/80`} {...data}>
       <PhoneOff size={compact ? 18 : 22} />
     </button>
   )
@@ -166,7 +166,7 @@ function LevelRow() {
   const lit = Math.max(0, Math.min(SEGMENTS, Math.round(((level + 60) / 60) * SEGMENTS)))
   return (
     <div className="px-2.5 py-1.5">
-      <div className="text-sm font-semibold text-text-0">Input Level</div>
+      <div className="text-sm font-semibold text-text-0">{t('Input Level')}</div>
       <div className="mt-2 flex gap-[3px]" aria-hidden data-input-meter={lit}>
         {Array.from({ length: SEGMENTS }, (_, i) => <span key={i} className={`h-3 flex-1 rounded-sm ${i < lit ? (transmitting ? 'bg-success' : 'bg-warn') : 'bg-bg-4'}`} />)}
       </div>
@@ -187,10 +187,10 @@ function SubPanel({ title, onBack, children, ...data }: { title: string; onBack:
 // ---- the menus ----
 
 type Profile = 'isolation' | 'studio' | 'custom'
-const PROFILES: { id: Profile; name: string; hint: string }[] = [
-  { id: 'isolation', name: 'Voice Isolation', hint: 'Echo cancellation, noise suppression and auto gain on' },
-  { id: 'studio', name: 'Studio', hint: 'All processing off, for music and good microphones' },
-  { id: 'custom', name: 'Custom', hint: 'Your own mix in Voice & Video settings' },
+const profiles = (): { id: Profile; name: string; hint: string }[] => [
+  { id: 'isolation', name: t('Voice Isolation'), hint: t('Echo cancellation, noise suppression and auto gain on') },
+  { id: 'studio', name: t('Studio'), hint: t('All processing off, for music and good microphones') },
+  { id: 'custom', name: t('Custom'), hint: t('Your own mix in Voice & Video settings') },
 ]
 
 /** Microphone menu: input/output devices, input profile, volumes, live input level, Deafen, settings. */
@@ -210,12 +210,12 @@ export function MicMenu({ close }: { close: () => void }) {
     setPanel('main')
   }
   if (panel === 'input' || panel === 'output') {
-    return <SubPanel title={TITLES[panel]} onBack={() => setPanel('main')} data-device-menu={panel}><DeviceOptions kind={panel} onPicked={() => setPanel('main')} /></SubPanel>
+    return <SubPanel title={titles()[panel]} onBack={() => setPanel('main')} data-device-menu={panel}><DeviceOptions kind={panel} onPicked={() => setPanel('main')} /></SubPanel>
   }
   if (panel === 'profile') {
     return (
-      <SubPanel title="Input Profile" onBack={() => setPanel('main')} data-input-profiles="">
-        {PROFILES.map((p) => (
+      <SubPanel title={t('Input Profile')} onBack={() => setPanel('main')} data-input-profiles="">
+        {profiles().map((p) => (
           <button key={p.id} type="button" role="menuitemradio" aria-checked={profile === p.id} onClick={() => pickProfile(p.id)} className="w-full flex items-start gap-2 rounded-md px-2 py-1.5 text-left hover:bg-bg-3" data-input-profile={p.id}>
             <span className="mt-0.5 w-4 shrink-0 text-text-0">{profile === p.id && <Check size={14} />}</span>
             <span className="min-w-0"><span className="block text-sm font-semibold text-text-0">{p.name}</span><span className="block text-xs text-text-2">{p.hint}</span></span>
@@ -226,16 +226,16 @@ export function MicMenu({ close }: { close: () => void }) {
   }
   return (
     <div data-mic-menu>
-      <NavRow title="Input Device" sub={deviceLabel('input', inputs, inputId)} onClick={() => setPanel('input')} data-device-row="input" />
-      <NavRow title="Input Profile" sub={PROFILES.find((p) => p.id === profile)!.name} onClick={() => setPanel('profile')} data-device-row="profile" />
-      <NavRow title="Output Device" sub={deviceLabel('output', outputs, outputId)} onClick={() => setPanel('output')} data-device-row="output" />
+      <NavRow title={t('Input Device')} sub={deviceLabel('input', inputs, inputId)} onClick={() => setPanel('input')} data-device-row="input" />
+      <NavRow title={t('Input Profile')} sub={profiles().find((p) => p.id === profile)!.name} onClick={() => setPanel('profile')} data-device-row="profile" />
+      <NavRow title={t('Output Device')} sub={deviceLabel('output', outputs, outputId)} onClick={() => setPanel('output')} data-device-row="output" />
       <MenuDivider />
-      <SliderRow label="Input Volume" value={st.inputVolume} max={200} onChange={(v) => update({ inputVolume: v })} data-input-volume="" />
+      <SliderRow label={t('Input Volume')} value={st.inputVolume} max={200} onChange={(v) => update({ inputVolume: v })} data-input-volume="" />
       <LevelRow />
-      <SliderRow label="Output Volume" value={Math.min(100, st.outputVolume)} max={100} onChange={(v) => update({ outputVolume: v })} data-output-volume="" />
+      <SliderRow label={t('Output Volume')} value={Math.min(100, st.outputVolume)} max={100} onChange={(v) => update({ outputVolume: v })} data-output-volume="" />
       <MenuDivider />
-      <CheckRow label="Deafen" checked={deaf} onChange={(v) => voice.setDeaf(v)} data-call-deafen="" />
-      <SettingsRow label="Voice Settings" close={close} />
+      <CheckRow label={t('Deafen')} checked={deaf} onChange={(v) => voice.setDeaf(v)} data-call-deafen="" />
+      <SettingsRow label={t('Voice Settings')} close={close} />
     </div>
   )
 }
@@ -246,14 +246,14 @@ export function CameraMenu({ close }: { close: () => void }) {
   const [preview, setPreview] = useState(false)
   const cams = useDevices('camera')
   const camId = useCurrentDevice('camera')
-  if (panel === 'camera') return <SubPanel title={TITLES.camera} onBack={() => setPanel('main')} data-device-menu="camera"><DeviceOptions kind="camera" onPicked={() => setPanel('main')} /></SubPanel>
+  if (panel === 'camera') return <SubPanel title={titles().camera} onBack={() => setPanel('main')} data-device-menu="camera"><DeviceOptions kind="camera" onPicked={() => setPanel('main')} /></SubPanel>
   return (
     <div data-camera-menu>
-      <NavRow title="Camera" sub={deviceLabel('camera', cams, camId)} onClick={() => setPanel('camera')} data-device-row="camera" />
+      <NavRow title={t('Camera')} sub={deviceLabel('camera', cams, camId)} onClick={() => setPanel('camera')} data-device-row="camera" />
       <MenuDivider />
       {preview && <CameraPreview />}
-      <ActionRow icon={<Eye size={18} />} label={preview ? 'Hide Preview' : 'Preview Camera'} onClick={() => setPreview((p) => !p)} />
-      <SettingsRow label="Video Settings" close={close} />
+      <ActionRow icon={<Eye size={18} />} label={preview ? t('Hide Preview') : t('Preview Camera')} onClick={() => setPreview((p) => !p)} />
+      <SettingsRow label={t('Video Settings')} close={close} />
     </div>
   )
 }
@@ -267,13 +267,13 @@ function CameraPreview() {
   useEffect(() => {
     if (live) return
     let stream: MediaStream | null = null, cancelled = false
-    voice.openCamera().then((s) => { if (cancelled) { s?.getTracks().forEach((t) => t.stop()); return } stream = s; setOwn(s); setFailed(!s) })
-    return () => { cancelled = true; stream?.getTracks().forEach((t) => t.stop()); setOwn(null) }
+    voice.openCamera().then((s) => { if (cancelled) { s?.getTracks().forEach((tr) => tr.stop()); return } stream = s; setOwn(s); setFailed(!s) })
+    return () => { cancelled = true; stream?.getTracks().forEach((tr) => tr.stop()); setOwn(null) }
   }, [live, camId])
   const stream = live ?? own
   return (
     <div className="mx-1 mb-1.5 aspect-video overflow-hidden rounded-lg bg-bg-0" data-camera-preview>
-      {stream ? <VideoTile stream={stream} mirror contain={false} /> : <div className="h-full flex items-center justify-center text-xs text-text-2">{failed ? 'Camera unavailable' : 'Starting camera…'}</div>}
+      {stream ? <VideoTile stream={stream} mirror contain={false} /> : <div className="h-full flex items-center justify-center text-xs text-text-2">{failed ? t('Camera unavailable') : t('Starting camera…')}</div>}
     </div>
   )
 }

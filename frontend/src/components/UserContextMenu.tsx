@@ -10,16 +10,18 @@ import { publicOrigin } from './InviteCard'
 import type { DmChannel, Invite, Member } from '../lib/types'
 import { myChannelPerms, myGuildPerms, useStore } from '../store'
 import type { MenuEntry } from './ContextMenu'
+import { t, useT } from '../lib/i18n'
 
 export interface MenuUser { id: string; display_name: string; nickname?: string | null; bot?: boolean }
 
 /** The volume slider at the top of a voice participant's menu (Discord's "User Volume"). */
 function UserVolume({ id }: { id: string }) {
+  useT()
   const v = (useUserAudioMap()[id]?.volume ?? 100)
   return (
     <div className="px-2 py-1.5" onClick={(e) => e.stopPropagation()} data-user-volume={id}>
-      <div className="flex items-center justify-between text-xs font-semibold text-text-2"><span>User Volume</span><span className="tabular-nums">{v}%</span></div>
-      <input type="range" min={0} max={100} step={5} value={v} onChange={(e) => setUserAudio(id, { volume: Number(e.target.value) })} className="mt-1 w-full accent-accent" aria-label="User volume" />
+      <div className="flex items-center justify-between text-xs font-semibold text-text-2"><span>{t('User Volume')}</span><span className="tabular-nums">{v}%</span></div>
+      <input type="range" min={0} max={100} step={5} value={v} onChange={(e) => setUserAudio(id, { volume: Number(e.target.value) })} className="mt-1 w-full accent-accent" aria-label={t('User volume')} />
     </div>
   )
 }
@@ -58,10 +60,10 @@ export function useUserMenu(guildId?: string | null) {
     const ignored = !!me?.ignored_users?.includes(u.id), alerts = !!me?.online_alerts?.includes(u.id)
     const member = members?.[u.id], myMember = me ? members?.[me.id] : undefined
     const outranks = !!(guild && me && !isMe && member && guild.owner_id !== u.id && (guild.owner_id === me.id || highestPosition({ guild, roles, member: myMember }, me.id) > highestPosition({ guild, roles, member }, u.id)))
-    const copy = (label: string, text: string) => act(async () => { await navigator.clipboard.writeText(text); pushToast(`${label} copied`) })
+    const copy = (label: string, text: string) => act(async () => { await navigator.clipboard.writeText(text); pushToast(t('{label} copied', { label })) })
     const profile = () => openModal({ kind: 'profile', userId: u.id, anchor: anchor ? { x: anchor.left, y: anchor.top, w: anchor.width, h: anchor.height } : undefined })
     const message = () => act(async () => { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); navigate(`/channels/@me/${c.id}`) })
-    const block = () => openModal({ kind: 'confirm', title: `Block ${name}`, body: `${name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.`, danger: true, confirmLabel: 'Block', action: () => act(() => api.put(`/users/@me/relationships/${u.id}/block`)) })
+    const block = () => openModal({ kind: 'confirm', title: t('Block {name}', { name }), body: t('{name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.', { name }), danger: true, confirmLabel: t('Block'), action: () => act(() => api.put(`/users/@me/relationships/${u.id}/block`)) })
     const st = useStore.getState()
     const call = () => act(async () => { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); navigate(`/channels/@me/${c.id}`); await voice.join(c.id) })
     const hasComposer = !!document.querySelector('textarea.composer-input')
@@ -89,10 +91,10 @@ export function useUserMenu(guildId?: string | null) {
       ? Object.values(st.channels).filter((c) => c.guild_id === guildId && c.id !== vs!.channel_id && (c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio') && has(myChannelPerms(st, c.id), P.CONNECT)).sort((a, b) => a.position - b.position)
       : []
     const modVoice: MenuEntry[] = inVoiceHere && !isMe ? [
-      ...(has(myPerms, P.MUTE_MEMBERS) ? [{ label: vs!.mute ? '✓ Server Mute' : 'Server Mute', icon: <MicOff size={16} />, danger: !vs!.mute, onClick: () => setVoice({ mute: !vs!.mute }, vs!.mute ? `${name} can speak again` : `${name} is server muted`) }] : []),
-      ...(has(myPerms, P.DEAFEN_MEMBERS) ? [{ label: vs!.deaf ? '✓ Server Deafen' : 'Server Deafen', icon: <HeadphoneOff size={16} />, danger: !vs!.deaf, onClick: () => setVoice({ deaf: !vs!.deaf }, vs!.deaf ? `${name} can hear again` : `${name} is server deafened`) }] : []),
-      ...(moveTargets.length ? [{ label: 'Move To', icon: <ArrowRightLeft size={16} />, children: moveTargets.map((c) => ({ label: c.name, onClick: () => setVoice({ channel_id: c.id }, `Moved ${name} to ${c.name}`) })) }] : []),
-      ...(has(myPerms, P.MOVE_MEMBERS) ? [{ label: 'Disconnect', icon: <PhoneOff size={16} />, danger: true, onClick: () => setVoice({ channel_id: null }, `Disconnected ${name}`) }] : []),
+      ...(has(myPerms, P.MUTE_MEMBERS) ? [{ label: `${vs!.mute ? '✓ ' : ''}${t('Server Mute')}`, icon: <MicOff size={16} />, danger: !vs!.mute, onClick: () => setVoice({ mute: !vs!.mute }, vs!.mute ? t('{name} can speak again', { name }) : t('{name} is server muted', { name })) }] : []),
+      ...(has(myPerms, P.DEAFEN_MEMBERS) ? [{ label: `${vs!.deaf ? '✓ ' : ''}${t('Server Deafen')}`, icon: <HeadphoneOff size={16} />, danger: !vs!.deaf, onClick: () => setVoice({ deaf: !vs!.deaf }, vs!.deaf ? t('{name} can hear again', { name }) : t('{name} is server deafened', { name })) }] : []),
+      ...(moveTargets.length ? [{ label: 'Move To', icon: <ArrowRightLeft size={16} />, children: moveTargets.map((c) => ({ label: c.name, onClick: () => setVoice({ channel_id: c.id }, t('Moved {name} to {channel}', { name, channel: c.name })) })) }] : []),
+      ...(has(myPerms, P.MOVE_MEMBERS) ? [{ label: 'Disconnect', icon: <PhoneOff size={16} />, danger: true, onClick: () => setVoice({ channel_id: null }, t('Disconnected {name}', { name })) }] : []),
     ] : []
     // Invite to Server: a week-long invite to any server you can invite to, sent to them in a DM.
     const invitable = isMe ? [] : Object.values(st.guilds).filter((g) => g.id !== guildId && has(myGuildPerms(st, g.id), P.CREATE_INVITE))
@@ -100,7 +102,7 @@ export function useUserMenu(guildId?: string | null) {
       const inv = await api.post<Invite>(`/guilds/${gid}/invites`, { max_age: 7 * 86400, max_uses: 0 })
       const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c)
       await api.post(`/channels/${c.id}/messages`, { content: `${publicOrigin()}/invite/${inv.code}` })
-      pushToast(`Invited ${name} to ${gname}`)
+      pushToast(t('Invited {name} to {server}', { name, server: gname }))
     })
     const inviteMenu = invitable.length ? [{ label: 'Invite to Server', icon: <Send size={16} />, children: invitable.map((g) => ({ label: g.name, onClick: () => invite(g.id, g.name) })) }] : []
     const kick = () => openModal({ kind: 'kick', guildId: guildId!, userId: u.id })
@@ -109,8 +111,8 @@ export function useUserMenu(guildId?: string | null) {
     const ua = userAudio(u.id)
     const voiceItems: MenuEntry[] = inMyCall ? [
       { node: <UserVolume id={u.id} /> },
-      { label: ua.muted ? '✓ Mute' : 'Mute', icon: <VolumeX size={16} />, onClick: () => setUserAudio(u.id, { muted: !ua.muted }) },
-      { label: ua.hideVideo ? '✓ Hide Video' : 'Hide Video', icon: <VideoOff size={16} />, onClick: () => setUserAudio(u.id, { hideVideo: !ua.hideVideo }) },
+      { label: `${ua.muted ? '✓ ' : ''}${t('Mute')}`, icon: <VolumeX size={16} />, onClick: () => setUserAudio(u.id, { muted: !ua.muted }) },
+      { label: `${ua.hideVideo ? '✓ ' : ''}${t('Hide Video')}`, icon: <VideoOff size={16} />, onClick: () => setUserAudio(u.id, { hideVideo: !ua.hideVideo }) },
       'sep',
     ] : []
     if (isMe) {
@@ -120,7 +122,7 @@ export function useUserMenu(guildId?: string | null) {
         { label: 'Edit Profile', onClick: () => openModal({ kind: 'userSettings', tab: 'profile' }) },
         ...nickname,
         ...roleMenu,
-        ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy User ID', icon: <Copy size={16} />, onClick: () => copy('User ID', u.id) }] : []),
+        ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy User ID', icon: <Copy size={16} />, onClick: () => copy(t('User ID'), u.id) }] : []),
       ]
     }
     return [
@@ -147,11 +149,11 @@ export function useUserMenu(guildId?: string | null) {
       { label: 'Report User', icon: <Flag size={16} />, danger: true, onClick: () => openModal({ kind: 'report', userId: u.id, name, guildId: guildId ?? null }) },
       ...(outranks && (has(myPerms, P.KICK_MEMBERS) || has(myPerms, P.BAN_MEMBERS) || has(myPerms, P.MODERATE_MEMBERS)) ? ['sep' as const, { label: 'Moderator View', icon: <Shield size={16} />, onClick: () => openModal({ kind: 'modView', guildId: guildId!, userId: u.id }) }] : []),
       ...(outranks && has(myPerms, P.MODERATE_MEMBERS) ? [isTimedOut(member)
-        ? { label: 'Remove Timeout', icon: <TimerOff size={16} />, onClick: () => act(async () => { upsertMember(await api.delete(`/guilds/${guildId}/members/${u.id}/timeout`)); pushToast(`Timeout removed for ${name}`) }) }
-        : { label: `Timeout ${name}`, icon: <TimerReset size={16} />, danger: true, onClick: () => openModal({ kind: 'timeout', guildId: guildId!, userId: u.id }) }] : []),
-      ...(outranks && has(myPerms, P.KICK_MEMBERS) ? [{ label: `Kick ${name}`, icon: <UserMinus size={16} />, danger: true, onClick: kick }] : []),
-      ...(outranks && has(myPerms, P.BAN_MEMBERS) ? [{ label: `Ban ${name}`, icon: <Gavel size={16} />, danger: true, onClick: () => openModal({ kind: 'ban', guildId: guildId!, userId: u.id }) }] : []),
-      ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy User ID', icon: <Copy size={16} />, onClick: () => copy('User ID', u.id) }] : []),
+        ? { label: 'Remove Timeout', icon: <TimerOff size={16} />, onClick: () => act(async () => { upsertMember(await api.delete(`/guilds/${guildId}/members/${u.id}/timeout`)); pushToast(t('Timeout removed for {name}', { name })) }) }
+        : { label: t('Timeout {name}', { name }), icon: <TimerReset size={16} />, danger: true, onClick: () => openModal({ kind: 'timeout', guildId: guildId!, userId: u.id }) }] : []),
+      ...(outranks && has(myPerms, P.KICK_MEMBERS) ? [{ label: t('Kick {name}', { name }), icon: <UserMinus size={16} />, danger: true, onClick: kick }] : []),
+      ...(outranks && has(myPerms, P.BAN_MEMBERS) ? [{ label: t('Ban {name}', { name }), icon: <Gavel size={16} />, danger: true, onClick: () => openModal({ kind: 'ban', guildId: guildId!, userId: u.id }) }] : []),
+      ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy User ID', icon: <Copy size={16} />, onClick: () => copy(t('User ID'), u.id) }] : []),
     ]
   }
 }

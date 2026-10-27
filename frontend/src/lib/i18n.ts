@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createElement, Fragment, useSyncExternalStore, type ReactNode } from 'react'
 import { STORAGE_PREFIX } from './brand'
 import KEYS from '../locales/keys.json'
 
@@ -96,6 +96,29 @@ export function t(key: string, vars?: Record<string, string | number>): string {
   let out = (lang === 'en' ? undefined : catalogues[lang]?.[key]) ?? key
   if (vars) for (const [k, v] of Object.entries(vars)) out = out.replaceAll(`{${k}}`, String(v))
   return out
+}
+
+/** t() for sentences with elements inside: `tn('Ban {name}?', { name: <b>{n}</b> })`. The whole sentence is one key, so
+ *  each language can put the element where its word order wants it. */
+export function tn(key: string, vars: Record<string, ReactNode>): ReactNode {
+  const parts = t(key).split(/(\{[a-zA-Z_][a-zA-Z0-9_]*\})/)
+  return createElement(Fragment, null, ...parts.map((p) => { const m = /^\{(.+)\}$/.exec(p); return m && m[1] in vars ? vars[m[1]] : p }))
+}
+
+const reverse = new Map<Resolved, Map<string, string>>()
+/** The English source of a string that may already have gone through t(): for stable ids (data-menu-item) when
+ *  callers pass translated labels. Unknown text comes back unchanged. */
+export function sourceText(text: string): string {
+  const lang = resolvedLanguage()
+  const c = lang === 'en' ? undefined : catalogues[lang]
+  if (!c) return text
+  let r = reverse.get(lang)
+  if (!r || r.size === 0) {
+    // Two keys can share a translation; the first one (the older, shared-component key) wins.
+    r = new Map(); for (const [k, v] of Object.entries(c)) if (!r.has(v)) r.set(v, k)
+    reverse.set(lang, r)
+  }
+  return r.get(text) ?? text
 }
 
 /** Hook form: re-renders the component when the language changes or its catalogue arrives. */

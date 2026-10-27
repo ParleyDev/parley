@@ -21,7 +21,7 @@ import { api } from '../lib/api'
 import { getPrefs } from '../lib/prefs'
 import type { Channel } from '../lib/types'
 import { STORAGE_PREFIX } from '../lib/brand'
-import { useT } from '../lib/i18n'
+import { useT, tn } from '../lib/i18n'
 
 
 /** Channel-list icon by kind; the server's rules channel gets a rulebook. */
@@ -93,7 +93,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     }
     setOffscreen((o) => (o.above === above && o.below === below ? o : { above, below }))
   }
-  useEffect(() => { const t = requestAnimationFrame(measureUnread); return () => cancelAnimationFrame(t) }) // after every render: unread rows may have changed
+  useEffect(() => { const raf = requestAnimationFrame(measureUnread); return () => cancelAnimationFrame(raf) }) // after every render: unread rows may have changed
   useEffect(() => { const box = listRef.current; if (!box || typeof ResizeObserver === 'undefined') return; const ro = new ResizeObserver(() => measureUnread()); ro.observe(box); return () => ro.disconnect() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const jumpUnread = (dir: 'above' | 'below') => {
     const box = listRef.current; if (!box) return
@@ -163,15 +163,15 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     onDragOver: (e: DragEvent<HTMLDivElement>) => {
       if (!drag || !listRef.current) return
       e.preventDefault(); e.dataTransfer.dropEffect = 'move'
-      const t = dropTarget(listRef.current, e.clientY, drag, channels[drag]?.kind === 'category')
-      if (t?.key !== target?.key) setTarget(t)
+      const tg = dropTarget(listRef.current, e.clientY, drag, channels[drag]?.kind === 'category')
+      if (tg?.key !== target?.key) setTarget(tg)
     },
     onDragLeave: (e: DragEvent<HTMLDivElement>) => { if (!listRef.current?.contains(e.relatedTarget as Node | null)) setTarget(null) },
     onDrop: (e: DragEvent<HTMLDivElement>) => {
       if (!drag || !listRef.current) return
       e.preventDefault()
-      const t = dropTarget(listRef.current, e.clientY, drag, channels[drag]?.kind === 'category')
-      if (t?.kind === 'category') dropCategory(t.before); else if (t) dropChannel(t.parent, t.before)
+      const tg = dropTarget(listRef.current, e.clientY, drag, channels[drag]?.kind === 'category')
+      if (tg?.kind === 'category') dropCategory(tg.before); else if (tg) dropChannel(tg.parent, tg.before)
       endDrag()
     },
   } : {}
@@ -184,15 +184,15 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const categoryMenu = (c: Channel): MenuEntry[] => {
     const unreadKids = childrenOf(c.id).filter((k) => isUnread({ readStates, lastMessageId }, k.id))
     return [
-    { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !unreadKids.length, onClick: () => { unreadKids.forEach((k) => markRead(k.id)) } },
+    { label: t('Mark As Read'), icon: <MailCheck size={16} />, disabled: !unreadKids.length, onClick: () => { unreadKids.forEach((k) => markRead(k.id)) } },
     'sep',
-    { label: collapsed[c.id] ? 'Expand Category' : 'Collapse Category', icon: <ChevronDown size={16} />, onClick: () => toggleCollapsed(c.id) },
-    { label: 'Collapse All Categories', icon: <ChevronsDownUp size={16} />, onClick: () => setAllCollapsed(true) },
-    { label: 'Expand All Categories', icon: <ChevronsUpDown size={16} />, onClick: () => setAllCollapsed(false) },
+    { label: collapsed[c.id] ? t('Expand Category') : t('Collapse Category'), icon: <ChevronDown size={16} />, onClick: () => toggleCollapsed(c.id) },
+    { label: t('Collapse All Categories'), icon: <ChevronsDownUp size={16} />, onClick: () => setAllCollapsed(true) },
+    { label: t('Expand All Categories'), icon: <ChevronsUpDown size={16} />, onClick: () => setAllCollapsed(false) },
     'sep',
     ...notifEntries(c.id, 'Category', notifSettings, { serverDefault: true }),
-    ...(canCreate ? ['sep' as const, { label: 'Create Channel', icon: <Plus size={16} />, onClick: () => openModal({ kind: 'createChannel', guildId, parentId: c.id }) }, { label: 'Edit Category', icon: <Pencil size={16} />, onClick: () => openModal({ kind: 'editCategory', channelId: c.id }) }, { label: 'Delete Category', icon: <Trash2 size={16} />, danger: true, onClick: () => openModal({ kind: 'confirm', title: `Delete '${c.name}'`, body: `The channels inside ${c.name} are kept and move to the top of the list.`, danger: true, confirmLabel: 'Delete Category', action: async () => { try { await api.delete(`/channels/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } }) }] : []),
-    ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Category ID', icon: <Copy size={16} />, onClick: () => copyText('Category ID', c.id) }] : []),
+    ...(canCreate ? ['sep' as const, { label: t('Create Channel'), icon: <Plus size={16} />, onClick: () => openModal({ kind: 'createChannel', guildId, parentId: c.id }) }, { label: t('Edit Category'), icon: <Pencil size={16} />, onClick: () => openModal({ kind: 'editCategory', channelId: c.id }) }, { label: t('Delete Category'), icon: <Trash2 size={16} />, danger: true, onClick: () => openModal({ kind: 'confirm', title: t("Delete '{name}'", { name: c.name }), body: t('The channels inside {name} are kept and move to the top of the list.', { name: c.name }), danger: true, confirmLabel: t('Delete Category'), action: async () => { try { await api.delete(`/channels/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } }) }] : []),
+    ...(getPrefs().developerMode ? ['sep' as const, { label: t('Copy Category ID'), icon: <Copy size={16} />, onClick: () => copyText(t('Category ID'), c.id) }] : []),
   ]
   }
   // Hide Muted Channels (per server, remembered in this browser): muted channels drop out unless you're in one.
@@ -214,50 +214,50 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       {(c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
     </div>
   )
-  const copyText = async (label: string, t: string) => { try { await navigator.clipboard.writeText(t); pushToast(`${label} copied`) } catch { pushToast('Clipboard unavailable', 'error') } }
+  const copyText = async (label: string, text: string) => { try { await navigator.clipboard.writeText(text); pushToast(t('{label} copied', { label })) } catch { pushToast(t('Clipboard unavailable'), 'error') } }
   const channelMenu = (c: { id: string; name: string }): MenuEntry[] => {
     const unread = isUnread({ readStates, lastMessageId }, c.id)
     const canEdit = canEditChannel(c.id)
     return [
-      { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: !unread, onClick: () => markRead(c.id) },
-      { label: pinnedIds.includes(c.id) ? 'Unpin Channel' : 'Pin Channel', icon: pinnedIds.includes(c.id) ? <PinOff size={16} /> : <Pin size={16} />, onClick: () => togglePinned(c.id) },
+      { label: t('Mark As Read'), icon: <MailCheck size={16} />, disabled: !unread, onClick: () => markRead(c.id) },
+      { label: pinnedIds.includes(c.id) ? t('Unpin Channel') : t('Pin Channel'), icon: pinnedIds.includes(c.id) ? <PinOff size={16} /> : <Pin size={16} />, onClick: () => togglePinned(c.id) },
       'sep',
       ...notifEntries(c.id, 'Channel', notifSettings, { serverDefault: true }),
       'sep',
-      ...(canInvite ? [{ label: 'Invite People', icon: <UserPlus size={16} />, accent: true, onClick: () => openModal({ kind: 'invite', guildId }) }] : []),
-      { label: 'Copy Link', icon: <Link2 size={16} />, onClick: () => copyText('Link', `${location.origin}/channels/${guildId}/${c.id}`) },
-      ...(canEdit ? ['sep' as const, { label: 'Edit Channel', icon: <Settings size={16} />, onClick: () => openModal({ kind: 'channelSettings', channelId: c.id }) }] : []),
-      ...(canEdit && list.length > 1 ? [{ label: 'Delete Channel', icon: <Trash2 size={16} />, danger: true, onClick: () => openModal({ kind: 'confirm', title: `Delete '${c.name}'`, body: `Are you sure you want to delete #${c.name}? This cannot be undone.`, danger: true, confirmLabel: 'Delete Channel', action: async () => { try { await api.delete(`/channels/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } }) }] : []),
-      ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Channel ID', icon: <Copy size={16} />, onClick: () => copyText('Channel ID', c.id) }] : []),
+      ...(canInvite ? [{ label: t('Invite People'), icon: <UserPlus size={16} />, accent: true, onClick: () => openModal({ kind: 'invite', guildId }) }] : []),
+      { label: t('Copy Link'), icon: <Link2 size={16} />, onClick: () => copyText(t('Link'), `${location.origin}/channels/${guildId}/${c.id}`) },
+      ...(canEdit ? ['sep' as const, { label: t('Edit Channel'), icon: <Settings size={16} />, onClick: () => openModal({ kind: 'channelSettings', channelId: c.id }) }] : []),
+      ...(canEdit && list.length > 1 ? [{ label: t('Delete Channel'), icon: <Trash2 size={16} />, danger: true, onClick: () => openModal({ kind: 'confirm', title: t("Delete '{name}'", { name: c.name }), body: t('Are you sure you want to delete #{name}? This cannot be undone.', { name: c.name }), danger: true, confirmLabel: t('Delete Channel'), action: async () => { try { await api.delete(`/channels/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } }) }] : []),
+      ...(getPrefs().developerMode ? ['sep' as const, { label: t('Copy Channel ID'), icon: <Copy size={16} />, onClick: () => copyText(t('Channel ID'), c.id) }] : []),
     ]
   }
 
   const leave = () => openModal({
-    kind: 'confirm', title: `Leave '${guild.name}'`, body: `Are you sure you want to leave ${guild.name}? You won't be able to rejoin unless you are re-invited.`, danger: true, confirmLabel: 'Leave Server',
+    kind: 'confirm', title: t("Leave '{name}'", { name: guild.name }), body: t("Are you sure you want to leave {name}? You won't be able to rejoin unless you are re-invited.", { name: guild.name }), danger: true, confirmLabel: t('Leave Server'),
     action: async () => {
       try { await api.delete(`/guilds/${guildId}/members/@me`); removeGuild(guildId); navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
     },
   })
   const del = () => openModal({
-    kind: 'confirm', title: `Delete '${guild.name}'`, body: `Are you sure you want to delete ${guild.name}? This cannot be undone.`, danger: true, confirmLabel: 'Delete Server',
+    kind: 'confirm', title: t("Delete '{name}'", { name: guild.name }), body: t('Are you sure you want to delete {name}? This cannot be undone.', { name: guild.name }), danger: true, confirmLabel: t('Delete Server'),
     action: async () => {
       try { await api.delete(`/guilds/${guildId}`); removeGuild(guildId); navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
     },
   })
 
   return (
-    <aside aria-label="Channels" className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
+    <aside aria-label={t('Channels')} className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="relative">
         {guild.banner_url ? (
           <div className="relative h-[135px] bg-cover bg-center" style={{ backgroundImage: `url(${guild.banner_url})` }} data-guild-banner>
             <button onClick={() => setMenu((m) => !m)} className="absolute inset-x-0 top-0 h-12 px-4 flex items-center justify-between font-bold text-white text-left bg-gradient-to-b from-black/60 to-transparent hover:from-black/70 drop-shadow">
-              <span className="truncate">{guild.name}{guild.partnered && <span title="Partnered server" className="ml-1 inline-flex align-[-2px]" data-partnered><Handshake size={15} className="text-accent" /></span>}</span>
+              <span className="truncate">{guild.name}{guild.partnered && <span title={t('Partnered server')} className="ml-1 inline-flex align-[-2px]" data-partnered><Handshake size={15} className="text-accent" /></span>}</span>
               <ChevronDown size={18} className={`transition ${menu ? 'rotate-180' : ''}`} />
             </button>
           </div>
         ) : (
           <button onClick={() => setMenu((m) => !m)} className="h-12 w-full px-4 flex items-center justify-between font-bold border-b border-line hover:bg-bg-3 transition text-left">
-            <span className="truncate">{guild.name}{guild.partnered && <span title="Partnered server" className="ml-1 inline-flex align-[-2px]" data-partnered><Handshake size={15} className="text-accent" /></span>}</span>
+            <span className="truncate">{guild.name}{guild.partnered && <span title={t('Partnered server')} className="ml-1 inline-flex align-[-2px]" data-partnered><Handshake size={15} className="text-accent" /></span>}</span>
             <ChevronDown size={18} className={`text-text-1 transition ${menu ? 'rotate-180' : ''}`} />
           </button>
         )}
@@ -266,18 +266,18 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
             <div className="pop absolute left-2 right-2 top-full mt-1 z-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5 text-sm" onClick={() => setMenu(false)}>
               {canInvite && <MenuItem icon={<UserPlus size={16} />} onClick={() => openModal({ kind: 'invite', guildId })} accent>{t('Invite People')}</MenuItem>}
-              <MenuItem icon={<BellOff size={16} />} onClick={(e) => { setMenu(false); ctx.open(e as React.MouseEvent, notifEntries(guildId, 'Server', notifSettings, { suppress: true, fallback: allGuilds[guildId]?.default_notifications })) }}>{mutedTarget(notifSettings, guildId) ? 'Unmute / Notifications' : 'Mute / Notifications'}</MenuItem>
-              <MenuItem icon={<Bell size={16} />} onClick={() => openModal({ kind: 'guildNotifications', guildId })}>Notification Settings</MenuItem>
-              <MenuItem icon={<Pencil size={16} />} onClick={() => openModal({ kind: 'serverProfile', guildId })}>Edit Server Profile</MenuItem>
-              <MenuItem icon={<ListChecks size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId })}>Browse Channels</MenuItem>
-              {(Object.values(allRoles).some((r) => r.self_assignable || r.requirements) || onboardingOn) && <MenuItem icon={<Tags size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId, tab: 'roles' })}>Channels &amp; Roles</MenuItem>}
-              <MenuItem icon={hideMuted ? <Eye size={16} /> : <EyeOff size={16} />} onClick={() => { setMenu(false); toggleHideMuted() }}>{hideMuted ? 'Show Muted Channels' : 'Hide Muted Channels'}</MenuItem>
-              {guild.welcome_screen?.enabled && <MenuItem icon={<DoorOpen size={16} />} onClick={() => openModal({ kind: 'welcome', guildId })}>Welcome Screen</MenuItem>}
+              <MenuItem icon={<BellOff size={16} />} onClick={(e) => { setMenu(false); ctx.open(e as React.MouseEvent, notifEntries(guildId, 'Server', notifSettings, { suppress: true, fallback: allGuilds[guildId]?.default_notifications })) }}>{mutedTarget(notifSettings, guildId) ? t('Unmute / Notifications') : t('Mute / Notifications')}</MenuItem>
+              <MenuItem icon={<Bell size={16} />} onClick={() => openModal({ kind: 'guildNotifications', guildId })}>{t('Notification Settings')}</MenuItem>
+              <MenuItem icon={<Pencil size={16} />} onClick={() => openModal({ kind: 'serverProfile', guildId })}>{t('Edit Server Profile')}</MenuItem>
+              <MenuItem icon={<ListChecks size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId })}>{t('Browse Channels')}</MenuItem>
+              {(Object.values(allRoles).some((r) => r.self_assignable || r.requirements) || onboardingOn) && <MenuItem icon={<Tags size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId, tab: 'roles' })}>{t('Channels & Roles')}</MenuItem>}
+              <MenuItem icon={hideMuted ? <Eye size={16} /> : <EyeOff size={16} />} onClick={() => { setMenu(false); toggleHideMuted() }}>{hideMuted ? t('Show Muted Channels') : t('Hide Muted Channels')}</MenuItem>
+              {guild.welcome_screen?.enabled && <MenuItem icon={<DoorOpen size={16} />} onClick={() => openModal({ kind: 'welcome', guildId })}>{t('Welcome Screen')}</MenuItem>}
               <MenuItem icon={<ShieldCheck size={16} />} onClick={() => openModal({ kind: 'guildPrivacy', guildId })}>{t('Privacy Settings')}</MenuItem>
               {canManageGuild && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>{t('Server Settings')}</MenuItem>}
               {canCreate && <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>{t('Create Channel')}</MenuItem>}
               <div className="h-px bg-line my-1" />
-              {!isOwner && <MenuItem icon={<Flag size={16} />} onClick={() => openModal({ kind: 'report', userId: guild.owner_id, name: guild.name, guildId, server: true })} danger>Report Server</MenuItem>}
+              {!isOwner && <MenuItem icon={<Flag size={16} />} onClick={() => openModal({ kind: 'report', userId: guild.owner_id, name: guild.name, guildId, server: true })} danger>{t('Report Server')}</MenuItem>}
               {isOwner
                 ? <MenuItem icon={<Trash2 size={16} />} onClick={del} danger>{t('Delete Server')}</MenuItem>
                 : <MenuItem icon={<LogOut size={16} />} onClick={leave} danger>{t('Leave Server')}</MenuItem>}
@@ -288,20 +288,20 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
 
       {viewAs && (
         <div className="flex items-center gap-2 bg-accent/90 px-3 py-2 text-xs text-white" data-view-as={viewAs.roleIds.join(',')}>
-          <span className="min-w-0 flex-1 truncate">Viewing as <b>{viewAs.roleIds.map((r) => allRoles[r]?.name ?? 'role').join(', ') || '@everyone'}</b></span>
-          <button type="button" onClick={() => useStore.getState().setViewAs(null)} className="shrink-0 rounded bg-white/20 px-2 py-0.5 font-semibold hover:bg-white/30" data-view-as-exit>Back</button>
+          <span className="min-w-0 flex-1 truncate">{tn('Viewing as {roles}', { roles: <b>{viewAs.roleIds.map((r) => allRoles[r]?.name ?? t('role')).join(', ') || '@everyone'}</b> })}</span>
+          <button type="button" onClick={() => useStore.getState().setViewAs(null)} className="shrink-0 rounded bg-white/20 px-2 py-0.5 font-semibold hover:bg-white/30" data-view-as-exit>{t('Back')}</button>
         </div>
       )}
       <div className="relative flex-1 min-h-0 flex flex-col">
-      {offscreen.above > 0 && <button type="button" onClick={() => jumpUnread('above')} className={`absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold shadow-lg ${offscreen.above === 2 ? 'bg-danger text-white' : 'bg-bg-4 text-text-0'}`} data-unread-pill="above">{offscreen.above === 2 ? 'New mentions' : 'Unread'} ↑</button>}
-      {offscreen.below > 0 && <button type="button" onClick={() => jumpUnread('below')} className={`absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold shadow-lg ${offscreen.below === 2 ? 'bg-danger text-white' : 'bg-bg-4 text-text-0'}`} data-unread-pill="below">{offscreen.below === 2 ? 'New mentions' : 'Unread'} ↓</button>}
+      {offscreen.above > 0 && <button type="button" onClick={() => jumpUnread('above')} className={`absolute left-1/2 top-2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold shadow-lg ${offscreen.above === 2 ? 'bg-danger text-white' : 'bg-bg-4 text-text-0'}`} data-unread-pill="above">{offscreen.above === 2 ? t('New mentions') : t('Unread')} ↑</button>}
+      {offscreen.below > 0 && <button type="button" onClick={() => jumpUnread('below')} className={`absolute bottom-2 left-1/2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-xs font-bold shadow-lg ${offscreen.below === 2 ? 'bg-danger text-white' : 'bg-bg-4 text-text-0'}`} data-unread-pill="below">{offscreen.below === 2 ? t('New mentions') : t('Unread')} ↓</button>}
       <div ref={listRef} onScroll={measureUnread} className="relative flex-1 overflow-y-auto px-2 pt-3 space-y-4" data-channel-list {...listDropProps}>
         {target?.line !== undefined && <div className="pointer-events-none absolute left-2 right-2 z-10 h-0.5 rounded-full bg-accent" style={{ top: target.line - 1 }} data-drop-line />}
         <EventsRow guildId={guildId} />
         <ActivityRow guildId={guildId} />
         {pinnedHere.length > 0 && (
           <div className="space-y-0.5" data-pinned-channels>
-            <div className="px-1 pb-0.5 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-text-2"><Pin size={11} /> Pinned</div>
+            <div className="px-1 pb-0.5 flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-text-2"><Pin size={11} /> {t('Pinned')}</div>
             {pinnedHere.map((c) => (
               <div key={c.id} data-pinned-channel={c.id}>
                 <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={chanIcon(c, guild?.rules_channel_id)} name={c.name}
@@ -320,7 +320,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             {childrenOf(cat.id).filter((c) => !collapsed[cat.id] || c.id === channelId || showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)).map(row)}
           </Category>
         ))}
-        {canCreate && <div><button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title="Create Channel" className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> Create channel or category</button></div>}
+        {canCreate && <div><button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title={t('Create Channel')} className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> {t('Create channel or category')}</button></div>}
       </div>
       </div>
       {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} />}
@@ -376,13 +376,14 @@ function MenuItem({ children, icon, onClick, danger, accent }: { children: React
 }
 
 function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, dragging, dragProps, testid, children }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; dragging?: boolean; dragProps?: object; testid: string; children: React.ReactNode }) {
+  const t = useT()
   return (
     <div data-category={testid} data-category-open={open ? '1' : '0'} className={dragging ? 'opacity-40' : ''}>
       <div className={`group flex items-center justify-between rounded pr-1 ${highlight ? 'bg-accent/20 text-text-0 ring-1 ring-accent' : ''} text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1`} onContextMenu={onContextMenu} data-category-header {...dragProps}>
         <button onClick={onToggle} className="flex items-center gap-0.5 py-1 pl-0.5 min-w-0" data-category-toggle>
           <ChevronDown size={12} className={`shrink-0 transition ${open ? '' : '-rotate-90'}`} /><span className="truncate">{label}</span>
         </button>
-        {onAdd && <button onClick={onAdd} title="Create Channel" className="opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0" data-category-add><Plus size={16} /></button>}
+        {onAdd && <button onClick={onAdd} title={t('Create Channel')} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0" data-category-add><Plus size={16} /></button>}
       </div>
       <div className="mt-0.5 space-y-0.5 min-h-1">{children}</div>
     </div>
@@ -390,6 +391,7 @@ function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, drag
 }
 
 function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUserMenu: (e: React.MouseEvent<HTMLElement>, u: { id: string; display_name: string; nickname?: string | null }) => void }) {
+  const t = useT()
   const participants = useStore(useShallow((s) => voiceParticipants(s, channelId)))
   const users = useStore((s) => s.users)
   const me = useStore((s) => s.user)
@@ -407,12 +409,12 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
           <button key={p.user_id} onClick={(e) => openModal({ kind: 'profile', userId: p.user_id, anchor: anchorOf(e) })} onContextMenu={(e) => onUserMenu(e, { id: u.id, display_name: u.display_name, nickname: members?.[p.user_id]?.nickname })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
             <span className={`rounded-full ${speaking[p.user_id] ? 'ring-2 ring-success' : ''}`}><Avatar user={u} size={22} /></span>
             <StyledName userId={p.user_id} guildId={guildId} className="truncate flex-1">{members?.[p.user_id]?.nickname ?? u.display_name}</StyledName>
-            {p.self_stream && <span className="rounded bg-danger px-1 text-[9px] font-extrabold text-white">LIVE</span>}
+            {p.self_stream && <span className="rounded bg-danger px-1 text-[9px] font-extrabold text-white">{t('LIVE')}</span>}
             {p.self_video && <Video size={14} className="text-text-2" />}
             {/* A moderator's server deafen or mute shows in red; your own choices in grey. */}
-            {p.deaf ? <HeadphoneOff size={14} className="text-danger" aria-label="Server deafened" data-server-deaf />
+            {p.deaf ? <HeadphoneOff size={14} className="text-danger" aria-label={t('Server deafened')} data-server-deaf />
               : p.self_deaf ? <HeadphoneOff size={14} className="text-text-2" />
-              : p.mute ? <MicOff size={14} className="text-danger" aria-label="Server muted" data-server-mute />
+              : p.mute ? <MicOff size={14} className="text-danger" aria-label={t('Server muted')} data-server-mute />
               : p.self_mute || p.suppress ? <MicOff size={14} className="text-text-2" data-voice-silent={p.suppress ? 'suppressed' : 'self'} /> : null}
           </button>
         )
@@ -422,17 +424,18 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
 }
 
 function ChannelRow({ to, icon, name, unread, mentions = 0, muted, locked, count, extra, onSettings, onClick, onContextMenu }: { to: string; icon: React.ReactNode; name: string; unread?: boolean; mentions?: number; muted?: boolean; locked?: boolean; count?: string; extra?: React.ReactNode; onSettings?: () => void; onClick?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void }) {
+  const t = useT()
   return (
     <NavLink to={to} onClick={onClick} onContextMenu={onContextMenu} data-channel-row={name} data-muted={muted ? 'true' : undefined} data-unread={unread || mentions > 0 ? 'true' : undefined} data-has-mention={mentions > 0 ? 'true' : undefined} className={({ isActive }) => `group relative flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[15px] ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'} ${muted ? 'opacity-50' : ''}`}>
       {unread && <span className="absolute -left-2 top-1/2 -translate-y-1/2 h-2 w-1 rounded-r bg-white" />}
       <span className="text-text-2">{icon}</span>
       <span className={`truncate flex-1 ${unread ? 'font-semibold' : ''}`}>{name}</span>
       {extra}
-      {count && <span className="shrink-0 rounded bg-bg-0/70 px-1 text-[10px] font-semibold tabular-nums text-text-2" title="People in the channel / its limit" data-user-limit>{count}</span>}
-      {locked && <Lock size={12} className="text-text-2 shrink-0" aria-label="End-to-end encrypted calls" data-e2ee-icon />}
+      {count && <span className="shrink-0 rounded bg-bg-0/70 px-1 text-[10px] font-semibold tabular-nums text-text-2" title={t('People in the channel / its limit')} data-user-limit>{count}</span>}
+      {locked && <Lock size={12} className="text-text-2 shrink-0" aria-label={t('End-to-end encrypted calls')} data-e2ee-icon />}
       {muted && <BellOff size={13} className="text-text-2 shrink-0" data-muted-icon />}
       {mentions > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center" data-mention-badge={mentions}>{mentions}</span>}
-      {onSettings && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 text-text-2 hover:text-text-0" title="Edit Channel"><Settings size={14} /></button>}
+      {onSettings && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 text-text-2 hover:text-text-0" title={t('Edit Channel')}><Settings size={14} /></button>}
     </NavLink>
   )
 }
@@ -457,10 +460,11 @@ function EventsRow({ guildId }: { guildId: string }) {
 
 /** "Activity" entry: the server's week at a glance. */
 function ActivityRow({ guildId }: { guildId: string }) {
+  const t = useT()
   const openModal = useStore((s) => s.openModal)
   return (
     <button type="button" onClick={() => openModal({ kind: 'activity', guildId })} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-[15px] font-medium text-text-1 hover:bg-bg-3 hover:text-text-0" data-activity-row>
-      <Flame size={18} className="text-text-2" /><span className="flex-1 text-left">Activity</span>
+      <Flame size={18} className="text-text-2" /><span className="flex-1 text-left">{t('Activity')}</span>
     </button>
   )
 }

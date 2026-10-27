@@ -17,7 +17,7 @@ import ExpressionPicker, { type PickerTab } from './ExpressionPicker'
 import ShortcodeSuggest, { shortcodeAt, useShortcodeSuggestions, type Suggestion } from './ShortcodeSuggest'
 import MentionSuggest, { applyMentions, mentionAt, useMentionItems, type MentionItem } from './MentionSuggest'
 import { dmName, isGroup } from '../lib/dm'
-import { useT } from '../lib/i18n'
+import { useT, tn } from '../lib/i18n'
 import { api } from '../lib/api'
 import { optionHint, commandMatches, runCommand, type SlashCommand } from '../lib/commands'
 import { getDraft, saveDraft } from '../lib/drafts'
@@ -62,8 +62,8 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     if (!myMember?.timeout_until) return
     const ms = new Date(myMember.timeout_until).getTime() - Date.now()
     if (ms <= 0) return
-    const t = setTimeout(() => bump((n) => n + 1), ms + 50)
-    return () => clearTimeout(t)
+    const timer = setTimeout(() => bump((n) => n + 1), ms + 50)
+    return () => clearTimeout(timer)
   }, [myMember?.timeout_until])
   const timedOut = isTimedOut(myMember)
   const rulesGuild = useStore((s) => (channel.guild_id ? s.guilds[channel.guild_id] : undefined))
@@ -78,14 +78,14 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const accountWait = gated && level >= 2 ? new Date(me!.created_at).getTime() + 5 * 60_000 - Date.now() : 0
   const memberWait = gated && level >= 3 ? new Date(myMember!.joined_at).getTime() + 10 * 60_000 - Date.now() : 0
   const verifyBlock = !gated ? null
-    : !me!.email_verified_at ? 'This server requires a verified email address before you can talk. Check your inbox for the verification link.'
-    : accountWait > 0 ? `This server requires an account older than 5 minutes. You can talk in ${shortDuration(accountWait / 1000)}.`
-    : memberWait > 0 ? `This server asks new members to look around for 10 minutes first. You can talk in ${shortDuration(memberWait / 1000)}.`
+    : !me!.email_verified_at ? t('This server requires a verified email address before you can talk. Check your inbox for the verification link.')
+    : accountWait > 0 ? t('This server requires an account older than 5 minutes. You can talk in {time}.', { time: shortDuration(accountWait / 1000) })
+    : memberWait > 0 ? t('This server asks new members to look around for 10 minutes first. You can talk in {time}.', { time: shortDuration(memberWait / 1000) })
     : null
   useEffect(() => {
     if (!verifyBlock || (accountWait <= 0 && memberWait <= 0)) return
-    const t = setInterval(() => bump((n) => n + 1), 1000)
-    return () => clearInterval(t)
+    const timer = setInterval(() => bump((n) => n + 1), 1000)
+    return () => clearInterval(timer)
   }, [verifyBlock, accountWait, memberWait])
   const canSend = has(perms, P.SEND_MESSAGES) && !timedOut && !rulesPending && !verifyBlock
   const canAttach = canSend && (channel.guild_id === null || has(perms, P.ATTACH_FILES))
@@ -116,12 +116,12 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   useEffect(() => {
     if (!typingCmd?.opt || !optAuto) { setAutoChoices([]); return }
     const { cmd, opt, partial, rest } = typingCmd
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       const opts = [...rest.matchAll(/(?:^|\s)([a-z0-9_-]+):([^:]*?)(?=\s[a-z0-9_-]+:|$)/gi)].map((x) => ({ name: x[1].toLowerCase(), value: x[2].trim() }))
       api.post<{ choices: { name: string; value: string | number }[] }>('/interactions/autocomplete', { command_id: cmd.id, channel_id: channel.id, focused: opt.name, options: opts.length ? opts : [{ name: opt.name, value: partial }] })
         .then((r) => { setAutoChoices(r.choices); setAutoIdx(0) }).catch(() => setAutoChoices([]))
     }, 250)
-    return () => clearTimeout(t)
+    return () => clearTimeout(timer)
   }, [typingCmd?.cmd.id, typingCmd?.opt?.name, typingCmd?.partial, optAuto]) // eslint-disable-line react-hooks/exhaustive-deps
   const optionSuggestions = !typingCmd?.opt ? [] : optAuto ? autoChoices : typingCmd.opt.choices.filter((c) => c.name.toLowerCase().startsWith(typingCmd.partial.trim().toLowerCase()))
   const pickOption = (c: { name: string; value: string | number }) => {
@@ -137,8 +137,8 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const cooling = coolUntil > now
   useEffect(() => {
     if (!cooling) return
-    const t = setInterval(() => setNow(Date.now()), 500)
-    return () => clearInterval(t)
+    const timer = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(timer)
   }, [cooling, channel.id])
   const startCooldown = (secs = slow) => { if (secs > 0 && !slowExempt) { cooldowns.set(channel.id, Date.now() + secs * 1000); setNow(Date.now()) } }
   // A refusal from the server ("…in 12 seconds") also starts the countdown, e.g. after a reload.
@@ -243,7 +243,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     return f === 'all' || (f === 'no_roles' && !(s.members[gid]?.[s.user.id]?.roles?.length))
   })
   const addFiles = (files: FileList | File[]) => {
-    if (!canAttach) { pushToast('You do not have permission to attach files here', 'error'); return }
+    if (!canAttach) { pushToast(t('You do not have permission to attach files here'), 'error'); return }
     const list = Array.from(files)
     if (!list.length) return
     if (filtered && list.some((f) => isImage(f.type) || f.type.startsWith('video/'))) {
@@ -254,7 +254,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           const url = URL.createObjectURL(f)
           const bad = await isExplicit(url, isImage(f.type) ? 'image' : 'video', f.name)
           URL.revokeObjectURL(url)
-          if (bad) pushToast(`${f.name} looks explicit, and this server filters explicit media`, 'error'); else ok.push(f)
+          if (bad) pushToast(t('{name} looks explicit, and this server filters explicit media', { name: f.name }), 'error'); else ok.push(f)
         }
         if (ok.length) addFilesNow(ok)
       })()
@@ -265,7 +265,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   const addFilesNow = (list: File[]) => {
     setPending((ps) => {
       const room = MAX_PER_MESSAGE - ps.length
-      if (list.length > room) pushToast(`You can attach up to ${MAX_PER_MESSAGE} files per message`, 'error')
+      if (list.length > room) pushToast(t('You can attach up to {n} files per message', { n: MAX_PER_MESSAGE }), 'error')
       const next = list.slice(0, Math.max(0, room)).map((file): Pending => {
         const key = pendingSeq++
         const preview = isImage(file.type) ? URL.createObjectURL(file) : null
@@ -325,7 +325,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   }
 
   const submit = async () => {
-    if (tooLong) { pushToast(`Your message is ${chars - MAX_CHARS} characters too long. Shorten it or send it as a file.`, 'error'); return }
+    if (tooLong) { pushToast(t('Your message is {n} characters too long. Shorten it or send it as a file.', { n: chars - MAX_CHARS }), 'error'); return }
     if (!canSubmit) return
     let text = value.trim()
     let tts = false
@@ -450,7 +450,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     if (files.length) { e.preventDefault(); addFiles(files) }
   }
 
-  const typers = Object.keys(typing ?? {}).map((id) => users[id]?.display_name ?? 'Someone')
+  const typers = Object.keys(typing ?? {}).map((id) => users[id]?.display_name ?? t('Someone'))
 
   /** Insert text at the caret (emoji picks), keeping focus in the textarea. */
   const insert = (text: string) => {
@@ -476,7 +476,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     try {
       await r.start((levels, ms) => setRec({ ms, levels: levels.slice(-40) }))
       recorder.current = r; setRec({ ms: 0, levels: [] })
-    } catch (e) { pushToast(`Microphone unavailable: ${(e as Error).message}`, 'error') }
+    } catch (e) { pushToast(t('Microphone unavailable: {error}', { error: (e as Error).message }), 'error') }
   }
   const cancelRecording = () => { recorder.current?.cancel(); recorder.current = null; setRec(null) }
   const sendRecording = async () => {
@@ -484,7 +484,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     recorder.current = null; setRecBusy(true)
     try {
       const out = await r.stop()
-      if (out.durationMs < 300) throw new Error('Recording too short')
+      if (out.durationMs < 300) throw new Error(t('Recording too short'))
       const att = await uploadVoice(channel.id, out.blob, out.waveform, out.durationMs)
       await sendMessage(channel.id, '', reply?.id, [att.id])
       onCancelReply(); onSent()
@@ -507,16 +507,16 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     return (
       <div className="shrink-0 px-4 pb-2 pt-1 max-md:px-2 max-md:pb-2">
         {rulesPending && applying
-          ? <div className="rounded-xl bg-accent/10 border border-accent/40 px-4 py-3 text-[15px] text-text-1 flex items-center gap-3" data-application-gate><span className="flex-1"><b>{rulesGuild?.name}</b> reviews new members. Apply to start chatting.</span><button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'application', guildId: channel.guild_id! })} data-application-open>Apply</button></div>
+          ? <div className="rounded-xl bg-accent/10 border border-accent/40 px-4 py-3 text-[15px] text-text-1 flex items-center gap-3" data-application-gate><span className="flex-1">{tn('{guild} reviews new members. Apply to start chatting.', { guild: <b>{rulesGuild?.name}</b> })}</span><button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'application', guildId: channel.guild_id! })} data-application-open>{t('Apply')}</button></div>
           : rulesPending
-          ? <div className="rounded-xl bg-accent/10 border border-accent/40 px-4 py-3 text-[15px] text-text-1 flex items-center gap-3" data-rules-gate><span className="flex-1">Read and accept the server rules to start chatting in <b>{rulesGuild?.name}</b>.</span><button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'rules', guildId: channel.guild_id! })} data-rules-open>View rules</button></div>
+          ? <div className="rounded-xl bg-accent/10 border border-accent/40 px-4 py-3 text-[15px] text-text-1 flex items-center gap-3" data-rules-gate><span className="flex-1">{tn('Read and accept the server rules to start chatting in {guild}.', { guild: <b>{rulesGuild?.name}</b> })}</span><button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'rules', guildId: channel.guild_id! })} data-rules-open>{t('View rules')}</button></div>
           : verifyBlock
           ? <div className="rounded-xl bg-warn/10 border border-warn/40 px-4 py-3 text-[15px] text-text-1" data-verification-gate>{verifyBlock}</div>
           : timedOut
           ? myMember?.quarantined
-            ? <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-quarantined>A moderator has limited your account in this server. You can read, but not send messages, react or join voice until they lift it.</div>
-            : <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-timed-out>You are timed out in this server until <b>{new Date(myMember!.timeout_until!).toLocaleString()}</b>. You can read, but not send messages, react or join voice.</div>
-          : <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2">You do not have permission to send messages in this channel.</div>}
+            ? <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-quarantined>{t('A moderator has limited your account in this server. You can read, but not send messages, react or join voice until they lift it.')}</div>
+            : <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-timed-out>{tn('You are timed out in this server until {time}.', { time: <b>{new Date(myMember!.timeout_until!).toLocaleString()}</b> })} {t('You can read, but not send messages, react or join voice.')}</div>
+          : <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2">{t('You do not have permission to send messages in this channel.')}</div>}
         <div className="h-5" />
       </div>
     )
@@ -527,21 +527,21 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-accent/20 backdrop-blur-[2px]">
           <div className="rounded-2xl border-2 border-dashed border-accent bg-bg-1/90 px-10 py-8 text-center pop">
-            <div className="text-xl font-bold">Upload to {name}</div>
-            <div className="text-sm text-text-2 mt-1">Drop files to attach them to your message</div>
+            <div className="text-xl font-bold">{t('Upload to {name}', { name })}</div>
+            <div className="text-sm text-text-2 mt-1">{t('Drop files to attach them to your message')}</div>
           </div>
         </div>
       )}
       {slow > 0 && (
-        <div className={`absolute -top-5 right-5 h-5 z-10 flex items-center gap-1 text-xs ${cooling ? 'text-text-0 font-semibold' : 'text-text-2'}`} title={slowExempt ? `Slowmode is ${shortDuration(slow)}, but you are exempt` : `Slowmode is on: one message every ${shortDuration(slow)}`} data-slowmode={cooling ? 'cooling' : 'on'}>
-          <Timer size={13} />{cooling ? shortDuration((coolUntil - now) / 1000) : slowExempt ? 'Slowmode (exempt)' : `Slowmode ${shortDuration(slow)}`}
+        <div className={`absolute -top-5 right-5 h-5 z-10 flex items-center gap-1 text-xs ${cooling ? 'text-text-0 font-semibold' : 'text-text-2'}`} title={slowExempt ? t('Slowmode is {time}, but you are exempt', { time: shortDuration(slow) }) : t('Slowmode is on: one message every {time}', { time: shortDuration(slow) })} data-slowmode={cooling ? 'cooling' : 'on'}>
+          <Timer size={13} />{cooling ? shortDuration((coolUntil - now) / 1000) : slowExempt ? t('Slowmode (exempt)') : t('Slowmode {time}', { time: shortDuration(slow) })}
         </div>
       )}
       <div className="absolute -top-5 left-5 right-5 h-5 text-xs text-text-1 flex items-center gap-1.5 pointer-events-none" data-typing-row>
         {typers.length > 0 && (
           <>
             <span className="flex gap-0.5"><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /></span>
-            <span><b>{typers.slice(0, 3).join(', ')}</b> {typers.length > 3 ? 'and others are' : typers.length === 1 ? 'is' : 'are'} typing…</span>
+            <span>{tn(typers.length > 3 ? '{names} and others are typing…' : typers.length === 1 ? '{names} is typing…' : '{names} are typing…', { names: <b>{typers.slice(0, 3).join(', ')}</b> })}</span>
           </>
         )}
       </div>
@@ -550,7 +550,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         <MentionSuggest items={mentionItems} active={mentionIdx} trigger={mention.trigger} query={mention.query} onPick={pickMention} onHover={setMentionIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
       )}
       {typingCmd && (optionSuggestions.length > 0 ? (
-        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label="Suggestions" data-option-suggest>
+        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label={t('Suggestions')} data-option-suggest>
           <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{typingCmd.opt?.name}</div>
           {optionSuggestions.map((c, i) => (
             <button key={`${c.name}:${c.value}`} type="button" role="option" aria-selected={i === autoIdx} onMouseDown={(e) => { e.preventDefault(); pickOption(c) }} onMouseEnter={() => setAutoIdx(i)} className={`w-full px-3 py-1.5 text-left text-sm ${i === autoIdx ? 'bg-bg-3' : ''}`} data-option-choice={c.name}>{c.name}</button>
@@ -562,8 +562,8 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         </div>
       ))}
       {commands.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label="Commands" data-command-suggest>
-          <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">Commands</div>
+        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label={t('Commands')} data-command-suggest>
+          <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Commands')}</div>
           {commands.map((c, i) => (
             <button key={c.name} type="button" role="option" aria-selected={i === cmdIdx} onMouseDown={(e) => { e.preventDefault(); pickCommand(c) }} onMouseEnter={() => setCmdIdx(i)}
               className={`w-full flex items-baseline gap-2 px-3 py-1.5 text-left ${i === cmdIdx ? 'bg-bg-3' : ''}`} data-command={c.name}>
@@ -580,7 +580,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
       <div ref={boxRef} className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition" data-composer-box data-composer-narrow={narrow ? '1' : undefined}>
         {reply && (
           <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-xl">
-            <span>Replying to <b className="text-text-0">{reply.author.display_name}</b></span>
+            <span>{tn('Replying to {name}', { name: <b className="text-text-0">{reply.author.display_name}</b> })}</span>
             <button onClick={onCancelReply} className="text-text-2 hover:text-text-0"><X size={14} /></button>
           </div>
         )}
@@ -588,20 +588,20 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           <div className="flex gap-3 overflow-x-auto px-3 pt-3 pb-1 border-b border-line">
             {pending.map((p) => (
               <div key={p.key} className={`relative w-40 shrink-0 rounded-lg border bg-bg-2 p-2 ${p.error ? 'border-danger' : 'border-line'}`} data-pending>
-                <button onClick={() => removePending(p.key)} className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-bg-1 border border-line text-text-2 hover:text-danger flex items-center justify-center" title="Remove"><X size={12} /></button>
-                <button onClick={() => toggleSpoiler(p.key)} className={`absolute left-1 top-1 z-10 h-6 w-6 rounded-md flex items-center justify-center ${p.file.name.startsWith('SPOILER_') ? 'bg-accent text-white' : 'bg-bg-1/80 text-text-2 hover:text-text-0'}`} title={p.file.name.startsWith('SPOILER_') ? 'Unmark as spoiler' : 'Mark as spoiler'} data-spoiler-toggle>{p.file.name.startsWith('SPOILER_') ? <EyeOff size={13} /> : <Eye size={13} />}</button>
+                <button onClick={() => removePending(p.key)} className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-bg-1 border border-line text-text-2 hover:text-danger flex items-center justify-center" title={t('Remove')}><X size={12} /></button>
+                <button onClick={() => toggleSpoiler(p.key)} className={`absolute left-1 top-1 z-10 h-6 w-6 rounded-md flex items-center justify-center ${p.file.name.startsWith('SPOILER_') ? 'bg-accent text-white' : 'bg-bg-1/80 text-text-2 hover:text-text-0'}`} title={p.file.name.startsWith('SPOILER_') ? t('Unmark as spoiler') : t('Mark as spoiler')} data-spoiler-toggle>{p.file.name.startsWith('SPOILER_') ? <EyeOff size={13} /> : <Eye size={13} />}</button>
                 <div className="h-24 flex items-center justify-center overflow-hidden rounded bg-bg-0/40">
                   {p.preview ? <img src={p.preview} alt="" className={`h-full w-full object-contain ${p.file.name.startsWith('SPOILER_') ? 'blur-md brightness-50' : ''}`} /> : <FileText size={36} className="text-text-2" />}
                 </div>
                 <div className="mt-1.5 flex items-center gap-1">
                   <span className="min-w-0 flex-1 text-xs truncate" title={p.file.name}>{p.file.name.replace(/^SPOILER_/, '')}</span>
-                  {p.preview && <button type="button" onClick={() => setAltFor(altFor === p.key ? null : p.key)} className={`shrink-0 rounded px-1 text-[10px] font-bold ${p.alt ? 'bg-accent text-white' : 'bg-bg-4 text-text-2 hover:text-text-0'}`} title={p.alt ? `Alt text: ${p.alt}` : 'Add alt text'} data-alt-toggle>ALT</button>}
+                  {p.preview && <button type="button" onClick={() => setAltFor(altFor === p.key ? null : p.key)} className={`shrink-0 rounded px-1 text-[10px] font-bold ${p.alt ? 'bg-accent text-white' : 'bg-bg-4 text-text-2 hover:text-text-0'}`} title={p.alt ? t('Alt text: {alt}', { alt: p.alt }) : t('Add alt text')} data-alt-toggle>ALT</button>}
                 </div>
                 {altFor === p.key && (
-                  <input autoFocus className="input mt-1 h-7 px-2 py-0 text-xs" maxLength={1024} value={p.alt ?? ''} placeholder="Describe the image" aria-label="Alt text"
+                  <input autoFocus className="input mt-1 h-7 px-2 py-0 text-xs" maxLength={1024} value={p.alt ?? ''} placeholder={t('Describe the image')} aria-label={t('Alt text')}
                     onChange={(e) => setPending((ps) => ps.map((x) => (x.key === p.key ? { ...x, alt: e.target.value } : x)))} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); setAltFor(null); ref.current?.focus() } }} data-alt-input />
                 )}
-                <div className="text-[10px] text-text-2">{p.error ? <span className="text-danger">{p.error}</span> : p.done ? formatBytes(p.file.size) : `Uploading… ${Math.round(p.progress * 100)}%`}</div>
+                <div className="text-[10px] text-text-2">{p.error ? <span className="text-danger">{p.error}</span> : p.done ? formatBytes(p.file.size) : t('Uploading… {pct}%', { pct: Math.round(p.progress * 100) })}</div>
                 {!p.done && !p.error && <div className="mt-1 h-1 rounded bg-bg-4 overflow-hidden"><div className="h-full bg-accent transition-[width]" style={{ width: `${Math.round(p.progress * 100)}%` }} /></div>}
               </div>
             ))}
@@ -609,14 +609,14 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         )}
         {(rec || recBusy) ? (
           <div className="flex items-center gap-3 px-3 py-2" data-voice-recording>
-            <button className="text-text-2 hover:text-danger" title="Discard recording" onClick={cancelRecording} disabled={recBusy} data-voice-cancel><Trash2 size={20} /></button>
+            <button className="text-text-2 hover:text-danger" title={t('Discard recording')} onClick={cancelRecording} disabled={recBusy} data-voice-cancel><Trash2 size={20} /></button>
             <span className="relative flex h-3 w-3 shrink-0"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-75" /><span className="relative inline-flex h-3 w-3 rounded-full bg-danger" /></span>
             <span className="text-sm tabular-nums text-text-0 w-10" data-voice-timer>{Math.floor((rec?.ms ?? 0) / 60000)}:{String(Math.floor(((rec?.ms ?? 0) % 60000) / 1000)).padStart(2, '0')}</span>
             <div className="flex h-8 min-w-0 flex-1 items-center justify-end gap-[2px] overflow-hidden" data-voice-levels>
               {Array.from({ length: 40 }, (_, i) => { const v = rec?.levels[rec.levels.length - 40 + i] ?? 0; return <span key={i} className="w-[3px] shrink-0 rounded-full bg-accent transition-[height] duration-100" style={{ height: `${Math.max(10, v * 100)}%`, opacity: 0.4 + v * 0.6 }} /> })}
             </div>
-            <span className="text-xs text-text-2 max-md:hidden">{recBusy ? 'Sending…' : 'Recording…'}</span>
-            <button className="h-9 w-9 rounded-full bg-accent text-white flex items-center justify-center hover:bg-accent-hover disabled:opacity-50" title="Send voice message" onClick={sendRecording} disabled={recBusy} data-voice-send><SendHorizontal size={18} /></button>
+            <span className="text-xs text-text-2 max-md:hidden">{recBusy ? t('Sending…') : t('Recording…')}</span>
+            <button className="h-9 w-9 rounded-full bg-accent text-white flex items-center justify-center hover:bg-accent-hover disabled:opacity-50" title={t('Send voice message')} onClick={sendRecording} disabled={recBusy} data-voice-send><SendHorizontal size={18} /></button>
           </div>
         ) : (
         <div className="flex items-end gap-2 px-3 py-2">
@@ -624,7 +624,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           <input ref={mediaRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="media" />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="camera" />
           <input ref={videoCamRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="video-camera" />
-          <button className="pb-1 text-text-2 hover:text-text-0" title="Attach, poll or voice message" onClick={(e) => {
+          <button className="pb-1 text-text-2 hover:text-text-0" title={t('Attach, poll or voice message')} onClick={(e) => {
             if (window.matchMedia('(pointer: coarse)').matches) { setSheet(true); return }
             const r = (e.currentTarget.closest('[data-composer-box]') ?? e.currentTarget).getBoundingClientRect(); plus.open({ clientX: r.left, clientY: r.top - 8 }, plusItems, { above: true })
           }} aria-haspopup="menu" data-composer-plus><PlusCircle size={22} /></button>
@@ -632,26 +632,26 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
             className="composer-input flex-1 min-w-0 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" />
                     <div className="relative pb-1 flex shrink-0 items-center gap-2.5">
-            {!narrow && <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title="GIF" data-gif-button><ImagePlay size={22} /></button>}
-            {!narrow && <button className={`${picker === 'sticker' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'sticker' ? null : 'sticker'))} title="Sticker" data-sticker-button><Sticker size={22} /></button>}
-            <button className={`${picker === 'emoji' ? 'text-warn' : 'text-text-2 hover:text-warn'}`} onClick={() => setPicker((p) => (p === 'emoji' ? null : 'emoji'))} title="Emoji" data-emoji-button><Smile size={22} /></button>
+            {!narrow && <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title={t('GIF')} data-gif-button><ImagePlay size={22} /></button>}
+            {!narrow && <button className={`${picker === 'sticker' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'sticker' ? null : 'sticker'))} title={t('Sticker')} data-sticker-button><Sticker size={22} /></button>}
+            <button className={`${picker === 'emoji' ? 'text-warn' : 'text-text-2 hover:text-warn'}`} onClick={() => setPicker((p) => (p === 'emoji' ? null : 'emoji'))} title={t('Emoji')} data-emoji-button><Smile size={22} /></button>
             {picker && (
               <ExpressionPicker initial={picker} guildId={channel.guild_id} className="bottom-full right-0 mb-3" onClose={() => setPicker(null)}
-                onEmoji={(t) => { insert(t); recordEmoji(t) }} onSticker={sendSticker} onGif={sendGif} />
+                onEmoji={(token) => { insert(token); recordEmoji(token) }} onSticker={sendSticker} onGif={sendGif} />
             )}
           </div>
-          <button onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-1 hover:text-accent-hover" title="Send"><SendHorizontal size={22} /></button>
+          <button onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-1 hover:text-accent-hover" title={t('Send')}><SendHorizontal size={22} /></button>
         </div>
         )}
       </div>
       {chars > MAX_CHARS - 200 && (
         <div className={`flex items-center justify-end gap-3 px-1 pt-1 text-xs ${tooLong ? 'text-danger' : 'text-text-2'}`} data-char-count>
           {tooLong
-            ? <><span>{chars - MAX_CHARS} characters over the {MAX_CHARS} limit</span>{canAttach && <button type="button" className="font-semibold text-sky-400 hover:underline" onClick={sendAsFile} data-send-as-file>Send as file</button>}</>
-            : <span>{MAX_CHARS - chars} characters left</span>}
+            ? <><span>{t('{n} characters over the {max} limit', { n: chars - MAX_CHARS, max: MAX_CHARS })}</span>{canAttach && <button type="button" className="font-semibold text-sky-400 hover:underline" onClick={sendAsFile} data-send-as-file>{t('Send as file')}</button>}</>
+            : <span>{t('{n} characters left', { n: MAX_CHARS - chars })}</span>}
         </div>
       )}
-      {plus.menu && <ContextMenu {...plus.menu} onClose={plus.close} label="Add to message" />}
+      {plus.menu && <ContextMenu {...plus.menu} onClose={plus.close} label={t('Add to message')} />}
       {sheet && (
         <AttachSheet onClose={() => setSheet(false)} canAttach={canAttach} canRecord={typeof MediaRecorder !== 'undefined'}
           onPick={(what) => {
@@ -673,6 +673,7 @@ type AttachKind = 'media' | 'camera' | 'video' | 'files' | 'poll' | 'voice'
 /** Touch devices: what "+" adds, as a bottom sheet of big targets. Photos, Take photo, Record video and Files open the phone's own
  *  pickers (on iOS the Photos one is the system photo library), so there is no separate "upload" step. */
 function AttachSheet({ onPick, onClose, canAttach, canRecord }: { onPick: (k: AttachKind) => void; onClose: () => void; canAttach: boolean; canRecord: boolean }) {
+  const t = useT()
   useEffect(() => { const k = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose() }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [onClose])
   const items: { id: AttachKind; label: string; icon: React.ReactNode; tint: string; show: boolean }[] = [
     { id: 'media', label: 'Photos & videos', icon: <Images size={24} />, tint: 'bg-accent text-white', show: canAttach },
@@ -684,13 +685,13 @@ function AttachSheet({ onPick, onClose, canAttach, canRecord }: { onPick: (k: At
   ]
   return (
     <div className="fixed inset-0 z-[90] flex items-end bg-black/50" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }} data-attach-sheet>
-      <div className="sheet-up w-full rounded-t-2xl border-t border-line bg-bg-1 px-4 pt-3" style={{ paddingBottom: 'calc(1rem + var(--sab))', paddingLeft: 'max(1rem, var(--sal))', paddingRight: 'max(1rem, var(--sar))' }} role="dialog" aria-label="Add to message">
+      <div className="sheet-up w-full rounded-t-2xl border-t border-line bg-bg-1 px-4 pt-3" style={{ paddingBottom: 'calc(1rem + var(--sab))', paddingLeft: 'max(1rem, var(--sal))', paddingRight: 'max(1rem, var(--sar))' }} role="dialog" aria-label={t('Add to message')}>
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-bg-4" />
         <div className="grid grid-cols-6 gap-2 max-[460px]:grid-cols-3">
           {items.filter((i) => i.show).map((i) => (
             <button key={i.id} type="button" onClick={() => onPick(i.id)} className="flex flex-col items-center gap-1.5 rounded-xl py-2 text-xs text-text-1 hover:bg-bg-3" data-attach={i.id}>
               <span className={`h-12 w-12 rounded-full flex items-center justify-center ${i.tint}`}>{i.icon}</span>
-              <span className="text-center leading-tight">{i.label}</span>
+              <span className="text-center leading-tight">{t(i.label)}</span>
             </button>
           ))}
         </div>

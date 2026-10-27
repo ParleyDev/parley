@@ -82,10 +82,11 @@ function ProfileLink() {
 }
 
 function Splash() {
+  const t = useT()
   return (
     <div className="h-full flex flex-col items-center justify-center gap-4 bg-bg-0">
       <LogoNeon className="h-14 w-14 rounded-2xl shadow-lg shadow-accent/30 animate-pulse" />
-      <p className="text-text-2 text-sm">Connecting…</p>
+      <p className="text-text-2 text-sm">{t('Connecting…')}</p>
     </div>
   )
 }

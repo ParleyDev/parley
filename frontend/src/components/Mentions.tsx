@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import Avatar from './Avatar'
 import { useStore } from '../store'
 import { EMPTY_ROLES } from '../lib/perms'
+import { useT } from '../lib/i18n'
 
 /** `<@id>`: the user's server nickname or display name as a pill; click opens the profile. */
 export function UserMention({ id }: { id: string }) {
@@ -24,6 +25,7 @@ export function RoleMention({ id }: { id: string }) {
   const openModal = useStore((s) => s.openModal)
   const [at, setAt] = useState<DOMRect | null>(null)
   const [people, setPeople] = useState<RoleHolder[] | null>(null)
+  const t = useT()
   void EMPTY_ROLES
   const color = role?.color ?? undefined
   const open = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -38,10 +40,10 @@ export function RoleMention({ id }: { id: string }) {
       {at && createPortal(
         <>
           <div className="fixed inset-0 z-[120]" onMouseDown={() => setAt(null)} />
-          <div role="dialog" aria-label={`Members with ${role?.name}`} className="pop fixed z-[130] w-64 max-h-80 overflow-y-auto rounded-lg border border-white/5 bg-[#111214] p-2 shadow-2xl"
+          <div role="dialog" aria-label={t('Members with {name}', { name: role?.name ?? '' })} className="pop fixed z-[130] w-64 max-h-80 overflow-y-auto rounded-lg border border-white/5 bg-[#111214] p-2 shadow-2xl"
             style={{ left: Math.min(at.left, window.innerWidth - 272), top: at.bottom + 6 > window.innerHeight - 330 ? Math.max(8, at.top - 326) : at.bottom + 6 }} data-role-members={id}>
             <div className="px-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{role?.name}{people ? ` · ${people.length}${people.length === 200 ? '+' : ''}` : ''}</div>
-            {people === null ? <p className="px-1 py-2 text-sm text-text-2">Loading…</p> : people.length === 0 ? <p className="px-1 py-2 text-sm text-text-2">Nobody has this role.</p> : people.map((p) => (
+            {people === null ? <p className="px-1 py-2 text-sm text-text-2">{t('Loading…')}</p> : people.length === 0 ? <p className="px-1 py-2 text-sm text-text-2">{t('Nobody has this role.')}</p> : people.map((p) => (
               <button key={p.id} type="button" onClick={(e) => { setAt(null); openModal({ kind: 'profile', userId: p.id, anchor: { x: e.clientX, y: e.clientY, w: 0, h: 0 } }) }} className="flex w-full items-center gap-2 rounded px-1 py-1 text-left text-sm hover:bg-bg-3" data-role-member={p.id}>
                 <Avatar user={p} size={22} /><span className="truncate">{p.nickname ?? p.display_name}</span>
               </button>

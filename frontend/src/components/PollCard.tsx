@@ -6,18 +6,20 @@ import { api } from '../lib/api'
 import type { Message, Poll } from '../lib/types'
 import { myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
+import { t, useT } from '../lib/i18n'
 
 const remaining = (iso: string) => {
   const ms = new Date(iso).getTime() - Date.now()
-  if (ms <= 0) return 'closing…'
+  if (ms <= 0) return t('closing…')
   const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000)
-  if (h >= 48) return `${Math.round(h / 24)} days left`
-  if (h >= 1) return `${h}h ${m}m left`
-  return `${Math.max(1, m)}m left`
+  if (h >= 48) return t('{n} days left', { n: Math.round(h / 24) })
+  if (h >= 1) return t('{h}h {m}m left', { h, m })
+  return t('{m}m left', { m: Math.max(1, m) })
 }
 
 /** A poll inside a message: vote (toggle), live bars, close early, final results. */
 export default function PollCard({ m, poll }: { m: Message; poll: Poll }) {
+  useT() // re-render when the language changes
   const me = useStore((s) => s.user?.id)
   const pushToast = useStore((s) => s.pushToast)
   const perms = useStore((s) => myChannelPerms(s, m.channel_id))
@@ -35,7 +37,7 @@ export default function PollCard({ m, poll }: { m: Message; poll: Poll }) {
     return () => { live = false }
   }, [votersFor, m.channel_id, m.id, poll.total_votes, pushToast])
   const [, tick] = useState(0)
-  useEffect(() => { if (!poll.expires_at || poll.closed) return; const t = setInterval(() => tick((n) => n + 1), 30000); return () => clearInterval(t) }, [poll.expires_at, poll.closed])
+  useEffect(() => { if (!poll.expires_at || poll.closed) return; const timer = setInterval(() => tick((n) => n + 1), 30000); return () => clearInterval(timer) }, [poll.expires_at, poll.closed])
   const expired = !!poll.expires_at && new Date(poll.expires_at).getTime() <= Date.now()
   const closed = poll.closed || expired
   const voted = poll.options.some((o) => o.me)
@@ -59,7 +61,7 @@ export default function PollCard({ m, poll }: { m: Message; poll: Poll }) {
         <BarChart3 size={18} className="text-text-2 mt-0.5 shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-[15px] break-words" data-poll-question>{poll.question}</div>
-          <div className="text-xs text-text-2">{poll.multi ? 'Select one or more' : 'Select one answer'}</div>
+          <div className="text-xs text-text-2">{poll.multi ? t('Select one or more') : t('Select one answer')}</div>
         </div>
       </div>
       <div className="mt-2 space-y-1.5">
@@ -80,11 +82,11 @@ export default function PollCard({ m, poll }: { m: Message; poll: Poll }) {
         })}
       </div>
       <div className="mt-2 flex items-center gap-2 text-xs text-text-2">
-        <span data-poll-summary>{poll.voters} vote{poll.voters === 1 ? '' : 's'}</span>
+        <span data-poll-summary>{poll.voters === 1 ? t('1 vote') : t('{n} votes', { n: poll.voters })}</span>
         <span>·</span>
-        {closed ? <span className="flex items-center gap-1" data-poll-final><Lock size={11} /> Final results</span> : poll.expires_at ? <span>{remaining(poll.expires_at)}</span> : <span>No end time</span>}
-        {showResults && poll.total_votes > 0 && <button type="button" onClick={() => setVotersFor(votersFor ? null : (poll.options.find((o) => o.votes > 0) ?? poll.options[0]).id)} className="text-sky-400 hover:underline" data-poll-view-votes>{votersFor ? 'Hide votes' : 'View votes'}</button>}
-        {canClose && <button type="button" onClick={close} disabled={busy} className="ml-auto text-sky-400 hover:underline" data-poll-close>Close poll</button>}
+        {closed ? <span className="flex items-center gap-1" data-poll-final><Lock size={11} /> {t('Final results')}</span> : poll.expires_at ? <span>{remaining(poll.expires_at)}</span> : <span>{t('No end time')}</span>}
+        {showResults && poll.total_votes > 0 && <button type="button" onClick={() => setVotersFor(votersFor ? null : (poll.options.find((o) => o.votes > 0) ?? poll.options[0]).id)} className="text-sky-400 hover:underline" data-poll-view-votes>{votersFor ? t('Hide votes') : t('View votes')}</button>}
+        {canClose && <button type="button" onClick={close} disabled={busy} className="ml-auto text-sky-400 hover:underline" data-poll-close>{t('Close poll')}</button>}
       </div>
       {votersFor && (
         <div className="mt-2 flex gap-2 rounded-lg border border-line bg-bg-2 p-2 text-sm" data-poll-voters>
@@ -96,7 +98,7 @@ export default function PollCard({ m, poll }: { m: Message; poll: Poll }) {
             ))}
           </div>
           <div className="min-w-0 flex-1 max-h-48 overflow-y-auto">
-            {!voters ? <p className="px-2 py-1 text-text-2">Loading…</p> : voters.length === 0 ? <p className="px-2 py-1 text-text-2">No votes for this answer.</p>
+            {!voters ? <p className="px-2 py-1 text-text-2">{t('Loading…')}</p> : voters.length === 0 ? <p className="px-2 py-1 text-text-2">{t('No votes for this answer.')}</p>
               : voters.map((u) => <div key={u.id} className="flex items-center gap-2 px-2 py-1" data-poll-voter={u.display_name}><Avatar user={u} size={20} /><span className="truncate">{u.display_name}</span></div>)}
           </div>
         </div>

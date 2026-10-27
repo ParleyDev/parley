@@ -5,6 +5,7 @@ import type { Listing } from '../../../lib/discover'
 import { EXPIRY, expiresIn, MAX_VANITY, USES, VANITY_RE } from '../../../lib/invites'
 import type { Invite, InviteListing } from '../../../lib/types'
 import { useStore } from '../../../store'
+import { useT } from '../../../lib/i18n'
 import Avatar from '../../Avatar'
 import { publicOrigin } from '../../InviteCard'
 
@@ -13,6 +14,7 @@ import { publicOrigin } from '../../InviteCard'
  * with an expiry and use limit; for servers approved for Discovery, up to three vanity links; and a way to the badge.
  */
 export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId: string; onDiscovery: () => void; onBadge: () => void }) {
+  const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
   const pushToast = useStore((s) => s.pushToast)
   const [list, setList] = useState<InviteListing[] | null>(null)
@@ -28,8 +30,8 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
   useEffect(() => {
     load()
     api.get<Listing | null>(`/guilds/${guildId}/discovery`).then((l) => setApproved(l?.status === 'approved')).catch(() => setApproved(false))
-    const t = setInterval(() => tick((n) => n + 1), 60_000)
-    return () => clearInterval(t)
+    const h = setInterval(() => tick((n) => n + 1), 60_000)
+    return () => clearInterval(h)
   }, [guildId]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!guild) return null
   const me = useStore.getState().user
@@ -53,23 +55,23 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
   const regular = (list ?? []).filter((i) => !i.vanity)
   const vanityOk = VANITY_RE.test(vanity)
   const copyBtn = (code: string) => (
-    <button type="button" onClick={() => copy(code)} className="rounded p-1.5 text-text-2 hover:bg-bg-3 hover:text-text-0" title="Copy link" data-invite-copy={code}>{copied === code ? <Check size={16} className="text-success" /> : <Copy size={16} />}</button>
+    <button type="button" onClick={() => copy(code)} className="rounded p-1.5 text-text-2 hover:bg-bg-3 hover:text-text-0" title={t('Copy link')} data-invite-copy={code}>{copied === code ? <Check size={16} className="text-success" /> : <Copy size={16} />}</button>
   )
   return (
     <div className="space-y-8" data-invites-tab>
       <div>
-        <h1 className="text-xl font-bold">Invites</h1>
-        <p className="text-sm text-text-2 mt-1">Links people can use to join {guild.name}. Revoking one stops it working straight away; people who already joined stay.</p>
+        <h1 className="text-xl font-bold">{t('Invites')}</h1>
+        <p className="text-sm text-text-2 mt-1">{t('Links people can use to join {name}. Revoking one stops it working straight away; people who already joined stay.', { name: guild.name })}</p>
       </div>
 
       <section data-vanity-section>
-        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2 flex items-center gap-1.5"><Sparkles size={14} /> Vanity links</h2>
-        {approved === null ? <p className="text-sm text-text-2">Loading…</p> : !approved ? (
+        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2 flex items-center gap-1.5"><Sparkles size={14} /> {t('Vanity links')}</h2>
+        {approved === null ? <p className="text-sm text-text-2">{t('Loading…')}</p> : !approved ? (
           <div className="rounded-xl bg-bg-0/50 border border-line p-4 flex items-start gap-3" data-vanity-locked>
             <Compass size={20} className="text-text-2 mt-0.5 shrink-0" />
             <div className="text-sm">
-              <p>Servers approved for Discovery can claim up to {MAX_VANITY} custom links, like <span className="font-medium">{publicOrigin().replace(/^https?:\/\//, '')}/invite/your-name</span>.</p>
-              <button type="button" className="mt-2 text-sky-400 hover:underline" onClick={onDiscovery}>Go to Discovery</button>
+              <p>{t('Servers approved for Discovery can claim up to {n} custom links, like', { n: MAX_VANITY })} <span className="font-medium">{publicOrigin().replace(/^https?:\/\//, '')}/invite/your-name</span>.</p>
+              <button type="button" className="mt-2 text-sky-400 hover:underline" onClick={onDiscovery}>{t('Go to Discovery')}</button>
             </div>
           </div>
         ) : (
@@ -78,11 +80,11 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
               <div key={v.code} className="flex items-center gap-2 rounded-lg border border-line bg-bg-0/40 pl-3 pr-1 py-1" data-vanity={v.code}>
                 <Link2 size={16} className="text-text-2 shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-sm"><span className="text-text-2">{publicOrigin().replace(/^https?:\/\//, '')}/invite/</span><b>{v.code}</b></span>
-                <span className="text-xs text-text-2 max-sm:hidden">{v.uses} {v.uses === 1 ? 'use' : 'uses'}</span>
+                <span className="text-xs text-text-2 max-sm:hidden">{v.uses} {v.uses === 1 ? t('use') : t('uses')}</span>
                 {copyBtn(v.code)}
                 {confirming === v.code
-                  ? <button type="button" onClick={() => revoke(v)} onBlur={() => setConfirming(null)} autoFocus className="rounded bg-danger px-2 py-1 text-xs font-semibold text-white hover:bg-danger/80" data-vanity-remove-confirm={v.code}>Remove?</button>
-                  : <button type="button" onClick={() => revoke(v)} className="rounded p-1.5 text-text-2 hover:bg-bg-3 hover:text-danger" title="Remove" data-vanity-remove={v.code}><X size={16} /></button>}
+                  ? <button type="button" onClick={() => revoke(v)} onBlur={() => setConfirming(null)} autoFocus className="rounded bg-danger px-2 py-1 text-xs font-semibold text-white hover:bg-danger/80" data-vanity-remove-confirm={v.code}>{t('Remove?')}</button>
+                  : <button type="button" onClick={() => revoke(v)} className="rounded p-1.5 text-text-2 hover:bg-bg-3 hover:text-danger" title={t('Remove')} data-vanity-remove={v.code}><X size={16} /></button>}
               </div>
             ))}
             {vanities.length < MAX_VANITY ? (
@@ -92,43 +94,43 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
                   <input className="min-w-0 flex-1 bg-transparent py-2 pr-3 text-sm outline-none" value={vanity} maxLength={32} placeholder="your-name"
                     onChange={(e) => setVanity(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} data-vanity-input />
                 </div>
-                <button className="btn-primary shrink-0" disabled={busy || !vanityOk} data-vanity-add><Plus size={16} /> Add</button>
+                <button className="btn-primary shrink-0" disabled={busy || !vanityOk} data-vanity-add><Plus size={16} /> {t('Add')}</button>
               </form>
-            ) : <p className="text-xs text-text-2">You're using all {MAX_VANITY} vanity links. Remove one to claim another.</p>}
-            <p className="text-xs text-text-2">3–32 lowercase letters, numbers or hyphens. Vanity links never expire and stop working if the server leaves Discovery. {vanities.length}/{MAX_VANITY} used.</p>
+            ) : <p className="text-xs text-text-2">{t("You're using all {n} vanity links. Remove one to claim another.", { n: MAX_VANITY })}</p>}
+            <p className="text-xs text-text-2">{t('3–32 lowercase letters, numbers or hyphens. Vanity links never expire and stop working if the server leaves Discovery.')} {t('{n}/{max} used.', { n: vanities.length, max: MAX_VANITY })}</p>
           </div>
         )}
       </section>
 
       <button type="button" onClick={onBadge} className="w-full flex items-center gap-3 rounded-xl border border-line bg-bg-0/40 p-3 text-left hover:bg-bg-3/60" data-badge-link>
         <Award size={20} className="text-text-2 shrink-0" />
-        <span className="min-w-0 flex-1 text-sm"><span className="font-semibold">README badge</span><span className="block text-text-2">Show off {guild.name} on GitHub or a website with a live badge.</span></span>
+        <span className="min-w-0 flex-1 text-sm"><span className="font-semibold">{t('README badge')}</span><span className="block text-text-2">{t('Show off {name} on GitHub or a website with a live badge.', { name: guild.name })}</span></span>
         <ChevronRight size={18} className="text-text-2 shrink-0" />
       </button>
 
       <section>
-        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">Create an invite</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">{t('Create an invite')}</h2>
         <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-[9rem] flex-1"><label className="label">Expire after</label>
+          <div className="min-w-[9rem] flex-1"><label className="label">{t('Expire after')}</label>
             <select className="input" value={maxAge} onChange={(e) => setMaxAge(Number(e.target.value))} data-new-invite-expiry>{EXPIRY.map((o) => <option key={o.s} value={o.s}>{o.label}</option>)}</select></div>
-          <div className="min-w-[9rem] flex-1"><label className="label">Max number of uses</label>
+          <div className="min-w-[9rem] flex-1"><label className="label">{t('Max number of uses')}</label>
             <select className="input" value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} data-new-invite-uses>{USES.map((o) => <option key={o.n} value={o.n}>{o.label}</option>)}</select></div>
-          <button type="button" className="btn-primary" disabled={busy} onClick={async () => { const inv = await create({ max_age: maxAge, max_uses: maxUses, temporary }); if (inv) copy(inv.code) }} data-new-invite>Create and copy</button>
+          <button type="button" className="btn-primary" disabled={busy} onClick={async () => { const inv = await create({ max_age: maxAge, max_uses: maxUses, temporary }); if (inv) copy(inv.code) }} data-new-invite>{t('Create and copy')}</button>
         </div>
         <label className="mt-3 flex items-start gap-2 text-sm cursor-pointer" data-new-invite-temporary>
           <input type="checkbox" className="mt-0.5 h-4 w-4 accent-accent" checked={temporary} onChange={(e) => setTemporary(e.target.checked)} />
-          <span><span className="block">Grant temporary membership</span><span className="block text-xs text-text-2">People who join with this link are removed when they go offline, unless you give them a role.</span></span>
+          <span><span className="block">{t('Grant temporary membership')}</span><span className="block text-xs text-text-2">{t('People who join with this link are removed when they go offline, unless you give them a role.')}</span></span>
         </label>
       </section>
 
       <section>
-        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">Active invites{list ? ` (${regular.length})` : ''}</h2>
-        {list === null ? <p className="text-sm text-text-2">Loading…</p> : regular.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-text-2">No active invites. Make one above, or with Invite People.</div>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">{t('Active invites')}{list ? ` (${regular.length})` : ''}</h2>
+        {list === null ? <p className="text-sm text-text-2">{t('Loading…')}</p> : regular.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-text-2">{t('No active invites. Make one above, or with Invite People.')}</div>
         ) : (
           <div className="rounded-lg border border-line divide-y divide-line" data-invite-list>
             <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_5rem_6.5rem_4.5rem] gap-3 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-text-2 max-sm:hidden">
-              <span>Inviter</span><span>Code</span><span>Uses</span><span>Expires</span><span />
+              <span>{t('Inviter')}</span><span>{t('Code')}</span><span>{t('Uses')}</span><span>{t('Expires')}</span><span />
             </div>
             {regular.map((i) => (
               <div key={i.code} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_5rem_6.5rem_4.5rem] max-sm:grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-sm" data-invite-row={i.code}>
@@ -138,12 +140,12 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
                 </div>
                 <span className="truncate font-mono text-text-1 max-sm:hidden">{i.code}</span>
                 <span className="text-text-1 max-sm:hidden" data-invite-uses-cell>{i.uses}{i.max_uses ? ` / ${i.max_uses}` : ''}</span>
-                <span className="text-text-1 max-sm:hidden" data-invite-expires>{expiresIn(i)}{i.temporary && <span className="ml-1 rounded bg-bg-4 px-1 text-[10px] font-semibold text-text-2" title="Temporary membership" data-invite-temporary>TEMP</span>}</span>
+                <span className="text-text-1 max-sm:hidden" data-invite-expires>{expiresIn(i)}{i.temporary && <span className="ml-1 rounded bg-bg-4 px-1 text-[10px] font-semibold text-text-2" title={t('Temporary membership')} data-invite-temporary>{t('TEMP')}</span>}</span>
                 <div className="flex justify-end">
                   {copyBtn(i.code)}
-                  <button type="button" onClick={() => revoke(i)} className="rounded p-1.5 text-text-2 hover:bg-bg-3 hover:text-danger" title="Revoke" data-invite-revoke={i.code}><X size={16} /></button>
+                  <button type="button" onClick={() => revoke(i)} className="rounded p-1.5 text-text-2 hover:bg-bg-3 hover:text-danger" title={t('Revoke')} data-invite-revoke={i.code}><X size={16} /></button>
                 </div>
-                <div className="col-span-2 -mt-1 text-xs text-text-2 sm:hidden"><span className="font-mono">{i.code}</span> · {i.uses}{i.max_uses ? `/${i.max_uses}` : ''} uses · {i.expires_at ? `expires ${expiresIn(i)}` : 'never expires'}</div>
+                <div className="col-span-2 -mt-1 text-xs text-text-2 sm:hidden"><span className="font-mono">{i.code}</span> · {t('{uses} uses · {expiry}', { uses: `${i.uses}${i.max_uses ? `/${i.max_uses}` : ''}`, expiry: i.expires_at ? t('expires {when}', { when: expiresIn(i) }) : t('never expires') })}</div>
               </div>
             ))}
           </div>

@@ -3,9 +3,11 @@ import { useState } from 'react'
 import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import Modal from '../Modal'
+import { useT } from '../../lib/i18n'
 
 /** Onboarding: the server's questions; answers grant roles and show channels. */
 export default function OnboardingModal({ onClose, guildId }: { onClose: () => void; guildId: string }) {
+  const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
   const loadCustomize = useStore((s) => s.loadCustomize)
   const openModal = useStore((s) => s.openModal)
@@ -31,16 +33,16 @@ export default function OnboardingModal({ onClose, guildId }: { onClose: () => v
   const canSkip = !qs.some((x) => x.required)
   const footer = (
     <>
-      {step > 0 && <button type="button" className="btn-ghost mr-auto" onClick={() => setStep(step - 1)}>Back</button>}
-      {canSkip && <button type="button" className="btn-ghost" disabled={busy} onClick={() => finish(true)} data-onboarding-skip>Skip</button>}
-      <button type="button" className="btn-primary" disabled={busy || (q.required && mine.length === 0)} onClick={() => (last ? finish(false) : setStep(step + 1))} data-onboarding-next>{last ? 'Finish' : 'Next'}</button>
+      {step > 0 && <button type="button" className="btn-ghost mr-auto" onClick={() => setStep(step - 1)}>{t('Back')}</button>}
+      {canSkip && <button type="button" className="btn-ghost" disabled={busy} onClick={() => finish(true)} data-onboarding-skip>{t('Skip')}</button>}
+      <button type="button" className="btn-primary" disabled={busy || (q.required && mine.length === 0)} onClick={() => (last ? finish(false) : setStep(step + 1))} data-onboarding-next>{last ? t('Finish') : t('Next')}</button>
     </>
   )
   return (
-    <Modal title={`Welcome to ${guild.name}`} subtitle={`Question ${step + 1} of ${qs.length}`} onClose={onClose} width="max-w-lg" footer={footer}>
+    <Modal title={t('Welcome to {name}', { name: guild.name })} subtitle={t('Question {n} of {total}', { n: step + 1, total: qs.length })} onClose={onClose} width="max-w-lg" footer={footer}>
       <div data-onboarding-modal data-step={step}>
         <h3 className="text-lg font-bold">{q.title}{q.required && <span className="text-danger"> *</span>}</h3>
-        <p className="mb-3 text-xs text-text-2">{q.multi ? 'Pick as many as you like.' : 'Pick one.'}</p>
+        <p className="mb-3 text-xs text-text-2">{q.multi ? t('Pick as many as you like.') : t('Pick one.')}</p>
         <div className="grid grid-cols-2 gap-2 max-sm:grid-cols-1">
           {q.options.map((o) => {
             const on = !!o.id && mine.includes(o.id)

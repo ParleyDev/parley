@@ -28,6 +28,7 @@ import type { Ban, Channel, DmChannel, Draft, Emoji, Guild, GuildEvent, LayoutIt
 import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
 import { channelPerms, guildPerms } from './lib/perms'
+import { t } from './lib/i18n'
 
 /** A picture in the image viewer's gallery (the pictures of one message). */
 export interface GalleryItem { url: string; name: string; alt?: string }
@@ -529,7 +530,7 @@ export const useStore = create<State>((set, get) => ({
   setGuildLayout: (items, save) => {
     const layout = reconcile(items, get().guildOrder)
     set({ guildLayout: layout })
-    if (save) api.put('/users/@me/guild-layout', layout).catch((e: Error) => get().pushToast(`Could not save server layout: ${e.message}`, 'error'))
+    if (save) api.put('/users/@me/guild-layout', layout).catch((e: Error) => get().pushToast(t('Could not save server layout: {error}', { error: e.message }), 'error'))
   },
   setBookmark: (messageId, on) => set((s) => { const bookmarks = { ...s.bookmarks }; if (on) bookmarks[messageId] = true; else delete bookmarks[messageId]; return { bookmarks } }),
   upsertRelationship: (r) => set((s) => ({ relationships: { ...s.relationships, [r.user.id]: r }, users: { ...s.users, [r.user.id]: r.user } })),

@@ -3,21 +3,23 @@ import { KEYBIND_LABELS, prettyCombo, useKeybindMap, type KeybindAction } from '
 import { isDesktop } from '../../lib/native'
 import { FORMATS } from '../../lib/editor'
 import { useStore } from '../../store'
+import { t, useT } from '../../lib/i18n'
 
 /** Keys that always do the same thing (only the ones in Settings › Keybinds can be changed). */
-const FIXED: { group: string; rows: [string, string][] }[] = [
-  { group: 'Messages', rows: [
-    ['Enter', 'Send message'], ['Shift + Enter', 'New line'], ['Arrow Up', 'Edit your last message (empty box)'],
-    ['Escape', 'Cancel a reply, or mark the channel read'], ['Shift + Escape', 'Mark the whole server read'], ['/', 'Built-in commands (start of the box)'], ['Any letter', 'Start typing in the message box'],
+const fixed = (): { group: string; rows: [string, string][] }[] => [
+  { group: t('Messages'), rows: [
+    ['Enter', t('Send message')], ['Shift + Enter', t('New line')], ['Arrow Up', t('Edit your last message (empty box)')],
+    ['Escape', t('Cancel a reply, or mark the channel read')], ['Shift + Escape', t('Mark the whole server read')], ['/', t('Built-in commands (start of the box)')], ['Any letter', t('Start typing in the message box')],
   ] },
-  { group: 'Formatting', rows: FORMATS.filter((f) => f.keys).map((f) => [prettyCombo(f.keys!), f.label]) },
-  { group: 'Navigation', rows: [
-    ['Alt + Left / Right', 'Back and forward (desktop app)'],
-    ['Escape', 'Close a menu or dialog'],
+  { group: t('Formatting'), rows: FORMATS.filter((f) => f.keys).map((f) => [prettyCombo(f.keys!), t(f.label)]) },
+  { group: t('Navigation'), rows: [
+    ['Alt + Left / Right', t('Back and forward (desktop app)')],
+    ['Escape', t('Close a menu or dialog')],
   ] },
 ]
 
 export default function ShortcutsModal({ onClose }: { onClose: () => void }) {
+  useT()
   const binds = useKeybindMap()
   const openModal = useStore((s) => s.openModal)
   const actions = Object.keys(KEYBIND_LABELS) as KeybindAction[]
@@ -28,14 +30,14 @@ export default function ShortcutsModal({ onClose }: { onClose: () => void }) {
     </div>
   )
   return (
-    <Modal title="Keyboard shortcuts" onClose={onClose} footer={<button type="button" className="btn-ghost" onClick={() => openModal({ kind: 'userSettings', tab: 'keybinds' })} data-shortcuts-edit>Change keybinds</button>}>
+    <Modal title="Keyboard shortcuts" onClose={onClose} footer={<button type="button" className="btn-ghost" onClick={() => openModal({ kind: 'userSettings', tab: 'keybinds' })} data-shortcuts-edit>{t('Change keybinds')}</button>}>
       <div className="grid gap-6 sm:grid-cols-2" data-shortcuts>
         <section>
-          <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-text-2">Your keybinds</h3>
-          {actions.filter((a) => binds[a]).map((a) => <Row key={a} keys={prettyCombo(binds[a])} what={KEYBIND_LABELS[a]} />)}
+          <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-text-2">{t('Your keybinds')}</h3>
+          {actions.filter((a) => binds[a]).map((a) => <Row key={a} keys={prettyCombo(binds[a])} what={t(KEYBIND_LABELS[a])} />)}
         </section>
         <div className="space-y-6">
-          {FIXED.map((g) => (
+          {fixed().map((g) => (
             <section key={g.group}>
               <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-text-2">{g.group}</h3>
               {g.rows.filter(([k]) => isDesktop() || !k.startsWith('Alt + Left')).map(([k, w]) => <Row key={k + w} keys={k} what={w} />)}

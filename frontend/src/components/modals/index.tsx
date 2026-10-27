@@ -1,4 +1,5 @@
 import { useStore } from '../../store'
+import { useT } from '../../lib/i18n'
 import CreateGuildModal from './CreateGuild'
 import JoinGuildModal from './JoinGuild'
 import CreateChannelModal from './CreateChannel'
@@ -48,12 +49,13 @@ import AppModal from './AppModal'
 import ErrorBoundary from '../ErrorBoundary'
 
 export default function Modals() {
+  const t = useT()
   const modal = useStore((s) => s.modal)
   const close = useStore((s) => s.closeModal)
   const pushToast = useStore((s) => s.pushToast)
   if (!modal) return null
   return (
-    <ErrorBoundary key={modal.kind} onError={(e) => { pushToast(`Couldn't open that: ${e.message}`, 'error'); close() }} fallback={() => null}>
+    <ErrorBoundary key={modal.kind} onError={(e) => { pushToast(t("Couldn't open that: {message}", { message: e.message }), 'error'); close() }} fallback={() => null}>
       {render()}
     </ErrorBoundary>
   )
@@ -96,9 +98,9 @@ export default function Modals() {
     case 'leaveGroups': return <LeaveGroupsModal onClose={close} />
     case 'modView': return <ModViewModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'warning': return (
-      <Modal title={`A warning from ${modal!.guildName}`} onClose={close} width="max-w-sm" footer={<button className="btn-primary" onClick={close} data-warning-ack>Understood</button>}>
+      <Modal title={t('A warning from {name}', { name: modal!.guildName })} onClose={close} width="max-w-sm" footer={<button className="btn-primary" onClick={close} data-warning-ack>{t('Understood')}</button>}>
         <p className="text-sm text-text-1" data-warning-reason>{modal!.reason}</p>
-        <p className="mt-3 text-xs text-text-2">The server's moderators sent you this. Warnings count toward your account standing for 90 days.</p>
+        <p className="mt-3 text-xs text-text-2">{t("The server's moderators sent you this. Warnings count toward your account standing for 90 days.")}</p>
       </Modal>
     )
     case 'welcome': return <WelcomeModal onClose={close} guildId={modal!.guildId} />

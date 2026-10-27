@@ -1,6 +1,7 @@
 import { api, getToken } from './api'
 import { useStore } from '../store'
 import { voice } from './voice'
+import { t } from '../lib/i18n'
 
 /**
  * Recording Studio client: when the engineer starts a session, every band member (unsuppressed participant of that
@@ -30,7 +31,7 @@ class StudioRecorder {
   private async start(sessionId: string, serverStart: number) {
     if (this.rec) return
     const stream = voice.getRecordingStream()
-    if (!stream || !stream.getAudioTracks().length) { useStore.getState().pushToast('Recording started, but your microphone is not available', 'error'); return }
+    if (!stream || !stream.getAudioTracks().length) { useStore.getState().pushToast(t('Recording started, but your microphone is not available'), 'error'); return }
     const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) ?? ''
     const offset = Math.max(0, Date.now() - serverStart)
     try {
@@ -42,7 +43,7 @@ class StudioRecorder {
       rec.start(5000)
       this.rec = rec; this.startedAt = Date.now()
       this.expose()
-      useStore.getState().pushToast('Recording: your track is being captured')
+      useStore.getState().pushToast(t('Recording: your track is being captured'))
     } catch (e) { useStore.getState().pushToast((e as Error).message, 'error') }
   }
 
@@ -53,13 +54,13 @@ class StudioRecorder {
       const token = getToken()
       const r = await fetch(`/api/studio/sessions/${sid}/tracks/${tid}/chunks`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: blob })
       if (!r.ok) throw new Error(`chunk upload failed (${r.status})`)
-    }).catch((e) => { useStore.getState().pushToast(`Recording upload: ${(e as Error).message}`, 'error') })
+    }).catch((e) => { useStore.getState().pushToast(t('Recording upload: {message}', { message: (e as Error).message }), 'error') })
   }
 
   private async finish() {
     const sid = this.sessionId, tid = this.trackId, dur = Date.now() - this.startedAt
     this.sessionId = null; this.trackId = null; this.rec = null
-    this.stream?.getTracks().forEach((t) => t.stop()); this.stream = null
+    this.stream?.getTracks().forEach((tr) => tr.stop()); this.stream = null
     voice.releaseRecordingStream()
     this.expose()
     if (sid && tid) { try { await api.post(`/studio/sessions/${sid}/tracks/${tid}/finish`, { duration_ms: dur }) } catch { /* server keeps what it has */ } }

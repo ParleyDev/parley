@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { t } from './i18n'
 
 /**
  * Name styles for users and roles (free for everyone): a font, an effect and its colours. Fonts are system
@@ -11,15 +12,15 @@ export interface NameStyle { font?: NameFont; effect?: NameEffect; colors?: stri
 export type ColorMode = 'one' | 'two' | 'stripes' | 'five'
 
 export const FONTS: { id: NameFont; label: string }[] = [
-  { id: 'default', label: 'Default' }, { id: 'serif', label: 'Serif' }, { id: 'mono', label: 'Mono' }, { id: 'rounded', label: 'Rounded' },
-  { id: 'display', label: 'Display' }, { id: 'script', label: 'Script' }, { id: 'smallcaps', label: 'Small caps' }, { id: 'condensed', label: 'Condensed' },
-  { id: 'wide', label: 'Wide' }, { id: 'italic', label: 'Italic' }, { id: 'slab', label: 'Slab' }, { id: 'pixel', label: 'Pixel' },
+  { id: 'default', get label() { return t('Default') } }, { id: 'serif', get label() { return t('Serif') } }, { id: 'mono', get label() { return t('Mono') } }, { id: 'rounded', get label() { return t('Rounded') } },
+  { id: 'display', get label() { return t('Display') } }, { id: 'script', get label() { return t('Script') } }, { id: 'smallcaps', get label() { return t('Small caps') } }, { id: 'condensed', get label() { return t('Condensed') } },
+  { id: 'wide', get label() { return t('Wide') } }, { id: 'italic', get label() { return t('Italic') } }, { id: 'slab', get label() { return t('Slab') } }, { id: 'pixel', get label() { return t('Pixel') } },
 ]
 export const EFFECTS: { id: NameEffect; label: string; mode: ColorMode }[] = [
-  { id: 'solid', label: 'Solid', mode: 'one' }, { id: 'gradient', label: 'Gradient', mode: 'two' }, { id: 'neon', label: 'Neon', mode: 'one' },
-  { id: 'toon', label: 'Toon', mode: 'one' }, { id: 'pop', label: 'Pop', mode: 'one' }, { id: 'gummy', label: 'Gummy', mode: 'stripes' },
-  { id: 'prism', label: 'Prism', mode: 'five' }, { id: 'glitch', label: 'Glitch', mode: 'one' }, { id: 'wave', label: 'Wave', mode: 'one' },
-  { id: 'holographic', label: 'Holographic', mode: 'stripes' },
+  { id: 'solid', get label() { return t('Solid') }, mode: 'one' }, { id: 'gradient', get label() { return t('Gradient') }, mode: 'two' }, { id: 'neon', get label() { return t('Neon') }, mode: 'one' },
+  { id: 'toon', get label() { return t('Toon') }, mode: 'one' }, { id: 'pop', get label() { return t('Pop') }, mode: 'one' }, { id: 'gummy', get label() { return t('Gummy') }, mode: 'stripes' },
+  { id: 'prism', get label() { return t('Prism') }, mode: 'five' }, { id: 'glitch', get label() { return t('Glitch') }, mode: 'one' }, { id: 'wave', get label() { return t('Wave') }, mode: 'one' },
+  { id: 'holographic', get label() { return t('Holographic') }, mode: 'stripes' },
 ]
 /** Discord's holographic role look: pale pink, blue and mint with a moving sheen. */
 export const HOLO_COLORS = ['#a9c9ff', '#ffbbec', '#c6f7e2']

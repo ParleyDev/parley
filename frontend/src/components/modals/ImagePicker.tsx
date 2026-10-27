@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { colorFor, initials } from '../../lib/format'
 import { prepareImage, uploadImage } from '../../lib/upload'
 import { useStore } from '../../store'
+import { useT } from '../../lib/i18n'
 
 interface Props { value: string | null; onChange: (v: string | null) => void; label: string; id: string; round?: boolean; kind?: 'avatar' | 'icon' | 'banner' }
 
@@ -14,6 +15,7 @@ export default function ImagePicker({ value, onChange, label, id, round = true, 
   const ref = useRef<HTMLInputElement>(null)
   const pushToast = useStore((s) => s.pushToast)
   const [busy, setBusy] = useState(false)
+  const t = useT()
   const pick = async (f: File | undefined) => {
     if (!f) return
     setBusy(true)
@@ -27,7 +29,7 @@ export default function ImagePicker({ value, onChange, label, id, round = true, 
         <span className={`absolute inset-0 bg-black/50 ${busy ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} flex items-center justify-center`}><Camera size={22} className={busy ? 'animate-pulse' : ''} /></span>
       </button>
       <input ref={ref} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/apng" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = '' }} />
-      {value && <button type="button" onClick={() => onChange(null)} className="text-xs text-text-2 hover:text-danger">Remove image</button>}
+      {value && <button type="button" onClick={() => onChange(null)} className="text-xs text-text-2 hover:text-danger">{t('Remove image')}</button>}
     </div>
   )
 }

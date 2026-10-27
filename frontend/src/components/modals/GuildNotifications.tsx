@@ -4,11 +4,13 @@ import { api } from '../../lib/api'
 import type { NotifSetting } from '../../lib/notify'
 import { useStore } from '../../store'
 import Modal from '../Modal'
+import { t, useT } from '../../lib/i18n'
 
-const MUTES: [string, number][] = [['15 minutes', 15], ['1 hour', 60], ['3 hours', 180], ['8 hours', 480], ['24 hours', 1440], ['Until I turn it back on', 0]]
+const mutes = (): [string, number][] => [[t('15 minutes'), 15], [t('1 hour'), 60], [t('3 hours'), 180], [t('8 hours'), 480], [t('24 hours'), 1440], [t('Until I turn it back on'), 0]]
 
 /** Server notification settings: mute, level, suppressions, highlights, events, mobile push and channel overrides. */
 export default function GuildNotificationsModal({ onClose, guildId }: { onClose: () => void; guildId: string }) {
+  useT()
   const guild = useStore((s) => s.guilds[guildId])
   const settings = useStore((s) => s.notifSettings)
   const channels = useStore((s) => s.channels)
@@ -30,37 +32,37 @@ export default function GuildNotificationsModal({ onClose, guildId }: { onClose:
     <Modal title="Notification Settings" subtitle={guild.name} onClose={onClose} width="max-w-lg">
       <div className="space-y-5" data-guild-notifications={guildId}>
         <div className="flex items-center gap-3 rounded-xl border border-line bg-bg-1 p-3">
-          <span className="flex-1 text-sm">{muted ? <>Muted{cur.muted_until && new Date(cur.muted_until).getFullYear() < 2100 ? ` until ${new Date(cur.muted_until).toLocaleString()}` : ''}. You won't get notifications from this server.</> : <>Mute {guild.name}</>}</span>
-          {muted ? <button type="button" className="btn-primary py-1" onClick={() => put(guildId, { unmute: true })} data-gn-unmute>Unmute</button> : <>
-            <select className="input w-auto py-1" value={muteFor} onChange={(e) => setMuteFor(Number(e.target.value))} data-gn-mute-for>{MUTES.map(([l, v]) => <option key={v} value={v}>{l}</option>)}</select>
-            <button type="button" className="btn-ghost py-1" onClick={() => put(guildId, { mute_minutes: muteFor })} data-gn-mute>Mute</button></>}
+          <span className="flex-1 text-sm">{muted ? (cur.muted_until && new Date(cur.muted_until).getFullYear() < 2100 ? t("Muted until {date}. You won't get notifications from this server.", { date: new Date(cur.muted_until).toLocaleString() }) : t("Muted. You won't get notifications from this server.")) : t('Mute {name}', { name: guild.name })}</span>
+          {muted ? <button type="button" className="btn-primary py-1" onClick={() => put(guildId, { unmute: true })} data-gn-unmute>{t('Unmute')}</button> : <>
+            <select className="input w-auto py-1" value={muteFor} onChange={(e) => setMuteFor(Number(e.target.value))} data-gn-mute-for>{mutes().map(([l, v]) => <option key={v} value={v}>{l}</option>)}</select>
+            <button type="button" className="btn-ghost py-1" onClick={() => put(guildId, { mute_minutes: muteFor })} data-gn-mute>{t('Mute')}</button></>}
         </div>
         <section>
-          <h3 className="label">Server notifications</h3>
-          {([['all', 'All messages'], ['mentions', 'Only @mentions'], ['nothing', 'Nothing']] as const).map(([v, l]) => (
+          <h3 className="label">{t('Server notifications')}</h3>
+          {([['all', t('All messages')], ['mentions', t('Only @mentions')], ['nothing', t('Nothing')]] as const).map(([v, l]) => (
             <label key={v} className="flex items-center gap-2 py-1 text-sm cursor-pointer"><input type="radio" name="gn-level" className="h-4 w-4 accent-accent" checked={level === v} onChange={() => put(guildId, { level: v })} data-gn-level={v} /> {l}</label>
           ))}
         </section>
         <section className="divide-y divide-line">
-          {box('suppress_everyone', 'Suppress @everyone and @here', !!cur.suppress_everyone)}
-          {box('suppress_roles', 'Suppress all role @mentions', !!cur.suppress_roles)}
-          {box('suppress_highlights', 'Suppress highlights', !!cur.suppress_highlights)}
-          {box('mute_events', 'Mute new events', !!cur.mute_events)}
-          {box('mobile_push', 'Mobile push notifications', cur.mobile_push ?? true)}
+          {box('suppress_everyone', t('Suppress @everyone and @here'), !!cur.suppress_everyone)}
+          {box('suppress_roles', t('Suppress all role @mentions'), !!cur.suppress_roles)}
+          {box('suppress_highlights', t('Suppress highlights'), !!cur.suppress_highlights)}
+          {box('mute_events', t('Mute new events'), !!cur.mute_events)}
+          {box('mobile_push', t('Mobile push notifications'), cur.mobile_push ?? true)}
         </section>
         <section>
-          <h3 className="label">Channel overrides</h3>
+          <h3 className="label">{t('Channel overrides')}</h3>
           <div className="space-y-1.5">
             {overrides.map((c) => (
               <div key={c.id} className="flex items-center gap-2 rounded-lg bg-bg-1 px-2 py-1.5 text-sm" data-gn-override={c.id}>
                 <span className="flex-1 truncate">{c.kind === 'category' ? c.name.toUpperCase() : `#${c.name}`}</span>
-                <select className="input w-auto py-0.5 text-xs" value={settings[c.id].level} onChange={(e) => put(c.id, { level: e.target.value })}>{[['default', 'Default'], ['all', 'All'], ['mentions', 'Mentions'], ['nothing', 'Nothing']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-                <button type="button" title="Remove override" className="text-text-2 hover:text-danger" onClick={() => put(c.id, { level: 'default', unmute: true })}><Trash2 size={14} /></button>
+                <select className="input w-auto py-0.5 text-xs" value={settings[c.id].level} onChange={(e) => put(c.id, { level: e.target.value })}>{[['default', t('Default')], ['all', t('All')], ['mentions', t('Mentions')], ['nothing', t('Nothing')]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+                <button type="button" title={t('Remove override')} className="text-text-2 hover:text-danger" onClick={() => put(c.id, { level: 'default', unmute: true })}><Trash2 size={14} /></button>
               </div>
             ))}
             <div className="flex gap-2">
-              <select className="input flex-1 py-1 text-sm" value={addChannel} onChange={(e) => setAddChannel(e.target.value)} data-gn-add-channel><option value="">Add a channel or category…</option>{list.filter((c) => !overrides.includes(c)).map((c) => <option key={c.id} value={c.id}>{c.kind === 'category' ? c.name.toUpperCase() : `#${c.name}`}</option>)}</select>
-              <button type="button" className="btn-ghost py-1" disabled={!addChannel} onClick={() => { void put(addChannel, { level: 'mentions' }); setAddChannel('') }} data-gn-add>Add</button>
+              <select className="input flex-1 py-1 text-sm" value={addChannel} onChange={(e) => setAddChannel(e.target.value)} data-gn-add-channel><option value="">{t('Add a channel or category…')}</option>{list.filter((c) => !overrides.includes(c)).map((c) => <option key={c.id} value={c.id}>{c.kind === 'category' ? c.name.toUpperCase() : `#${c.name}`}</option>)}</select>
+              <button type="button" className="btn-ghost py-1" disabled={!addChannel} onClick={() => { void put(addChannel, { level: 'mentions' }); setAddChannel('') }} data-gn-add>{t('Add')}</button>
             </div>
           </div>
         </section>

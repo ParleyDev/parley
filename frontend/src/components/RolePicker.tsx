@@ -5,9 +5,11 @@ import { api } from '../lib/api'
 import { myGuildPerms, useStore } from '../store'
 import type { Member } from '../lib/types'
 import { canManageRole, has, highestPosition, P, sortedRoles, EMPTY_ROLES } from '../lib/perms'
+import { useT } from '../lib/i18n'
 
 /** Role chips for a member plus (if allowed) a popover to add/remove roles below your own highest. */
 export default function RolePicker({ guildId, member, compact }: { guildId: string; member: Member; compact?: boolean }) {
+  const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
   const roles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   const me = useStore((s) => s.user)
@@ -52,12 +54,12 @@ export default function RolePicker({ guildId, member, compact }: { guildId: stri
         <span key={r.id} className={`flex items-center gap-1 rounded-md border border-line bg-bg-3 pl-1.5 pr-1.5 ${compact ? 'text-[11px] py-0' : 'text-xs py-0.5'}`}>
           <span className="h-2.5 w-2.5 rounded-full" style={{ background: r.color ? (r.color_accent ? `linear-gradient(90deg, ${r.color}, ${r.color_accent})` : r.color) : '#7d8394' }} />
           {r.name}
-          {canEdit && assignable.some((a) => a.id === r.id) && <button onClick={() => setRoles(member.roles.filter((x) => x !== r.id))} className="text-text-2 hover:text-text-0" title="Remove role"><X size={11} /></button>}
+          {canEdit && assignable.some((a) => a.id === r.id) && <button onClick={() => setRoles(member.roles.filter((x) => x !== r.id))} className="text-text-2 hover:text-text-0" title={t('Remove role')}><X size={11} /></button>}
         </span>
       ))}
-      {mine.length === 0 && !canEdit && <span className="text-xs text-text-2">No roles</span>}
+      {mine.length === 0 && !canEdit && <span className="text-xs text-text-2">{t('No roles')}</span>}
       {canEdit && assignable.length > 0 && (
-        <button ref={anchor} onClick={() => setOpen((o) => !o)} className={`rounded-md border border-line bg-bg-3 text-text-1 hover:text-text-0 flex items-center justify-center ${compact ? 'h-4 w-5' : 'h-5 w-6'}`} title="Add role"><Plus size={12} /></button>
+        <button ref={anchor} onClick={() => setOpen((o) => !o)} className={`rounded-md border border-line bg-bg-3 text-text-1 hover:text-text-0 flex items-center justify-center ${compact ? 'h-4 w-5' : 'h-5 w-6'}`} title={t('Add role')}><Plus size={12} /></button>
       )}
       {open && createPortal(
         <>

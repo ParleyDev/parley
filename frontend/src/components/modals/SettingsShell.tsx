@@ -33,7 +33,7 @@ export default function SettingsShell<T extends string>({ sections, tab, onTab, 
   }, [onClose])
   const pick = (id: T) => { onTab(id); setMenu(false) }
   const current = sections.flatMap((sec) => sec.items).find((it) => it.id === tab)
-  const closeBtn = <button onClick={onClose} title="Close" className="md:hidden ml-auto h-9 w-9 shrink-0 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-settings-close><X size={22} /></button>
+  const closeBtn = <button onClick={onClose} title={t('Close')} className="md:hidden ml-auto h-9 w-9 shrink-0 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-settings-close><X size={22} /></button>
 
   return (
     <div className="fixed inset-0 z-50 bg-bg-1 flex max-md:flex-col pop safe-area" role="dialog" aria-modal data-settings-view={menu ? 'menu' : 'section'}>
@@ -57,7 +57,7 @@ export default function SettingsShell<T extends string>({ sections, tab, onTab, 
       </nav>
       <div className={`flex-1 min-w-0 min-h-0 flex flex-col ${menu ? 'max-md:hidden' : ''}`}>
         <div className="md:hidden h-12 shrink-0 flex items-center gap-1 pl-1 pr-3 border-b border-line">
-          <button onClick={() => setMenu(true)} className="h-9 flex items-center gap-0.5 rounded-md pl-1 pr-2 text-text-1 hover:bg-bg-3 hover:text-text-0" data-settings-back><ChevronLeft size={22} /><span className="text-[15px]">{title}</span></button>
+          <button onClick={() => setMenu(true)} className="h-9 flex items-center gap-0.5 rounded-md pl-1 pr-2 text-text-1 hover:bg-bg-3 hover:text-text-0" data-settings-back><ChevronLeft size={22} /><span className="text-[15px]">{t(title)}</span></button>
           <span className="min-w-0 flex-1 truncate text-center font-semibold" data-settings-title>{current?.label ? t(current.label) : ''}</span>
           {closeBtn}
         </div>

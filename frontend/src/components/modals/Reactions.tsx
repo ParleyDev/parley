@@ -6,11 +6,13 @@ import Emoji from '../Emoji'
 import { api } from '../../lib/api'
 import { has, P } from '../../lib/perms'
 import { myChannelPerms, useStore } from '../../store'
+import { useT } from '../../lib/i18n'
 
 interface Reactor { id: string; display_name: string; avatar_url: string | null }
 
 /** View Reactions: a tab per emoji with everyone who reacted; moderators can remove someone's reaction. */
 export default function ReactionsModal({ onClose, channelId, messageId }: { onClose: () => void; channelId: string; messageId: string }) {
+  const t = useT()
   const msg = useStore((s) => s.messages[channelId]?.find((m) => m.id === messageId))
   const me = useStore((s) => s.user)
   const perms = useStore((s) => myChannelPerms(s, channelId))
@@ -33,10 +35,10 @@ export default function ReactionsModal({ onClose, channelId, messageId }: { onCl
     try { await api.delete(`/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}/${id}${q}`); setPeople((p) => (p ?? []).filter((x) => x.id !== id)) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   return (
-    <Modal title="Reactions" onClose={onClose} width="max-w-lg">
-      {reactions.length === 0 ? <p className="text-sm text-text-2">No reactions left on this message.</p> : (
+    <Modal title={t('Reactions')} onClose={onClose} width="max-w-lg">
+      {reactions.length === 0 ? <p className="text-sm text-text-2">{t('No reactions left on this message.')}</p> : (
         <div className="flex min-h-[16rem] gap-3 max-sm:flex-col" data-reactions-modal>
-          <div className="flex shrink-0 flex-col gap-1 max-sm:flex-row max-sm:overflow-x-auto" role="tablist" aria-label="Emoji">
+          <div className="flex shrink-0 flex-col gap-1 max-sm:flex-row max-sm:overflow-x-auto" role="tablist" aria-label={t('Emoji')}>
             {reactions.map((r) => (
               <button key={keyOf(r)} type="button" role="tab" aria-selected={keyOf(r) === tab} onClick={() => setTab(keyOf(r))}
                 className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm ${keyOf(r) === tab ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3'} ${r.burst ? 'super-reaction' : ''}`} data-reactions-tab={r.emoji} data-reactions-burst={r.burst ? '1' : undefined}>
@@ -45,11 +47,11 @@ export default function ReactionsModal({ onClose, channelId, messageId }: { onCl
             ))}
           </div>
           <div className="min-w-0 flex-1 space-y-1" role="tabpanel">
-            {people === null ? <p className="text-sm text-text-2">Loading…</p> : people.map((u) => (
+            {people === null ? <p className="text-sm text-text-2">{t('Loading…')}</p> : people.map((u) => (
               <div key={u.id} className="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-bg-3" data-reactor={u.id}>
                 <Avatar user={u} size={28} />
                 <span className="min-w-0 flex-1 truncate text-sm">{u.display_name}</span>
-                {(canRemove || u.id === me?.id) && <button type="button" onClick={() => remove(u.id)} className="rounded p-1 text-text-2 hover:bg-bg-4 hover:text-danger" title="Remove reaction" aria-label={`Remove ${u.display_name}'s reaction`} data-reactor-remove={u.id}><X size={14} /></button>}
+                {(canRemove || u.id === me?.id) && <button type="button" onClick={() => remove(u.id)} className="rounded p-1 text-text-2 hover:bg-bg-4 hover:text-danger" title={t('Remove reaction')} aria-label={t("Remove {name}'s reaction", { name: u.display_name })} data-reactor-remove={u.id}><X size={14} /></button>}
               </div>
             ))}
           </div>

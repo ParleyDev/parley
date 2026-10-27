@@ -17,11 +17,13 @@ import { FORMATS, toggleWrap } from '../../../lib/editor'
 import ProfileCard, { type ProfileEdit } from '../../ProfileCard'
 import { WearServerTag } from '../../ServerTag'
 import Avatar from '../../Avatar'
+import { useT } from '../../../lib/i18n'
 
 const MAX_BIO = 400
 
 /** Everything about how your profile card looks, with a live preview. */
 export default function ProfilesTab() {
+  const t = useT()
   const user = useStore((s) => s.user)
   const setAuth = useStore((s) => s.setAuth)
   const token = useStore((s) => s.token)
@@ -71,7 +73,7 @@ export default function ProfilesTab() {
         profile_privacy: privacy, profile_frame: frame, nameplate: plate, profile_effect: effect,
       })
       if (token) setAuth(token, u)
-      pushToast('Profile saved')
+      pushToast(t('Profile saved'))
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   const pickBanner = async (f: File | undefined) => {
@@ -94,16 +96,16 @@ export default function ProfilesTab() {
   return (
     <>
     <div>
-      <h1 className="text-xl font-bold mb-5">Profiles</h1>
+      <h1 className="text-xl font-bold mb-5">{t('Profiles')}</h1>
       <div className="flex gap-8 max-lg:flex-col">
         <div className="flex-1 min-w-0 space-y-6">
-          <div><label className="label">Display name</label><input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} maxLength={32} required /></div>
-          <div><label className="label">Pronouns</label><input className="input" value={pronouns} onChange={(e) => setPronouns(e.target.value)} maxLength={40} placeholder="Add your pronouns" /></div>
-          <div><label className="label">Custom status</label><input className="input" value={customStatus} onChange={(e) => setCustomStatus(e.target.value)} maxLength={128} placeholder="Support has arrived!" data-profile-custom-status /></div>
-          <div><label className="label">Clan tag</label><input className="input w-32 uppercase" value={clanTag} onChange={(e) => setClanTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))} maxLength={4} placeholder="TAG" data-clan-tag-input /><p className="text-xs text-text-2 mt-1">2–4 letters or digits shown beside your name everywhere. Leave empty for none.</p></div>
+          <div><label className="label">{t('Display name')}</label><input className="input" value={display} onChange={(e) => setDisplay(e.target.value)} maxLength={32} required /></div>
+          <div><label className="label">{t('Pronouns')}</label><input className="input" value={pronouns} onChange={(e) => setPronouns(e.target.value)} maxLength={40} placeholder={t('Add your pronouns')} /></div>
+          <div><label className="label">{t('Custom status')}</label><input className="input" value={customStatus} onChange={(e) => setCustomStatus(e.target.value)} maxLength={128} placeholder={t('Support has arrived!')} data-profile-custom-status /></div>
+          <div><label className="label">{t('Clan tag')}</label><input className="input w-32 uppercase" value={clanTag} onChange={(e) => setClanTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))} maxLength={4} placeholder="TAG" data-clan-tag-input /><p className="text-xs text-text-2 mt-1">{t('2–4 letters or digits shown beside your name everywhere. Leave empty for none.')}</p></div>
           <WearServerTag />
           <div>
-            <label className="label">Avatar decoration</label>
+            <label className="label">{t('Avatar decoration')}</label>
             <div className="flex flex-wrap gap-2" data-decoration-options>
               {DECORATIONS.map((d) => (
                 <button key={d.id} type="button" onClick={() => setDecoration(d.id)} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-sm ${decoration === d.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-decoration-option={d.id} aria-pressed={decoration === d.id}>
@@ -114,104 +116,104 @@ export default function ProfilesTab() {
             <DecorationGallery user={{ ...user, avatar_url: avatar }} value={decoration} onChange={setDecoration} />
           </div>
           <div>
-            <label className="label">Avatar</label>
+            <label className="label">{t('Avatar')}</label>
             <ImagePicker value={avatar} onChange={setAvatar} label={display} id={user.id} kind="avatar" />
             {(user.avatar_history?.length ?? 0) > 0 && (
               <div className="mt-2" data-avatar-history>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1">Recent avatars</div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1">{t('Recent avatars')}</div>
                 <div className="flex flex-wrap gap-2">
-                  {user.avatar_history!.map((url) => <button key={url} type="button" onClick={() => setAvatar(url)} className={`h-10 w-10 overflow-hidden rounded-full border-2 ${avatar === url ? 'border-accent' : 'border-transparent hover:border-text-2'}`} title="Use this avatar again" data-avatar-history-item={url}><img src={url} alt="" className="h-full w-full object-cover" /></button>)}
+                  {user.avatar_history!.map((url) => <button key={url} type="button" onClick={() => setAvatar(url)} className={`h-10 w-10 overflow-hidden rounded-full border-2 ${avatar === url ? 'border-accent' : 'border-transparent hover:border-text-2'}`} title={t('Use this avatar again')} data-avatar-history-item={url}><img src={url} alt="" className="h-full w-full object-cover" /></button>)}
                 </div>
               </div>
             )}
-            <p className="text-xs text-text-2 mt-1">PNG, JPEG, GIF or WebP up to 8 MB. Animated GIF, APNG and WebP stay animated.</p>
+            <p className="text-xs text-text-2 mt-1">{t('PNG, JPEG, GIF or WebP up to 8 MB. Animated GIF, APNG and WebP stay animated.')}</p>
           </div>
           <div>
-            <label className="label">Profile banner</label>
+            <label className="label">{t('Profile banner')}</label>
             <div className="flex items-center gap-3">
               <button type="button" onClick={() => bannerRef.current?.click()} className="group relative h-20 w-60 max-w-full overflow-hidden rounded-xl border-2 border-dashed border-line hover:border-accent flex items-center justify-center" style={{ background: banner ? undefined : 'rgba(0,0,0,0.25)' }}>
-                {banner ? <img src={banner} alt="" className="h-full w-full object-cover" /> : <span className="text-xs text-text-2">Upload banner</span>}
+                {banner ? <img src={banner} alt="" className="h-full w-full object-cover" /> : <span className="text-xs text-text-2">{t('Upload banner')}</span>}
                 <span className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white"><Camera size={22} /></span>
               </button>
               <input ref={bannerRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/apng" className="hidden" onChange={(e) => { pickBanner(e.target.files?.[0]); e.target.value = '' }} data-banner-input />
-              {banner && <button type="button" onClick={() => setBanner(null)} className="text-text-2 hover:text-danger" title="Remove banner"><Trash2 size={18} /></button>}
+              {banner && <button type="button" onClick={() => setBanner(null)} className="text-text-2 hover:text-danger" title={t('Remove banner')}><Trash2 size={18} /></button>}
             </div>
-            <p className="text-xs text-text-2 mt-1">Without a banner the card shows your theme colour. Still images are resized to 1200×480; animated ones are kept as uploaded.</p>
+            <p className="text-xs text-text-2 mt-1">{t('Without a banner the card shows your theme colour. Still images are resized to 1200×480; animated ones are kept as uploaded.')}</p>
           </div>
           <div className="space-y-2 rounded-xl bg-bg-0/40 border border-line p-4" data-theme-card>
-            <label className="label">Profile theme</label>
+            <label className="label">{t('Profile theme')}</label>
             <div className="relative h-28 w-full max-w-[260px] rounded-xl" style={{ background: `linear-gradient(180deg, ${primary ?? base}, ${accent ?? primary ?? base})` }} data-theme-box>
-              <label className="absolute left-1/2 -translate-x-1/2 top-3 h-8 w-8 rounded-full border-2 border-white/80 bg-white/20 backdrop-blur cursor-pointer flex items-center justify-center text-white" title="Primary colour"><Pipette size={13} /><input type="color" value={primary ?? base} onChange={(e) => setPrimary(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" data-theme-primary /></label>
-              <label className="absolute left-1/2 -translate-x-1/2 bottom-3 h-8 w-8 rounded-full border-2 border-white/80 bg-white/20 backdrop-blur cursor-pointer flex items-center justify-center text-white" title="Accent colour"><Pipette size={13} /><input type="color" value={accent ?? primary ?? base} onChange={(e) => setAccent(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" data-theme-accent /></label>
+              <label className="absolute left-1/2 -translate-x-1/2 top-3 h-8 w-8 rounded-full border-2 border-white/80 bg-white/20 backdrop-blur cursor-pointer flex items-center justify-center text-white" title={t('Primary colour')}><Pipette size={13} /><input type="color" value={primary ?? base} onChange={(e) => setPrimary(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" data-theme-primary /></label>
+              <label className="absolute left-1/2 -translate-x-1/2 bottom-3 h-8 w-8 rounded-full border-2 border-white/80 bg-white/20 backdrop-blur cursor-pointer flex items-center justify-center text-white" title={t('Accent colour')}><Pipette size={13} /><input type="color" value={accent ?? primary ?? base} onChange={(e) => setAccent(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" data-theme-accent /></label>
             </div>
             <div className="flex items-center gap-3 text-xs text-text-2">
-              <span>Tints your profile card top to bottom.</span>
-              {(primary || accent) && <button type="button" className="hover:text-text-0" onClick={() => { setPrimary(null); setAccent(null) }} data-theme-reset>Reset</button>}
-              {accent && primary && accent !== primary && <button type="button" className="hover:text-text-0" onClick={() => setAccent(null)} data-theme-single>Single colour</button>}
+              <span>{t('Tints your profile card top to bottom.')}</span>
+              {(primary || accent) && <button type="button" className="hover:text-text-0" onClick={() => { setPrimary(null); setAccent(null) }} data-theme-reset>{t('Reset')}</button>}
+              {accent && primary && accent !== primary && <button type="button" className="hover:text-text-0" onClick={() => setAccent(null)} data-theme-single>{t('Single colour')}</button>}
             </div>
           </div>
           <div className="space-y-3 rounded-xl bg-bg-0/40 border border-line p-4" data-name-style-card>
-            <div className="text-sm text-text-2">How your name appears in chat, DMs and lists. Inside a server a coloured role takes over.</div>
+            <div className="text-sm text-text-2">{t('How your name appears in chat, DMs and lists. Inside a server a coloured role takes over.')}</div>
             <div className="flex items-center gap-3 flex-wrap">
               <span className="text-[15px] font-semibold"><span className={previewLook.className} style={previewLook.style} data-name-preview>{display || user.display_name}</span></span>
-              <span className="text-xs text-text-2">{EFFECTS.find((e) => e.id === (nameStyle.effect ?? 'solid'))?.label} · {FONTS.find((f) => f.id === (nameStyle.font ?? 'default'))?.label}{nameStyle.colors?.length ? '' : ' · no colour'}</span>
-              <button type="button" className="btn-ghost bg-bg-3 hover:bg-bg-4 ml-auto" onClick={() => setStyleOpen(true)} data-name-style-open>Change Display Name Style</button>
+              <span className="text-xs text-text-2">{EFFECTS.find((e) => e.id === (nameStyle.effect ?? 'solid'))?.label} · {FONTS.find((f) => f.id === (nameStyle.font ?? 'default'))?.label}{nameStyle.colors?.length ? '' : ` · ${t('no colour')}`}</span>
+              <button type="button" className="btn-ghost bg-bg-3 hover:bg-bg-4 ml-auto" onClick={() => setStyleOpen(true)} data-name-style-open>{t('Change Display Name Style')}</button>
             </div>
           </div>
           <div className="space-y-3 rounded-xl bg-bg-0/40 border border-line p-4" data-cosmetics>
             <div>
-              <label className="label">Profile frame</label>
+              <label className="label">{t('Profile frame')}</label>
               <div className="flex flex-wrap gap-2">
-                {[{ id: '', label: 'None' }, ...PROFILE_FRAMES].map((f) => <button key={f.id || 'none'} type="button" onClick={() => setFrame(f.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${frame === f.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-frame-option={f.id || 'none'} aria-pressed={frame === f.id}>{f.label}</button>)}
+                {[{ id: '', label: t('None') }, ...PROFILE_FRAMES].map((f) => <button key={f.id || 'none'} type="button" onClick={() => setFrame(f.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${frame === f.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-frame-option={f.id || 'none'} aria-pressed={frame === f.id}>{f.label}</button>)}
               </div>
             </div>
             <div>
-              <label className="label">Nameplate</label>
+              <label className="label">{t('Nameplate')}</label>
               <div className="flex flex-wrap gap-2">
-                {[{ id: '', label: 'None' }, ...NAMEPLATES].map((n) => <button key={n.id || 'none'} type="button" onClick={() => setPlate(n.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${nameplateClass(n.id)} ${plate === n.id ? 'border-accent' : 'border-line hover:border-text-2'}`} data-nameplate-option={n.id || 'none'} aria-pressed={plate === n.id}>{n.label}</button>)}
+                {[{ id: '', label: t('None') }, ...NAMEPLATES].map((n) => <button key={n.id || 'none'} type="button" onClick={() => setPlate(n.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${nameplateClass(n.id)} ${plate === n.id ? 'border-accent' : 'border-line hover:border-text-2'}`} data-nameplate-option={n.id || 'none'} aria-pressed={plate === n.id}>{n.label}</button>)}
               </div>
-              <p className="mt-1 text-xs text-text-2">Shown behind your name in member lists and DMs.</p>
+              <p className="mt-1 text-xs text-text-2">{t('Shown behind your name in member lists and DMs.')}</p>
             </div>
             <div>
-              <label className="label">Profile effect</label>
+              <label className="label">{t('Profile effect')}</label>
               <div className="flex flex-wrap gap-2">
-                {[{ id: '', label: 'None', glyph: '' }, ...PROFILE_EFFECTS].map((e) => <button key={e.id || 'none'} type="button" onClick={() => setEffect(e.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${effect === e.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-effect-option={e.id || 'none'} aria-pressed={effect === e.id}>{e.glyph} {e.label}</button>)}
+                {[{ id: '', label: t('None'), glyph: '' }, ...PROFILE_EFFECTS].map((e) => <button key={e.id || 'none'} type="button" onClick={() => setEffect(e.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${effect === e.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-effect-option={e.id || 'none'} aria-pressed={effect === e.id}>{e.glyph} {e.label}</button>)}
               </div>
             </div>
             <div>
-              <label className="label" htmlFor="profile-privacy">Who can see your full profile</label>
+              <label className="label" htmlFor="profile-privacy">{t('Who can see your full profile')}</label>
               <select id="profile-privacy" className="input w-auto" value={privacy} onChange={(e) => setPrivacy(e.target.value as 'everyone' | 'friends')} data-profile-privacy>
-                <option value="everyone">Everyone</option>
-                <option value="friends">Friends only</option>
+                <option value="everyone">{t('Everyone')}</option>
+                <option value="friends">{t('Friends only')}</option>
               </select>
-              <p className="mt-1 text-xs text-text-2">Friends only hides your about me, banner, pronouns and panels from everyone else.</p>
+              <p className="mt-1 text-xs text-text-2">{t('Friends only hides your about me, banner, pronouns and panels from everyone else.')}</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1" data-panels>
-            <div><label className="label">Wishlist panel</label><textarea className="input resize-none font-mono text-[13px]" rows={4} value={wishlist} onChange={(e) => setWishlist(e.target.value)} placeholder={'One per line: Title | https://link (link optional)'} data-panel-wishlist /></div>
-            <div><label className="label">Game collection panel</label><textarea className="input resize-none font-mono text-[13px]" rows={4} value={games} onChange={(e) => setGames(e.target.value)} placeholder={'One per line: Title | https://link (link optional)'} data-panel-games /></div>
-            <p className="col-span-full -mt-2 text-xs text-text-2">Optional sections on your profile card, up to 25 items each. Leave empty to hide.</p>
+            <div><label className="label">{t('Wishlist panel')}</label><textarea className="input resize-none font-mono text-[13px]" rows={4} value={wishlist} onChange={(e) => setWishlist(e.target.value)} placeholder={t('One per line: Title | https://link (link optional)')} data-panel-wishlist /></div>
+            <div><label className="label">{t('Game collection panel')}</label><textarea className="input resize-none font-mono text-[13px]" rows={4} value={games} onChange={(e) => setGames(e.target.value)} placeholder={t('One per line: Title | https://link (link optional)')} data-panel-games /></div>
+            <p className="col-span-full -mt-2 text-xs text-text-2">{t('Optional sections on your profile card, up to 25 items each. Leave empty to hide.')}</p>
           </div>
           <div>
-            <label className="label">About me</label>
+            <label className="label">{t('About me')}</label>
             <div className="mb-1 flex gap-0.5" data-bio-toolbar>
               {FORMATS.map((f) => <button key={f.key} type="button" title={f.label} aria-label={f.label} onMouseDown={(e) => e.preventDefault()} onClick={() => { const el = bioRef.current; if (el) { el.focus(); setBio(toggleWrap(el, f)) } }} className="h-8 min-w-8 rounded-md px-2 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0" data-bio-format={f.key}>{f.label}</button>)}
             </div>
-            <textarea ref={bioRef} className="input resize-none text-[14px]" rows={5} maxLength={MAX_BIO} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell people a bit about yourself" data-bio-input />
-            <div className="flex justify-between text-[11px] text-text-2 mt-1"><span>Select text and use the buttons above, or type **bold**, *italic*, __underline__, ~~strike~~ and links. The preview shows how it looks.</span><span>{bio.length}/{MAX_BIO}</span></div>
+            <textarea ref={bioRef} className="input resize-none text-[14px]" rows={5} maxLength={MAX_BIO} value={bio} onChange={(e) => setBio(e.target.value)} placeholder={t('Tell people a bit about yourself')} data-bio-input />
+            <div className="flex justify-between text-[11px] text-text-2 mt-1"><span>{t('Select text and use the buttons above, or type **bold**, *italic*, __underline__, ~~strike~~ and links. The preview shows how it looks.')}</span><span>{bio.length}/{MAX_BIO}</span></div>
           </div>
         </div>
         <div className="w-[340px] max-lg:w-full shrink-0">
-          <div className="label">Preview</div>
-          <p className="-mt-1 mb-2 text-xs text-text-2">Click your name, pronouns, status, avatar or banner to change them here.</p>
+          <div className="label">{t('Preview')}</div>
+          <p className="-mt-1 mb-2 text-xs text-text-2">{t('Click your name, pronouns, status, avatar or banner to change them here.')}</p>
           <ProfileCard edit={edit} user={{ ...user, display_name: display || user.display_name, pronouns, custom_status: customStatus, bio, avatar_url: avatar, avatar_decoration: decoration, name_style: nameStyle, name_primary: nameStyle.colors?.[0] ?? null, name_accent: nameStyle.colors?.[1] ?? null, banner_url: banner, theme_primary: primary, theme_accent: accent, profile_frame: frame, profile_effect: effect}} />
         </div>
       </div>
       {dirty && (
         <div className="sticky bottom-4 mt-6 rounded-xl bg-bg-0 border border-line shadow-2xl px-4 py-3 flex items-center gap-3 fade-in">
-          <span className="text-sm flex-1">Careful — you have unsaved changes!</span>
-          <button type="button" className="btn-ghost" onClick={reset}>Reset</button>
-          <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !display.trim()} onClick={save}>Save Changes</button>
+          <span className="text-sm flex-1">{t('Careful — you have unsaved changes!')}</span>
+          <button type="button" className="btn-ghost" onClick={reset}>{t('Reset')}</button>
+          <button className="btn-primary bg-success hover:bg-success/80 text-black" disabled={busy || !display.trim()} onClick={save}>{t('Save Changes')}</button>
         </div>
       )}
     </div>

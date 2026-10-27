@@ -23,6 +23,7 @@ import sql from 'highlight.js/lib/languages/sql'
 import yaml from 'highlight.js/lib/languages/yaml'
 import markdown from 'highlight.js/lib/languages/markdown'
 import diff from 'highlight.js/lib/languages/diff'
+import { useT } from './i18n'
 
 /**
  * Discord-flavoured markdown → React. Supported:
@@ -276,12 +277,13 @@ export function renderInline(text: string, opts: { noLinks?: boolean } = {}): Re
 
 function Spoiler({ children }: { children: ReactNode }) {
   const mode = getPrefs().spoilers
+  const t = useT()
   const ref = useRef<HTMLSpanElement>(null)
   const [open, setOpen] = useState(mode === 'always')
   // "On servers I moderate": the message marks itself data-can-moderate when the reader has Manage Messages there.
   useEffect(() => { if (mode === 'moderate' && ref.current?.closest('[data-can-moderate="1"]')) setOpen(true) }, [mode])
   return (
-    <span ref={ref} className={`spoiler ${open ? 'open' : ''}`} role="button" tabIndex={0} aria-label={open ? undefined : 'Spoiler'} title={open ? undefined : 'Click to reveal'}
+    <span ref={ref} className={`spoiler ${open ? 'open' : ''}`} role="button" tabIndex={0} aria-label={open ? undefined : t('Spoiler')} title={open ? undefined : t('Click to reveal')}
       onClick={(e) => { if (!open) { e.stopPropagation(); setOpen(true) } }}
       onKeyDown={(e) => { if (!open && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setOpen(true) } }}>
       {children}
@@ -300,6 +302,7 @@ export function highlightHtml(code: string, lang: string): string | null {
 
 function CodeBlock({ code, lang }: { code: string; lang: string }) {
   const [copied, setCopied] = useState(false)
+  const t = useT()
   // Lazy languages: render plain first, re-render once the chunk has registered itself.
   const [, bump] = useState(0)
   const pending = lang ? ensureLanguage(lang) : null
@@ -314,8 +317,8 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
   return (
     <div className="codeblock" data-lang={canonical ?? lang ?? ''}>
       <div className="codeblock-head">
-        <span>{canonical ? labels[canonical] : lang || 'Code'}</span>
-        <button type="button" onClick={copy} title="Copy code" className="codeblock-copy">{copied ? <Check size={13} /> : <Copy size={13} />}<span>{copied ? 'Copied' : 'Copy'}</span></button>
+        <span>{canonical ? labels[canonical] : lang || t('Code')}</span>
+        <button type="button" onClick={copy} title={t('Copy code')} className="codeblock-copy">{copied ? <Check size={13} /> : <Copy size={13} />}<span>{copied ? t('Copied') : t('Copy')}</span></button>
       </div>
       <pre>{html !== null ? <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /> : <code>{code}</code>}</pre>
     </div>

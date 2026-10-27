@@ -5,12 +5,14 @@ import { BADGE_COLOR, BADGE_COLORS, BADGE_SHOW, BADGE_STYLES, badgeHtml, badgeMa
 import type { InviteListing } from '../../../lib/types'
 import { useStore } from '../../../store'
 import { Toggle } from '../SettingsShell'
+import { useT, tn } from '../../../lib/i18n'
 
 /**
  * Server Settings › Badge: the server's README badge. Turn it on or off, set its label, colour, counts and default
  * style (they apply to every badge already posted), preview it with the real counts, and copy the code for an invite.
  */
 export default function BadgeTab({ guildId, onInvites }: { guildId: string; onInvites: () => void }) {
+  const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
   const pushToast = useStore((s) => s.pushToast)
   const [saved, setSaved] = useState<BadgeSettings | null>(null)
@@ -29,7 +31,7 @@ export default function BadgeTab({ guildId, onInvites }: { guildId: string; onIn
   useEffect(() => {
     if (!draft) return
     let url: string | null = null; let gone = false
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const q = new URLSearchParams({ enabled: String(draft.enabled), label: draft.label, color: draft.color, show: draft.show, style: draft.style })
       try {
         const r = await fetch(`/api/guilds/${guildId}/badge/preview.svg?${q}`, { headers: { Authorization: `Bearer ${getToken()}` } })
@@ -37,7 +39,7 @@ export default function BadgeTab({ guildId, onInvites }: { guildId: string; onIn
         url = URL.createObjectURL(await r.blob()); setPreview(url)
       } catch { /* keep the last preview */ }
     }, 200)
-    return () => { gone = true; clearTimeout(t); if (url) URL.revokeObjectURL(url) }
+    return () => { gone = true; clearTimeout(timer); if (url) URL.revokeObjectURL(url) }
   }, [guildId, draft])
   if (!guild) return null
   const set = (p: Partial<BadgeSettings>) => setDraft((d) => (d ? { ...d, ...p } : d))
@@ -45,7 +47,7 @@ export default function BadgeTab({ guildId, onInvites }: { guildId: string; onIn
   const save = async () => {
     if (!draft) return
     setBusy(true)
-    try { const s = await api.put<BadgeSettings>(`/guilds/${guildId}/badge`, draft); setSaved(s); setDraft(s); pushToast('Badge settings saved') } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
+    try { const s = await api.put<BadgeSettings>(`/guilds/${guildId}/badge`, draft); setSaved(s); setDraft(s); pushToast(t('Badge settings saved')) } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   const copyText = async (text: string, key: string) => { try { await navigator.clipboard.writeText(text); setCopied(key); setTimeout(() => setCopied((c) => (c === key ? null : c)), 1500) } catch { /* ignore */ } }
   const list = invites ?? []
@@ -55,76 +57,76 @@ export default function BadgeTab({ guildId, onInvites }: { guildId: string; onIn
   return (
     <div className="space-y-8" data-badge-tab>
       <div>
-        <h1 className="text-xl font-bold flex items-center gap-2"><Award size={20} /> README badge</h1>
-        <p className="text-sm text-text-2 mt-1">A live badge for a GitHub README or a website that shows how many people are in {guild.name} and opens an invite when clicked. Changes here update every badge already posted.</p>
+        <h1 className="text-xl font-bold flex items-center gap-2"><Award size={20} /> {t('README badge')}</h1>
+        <p className="text-sm text-text-2 mt-1">{t('A live badge for a GitHub README or a website that shows how many people are in {name} and opens an invite when clicked. Changes here update every badge already posted.', { name: guild.name })}</p>
       </div>
 
-      {!draft ? <p className="text-sm text-text-2">Loading…</p> : (
+      {!draft ? <p className="text-sm text-text-2">{t('Loading…')}</p> : (
         <>
           <div className="flex items-center justify-center rounded-xl border border-line bg-bg-0/40 p-6 min-h-[5rem]">
-            {preview && <img src={preview} alt={`${guild.name} badge preview`} className="max-w-full" data-badge-preview />}
+            {preview && <img src={preview} alt={t('{name} badge preview', { name: guild.name })} className="max-w-full" data-badge-preview />}
           </div>
 
           <section className="space-y-5">
             <div data-badge-enabled>
-              <Toggle label="Show the badge" checked={draft.enabled} onChange={(v) => set({ enabled: v })} />
-              <p className="text-xs text-text-2 mt-1">Off: posted badges turn grey and say "badge disabled", with no counts.</p>
+              <Toggle label={t('Show the badge')} checked={draft.enabled} onChange={(v) => set({ enabled: v })} />
+              <p className="text-xs text-text-2 mt-1">{t('Off: posted badges turn grey and say "badge disabled", with no counts.')}</p>
             </div>
             <div className="flex flex-wrap gap-4">
-              <div className="min-w-[12rem] flex-1"><label className="label">Label</label>
+              <div className="min-w-[12rem] flex-1"><label className="label">{t('Label')}</label>
                 <input className="input" value={draft.label} maxLength={32} placeholder="Parley" onChange={(e) => set({ label: e.target.value })} disabled={!draft.enabled} data-badge-label /></div>
-              <div className="min-w-[12rem] flex-1"><label className="label">Show</label>
+              <div className="min-w-[12rem] flex-1"><label className="label">{t('Show')}</label>
                 <select className="input" value={draft.show} onChange={(e) => set({ show: e.target.value as BadgeShow })} disabled={!draft.enabled} data-badge-show>
-                  {BADGE_SHOW.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  {BADGE_SHOW.map((o) => <option key={o.id} value={o.id}>{t(o.label)}</option>)}
                 </select></div>
-              <div className="min-w-[12rem] flex-1"><label className="label">Style</label>
+              <div className="min-w-[12rem] flex-1"><label className="label">{t('Style')}</label>
                 <select className="input" value={draft.style} onChange={(e) => set({ style: e.target.value as BadgeStyle })} disabled={!draft.enabled} data-badge-style>
-                  {BADGE_STYLES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  {BADGE_STYLES.map((o) => <option key={o.id} value={o.id}>{t(o.label)}</option>)}
                 </select></div>
             </div>
             <div>
-              <label className="label">Colour</label>
+              <label className="label">{t('Colour')}</label>
               <div className={`flex flex-wrap items-center gap-2 ${draft.enabled ? '' : 'pointer-events-none opacity-50'}`}>
                 {BADGE_COLORS.map((c) => (
-                  <button key={c} type="button" onClick={() => set({ color: c === BADGE_COLOR ? '' : c })} title={c} aria-label={`Colour ${c}`} aria-pressed={color === c}
+                  <button key={c} type="button" onClick={() => set({ color: c === BADGE_COLOR ? '' : c })} title={c} aria-label={t('Colour {c}', { c })} aria-pressed={color === c}
                     className={`h-8 w-8 rounded-full flex items-center justify-center ring-offset-2 ring-offset-bg-1 ${color === c ? 'ring-2 ring-text-0' : ''}`} style={{ background: c }} data-badge-color={c}>
                     {color === c && <Check size={14} className="text-white" />}
                   </button>
                 ))}
                 <label className={`relative overflow-hidden h-8 w-8 rounded-full flex items-center justify-center cursor-pointer border border-line ring-offset-2 ring-offset-bg-1 ${BADGE_COLORS.includes(color) ? 'bg-bg-3' : 'ring-2 ring-text-0'}`}
-                  style={BADGE_COLORS.includes(color) ? undefined : { background: color }} title="Custom colour">
+                  style={BADGE_COLORS.includes(color) ? undefined : { background: color }} title={t('Custom colour')}>
                   <Pipette size={14} className={BADGE_COLORS.includes(color) ? 'text-text-1' : 'text-white'} />
                   <input type="color" value={color} onChange={(e) => set({ color: e.target.value })} className="absolute inset-0 h-full w-full opacity-0 cursor-pointer" data-badge-color-custom />
                 </label>
               </div>
             </div>
-            <p className="text-xs text-text-2">Members set to invisible are never counted as online. Showing members only keeps who's online private.</p>
+            <p className="text-xs text-text-2">{t("Members set to invisible are never counted as online. Showing members only keeps who's online private.")}</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="btn-primary" disabled={!dirty || busy} onClick={save} data-badge-save>Save changes</button>
-              {dirty && <button type="button" className="btn-ghost" onClick={() => setDraft(saved)} data-badge-reset><RotateCcw size={16} /> Reset</button>}
+              <button type="button" className="btn-primary" disabled={!dirty || busy} onClick={save} data-badge-save>{t('Save changes')}</button>
+              {dirty && <button type="button" className="btn-ghost" onClick={() => setDraft(saved)} data-badge-reset><RotateCcw size={16} /> {t('Reset')}</button>}
             </div>
           </section>
 
           <section data-badge-embed>
-            <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">Add it to a README</h2>
-            {invites === null ? <p className="text-sm text-text-2">Loading…</p> : !invite ? (
+            <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">{t('Add it to a README')}</h2>
+            {invites === null ? <p className="text-sm text-text-2">{t('Loading…')}</p> : !invite ? (
               <div className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-text-2" data-badge-no-invite>
-                The badge links to an invite. <button type="button" className="text-sky-400 hover:underline" onClick={onInvites}>Create one in Invites</button>, ideally one that never expires.
+                {tn('The badge links to an invite. {link}, ideally one that never expires.', { link: <button type="button" className="text-sky-400 hover:underline" onClick={onInvites}>{t('Create one in Invites')}</button> })}
               </div>
             ) : (
               <>
                 <div className="flex flex-wrap items-end gap-3">
-                  <div className="min-w-[12rem] flex-1"><label className="label">Invite</label>
+                  <div className="min-w-[12rem] flex-1"><label className="label">{t('Invite')}</label>
                     <select className="input" value={invite.code} onChange={(e) => setCode(e.target.value)} data-badge-invite>
-                      {list.map((i) => <option key={i.code} value={i.code}>{i.vanity ? `/invite/${i.code}` : `${i.code} · ${i.expires_at ? `expires ${expiresIn(i)}` : 'never expires'}`}</option>)}
+                      {list.map((i) => <option key={i.code} value={i.code}>{i.vanity ? `/invite/${i.code}` : `${i.code} · ${i.expires_at ? t('expires {when}', { when: expiresIn(i) }) : t('never expires')}`}</option>)}
                     </select></div>
                   <button type="button" className="btn-primary" onClick={() => copyText(badgeMarkdown(invite.code, undefined, guild.name), 'md')} data-badge-copy="markdown">
-                    {copied === 'md' ? <Check size={16} /> : <Copy size={16} />} Copy Markdown</button>
+                    {copied === 'md' ? <Check size={16} /> : <Copy size={16} />} {t('Copy Markdown')}</button>
                   <button type="button" className="btn-ghost" onClick={() => copyText(badgeHtml(invite.code, undefined, guild.name), 'html')} data-badge-copy="html">
-                    {copied === 'html' ? <Check size={16} /> : <Copy size={16} />} HTML</button>
+                    {copied === 'html' ? <Check size={16} /> : <Copy size={16} />} {t('HTML')}</button>
                 </div>
-                {(invite.expires_at || invite.max_uses) && <p className="mt-2 text-xs text-warn" data-badge-warn>This invite {invite.expires_at ? `expires ${expiresIn(invite)}` : 'has a use limit'}, and the badge turns grey when it stops working. Pick one that never expires.</p>}
-                <p className="mt-2 text-xs text-text-2">Add <code>?style=flat-square</code> or <code>?label=…</code> to the image link to change one badge without changing the others.</p>
+                {(invite.expires_at || invite.max_uses) && <p className="mt-2 text-xs text-warn" data-badge-warn>{invite.expires_at ? t('This invite expires {when}, and the badge turns grey when it stops working. Pick one that never expires.', { when: expiresIn(invite) }) : t('This invite has a use limit, and the badge turns grey when it stops working. Pick one that never expires.')}</p>}
+                <p className="mt-2 text-xs text-text-2">{tn('Add {style} or {label} to the image link to change one badge without changing the others.', { style: <code>?style=flat-square</code>, label: <code>?label=…</code> })}</p>
               </>
             )}
           </section>

@@ -5,6 +5,7 @@ import type { Channel, Guild, Role } from '../lib/types'
 import { useStore } from '../store'
 import { colorFor, initials } from '../lib/format'
 import { markJoined } from '../lib/welcome'
+import { useT } from '../lib/i18n'
 
 interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; online_count: number }; expired: boolean; already_member: boolean; banned: boolean }
 
@@ -30,6 +31,7 @@ const cache = new Map<string, Promise<Preview | null>>()
 
 /** Discord-style invite embed: server icon, name, counts, Join / Joined / Expired. */
 export default function InviteCard({ code }: { code: string }) {
+  const t = useT()
   const [pv, setPv] = useState<Preview | null | undefined>(undefined)
   const guilds = useStore((s) => s.guilds)
   const upsertGuild = useStore((s) => s.upsertGuild)
@@ -42,13 +44,13 @@ export default function InviteCard({ code }: { code: string }) {
     let live = true; p.then((v) => { if (live) setPv(v) }); return () => { live = false }
   }, [code])
   if (pv === undefined) return null
-  if (pv === null) return <div className="mt-1 max-w-[440px] rounded-lg border border-line bg-bg-1 p-3 text-sm text-text-2" data-invite-card={code} data-invite-state="invalid">This invite is invalid or has expired.</div>
+  if (pv === null) return <div className="mt-1 max-w-[440px] rounded-lg border border-line bg-bg-1 p-3 text-sm text-text-2" data-invite-card={code} data-invite-state="invalid">{t('This invite is invalid or has expired.')}</div>
   const member = pv.already_member || !!guilds[pv.guild.id]
   const join = async () => {
     setBusy(true)
     try {
       const g = await api.post<Guild & { channels: Channel[]; roles: Role[] }>(`/invites/${code}`, {})
-      upsertGuild(g); markJoined(g.id); cache.delete(code); pushToast(`Welcome to ${g.name}!`); navigate(`/channels/${g.id}`)
+      upsertGuild(g); markJoined(g.id); cache.delete(code); pushToast(t('Welcome to {name}!', { name: g.name })); navigate(`/channels/${g.id}`)
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   const state = pv.banned ? 'banned' : pv.expired && !member ? 'expired' : member ? 'member' : 'open'
@@ -58,13 +60,13 @@ export default function InviteCard({ code }: { code: string }) {
         {pv.guild.icon_url ? <img src={pv.guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(pv.guild.name)}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-bold uppercase tracking-wider text-text-2">{member ? 'You are a member of' : 'You have been invited to join'}</div>
+        <div className="text-[11px] font-bold uppercase tracking-wider text-text-2">{member ? t('You are a member of') : t('You have been invited to join')}</div>
         <div className="font-semibold truncate" data-invite-name>{pv.guild.name}</div>
-        <div className="flex items-center gap-3 text-xs text-text-2"><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" />{pv.guild.online_count} Online</span><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-text-2" />{pv.guild.member_count} Members</span></div>
+        <div className="flex items-center gap-3 text-xs text-text-2"><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-success" />{t('{n} Online', { n: pv.guild.online_count })}</span><span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-text-2" />{t('{n} Members', { n: pv.guild.member_count })}</span></div>
       </div>
-      {state === 'member' ? <button type="button" className="btn-ghost py-1.5" onClick={() => navigate(`/channels/${pv.guild.id}`)} data-invite-open>Joined</button>
-        : state === 'open' ? <button type="button" className="btn-primary bg-success hover:bg-success/80 text-black py-1.5" disabled={busy} onClick={join} data-invite-join>Join</button>
-        : <span className="text-xs text-text-2">{state === 'banned' ? 'Banned' : 'Expired'}</span>}
+      {state === 'member' ? <button type="button" className="btn-ghost py-1.5" onClick={() => navigate(`/channels/${pv.guild.id}`)} data-invite-open>{t('Joined')}</button>
+        : state === 'open' ? <button type="button" className="btn-primary bg-success hover:bg-success/80 text-black py-1.5" disabled={busy} onClick={join} data-invite-join>{t('Join')}</button>
+        : <span className="text-xs text-text-2">{state === 'banned' ? t('Banned') : t('Expired')}</span>}
     </div>
   )
 }

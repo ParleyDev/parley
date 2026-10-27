@@ -1,7 +1,7 @@
 import { Check, ChevronRight, Clock, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { nameLook } from '../lib/nameStyle'
 import { roleLook } from './StyledName'
-import { locale } from '../lib/i18n'
+import { locale, useT } from '../lib/i18n'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
@@ -54,6 +54,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const upsertChannel = useStore((s) => s.upsertChannel)
   const sendMessage = useStore((s) => s.sendMessage)
   const navigate = useNavigate()
+  const t = useT()
   const [quick, setQuick] = useState('')
   const [sending, setSending] = useState(false)
   const [emoji, setEmoji] = useState<DOMRect | null>(null)
@@ -89,23 +90,23 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     try { const c = await openDm(); await sendMessage(c.id, text); onClose(); navigate(`/channels/@me/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } finally { setSending(false) }
   }
   const onQuickKey = (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') { e.preventDefault(); sendQuick() } }
-  const copy = (label: string, text: string) => act(async () => { await navigator.clipboard.writeText(text); pushToast(`${label} copied`) })
+  const copy = (label: string, text: string) => act(async () => { await navigator.clipboard.writeText(text); pushToast(t('{label} copied', { label })) })
   const fullProfile = () => { onClose(); openModal({ kind: 'profile', userId: user.id }) }
   const invite = (g: Guild) => act(async () => {
     const inv = await api.post<{ code: string }>(`/guilds/${g.id}/invites`, {})
     const c = await openDm()
     await sendMessage(c.id, `${publicOrigin()}/invite/${inv.code}`)
-    pushToast(`Invite to ${g.name} sent`)
+    pushToast(t('Invite to {name} sent', { name: g.name }))
   })
   const kick = () => { onClose(); openModal({ kind: 'kick', guildId: guildId!, userId: user.id }) }
   const ban = () => { onClose(); openModal({ kind: 'ban', guildId: guildId!, userId: user.id }) }
-  const block = () => { onClose(); openModal({ kind: 'confirm', title: `Block ${user.display_name}`, body: `${user.display_name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.`, danger: true, confirmLabel: 'Block', action: () => act(() => api.put(`/users/@me/relationships/${user.id}/block`)) }) }
+  const block = () => { onClose(); openModal({ kind: 'confirm', title: t('Block {name}', { name: user.display_name }), body: t('{name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.', { name: user.display_name }), danger: true, confirmLabel: t('Block'), action: () => act(() => api.put(`/users/@me/relationships/${user.id}/block`)) }) }
 
   const friendBtn = !isMe && (
-    rel === 'friend' ? { title: 'Friend', icon: <UserCheck size={18} />, fn: () => setFriendMenu((m) => !m) }
-    : rel === undefined ? { title: 'Add Friend', icon: <UserPlus size={18} />, fn: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }
-    : rel === 'incoming' ? { title: 'Accept Friend Request', icon: <Check size={18} />, fn: () => act(() => api.put(`/users/@me/relationships/${user.id}`)) }
-    : rel === 'outgoing' ? { title: 'Cancel Friend Request', icon: <Clock size={18} />, fn: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }
+    rel === 'friend' ? { title: t('Friend'), icon: <UserCheck size={18} />, fn: () => setFriendMenu((m) => !m) }
+    : rel === undefined ? { title: t('Add Friend'), icon: <UserPlus size={18} />, fn: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }
+    : rel === 'incoming' ? { title: t('Accept Friend Request'), icon: <Check size={18} />, fn: () => act(() => api.put(`/users/@me/relationships/${user.id}`)) }
+    : rel === 'outgoing' ? { title: t('Cancel Friend Request'), icon: <Clock size={18} />, fn: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }
     : null)
 
   const mutual = user.mutual_guilds ?? []
@@ -122,31 +123,31 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
 
   const menuItems: MenuEntry[] = isMe
     ? [
-      { label: 'Edit Profile', icon: <Pencil size={16} />, onClick: () => { onClose(); openModal({ kind: 'userSettings', tab: 'profile' }) } },
+      { label: t('Edit Profile'), icon: <Pencil size={16} />, onClick: () => { onClose(); openModal({ kind: 'userSettings', tab: 'profile' }) } },
       'sep',
       copyMenu(),
     ]
     : [
-      { label: 'View Full Profile', onClick: fullProfile },
-      ...(inviteTargets.length ? [{ label: 'Invite to Server', children: inviteTargets.map((g) => ({ label: g.name, icon: <GuildDot g={g} />, onClick: () => invite(g) })) }] : []),
+      { label: t('View Full Profile'), onClick: fullProfile },
+      ...(inviteTargets.length ? [{ label: t('Invite to Server'), children: inviteTargets.map((g) => ({ label: g.name, icon: <GuildDot g={g} />, onClick: () => invite(g) })) }] : []),
       'sep',
-      ...(rel === undefined ? [{ label: 'Add Friend', onClick: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }] : []),
-      ...(rel === 'incoming' ? [{ label: 'Accept Friend Request', onClick: () => act(() => api.put(`/users/@me/relationships/${user.id}`)) }] : []),
-      ...(rel === 'outgoing' ? [{ label: 'Cancel Friend Request', onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] : []),
-      ...(rel === 'friend' ? [{ label: 'Remove Friend', danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] : []),
-      rel === 'blocked' ? { label: 'Unblock', onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) } : { label: 'Block', danger: true, onClick: block },
+      ...(rel === undefined ? [{ label: t('Add Friend'), onClick: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }] : []),
+      ...(rel === 'incoming' ? [{ label: t('Accept Friend Request'), onClick: () => act(() => api.put(`/users/@me/relationships/${user.id}`)) }] : []),
+      ...(rel === 'outgoing' ? [{ label: t('Cancel Friend Request'), onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] : []),
+      ...(rel === 'friend' ? [{ label: t('Remove Friend'), danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] : []),
+      rel === 'blocked' ? { label: t('Unblock'), onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) } : { label: t('Block'), danger: true, onClick: block },
       ...(canKick || canBan ? ['sep' as const] : []),
-      ...(canKick ? [{ label: `Kick ${nickname ?? user.display_name}`, danger: true, icon: <UserMinus size={16} />, onClick: kick }] : []),
-      ...(canBan ? [{ label: `Ban ${nickname ?? user.display_name}`, danger: true, icon: <Gavel size={16} />, onClick: ban }] : []),
+      ...(canKick ? [{ label: t('Kick {name}', { name: nickname ?? user.display_name }), danger: true, icon: <UserMinus size={16} />, onClick: kick }] : []),
+      ...(canBan ? [{ label: t('Ban {name}', { name: nickname ?? user.display_name }), danger: true, icon: <Gavel size={16} />, onClick: ban }] : []),
       'sep',
       copyMenu(),
     ]
   function copyMenu(): MenuEntry {
-    return { label: 'Copy User Info', children: [
-      { label: 'Copy User ID', onClick: () => copy('User ID', user.id) },
-      { label: 'Copy Profile Link', onClick: () => copy('Profile link', `${location.origin}/users/${user.id}`) },
-      ...(user.avatar_url ? [{ label: 'Copy Avatar Image Link', onClick: () => copy('Avatar link', new URL(user.avatar_url!, location.origin).href) }] : []),
-      ...(user.banner_url ? [{ label: 'Copy Banner Image Link', onClick: () => copy('Banner link', new URL(user.banner_url!, location.origin).href) }] : []),
+    return { label: t('Copy User Info'), children: [
+      { label: t('Copy User ID'), onClick: () => copy(t('User ID'), user.id) },
+      { label: t('Copy Profile Link'), onClick: () => copy(t('Profile link'), `${location.origin}/users/${user.id}`) },
+      ...(user.avatar_url ? [{ label: t('Copy Avatar Image Link'), onClick: () => copy(t('Avatar link'), new URL(user.avatar_url!, location.origin).href) }] : []),
+      ...(user.banner_url ? [{ label: t('Copy Banner Image Link'), onClick: () => copy(t('Banner link'), new URL(user.banner_url!, location.origin).href) }] : []),
     ] }
   }
 
@@ -159,11 +160,11 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           {friendBtn && (
             <div className="relative">
               <button onClick={friendBtn.fn} title={friendBtn.title} aria-label={friendBtn.title} aria-expanded={rel === 'friend' ? friendMenu : undefined} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center" data-friend-badge={rel === 'friend' ? '' : undefined}>{friendBtn.icon}</button>
-              {friendMenu && <Menu items={[{ label: 'Remove Friend', danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }]} onClose={() => setFriendMenu(false)} className="top-[calc(100%+4px)] right-0" />}
+              {friendMenu && <Menu items={[{ label: t('Remove Friend'), danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }]} onClose={() => setFriendMenu(false)} className="top-[calc(100%+4px)] right-0" />}
             </div>
           )}
           <div className="relative">
-            <button onClick={() => setMenu((m) => !m)} title="More" aria-label="More" aria-expanded={menu} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center"><MoreHorizontal size={18} /></button>
+            <button onClick={() => setMenu((m) => !m)} title={t('More')} aria-label={t('More')} aria-expanded={menu} className="h-8 w-8 rounded-full bg-black/55 hover:bg-black/75 text-white flex items-center justify-center"><MoreHorizontal size={18} /></button>
             {menu && <Menu items={menuItems} onClose={() => setMenu(false)} className="top-0 left-[calc(100%+8px)]" />}
           </div>
         </div>
@@ -187,7 +188,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             <ClanTag userId={user.id} tag={user.clan_tag} />
             <Badges badges={user.badges} />
             {guild?.owner_id === user.id && <Crown size={16} className="text-warn shrink-0" />}
-            {rel === 'friend' && nickEdit === null && <button type="button" onClick={() => setNickEdit(friendNote?.nickname ?? '')} title="Set friend nickname" className="shrink-0 opacity-60 hover:opacity-100" data-friend-nick><Pencil size={13} /></button>}
+            {rel === 'friend' && nickEdit === null && <button type="button" onClick={() => setNickEdit(friendNote?.nickname ?? '')} title={t('Set friend nickname')} className="shrink-0 opacity-60 hover:opacity-100" data-friend-nick><Pencil size={13} /></button>}
           </h2>
           {/* Like Discord: "username • pronouns" wraps so long pronouns drop to their own line. */}
           <p className="text-sm leading-[18px] flex flex-wrap gap-x-1 break-words">
@@ -198,8 +199,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         </div>
         {!isMe && (
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[#b5bac1] mb-1">Note</div>
-            <textarea value={noteDraft ?? friendNote?.note ?? ''} onChange={(e) => setNoteDraft(e.target.value)} onBlur={saveNoteText} maxLength={256} rows={noteDraft || friendNote?.note ? 3 : 1} placeholder="Click to add a note"
+            <div className="text-[11px] font-bold uppercase tracking-wider text-[#b5bac1] mb-1">{t('Note')}</div>
+            <textarea value={noteDraft ?? friendNote?.note ?? ''} onChange={(e) => setNoteDraft(e.target.value)} onBlur={saveNoteText} maxLength={256} rows={noteDraft || friendNote?.note ? 3 : 1} placeholder={t('Click to add a note')}
               className="w-full resize-none rounded-md bg-black/20 px-2 py-1 text-sm outline-none placeholder:text-[#b5bac1]/70 focus:bg-black/30" data-profile-note />
           </div>
         )}
@@ -208,35 +209,35 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             {friends.length > 0 && (
               <span className="flex items-center gap-1">
                 <span className="flex -space-x-2">{friends.slice(0, 3).map((f) => <span key={f.id} className="rounded-full ring-2 ring-[#232428]"><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={16} /></span>)}</span>
-                <span>{friends.length} Mutual Friend{friends.length === 1 ? '' : 's'}</span>
+                <span>{friends.length === 1 ? t('{n} Mutual Friend', { n: friends.length }) : t('{n} Mutual Friends', { n: friends.length })}</span>
               </span>
             )}
             {friends.length > 0 && mutual.length > 0 && <span className="opacity-60">•</span>}
             {mutual.length > 0 && (
               <span className="flex items-center gap-1">
                 <span className="flex -space-x-2">{mutual.slice(0, 3).map((g) => <GuildDot key={g.id} g={g} ring />)}</span>
-                <span>{mutual.length} Mutual Server{mutual.length === 1 ? '' : 's'}</span>
+                <span>{mutual.length === 1 ? t('{n} Mutual Server', { n: mutual.length }) : t('{n} Mutual Servers', { n: mutual.length })}</span>
               </span>
             )}
           </button>
         )}
-        {user.private_profile && <div className="flex items-center gap-1.5 text-xs text-[#b5bac1]" data-private-profile><Lock size={12} /> Private profile: only friends can see more</div>}
-        {live && <div className="flex items-center gap-1.5 text-xs" data-profile-live><span className="rounded bg-danger px-1 text-[10px] font-extrabold text-white">LIVE</span>Streaming in voice</div>}
+        {user.private_profile && <div className="flex items-center gap-1.5 text-xs text-[#b5bac1]" data-private-profile><Lock size={12} /> {t('Private profile: only friends can see more')}</div>}
+        {live && <div className="flex items-center gap-1.5 text-xs" data-profile-live><span className="rounded bg-danger px-1 text-[10px] font-extrabold text-white">{t('LIVE')}</span>{t('Streaming in voice')}</div>}
         {activity && <SpotifyCard userId={user.id} activity={activity} dark={themed} />}
         {user.bio && (
           <div>
             <div ref={bioRef} className="msg-content text-sm leading-[18px] whitespace-pre-wrap break-words overflow-hidden max-h-[54px]" data-bio>{renderMarkdown(user.bio, { blocks: false })}</div>
             {bioClamped && <div className="text-sm leading-[18px] text-[#b5bac1]" aria-hidden>…</div>}
-            {bioClamped && <button onClick={fullProfile} className="mt-3 block text-xs font-medium text-[#dbdee1] hover:underline" data-view-full-bio>View Full Bio</button>}
+            {bioClamped && <button onClick={fullProfile} className="mt-3 block text-xs font-medium text-[#dbdee1] hover:underline" data-view-full-bio>{t('View Full Bio')}</button>}
           </div>
         )}
         <button onClick={fullProfile} className="w-full flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-semibold text-left hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-reviews>
-          <span>User Reviews</span>
-          <span className="font-normal text-[#b5bac1]">{reviewCount === 0 ? 'No reviews yet' : `${reviewCount} review${reviewCount === 1 ? '' : 's'}`}</span>
+          <span>{t('User Reviews')}</span>
+          <span className="font-normal text-[#b5bac1]">{reviewCount === 0 ? t('No reviews yet') : reviewCount === 1 ? t('{n} review', { n: reviewCount }) : t('{n} reviews', { n: reviewCount })}</span>
         </button>
         {(user.connections?.length ?? 0) > 0 && (
           <div data-profile-connections>
-            <h3 className="text-xs font-bold mb-1">Connections</h3>
+            <h3 className="text-xs font-bold mb-1">{t('Connections')}</h3>
             <div className="flex flex-wrap gap-1.5">
               {user.connections!.map((c) => (
                 <a key={c.id} href={c.url || undefined} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-connection={c.provider} title={c.provider}>
@@ -249,31 +250,31 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         )}
         {panel && (
           <div>
-            <h3 className="text-xs font-bold mb-1">Member Since</h3>
+            <h3 className="text-xs font-bold mb-1">{t('Member Since')}</h3>
             <p className="text-sm text-[#b5bac1]">{new Date(user.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}</p>
           </div>
         )}
         {rel === 'friend' && friendsSince && (
           <div data-friends-since>
-            <h3 className="text-xs font-bold mb-1">Friends Since</h3>
+            <h3 className="text-xs font-bold mb-1">{t('Friends Since')}</h3>
             <p className="text-sm text-[#b5bac1]">{new Date(friendsSince).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}</p>
           </div>
         )}
         {!panel && !isMe && rel !== 'blocked' && (
           <div className="relative">
             <input ref={inputRef} value={quick} onChange={(e) => setQuick(e.target.value)} onKeyDown={onQuickKey} disabled={sending} maxLength={2000}
-              placeholder={`Message @${nickname ?? user.display_name}`} aria-label={`Message @${user.username}`} data-quick-message
+              placeholder={t('Message @{name}', { name: nickname ?? user.display_name })} aria-label={t('Message @{name}', { name: user.username })} data-quick-message
               className="w-full h-11 rounded-lg pl-3 pr-10 text-sm text-[#dbdee1] placeholder:text-[#87898c] outline-none border border-transparent focus:border-white/15"
               style={{ background: themed ? 'rgba(0,0,0,0.4)' : '#1e1f22' }} />
-            <button type="button" onClick={(e) => setEmoji((cur) => (cur ? null : e.currentTarget.getBoundingClientRect()))} title="Emoji" className="absolute right-2 top-1/2 -translate-y-1/2 text-[#b5bac1] hover:text-[#dbdee1]"><Smile size={20} /></button>
+            <button type="button" onClick={(e) => setEmoji((cur) => (cur ? null : e.currentTarget.getBoundingClientRect()))} title={t('Emoji')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#b5bac1] hover:text-[#dbdee1]"><Smile size={20} /></button>
             {emoji && (
               <ExpressionPicker tabs={['emoji']} anchor={emoji} onClose={() => { setEmoji(null); inputRef.current?.focus() }}
-                onEmoji={(t) => setQuick((v) => (v && !/\s$/.test(v) ? v + ' ' : v) + t + ' ')} />
+                onEmoji={(em) => setQuick((v) => (v && !/\s$/.test(v) ? v + ' ' : v) + em + ' ')} />
             )}
           </div>
         )}
-        {rel === 'blocked' && <div className="flex items-center gap-2 text-sm text-text-2"><UserX size={16} /> You blocked this user.</div>}
-        {panel && <button onClick={fullProfile} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-view-full-profile>View Full Profile</button>}
+        {rel === 'blocked' && <div className="flex items-center gap-2 text-sm text-text-2"><UserX size={16} /> {t('You blocked this user.')}</div>}
+        {panel && <button onClick={fullProfile} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-view-full-profile>{t('View Full Profile')}</button>}
       </div>
     </div>
   )

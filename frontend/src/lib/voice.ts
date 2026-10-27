@@ -14,6 +14,7 @@ import E2EEWorker from 'livekit-client/e2ee-worker?worker'
 import { CallCrypto, e2eeSupported, legacyInsertableStreams, MeshCrypto, ParleyKeyProvider } from './e2ee'
 import { CaptionSender, clearCaptions } from './captions'
 import { createRnnoise } from './rnnoise'
+import { t } from './i18n'
 
 /**
  * Mesh WebRTC voice/video: every participant holds one RTCPeerConnection per other participant.
@@ -127,7 +128,7 @@ class VoiceManager {
           if (want === watched) return
           watched = want
           void desktop.pttKey(want).then((ok) => {
-            if (!ok && want && watched === want) useStore.getState().pushToast(`Push to talk with ${keyLabel(want)} only works while Parley is in front: the app can't read the keyboard in the background${navigator.userAgent.includes('Mac') ? ' (allow Parley under System Settings → Privacy & Security → Accessibility)' : ''}.`, 'error')
+            if (!ok && want && watched === want) useStore.getState().pushToast(navigator.userAgent.includes('Mac') ? t("Push to talk with {key} only works while Parley is in front: the app can't read the keyboard in the background (allow Parley under System Settings → Privacy & Security → Accessibility).", { key: keyLabel(want) }) : t("Push to talk with {key} only works while Parley is in front: the app can't read the keyboard in the background.", { key: keyLabel(want) }), 'error')
           })
         })
       }
@@ -223,7 +224,7 @@ class VoiceManager {
       if (this.raw && captureChanged) await this.reopenMicDevice()
       const e2ee = !!(s.channels[channelId] ?? s.dms[channelId])?.e2ee
       if (e2ee && !e2eeSupported()) {
-        s.pushToast("This call is end-to-end encrypted, and this browser can't encrypt calls. Use a current version of Chrome, Edge, Firefox or Safari.", 'error')
+        s.pushToast(t("This call is end-to-end encrypted, and this browser can't encrypt calls. Use a current version of Chrome, Edge, Firefox or Safari."), 'error')
         return
       }
       if (!(await this.acquireMic('call'))) return
@@ -236,7 +237,7 @@ class VoiceManager {
       s.setMyVoice(channelId, true)
       s.setLocalMedia({ camera: this.camera, screen: this.screen })
       if (!sendOp({ op: 'voice_join', channel_id: channelId, e2ee: e2eeSupported() })) {
-        s.pushToast('Not connected to the server', 'error')
+        s.pushToast(t('Not connected to the server'), 'error')
         this.leave()
       }
     } finally {
@@ -256,7 +257,7 @@ class VoiceManager {
     const e2ee = !!(s.channels[id] ?? s.dms[id])?.e2ee
     if (e2ee === !!this.crypto) return false
     this.leave(); this.join(id)
-    s.pushToast(e2ee ? 'This call is now end-to-end encrypted. Reconnecting…' : 'End-to-end encryption was turned off. Reconnecting…')
+    s.pushToast(e2ee ? t('This call is now end-to-end encrypted. Reconnecting…') : t('End-to-end encryption was turned off. Reconnecting…'))
     return true
   }
 
@@ -348,14 +349,14 @@ class VoiceManager {
       this.pushState()
       return
     }
-    if (!navigator.mediaDevices?.getDisplayMedia) { s.pushToast('Screen sharing is not supported in this browser', 'error'); return }
+    if (!navigator.mediaDevices?.getDisplayMedia) { s.pushToast(t('Screen sharing is not supported in this browser'), 'error'); return }
     try {
       const q = STREAM_QUALITY[this.settings.streamQuality] ?? STREAM_QUALITY.auto
       this.screenBitrate = q.bitrate; this.screenFps = q.fps
       this.screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: q.fps, max: q.fps }, ...(q.height ? { height: { ideal: q.height, max: q.height } } : {}) }, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, systemAudio: 'include' } as DisplayMediaStreamOptions)
       playSfx('stream_started')
     } catch (e) {
-      if ((e as Error).name !== 'NotAllowedError') s.pushToast(`Screen share failed: ${(e as Error).message}`, 'error')
+      if ((e as Error).name !== 'NotAllowedError') s.pushToast(t('Screen share failed: {error}', { error: (e as Error).message }), 'error')
       return
     }
     const track = this.screen.getVideoTracks()[0]
@@ -430,7 +431,7 @@ class VoiceManager {
         useStore.getState().updateVoiceSettings({ cameraDeviceId: '' })
         try { return await navigator.mediaDevices.getUserMedia({ video: { ...video, deviceId: undefined }, audio: false }) } catch { /* fallthrough */ }
       }
-      useStore.getState().pushToast(`Camera unavailable: ${(e as Error).message}`, 'error')
+      useStore.getState().pushToast(t('Camera unavailable: {error}', { error: (e as Error).message }), 'error')
       return null
     }
   }
@@ -541,8 +542,8 @@ class VoiceManager {
     const s = useStore.getState()
     if (!navigator.mediaDevices?.getUserMedia) {
       s.pushToast(window.isSecureContext
-        ? 'This browser does not support microphone capture'
-        : `Microphone needs a secure context. Open the app over HTTPS (e.g. https://${location.hostname}:3443) or via localhost.`, 'error')
+        ? t('This browser does not support microphone capture')
+        : t('Microphone needs a secure context. Open the app over HTTPS (e.g. https://{host}:3443) or via localhost.', { host: location.hostname }), 'error')
       return null
     }
     try {
@@ -552,7 +553,7 @@ class VoiceManager {
         s.updateVoiceSettings({ inputDeviceId: '' })
         try { return await navigator.mediaDevices.getUserMedia(this.micConstraints()) } catch { /* fallthrough */ }
       }
-      s.pushToast(`Microphone unavailable: ${(e as Error).message}`, 'error')
+      s.pushToast(t('Microphone unavailable: {error}', { error: (e as Error).message }), 'error')
       return null
     }
   }
@@ -716,7 +717,7 @@ class VoiceManager {
     const g = s.guilds[s.channels[this.channelId]?.guild_id ?? '']
     if (!g?.afk_channel_id || g.afk_channel_id === this.channelId || !s.channels[g.afk_channel_id]) return false
     if (now - this.lastSpokeAt < (g.afk_timeout ?? 300) * 1000) return false
-    s.pushToast(`You were moved to ${s.channels[g.afk_channel_id].name} for being inactive`)
+    s.pushToast(t('You were moved to {channel} for being inactive', { channel: s.channels[g.afk_channel_id].name }))
     void this.join(g.afk_channel_id)
     return true
   }
@@ -955,7 +956,7 @@ class VoiceManager {
     const s = useStore.getState()
     if (this.room) await this.disconnectSfu()
     let grant: { url: string; token: string }
-    try { grant = await api.post<{ url: string; token: string }>('/voice/token', { channel_id: channelId }) } catch (e) { s.pushToast(`Voice server refused: ${(e as Error).message}`, 'error'); this.leave(); return }
+    try { grant = await api.post<{ url: string; token: string }>('/voice/token', { channel_id: channelId }) } catch (e) { s.pushToast(t('Voice server refused: {error}', { error: (e as Error).message }), 'error'); this.leave(); return }
     const keys = this.crypto && s.user ? new ParleyKeyProvider(s.user.id) : null
     const room = new Room({ adaptiveStream: true, dynacast: true, ...(keys ? { e2ee: { keyProvider: keys, worker: new E2EEWorker() } } : {}) })
     if (keys) this.crypto!.attach(keys)
@@ -977,7 +978,7 @@ class VoiceManager {
       room.remoteParticipants.forEach((p) => st.setSpeaking(p.identity, ids.has(p.identity)))
       if (me && !ids.has(me) && st.speaking[me]) { /* own speaking comes from the local meter */ }
     })
-    room.on(RoomEvent.Disconnected, () => { if (this.room === room) { this.room = null; if (this.channelId) useStore.getState().pushToast('Voice server connection lost', 'error') } })
+    room.on(RoomEvent.Disconnected, () => { if (this.room === room) { this.room = null; if (this.channelId) useStore.getState().pushToast(t('Voice server connection lost'), 'error') } })
     try {
       if (keys) await room.setE2EEEnabled(true)
       await room.connect(grant.url, grant.token, { autoSubscribe: false })
@@ -987,7 +988,7 @@ class VoiceManager {
       if (this.camera) await this.sfuPublish('camera', this.camera.getVideoTracks()[0])
       if (this.screen) await this.sfuPublish('screen', this.screen.getVideoTracks()[0])
     } catch (e) {
-      s.pushToast(`Could not join the voice server: ${(e as Error).message}`, 'error')
+      s.pushToast(t('Could not join the voice server: {error}', { error: (e as Error).message }), 'error')
       await this.disconnectSfu()
       this.leave()
     }
@@ -1053,7 +1054,7 @@ class VoiceManager {
         await this.room.localParticipant.publishTrack(a, { source: Track.Source.ScreenShareAudio, audioPreset: { maxBitrate: 128_000 }, dtx: false, red: false, forceStereo: true })
         this.sfuScreenAudio = a
       }
-    } catch (e) { useStore.getState().pushToast(`Could not publish ${kind}: ${(e as Error).message}`, 'error') }
+    } catch (e) { useStore.getState().pushToast(t('Could not publish {kind}: {error}', { kind, error: (e as Error).message }), 'error') }
   }
 
   private async sfuUnpublish(kind: 'camera' | 'screen') {

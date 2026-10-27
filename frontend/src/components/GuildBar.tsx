@@ -170,12 +170,12 @@ export default function GuildBar() {
   }
 
   return (
-    <nav aria-label="Servers" className="w-[72px] shrink-0 bg-bg-0 flex flex-col items-center py-3 gap-2 overflow-y-auto overflow-x-hidden" data-guild-bar>
+    <nav aria-label={t('Servers')} className="w-[72px] shrink-0 bg-bg-0 flex flex-col items-center py-3 gap-2 overflow-y-auto overflow-x-hidden" data-guild-bar>
       {/* The desktop app has no browser chrome, so it gets its own back and forward buttons. */}
       {isDesktop() && (
         <div className="flex gap-1 -mt-1" data-history-nav>
-          <button type="button" onClick={() => history.back()} className="h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title="Back (Alt+Left)" aria-label="Back" data-history-back><ArrowLeft size={14} /></button>
-          <button type="button" onClick={() => history.forward()} className="h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title="Forward (Alt+Right)" aria-label="Forward" data-history-forward><ArrowRight size={14} /></button>
+          <button type="button" onClick={() => history.back()} className="h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title={t('Back (Alt+Left)')} aria-label={t('Back')} data-history-back><ArrowLeft size={14} /></button>
+          <button type="button" onClick={() => history.forward()} className="h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title={t('Forward (Alt+Right)')} aria-label={t('Forward')} data-history-forward><ArrowRight size={14} /></button>
         </div>
       )}
       <NavLink to="/channels/@me" className={({ isActive }) => `group relative ${isActive ? 'active' : ''}`}>
@@ -210,13 +210,14 @@ export default function GuildBar() {
           </Pill>
         )}
       </NavLink>
-      {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} label="Server" />}
+      {ctx.menu && <ContextMenu {...ctx.menu} onClose={ctx.close} label={t('Server')} />}
     </nav>
   )
 }
 
 /** Right-click menu for a server icon: Mark As Read, Invite People, Server Settings, Leave / Delete, Copy Server ID. */
 export function useGuildMenu() {
+  const t = useT()
   const me = useStore((s) => s.user)
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
@@ -232,9 +233,9 @@ export function useGuildMenu() {
     const isOwner = me?.id === g.owner_id
     const unreadChannels = Object.values(s.channels).filter((c) => c.guild_id === guildId && isUnread(s, c.id))
     const act = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
-    const leave = () => openModal({ kind: 'confirm', title: `Leave '${g.name}'`, body: `Are you sure you want to leave ${g.name}? You won't be able to rejoin unless you are re-invited.`, danger: true, confirmLabel: 'Leave Server',
+    const leave = () => openModal({ kind: 'confirm', title: t("Leave '{name}'", { name: g.name }), body: t("Are you sure you want to leave {name}? You won't be able to rejoin unless you are re-invited.", { name: g.name }), danger: true, confirmLabel: t('Leave Server'),
       action: () => act(async () => { await api.delete(`/guilds/${guildId}/members/@me`); removeGuild(guildId); navigate('/channels/@me') }) })
-    const del = () => openModal({ kind: 'confirm', title: `Delete '${g.name}'`, body: `Are you sure you want to delete ${g.name}? This cannot be undone.`, danger: true, confirmLabel: 'Delete Server',
+    const del = () => openModal({ kind: 'confirm', title: t("Delete '{name}'", { name: g.name }), body: t('Are you sure you want to delete {name}? This cannot be undone.', { name: g.name }), danger: true, confirmLabel: t('Delete Server'),
       action: () => act(async () => { await api.delete(`/guilds/${guildId}`); removeGuild(guildId); navigate('/channels/@me') }) })
     return [
       { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: unreadChannels.length === 0, onClick: () => unreadChannels.forEach((c) => markRead(c.id)) },
@@ -244,7 +245,7 @@ export function useGuildMenu() {
       ...(has(perms, P.MANAGE_CHANNELS) ? [{ label: 'Create Channel', icon: <Plus size={16} />, onClick: () => openModal({ kind: 'createChannel', guildId }) }] : []),
       'sep',
       isOwner ? { label: 'Delete Server', icon: <Trash2 size={16} />, danger: true, onClick: del } : { label: 'Leave Server', icon: <LogOut size={16} />, danger: true, onClick: leave },
-      ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Server ID', icon: <Copy size={16} />, onClick: () => act(async () => { await navigator.clipboard.writeText(guildId); pushToast('Server ID copied') }) }] : []),
+      ...(getPrefs().developerMode ? ['sep' as const, { label: 'Copy Server ID', icon: <Copy size={16} />, onClick: () => act(async () => { await navigator.clipboard.writeText(guildId); pushToast(t('Server ID copied')) }) }] : []),
     ]
   }
 }
@@ -258,7 +259,7 @@ function Pill({ active, unread, tip, children }: { active?: boolean; unread?: bo
   // Touch screens fire synthetic mouseenter on tap and never mouseleave, which would pin the tooltip.
   return (
     <div className="relative flex items-center" onMouseEnter={(e) => { if (canHover()) setRect(e.currentTarget.getBoundingClientRect()) }} onMouseLeave={() => setRect(null)} onTouchStart={() => setRect(null)} onClick={() => setRect(null)}>
-      <span data-pill={active ? 'active' : unread ? 'unread' : 'none'} className={`absolute -left-3 w-1 rounded-r-full bg-white transition-all duration-200 ${active ? 'h-10' : unread ? 'h-2 group-hover:h-5' : 'h-0 group-hover:h-5'}`} />
+      <span data-pill={active ? 'active' : unread ? 'unread' : 'none'} className={`absolute -start-3 w-1 rounded-e-full bg-white transition-all duration-200 ${active ? 'h-10' : unread ? 'h-2 group-hover:h-5' : 'h-0 group-hover:h-5'}`} />
       {children}
       {rect && createPortal(
         <span role="tooltip" className="pointer-events-none fixed z-[150] whitespace-nowrap rounded-lg bg-bg-0 border border-line px-3 py-1.5 text-sm font-semibold text-text-0 shadow-xl pop" style={{ left: rect.right + 14, top: rect.top + rect.height / 2, transform: 'translateY(-50%)' }} data-guild-tip>

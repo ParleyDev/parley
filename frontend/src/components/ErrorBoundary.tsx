@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import { t } from '../lib/i18n'
 
 interface Props { children: ReactNode; fallback?: (reset: () => void, error: Error) => ReactNode; onError?: (e: Error) => void }
 interface State { error: Error | null }
@@ -16,11 +17,11 @@ export default class ErrorBoundary extends Component<Props, State> {
       <div className="h-full w-full flex items-center justify-center p-6 text-center">
         <div className="max-w-md">
           <div className="text-4xl mb-3">😵</div>
-          <h2 className="text-lg font-bold">Something went wrong</h2>
+          <h2 className="text-lg font-bold">{t('Something went wrong')}</h2>
           <p className="text-sm text-text-2 mt-1 break-words">{this.state.error.message}</p>
           <div className="mt-4 flex justify-center gap-2">
-            <button className="btn-ghost" onClick={this.reset}>Try again</button>
-            <button className="btn-primary" onClick={() => location.reload()}>Reload</button>
+            <button className="btn-ghost" onClick={this.reset}>{t('Try again')}</button>
+            <button className="btn-primary" onClick={() => location.reload()}>{t('Reload')}</button>
           </div>
         </div>
       </div>

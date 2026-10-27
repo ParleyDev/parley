@@ -1,6 +1,6 @@
 import { Camera, ChevronDown, Pencil, Trash2 } from 'lucide-react'
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
-import { locale } from '../lib/i18n'
+import { locale, useT } from '../lib/i18n'
 import type { User, Connection } from '../lib/types'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import { APP_NAME } from '../lib/brand'
@@ -75,6 +75,7 @@ const IMAGE_TYPES = 'image/png,image/jpeg,image/gif,image/webp,image/apng'
 function InlineText({ value, placeholder, maxLength, onCommit, className, inputClassName, field, required, children }: {
   value: string; placeholder: string; maxLength: number; onCommit: (v: string) => void; className?: string; inputClassName?: string; field: string; required?: boolean; children?: ReactNode
 }) {
+  const t = useT()
   const [draft, setDraft] = useState<string | null>(null)
   const done = (keep: boolean) => {
     if (draft !== null && keep) { const v = draft.trim(); if (v !== value && (v || !required)) onCommit(v) }
@@ -88,7 +89,7 @@ function InlineText({ value, placeholder, maxLength, onCommit, className, inputC
     )
   }
   return (
-    <button type="button" onClick={() => setDraft(value)} className={`group/inline inline-flex min-w-0 max-w-full items-center gap-1 rounded-md px-1 -mx-1 text-left hover:bg-black/20 ${className ?? ''}`} title="Click to edit" data-inline-edit={field}>
+    <button type="button" onClick={() => setDraft(value)} className={`group/inline inline-flex min-w-0 max-w-full items-center gap-1 rounded-md px-1 -mx-1 text-left hover:bg-black/20 ${className ?? ''}`} title={t('Click to edit')} data-inline-edit={field}>
       {children ?? (value ? <span className="truncate">{value}</span> : <span className="truncate opacity-60">{placeholder}</span>)}
       <Pencil size={12} className="shrink-0 opacity-0 group-hover/inline:opacity-70" aria-hidden />
     </button>
@@ -124,6 +125,7 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString(locale(), { mo
  * The whole card is tinted with the user's theme colours.
  */
 export default function ProfileCard({ user, actions, children, nameOverride, compact, nameStyle, nameLook: nameLook_, server, footer, edit }: Props) {
+  const t = useT()
   const avatarRef = useRef<HTMLInputElement>(null)
   const bannerRef = useRef<HTMLInputElement>(null)
   const [statusMenu, setStatusMenu] = useState(false)
@@ -145,9 +147,9 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
         {edit && (
           <>
             <button type="button" onClick={() => bannerRef.current?.click()} disabled={edit.busy === 'banner'} className={`absolute inset-0 flex items-center justify-center gap-2 bg-black/45 text-sm font-semibold text-white transition-opacity ${edit.busy === 'banner' ? 'opacity-100' : 'opacity-0 group-hover/banner:opacity-100 focus-visible:opacity-100'}`} data-inline-banner>
-              <Camera size={18} className={edit.busy === 'banner' ? 'animate-pulse' : ''} />{edit.busy === 'banner' ? 'Uploading…' : user.banner_url ? 'Change banner' : 'Add banner'}
+              <Camera size={18} className={edit.busy === 'banner' ? 'animate-pulse' : ''} />{edit.busy === 'banner' ? t('Uploading…') : user.banner_url ? t('Change banner') : t('Add banner')}
             </button>
-            {user.banner_url && <button type="button" onClick={edit.onBannerRemove} className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white opacity-0 group-hover/banner:opacity-100 focus-visible:opacity-100 hover:text-danger" title="Remove banner" data-inline-banner-remove><Trash2 size={14} /></button>}
+            {user.banner_url && <button type="button" onClick={edit.onBannerRemove} className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white opacity-0 group-hover/banner:opacity-100 focus-visible:opacity-100 hover:text-danger" title={t('Remove banner')} data-inline-banner-remove><Trash2 size={14} /></button>}
             <input ref={bannerRef} type="file" accept={IMAGE_TYPES} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) edit.onBannerFile(f); e.target.value = '' }} data-inline-banner-input />
           </>
         )}
@@ -157,10 +159,10 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
           <Avatar user={user} size={avatar} presence decoration={user.avatar_decoration} animate />
           {edit && (
             <>
-              <button type="button" onClick={() => avatarRef.current?.click()} disabled={edit.busy === 'avatar'} className={`absolute inset-0 rounded-full flex flex-col items-center justify-center bg-black/50 text-[10px] font-bold uppercase tracking-wide text-white transition-opacity ${edit.busy === 'avatar' ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100 focus-visible:opacity-100'}`} title="Change avatar" data-inline-avatar>
-                <Camera size={18} className={edit.busy === 'avatar' ? 'animate-pulse' : ''} />{edit.busy === 'avatar' ? '' : 'Change'}
+              <button type="button" onClick={() => avatarRef.current?.click()} disabled={edit.busy === 'avatar'} className={`absolute inset-0 rounded-full flex flex-col items-center justify-center bg-black/50 text-[10px] font-bold uppercase tracking-wide text-white transition-opacity ${edit.busy === 'avatar' ? 'opacity-100' : 'opacity-0 group-hover/avatar:opacity-100 focus-visible:opacity-100'}`} title={t('Change avatar')} data-inline-avatar>
+                <Camera size={18} className={edit.busy === 'avatar' ? 'animate-pulse' : ''} />{edit.busy === 'avatar' ? '' : t('Change')}
               </button>
-              {user.avatar_url && <button type="button" onClick={edit.onAvatarRemove} className="absolute -right-1 -top-1 rounded-full bg-black/70 p-1 text-white opacity-0 group-hover/avatar:opacity-100 focus-visible:opacity-100 hover:text-danger" title="Remove avatar" data-inline-avatar-remove><Trash2 size={12} /></button>}
+              {user.avatar_url && <button type="button" onClick={edit.onAvatarRemove} className="absolute -right-1 -top-1 rounded-full bg-black/70 p-1 text-white opacity-0 group-hover/avatar:opacity-100 focus-visible:opacity-100 hover:text-danger" title={t('Remove avatar')} data-inline-avatar-remove><Trash2 size={12} /></button>}
               <input ref={avatarRef} type="file" accept={IMAGE_TYPES} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) edit.onAvatarFile(f); e.target.value = '' }} data-inline-avatar-input />
             </>
           )}
@@ -170,20 +172,20 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
       {edit ? (
         <div className="px-4 pt-2 shrink-0 space-y-0.5" data-profile-editable>
           <h2 className="text-xl font-bold leading-tight flex items-center gap-1.5 min-w-0">
-            <InlineText field="display_name" value={user.display_name} placeholder="Display name" maxLength={32} required onCommit={edit.onDisplayName} inputClassName="text-xl font-bold">
+            <InlineText field="display_name" value={user.display_name} placeholder={t('Display name')} maxLength={32} required onCommit={edit.onDisplayName} inputClassName="text-xl font-bold">
               <span className={`truncate ${look.className}`} style={nameCssFinal} data-profile-name>{user.display_name}</span>
             </InlineText>
             <ClanTag userId={user.id} tag={user.clan_tag} /><Badges badges={user.badges} className="ml-1" />
           </h2>
           <div className="text-sm flex items-center gap-1 min-w-0" style={{ color: dim }}>
             <span className="shrink-0">{user.username} ·</span>
-            <InlineText field="pronouns" value={user.pronouns ?? ''} placeholder="Add pronouns" maxLength={40} onCommit={edit.onPronouns} />
+            <InlineText field="pronouns" value={user.pronouns ?? ''} placeholder={t('Add pronouns')} maxLength={40} onCommit={edit.onPronouns} />
           </div>
           <div className="flex items-center gap-2 min-w-0 pt-1">
             {edit.onStatus && (
               <div className="relative shrink-0">
                 <button type="button" onClick={() => setStatusMenu((o) => !o)} className="flex items-center gap-1.5 rounded-full bg-black/25 px-2 py-0.5 text-xs font-medium hover:bg-black/35" aria-haspopup="menu" aria-expanded={statusMenu} data-inline-presence={edit.status ?? 'online'}>
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(edit.status, true) }} />{PRESENCE.find((p) => p.v === (edit.status ?? 'online'))?.label ?? 'Online'}<ChevronDown size={12} />
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(edit.status, true) }} />{t(PRESENCE.find((p) => p.v === (edit.status ?? 'online'))?.label ?? 'Online')}<ChevronDown size={12} />
                 </button>
                 {statusMenu && (
                   <>
@@ -191,7 +193,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
                     <div role="menu" className="pop absolute left-0 top-full z-[70] mt-1 w-44 rounded-lg border border-line bg-bg-0 p-1 text-text-0 shadow-2xl">
                       {PRESENCE.map((p) => (
                         <button key={p.v} type="button" role="menuitem" onClick={() => { setStatusMenu(false); edit.onStatus!(p.v) }} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-bg-3" data-presence-option={p.v}>
-                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(p.v, true) }} />{p.label}
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ background: statusColor(p.v, true) }} />{t(p.label)}
                         </button>
                       ))}
                     </div>
@@ -199,7 +201,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
                 )}
               </div>
             )}
-            <InlineText field="custom_status" value={user.custom_status ?? ''} placeholder="Set a custom status" maxLength={128} onCommit={edit.onCustomStatus} className="text-sm" />
+            <InlineText field="custom_status" value={user.custom_status ?? ''} placeholder={t('Set a custom status')} maxLength={128} onCommit={edit.onCustomStatus} className="text-sm" />
           </div>
         </div>
       ) : (
@@ -216,12 +218,12 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
         <div className="rounded-xl p-3 space-y-3 text-sm" style={{ background: panel }}>
           {user.bio && (
             <section>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>About me</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>{t('About me')}</h3>
               <div className="msg-content whitespace-pre-wrap break-words leading-snug">{renderMarkdown(user.bio, { blocks: false })}</div>
             </section>
           )}
           <section>
-            <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Member since</h3>
+            <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>{t('Member since')}</h3>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="flex items-center gap-1.5" title={APP_NAME}>
                 <span className="h-4 w-4 rounded-full bg-bg-0 text-accent flex items-center justify-center shrink-0" aria-hidden><LogoMark className="h-2.5 w-2.5" /></span>
@@ -242,13 +244,13 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
           </section>
           {friendsSince && (
             <section data-friends-since>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Friends since</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>{t('Friends since')}</h3>
               <span>{fmtDate(friendsSince)}</span>
             </section>
           )}
           {(user.connections?.length ?? 0) > 0 && (
             <section data-profile-connections>
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Connections</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>{t('Connections')}</h3>
               <div className="flex flex-wrap gap-1.5">
                 {user.connections!.map((c) => (
                   <a key={c.id} href={c.url || undefined} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-md bg-bg-0/40 px-2 py-1 text-xs hover:bg-bg-0/70" data-connection={c.provider} title={c.provider}>
@@ -261,13 +263,13 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
           )}
           {(user.panels?.wishlist?.length ?? 0) > 0 && (
             <section data-panel="wishlist">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Wishlist</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>{t('Wishlist')}</h3>
               <ul className="space-y-0.5">{user.panels!.wishlist!.map((it, i) => <li key={i} className="truncate">{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:decoration-solid">{it.title}</a> : it.title}</li>)}</ul>
             </section>
           )}
           {(user.panels?.games?.length ?? 0) > 0 && (
             <section data-panel="games">
-              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>Game collection</h3>
+              <h3 className="text-[11px] font-bold uppercase tracking-wider mb-1" style={{ color: dim }}>{t('Game collection')}</h3>
               <ul className="flex flex-wrap gap-1">{user.panels!.games!.map((it, i) => <li key={i} className="rounded-md px-2 py-0.5 text-xs" style={{ background: 'rgba(0,0,0,0.25)' }}>{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="hover:underline">{it.title}</a> : it.title}</li>)}</ul>
             </section>
           )}

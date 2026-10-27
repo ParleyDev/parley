@@ -5,6 +5,7 @@ import { myGuildPerms, useStore } from '../../store'
 import { api } from '../../lib/api'
 import { has, P } from '../../lib/perms'
 import SettingsShell from './SettingsShell'
+import { useT } from '../../lib/i18n'
 import GuildOverviewTab from './settings/GuildOverviewTab'
 import RolesTab from './settings/RolesTab'
 import MembersTab from './settings/MembersTab'
@@ -30,6 +31,7 @@ import IntegrationsTab from './settings/IntegrationsTab'
 type Tab = 'overview' | 'safety' | 'automod' | 'welcome' | 'onboarding' | 'template' | 'applications' | 'insights' | 'integrations' | 'widget' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
 
 export default function GuildSettingsModal({ onClose, guildId, tab: requested }: { onClose: () => void; guildId: string; tab?: Tab }) {
+  const t = useT()
   const initial: Tab = requested ?? 'overview'
   const guild = useStore((s) => s.guilds[guildId])
   const user = useStore((s) => s.user)
@@ -49,7 +51,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   const isOwner = guild.owner_id === user?.id
 
   const del = () => openModal({
-    kind: 'confirm', title: `Delete '${guild.name}'`, body: `Are you sure you want to delete ${guild.name}? This cannot be undone.`, danger: true, confirmLabel: 'Delete Server',
+    kind: 'confirm', title: t("Delete '{name}'", { name: guild.name }), body: t('Are you sure you want to delete {name}? This cannot be undone.', { name: guild.name }), danger: true, confirmLabel: t('Delete Server'),
     action: async () => {
       try { await api.delete(`/guilds/${guildId}`); removeGuild(guildId); navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
     },
@@ -73,8 +75,8 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
       sections={[{ title: guild.name, items }]}
       footer={isOwner ? (
         <div className="flex flex-col max-md:flex-row gap-0.5">
-          <button onClick={() => openModal({ kind: 'transferOwnership', guildId })} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-text-1 hover:bg-bg-3 hover:text-text-0 whitespace-nowrap" title="Transfer Ownership"><span>Transfer Ownership</span><Crown size={16} /></button>
-          <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title="Delete Server"><span>Delete Server</span><Trash2 size={16} /></button>
+          <button onClick={() => openModal({ kind: 'transferOwnership', guildId })} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-text-1 hover:bg-bg-3 hover:text-text-0 whitespace-nowrap" title={t('Transfer Ownership')}><span>{t('Transfer Ownership')}</span><Crown size={16} /></button>
+          <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title={t('Delete Server')}><span>{t('Delete Server')}</span><Trash2 size={16} /></button>
         </div>
       ) : undefined}
     >

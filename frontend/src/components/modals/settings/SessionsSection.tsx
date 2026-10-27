@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { Bot, LogOut, Monitor, MonitorSmartphone, Smartphone, Tablet } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
+import { useT } from '../../../lib/i18n'
 import { describeIp, describeUa, relativeTime, uaKind } from '../../../lib/ua'
 
 interface Session { id: string; created_at: string; last_seen_at: string; ip: string; user_agent: string; current: boolean }
 
 /** "Devices" card in My Account: every active login, log one out, or log out everywhere else. */
 export default function SessionsSection() {
+  const t = useT()
   const pushToast = useStore((s) => s.pushToast)
   const logout = useStore((s) => s.logout)
   const [sessions, setSessions] = useState<Session[] | null>(null)
@@ -26,14 +28,14 @@ export default function SessionsSection() {
     try {
       await api.delete(`/users/@me/sessions/${s.id}`)
       if (s.current) { logout(); return }
-      pushToast('Device logged out'); await load()
+      pushToast(t('Device logged out')); await load()
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(null) }
   }
   const endOthers = async (e?: React.FormEvent) => {
     e?.preventDefault(); setBusy('others'); setErr(null)
     try {
       const r = await api.delete<{ revoked: number }>('/users/@me/sessions', { password })
-      pushToast(r.revoked === 1 ? 'Logged out 1 other device' : `Logged out ${r.revoked} other devices`); setAskPw(false); setPassword(''); await load()
+      pushToast(r.revoked === 1 ? t('Logged out 1 other device') : t('Logged out {n} other devices', { n: r.revoked })); setAskPw(false); setPassword(''); await load()
     } catch (e) { setErr((e as Error).message) } finally { setBusy(null) }
   }
   const Icon = ({ ua }: { ua: string }) => { const k = uaKind(ua); const I = k === 'phone' ? Smartphone : k === 'tablet' ? Tablet : k === 'desktop' ? Monitor : Bot; return <I size={18} /> }
@@ -44,31 +46,31 @@ export default function SessionsSection() {
       <div className="flex items-start gap-3">
         <div className="h-9 w-9 shrink-0 rounded-lg bg-bg-3 text-text-2 flex items-center justify-center"><MonitorSmartphone size={18} /></div>
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold">Devices</h3>
-          <p className="text-sm text-text-2">Where you are logged in. Log out any device you don't recognise; its session stops working immediately.</p>
+          <h3 className="font-semibold">{t('Devices')}</h3>
+          <p className="text-sm text-text-2">{t("Where you are logged in. Log out any device you don't recognise; its session stops working immediately.")}</p>
         </div>
       </div>
-      {sessions === null ? <div className="text-sm text-text-2">Loading…</div> : (
+      {sessions === null ? <div className="text-sm text-text-2">{t('Loading…')}</div> : (
         <ul className="divide-y divide-line rounded-lg border border-line" data-sessions>
           {sessions.map((s) => (
             <li key={s.id} className={`flex items-center gap-3 px-3 py-2 ${s.current ? 'bg-success/5' : ''}`} data-session={s.id} data-session-current={s.current ? '1' : '0'} data-session-kind={uaKind(s.user_agent)}>
               <div className={`h-9 w-9 shrink-0 rounded-lg flex items-center justify-center ${s.current ? 'bg-success/20 text-success' : 'bg-bg-3 text-text-2'}`}><Icon ua={s.user_agent} /></div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate" data-session-device>{describeUa(s.user_agent)}{s.current && <span className="ml-2 rounded bg-success/20 text-success px-1.5 py-0.5 text-[10px] font-bold align-middle">THIS DEVICE</span>}</div>
-                <div className="text-xs text-text-2 truncate" title={s.user_agent}>{describeIp(s.ip)} · {s.current ? 'active now' : `last active ${relativeTime(s.last_seen_at)}`} · signed in {relativeTime(s.created_at)}</div>
+                <div className="text-sm font-medium truncate" data-session-device>{describeUa(s.user_agent)}{s.current && <span className="ml-2 rounded bg-success/20 text-success px-1.5 py-0.5 text-[10px] font-bold align-middle">{t('THIS DEVICE')}</span>}</div>
+                <div className="text-xs text-text-2 truncate" title={s.user_agent}>{describeIp(s.ip)} · {s.current ? t('active now') : t('last active {when}', { when: relativeTime(s.last_seen_at) })} · {t('signed in {when}', { when: relativeTime(s.created_at) })}</div>
               </div>
-              <button type="button" title={s.current ? 'Log out' : 'Log out this device'} onClick={() => end(s)} disabled={busy !== null} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:text-danger hover:bg-bg-3 disabled:opacity-50" data-session-logout><LogOut size={16} /></button>
+              <button type="button" title={s.current ? t('Log out') : t('Log out this device')} onClick={() => end(s)} disabled={busy !== null} className="h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:text-danger hover:bg-bg-3 disabled:opacity-50" data-session-logout><LogOut size={16} /></button>
             </li>
           ))}
         </ul>
       )}
-      {others > 0 && !askPw && <button type="button" className="btn-ghost py-1.5 text-danger" onClick={() => setAskPw(true)} disabled={busy !== null} data-sessions-logout-others>Log out all other devices ({others})</button>}
+      {others > 0 && !askPw && <button type="button" className="btn-ghost py-1.5 text-danger" onClick={() => setAskPw(true)} disabled={busy !== null} data-sessions-logout-others>{t('Log out all other devices ({n})', { n: others })}</button>}
       {askPw && (
         <form onSubmit={endOthers} className="rounded-lg border border-line bg-bg-1 p-3 space-y-2" data-sessions-password-form>
-          <p className="text-sm">Enter your password to log out your {others} other device{others === 1 ? '' : 's'}.</p>
-          <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required autoComplete="current-password" placeholder="Password" data-sessions-password />
+          <p className="text-sm">{others === 1 ? t('Enter your password to log out your 1 other device.') : t('Enter your password to log out your {n} other devices.', { n: others })}</p>
+          <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus required autoComplete="current-password" placeholder={t('Password')} data-sessions-password />
           {err && <p className="text-sm text-danger" data-sessions-error>{err}</p>}
-          <div className="flex gap-2"><button className="rounded-md bg-danger/90 hover:bg-danger px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50" disabled={busy !== null || !password} data-sessions-logout-confirm>Log out other devices</button><button type="button" className="btn-ghost py-1.5" onClick={() => { setAskPw(false); setErr(null) }}>Cancel</button></div>
+          <div className="flex gap-2"><button className="rounded-md bg-danger/90 hover:bg-danger px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50" disabled={busy !== null || !password} data-sessions-logout-confirm>{t('Log out other devices')}</button><button type="button" className="btn-ghost py-1.5" onClick={() => { setAskPw(false); setErr(null) }}>{t('Cancel')}</button></div>
         </form>
       )}
     </section>
