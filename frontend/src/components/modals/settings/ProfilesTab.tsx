@@ -1,5 +1,5 @@
 import { Camera, Trash2, Pipette } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import { DECORATIONS, type PanelItem, type PrivateUser } from '../../../lib/types'
@@ -15,6 +15,7 @@ import ImagePicker from '../ImagePicker'
 import { NAMEPLATES, PROFILE_EFFECTS, PROFILE_FRAMES, nameplateClass } from '../../../lib/cosmetics'
 import { FORMATS, toggleWrap } from '../../../lib/editor'
 import ProfileCard, { type ProfileEdit } from '../../ProfileCard'
+import { WearServerTag } from '../../ServerTag'
 import Avatar from '../../Avatar'
 
 const MAX_BIO = 400
@@ -37,6 +38,8 @@ export default function ProfilesTab() {
   const [accent, setAccent] = useState<string | null>(user?.theme_accent ?? null)
   const [decoration, setDecoration] = useState(user?.avatar_decoration ?? '')
   const [clanTag, setClanTag] = useState(user?.clan_tag ?? '')
+  // Wearing (or dropping) a server tag elsewhere changes it under us: keep the field in step.
+  useEffect(() => { setClanTag(user?.clan_tag ?? '') }, [user?.clan_tag])
   const [nameStyle, setNameStyle] = useState<NameStyle>(() => styleOfUser(user))
   const [styleOpen, setStyleOpen] = useState(false)
   const previewLook = nameLook({ name_style: nameStyle })
@@ -98,6 +101,7 @@ export default function ProfilesTab() {
           <div><label className="label">Pronouns</label><input className="input" value={pronouns} onChange={(e) => setPronouns(e.target.value)} maxLength={40} placeholder="Add your pronouns" /></div>
           <div><label className="label">Custom status</label><input className="input" value={customStatus} onChange={(e) => setCustomStatus(e.target.value)} maxLength={128} placeholder="Support has arrived!" data-profile-custom-status /></div>
           <div><label className="label">Clan tag</label><input className="input w-32 uppercase" value={clanTag} onChange={(e) => setClanTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4))} maxLength={4} placeholder="TAG" data-clan-tag-input /><p className="text-xs text-text-2 mt-1">2–4 letters or digits shown beside your name everywhere. Leave empty for none.</p></div>
+          <WearServerTag />
           <div>
             <label className="label">Avatar decoration</label>
             <div className="flex flex-wrap gap-2" data-decoration-options>

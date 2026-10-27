@@ -32,6 +32,8 @@ export interface User {
   profile_effect?: string
   /** Their profile is friends-only and you aren't friends: bio, banner, pronouns and panels are hidden. */
   private_profile?: boolean
+  /** The server whose official tag `clan_tag` is. */
+  clan_tag_guild?: string | null
 }
 export interface PanelItem { title: string; url?: string }
 /** Preset avatar frames (User Settings → Profiles). */
@@ -144,6 +146,10 @@ export interface Guild {
   raid_threshold?: number
   safety_alerts_channel_id?: string | null
   onboarding?: Onboarding
+  /** The server's official tag (members can wear it) and its badge; partnered with this instance. */
+  tag?: string | null
+  tag_badge?: string | null
+  partnered?: boolean
   applications?: { enabled?: boolean; questions?: ApplicationQuestion[] }
 }
 

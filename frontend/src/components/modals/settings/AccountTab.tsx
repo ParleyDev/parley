@@ -8,10 +8,12 @@ import PasskeysSection from './PasskeysSection'
 import StorageSection from './StorageSection'
 import DeleteAccountSection from './DeleteAccountSection'
 import { AccountChanges, StandingCard } from './AccountChanges'
+import RecapModal from '../Recap'
 import { AgeSection, MyBans } from '../../AgeSafety'
 
 export default function AccountTab({ onClose, onEditProfile }: { onClose: () => void; onEditProfile: () => void }) {
   const user = useStore((s) => s.user)
+  const [recap, setRecap] = useState(false)
   const setAuth = useStore((s) => s.setAuth)
   const token = useStore((s) => s.token)
   const pushToast = useStore((s) => s.pushToast)
@@ -43,6 +45,8 @@ export default function AccountTab({ onClose, onEditProfile }: { onClose: () => 
       )}
     </form>
     <AccountChanges />
+    <section className="flex items-center gap-3 rounded-xl bg-bg-0/50 p-4" data-recap-card><div className="flex-1"><h3 className="font-bold">Your year in review</h3><p className="text-sm text-text-2">Messages, favourite servers and more from {new Date().getFullYear()}.</p></div><button type="button" className="btn-primary" onClick={() => setRecap(true)} data-open-recap>Open</button></section>
+    {recap && <RecapModal onClose={() => setRecap(false)} />}
     <StandingCard />
     <MyBans />
     <AgeSection />

@@ -1,4 +1,4 @@
-import { BadgeCheck, Check, ChevronDown, Compass, Search, Server, ShieldCheck, X } from 'lucide-react'
+import { BadgeCheck, Check, Handshake, ChevronDown, Compass, Search, Server, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -199,7 +199,7 @@ function ServerCard({ l }: { l: Listing }) {
         </span>
       </div>
       <div className="px-3 pt-8 pb-3 flex-1 flex flex-col">
-        <div className="flex items-center gap-1.5 font-bold text-[15px]">{l.verified && <span title="Verified by this instance's admins" className="flex shrink-0" data-verified><BadgeCheck size={16} className="text-success" /></span>}<span className="truncate">{l.name}</span>
+        <div className="flex items-center gap-1.5 font-bold text-[15px]">{l.verified && <span title="Verified by this instance's admins" className="flex shrink-0" data-verified><BadgeCheck size={16} className="text-success" /></span>}{l.partnered && <span title="Partnered server" className="flex shrink-0" data-partnered><Handshake size={16} className="text-accent" /></span>}<span className="truncate">{l.name}</span>
           {joined ? <span className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-1" data-joined>JOINED</span>
             : <button type="button" onClick={quickJoin} disabled={busy} className="ml-auto rounded-md bg-success text-black px-2 py-0.5 text-[11px] font-bold opacity-0 group-hover:opacity-100 focus:opacity-100 hover:bg-success/80" data-quick-join>{busy ? 'Joining…' : 'Join'}</button>}
         </div>
@@ -224,7 +224,7 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
   const decide = async (l: Listing, next: 'approved' | 'rejected' | 'pending') => {
     try { await api.post(`/admin/discovery/${l.guild_id}/review`, { status: next, note: notes[l.guild_id] ?? '' }); pushToast(`${l.name} ${next}`); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
-  const flag = async (l: Listing, patch: { featured_order?: number | null; verified?: boolean }) => {
+  const flag = async (l: Listing, patch: { featured_order?: number | null; verified?: boolean; partnered?: boolean }) => {
     try { await api.patch(`/admin/discovery/${l.guild_id}`, patch); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
   return (
@@ -253,6 +253,7 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
               {status === 'approved' && (
                 <div className="mt-3 flex items-center gap-4 flex-wrap text-sm" data-review-flags>
                   <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={l.verified} onChange={(e) => flag(l, { verified: e.target.checked })} className="h-4 w-4 accent-accent" data-review-verified /> Verified badge</label>
+                  <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={!!l.partnered} onChange={(e) => flag(l, { partnered: e.target.checked })} className="h-4 w-4 accent-accent" data-review-partnered /> Partnered</label>
                   <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={l.featured_order !== null} onChange={(e) => flag(l, { featured_order: e.target.checked ? 0 : null })} className="h-4 w-4 accent-accent" data-review-featured /> Featured</label>
                   {l.featured_order !== null && <label className="flex items-center gap-2">order <input type="number" min={0} max={1000} defaultValue={l.featured_order} onBlur={(e) => { const n = Number(e.target.value); if (Number.isInteger(n) && n !== l.featured_order) flag(l, { featured_order: n }) }} className="input w-20 py-1 text-xs" data-review-featured-order /></label>}
                 </div>

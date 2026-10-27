@@ -4,11 +4,15 @@ import { useStore } from '../store'
 import Tooltip from './Tooltip'
 
 /** The user's clan tag as a small chip next to their name, or nothing. */
-export function ClanTag({ userId, tag, className = '' }: { userId: string; tag?: string; className?: string }) {
+export function ClanTag({ userId, tag, tagGuild, className = '' }: { userId: string; tag?: string; tagGuild?: string | null; className?: string }) {
   const live = useStore((s) => s.users[userId]?.clan_tag)
+  // A server's official tag: its badge, and its name on hover (when you're in it too).
+  const liveGid = useStore((s) => s.users[userId]?.clan_tag_guild)
+  const gid = liveGid !== undefined ? liveGid : tagGuild
+  const guild = useStore((s) => (gid ? s.guilds[gid] : undefined))
   const t = live ?? tag ?? ''
   if (!t) return null
-  return <span className={`inline-flex shrink-0 items-center rounded bg-bg-4 px-1 text-[10px] font-bold leading-4 tracking-wide text-text-1 ${className}`} data-clan-tag={t}>{t}</span>
+  return <span className={`inline-flex shrink-0 items-center gap-0.5 rounded bg-bg-4 px-1 text-[10px] font-bold leading-4 tracking-wide text-text-1 ${className}`} title={gid ? `Server tag${guild ? ` of ${guild.name}` : ''}` : undefined} data-clan-tag={t} data-server-tag={gid ?? undefined}>{guild?.tag_badge && <span className="text-[11px] leading-none">{guild.tag_badge}</span>}{t}</span>
 }
 
 const BADGES: Record<string, { label: string; icon: ReactNode; color: string }> = {

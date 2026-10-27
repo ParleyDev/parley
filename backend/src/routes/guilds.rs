@@ -48,7 +48,7 @@ pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
     v
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications, tag, tag_badge, partnered";
 pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality, forum_layout, forum_sort, forum_require_tag, forum_default_reaction, news, media";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -676,6 +676,9 @@ async fn try_remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> A
         .execute(&state.db)
         .await?;
     state.hub.voice_evict(|v| v.guild_id == Some(guild_id) && v.user_id == user_id);
+    // Leaving a server takes off its tag.
+    let untagged = sqlx::query("UPDATE users SET clan_tag = '', clan_tag_guild = NULL WHERE id = $1 AND clan_tag_guild = $2").bind(user_id).bind(guild_id).execute(&state.db).await?;
+    if untagged.rows_affected() > 0 { crate::routes::server_tags::announce(state, &[user_id]).await; }
     // A bot leaving takes its own role with it.
     let gone = sqlx::query("DELETE FROM roles WHERE guild_id = $1 AND managed_app_id IN (SELECT id FROM applications WHERE bot_user_id = $2)").bind(guild_id).bind(user_id).execute(&state.db).await?;
     if gone.rows_affected() > 0 { let _ = crate::routes::roles::emit_roles(state, guild_id).await; }

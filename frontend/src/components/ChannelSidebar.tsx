@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { anchorOf } from '../lib/anchor'
-import { CalendarDays, Flame, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, Image as ImageIcon, Megaphone, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
+import { CalendarDays, Flame, Handshake, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, Image as ImageIcon, Megaphone, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
@@ -251,13 +251,13 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
         {guild.banner_url ? (
           <div className="relative h-[135px] bg-cover bg-center" style={{ backgroundImage: `url(${guild.banner_url})` }} data-guild-banner>
             <button onClick={() => setMenu((m) => !m)} className="absolute inset-x-0 top-0 h-12 px-4 flex items-center justify-between font-bold text-white text-left bg-gradient-to-b from-black/60 to-transparent hover:from-black/70 drop-shadow">
-              <span className="truncate">{guild.name}</span>
+              <span className="truncate">{guild.name}{guild.partnered && <span title="Partnered server" className="ml-1 inline-flex align-[-2px]" data-partnered><Handshake size={15} className="text-accent" /></span>}</span>
               <ChevronDown size={18} className={`transition ${menu ? 'rotate-180' : ''}`} />
             </button>
           </div>
         ) : (
           <button onClick={() => setMenu((m) => !m)} className="h-12 w-full px-4 flex items-center justify-between font-bold border-b border-line hover:bg-bg-3 transition text-left">
-            <span className="truncate">{guild.name}</span>
+            <span className="truncate">{guild.name}{guild.partnered && <span title="Partnered server" className="ml-1 inline-flex align-[-2px]" data-partnered><Handshake size={15} className="text-accent" /></span>}</span>
             <ChevronDown size={18} className={`text-text-1 transition ${menu ? 'rotate-180' : ''}`} />
           </button>
         )}

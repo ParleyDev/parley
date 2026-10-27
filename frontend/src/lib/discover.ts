@@ -10,6 +10,7 @@ export const CATEGORIES: { id: string; label: string }[] = [
 export const categoryLabel = (id: string) => CATEGORIES.find((c) => c.id === id)?.label ?? id
 
 export interface Listing {
+  partnered?: boolean
   guild_id: string
   name: string
   icon_url: string | null

@@ -56,6 +56,9 @@ pub struct Listing {
     #[sqlx(default)]
     #[serde(default)]
     pub verified: bool,
+    #[sqlx(default)]
+    #[serde(default)]
+    pub partnered: bool,
     #[sqlx(skip)]
     #[serde(default)]
     pub online_count: i64,
@@ -65,7 +68,7 @@ pub struct Listing {
 }
 
 const LISTING_SELECT: &str = "SELECT d.guild_id, g.name, g.icon_url, d.description, d.category, COALESCE(d.banner_url, g.banner_url) AS banner_url, d.status, d.note, d.submitted_at, d.reviewed_at,
-    d.featured_order, d.verified,
+    d.featured_order, d.verified, g.partnered,
     (SELECT COUNT(*) FROM guild_members m WHERE m.guild_id = d.guild_id) AS member_count
     FROM guild_discovery d JOIN guilds g ON g.id = d.guild_id";
 
@@ -328,6 +331,8 @@ struct AdminUpdate {
     #[serde(default, deserialize_with = "deserialize_nullable_i32")]
     featured_order: Option<Option<i32>>,
     verified: Option<bool>,
+    /// Partnered with this instance (a badge on the server everywhere).
+    partnered: Option<bool>,
 }
 fn deserialize_nullable_i32<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i32>>, D::Error> {
     Ok(Some(Option::<i32>::deserialize(d)?))
@@ -347,7 +352,12 @@ async fn admin_update(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
         .bind(gid).bind(req.featured_order.is_some()).bind(req.featured_order.flatten()).bind(req.verified)
         .execute(&state.db)
         .await?;
+    if let Some(p) = req.partnered {
+        sqlx::query("UPDATE guilds SET partnered = $2 WHERE id = $1").bind(gid).bind(p).execute(&state.db).await?;
+        if let Ok(g) = sqlx::query_as::<_, crate::models::Guild>(&format!("SELECT {} FROM guilds WHERE id = $1", crate::routes::guilds::GUILD_COLS)).bind(gid).fetch_one(&state.db).await { state.hub.emit_guild(gid, "GUILD_UPDATE", json!(g)); }
+    }
     let mut details = serde_json::Map::new();
+    if let Some(p) = req.partnered { details.insert("partnered".into(), json!(p)); }
     if let Some(f) = req.featured_order { details.insert("featured_order".into(), json!(f)); }
     if let Some(v) = req.verified { details.insert("verified".into(), json!(v)); }
     crate::audit::record(&state, uid, "discovery.update", "guild", Some(gid), &crate::audit::guild_name(&state, gid).await, Value::Object(details)).await;

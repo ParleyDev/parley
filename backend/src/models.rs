@@ -34,6 +34,9 @@ pub struct User {
     pub avatar_decoration: String,
     #[sqlx(default)]
     pub clan_tag: String,
+    /// The server whose official tag this is (None: a free-text tag).
+    #[sqlx(default)]
+    pub clan_tag_guild: Option<Uuid>,
     #[sqlx(default)]
     pub panels: serde_json::Value,
     /// 'everyone' or 'friends': who sees bio, banner, pronouns and panels.
@@ -73,6 +76,8 @@ struct UserWire<'a> {
     custom_status: &'a str,
     avatar_decoration: &'a str,
     clan_tag: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    clan_tag_guild: Option<Uuid>,
     panels: &'a serde_json::Value,
     #[serde(skip_serializing_if = "str::is_empty")]
     profile_frame: &'a str,
@@ -94,7 +99,7 @@ impl Serialize for User {
             banner_url: if hidden { None } else { self.banner_url.as_ref() }, theme_primary: &self.theme_primary, theme_accent: &self.theme_accent,
             pronouns: if hidden { "" } else { &self.pronouns }, name_primary: &self.name_primary, name_accent: &self.name_accent,
             bot: self.bot, verified_bot: self.verified_bot, name_style: &self.name_style, custom_status: &self.custom_status, avatar_decoration: &self.avatar_decoration,
-            clan_tag: &self.clan_tag, panels: if hidden { &NULL } else { &self.panels },
+            clan_tag: &self.clan_tag, clan_tag_guild: self.clan_tag_guild, panels: if hidden { &NULL } else { &self.panels },
             profile_frame: &self.profile_frame, nameplate: &self.nameplate, profile_effect: &self.profile_effect,
             private_profile: hidden,
         }
@@ -108,7 +113,7 @@ impl From<&PrivateUser> for User {
             name_style: u.name_style.clone(), bot: u.bot, verified_bot: false, id: u.id, username: u.username.clone(), display_name: u.display_name.clone(), avatar_url: u.avatar_url.clone(), bio: u.bio.clone(),
             status: u.status.clone(), custom_status: u.custom_status.clone(), created_at: u.created_at, banner_url: u.banner_url.clone(),
             theme_primary: u.theme_primary.clone(), theme_accent: u.theme_accent.clone(), pronouns: u.pronouns.clone(), name_primary: u.name_primary.clone(),
-            name_accent: u.name_accent.clone(), avatar_decoration: u.avatar_decoration.clone(), clan_tag: u.clan_tag.clone(), panels: u.panels.clone(),
+            name_accent: u.name_accent.clone(), avatar_decoration: u.avatar_decoration.clone(), clan_tag: u.clan_tag.clone(), clan_tag_guild: u.clan_tag_guild, panels: u.panels.clone(),
             profile_privacy: u.profile_privacy.clone(), profile_frame: u.profile_frame.clone(), nameplate: u.nameplate.clone(), profile_effect: u.profile_effect.clone(),
             reveal: false,
         }
@@ -244,6 +249,8 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub age_group: String,
+    #[sqlx(default)]
+    pub clan_tag_guild: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -333,6 +340,15 @@ pub struct Guild {
     #[sqlx(default)]
     #[serde(default)]
     pub applications: serde_json::Value,
+    /// The server's own tag (2-4 letters) and its badge (an emoji), which members can wear.
+    #[sqlx(default)]
+    pub tag: Option<String>,
+    #[sqlx(default)]
+    pub tag_badge: Option<String>,
+    /// Partnered with this instance (set by admins).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub partnered: bool,
 }
 
 fn default_all() -> String { "all".into() }
@@ -616,6 +632,8 @@ pub struct MessageRow {
     pub components: Option<serde_json::Value>,
     #[sqlx(default)]
     pub author_verified_bot: bool,
+    #[sqlx(default)]
+    pub author_clan_tag_guild: Option<Uuid>,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -871,6 +889,7 @@ impl MessageRow {
                 name_accent: self.author_name_accent.clone(),
                 avatar_decoration: self.avatar_decoration,
                 clan_tag: self.clan_tag,
+                clan_tag_guild: self.author_clan_tag_guild,
                 panels: serde_json::Value::Null,
                 ..Default::default()
             },
