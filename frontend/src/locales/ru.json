@@ -3166,5 +3166,9 @@
 "{guild} reviews new members. Apply to start chatting.": "{guild} проверяет новых участников. Подай заявку, чтобы начать общаться.",
 "{name} was added to your apps: its commands now work for you in any server or DM.": "{name} добавлено в твои приложения: его команды теперь работают для тебя на любом сервере и в личных сообщениях.",
 "{user} used {command}": "{user} использовал(а) {command}",
-"to {email}": "на {email}"
+"to {email}": "на {email}",
+"Close to tray": "Сворачивать в трей при закрытии",
+"Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.": "При закрытии окна Parley продолжает работать в трее, звонки и уведомления не прерываются; выйти можно через значок в трее.",
+"Minimize to tray": "Сворачивать в трей",
+"Turns Streamer Mode on when OBS, Streamlabs or XSplit starts, and back off when it quits.": "Включает режим стримера, когда запускается OBS, Streamlabs или XSplit, и выключает, когда программа закрывается."
 }

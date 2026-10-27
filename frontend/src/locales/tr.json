@@ -3166,5 +3166,9 @@
 "{guild} reviews new members. Apply to start chatting.": "{guild} yeni üyeleri inceliyor. Sohbete başlamak için başvur.",
 "{name} was added to your apps: its commands now work for you in any server or DM.": "{name} uygulamalarına eklendi: komutları artık her sunucuda ya da DM'de senin için çalışıyor.",
 "{user} used {command}": "{user}, {command} kullandı",
-"to {email}": "{email} adresine"
+"to {email}": "{email} adresine",
+"Close to tray": "Kapatınca tepsiye küçült",
+"Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.": "Pencereyi kapatınca Parley tepside çalışmaya devam eder; aramalar ve bildirimler sürer. Tepsi simgesinden çıkabilirsin.",
+"Minimize to tray": "Tepsiye küçült",
+"Turns Streamer Mode on when OBS, Streamlabs or XSplit starts, and back off when it quits.": "OBS, Streamlabs veya XSplit başladığında Yayıncı Modunu açar, kapandığında yeniden kapatır."
 }

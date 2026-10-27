@@ -3166,5 +3166,9 @@
 "{guild} reviews new members. Apply to start chatting.": "{guild} analisa os novos membros. Candidate-se para começar a conversar.",
 "{name} was added to your apps: its commands now work for you in any server or DM.": "{name} foi adicionado aos seus apps: os comandos dele agora funcionam para você em qualquer servidor ou DM.",
 "{user} used {command}": "{user} usou {command}",
-"to {email}": "para {email}"
+"to {email}": "para {email}",
+"Close to tray": "Fechar para a bandeja",
+"Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.": "Fechar a janela mantém o Parley na bandeja, então chamadas e notificações continuam; saia pelo ícone da bandeja.",
+"Minimize to tray": "Minimizar para a bandeja",
+"Turns Streamer Mode on when OBS, Streamlabs or XSplit starts, and back off when it quits.": "Ativa o modo streamer quando o OBS, Streamlabs ou XSplit abre e desativa quando ele fecha."
 }

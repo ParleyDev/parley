@@ -13,12 +13,13 @@ const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Geck
 const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] }); const errors = []
 const fake = () => {
   window.__calls = []
-  const st = { autostart: false, start_minimized: false, hardware_acceleration: true, version: '0.13.0' }
+  const st = { autostart: false, start_minimized: false, hardware_acceleration: true, close_to_tray: true, minimize_to_tray: false, tray: true, version: '0.13.0' }
   window.__TAURI_INTERNALS__ = { invoke: async (cmd, args) => {
     window.__calls.push([cmd, args ?? null])
     if (cmd === 'desktop_settings') return { ...st }
     if (cmd === 'set_ptt_key') return window.__pttOk ?? true
-    if (cmd === 'set_desktop_settings') { if (args.autostart !== undefined) st.autostart = args.autostart; if (args.startMinimized !== undefined) st.start_minimized = args.startMinimized; if (args.hardwareAcceleration !== undefined) st.hardware_acceleration = args.hardwareAcceleration; return { ...st } }
+    if (cmd === 'streaming_apps') return !!window.__obs
+    if (cmd === 'set_desktop_settings') { if (args.autostart !== undefined) st.autostart = args.autostart; if (args.startMinimized !== undefined) st.start_minimized = args.startMinimized; if (args.hardwareAcceleration !== undefined) st.hardware_acceleration = args.hardwareAcceleration; if (args.closeToTray !== undefined) st.close_to_tray = args.closeToTray; if (args.minimizeToTray !== undefined) st.minimize_to_tray = args.minimizeToTray; return { ...st } }
     return null
   } }
 }
@@ -68,6 +69,23 @@ await p.waitForFunction(() => window.__calls.some((c) => c[0] === 'set_badge' &&
 ok('a mention puts a count on the app icon', (await calls(p, 'set_badge')).some((x) => x.count === 1), JSON.stringify(await calls(p, 'set_badge')))
 await p.goto(`${WEB}/channels/${g.id}/${ch.id}`); await p.waitForTimeout(1500)
 ok('reading it clears the badge', (await calls(p, 'set_badge')).at(-1)?.count === 0, JSON.stringify(await calls(p, 'set_badge')))
+
+console.log('-- tray and OBS')
+await p.click('button[title="User Settings"]'); await p.click('[data-settings-tab="advanced"]'); await p.waitForSelector('[data-desktop-close-tray]')
+await p.click('[data-desktop-close-tray] button'); await p.click('[data-desktop-minimize-tray] button')
+await p.waitForFunction(() => window.__calls.filter((c) => c[0] === 'set_desktop_settings').length >= 2)
+const trayCalls = await calls(p, 'set_desktop_settings')
+ok('close and minimise to tray reach the shell', trayCalls.some((c) => c.closeToTray === false) && trayCalls.some((c) => c.minimizeToTray === true), JSON.stringify(trayCalls))
+await p.click('[data-settings-tab="streamer"]'); await p.waitForSelector('[data-streamer-auto]')
+ok('the OBS switch works in the app', await p.locator('[data-streamer-auto] button').isEnabled())
+await p.click('[data-streamer-auto] button'); await p.keyboard.press('Escape')
+const streamer = () => p.evaluate(() => document.documentElement.dataset.streamer)
+await p.evaluate(() => window.__parleyStreamerCheck())
+ok('nothing happens without OBS', await streamer() === '0')
+await p.evaluate(async () => { window.__obs = true; await window.__parleyStreamerCheck() })
+ok('OBS starting turns Streamer Mode on', await streamer() === '1')
+await p.evaluate(async () => { window.__obs = false; await window.__parleyStreamerCheck() })
+ok('and quitting turns it off again', await streamer() === '0')
 
 console.log('-- push to talk')
 const vc = g.channels.find((c) => c.kind === 'voice')

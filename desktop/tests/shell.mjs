@@ -1,11 +1,11 @@
 // Drives a debug build of the desktop shell (Linux, under Xvfb and a private D-Bus session) against a local page:
 // the page calls the shell's commands through the remote capability, a second launch hands over a parley:// link,
-// startup settings land on disk, and push to talk is heard while the window is in the background (keys pressed
+// startup and tray settings land on disk, a running OBS is seen, and push to talk is heard while the window is in the background (keys pressed
 // through XTest with a tiny helper: XKEY=/path/to/xkey, built from tests/xkey.c). Build first: (cd src-tauri && cargo build)
 //   dbus-run-session -- xvfb-run -a node tests/shell.mjs
 import { createServer } from 'node:http'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -34,15 +34,19 @@ const page = (step) => `<!doctype html><meta charset=utf-8><title>shell test</ti
     window.__parleyPtt = (down) => fetch('/ptt/' + down, { method: 'POST', body: '{}' })
     await t('pttBad', () => inv('set_ptt_key', { code: 'MediaPlay' }))
     await t('ptt', () => inv('set_ptt_key', { code: 'Backquote' }))
+    await t('tray', () => inv('set_desktop_settings', { closeToTray: false, minimizeToTray: true }))
+    setInterval(() => inv('streaming_apps').then((v) => fetch('/obs/' + v, { method: 'POST', body: '{}' })), 400)
+    await t('obs', () => inv('streaming_apps'))
   }
   if (inv && ${step} === 2) await t('off', () => inv('set_desktop_settings', { autostart: false }))
   await fetch('/result/${step}', { method: 'POST', body: JSON.stringify(out) })
 })()
 </script>`
-const ptt = []
+const ptt = [], obs = []
 const srv = createServer((req, res) => {
   hits.push(req.url)
   if (req.url.startsWith('/ptt/')) { ptt.push(req.url.slice(5)); res.end(); return }
+  if (req.url.startsWith('/obs/')) { obs.push(req.url.slice(5)); res.end(); return }
   if (req.method === 'POST') { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => { results[req.url.split('/').pop()] = JSON.parse(b); res.end() }); return }
   res.setHeader('Content-Type', 'text/html')
   res.end(page(req.url.startsWith('/invite/') ? 2 : 1))
@@ -66,6 +70,17 @@ ok('and are kept for the next launch', existsSync(prefsFile) && JSON.parse(readF
 const autostartFile = join(home, '.config/autostart/Parley.desktop')
 ok('an autostart entry is written, launching minimised', existsSync(autostartFile) && /--autostart/.test(readFileSync(autostartFile, 'utf8')))
 ok('plugin APIs stay out of reach of the server page', String(r.opener).startsWith('error') && String(r.notify).startsWith('error'), JSON.stringify({ opener: r.opener, notify: r.notify }))
+
+console.log('-- tray and streaming apps')
+ok('a tray icon is up, closing to it by default', r.settings?.tray === true && r.settings?.close_to_tray === true && r.settings?.minimize_to_tray === false, JSON.stringify(r.settings))
+ok('close / minimise to tray can change', r.tray?.close_to_tray === false && r.tray?.minimize_to_tray === true, JSON.stringify(r.tray))
+ok('no streaming app is running', r.obs === false)
+const fake = join(home, 'obs'); copyFileSync('/bin/sleep', fake); const obsProc = spawn(fake, ['60'])
+const seen = obs.length
+ok('OBS running is seen', await wait(() => obs.slice(seen).includes('true'), 5000), obs.slice(-3).join())
+obsProc.kill()
+const gone = obs.length
+ok('and its quitting too', await wait(() => obs.slice(gone + 1).includes('false'), 5000))
 
 console.log('-- push to talk in the background')
 ok('the shell watches a known key, and refuses one it cannot', r.ptt === true && r.pttBad === false, JSON.stringify({ ptt: r.ptt, pttBad: r.pttBad }))

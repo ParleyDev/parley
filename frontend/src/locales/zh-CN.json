@@ -3166,5 +3166,9 @@
 "{guild} reviews new members. Apply to start chatting.": "{guild} 会审核新成员。提交申请即可开始聊天。",
 "{name} was added to your apps: its commands now work for you in any server or DM.": "{name} 已添加到你的应用:它的命令现在可在任何服务器或私信中使用。",
 "{user} used {command}": "{user} 使用了 {command}",
-"to {email}": "发送至 {email}"
+"to {email}": "发送至 {email}",
+"Close to tray": "关闭时最小化到托盘",
+"Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.": "关闭窗口后 Parley 会在托盘中继续运行，通话和通知不会中断；可从托盘图标退出。",
+"Minimize to tray": "最小化到托盘",
+"Turns Streamer Mode on when OBS, Streamlabs or XSplit starts, and back off when it quits.": "在 OBS、Streamlabs 或 XSplit 启动时开启主播模式，关闭后再关掉。"
 }

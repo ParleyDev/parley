@@ -3166,5 +3166,9 @@
 "{guild} reviews new members. Apply to start chatting.": "{guild} beoordeelt nieuwe leden. Meld je aan om te kunnen chatten.",
 "{name} was added to your apps: its commands now work for you in any server or DM.": "{name} is toegevoegd aan je apps: de opdrachten werken nu voor jou op elke server of in elke privéchat.",
 "{user} used {command}": "{user} gebruikte {command}",
-"to {email}": "naar {email}"
+"to {email}": "naar {email}",
+"Close to tray": "Sluiten naar systeemvak",
+"Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.": "Als je het venster sluit, blijft Parley in het systeemvak draaien, dus gesprekken en meldingen gaan door; afsluiten doe je via het pictogram.",
+"Minimize to tray": "Minimaliseren naar systeemvak",
+"Turns Streamer Mode on when OBS, Streamlabs or XSplit starts, and back off when it quits.": "Zet de streamermodus aan als OBS, Streamlabs of XSplit start, en weer uit als het stopt."
 }

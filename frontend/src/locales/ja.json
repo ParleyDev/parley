@@ -3166,5 +3166,9 @@
 "{guild} reviews new members. Apply to start chatting.": "{guild}では新しいメンバーを審査しています。申請してチャットを始めましょう。",
 "{name} was added to your apps: its commands now work for you in any server or DM.": "{name}があなたのアプリに追加されました。コマンドはどのサーバーやDMでも使えます。",
 "{user} used {command}": "{user}が{command}を使用しました",
-"to {email}": "{email} 宛"
+"to {email}": "{email} 宛",
+"Close to tray": "閉じるとトレイに格納",
+"Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.": "ウィンドウを閉じても Parley はトレイで動き続け、通話や通知も続きます。終了はトレイアイコンから行えます。",
+"Minimize to tray": "最小化でトレイに格納",
+"Turns Streamer Mode on when OBS, Streamlabs or XSplit starts, and back off when it quits.": "OBS、Streamlabs、XSplit が起動するとストリーマーモードをオンにし、終了するとオフに戻します。"
 }

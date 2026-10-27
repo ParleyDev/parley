@@ -3166,5 +3166,9 @@
 "{guild} reviews new members. Apply to start chatting.": "{guild} esamina i nuovi membri. Fai richiesta per iniziare a chattare.",
 "{name} was added to your apps: its commands now work for you in any server or DM.": "{name} è stata aggiunta alle tue app: i suoi comandi ora funzionano per te in qualsiasi server o DM.",
 "{user} used {command}": "{user} ha usato {command}",
-"to {email}": "a {email}"
+"to {email}": "a {email}",
+"Close to tray": "Chiudi nell'area di notifica",
+"Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.": "Chiudendo la finestra Parley resta attivo nell'area di notifica, quindi chiamate e notifiche continuano; esci dall'icona.",
+"Minimize to tray": "Riduci nell'area di notifica",
+"Turns Streamer Mode on when OBS, Streamlabs or XSplit starts, and back off when it quits.": "Attiva la modalità streamer quando si avvia OBS, Streamlabs o XSplit e la disattiva quando si chiude."
 }

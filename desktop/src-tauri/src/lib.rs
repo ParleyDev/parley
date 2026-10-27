@@ -13,6 +13,10 @@
 //! `parley://channels/<server>/<channel>` links open in the app, on whichever server it is connected to.
 //! Window size and position are remembered between launches.
 //!
+//! A tray icon (where the desktop has one) reopens the window and quits. Closing the window hides it to the tray
+//! unless turned off, and minimising can too; without a tray, closing quits as usual. `streaming_apps` tells the
+//! page whether OBS or XSplit is running, for Streamer Mode's automatic switch.
+//!
 //! Global push-to-talk: while the page is in a call with push to talk on, it names its key (`set_ptt_key`). The
 //! shell then reads that key's state (it never grabs the key, so it still types in other apps) and, while the
 //! window is in the background, tells the page through `window.__parleyPtt(down)`. In the foreground the page
@@ -58,6 +62,9 @@ struct Prefs {
     #[serde(default)] start_minimized: bool,
     /// None = on. Applied at launch (the web view's GPU use can't change while it runs).
     #[serde(default)] hardware_acceleration: Option<bool>,
+    /// None = on: the close button hides the window to the tray (when there is one).
+    #[serde(default)] close_to_tray: Option<bool>,
+    #[serde(default)] minimize_to_tray: bool,
 }
 
 fn prefs_path(app: &AppHandle) -> Option<std::path::PathBuf> { app.path().app_config_dir().ok().map(|d| d.join("desktop.json")) }
@@ -69,11 +76,14 @@ fn save_prefs(app: &AppHandle, p: &Prefs) -> Result<(), String> {
 }
 
 #[derive(Serialize)]
-struct DesktopSettings { autostart: bool, start_minimized: bool, hardware_acceleration: bool, version: &'static str }
+struct DesktopSettings { autostart: bool, start_minimized: bool, hardware_acceleration: bool, close_to_tray: bool, minimize_to_tray: bool, tray: bool, version: &'static str }
 
 fn settings(app: &AppHandle) -> DesktopSettings {
     let p = load_prefs(app);
-    DesktopSettings { autostart: app.autolaunch().is_enabled().unwrap_or(false), start_minimized: p.start_minimized, hardware_acceleration: p.hardware_acceleration.unwrap_or(true), version: VERSION }
+    DesktopSettings {
+        autostart: app.autolaunch().is_enabled().unwrap_or(false), start_minimized: p.start_minimized, hardware_acceleration: p.hardware_acceleration.unwrap_or(true),
+        close_to_tray: p.close_to_tray.unwrap_or(true), minimize_to_tray: p.minimize_to_tray, tray: has_tray(app), version: VERSION,
+    }
 }
 
 #[tauri::command]
@@ -81,15 +91,18 @@ fn desktop_settings(app: AppHandle) -> DesktopSettings { settings(&app) }
 
 /// Settings → Windows/Desktop: open on login, and start minimised when it does.
 #[tauri::command]
-fn set_desktop_settings(app: AppHandle, autostart: Option<bool>, start_minimized: Option<bool>, hardware_acceleration: Option<bool>) -> Result<DesktopSettings, String> {
+#[allow(clippy::too_many_arguments)]
+fn set_desktop_settings(app: AppHandle, autostart: Option<bool>, start_minimized: Option<bool>, hardware_acceleration: Option<bool>, close_to_tray: Option<bool>, minimize_to_tray: Option<bool>) -> Result<DesktopSettings, String> {
     if let Some(on) = autostart {
         let l = app.autolaunch();
         if on { l.enable() } else { l.disable() }.map_err(|e| e.to_string())?;
     }
-    if start_minimized.is_some() || hardware_acceleration.is_some() {
+    if start_minimized.is_some() || hardware_acceleration.is_some() || close_to_tray.is_some() || minimize_to_tray.is_some() {
         let mut p = load_prefs(&app);
         if let Some(m) = start_minimized { p.start_minimized = m; }
         if let Some(h) = hardware_acceleration { p.hardware_acceleration = Some(h); }
+        if let Some(c) = close_to_tray { p.close_to_tray = Some(c); }
+        if let Some(m) = minimize_to_tray { p.minimize_to_tray = m; }
         save_prefs(&app, &p)?;
     }
     Ok(settings(&app))
@@ -182,6 +195,54 @@ fn set_ptt_key(app: AppHandle, code: Option<String>) -> bool {
     true
 }
 
+/// Whether a tray icon was created (Linux desktops without a status area have none).
+struct Tray(std::sync::atomic::AtomicBool);
+fn has_tray(app: &AppHandle) -> bool { app.state::<Tray>().0.load(std::sync::atomic::Ordering::Relaxed) }
+
+fn show_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") { let _ = w.show(); let _ = w.unminimize(); let _ = w.set_focus(); }
+}
+
+/// Linux loads the status-area library at run time and aborts if it is missing: look for it first.
+#[cfg(target_os = "linux")]
+fn tray_supported() -> bool {
+    ["libayatana-appindicator3.so.1", "libappindicator3.so.1", "libayatana-appindicator3.so", "libappindicator3.so"]
+        .iter().any(|n| unsafe { libloading::Library::new(n) }.is_ok())
+}
+#[cfg(not(target_os = "linux"))]
+fn tray_supported() -> bool { true }
+
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    if !tray_supported() { return Err(tauri::Error::AssetNotFound("status-area library (libayatana-appindicator3)".into())) }
+    use tauri::menu::{Menu, MenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let open = MenuItem::with_id(app, "open", "Open Parley", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Parley", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &quit])?;
+    let mut b = TrayIconBuilder::with_id("main").tooltip("Parley").menu(&menu).show_menu_on_left_click(false)
+        .on_menu_event(|app, e| match e.id().as_ref() { "open" => show_main(app), "quit" => app.exit(0), _ => {} })
+        .on_tray_icon_event(|tray, e| { if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e { show_main(tray.app_handle()) } });
+    if let Some(icon) = app.default_window_icon() { b = b.icon(icon.clone()); }
+    b.build(app)?;
+    Ok(())
+}
+
+/// Names of programs that mean "streaming right now" (OBS Studio, Streamlabs, XSplit).
+fn is_streaming_app(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    let n = n.trim_end_matches(".exe");
+    matches!(n, "obs" | "obs64" | "obs32" | "obs-studio" | "obs-browser-page" | "streamlabs obs" | "streamlabs desktop" | "xsplit.core" | "xsplit broadcaster" | "xsplitbroadcaster")
+}
+
+/// Is OBS or XSplit running? (Streamer Mode's automatic switch.)
+#[tauri::command]
+fn streaming_apps() -> bool {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+    sys.processes().values().any(|p| is_streaming_app(&p.name().to_string_lossy()))
+}
+
 /// A deep link waiting for the app to reach a server (it was opened on the connect screen).
 struct Pending(Mutex<Option<String>>);
 
@@ -221,7 +282,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(Pending(Mutex::new(None)))
         .manage(Ptt::default())
-        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, desktop_settings, set_desktop_settings, set_ptt_key])
+        .manage(Tray(std::sync::atomic::AtomicBool::new(false)))
+        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps])
         .setup(|app| {
             let handle = app.handle().clone();
             // AppImages and dev builds aren't registered for parley:// by an installer.
@@ -290,7 +352,23 @@ pub fn run() {
                     if let Some(next) = pending.and_then(|p| payload.url().join(&p).ok()) { let _ = w.navigate(next); }
                 })
                 .build()?;
-            if std::env::args().any(|a| a == "--autostart") && load_prefs(app.handle()).start_minimized { let _ = window.minimize(); }
+            match build_tray(app.handle()) {
+                Ok(()) => app.state::<Tray>().0.store(true, std::sync::atomic::Ordering::Relaxed),
+                Err(e) => eprintln!("no tray icon: {e}"),
+            }
+            if std::env::args().any(|a| a == "--autostart") && load_prefs(app.handle()).start_minimized {
+                if has_tray(app.handle()) && load_prefs(app.handle()).minimize_to_tray { let _ = window.hide(); } else { let _ = window.minimize(); }
+            }
+            // Close (and, when chosen, minimise) to the tray instead of quitting.
+            {
+                let h = app.handle().clone();
+                let w = window.clone();
+                window.on_window_event(move |e| match e {
+                    tauri::WindowEvent::CloseRequested { api, .. } if has_tray(&h) && load_prefs(&h).close_to_tray.unwrap_or(true) => { api.prevent_close(); let _ = w.hide(); }
+                    tauri::WindowEvent::Resized(_) if has_tray(&h) && load_prefs(&h).minimize_to_tray && w.is_minimized().unwrap_or(false) => { let _ = w.hide(); }
+                    _ => {}
+                });
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -299,7 +377,12 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{deep_path, keycode};
+    use super::{deep_path, is_streaming_app, keycode};
+    #[test]
+    fn streaming_names() {
+        assert!(is_streaming_app("obs64.exe") && is_streaming_app("obs") && is_streaming_app("XSplit.Core.exe") && is_streaming_app("Streamlabs OBS.exe"));
+        assert!(!is_streaming_app("observer") && !is_streaming_app("chrome.exe") && !is_streaming_app("jobs"));
+    }
     use device_query::Keycode;
     #[test]
     fn keycodes() {

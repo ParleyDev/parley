@@ -14,6 +14,7 @@ import { installSettingsSync } from './lib/settingsSync'
 import { installArrowNav } from './lib/arrowNav'
 import { followOtherTabs } from './lib/accounts'
 import { useStore } from './store'
+import { initStreamerAuto } from './lib/streamerAuto'
 
 initAppearance()
 initPrefs()
@@ -24,6 +25,7 @@ initPwa()
 initViewport()
 installSettingsSync()
 installArrowNav()
+initStreamerAuto()
 followOtherTabs(() => ({ token: useStore.getState().token, userId: useStore.getState().user?.id ?? null }), (token) => useStore.setState({ token }))
 
 // First paint waits (briefly) for the chosen language's catalogue, so a non-English UI doesn't flash English.

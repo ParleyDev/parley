@@ -16,7 +16,7 @@ export default function AdvancedTab() {
   const [ds, setDs] = useState<DesktopSettings | null>(null)
   const [hwAtLaunch, setHwAtLaunch] = useState<boolean | null>(null)
   useEffect(() => { if (desktopBridge()) void desktop.settings().then((s) => { setDs(s); setHwAtLaunch(s.hardware_acceleration) }).catch(() => {}) }, [])
-  const change = (patch: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean }) => { void desktop.setSettings(patch).then(setDs).catch((e) => pushToast(String((e as Error).message ?? e), 'error')) }
+  const change = (patch: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean; closeToTray?: boolean; minimizeToTray?: boolean }) => { void desktop.setSettings(patch).then(setDs).catch((e) => pushToast(String((e as Error).message ?? e), 'error')) }
   return (
     <div className="space-y-6" data-advanced-tab>
       <h2 className="text-xl font-bold">{t('Advanced')}</h2>
@@ -36,7 +36,11 @@ export default function AdvancedTab() {
           <label className="label">{t('Desktop app')}</label>
           <span data-desktop-autostart><Toggle label={t('Open Parley when you sign in to your computer')} checked={ds.autostart} onChange={(v) => change({ autostart: v })} /></span>
           <span data-desktop-minimized><Toggle label={t('Start minimized')} checked={ds.start_minimized} onChange={(v) => change({ startMinimized: v })} disabled={!ds.autostart} /></span>
-          <p className="text-xs text-text-2">{t('Starts quietly in the background with your computer. Zoom with Ctrl + = / - / 0 (⌘ on a Mac); Appearance → Zoom level sets it too.')}</p>
+          {ds.tray && <>
+            <span data-desktop-close-tray><Toggle label={t('Close to tray')} checked={ds.close_to_tray ?? true} onChange={(v) => change({ closeToTray: v })} /></span>
+            <span data-desktop-minimize-tray><Toggle label={t('Minimize to tray')} checked={!!ds.minimize_to_tray} onChange={(v) => change({ minimizeToTray: v })} /></span>
+          </>}
+          <p className="text-xs text-text-2">{ds.tray ? t('Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.') + ' ' : ''}{t('Starts quietly in the background with your computer. Zoom with Ctrl + = / - / 0 (⌘ on a Mac); Appearance → Zoom level sets it too.')}</p>
         </section>
         <div className="h-px bg-line" />
       </>}
