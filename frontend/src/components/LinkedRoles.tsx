@@ -5,7 +5,7 @@ import type { Role } from '../lib/types'
 import { useStore } from '../store'
 
 export interface Requirements { account_age_days?: number; verified_email?: boolean; connection?: string; app?: { app_id: string; key: string; type?: number; label?: string; value: number | boolean | string } }
-const PROVIDERS: [string, string][] = [['', 'None'], ['github', 'GitHub'], ['gitlab', 'GitLab'], ['twitch', 'Twitch'], ['reddit', 'Reddit'], ['spotify', 'Spotify']]
+const PROVIDERS: [string, string][] = [['', 'None'], ['github', 'GitHub'], ['gitlab', 'GitLab'], ['twitch', 'Twitch'], ['youtube', 'YouTube'], ['reddit', 'Reddit'], ['spotify', 'Spotify']]
 interface Meta { key: string; name: string; type: number }
 
 /** Server Settings › Roles › Links: what a member needs to claim this role themselves. */

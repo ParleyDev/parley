@@ -335,6 +335,9 @@ async fn delete_role(
     if ctx.roles.get(&rid).map(|r| r.managed_app_id.is_some()).unwrap_or(false) {
         return Err(AppError::BadRequest("This role belongs to a bot: remove the bot to remove it".into()));
     }
+    if crate::routes::integrations::is_managed(&state.db, rid).await? {
+        return Err(AppError::BadRequest("This role is managed by a Twitch or YouTube integration".into()));
+    }
     if rid == id {
         return Err(AppError::BadRequest("@everyone cannot be deleted".into()));
     }
@@ -465,6 +468,7 @@ async fn update_member(
                 return Err(AppError::Forbidden);
             }
             if role.managed_app_id.is_some() { return Err(AppError::BadRequest(format!("{} is a bot's own role and can't be given or taken", role.name))) }
+            if crate::routes::integrations::is_managed(&state.db, role.id).await? { return Err(AppError::BadRequest(format!("{} is managed by a Twitch or YouTube integration", role.name))) }
         }
         sqlx::query("DELETE FROM member_roles WHERE guild_id = $1 AND user_id = $2").bind(id).bind(target).execute(&mut *tx).await?;
         for r in &wanted {

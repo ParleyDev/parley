@@ -23,6 +23,7 @@ pub mod qr_login;
 pub mod server_tags;
 pub mod recap;
 pub mod directory;
+pub mod integrations;
 pub mod web_push;
 pub mod connections;
 pub mod discovery;
@@ -65,6 +66,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(web_push::router())
         .merge(account::router())
         .merge(connections::router())
+        .merge(integrations::router())
         .merge(applications::router())
         .merge(mfa::router())
         .merge(passkeys::router())

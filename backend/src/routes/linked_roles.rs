@@ -165,7 +165,7 @@ async fn claim(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn set_role(state: &AppState, gid: Uuid, uid: Uuid, rid: Uuid, add: bool) -> AppResult<()> {
+pub(crate) async fn set_role(state: &AppState, gid: Uuid, uid: Uuid, rid: Uuid, add: bool) -> AppResult<()> {
     let before = perms::visibility(&state.db, gid).await?;
     if add { sqlx::query("INSERT INTO member_roles (guild_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING").bind(gid).bind(uid).bind(rid).execute(&state.db).await?; }
     else { sqlx::query("DELETE FROM member_roles WHERE guild_id = $1 AND user_id = $2 AND role_id = $3").bind(gid).bind(uid).bind(rid).execute(&state.db).await?; }
