@@ -15,7 +15,9 @@ ok('png upload returns dims', r.status===201 && pic.width===640 && pic.height===
 r=await up(a.token,tc,'fake.png','image/png',fs.readFileSync(`${FIX}/fake.png`)); ok('html disguised as png is not image/*: '+r.body?.content_type, r.status===201 && !r.body.content_type.startsWith('image/'))
 const fake=r.body
 r=await fetch(`${WEB}`+fake.url); ok('disguised file served as download with nosniff', r.headers.get('content-disposition').startsWith('attachment') && r.headers.get('x-content-type-options')==='nosniff')
-r=await up(a.token,tc,'big.bin','application/octet-stream',Buffer.alloc(26 * 1024 * 1024)); ok('26MB rejected: '+r.status, r.status===400||r.status===413)
+// One MB over the instance's limit (0 means the 25 MB default).
+const limit=(await fetch(`${B}/instance`).then(x=>x.json())).max_upload_bytes||25*1024*1024
+r=await up(a.token,tc,'big.bin','application/octet-stream',Buffer.alloc(limit+1024*1024)); ok('over the upload limit rejected: '+r.status, r.status===400||r.status===413)
 r=await up(a.token,tc,'notes.txt','text/plain',fs.readFileSync(`${FIX}/notes.txt`)); const notes=r.body; ok('text upload keeps text/plain', r.status===201 && notes.content_type==='text/plain')
 r=await callS(a.token,'POST',`/channels/${tc}/messages`,{content:'',attachment_ids:[pic.id,notes.id]}); const m1=r.body
 ok('message with only attachments', r.status===201 && m1.attachments.length===2 && m1.content==='')

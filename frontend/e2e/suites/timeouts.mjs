@@ -54,6 +54,7 @@ ok('carol\'s composer is replaced by the timed-out notice, live', await pc.locat
 await pc.screenshot({ path: '98-timed-out.png' })
 await pb.click(`[data-member-row="${c.user.id}"]`, { button: 'right' }); await pb.waitForSelector('[data-context-menu] [data-menu-item="Remove Timeout"]'); await pb.click('[data-context-menu] [data-menu-item="Remove Timeout"]')
 await pc.waitForSelector('textarea')
+await pb.waitForFunction((id) => !document.querySelector(`[data-member-row="${id}"] [data-member-timeout]`), c.user.id, { timeout: 5000 }).catch(() => {})
 ok('removing the timeout brings the composer back and clears the badge', await pb.locator(`[data-member-row="${c.user.id}"] [data-member-timeout]`).count() === 0)
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await browser.close(); await finish()

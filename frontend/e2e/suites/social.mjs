@@ -1,5 +1,5 @@
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, raw, ok, finish } from '../lib.mjs'
+import { API_ORIGIN, WEB, S, reg, call, callS, raw, ok, finish } from '../lib.mjs'
 
 const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol')
 const friend = async (x, y) => { await call(x.token, 'POST', '/users/@me/relationships', { user_id: y.user.id }); await call(y.token, 'PUT', `/users/@me/relationships/${x.user.id}`) }
@@ -12,7 +12,7 @@ const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.
 console.log('-- receipts (API)')
 const m1 = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'did you see this?' })
 ok('no receipts before anyone reads', (await call(a.token, 'GET', `/channels/${dm.id}/receipts`)).length === 0)
-const WS = 'ws://localhost:18080/ws'
+const WS = `${API_ORIGIN.replace(/^http/, 'ws')}/ws`
 const events = []; const ws = new WebSocket(`${WS}?token=${a.token}`); ws.onmessage = (e) => events.push(JSON.parse(e.data)); await new Promise((r) => { ws.onopen = () => setTimeout(r, 400) })
 await callS(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m1.id })
 await new Promise((r) => setTimeout(r, 400))
