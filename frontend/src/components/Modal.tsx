@@ -9,15 +9,22 @@ interface Props {
   children: ReactNode
   width?: string
   footer?: ReactNode
+  /** No box of its own (the content is a card that draws itself, e.g. a profile with a frame reaching past it). */
+  bare?: boolean
 }
 
-export default function Modal({ title, subtitle, onClose, children, width = 'max-w-md', footer }: Props) {
+export default function Modal({ title, subtitle, onClose, children, width = 'max-w-md', footer, bare }: Props) {
   useEffect(() => {
     // Capture phase, and stop it there: a modal over Settings closes on its own without closing Settings too.
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); onClose() } }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
+  if (bare) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className={`pop w-full ${width} max-h-full overflow-y-auto overscroll-contain`} role="dialog" aria-modal data-modal-bare onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>{children}</div>
+    </div>
+  )
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className={`pop w-full ${width} rounded-2xl bg-bg-1 border border-line shadow-2xl overflow-hidden`} role="dialog" aria-modal>

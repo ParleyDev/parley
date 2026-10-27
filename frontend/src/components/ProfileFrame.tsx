@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react'
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
 import { assetFile, isAssetValue, useAssetItem, type FrameItem, type FrameLayer } from '../lib/assetCatalog'
 
 /**
@@ -61,6 +61,37 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
         // Rails and borders stop at the card's top and bottom edges; staples hang free.
         return at.along ? clip({ left: -oh - pad, top: 0, width: W + 2 * (oh + pad), height: H }, img(l, at, -oh - pad, 0), `${i}`) : <span key={i}>{img(l, at)}</span>
       })}
+    </div>
+  )
+}
+
+/**
+ * Room for a card's frame: padding as large as the frame reaches past the card (scaled to the card's width), with the
+ * card and its frame inside. Whatever positions, nudges, scrolls or clips the card then sees the whole framed area,
+ * so a frame is never cut off by a scroll box or pushed off screen. Without an asset frame it adds nothing.
+ */
+export function FrameRoom({ value, className = '', innerClassName = '', style, children, ...rest }: { value?: string | null; className?: string; innerClassName?: string; style?: CSSProperties; children: ReactNode } & Record<`data-${string}`, string | boolean | undefined>) {
+  const item = useAssetItem<FrameItem>('profile-frames', value)
+  const ref = useRef<HTMLDivElement>(null)
+  const [w, setW] = useState(0)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || !item || typeof ResizeObserver === 'undefined') return
+    const measure = () => setW(el.offsetWidth)
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [item])
+  const L = item?.layout
+  const s = L && w ? w / (L.inner_width || 1200) : 0
+  const pad: CSSProperties = L && s ? { paddingTop: L.overflow_top * s, paddingBottom: L.overflow_bottom * s, paddingLeft: L.overflow_horizontal * s, paddingRight: L.overflow_horizontal * s } : {}
+  return (
+    <div className={className} style={{ ...style, ...pad }} data-frame-room={item ? item.id : undefined} {...rest}>
+      <div ref={ref} className={`relative ${innerClassName}`}>
+        {children}
+        <ProfileFrame value={value} />
+      </div>
     </div>
   )
 }

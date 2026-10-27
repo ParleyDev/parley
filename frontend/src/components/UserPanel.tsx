@@ -33,10 +33,12 @@ export default function UserPanel() {
   return (
     <div className="shrink-0 w-full min-w-0 p-2 pt-0" style={{ background: 'linear-gradient(90deg, var(--color-bg-0) 72px, var(--color-bg-1) 72px)' }} data-user-panel-bar>
       <VoiceConnected />
-      <div className="relative isolate rounded-xl border shadow-lg pl-2 pr-1.5 py-1.5 flex items-center gap-0.5" style={cardStyle} data-user-panel>
-        {/* Your nameplate as the panel's background (Discord shows it here), playing while the panel is hovered. */}
-        {user.nameplate && <div className={`pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-xl ${nameplateClass(user.nameplate)}`} data-panel-nameplate={user.nameplate} aria-hidden><NameplateVideo value={user.nameplate} hoverRoot="[data-user-panel]" /></div>}
-        <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 flex-1 rounded-lg pl-1 pr-1 py-1 hover:bg-white/10 text-left" data-panel-self data-motion-row>
+      <div className="relative rounded-xl border shadow-lg pl-2 pr-1.5 py-1.5 flex items-center gap-0.5" style={cardStyle} data-user-panel>
+        {/* Your nameplate as the panel's background (Discord shows it here), playing while the panel is hovered. It sits
+            at z 0 under the panel's content (z 1); no `isolate` on the panel, which would trap the menu's click-away
+            backdrop inside it. */}
+        {user.nameplate && <div className={`pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-xl ${nameplateClass(user.nameplate)}`} data-panel-nameplate={user.nameplate} aria-hidden><NameplateVideo value={user.nameplate} hoverRoot="[data-user-panel]" /></div>}
+        <button onClick={() => setOpen((o) => !o)} className="relative z-[1] flex items-center gap-2 min-w-0 flex-1 rounded-lg pl-1 pr-1 py-1 hover:bg-white/10 text-left" data-panel-self data-motion-row>
           <span className="rounded-full ring-2 ring-black/20"><Avatar user={user} size={40} presence /></span>
           <div className="min-w-0 flex-1">
             <div className="text-[16px] font-bold truncate leading-5"><StyledName userId={user.id}>{user.display_name}</StyledName></div>
@@ -63,7 +65,7 @@ export default function UserPanel() {
 function ControlBtn({ children, label, onClick, active, onMenu, menuOpen }: { children: ReactNode; label: string; onClick: () => void; active?: boolean; onMenu?: () => void; menuOpen?: boolean }) {
   const t = useT()
   return (
-    <span className={`flex items-center rounded-lg shrink-0 ${menuOpen ? 'bg-white/10' : ''}`}>
+    <span className={`relative z-[1] flex items-center rounded-lg shrink-0 ${menuOpen ? 'bg-white/10' : ''}`}>
       <button title={t(label)} onClick={onClick} className={`h-9 w-9 rounded-lg flex items-center justify-center hover:bg-white/10 ${active ? 'text-danger' : 'text-text-0'}`} data-control={label}>
         {children}
       </button>

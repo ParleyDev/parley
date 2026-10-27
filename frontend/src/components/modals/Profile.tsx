@@ -106,8 +106,8 @@ function FullProfile({ user, inGuild, onClose }: { user: UserProfile; inGuild?: 
   const mutual = user.mutual_guilds ?? []
   const friends = user.mutual_friends ?? []
   return (
-    <Modal onClose={onClose} width="max-w-sm">
-      <div className="-mx-6 -my-4">
+    <Modal onClose={onClose} width="max-w-sm" bare>
+      <div>
         <ProfileCard user={user} actions={actions} nameOverride={member?.nickname ? member.nickname : null} nameLook={roleNameLook}
           server={guild && member ? { id: guild.id, name: guild.name, icon_url: guild.icon_url, joined_at: member.joined_at } : undefined}>
           {inGuild && member && (
@@ -216,18 +216,26 @@ function Popout({ anchor, onClose, children }: { anchor: Anchor; onClose: () => 
     if (!wide) return
     const place = () => {
       const h = ref.current?.offsetHeight ?? 400
+      // A profile frame reaches past the card: its room (padding on the frame wrapper) widens the box, and the whole
+      // framed box is what has to fit on screen.
+      const room = ref.current?.querySelector<HTMLElement>('[data-frame-room]')
+      const cs = room ? getComputedStyle(room) : null
+      const side = cs ? (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) : 0
+      const W = POPOUT_W + side
       const vw = window.innerWidth, vh = window.innerHeight
       let left: number
-      if (anchor.x + anchor.w + GAP + POPOUT_W <= vw - PAD) left = anchor.x + anchor.w + GAP
-      else if (anchor.x - GAP - POPOUT_W >= PAD) left = anchor.x - GAP - POPOUT_W
-      else left = Math.max(PAD, Math.min(anchor.x, vw - POPOUT_W - PAD))
+      if (anchor.x + anchor.w + GAP + W <= vw - PAD) left = anchor.x + anchor.w + GAP
+      else if (anchor.x - GAP - W >= PAD) left = anchor.x - GAP - W
+      else left = Math.max(PAD, Math.min(anchor.x, vw - W - PAD))
       // Align the card's top with the anchor, keep it on screen.
-      const top = Math.max(PAD, Math.min(anchor.y, vh - h - PAD))
-      setStyle({ position: 'fixed', left, top, width: POPOUT_W })
+      const top = Math.max(PAD, Math.min(anchor.y - (cs ? parseFloat(cs.paddingTop) || 0 : 0), vh - h - PAD))
+      setStyle((o) => (o && o.left === left && o.top === top && o.width === W ? o : { position: 'fixed', left, top, width: W }))
     }
     place()
     window.addEventListener('resize', place)
-    return () => window.removeEventListener('resize', place)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(place) : null
+    if (ref.current) ro?.observe(ref.current)
+    return () => { window.removeEventListener('resize', place); ro?.disconnect() }
   }, [anchor, wide, children])
 
   if (!wide) {

@@ -13,7 +13,7 @@ import AccountSwitcher from './AccountSwitcher'
 import Avatar from './Avatar'
 import { Badges } from './Flair'
 import ProfileEffect from './ProfileEffect'
-import ProfileFrame from './ProfileFrame'
+import { FrameRoom } from './ProfileFrame'
 import StyledName from './StyledName'
 
 const statusDurations = () => [
@@ -47,7 +47,7 @@ function Flyout({ anchor, width, children }: { anchor: HTMLElement | null; width
   useLayoutEffect(() => {
     if (!anchor) return
     const row = anchor.getBoundingClientRect()
-    const menu = (anchor.closest('[data-user-menu]') ?? anchor).getBoundingClientRect()
+    const menu = (anchor.closest('[data-frame-room]') ?? anchor.closest('[data-user-menu]') ?? anchor).getBoundingClientRect()
     const h = ref.current?.offsetHeight ?? 0
     const top = Math.max(8, Math.min(row.top, window.innerHeight - h - 8))
     if (menu.right + 8 + width <= window.innerWidth - 8) setPos({ left: row.right, top, pad: menu.right - row.right + 8, side: 'right' })
@@ -112,9 +112,10 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
   const editProfile = () => { onClose(); openModal({ kind: 'editProfile' }) }
 
   return (
-    <div className={`pop absolute bottom-full left-0 mb-2 z-40 w-[300px] max-w-[calc(100vw-16px)] rounded-xl border shadow-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={profileCardStyle(user)} data-user-menu data-profile-frame={user.profile_frame || undefined}>
+    // The frame's room is part of the floating box, so placement and keep-on-screen account for the frame too.
+    <FrameRoom value={user.profile_frame} className="pop absolute bottom-full left-0 mb-2 z-40">
+    <div className={`relative w-[300px] max-w-[calc(100vw-16px)] rounded-xl border shadow-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={profileCardStyle(user)} data-user-menu data-profile-frame={user.profile_frame || undefined}>
       <ProfileEffect id={user.profile_effect} />
-      <ProfileFrame value={user.profile_frame} />
       <div className="relative h-[100px] rounded-t-xl bg-cover bg-center" style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }} />
       <div className="relative px-4 -mt-10 flex items-end gap-2">
         <div className="inline-block rounded-full" style={{ boxShadow: '0 0 0 5px #232428' }}><Avatar user={user} size={80} presence animate /></div>
@@ -164,6 +165,7 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
         </Group>
       </div>
     </div>
+    </FrameRoom>
   )
 }
 

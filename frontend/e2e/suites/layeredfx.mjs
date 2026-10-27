@@ -72,9 +72,9 @@ for (let i = 0; i < 30; i++) { const f = await card.locator('[data-effect-layer^
 ok('looping layers come back (and pick their variants)', seen.size >= 1, [...seen].join(','))
 const geo = await card.evaluate((c) => {
   const cr = c.getBoundingClientRect(), s = cr.width / 1200
-  const img = (f) => c.querySelector(`[data-frame-layer="${f}"]`)
+  const img = (f) => c.parentElement.querySelector(`[data-frame-layer="${f}"]`)
   const top = img('front_staple_top.png').getBoundingClientRect(), rail = img('front_rail_center.png'), railBox = rail.parentElement.getBoundingClientRect()
-  const overlaps = [...c.querySelectorAll('[data-frame-layer="back_staple_bottom.png"]')].map((b) => b.parentElement.getBoundingClientRect()).filter((r) => r.right > cr.left + 1 && r.left < cr.right - 1 && r.bottom > cr.top + 1 && r.top < cr.bottom - 1).length
+  const overlaps = [...c.parentElement.querySelectorAll('[data-frame-layer="back_staple_bottom.png"]')].map((b) => b.parentElement.getBoundingClientRect()).filter((r) => r.right > cr.left + 1 && r.left < cr.right - 1 && r.bottom > cr.top + 1 && r.top < cr.bottom - 1).length
   return { s, topOver: Math.round(cr.top - top.top), want: Math.round(304 * s), topW: Math.round(top.width), wantW: Math.round(1312 * s), railH: Math.round(railBox.height), cardH: Math.round(cr.height), overlaps }
 })
 ok('the top staple hangs over the card edge by overflow_top (scaled)', Math.abs(geo.topOver - geo.want) <= 1 && Math.abs(geo.topW - geo.wantW) <= 1, JSON.stringify(geo))
