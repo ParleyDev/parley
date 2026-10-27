@@ -26,6 +26,7 @@ pub mod directory;
 pub mod integrations;
 pub mod web_push;
 pub mod captions;
+pub mod ai;
 pub mod connections;
 pub mod discovery;
 pub mod dms;
@@ -66,6 +67,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(users::router())
         .merge(web_push::router())
         .merge(captions::router())
+        .merge(ai::router())
         .merge(account::router())
         .merge(connections::router())
         .merge(integrations::router())

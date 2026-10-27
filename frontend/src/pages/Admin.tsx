@@ -305,6 +305,11 @@ function SettingsPane() {
   const [sttUrl, setSttUrl] = useState('')
   const [sttKey, setSttKey] = useState('')
   const [sttModel, setSttModel] = useState('')
+  const [trUrl, setTrUrl] = useState('')
+  const [trKey, setTrKey] = useState('')
+  const [llmUrl, setLlmUrl] = useState('')
+  const [llmKey, setLlmKey] = useState('')
+  const [llmModel, setLlmModel] = useState('')
   const [fcm, setFcm] = useState('')
   const [fcmEndpoint, setFcmEndpoint] = useState('')
   const [oauth, setOauth] = useState<Record<string, { client_id: string; client_secret: string }>>({})
@@ -315,10 +320,10 @@ function SettingsPane() {
   const [rl, setRl] = useState<Record<string, string>>({})
   const [rlDefaults, setRlDefaults] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
-  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string; stt_url?: string; stt_api_key?: string; stt_model?: string; rate_limits?: Record<string, string>; rate_limit_defaults?: Record<string, string>; av_addr?: string; av_fail_closed?: boolean; fcm_service_account?: string; fcm_endpoint?: string; push?: boolean; oauth_providers?: Record<string, { client_id: string; client_secret: string }>; oauth_endpoint_override?: string; max_upload_bytes?: number }>('/admin/settings').then((s) => { setMaxUploadMb(s.max_upload_bytes ? String(Math.round(s.max_upload_bytes / 1048576)) : ''); setOauth(s.oauth_providers && typeof s.oauth_providers === 'object' ? s.oauth_providers : {}); setOauthOverride(s.oauth_endpoint_override ?? ''); setAvAddr(s.av_addr ?? ''); setAvClosed(!!s.av_fail_closed); setFcm(s.fcm_service_account ?? ''); setFcmEndpoint(s.fcm_endpoint ?? ''); setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification); setLkUrl(s.livekit_url ?? ''); setLkKey(s.livekit_api_key ?? ''); setLkSecret(s.livekit_api_secret ?? ''); setSttUrl(s.stt_url ?? ''); setSttKey(s.stt_api_key ?? ''); setSttModel(s.stt_model ?? ''); setRl(s.rate_limits ?? {}); setRlDefaults(s.rate_limit_defaults ?? {}) }).catch(() => {}) }, [])
+  useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; livekit_url?: string; livekit_api_key?: string; livekit_api_secret?: string; stt_url?: string; stt_api_key?: string; stt_model?: string; translate_url?: string; translate_api_key?: string; llm_url?: string; llm_api_key?: string; llm_model?: string; rate_limits?: Record<string, string>; rate_limit_defaults?: Record<string, string>; av_addr?: string; av_fail_closed?: boolean; fcm_service_account?: string; fcm_endpoint?: string; push?: boolean; oauth_providers?: Record<string, { client_id: string; client_secret: string }>; oauth_endpoint_override?: string; max_upload_bytes?: number }>('/admin/settings').then((s) => { setMaxUploadMb(s.max_upload_bytes ? String(Math.round(s.max_upload_bytes / 1048576)) : ''); setOauth(s.oauth_providers && typeof s.oauth_providers === 'object' ? s.oauth_providers : {}); setOauthOverride(s.oauth_endpoint_override ?? ''); setAvAddr(s.av_addr ?? ''); setAvClosed(!!s.av_fail_closed); setFcm(s.fcm_service_account ?? ''); setFcmEndpoint(s.fcm_endpoint ?? ''); setReg(s.registration_enabled); setAnn(s.announcement); setReqVerify(!!s.require_email_verification); setLkUrl(s.livekit_url ?? ''); setLkKey(s.livekit_api_key ?? ''); setLkSecret(s.livekit_api_secret ?? ''); setSttUrl(s.stt_url ?? ''); setSttKey(s.stt_api_key ?? ''); setSttModel(s.stt_model ?? ''); setTrUrl(s.translate_url ?? ''); setTrKey(s.translate_api_key ?? ''); setLlmUrl(s.llm_url ?? ''); setLlmKey(s.llm_api_key ?? ''); setLlmModel(s.llm_model ?? ''); setRl(s.rate_limits ?? {}); setRlDefaults(s.rate_limit_defaults ?? {}) }).catch(() => {}) }, [])
   const save = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true)
-    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify, livekit_url: lkUrl, livekit_api_key: lkKey, livekit_api_secret: lkSecret, stt_url: sttUrl, stt_api_key: sttKey, stt_model: sttModel, rate_limits: rl, av_addr: avAddr, av_fail_closed: avClosed, fcm_service_account: fcm, fcm_endpoint: fcmEndpoint, oauth_providers: oauth, oauth_endpoint_override: oauthOverride, max_upload_bytes: maxUploadMb ? Math.round(Number(maxUploadMb) * 1048576) : 0 }); setInstance({ ...s, livekit_url: s.livekit_url }); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
+    try { const s = await api.put<{ registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; translation?: boolean; summaries?: boolean }>('/admin/settings', { registration_enabled: reg, announcement: ann, require_email_verification: reqVerify, livekit_url: lkUrl, livekit_api_key: lkKey, livekit_api_secret: lkSecret, stt_url: sttUrl, stt_api_key: sttKey, stt_model: sttModel, translate_url: trUrl, translate_api_key: trKey, llm_url: llmUrl, llm_api_key: llmKey, llm_model: llmModel, rate_limits: rl, av_addr: avAddr, av_fail_closed: avClosed, fcm_service_account: fcm, fcm_endpoint: fcmEndpoint, oauth_providers: oauth, oauth_endpoint_override: oauthOverride, max_upload_bytes: maxUploadMb ? Math.round(Number(maxUploadMb) * 1048576) : 0 }); setInstance({ ...s, livekit_url: s.livekit_url }); pushToast('Instance settings saved') } catch (err) { pushToast((err as Error).message, 'error') } finally { setBusy(false) }
   }
   return (
     <form onSubmit={save} className="max-w-xl space-y-6" data-admin-settings>
@@ -352,6 +357,23 @@ function SettingsPane() {
           <div><label className="label">Model</label><input className="input" value={sttModel} onChange={(e) => setSttModel(e.target.value)} placeholder="Systran/faster-whisper-base.en or whisper-1" data-admin-stt-model /></div>
         </div>
         <div className="text-xs text-text-2">Transcription: <b data-admin-stt-state>{instance.transcription ? 'on' : 'off'}</b></div>
+      </div>
+      <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-translate>
+        <div><span className="block font-semibold">Message translation</span><span className="block text-sm text-text-2">A LibreTranslate-compatible server (<code>POST /translate</code>), self-hosted or a provider. Adds Translate to message menus; translations are cached per message.</span></div>
+        <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+          <div><label className="label">Translation server URL</label><input className="input" value={trUrl} onChange={(e) => setTrUrl(e.target.value)} placeholder="http://libretranslate:5000" data-admin-translate-url /></div>
+          <div><label className="label">API key (optional)</label><input className="input" type="password" value={trKey} onChange={(e) => setTrKey(e.target.value)} autoComplete="new-password" data-admin-translate-key /></div>
+        </div>
+        <div className="text-xs text-text-2">Translation: <b data-admin-translate-state>{instance.translation ? 'on' : 'off'}</b></div>
+      </div>
+      <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-llm>
+        <div><span className="block font-semibold">AI channel summaries</span><span className="block text-sm text-text-2">Any OpenAI-compatible chat server (<code>POST /v1/chat/completions</code>): a local model or a provider. Members get a Summaries button in server text channels; the last 48 hours of that channel are sent to it when asked. Server owners can turn it off.</span></div>
+        <div><label className="label">Chat server URL</label><input className="input" value={llmUrl} onChange={(e) => setLlmUrl(e.target.value)} placeholder="http://ollama:11434 or https://api.openai.com" data-admin-llm-url /></div>
+        <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+          <div><label className="label">API key (optional)</label><input className="input" type="password" value={llmKey} onChange={(e) => setLlmKey(e.target.value)} autoComplete="new-password" data-admin-llm-key /></div>
+          <div><label className="label">Model</label><input className="input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder="llama3.1 or gpt-4o-mini" data-admin-llm-model /></div>
+        </div>
+        <div className="text-xs text-text-2">Summaries: <b data-admin-llm-state>{instance.summaries ? 'on' : 'off'}</b></div>
       </div>
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-push>
         <div><span className="block font-semibold">Push notifications (iOS / Android apps)</span><span className="block text-sm text-text-2">Paste the Firebase <b>service account</b> JSON (Project settings → Service accounts → Generate new private key). DMs and mentions are pushed to members who have no app or browser open. Leave empty to turn push off.</span></div>

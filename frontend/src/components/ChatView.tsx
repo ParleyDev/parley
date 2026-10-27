@@ -1,3 +1,4 @@
+import SummariesButton from './Summaries'
 import { AlarmClock, Megaphone, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup, nameOf } from '../lib/dm'
@@ -182,6 +183,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
             </>
           )}
           <span className="ml-auto flex items-center gap-0.5">
+            {!isDm && <SummariesButton channel={channel} />}
             <InboxButton />
             {isDm && (
               <>

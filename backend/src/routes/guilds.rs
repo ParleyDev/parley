@@ -48,7 +48,7 @@ pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
     v
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications, tag, tag_badge, partnered, explicit_filter";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications, tag, tag_badge, partnered, explicit_filter, summaries_enabled";
 pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality, forum_layout, forum_sort, forum_require_tag, forum_default_reaction, news, media";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -229,6 +229,7 @@ struct UpdateGuild {
     /// Joins per minute that count as a raid (3-100).
     raid_threshold: Option<i32>,
     explicit_filter: Option<String>,
+    summaries_enabled: Option<bool>,
     #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
     safety_alerts_channel_id: Option<Option<Uuid>>,
 }
@@ -333,6 +334,9 @@ async fn update_guild(
     if let Some(Some(cid)) = req.safety_alerts_channel_id {
         let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind = 'text'").bind(cid).bind(id).fetch_optional(&state.db).await?;
         if ok.is_none() { return Err(AppError::BadRequest("Safety alerts go to a text channel in this server".into())) }
+    }
+    if let Some(on) = req.summaries_enabled {
+        sqlx::query("UPDATE guilds SET summaries_enabled = $2 WHERE id = $1").bind(id).bind(on).execute(&state.db).await?;
     }
     if let Some(f) = &req.explicit_filter {
         if !["off", "no_roles", "all"].contains(&f.as_str()) { return Err(AppError::BadRequest("explicit_filter is off, no_roles or all".into())) }

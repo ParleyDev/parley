@@ -20,6 +20,7 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
   const upsertGuild = useStore((s) => s.upsertGuild)
   const pushToast = useStore((s) => s.pushToast)
   const [pauseFor, setPauseFor] = useState(24)
+  const summariesOffered = useStore((s) => !!s.instance.summaries)
   const channels = useStore((s) => s.channels)
   const textChannels = Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'text').sort((a, b) => a.position - b.position)
   const [, tick] = useState(0)
@@ -75,6 +76,14 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
           </div>
         </div>
       </section>
+
+      {summariesOffered && (
+        <section data-guild-summaries>
+          <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">AI summaries</h2>
+          <Toggle label="Offer Summaries in this server's text channels" checked={guild.summaries_enabled !== false} onChange={(v) => save({ summaries_enabled: v }, v ? 'Summaries on' : 'Summaries off')} />
+          <p className="mt-1 text-xs text-text-2">When a member asks, the last 48 hours of that channel go to this Parley instance's AI service to be summarized. Off: nothing is sent.</p>
+        </section>
+      )}
 
       <section data-explicit-filter>
         <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">Explicit image filter</h2>

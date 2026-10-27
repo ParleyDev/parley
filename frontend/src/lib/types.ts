@@ -152,6 +152,8 @@ export interface Guild {
   partnered?: boolean
   /** Explicit image filter: off, for members without roles, or for everyone. */
   explicit_filter?: 'off' | 'no_roles' | 'all'
+  /** AI channel summaries offered here (when the instance has them). */
+  summaries_enabled?: boolean
   applications?: { enabled?: boolean; questions?: ApplicationQuestion[] }
 }
 

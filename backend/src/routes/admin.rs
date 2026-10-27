@@ -83,6 +83,24 @@ pub struct InstanceSettings {
     /// Whether voice messages get transcribed (derived; clients use it to show "Transcribing…").
     #[serde(default)]
     pub transcription: bool,
+    /// Message translation: base URL of a LibreTranslate-compatible server (`/translate`). Empty = off.
+    #[serde(default)]
+    pub translate_url: String,
+    #[serde(default)]
+    pub translate_api_key: String,
+    /// Derived: Translate is offered on messages.
+    #[serde(default)]
+    pub translation: bool,
+    /// AI channel summaries: base URL of an OpenAI-compatible `/v1/chat/completions` server. Empty = off.
+    #[serde(default)]
+    pub llm_url: String,
+    #[serde(default)]
+    pub llm_api_key: String,
+    #[serde(default)]
+    pub llm_model: String,
+    /// Derived: channel summaries are offered.
+    #[serde(default)]
+    pub summaries: bool,
     /// Rate limit overrides as `count/seconds` by bucket (register, login, login_fail, messages, uploads, gifs, mail);
     /// a missing bucket uses the RL_* environment value, shown in `rate_limit_defaults`.
     #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
@@ -136,6 +154,11 @@ impl InstanceSettings {
         self.livekit_api_secret = String::new();
         self.stt_url = String::new();
         self.stt_api_key = String::new();
+        self.translate_url = String::new();
+        self.translate_api_key = String::new();
+        self.llm_url = String::new();
+        self.llm_api_key = String::new();
+        self.llm_model = String::new();
         self.rate_limits.clear();
         self.rate_limit_defaults.clear();
         self.av_addr = String::new();
@@ -149,7 +172,7 @@ impl InstanceSettings {
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string() };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, translate_url: String::new(), translate_api_key: String::new(), translation: false, llm_url: String::new(), llm_api_key: String::new(), llm_model: String::new(), summaries: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string() };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -161,6 +184,11 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "stt_url" => s.stt_url = v.as_str().unwrap_or("").to_string(),
             "stt_api_key" => s.stt_api_key = v.as_str().unwrap_or("").to_string(),
             "stt_model" => s.stt_model = v.as_str().unwrap_or("").to_string(),
+            "translate_url" => s.translate_url = v.as_str().unwrap_or("").to_string(),
+            "translate_api_key" => s.translate_api_key = v.as_str().unwrap_or("").to_string(),
+            "llm_url" => s.llm_url = v.as_str().unwrap_or("").to_string(),
+            "llm_api_key" => s.llm_api_key = v.as_str().unwrap_or("").to_string(),
+            "llm_model" => s.llm_model = v.as_str().unwrap_or("").to_string(),
             "av_addr" => s.av_addr = v.as_str().unwrap_or("").to_string(),
             "av_fail_closed" => s.av_fail_closed = v.as_bool().unwrap_or(false),
             "fcm_service_account" => s.fcm_service_account = v.as_str().unwrap_or("").to_string(),
@@ -175,6 +203,8 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     s.rate_limit_defaults = crate::ratelimit::LIMITER.env_defaults();
     s.voice_mode = if s.sfu_configured() { "sfu".into() } else { "mesh".into() };
     s.transcription = s.stt_configured();
+    s.translation = !s.translate_url.trim().is_empty();
+    s.summaries = !s.llm_url.trim().is_empty() && !s.llm_model.trim().is_empty();
     s.push = !s.fcm_service_account.trim().is_empty();
     s.oauth_available = crate::routes::connections::PROVIDERS.iter().filter(|p| {
         let c = s.oauth_providers.get(**p).cloned().unwrap_or(Value::Null);
@@ -601,6 +631,19 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if before.stt_url != stt_url { changed.insert("stt_url".into(), json!(stt_url)); }
     if before.stt_api_key != stt_key { changed.insert("stt_api_key".into(), json!(if stt_key.is_empty() { "cleared" } else { "set" })); }
     if before.stt_model != stt_model { changed.insert("stt_model".into(), json!(stt_model)); }
+    let tr_url = req.translate_url.trim().trim_end_matches('/').to_string();
+    let llm_url = req.llm_url.trim().trim_end_matches('/').to_string();
+    for (u, what) in [(&tr_url, "Translation"), (&llm_url, "Summaries")] {
+        if !u.is_empty() && !(u.starts_with("http://") || u.starts_with("https://")) { return Err(AppError::BadRequest(format!("{what} URL must start with http:// or https://"))); }
+    }
+    let tr_key = req.translate_api_key.trim().to_string();
+    let llm_key = req.llm_api_key.trim().to_string();
+    let llm_model = req.llm_model.trim().chars().take(100).collect::<String>();
+    if before.translate_url != tr_url { changed.insert("translate_url".into(), json!(tr_url)); }
+    if before.translate_api_key != tr_key { changed.insert("translate_api_key".into(), json!(if tr_key.is_empty() { "cleared" } else { "set" })); }
+    if before.llm_url != llm_url { changed.insert("llm_url".into(), json!(llm_url)); }
+    if before.llm_api_key != llm_key { changed.insert("llm_api_key".into(), json!(if llm_key.is_empty() { "cleared" } else { "set" })); }
+    if before.llm_model != llm_model { changed.insert("llm_model".into(), json!(llm_model)); }
     let mut rate_limits: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     for (k, v) in &req.rate_limits {
         let v = v.trim();
@@ -653,7 +696,7 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override)), ("max_upload_bytes", json!(req.max_upload_bytes))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("translate_url", json!(tr_url)), ("translate_api_key", json!(tr_key)), ("llm_url", json!(llm_url)), ("llm_api_key", json!(llm_key)), ("llm_model", json!(llm_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override)), ("max_upload_bytes", json!(req.max_upload_bytes))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     let mut s = load_settings(&state.db).await?;

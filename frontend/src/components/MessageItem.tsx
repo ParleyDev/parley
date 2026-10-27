@@ -1,4 +1,4 @@
-import { AlarmClock, AppWindow, Check, Megaphone, Sparkles, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import { AlarmClock, AppWindow, Languages, Check, Megaphone, Sparkles, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
 import { isImage } from '../lib/upload'
 import RoleIcon from './RoleIcon'
 import { locale } from '../lib/i18n'
@@ -209,6 +209,14 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   // Voice messages without a usable transcript (never attempted, failed, or empty) can be (re)transcribed.
   const voiceNeedingText = (m.attachments ?? []).filter((a) => a.duration_ms && a.transcript_status !== 'pending' && !(a.transcript_status === 'done' && a.transcript))
   const transcriptionOn = useStore((s) => s.instance.transcription)
+  // Translate (Instance Settings › Translation): shown under the original until "Show original".
+  const [translation, setTranslation] = useState<{ text: string; source_lang: string } | 'loading' | null>(null)
+  const canTranslate = useStore((s) => !!s.instance.translation)
+  const translate = async () => {
+    setTranslation('loading')
+    try { setTranslation(await api.post<{ text: string; source_lang: string }>(`/channels/${m.channel_id}/messages/${m.id}/translate`, { target: locale().toLowerCase() })) }
+    catch (err) { setTranslation(null); pushToast((err as Error).message, 'error') }
+  }
   const contextItems = (e: { clientX: number; clientY: number }): MenuEntry[] => {
     const quick = suggestReactions(m, 4, 2)
     const anchorRect = new DOMRect(e.clientX, e.clientY, 0, 0)
@@ -243,6 +251,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       'sep' as const,
       ...(voiceNeedingText.length ? [{ label: voiceNeedingText.some((a) => a.transcript_status === 'failed') ? 'Retry transcript' : 'Generate transcript', icon: <Captions size={16} />, disabled: transcriptionOn === false, onClick: () => { void Promise.all(voiceNeedingText.map((a) => api.post(`/attachments/${a.id}/transcribe`, {}))).then(() => pushToast('Transcribing…')).catch((e: Error) => pushToast(e.message, 'error')) } }] : []),
       { label: 'Copy Text', icon: <Copy size={16} />, onClick: () => copy('Text', m.content) },
+      ...(canTranslate && m.content.trim() ? [{ label: translation && translation !== 'loading' ? 'Show Original' : 'Translate', icon: <Languages size={16} />, onClick: () => { if (translation && translation !== 'loading') setTranslation(null); else void translate() } }] : []),
       bookmarked ? { label: 'Remove Bookmark', icon: <BookmarkMinus size={16} />, onClick: toggleBookmark } : { label: 'Bookmark Message', icon: <Bookmark size={16} />, onClick: toggleBookmark },
       ...(canPin ? [{ label: m.pinned_at ? 'Unpin Message' : 'Pin Message', icon: m.pinned_at ? <PinOff size={16} /> : <Pin size={16} />, onClick: togglePin }] : []),
       { label: 'Remind Me', icon: <AlarmClock size={16} />, children: remindPresets().map((p) => ({ label: p.label, onClick: () => { setReminder(m.id, p.at).then((at) => pushToast(`I'll remind you ${at ? remindLabel(at) : ''}`)).catch((err: Error) => pushToast(err.message, 'error')) } })) },
@@ -382,6 +391,14 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                   {renderMarkdown(m.content)}
                   {m.crosspost?.published && <span className="ml-1 inline-flex items-center gap-0.5 text-[10px] text-text-2" title="Published to following channels" data-published><Megaphone size={10} />published</span>}
                   {m.edited_at && <button type="button" onClick={(e) => { e.stopPropagation(); openModal({ kind: 'editHistory', channelId: m.channel_id, messageId: m.id }) }} title={`Edited ${new Date(m.edited_at).toLocaleString()} — click to see the history`} className="ml-1 text-[10px] text-text-2 hover:underline" data-edited>(edited)</button>}
+                </div>
+              )}
+              {translation && (
+                <div className="mt-1 rounded-md border-l-2 border-accent/60 bg-bg-0/30 px-2 py-1 text-[15px] leading-[1.375rem]" data-translation>
+                  {translation === 'loading' ? <span className="text-sm text-text-2">Translating…</span> : <>
+                    <div className="whitespace-pre-wrap break-words">{renderMarkdown(translation.text)}</div>
+                    <div className="text-[11px] text-text-2">Translated{translation.source_lang ? ` from ${langName(translation.source_lang)}` : ''} · <button type="button" className="hover:underline" onClick={(e) => { e.stopPropagation(); setTranslation(null) }} data-translation-original>Show original</button></div>
+                  </>}
                 </div>
               )}
               {blockMedia && (media || links.length > 0 || (m.attachments ?? []).some((a) => /^(image|video)\//.test(a.content_type))) && <div className="mt-1 text-xs text-text-2 italic" data-media-blocked>Media hidden by your Content & Social settings.</div>}
@@ -614,4 +631,9 @@ export function joinGreeting(id: string): [string, string] {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
   return GREETINGS[h % GREETINGS.length]
+}
+
+/** "de" → "German" in the app's language (falls back to the code). */
+function langName(code: string): string {
+  try { return new Intl.DisplayNames([locale()], { type: 'language' }).of(code) ?? code } catch { return code }
 }

@@ -353,6 +353,10 @@ pub struct Guild {
     #[sqlx(default)]
     #[serde(default)]
     pub explicit_filter: String,
+    /// AI channel summaries offered in this server (when the instance has an LLM configured).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub summaries_enabled: bool,
 }
 
 fn default_all() -> String { "all".into() }

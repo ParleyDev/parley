@@ -228,7 +228,7 @@ interface State {
   /** Phones: the message whose action bar a tap opened (only one at a time). */
   tappedMessage: string | null
   /** Instance-wide settings from GET /instance (registration, announcement banner). */
-  instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; app_url?: string; oauth_available?: string[]; max_upload_bytes?: number; version?: string }
+  instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; translation?: boolean; summaries?: boolean; app_url?: string; oauth_available?: string[]; max_upload_bytes?: number; version?: string }
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
 
   // auth
