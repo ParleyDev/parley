@@ -1,4 +1,4 @@
-package us.vic10.parley;
+package com.runparley.app;
 
 import com.getcapacitor.BridgeActivity;
 

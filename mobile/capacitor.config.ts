@@ -7,7 +7,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
  * injected on whatever server the user picks; the web client only uses it when `Capacitor.isNativePlatform()`.
  */
 const config: CapacitorConfig = {
-  appId: 'us.vic10.parley',
+  appId: 'com.runparley.app',
   appName: 'Parley',
   webDir: 'www',
   server: { allowNavigation: ['*'], androidScheme: 'https' },

@@ -30,7 +30,7 @@ Icons and splash: drop a 1024×1024 `assets/icon.png` and `assets/splash.png` in
 
 ## Push
 
-The server sends through Firebase Cloud Messaging (HTTP v1). Create a Firebase project, add the Android app (`us.vic10.parley`) and download `google-services.json` into `mobile/android/app/`; add the iOS app, upload your APNs key in Firebase, and put `GoogleService-Info.plist` into `mobile/ios/App/App/` (enable the Push Notifications capability and Background Modes → Remote notifications in Xcode). Then paste the Firebase **service account** JSON (Project settings → Service accounts → Generate new private key) into Admin Console → Instance Settings → Push notifications (no restart needed). The app registers its token after login (`PUT /users/@me/push-tokens`), forgets it on logout, and taps on a notification open the right channel.
+The server sends through Firebase Cloud Messaging (HTTP v1). Create a Firebase project, add the Android app (`com.runparley.app`) and download `google-services.json` into `mobile/android/app/`; add the iOS app, upload your APNs key in Firebase, and put `GoogleService-Info.plist` into `mobile/ios/App/App/` (enable the Push Notifications capability and Background Modes → Remote notifications in Xcode). Then paste the Firebase **service account** JSON (Project settings → Service accounts → Generate new private key) into Admin Console → Instance Settings → Push notifications (no restart needed). The app registers its token after login (`PUT /users/@me/push-tokens`), forgets it on logout, and taps on a notification open the right channel.
 
 ## Permissions
 

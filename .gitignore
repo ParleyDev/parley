@@ -16,3 +16,4 @@ backups/
 /media/
 secrets/
 desktop/dist/
+*.jks

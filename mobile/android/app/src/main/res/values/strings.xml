@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">Parley</string>
     <string name="title_activity_main">Parley</string>
-    <string name="package_name">us.vic10.parley</string>
-    <string name="custom_url_scheme">us.vic10.parley</string>
+    <string name="package_name">com.runparley.app</string>
+    <string name="custom_url_scheme">com.runparley.app</string>
 </resources>
