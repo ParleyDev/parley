@@ -6,7 +6,8 @@ import type { AudioStat } from '../lib/audioProfile'
 const fmt = (v: number | null, unit: string) => (v == null ? '—' : `${v}${unit}`)
 
 /** Live audio numbers for the current call (refreshes every second): what the profile actually achieves. */
-export default function AudioStats({ onClose }: { onClose: () => void }) {
+/** `inline`: inside another panel (the voice details' Debug section) instead of its own popover. */
+export default function AudioStats({ onClose, inline }: { onClose?: () => void; inline?: boolean }) {
   const users = useStore((s) => s.users)
   const [rows, setRows] = useState<AudioStat[] | null>(null)
   const p = voice.audioProfile
@@ -19,8 +20,8 @@ export default function AudioStats({ onClose }: { onClose: () => void }) {
   }, [])
   return (
     <>
-      <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="pop absolute bottom-full left-0 right-0 mb-2 z-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-3 text-xs" data-audio-stats>
+      {!inline && <div className="fixed inset-0 z-30" onClick={onClose} />}
+      <div className={inline ? 'rounded-lg bg-bg-0/60 p-2 text-xs' : 'pop absolute bottom-full left-0 right-0 mb-2 z-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-3 text-xs'} data-audio-stats>
         <div className="flex items-center justify-between mb-2">
           <span className="font-bold uppercase tracking-wider text-text-2">Audio</span>
           <span className="text-text-1" data-audio-stats-profile>{p.mode === 'music' ? 'High fidelity' : 'Voice'} · {p.bitrate} kbps{p.lowLatency ? ' · low latency' : ''}</span>

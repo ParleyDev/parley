@@ -50,7 +50,7 @@ ok('incoming bitrate is well above speech rates', st.inKbps > 96, JSON.stringify
 console.log(`  stats: ${JSON.stringify(st)}`)
 
 console.log('-- stats UI')
-await pa.click('[data-audio-stats-toggle]'); await pa.waitForSelector(`[data-audio-stat="${b.user.id}"]`)
+await pa.click('[data-audio-stats-toggle]'); await pa.click('[data-voice-debug]'); await pa.waitForSelector(`[data-audio-stat="${b.user.id}"]`)
 ok('the voice card shows HI-FI and LL badges', await pa.locator('[data-hifi-badge]').count() === 1 && await pa.locator('[data-lowlat-badge]').count() === 1)
 await pa.waitForFunction((id) => /stereo/.test(document.querySelector(`[data-audio-stat="${id}"] [data-audio-stat-codec]`)?.textContent ?? ''), b.user.id)
 await pa.waitForFunction((id) => /\d+ ms/.test(document.querySelector(`[data-audio-stat="${id}"] [data-audio-stat-frame]`)?.textContent ?? ''), b.user.id, { timeout: 10000 }).catch(() => {})

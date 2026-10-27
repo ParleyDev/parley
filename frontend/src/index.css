@@ -42,6 +42,19 @@
 :root:not([data-theme="light"])[data-palette="sunset"] { --color-bg-0: rgb(24 8 14 / .55); --color-bg-1: rgb(36 12 24 / .55); --color-bg-2: rgb(36 14 30 / .35); --color-bg-3: rgb(255 255 255 / .07); --color-bg-4: rgb(255 255 255 / .12); --color-line: rgb(255 255 255 / .09); --color-accent: #f97362; --color-accent-hover: #e55a4a; }
 :root:not([data-theme="light"])[data-palette="aurora"] body { background: linear-gradient(135deg, #2b1a4f 0%, #14213d 50%, #0f3b46 100%) fixed; }
 :root:not([data-theme="light"])[data-palette="sunset"] body { background: linear-gradient(135deg, #4a1c2c 0%, #2c1838 55%, #3b2350 100%) fixed; }
+/* The see-through palettes let the gradient show behind the app, but anything floating over it (menus, dialogs,
+   popovers, tooltips, settings) gets a solid surface so what's underneath doesn't bleed through and hurt legibility. */
+:root:not([data-theme="light"])[data-palette="aurora"] { --color-float: #171230; --color-float-2: #1f1a3d; }
+:root:not([data-theme="light"])[data-palette="sunset"] { --color-float: #26121f; --color-float-2: #321a2b; }
+:root:not([data-theme="light"])[data-palette="aurora"] .pop:not([data-profile-popout]),
+:root:not([data-theme="light"])[data-palette="sunset"] .pop:not([data-profile-popout]),
+:root:not([data-theme="light"])[data-palette="aurora"] [data-profile-popout] > *,
+:root:not([data-theme="light"])[data-palette="sunset"] [data-profile-popout] > * { background-color: var(--color-float) !important; }
+/* Inside a floating surface, the translucent layers stack on solid ground: keep them readable but distinct. */
+:root:not([data-theme="light"])[data-palette="aurora"] .pop .bg-bg-1,
+:root:not([data-theme="light"])[data-palette="sunset"] .pop .bg-bg-1,
+:root:not([data-theme="light"])[data-palette="aurora"] .pop .bg-bg-0,
+:root:not([data-theme="light"])[data-palette="sunset"] .pop .bg-bg-0 { background-color: var(--color-float-2); }
 
 /* UI density: rows in the channel list, DM list and member list. */
 :root[data-ui-density="compact"] :is([data-channel-item] > a, aside a[data-dm-row], aside a[data-group-row], [data-member-row]) { padding-top: 2px !important; padding-bottom: 2px !important; }

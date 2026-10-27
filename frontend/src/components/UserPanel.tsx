@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, Clock, Headphones, HeadphoneOff, Mic, MicOff, PhoneOff, Settings, ShieldCheck, Signal, Smile } from 'lucide-react'
+import { ChevronDown, Clock, Headphones, HeadphoneOff, Mic, MicOff, Settings, ShieldCheck, Smile } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { voice } from '../lib/voice'
 import { useState, type ReactNode } from 'react'
@@ -6,11 +6,9 @@ import { useStore } from '../store'
 import type { PrivateUser } from '../lib/types'
 import { api } from '../lib/api'
 import { colorFor } from '../lib/format'
-import { dmName } from '../lib/dm'
 import Avatar from './Avatar'
 import DeviceMenu from './DeviceMenu'
-import AudioStats from './AudioStats'
-import { profileOf } from '../lib/audioProfile'
+import VoiceConnected from './VoiceConnected'
 import StyledName from './StyledName'
 import AccountSwitcher from './AccountSwitcher'
 import { useT } from '../lib/i18n'
@@ -41,17 +39,8 @@ export default function UserPanel() {
   const [devices, setDevices] = useState<'input' | 'output' | null>(null)
   const muted = useStore((s) => s.selfMute)
   const deaf = useStore((s) => s.selfDeaf)
-  const myVoice = useStore((s) => s.myVoiceChannelId)
-  const connecting = useStore((s) => s.voiceConnecting)
-  const voiceChannel = useStore((s) => (s.myVoiceChannelId ? s.channels[s.myVoiceChannelId] : undefined))
-  const voiceGuild = useStore((s) => (voiceChannel?.guild_id ? s.guilds[voiceChannel.guild_id] : undefined))
-  const voiceDm = useStore((s) => { const d = s.myVoiceChannelId ? s.dms[s.myVoiceChannelId] : undefined; return d ? dmName(d, s.users) : undefined })
-  const pttMode = useStore((s) => s.voiceSettings.inputMode === 'ptt')
-  const pttHeld = useStore((s) => s.pttHeld)
-  const [stats, setStats] = useState(false)
   const [durations, setDurations] = useState<string | null>(null)
   if (!user) return null
-  const prof = profileOf(voiceChannel)
 
   // Idle, Do Not Disturb and Invisible can be set for a while, then go back to Online (Discord's durations).
   const setStatus = async (v: string, forSecs?: number) => {
@@ -73,22 +62,7 @@ export default function UserPanel() {
 
   return (
     <div className="shrink-0 w-full min-w-0 p-2 pt-0" style={{ background: 'linear-gradient(90deg, var(--color-bg-0) 72px, var(--color-bg-1) 72px)' }} data-user-panel-bar>
-      {myVoice && (
-        <div className="relative mb-2 rounded-xl bg-bg-0/60 border border-line px-3 py-2 flex items-center gap-2" data-voice-connected>
-          {stats && <AudioStats onClose={() => setStats(false)} />}
-          <Signal size={16} className={connecting ? 'text-warn' : 'text-success'} />
-          <div className="min-w-0 flex-1">
-            <div className={`text-xs font-bold truncate ${connecting ? 'text-warn' : 'text-success'}`}>{connecting ? 'Connecting…' : 'Voice Connected'}</div>
-            <div className="text-[11px] text-text-2 truncate">{voiceDm ? `${voiceDm} / Direct Message` : `${voiceChannel?.name ?? 'Voice'}${voiceGuild ? ` / ${voiceGuild.name}` : ''}`}</div>
-          </div>
-          {prof.mode === 'music' && <span title={`High-fidelity audio, ${prof.bitrate} kbps stereo`} className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-accent/20 text-accent" data-hifi-badge>HI-FI</span>}
-          {prof.lowLatency && <span title="Ultra-low latency: 10 ms frames, minimal jitter buffer" className="rounded px-1.5 py-0.5 text-[10px] font-bold bg-bg-3 text-text-1" data-lowlat-badge>LL</span>}
-          {pttMode && <span title="Push to talk" className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${pttHeld ? 'bg-success text-black' : 'bg-bg-3 text-text-2'}`}>PTT</span>}
-          <button title="Audio stats" onClick={() => setStats((v) => !v)} className={`h-8 w-8 rounded-md flex items-center justify-center hover:bg-bg-3 hover:text-text-0 ${stats ? 'text-text-0 bg-bg-3' : 'text-text-1'}`} data-audio-stats-toggle><Activity size={16} /></button>
-          <button title={t('Voice Settings')} onClick={() => openModal({ kind: 'userSettings', tab: 'voice' })} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0"><Settings size={16} /></button>
-          <button title={t('Disconnect')} onClick={() => voice.leave()} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-danger"><PhoneOff size={18} /></button>
-        </div>
-      )}
+      <VoiceConnected />
       <div className="relative rounded-xl border shadow-lg pl-2 pr-1.5 py-1.5 flex items-center gap-0.5" style={cardStyle} data-user-panel>
         <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 flex-1 rounded-lg pl-1 pr-1 py-1 hover:bg-white/10 text-left" data-panel-self data-motion-row>
           <span className="rounded-full ring-2 ring-black/20"><Avatar user={user} size={40} presence /></span>

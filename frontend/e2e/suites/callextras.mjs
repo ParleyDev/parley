@@ -49,7 +49,7 @@ ok('Watch Stream shows a recent still of the stream', await pb.waitForSelector('
 ok('only the streamer can post a still', (await fetch(`${process.env.PARLEY_API_ORIGIN ?? 'http://localhost:18080'}/api/channels/${vc.id}/stream-preview`, { method: 'PUT', headers: { Authorization: `Bearer ${b.token}`, 'Content-Type': 'image/jpeg' }, body: new Uint8Array([1, 2, 3]) })).status === 400)
 await pa.click('button[aria-label="Stop Sharing"]'); await pb.click('button[aria-label="Turn On Camera"]'); await pa.waitForTimeout(4500)
 ok('call tiles show connection quality', await pa.locator(`[data-voice-tile="${b.user.id}"] [data-conn-quality]`).count() === 1)
-await pa.click('[data-audio-stats-toggle]'); await pa.waitForSelector('[data-audio-stats]')
+await pa.click('[data-audio-stats-toggle]'); await pa.click('[data-voice-debug]'); await pa.waitForSelector('[data-audio-stats]')
 ok('stats include the video you receive', await pa.waitForSelector('[data-video-in]', { timeout: 6000 }).then(() => true).catch(() => false))
 await pa.click('[data-audio-stats-toggle]').catch(() => {}); await pa.mouse.click(640, 100)
 

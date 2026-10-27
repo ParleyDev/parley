@@ -241,6 +241,9 @@ class VoiceManager {
     this.priorityOn = false
     const s = useStore.getState()
     if (this.channelId) { sendOp({ op: 'voice_leave' }); playSfx(evicted ? 'disconnect' : 'user_leave') }
+    // Leaving a DM or group call that's still going must not ring you back in: it stays quiet (rejoin from the DM)
+    // until it ends.
+    if (this.channelId && s.dms[this.channelId]) s.setCallIgnored(this.channelId, true)
     this.channelId = null
     this.closeAllPeers()
     this.disconnectSfu()

@@ -264,7 +264,16 @@ function handle(ev: Ev) {
     case 'READ_STATE_UPDATE': s.setReadState(ev.d.channel_id, ev.d.last_read_msg); break
     case 'READ_RECEIPT': if (ev.d.user_id !== s.user?.id) s.applyReceipt(ev.d.channel_id, ev.d.user_id, ev.d.message_id); break
     case 'VOICE_LISTENED': s.applyListened(ev.d.channel_id, ev.d.message_id, ev.d.attachment_id, ev.d.user_id); break
-    case 'VOICE_STATE_UPDATE': voiceSfx(s, ev.d); s.applyVoiceState(ev.d); voice.onVoiceState(ev.d); break
+    case 'VOICE_STATE_UPDATE': {
+      // You left a DM call from another device: same as leaving here (no ring for that call any more).
+      const before = s.voiceStates[ev.d.user_id]?.channel_id
+      if (ev.d.user_id === s.user?.id && before && before !== ev.d.channel_id && s.dms[before]) s.setCallIgnored(before, true)
+      voiceSfx(s, ev.d); s.applyVoiceState(ev.d); voice.onVoiceState(ev.d)
+      // A call that has ended (nobody left in it) rings again next time.
+      const after = useStore.getState()
+      for (const cid of Object.keys(after.callIgnored)) if (!Object.values(after.voiceStates).some((v) => v.channel_id === cid)) after.setCallIgnored(cid, false)
+      break
+    }
     case 'SOUNDBOARD_PLAY': {
       if (s.myVoiceChannelId !== ev.d.channel_id || (ev.d.entrance && !getPrefs().entranceSounds)) break
       const url = ev.d.sound.builtin ? builtinUrl(ev.d.sound.id) : ev.d.sound.url
