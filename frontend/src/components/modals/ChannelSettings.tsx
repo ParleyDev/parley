@@ -1,4 +1,4 @@
-import { AudioLines, Blocks, Lock, Mic, SlidersHorizontal, Tag, Timer, Trash2 } from 'lucide-react'
+import { AudioLines, Blocks, Lock, Mic, Shield, SlidersHorizontal, Tag, Timer, Trash2 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -10,9 +10,10 @@ import SettingsShell from './SettingsShell'
 import ChannelPermissionsTab from './settings/ChannelPermissionsTab'
 import ForumTagsTab from './settings/ForumTagsTab'
 import FollowersTab from './settings/FollowersTab'
+import StageModeratorsTab from './settings/StageModeratorsTab'
 import { DEFAULT_BITRATE, MAX_BITRATE, MIN_BITRATE, type AudioMode } from '../../lib/audioProfile'
 
-type Tab = 'overview' | 'permissions' | 'tags' | 'integrations'
+type Tab = 'overview' | 'permissions' | 'tags' | 'integrations' | 'stageMods'
 
 export default function ChannelSettingsModal({ onClose, channelId, tab: requested }: { onClose: () => void; channelId: string; tab?: Tab }) {
   const initial: Tab = requested ?? 'overview'
@@ -40,6 +41,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
   if (canEdit && channel.kind === 'forum') items.push({ id: 'tags', label: 'Tags', icon: <Tag size={16} /> })
   if (canEdit && channel.kind === 'text') items.push({ id: 'integrations', label: 'Integrations', icon: <Blocks size={16} /> })
   if (canPerms) items.push({ id: 'permissions', label: 'Permissions', icon: <Lock size={16} /> })
+  if (canPerms && channel.kind === 'stage') items.push({ id: 'stageMods', label: 'Stage Moderators', icon: <Shield size={16} /> })
 
   return (
     <SettingsShell<Tab>
@@ -51,6 +53,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
       {tab === 'tags' && canEdit && <ForumTagsTab channelId={channelId} />}
       {tab === 'integrations' && canEdit && <FollowersTab channelId={channelId} />}
       {tab === 'permissions' && canPerms && <ChannelPermissionsTab channelId={channelId} />}
+      {tab === 'stageMods' && canPerms && <StageModeratorsTab channelId={channelId} />}
     </SettingsShell>
   )
 }

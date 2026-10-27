@@ -107,6 +107,12 @@ pub fn moderates_threads(p: u64) -> bool { has(p, MANAGE_MESSAGES) || has(p, MAN
 /// Powers a member must never be able to give themselves (self-assignable roles, onboarding answers).
 pub const SELF_GRANT_FORBIDDEN: u64 = ADMINISTRATOR | MANAGE_GUILD | MANAGE_ROLES | MANAGE_CHANNELS | KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS | MANAGE_MESSAGES | MANAGE_NICKNAMES | MANAGE_THREADS | MANAGE_EVENTS | MANAGE_EXPRESSIONS | VIEW_AUDIT_LOG | MENTION_EVERYONE | MUTE_MEMBERS | DEAFEN_MEMBERS | MOVE_MEMBERS;
 
+/// Stage moderator in a channel: Manage Channels, or both Mute Members and Move Members there (Discord's Stage
+/// Moderator, granted per stage with a permission overwrite).
+pub fn stage_mod(perms: u64) -> bool {
+    has(perms, MANAGE_CHANNELS) || (has(perms, MUTE_MEMBERS) && has(perms, MOVE_MEMBERS))
+}
+
 pub fn has(perms: u64, bit: u64) -> bool {
     perms & bit == bit
 }
@@ -412,7 +418,9 @@ async fn refresh_voice(state: &AppState, guild_id: Uuid, vis: &Visibility) -> Ap
             state.hub.emit_users(vec![vs.user_id], "VOICE_ERROR", json!({ "message": "You no longer have permission to be in this voice channel" }));
             continue;
         }
-        let suppress = !has(p, SPEAK);
+        // Stage and studio audiences, and the AFK channel, stay suppressed until a moderator (or leaving) lifts it.
+        let sticky = matches!(channel.kind.as_str(), "stage" | "studio") || ctx.guild.afk_channel_id == Some(channel.id);
+        let suppress = !has(p, SPEAK) || (sticky && vs.suppress);
         let can_stream = has(p, STREAM);
         let changed = vs.suppress != suppress || (!can_stream && (vs.self_video || vs.self_stream));
         if changed {

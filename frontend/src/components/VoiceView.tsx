@@ -66,7 +66,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const isStage = channel.kind === 'stage' || isStudio
   const engineers = channel.engineer_ids ?? []
   const isEngineer = isStudio && !!me && engineers.includes(me.id)
-  const isMod = has(perms, P.MANAGE_CHANNELS) || isEngineer
+  // Stage moderators: Manage Channels, or Mute + Move Members on this stage (backend perms::stage_mod).
+  const isMod = has(perms, P.MANAGE_CHANNELS) || (has(perms, P.MUTE_MEMBERS) && has(perms, P.MOVE_MEMBERS)) || isEngineer
   const [sessionsOpen, setSessionsOpen] = useState(false)
   const chatPanel = useResizablePanel('voiceChat', 400)
   const sessionsPanel = useResizablePanel('studioSessions', 420)

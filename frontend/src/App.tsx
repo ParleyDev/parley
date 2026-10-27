@@ -57,6 +57,7 @@ export default function App() {
           element={token ? (ready ? <AppShell /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />}
         />
         <Route path="/admin/*" element={token ? (ready ? (isAdmin ? <AdminPage /> : <Navigate to="/channels/@me" replace />) : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
+        <Route path="/discover/stages" element={token ? (ready ? <DiscoverPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/discover/review/*" element={token ? (ready ? <DiscoverPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/discover/:guildId/:channelId?" element={token ? (ready ? <GuildPreviewPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/app-directory" element={token ? (ready ? <AppDirectoryPage /> : <Splash />) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />

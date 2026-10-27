@@ -425,9 +425,8 @@ async fn handle_client_op(
             // Carry over mute/deaf prefs if moving between channels.
             let (self_mute, self_deaf) = state.hub.voice_state(user_id).map(|v| (v.self_mute, v.self_deaf)).unwrap_or((false, false));
             // Video/screen always start off in a new channel: the client re-attaches tracks after joining.
-            // Stage channels: everyone but moderators (Manage Channels) joins as audience, i.e. suppressed.
             // Stage: everyone but moderators joins as audience. Studio: the engineer and moderators are in the band from the start.
-            let crew = has(p, perms::MANAGE_CHANNELS) || (channel.kind == "studio" && perms::is_engineer(&state.db, channel_id, user_id).await.unwrap_or(false));
+            let crew = perms::stage_mod(p) || (channel.kind == "studio" && perms::is_engineer(&state.db, channel_id, user_id).await.unwrap_or(false));
             // The server's inactive (AFK) channel is listen-only.
             let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew) || is_afk_channel(&state.db, &channel).await);
             // The "active for" timer keeps counting across reconnects to the same channel.

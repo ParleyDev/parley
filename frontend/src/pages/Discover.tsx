@@ -1,4 +1,4 @@
-import { BadgeCheck, Check, Handshake, ChevronDown, Compass, Search, Server, ShieldCheck, X } from 'lucide-react'
+import { BadgeCheck, Check, Handshake, ChevronDown, Compass, Radio, Search, Server, ShieldCheck, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -15,6 +15,7 @@ export default function DiscoverPage() {
   const isAdmin = useStore((s) => !!s.user?.is_admin)
   // /discover/review is routed to this page separately (the preview route owns /discover/:guildId).
   const isReview = !!useMatch('/discover/review/*')
+  const isStages = !!useMatch('/discover/stages')
   const [pending, setPending] = useState<number | null>(null)
   useEffect(() => { if (isAdmin) api.get<Listing[]>('/admin/discovery?status=pending').then((l) => setPending(l.length)).catch(() => {}) }, [isAdmin])
   const item = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2.5 text-[15px] font-medium ${active ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`
@@ -25,6 +26,7 @@ export default function DiscoverPage() {
             <div className="h-12 px-4 flex items-center font-bold text-lg border-b border-line">Discover</div>
             <nav className="p-2 space-y-0.5">
               <NavLink to="/discover" end onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-servers><Server size={20} /> Servers</NavLink>
+              <NavLink to="/discover/stages" onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-stages><Radio size={20} /> Stages</NavLink>
               {isAdmin && (
                 <NavLink to="/discover/review" onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-review>
                   <ShieldCheck size={20} /> Review Queue
@@ -35,7 +37,7 @@ export default function DiscoverPage() {
           </aside>
     }>
       <div className="flex-1 min-h-0 overflow-y-auto">
-        {isReview && isAdmin ? <ReviewQueue onChange={(n) => setPending(n)} /> : <Browse />}
+        {isReview && isAdmin ? <ReviewQueue onChange={(n) => setPending(n)} /> : isStages ? <LiveStages /> : <Browse />}
       </div>
     </SplitLayout>
   )
@@ -259,6 +261,58 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
                 </div>
               )}
             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface LiveStage { guild: { id: string; name: string; icon_url: string | null }; channel: { id: string; name: string; topic: string }; member: boolean; listeners: number; speaker_count: number; speakers: { id: string; display_name: string; avatar_url: string | null }[] }
+
+/** Discover › Stages: stages live right now in your servers and in Discover servers, most listeners first. */
+function LiveStages() {
+  const [list, setList] = useState<LiveStage[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const pushToast = useStore((s) => s.pushToast)
+  useEffect(() => {
+    const load = () => api.get<LiveStage[]>('/discover/stages').then(setList).catch(() => setList([]))
+    void load(); const t = setInterval(load, 30_000); return () => clearInterval(t)
+  }, [])
+  const open = async (st: LiveStage) => {
+    if (!st.member) {
+      setBusy(st.channel.id)
+      try { await api.post(`/discover/${st.guild.id}/join`); markJoined(st.guild.id) } catch (e) { pushToast((e as Error).message, 'error'); setBusy(null); return }
+    }
+    navigate(`/channels/${st.guild.id}/${st.channel.id}`)
+  }
+  return (
+    <div className="px-10 py-8 max-md:px-5" data-live-stages>
+      <div className="flex items-center gap-2 mb-1"><MobileBack /><h1 className="text-2xl font-bold">Live Stages</h1></div>
+      <p className="text-sm text-text-2 mb-5">Talks, shows and Q&amp;As happening now in your servers and across Discover.</p>
+      {list === null && <p className="text-sm text-text-2">Loading…</p>}
+      {list?.length === 0 && (
+        <div className="rounded-xl border border-dashed border-line p-10 text-center text-text-2" data-live-stages-empty>
+          <Radio size={32} className="mx-auto mb-2" />
+          <div className="font-semibold text-text-1">Nothing live right now</div>
+          <div className="text-sm mt-1">Stages show up here while someone is speaking.</div>
+        </div>
+      )}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
+        {list?.map((st) => (
+          <div key={st.channel.id} className="rounded-xl border border-line bg-bg-1 p-4 flex flex-col gap-3" data-live-stage={st.channel.id}>
+            <div className="flex items-center gap-2 text-xs text-text-2">
+              {st.guild.icon_url ? <img src={st.guild.icon_url} alt="" className="h-5 w-5 rounded-md object-cover" /> : <span className="h-5 w-5 rounded-md text-[9px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(st.guild.id) }}>{initials(st.guild.name)}</span>}
+              <span className="truncate">{st.guild.name}</span>
+              <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 font-semibold text-success"><Radio size={12} /> LIVE</span>
+            </div>
+            <div><div className="font-bold text-lg leading-snug">{st.channel.topic || st.channel.name}</div>{st.channel.topic && <div className="text-xs text-text-2">{st.channel.name}</div>}</div>
+            <div className="flex items-center gap-2">
+              <div className="flex -space-x-2">{st.speakers.map((p) => p.avatar_url ? <img key={p.id} src={p.avatar_url} alt="" title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 object-cover" /> : <span key={p.id} title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 text-[10px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(p.id) }}>{initials(p.display_name)}</span>)}</div>
+              <span className="text-xs text-text-2" data-live-stage-counts>{st.speaker_count} speaking · {st.listeners} {st.listeners === 1 ? 'person' : 'people'}</span>
+            </div>
+            <button type="button" className="btn-primary mt-auto" disabled={busy === st.channel.id} onClick={() => void open(st)} data-live-stage-open={st.channel.id}>{st.member ? 'Listen' : busy === st.channel.id ? 'Joining…' : 'Join Server & Listen'}</button>
           </div>
         ))}
       </div>

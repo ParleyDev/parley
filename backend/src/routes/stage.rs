@@ -1,4 +1,4 @@
-//! Stage channels: audience / speakers. Moderators (Manage Channels) join as speakers and can invite others to speak or
+//! Stage channels: audience / speakers. Moderators (`perms::stage_mod`) join as speakers and can invite others to speak or
 //! move them back; everyone else joins suppressed and can raise a hand. All of it is voice state, so clients learn
 //! about changes through the usual VOICE_STATE_UPDATE.
 
@@ -37,7 +37,7 @@ async fn set_speaker(state: AppState, id: Uuid, uid: Uuid, target: Uuid, speaker
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     if c.kind != "stage" && c.kind != "studio" { return Err(AppError::BadRequest("Not a stage channel".into())); }
     let engineer = c.kind == "studio" && perms::is_engineer(&state.db, id, uid).await?;
-    if (uid != target || speaker) && !engineer { perms::check(p, perms::MANAGE_CHANNELS)?; }   // anyone may step down themselves
+    if (uid != target || speaker) && !engineer && !perms::stage_mod(p) { return Err(AppError::Forbidden); }   // anyone may step down themselves
     let in_here = state.hub.voice_state(target).map(|v| v.channel_id == id).unwrap_or(false);
     if !in_here { return Err(AppError::NotFound("That member is not on this stage".into())); }
     if speaker {

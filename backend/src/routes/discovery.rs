@@ -26,6 +26,7 @@ const MAX_DESCRIPTION: usize = 300;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/discover", get(browse))
+        .route("/discover/stages", get(live_stages))
         .route("/discover/:gid/join", post(join))
         .route("/discover/:gid/preview", get(preview))
         .route("/discover/:gid/channels/:cid/messages", get(preview_messages))
@@ -120,6 +121,46 @@ async fn browse(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q)
     .fetch_all(&state.db)
     .await?;
     Ok(Json(decorate(&state, uid, rows).await?))
+}
+
+/// `GET /discover/stages`: stages live right now (someone on stage) in your servers and in Discover servers whose
+/// stage everyone can see. Most listeners first.
+async fn live_stages(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Value>>> {
+    let gids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>(
+        "SELECT guild_id FROM guild_discovery WHERE status = 'approved' UNION SELECT guild_id FROM guild_members WHERE user_id = $1",
+    ).bind(uid).fetch_all(&state.db).await?.into_iter().map(|r| r.0).collect();
+    let states = state.hub.voice_states_for_guilds(&gids);
+    let mut by_channel: std::collections::HashMap<Uuid, Vec<&crate::ws::hub::VoiceState>> = std::collections::HashMap::new();
+    for v in &states { by_channel.entry(v.channel_id).or_default().push(v); }
+    let ids: Vec<Uuid> = by_channel.keys().copied().collect();
+    let chans: Vec<(Uuid, Uuid, String, String, String, Option<String>, bool)> = sqlx::query_as(
+        "SELECT c.id, c.guild_id, c.name, c.topic, g.name, g.icon_url, EXISTS (SELECT 1 FROM guild_members m WHERE m.guild_id = c.guild_id AND m.user_id = $2)
+         FROM channels c JOIN guilds g ON g.id = c.guild_id WHERE c.id = ANY($1) AND c.kind = 'stage'",
+    ).bind(&ids).bind(uid).fetch_all(&state.db).await?;
+    let mut out = Vec::new();
+    for (cid, gid, name, topic, gname, gicon, member) in chans {
+        let vs = &by_channel[&cid];
+        let speakers: Vec<Uuid> = vs.iter().filter(|v| !v.suppress).map(|v| v.user_id).collect();
+        if speakers.is_empty() { continue; }
+        // You see a stage you can see: as a member, by your own permissions; otherwise only if @everyone can.
+        let p = if member {
+            match crate::routes::channels::require_channel_perms(&state.db, cid, uid).await { Ok((_, p)) => p, Err(_) => 0 }
+        } else {
+            let ctx = perms::GuildCtx::load(&state.db, gid).await?;
+            let everyone = ctx.roles.get(&gid).map(|r| r.permissions as u64).unwrap_or(0);
+            perms::guild_channels(&state.db, gid).await?.into_iter().find(|c| c.id == cid).map(|c| ctx.in_channel(Uuid::nil(), everyone, &c.overwrites)).unwrap_or(0)
+        };
+        if !perms::has(p, perms::VIEW_CHANNEL) || !perms::has(p, perms::CONNECT) { continue; }
+        let people: Vec<(Uuid, String, Option<String>)> = sqlx::query_as("SELECT id, display_name, avatar_url FROM users WHERE id = ANY($1)").bind(&speakers[..speakers.len().min(5)]).fetch_all(&state.db).await?;
+        out.push(json!({
+            "guild": { "id": gid, "name": gname, "icon_url": gicon }, "channel": { "id": cid, "name": name, "topic": topic },
+            "member": member, "listeners": vs.len(), "speaker_count": speakers.len(),
+            "speakers": people.into_iter().map(|(id, n, a)| json!({ "id": id, "display_name": n, "avatar_url": a })).collect::<Vec<_>>(),
+        }));
+    }
+    out.sort_by_key(|v| std::cmp::Reverse(v["listeners"].as_u64().unwrap_or(0)));
+    out.truncate(50);
+    Ok(Json(out))
 }
 
 /// Join an approved server from Discover (no invite needed).
