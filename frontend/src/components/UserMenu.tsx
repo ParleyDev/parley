@@ -3,8 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
-import { frameClass, nameplateClass } from '../lib/cosmetics'
-import { NameplateVideo } from './Nameplate'
+import { frameClass } from '../lib/cosmetics'
 import { renderMarkdown } from '../lib/format'
 import { t as tr, useT } from '../lib/i18n'
 import { profileCardStyle, profileColors } from '../lib/profileLook'
@@ -122,8 +121,7 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <div className="relative px-4 pt-2 pb-3 space-y-2">
-        <div className={`relative isolate overflow-hidden -mx-2 px-2 py-1 rounded-lg ${nameplateClass(user.nameplate)}`} data-user-menu-nameplate={user.nameplate || undefined}>
-          <NameplateVideo value={user.nameplate} />
+        <div>
           <div className="text-xl font-bold leading-6 truncate flex items-center gap-1.5"><StyledName userId={user.id}>{user.display_name}</StyledName></div>
           <div className="text-sm flex flex-wrap items-center gap-x-1.5"><span>{user.username}</span>{user.pronouns ? <><span className="opacity-60">•</span><span>{user.pronouns}</span></> : null}<Badges badges={profile?.badges} /></div>
         </div>

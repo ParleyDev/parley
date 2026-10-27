@@ -3,6 +3,8 @@ import { voice } from '../lib/voice'
 import { useState, type ReactNode } from 'react'
 import { useStore } from '../store'
 import { profileCardStyle } from '../lib/profileLook'
+import { nameplateClass } from '../lib/cosmetics'
+import { NameplateVideo } from './Nameplate'
 import Avatar from './Avatar'
 import DeviceMenu from './DeviceMenu'
 import VoiceConnected from './VoiceConnected'
@@ -31,7 +33,9 @@ export default function UserPanel() {
   return (
     <div className="shrink-0 w-full min-w-0 p-2 pt-0" style={{ background: 'linear-gradient(90deg, var(--color-bg-0) 72px, var(--color-bg-1) 72px)' }} data-user-panel-bar>
       <VoiceConnected />
-      <div className="relative rounded-xl border shadow-lg pl-2 pr-1.5 py-1.5 flex items-center gap-0.5" style={cardStyle} data-user-panel>
+      <div className="relative isolate rounded-xl border shadow-lg pl-2 pr-1.5 py-1.5 flex items-center gap-0.5" style={cardStyle} data-user-panel>
+        {/* Your nameplate as the panel's background (Discord shows it here), playing while the panel is hovered. */}
+        {user.nameplate && <div className={`pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-xl ${nameplateClass(user.nameplate)}`} data-panel-nameplate={user.nameplate} aria-hidden><NameplateVideo value={user.nameplate} hoverRoot="[data-user-panel]" /></div>}
         <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 min-w-0 flex-1 rounded-lg pl-1 pr-1 py-1 hover:bg-white/10 text-left" data-panel-self data-motion-row>
           <span className="rounded-full ring-2 ring-black/20"><Avatar user={user} size={40} presence /></span>
           <div className="min-w-0 flex-1">

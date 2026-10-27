@@ -271,7 +271,8 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 :root[data-name-anim="never"] [class*="ne-"] { animation: none !important; }
 
 /* Profile frames (border around the profile card) and nameplates (behind names in lists). */
-.pf { position: relative; }
+/* Only gives the frame a positioning context; never override a floating card's own absolute/fixed placement. */
+.pf:not(.absolute):not(.fixed):not(.sticky) { position: relative; }
 .pf-gold { box-shadow: 0 0 0 3px #f6b53d, 0 0 18px rgb(246 181 61 / .45) !important; }
 .pf-neon { box-shadow: 0 0 0 2px #22d3ee, 0 0 0 4px #a855f7, 0 0 22px rgb(168 85 247 / .55) !important; }
 .pf-vines { box-shadow: 0 0 0 3px #3f8f4e, inset 0 0 0 1px #8bd17c !important; }

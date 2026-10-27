@@ -8,18 +8,19 @@ const reduced = () => document.documentElement.dataset.motion === 'reduced' || m
 
 /**
  * The video behind a list row for an asset nameplate (nothing for built-in ones). It sits behind the row's content
- * (the row needs `relative isolate overflow-hidden`), shows its first frame, and plays while the row is hovered.
+ * (the row needs `relative isolate overflow-hidden`), shows its first frame, and plays while the row (or the
+ * `hoverRoot` ancestor) is hovered.
  */
-export function NameplateVideo({ value }: { value?: string | null }) {
+export function NameplateVideo({ value, hoverRoot }: { value?: string | null; hoverRoot?: string }) {
   const ref = useRef<HTMLVideoElement>(null)
   useEffect(() => {
-    const v = ref.current, row = v?.parentElement
+    const v = ref.current, row = hoverRoot ? v?.closest<HTMLElement>(hoverRoot) : v?.parentElement
     if (!v || !row) return
     const on = () => { if (!reduced()) void v.play().catch(() => {}) }
     const off = () => { v.pause() }
     row.addEventListener('mouseenter', on); row.addEventListener('mouseleave', off)
     return () => { row.removeEventListener('mouseenter', on); row.removeEventListener('mouseleave', off) }
-  }, [value])
+  }, [value, hoverRoot])
   if (!isAssetNameplate(value)) return null
   return <video ref={ref} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />
 }
