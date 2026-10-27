@@ -64,6 +64,8 @@ jobs:
       PARLEY_VERSION: ci-${{ github.sha }}
       # Two small decorations (one still, one APNG) for the decorations suite; mounted read-only into the backend.
       ASSETS_PATH: ./frontend/e2e/fixtures/assets
+      # The webpush suite's stub push service runs on the runner, reached from the stack at its network gateway.
+      PUSH_ALLOW_HOSTS: 172.30.0.1
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3

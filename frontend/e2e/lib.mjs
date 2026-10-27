@@ -91,6 +91,7 @@ import { fileURLToPath } from 'node:url'
 export const FIX = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 
 // ---- cross-browser: E2E_BROWSER=chromium (default) | webkit | firefox -------------------------------
+import { execSync as _execSync } from 'node:child_process'
 import { chromium as _chromium, webkit as _webkit, firefox as _firefox, devices as _devices } from 'playwright'
 export const BROWSER = process.env.E2E_BROWSER ?? 'chromium'
 export const browserType = () => (BROWSER === 'webkit' ? _webkit : BROWSER === 'firefox' ? _firefox : _chromium)
@@ -98,3 +99,14 @@ export const browserType = () => (BROWSER === 'webkit' ? _webkit : BROWSER === '
 export const launchBrowser = (opts = {}) => { const { args, ...rest } = opts; return browserType().launch(BROWSER === 'chromium' ? { args, ...rest } : rest) }
 /** A phone context descriptor: real iOS-like WebKit under E2E_BROWSER=webkit, emulated otherwise. */
 export const phone = () => ({ ..._devices['iPhone 13'], ...(BROWSER === 'chromium' ? {} : { defaultBrowserType: BROWSER }) })
+
+/** The test stack's database or backend container: PARLEY_TEST_DB / PARLEY_TEST_BACKEND, the local isolated stack's
+ *  (parley-inv-db / parley-inv-test), or the docker compose stack's (CI). */
+export function testContainer(kind) {
+  const env = kind === 'db' ? process.env.PARLEY_TEST_DB : process.env.PARLEY_TEST_BACKEND
+  if (env) return env
+  const local = kind === 'db' ? 'parley-inv-db' : 'parley-inv-test'
+  try { _execSync(`docker inspect ${local}`, { stdio: 'ignore' }); return local } catch { /* not this machine's stack */ }
+  const file = fileURLToPath(new URL('../../docker-compose.yml', import.meta.url))
+  return _execSync(`docker compose -f ${file} ps -q ${kind === 'db' ? 'db' : 'backend'}`).toString().trim().split('\n')[0]
+}

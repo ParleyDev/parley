@@ -2,7 +2,7 @@
 // tab moves the others to the same account, and a reconnect (a deploy restarting the server) must never save one
 // account under another's token, which showed both as current in the switcher and made switching do nothing.
 import { execSync } from 'node:child_process'
-import { WEB, PASSWORD, reg, ok, finish, launchBrowser } from '../lib.mjs'
+import { WEB, PASSWORD, reg, ok, finish, launchBrowser, testContainer } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob')
 const browser = await launchBrowser(); const errors = []
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
@@ -25,7 +25,7 @@ ok('the first tab follows to bob instead of acting as alice on bob\'s session', 
 ok('both saved with their own tokens', consistent(await saved(p2)), JSON.stringify(await saved(p2)))
 
 // The server restarts (a deploy): every tab reconnects and gets a fresh READY.
-execSync(`docker restart ${process.env.PARLEY_TEST_BACKEND ?? 'parley-inv-test'}`)
+execSync(`docker restart ${testContainer('backend')}`)
 await p1.waitForTimeout(9000)
 ok('after a reconnect, still one token per account', consistent(await saved(p1)), JSON.stringify(await saved(p1)))
 await p2.click('[data-panel-self]'); await p2.waitForSelector('[data-account-switcher]')

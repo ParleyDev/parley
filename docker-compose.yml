@@ -40,6 +40,8 @@ services:
       GIPHY_API_KEY: ${GIPHY_API_KEY:-}
       # Comma-separated emails of Parley admins (they approve Discover submissions).
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      # Push services on private addresses that browsers may subscribe with (tests only; leave empty).
+      PUSH_ALLOW_HOSTS: ${PUSH_ALLOW_HOSTS:-}
       # Rate limits as count/seconds. Built-in defaults (register 20/60 per IP, login 30/60 per IP,
       # failed logins 5/60 per IP, messages 10/5 per user, uploads 30/60, GIF proxy 60/60) suit
       # production; the compose defaults below are looser so local development and the e2e suites

@@ -5,9 +5,9 @@ import { createServer } from 'node:http'
 import { createECDH, createHmac, createPublicKey, createVerify, randomBytes, createDecipheriv } from 'node:crypto'
 import { execSync } from 'node:child_process'
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, raw, ok, openDms, finish, login } from '../lib.mjs'
+import { API_ORIGIN, WEB, S, reg, call, raw, ok, openDms, finish, login, testContainer } from '../lib.mjs'
 
-const DB = process.env.PARLEY_TEST_DB ?? 'parley-inv-db'
+const DB = testContainer('db')
 const sql = (q) => execSync(`docker exec ${DB} psql -U parley -tAc "${q}"`).toString().trim()
 // Where the test backend (in Docker) reaches this process; the backend allow-lists it with PUSH_ALLOW_HOSTS.
 const HOST = process.env.PUSH_TEST_HOST ?? '172.30.0.1'
@@ -65,8 +65,8 @@ ok('it names the sender and carries the message', p?.title?.includes(alice.user.
 ok('grouped per channel', p?.tag === dm.id)
 
 console.log('-- actions')
-ok('a forged token is refused', (await fetch(`${process.env.PARLEY_API_ORIGIN}/api/push/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: p.action_token.slice(0, -3) + 'AAA', action: 'read' }) })).status === 401)
-const act = (body) => fetch(`${process.env.PARLEY_API_ORIGIN}/api/push/action`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': `10.7.${S % 250}.1` }, body: JSON.stringify({ token: p.action_token, ...body }) })
+ok('a forged token is refused', (await fetch(`${API_ORIGIN}/api/push/action`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: p.action_token.slice(0, -3) + 'AAA', action: 'read' }) })).status === 401)
+const act = (body) => fetch(`${API_ORIGIN}/api/push/action`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': `10.7.${S % 250}.1` }, body: JSON.stringify({ token: p.action_token, ...body }) })
 ok('Mark as Read works without a session token', (await act({ action: 'read' })).status === 204)
 ok('the channel is read', sql(`SELECT last_read_msg FROM read_states WHERE user_id = '${bob.user.id}' AND channel_id = '${dm.id}'`) === m1.id)
 ok('Reply sends a reply', (await act({ action: 'reply', content: `pong ${S}`, message_id: m1.id })).status === 204)

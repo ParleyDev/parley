@@ -3,7 +3,7 @@
 // summaries as topics that jump to their messages, cached until new messages, servers can turn summaries off.
 import http from 'node:http'
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, raw, adminToken, ok, openDms, finish } from '../lib.mjs'
+import { API_ORIGIN, WEB, S, reg, call, callS, raw, adminToken, ok, openDms, finish } from '../lib.mjs'
 const HOST = process.env.PARLEY_EMBED_HOST ?? '172.30.0.1'
 const hits = { translate: [], chat: [] }
 let topicIds = []
@@ -33,7 +33,7 @@ ok('so are summaries', (await raw(a.token, 'GET', `/channels/${ch.id}/summaries`
 let r = await callS(admin.token, 'PUT', '/admin/settings', { ...original, translate_url: 'ftp://x' }); ok('service URLs must be http(s)', r.status === 400)
 r = await callS(admin.token, 'PUT', '/admin/settings', { ...original, translate_url: BASE + '/', llm_url: BASE, llm_api_key: `sk-${S}`, llm_model: 'stub-model' })
 ok('admin sets both up; the public instance says so without the URLs or keys', r.status === 200 && r.body.translation === true && r.body.summaries === true
-  && await fetch(`${process.env.PARLEY_API_ORIGIN}/api/instance`).then((x) => x.json()).then((i) => i.translation && i.summaries && !i.translate_url && !i.llm_api_key && !i.llm_url))
+  && await fetch(`${API_ORIGIN}/api/instance`).then((x) => x.json()).then((i) => i.translation && i.summaries && !i.translate_url && !i.llm_api_key && !i.llm_url))
 
 console.log('-- translation')
 const browser = await chromium.launch(); const errors = []

@@ -58,6 +58,8 @@ await pb.waitForTimeout(5000); const n = clips.length; await pb.waitForTimeout(6
 ok('turning it off stops the clips', clips.length === n, `${n} → ${clips.length}`)
 
 console.log('-- encrypted calls')
+// Alice leaves the first call before her other window joins the encrypted one, so the two don't race.
+await pa.click('[data-voice-leave]'); await pa.waitForSelector('text=Join Voice')
 const pe = await mk(a.token, secret.id)
 ok('the CC button is off in an end-to-end encrypted call', await pe.locator('[data-captions-toggle]').isDisabled() && /end-to-end/.test(await pe.locator('[data-captions-toggle]').getAttribute('title') ?? ''))
 await pe.waitForTimeout(800)

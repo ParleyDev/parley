@@ -3,8 +3,8 @@
 // rather than waiting an hour.
 import { chromium } from 'playwright'
 import { execSync } from 'node:child_process'
-import { WEB, S, reg, call, raw, ok, finish } from '../lib.mjs'
-const DB = process.env.PARLEY_TEST_DB ?? 'parley-inv-db'
+import { WEB, S, reg, call, raw, ok, finish, testContainer } from '../lib.mjs'
+const DB = testContainer('db')
 const sql = (q) => execSync(`docker exec ${DB} psql -U parley -tAc "${q}"`).toString().trim()
 const a = await reg('alice'), b = await reg('bob')
 const g = await call(a.token, 'POST', '/guilds', { name: `Status ${S}` })
