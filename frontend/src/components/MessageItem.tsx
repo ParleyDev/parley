@@ -3,6 +3,7 @@ import { isImage } from '../lib/upload'
 import RoleIcon from './RoleIcon'
 import { locale } from '../lib/i18n'
 import { createPortal } from 'react-dom'
+import { useLongPress } from '../lib/longPress'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { ClanTag } from './Flair'
@@ -173,6 +174,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const prefs = usePrefs()
   // Touch screens: double-tap a message to react with your quick reaction (Chat settings).
   const lastTap = useRef(0)
+  // Phones: hold a message for its actions as a bottom sheet (ContextMenu renders as one on touch phones).
+  const longPress = useLongPress((at) => { if (m.local || m.ephemeral) return; setTappedMessage(null); ctx.open(at, contextItems(at)) })
   const onTap = (e: React.PointerEvent) => {
     if (e.pointerType !== 'touch' || !prefs.doubleTapReact || !canReact || m.local || m.ephemeral) return
     if ((e.target as HTMLElement).closest('button, a, textarea, input, img, video')) return
@@ -199,7 +202,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   // Voice messages without a usable transcript (never attempted, failed, or empty) can be (re)transcribed.
   const voiceNeedingText = (m.attachments ?? []).filter((a) => a.duration_ms && a.transcript_status !== 'pending' && !(a.transcript_status === 'done' && a.transcript))
   const transcriptionOn = useStore((s) => s.instance.transcription)
-  const contextItems = (e: React.MouseEvent): MenuEntry[] => {
+  const contextItems = (e: { clientX: number; clientY: number }): MenuEntry[] => {
     const quick = suggestReactions(m, 4, 2)
     const anchorRect = new DOMRect(e.clientX, e.clientY, 0, 0)
     const markUnread = async () => {
@@ -325,7 +328,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
   return (
     <AvatarMotion.Provider value={motion}>
-    <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${authorName}: ${m.content.slice(0, 200)}`} onPointerUp={onTap} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local || m.ephemeral) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${authorName}: ${m.content.slice(0, 200)}`} onPointerDown={longPress.bind.onPointerDown} onPointerMove={longPress.bind.onPointerMove} onPointerCancel={longPress.bind.onPointerCancel} onPointerUp={(e) => { longPress.bind.onPointerUp(); onTap(e) }} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local || m.ephemeral || longPress.isTouch()) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (longPress.fired()) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {m.interaction && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" data-interaction-header={m.interaction.name}>
           <span className="font-semibold text-text-1">{m.interaction.user.display_name}</span> used <span className="font-semibold text-sky-400">/{m.interaction.name}</span>

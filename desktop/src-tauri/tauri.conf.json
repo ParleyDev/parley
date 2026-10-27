@@ -12,6 +12,9 @@
       "csp": null
     }
   },
+  "plugins": {
+    "deep-link": { "desktop": { "schemes": ["parley"] } }
+  },
   "bundle": {
     "active": true,
     "license": "Apache-2.0",

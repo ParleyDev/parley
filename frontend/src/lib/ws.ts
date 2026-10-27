@@ -10,6 +10,7 @@ import { getPrefs, streamerHides } from './prefs'
 import { log } from './log'
 import { studio } from './studio'
 import { isNative, registerPush } from './native'
+import { clearChannelNotifications, refreshPush } from './webpush'
 import { markJoined } from './welcome'
 import { receive as receiveSettings } from './settingsSync'
 import { builtinUrl } from './builtinSounds'
@@ -170,7 +171,7 @@ export function sendTyping(channelId: string) {
 function handle(ev: Ev) {
   const s = useStore.getState()
   switch (ev.t) {
-    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void s.loadNotes(); void s.loadMyThreads(); receiveSettings(ev.d.user.client_settings); void registerPush(); voice.onReconnect(); break
+    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void s.loadNotes(); void s.loadMyThreads(); receiveSettings(ev.d.user.client_settings); void registerPush(); void refreshPush(); voice.onReconnect(); break
     // The server replayed everything we missed; state is already current, no need to rebuild it.
     case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); break
     case 'RESYNC': lastSeq = 0; instanceId = null; socket?.close(); break
@@ -262,7 +263,7 @@ function handle(ev: Ev) {
     case 'CHANNEL_CREATE':
     case 'CHANNEL_UPDATE': s.upsertChannel(ev.d); break
     case 'CHANNEL_DELETE': s.removeChannel(ev.d.id); break
-    case 'READ_STATE_UPDATE': s.setReadState(ev.d.channel_id, ev.d.last_read_msg); break
+    case 'READ_STATE_UPDATE': s.setReadState(ev.d.channel_id, ev.d.last_read_msg); clearChannelNotifications(ev.d.channel_id); break
     case 'READ_RECEIPT': if (ev.d.user_id !== s.user?.id) s.applyReceipt(ev.d.channel_id, ev.d.user_id, ev.d.message_id); break
     case 'VOICE_LISTENED': s.applyListened(ev.d.channel_id, ev.d.message_id, ev.d.attachment_id, ev.d.user_id); break
     case 'VOICE_STATE_UPDATE': {

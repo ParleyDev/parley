@@ -8,6 +8,7 @@ import { initPrefs } from './lib/prefs'
 import { initLog } from './lib/log'
 import { initLanguage } from './lib/i18n'
 import { initNative } from './lib/native'
+import { initPwa } from './lib/webpush'
 import { initViewport } from './lib/viewport'
 import { installSettingsSync } from './lib/settingsSync'
 import { installArrowNav } from './lib/arrowNav'
@@ -19,6 +20,7 @@ initPrefs()
 initLog()
 initLanguage()
 void initNative()
+initPwa()
 initViewport()
 installSettingsSync()
 installArrowNav()

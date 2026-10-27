@@ -1,3 +1,4 @@
+import { desktop } from './desktop'
 import { useStore, messageRequests, pendingCount } from '../store'
 import { getNotifPrefs } from './notifPrefs'
 import { APP_NAME } from './brand'
@@ -61,6 +62,7 @@ function apply() {
   if (n === last) return
   last = n
   draw(n)
+  desktop.badge(n)
   try {
     const nav = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> }
     if (n > 0) nav.setAppBadge?.(n).catch(() => {}); else nav.clearAppBadge?.().catch(() => {})

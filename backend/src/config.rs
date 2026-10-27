@@ -23,6 +23,8 @@ pub struct Config {
     pub app_url: String,
     /// Hosts/IPs the link-preview fetcher may reach even though they are private (dev/e2e only).
     pub embed_allow_hosts: Vec<String>,
+    /// Push-service hosts allowed even though they resolve to private addresses or use plain http (tests).
+    pub push_allow_hosts: Vec<String>,
     /// Default per-user storage quota for attachments + profile images; 0 = unlimited.
     pub upload_quota_bytes: i64,
     /// Bearer / ?token= required for GET /metrics when set.
@@ -78,6 +80,7 @@ impl Config {
             sentry_environment: std::env::var("SENTRY_ENVIRONMENT").unwrap_or_else(|_| "production".into()),
             upload_quota_bytes: std::env::var("UPLOAD_QUOTA_BYTES").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(1024 * 1024 * 1024),
             embed_allow_hosts: std::env::var("EMBED_ALLOW_HOSTS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
+            push_allow_hosts: std::env::var("PUSH_ALLOW_HOSTS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
             admin_emails: std::env::var("ADMIN_EMAILS").map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect()).unwrap_or_default(),
         }
     }

@@ -52,6 +52,7 @@ export async function registerPush() {
 
 /** Before logging out: forget this device's token so a signed-out phone stops buzzing. */
 export async function unregisterPush() {
+  await import('./webpush').then((w) => w.disablePush()).catch(() => {})
   if (!isNative()) return
   try { const t = localStorage.getItem('parley.pushToken'); if (t) { await api.delete('/users/@me/push-tokens', { token: t }); localStorage.removeItem('parley.pushToken') } } catch { /* ignore */ }
 }

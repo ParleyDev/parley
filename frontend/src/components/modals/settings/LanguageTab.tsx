@@ -1,10 +1,13 @@
 import { Check } from 'lucide-react'
 import { coverage, LANGUAGES, setLanguage, useLanguage, useT, type Language, type Resolved } from '../../../lib/i18n'
+import { setPrefs, usePrefs } from '../../../lib/prefs'
+import { Toggle } from '../SettingsShell'
 
 /** Settings → Language: pick the app language; shows how complete each translation is. */
 export default function LanguageTab() {
   const t = useT()
   const language = useLanguage()
+  const p = usePrefs()
   return (
     <div className="space-y-6" data-language-tab>
       <h2 className="text-xl font-bold">{t('Language')}</h2>
@@ -20,6 +23,11 @@ export default function LanguageTab() {
           </button>
         ) })}
       </div>
+      <div className="h-px bg-line" />
+      <section className="space-y-2">
+        <span data-spellcheck-toggle><Toggle label="Enable spellcheck" checked={p.spellcheck} onChange={(v) => setPrefs({ spellcheck: v })} /></span>
+        <p className="text-xs text-text-2">Underlines misspelt words in the message box. Checks the languages set up in your {/ParleyDesktop\//.test(navigator.userAgent) ? 'operating system' : 'browser'}.</p>
+      </section>
     </div>
   )
 }

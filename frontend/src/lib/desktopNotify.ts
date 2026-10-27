@@ -1,6 +1,7 @@
 import { useStore } from '../store'
 import { getNotifPrefs } from './notifPrefs'
 import { appNavigate } from './native'
+import { desktop } from './desktop'
 import type { DmChannel, Message } from './types'
 
 /** Message text as it reads in the app: mentions, channels, roles and custom emoji by name; markdown marks dropped. */
@@ -24,6 +25,7 @@ export function desktopNotify(title: string, body: string, opts: { icon?: string
     if (!getNotifPrefs().desktop || !('Notification' in window) || Notification.permission !== 'granted') return
     const n = new Notification(title, { body, icon: opts.icon ?? undefined, tag: opts.tag, renotify: !!opts.tag } as NotificationOptions)
     n.onclick = () => { window.focus(); if (opts.path) appNavigate(opts.path); n.close() }
+    desktop.flash()
     ;(window as unknown as { __parleyNotes?: { title: string; body: string; tag?: string; path?: string }[] }).__parleyNotes?.push({ title, body, tag: opts.tag, path: opts.path })
   } catch { /* ignore */ }
 }

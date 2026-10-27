@@ -489,7 +489,7 @@ async fn list_messages(
 }
 
 #[derive(Deserialize)]
-struct CreateMessage {
+pub(crate) struct CreateMessage {
     #[serde(default)]
     content: String,
     reply_to: Option<Uuid>,
@@ -509,7 +509,7 @@ struct CreateMessage {
     components: Option<serde_json::Value>,
 }
 
-async fn create_message(
+pub(crate) async fn create_message(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,
@@ -1175,11 +1175,11 @@ async fn delete_overwrite(
 }
 
 #[derive(Deserialize)]
-struct MarkRead {
+pub(crate) struct MarkRead {
     message_id: Uuid,
 }
 
-async fn mark_read(
+pub(crate) async fn mark_read(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,

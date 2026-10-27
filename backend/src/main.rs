@@ -6,6 +6,7 @@ mod error;
 mod models;
 mod perms;
 mod push;
+mod webpush;
 mod mail;
 mod metrics;
 mod mfa;

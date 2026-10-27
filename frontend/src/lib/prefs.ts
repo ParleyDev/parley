@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { STORAGE_PREFIX } from './brand'
+import { desktop, desktopBridge } from './desktop'
 
 /**
  * Client-side preferences beyond theme/density (Appearance extras, Accessibility, Chat). Stored per browser;
@@ -32,6 +33,8 @@ export interface ClientPrefs {
   entranceSounds: boolean
   /** Ask before opening links to other sites. */
   warnLinks: boolean
+  /** Underline misspelt words while typing. */
+  spellcheck: boolean
   /** Phones: double-tap a message to react with `quickReaction`. */
   doubleTapReact: boolean
   quickReaction: string
@@ -69,7 +72,7 @@ export interface ClientPrefs {
 
 export const DEFAULT_PREFS: ClientPrefs = {
   accent: null, messageGap: 17, zoom: 100, compactAvatars: false, roleColors: 'name',
-  saturation: 100, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, ttsPlayback: true, entranceSounds: true, warnLinks: true, doubleTapReact: true, quickReaction: '❤️', focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
+  saturation: 100, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, ttsPlayback: true, entranceSounds: true, warnLinks: true, spellcheck: true, doubleTapReact: true, quickReaction: '❤️', focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
   inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
   streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true,
   developerMode: true,
@@ -90,7 +93,7 @@ function load(): ClientPrefs {
       accent: typeof p.accent === 'string' && /^#[0-9a-f]{6}$/i.test(p.accent) ? p.accent : null,
       messageGap: clamp(p.messageGap, 0, 24, 17), zoom: clamp(p.zoom, 50, 200, 100), compactAvatars: bool(p.compactAvatars, false), roleColors: oneOf(p.roleColors, ['name', 'next', 'off'] as const, 'name'),
       saturation: clamp(p.saturation, 0, 100, 100), underlineLinks: bool(p.underlineLinks, false), animatedEmoji: bool(p.animatedEmoji, true), autoplayGifs: bool(p.autoplayGifs, true),
-      stickerAnimation: oneOf(p.stickerAnimation, ['always', 'interaction', 'never'] as const, 'always'), ttsRate: clamp(p.ttsRate, 0.5, 2, 1), ttsPlayback: bool(p.ttsPlayback, true), entranceSounds: bool(p.entranceSounds, true), warnLinks: bool(p.warnLinks, true), doubleTapReact: bool(p.doubleTapReact, true), quickReaction: typeof p.quickReaction === 'string' && p.quickReaction.trim() && [...p.quickReaction].length <= 8 ? p.quickReaction : '❤️', focusRing: bool(p.focusRing, false), timeFormat: oneOf(p.timeFormat, ['auto', '12', '24'] as const, 'auto'), nameAnimation: oneOf(p.nameAnimation, ['hover', 'always', 'never'] as const, 'hover'),
+      stickerAnimation: oneOf(p.stickerAnimation, ['always', 'interaction', 'never'] as const, 'always'), ttsRate: clamp(p.ttsRate, 0.5, 2, 1), ttsPlayback: bool(p.ttsPlayback, true), entranceSounds: bool(p.entranceSounds, true), warnLinks: bool(p.warnLinks, true), spellcheck: bool(p.spellcheck, true), doubleTapReact: bool(p.doubleTapReact, true), quickReaction: typeof p.quickReaction === 'string' && p.quickReaction.trim() && [...p.quickReaction].length <= 8 ? p.quickReaction : '❤️', focusRing: bool(p.focusRing, false), timeFormat: oneOf(p.timeFormat, ['auto', '12', '24'] as const, 'auto'), nameAnimation: oneOf(p.nameAnimation, ['hover', 'always', 'never'] as const, 'hover'),
       inlineAttachments: bool(p.inlineAttachments, true), linkMedia: bool(p.linkMedia, true), embeds: bool(p.embeds, true), emoticons: bool(p.emoticons, true), showReactions: bool(p.showReactions, true),
       spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'),
       streamer: bool(p.streamer, false), streamerHideInfo: bool(p.streamerHideInfo, true), streamerHideInvites: bool(p.streamerHideInvites, true), streamerMuteSounds: bool(p.streamerMuteSounds, true), streamerMuteNotifications: bool(p.streamerMuteNotifications, true),
@@ -115,7 +118,8 @@ export function applyPrefs(p: ClientPrefs = current) {
   const el = document.documentElement
   if (p.accent) { el.style.setProperty('--color-accent', p.accent); el.style.setProperty('--color-accent-hover', darken(p.accent)) } else { el.style.removeProperty('--color-accent'); el.style.removeProperty('--color-accent-hover') }
   el.style.setProperty('--msg-gap', `${p.messageGap}px`)
-  ;(el.style as CSSStyleDeclaration & { zoom?: string }).zoom = p.zoom === 100 ? '' : `${p.zoom}%`
+  // The desktop app zooms natively; browsers get CSS zoom (their own Ctrl +/- still works on top).
+  ;(el.style as CSSStyleDeclaration & { zoom?: string }).zoom = desktop.zoom(p.zoom / 100) || p.zoom === 100 ? '' : `${p.zoom}%`
   document.body.style.filter = p.saturation === 100 ? '' : `saturate(${p.saturation}%)`
   el.dataset.underlineLinks = p.underlineLinks ? '1' : '0'
   el.dataset.focusRing = p.focusRing ? '1' : '0'
@@ -143,7 +147,18 @@ export function setPrefs(patch: Partial<ClientPrefs>) {
 export function usePrefs(): ClientPrefs {
   return useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l) } }, getPrefs)
 }
-export function initPrefs() { applyPrefs(current) }
+export function initPrefs() {
+  applyPrefs(current)
+  // Desktop app: Ctrl/⌘ + = / - / 0 zoom like a browser, in 10% steps, remembered with the other preferences.
+  if (desktopBridge()) window.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey && e.key !== '+') return
+    const z = current.zoom
+    const next = e.key === '=' || e.key === '+' ? z + 10 : e.key === '-' ? z - 10 : e.key === '0' ? 100 : null
+    if (next === null) return
+    e.preventDefault()
+    setPrefs({ zoom: Math.max(50, Math.min(200, next)) })
+  })
+}
 
 /** Classic emoticons → emoji (Chat → "Automatically convert emoticons"). Only whole tokens are replaced. */
 const EMOTICONS: [RegExp, string][] = [

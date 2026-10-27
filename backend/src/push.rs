@@ -72,6 +72,7 @@ async fn send_one(f: &Fcm, token: &str, title: &str, body: &str, data: &serde_js
 
 /// Notify `users` (already filtered to offline, unmuted recipients) about a message.
 pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, data: serde_json::Value) {
+    crate::webpush::notify(state, users, title, body, &data).await;
     let Some(f) = fcm(state).await else { return };
     let f = &f;
     if users.is_empty() { return; }
@@ -89,7 +90,7 @@ pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, d
 /// muted the channel, its category (or a thread's parent channel) or the server. Runs in the background; never blocks the request.
 pub fn after_message(state: AppState, msg: crate::models::Message, channel: crate::models::Channel) {
     tokio::spawn(async move {
-        let push_on = enabled(&state).await;
+        let push_on = enabled(&state).await || crate::webpush::any(&state).await;
         let mail_on = crate::mail::enabled(&state.config);
         if !push_on && !mail_on { return; }
         let online = crate::ws::bus::online_users(&state.db).await;

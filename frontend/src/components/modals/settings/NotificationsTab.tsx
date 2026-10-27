@@ -1,5 +1,5 @@
 import { Play } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Toggle } from '../SettingsShell'
 import { SOUND_LABELS, setNotifPrefs, setSound, useNotifPrefs, type SoundKey, type Tts } from '../../../lib/notifPrefs'
 import { api } from '../../../lib/api'
@@ -7,6 +7,7 @@ import { useStore } from '../../../store'
 import { refreshBadge } from '../../../lib/badge'
 import type { NotifPrefsServer, PrivateUser } from '../../../lib/types'
 import { playSfx } from '../../../lib/sfx'
+import { disablePush, enablePush, pushSubscribed, pushSupported } from '../../../lib/webpush'
 
 /** Settings → Notifications: desktop notifications and one switch per sound, Discord-style. */
 export default function NotificationsTab() {
@@ -20,6 +21,14 @@ export default function NotificationsTab() {
     try { const u = await api.patch<PrivateUser>('/users/@me/notification-prefs', patch); if (token) setAuth(token, u) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const [timeout_, setTimeout_] = useState(String(sp.push_timeout_min ?? 10))
+  const [webPush, setWebPush] = useState(false)
+  useEffect(() => { void pushSubscribed().then(setWebPush) }, [])
+  const toggleWebPush = async (on: boolean) => {
+    try {
+      if (on) { const ok = await enablePush(); setWebPush(ok); if (!ok) pushToast('Notifications are blocked for this site in your browser settings.', 'error') }
+      else { await disablePush(); setWebPush(false) }
+    } catch (e) { pushToast((e as Error).message, 'error') }
+  }
   const supported = typeof Notification !== 'undefined'
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>(supported ? Notification.permission : 'unsupported')
   const ask = () => { if (!supported) return; Notification.requestPermission().then((p) => setPerm(p)).catch(() => {}) }
@@ -62,6 +71,10 @@ export default function NotificationsTab() {
 
       <section className="space-y-3" data-server-notif-prefs>
         <label className="label">Push notifications</label>
+        {pushSupported() && <>
+          <span data-web-push-toggle><Toggle label="Push notifications on this browser" checked={webPush} onChange={(v) => void toggleWebPush(v)} /></span>
+          <p className="text-xs text-text-2">Mentions and DMs reach this browser even with every Parley tab closed, with Reply and Mark as Read right on the notification.</p>
+        </>}
         <div className="flex items-center justify-between gap-4">
           <span className="text-[15px]">Push notification inactive timeout</span>
           <span className="flex items-center gap-2 text-sm"><input type="number" min={1} max={120} value={timeout_} onChange={(e) => setTimeout_(e.target.value)} onBlur={() => { const n = Math.max(1, Math.min(120, Number(timeout_) || 10)); setTimeout_(String(n)); if (n !== (sp.push_timeout_min ?? 10)) void saveServer({ push_timeout_min: n }) }} className="input w-20 py-1 text-right" data-push-timeout /> minutes</span>

@@ -1,3 +1,4 @@
+import MobileTabBar from '../components/MobileTabBar'
 import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store'
@@ -75,6 +76,7 @@ export default function AppShell() {
         </div>
         {/* Discord's self card floats across the bottom of both the server column and the channel list. */}
         <UserPanel />
+        <MobileTabBar />
       </NavColumn>
       <ErrorBoundary>
       <Routes>

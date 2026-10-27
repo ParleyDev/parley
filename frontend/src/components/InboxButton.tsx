@@ -1,4 +1,4 @@
-import { CheckCheck, Hash, Inbox, MessageSquare, X } from 'lucide-react'
+import { Bell, CheckCheck, Hash, Inbox, MessageSquare, X } from 'lucide-react'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { locale } from '../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
@@ -15,7 +15,7 @@ const HIDDEN_KEY = `${STORAGE_PREFIX}inboxHidden`
 const loadHidden = (): string[] => { try { const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
 
 /** Header Inbox: Mentions (last 30 days, each removable) and Unreads (channels with new messages, mark read). */
-export default function InboxButton() {
+export default function InboxButton({ variant = 'header' }: { variant?: 'header' | 'tab' } = {}) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'mentions' | 'unreads' | 'highlights'>('mentions')
   const [highlights, setHighlights] = useState<(Message & { guild_name?: string; channel_name?: string })[] | null>(null)
@@ -40,7 +40,8 @@ export default function InboxButton() {
   const toggle = () => {
     if (open) { setOpen(false); return }
     const r = ref.current!.getBoundingClientRect()
-    setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) })
+    // The phone tab bar's inbox fills the screen above the tabs.
+    setPos(variant === 'tab' ? { top: 8, right: 8 } : { top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) })
     setOpen(true)
   }
   useEffect(() => { if (open) api.get<Message[]>('/users/@me/mentions').then(setList).catch(() => setList([])) }, [open])
@@ -71,13 +72,17 @@ export default function InboxButton() {
     void jumpToMessageAsync(m.channel_id, m.id).then((found) => { if (!found) pushToast('That message could not be found', 'error') })
   }
   return (
-    <div ref={ref} className="relative">
-      <button onClick={toggle} title="Inbox" className={`relative h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${open ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-inbox-toggle>
-        <Inbox size={20} />
-        {count > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-bg-1" data-inbox-count>{count > 99 ? '99+' : count}</span>}
-      </button>
+    <div ref={ref} className={variant === 'tab' ? 'contents' : 'relative'}>
+      {variant === 'tab'
+        ? <button onClick={toggle} className={`w-full flex flex-col items-center gap-0.5 ${open ? 'text-text-0' : ''}`} data-inbox-toggle="tab">
+            <span className="relative"><Bell size={22} />{count > 0 && <span className="absolute -right-2 -top-1 min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-bg-0" data-inbox-count>{count > 99 ? '99+' : count}</span>}</span>Notifications
+          </button>
+        : <button onClick={toggle} title="Inbox" className={`relative h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${open ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-inbox-toggle>
+            <Inbox size={20} />
+            {count > 0 && <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-bg-1" data-inbox-count>{count > 99 ? '99+' : count}</span>}
+          </button>}
       {open && pos && createPortal(
-        <div ref={panel} style={{ top: pos.top, right: pos.right }} className="pop fixed z-50 w-[420px] max-w-[calc(100vw-16px)] rounded-xl border border-line bg-bg-1 shadow-2xl" data-inbox>
+        <div ref={panel} style={{ top: pos.top, right: pos.right }} className={`pop fixed z-50 w-[420px] max-w-[calc(100vw-16px)] rounded-xl border border-line bg-bg-1 shadow-2xl ${variant === 'tab' ? 'left-2 !w-auto bottom-[calc(64px+env(safe-area-inset-bottom))] flex flex-col' : ''}`} data-inbox>
           <div className="flex items-center gap-2 px-4 pt-3 pb-2 border-b border-line">
             <Inbox size={16} className="text-text-2" /><span className="font-bold mr-2">Inbox</span>
             {(['mentions', 'unreads', 'highlights'] as const).map((id) => (
@@ -88,7 +93,7 @@ export default function InboxButton() {
             {tab === 'unreads' && unreads.length > 0 && <button type="button" onClick={() => { for (const id of unreads) void markRead(id) }} className="ml-auto flex items-center gap-1 text-xs text-sky-400 hover:underline" data-inbox-read-all><CheckCheck size={14} /> Mark all read</button>}
           </div>
           {tab === 'highlights' ? (
-            <div className="max-h-[60vh] overflow-y-auto" data-inbox-highlights>
+            <div className={`${variant === 'tab' ? 'flex-1 min-h-0' : 'max-h-[60vh]'} overflow-y-auto`} data-inbox-highlights>
               {highlights === null && <p className="px-4 py-6 text-sm text-text-2">Loading…</p>}
               {highlights?.length === 0 && <p className="px-4 py-6 text-sm text-text-2">Nothing stood out in your servers in the last two days.</p>}
               {highlights?.map((m) => (
@@ -103,7 +108,7 @@ export default function InboxButton() {
               ))}
             </div>
           ) : tab === 'unreads' ? (
-            <div className="max-h-[60vh] overflow-y-auto" data-inbox-unreads>
+            <div className={`${variant === 'tab' ? 'flex-1 min-h-0' : 'max-h-[60vh]'} overflow-y-auto`} data-inbox-unreads>
               {unreads.length === 0 && <p className="px-4 py-6 text-sm text-text-2">You're all caught up.</p>}
               {unreads.map((id) => (
                 <div key={id} className="group flex items-center gap-3 px-4 py-2 hover:bg-bg-3 border-b border-line/60" data-inbox-unread={id}>
@@ -116,7 +121,7 @@ export default function InboxButton() {
               ))}
             </div>
           ) : (
-          <div className="max-h-[60vh] overflow-y-auto">
+          <div className={`${variant === 'tab' ? 'flex-1 min-h-0' : 'max-h-[60vh]'} overflow-y-auto`}>
             {list === null && <p className="px-4 py-6 text-sm text-text-2">Loading…</p>}
             {list !== null && shown.length === 0 && <p className="px-4 py-6 text-sm text-text-2">Nobody has mentioned you in the last 30 days.</p>}
             {shown.map((m) => (

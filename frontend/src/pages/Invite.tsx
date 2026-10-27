@@ -85,6 +85,8 @@ export default function InvitePage() {
             ) : (
               <button className="btn-primary w-full" disabled={busy} onClick={join}>{busy ? 'Joining…' : 'Accept Invite'}</button>
             )}
+            {/* Installed desktop apps register parley:// and open the invite on their server. */}
+            {!/ParleyDesktop\//.test(navigator.userAgent) && !p.expired && <a href={`parley://invite/${encodeURIComponent(code ?? '')}`} className="mt-3 block text-center text-xs text-text-2 hover:text-text-0 hover:underline" data-invite-open-app>Open in the desktop app</a>}
           </>
         )}
       </div>

@@ -184,6 +184,8 @@ body {
 .pop { animation: pop .14s ease-out both; }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0 } to { transform: none; opacity: 1 } }
 .sheet-up { animation: sheet-up .18s ease-out both; }
+/* Phones: holding a message opens its sheet, so no iOS callout or text selection on the way. */
+@media (pointer: coarse) and (max-width: 767px) { [data-msg-id] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
 @keyframes bounce-dot { 0%, 80%, 100% { transform: translateY(0) } 40% { transform: translateY(-4px) } }
 .typing-dot { animation: bounce-dot 1.2s infinite; }
 .typing-dot:nth-child(2) { animation-delay: .15s }
