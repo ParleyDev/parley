@@ -69,6 +69,8 @@ export interface PrivateUser extends User {
   /** Share Spotify and hand-set activities (default on). */
   share_activity?: boolean
   custom_activity?: ManualActivity | null
+  /** House badge: ember, tide, grove or ''. */
+  house?: string
   /** Sensitive media: blur images/videos from non-friends' DMs and in age-restricted channels until clicked. */
   sensitive_media?: { non_friend_dms?: SensitiveLevel; friend_dms?: SensitiveLevel; servers?: SensitiveLevel; restricted?: SensitiveLevel }
   spam_filter?: 'none' | 'non_friends' | 'all'

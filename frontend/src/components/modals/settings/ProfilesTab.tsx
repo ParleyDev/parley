@@ -18,6 +18,7 @@ import ProfileCard, { type ProfileEdit } from '../../ProfileCard'
 import { WearServerTag } from '../../ServerTag'
 import Avatar from '../../Avatar'
 import { useT } from '../../../lib/i18n'
+import { badgeIcon, HOUSES } from '../../Flair'
 
 const MAX_BIO = 400
 
@@ -180,6 +181,7 @@ export default function ProfilesTab() {
                 {[{ id: '', label: t('None'), glyph: '' }, ...PROFILE_EFFECTS].map((e) => <button key={e.id || 'none'} type="button" onClick={() => setEffect(e.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${effect === e.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-effect-option={e.id || 'none'} aria-pressed={effect === e.id}>{e.glyph} {e.label}</button>)}
               </div>
             </div>
+            <HousePicker />
             <div>
               <label className="label" htmlFor="profile-privacy">{t('Who can see your full profile')}</label>
               <select id="profile-privacy" className="input w-auto" value={privacy} onChange={(e) => setPrivacy(e.target.value as 'everyone' | 'friends')} data-profile-privacy>
@@ -222,3 +224,28 @@ export default function ProfilesTab() {
   )
 }
 
+
+/** Settings → Profiles: join a house for a badge on your profile, or none. Saves right away. */
+function HousePicker() {
+  const t = useT()
+  const user = useStore((s) => s.user)
+  const pushToast = useStore((s) => s.pushToast)
+  const pick = async (house: string) => {
+    try { const u = await api.patch<PrivateUser>('/users/@me', { house }); const st = useStore.getState(); if (st.token) st.setAuth(st.token, u) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  const cur = user?.house ?? ''
+  return (
+    <div data-house-picker>
+      <label className="label">{t('House badge')}</label>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {HOUSES.map((h) => (
+          <button key={h.id} type="button" onClick={() => pick(cur === h.id ? '' : h.id)} aria-pressed={cur === h.id} className={`flex items-start gap-2 rounded-lg border p-2.5 text-left ${cur === h.id ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`} data-house-option={h.id}>
+            {badgeIcon(h.badge)}
+            <span className="min-w-0"><span className="block text-sm font-semibold">{t(h.label)}</span><span className="block text-xs text-text-2">{t(h.desc)}</span></span>
+          </button>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-text-2">{cur ? t('Click your house again to leave it.') : t('Optional: pick one for a badge on your profile.')}</p>
+    </div>
+  )
+}

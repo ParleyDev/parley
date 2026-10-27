@@ -1,3 +1,4 @@
+import { unseenEntry } from '../lib/changelog'
 import MobileTabBar from '../components/MobileTabBar'
 import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -40,6 +41,9 @@ export default function AppShell() {
   useT() // re-render when the language changes
   useEffect(() => { initBadge() }, [])
   useEffect(() => installLinkGuard(), [])
+  // What's New: once per new changelog entry, after the first connection.
+  const ready = useStore((s) => !!s.user && s.connected)
+  useEffect(() => { if (ready && unseenEntry()) useStore.getState().openModal({ kind: 'whatsNew' }) }, [ready])
   const connected = useStore((s) => s.connected)
   const pane = useStore((s) => s.mobilePane)
   const announcement = useStore((s) => s.instance.announcement)

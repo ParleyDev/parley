@@ -76,6 +76,7 @@ export type ModalKind =
   | { kind: 'rules'; guildId: string }
   | { kind: 'events'; guildId: string }
   | { kind: 'customStatus' }
+  | { kind: 'whatsNew' }
   | { kind: 'forward'; message: Message }
   | { kind: 'groupMembers'; channelId?: string; userIds?: string[] }
   | { kind: 'folderSettings'; folderId: string }

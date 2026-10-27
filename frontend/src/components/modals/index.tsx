@@ -45,6 +45,7 @@ import FollowChannelModal from './FollowChannel'
 import ServerProfileModal from './ServerProfile'
 import ApplicationModal from './Application'
 import ActivityModal from './Activity'
+import WhatsNewModal from './WhatsNew'
 import AppModal from './AppModal'
 import ErrorBoundary from '../ErrorBoundary'
 
@@ -85,6 +86,7 @@ export default function Modals() {
     case 'rules': return <RulesModal onClose={close} guildId={modal!.guildId} />
     case 'events': return <EventsModal onClose={close} guildId={modal!.guildId} />
     case 'customStatus': return <CustomStatusModal onClose={close} />
+    case 'whatsNew': return <WhatsNewModal onClose={close} />
     case 'forward': return <ForwardModal onClose={close} message={modal!.message} />
     case 'groupMembers': return <GroupMembersModal onClose={close} channelId={modal!.channelId} userIds={modal!.userIds} />
     case 'folderSettings': return <FolderSettingsModal onClose={close} folderId={modal!.folderId} />

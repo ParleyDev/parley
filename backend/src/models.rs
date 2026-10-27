@@ -256,6 +256,8 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default = "yes")]
     pub share_activity: bool,
+    #[sqlx(default)]
+    pub house: String,
 }
 fn yes() -> bool { true }
 
