@@ -1,4 +1,6 @@
-import { Copy, Plus, Trash2 } from 'lucide-react'
+import { Copy, ImagePlus, Plus, Trash2 } from 'lucide-react'
+import { has, P, PERMS } from '../../../lib/perms'
+import { uploadImage } from '../../../lib/upload'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
@@ -18,6 +20,9 @@ export default function ApplicationsTab() {
   const [uris, setUris] = useState('')
   const [desc, setDesc] = useState('')
   const [scopes, setScopes] = useState<string[]>(['identify'])
+  // Bot invite link: scopes and the permissions the bot asks for.
+  const [botScopes, setBotScopes] = useState<string[]>(['bot', 'applications.commands'])
+  const [botPerms, setBotPerms] = useState(P.VIEW_CHANNEL | P.SEND_MESSAGES | P.EMBED_LINKS | P.READ_MESSAGE_HISTORY | P.ADD_REACTIONS)
   const load = () => api.get<Application[]>('/applications').then(setList).catch(() => setList([]))
   useEffect(() => { void load() }, [])
   const copy = async (label: string, v: string) => { try { await navigator.clipboard.writeText(v); pushToast(`${label} copied`) } catch { pushToast('Clipboard unavailable', 'error') } }
@@ -32,6 +37,7 @@ export default function ApplicationsTab() {
   const setIntents = async (v: number) => { if (!open) return; try { const a = await api.patch<Application>(`/applications/${open.id}`, { privileged_intents: v }); setOpen({ ...open, ...a }) } catch (err) { pushToast((err as Error).message, 'error') } }
   const resetBot = async () => { if (!open) return; try { const r = await api.post<{ token: string }>(`/applications/${open.id}/bot/reset-token`, {}); setSecret({ label: 'New bot token (shown once)', value: r.token }) } catch (err) { pushToast((err as Error).message, 'error') } }
   const del = () => open && openModal({ kind: 'confirm', title: `Delete '${open.name}'`, body: 'Every token is revoked and its bot account removed. This cannot be undone.', danger: true, confirmLabel: 'Delete Application', action: async () => { try { await api.delete(`/applications/${open.id}`); setOpen(null); await load() } catch (err) { pushToast((err as Error).message, 'error') } } })
+  const inviteUrl = open ? `${publicOrigin()}/oauth2/authorize?client_id=${open.client_id}&scope=${encodeURIComponent(botScopes.join(' '))}${botScopes.includes('bot') ? `&permissions=${botPerms}` : ''}` : ''
   const authUrl = open ? `${publicOrigin()}/oauth2/authorize?client_id=${open.client_id}&response_type=code&scope=${encodeURIComponent(scopes.join(' '))}${open.redirect_uris[0] ? `&redirect_uri=${encodeURIComponent(open.redirect_uris[0])}` : ''}` : ''
   return (
     <div className="space-y-6" data-applications-tab>
@@ -77,6 +83,28 @@ export default function ApplicationsTab() {
               <><p className="text-sm text-text-2">A bot is a user that acts through a token (<code>Authorization: Bot …</code>). Add it to servers with the <code>bot</code> scope.</p><button type="button" className="btn-ghost bg-bg-3" onClick={createBot} data-app-create-bot>Create bot</button></>
             )}
           </div>
+          <div className="rounded-lg border border-line bg-bg-1 p-3 space-y-2" data-app-look>
+            <div className="font-semibold">Icon and visibility</div>
+            <div className="flex items-center gap-3">
+              {open.icon_url ? <img src={open.icon_url} alt="" className="h-12 w-12 rounded-xl" /> : <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-bg-3 text-xl font-bold">{open.name[0]}</div>}
+              <label className="btn-ghost flex cursor-pointer items-center gap-1 text-xs"><ImagePlus size={14} />Upload icon<input type="file" accept="image/*" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; try { const img = await uploadImage('avatar', f); const a = await api.patch<Application>(`/applications/${open.id}`, { icon_url: img.url }); setOpen({ ...open, ...a }) } catch (err) { pushToast((err as Error).message, 'error') } }} data-app-icon /></label>
+              {open.icon_url && <button type="button" className="btn-ghost text-xs" onClick={async () => { const a = await api.patch<Application>(`/applications/${open.id}`, { icon_url: '' }); setOpen({ ...open, ...a }) }}>Remove</button>}
+            </div>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-accent" checked={open.bot_public !== false} onChange={async (e) => { try { const a = await api.patch<Application>(`/applications/${open.id}`, { bot_public: e.target.checked }); setOpen({ ...open, ...a }) } catch (err) { pushToast((err as Error).message, 'error') } }} data-app-public />Public bot <span className="text-xs text-text-2">(off: only you can add it to servers)</span></label>
+            {open.verified && <p className="text-xs text-accent">✓ Verified by an administrator</p>}
+          </div>
+          {open.bot && (
+            <div className="rounded-lg border border-line bg-bg-1 p-3 space-y-2" data-app-invite>
+              <div className="font-semibold">Bot invite link</div>
+              <div className="flex flex-wrap gap-3">{['bot', 'applications.commands'].map((s) => <label key={s} className="flex items-center gap-1.5 text-sm"><input type="checkbox" className="accent-accent" checked={botScopes.includes(s)} onChange={(e) => setBotScopes(e.target.checked ? [...botScopes, s] : botScopes.filter((x) => x !== s))} />{s}</label>)}</div>
+              <div className="text-xs font-semibold text-text-1">Permissions <span className="font-normal text-text-2">· {botPerms}</span></div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 max-sm:grid-cols-1" data-perm-calculator>
+                {PERMS.map((p) => <label key={p.key} className="flex items-center gap-1.5 text-xs" title={p.desc}><input type="checkbox" className="accent-accent" checked={has(botPerms, P[p.key])} onChange={(e) => setBotPerms(e.target.checked ? botPerms | P[p.key] : botPerms & ~P[p.key])} data-perm-pick={p.key} />{p.label}</label>)}
+              </div>
+              <code className="block break-all rounded bg-bg-0 px-2 py-1 text-xs" data-app-invite-url>{inviteUrl}</code>
+              <button type="button" className="btn-ghost text-xs" onClick={() => copy('Invite link', inviteUrl)}><Copy size={12} /> Copy link</button>
+            </div>
+          )}
           <div className="rounded-lg border border-line bg-bg-1 p-3 space-y-2" data-app-oauth>
             <div className="font-semibold">OAuth2 URL generator</div>
             <div className="flex flex-wrap gap-2">{SCOPES.map(([id, label]) => <label key={id} className="flex items-center gap-1.5 text-sm"><input type="checkbox" checked={scopes.includes(id)} onChange={(e) => setScopes(e.target.checked ? [...scopes, id] : scopes.filter((s) => s !== id))} className="accent-accent" data-scope-pick={id} /> {label}</label>)}</div>

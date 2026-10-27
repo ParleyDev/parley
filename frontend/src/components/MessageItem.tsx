@@ -1,4 +1,4 @@
-import { AlarmClock, AppWindow, Megaphone, Sparkles, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import { AlarmClock, AppWindow, Check, Megaphone, Sparkles, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
 import { isImage } from '../lib/upload'
 import RoleIcon from './RoleIcon'
 import { locale } from '../lib/i18n'
@@ -345,7 +345,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
             <div className="flex items-baseline gap-2 leading-[1.375rem] h-[1.375rem]" data-msg-header>
               <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} data-msg-author className="font-semibold hover:underline leading-[1.375rem]"><StyledName userId={m.author.id} guildId={guildId}>{m.author.display_name}</StyledName></button><RoleIcon guildId={guildId} userId={m.author.id} />
               <ClanTag userId={m.author.id} tag={m.author.clan_tag} />
-              {m.author.bot && <span className="rounded bg-accent px-1 py-px text-[10px] font-bold uppercase text-white" data-bot-tag>Bot</span>}
+              {m.author.bot && <span className="inline-flex items-center gap-0.5 rounded bg-accent px-1 py-px text-[10px] font-bold uppercase text-white" data-bot-tag={m.author.verified_bot ? 'verified' : ''} title={m.author.verified_bot ? 'Verified bot' : undefined}>{m.author.verified_bot && <Check size={10} strokeWidth={3} />}Bot</span>}
               <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
             </div>
           )}

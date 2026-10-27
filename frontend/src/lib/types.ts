@@ -6,6 +6,8 @@ export interface User {
   display_name: string
   /** Bot account (acts through an app token). */
   bot?: boolean
+  /** A bot whose app an administrator verified. */
+  verified_bot?: boolean
   /** Display name style: font and effect (see lib/nameStyle.ts); colours in name_primary / name_accent. */
   name_style?: { font?: string; effect?: string; colors?: string[] } | null
   avatar_url: string | null
@@ -456,6 +458,6 @@ export interface RemoteMedia { camera: MediaStream | null; screen: MediaStream |
 export type PeerStatus = 'connecting' | 'connected' | 'failed'
 
 /** A developer application (Settings → Applications). */
-export interface Application { id: string; owner_id: string; name: string; description: string; client_id: string; redirect_uris: string[]; bot_user_id: string | null; created_at: string; privileged_intents?: number; client_secret?: string; bot?: User | null; authorized_users?: number }
+export interface Application { id: string; owner_id: string; name: string; description: string; client_id: string; redirect_uris: string[]; bot_user_id: string | null; created_at: string; privileged_intents?: number; icon_url?: string | null; bot_public?: boolean; verified?: boolean; client_secret?: string; bot?: User | null; authorized_users?: number }
 /** An app holding a token for you (Settings → Authorized Apps). */
 export interface AuthorizedApp { id: string; name: string; description: string; owner: string | null; scopes: string[]; since: string }

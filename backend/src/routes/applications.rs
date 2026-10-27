@@ -19,25 +19,31 @@ pub fn router() -> Router<AppState> {
         .route("/oauth2/token", post(token))
         .route("/oauth2/@me", get(oauth_me))
         .route("/users/@me/authorized-apps", get(authorized_apps))
+        .route("/guilds/:id/members/:uid", axum::routing::put(join_member))
+        .route("/admin/applications", get(admin_list))
+        .route("/admin/applications/:id", axum::routing::patch(admin_verify))
         .route("/users/@me/authorized-apps/:app", axum::routing::delete(deauthorize))
 }
 
 /// Scopes an app may ask for, with what each lets it do.
-pub const SCOPES: [(&str, &str); 6] = [
+pub const SCOPES: [(&str, &str); 9] = [
     ("identify", "Read your username, display name and avatar"),
     ("email", "Read your email address"),
     ("guilds", "See which servers you are in"),
     ("messages.read", "Read messages in channels you can see"),
     ("messages.write", "Send messages as you"),
     ("bot", "Add the app's bot to a server you manage"),
+    ("applications.commands", "Add the app's commands"),
+    ("guilds.join", "Add you to servers the app's bot is in"),
+    ("connections", "See the accounts you have linked"),
 ];
 
 pub fn hash(token: &str) -> String { format!("{:x}", Sha256::digest(token.as_bytes())) }
 fn secret(prefix: &str) -> String { format!("{prefix}_{}", crate::mail::new_token()) }
 
 #[derive(Serialize, sqlx::FromRow, Clone)]
-pub struct App { pub id: Uuid, pub owner_id: Uuid, pub name: String, pub description: String, pub client_id: String, pub redirect_uris: Vec<String>, pub bot_user_id: Option<Uuid>, pub created_at: chrono::DateTime<chrono::Utc>, #[sqlx(default)] pub privileged_intents: i32 }
-const APP_COLS: &str = "id, owner_id, name, description, client_id, redirect_uris, bot_user_id, created_at, privileged_intents";
+pub struct App { pub id: Uuid, pub owner_id: Uuid, pub name: String, pub description: String, pub client_id: String, pub redirect_uris: Vec<String>, pub bot_user_id: Option<Uuid>, pub created_at: chrono::DateTime<chrono::Utc>, #[sqlx(default)] pub privileged_intents: i32, #[sqlx(default)] pub icon_url: Option<String>, #[sqlx(default)] pub bot_public: bool, #[sqlx(default)] pub verified: bool }
+const APP_COLS: &str = "id, owner_id, name, description, client_id, redirect_uris, bot_user_id, created_at, privileged_intents, icon_url, bot_public, verified";
 
 async fn own(state: &AppState, uid: Uuid, id: Uuid) -> AppResult<App> {
     sqlx::query_as::<_, App>(&format!("SELECT {APP_COLS} FROM applications WHERE id = $1 AND owner_id = $2")).bind(id).bind(uid).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Application not found".into()))
@@ -58,6 +64,10 @@ struct AppReq {
     /// Privileged gateway intents the bot may ask for: server members (1<<1), presences (1<<8), message content (1<<15).
     #[serde(default)]
     privileged_intents: Option<u32>,
+    /// An uploaded image (the bot's avatar too); "" clears.
+    icon_url: Option<String>,
+    /// Anyone can add the bot (true), or only you.
+    bot_public: Option<bool>,
 }
 
 fn clean_uris(list: &[String]) -> AppResult<Vec<String>> {
@@ -101,10 +111,12 @@ async fn update_app(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     own(&state, uid, id).await?;
     if let Some(n) = &req.name { if n.trim().is_empty() || n.chars().count() > 50 { return Err(AppError::BadRequest("Name must be 1–50 characters".into())) } }
     let uris = match &req.redirect_uris { Some(l) => Some(clean_uris(l)?), None => None };
-    let app = sqlx::query_as::<_, App>(&format!("UPDATE applications SET name = COALESCE($2, name), description = COALESCE($3, description), redirect_uris = COALESCE($4, redirect_uris), privileged_intents = COALESCE($5, privileged_intents) WHERE id = $1 RETURNING {APP_COLS}"))
+    let app = sqlx::query_as::<_, App>(&format!("UPDATE applications SET name = COALESCE($2, name), description = COALESCE($3, description), redirect_uris = COALESCE($4, redirect_uris), privileged_intents = COALESCE($5, privileged_intents),
+        icon_url = CASE WHEN $6 THEN NULLIF($7, '') ELSE icon_url END, bot_public = COALESCE($8, bot_public) WHERE id = $1 RETURNING {APP_COLS}"))
         .bind(id).bind(req.name.map(|n| n.trim().to_string())).bind(req.description.map(|d| d.trim().chars().take(400).collect::<String>())).bind(uris)
-        .bind(req.privileged_intents.map(|i| (i & crate::ws::intents::PRIVILEGED) as i32)).fetch_one(&state.db).await?;
-    if let Some(b) = app.bot_user_id { sqlx::query("UPDATE users SET display_name = $2 WHERE id = $1 AND bot").bind(b).bind(&app.name).execute(&state.db).await?; }
+        .bind(req.privileged_intents.map(|i| (i & crate::ws::intents::PRIVILEGED) as i32)).bind(req.icon_url.is_some()).bind(req.icon_url.clone().unwrap_or_default()).bind(req.bot_public).fetch_one(&state.db).await?;
+    if let Some(i) = &req.icon_url { crate::routes::users::validate_image(&Some(i.clone()).filter(|x| !x.is_empty()))?; }
+    if let Some(b) = app.bot_user_id { sqlx::query("UPDATE users SET display_name = $2, avatar_url = $3 WHERE id = $1 AND bot").bind(b).bind(&app.name).bind(&app.icon_url).execute(&state.db).await?; }
     Ok(Json(app))
 }
 
@@ -157,7 +169,7 @@ async fn issue_token(state: &AppState, app_id: Uuid, user_id: Uuid, kind: &str, 
 // ---- OAuth2 ------------------------------------------------------------------------------------------
 
 #[derive(Deserialize)]
-struct AuthorizeQ { client_id: String, redirect_uri: Option<String>, scope: Option<String>, state: Option<String>, guild_id: Option<Uuid> }
+struct AuthorizeQ { client_id: String, redirect_uri: Option<String>, scope: Option<String>, state: Option<String>, guild_id: Option<Uuid>, permissions: Option<String> }
 
 fn parse_scopes(s: &str) -> AppResult<Vec<String>> {
     let mut out = Vec::new();
@@ -174,7 +186,8 @@ fn parse_scopes(s: &str) -> AppResult<Vec<String>> {
 async fn authorize_info(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<AuthorizeQ>) -> AppResult<Json<Value>> {
     let app = by_client(&state, &q.client_id).await?;
     let scopes = parse_scopes(q.scope.as_deref().unwrap_or("identify"))?;
-    let redirect = pick_redirect(&app, q.redirect_uri.as_deref())?;
+    let redirect = if bot_only(&scopes) { pick_redirect(&app, q.redirect_uri.as_deref()).ok() } else { Some(pick_redirect(&app, q.redirect_uri.as_deref())?) };
+    if scopes.iter().any(|s| s == "bot") && !app.bot_public && app.owner_id != uid { return Err(AppError::BadRequest("This bot is private: only its owner can add it".into())) }
     let owner = sqlx::query_as::<_, User>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::USER_COLS)).bind(app.owner_id).fetch_optional(&state.db).await?;
     let guilds: Vec<(Uuid, String, Option<String>)> = if scopes.iter().any(|s| s == "bot") {
         sqlx::query_as("SELECT g.id, g.name, g.icon_url FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $1 ORDER BY g.name").bind(uid).fetch_all(&state.db).await?
@@ -182,10 +195,11 @@ async fn authorize_info(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     let mut manageable = Vec::new();
     for (gid, name, icon) in guilds {
         let p = crate::perms::guild_perms(&state.db, gid, uid).await.map(|x| x.1).unwrap_or(0);
-        if crate::perms::has(p, crate::perms::MANAGE_GUILD) { manageable.push(json!({ "id": gid, "name": name, "icon_url": icon })); }
+        if crate::perms::has(p, crate::perms::MANAGE_GUILD) { manageable.push(json!({ "id": gid, "name": name, "icon_url": icon, "my_permissions": p })); }
     }
     Ok(Json(json!({
-        "app": { "id": app.id, "name": app.name, "description": app.description, "client_id": app.client_id, "has_bot": app.bot_user_id.is_some(), "owner": owner },
+        "app": { "id": app.id, "name": app.name, "description": app.description, "client_id": app.client_id, "has_bot": app.bot_user_id.is_some(), "owner": owner, "icon_url": app.icon_url, "verified": app.verified },
+        "permissions": perm_value(q.permissions.as_ref().map(|p| serde_json::Value::String(p.clone())).as_ref()),
         "scopes": scopes.iter().map(|s| json!({ "id": s, "description": SCOPES.iter().find(|(k, _)| k == s).map(|x| x.1).unwrap_or("") })).collect::<Vec<_>>(),
         "redirect_uri": redirect, "state": q.state, "guilds": manageable,
     })))
@@ -200,24 +214,37 @@ fn pick_redirect(app: &App, want: Option<&str>) -> AppResult<String> {
 }
 
 #[derive(Deserialize)]
-struct AuthorizeReq { client_id: String, redirect_uri: Option<String>, scope: Option<String>, state: Option<String>, guild_id: Option<Uuid> }
+struct AuthorizeReq { client_id: String, redirect_uri: Option<String>, scope: Option<String>, state: Option<String>, guild_id: Option<Uuid>, #[serde(default)] permissions: Option<serde_json::Value> }
+
+/// Bot-only invites (bot and/or applications.commands) need no redirect: the app gets nothing back.
+fn bot_only(scopes: &[String]) -> bool { scopes.iter().all(|s| s == "bot" || s == "applications.commands") }
+
+/// A permissions value from a query string or JSON (a decimal string or a number).
+fn perm_value(v: Option<&serde_json::Value>) -> u64 { v.and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).unwrap_or(0) & crate::perms::ALL }
 
 /// The user approved: mint a one-minute code and (with the bot scope) add the bot to the chosen server.
 async fn authorize(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<AuthorizeReq>) -> AppResult<Json<Value>> {
     let app = by_client(&state, &req.client_id).await?;
     let scopes = parse_scopes(req.scope.as_deref().unwrap_or("identify"))?;
-    let redirect = pick_redirect(&app, req.redirect_uri.as_deref())?;
+    let redirect = if bot_only(&scopes) { pick_redirect(&app, req.redirect_uri.as_deref()).ok() } else { Some(pick_redirect(&app, req.redirect_uri.as_deref())?) };
     if scopes.iter().any(|s| s == "bot") {
+        if !app.bot_public && app.owner_id != uid { return Err(AppError::BadRequest("This bot is private: only its owner can add it".into())) }
         let gid = req.guild_id.ok_or_else(|| AppError::BadRequest("Pick a server to add the bot to".into()))?;
         let bot = app.bot_user_id.ok_or_else(|| AppError::BadRequest("This application has no bot".into()))?;
         let p = crate::perms::guild_perms(&state.db, gid, uid).await?.1;
         if !crate::perms::has(p, crate::perms::MANAGE_GUILD) { return Err(AppError::Forbidden) }
+        // You can only hand the bot powers you have yourself.
+        let wanted = perm_value(req.permissions.as_ref());
+        if wanted & !p != 0 { return Err(AppError::BadRequest("You can't give the bot permissions you don't have".into())) }
         let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(gid).bind(bot).execute(&state.db).await?.rows_affected();
+        managed_role(&state, gid, &app, bot, wanted).await?;
         if inserted > 0 {
             if let Ok(member) = crate::routes::guilds::fetch_member(&state.db, gid, bot).await { state.hub.emit_guild(gid, "GUILD_MEMBER_ADD", json!(member)); }
             let _ = crate::routes::channels::guild_system_message(&state, gid, bot, "member_join", "joined the server.").await;
+            crate::audit::guild(&state, gid, uid, "bot.add", "user", Some(bot), &app.name, json!({ "permissions": wanted.to_string() })).await;
         }
     }
+    let Some(redirect) = redirect else { return Ok(Json(json!({ "redirect": null, "guild_id": req.guild_id }))) };
     let code = crate::mail::new_token();
     sqlx::query("INSERT INTO oauth_codes (code, app_id, user_id, scopes, redirect_uri, expires_at) VALUES ($1, $2, $3, $4, $5, now() + interval '1 minute')")
         .bind(&code).bind(app.id).bind(uid).bind(&scopes).bind(&redirect).execute(&state.db).await?;
@@ -228,14 +255,20 @@ async fn authorize(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(
 }
 
 #[derive(Deserialize)]
-struct TokenReq { grant_type: String, code: Option<String>, client_id: String, client_secret: String, redirect_uri: Option<String> }
+struct TokenReq { grant_type: String, code: Option<String>, client_id: String, client_secret: String, redirect_uri: Option<String>, scope: Option<String> }
 
-/// Swap a code for a user token (the app's secret proves the app). JSON like the big providers.
+/// Swap a code for a user token (the app's secret proves the app). JSON like the big providers. `client_credentials`
+/// gives the app's owner a token for testing (no bot, guilds.join or messages.write).
 async fn token(State(state): State<AppState>, Form(req): Form<TokenReq>) -> AppResult<Json<Value>> {
-    if req.grant_type != "authorization_code" { return Err(AppError::BadRequest("unsupported_grant_type".into())) }
+    if req.grant_type != "authorization_code" && req.grant_type != "client_credentials" { return Err(AppError::BadRequest("unsupported_grant_type".into())) }
     let app = by_client(&state, &req.client_id).await?;
     let (hash_db,): (String,) = sqlx::query_as("SELECT client_secret_hash FROM applications WHERE id = $1").bind(app.id).fetch_one(&state.db).await?;
     if hash(&req.client_secret) != hash_db { return Err(AppError::Unauthorized) }
+    if req.grant_type == "client_credentials" {
+        let scopes: Vec<String> = parse_scopes(req.scope.as_deref().unwrap_or("identify"))?.into_iter().filter(|s| !["bot", "guilds.join", "messages.write"].contains(&s.as_str())).collect();
+        let tok = issue_token(&state, app.id, app.owner_id, "user", &scopes).await?;
+        return Ok(Json(json!({ "access_token": tok, "token_type": "Bearer", "scope": scopes.join(" "), "expires_in": 604800 })));
+    }
     let code = req.code.ok_or_else(|| AppError::BadRequest("code required".into()))?;
     let row: Option<(Uuid, Vec<String>, String)> = sqlx::query_as("UPDATE oauth_codes SET used_at = now() WHERE code = $1 AND app_id = $2 AND used_at IS NULL AND expires_at > now() RETURNING user_id, scopes, redirect_uri")
         .bind(&code).bind(app.id).fetch_optional(&state.db).await?;
@@ -302,6 +335,7 @@ fn scope_allows(scopes: &[String], method: &axum::http::Method, path: &str) -> b
     if path == "/api/users/@me" && get { return has("identify") || has("email") }
     if path.starts_with("/api/users/@me/guilds") || (path == "/api/guilds" && get) { return has("guilds") }
     if path.starts_with("/api/channels/") && path.contains("/messages") { return if get { has("messages.read") } else { has("messages.write") } }
+    if path == "/api/users/@me/connections" && get { return has("connections") }
     if path.starts_with("/api/users/") && get { return has("identify") }
     false
 }
@@ -313,3 +347,73 @@ pub async fn is_bot(db: &sqlx::PgPool, uid: Uuid) -> bool {
 
 #[allow(dead_code)]
 fn _unused(_: PrivateUser) {}
+
+/// The bot's own role in a server: made just above @everyone with the permissions picked when it was added (or
+/// updated when it's added again). None picked: no role.
+async fn managed_role(state: &AppState, gid: Uuid, app: &App, bot: Uuid, perms: u64) -> AppResult<()> {
+    let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM roles WHERE guild_id = $1 AND managed_app_id = $2").bind(gid).bind(app.id).fetch_optional(&state.db).await?;
+    match existing {
+        Some((rid,)) => { sqlx::query("UPDATE roles SET permissions = $2 WHERE id = $1").bind(rid).bind(perms as i64).execute(&state.db).await?; }
+        None if perms != 0 => {
+            let rid = Uuid::now_v7();
+            let mut tx = state.db.begin().await?;
+            sqlx::query("UPDATE roles SET position = position + 1 WHERE guild_id = $1 AND position >= 1").bind(gid).execute(&mut *tx).await?;
+            sqlx::query("INSERT INTO roles (id, guild_id, name, position, permissions, managed_app_id) VALUES ($1, $2, $3, 1, $4, $5)").bind(rid).bind(gid).bind(app.name.chars().take(100).collect::<String>()).bind(perms as i64).bind(app.id).execute(&mut *tx).await?;
+            sqlx::query("INSERT INTO member_roles (guild_id, user_id, role_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING").bind(gid).bind(bot).bind(rid).execute(&mut *tx).await?;
+            tx.commit().await?;
+        }
+        None => return Ok(()),
+    }
+    crate::routes::roles::emit_roles(state, gid).await?;
+    if let Ok(m) = crate::routes::guilds::fetch_member(&state.db, gid, bot).await { state.hub.emit_guild(gid, "GUILD_MEMBER_UPDATE", json!(m)); }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct JoinReq { access_token: String }
+
+/// `PUT /guilds/:id/members/:uid` (bots, with Create Invite): add someone who gave this app the guilds.join scope.
+async fn join_member(State(state): State<AppState>, AuthUser(bot): AuthUser, Path((gid, uid)): Path<(Uuid, Uuid)>, Json(req): Json<JoinReq>) -> AppResult<StatusCode> {
+    let app: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM applications WHERE bot_user_id = $1").bind(bot).fetch_optional(&state.db).await?;
+    let (app,) = app.ok_or(AppError::Forbidden)?;
+    let (_, p) = crate::perms::guild_perms(&state.db, gid, bot).await?;
+    crate::perms::check(p, crate::perms::CREATE_INVITE)?;
+    let row: Option<(Uuid, Vec<String>)> = sqlx::query_as("SELECT user_id, scopes FROM oauth_tokens WHERE token_hash = $1 AND app_id = $2 AND kind = 'user' AND revoked_at IS NULL").bind(hash(&req.access_token)).bind(app).fetch_optional(&state.db).await?;
+    match row { Some((u, scopes)) if u == uid && scopes.iter().any(|s| s == "guilds.join") => {}, _ => return Err(AppError::Forbidden) }
+    if crate::routes::guilds::is_banned(&state.db, gid, uid).await? { return Err(AppError::Forbidden) }
+    let inserted = sqlx::query("INSERT INTO guild_members (guild_id, user_id, joined_via) VALUES ($1, $2, 'app') ON CONFLICT DO NOTHING").bind(gid).bind(uid).execute(&state.db).await?.rows_affected();
+    if inserted == 0 { return Ok(StatusCode::NO_CONTENT) }
+    let g = sqlx::query_as::<_, crate::models::Guild>(&format!("SELECT {} FROM guilds WHERE id = $1", crate::routes::guilds::GUILD_COLS)).bind(gid).fetch_one(&state.db).await?;
+    let mut channels = crate::perms::visible_channels(&state.db, gid, uid).await?;
+    crate::perms::attach_overwrites(&state.db, &mut channels).await?;
+    let roles = crate::perms::list_roles(&state.db, gid).await?;
+    state.hub.emit_users(vec![uid], "GUILD_CREATE", crate::routes::guilds::guild_payload(&g, json!({ "channels": channels, "roles": roles })));
+    if let Ok(m) = crate::routes::guilds::fetch_member(&state.db, gid, uid).await { state.hub.emit_guild(gid, "GUILD_MEMBER_ADD", json!(m)); }
+    Ok(StatusCode::CREATED)
+}
+
+/// `GET /admin/applications`: every app with a bot, newest first, for verifying.
+async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Value>>> {
+    crate::routes::users::require_admin(&state, uid).await?;
+    let rows: Vec<(Uuid, String, String, Option<String>, bool, bool, chrono::DateTime<chrono::Utc>, Option<String>, i64)> = sqlx::query_as(
+        "SELECT a.id, a.name, a.description, a.icon_url, a.verified, a.bot_public, a.created_at, o.username,
+                (SELECT COUNT(*) FROM guild_members m WHERE m.user_id = a.bot_user_id) FROM applications a LEFT JOIN users o ON o.id = a.owner_id
+         WHERE a.bot_user_id IS NOT NULL ORDER BY a.created_at DESC LIMIT 500").fetch_all(&state.db).await?;
+    Ok(Json(rows.into_iter().map(|(id, name, desc, icon, verified, public, at, owner, servers)| json!({ "id": id, "name": name, "description": desc, "icon_url": icon, "verified": verified, "bot_public": public, "created_at": at, "owner": owner, "servers": servers })).collect()))
+}
+
+#[derive(Deserialize)]
+struct VerifyReq { verified: bool }
+
+/// `PATCH /admin/applications/:id`: mark an app (and its bot) verified, or not.
+async fn admin_verify(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<VerifyReq>) -> AppResult<StatusCode> {
+    crate::routes::users::require_admin(&state, uid).await?;
+    let row: Option<(Option<Uuid>, String)> = sqlx::query_as("UPDATE applications SET verified = $2 WHERE id = $1 RETURNING bot_user_id, name").bind(id).bind(req.verified).fetch_optional(&state.db).await?;
+    let (bot, name) = row.ok_or_else(|| AppError::NotFound("Application not found".into()))?;
+    if let Some(b) = bot {
+        sqlx::query("UPDATE users SET verified_bot = $2 WHERE id = $1").bind(b).bind(req.verified).execute(&state.db).await?;
+        if let Ok(u) = sqlx::query_as::<_, User>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::USER_COLS)).bind(b).fetch_one(&state.db).await { state.hub.emit_all("USER_UPDATE", json!(u)); }
+    }
+    crate::audit::record(&state, uid, if req.verified { "app.verify" } else { "app.unverify" }, "application", Some(id), &name, json!({})).await;
+    Ok(StatusCode::NO_CONTENT)
+}

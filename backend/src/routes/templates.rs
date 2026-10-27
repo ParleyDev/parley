@@ -49,7 +49,8 @@ async fn snapshot(state: &AppState, gid: Uuid) -> AppResult<Snapshot> {
     let mut roles = perms::list_roles(&state.db, gid).await?;
     roles.sort_by_key(|r| r.position);
     let everyone = roles.iter().find(|r| r.id == gid).map(|r| r.permissions).unwrap_or(0);
-    let roles: Vec<_> = roles.into_iter().filter(|r| r.id != gid).collect();
+    // Bots' own roles stay behind with their bots.
+    let roles: Vec<_> = roles.into_iter().filter(|r| r.id != gid && r.managed_app_id.is_none()).collect();
     let role_idx: HashMap<Uuid, i32> = roles.iter().enumerate().map(|(i, r)| (r.id, i as i32)).collect();
     let mut chans = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE guild_id = $1 AND kind <> 'thread' ORDER BY (kind <> 'category'), position, created_at")).bind(gid).fetch_all(&state.db).await?;
     perms::attach_overwrites(&state.db, &mut chans).await?;

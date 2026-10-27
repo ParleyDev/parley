@@ -21,6 +21,9 @@ pub struct User {
     /// A bot account (acts only through its token).
     #[sqlx(default)]
     pub bot: bool,
+    /// A bot whose app an administrator verified.
+    #[sqlx(default)]
+    pub verified_bot: bool,
     /// Display name style: {font, effect} (colours in name_primary / name_accent).
     #[sqlx(default)]
     pub name_style: serde_json::Value,
@@ -64,6 +67,8 @@ struct UserWire<'a> {
     name_primary: &'a Option<String>,
     name_accent: &'a Option<String>,
     bot: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    verified_bot: bool,
     name_style: &'a serde_json::Value,
     custom_status: &'a str,
     avatar_decoration: &'a str,
@@ -88,7 +93,7 @@ impl Serialize for User {
             bio: if hidden { "" } else { &self.bio }, status: &self.status, created_at: self.created_at,
             banner_url: if hidden { None } else { self.banner_url.as_ref() }, theme_primary: &self.theme_primary, theme_accent: &self.theme_accent,
             pronouns: if hidden { "" } else { &self.pronouns }, name_primary: &self.name_primary, name_accent: &self.name_accent,
-            bot: self.bot, name_style: &self.name_style, custom_status: &self.custom_status, avatar_decoration: &self.avatar_decoration,
+            bot: self.bot, verified_bot: self.verified_bot, name_style: &self.name_style, custom_status: &self.custom_status, avatar_decoration: &self.avatar_decoration,
             clan_tag: &self.clan_tag, panels: if hidden { &NULL } else { &self.panels },
             profile_frame: &self.profile_frame, nameplate: &self.nameplate, profile_effect: &self.profile_effect,
             private_profile: hidden,
@@ -100,7 +105,7 @@ impl Serialize for User {
 impl From<&PrivateUser> for User {
     fn from(u: &PrivateUser) -> Self {
         User {
-            name_style: u.name_style.clone(), bot: u.bot, id: u.id, username: u.username.clone(), display_name: u.display_name.clone(), avatar_url: u.avatar_url.clone(), bio: u.bio.clone(),
+            name_style: u.name_style.clone(), bot: u.bot, verified_bot: false, id: u.id, username: u.username.clone(), display_name: u.display_name.clone(), avatar_url: u.avatar_url.clone(), bio: u.bio.clone(),
             status: u.status.clone(), custom_status: u.custom_status.clone(), created_at: u.created_at, banner_url: u.banner_url.clone(),
             theme_primary: u.theme_primary.clone(), theme_accent: u.theme_accent.clone(), pronouns: u.pronouns.clone(), name_primary: u.name_primary.clone(),
             name_accent: u.name_accent.clone(), avatar_decoration: u.avatar_decoration.clone(), clan_tag: u.clan_tag.clone(), panels: u.panels.clone(),
@@ -464,6 +469,11 @@ pub struct Role {
     #[sqlx(default)]
     #[serde(default)]
     pub self_assignable: bool,
+    /// A bot's own role (made when it was added, with the permissions picked then): can't be deleted or given to
+    /// anyone else while the bot is there.
+    #[sqlx(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub managed_app_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, FromRow)]
@@ -600,6 +610,8 @@ pub struct MessageRow {
     pub interaction: Option<serde_json::Value>,
     #[sqlx(default)]
     pub components: Option<serde_json::Value>,
+    #[sqlx(default)]
+    pub author_verified_bot: bool,
 }
 
 /// The sticker attached to a message (at most one, like Discord).
@@ -838,6 +850,7 @@ impl MessageRow {
             author: User {
                 name_style: self.author_name_style.clone(),
                 bot: self.author_bot,
+                verified_bot: self.author_verified_bot,
                 id: self.author_id,
                 username: self.username,
                 display_name: self.author_override.as_ref().and_then(|o| o["name"].as_str()).map(str::to_string).unwrap_or(self.display_name),

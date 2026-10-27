@@ -1,5 +1,6 @@
 import BlockedLinksPane from './AdminBlockedLinks'
-import { Ban, Compass, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
+import AppsPane from './AdminApps'
+import { Ban, Bot, Compass, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -26,6 +27,7 @@ export default function AdminPage() {
               <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> Messages</NavLink>
               <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> Reports</NavLink>
               <NavLink to="/admin/blocked-links" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="blocked-links"><Ban size={20} /> Blocked Links</NavLink>
+              <NavLink to="/admin/apps" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="apps"><Bot size={20} /> Apps</NavLink>
               <NavLink to="/admin/audit" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="audit"><ScrollText size={20} /> Audit Log</NavLink>
               <NavLink to="/admin/mail" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="mail"><Mail size={20} /> Mail</NavLink>
             </nav>
@@ -42,6 +44,7 @@ export default function AdminPage() {
           <Route path="mail" element={<MailPane />} />
           <Route path="reports" element={<ReportsPane />} />
           <Route path="blocked-links" element={<BlockedLinksPane />} />
+          <Route path="apps" element={<AppsPane />} />
           <Route path="messages" element={<MessagesPane />} />
           <Route path="users/:id" element={<UserContentPane />} />
         </Routes>

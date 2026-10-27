@@ -319,7 +319,7 @@ async fn reorder(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, ctx: &GuildCtx,
     Ok(())
 }
 
-async fn emit_roles(state: &AppState, guild_id: Uuid) -> AppResult<()> {
+pub async fn emit_roles(state: &AppState, guild_id: Uuid) -> AppResult<()> {
     let roles = perms::list_roles(&state.db, guild_id).await?;
     state.hub.emit_guild(guild_id, "ROLES_SYNC", json!({ "guild_id": guild_id, "roles": roles }));
     Ok(())
@@ -332,6 +332,9 @@ async fn delete_role(
 ) -> AppResult<StatusCode> {
     let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
     perms::check(p, perms::MANAGE_ROLES)?;
+    if ctx.roles.get(&rid).map(|r| r.managed_app_id.is_some()).unwrap_or(false) {
+        return Err(AppError::BadRequest("This role belongs to a bot: remove the bot to remove it".into()));
+    }
     if rid == id {
         return Err(AppError::BadRequest("@everyone cannot be deleted".into()));
     }
@@ -461,6 +464,7 @@ async fn update_member(
             if !ctx.outranks_role(uid, role) || role.id == id {
                 return Err(AppError::Forbidden);
             }
+            if role.managed_app_id.is_some() { return Err(AppError::BadRequest(format!("{} is a bot's own role and can't be given or taken", role.name))) }
         }
         sqlx::query("DELETE FROM member_roles WHERE guild_id = $1 AND user_id = $2").bind(id).bind(target).execute(&mut *tx).await?;
         for r in &wanted {

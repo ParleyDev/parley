@@ -676,6 +676,9 @@ async fn try_remove_member(state: &AppState, guild_id: Uuid, user_id: Uuid) -> A
         .execute(&state.db)
         .await?;
     state.hub.voice_evict(|v| v.guild_id == Some(guild_id) && v.user_id == user_id);
+    // A bot leaving takes its own role with it.
+    let gone = sqlx::query("DELETE FROM roles WHERE guild_id = $1 AND managed_app_id IN (SELECT id FROM applications WHERE bot_user_id = $2)").bind(guild_id).bind(user_id).execute(&state.db).await?;
+    if gone.rows_affected() > 0 { let _ = crate::routes::roles::emit_roles(state, guild_id).await; }
     let payload = json!({ "guild_id": guild_id, "user_id": user_id });
     state.hub.emit_guild(guild_id, "GUILD_MEMBER_REMOVE", payload.clone());
     // The removed user no longer matches the guild target; notify them directly.
