@@ -18,6 +18,7 @@ pub mod appeals;
 pub mod webhooks;
 pub mod interactions;
 pub mod linked_roles;
+pub mod apidoc;
 pub mod connections;
 pub mod discovery;
 pub mod dms;
@@ -91,6 +92,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(webhooks::router())
         .merge(interactions::router())
         .merge(linked_roles::router())
+        .merge(apidoc::router())
         .merge(invites::router())
         .merge(roles::router())
         .merge(relationships::router())

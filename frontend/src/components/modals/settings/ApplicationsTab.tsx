@@ -41,7 +41,7 @@ export default function ApplicationsTab() {
   const authUrl = open ? `${publicOrigin()}/oauth2/authorize?client_id=${open.client_id}&response_type=code&scope=${encodeURIComponent(scopes.join(' '))}${open.redirect_uris[0] ? `&redirect_uri=${encodeURIComponent(open.redirect_uris[0])}` : ''}` : ''
   return (
     <div className="space-y-6" data-applications-tab>
-      <h2 className="text-xl font-bold">Applications</h2>
+      <div className="flex items-center justify-between"><h2 className="text-xl font-bold">Applications</h2><a href="/developers" target="_blank" rel="noopener" className="text-sm text-sky-400 hover:underline" data-dev-docs>API reference</a></div>
       {secret && (
         <div className="rounded-xl border border-warn/50 bg-warn/10 p-3 space-y-2" data-secret-reveal>
           <div className="text-sm font-semibold">{secret.label}</div>

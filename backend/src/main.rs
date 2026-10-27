@@ -99,6 +99,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/version", get(|| async { axum::Json(serde_json::json!({ "version": VERSION })) }))
         .route("/metrics", get(metrics::endpoint))
         .route("/ws", get(ws::handler::ws_upgrade))
+        // The versioned prefix (what the API reference documents) and the original one; both are the same API.
+        .nest("/api/v1", routes::api_router().layer(axum::middleware::from_fn(audit::reason_scope)))
         .nest("/api", routes::api_router().layer(axum::middleware::from_fn(audit::reason_scope)))
         .layer(axum::extract::DefaultBodyLimit::max(2 * 1024 * 1024))
         .layer(cors)
