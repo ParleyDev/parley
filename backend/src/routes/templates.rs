@@ -171,7 +171,7 @@ async fn use_template(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
             .execute(&mut *tx).await?;
         role_ids.push(id);
     }
-    const KINDS: [&str; 6] = ["text", "voice", "stage", "studio", "category", "forum"];
+    const KINDS: [&str; 7] = ["text", "voice", "stage", "studio", "category", "forum", "directory"];
     let mut chan_ids: Vec<Option<Uuid>> = Vec::new();
     let mut pos: HashMap<Option<Uuid>, i32> = HashMap::new();
     for c in snap.channels.iter().take(500) {

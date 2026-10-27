@@ -527,6 +527,9 @@ async fn create_message(
     if c.kind == "forum" {
         return Err(AppError::BadRequest("Forum channels hold posts: create a post instead".into()));
     }
+    if c.kind == "directory" {
+        return Err(AppError::BadRequest("Directory channels list servers; they don't hold messages".into()));
+    }
     if c.kind == "thread" { crate::routes::threads::check_locked(&state.db, c.id, p).await?; }
     if let Some(gid) = c.guild_id { check_verification(&state.db, gid, uid).await?; }
     check_slowmode(&state.db, &c, p, uid).await?;

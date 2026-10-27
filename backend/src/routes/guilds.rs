@@ -461,8 +461,8 @@ async fn create_channel(
     let kind = req.kind.unwrap_or_else(|| "text".into());
     // Announcement and media channels are text channels and forums with a flag.
     let (kind, news, media) = match kind.as_str() { "announcement" => ("text".to_string(), true, false), "media" => ("forum".to_string(), false, true), _ => (kind, false, false) };
-    if !["text", "voice", "stage", "studio", "category", "forum"].contains(&kind.as_str()) {
-        return Err(AppError::BadRequest("kind must be text, voice, forum or category".into()));
+    if !["text", "voice", "stage", "studio", "category", "forum", "directory"].contains(&kind.as_str()) {
+        return Err(AppError::BadRequest("kind must be text, announcement, voice, stage, studio, forum, media, directory or category".into()));
     }
     let name = normalize_channel_name(&req.name, &kind)?;
     let parent = check_parent(&state.db, id, &kind, req.parent_id).await?;
@@ -496,7 +496,7 @@ async fn create_channel(
 pub fn normalize_channel_name(raw: &str, kind: &str) -> AppResult<String> {
     let name = if kind == "category" {
         raw.trim().chars().take(100).collect::<String>()
-    } else if kind == "text" || kind == "forum" {
+    } else if kind == "text" || kind == "forum" || kind == "directory" {
         raw.trim().to_lowercase().chars().map(|c| if c.is_whitespace() { '-' } else { c }).collect::<String>()
     } else {
         raw.trim().to_string()

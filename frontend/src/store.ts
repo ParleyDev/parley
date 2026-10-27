@@ -157,6 +157,9 @@ interface State {
   customize: Record<string, { hidden: string[]; onboarded: boolean }>
   /** App commands usable in a channel (from the bots there); cleared when an app changes its commands. */
   appCommands: Record<string, AppCommand[]>
+  /** Bumped when a directory channel's list changes (DIRECTORY_UPDATE), to refetch it. */
+  directoryVersion: Record<string, number>
+  bumpDirectory: (channelId: string) => void
   loadAppCommands: (channelId: string) => Promise<void>
   clearAppCommands: () => void
   loadCustomize: (guildId: string) => Promise<void>
@@ -361,6 +364,8 @@ export const useStore = create<State>((set, get) => ({
   myThreads: {},
   customize: {},
   appCommands: {},
+  directoryVersion: {},
+  bumpDirectory: (channelId) => set((s) => ({ directoryVersion: { ...s.directoryVersion, [channelId]: (s.directoryVersion[channelId] ?? 0) + 1 } })),
   loadAppCommands: async (channelId) => { try { const list = await api.get<AppCommand[]>(`/channels/${channelId}/commands`); set((s) => ({ appCommands: { ...s.appCommands, [channelId]: list } })) } catch { /* ignore */ } },
   clearAppCommands: () => set({ appCommands: {} }),
   loadCustomize: async (guildId) => { try { const r = await api.get<{ hidden_channels: string[]; onboarded: boolean }>(`/guilds/${guildId}/me/customize`); set((s) => ({ customize: { ...s.customize, [guildId]: { hidden: r.hidden_channels, onboarded: r.onboarded } } })) } catch { /* ignore */ } },

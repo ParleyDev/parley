@@ -24,6 +24,7 @@ import { MembersToggle, MobileBack } from './HeaderBits'
 import { useT } from '../lib/i18n'
 import { remindLabel, setReminder } from '../lib/reminders'
 import { applySuggestion, useSearchSuggestions } from './SearchSuggest'
+import DirectoryView from './DirectoryView'
 import { confirmSkipped } from './modals/Confirm'
 
 /** Scroll a loaded message into view and flash it. Returns false when it is not in the DOM. */
@@ -236,7 +237,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
         </header>
         {isDm && <DmCall channel={channel as DmChannel} />}
         {isDm && !group && other && myAge === 'teen' && relKind !== 'friend' && <TeenDmNotice name={other.display_name} onBlock={() => { void api.put(`/users/@me/relationships/${other.id}/block`).then(() => pushToast(`${other.display_name} blocked`)).catch((e: Error) => pushToast(e.message, 'error')) }} />}
-        {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : <ChatPane channel={channel} />}
+        {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : channel.kind === 'directory' ? <DirectoryView channel={channel as Channel} /> : <ChatPane channel={channel} />}
       </main>
       {search !== null ? (
         <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast('That message could not be found', 'error')} />

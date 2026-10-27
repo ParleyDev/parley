@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
 import { anchorOf } from '../lib/anchor'
-import { CalendarDays, Flame, Handshake, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, Image as ImageIcon, Megaphone, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
+import { CalendarDays, Flame, Handshake, LayoutGrid, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, Image as ImageIcon, Megaphone, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
@@ -27,7 +27,7 @@ import { useT } from '../lib/i18n'
 /** Channel-list icon by kind; the server's rules channel gets a rulebook. */
 function chanIcon(c: Channel, rulesId?: string | null) {
   if (c.id === rulesId) return <BookOpenCheck size={18} data-rules-icon />
-  return c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? (c.media ? <ImageIcon size={18} /> : <MessageSquareText size={18} />) : c.news ? <Megaphone size={18} /> : <Hash size={18} />
+  return c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? (c.media ? <ImageIcon size={18} /> : <MessageSquareText size={18} />) : c.kind === 'directory' ? <LayoutGrid size={18} /> : c.news ? <Megaphone size={18} /> : <Hash size={18} />
 }
 export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const t = useT()

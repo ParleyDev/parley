@@ -68,6 +68,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'VOICE_DISCONNECT'; d: { guild_id: string } }
   | { t: 'GUILD_CUSTOMIZE_UPDATE'; d: { guild_id: string; hidden_channels: string[] } }
   | { t: 'THREAD_MEMBER_UPDATE'; d: { thread_id: string; joined: boolean } }
+  | { t: 'DIRECTORY_UPDATE'; d: { channel_id: string } }
   | { t: 'APPLICATION_COMMANDS_UPDATE'; d: { application_id: string; guild_id: string | null } }
   | { t: 'INTERACTION_FAILED'; d: { id: string; name: string; label?: string; application: string } }
   | { t: 'INTERACTION_MODAL'; d: { interaction_id: string; modal: import('../components/modals/AppModal').AppForm } }
@@ -305,6 +306,7 @@ function handle(ev: Ev) {
     case 'GUILD_CUSTOMIZE_UPDATE': s.setHidden(ev.d.guild_id, ev.d.hidden_channels); break
     case 'THREAD_MEMBER_UPDATE': s.setMyThread(ev.d.thread_id, ev.d.joined); break
     case 'APPLICATION_COMMANDS_UPDATE': s.clearAppCommands(); break
+    case 'DIRECTORY_UPDATE': s.bumpDirectory(ev.d.channel_id); break
     case 'INTERACTION_FAILED': s.pushToast(`${ev.d.application} didn't respond to ${ev.d.label ?? `/${ev.d.name}`}.`, 'error'); break
     case 'INTERACTION_MODAL': s.openModal({ kind: 'appModal', interactionId: ev.d.interaction_id, modal: ev.d.modal }); break
     case 'APPEAL_UPDATE': s.pushToast(ev.d.status === 'accepted' ? `Your appeal to ${ev.d.guild_name} was accepted: you can rejoin with an invite.` : `Your appeal to ${ev.d.guild_name} was denied${ev.d.reason ? `: ${ev.d.reason}` : '.'}`, ev.d.status === 'accepted' ? undefined : 'error'); break

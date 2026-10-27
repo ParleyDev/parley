@@ -162,7 +162,7 @@ export interface Channel {
   id: string
   guild_id: string | null
   name: string
-  kind: 'text' | 'voice' | 'stage' | 'studio' | 'dm' | 'group' | 'category' | 'thread' | 'forum'
+  kind: 'text' | 'voice' | 'stage' | 'studio' | 'dm' | 'group' | 'category' | 'thread' | 'forum' | 'directory'
   topic: string
   position: number
   created_at: string

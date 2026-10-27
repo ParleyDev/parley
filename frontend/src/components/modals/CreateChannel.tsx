@@ -1,4 +1,4 @@
-import { FolderOpen, Hash, Image as ImageIcon, Lock, Megaphone, MessageSquareText, Volume2, Radio, Disc3 } from 'lucide-react'
+import { FolderOpen, Hash, Image as ImageIcon, LayoutGrid, Lock, Megaphone, MessageSquareText, Volume2, Radio, Disc3 } from 'lucide-react'
 import { P } from '../../lib/perms'
 import { Toggle } from './SettingsShell'
 import { useState, type FormEvent } from 'react'
@@ -10,7 +10,7 @@ import type { Channel } from '../../lib/types'
 
 export default function CreateChannelModal({ onClose, guildId, parentId = null }: { onClose: () => void; guildId: string; parentId?: string | null }) {
   const [name, setName] = useState('')
-  const [kind, setKind] = useState<'text' | 'announcement' | 'voice' | 'stage' | 'studio' | 'category' | 'forum' | 'media'>('text')
+  const [kind, setKind] = useState<'text' | 'announcement' | 'voice' | 'stage' | 'studio' | 'category' | 'forum' | 'media' | 'directory'>('text')
   const [parent, setParent] = useState<string>(parentId ?? '')
   const allChannels = useStore((s) => s.channels)
   const categories = Object.values(allChannels).filter((c) => c.guild_id === guildId && c.kind === 'category').sort((a, b) => a.position - b.position)
@@ -41,7 +41,7 @@ export default function CreateChannelModal({ onClose, guildId, parentId = null }
         <div>
           <label className="label">Channel type</label>
           <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-1" data-channel-kinds>
-            {([['text', 'Text', 'Send messages, images, GIFs, emoji, opinions, and puns', Hash], ['announcement', 'Announcement', 'Important updates people can follow into their own servers', Megaphone], ['voice', 'Voice', 'Hang out together with voice, video, and screen share', Volume2], ['stage', 'Stage', 'Speakers on stage, everyone else listens and can raise a hand', Radio], ['studio', 'Recording Studio', 'An engineer records the band as separate tracks while the audience listens', Disc3], ['forum', 'Forum', 'Organised posts with tags instead of a running chat', MessageSquareText], ['media', 'Media', 'A gallery of posts that each lead with an image or video', ImageIcon], ['category', 'Category', 'Group channels under a collapsible heading', FolderOpen]] as const).map(([v, t, d, Icon]) => (
+            {([['text', 'Text', 'Send messages, images, GIFs, emoji, opinions, and puns', Hash], ['announcement', 'Announcement', 'Important updates people can follow into their own servers', Megaphone], ['voice', 'Voice', 'Hang out together with voice, video, and screen share', Volume2], ['stage', 'Stage', 'Speakers on stage, everyone else listens and can raise a hand', Radio], ['studio', 'Recording Studio', 'An engineer records the band as separate tracks while the audience listens', Disc3], ['forum', 'Forum', 'Organised posts with tags instead of a running chat', MessageSquareText], ['media', 'Media', 'A gallery of posts that each lead with an image or video', ImageIcon], ['directory', 'Directory', 'A list of servers members can browse and join', LayoutGrid], ['category', 'Category', 'Group channels under a collapsible heading', FolderOpen]] as const).map(([v, t, d, Icon]) => (
               <button type="button" key={v} onClick={() => setKind(v)} data-channel-kind={v} className={`w-full flex items-center gap-3 rounded-lg border p-3 text-left ${kind === v ? 'border-accent bg-accent/10' : 'border-line bg-bg-3 hover:bg-bg-4'}`}>
                 <Icon size={22} className="text-text-1" />
                 <div><div className="font-semibold">{t}</div><div className="text-xs text-text-2">{d}</div></div>
@@ -54,7 +54,7 @@ export default function CreateChannelModal({ onClose, guildId, parentId = null }
         <div>
           <label className="label">Channel name</label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2">{kind === 'text' || kind === 'forum' || kind === 'announcement' || kind === 'media' ? <Hash size={16} /> : kind === 'voice' ? <Volume2 size={16} /> : <FolderOpen size={16} />}</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2">{kind === 'text' || kind === 'forum' || kind === 'announcement' || kind === 'media' || kind === 'directory' ? <Hash size={16} /> : kind === 'voice' ? <Volume2 size={16} /> : <FolderOpen size={16} />}</span>
             <input className="input pl-9" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === 'category' ? 'New Category' : 'new-channel'} maxLength={100} required data-channel-name />
           </div>
         </div>
