@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ProfileEffect from '../ProfileEffect'
 import { useT } from '../../lib/i18n'
 import { assetFile, useCatalog, type LayeredItem, type LayeredKind } from '../../lib/assetCatalog'
 
@@ -8,12 +9,15 @@ export const layeredThumb = (kind: LayeredKind, item: LayeredItem) =>
 
 /**
  * Profile editor: the instance's profile effects or frames (assets folder), searchable by name and description,
- * as a grid of previews that load as they scroll in. The description shows on hover.
+ * as a grid of previews that load as they scroll in. Hovering (or focusing) an effect plays it; the description
+ * shows in the tooltip.
  */
 export default function LayeredPicker({ kind, value, onPick }: { kind: LayeredKind; value: string; onPick: (v: string) => void }) {
   const t = useT()
   const list = useCatalog(kind)
   const [q, setQ] = useState('')
+  // The tile under the pointer (or focused) plays its effect, so you can see it before picking it.
+  const [live, setLive] = useState<string | null>(null)
   if (!list || list.length === 0) return null
   const needle = q.trim().toLowerCase()
   const shown = list.filter((x) => !needle || x.name.toLowerCase().includes(needle) || x.description.toLowerCase().includes(needle))
@@ -26,12 +30,15 @@ export default function LayeredPicker({ kind, value, onPick }: { kind: LayeredKi
           const v = `asset:${x.id}`
           const src = layeredThumb(kind, x)
           return (
-            <button key={x.id} type="button" onClick={() => onPick(v)} aria-pressed={value === v} title={x.description ? `${x.name}: ${x.description}` : x.name}
+            <button key={x.id} type="button" onClick={() => onPick(v)} aria-pressed={value === v}
+              onMouseEnter={frames ? undefined : () => setLive(v)} onMouseLeave={frames ? undefined : () => setLive((c) => (c === v ? null : c))}
+              onFocus={frames ? undefined : () => setLive(v)} onBlur={frames ? undefined : () => setLive((c) => (c === v ? null : c))} title={x.description ? `${x.name}: ${x.description}` : x.name}
               className={`group relative overflow-hidden rounded-lg border bg-[#232428] text-left ${value === v ? 'border-accent ring-2 ring-accent/40' : 'border-line hover:border-text-2'}`} data-layered-option={v}>
               <span className={`block ${frames ? 'aspect-[4/5]' : 'aspect-[9/16]'} w-full`}>
-                {src && <img src={src} alt="" loading="lazy" className={`h-full w-full ${frames ? 'object-contain' : 'object-cover object-top'}`} />}
+                {src && <img src={src} alt="" loading="lazy" className={`h-full w-full transition-opacity ${frames ? 'object-contain' : 'object-cover object-top'} ${live === v ? 'opacity-25' : ''}`} />}
               </span>
-              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1 pt-4 text-[11px] font-semibold leading-tight text-white line-clamp-2">{x.name}</span>
+              {live === v && <span className="absolute inset-0" data-effect-tile-live><ProfileEffect id={v} /></span>}
+              <span className="absolute z-10 inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent px-1.5 pb-1 pt-4 text-[11px] font-semibold leading-tight text-white line-clamp-2">{x.name}</span>
             </button>
           )
         })}
