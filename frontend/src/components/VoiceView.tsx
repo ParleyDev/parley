@@ -9,14 +9,15 @@ import { useUserMenu } from './UserContextMenu'
 import { useUserAudioMap } from '../lib/userAudio'
 import { has, P } from '../lib/perms'
 import { api } from '../lib/api'
-import { isPhone } from '../lib/swipe'
+import { usePhone } from '../lib/swipe'
 import type { Channel, User, VoiceState } from '../lib/types'
 import { screenShareSupported, voice } from '../lib/voice'
 import Avatar from './Avatar'
 import StudioPanel from './StudioPanel'
 import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Activities'
 import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
-import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpButton, MenuControl, MenuDivider, MicMenu, SettingsRow, SplitControl } from './CallControls'
+import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpButton, MenuControl, MenuDivider, MicMenu, PhoneMore, SettingsRow, SplitControl } from './CallControls'
+import PhoneStage, { ExpandButton } from './PhoneStage'
 import { useResizablePanel } from '../lib/resize'
 import { studio as studioRec } from '../lib/studio'
 import CallLock from './CallLock'
@@ -57,6 +58,8 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const suppressed = useStore((s) => !!(s.user && s.voiceStates[s.user.id]?.suppress))
   const myVs = useStore((s) => (s.user ? s.voiceStates[s.user.id] : undefined))
   const [focused, setFocused] = useState<string | null>(null)
+  // Phones: a tile, screen share or the Activity opened across the whole screen ('activity' for the Activity).
+  const [stage, setStage] = useState<string | null>(null)
   const [chat, setChat] = useState(() => { try { return localStorage.getItem(CHAT_KEY) === '1' } catch { return false } })
   // Soundboard: the server's sounds, loaded when the picker first opens; playing is a REST call the server fans out.
   const sounds = useStore((s) => (channel.guild_id ? s.sounds[channel.guild_id] : undefined))
@@ -165,14 +168,14 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const userMenu = useUserMenu(channel.guild_id)
   const tileMenu = useContextMenu()
   const toggleFullscreen = (el: HTMLElement) => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else el.requestFullscreen?.().catch(() => {}) }
-  const renderTile = (tile: Tile, big: boolean) => {
+  const renderTile = (tile: Tile, big: boolean, fill = false) => {
     const talking = tile.kind === 'camera' && !!speaking[tile.userId]
     const status = tile.kind !== 'camera' ? null : tile.isMe ? (connecting ? 'connecting' : 'connected') : inThis ? peerStatus[tile.userId] ?? 'connecting' : null
     const name = tile.user?.display_name ?? t('Unknown')
     return (
-      <div key={tile.key} onClick={() => setFocused(focused === tile.key ? null : tile.key)} onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget) }}
+      <div key={tile.key} onClick={() => { if (phone) { if (!stage) setStage(tile.key) } else setFocused(focused === tile.key ? null : tile.key) }} onDoubleClick={(e) => { e.stopPropagation(); if (!phone) toggleFullscreen(e.currentTarget) }}
         onContextMenu={(e) => { if (!tile.isMe || tile.kind === 'camera') tileMenu.open(e, userMenu({ id: tile.userId, display_name: name }, e.currentTarget.getBoundingClientRect())) }}
-        className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big ? 'h-full w-full' : 'aspect-video'}`} data-voice-tile={tile.userId} data-tile-big={big ? '1' : '0'} title={big ? t('Click to return to the grid · double-click for fullscreen') : t('Click to focus · double-click for fullscreen')}>
+        className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big || fill ? 'h-full w-full' : 'aspect-video'}`} data-voice-tile={tile.userId} data-tile-big={big ? '1' : '0'} title={big ? t('Click to return to the grid · double-click for fullscreen') : t('Click to focus · double-click for fullscreen')}>
         {isStage && isMod && inThis && !tile.isMe && tile.kind === 'camera' && <button type="button" onClick={(e) => { e.stopPropagation(); toAudience(tile.userId) }} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 group-hover:opacity-100" data-to-audience>{t('Move to audience')}</button>}
         {isStudio && tile.kind === 'camera' && engineers.includes(tile.userId) && <span className="absolute left-2 top-2 z-10 rounded-md bg-warn px-1.5 py-0.5 text-[10px] font-bold uppercase text-black" data-engineer-badge>{t('Engineer')}</span>}
         {isStudio && tile.kind === 'camera' && !engineers.includes(tile.userId) && !tile.state.suppress && <span className="absolute left-2 top-2 z-10 rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-white" data-artist-badge>{t('Artist')}</span>}
@@ -253,7 +256,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
               </div>
             ) : activity ? (
               <>
-                <div className="flex-1 min-h-0"><ActivityFrame session={activity} /></div>
+                <div className="relative flex-1 min-h-0"><ActivityFrame session={activity} />{phone && <ExpandButton onClick={() => setStage('activity')} />}</div>
                 <div className="shrink-0 flex gap-3 overflow-x-auto pb-1">
                   {shown.map((x) => <div key={x.key} className="w-40 max-md:w-28 shrink-0">{renderTile(x, false)}</div>)}
                 </div>
@@ -268,7 +271,12 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 )}
               </>
             ) : (
-              <div className="flex-1 overflow-y-auto">
+              phone && shown.length <= 4 ? (
+                // Phones with a few people: the tiles share the whole height instead of sitting small at the top.
+                <div className="flex-1 min-h-0 grid gap-2" data-voice-grid data-voice-grid-fill style={{ gridTemplateColumns: shown.length >= 3 ? 'repeat(2, minmax(0, 1fr))' : '1fr', gridTemplateRows: `repeat(${shown.length >= 3 ? 2 : shown.length}, minmax(0, 1fr))` }}>
+                  {shown.map((x) => renderTile(x, false, true))}
+                </div>
+              ) : <div className="flex-1 overflow-y-auto">
                 <div className="grid gap-4 max-md:gap-2 justify-center content-start" data-voice-grid style={{ gridTemplateColumns: phone ? (shown.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))') : `repeat(auto-fit, minmax(min(240px, 100%), ${shown.length <= 2 ? '480px' : '340px'}))` }}>
                   {shown.map((x) => renderTile(x, false))}
                 </div>
@@ -309,7 +317,9 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                     </SplitControl>
                   )}
                 </ControlGroup>
-                <ControlGroup>
+                {(() => {
+                  const extras = (
+                    <>
                   {isStudio && isEngineer && (
                     <ControlButton label={liveSession ? t('Stop recording') : t('Record')} on={!!liveSession} tone="danger" onClick={record} disabled={recBusy} data-studio-record="">{liveSession ? <span className="h-3.5 w-3.5 rounded-sm bg-danger" /> : <span className="h-3.5 w-3.5 rounded-full bg-danger" />}</ControlButton>
                   )}
@@ -345,13 +355,25 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                       <SettingsRow label={t('Voice & Video Settings')} close={close} />
                     </div>
                   )} />
-                </ControlGroup>
+                    </>
+                  )
+                  return phone ? <PhoneMore>{extras}</PhoneMore> : <ControlGroup>{extras}</ControlGroup>
+                })()}
                 <HangUpButton label={t('Disconnect')} onClick={() => { void studioRec.stop(); voice.leave() }} data-voice-leave="" />
               </ControlBar>
           </div>}
         </div>
 
         {isStudio && sessionsOpen && <StudioPanel channelId={channel.id} canManage={isMod} onClose={() => setSessionsOpen(false)} width={sessionsPanel.width} handle={<div {...sessionsPanel.handleProps} />} />}
+        {phone && stage && (() => {
+          const tile = stage === 'activity' ? null : shown.find((x) => x.key === stage)
+          if (stage === 'activity' ? !activity : !tile) { queueMicrotask(() => setStage(null)); return null }
+          return (
+            <PhoneStage title={tile ? (tile.user?.display_name ?? channel.name) : channel.name} landscape={tile?.kind === 'screen'} onClose={() => setStage(null)}>
+              {tile ? renderTile(tile, true) : <ActivityFrame session={activity!} />}
+            </PhoneStage>
+          )
+        })()}
         {/* Chat: side panel on wide screens, full overlay on phones. */}
         {chat && (
           <section className="relative flex flex-col bg-bg-2 border-l border-line shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10" data-layer="md" style={{ width: chatPanel.width }} data-voice-chat-panel>
@@ -376,12 +398,6 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   )
 }
 
-/** Phone-sized layout? Re-evaluated on resize/rotation. */
-function usePhone() {
-  const [p, setP] = useState(isPhone)
-  useEffect(() => { const mq = window.matchMedia('(max-width: 767px)'); const on = () => setP(mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on) }, [])
-  return p
-}
 
 /** "Alice", "Alice and Bob", "Alice, Bob, and 3 others" for `count` people of whom `names` are known. */
 function peopleList(names: string[], count: number) {

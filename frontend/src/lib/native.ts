@@ -34,6 +34,8 @@ export async function initNative() {
   App.addListener('appStateChange', ({ isActive }) => { if (isActive) resumeSocket(); else suspendSocket() })
   App.addListener('backButton', ({ canGoBack }) => {
     const s = useStore.getState()
+    // Something on screen (a phone call's fullscreen view, its More sheet) can claim the back button first.
+    if (!window.dispatchEvent(new CustomEvent('parley:back', { cancelable: true }))) return
     if (s.modal) { s.closeModal(); return }
     if (s.mobilePane === 'content') { s.setMobilePane('nav'); return }
     if (canGoBack) window.history.back(); else App.exitApp()

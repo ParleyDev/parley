@@ -12,7 +12,9 @@ import SoundboardPicker from './SoundboardPicker'
 import { ConnQuality, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
 import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Activities'
 import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
-import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
+import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, PhoneMore, SplitControl } from './CallControls'
+import PhoneStage, { ExpandButton } from './PhoneStage'
+import { usePhone } from '../lib/swipe'
 import { useResizableHeight } from '../lib/resize'
 import { screenShareSupported, voice } from '../lib/voice'
 import Avatar from './Avatar'
@@ -47,6 +49,9 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const tileMenu = useContextMenu()
   const watching = useStore((s) => s.watching)
   const [focused, setFocused] = useState<string | null>(null)
+  // Phones: a tile or the Activity across the whole screen ('activity' for the Activity).
+  const phone = usePhone()
+  const [phoneStage, setPhoneStage] = useState<string | null>(null)
   const [board, setBoard] = useState(false)
   const t = useT()
   const videoFit = useVideoFit()
@@ -103,7 +108,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
     const talking = tile.kind === 'camera' && !!speaking[tile.userId]
     const name = tile.user?.display_name ?? t('User')
     return (
-      <div key={tile.key} onClick={() => setFocused(focused === tile.key ? null : tile.key)} onDoubleClick={(e) => { e.stopPropagation(); toggleFullscreen(e.currentTarget) }}
+      <div key={tile.key} onClick={() => { if (phone) { if (!phoneStage) setPhoneStage(tile.key) } else setFocused(focused === tile.key ? null : tile.key) }} onDoubleClick={(e) => { e.stopPropagation(); if (!phone) toggleFullscreen(e.currentTarget) }}
         onContextMenu={(e) => { if (!tile.isMe || tile.kind === 'camera') tileMenu.open(e, userMenu({ id: tile.userId, display_name: name }, e.currentTarget.getBoundingClientRect())) }}
         className={`group relative min-h-0 min-w-0 overflow-hidden rounded-xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big || cell ? 'h-full w-full' : 'aspect-video'}`}
         data-call-tile={tile.key} data-tile-big={big ? '1' : '0'} title={big ? t('Click to return to the grid · double-click for fullscreen') : t('Click to focus · double-click for fullscreen')}
@@ -152,7 +157,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         {inThis && <ActivityChips channelId={channel.id} inCall />}
         {activity ? (
           <>
-            <div className="flex-1 min-h-0"><ActivityFrame session={activity} /></div>
+            <div className="relative flex-1 min-h-0"><ActivityFrame session={activity} />{phone && <ExpandButton onClick={() => setPhoneStage('activity')} />}</div>
             <div className="shrink-0 flex gap-2 overflow-x-auto">{tiles.map((tile) => <div key={tile.key} className="w-32 shrink-0">{renderTile(tile, false)}</div>)}</div>
           </>
         ) : tiles.length === 0 ? (
@@ -180,7 +185,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         </div>
       )}
       <div className="relative mt-2 shrink-0 flex justify-center pb-1">
-        <span className="absolute left-0 top-1/2 -translate-y-1/2"><CallLock channelId={channel.id} /></span>
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 max-md:hidden"><CallLock channelId={channel.id} /></span>
         {inThis ? (
           <ControlBar compact>
             <ControlGroup>
@@ -191,7 +196,9 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
                 <ControlButton label={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} on={!!localCamera} onClick={() => voice.toggleCamera()}>{localCamera ? <Video size={18} /> : <VideoOff size={18} />}</ControlButton>
               </SplitControl>
             </ControlGroup>
-            <ControlGroup>
+            {(() => {
+              const extras = (
+                <>
               <ReactButton />
               <span className="relative flex">
                 <ControlButton label={t('Soundboard')} on={board} onClick={() => setBoard((b) => !b)} data-dm-soundboard=""><Music2 size={18} /></ControlButton>
@@ -208,13 +215,25 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
               <ActivitiesButton channelId={channel.id} />
               <ClipButton />
               {(screenShareSupported() || localScreen) && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>}
-            </ControlGroup>
+                </>
+              )
+              return phone ? <PhoneMore>{extras}</PhoneMore> : <ControlGroup>{extras}</ControlGroup>
+            })()}
             <HangUpButton label={t('Leave Call')} onClick={() => voice.leave()} data-call-leave="" />
           </ControlBar>
         ) : (
           <button onClick={() => voice.join(channel.id)} disabled={connecting} title={t('Join Call')} className="h-10 px-6 rounded-xl bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50" data-join-call><Phone size={18} /> {myChannel ? t('Switch to this call') : t('Join Call')}</button>
         )}
       </div>
+      {phone && phoneStage && (() => {
+        const tile = phoneStage === 'activity' ? null : tiles.find((x) => x.key === phoneStage)
+        if (phoneStage === 'activity' ? !activity : !tile) { queueMicrotask(() => setPhoneStage(null)); return null }
+        return (
+          <PhoneStage title={tile?.user?.display_name ?? t('Call')} landscape={tile?.kind === 'screen'} onClose={() => setPhoneStage(null)}>
+            {tile ? renderTile(tile, true) : <ActivityFrame session={activity!} />}
+          </PhoneStage>
+        )
+      })()}
       <div {...stage.handleProps} />
     </section>
   )

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 /**
  * Horizontal swipe detection for phones: a quick, mostly horizontal touch of at least 70px.
@@ -32,3 +32,10 @@ export function useSwipe(handlers: { onLeft?: () => void; onRight?: () => void }
 
 /** Media query as React state (phones: max-width 767px). */
 export const isPhone = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+
+/** Phone-sized layout? Re-evaluated on resize/rotation. */
+export function usePhone() {
+  const [p, setP] = useState(isPhone)
+  useEffect(() => { const mq = window.matchMedia('(max-width: 767px)'); const on = () => setP(mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on) }, [])
+  return p
+}

@@ -1,5 +1,5 @@
 import { t } from '../lib/i18n'
-import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronUp, Eye, PhoneOff, Settings } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronUp, Eye, MoreHorizontal, PhoneOff, Settings } from 'lucide-react'
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { useStore } from '../store'
@@ -22,6 +22,40 @@ export function ControlBar({ compact = false, children }: { compact?: boolean; c
   )
 }
 
+/** Inside the phone call's More sheet controls show as labelled tiles, so they can be told apart without hovering. */
+const Labeled = createContext(false)
+
+/**
+ * Phones: the call's secondary controls (reactions, captions, invite, Activities, soundboard, view options…) behind
+ * one More button that opens them as a sheet of labelled tiles, so the bar keeps just mic, camera, More and hang up.
+ */
+export function PhoneMore({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const back = (e: Event) => { e.preventDefault(); setOpen(false) }
+    window.addEventListener('parley:back', back)
+    return () => window.removeEventListener('parley:back', back)
+  }, [open])
+  return (
+    <>
+      <ControlGroup><ControlButton label={t('More')} on={open} onClick={() => setOpen((o) => !o)} data-phone-call-more=""><MoreHorizontal size={20} /></ControlButton></ControlGroup>
+      {open && createPortal(
+        <>
+          <div className="fixed inset-0 z-[110] bg-black/50" onClick={() => setOpen(false)} data-phone-call-more-backdrop />
+          <div className="pop sheet-up fixed inset-x-0 bottom-0 z-[115] rounded-t-2xl border-t border-line bg-bg-1 px-3 pt-3 pb-[max(16px,var(--sab))] shadow-2xl" data-phone-call-more-sheet>
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-text-2/40" />
+            <Labeled.Provider value={true}>
+              <div className="grid grid-cols-4 gap-1 justify-items-center">{children}</div>
+            </Labeled.Provider>
+          </div>
+        </>,
+        document.body,
+      )}
+    </>
+  )
+}
+
 export function ControlGroup({ children }: { children: ReactNode }) {
   const compact = useContext(Compact)
   return <div role="group" className={`flex items-center gap-0.5 rounded-xl border border-line bg-bg-1 shadow-sm ${compact ? 'p-1' : 'p-1.5'}`}>{children}</div>
@@ -33,7 +67,14 @@ export function ControlGroup({ children }: { children: ReactNode }) {
  */
 export function ControlButton({ label, on = false, tone = 'active', onClick, disabled, children, ...data }: { label: string; on?: boolean; tone?: 'active' | 'danger'; onClick: () => void; disabled?: boolean; children: ReactNode } & Record<`data-${string}`, string | undefined>) {
   const compact = useContext(Compact)
+  const labeled = useContext(Labeled)
   const state = !on ? 'text-text-0 hover:bg-bg-3' : tone === 'danger' ? 'bg-danger/15 text-danger hover:bg-danger/25' : 'bg-text-0 text-bg-0 hover:bg-text-1'
+  if (labeled) return (
+    <button type="button" aria-label={t(label)} aria-pressed={on} onClick={onClick} disabled={disabled} className="w-full min-w-0 flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-text-1 disabled:opacity-50" {...data}>
+      <span className={`h-12 w-12 rounded-full flex items-center justify-center ${on ? (tone === 'danger' ? 'bg-danger/20 text-danger' : 'bg-text-0 text-bg-0') : 'bg-bg-3 text-text-0'}`}>{children}</span>
+      <span className="w-full truncate text-center text-[11px] leading-tight">{t(label)}</span>
+    </button>
+  )
   return (
     <button type="button" title={t(label)} aria-label={t(label)} aria-pressed={on} onClick={onClick} disabled={disabled} className={`${compact ? 'h-9 w-9' : 'h-10 w-10'} shrink-0 rounded-lg flex items-center justify-center transition-colors disabled:opacity-50 ${state}`} {...data}>
       {children}
@@ -49,7 +90,7 @@ export function SplitControl({ chevronLabel, menuKind, menu, align = 'start', ch
   return (
     <span ref={ref} className="flex items-center">
       {children}
-      <button type="button" title={t(chevronLabel)} aria-label={t(chevronLabel)} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`${compact ? 'h-9' : 'h-10'} w-6 shrink-0 rounded-lg flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0 ${open ? 'bg-bg-3 text-text-0' : ''}`} data-device-chevron={menuKind}>
+      <button type="button" title={t(chevronLabel)} aria-label={t(chevronLabel)} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`${compact ? 'h-9' : 'h-10'} w-6 shrink-0 rounded-lg flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0 max-md:hidden ${open ? 'bg-bg-3 text-text-0' : ''}`} data-device-chevron={menuKind}>
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
       {open && <CallMenu anchor={ref} align={align} onClose={() => setOpen(false)}>{menu(() => setOpen(false))}</CallMenu>}
