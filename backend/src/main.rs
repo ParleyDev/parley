@@ -116,6 +116,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_reminders = state_for_sweep.clone();
     tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep.clone()));
     tokio::spawn(voice_audio::convert_backlog(state_for_sweep.clone()));
+    tokio::spawn(routes::assets::convert_nameplates(state_for_sweep.clone()));
     tokio::spawn(routes::storage::fix_orientation_backlog(state_for_sweep.clone()));
     tokio::spawn(routes::images::sweep_orphans(state_for_sweep));
     tokio::spawn(ratelimit::prune_loop());

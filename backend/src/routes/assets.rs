@@ -42,6 +42,7 @@ pub fn router() -> Router<AppState> {
         .route("/assets/avatar-decorations/:id/static", get(serve_static))
         .route("/assets/nameplates", get(list_nameplates))
         .route("/assets/nameplates/:id", get(serve_nameplate))
+        .route("/assets/nameplates/:id/anim", get(serve_nameplate_anim))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -191,6 +192,83 @@ async fn serve_nameplate(State(state): State<AppState>, Path(id): Path<String>, 
     Ok(image_response(Body::from_stream(tokio_util::io::ReaderStream::new(file)), d.content_type, &etag))
 }
 
+/// Where a video nameplate's animated WebP goes: the server's own cache, never the (possibly read-only) assets folder.
+fn anim_cache(config: &Config, d: &Decoration) -> PathBuf {
+    config.upload_dir.join("asset-cache").join(NAMEPLATES_DIR).join(format!("{}-{}.webp", d.id, d.tag))
+}
+
+/// `GET /assets/nameplates/:id/anim`: the nameplate as an animated WebP, for the phone apps (iOS can't play VP9 with
+/// transparency at all; Android shows an empty player until each video starts). Image nameplates are served as they
+/// are. A video one answers 404 until `convert_nameplates` has made it, and clients keep using the video meanwhile.
+async fn serve_nameplate_anim(State(state): State<AppState>, Path(id): Path<String>, headers: HeaderMap) -> AppResult<Response> {
+    let d = nameplates(&state.config).await.get(&id).cloned().ok_or_else(|| AppError::NotFound("Unknown nameplate".into()))?;
+    if !d.content_type.starts_with("video/") { return serve_nameplate(State(state), Path(id), headers).await; }
+    let etag = format!("\"w-{}\"", d.tag);
+    if not_modified(&headers, &etag) { return Ok(StatusCode::NOT_MODIFIED.into_response()); }
+    let file = tokio::fs::File::open(anim_cache(&state.config, &d)).await.map_err(|_| AppError::NotFound("Not converted yet".into()))?;
+    Ok(image_response(Body::from_stream(tokio_util::io::ReaderStream::new(file)), "image/webp", &etag))
+}
+
+/// Convert one WebM (VP8 or VP9, keeping its alpha channel, which only libvpx's decoders do) to an animated WebP.
+pub async fn webm_to_webp(src: &FsPath, out: &FsPath) -> anyhow::Result<()> {
+    let head = { let mut b = vec![0u8; 4096]; let n = std::io::Read::read(&mut std::fs::File::open(src)?, &mut b)?; b.truncate(n); b };
+    let decoder = if head.windows(5).any(|w| w == b"V_VP9") { "libvpx-vp9" } else { "libvpx" };
+    let tmp = out.with_extension("part");
+    if let Some(parent) = out.parent() { tokio::fs::create_dir_all(parent).await?; }
+    let run = tokio::process::Command::new("ffmpeg")
+        .args(["-v", "error", "-y", "-threads", "1", "-c:v", decoder, "-i"]).arg(src)
+        .args(["-an", "-c:v", "libwebp_anim", "-lossless", "0", "-quality", "75", "-loop", "0", "-f", "webp"]).arg(&tmp)
+        .kill_on_drop(true).output();
+    let out_ = match tokio::time::timeout(Duration::from_secs(120), run).await {
+        Err(_) => { let _ = tokio::fs::remove_file(&tmp).await; anyhow::bail!("ffmpeg timed out") }
+        Ok(Err(e)) => anyhow::bail!("ffmpeg not available: {e}"),
+        Ok(Ok(o)) => o,
+    };
+    if !out_.status.success() {
+        let _ = tokio::fs::remove_file(&tmp).await;
+        anyhow::bail!("ffmpeg failed: {}", String::from_utf8_lossy(&out_.stderr).trim());
+    }
+    tokio::fs::rename(&tmp, out).await?;
+    Ok(())
+}
+
+/// Background: give every WebM nameplate an animated WebP, one at a time, whenever the folder has one without (a
+/// new file, or a replaced one: the cache name follows its mtime and size). Stale conversions are removed. A file
+/// ffmpeg can't convert gets a `.failed` marker so it isn't retried every pass; without ffmpeg nothing happens.
+pub async fn convert_nameplates(state: AppState) {
+    tokio::time::sleep(Duration::from_secs(15)).await;
+    let dir = state.config.upload_dir.join("asset-cache").join(NAMEPLATES_DIR);
+    loop {
+        let idx = nameplates(&state.config).await;
+        let mut keep = std::collections::HashSet::new();
+        for d in idx.list.iter().filter(|d| d.content_type == "video/webm") {
+            let out = anim_cache(&state.config, d);
+            let failed = out.with_extension("failed");
+            keep.insert(out.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
+            keep.insert(failed.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
+            if out.exists() || failed.exists() { continue; }
+            match webm_to_webp(&d.path, &out).await {
+                Ok(()) => tracing::debug!(id = %d.id, "nameplate converted to animated WebP"),
+                Err(e) if e.to_string().starts_with("ffmpeg not available") => {
+                    tracing::warn!("ffmpeg not available ({e}); video nameplates won't show in the iOS app");
+                    break;
+                }
+                Err(e) => {
+                    tracing::warn!(id = %d.id, "nameplate conversion failed: {e}");
+                    let _ = tokio::fs::write(&failed, e.to_string()).await;
+                }
+            }
+        }
+        if let Ok(mut rd) = tokio::fs::read_dir(&dir).await {
+            while let Ok(Some(e)) = rd.next_entry().await {
+                let name = e.file_name().to_string_lossy().to_string();
+                if !keep.contains(&name) && !name.ends_with(".part") { let _ = tokio::fs::remove_file(e.path()).await; }
+            }
+        }
+        tokio::time::sleep(RESCAN * 2).await;
+    }
+}
+
 /// Shared headers; the ETag follows the file's mtime and size so a replaced file is picked up after max-age.
 fn image_response(body: Body, ct: &str, etag: &str) -> Response {
     let mut resp = Response::new(body);
@@ -291,5 +369,28 @@ mod tests {
         assert!(plates.get("aurora").unwrap().animated && plates.get("aurora").unwrap().content_type == "video/webm");
         assert!(scan(&dir).list.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Needs an ffmpeg with libvpx and libwebp on PATH (the Docker image has one); skipped without.
+    #[tokio::test]
+    async fn webm_nameplates_become_animated_webp() {
+        // A moving, half-transparent VP9 clip, like Discord's nameplates.
+        let src = std::env::temp_dir().join(format!("parley-np-{}.webm", std::process::id()));
+        let out = std::env::temp_dir().join(format!("parley-np-{}.webp", std::process::id()));
+        let made = std::process::Command::new("ffmpeg").args(["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=s=96x24:d=1:r=12,format=yuva420p,colorchannelmixer=aa=0.5", "-c:v", "libvpx-vp9", "-auto-alt-ref", "0"]).arg(&src).status();
+        if !made.map(|s| s.success()).unwrap_or(false) { return; }
+        match webm_to_webp(&src, &out).await {
+            Err(e) if e.to_string().contains("not available") || e.to_string().contains("Unknown decoder") || e.to_string().contains("Unknown encoder") => {}
+            Err(e) => panic!("{e}"),
+            Ok(()) => {
+                let b = std::fs::read(&out).unwrap();
+                assert_eq!(&b[..4], b"RIFF");
+                assert_eq!(&b[8..12], b"WEBP");
+                assert!(b.windows(4).any(|w| w == b"ANIM"), "animated");
+                assert!(b.windows(4).any(|w| w == b"ALPH") || b.windows(4).any(|w| w == b"VP8L"), "keeps transparency");
+                let _ = std::fs::remove_file(&out);
+            }
+        }
+        let _ = std::fs::remove_file(&src);
     }
 }

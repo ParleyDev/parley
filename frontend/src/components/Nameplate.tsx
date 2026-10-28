@@ -5,6 +5,10 @@ import { useT } from '../lib/i18n'
 export const isAssetNameplate = (v?: string | null): v is string => !!v && v.startsWith('asset:')
 export const nameplateSrc = (v: string) => `/api/assets/nameplates/${encodeURIComponent(v.slice('asset:'.length))}`
 const reduced = () => document.documentElement.dataset.motion === 'reduced' || matchMedia('(prefers-reduced-motion: reduce)').matches
+/** Phones and tablets (the apps, or any screen without hover): video nameplates don't suit them. iOS can't play WebM
+ *  with transparency at all, and Android shows an empty player until each video starts. They get the server's animated
+ *  WebP of it instead (`…/anim`), which images draw everywhere; until the server has made one, the video stays. */
+const touchOnly = () => typeof matchMedia !== 'undefined' && (matchMedia('(hover: none)').matches || !!(window as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.())
 
 /**
  * The video behind a list row for an asset nameplate (nothing for built-in ones). It sits behind the row's content
@@ -13,6 +17,8 @@ const reduced = () => document.documentElement.dataset.motion === 'reduced' || m
  */
 export function NameplateVideo({ value, hoverRoot }: { value?: string | null; hoverRoot?: string }) {
   const ref = useRef<HTMLVideoElement>(null)
+  const [asImage, setAsImage] = useState(touchOnly)
+  useEffect(() => { setAsImage(touchOnly()) }, [value])
   useEffect(() => {
     const v = ref.current, row = hoverRoot ? v?.closest<HTMLElement>(hoverRoot) : v?.parentElement
     if (!v || !row) return
@@ -22,6 +28,7 @@ export function NameplateVideo({ value, hoverRoot }: { value?: string | null; ho
     return () => { row.removeEventListener('mouseenter', on); row.removeEventListener('mouseleave', off) }
   }, [value, hoverRoot])
   if (!isAssetNameplate(value)) return null
+  if (asImage) return <img key={value} src={`${nameplateSrc(value)}/anim`} alt="" draggable={false} onError={() => setAsImage(false)} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" aria-hidden data-nameplate-video={value.slice(6)} data-nameplate-image />
   return <video key={value} ref={ref} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />
 }
 
