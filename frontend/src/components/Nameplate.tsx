@@ -22,7 +22,7 @@ export function NameplateVideo({ value, hoverRoot }: { value?: string | null; ho
     return () => { row.removeEventListener('mouseenter', on); row.removeEventListener('mouseleave', off) }
   }, [value, hoverRoot])
   if (!isAssetNameplate(value)) return null
-  return <video ref={ref} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />
+  return <video key={value} ref={ref} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />
 }
 
 interface AssetNameplate { id: string; name: string; description?: string }

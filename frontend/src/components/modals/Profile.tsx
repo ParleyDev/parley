@@ -23,20 +23,27 @@ const PAD = 8
  * "View Full Profile") it is the full profile modal: card with Member Since, roles, mutual
  * servers and the action buttons.
  */
+/** Full profiles fetched this session: reopening one shows it whole at once (frame, effect, banner) while it refreshes. */
+const profiles = new Map<string, UserProfile>()
+
 export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose: () => void; userId: string; anchor?: Anchor; tab?: FullTab | 'roles' }) {
   const t = useT()
   const cached = useStore((s) => s.users[userId])
   const { pathname } = useLocation()
   const guildId = matchPath('/channels/:guildId/*', pathname)?.params.guildId
   const inGuild = guildId && guildId !== '@me' ? guildId : undefined
-  const [fetched, setUser] = useState<UserProfile | null>(cached ?? null)
+  const [fetched, setUser] = useState<UserProfile | null>(profiles.get(userId) ?? cached ?? null)
+  // The first time, the cached copy is only partial (no frame, effect or banner): give the full profile a moment
+  // before showing it, rather than flashing the bare card and building it up.
+  const [complete, setComplete] = useState(profiles.has(userId))
+  useEffect(() => { if (complete) return; const id = setTimeout(() => setComplete(true), 500); return () => clearTimeout(id) }, [complete])
   const serverMember = useStore((s) => (inGuild ? s.members[inGuild]?.[userId] : undefined))
   const user = useMemo(() => (fetched ? withServerProfile(fetched, serverMember) : null), [fetched, serverMember])
   // The cached copy may be partial (built from a member row), so always fetch the full profile,
   // and refetch whenever the cached copy changes (USER_UPDATE, member list load).
   // Not found: an account waiting to be deleted (hidden) or gone.
   const [gone, setGone] = useState(false)
-  useEffect(() => { api.get<UserProfile>(`/users/${userId}`).then((u) => { setUser(u); setGone(false) }).catch(() => setGone(true)) }, [userId, cached])
+  useEffect(() => { api.get<UserProfile>(`/users/${userId}`).then((u) => { profiles.set(userId, u); setUser(u); setComplete(true); setGone(false) }).catch(() => { setGone(true); setComplete(true) }) }, [userId, cached])
 
   if (gone || user?.deleted) {
     const card = <DeletedCard deleted={!!user?.deleted} />
@@ -45,7 +52,7 @@ export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose
   if (anchor) {
     return (
       <Popout anchor={anchor} onClose={onClose}>
-        {user ? <ProfilePopout user={user} guildId={inGuild} onClose={onClose} /> : <div className="rounded-lg bg-[#232428] p-6 text-text-2">{t('Loading…')}</div>}
+        {!complete ? null : user ? <ProfilePopout user={user} guildId={inGuild} onClose={onClose} /> : <div className="rounded-lg bg-[#232428] p-6 text-text-2">{t('Loading…')}</div>}
       </Popout>
     )
   }

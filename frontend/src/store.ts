@@ -726,7 +726,8 @@ export const useStore = create<State>((set, get) => ({
     const members = { ...s.members }
     for (const gid of Object.keys(members)) {
       const m = members[gid][u.id]
-      if (m) members[gid] = { ...members[gid], [u.id]: { ...m, display_name: u.display_name, avatar_url: u.avatar_url, status: u.status, name_primary: u.name_primary, name_accent: u.name_accent, name_style: u.name_style, avatar_decoration: u.avatar_decoration ?? m.avatar_decoration, clan_tag: u.clan_tag ?? m.clan_tag } }
+      // Cosmetics follow the user too: a member row prefers its own copy, so a stale one would win over the update.
+      if (m) members[gid] = { ...members[gid], [u.id]: { ...m, display_name: u.display_name, avatar_url: u.avatar_url, status: u.status, name_primary: u.name_primary, name_accent: u.name_accent, name_style: u.name_style, avatar_decoration: u.avatar_decoration ?? m.avatar_decoration, clan_tag: u.clan_tag ?? m.clan_tag, nameplate: u.nameplate ?? m.nameplate } }
     }
     const dms = { ...s.dms }
     for (const id of Object.keys(dms)) {
