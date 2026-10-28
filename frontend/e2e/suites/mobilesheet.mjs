@@ -1,4 +1,5 @@
-// Phones: the bottom tab bar (Servers, Messages, Notifications, You) and holding a message for its action sheet.
+// Phones: no bottom tab bar (navigation is the server bar, your panel and the header inbox), and holding a message
+// opens its action sheet.
 import { chromium } from 'playwright'
 import { WEB, S, reg, call, ok, openDms, finish } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob')
@@ -14,34 +15,19 @@ const p = await (await browser.newContext({ viewport: { width: 390, height: 844 
 p.on('pageerror', (e) => errors.push(e.message))
 await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 
-console.log('-- tabs')
-await p.goto(`${WEB}/channels/@me`); await p.waitForSelector('[data-mobile-tabs]')
-const tabs = p.locator('[data-mobile-tabs]')
-const box = await tabs.boundingBox()
-ok('a tab bar sits along the bottom', box && Math.abs(box.y + box.height - 844) <= 2 && box.width >= 388)
-ok('Messages is the current tab', await p.locator('[data-mobile-tab="messages"]').getAttribute('aria-current') === 'page')
-await p.waitForSelector('[data-mobile-dm-count]', { timeout: 5000 }).catch(() => {})
-ok('it counts unread DMs', (await p.locator('[data-mobile-dm-count]').innerText().catch(() => '')) === '1')
-await p.locator('[data-mobile-tab="servers"]').tap()
-await p.waitForURL(new RegExp(`/channels/${g.id}`), { timeout: 5000 }).catch(() => {})
-ok('Servers opens your server', p.url().includes(g.id))
-await p.goto(`${WEB}/channels/@me`); await p.waitForSelector('[data-mobile-tabs]')
-await p.locator('[data-mobile-tab="servers"]').tap(); await p.waitForTimeout(300)
-ok('and remembers the last one', p.url().includes(g.id))
-await p.locator('[data-mobile-tab="messages"]').tap(); await p.waitForURL(/\/channels\/@me/)
-ok('Messages goes to your DMs', true)
-await p.locator('[data-inbox-toggle="tab"]').tap(); await p.waitForSelector('[data-inbox]'); await p.waitForTimeout(300)
+console.log('-- phones')
+await p.goto(`${WEB}/channels/@me`); await p.waitForSelector('[data-user-panel]')
+ok('no bottom tab bar', await p.locator('[data-mobile-tabs]').count() === 0)
+const panel = await p.locator('[data-user-panel]').boundingBox()
+ok('your panel sits at the bottom of the navigation', panel && Math.abs(panel.y + panel.height - 844) <= 16, JSON.stringify(panel))
+await p.goto(`${WEB}/channels/${g.id}/${ch.id}`); await p.waitForSelector(`[data-msg-id="${mine.id}"]`); await p.waitForTimeout(400)
+await p.locator('[data-inbox-toggle]:visible').first().tap(); await p.waitForSelector('[data-inbox]'); await p.waitForTimeout(300)
 const ib = await p.locator('[data-inbox]').boundingBox()
-await p.screenshot({ path: 'mobiletabs-inbox.png' })
-ok('Notifications opens the inbox across the screen', ib && ib.width >= 370 && ib.height > 500, JSON.stringify(ib))
-await p.locator('[data-inbox-toggle="tab"]').tap(); await p.waitForTimeout(200)
-await p.locator('[data-mobile-tab="you"]').tap()
-ok('You opens your settings', await p.locator('[data-settings-view]').isVisible().catch(() => false))
-await p.locator('[data-settings-close]:visible').first().tap()
+ok('inside a chat, the inbox opens from the header and fits the screen', ib && ib.x >= 0 && ib.x + ib.width <= 390, JSON.stringify(ib))
+await p.locator('[data-inbox-toggle]:visible').first().tap(); await p.waitForTimeout(200)
 
 console.log('-- long-press sheet')
 await p.goto(`${WEB}/channels/${g.id}/${ch.id}`); await p.waitForSelector(`[data-msg-id="${mine.id}"]`); await p.waitForTimeout(500)
-ok('the tab bar hides inside a chat', !(await tabs.isVisible()))
 const cdp = await p.context().newCDPSession(p)
 const hold = async (sel, ms) => {
   const r = await p.locator(sel).first().boundingBox(); const pt = { x: r.x + 20, y: r.y + r.height / 2 }
@@ -68,7 +54,6 @@ console.log('-- desktop')
 const d = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage()
 await d.goto(`${WEB}/login`); await d.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await d.goto(`${WEB}/channels/${g.id}/${ch.id}`); await d.waitForSelector(`[data-msg-id="${mine.id}"]`)
-ok('no tab bar on desktop', !(await d.locator('[data-mobile-tabs]').isVisible()))
 await d.locator(`[data-msg-id="${mine.id}"] .msg-content`).click({ button: 'right' })
 ok('right-click is still a popup menu', await d.locator('[data-context-menu]').isVisible() && await d.locator('[data-menu-sheet]').count() === 0)
 ok('no page errors', errors.length === 0, errors.join(' | '))

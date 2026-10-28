@@ -2,7 +2,6 @@ import { toggleOverlay } from '../lib/overlay'
 import { FAMILY_CODE_KEY } from '../components/modals/settings/FamilyTab'
 import { saveClip } from '../lib/clips'
 import { unseenEntry } from '../lib/changelog'
-import MobileTabBar from '../components/MobileTabBar'
 import { useEffect, useState } from 'react'
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store'
@@ -101,7 +100,6 @@ export default function AppShell() {
         </div>
         {/* Discord's self card floats across the bottom of both the server column and the channel list. */}
         <UserPanel />
-        <MobileTabBar />
       </NavColumn>
       <ErrorBoundary>
       <Routes>
