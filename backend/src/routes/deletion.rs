@@ -39,7 +39,7 @@ pub fn router() -> Router<AppState> {
 /// `POST /admin/deletions/run` (instance admins): finalize every due deletion now instead of at the next run.
 async fn run_now(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
     crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
-    Ok(Json(json!({ "finalized": finalize_due(&state).await? })))
+    Ok(Json(json!({ "finalized": finalize_due(&state).await?, "servers": crate::routes::server_deletion::finalize_due(&state).await? })))
 }
 
 /// `deleted_user_` and 12 random letters and digits from the OS generator: not derived from anything about the person.
@@ -68,7 +68,7 @@ pub async fn email_blocked(state: &AppState, email: &str) -> AppResult<bool> {
 
 /// What stands in the way of deleting: servers you own, and apps (bots) you own. Transfer or delete them first.
 async fn blockers(state: &AppState, uid: Uuid) -> AppResult<Value> {
-    let guilds: Vec<(Uuid, String, Option<String>)> = sqlx::query_as("SELECT id, name, icon_url FROM guilds WHERE owner_id = $1 ORDER BY name").bind(uid).fetch_all(&state.db).await?;
+    let guilds: Vec<(Uuid, String, Option<String>)> = sqlx::query_as("SELECT id, name, icon_url FROM guilds WHERE owner_id = $1 AND state = 'active' ORDER BY name").bind(uid).fetch_all(&state.db).await?;
     let apps: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM applications WHERE owner_id = $1 ORDER BY name").bind(uid).fetch_all(&state.db).await?;
     let (sole_admin,): (bool,) = sqlx::query_as("SELECT u.is_admin AND NOT EXISTS (SELECT 1 FROM users o WHERE o.is_admin AND o.id <> u.id AND o.account_state = 'active') FROM users u WHERE u.id = $1")
         .bind(uid).fetch_one(&state.db).await?;
@@ -151,6 +151,11 @@ pub async fn finalize_loop(state: AppState) {
             Ok(n) if n > 0 => tracing::info!(accounts = n, "finalized account deletions"),
             Ok(_) => {}
             Err(e) => tracing::warn!(error = ?e, "account deletion run failed"),
+        }
+        match crate::routes::server_deletion::finalize_due(&state).await {
+            Ok(n) if n > 0 => tracing::info!(servers = n, "finalized server deletions"),
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = ?e, "server deletion run failed"),
         }
         tokio::time::sleep(std::time::Duration::from_secs(600)).await;
     }

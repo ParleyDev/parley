@@ -106,5 +106,5 @@ await p.click('[data-creator-remove="youtube"]'); await p.click('button.btn-dang
 ok('removing takes the role with it', !(await call(owner.token, 'GET', `/guilds/${g.id}/roles`)).some((x) => x.id === yt.role_id) && !(await roles(ytfan)).includes(yt.role_id))
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await raw(admin.token, 'PUT', '/admin/settings', settings)
-await call(owner.token, 'DELETE', `/guilds/${g.id}`)
+await call(owner.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); server.close(); await finish()

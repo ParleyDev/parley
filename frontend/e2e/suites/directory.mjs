@@ -37,5 +37,5 @@ ok('members can\'t remove entries', (await raw(member.token, 'DELETE', `/channel
 await call(hubOwner.token, 'DELETE', `/channels/${dir.id}/directory/${club.id}`)
 ok('the hub\'s moderators can', (await call(member.token, 'GET', `/channels/${dir.id}/directory`)).length === 0)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-for (const [t, g] of [[hubOwner, hub], [clubOwner, club]]) await call(t.token, 'DELETE', `/guilds/${g.id}`)
+for (const [t, g] of [[hubOwner, hub], [clubOwner, club]]) await call(t.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

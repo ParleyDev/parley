@@ -3494,5 +3494,22 @@
 "case": "vaka",
 "searched “{q}”": "“{q}” arandı",
 "{n} items": "{n} öğe",
-"Message searches (per user)": "Mesaj aramaları (kullanıcı başına)"
+"Message searches (per user)": "Mesaj aramaları (kullanıcı başına)",
+"Being deleted. Gone for good on {date}.": "Siliniyor. {date} tarihinde tamamen yok olacak.",
+"Forwarded from a server that's no longer available": "Artık mevcut olmayan bir sunucudan iletildi",
+"Go home": "Ana sayfaya git",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "Silindi veya kaldırıldı. Kanalları ve mesajları artık açılamaz.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "Üyeler sunucuyu hemen kaybeder ve topluluk kurallarını ihlal ettiği için kaldırıldığı bilgisi verilir. Sahibi geri yükleyemez. İçeriği dosya için saklanır, sonra silinir.",
+"Restore": "Geri yükle",
+"TAKEN DOWN": "KALDIRILDI",
+"Take down": "Kaldır",
+"Take down '{name}'": "'{name}' sunucusunu kaldır",
+"This server is no longer available": "Bu sunucu artık mevcut değil",
+"Type the server name to confirm": "Onaylamak için sunucu adını yaz",
+"Your password": "Parolan",
+"{name} is back": "{name} geri döndü",
+"{name} was removed for violating the community guidelines.": "{name} topluluk kurallarını ihlal ettiği için kaldırıldı.",
+"{name} was taken down": "{name} kaldırıldı",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} {date} tarihinde silinecek. O zamana kadar Kullanıcı Ayarları › Hesabım bölümünden geri yükleyebilirsin.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Sunucu tüm üyeler için hemen ortadan kalkar: kanallar, mesajlar ve davetler çalışmaz. Bir süre boyunca geri yükleyebilirsin (tarih, silme işlemi tamamlandığında gösterilir); sonrasında kalıcı olarak silinir."
 }

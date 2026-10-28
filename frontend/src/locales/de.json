@@ -3494,5 +3494,22 @@
 "case": "Fall",
 "searched “{q}”": "gesucht nach „{q}“",
 "{n} items": "{n} Einträge",
-"Message searches (per user)": "Nachrichtensuchen (pro Benutzer)"
+"Message searches (per user)": "Nachrichtensuchen (pro Benutzer)",
+"Being deleted. Gone for good on {date}.": "Wird gelöscht. Endgültig weg am {date}.",
+"Forwarded from a server that's no longer available": "Weitergeleitet von einem Server, der nicht mehr verfügbar ist",
+"Go home": "Zur Startseite",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "Er wurde gelöscht oder entfernt. Seine Kanäle und Nachrichten können nicht mehr geöffnet werden.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "Mitglieder verlieren den Server sofort und erfahren, dass er wegen Verstoßes gegen die Community-Richtlinien entfernt wurde. Der Besitzer kann ihn nicht wiederherstellen. Die Inhalte werden für den Fall aufbewahrt und danach gelöscht.",
+"Restore": "Wiederherstellen",
+"TAKEN DOWN": "ENTFERNT",
+"Take down": "Entfernen",
+"Take down '{name}'": "'{name}' entfernen",
+"This server is no longer available": "Dieser Server ist nicht mehr verfügbar",
+"Type the server name to confirm": "Gib zur Bestätigung den Servernamen ein",
+"Your password": "Dein Passwort",
+"{name} is back": "{name} ist zurück",
+"{name} was removed for violating the community guidelines.": "{name} wurde wegen Verstoßes gegen die Community-Richtlinien entfernt.",
+"{name} was taken down": "{name} wurde entfernt",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} wird am {date} gelöscht. Bis dahin kannst du den Server unter Benutzereinstellungen › Mein Konto wiederherstellen.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Der Server verschwindet sofort für alle Mitglieder: Kanäle, Nachrichten und Einladungen funktionieren nicht mehr. Du kannst ihn eine Weile wiederherstellen (das Datum siehst du, sobald der Vorgang abgeschlossen ist); danach wird er endgültig gelöscht."
 }

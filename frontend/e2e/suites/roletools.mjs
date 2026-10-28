@@ -59,5 +59,5 @@ ok('the holographic style is accepted', holo.status === 200 && (await holo.json(
 await p.waitForTimeout(500)
 ok('and names render with it', await p.locator(`[data-member-row="${b.user.id}"] .ne-holographic`).count() >= 1)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

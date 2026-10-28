@@ -51,5 +51,5 @@ await call(b.token, 'POST', `/channels/${ch.id}/messages`, { content: `announce 
 ok('new messages are announced', (await pa.locator('[data-live-region]').first().innerText()).includes(`announce me ${S}`))
 void second
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

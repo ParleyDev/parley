@@ -3494,5 +3494,22 @@
 "case": "케이스",
 "searched “{q}”": "“{q}” 검색",
 "{n} items": "{n}개 항목",
-"Message searches (per user)": "메시지 검색 (사용자별)"
+"Message searches (per user)": "메시지 검색 (사용자별)",
+"Being deleted. Gone for good on {date}.": "삭제 중입니다. {date}에 완전히 사라집니다.",
+"Forwarded from a server that's no longer available": "더 이상 사용할 수 없는 서버에서 전달됨",
+"Go home": "홈으로 가기",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "삭제되었거나 제거되었습니다. 채널과 메시지를 더 이상 열 수 없습니다.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "멤버는 즉시 서버를 잃게 되며 커뮤니티 가이드라인 위반으로 제거되었다는 안내를 받습니다. 소유자는 복구할 수 없습니다. 콘텐츠는 사건 처리를 위해 보관된 뒤 삭제됩니다.",
+"Restore": "복원",
+"TAKEN DOWN": "차단됨",
+"Take down": "차단하기",
+"Take down '{name}'": "'{name}' 차단하기",
+"This server is no longer available": "이 서버는 더 이상 사용할 수 없습니다",
+"Type the server name to confirm": "확인하려면 서버 이름을 입력하세요",
+"Your password": "내 비밀번호",
+"{name} is back": "{name} 서버가 복구되었습니다",
+"{name} was removed for violating the community guidelines.": "{name} 서버가 커뮤니티 가이드라인 위반으로 제거되었습니다.",
+"{name} was taken down": "{name} 서버가 차단되었습니다",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} 서버는 {date}에 삭제됩니다. 그때까지는 사용자 설정 › 내 계정에서 복원할 수 있습니다.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "서버는 모든 멤버에게서 즉시 사라지며, 채널, 메시지, 초대가 작동하지 않게 돼. 일정 기간 동안은 복원할 수 있어(날짜는 삭제가 완료되면 표시돼). 그 이후에는 영구적으로 삭제돼."
 }

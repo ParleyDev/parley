@@ -37,7 +37,7 @@ try {
   ok('no page errors', errors.length === 0, errors.join(' | '))
 } finally {
   await callS(admin.token, 'PUT', '/admin/settings', original)
-  await call(a.token, 'DELETE', `/guilds/${g.id}`)
+  await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
   await browser.close()
   if (startedHere) execSync(`docker compose -f ${COMPOSE_FILE} --profile sfu stop livekit`, { stdio: 'pipe' })
 }

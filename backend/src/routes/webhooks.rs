@@ -154,6 +154,8 @@ async fn execute(State(state): State<AppState>, Path((id, token)): Path<(Uuid, S
     let avatar = req.avatar_url.filter(|a| a.starts_with("https://") || a.starts_with("/api/images/"));
     let author_override = (username.is_some() || avatar.is_some()).then(|| json!({ "name": username, "avatar_url": avatar }));
     let c = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(w.channel_id).fetch_one(&state.db).await?;
+    // Webhooks stop with their server.
+    if let Some(g) = c.guild_id { crate::routes::server_deletion::ensure_active(&state.db, g).await? }
     let parse = req.allowed_mentions.unwrap_or(AllowedMentions { parse: vec!["users".into()] }).parse;
     let (u, r, e) = parse_mentions(&content);
     let users = if parse.iter().any(|p| p == "users") { u } else { vec![] };

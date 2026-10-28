@@ -63,5 +63,5 @@ const long = await call(b.token, 'POST', `/channels/${grp.id}/group-invites`, { 
 ok('links last at most a week', new Date(long.expires_at).getTime() - Date.now() < 169 * 3600e3)
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
-for (const x of [g, g2]) await call(a.token, 'DELETE', `/guilds/${x.id}`)
+for (const x of [g, g2]) await call(a.token, 'DELETE', `/guilds/${x.id}`, { password: 'password1', name: x.name })
 await browser.close(); await finish()

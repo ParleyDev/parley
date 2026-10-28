@@ -49,5 +49,5 @@ await pa.click(`[data-event="${weekly.id}"] [data-event-people]`); await pa.wait
 ok('the interested list opens', (await pa.locator('[data-event-people-list]').innerText()).includes('Bob'))
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

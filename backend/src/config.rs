@@ -16,6 +16,9 @@ pub struct Config {
     pub case_expiry_days: i64,
     /// Console audit entries are kept this long (at least a year; default about seven, longer than case data).
     pub audit_retention_days: i64,
+    /// Server deletion: days the owner can restore, and days a taken-down server's content is kept for its case.
+    pub server_deletion_grace_days: i64,
+    pub takedown_retention_days: i64,
     /// Instance-wide assets (read-only mount is fine): `avatar-decorations/` today. See routes/assets.rs.
     pub assets_dir: std::path::PathBuf,
     /// GIF picker providers; the first one set is used.
@@ -79,6 +82,8 @@ impl Config {
             report_context_window: std::env::var("REPORT_CONTEXT_WINDOW").ok().and_then(|v| v.parse().ok()).unwrap_or(20i64).clamp(0, 200),
             case_grant_hours: std::env::var("CASE_GRANT_HOURS").ok().and_then(|v| v.parse().ok()).unwrap_or(72i64).clamp(1, 24 * 90),
             case_expiry_days: std::env::var("CASE_EXPIRY_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(30i64).clamp(1, 3650),
+            server_deletion_grace_days: std::env::var("SERVER_DELETION_GRACE_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(7i64).clamp(0, 365),
+            takedown_retention_days: std::env::var("TAKEDOWN_RETENTION_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(90i64).clamp(1, 3650),
             audit_retention_days: std::env::var("AUDIT_RETENTION_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(2555i64).clamp(365, 36500),
             assets_dir: std::env::var("ASSETS_DIR").unwrap_or_else(|_| "./assets".into()).into(),
             tenor_api_key: env_or_file("TENOR_API_KEY").ok_or(std::env::VarError::NotPresent).ok(),

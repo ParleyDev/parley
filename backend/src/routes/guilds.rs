@@ -23,7 +23,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/guilds", get(list_guilds).post(create_guild))
         .route("/guilds/:id/rules/accept", axum::routing::post(accept_rules))
-        .route("/guilds/:id", get(get_guild).patch(update_guild).delete(delete_guild))
+        .route("/guilds/:id", get(get_guild).patch(update_guild).delete(crate::routes::server_deletion::delete_alias))
         .route("/guilds/:id/channels", get(list_channels).post(create_channel))
         .route("/guilds/:id/members", get(list_members))
         .route("/guilds/:id/members/@me", delete(leave_guild))
@@ -54,14 +54,14 @@ pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, creat
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
     let g = sqlx::query_as::<_, Guild>(&format!(
         "SELECT g.{} FROM guilds g JOIN guild_members m ON m.guild_id = g.id
-         WHERE g.id = $1 AND m.user_id = $2",
+         WHERE g.id = $1 AND m.user_id = $2 AND g.state = 'active'",
         GUILD_COLS.replace(", ", ", g.")
     ))
     .bind(guild_id)
     .bind(user_id)
     .fetch_optional(db)
     .await?;
-    g.ok_or_else(|| AppError::NotFound("Server not found".into()))
+    match g { Some(g) => Ok(g), None => Err(crate::routes::server_deletion::unavailable(db, guild_id).await) }
 }
 
 pub async fn require_owner(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -108,7 +108,7 @@ pub async fn fetch_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResu
 async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Guild>>> {
     let gs = sqlx::query_as::<_, Guild>(&format!(
         "SELECT g.{} FROM guilds g
-         JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at",
+         JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 AND g.state = 'active' ORDER BY m.joined_at",
         GUILD_COLS.replace(", ", ", g.")
     ))
     .bind(uid)
@@ -415,18 +415,6 @@ async fn update_guild(
     Ok(Json(g))
 }
 
-async fn delete_guild(
-    State(state): State<AppState>,
-    AuthUser(uid): AuthUser,
-    Path(id): Path<Uuid>,
-) -> AppResult<StatusCode> {
-    require_owner(&state.db, id, uid).await?;
-    // Emit before deleting so member set is still intact for fan-out.
-    state.hub.voice_evict(|v| v.guild_id == Some(id));
-    state.hub.emit_guild(id, "GUILD_DELETE", json!({ "id": id }));
-    sqlx::query("DELETE FROM guilds WHERE id = $1").bind(id).execute(&state.db).await?;
-    Ok(StatusCode::NO_CONTENT)
-}
 
 async fn list_channels(
     State(state): State<AppState>,

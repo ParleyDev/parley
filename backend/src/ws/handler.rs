@@ -150,7 +150,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     }
 
     let guilds = sqlx::query_as::<_, Guild>(&format!(
-        "SELECT g.{} FROM guilds g JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at",
+        "SELECT g.{} FROM guilds g JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 AND g.state = 'active' ORDER BY m.joined_at",
         crate::routes::guilds::GUILD_COLS.replace(", ", ", g.")
     ))
     .bind(user_id)

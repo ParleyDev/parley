@@ -12,6 +12,7 @@ import UserSettingsModal from './UserSettings'
 import NewDmModal from './NewDm'
 import ProfileModal from './Profile'
 import ConfirmModal from './Confirm'
+import DeleteServerModal from './DeleteServer'
 import ImageLightbox from './ImageLightbox'
 import BanMemberModal from './BanMember'
 import TimeoutMemberModal from './TimeoutMember'
@@ -73,6 +74,7 @@ export default function Modals() {
     case 'newDm': return <NewDmModal onClose={close} />
     case 'profile': return <ProfileModal onClose={close} userId={modal!.userId} anchor={modal!.anchor} tab={modal!.tab} />
     case 'confirm': return <ConfirmModal onClose={close} {...modal} />
+    case 'deleteServer': return <DeleteServerModal onClose={close} guildId={modal!.guildId} />
     case 'image': return <ImageLightbox onClose={close} url={modal!.url} name={modal!.name} items={modal!.items} index={modal!.index} />
     case 'ban': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'kick': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} kick />

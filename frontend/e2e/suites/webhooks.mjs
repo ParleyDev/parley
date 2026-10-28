@@ -64,5 +64,5 @@ await call(a.token, 'DELETE', `/webhooks/${id}`)
 ok('a deleted webhook\'s URL stops working', (await fetch(hook)).status === 404) // GET isn't rate limited
 ok('webhook users never show in user search', !(await call(a.token, 'GET', '/users/search?q=webhook')).some((u) => u.username.startsWith('webhook_')))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

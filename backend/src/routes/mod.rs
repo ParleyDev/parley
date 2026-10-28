@@ -4,6 +4,7 @@ pub mod applications;
 pub mod admin_access;
 pub mod admin_search;
 pub mod cases;
+pub mod server_deletion;
 pub mod assets;
 pub mod deletion;
 pub mod notices;
@@ -130,6 +131,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(images::router())
         .merge(admin_access::router())
         .merge(cases::router())
+        .merge(server_deletion::router())
         .merge(admin_search::router())
         .merge(assets::router())
         .merge(deletion::router())

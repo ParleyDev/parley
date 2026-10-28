@@ -109,7 +109,7 @@ pub fn rest_allows(scopes: &[String], method: &Method, path: &str) -> bool {
 /// Channels and DMs with messages the user has not read yet: how many (capped at 100) and how many mention them.
 /// What "what did I miss?" needs, without the WebSocket READY payload the app uses.
 async fn unreads(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
-    let guilds: Vec<(Uuid, String)> = sqlx::query_as("SELECT g.id, g.name FROM guilds g JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 ORDER BY m.joined_at").bind(uid).fetch_all(&state.db).await?;
+    let guilds: Vec<(Uuid, String)> = sqlx::query_as("SELECT g.id, g.name FROM guilds g JOIN guild_members m ON m.guild_id = g.id WHERE m.user_id = $1 AND g.state = 'active' ORDER BY m.joined_at").bind(uid).fetch_all(&state.db).await?;
     let mut place: std::collections::HashMap<Uuid, Value> = std::collections::HashMap::new();
     for (gid, gname) in &guilds {
         for c in crate::perms::visible_channels(&state.db, *gid, uid).await.unwrap_or_default() {

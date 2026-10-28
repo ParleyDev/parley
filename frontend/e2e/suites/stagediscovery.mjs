@@ -62,5 +62,5 @@ await po.click(`[data-live-stage-open="${stage.id}"]`); await po.waitForURL(new 
 ok('Join Server & Listen joins and opens the stage', po.url().includes(stage.id) && (await call(host.token, 'GET', `/guilds/${g.id}/members`)).some((m) => m.user_id === outsider.user.id))
 ok('no page errors', errors.length === 0, errors.join(' | '))
 for (const s of [sf, sh, sm]) s.w.close()
-await call(host.token, 'DELETE', `/guilds/${g.id}`)
+await call(host.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

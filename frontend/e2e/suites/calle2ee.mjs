@@ -109,6 +109,6 @@ ok('and both sides see the same code', /^\d{4}( \d{4}){4}$/.test(da) && da === d
 const dmTransforms = await pb.evaluate(() => window.__pcs.filter((pc) => pc.connectionState !== 'closed').flatMap((pc) => pc.getTransceivers().flatMap((t) => [t.sender, t.receiver])).every((x) => !!x.transform))
 ok('DM call media goes through the worker', dmTransforms)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close()
 await finish()

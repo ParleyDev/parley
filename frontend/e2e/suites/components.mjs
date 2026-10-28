@@ -93,5 +93,5 @@ ok('user commands from the Apps menu', await pb.locator('[data-message-list] [da
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
 ws.close()
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

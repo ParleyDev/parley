@@ -62,5 +62,5 @@ ok('into the inactive channel', (await pb.evaluate(() => window.__parleyVoice().
 ok('where they are silenced for everyone', await pa.locator(`[data-channel-item="${afk.id}"] [data-voice-silent="suppressed"]`).count() === 1)
 ok('and are not moved again', await pb.evaluate(() => window.__parleyAfk(10 * 60_000)) === false)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

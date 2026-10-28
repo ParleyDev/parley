@@ -109,6 +109,6 @@ await p.click('[role=dialog] button:has-text("Badge")'); await p.waitForTimeout(
 await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(400)
 ok('phone: the tab fits', await p.evaluate(() => { const t = document.querySelector('[data-badge-tab]'); return !!t && t.scrollWidth <= t.clientWidth + 1 }), await p.evaluate(() => { const t = document.querySelector('[data-badge-tab]'); return t ? `${t.scrollWidth}/${t.clientWidth} ` + [...t.querySelectorAll('*')].filter((e) => e.getBoundingClientRect().right > t.getBoundingClientRect().right + 1).slice(0, 3).map((e) => e.tagName + '.' + e.className.toString().slice(0, 40)).join(',') : 'none' }))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close()
 await finish()

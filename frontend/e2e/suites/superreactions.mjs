@@ -38,5 +38,5 @@ await p.waitForSelector('[data-emoji-grid] [data-emoji-btn]'); await p.locator('
 msg = (await call(a.token, 'GET', `/channels/${ch.id}/messages`)).find((x) => x.id === m.id)
 ok('Add Super Reaction from the menu', msg.reactions.some((r) => r.burst && r.me))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

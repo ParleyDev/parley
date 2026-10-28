@@ -59,5 +59,5 @@ await p.click('[data-inbox-tab="mentions"]'); await p.keyboard.press('Escape'); 
 await p.click('[data-inbox-toggle]'); await p.waitForSelector('[data-inbox]'); await p.waitForTimeout(500)
 ok('removed mentions stay removed', await p.locator(`[data-inbox-item="${m1.id}"]`).count() === 0)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

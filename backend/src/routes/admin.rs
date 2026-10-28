@@ -635,6 +635,10 @@ struct AdminGuild {
     member_count: i64,
     message_count: i64,
     discovery_status: Option<String>,
+    /// active, pending_deletion or taken_down.
+    state: String,
+    deletion_scheduled_for: Option<DateTime<Utc>>,
+    takedown_case_id: Option<Uuid>,
 }
 
 async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<ListQuery>) -> AppResult<Json<Vec<AdminGuild>>> {
@@ -643,7 +647,7 @@ async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser, Que
         "SELECT g.id, g.name, g.icon_url, g.created_at, g.owner_id, u.username AS owner_username,
                 (SELECT COUNT(*) FROM guild_members m WHERE m.guild_id = g.id) AS member_count,
                 (SELECT COUNT(*) FROM messages ms JOIN channels c ON c.id = ms.channel_id WHERE c.guild_id = g.id AND ms.kind = 'default') AS message_count,
-                d.status AS discovery_status
+                d.status AS discovery_status, g.state, g.deletion_scheduled_for, g.takedown_case_id
          FROM guilds g JOIN users u ON u.id = g.owner_id LEFT JOIN guild_discovery d ON d.guild_id = g.id
          WHERE ($1::text IS NULL OR g.name ILIKE $1 OR u.username ILIKE $1)
          ORDER BY member_count DESC, g.created_at DESC LIMIT 200",
@@ -656,11 +660,11 @@ async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser, Que
 
 async fn delete_guild(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
     crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
+    // Spam and the like: no grace period. Finalized at once, like a scheduled deletion (tombstone, files removed).
     let name = audit::guild_name(&state, id).await;
     state.hub.voice_evict(|v| v.guild_id == Some(id));
-    state.hub.emit_guild(id, "GUILD_DELETE", json!({ "id": id }));
-    let res = sqlx::query("DELETE FROM guilds WHERE id = $1").bind(id).execute(&state.db).await?;
-    if res.rows_affected() == 0 {
+    state.hub.emit_guild(id, "GUILD_DELETE", json!({ "id": id, "unavailable": true, "reason": "deleted", "name": name }));
+    if !crate::routes::server_deletion::finalize(&state, id, "admin").await? {
         return Err(AppError::NotFound("Server not found".into()));
     }
     audit::record(&state, uid, "guild.delete", "guild", Some(id), &name, json!({})).await;

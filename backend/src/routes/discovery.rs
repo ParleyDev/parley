@@ -112,7 +112,7 @@ async fn browse(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q)
     let pattern = if term.is_empty() { None } else { Some(format!("%{term}%")) };
     let category = q.category.filter(|c| CATEGORIES.contains(&c.as_str()));
     let rows = sqlx::query_as::<_, Listing>(&format!(
-        "{LISTING_SELECT} WHERE d.status = 'approved' AND ($1::text IS NULL OR d.category = $1)
+        "{LISTING_SELECT} WHERE d.status = 'approved' AND g.state = 'active' AND ($1::text IS NULL OR d.category = $1)
            AND ($2::text IS NULL OR g.name ILIKE $2 OR d.description ILIKE $2)
          ORDER BY d.featured_order ASC NULLS LAST, member_count DESC, g.name LIMIT 100"
     ))

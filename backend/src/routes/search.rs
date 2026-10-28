@@ -119,7 +119,7 @@ async fn scope(db: &PgPool, uid: Uuid, guild_id: Option<Uuid>, channel_id: Optio
     }
     let guilds: Vec<(Uuid,)> = match guild_id {
         Some(g) => vec![(g,)],
-        None => sqlx::query_as("SELECT guild_id FROM guild_members WHERE user_id = $1").bind(uid).fetch_all(db).await?,
+        None => sqlx::query_as("SELECT m.guild_id FROM guild_members m JOIN guilds g ON g.id = m.guild_id WHERE m.user_id = $1 AND g.state = 'active'").bind(uid).fetch_all(db).await?,
     };
     let mut out = Vec::new();
     for (g,) in guilds {

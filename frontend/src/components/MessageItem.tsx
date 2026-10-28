@@ -387,6 +387,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           ) : (
             <>
               {m.forwarded_from && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded><Forward size={13} /> {t('Forwarded')}</div>}
+              {m.forwarded_unavailable && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded="unavailable"><Forward size={13} /> {t("Forwarded from a server that's no longer available")}</div>}
               {m.crosspost?.channel_name && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-crosspost-from={m.crosspost.channel_id}><Megaphone size={13} /><span className="rounded bg-accent/80 px-1 text-[10px] font-bold uppercase text-white">{t('Server')}</span> {m.crosspost.guild_name} · #{m.crosspost.channel_name}</div>}
               {(m.content || m.edited_at) && !media && (
                 <div dir="auto" onClick={emojiHover.onClick} className={`msg-content text-[15px] leading-[1.375rem] break-words whitespace-pre-wrap ${m.local === 'failed' ? 'text-danger' : 'text-text-0'} ${isJumbo(m.content) ? 'jumbo' : ''}`}>

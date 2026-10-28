@@ -69,5 +69,5 @@ ok('phone: the menu fits the screen', await m.evaluate(() => { const r = documen
 await m.click('[data-user-menu-edit]'); await m.waitForSelector('[data-profile-editor]')
 ok('phone: the editor fills the screen without sideways scrolling', await m.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

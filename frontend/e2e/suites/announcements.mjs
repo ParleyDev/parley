@@ -70,5 +70,5 @@ const fm = await call(a.token, 'GET', `/channels/${fp.id}/messages`)
 ok('forum posts can carry files too', fm[fm.length - 1]?.attachments?.length === 1 || fm[0]?.attachments?.length === 1)
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
-for (const [t, g] of [[a, ga], [b, gb]]) await call(t.token, 'DELETE', `/guilds/${g.id}`)
+for (const [t, g] of [[a, ga], [b, gb]]) await call(t.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

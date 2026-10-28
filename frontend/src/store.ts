@@ -73,6 +73,7 @@ export type ModalKind =
   | { kind: 'createThread'; channelId: string; messageId?: string; suggested?: string }
   | { kind: 'newPost'; channelId: string }
   | { kind: 'transferOwnership'; guildId: string; userId?: string }
+  | { kind: 'deleteServer'; guildId: string }
   | { kind: 'rules'; guildId: string }
   | { kind: 'events'; guildId: string }
   | { kind: 'customStatus' }

@@ -79,5 +79,5 @@ await openDms(a, b); const dm = await call(a.token, 'POST', '/users/@me/channels
 ok('DMs are never summarized', (await raw(a.token, 'GET', `/channels/${dm.id}/summaries`)).status === 400)
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await callS(admin.token, 'PUT', '/admin/settings', original)
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); server.close(); await finish()

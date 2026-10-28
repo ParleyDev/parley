@@ -50,5 +50,5 @@ ok('members see why they can\'t', await pc.locator('[data-readonly-note]').count
 ok('only moderators lock', (await raw(b.token, 'PATCH', `/threads/${pub.id}`, { locked: false })).status === 403)
 ok('auto-archive takes 1 hour to 1 week', (await raw(a.token, 'PATCH', `/threads/${pub.id}`, { auto_archive_minutes: 5 })).status === 400 && (await call(a.token, 'PATCH', `/threads/${pub.id}`, { auto_archive_minutes: 60 })).auto_archive_minutes === 60)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

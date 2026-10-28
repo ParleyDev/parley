@@ -72,5 +72,5 @@ await pc.goto(`${WEB}/channels/${g.id}/${vc1.id}`); await pc.click('text=Join Vo
 await call(a.token, 'PATCH', `/guilds/${g.id}/members/${c.user.id}`, { channel_id: vc2.id }); await pa.waitForTimeout(2500)
 ok('but a moderator can move someone into it', await pa.locator(`[data-channel-item="${vc2.id}"] button:has-text("Carol")`).count() === 1)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

@@ -60,5 +60,5 @@ await pf.click('button:has-text("Accept Invite"), button:has-text("Join")').catc
 await pf.waitForTimeout(1500)
 ok('a new member sees the verification gate straight away', await pf.locator('[data-verification-gate]').count() === 1)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

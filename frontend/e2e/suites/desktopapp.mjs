@@ -168,5 +168,5 @@ ok('but not inside it', await d2.locator('[data-invite-open-app]').count() === 0
 const old = await mk(UA, false); await old.goto(`${WEB}/channels/${g.id}/${ch.id}`); await old.waitForSelector('textarea')
 ok('older shells without commands still work', true)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(b.token, 'DELETE', `/guilds/${g.id}`)
+await call(b.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

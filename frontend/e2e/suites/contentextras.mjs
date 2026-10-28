@@ -50,5 +50,5 @@ ok('Context shows the neighbouring messages', await p.locator(`[data-search-hit=
 const polls = await call(a.token, 'GET', `/search?q=has:poll&channel_id=${ch.id}`)
 ok('has:poll finds polls only', polls.total === 1 && polls.results[0].poll)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

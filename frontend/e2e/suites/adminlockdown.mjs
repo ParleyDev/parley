@@ -49,5 +49,5 @@ ok('members find server and DM messages', after.a.ids.includes(pub.id) && after.
 ok('outsiders find nothing (and no count leaks)', after.c.total === 0 && after.c.ids.length === 0)
 const n2 = logCount()
 ok('an admin searching as a user needs no reason and leaves no admin log', (await raw(admin.token, 'GET', '/search?q=lockdown')).status === 200 && logCount() === n2)
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await finish()

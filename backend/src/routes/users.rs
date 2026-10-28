@@ -614,6 +614,7 @@ async fn get_user(
             "SELECT g.id, g.name, g.icon_url FROM guilds g
              JOIN guild_members a ON a.guild_id = g.id AND a.user_id = $1
              JOIN guild_members b ON b.guild_id = g.id AND b.user_id = $2
+             WHERE g.state = 'active'
              ORDER BY a.joined_at",
         )
         .bind(me)

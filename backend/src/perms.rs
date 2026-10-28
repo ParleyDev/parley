@@ -139,11 +139,15 @@ pub const MFA_GATED: u64 = ADMINISTRATOR | KICK_MEMBERS | BAN_MEMBERS | MANAGE_C
 
 impl GuildCtx {
     pub async fn load(db: &PgPool, guild_id: Uuid) -> AppResult<Self> {
-        let guild = sqlx::query_as::<_, Guild>(&format!("SELECT {GUILD_COLS} FROM guilds WHERE id = $1"))
+        // Servers being deleted or taken down are gone for everyone (404 or 410 server_unavailable).
+        let guild = match sqlx::query_as::<_, Guild>(&format!("SELECT {GUILD_COLS} FROM guilds WHERE id = $1 AND state = 'active'"))
             .bind(guild_id)
             .fetch_optional(db)
             .await?
-            .ok_or_else(|| AppError::NotFound("Server not found".into()))?;
+        {
+            Some(g) => g,
+            None => return Err(crate::routes::server_deletion::unavailable(db, guild_id).await),
+        };
         let roles = list_roles(db, guild_id).await?.into_iter().map(|r| (r.id, r)).collect();
         let members: HashSet<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM guild_members WHERE guild_id = $1")
             .bind(guild_id)

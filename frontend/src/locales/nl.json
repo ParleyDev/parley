@@ -3494,5 +3494,22 @@
 "case": "zaak",
 "searched “{q}”": "zocht naar “{q}”",
 "{n} items": "{n} items",
-"Message searches (per user)": "Berichtzoekopdrachten (per gebruiker)"
+"Message searches (per user)": "Berichtzoekopdrachten (per gebruiker)",
+"Being deleted. Gone for good on {date}.": "Wordt verwijderd. Definitief weg op {date}.",
+"Forwarded from a server that's no longer available": "Doorgestuurd vanaf een server die niet meer beschikbaar is",
+"Go home": "Naar home",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "Hij is verwijderd of weggehaald. De kanalen en berichten zijn niet meer te openen.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "Leden raken de server meteen kwijt en krijgen te horen dat hij is verwijderd wegens schending van de communityrichtlijnen. De eigenaar kan hem niet herstellen. De inhoud wordt bewaard voor de zaak en daarna verwijderd.",
+"Restore": "Herstellen",
+"TAKEN DOWN": "OFFLINE GEHAALD",
+"Take down": "Offline halen",
+"Take down '{name}'": "'{name}' offline halen",
+"This server is no longer available": "Deze server is niet meer beschikbaar",
+"Type the server name to confirm": "Typ de servernaam om te bevestigen",
+"Your password": "Je wachtwoord",
+"{name} is back": "{name} is terug",
+"{name} was removed for violating the community guidelines.": "{name} is verwijderd wegens schending van de communityrichtlijnen.",
+"{name} was taken down": "{name} is offline gehaald",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} wordt op {date} verwijderd. Tot die tijd kun je hem herstellen via Gebruikersinstellingen › Mijn account.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "De server verdwijnt meteen voor alle leden: kanalen, berichten en uitnodigingen werken niet meer. Je kunt hem een tijdje herstellen (de datum zie je zodra het klaar is); daarna wordt hij definitief verwijderd."
 }

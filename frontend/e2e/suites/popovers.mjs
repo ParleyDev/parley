@@ -91,5 +91,5 @@ ok('clicking the avatar opens the full image', (await p.locator('[data-lightbox]
 await p.keyboard.press('Escape'); await p.waitForTimeout(200)
 ok('Escape closes the image and leaves the profile', await p.locator('[data-lightbox]').count() === 0 && await p.locator('[data-dm-profile]').count() === 1)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

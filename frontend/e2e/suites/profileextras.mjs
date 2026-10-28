@@ -66,5 +66,5 @@ ok('streamers get LIVE in the member list', await pa.locator(`[data-member-row="
 await pa.click(`[data-member-row="${b.user.id}"]`); await pa.waitForSelector('[data-profile-card]')
 ok('and in their profile', await pa.locator('[data-profile-live]').count() === 1)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

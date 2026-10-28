@@ -96,5 +96,5 @@ let limited = null
 for (let i = 0; i < 40 && !limited; i++) { const res = await raw(z.token, 'GET', `/search?q=${W}`); if (res.status === 429) limited = res }
 ok('searching is rate limited per user', !!limited && limited.headers.get('x-ratelimit-bucket') === 'search' && Number(limited.headers.get('retry-after')) > 0)
 ok('and only for that user', (await raw(a.token, 'GET', `/search?q=${W}`)).status === 200)
-await call(c.token, 'DELETE', `/guilds/${other.id}`); await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(c.token, 'DELETE', `/guilds/${other.id}`, { password: 'password1', name: other.name }); await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await finish()

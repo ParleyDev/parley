@@ -3494,5 +3494,22 @@
 "case": "caso",
 "searched “{q}”": "buscó «{q}»",
 "{n} items": "{n} elementos",
-"Message searches (per user)": "Búsquedas de mensajes (por usuario)"
+"Message searches (per user)": "Búsquedas de mensajes (por usuario)",
+"Being deleted. Gone for good on {date}.": "Se está eliminando. Desaparecerá para siempre el {date}.",
+"Forwarded from a server that's no longer available": "Reenviado desde un servidor que ya no está disponible",
+"Go home": "Ir al inicio",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "Se eliminó o se retiró. Sus canales y mensajes ya no se pueden abrir.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "Los miembros pierden el servidor al instante y se les avisa de que se retiró por infringir las normas de la comunidad. El propietario no puede restaurarlo. Su contenido se conserva para el caso y luego se elimina.",
+"Restore": "Restaurar",
+"TAKEN DOWN": "SUSPENDIDO",
+"Take down": "Suspender",
+"Take down '{name}'": "Suspender '{name}'",
+"This server is no longer available": "Este servidor ya no está disponible",
+"Type the server name to confirm": "Escribe el nombre del servidor para confirmar",
+"Your password": "Tu contraseña",
+"{name} is back": "{name} ha vuelto",
+"{name} was removed for violating the community guidelines.": "{name} se retiró por infringir las normas de la comunidad.",
+"{name} was taken down": "{name} fue suspendido",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} se eliminará el {date}. Hasta entonces puedes restaurarlo en Ajustes de usuario › Mi cuenta.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "El servidor desaparece de inmediato para todos sus miembros: los canales, los mensajes y las invitaciones dejan de funcionar. Puedes restaurarlo durante un tiempo (la fecha se muestra cuando termine); después se elimina definitivamente."
 }

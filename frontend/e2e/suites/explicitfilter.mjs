@@ -73,5 +73,5 @@ const pc3 = await mk(c, true); await pc3.goto(`${WEB}/channels/${g.id}/${ch.id}`
 ok('"members without roles" spares a member with a role', await pc3.locator(`[data-msg-id="${bad.id}"] [data-explicit-removed]`).count() === 0)
 ok('bad values are refused', (await raw(a.token, 'PATCH', `/guilds/${g.id}`, { explicit_filter: 'maybe' })).status === 400)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

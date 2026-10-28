@@ -78,5 +78,5 @@ ok('the wheel zooms into a screen share', Number(await zoomBox.getAttribute('dat
 await zoomBox.hover(); await pb.click('[data-zoom-reset]'); await pb.waitForTimeout(200)
 ok('and the reset button goes back to 100%', (await zoomBox.getAttribute('data-zoom')) === '1.00')
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

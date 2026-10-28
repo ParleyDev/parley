@@ -188,8 +188,9 @@ Tests cover:
 - **hard-delete** messages, threads, channels, overwrites, roles, emoji, stickers, sounds, invites, webhooks,
   integrations, memberships, bans, events and reports' guild links; delete attachment and image files after the
   commit;
-- keep the `guilds` row with only `id`, `state = 'deleted'`, `deleted_at` and `deletion_type`. Name, icon,
-  description and owner become NULL, so those columns go nullable.
+- delete the `guilds` row itself and keep a `guild_tombstones` row with only `id`, `deleted_at` and
+  `deletion_type`. (As built: a separate tombstone table instead of NULLing name, icon, description and owner on
+  `guilds`, so no code that loads a server ever meets a half-empty row.)
 - Before finalizing, if an open case or legal hold references the server, copy **only the in-scope messages and
   attachments** into `case_snapshots` (case retention).
 
@@ -199,7 +200,7 @@ return `410 {code: "server_unavailable"}`. Clients render "This server is no lon
 **Account deletion** already blocks while the user owns servers, and its blocker list would also show servers that are
 pending deletion.
 
-## Forwarded messages (needs your decision)
+## Forwarded messages (decided: they survive)
 
 Forwards are **independent copies**: the forwarder's own message, with duplicated files, in another conversation. I
 propose they **survive** server deletion (they belong to the conversation they were forwarded into, like a quote). The
@@ -207,7 +208,28 @@ propose they **survive** server deletion (they belong to the conversation they w
 available". The alternative is deleting every forward whose source was in the server, which reaches into other
 people's DMs and other servers.
 
-## Open questions
+## Decisions taken
+
+1. Phase 0: only `ADMIN_EMAILS` admins held `SUPER_ADMIN_TEMP`; the role was removed in Phase 3.
+2. Phase 1: existing admins became `SUPER_ADMIN` + `TS_LEAD`.
+3. Forwards survive with the pointer cleared (`forwarded_unavailable`).
+4. Audit rows store IDs only; names are resolved at read time.
+5. One-admin instances have no break-glass: DM and group content stays unreachable without a second T&S lead.
+
+## Configuration
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `REPORT_CONTEXT_WINDOW` | 20 | Messages shown either side of a reported one |
+| `CASE_GRANT_HOURS` | 72 | How long an approved grant lasts |
+| `CASE_EXPIRY_DAYS` | 30 | How long a case stays usable |
+| `AUDIT_RETENTION_DAYS` | 2555 (min 365) | Console audit retention |
+| `RL_SEARCH` | 30/60 | User message searches per user per minute |
+| `SERVER_DELETION_GRACE_DAYS` | 7 | Owner restore window |
+| `TAKEDOWN_RETENTION_DAYS` | 90 | Taken-down content kept for its case |
+
+## Open questions (resolved)
+
 
 1. **Phase 0 access.** Should existing admins get `super_admin_temp`, so admin search keeps working (justified and
    logged), or should nobody have it until Phase 3?

@@ -41,5 +41,5 @@ await call(a.token, 'PATCH', `/guilds/${g2.id}/members/@me/privacy`, { share_act
 ok('turning it back on keeps it shown', await until(async () => (await lineC.count()) === 1))
 ok('allow_dms is left alone by the activity switch', (await call(a.token, 'GET', `/guilds/${g2.id}/members/@me/privacy`)).allow_dms === null)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-for (const g of [g1, g2]) await call(a.token, 'DELETE', `/guilds/${g.id}`)
+for (const g of [g1, g2]) await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

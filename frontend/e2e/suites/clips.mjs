@@ -80,5 +80,5 @@ ok('each can be downloaded', (await pb.locator('[data-clip-download]').first().g
 await pb.locator('[data-clip-delete]').first().click()
 ok('and deleted', await pb.waitForFunction(() => document.querySelectorAll('[data-clip]').length === 1, null, { timeout: 3000 }).then(() => true).catch(() => false) && (await pb.evaluate(async () => (await window.__clips()).length)) === 1)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

@@ -57,5 +57,5 @@ await pa2.click('[data-panel-self]'); await pa2.waitForTimeout(200); await pa2.c
 await pa2.click('[data-activity-clear]')
 ok('Clear activity removes it for everyone', await until(async () => (await line.count()) === 0))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

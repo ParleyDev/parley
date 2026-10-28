@@ -210,7 +210,7 @@ async fn authorize_info(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     if scopes.iter().any(|s| s == "bot") && !app.bot_public && app.owner_id != uid { return Err(AppError::BadRequest("This bot is private: only its owner can add it".into())) }
     let owner = sqlx::query_as::<_, User>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::USER_COLS)).bind(app.owner_id).fetch_optional(&state.db).await?;
     let guilds: Vec<(Uuid, String, Option<String>)> = if scopes.iter().any(|s| s == "bot") {
-        sqlx::query_as("SELECT g.id, g.name, g.icon_url FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $1 ORDER BY g.name").bind(uid).fetch_all(&state.db).await?
+        sqlx::query_as("SELECT g.id, g.name, g.icon_url FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $1 WHERE g.state = 'active' ORDER BY g.name").bind(uid).fetch_all(&state.db).await?
     } else { Vec::new() };
     let mut manageable = Vec::new();
     for (gid, name, icon) in guilds {

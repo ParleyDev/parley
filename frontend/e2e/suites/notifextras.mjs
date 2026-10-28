@@ -38,5 +38,5 @@ ok('and not the quiet one', !(await p.locator('[data-inbox-highlights]').innerTe
 await call(b.token, 'PUT', `/users/@me/notification-settings/${g.id}`, { suppress_highlights: true })
 ok('suppressing highlights for a server hides them', !(await call(b.token, 'GET', '/users/@me/highlights')).some((m) => m.id === hot.id))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

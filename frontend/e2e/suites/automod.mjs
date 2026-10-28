@@ -47,5 +47,5 @@ await call(a.token, 'PATCH', `/guilds/${g.id}/automod/${kw.id}`, { enabled: fals
 await call(a.token, 'DELETE', `/guilds/${g.id}/members/${b.user.id}/timeout`)
 ok('disabled rules do nothing', (await post(b, 'darn')).status === 201)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

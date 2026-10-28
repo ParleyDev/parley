@@ -52,5 +52,5 @@ ok('no page errors', errors.length === 0, errors.join(' | '))
 // Leave the shared instance's admin queue as we found it.
 const admin = await adminToken()
 for (const r of await call(admin.token, 'GET', '/admin/reports')) if (r.guild_id === g.id || r.guild_id === g2.id) await call(admin.token, 'PATCH', `/admin/reports/${r.id}`, { status: 'dismissed' })
-await call(a.token, 'DELETE', `/guilds/${g.id}`); await call(a.token, 'DELETE', `/guilds/${g2.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name }); await call(a.token, 'DELETE', `/guilds/${g2.id}`, { password: 'password1', name: g2.name })
 await browser.close(); await finish()

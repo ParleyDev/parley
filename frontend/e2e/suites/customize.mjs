@@ -74,5 +74,5 @@ const got = (await call(a.token, 'GET', `/guilds/${g.id}`)).onboarding
 ok('saving adds the new question', got.questions.length === 2 && got.questions[1].options[0].label === 'Earth', JSON.stringify(got))
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

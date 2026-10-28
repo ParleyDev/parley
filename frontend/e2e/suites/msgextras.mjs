@@ -77,5 +77,5 @@ await p.click(`[data-reactor-remove="${c.user.id}"]`); await p.waitForTimeout(50
 const reacts = (await call(a.token, 'GET', `/channels/${ch.id}/messages?limit=10`)).find((m) => m.id === linkMsg.id).reactions
 ok('a moderator can', reacts.find((r) => r.emoji === '👍')?.count === 1 && await p.locator('[data-reactor]').count() === 1)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

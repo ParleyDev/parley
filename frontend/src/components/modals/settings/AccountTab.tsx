@@ -60,7 +60,7 @@ export default function AccountTab({ onDevices }: { onDevices: () => void }) {
         {recap && <RecapModal onClose={() => setRecap(false)} />}
       </WindowSection>
       <WindowSection id="storage" title={titles.storage}><StorageSection /></WindowSection>
-      <WindowSection id="removal" title={titles.removal}><DeleteAccountSection /></WindowSection>
+      <WindowSection id="removal" title={titles.removal}><PendingServers /><DeleteAccountSection /></WindowSection>
     </div>
   )
 }
@@ -88,5 +88,26 @@ function DisplayNameRow({ user }: { user: PrivateUser }) {
       <button type="button" className="text-sm text-text-1 hover:underline" onClick={() => setEdit(null)}>{t('Cancel')}</button>
       <button className="btn-primary h-10" disabled={busy || !edit.trim()} data-display-name-save>{t('Save')}</button>
     </form>
+  )
+}
+
+/** Servers you deleted that can still be restored (only you see them, until the grace period ends). */
+function PendingServers() {
+  const t = useT()
+  const pushToast = useStore((s) => s.pushToast)
+  const [list, setList] = useState<{ id: string; name: string; scheduled_for: string }[]>([])
+  const load = () => api.get<{ id: string; name: string; scheduled_for: string }[]>('/users/@me/guilds/pending-deletion').then(setList).catch(() => {})
+  useEffect(() => { load() }, [])
+  const restore = async (id: string, name: string) => {
+    try { await api.post(`/guilds/${id}/restore`); pushToast(t('{name} is back', { name })); load() } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  if (list.length === 0) return null
+  return (
+    <div data-pending-servers>
+      {list.map((g) => (
+        <WindowRow key={g.id} label={g.name} hint={t('Being deleted. Gone for good on {date}.', { date: new Date(g.scheduled_for).toLocaleDateString() })}
+          action={<button type="button" className={windowButton} onClick={() => restore(g.id, g.name)} data-restore-server={g.id}>{t('Restore')}</button>} />
+      ))}
+    </div>
   )
 }

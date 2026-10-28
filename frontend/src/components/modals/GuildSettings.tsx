@@ -1,8 +1,6 @@
 import { Award, Blocks, Bot, ChartColumn, ClipboardList, DoorOpen, LayoutTemplate, ListChecks, Flag, PanelsTopLeft, Compass, Crown, ShieldAlert, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Tag, Trash2, Users } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { myGuildPerms, useStore } from '../../store'
-import { api } from '../../lib/api'
 import { has, P } from '../../lib/perms'
 import SettingsShell from './SettingsShell'
 import { useT } from '../../lib/i18n'
@@ -38,9 +36,6 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   const user = useStore((s) => s.user)
   const perms = useStore((s) => myGuildPerms(s, guildId))
   const openModal = useStore((s) => s.openModal)
-  const removeGuild = useStore((s) => s.removeGuild)
-  const pushToast = useStore((s) => s.pushToast)
-  const navigate = useNavigate()
   const canOverview = has(perms, P.MANAGE_GUILD)
   const canBans = has(perms, P.BAN_MEMBERS)
   const canAudit = canOverview || has(perms, P.VIEW_AUDIT_LOG)
@@ -51,12 +46,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   if (!guild) return null
   const isOwner = guild.owner_id === user?.id
 
-  const del = () => openModal({
-    kind: 'confirm', title: t("Delete '{name}'", { name: guild.name }), body: t('Are you sure you want to delete {name}? This cannot be undone.', { name: guild.name }), danger: true, confirmLabel: t('Delete Server'),
-    action: async () => {
-      try { await api.delete(`/guilds/${guildId}`); removeGuild(guildId); navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
-    },
-  })
+  const del = () => openModal({ kind: 'deleteServer', guildId })
 
   // Grouped like Discord's server settings: the server, Expression, People, Apps, Moderation, Community.
   type Item = { id: Tab; label: string; icon: React.ReactNode }

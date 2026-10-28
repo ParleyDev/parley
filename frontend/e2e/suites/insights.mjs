@@ -44,5 +44,5 @@ await pb.click(`[data-activity-message="${m1.id}"]`); await pb.waitForTimeout(60
 ok('clicking a message jumps to it', pb.url().includes(`message=${m1.id}`) || pb.url().includes(ch.id))
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

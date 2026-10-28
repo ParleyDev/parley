@@ -88,5 +88,5 @@ await pr.click(`[data-member-row="${a.user.id}"]`); await pr.waitForSelector('[d
 ok('shows the still instead of playing', await pr.locator('[data-profile-popout] [data-effect-layer]').count() === 0)
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await call(a.token, 'PATCH', '/users/@me', { profile_effect: '', profile_frame: '' })
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

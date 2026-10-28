@@ -238,12 +238,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       try { await api.delete(`/guilds/${guildId}/members/@me`); removeGuild(guildId); navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
     },
   })
-  const del = () => openModal({
-    kind: 'confirm', title: t("Delete '{name}'", { name: guild.name }), body: t('Are you sure you want to delete {name}? This cannot be undone.', { name: guild.name }), danger: true, confirmLabel: t('Delete Server'),
-    action: async () => {
-      try { await api.delete(`/guilds/${guildId}`); removeGuild(guildId); navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
-    },
-  })
+  const del = () => openModal({ kind: 'deleteServer', guildId })
 
   return (
     <aside aria-label={t('Channels')} className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">

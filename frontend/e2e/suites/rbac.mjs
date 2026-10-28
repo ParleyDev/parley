@@ -66,6 +66,7 @@ const M = [
   ['POST', '/admin/discovery/:gid/review', `/admin/discovery/${X}/review`, { status: 'approved' }, 'instance_manage'],
   ['GET', '/admin/guilds', '/admin/guilds', null, 'conversation_metadata_read'],
   ['DELETE', '/admin/guilds/:id', `/admin/guilds/${X}`, null, 'content_action'],
+  ['POST', '/admin/guilds/:id/takedown', `/admin/guilds/${X}/takedown`, { case_id: X, justification: why }, 'content_action'],
   ['GET', '/admin/mail', '/admin/mail?limit=1', null, 'account_pii_reveal'],
   ['DELETE', '/admin/mail', `/admin/mail?to=nobody-rbac${S}@example.org`, null, 'instance_manage'],
   ['DELETE', '/admin/mail/:id', `/admin/mail/${X}`, null, 'instance_manage'],

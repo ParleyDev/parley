@@ -59,5 +59,5 @@ ok('channels can be pinned to the top of the server', await pa.locator(`[data-pi
 await pa.click(`[data-pinned-channel="${general.id}"] a`, { button: 'right' }); await pa.click('[data-menu-item="Unpin Channel"]'); await pa.waitForTimeout(600)
 ok('and unpinned', await pa.locator('[data-pinned-channels]').count() === 0)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

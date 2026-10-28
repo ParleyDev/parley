@@ -83,5 +83,5 @@ ok('while it runs, Enter waits and keeps the text', await pc.inputValue(box) ===
 ok('the owner sees that they are exempt', /exempt/.test(await pa.locator('[data-slowmode]').innerText()))
 await call(a.token, 'PATCH', `/channels/${ch.id}`, { rate_limit_per_user: 0 })
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

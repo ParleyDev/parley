@@ -91,5 +91,5 @@ await call(b.token, 'POST', `/channels/${other.id}/messages`, { content: `hey <@
 await p.waitForFunction(() => document.title.startsWith('(1) '), null, { timeout: 8000 }).catch(() => {})
 ok('a mention elsewhere puts the count in front', (await p.title()).startsWith('(1) #general'), await p.title())
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

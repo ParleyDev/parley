@@ -72,5 +72,5 @@ ok('and the tag shows a check', await po.locator(`[data-msg-id="${bm.id}"] [data
 await call(admin.token, 'PATCH', `/admin/applications/${app2.id}`, { verified: false })
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(owner.token, 'DELETE', `/guilds/${g.id}`)
+await call(owner.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

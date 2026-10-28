@@ -349,6 +349,8 @@ export interface Message {
   attachments: Attachment[]
   sticker?: MessageSticker | null
   forwarded_from?: string | null
+  /** The forward's source server was deleted: the copy stays, without a link back. */
+  forwarded_unavailable?: boolean
   mentions?: string[]
   mention_roles?: string[]
   mention_everyone?: boolean

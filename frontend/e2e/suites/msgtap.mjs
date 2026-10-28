@@ -39,6 +39,6 @@ ok('bar still there after a menu action, closes on the next outside tap', await 
 await body(ids[0]).tap(); await p.waitForTimeout(200)
 ok('and only the new one is open', JSON.stringify(await open()) === '[true,false,false]', JSON.stringify(await open()))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close()
 await finish()

@@ -61,5 +61,5 @@ ok('everyone picked is banned', [c.user.id, d.user.id].every((id) => bans.some((
 const r = await call(a.token, 'POST', `/guilds/${g.id}/bulk-ban`, { user_ids: [b.user.id, a.user.id] })
 ok('bulk results report who could not be banned', r.banned.length === 1 && r.failed.length === 1 && r.failed[0].user_id === a.user.id)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

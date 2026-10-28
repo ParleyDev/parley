@@ -3494,5 +3494,22 @@
 "case": "حالة",
 "searched “{q}”": "بحث عن «{q}»",
 "{n} items": "{n} عناصر",
-"Message searches (per user)": "عمليات البحث عن الرسائل (لكل مستخدم)"
+"Message searches (per user)": "عمليات البحث عن الرسائل (لكل مستخدم)",
+"Being deleted. Gone for good on {date}.": "جارٍ الحذف. سيختفي نهائيًا في {date}.",
+"Forwarded from a server that's no longer available": "تمت إعادة توجيهها من خادم لم يعد متاحًا",
+"Go home": "الذهاب إلى الصفحة الرئيسية",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "تم حذفه أو إزالته. لم يعد بالإمكان فتح قنواته ورسائله.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "يفقد الأعضاء الخادم فورًا ويُبلَّغون بأنه أُزيل لانتهاك إرشادات المجتمع. لا يستطيع المالك استعادته. يُحتفظ بمحتواه من أجل القضية ثم يُحذف.",
+"Restore": "استعادة",
+"TAKEN DOWN": "تم الإيقاف",
+"Take down": "إيقاف",
+"Take down '{name}'": "إيقاف '{name}'",
+"This server is no longer available": "هذا الخادم لم يعد متاحًا",
+"Type the server name to confirm": "اكتب اسم الخادم للتأكيد",
+"Your password": "كلمة المرور الخاصة بك",
+"{name} is back": "عاد {name}",
+"{name} was removed for violating the community guidelines.": "أُزيل {name} لانتهاك إرشادات المجتمع.",
+"{name} was taken down": "تم إيقاف {name}",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "سيتم حذف {name} في {date}. يمكنك استعادته حتى ذلك الحين من إعدادات المستخدم › حسابي.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "سيختفي الخادم فورًا عن جميع أعضائه: ستتوقف القنوات والرسائل والدعوات عن العمل. يمكنك استعادته لفترة من الوقت (يظهر التاريخ بمجرد اكتمال الحذف)، وبعد ذلك يُحذف نهائيًا."
 }

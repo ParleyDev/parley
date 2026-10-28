@@ -236,8 +236,7 @@ export function useGuildMenu() {
     const act = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
     const leave = () => openModal({ kind: 'confirm', title: t("Leave '{name}'", { name: g.name }), body: t("Are you sure you want to leave {name}? You won't be able to rejoin unless you are re-invited.", { name: g.name }), danger: true, confirmLabel: t('Leave Server'),
       action: () => act(async () => { await api.delete(`/guilds/${guildId}/members/@me`); removeGuild(guildId); navigate('/channels/@me') }) })
-    const del = () => openModal({ kind: 'confirm', title: t("Delete '{name}'", { name: g.name }), body: t('Are you sure you want to delete {name}? This cannot be undone.', { name: g.name }), danger: true, confirmLabel: t('Delete Server'),
-      action: () => act(async () => { await api.delete(`/guilds/${guildId}`); removeGuild(guildId); navigate('/channels/@me') }) })
+    const del = () => openModal({ kind: 'deleteServer', guildId })
     return [
       { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: unreadChannels.length === 0, onClick: () => unreadChannels.forEach((c) => markRead(c.id)) },
       'sep',

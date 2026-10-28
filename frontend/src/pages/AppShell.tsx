@@ -3,9 +3,10 @@ import { FAMILY_CODE_KEY } from '../components/modals/settings/FamilyTab'
 import { saveClip } from '../lib/clips'
 import { unseenEntry } from '../lib/changelog'
 import MobileTabBar from '../components/MobileTabBar'
-import { useEffect } from 'react'
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store'
+import { api, ApiError } from '../lib/api'
 import GuildBar from '../components/GuildBar'
 import ChannelSidebar from '../components/ChannelSidebar'
 import DmSidebar from '../components/DmSidebar'
@@ -142,7 +143,7 @@ function GuildRedirect() {
   const targetId = target?.id
   // Rendering never waits for the navigation: the URL is fixed up for bookmarks/reloads, but the view is already there.
   useEffect(() => { if (guild && targetId) navigate(`/channels/${guildId}/${targetId}`, { replace: true }) }, [guild, guildId, targetId, navigate])
-  if (!guild) return <Navigate to="/channels/@me" replace />
+  if (!guild) return <MissingGuild guildId={guildId} />
   if (!targetId) return <div className="flex-1 max-md:hidden" />
   return <GuildMain channelOverride={targetId} />
 }
@@ -161,7 +162,7 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
   useEffect(() => { if (guild && !hasMembers) loadMembers(guildId) }, [guild, guildId, hasMembers, loadMembers])
   useEffect(() => { if (guild && !channel && !channelOverride) navigate(`/channels/${guildId}`, { replace: true }) }, [guild, channel, guildId, navigate, channelOverride])
 
-  if (!guild) return <Navigate to="/channels/@me" replace />
+  if (!guild) return <MissingGuild guildId={guildId} />
   if (!channel || channel.guild_id !== guildId) return <div className="flex-1 max-md:hidden" />
   return (
     <>
@@ -171,6 +172,28 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
   )
 }
 
+
+/**
+ * A server link that isn't one of yours: if the server was deleted or taken down (410 server_unavailable) say so,
+ * otherwise go home.
+ */
+function MissingGuild({ guildId }: { guildId: string }) {
+  const t = useT()
+  const [gone, setGone] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (!guildId || guildId === '@me') { setGone(false); return }
+    api.get(`/guilds/${guildId}`).then(() => setGone(false)).catch((e) => setGone(e instanceof ApiError && e.code === 'server_unavailable'))
+  }, [guildId])
+  if (gone === null) return <div className="flex-1" />
+  if (!gone) return <Navigate to="/channels/@me" replace />
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center" data-server-unavailable>
+      <div className="text-xl font-bold">{t('This server is no longer available')}</div>
+      <p className="text-sm text-text-2 max-w-sm">{t('It was deleted or removed. Its channels and messages can no longer be opened.')}</p>
+      <NavLink to="/channels/@me" className="btn-primary">{t('Go home')}</NavLink>
+    </div>
+  )
+}
 
 /** Phone swipes (content → channel list / member list) and the rebindable keyboard shortcuts. Renders nothing. */
 function Shortcuts() {

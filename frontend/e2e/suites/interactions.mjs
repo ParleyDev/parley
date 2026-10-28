@@ -105,5 +105,5 @@ ok('answering too late is refused', late && (await fetch(`${B}/interactions/${la
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
 full.ws.close()
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

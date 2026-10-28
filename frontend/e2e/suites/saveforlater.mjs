@@ -66,5 +66,5 @@ ok('clicking it jumps to that message', new URL(p.url()).pathname === `/channels
 await p.goto(`${WEB}/channels/${g.id}/${general.id}?message=${target.id}`); await p.waitForTimeout(1500)
 ok('opening a ?message= link scrolls to it and tidies the URL', await p.locator(`[data-msg-id="${target.id}"]`).isVisible() && !p.url().includes('message='))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

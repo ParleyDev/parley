@@ -59,5 +59,5 @@ await pa.click('[data-ns-mode-option="standard"]'); await pa.waitForTimeout(3000
 const back = await heard()
 ok('back to Standard: the noise is back', back > std * 0.5, `${back.toFixed(4)}`)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

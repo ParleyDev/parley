@@ -3494,5 +3494,22 @@
 "case": "дело",
 "searched “{q}”": "поиск «{q}»",
 "{n} items": "Элементов: {n}",
-"Message searches (per user)": "Поиски сообщений (на пользователя)"
+"Message searches (per user)": "Поиски сообщений (на пользователя)",
+"Being deleted. Gone for good on {date}.": "Удаляется. Исчезнет навсегда {date}.",
+"Forwarded from a server that's no longer available": "Переслано с сервера, который больше недоступен",
+"Go home": "На главную",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "Он был удалён или снят. Его каналы и сообщения больше нельзя открыть.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "Участники сразу теряют сервер и узнают, что он удалён за нарушение правил сообщества. Владелец не может его восстановить. Содержимое сохраняется для разбирательства, затем удаляется.",
+"Restore": "Восстановить",
+"TAKEN DOWN": "ЗАБЛОКИРОВАН",
+"Take down": "Заблокировать",
+"Take down '{name}'": "Заблокировать «{name}»",
+"This server is no longer available": "Этот сервер больше недоступен",
+"Type the server name to confirm": "Введи название сервера для подтверждения",
+"Your password": "Твой пароль",
+"{name} is back": "{name} снова доступен",
+"{name} was removed for violating the community guidelines.": "{name} удалён за нарушение правил сообщества.",
+"{name} was taken down": "{name} заблокирован",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} будет удалён {date}. До этого времени ты можешь восстановить его в разделе Настройки пользователя › Моя учётная запись.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Сервер сразу исчезнет для всех участников: каналы, сообщения и приглашения перестанут работать. Ты сможешь восстановить его в течение некоторого времени (дата появится после завершения удаления); после этого он будет удалён навсегда."
 }

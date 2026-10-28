@@ -66,5 +66,5 @@ ok('clicking it scrolls to the channel', await p.locator(`[data-channel-item="${
 await p.focus('[data-composer-box] textarea'); await p.keyboard.press('Shift+Escape'); await p.waitForTimeout(800)
 ok('Shift+Escape marks the whole server read', await p.locator('[data-channel-item] > a[data-unread]').count() === 0)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`); await call(a.token, 'DELETE', `/guilds/${g2.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name }); await call(a.token, 'DELETE', `/guilds/${g2.id}`, { password: 'password1', name: g2.name })
 await browser.close(); await finish()

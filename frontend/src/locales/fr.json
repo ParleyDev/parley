@@ -3494,5 +3494,22 @@
 "case": "dossier",
 "searched “{q}”": "a recherché « {q} »",
 "{n} items": "{n} éléments",
-"Message searches (per user)": "Recherches de messages (par utilisateur)"
+"Message searches (per user)": "Recherches de messages (par utilisateur)",
+"Being deleted. Gone for good on {date}.": "Suppression en cours. Définitivement supprimé le {date}.",
+"Forwarded from a server that's no longer available": "Transféré depuis un serveur qui n'est plus disponible",
+"Go home": "Retour à l'accueil",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "Il a été supprimé ou retiré. Ses salons et ses messages ne peuvent plus être ouverts.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "Les membres perdent le serveur immédiatement et sont informés qu'il a été retiré pour non-respect des règles de la communauté. Le propriétaire ne peut pas le restaurer. Son contenu est conservé pour le dossier, puis supprimé.",
+"Restore": "Restaurer",
+"TAKEN DOWN": "SUSPENDU",
+"Take down": "Suspendre",
+"Take down '{name}'": "Suspendre « {name} »",
+"This server is no longer available": "Ce serveur n'est plus disponible",
+"Type the server name to confirm": "Saisis le nom du serveur pour confirmer",
+"Your password": "Ton mot de passe",
+"{name} is back": "{name} est de retour",
+"{name} was removed for violating the community guidelines.": "{name} a été retiré pour non-respect des règles de la communauté.",
+"{name} was taken down": "{name} a été suspendu",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} sera supprimé le {date}. Jusque-là, tu peux le restaurer dans Paramètres utilisateur › Mon compte.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Le serveur disparaît immédiatement pour tous ses membres : les salons, les messages et les invitations ne fonctionnent plus. Tu peux le restaurer pendant un certain temps (la date s'affiche une fois la suppression terminée) ; après cela, il est supprimé définitivement."
 }

@@ -59,5 +59,5 @@ ok('looking elsewhere, the call floats in a corner', await pa.locator(`[data-min
 await pa.click('[data-mini-back]'); await pa.waitForTimeout(600)
 ok('and one click takes you back', new URL(pa.url()).pathname === `/channels/${g.id}/${vc.id}` && await pa.locator('[data-mini-call]').count() === 0)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

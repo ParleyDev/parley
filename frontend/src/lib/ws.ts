@@ -55,7 +55,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'SESSION_REVOKED'; d: { reason: string } }
   | { t: 'NOTIFICATION_SETTINGS_UPDATE'; d: NotifSetting & { deleted?: boolean } }
   | { t: 'GUILD_STICKERS_UPDATE'; d: { guild_id: string; stickers: Sticker[] } }
-  | { t: 'GUILD_DELETE'; d: { id: string } }
+  | { t: 'GUILD_DELETE'; d: { id: string; unavailable?: boolean; reason?: 'deleted' | 'takedown'; name?: string } }
   | { t: 'GUILD_MEMBER_ADD'; d: Member }
   | { t: 'GUILD_MEMBER_REMOVE'; d: { guild_id: string; user_id: string } }
   | { t: 'GUILD_BAN_ADD'; d: Ban }
@@ -251,7 +251,10 @@ function handle(ev: Ev) {
     case 'SESSION_REVOKED': s.pushToast(ev.d.reason, 'error'); s.logout(); break
     case 'NOTIFICATION_SETTINGS_UPDATE': s.setNotifSetting(ev.d); break
     case 'GUILD_STICKERS_UPDATE': s.setGuildStickers(ev.d.guild_id, ev.d.stickers); break
-    case 'GUILD_DELETE': s.removeGuild(ev.d.id); break
+    case 'GUILD_DELETE':
+      // A takedown tells members why their server vanished.
+      if (ev.d.reason === 'takedown' && s.guilds[ev.d.id]) s.pushToast(t('{name} was removed for violating the community guidelines.', { name: ev.d.name || s.guilds[ev.d.id].name }), 'error')
+      s.removeGuild(ev.d.id); break
     case 'GUILD_MEMBER_ADD': s.upsertMember(ev.d); break
     case 'GUILD_MEMBER_UPDATE': s.upsertMember(ev.d); break
     case 'GUILD_BAN_ADD': s.upsertBan(ev.d); break

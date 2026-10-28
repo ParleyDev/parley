@@ -62,5 +62,5 @@ ok('accepting lifts the ban', !(await call(a.token, 'GET', `/guilds/${g.id}/bans
 ok('and tells them', await pu.locator('text=was accepted').count() >= 1)
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
-for (const [tok, gg] of [[a, g], [x, g2]]) await call(tok.token, 'DELETE', `/guilds/${gg.id}`)
+for (const [tok, gg] of [[a, g], [x, g2]]) await call(tok.token, 'DELETE', `/guilds/${gg.id}`, { password: 'password1', name: gg.name })
 await browser.close(); await finish()

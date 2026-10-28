@@ -66,5 +66,5 @@ ok('inviting again right away is refused', (await raw(a.token, 'POST', `/channel
 await pc.click('[data-voice-invite-join]'); await pc.waitForSelector('[data-voice-leave]', { timeout: 10000 }).catch(() => {})
 ok('Join puts them in the channel', (await pc.evaluate(() => window.__parleyVoice().channel)) === vc.id)
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

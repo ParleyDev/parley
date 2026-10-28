@@ -24,6 +24,10 @@ pub enum AppError {
     AgeGate(bool),
     #[error("{0}")]
     NotFound(String),
+    /// A server that is being deleted, was taken down or is gone: 410 with `code: "server_unavailable"` and the
+    /// `reason` (`pending_deletion`, `taken_down` or `deleted`), so clients say "This server is no longer available".
+    #[error("server unavailable")]
+    ServerUnavailable(&'static str),
     #[error("{0}")]
     Conflict(String),
     /// 429 with a message: a per-feature cooldown (username changes, ...).
@@ -55,6 +59,9 @@ impl IntoResponse for AppError {
                 else { (StatusCode::FORBIDDEN, Json(json!({ "error": "Confirm your birth date to view age-restricted channels.", "code": "age_required" }))).into_response() };
             }
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
+            AppError::ServerUnavailable(reason) => {
+                return (StatusCode::GONE, Json(json!({ "error": "This server is no longer available.", "code": "server_unavailable", "reason": reason }))).into_response();
+            }
             AppError::Conflict(m) => (StatusCode::CONFLICT, m.clone()),
             AppError::TooMany(m) => (StatusCode::TOO_MANY_REQUESTS, m.clone()),
             AppError::Db(sqlx::Error::RowNotFound) => (StatusCode::NOT_FOUND, "Not found".into()),

@@ -20,5 +20,5 @@ await p.click('[data-member-list] button:has(svg)').catch(() => {}); await p.wai
 await p.goto(`${WEB}/channels/${g.id}`); await p.waitForTimeout(1000)
 ok('so does the navigation pane', await p.evaluate(() => { const el = document.querySelector('[data-layer="md"]'); if (!el) return false; const c = getComputedStyle(el).backgroundColor; return !/\/\s*0?\.\d|, 0?\.\d+\)$/.test(c) }))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

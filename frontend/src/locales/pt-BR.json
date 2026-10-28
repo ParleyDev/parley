@@ -3494,5 +3494,22 @@
 "case": "caso",
 "searched “{q}”": "pesquisou “{q}”",
 "{n} items": "{n} itens",
-"Message searches (per user)": "Buscas de mensagens (por usuário)"
+"Message searches (per user)": "Buscas de mensagens (por usuário)",
+"Being deleted. Gone for good on {date}.": "Sendo excluído. Some para sempre em {date}.",
+"Forwarded from a server that's no longer available": "Encaminhado de um servidor que não está mais disponível",
+"Go home": "Ir para o início",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "Ele foi excluído ou removido. Seus canais e mensagens não podem mais ser abertos.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "Os membros perdem o servidor na hora e são avisados de que ele foi removido por violar as diretrizes da comunidade. O dono não pode restaurá-lo. O conteúdo é mantido para o caso e depois excluído.",
+"Restore": "Restaurar",
+"TAKEN DOWN": "REMOVIDO",
+"Take down": "Remover",
+"Take down '{name}'": "Remover '{name}'",
+"This server is no longer available": "Este servidor não está mais disponível",
+"Type the server name to confirm": "Digite o nome do servidor para confirmar",
+"Your password": "Sua senha",
+"{name} is back": "{name} voltou",
+"{name} was removed for violating the community guidelines.": "{name} foi removido por violar as diretrizes da comunidade.",
+"{name} was taken down": "{name} foi removido",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} será excluído em {date}. Até lá, você pode restaurá-lo em Configurações de usuário › Minha conta.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "O servidor desaparece imediatamente para todos os membros: canais, mensagens e convites param de funcionar. Você pode restaurá-lo por um tempo (a data é mostrada assim que a exclusão for concluída); depois disso, ele é excluído definitivamente."
 }

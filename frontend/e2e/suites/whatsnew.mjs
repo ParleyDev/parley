@@ -39,5 +39,5 @@ ok('one house at a time', (await call(b.token, 'GET', `/users/${a.user.id}`)).ba
 await p.click('[data-house-option="tide"]'); await p.waitForSelector('[data-house-option="tide"][aria-pressed="false"]', { timeout: 5000 }).catch(() => {})
 ok('clicking it again leaves', !(await call(b.token, 'GET', `/users/${a.user.id}`)).badges.some((x) => x.startsWith('house_')))
 ok('no page errors', errors.length === 0, errors.join(' | '))
-await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

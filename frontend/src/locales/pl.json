@@ -3494,5 +3494,22 @@
 "case": "sprawa",
 "searched “{q}”": "wyszukano „{q}”",
 "{n} items": "Elementów: {n}",
-"Message searches (per user)": "Wyszukiwania wiadomości (na użytkownika)"
+"Message searches (per user)": "Wyszukiwania wiadomości (na użytkownika)",
+"Being deleted. Gone for good on {date}.": "Trwa usuwanie. Zniknie na zawsze {date}.",
+"Forwarded from a server that's no longer available": "Przekazano z serwera, który nie jest już dostępny",
+"Go home": "Wróć na stronę główną",
+"It was deleted or removed. Its channels and messages can no longer be opened.": "Został usunięty lub zdjęty. Jego kanałów i wiadomości nie można już otworzyć.",
+"Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.": "Członkowie tracą serwer od razu i dowiadują się, że został usunięty za naruszenie zasad społeczności. Właściciel nie może go przywrócić. Jego zawartość jest przechowywana na potrzeby sprawy, a potem usuwana.",
+"Restore": "Przywróć",
+"TAKEN DOWN": "ZABLOKOWANY",
+"Take down": "Zablokuj",
+"Take down '{name}'": "Zablokuj '{name}'",
+"This server is no longer available": "Ten serwer nie jest już dostępny",
+"Type the server name to confirm": "Wpisz nazwę serwera, aby potwierdzić",
+"Your password": "Twoje hasło",
+"{name} is back": "{name} wrócił",
+"{name} was removed for violating the community guidelines.": "{name} został usunięty za naruszenie zasad społeczności.",
+"{name} was taken down": "{name} został zablokowany",
+"{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} zostanie usunięty {date}. Do tego czasu możesz go przywrócić w Ustawienia użytkownika › Moje konto.",
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Serwer natychmiast znika dla wszystkich członków: kanały, wiadomości i zaproszenia przestają działać. Możesz go przywrócić przez pewien czas (datę zobaczysz po zakończeniu usuwania); potem zostanie usunięty na stałe."
 }

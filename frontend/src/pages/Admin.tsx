@@ -366,7 +366,7 @@ function RevealDialog({ user, onClose }: { user: AdminUser; onClose: () => void 
   )
 }
 
-interface AdminGuild { id: string; name: string; icon_url: string | null; created_at: string; owner_id: string; owner_username: string; member_count: number; message_count: number; discovery_status: string | null }
+interface AdminGuild { id: string; name: string; icon_url: string | null; created_at: string; owner_id: string; owner_username: string; member_count: number; message_count: number; discovery_status: string | null; state: 'active' | 'pending_deletion' | 'taken_down'; deletion_scheduled_for: string | null; takedown_case_id: string | null }
 
 function ServersPane() {
   const t = useT()
@@ -376,12 +376,15 @@ function ServersPane() {
   const [list, setList] = useState<AdminGuild[] | null>(null)
   const load = () => api.get<AdminGuild[]>(`/admin/guilds?q=${encodeURIComponent(q.trim())}`).then(setList).catch((e: Error) => pushToast(e.message, 'error'))
   useEffect(() => { const h = setTimeout(load, 250); return () => clearTimeout(h) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const a = useAccess()
+  const [takingDown, setTakingDown] = useState<AdminGuild | null>(null)
   const del = (g: AdminGuild) => openModal({ kind: 'confirm', title: t("Delete '{name}'", { name: g.name }), body: t('This permanently deletes the server, its channels and {messages} messages for all {members} members. This cannot be undone.', { messages: g.message_count.toLocaleString(), members: g.member_count }), danger: true, confirmLabel: t('Delete Server'),
     action: async () => { try { await api.delete(`/admin/guilds/${g.id}`); pushToast(t('Server deleted')); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
   return (
     <div data-admin-servers>
       <h1 className="text-2xl font-bold">{t('Servers')}</h1>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search by server name or owner')} data-admin-guild-search className="input mt-4 max-w-md" />
+      {takingDown && <TakedownDialog guild={takingDown} onClose={() => setTakingDown(null)} onDone={() => { setTakingDown(null); load() }} />}
       <div className="mt-4 rounded-xl border border-line overflow-hidden">
         <div className="grid grid-cols-[1fr_160px_100px_110px_120px_60px] gap-3 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-text-2 bg-bg-0/40 max-md:hidden"><span>{t('Server')}</span><span>{t('Owner')}</span><span>{t('Members')}</span><span>{t('Messages')}</span><span>{t('Discover')}</span><span /></div>
         {list === null && <p className="p-4 text-sm text-text-2">{t('Loading…')}</p>}
@@ -391,14 +394,46 @@ function ServersPane() {
             <div className="min-w-0 flex items-center gap-2">
               <span className="h-8 w-8 rounded-xl overflow-hidden flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>{g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name)}</span>
               <span className="min-w-0"><span className="block truncate font-semibold">{g.name}</span><span className="block truncate text-xs text-text-2">{new Date(g.created_at).toLocaleDateString()}</span></span>
+              {g.state === 'pending_deletion' && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="pending-deletion">{t('DELETING {date}', { date: g.deletion_scheduled_for ? new Date(g.deletion_scheduled_for).toLocaleDateString() : '' })}</span>}
+              {g.state === 'taken_down' && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="taken-down">{t('TAKEN DOWN')}</span>}
             </div>
             <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">{t('Owner:')} </span>@{g.owner_username}</div>
             <div className="text-sm text-text-1"><span className="md:hidden text-text-2">{t('Members:')} </span>{g.member_count}</div>
             <div className="text-sm text-text-1"><span className="md:hidden text-text-2">{t('Messages:')} </span>{g.message_count.toLocaleString()}</div>
             <div className="text-xs"><span className="md:hidden text-text-2">{t('Discover:')} </span>{g.discovery_status ? <span className={`rounded px-1.5 py-0.5 font-bold uppercase ${g.discovery_status === 'approved' ? 'bg-success/20 text-success' : g.discovery_status === 'rejected' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{g.discovery_status}</span> : <span className="text-text-2">—</span>}</div>
-            <div className="flex justify-end"><Tool label={t('Delete server')} onClick={() => del(g)} testid="delete-guild" danger><Gavel size={16} /></Tool></div>
+            <div className="flex justify-end gap-1">
+              {can(a, 'content_action') && g.state !== 'taken_down' && <Tool label={t('Take down')} onClick={() => setTakingDown(g)} testid="takedown-guild" danger><Ban size={16} /></Tool>}
+              {can(a, 'content_action') && <Tool label={t('Delete server')} onClick={() => del(g)} testid="delete-guild" danger><Gavel size={16} /></Tool>}
+            </div>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/** Take a server down under an open case: gone for members at once, the owner can't restore it, content kept for the case. */
+function TakedownDialog({ guild, onClose, onDone }: { guild: AdminGuild; onClose: () => void; onDone: () => void }) {
+  const t = useT()
+  const pushToast = useStore((s) => s.pushToast)
+  const [cases, setCases] = useState<{ id: string; justification: string }[]>([])
+  const [caseId, setCaseId] = useState('')
+  const [why, setWhy] = useState('')
+  useEffect(() => { api.get<{ id: string; justification: string }[]>('/admin/cases?status=open').then(setCases).catch(() => {}) }, [])
+  const go = async () => {
+    try { await api.post(`/admin/guilds/${guild.id}/takedown`, { case_id: caseId, justification: why.trim() }); pushToast(t('{name} was taken down', { name: guild.name })); onDone() } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 safe-pad" onClick={onClose} data-takedown-dialog>
+      <div className="pop w-full max-w-md rounded-xl bg-bg-1 border border-line p-5 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold">{t("Take down '{name}'", { name: guild.name })}</h3>
+        <p className="text-sm text-text-2">{t('Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.')}</p>
+        <select className="input" value={caseId} onChange={(e) => setCaseId(e.target.value)} data-takedown-case>
+          <option value="">{t('Choose an open case')}</option>
+          {cases.map((c) => <option key={c.id} value={c.id}>{c.justification}</option>)}
+        </select>
+        <input className="input" value={why} onChange={(e) => setWhy(e.target.value)} placeholder={t('Reason (required)')} data-takedown-why />
+        <div className="flex justify-end gap-2"><button type="button" className="btn-ghost py-1.5" onClick={onClose}>{t('Cancel')}</button><button type="button" className="btn-danger py-1.5" disabled={!caseId || why.trim().length < MIN_WHY} onClick={go} data-takedown-go>{t('Take down')}</button></div>
       </div>
     </div>
   )
