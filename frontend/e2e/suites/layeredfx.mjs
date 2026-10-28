@@ -74,14 +74,20 @@ const geo = await card.evaluate((c) => {
   const cr = c.getBoundingClientRect(), s = cr.width / 1200
   const img = (f) => c.parentElement.querySelector(`[data-frame-layer="${f}"]`)
   const top = img('front_staple_top.png').getBoundingClientRect(), rail = img('front_rail_center.png'), railBox = rail.parentElement.getBoundingClientRect()
-  const overlaps = [...c.parentElement.querySelectorAll('[data-frame-layer="back_staple_bottom.png"]')].map((b) => b.parentElement.getBoundingClientRect()).filter((r) => r.right > cr.left + 1 && r.left < cr.right - 1 && r.bottom > cr.top + 1 && r.top < cr.bottom - 1).length
+  // Back layers live in one box over the whole framed area, masked by an even-odd path that cuts out the card with
+  // its own rounded corners (a rectangular hole left the corners empty).
+  const back = c.parentElement.querySelector('[data-frame-back]'), br = back?.getBoundingClientRect()
+  const mask = back ? decodeURIComponent(getComputedStyle(back).maskImage || getComputedStyle(back).webkitMaskImage || '') : ''
+  const radius = parseFloat(getComputedStyle(c).borderTopLeftRadius) || 0
+  const covers = !!br && br.left < cr.left && br.top < cr.top && br.right > cr.right && br.bottom > cr.bottom
+  const overlaps = covers && /evenodd/.test(mask) && (radius === 0 || / A\d|A[\d.]+ [\d.]+ 0 0 1/.test(mask)) ? 0 : 1
   // Same stacking context, so DOM order is paint order: back layers must come first even though metadata lists a front one first.
   const order = [...c.parentElement.querySelectorAll('[data-frame-layer]')].map((e) => e.dataset.frameLayer.startsWith('back') ? 'b' : 'f').join('')
   return { s, topOver: Math.round(cr.top - top.top), want: Math.round(304 * s), topW: Math.round(top.width), wantW: Math.round(1312 * s), railH: Math.round(railBox.height), cardH: Math.round(cr.height), overlaps, order }
 })
 ok('the top staple hangs over the card edge by overflow_top (scaled)', Math.abs(geo.topOver - geo.want) <= 1 && Math.abs(geo.topW - geo.wantW) <= 1, JSON.stringify(geo))
 ok('rails run the height of the card', Math.abs(geo.railH - geo.cardH) <= 1, JSON.stringify(geo))
-ok('back layers only show outside the card', geo.overlaps === 0, JSON.stringify(geo))
+ok('back layers only show outside the card, rounded corners included', geo.overlaps === 0, JSON.stringify(geo))
 ok('back layers are painted before (under) front layers', /^b+f+$/.test(geo.order), geo.order)
 await pb.keyboard.press('Escape')
 

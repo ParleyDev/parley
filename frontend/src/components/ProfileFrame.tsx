@@ -7,13 +7,14 @@ import { assetFile, isAssetValue, useAssetItem, type FrameItem, type FrameLayer 
  * layer is scaled by card width / inner_width:
  *  - staples hang off the top or bottom edge, reaching `overflow_top` / `overflow_bottom` past it;
  *  - rails and borders run along the sides, cropped to the card's height from their top or centre;
- *  - front layers draw over the card, back layers behind it (only the parts outside the card show). Back layers are
+ *  - front layers draw over the card, back layers behind it: they show everywhere but on the card itself, which is
+ *    masked out with its own rounded corners (a rectangular hole would leave the corners empty). Back layers are
  *    always painted first: metadata often lists the front one first, and a back layer drawn later would cover it.
  */
 export default function ProfileFrame({ value }: { value?: string | null }) {
   const item = useAssetItem<FrameItem>('profile-frames', value)
   const ref = useRef<HTMLDivElement>(null)
-  const [box, setBox] = useState<{ w: number; h: number; inset: CSSProperties } | null>(null)
+  const [box, setBox] = useState<{ w: number; h: number; r: number[]; inset: CSSProperties } | null>(null)
   useLayoutEffect(() => {
     const el = ref.current
     if (!el || typeof ResizeObserver === 'undefined') return
@@ -23,7 +24,10 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
       const cs = p ? getComputedStyle(p) : null
       const bw = (k: 'Top' | 'Right' | 'Bottom' | 'Left') => (cs ? parseFloat(cs[`border${k}Width`]) || 0 : 0)
       const w = (p?.offsetWidth ?? el.offsetWidth), h = (p?.offsetHeight ?? el.offsetHeight)
-      setBox((b) => (b && b.w === w && b.h === h ? b : { w, h, inset: { top: -bw('Top'), right: -bw('Right'), bottom: -bw('Bottom'), left: -bw('Left') } }))
+      // The card's corner radii (top-left, top-right, bottom-right, bottom-left): it's the wrapper's first child.
+      const card = p?.firstElementChild instanceof HTMLElement && p.firstElementChild !== el ? getComputedStyle(p.firstElementChild) : cs
+      const r = (['TopLeft', 'TopRight', 'BottomRight', 'BottomLeft'] as const).map((k) => (card ? parseFloat(card[`border${k}Radius`]) || 0 : 0))
+      setBox((b) => (b && b.w === w && b.h === h && b.r.join() === r.join() ? b : { w, h, r, inset: { top: -bw('Top'), right: -bw('Right'), bottom: -bw('Bottom'), left: -bw('Left') } }))
     }
     measure()
     const ro = new ResizeObserver(measure)
@@ -35,13 +39,17 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
   const s = W / (item.layout.inner_width || 1200)
   const ot = item.layout.overflow_top * s, ob = item.layout.overflow_bottom * s, oh = item.layout.overflow_horizontal * s
   const pad = 40
-  // Where back layers may show: around the card, never on it.
-  const bands = [
-    { left: -oh - pad, top: -ot - pad, width: W + 2 * (oh + pad), height: ot + pad },
-    { left: -oh - pad, top: H, width: W + 2 * (oh + pad), height: ob + pad },
-    { left: -oh - pad, top: 0, width: oh + pad, height: H },
-    { left: W, top: 0, width: oh + pad, height: H },
-  ]
+  // Where back layers may show: everything around the card, never on it. One box over the whole framed area with the
+  // card's rounded shape cut out of it (an SVG mask, even-odd), so the corners of the card are filled too.
+  const back = { left: -oh - pad, top: -ot - pad, width: W + 2 * (oh + pad), height: H + ot + ob + 2 * pad }
+  const hole = (() => {
+    const [tl, tr, br, bl] = (box?.r ?? [0, 0, 0, 0]).map((v) => Math.min(v, W / 2, H / 2))
+    const x = oh + pad, y = ot + pad
+    const card = `M${x + tl} ${y}H${x + W - tr}A${tr} ${tr} 0 0 1 ${x + W} ${y + tr}V${y + H - br}A${br} ${br} 0 0 1 ${x + W - br} ${y + H}H${x + bl}A${bl} ${bl} 0 0 1 ${x} ${y + H - bl}V${y + tl}A${tl} ${tl} 0 0 1 ${x + tl} ${y}Z`
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${back.width}" height="${back.height}"><path fill-rule="evenodd" d="M0 0H${back.width}V${back.height}H0Z${card}"/></svg>`
+    const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
+    return { maskImage: url, WebkitMaskImage: url, maskSize: '100% 100%', WebkitMaskSize: '100% 100%', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' } as CSSProperties
+  })()
   const place = (l: FrameLayer) => {
     const w = (l.width ?? 1312) * s, h = (l.height ?? 0) * s
     const left = (W - w) / 2
@@ -54,11 +62,21 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
 
   return (
     <div ref={ref} className="pointer-events-none absolute inset-0 z-[6]" style={box?.inset} aria-hidden data-profile-frame-layers={item.id}>
-      {box && W > 0 && item.layers.map((l, i) => ({ l, i })).sort((a, b) => Number(a.l.order !== 'back') - Number(b.l.order !== 'back')).map(({ l, i }) => {
+      {box && W > 0 && item.layers.some((l) => l.order === 'back') && (
+        <div className="absolute overflow-hidden" style={{ ...back, ...hole }} data-frame-back>
+          {item.layers.map((l, i) => {
+            if (l.order !== 'back') return null
+            const at = place(l)
+            // Back rails and borders only run alongside the card, from its top edge to its bottom edge.
+            return at.along
+              ? clip({ left: 0, top: -back.top, width: back.width, height: H }, img(l, at, back.left, 0), `${i}`)
+              : <span key={i}>{img(l, at, back.left, back.top)}</span>
+          })}
+        </div>
+      )}
+      {box && W > 0 && item.layers.map((l, i) => {
+        if (l.order === 'back') return null
         const at = place(l)
-        if (l.order === 'back') {
-          return (bands.filter((_, b) => !at.along || b >= 2)).map((b, j) => clip(b, img(l, at, b.left, b.top), `${i}-${j}`))
-        }
         // Rails and borders stop at the card's top and bottom edges; staples hang free.
         return at.along ? clip({ left: -oh - pad, top: 0, width: W + 2 * (oh + pad), height: H }, img(l, at, -oh - pad, 0), `${i}`) : <span key={i}>{img(l, at)}</span>
       })}
