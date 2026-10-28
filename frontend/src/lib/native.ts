@@ -5,6 +5,8 @@ import { PushNotifications } from '@capacitor/push-notifications'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { api } from './api'
 import { resumeSocket, suspendSocket } from './ws'
+import { voice } from './voice'
+import { t } from './i18n'
 import { useStore } from '../store'
 
 /**
@@ -12,6 +14,8 @@ import { useStore } from '../store'
  * app's WebView, where `window.Capacitor` exists; everything here is a no-op in a normal browser.
  */
 const KeepAwake = registerPlugin<{ keepAwake(): Promise<void>; allowSleep(): Promise<void> }>('KeepAwake')
+/** Android: the "In a call" foreground service that keeps the mic and audio going in the background (app 0.16+). */
+const CallKeepAlive = registerPlugin<{ start(o: { title: string }): Promise<void>; stop(): Promise<void> }>('CallKeepAlive')
 
 export const isNative = () => Capacitor.isNativePlatform()
 export const nativePlatform = () => Capacitor.getPlatform() as 'ios' | 'android' | 'web'
@@ -31,7 +35,7 @@ export async function initNative() {
   if (!isNative()) return
   document.documentElement.dataset.native = nativePlatform()
   try { await StatusBar.setStyle({ style: Style.Dark }); if (nativePlatform() === 'android') await StatusBar.setBackgroundColor({ color: '#0b0c10' }) } catch { /* plugin missing */ }
-  App.addListener('appStateChange', ({ isActive }) => { if (isActive) resumeSocket(); else suspendSocket() })
+  App.addListener('appStateChange', ({ isActive }) => { if (isActive) { resumeSocket(); void voice.resumeAfterBackground() } else suspendSocket() })
   App.addListener('backButton', ({ canGoBack }) => {
     const s = useStore.getState()
     // Something on screen (a phone call's fullscreen view, its More sheet) can claim the back button first.
@@ -80,10 +84,11 @@ export async function unregisterPush() {
   try { const t = localStorage.getItem('parley.pushToken'); if (t) { await api.delete('/users/@me/push-tokens', { token: t }); localStorage.removeItem('parley.pushToken') } } catch { /* ignore */ }
 }
 
-/** Keep the screen on while in a call. */
+/** While in a call: keep the screen on, and on Android keep the call alive in the background. */
 export function keepAwake(on: boolean) {
   if (!isNative()) return
   ;(on ? KeepAwake.keepAwake() : KeepAwake.allowSleep()).catch(() => {})
+  if (nativePlatform() === 'android') (on ? CallKeepAlive.start({ title: t('In a call') }) : CallKeepAlive.stop()).catch(() => {})
 }
 
 export function haptic(style: 'light' | 'medium' = 'light') {

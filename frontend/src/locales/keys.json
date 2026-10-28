@@ -1196,6 +1196,7 @@
 "In 20 minutes",
 "In 3 hours",
 "In Discord: Server Settings → Server Template → Generate Template, then copy the link. If Discord cannot be reached from this server, open the link https://discord.com/api/v10/guilds/templates/CODE in a browser and paste or upload what it shows.",
+"In a call",
 "In names",
 "In the last 7 days: {direct} direct messages and {servers} messages in servers.",
 "In voice",

@@ -48,6 +48,15 @@ await p.locator('[data-phone-stage]').tap({ position: { x: 195, y: 420 } }); awa
 await p.locator('[data-phone-stage-close]').tap(); await p.waitForTimeout(300)
 ok('close returns to the call', await p.locator('[data-phone-stage]').count() === 0 && await p.locator('[data-voice-controls]').isVisible())
 
+console.log('-- back from the background')
+const before = await p.evaluate(() => window.__parleyMic.info())
+await p.evaluate(() => window.__parleyMic.end())
+ok('(the OS ended the mic while the app was away)', (await p.evaluate(() => window.__parleyMic.info())).state === 'ended')
+await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true }); document.dispatchEvent(new Event('visibilitychange')) })
+await p.waitForTimeout(1500)
+const after = await p.evaluate(() => window.__parleyMic.info())
+ok('coming back reopens the mic, still in the call', after.state === 'live' && after.id !== before.id && await p.locator('[data-voice-controls]').isVisible(), JSON.stringify({ before, after }))
+
 console.log('-- desktop')
 ok('desktop keeps device pickers and its full bar', await d.locator('[data-device-chevron]:visible').count() >= 1 && await d.locator('[data-phone-call-more]').count() === 0)
 await d.locator('[data-voice-tile]').first().click(); await d.waitForTimeout(300)

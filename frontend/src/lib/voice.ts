@@ -529,6 +529,23 @@ class VoiceManager {
     }
   }
 
+  /** Back from the background (phones): the OS may have ended the mic or camera and suspended audio. Reopen the mic,
+   *  drop a dead camera and start playback again, so a call that survived (or rejoined) is heard both ways. */
+  /** Tests: the device mic track's id and state, and ending it as a phone OS does to a backgrounded app. */
+  get micDebug() { const tr = this.raw?.getAudioTracks()[0]; return { id: tr?.id ?? null, state: tr?.readyState ?? null } }
+  endMicForTest() { this.raw?.getAudioTracks()[0]?.stop() }
+
+  async resumeAfterBackground() {
+    if (!this.channelId) return
+    const mic = this.raw?.getAudioTracks()[0]
+    if (this.raw && (!mic || mic.readyState === 'ended')) await this.reopenMicDevice().catch(() => {})
+    const cam = this.camera?.getVideoTracks()[0]
+    if (this.camera && cam?.readyState === 'ended') this.toggleCamera()
+    if (this.ctx?.state === 'suspended') await this.ctx.resume().catch(() => {})
+    this.peers.forEach((p) => { if (p.audio.paused) void p.audio.play().catch(() => {}) })
+    this.sfuAudio.forEach((a) => { if (a.paused) void a.play().catch(() => {}) })
+  }
+
   onSocketLost() {
     if (this.channelId) useStore.getState().setMyVoice(this.channelId, true)
   }
@@ -1170,3 +1187,4 @@ useStore.subscribe((s) => {
 function newAudioContext(): AudioContext {
   try { return new AudioContext({ latencyHint: 'interactive', sampleRate: 48000 }) } catch { return new AudioContext({ latencyHint: 'interactive' }) }
 }
+if (typeof window !== 'undefined') (window as unknown as { __parleyMic: { info: () => unknown; end: () => void } }).__parleyMic = { info: () => voice.micDebug, end: () => voice.endMicForTest() }

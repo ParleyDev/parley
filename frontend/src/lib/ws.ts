@@ -429,7 +429,8 @@ function onInput() {
 }
 if (typeof window !== 'undefined') {
   for (const ev of ['keydown', 'pointerdown', 'pointermove', 'wheel', 'touchstart', 'focus']) window.addEventListener(ev, onInput, { passive: true })
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') onInput(); else checkIdle() })
+  // Phone browsers suspend a hidden tab's mic and audio: pick a call back up when it's shown again.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { onInput(); void voice.resumeAfterBackground() } else checkIdle() })
   setInterval(checkIdle, 15_000)
 }
 

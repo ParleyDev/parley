@@ -8,6 +8,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(CallKeepAlivePlugin.class);
         super.onCreate(savedInstanceState);
         // Passkeys and security keys: Android's web view only runs WebAuthn when the app opts in, and then only for
         // sites whose /.well-known/assetlinks.json lists this app (ANDROID_APP_CERTS on the server).
