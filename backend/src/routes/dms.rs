@@ -222,8 +222,9 @@ async fn allows_group_add(db: &PgPool, target: Uuid) -> AppResult<bool> {
 /// "who can message you" setting (everyone / friends and server members / friends only).
 pub async fn can_dm(db: &PgPool, from: Uuid, to: Uuid) -> AppResult<bool> {
     // Accounts being deleted, or deleted, receive nothing (their DMs stay readable, not writable).
-    let (p, state): (String, String) = sqlx::query_as("SELECT dm_privacy, account_state FROM users WHERE id = $1").bind(to).fetch_one(db).await?;
-    if state != "active" { return Ok(false) }
+    // Nor does the system account (its notices can't be answered).
+    let (p, state, system): (String, String, bool) = sqlx::query_as("SELECT dm_privacy, account_state, system FROM users WHERE id = $1").bind(to).fetch_one(db).await?;
+    if state != "active" || system { return Ok(false) }
     if are_friends(db, from, to).await? { return Ok(true) }
     Ok(match p.as_str() {
         "friends" => false,

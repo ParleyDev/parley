@@ -3400,5 +3400,19 @@
 "Purge account": "계정 영구 삭제",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "선택한 계정을 지금 삭제합니다. 해당 계정이 소유한 서버와 앱이 삭제되고 계정은 익명화됩니다(메시지는 \"삭제된 사용자\"로 남습니다). 이 작업은 되돌릴 수 없습니다.",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "{name}님의 계정을 지금 삭제합니다. 해당 계정이 소유한 서버와 앱이 삭제되고 계정은 익명화됩니다(메시지는 \"삭제된 사용자\"로 남습니다). 이 작업은 되돌릴 수 없습니다.",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "계정과 메시지, 업로드를 포함해 계정이 만든 모든 것을 처음부터 존재하지 않았던 것처럼 제거합니다. 스팸과 악용에 사용하세요. 이 작업은 되돌릴 수 없습니다."
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "계정과 메시지, 업로드를 포함해 계정이 만든 모든 것을 처음부터 존재하지 않았던 것처럼 제거합니다. 스팸과 악용에 사용하세요. 이 작업은 되돌릴 수 없습니다.",
+"An official message from this Parley server": "이 Parley 서버의 공식 메시지",
+"Dismiss report": "신고 기각",
+"Internal note (only admins see it)": "내부 메모(관리자에게만 표시)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "공지는 이 서버의 공식 계정에서 보내는 DM으로 전달됩니다. 읽을 수는 있지만 답장할 수는 없습니다.",
+"Official": "공식",
+"Resolve report": "신고 처리 완료",
+"Tell @{name}, who reported it": "신고한 @{name}님에게 알리기",
+"Tell @{name}, who was reported": "신고당한 @{name}님에게 알리기",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "@{name}님에 대한 신고에 감사드립니다. 검토한 결과 이번에는 커뮤니티 가이드라인 위반이 확인되지 않았습니다. 다른 사람들을 살펴 주셔서 감사합니다.",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "@{name}님에 대한 신고에 감사드립니다. 검토 후 조치를 취했습니다. 회원님과 같은 신고가 이 커뮤니티를 안전하게 지키는 데 도움이 됩니다.",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "회원님의 {what}에 대한 신고를 검토한 결과, 커뮤니티 가이드라인 위반은 확인되지 않았습니다. 별도의 조치는 취해지지 않았습니다.",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "회원님의 {what}에 대한 신고를 검토한 결과, 커뮤니티 가이드라인을 위반한 것으로 확인되었습니다. 게시하는 내용이 가이드라인을 따르도록 유의해 주세요. 위반이 반복되면 계정이 정지될 수 있습니다.",
+"account": "계정",
+"message": "메시지"
 }

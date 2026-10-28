@@ -3400,5 +3400,19 @@
 "Purge account": "Konto endgültig löschen",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Dadurch werden die ausgewählten Konten jetzt gelöscht: Die Server und Apps, die ihnen gehören, werden gelöscht, und die Konten werden anonymisiert (ihre Nachrichten bleiben als \"Gelöschter Benutzer\" erhalten). Dies kann nicht rückgängig gemacht werden.",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Dadurch wird das Konto von {name} jetzt gelöscht: Die Server und Apps, die dem Nutzer gehören, werden gelöscht, und das Konto wird anonymisiert (die Nachrichten bleiben als \"Gelöschter Benutzer\" erhalten). Dies kann nicht rückgängig gemacht werden.",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Dadurch werden das Konto und alles, was es erstellt hat, einschließlich Nachrichten und Uploads, entfernt, als hätte es nie existiert. Nutze es für Spam und Missbrauch. Dies kann nicht rückgängig gemacht werden."
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Dadurch werden das Konto und alles, was es erstellt hat, einschließlich Nachrichten und Uploads, entfernt, als hätte es nie existiert. Nutze es für Spam und Missbrauch. Dies kann nicht rückgängig gemacht werden.",
+"An official message from this Parley server": "Eine offizielle Nachricht von diesem Parley-Server",
+"Dismiss report": "Meldung verwerfen",
+"Internal note (only admins see it)": "Interne Notiz (nur Admins sehen sie)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "Hinweise kommen als Direktnachricht vom offiziellen Konto dieses Servers an. Man kann sie lesen, aber nicht darauf antworten.",
+"Official": "Offiziell",
+"Resolve report": "Meldung abschließen",
+"Tell @{name}, who reported it": "@{name} benachrichtigen, die meldende Person",
+"Tell @{name}, who was reported": "@{name} benachrichtigen, die gemeldete Person",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "Danke für deine Meldung zu @{name}. Wir haben sie geprüft und diesmal keinen Verstoß gegen unsere Community-Richtlinien festgestellt. Wir schätzen es, dass du auf andere achtest.",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "Danke für deine Meldung zu @{name}. Wir haben sie geprüft und Maßnahmen ergriffen. Meldungen wie deine helfen, diese Community sicher zu halten.",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "Wir haben eine Meldung geprüft, die dich betrifft ({what}), und keinen Verstoß gegen unsere Community-Richtlinien festgestellt. Es wurden keine Maßnahmen ergriffen.",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "Wir haben eine Meldung geprüft, die dich betrifft ({what}), und einen Verstoß gegen unsere Community-Richtlinien festgestellt. Bitte achte darauf, dass deine Beiträge sie einhalten; weitere Verstöße können zur Sperrung deines Kontos führen.",
+"account": "Konto",
+"message": "Nachricht"
 }

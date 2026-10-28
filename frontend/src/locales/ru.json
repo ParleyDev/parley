@@ -3400,5 +3400,19 @@
 "Purge account": "Стереть аккаунт",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Выбранные аккаунты будут удалены сейчас: серверы и приложения, которыми они владеют, удаляются, а аккаунты обезличиваются (их сообщения остаются как «Удалённый пользователь»). Это действие нельзя отменить.",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Аккаунт {name} будет удалён сейчас: серверы и приложения, которыми он владеет, удаляются, а аккаунт обезличивается (сообщения остаются как «Удалённый пользователь»). Это действие нельзя отменить.",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Это удаляет аккаунт и всё, что он создал, включая сообщения и загрузки, как будто его никогда не существовало. Используйте для спама и злоупотреблений. Это действие нельзя отменить."
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Это удаляет аккаунт и всё, что он создал, включая сообщения и загрузки, как будто его никогда не существовало. Используйте для спама и злоупотреблений. Это действие нельзя отменить.",
+"An official message from this Parley server": "Официальное сообщение от этого сервера Parley",
+"Dismiss report": "Отклонить жалобу",
+"Internal note (only admins see it)": "Внутренняя заметка (видна только администраторам)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "Уведомления приходят личным сообщением от официального аккаунта этого сервера. Их можно прочитать, но нельзя на них ответить.",
+"Official": "Официально",
+"Resolve report": "Закрыть жалобу",
+"Tell @{name}, who reported it": "Уведомить @{name}, подавшего жалобу",
+"Tell @{name}, who was reported": "Уведомить @{name}, на кого подана жалоба",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "Спасибо за вашу жалобу на @{name}. Мы её рассмотрели и на этот раз не обнаружили нарушения правил нашего сообщества. Мы ценим вашу заботу о других.",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "Спасибо за вашу жалобу на @{name}. Мы её рассмотрели и приняли меры. Такие жалобы, как ваша, помогают сохранять безопасность этого сообщества.",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "Мы рассмотрели жалобу, связанную с вами ({what}), и не обнаружили нарушения правил нашего сообщества. Никаких мер не принято.",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "Мы рассмотрели жалобу, связанную с вами ({what}), и обнаружили нарушение правил нашего сообщества. Следите за тем, чтобы ваши публикации им соответствовали; повторные нарушения могут привести к блокировке вашего аккаунта.",
+"account": "аккаунт",
+"message": "сообщение"
 }

@@ -3400,5 +3400,19 @@
 "Purge account": "アカウントを完全削除",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "選択したアカウントを今すぐ削除します。それらが所有するサーバーとアプリは削除され、アカウントは匿名化されます(メッセージは「削除済みユーザー」として残ります)。この操作は元に戻せません。",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "{name} のアカウントを今すぐ削除します。所有するサーバーとアプリは削除され、アカウントは匿名化されます(メッセージは「削除済みユーザー」として残ります)。この操作は元に戻せません。",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "アカウントと、メッセージやアップロードを含むそのアカウントが作成したすべてを、最初から存在しなかったかのように削除します。スパムや不正行為に使用してください。この操作は元に戻せません。"
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "アカウントと、メッセージやアップロードを含むそのアカウントが作成したすべてを、最初から存在しなかったかのように削除します。スパムや不正行為に使用してください。この操作は元に戻せません。",
+"An official message from this Parley server": "このParleyサーバーからの公式メッセージ",
+"Dismiss report": "報告を却下",
+"Internal note (only admins see it)": "内部メモ(管理者のみ閲覧可)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "お知らせは、このサーバーの公式アカウントからのダイレクトメッセージとして届きます。読むことはできますが、返信はできません。",
+"Official": "公式",
+"Resolve report": "報告を解決",
+"Tell @{name}, who reported it": "報告者の@{name}さんに通知",
+"Tell @{name}, who was reported": "報告された@{name}さんに通知",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "@{name}さんに関するご報告をありがとうございます。内容を確認しましたが、今回はコミュニティガイドラインへの違反は確認されませんでした。他の人を気づかってくださり、ありがとうございます。",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "@{name}さんに関するご報告をありがとうございます。内容を確認し、対応を行いました。皆さまからの報告が、このコミュニティの安全につながっています。",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "あなたの{what}に関する報告を確認しましたが、コミュニティガイドラインへの違反は確認されませんでした。措置は取られていません。",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "あなたの{what}に関する報告を確認し、コミュニティガイドラインに違反していると判断しました。投稿内容がガイドラインに沿うようご注意ください。違反が続くと、アカウントが停止される場合があります。",
+"account": "アカウント",
+"message": "メッセージ"
 }

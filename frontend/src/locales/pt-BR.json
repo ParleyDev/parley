@@ -3400,5 +3400,19 @@
 "Purge account": "Eliminar conta",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Isso exclui agora as contas selecionadas: os servidores e apps que elas possuem são excluídos, e as contas são anonimizadas (suas mensagens permanecem, como \"Usuário Excluído\"). Isso não pode ser desfeito.",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Isso exclui agora a conta de {name}: os servidores e apps que a pessoa possui são excluídos, e a conta é anonimizada (as mensagens permanecem, como \"Usuário Excluído\"). Isso não pode ser desfeito.",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Isso remove a conta e tudo o que ela criou, incluindo mensagens e uploads, como se nunca tivesse existido. Use para spam e abuso. Isso não pode ser desfeito."
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Isso remove a conta e tudo o que ela criou, incluindo mensagens e uploads, como se nunca tivesse existido. Use para spam e abuso. Isso não pode ser desfeito.",
+"An official message from this Parley server": "Uma mensagem oficial deste servidor do Parley",
+"Dismiss report": "Dispensar denúncia",
+"Internal note (only admins see it)": "Nota interna (apenas administradores veem)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "Os avisos chegam como mensagem direta da conta oficial deste servidor. As pessoas podem lê-los, mas não responder.",
+"Official": "Oficial",
+"Resolve report": "Resolver denúncia",
+"Tell @{name}, who reported it": "Avisar @{name}, quem fez a denúncia",
+"Tell @{name}, who was reported": "Avisar @{name}, quem foi denunciado",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "Obrigado pela sua denúncia sobre @{name}. Nós a analisamos e, desta vez, não encontramos violação das nossas diretrizes da comunidade. Agradecemos por cuidar dos outros.",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "Obrigado pela sua denúncia sobre @{name}. Nós a analisamos e tomamos providências. Denúncias como a sua ajudam a manter esta comunidade segura.",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "Analisamos uma denúncia que envolve você ({what}) e não encontramos violação das nossas diretrizes da comunidade. Nenhuma ação foi tomada.",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "Analisamos uma denúncia que envolve você ({what}) e encontramos violação das nossas diretrizes da comunidade. Certifique-se de que o que você publica as siga; novas violações podem levar à suspensão da sua conta.",
+"account": "conta",
+"message": "mensagem"
 }

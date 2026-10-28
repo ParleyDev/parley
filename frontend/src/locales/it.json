@@ -3400,5 +3400,19 @@
 "Purge account": "Elimina definitivamente account",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Questo elimina ora gli account selezionati: i server e le app che possiedono vengono eliminati e gli account vengono anonimizzati (i loro messaggi restano, come \"Utente eliminato\"). Questa azione non può essere annullata.",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Questo elimina ora l'account di {name}: i server e le app che possiede vengono eliminati e il suo account viene anonimizzato (i suoi messaggi restano, come \"Utente eliminato\"). Questa azione non può essere annullata.",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Questo rimuove l'account e tutto ciò che ha creato, messaggi e upload inclusi, come se non fosse mai esistito. Usalo per spam e abusi. Questa azione non può essere annullata."
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Questo rimuove l'account e tutto ciò che ha creato, messaggi e upload inclusi, come se non fosse mai esistito. Usalo per spam e abusi. Questa azione non può essere annullata.",
+"An official message from this Parley server": "Un messaggio ufficiale da questo server Parley",
+"Dismiss report": "Ignora segnalazione",
+"Internal note (only admins see it)": "Nota interna (visibile solo agli admin)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "Gli avvisi arrivano come messaggio diretto dall'account ufficiale di questo server. Le persone possono leggerli ma non rispondere.",
+"Official": "Ufficiale",
+"Resolve report": "Risolvi segnalazione",
+"Tell @{name}, who reported it": "Avvisa @{name}, che ha fatto la segnalazione",
+"Tell @{name}, who was reported": "Avvisa @{name}, che è stato segnalato",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "Grazie per la tua segnalazione su @{name}. L'abbiamo esaminata e questa volta non abbiamo riscontrato violazioni delle nostre linee guida della community. Ti ringraziamo per l'attenzione verso gli altri.",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "Grazie per la tua segnalazione su @{name}. L'abbiamo esaminata e abbiamo preso provvedimenti. Segnalazioni come la tua aiutano a mantenere sicura questa community.",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "Abbiamo esaminato una segnalazione che ti riguarda ({what}) e non abbiamo riscontrato violazioni delle nostre linee guida della community. Non è stato preso alcun provvedimento.",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "Abbiamo esaminato una segnalazione che ti riguarda ({what}) e abbiamo riscontrato una violazione delle nostre linee guida della community. Assicurati che ciò che pubblichi le rispetti; ulteriori violazioni potrebbero comportare la sospensione del tuo account.",
+"account": "account",
+"message": "messaggio"
 }

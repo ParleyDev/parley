@@ -3400,5 +3400,19 @@
 "Purge account": "彻底清除账号",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "这将立即删除所选账号:它们拥有的服务器和应用将被删除,账号将被匿名化(其消息会保留,显示为“已删除用户”)。此操作无法撤销。",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "这将立即删除 {name} 的账号:其拥有的服务器和应用将被删除,账号将被匿名化(其消息会保留,显示为“已删除用户”)。此操作无法撤销。",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "这将移除该账号及其创建的所有内容,包括消息和上传文件,就像它从未存在过一样。用于垃圾信息和滥用。此操作无法撤销。"
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "这将移除该账号及其创建的所有内容,包括消息和上传文件,就像它从未存在过一样。用于垃圾信息和滥用。此操作无法撤销。",
+"An official message from this Parley server": "来自此 Parley 服务器的官方消息",
+"Dismiss report": "忽略举报",
+"Internal note (only admins see it)": "内部备注(仅管理员可见)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "通知会以此服务器官方账号发送的私信形式送达。对方可以阅读,但无法回复。",
+"Official": "官方",
+"Resolve report": "处理举报",
+"Tell @{name}, who reported it": "通知举报人 @{name}",
+"Tell @{name}, who was reported": "通知被举报人 @{name}",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "感谢你对 @{name} 的举报。我们已审核,这次未发现违反社区准则的情况。感谢你守护他人。",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "感谢你对 @{name} 的举报。我们已审核并采取了措施。像你这样的举报有助于维护社区安全。",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "我们审核了一项与你的{what}相关的举报,未发现违反社区准则的情况,因此未采取任何措施。",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "我们审核了一项与你的{what}相关的举报,发现其违反了社区准则。请确保你发布的内容符合准则;再次违规可能导致你的账号被封禁。",
+"account": "账号",
+"message": "消息"
 }

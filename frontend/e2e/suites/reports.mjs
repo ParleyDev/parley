@@ -59,7 +59,31 @@ ok('Reports page shows the open message report with its snapshot', (await row.lo
 await pad.screenshot({ path: '105-reports.png' })
 await row.locator('[data-report-delete-message]').click(); await pad.waitForSelector('text=Message deleted'); await pad.waitForFunction(() => !document.querySelector('[data-admin-report][data-report-kind="message"] [data-report-delete-message]'))
 ok('Delete message removes it and the button', !(await call(a.token, 'GET', `/channels/${tc.id}/messages?limit=10`)).some((x) => x.id === bad2.id))
-await row.locator('[data-report-resolve]').click(); await pad.waitForFunction((id) => !document.querySelector(`[data-admin-report][data-report-kind="message"]`), bad2.id)
+await row.locator('[data-report-resolve]').click(); await pad.waitForSelector('[data-report-decision="resolved"]')
+ok('resolving asks what to tell the people involved, with templates', (await pad.inputValue('[data-notify-reporter-text]')).includes('took action') && (await pad.inputValue('[data-notify-target-text]')).includes('community guidelines'))
+await pad.fill('[data-notify-target-text]', `Your post broke the rules ${S}`)
+await pad.click('[data-report-decision-confirm]'); await pad.waitForFunction((id) => !document.querySelector(`[data-admin-report][data-report-kind="message"]`), bad2.id)
+// Both get an official notice: a DM from the system account, which they can read but not answer.
+const notice = async (u, text) => {
+  for (let i = 0; i < 20; i++) {
+    const dms = await call(u.token, 'GET', '/users/@me/channels')
+    const sys = dms.find((d) => d.recipients?.[0]?.system)
+    if (sys) { const ms = await call(u.token, 'GET', `/channels/${sys.id}/messages?limit=5`); if (ms.some((m) => m.content.includes(text) && m.author.system)) return sys }
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  return null
+}
+const toTarget = await notice(b, `Your post broke the rules ${S}`)
+ok('the reported user gets the edited notice from the official account', !!toTarget && toTarget.recipients[0].display_name === 'Parley')
+const toReporter = await notice(a, 'took action')
+ok('the reporter gets theirs too', !!toReporter)
+ok("notices can't be answered", (await raw(a.token, 'POST', `/channels/${toReporter?.id}/messages`, { content: 'hi' })).status >= 400)
+ok('nobody can befriend the official account', (await raw(a.token, 'POST', '/users/@me/relationships', { user_id: toReporter?.recipients[0].id })).status >= 400)
+const audited = (await call(admin.token, 'GET', '/admin/audit')).find((e) => e.action === 'report.resolved')
+ok('the audit log records who was told what', JSON.stringify(audited?.details ?? {}).includes(`Your post broke the rules ${S}`))
+const pr = await mk(a.token); await pr.goto(`${WEB}/channels/@me/${toReporter?.id}`); await pr.waitForSelector('[data-readonly-note]')
+ok('in the app it reads as Official, with no message box', (await pr.textContent('[data-readonly-note]')).includes('official message') && await pr.locator('[data-system-tag]').count() >= 1)
+await pr.close()
 await pad.click('[data-admin-report-filter="resolved"]'); await pad.waitForSelector('[data-admin-report][data-report-status="resolved"]')
 ok('Resolve moves it to the resolved filter', await pad.locator('[data-admin-report][data-report-status="resolved"]').count() >= 1)
 await pad.close()

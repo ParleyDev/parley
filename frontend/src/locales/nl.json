@@ -3400,5 +3400,19 @@
 "Purge account": "Account wissen",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Hiermee worden de geselecteerde accounts nu verwijderd: de servers en apps die ze bezitten worden verwijderd en de accounts worden geanonimiseerd (hun berichten blijven staan, als \"Verwijderde gebruiker\"). Dit kan niet ongedaan worden gemaakt.",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Hiermee wordt het account van {name} nu verwijderd: de servers en apps die diegene bezit worden verwijderd en het account wordt geanonimiseerd (de berichten blijven staan, als \"Verwijderde gebruiker\"). Dit kan niet ongedaan worden gemaakt.",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Hiermee worden het account en alles wat het heeft gemaakt, inclusief berichten en uploads, verwijderd alsof het nooit heeft bestaan. Gebruik dit voor spam en misbruik. Dit kan niet ongedaan worden gemaakt."
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Hiermee worden het account en alles wat het heeft gemaakt, inclusief berichten en uploads, verwijderd alsof het nooit heeft bestaan. Gebruik dit voor spam en misbruik. Dit kan niet ongedaan worden gemaakt.",
+"An official message from this Parley server": "Een officieel bericht van deze Parley-server",
+"Dismiss report": "Melding afwijzen",
+"Internal note (only admins see it)": "Interne notitie (alleen admins zien dit)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "Mededelingen komen binnen als privébericht van het officiële account van deze server. Mensen kunnen ze lezen, maar niet beantwoorden.",
+"Official": "Officieel",
+"Resolve report": "Melding afhandelen",
+"Tell @{name}, who reported it": "Laat @{name}, die de melding deed, iets weten",
+"Tell @{name}, who was reported": "Laat @{name}, over wie gemeld is, iets weten",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "Bedankt voor je melding over @{name}. We hebben die bekeken en dit keer geen overtreding van onze communityrichtlijnen gevonden. Fijn dat je oplet voor anderen.",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "Bedankt voor je melding over @{name}. We hebben die bekeken en maatregelen genomen. Meldingen zoals de jouwe helpen deze community veilig te houden.",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "We hebben een melding over jouw {what} bekeken en geen overtreding van onze communityrichtlijnen gevonden. Er is geen actie ondernomen.",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "We hebben een melding over jouw {what} bekeken en vastgesteld dat deze onze communityrichtlijnen overtreedt. Zorg ervoor dat wat je plaatst de richtlijnen volgt; bij verdere overtredingen kan je account worden geschorst.",
+"account": "account",
+"message": "bericht"
 }

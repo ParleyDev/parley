@@ -51,6 +51,9 @@ pub struct User {
     /// 'active', 'pending_deletion' or 'deleted' (a tombstone: content stays, shown as "Deleted User").
     #[sqlx(default)]
     pub account_state: String,
+    /// The instance's own account, which sends official notices.
+    #[sqlx(default)]
+    pub system: bool,
     /// The viewer may see a private profile (themselves, or a friend): set by the profile endpoint.
     #[sqlx(skip)]
     pub reveal: bool,
@@ -93,6 +96,9 @@ struct UserWire<'a> {
     /// The account was deleted: render it as "Deleted User" with the default avatar, no profile.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     deleted: bool,
+    /// The instance's official account: its messages are notices, and it can't be messaged.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    system: bool,
 }
 
 impl Serialize for User {
@@ -109,6 +115,7 @@ impl Serialize for User {
             profile_frame: &self.profile_frame, nameplate: &self.nameplate, profile_effect: &self.profile_effect,
             private_profile: hidden,
             deleted: self.account_state == "deleted",
+            system: self.system,
         }
         .serialize(s)
     }
@@ -122,7 +129,7 @@ impl From<&PrivateUser> for User {
             theme_primary: u.theme_primary.clone(), theme_accent: u.theme_accent.clone(), pronouns: u.pronouns.clone(), name_primary: u.name_primary.clone(),
             name_accent: u.name_accent.clone(), avatar_decoration: u.avatar_decoration.clone(), clan_tag: u.clan_tag.clone(), clan_tag_guild: u.clan_tag_guild, panels: u.panels.clone(),
             profile_privacy: u.profile_privacy.clone(), profile_frame: u.profile_frame.clone(), nameplate: u.nameplate.clone(), profile_effect: u.profile_effect.clone(),
-            account_state: "active".into(), reveal: false,
+            account_state: "active".into(), system: false, reveal: false,
         }
     }
 }
@@ -659,6 +666,8 @@ pub struct MessageRow {
     #[sqlx(default)]
     pub author_verified_bot: bool,
     #[sqlx(default)]
+    pub author_system: bool,
+    #[sqlx(default)]
     pub author_clan_tag_guild: Option<Uuid>,
 }
 
@@ -921,6 +930,7 @@ impl MessageRow {
                 panels: serde_json::Value::Null,
                 // Only deleted accounts carry the (reserved) placeholder prefix.
                 account_state: if author_deleted { "deleted".into() } else { String::new() },
+                system: self.author_system,
                 ..Default::default()
             } },
             reactions,

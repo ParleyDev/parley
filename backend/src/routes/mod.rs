@@ -3,6 +3,7 @@ pub mod admin;
 pub mod applications;
 pub mod assets;
 pub mod deletion;
+pub mod notices;
 pub mod asset_layers;
 pub mod attachments;
 pub mod automod;

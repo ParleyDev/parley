@@ -3400,5 +3400,19 @@
 "Purge account": "Hesabı tamamen sil",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Bu işlem seçili hesapları şimdi siler: sahip oldukları sunucular ve uygulamalar silinir, hesaplar anonimleştirilir (mesajları \"Silinmiş Kullanıcı\" olarak kalır). Bu işlem geri alınamaz.",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Bu işlem {name} kullanıcısının hesabını şimdi siler: sahip olduğu sunucular ve uygulamalar silinir, hesabı anonimleştirilir (mesajları \"Silinmiş Kullanıcı\" olarak kalır). Bu işlem geri alınamaz.",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Bu işlem hesabı ve oluşturduğu her şeyi, mesajlar ve yüklemeler dahil, hiç var olmamış gibi kaldırır. Spam ve kötüye kullanım için kullanın. Bu işlem geri alınamaz."
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Bu işlem hesabı ve oluşturduğu her şeyi, mesajlar ve yüklemeler dahil, hiç var olmamış gibi kaldırır. Spam ve kötüye kullanım için kullanın. Bu işlem geri alınamaz.",
+"An official message from this Parley server": "Bu Parley sunucusundan resmi bir mesaj",
+"Dismiss report": "Bildirimi reddet",
+"Internal note (only admins see it)": "Dahili not (yalnızca yöneticiler görür)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "Duyurular, bu sunucunun resmi hesabından doğrudan mesaj olarak gelir. Kişiler bunları okuyabilir ancak yanıtlayamaz.",
+"Official": "Resmi",
+"Resolve report": "Bildirimi çözümle",
+"Tell @{name}, who reported it": "Bildirimi yapan @{name} kişisine haber ver",
+"Tell @{name}, who was reported": "Bildirilen @{name} kişisine haber ver",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "@{name} hakkındaki bildiriminiz için teşekkürler. Bildirimi inceledik ve bu sefer topluluk kurallarımızın ihlal edildiğini tespit etmedik. Başkalarını kolladığınız için teşekkür ederiz.",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "@{name} hakkındaki bildiriminiz için teşekkürler. Bildirimi inceledik ve işlem yaptık. Sizinki gibi bildirimler bu topluluğu güvende tutmaya yardımcı olur.",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "Sizinle ilgili bir bildirimi ({what}) inceledik ve topluluk kurallarımızın ihlal edildiğini tespit etmedik. Herhangi bir işlem yapılmadı.",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "Sizinle ilgili bir bildirimi ({what}) inceledik ve topluluk kurallarımızın ihlal edildiğini tespit ettik. Paylaştıklarınızın bu kurallara uygun olduğundan emin olun; yeni ihlaller hesabınızın askıya alınmasına yol açabilir.",
+"account": "hesap",
+"message": "mesaj"
 }

@@ -3400,5 +3400,19 @@
 "Purge account": "مسح الحساب نهائيًا",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "سيؤدي هذا إلى حذف الحسابات المحددة الآن: تُحذف الخوادم والتطبيقات التي تملكها، ويتم إخفاء هوية الحسابات (تبقى رسائلها باسم \"مستخدم محذوف\"). لا يمكن التراجع عن هذا.",
 "This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "سيؤدي هذا إلى حذف حساب {name} الآن: تُحذف الخوادم والتطبيقات التي يملكها، ويتم إخفاء هوية حسابه (تبقى رسائله باسم \"مستخدم محذوف\"). لا يمكن التراجع عن هذا.",
-"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "يزيل هذا الحساب وكل ما أنشأه، بما في ذلك الرسائل والملفات المرفوعة، كأنه لم يكن موجودًا قط. استخدمه للرسائل المزعجة والإساءة. لا يمكن التراجع عن هذا."
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "يزيل هذا الحساب وكل ما أنشأه، بما في ذلك الرسائل والملفات المرفوعة، كأنه لم يكن موجودًا قط. استخدمه للرسائل المزعجة والإساءة. لا يمكن التراجع عن هذا.",
+"An official message from this Parley server": "رسالة رسمية من خادم Parley هذا",
+"Dismiss report": "تجاهل البلاغ",
+"Internal note (only admins see it)": "ملاحظة داخلية (يراها المشرفون فقط)",
+"Notices arrive as a direct message from this server's official account. People can read them but not reply.": "تصل الإشعارات كرسالة مباشرة من الحساب الرسمي لهذا الخادم. يمكن للأشخاص قراءتها لكن لا يمكنهم الرد عليها.",
+"Official": "رسمي",
+"Resolve report": "حل البلاغ",
+"Tell @{name}, who reported it": "أبلغ @{name}، صاحب البلاغ",
+"Tell @{name}, who was reported": "أبلغ @{name}، الشخص المُبلَّغ عنه",
+"Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.": "شكرًا على بلاغك بشأن @{name}. راجعناه ولم نجد انتهاكًا لإرشادات مجتمعنا هذه المرة. نقدّر حرصك على حماية الآخرين.",
+"Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.": "شكرًا على بلاغك بشأن @{name}. راجعناه واتخذنا إجراءً. البلاغات مثل بلاغك تساعد في الحفاظ على أمان هذا المجتمع.",
+"We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "راجعنا بلاغًا يتعلق بك ({what}) ولم نجد أي انتهاك لإرشادات مجتمعنا. لم يُتخذ أي إجراء.",
+"We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "راجعنا بلاغًا يتعلق بك ({what}) ووجدنا انتهاكًا لإرشادات مجتمعنا. يرجى التأكد من أن ما تنشره يلتزم بها؛ فقد تؤدي المخالفات المتكررة إلى تعليق حسابك.",
+"account": "حساب",
+"message": "رسالة"
 }

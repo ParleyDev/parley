@@ -593,7 +593,9 @@ function ReportsPane() {
   const load = async () => { try { setRows(await api.get<Report[]>(`/admin/reports?status=${status}`)) } catch (e) { pushToast((e as Error).message, 'error') } }
   useEffect(() => { setRows(null); load() }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
   const act = async (fn: () => Promise<unknown>, done: string) => { try { await fn(); pushToast(done); await load() } catch (e) { pushToast((e as Error).message, 'error') } }
-  const setState = (r: Report, s: 'resolved' | 'dismissed' | 'open') => act(() => api.patch(`/admin/reports/${r.id}`, { status: s }), s === 'open' ? t('Report reopened') : s === 'resolved' ? t('Report resolved') : t('Report dismissed'))
+  const setState = (r: Report, s: 'resolved' | 'dismissed' | 'open', extra: Record<string, string> = {}) => act(() => api.patch(`/admin/reports/${r.id}`, { status: s, ...extra }), s === 'open' ? t('Report reopened') : s === 'resolved' ? t('Report resolved') : t('Report dismissed'))
+  // Resolving or dismissing asks what to tell the people involved (official notices from the system account).
+  const [deciding, setDeciding] = useState<{ r: Report; status: 'resolved' | 'dismissed' } | null>(null)
   const statusLabel = { open: t('open'), resolved: t('resolved'), dismissed: t('dismissed'), all: t('all') }
   return (
     <div data-admin-reports>
@@ -602,6 +604,7 @@ function ReportsPane() {
       <div className="mt-4 flex gap-1.5" data-admin-report-filters>
         {(['open', 'resolved', 'dismissed', 'all'] as const).map((s) => <button key={s} type="button" onClick={() => setStatus(s)} className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${status === s ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-admin-report-filter={s}>{statusLabel[s]}</button>)}
       </div>
+      {deciding && <ReportDecision report={deciding.r} status={deciding.status} onCancel={() => setDeciding(null)} onDone={(extra) => { setState(deciding.r, deciding.status, extra); setDeciding(null) }} />}
       <div className="mt-4 space-y-3">
         {rows === null && <p className="text-sm text-text-2">{t('Loading…')}</p>}
         {rows?.length === 0 && <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-text-2" data-admin-reports-empty>{status === 'all' ? t('No reports.') : t('No {status} reports.', { status: statusLabel[status] })}</div>}
@@ -627,8 +630,8 @@ function ReportsPane() {
               {r.guild_id && r.channel_id && <a className="btn-ghost py-1 text-xs" href={`/channels/${r.guild_id}/${r.channel_id}?message=${r.message_id}`} target="_blank" rel="noreferrer">{t('Open channel')}</a>}
               {r.status === 'open' ? (
                 <>
-                  <button type="button" className="btn-primary py-1 text-xs" onClick={() => setState(r, 'resolved')} data-report-resolve>{t('Resolve')}</button>
-                  <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setState(r, 'dismissed')} data-report-dismiss>{t('Dismiss')}</button>
+                  <button type="button" className="btn-primary py-1 text-xs" onClick={() => setDeciding({ r, status: 'resolved' })} data-report-resolve>{t('Resolve')}</button>
+                  <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setDeciding({ r, status: 'dismissed' })} data-report-dismiss>{t('Dismiss')}</button>
                 </>
               ) : <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setState(r, 'open')} data-report-reopen>{t('Reopen')}</button>}
             </div>
@@ -773,6 +776,60 @@ function UserContentPane() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Resolving or dismissing a report: an internal note, and the official notices to send (from this server's system
+ * account) to the person who reported it and to the reported user. Each starts from a template that can be edited or
+ * left off.
+ */
+function ReportDecision({ report: r, status, onCancel, onDone }: { report: Report; status: 'resolved' | 'dismissed'; onCancel: () => void; onDone: (extra: Record<string, string>) => void }) {
+  const t = useT()
+  const what = r.kind === 'message' ? t('message') : t('account')
+  const templates = {
+    reporter: status === 'resolved'
+      ? t('Thanks for your report about @{name}. We reviewed it and took action. Reports like yours help keep this community safe.', { name: r.target_username })
+      : t("Thanks for your report about @{name}. We reviewed it and didn't find a breach of our community guidelines this time. We appreciate you looking out for others.", { name: r.target_username }),
+    target: status === 'resolved'
+      ? t('We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.', { what })
+      : t('We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.', { what }),
+  }
+  const [note, setNote] = useState(r.note ?? '')
+  const [toReporter, setToReporter] = useState(!!r.reporter_id)
+  const [toTarget, setToTarget] = useState(status === 'resolved' && !!r.target_user_id)
+  const [reporterText, setReporterText] = useState(templates.reporter)
+  const [targetText, setTargetText] = useState(templates.target)
+  const box = 'input min-h-[84px] text-sm'
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel() }} data-report-decision={status}>
+      <div className="pop w-full max-w-lg max-h-full overflow-y-auto rounded-xl bg-bg-1 border border-line p-5 space-y-4 shadow-2xl" role="dialog" aria-modal>
+        <h3 className="text-lg font-bold">{status === 'resolved' ? t('Resolve report') : t('Dismiss report')}</h3>
+        <div>
+          <label className="label">{t('Internal note (only admins see it)')}</label>
+          <input className="input text-sm" value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} data-report-note />
+        </div>
+        <p className="text-xs text-text-2">{t('Notices arrive as a direct message from this server\'s official account. People can read them but not reply.')}</p>
+        {r.reporter_id && (
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" className="h-4 w-4 accent-accent" checked={toReporter} onChange={(e) => setToReporter(e.target.checked)} data-notify-reporter />{t('Tell @{name}, who reported it', { name: r.reporter_username ?? '?' })}</label>
+            {toReporter && <textarea className={box} value={reporterText} onChange={(e) => setReporterText(e.target.value)} maxLength={2000} data-notify-reporter-text />}
+          </div>
+        )}
+        {r.target_user_id && (
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" className="h-4 w-4 accent-accent" checked={toTarget} onChange={(e) => setToTarget(e.target.checked)} data-notify-target />{t('Tell @{name}, who was reported', { name: r.target_username })}</label>
+            {toTarget && <textarea className={box} value={targetText} onChange={(e) => setTargetText(e.target.value)} maxLength={2000} data-notify-target-text />}
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-ghost" onClick={onCancel}>{t('Cancel')}</button>
+          <button type="button" className="btn-primary" onClick={() => onDone({ note, ...(toReporter && reporterText.trim() ? { message_reporter: reporterText } : {}), ...(toTarget && targetText.trim() ? { message_target: targetText } : {}) })} data-report-decision-confirm>
+            {status === 'resolved' ? t('Resolve') : t('Dismiss')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

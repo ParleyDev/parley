@@ -161,6 +161,12 @@ struct UpdateReport {
     status: String,
     #[serde(default)]
     note: String,
+    /// Official notices sent from the system account ("Parley") with the decision: to whoever reported it, and to the
+    /// reported user. Empty or absent: nothing is sent.
+    #[serde(default)]
+    message_reporter: Option<String>,
+    #[serde(default)]
+    message_target: Option<String>,
 }
 
 async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<UpdateReport>) -> AppResult<Json<Report>> {
@@ -177,7 +183,13 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
         return Err(AppError::NotFound("Report not found".into()));
     }
     let r = sqlx::query_as::<_, Report>(&format!("{REPORT_SELECT} WHERE r.id = $1")).bind(id).fetch_one(&state.db).await?;
-    audit::record(&state, uid, &format!("report.{}", req.status), "report", Some(id), &r.target_username, json!({ "kind": r.kind, "note": note })).await;
+    let clean = |m: &Option<String>| m.as_deref().map(str::trim).filter(|m| !m.is_empty()).map(|m| m.chars().take(crate::routes::notices::MAX_NOTICE).collect::<String>());
+    let (to_reporter, to_target) = (clean(&req.message_reporter), clean(&req.message_target));
+    let mut notified = Vec::new();
+    if let (Some(text), Some(who)) = (&to_reporter, r.reporter_id) { crate::routes::notices::send(&state, who, text).await?; notified.push("reporter") }
+    if let (Some(text), Some(who)) = (&to_target, r.target_user_id) { crate::routes::notices::send(&state, who, text).await?; notified.push("target") }
+    audit::record(&state, uid, &format!("report.{}", req.status), "report", Some(id), &r.target_username,
+        json!({ "kind": r.kind, "note": note, "notified": notified, "message_reporter": to_reporter, "message_target": to_target })).await;
     Ok(Json(r))
 }
 

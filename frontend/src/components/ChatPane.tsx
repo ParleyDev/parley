@@ -21,8 +21,8 @@ import { t as tr, useT, tn } from '../lib/i18n'
  */
 export default function ChatPane({ channel, readOnly: lockedNote }: { channel: Channel | DmChannel; /** Shown instead of the composer (e.g. a locked thread). */ readOnly?: string }) {
   // A 1:1 DM with a deleted account stays readable, but nothing can be sent to them.
-  const dmGone = channel.guild_id === null && (channel as DmChannel).kind === 'dm' && !!(channel as DmChannel).recipients?.[0]?.deleted
-  const readOnly = lockedNote ?? (dmGone ? tr("You can't send messages to this user.") : undefined)
+  const other = channel.guild_id === null && (channel as DmChannel).kind === 'dm' ? (channel as DmChannel).recipients?.[0] : undefined
+  const readOnly = lockedNote ?? (other?.deleted ? tr("You can't send messages to this user.") : other?.system ? tr("This is an official message from this Parley server. Replies aren't read.") : undefined)
   const t = useT()
   const messages = useStore((s) => s.messages[channel.id])
   // App commands here (the / menu and the Apps menus on messages and people).

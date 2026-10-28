@@ -127,7 +127,7 @@ async fn send_request(
         _ => return Err(AppError::BadRequest("Provide a username".into())),
     };
     // Nobody can befriend an account that is being (or has been) deleted.
-    let target = if target.account_state == "active" { target } else {
+    let target = if target.account_state == "active" && !target.system { target } else {
         return Err(AppError::BadRequest("Hm, didn't work. Double check that the username is correct.".into()))
     };
     if target.id == uid {
