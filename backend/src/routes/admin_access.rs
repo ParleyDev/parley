@@ -16,7 +16,7 @@ use crate::{
     state::AppState,
 };
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::{header, HeaderMap},
     routing::{get, post, put},
     Json, Router,
@@ -158,7 +158,6 @@ pub async fn log_case(state: &AppState, uid: Uuid, roles: &[String], headers: &H
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/admin/access", get(my_access))
-        .route("/admin/access-log", get(read_log))
         .route("/admin/roles", get(list_roles))
         .route("/admin/users/:id/roles", put(set_roles))
         .route("/admin/users/:id/reveal", post(reveal))
@@ -169,20 +168,6 @@ async fn my_access(State(state): State<AppState>, AuthUser(uid): AuthUser) -> Ap
     require_admin(&state, uid).await?;
     let a = access(&state, uid).await?;
     Ok(Json(json!({ "roles": a.roles, "perms": a.perms, "all_roles": ROLES })))
-}
-
-#[derive(Serialize, sqlx::FromRow)]
-pub struct LogRow { pub id: Uuid, pub at: DateTime<Utc>, pub actor_id: Uuid, pub actor_roles: Vec<String>, pub action: String, pub query: String, pub filters: Value, pub justification: String, pub target_ids: Vec<Uuid>, pub case_id: Option<Uuid>, pub ip: String, pub user_agent: String }
-
-#[derive(Deserialize)]
-struct LogQuery { actor_id: Option<Uuid>, before: Option<DateTime<Utc>>, limit: Option<i64> }
-
-/// `GET /admin/access-log`: the access log, newest first (anyone who may read the whole audit log).
-async fn read_log(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<LogQuery>) -> AppResult<Json<Vec<LogRow>>> {
-    require_perm(&state, uid, AuditReadAll).await?;
-    Ok(Json(sqlx::query_as::<_, LogRow>("SELECT id, at, actor_id, actor_roles, action, query, filters, justification, target_ids, case_id, ip, user_agent FROM admin_access_log
-        WHERE ($1::uuid IS NULL OR actor_id = $1) AND ($2::timestamptz IS NULL OR at < $2) ORDER BY at DESC LIMIT $3")
-        .bind(q.actor_id).bind(q.before).bind(q.limit.unwrap_or(100).clamp(1, 500)).fetch_all(&state.db).await?))
 }
 
 #[derive(Deserialize)]

@@ -532,7 +532,7 @@ function Tool({ children, label, onClick, danger, testid }: { children: React.Re
   return <button type="button" title={label} onClick={onClick} data-admin-action={testid} className={`h-8 w-8 rounded-md flex items-center justify-center hover:bg-bg-3 ${danger ? 'text-text-2 hover:text-danger' : 'text-text-2 hover:text-text-0'}`}>{children}</button>
 }
 
-interface AuditRow { id: string; actor_id: string | null; actor_name: string; action: string; target_kind: string; target_id: string | null; target_name: string; details: Record<string, unknown>; created_at: string }
+interface AuditRow { id: string; actor_id: string; actor_name: string; actor_roles: string[]; action: string; target_kind: string; target_id: string | null; target_ids: string[]; target_name: string; details: Record<string, unknown>; query: string; justification: string; case_id: string | null; ip: string; user_agent: string; created_at: string }
 
 const actionLabels = (): Record<string, string> => ({
   'user.promote': tr('made admin'), 'user.demote': tr('removed admin from'), 'user.suspend': tr('suspended'), 'user.unsuspend': tr('unsuspended'),
@@ -630,17 +630,20 @@ function MailPane() {
 function AuditPane() {
   const t = useT()
   const [q, setQ] = useState('')
+  // Auditor filters: admin, case, target (ids) and a date range.
+  const [f, setF] = useState({ actor_id: '', case_id: '', target_id: '', from: '', to: '' })
+  const filterQs = () => Object.entries(f).filter(([, v]) => v.trim()).map(([k, v]) => `&${k}=${encodeURIComponent(k === 'from' || k === 'to' ? new Date(v).toISOString() : v.trim())}`).join('')
   const [rows, setRows] = useState<AuditRow[]>([])
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
   const load = async (before?: string) => {
     setBusy(true)
     try {
-      const page = await api.get<AuditRow[]>(`/admin/audit?q=${encodeURIComponent(q)}${before ? `&before=${before}` : ''}`)
+      const page = await api.get<AuditRow[]>(`/admin/audit?q=${encodeURIComponent(q)}${filterQs()}${before ? `&before=${before}` : ''}`)
       setRows((r) => before ? [...r, ...page] : page); setDone(page.length < 100)
     } catch { /* keep what we have */ } finally { setBusy(false) }
   }
-  useEffect(() => { const h = setTimeout(() => load(), 200); return () => clearTimeout(h) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const h = setTimeout(() => load(), 200); return () => clearTimeout(h) }, [q, f]) // eslint-disable-line react-hooks/exhaustive-deps
   const detail = (r: AuditRow) => {
     const d = r.details ?? {}
     if (r.action === 'settings.update') return Object.entries(d).map(([k, v]) => `${k} → ${typeof v === 'string' ? JSON.stringify(v) : String(v)}`).join(', ')
@@ -651,8 +654,15 @@ function AuditPane() {
   return (
     <div data-admin-audit>
       <h1 className="text-2xl font-bold">{t('Audit Log')}</h1>
-      <p className="text-sm text-text-2 mt-1">{t('Every action taken in this console, newest first. Names are recorded at the time, so entries survive deletions.')}</p>
+      <p className="text-sm text-text-2 mt-1">{t('Every action taken in this console, newest first: content access, reveals, cases, role changes and moderation. The log cannot be changed; deleted accounts show as their tombstone.')}</p>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Filter by admin, action or target')} data-admin-audit-search className="input mt-4 max-w-md" />
+      <div className="mt-2 flex flex-wrap gap-2 items-center text-xs text-text-2" data-admin-audit-filters>
+        <input className="input w-72 py-1 text-xs" value={f.actor_id} onChange={(e) => setF({ ...f, actor_id: e.target.value })} placeholder={t('Admin ID')} data-admin-audit-filter="actor_id" />
+        <input className="input w-72 py-1 text-xs" value={f.case_id} onChange={(e) => setF({ ...f, case_id: e.target.value })} placeholder={t('Case ID')} data-admin-audit-filter="case_id" />
+        <input className="input w-72 py-1 text-xs" value={f.target_id} onChange={(e) => setF({ ...f, target_id: e.target.value })} placeholder={t('Target ID')} data-admin-audit-filter="target_id" />
+        <label className="flex items-center gap-1">{t('From')} <input type="date" className="input w-auto py-1 text-xs" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} data-admin-audit-filter="from" /></label>
+        <label className="flex items-center gap-1">{t('to')} <input type="date" className="input w-auto py-1 text-xs" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} data-admin-audit-filter="to" /></label>
+      </div>
       <div className="mt-4 rounded-xl border border-line bg-bg-1 overflow-hidden">
         {rows.length === 0 && <div className="px-3 py-6 text-sm text-text-2 text-center" data-admin-audit-empty>{busy ? t('Loading…') : t('Nothing logged yet.')}</div>}
         {rows.map((r) => (
@@ -660,8 +670,15 @@ function AuditPane() {
             <div className="text-xs text-text-2 pt-0.5" title={r.created_at}>{new Date(r.created_at).toLocaleString()}</div>
             <div className="min-w-0">
               <span className="font-semibold">@{r.actor_name || t('unknown')}</span> <span className="text-text-1">{actionLabels()[r.action] ?? r.action}</span>
-              {r.target_name && <span className="font-semibold"> {r.target_kind === 'user' ? '@' : ''}{r.target_name}</span>}
+              {(r.target_name || (r.target_kind && r.target_id)) && <span className="font-semibold"> {r.target_kind === 'user' ? '@' : ''}{r.target_name || r.target_id}</span>}
               {detail(r) && <div className="text-xs text-text-2 truncate" data-audit-detail>{detail(r)}</div>}
+              {(r.justification || r.query) && <div className="text-xs text-text-2 truncate" data-audit-why>{r.query && <>{t('searched “{q}”', { q: r.query })} · </>}{r.justification}</div>}
+              <div className="text-[11px] text-text-2 flex flex-wrap gap-x-2">
+                {r.actor_roles.length > 0 && <span data-audit-roles>{r.actor_roles.join(', ')}</span>}
+                {r.case_id && <NavLink to={`/admin/cases/${r.case_id}`} className="text-sky-400 hover:underline" data-audit-case>{t('case')}</NavLink>}
+                {r.target_ids.length > 1 && <span>{t('{n} items', { n: r.target_ids.length })}</span>}
+                {r.ip && <span data-audit-ip>{r.ip}</span>}
+              </div>
             </div>
           </div>
         ))}

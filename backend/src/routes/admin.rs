@@ -778,13 +778,20 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
 #[derive(Debug, Serialize, FromRow)]
 struct AuditRow {
     id: Uuid,
-    actor_id: Option<Uuid>,
+    actor_id: Uuid,
     actor_name: String,
+    actor_roles: Vec<String>,
     action: String,
     target_kind: String,
     target_id: Option<Uuid>,
+    target_ids: Vec<Uuid>,
     target_name: String,
     details: Value,
+    query: String,
+    justification: String,
+    case_id: Option<Uuid>,
+    ip: String,
+    user_agent: String,
     created_at: DateTime<Utc>,
 }
 
@@ -794,29 +801,42 @@ struct AuditQuery {
     q: String,
     /// Page by the id of the last row seen (ids are time-ordered v7 UUIDs).
     before: Option<Uuid>,
+    actor_id: Option<Uuid>,
+    case_id: Option<Uuid>,
+    target_id: Option<Uuid>,
+    from: Option<DateTime<Utc>>,
+    to: Option<DateTime<Utc>>,
 }
 
-/// Newest first, 100 per page; `q` matches actor, action or target name.
-/// The admin audit log, scoped by role: all of it (legal, super admins, auditors), your team's (T&S leads: actions by
-/// moderators and leads), or only your own (moderators).
+/// `GET /admin/audit`: the console audit log (the append-only `admin_access_log`), newest first, 100 per page. Scoped
+/// by role: all of it (legal, super admins, auditors), your team's (T&S leads: moderators and leads), or only your own
+/// (moderators). Filter by admin, case, target and date; `q` matches admin, action or target name. Names are looked up
+/// now, so a deleted account reads as its `deleted_user_*` tombstone. IPs and devices show only with the whole log.
 async fn list_audit(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<AuditQuery>) -> AppResult<Json<Vec<AuditRow>>> {
     crate::routes::users::require_admin(&state, uid).await?;
     let a = crate::routes::admin_access::access(&state, uid).await?;
     use crate::routes::admin_access::Perm::*;
     let scope = if a.has(AuditReadAll) { "all" } else if a.has(AuditReadTeam) { "team" } else if a.has(AuditReadOwn) { "own" } else { return Err(AppError::Forbidden) };
-    let rows = sqlx::query_as::<_, AuditRow>(
-        "SELECT id, actor_id, actor_name, action, target_kind, target_id, target_name, details, created_at FROM admin_audit
-         WHERE ($1::text IS NULL OR actor_name ILIKE $1 OR action ILIKE $1 OR target_name ILIKE $1)
-           AND ($2::uuid IS NULL OR id < $2)
-           AND ($3 = 'all' OR ($3 = 'own' AND actor_id = $4)
-                OR ($3 = 'team' AND EXISTS (SELECT 1 FROM admin_roles r WHERE r.user_id = admin_audit.actor_id AND r.role IN ('MODERATOR', 'TS_LEAD'))))
-         ORDER BY id DESC LIMIT 100",
+    let mut rows = sqlx::query_as::<_, AuditRow>(
+        "SELECT l.id, l.actor_id, COALESCE(au.username, '') AS actor_name, l.actor_roles, l.action, l.target_kind, l.target_ids[1] AS target_id, l.target_ids,
+                COALESCE(tu.username, tg.name, l.filters->>'target_label', '') AS target_name, l.filters AS details, l.query, l.justification, l.case_id,
+                l.ip, l.user_agent, l.at AS created_at
+         FROM admin_access_log l
+         LEFT JOIN users au ON au.id = l.actor_id
+         LEFT JOIN users tu ON l.target_kind = 'user' AND tu.id = l.target_ids[1]
+         LEFT JOIN guilds tg ON l.target_kind = 'guild' AND tg.id = l.target_ids[1]
+         WHERE ($1::text IS NULL OR au.username ILIKE $1 OR l.action ILIKE $1 OR tu.username ILIKE $1 OR tg.name ILIKE $1)
+           AND ($2::uuid IS NULL OR l.id < $2)
+           AND ($3 = 'all' OR ($3 = 'own' AND l.actor_id = $4)
+                OR ($3 = 'team' AND EXISTS (SELECT 1 FROM admin_roles r WHERE r.user_id = l.actor_id AND r.role IN ('MODERATOR', 'TS_LEAD'))))
+           AND ($5::uuid IS NULL OR l.actor_id = $5) AND ($6::uuid IS NULL OR l.case_id = $6) AND ($7::uuid IS NULL OR $7 = ANY(l.target_ids))
+           AND ($8::timestamptz IS NULL OR l.at >= $8) AND ($9::timestamptz IS NULL OR l.at < $9)
+         ORDER BY l.id DESC LIMIT 100",
     )
-    .bind(pattern(&q.q))
-    .bind(q.before)
-    .bind(scope)
-    .bind(uid)
+    .bind(pattern(&q.q)).bind(q.before).bind(scope).bind(uid)
+    .bind(q.actor_id).bind(q.case_id).bind(q.target_id).bind(q.from).bind(q.to)
     .fetch_all(&state.db)
     .await?;
+    if scope != "all" { for r in &mut rows { r.ip.clear(); r.user_agent.clear() } }
     Ok(Json(rows))
 }

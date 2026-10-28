@@ -3486,5 +3486,12 @@
 "No case": "Vaka yok",
 "Search within this case": "Bu vakada ara",
 "Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Discover'da listelenen sunucuların herkese açık kanallarında arar. Sonuçlar kimin, nerede ve ne zaman yazdığını gösterir; bir mesajı açmak ayrıca kaydedilir. DM'lere, grup sohbetlerine ve özel kanallara yalnızca bir vaka üzerinden ulaşılabilir.",
-"Storage and devices": "Depolama ve cihazlar"
+"Storage and devices": "Depolama ve cihazlar",
+"Admin ID": "Yönetici ID",
+"Case ID": "Vaka ID",
+"Every action taken in this console, newest first: content access, reveals, cases, role changes and moderation. The log cannot be changed; deleted accounts show as their tombstone.": "Bu konsolda yapılan tüm işlemler, en yeniden başlayarak: içerik erişimi, ifşalar, vakalar, rol değişiklikleri ve moderasyon. Günlük değiştirilemez; silinen hesaplar anonim yer tutucusuyla görünür.",
+"Target ID": "Hedef ID",
+"case": "vaka",
+"searched “{q}”": "“{q}” arandı",
+"{n} items": "{n} öğe"
 }

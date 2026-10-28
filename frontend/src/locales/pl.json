@@ -3486,5 +3486,12 @@
 "No case": "Brak sprawy",
 "Search within this case": "Szukaj w tej sprawie",
 "Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Przeszukuje publiczne kanały serwerów wymienionych w Discover. Wyniki pokazują, kto, gdzie i kiedy; otwarcie wiadomości jest rejestrowane osobno. Wiadomości prywatne, czaty grupowe i kanały prywatne są dostępne tylko przez sprawę.",
-"Storage and devices": "Pamięć i urządzenia"
+"Storage and devices": "Pamięć i urządzenia",
+"Admin ID": "ID admina",
+"Case ID": "ID sprawy",
+"Every action taken in this console, newest first: content access, reveals, cases, role changes and moderation. The log cannot be changed; deleted accounts show as their tombstone.": "Każda akcja wykonana w tej konsoli, od najnowszej: dostęp do treści, odsłonięcia, sprawy, zmiany ról i moderacja. Dziennika nie można zmienić; usunięte konta widać jako ich anonimowy znacznik.",
+"Target ID": "ID celu",
+"case": "sprawa",
+"searched “{q}”": "wyszukano „{q}”",
+"{n} items": "Elementów: {n}"
 }

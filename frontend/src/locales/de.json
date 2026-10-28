@@ -3486,5 +3486,12 @@
 "No case": "Kein Fall",
 "Search within this case": "In diesem Fall suchen",
 "Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Durchsucht öffentliche Kanäle von Servern, die in Discover gelistet sind. Die Ergebnisse zeigen, wer, wo und wann; das Öffnen einer Nachricht wird separat protokolliert. DMs, Gruppenchats und private Kanäle sind nur über einen Fall erreichbar.",
-"Storage and devices": "Speicher und Geräte"
+"Storage and devices": "Speicher und Geräte",
+"Admin ID": "Admin-ID",
+"Case ID": "Fall-ID",
+"Every action taken in this console, newest first: content access, reveals, cases, role changes and moderation. The log cannot be changed; deleted accounts show as their tombstone.": "Jede Aktion in dieser Konsole, neueste zuerst: Inhaltszugriffe, Aufdeckungen, Fälle, Rollenänderungen und Moderation. Das Protokoll lässt sich nicht ändern; gelöschte Konten erscheinen als ihr Platzhalter.",
+"Target ID": "Ziel-ID",
+"case": "Fall",
+"searched “{q}”": "gesucht nach „{q}“",
+"{n} items": "{n} Einträge"
 }

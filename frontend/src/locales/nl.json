@@ -3486,5 +3486,12 @@
 "No case": "Geen zaak",
 "Search within this case": "Zoeken in deze zaak",
 "Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Doorzoekt openbare kanalen van servers die in Discover staan. Resultaten tonen wie, waar en wanneer; het openen van een bericht wordt apart gelogd. DM's, groepschats en privékanalen zijn alleen via een zaak bereikbaar.",
-"Storage and devices": "Opslag en apparaten"
+"Storage and devices": "Opslag en apparaten",
+"Admin ID": "Admin-ID",
+"Case ID": "Zaak-ID",
+"Every action taken in this console, newest first: content access, reveals, cases, role changes and moderation. The log cannot be changed; deleted accounts show as their tombstone.": "Elke actie in deze console, nieuwste eerst: toegang tot inhoud, onthullingen, zaken, rolwijzigingen en moderatie. Het logboek kan niet worden gewijzigd; verwijderde accounts verschijnen als hun anonieme tombstone.",
+"Target ID": "Doel-ID",
+"case": "zaak",
+"searched “{q}”": "zocht naar “{q}”",
+"{n} items": "{n} items"
 }

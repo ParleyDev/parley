@@ -3486,5 +3486,12 @@
 "No case": "ケースなし",
 "Search within this case": "このケース内を検索",
 "Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Discover に掲載されているサーバーの公開チャンネルを検索します。結果には誰が・どこで・いつ投稿したかが表示され、メッセージを開く操作は別途記録されます。DM、グループチャット、非公開チャンネルはケース経由でのみアクセスできます。",
-"Storage and devices": "ストレージとデバイス"
+"Storage and devices": "ストレージとデバイス",
+"Admin ID": "管理者ID",
+"Case ID": "ケースID",
+"Every action taken in this console, newest first: content access, reveals, cases, role changes and moderation. The log cannot be changed; deleted accounts show as their tombstone.": "このコンソールで行われたすべての操作を新しい順に表示します：コンテンツへのアクセス、開示、ケース、ロール変更、モデレーション。ログは変更できません。削除されたアカウントは匿名化されたプレースホルダーとして表示されます。",
+"Target ID": "対象ID",
+"case": "ケース",
+"searched “{q}”": "「{q}」を検索",
+"{n} items": "{n}件"
 }

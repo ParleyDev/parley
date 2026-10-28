@@ -240,10 +240,10 @@ async fn scrub(state: &AppState, tx: &mut Transaction<'_, Postgres>, uid: Uuid) 
         .bind(uid).execute(&mut **tx).await?;
     sqlx::query("DELETE FROM channel_members m USING channels c WHERE m.channel_id = c.id AND c.kind = 'group' AND m.user_id = $1").bind(uid).execute(&mut **tx).await?;
 
-    // Copies of their name kept by logs and reports: moderation keeps the record, not the name.
+    // Copies of their name kept by server logs and reports: moderation keeps the record, not the name. (The admin audit
+    // log stores IDs only and needs no rewrite.)
     for q in [
         "UPDATE guild_audit SET actor_name = $2 WHERE actor_id = $1", "UPDATE guild_audit SET target_name = $2 WHERE target_id = $1",
-        "UPDATE admin_audit SET actor_name = $2 WHERE actor_id = $1", "UPDATE admin_audit SET target_name = $2 WHERE target_id = $1",
         "UPDATE reports SET target_username = $2 WHERE target_user_id = $1",
     ] {
         sqlx::query(q).bind(uid).bind(DELETED_NAME).execute(&mut **tx).await?;

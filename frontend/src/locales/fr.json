@@ -3486,5 +3486,12 @@
 "No case": "Aucun dossier",
 "Search within this case": "Rechercher dans ce dossier",
 "Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Recherche dans les salons publics des serveurs listés dans Discover. Les résultats indiquent qui, où et quand ; l'ouverture d'un message est consignée séparément. Les MP, les discussions de groupe et les salons privés ne sont accessibles que via un dossier.",
-"Storage and devices": "Stockage et appareils"
+"Storage and devices": "Stockage et appareils",
+"Admin ID": "ID admin",
+"Case ID": "ID du dossier",
+"Every action taken in this console, newest first: content access, reveals, cases, role changes and moderation. The log cannot be changed; deleted accounts show as their tombstone.": "Toutes les actions effectuées dans cette console, les plus récentes d'abord : accès au contenu, révélations, dossiers, changements de rôle et modération. Le journal est immuable ; les comptes supprimés apparaissent sous leur marqueur anonymisé.",
+"Target ID": "ID de la cible",
+"case": "dossier",
+"searched “{q}”": "a recherché « {q} »",
+"{n} items": "{n} éléments"
 }

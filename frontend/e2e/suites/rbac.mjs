@@ -54,7 +54,6 @@ const M = [
   ['POST', '/admin/cases/:id/grants', `/admin/cases/${X}/grants`, { kind: 'expand', justification: why }, 'report_context_expand'],
   ['POST', '/admin/cases/:id/grants/:gid', `/admin/cases/${X}/grants/${X}`, { decision: 'approve' }, 'case_approve'],
   ['GET', '/admin/case-grants', '/admin/case-grants', null, 'case_approve'],
-  ['GET', '/admin/access-log', '/admin/access-log?limit=1', null, 'audit_read_all'],
   ['GET', '/admin/applications', '/admin/applications', null, 'instance_manage'],
   ['PATCH', '/admin/applications/:id', `/admin/applications/${X}`, { verified: false }, 'instance_manage'],
   ['GET', '/admin/audit', '/admin/audit', null, ['audit_read_own', 'audit_read_team', 'audit_read_all']],

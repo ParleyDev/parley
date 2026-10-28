@@ -3486,5 +3486,12 @@
 "No case": "بدون قضية",
 "Search within this case": "البحث داخل هذه القضية",
 "Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "يبحث في القنوات العامة للخوادم المدرجة في Discover. تعرض النتائج من كتب وأين ومتى؛ ويتم تسجيل فتح الرسالة بشكل منفصل. الرسائل الخاصة والمحادثات الجماعية والقنوات الخاصة لا يمكن الوصول إليها إلا عبر قضية.",
-"Storage and devices": "التخزين والأجهزة"
+"Storage and devices": "التخزين والأجهزة",
+"Admin ID": "معرّف المشرف",
+"Case ID": "معرّف الحالة",
+"Every action taken in this console, newest first: content access, reveals, cases, role changes and moderation. The log cannot be changed; deleted accounts show as their tombstone.": "كل إجراء تم في هذه الوحدة، الأحدث أولًا: الوصول إلى المحتوى، وكشف البيانات، والحالات، وتغييرات الأدوار، والإشراف. لا يمكن تغيير السجل؛ تظهر الحسابات المحذوفة كعنصر مجهول بديل لها.",
+"Target ID": "معرّف الهدف",
+"case": "حالة",
+"searched “{q}”": "بحث عن «{q}»",
+"{n} items": "{n} عناصر"
 }

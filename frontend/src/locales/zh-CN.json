@@ -3486,5 +3486,12 @@
 "No case": "无案件",
 "Search within this case": "在此案件中搜索",
 "Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "搜索 Discover 中列出的服务器的公开频道。结果会显示谁、在哪里、何时发送;打开消息会另行记录。私信、群聊和私密频道只能通过案件访问。",
-"Storage and devices": "存储与设备"
+"Storage and devices": "存储与设备",
+"Admin ID": "管理员 ID",
+"Case ID": "案件 ID",
+"Every action taken in this console, newest first: content access, reveals, cases, role changes and moderation. The log cannot be changed; deleted accounts show as their tombstone.": "此控制台中执行的所有操作，按最新排序：内容访问、揭示、案件、角色变更和审核。日志无法修改；已删除的账号显示为其匿名占位符。",
+"Target ID": "目标 ID",
+"case": "案件",
+"searched “{q}”": "搜索了“{q}”",
+"{n} items": "{n} 项"
 }
