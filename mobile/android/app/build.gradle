@@ -16,8 +16,22 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing with the Play upload key, when the environment provides it (CI decodes the keystore from a
+    // secret); without it release builds come out unsigned and only debug builds install.
+    def keystore = System.getenv('PARLEY_KEYSTORE_FILE')
+    signingConfigs {
+        if (keystore) {
+            release {
+                storeFile file(keystore)
+                storePassword System.getenv('PARLEY_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('PARLEY_KEY_ALIAS')
+                keyPassword System.getenv('PARLEY_KEY_PASSWORD') ?: System.getenv('PARLEY_KEYSTORE_PASSWORD')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystore) signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

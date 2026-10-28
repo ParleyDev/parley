@@ -79,6 +79,9 @@
 		<string>audio</string>
 		<string>remote-notification</string>
 	</array>
+	<!-- Only standard HTTPS/TLS: exempt from export compliance, so uploads skip the encryption question. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 </dict>

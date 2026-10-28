@@ -24,7 +24,33 @@ cd android && ./gradlew assembleRelease         # sign with your keystore (andro
 cd ios/App && pod install && open App.xcworkspace   # pick your team, then Run / Archive
 ```
 
-`.github/workflows/mobile.yml` builds a debug APK and an unsigned iOS simulator build on every change under `mobile/`.
+Release signing locally: set `PARLEY_KEYSTORE_FILE`, `PARLEY_KEYSTORE_PASSWORD`, `PARLEY_KEY_ALIAS` (and `PARLEY_KEY_PASSWORD` if it differs) before `./gradlew bundleRelease` (needs a full JDK 21).
+
+## Store builds
+
+`.github/workflows/mobile.yml` runs on every published GitHub release (and by hand from Actions → mobile → Run workflow; tick *upload* to send a development build to testers too). With the secrets below it builds signed store builds and sends them to **Play internal testing** and **TestFlight**; promoting a build to production is done by hand in Play Console and App Store Connect. Without them it falls back to a debug APK and an unsigned simulator build.
+
+Android (Play Console app `com.runparley.app`, Play App Signing on, `parley-upload.jks` is the upload key, never committed):
+
+| Secret | Value |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 parley-upload.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore password |
+| `ANDROID_KEY_ALIAS` | key alias (`keytool -list -keystore parley-upload.jks`) |
+| `ANDROID_KEY_PASSWORD` | key password, if different from the keystore's |
+| `PLAY_SERVICE_ACCOUNT_JSON` | JSON key of a Google Cloud service account invited in Play Console → Users and permissions with release rights for the app |
+
+Until the app's first release has passed review, Play only accepts draft releases: set the repository **variable** `PLAY_RELEASE_STATUS=draft`, and delete it afterwards. Play also needs each upload's version code to be higher than any before; the workflow derives it from the commit count (`scripts/version.mjs`).
+
+iOS (bundle ID `com.runparley.app`; create the app record in App Store Connect first):
+
+| Secret | Value |
+|---|---|
+| `APPLE_TEAM_ID` | Team ID (developer.apple.com → Membership) |
+| `ASC_KEY_ID`, `ASC_ISSUER_ID` | App Store Connect → Users and Access → Integrations → App Store Connect API: a team key with the **Admin** role (cloud signing creates the distribution certificate and profile) |
+| `ASC_KEY_P8` | `base64 -w0 AuthKey_XXXX.p8` |
+
+Builds appear in TestFlight after Apple's processing (10–30 minutes). The first build also needs the export-compliance answer, which `ITSAppUsesNonExemptEncryption = NO` in Info.plist gives.
 
 Icons and splash: drop a 1024×1024 `assets/icon.png` and `assets/splash.png` in `mobile/` and run `npx @capacitor/assets generate`.
 

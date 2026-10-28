@@ -11,6 +11,11 @@ on:
         description: Existing release tag to build and attach to (blank = development build)
         required: false
         default: ''
+      upload:
+        description: Also send a development build to Play internal testing and TestFlight
+        type: boolean
+        required: false
+        default: false
 # Attaching build outputs to the GitHub release needs write access to repository contents.
 permissions:
   contents: write
@@ -24,6 +29,8 @@ jobs:
       ok: ${{ steps.check.outputs.ok }}
       version: ${{ steps.check.outputs.version }}
       tag: ${{ steps.check.outputs.tag }}
+      # Releases always go to the testers' tracks; development builds only when asked.
+      upload: ${{ steps.check.outputs.tag != '' || inputs.upload == true }}
     steps:
       - id: check
         env:
@@ -39,6 +46,10 @@ jobs:
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice::Release tag '$TAG' is not semver (e.g. v1.2.3); skipping build"
           fi
+  # Android: with the Play upload key in secrets (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
+  # ANDROID_KEY_ALIAS, optional ANDROID_KEY_PASSWORD) the build is release-signed: an AAB for Play and an APK for
+  # sideloading. With PLAY_SERVICE_ACCOUNT_JSON too, the AAB goes to the Play internal testing track; promoting it
+  # to production stays a manual step in Play Console. Without the key it falls back to a debug APK.
   android:
     needs: gate
     if: needs.gate.outputs.ok == 'true'
@@ -67,13 +78,44 @@ jobs:
       - run: |
           if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > android/app/google-services.json; fi
         working-directory: mobile
-      - run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Upload key
+        id: key
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then echo "signed=false" >> "$GITHUB_OUTPUT"; echo "::notice::No ANDROID_KEYSTORE_BASE64 secret; building a debug APK"; exit 0; fi
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          {
+            echo "PARLEY_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks"
+            echo "PARLEY_KEYSTORE_PASSWORD=$STORE_PASSWORD"
+            echo "PARLEY_KEY_ALIAS=$KEY_ALIAS"
+            echo "PARLEY_KEY_PASSWORD=${KEY_PASSWORD:-$STORE_PASSWORD}"
+          } >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+          echo "play=$([ -n "$PLAY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Build
         working-directory: mobile/android
+        run: |
+          chmod +x gradlew
+          if [ "${{ steps.key.outputs.signed }}" = true ]; then
+            ./gradlew bundleRelease assembleRelease --no-daemon
+            cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/parley.apk"
+            cp app/build/outputs/bundle/release/app-release.aab "$RUNNER_TEMP/parley.aab"
+          else
+            ./gradlew assembleDebug --no-daemon
+            cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/parley.apk"
+          fi
       - uses: actions/upload-artifact@v4
         with:
-          name: parley-android-debug-${{ steps.ver.outputs.display }}
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
-      # Published release: attach the APK (debug-signed, installable by sideloading; Play Store needs a release key).
+          name: parley-android-${{ steps.ver.outputs.display }}
+          path: |
+            ${{ runner.temp }}/parley.apk
+            ${{ runner.temp }}/parley.aab
+          if-no-files-found: ignore
       - name: Attach the APK to the release
         if: needs.gate.outputs.tag != ''
         env:
@@ -81,8 +123,24 @@ jobs:
           TAG: ${{ needs.gate.outputs.tag }}
         run: |
           apk="Parley_${PARLEY_VERSION}_android.apk"
-          cp mobile/android/app/build/outputs/apk/debug/app-debug.apk "$apk"
+          cp "$RUNNER_TEMP/parley.apk" "$apk"
           gh release upload "$TAG" "$apk" --clobber --repo "$GITHUB_REPOSITORY"
+      # A Play app that has never been published only takes draft releases: set the repository variable
+      # PLAY_RELEASE_STATUS=draft until the first review, then remove it.
+      - name: Send to Play internal testing
+        if: needs.gate.outputs.upload == 'true' && steps.key.outputs.play == 'true'
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.runparley.app
+          releaseFiles: ${{ runner.temp }}/parley.aab
+          releaseName: ${{ steps.ver.outputs.display }}
+          track: internal
+          status: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}
+  # iOS: with an App Store Connect API key in secrets (ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 = the .p8 file's
+  # contents, base64) and APPLE_TEAM_ID, Xcode signs in the cloud (certificate and profile are created on demand)
+  # and the archive is uploaded to App Store Connect for TestFlight. The key needs the Admin role so it can manage
+  # signing. Without the key it only proves the project compiles with an unsigned simulator build.
   ios:
     needs: gate
     if: needs.gate.outputs.ok == 'true'
@@ -99,7 +157,45 @@ jobs:
         working-directory: mobile
       - run: npx cap sync ios
         working-directory: mobile
+      - name: App Store Connect key
+        id: key
+        env:
+          P8: ${{ secrets.ASC_KEY_P8 }}
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$P8" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER" ] || [ -z "$TEAM" ]; then echo "signed=false" >> "$GITHUB_OUTPUT"; echo "::notice::No App Store Connect key; simulator build only"; exit 0; fi
+          printf '%s' "$P8" | base64 -d > "$RUNNER_TEMP/AuthKey.p8"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
       # Capacitor 8 uses Swift Package Manager (ios/App/CapApp-SPM), not CocoaPods: build the project directly.
-      # Unsigned simulator build proves the project compiles; signing and TestFlight need your team's certificates.
-      - run: xcodebuild -project App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+      - name: Simulator build
+        if: steps.key.outputs.signed != 'true'
         working-directory: mobile/ios/App
+        run: xcodebuild -project App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+      - name: Archive
+        if: steps.key.outputs.signed == 'true'
+        working-directory: mobile/ios/App
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          auth=(-allowProvisioningUpdates -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER")
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Parley.xcarchive" "${auth[@]}" DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic archive
+          cp ../ExportOptions.plist "$RUNNER_TEMP/ExportOptions.plist"
+          plutil -replace teamID -string "$TEAM" "$RUNNER_TEMP/ExportOptions.plist"
+          # The upload destination exports and uploads in one go; otherwise export an IPA to keep as an artifact.
+          if [ "${{ needs.gate.outputs.upload }}" != true ]; then plutil -replace destination -string export "$RUNNER_TEMP/ExportOptions.plist"; fi
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Parley.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" "${auth[@]}"
+      - uses: actions/upload-artifact@v4
+        if: steps.key.outputs.signed == 'true'
+        with:
+          name: parley-ios-${{ env.PARLEY_VERSION || github.sha }}
+          path: ${{ runner.temp }}/export
+          if-no-files-found: ignore
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
