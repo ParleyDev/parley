@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "Ты вышел из аккаунта на всех устройствах. Передумал? Войди до этой даты и выбери «Восстановить».",
 "in {server}": "на сервере {server}",
 "with 1 other": "и ещё 1 участник",
-"with {n} others": "и ещё {n}"
+"with {n} others": "и ещё {n}",
+"Account purged": "Аккаунт удалён безвозвратно",
+"Account type": "Тип аккаунта",
+"BOT": "БОТ",
+"DELETING {date}": "УДАЛЕНИЕ {date}",
+"Include deleted": "Включая удалённые",
+"People": "Люди",
+"Purge": "Стереть",
+"Purge @{username}": "Стереть @{username}",
+"Purge account": "Стереть аккаунт",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Выбранные аккаунты будут удалены сейчас: серверы и приложения, которыми они владеют, удаляются, а аккаунты обезличиваются (их сообщения остаются как «Удалённый пользователь»). Это действие нельзя отменить.",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Аккаунт {name} будет удалён сейчас: серверы и приложения, которыми он владеет, удаляются, а аккаунт обезличивается (сообщения остаются как «Удалённый пользователь»). Это действие нельзя отменить.",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Это удаляет аккаунт и всё, что он создал, включая сообщения и загрузки, как будто его никогда не существовало. Используйте для спама и злоупотреблений. Это действие нельзя отменить."
 }

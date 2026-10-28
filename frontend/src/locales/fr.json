@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "Tu as été déconnecté partout. Tu as changé d’avis ? Connecte-toi avant cette date et choisis Restaurer.",
 "in {server}": "dans {server}",
 "with 1 other": "avec 1 autre personne",
-"with {n} others": "avec {n} autres personnes"
+"with {n} others": "avec {n} autres personnes",
+"Account purged": "Compte purgé",
+"Account type": "Type de compte",
+"BOT": "BOT",
+"DELETING {date}": "SUPPRESSION {date}",
+"Include deleted": "Inclure les supprimés",
+"People": "Personnes",
+"Purge": "Purger",
+"Purge @{username}": "Purger @{username}",
+"Purge account": "Purger le compte",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Cela supprime maintenant les comptes sélectionnés : les serveurs et applications qu'ils possèdent sont supprimés, et les comptes sont anonymisés (leurs messages restent, sous le nom \"Utilisateur supprimé\"). Cette action est irréversible.",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Cela supprime maintenant le compte de {name} : les serveurs et applications qu'il possède sont supprimés, et son compte est anonymisé (ses messages restent, sous le nom \"Utilisateur supprimé\"). Cette action est irréversible.",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Cela supprime le compte et tout ce qu'il a créé, messages et fichiers envoyés compris, comme s'il n'avait jamais existé. À utiliser pour le spam et les abus. Cette action est irréversible."
 }

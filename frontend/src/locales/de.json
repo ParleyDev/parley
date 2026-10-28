@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "Du wurdest überall abgemeldet. Du hast es dir anders überlegt? Melde dich vorher an und wähle „Wiederherstellen“.",
 "in {server}": "in {server}",
 "with 1 other": "mit 1 weiteren Person",
-"with {n} others": "mit {n} weiteren"
+"with {n} others": "mit {n} weiteren",
+"Account purged": "Konto endgültig gelöscht",
+"Account type": "Kontotyp",
+"BOT": "BOT",
+"DELETING {date}": "LÖSCHUNG {date}",
+"Include deleted": "Gelöschte einbeziehen",
+"People": "Personen",
+"Purge": "Endgültig löschen",
+"Purge @{username}": "@{username} endgültig löschen",
+"Purge account": "Konto endgültig löschen",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Dadurch werden die ausgewählten Konten jetzt gelöscht: Die Server und Apps, die ihnen gehören, werden gelöscht, und die Konten werden anonymisiert (ihre Nachrichten bleiben als \"Gelöschter Benutzer\" erhalten). Dies kann nicht rückgängig gemacht werden.",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Dadurch wird das Konto von {name} jetzt gelöscht: Die Server und Apps, die dem Nutzer gehören, werden gelöscht, und das Konto wird anonymisiert (die Nachrichten bleiben als \"Gelöschter Benutzer\" erhalten). Dies kann nicht rückgängig gemacht werden.",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Dadurch werden das Konto und alles, was es erstellt hat, einschließlich Nachrichten und Uploads, entfernt, als hätte es nie existiert. Nutze es für Spam und Missbrauch. Dies kann nicht rückgängig gemacht werden."
 }

@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "你已在所有设备上退出登录。改变主意了？请在此之前登录并选择“恢复”。",
 "in {server}": "在 {server}",
 "with 1 other": "还有 1 人",
-"with {n} others": "还有另外 {n} 人"
+"with {n} others": "还有另外 {n} 人",
+"Account purged": "账号已彻底清除",
+"Account type": "账号类型",
+"BOT": "机器人",
+"DELETING {date}": "删除于 {date}",
+"Include deleted": "包含已删除",
+"People": "用户",
+"Purge": "彻底清除",
+"Purge @{username}": "彻底清除 @{username}",
+"Purge account": "彻底清除账号",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "这将立即删除所选账号:它们拥有的服务器和应用将被删除,账号将被匿名化(其消息会保留,显示为“已删除用户”)。此操作无法撤销。",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "这将立即删除 {name} 的账号:其拥有的服务器和应用将被删除,账号将被匿名化(其消息会保留,显示为“已删除用户”)。此操作无法撤销。",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "这将移除该账号及其创建的所有内容,包括消息和上传文件,就像它从未存在过一样。用于垃圾信息和滥用。此操作无法撤销。"
 }

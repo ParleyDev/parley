@@ -1,6 +1,6 @@
 import { chromium } from 'playwright'
 import { deflateSync } from 'node:zlib'
-import { WEB, S, reg, call, callS, raw, ok, finish, adminToken, multi, pngFile } from '../lib.mjs'
+import { API_ORIGIN, WEB, S, reg, call, callS, raw, ok, finish, adminToken, multi, pngFile } from '../lib.mjs'
 
 // Minimal PNG encoder (RGB) so the suite can make an image big enough to need a thumbnail.
 const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0 })
@@ -18,12 +18,12 @@ const tc = (await call(a.token, 'GET', `/guilds/${g.id}/channels`)).find((x) => 
 console.log('-- thumbnails')
 let up = await (await multi(a.token, `/channels/${tc.id}/attachments`, bigPng)).json()
 ok('a 900x600 upload records its size and gets a thumbnail', up.width === 900 && up.height === 600 && typeof up.thumb_url === 'string' && /\/thumb(\?v=\d+)?$/.test(up.thumb_url))
-let r = await fetch('http://localhost:18080' + up.thumb_url); const tb = Buffer.from(await r.arrayBuffer())
+let r = await fetch(API_ORIGIN + up.thumb_url); const tb = Buffer.from(await r.arrayBuffer())
 const dims = (buf) => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) })
 ok('the thumbnail is a PNG scaled to 400px on the long side', r.status === 200 && r.headers.get('content-type') === 'image/png' && tb.slice(1, 4).toString() === 'PNG' && dims(tb).w === 400 && dims(tb).h === 267)
 ok('thumbnails are much smaller than the original', tb.length < bigPng.buffer.length)
 const small = await (await multi(a.token, `/channels/${tc.id}/attachments`, pngFile)).json()
-ok('small images get no thumbnail', small.thumb_url === undefined && (await fetch(`http://localhost:18080/api/attachments/${small.id}/thumb`)).status === 404)
+ok('small images get no thumbnail', small.thumb_url === undefined && (await fetch(`${API_ORIGIN}/api/attachments/${small.id}/thumb`)).status === 404)
 const txt = await (await multi(a.token, `/channels/${tc.id}/attachments`, { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') })).json()
 ok('non-images get no thumbnail', txt.thumb_url === undefined)
 const m = await call(a.token, 'POST', `/channels/${tc.id}/messages`, { content: 'pics', attachment_ids: [up.id, small.id] })
@@ -47,7 +47,7 @@ r = await callS(b.token, 'PATCH', `/admin/users/${b.user.id}`, { upload_quota_by
 const c = await call(admin.token, 'GET', `/admin/users/${b.user.id}/content`); ok('admin content view reports quota and override', c.quota === 1073741824 && c.quota_override === null)
 ok('quota changes are audited', (await call(admin.token, 'GET', '/admin/audit')).some((e) => e.action === 'user.quota' && e.target_name === `bob${S}`))
 await callS(a.token, 'DELETE', `/channels/${tc.id}/messages/${m.id}`)
-ok('deleting the message frees the space and the thumbnail', (await call(a.token, 'GET', '/users/@me/storage')).attachment_bytes === 5 && (await fetch('http://localhost:18080' + up.thumb_url)).status === 404)
+ok('deleting the message frees the space and the thumbnail', (await call(a.token, 'GET', '/users/@me/storage')).attachment_bytes === 5 && (await fetch(API_ORIGIN + up.thumb_url)).status === 404)
 
 console.log('-- UI')
 const m2 = await call(a.token, 'POST', `/channels/${tc.id}/messages`, { content: 'thumb', attachment_ids: [(await (await multi(a.token, `/channels/${tc.id}/attachments`, bigPng)).json()).id] })

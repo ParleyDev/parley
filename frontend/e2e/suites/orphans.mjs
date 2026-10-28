@@ -1,4 +1,4 @@
-import { S, reg, call, callS, raw, ok, finish, adminToken, multi, pngFile } from '../lib.mjs'
+import { API_ORIGIN, S, reg, call, callS, raw, ok, finish, adminToken, multi, pngFile } from '../lib.mjs'
 
 // Server banners and Discover banners must survive the orphan-image sweep; stray uploads must not.
 const admin = await adminToken()
@@ -11,7 +11,7 @@ await callS(a.token, 'PUT', `/guilds/${g.id}/discovery`, { description: 'A serve
 await callS(a.token, 'PATCH', '/users/@me', { avatar_url: avatar.url, banner_url: profileBanner.url })
 let r = await raw(a.token, 'POST', '/admin/maintenance/sweep-images?min_age_secs=0'); ok('the sweep is admin only', r.status === 403)
 r = await callS(admin.token, 'POST', '/admin/maintenance/sweep-images?min_age_secs=0'); ok('an immediate sweep removes exactly the stray upload', r.status === 200 && r.body.removed === 1)
-const status = async (u) => (await fetch(`http://localhost:18080${u}`)).status
+const status = async (u) => (await fetch(`${API_ORIGIN}${u}`)).status
 ok('server icon and banner survive', await status(icon.url) === 200 && await status(banner.url) === 200)
 ok('the Discover listing banner survives', await status(listing.url) === 200)
 ok('profile avatar and banner survive', await status(avatar.url) === 200 && await status(profileBanner.url) === 200)

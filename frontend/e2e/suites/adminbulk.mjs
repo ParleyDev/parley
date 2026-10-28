@@ -1,10 +1,10 @@
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, raw, ok, finish, adminToken } from '../lib.mjs'
+import { API_ORIGIN, WEB, S, reg, call, callS, raw, ok, finish, adminToken } from '../lib.mjs'
 
 const admin = await adminToken()
 const users = {}; for (const n of ['ann', 'ben', 'cid', 'dee']) users[n] = await reg(n)
 const me = await call(admin.token, 'GET', '/users/@me')
-const list = async (qs) => { const r = await fetch(`http://localhost:18080/api/admin/users?${qs}`, { headers: { Authorization: `Bearer ${admin.token}` } }); return { total: Number(r.headers.get('x-total-count')), rows: await r.json() } }
+const list = async (qs) => { const r = await fetch(`${API_ORIGIN}/api/admin/users?${qs}`, { headers: { Authorization: `Bearer ${admin.token}` } }); return { total: Number(r.headers.get('x-total-count')), rows: await r.json() } }
 
 console.log('-- filters & paging')
 let r = await list(`q=${S}`); ok('search returns the four accounts with a total header', r.rows.length === 4 && r.total === 4)

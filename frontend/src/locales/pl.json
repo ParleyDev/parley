@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "Wylogowano Cię ze wszystkich urządzeń. Zmieniasz zdanie? Zaloguj się przed tą datą i wybierz Przywróć.",
 "in {server}": "na serwerze {server}",
 "with 1 other": "z 1 inną osobą",
-"with {n} others": "z {n} innymi"
+"with {n} others": "z {n} innymi",
+"Account purged": "Konto całkowicie usunięte",
+"Account type": "Typ konta",
+"BOT": "BOT",
+"DELETING {date}": "USUWANIE {date}",
+"Include deleted": "Uwzględnij usunięte",
+"People": "Osoby",
+"Purge": "Wyczyść",
+"Purge @{username}": "Wyczyść @{username}",
+"Purge account": "Wyczyść konto",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "To natychmiast usuwa wybrane konta: serwery i aplikacje, których są właścicielami, zostają usunięte, a konta zostają zanonimizowane (ich wiadomości pozostają jako \"Usunięty użytkownik\"). Tej operacji nie można cofnąć.",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "To natychmiast usuwa konto użytkownika {name}: serwery i aplikacje, których jest właścicielem, zostają usunięte, a jego konto zostaje zanonimizowane (jego wiadomości pozostają jako \"Usunięty użytkownik\"). Tej operacji nie można cofnąć.",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "To usuwa konto i wszystko, co utworzyło, wraz z wiadomościami i przesłanymi plikami, tak jakby nigdy nie istniało. Używaj w przypadku spamu i nadużyć. Tej operacji nie można cofnąć."
 }

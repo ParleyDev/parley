@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "Você foi desconectado de todos os lugares. Mudou de ideia? Entre antes dessa data e escolha Restaurar.",
 "in {server}": "em {server}",
 "with 1 other": "com mais 1 pessoa",
-"with {n} others": "com mais {n} pessoas"
+"with {n} others": "com mais {n} pessoas",
+"Account purged": "Conta eliminada permanentemente",
+"Account type": "Tipo de conta",
+"BOT": "BOT",
+"DELETING {date}": "EXCLUINDO {date}",
+"Include deleted": "Incluir excluídas",
+"People": "Pessoas",
+"Purge": "Eliminar",
+"Purge @{username}": "Eliminar @{username}",
+"Purge account": "Eliminar conta",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Isso exclui agora as contas selecionadas: os servidores e apps que elas possuem são excluídos, e as contas são anonimizadas (suas mensagens permanecem, como \"Usuário Excluído\"). Isso não pode ser desfeito.",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Isso exclui agora a conta de {name}: os servidores e apps que a pessoa possui são excluídos, e a conta é anonimizada (as mensagens permanecem, como \"Usuário Excluído\"). Isso não pode ser desfeito.",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Isso remove a conta e tudo o que ela criou, incluindo mensagens e uploads, como se nunca tivesse existido. Use para spam e abuso. Isso não pode ser desfeito."
 }

@@ -1,6 +1,6 @@
 import BlockedLinksPane from './AdminBlockedLinks'
 import AppsPane from './AdminApps'
-import { Ban, Bot, Compass, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
+import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -86,7 +86,7 @@ function Overview() {
   )
 }
 
-interface AdminUser { id: string; username: string; display_name: string; email: string; created_at: string; is_admin: boolean; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; upload_quota_bytes?: number | null; max_upload_bytes?: number | null; last_seen_at?: string | null; guild_count: number; online: boolean }
+interface AdminUser { id: string; username: string; display_name: string; email: string | null; created_at: string; is_admin: boolean; bot?: boolean; account_state?: 'active' | 'pending_deletion' | 'deleted'; deletion_scheduled_for?: string | null; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; upload_quota_bytes?: number | null; max_upload_bytes?: number | null; last_seen_at?: string | null; guild_count: number; online: boolean }
 type Tri = '' | 'true' | 'false'
 interface UserFilters { admin: Tri; suspended: Tri; verified: Tri; mfa: Tri; online: Tri; joined_before: string; joined_after: string; inactive_days: string; ip: string }
 const EMPTY_FILTERS: UserFilters = { admin: '', suspended: '', verified: '', mfa: '', online: '', joined_before: '', joined_after: '', inactive_days: '', ip: '' }
@@ -100,6 +100,9 @@ function UsersPane() {
   const [q, setQ] = useState('')
   const [params] = useSearchParams()
   const [filters, setFilters] = useState<UserFilters>({ ...EMPTY_FILTERS, ip: params.get('ip') ?? '' })
+  // People and bots are listed apart; deleted (anonymized) accounts only when asked for.
+  const [kind, setKind] = useState<'people' | 'bots'>('people')
+  const [withDeleted, setWithDeleted] = useState(false)
   const [list, setList] = useState<AdminUser[] | null>(null)
   const [total, setTotal] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -107,6 +110,8 @@ function UsersPane() {
   const query = (offset: number) => {
     const p = new URLSearchParams({ q: q.trim(), offset: String(offset), limit: String(PAGE) })
     for (const [k, v] of Object.entries(filters)) if (v !== '') p.set(k, v)
+    p.set('kind', kind)
+    if (withDeleted) p.set('include_deleted', 'true')
     return `/admin/users?${p.toString()}`
   }
   const load = async (append = false) => {
@@ -117,7 +122,7 @@ function UsersPane() {
       if (!append) setSelected(new Set())
     } catch (e) { pushToast((e as Error).message, 'error') }
   }
-  useEffect(() => { const h = setTimeout(() => load(), 250); return () => clearTimeout(h) }, [q, filters]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { const h = setTimeout(() => load(), 250); return () => clearTimeout(h) }, [q, filters, kind, withDeleted]) // eslint-disable-line react-hooks/exhaustive-deps
   const navigate = useNavigate()
   const logoutAll = async (u: AdminUser) => {
     try { const r = await api.delete<{ revoked: number }>(`/admin/users/${u.id}/sessions`); pushToast(r.revoked === 1 ? t('@{username} logged out of 1 device', { username: u.username }) : t('@{username} logged out of {n} devices', { username: u.username, n: r.revoked })) } catch (e) { pushToast((e as Error).message, 'error') }
@@ -141,11 +146,14 @@ function UsersPane() {
     if (mode === 'set' && (!Number.isFinite(body as number) || (body as number) <= 0)) { pushToast(t('Enter a size in MB'), 'error'); return }
     try { await api.patch(`/admin/users/${quotaFor.id}`, { upload_quota_bytes: body }); pushToast(mode === 'default' ? t('@{username} uses the instance default quota', { username: quotaFor.username }) : mode === 'unlimited' ? t('@{username} has unlimited storage', { username: quotaFor.username }) : t('@{username} may store {mb} MB', { username: quotaFor.username, mb: quotaMb })); setQuotaFor(null); setQuotaMb('') } catch (e) { pushToast((e as Error).message, 'error') }
   }
-  const del = (u: AdminUser) => openModal({ kind: 'confirm', title: t('Delete @{username}', { username: u.username }), body: t("This permanently deletes {name}'s account, the servers they own, their messages and uploads. This cannot be undone.", { name: u.display_name }), danger: true, confirmLabel: t('Delete Account'),
+  const del = (u: AdminUser) => openModal({ kind: 'confirm', title: t('Delete @{username}', { username: u.username }), body: t("This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.", { name: u.display_name }), danger: true, confirmLabel: t('Delete Account'),
     action: async () => { try { await api.delete(`/admin/users/${u.id}`); pushToast(t('Account deleted')); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
+  // Purge: the account and everything it made, messages included (for spam); deleted accounts can be purged too.
+  const purge = (u: AdminUser) => openModal({ kind: 'confirm', title: t('Purge @{username}', { username: u.username }), body: t('This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.'), danger: true, confirmLabel: t('Purge'),
+    action: async () => { try { await api.post(`/admin/users/${u.id}/purge`); pushToast(t('Account purged')); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
 
   // ---- bulk mode ----
-  const selectable = (list ?? []).filter((u) => u.id !== me?.id)
+  const selectable = (list ?? []).filter((u) => u.id !== me?.id && u.account_state !== 'deleted')
   const allSelected = selectable.length > 0 && selectable.every((u) => selected.has(u.id))
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((u) => u.id)))
   const toggle = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -170,6 +178,11 @@ function UsersPane() {
     <div data-admin-users>
       <h1 className="text-2xl font-bold">{t('Users')}</h1>
       <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="flex rounded-lg border border-line overflow-hidden text-sm" role="tablist" aria-label={t('Account type')}>
+          {(['people', 'bots'] as const).map((k) => (
+            <button key={k} type="button" role="tab" aria-selected={kind === k} onClick={() => setKind(k)} className={`px-3 py-1.5 font-medium ${kind === k ? 'bg-accent text-white' : 'text-text-1 hover:bg-bg-3'}`} data-admin-kind={k}>{k === 'people' ? t('People') : t('Bots')}</button>
+          ))}
+        </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search by username, display name or email')} data-admin-user-search className="input max-w-md" />
         {tri('admin', t('Role'), t('Admins'), t('Not admins'))}
         {tri('suspended', t('Status'), t('Suspended'), t('Active'))}
@@ -180,6 +193,7 @@ function UsersPane() {
         <label className="flex items-center gap-1 text-xs text-text-2">{t('before')} <input type="date" className="input w-auto py-1 text-xs" value={filters.joined_before} onChange={(e) => setFilters({ ...filters, joined_before: e.target.value })} data-admin-filter="joined_before" /></label>
         <label className="flex items-center gap-1 text-xs text-text-2">{t('Inactive for')} <input type="number" min={1} className="input w-20 py-1 text-xs" value={filters.inactive_days} onChange={(e) => setFilters({ ...filters, inactive_days: e.target.value })} placeholder={t('days')} data-admin-filter="inactive_days" /> {t('days')}</label>
         <label className="flex items-center gap-1 text-xs text-text-2">{t('IP')} <input className="input w-36 py-1 text-xs" value={filters.ip} onChange={(e) => setFilters({ ...filters, ip: e.target.value })} placeholder="203.0.113.7" data-admin-filter-ip /></label>
+        <label className="flex items-center gap-1.5 text-xs text-text-2"><input type="checkbox" className="h-4 w-4 accent-accent" checked={withDeleted} onChange={(e) => setWithDeleted(e.target.checked)} data-admin-include-deleted />{t('Include deleted')}</label>
         {activeFilters > 0 && <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setFilters(EMPTY_FILTERS)} data-admin-filter-clear>{t('Clear filters')}</button>}
         <span className="ml-auto text-xs text-text-2" data-admin-user-total>{list ? `${list.length} of ${total}` : '…'}</span>
       </div>
@@ -211,7 +225,7 @@ function UsersPane() {
           <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('logout', t('Log out'), t('Every session of the selected accounts is revoked.'))} data-admin-bulk="logout">{t('Log out everywhere')}</button>
           <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('clear_mfa', t('Clear 2FA'), t('Two-factor authentication is removed from the selected accounts; they log in with just their password.'), true)} data-admin-bulk="clear_mfa">{t('Clear 2FA')}</button>
           <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={bulkQuota} data-admin-bulk="quota">{t('Set quota')}</button>
-          <button type="button" className="btn-danger py-1 text-xs" disabled={busy} onClick={() => bulk('delete', t('Delete'), t('This permanently deletes the selected accounts, the servers they own, their messages and uploads. This cannot be undone.'), true)} data-admin-bulk="delete">{t('Delete')}</button>
+          <button type="button" className="btn-danger py-1 text-xs" disabled={busy} onClick={() => bulk('delete', t('Delete'), t('This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as "Deleted User"). This cannot be undone.'), true)} data-admin-bulk="delete">{t('Delete')}</button>
           <button type="button" className="ml-auto text-xs text-text-2 hover:text-text-0" onClick={() => setSelected(new Set())} data-admin-bulk-clear>{t('Clear selection')}</button>
         </div>
       )}
@@ -224,20 +238,24 @@ function UsersPane() {
         {list?.length === 0 && <p className="p-4 text-sm text-text-2">{t('No users match.')}</p>}
         {list?.map((u) => (
           <div key={u.id} className={`grid grid-cols-[28px_1fr_1fr_90px_110px_200px] max-md:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40 ${selected.has(u.id) ? 'bg-accent/5' : ''}`} data-admin-user={u.username} data-selected={selected.has(u.id) ? '1' : '0'}>
-            <input type="checkbox" className="h-4 w-4 accent-accent" checked={selected.has(u.id)} disabled={u.id === me?.id} onChange={() => toggle(u.id)} aria-label={t('Select @{username}', { username: u.username })} data-admin-select />
+            <input type="checkbox" className="h-4 w-4 accent-accent" checked={selected.has(u.id)} disabled={u.id === me?.id || u.account_state === 'deleted'} onChange={() => toggle(u.id)} aria-label={t('Select @{username}', { username: u.username })} data-admin-select />
             <div className="min-w-0 flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full shrink-0 ${u.online ? 'bg-success' : 'bg-text-2'}`} />
               <span className="min-w-0"><span className="block truncate font-semibold">{u.display_name}</span><span className="block truncate text-xs text-text-2">@{u.username}{u.last_seen_at ? ` · ${t('seen {date}', { date: new Date(u.last_seen_at).toLocaleDateString() })}` : ''}</span></span>
+              {u.bot && <span className="rounded bg-accent/20 text-accent px-1.5 py-0.5 text-[10px] font-bold" data-badge="bot">{t('BOT')}</span>}
+              {u.account_state === 'deleted' && <span className="rounded bg-text-2/20 text-text-2 px-1.5 py-0.5 text-[10px] font-bold" data-badge="deleted">{t('DELETED')}</span>}
+              {u.account_state === 'pending_deletion' && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" title={u.deletion_scheduled_for ? new Date(u.deletion_scheduled_for).toLocaleString() : undefined} data-badge="pending-deletion">{t('DELETING {date}', { date: u.deletion_scheduled_for ? new Date(u.deletion_scheduled_for).toLocaleDateString() : '' })}</span>}
               {u.is_admin && <span className="rounded bg-success/20 text-success px-1.5 py-0.5 text-[10px] font-bold" data-badge="admin">{t('ADMIN')}</span>}
               {u.suspended_at && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="suspended">{t('SUSPENDED')}</span>}
               {u.mfa_enabled && <span className="rounded bg-sky-500/20 text-sky-300 px-1.5 py-0.5 text-[10px] font-bold" data-badge="mfa">{t('2FA')}</span>}
-              {!u.email_verified_at && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="unverified">{t('UNVERIFIED')}</span>}
+              {!u.email_verified_at && !u.bot && u.account_state !== 'deleted' && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="unverified">{t('UNVERIFIED')}</span>}
             </div>
-            <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">{t('Email:')} </span>{u.email}</div>
+            <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">{t('Email:')} </span>{u.email ?? '—'}</div>
             <div className="text-sm text-text-1"><span className="md:hidden text-text-2">{t('Servers:')} </span>{u.guild_count}</div>
             <div className="text-xs text-text-2"><span className="md:hidden">{t('Joined:')} </span>{new Date(u.created_at).toLocaleDateString()}</div>
             <div className="flex items-center justify-end gap-1">
-              {u.id !== me?.id && (
+              {u.account_state === 'deleted' && <Tool label={t('Purge account')} onClick={() => purge(u)} testid="purge-user" danger><Eraser size={16} /></Tool>}
+              {u.id !== me?.id && u.account_state !== 'deleted' && (
                 <>
                   <Tool label={u.is_admin ? t('Remove admin') : t('Make admin')} onClick={() => patch(u, { is_admin: !u.is_admin }, u.is_admin ? t('@{username} is no longer an admin', { username: u.username }) : t('@{username} is now an admin', { username: u.username }))} testid="toggle-admin">{u.is_admin ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}</Tool>
                   <Tool label={u.suspended_at ? t('Unsuspend') : t('Suspend')} onClick={() => patch(u, { suspended: !u.suspended_at }, u.suspended_at ? t('@{username} unsuspended', { username: u.username }) : t('@{username} suspended', { username: u.username }))} testid="toggle-suspend" danger={!u.suspended_at}>{u.suspended_at ? <UserCheck size={16} /> : <UserX size={16} />}</Tool>
@@ -247,6 +265,7 @@ function UsersPane() {
                   <Tool label={t('Upload size limit')} onClick={() => { setLimitFor(u); setLimitMb(u.max_upload_bytes ? String(Math.round(u.max_upload_bytes / 1048576)) : '') }} testid="upload-limit"><Upload size={16} /></Tool>
                   {u.mfa_enabled && <Tool label={t('Clear two-factor auth')} onClick={() => patch(u, { mfa: false }, t('Two-factor authentication cleared for @{username}', { username: u.username }))} testid="clear-mfa" danger><KeyRound size={16} /></Tool>}
                   <Tool label={t('Delete account')} onClick={() => del(u)} testid="delete-user" danger><Trash2 size={16} /></Tool>
+                  <Tool label={t('Purge account')} onClick={() => purge(u)} testid="purge-user" danger><Eraser size={16} /></Tool>
                 </>
               )}
               {u.id === me?.id && <span className="text-xs text-text-2">{t('you')}</span>}

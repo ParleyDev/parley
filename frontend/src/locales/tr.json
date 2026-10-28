@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "Her yerde oturumun kapatıldı. Fikrini mi değiştirdin? O tarihten önce oturum aç ve Geri Yükle’yi seç.",
 "in {server}": "{server} sunucusunda",
 "with 1 other": "1 kişiyle daha",
-"with {n} others": "{n} kişiyle daha"
+"with {n} others": "{n} kişiyle daha",
+"Account purged": "Hesap tamamen silindi",
+"Account type": "Hesap türü",
+"BOT": "BOT",
+"DELETING {date}": "SİLİNİYOR {date}",
+"Include deleted": "Silinenleri dahil et",
+"People": "Kişiler",
+"Purge": "Tamamen sil",
+"Purge @{username}": "@{username} hesabını tamamen sil",
+"Purge account": "Hesabı tamamen sil",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Bu işlem seçili hesapları şimdi siler: sahip oldukları sunucular ve uygulamalar silinir, hesaplar anonimleştirilir (mesajları \"Silinmiş Kullanıcı\" olarak kalır). Bu işlem geri alınamaz.",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Bu işlem {name} kullanıcısının hesabını şimdi siler: sahip olduğu sunucular ve uygulamalar silinir, hesabı anonimleştirilir (mesajları \"Silinmiş Kullanıcı\" olarak kalır). Bu işlem geri alınamaz.",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Bu işlem hesabı ve oluşturduğu her şeyi, mesajlar ve yüklemeler dahil, hiç var olmamış gibi kaldırır. Spam ve kötüye kullanım için kullanın. Bu işlem geri alınamaz."
 }

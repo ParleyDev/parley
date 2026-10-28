@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "تم تسجيل خروجك من كل مكان. غيّرت رأيك؟ سجّل الدخول قبل ذلك التاريخ واختر «استعادة».",
 "in {server}": "في {server}",
 "with 1 other": "مع شخص آخر",
-"with {n} others": "مع {n} آخرين"
+"with {n} others": "مع {n} آخرين",
+"Account purged": "تم مسح الحساب نهائيًا",
+"Account type": "نوع الحساب",
+"BOT": "بوت",
+"DELETING {date}": "حذف {date}",
+"Include deleted": "تضمين المحذوفة",
+"People": "الأشخاص",
+"Purge": "مسح نهائي",
+"Purge @{username}": "مسح @{username} نهائيًا",
+"Purge account": "مسح الحساب نهائيًا",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "سيؤدي هذا إلى حذف الحسابات المحددة الآن: تُحذف الخوادم والتطبيقات التي تملكها، ويتم إخفاء هوية الحسابات (تبقى رسائلها باسم \"مستخدم محذوف\"). لا يمكن التراجع عن هذا.",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "سيؤدي هذا إلى حذف حساب {name} الآن: تُحذف الخوادم والتطبيقات التي يملكها، ويتم إخفاء هوية حسابه (تبقى رسائله باسم \"مستخدم محذوف\"). لا يمكن التراجع عن هذا.",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "يزيل هذا الحساب وكل ما أنشأه، بما في ذلك الرسائل والملفات المرفوعة، كأنه لم يكن موجودًا قط. استخدمه للرسائل المزعجة والإساءة. لا يمكن التراجع عن هذا."
 }

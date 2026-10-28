@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "すべての端末からログアウトしました。気が変わりましたか？その日までにログインして「復元」を選んでください。",
 "in {server}": "{server}で",
 "with 1 other": "ほか1人と",
-"with {n} others": "ほか{n}人と"
+"with {n} others": "ほか{n}人と",
+"Account purged": "アカウントを完全削除しました",
+"Account type": "アカウントの種類",
+"BOT": "BOT",
+"DELETING {date}": "削除予定 {date}",
+"Include deleted": "削除済みを含める",
+"People": "ユーザー",
+"Purge": "完全削除",
+"Purge @{username}": "@{username} を完全削除",
+"Purge account": "アカウントを完全削除",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "選択したアカウントを今すぐ削除します。それらが所有するサーバーとアプリは削除され、アカウントは匿名化されます(メッセージは「削除済みユーザー」として残ります)。この操作は元に戻せません。",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "{name} のアカウントを今すぐ削除します。所有するサーバーとアプリは削除され、アカウントは匿名化されます(メッセージは「削除済みユーザー」として残ります)。この操作は元に戻せません。",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "アカウントと、メッセージやアップロードを含むそのアカウントが作成したすべてを、最初から存在しなかったかのように削除します。スパムや不正行為に使用してください。この操作は元に戻せません。"
 }

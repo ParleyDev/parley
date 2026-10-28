@@ -3388,5 +3388,17 @@
 "You’ve been signed out everywhere. Changed your mind? Sign in before then and choose Restore.": "Je bent overal uitgelogd. Bedacht je je? Log vóór die datum in en kies Herstellen.",
 "in {server}": "in {server}",
 "with 1 other": "met 1 ander",
-"with {n} others": "met {n} anderen"
+"with {n} others": "met {n} anderen",
+"Account purged": "Account verwijderd (gewist)",
+"Account type": "Accounttype",
+"BOT": "BOT",
+"DELETING {date}": "VERWIJDERING {date}",
+"Include deleted": "Verwijderde meenemen",
+"People": "Mensen",
+"Purge": "Wissen",
+"Purge @{username}": "@{username} wissen",
+"Purge account": "Account wissen",
+"This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Hiermee worden de geselecteerde accounts nu verwijderd: de servers en apps die ze bezitten worden verwijderd en de accounts worden geanonimiseerd (hun berichten blijven staan, als \"Verwijderde gebruiker\"). Dit kan niet ongedaan worden gemaakt.",
+"This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.": "Hiermee wordt het account van {name} nu verwijderd: de servers en apps die diegene bezit worden verwijderd en het account wordt geanonimiseerd (de berichten blijven staan, als \"Verwijderde gebruiker\"). Dit kan niet ongedaan worden gemaakt.",
+"This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.": "Hiermee worden het account en alles wat het heeft gemaakt, inclusief berichten en uploads, verwijderd alsof het nooit heeft bestaan. Gebruik dit voor spam en misbruik. Dit kan niet ongedaan worden gemaakt."
 }
