@@ -148,19 +148,24 @@ jobs:
     if: needs.gate.outputs.ok == 'true'
     env:
       PARLEY_VERSION: ${{ needs.gate.outputs.version }}
-    # Xcode 26 (required for App Store uploads) is only on the Apple-silicon images.
-    runs-on: macos-26
+    # Xcode 26 (required for App Store uploads) is only on GitHub's Apple-silicon images, which are not always
+    # assigned. The repository variable IOS_RUNNER picks another machine as a JSON label list, e.g. a self-hosted
+    # Mac: ["self-hosted","macOS","parley-ios"]. Unset, GitHub's macos-26 runner is used.
+    runs-on: ${{ fromJSON(vars.IOS_RUNNER || '"macos-26"') }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0, ref: "${{ needs.gate.outputs.tag }}" }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      # App Store Connect only takes builds from a current Xcode; the image's default can lag, so use its newest.
+      # App Store Connect only takes builds from a current Xcode; GitHub's image default can lag, so use its newest.
+      # A self-hosted Mac keeps whatever Xcode its owner selected.
       - name: Newest Xcode
         run: |
-          ls -d /Applications/Xcode_*.app
-          xc=$(ls -d /Applications/Xcode_*.app | grep -E 'Xcode_[0-9.]+\.app$' | sort -V | tail -1)
-          sudo xcode-select -s "$xc" && xcodebuild -version
+          if ls -d /Applications/Xcode_*.app >/dev/null 2>&1; then
+            xc=$(ls -d /Applications/Xcode_*.app | grep -E 'Xcode_[0-9.]+\.app$' | sort -V | tail -1)
+            sudo xcode-select -s "$xc"
+          fi
+          xcodebuild -version
       - run: node scripts/version.mjs --apply
       - run: npm ci
         working-directory: mobile
