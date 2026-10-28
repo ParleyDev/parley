@@ -10,6 +10,7 @@ import type { Message } from '../lib/types'
 import Avatar from './Avatar'
 import { jumpToMessageAsync } from './ChatView'
 import { badgeCount } from '../lib/badge'
+import { notificationText } from '../lib/desktopNotify'
 
 const HIDDEN_KEY = `${STORAGE_PREFIX}inboxHidden`
 const loadHidden = (): string[] => { try { const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
@@ -102,7 +103,7 @@ export default function InboxButton({ variant = 'header' }: { variant?: 'header'
                   <Avatar user={m.author} size={32} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline gap-2"><span className="font-semibold truncate">{m.author.display_name}</span><span className="text-[11px] text-text-2 truncate">#{m.channel_name} · {m.guild_name}</span></span>
-                    <span className="block text-sm text-text-1 truncate">{m.content || (m.attachments?.length ? `📎 ${t('Attachment')}` : '')}</span>
+                    <span className="block text-sm text-text-1 truncate">{m.content ? notificationText(m.content, channels[m.channel_id]?.guild_id ?? null) : m.attachments?.length ? `📎 ${t('Attachment')}` : ''}</span>
                     <span className="text-[11px] text-text-2">{t('{n} reactions', { n: m.reactions.reduce((n, r) => n + r.count, 0) })}</span>
                   </span>
                 </button>
@@ -131,7 +132,7 @@ export default function InboxButton({ variant = 'header' }: { variant?: 'header'
                 <Avatar user={m.author} size={32} />
                 <span className="min-w-0 flex-1">
                   <span className="flex items-baseline gap-2"><span className="font-semibold truncate">{m.author.display_name}</span><span className="text-[11px] text-text-2 truncate">{whereOf(m)}</span><span className="ml-auto text-[11px] text-text-2 shrink-0">{new Date(m.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric' })}</span></span>
-                  <span className="block text-sm text-text-1 truncate">{m.content || (m.attachments?.length ? `📎 ${t('Attachment')}` : '')}</span>
+                  <span className="block text-sm text-text-1 truncate">{m.content ? notificationText(m.content, channels[m.channel_id]?.guild_id ?? null) : m.attachments?.length ? `📎 ${t('Attachment')}` : ''}</span>
                 </span>
               </button>
               <button type="button" onClick={() => hide(m.id)} title={t('Remove from inbox')} className="absolute right-2 top-2 rounded p-1 text-text-2 opacity-0 hover:bg-bg-4 hover:text-text-0 group-hover:opacity-100 focus:opacity-100" data-inbox-remove={m.id}><X size={14} /></button>

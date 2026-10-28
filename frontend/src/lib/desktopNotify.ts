@@ -4,11 +4,20 @@ import { appNavigate } from './native'
 import { desktop, isOverlay } from './desktop'
 import type { DmChannel, Message } from './types'
 
+/** A mentioned user's name: their nickname in this server, else their display name from wherever the client knows them. */
+function userName(id: string, guildId: string | null): string {
+  const s = useStore.getState()
+  const member = guildId ? s.members[guildId]?.[id] : undefined
+  if (member?.nickname) return member.nickname
+  const known = member ?? s.users[id] ?? (s.user?.id === id ? s.user : undefined) ?? Object.values(s.members).map((g) => g[id]).find(Boolean)
+  return known?.display_name || known?.username || 'someone'
+}
+
 /** Message text as it reads in the app: mentions, channels, roles and custom emoji by name; markdown marks dropped. */
 export function notificationText(content: string, guildId: string | null): string {
   const s = useStore.getState()
   return content
-    .replace(/<@!?([0-9a-f-]{36})>/g, (_, id) => `@${(guildId && s.members[guildId]?.[id]?.nickname) || s.users[id]?.display_name || 'someone'}`)
+    .replace(/<@!?([0-9a-f-]{36})>/g, (_, id) => `@${userName(id, guildId)}`)
     .replace(/<@&([0-9a-f-]{36})>/g, (_, id) => `@${(guildId && s.roles[guildId]?.[id]?.name) || 'role'}`)
     .replace(/<#([0-9a-f-]{36})>/g, (_, id) => `#${s.channels[id]?.name ?? 'channel'}`)
     .replace(/<a?:([\w~-]+):[0-9a-f-]+>/g, ':$1:')
