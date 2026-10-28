@@ -161,6 +161,41 @@ pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, d
     }
 }
 
+/// Message text as people read it, for push notifications and notification emails: user mentions by their name in the
+/// server (or display name), role and channel mentions by name, custom emoji as `:name:`, timestamps as dates and
+/// spoilers hidden. Unknown ids read as "@someone" / "#channel" rather than leaking the raw token.
+pub async fn readable(state: &AppState, content: &str, guild_id: Option<Uuid>) -> String {
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| regex::Regex::new(r"<@!?([0-9a-fA-F-]{36})>|<@&([0-9a-fA-F-]{36})>|<#([0-9a-fA-F-]{36})>|<a?:([\w~-]+):[0-9A-Za-z-]+>|<t:(-?\d+)(?::\w)?>|\|\|[\s\S]*?\|\|").expect("token regex"));
+    let ids = |g: usize| -> Vec<Uuid> { re.captures_iter(content).filter_map(|c| c.get(g).and_then(|m| Uuid::parse_str(m.as_str()).ok())).collect() };
+    let (users, roles, chans) = (ids(1), ids(2), ids(3));
+    let mut names: HashMap<Uuid, String> = HashMap::new();
+    if !users.is_empty() {
+        let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT u.id, COALESCE(NULLIF(m.nickname, ''), u.display_name) FROM users u LEFT JOIN guild_members m ON m.user_id = u.id AND m.guild_id = $2 WHERE u.id = ANY($1)")
+            .bind(&users).bind(guild_id).fetch_all(&state.db).await.unwrap_or_default();
+        names.extend(rows);
+    }
+    if !roles.is_empty() {
+        let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM roles WHERE id = ANY($1)").bind(&roles).fetch_all(&state.db).await.unwrap_or_default();
+        names.extend(rows);
+    }
+    if !chans.is_empty() {
+        let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT id, name FROM channels WHERE id = ANY($1)").bind(&chans).fetch_all(&state.db).await.unwrap_or_default();
+        names.extend(rows);
+    }
+    let name = |m: Option<regex::Match>| m.and_then(|m| Uuid::parse_str(m.as_str()).ok()).and_then(|id| names.get(&id).cloned());
+    re.replace_all(content, |c: &regex::Captures| {
+        if c.get(1).is_some() { format!("@{}", name(c.get(1)).unwrap_or_else(|| "someone".into())) }
+        else if c.get(2).is_some() { format!("@{}", name(c.get(2)).unwrap_or_else(|| "role".into())) }
+        else if c.get(3).is_some() { format!("#{}", name(c.get(3)).unwrap_or_else(|| "channel".into())) }
+        else if let Some(e) = c.get(4) { format!(":{}:", e.as_str()) }
+        else if let Some(t) = c.get(5) {
+            t.as_str().parse::<i64>().ok().and_then(|s| chrono::DateTime::from_timestamp(s, 0)).map(|d| d.format("%Y-%m-%d %H:%M UTC").to_string()).unwrap_or_default()
+        }
+        else { "(spoiler)".into() }
+    }).into_owned()
+}
+
 /// Settings → Notifications → Send test notification: push to every device the user registered, whether or not they
 /// are online, and report what Apple or Google said about each (dead tokens are dropped as usual).
 pub async fn test(state: &AppState, user: Uuid) -> serde_json::Value {
@@ -236,7 +271,7 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
                 let g: Option<(String,)> = sqlx::query_as("SELECT name FROM guilds WHERE id = $1").bind(gid).fetch_optional(&state.db).await.unwrap_or(None);
                 format!("#{} in {}", channel.name, g.map(|x| x.0).unwrap_or_default())
             } else { "a direct message".to_string() };
-            let snippet: String = if msg.content.is_empty() { "(an attachment)".into() } else { msg.content.chars().take(200).collect() };
+            let snippet: String = if msg.content.is_empty() { "(an attachment)".into() } else { readable(&state, &msg.content, channel.guild_id).await.chars().take(200).collect() };
             for u in &mail_to {
                 if let Ok((email,)) = sqlx::query_as::<_, (String,)>("UPDATE users SET notify_mailed_at = now() WHERE id = $1 RETURNING email").bind(u).fetch_one(&state.db).await {
                     let body = format!("{} sent you a message in {}:\n\n{}\n\nOpen Parley: {}\n\nYou get at most one of these an hour while you are away. Turn them off in Settings → Notifications.", msg.author.display_name, where_, snippet, state.config.app_url);
@@ -250,7 +285,7 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
             format!("#{} · {}", channel.name, g.map(|x| x.0).unwrap_or_default())
         } else { "Direct message".to_string() };
         let title = format!("{} ({})", msg.author.display_name, where_);
-        let body = if msg.content.is_empty() { if msg.attachments.is_empty() { "Sent a message".to_string() } else { "Sent an attachment".to_string() } } else { msg.content.chars().take(160).collect() };
+        let body = if msg.content.is_empty() { if msg.attachments.is_empty() { "Sent a message".to_string() } else { "Sent an attachment".to_string() } } else { readable(&state, &msg.content, channel.guild_id).await.chars().take(160).collect() };
         notify(&state, &targets, &title, &body, json!({ "channel_id": channel.id, "guild_id": channel.guild_id, "message_id": msg.id })).await;
     });
 }
