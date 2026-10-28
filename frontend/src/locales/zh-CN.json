@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "在基于案件的访问机制建成之前，管理控制台中读取消息内容仅限临时超级管理员角色。请联系 ADMIN_EMAILS 中列出的所有者。",
 "Reason (required)": "理由（必填）",
 "This account's messages and uploads": "此账号的消息和上传内容",
-"e.g. report #123: checking for more spam from this account": "例如：举报 #123：检查此账号是否还有更多垃圾信息"
+"e.g. report #123: checking for more spam from this account": "例如：举报 #123：检查此账号是否还有更多垃圾信息",
+"Account details; email and devices only through a logged reveal.": "账号详情；邮箱和设备只能通过会被记录的揭示操作查看。",
+"Admin roles": "管理员角色",
+"Admin roles for @{username}": "@{username} 的管理员角色",
+"Case-bound content, exports with an approved case, the whole audit log.": "与案件绑定的内容、已批准案件的导出、完整审计日志。",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "邮箱地址、IP 和设备默认隐藏。请说明需要的原因；揭示操作会被记录。",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "版主能做的一切，外加账号 PII、批准案件授权以及其团队的审计条目。",
+"Read-only access to the audit log.": "审计日志只读访问。",
+"Reason (for example, a support ticket number)": "原因（例如工单编号）",
+"Reports and their context, content actions, their own audit entries.": "举报及其上下文、内容操作、自己的审计条目。",
+"Reveal": "揭示",
+"Reveal details for @{username}": "揭示 @{username} 的详情",
+"Reveal email and devices": "揭示邮箱和设备",
+"Roles and instance settings. No access to content.": "角色和实例设置。无法访问内容。",
+"Roles updated for @{username}": "已更新 @{username} 的角色",
+"Temporary: admin message search, until case-based access replaces it.": "临时：管理员消息搜索，直到基于案件的访问取而代之。"
 }

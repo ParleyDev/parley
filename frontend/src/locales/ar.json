@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "قراءة محتوى الرسائل من وحدة تحكم المشرف مقتصرة على دور المشرف الأعلى المؤقت إلى حين بناء الوصول القائم على الحالات. اطلب من مالك مدرج في ADMIN_EMAILS.",
 "Reason (required)": "السبب (مطلوب)",
 "This account's messages and uploads": "رسائل هذا الحساب وملفاته المرفوعة",
-"e.g. report #123: checking for more spam from this account": "مثال: البلاغ رقم 123: التحقق من وجود المزيد من الرسائل المزعجة من هذا الحساب"
+"e.g. report #123: checking for more spam from this account": "مثال: البلاغ رقم 123: التحقق من وجود المزيد من الرسائل المزعجة من هذا الحساب",
+"Account details; email and devices only through a logged reveal.": "تفاصيل الحساب؛ البريد الإلكتروني والأجهزة فقط عبر كشف مسجّل.",
+"Admin roles": "أدوار المسؤول",
+"Admin roles for @{username}": "أدوار المسؤول لـ @{username}",
+"Case-bound content, exports with an approved case, the whole audit log.": "المحتوى المرتبط بالقضايا، وعمليات التصدير مع قضية معتمدة، وسجل التدقيق بالكامل.",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "عناوين البريد الإلكتروني وعناوين IP والأجهزة مخفية افتراضيًا. اذكر سبب حاجتك إليها؛ سيتم تسجيل الكشف.",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "كل ما يمكن للمشرف فعله، بالإضافة إلى PII للحساب، والموافقة على منح الوصول إلى القضايا، وسجلات التدقيق الخاصة بفريقه.",
+"Read-only access to the audit log.": "وصول للقراءة فقط إلى سجل التدقيق.",
+"Reason (for example, a support ticket number)": "السبب (مثلًا رقم تذكرة دعم)",
+"Reports and their context, content actions, their own audit entries.": "البلاغات وسياقها، وإجراءات المحتوى، وسجلات التدقيق الخاصة به.",
+"Reveal": "كشف",
+"Reveal details for @{username}": "كشف تفاصيل @{username}",
+"Reveal email and devices": "كشف البريد الإلكتروني والأجهزة",
+"Roles and instance settings. No access to content.": "الأدوار وإعدادات النسخة. لا وصول إلى المحتوى.",
+"Roles updated for @{username}": "تم تحديث أدوار @{username}",
+"Temporary: admin message search, until case-based access replaces it.": "مؤقت: البحث في رسائل المسؤولين، إلى أن يحل محله الوصول المعتمد على القضايا."
 }

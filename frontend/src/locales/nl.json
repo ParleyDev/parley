@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "Het lezen van berichtinhoud via de beheerconsole is beperkt tot de tijdelijke superbeheerderrol totdat toegang op basis van zaken is gebouwd. Vraag het aan een eigenaar die in ADMIN_EMAILS staat.",
 "Reason (required)": "Reden (verplicht)",
 "This account's messages and uploads": "Berichten en uploads van dit account",
-"e.g. report #123: checking for more spam from this account": "bijv. melding #123: controleren op meer spam van dit account"
+"e.g. report #123: checking for more spam from this account": "bijv. melding #123: controleren op meer spam van dit account",
+"Account details; email and devices only through a logged reveal.": "Accountgegevens; e-mail en apparaten alleen via een gelogde onthulling.",
+"Admin roles": "Beheerdersrollen",
+"Admin roles for @{username}": "Beheerdersrollen voor @{username}",
+"Case-bound content, exports with an approved case, the whole audit log.": "Aan zaken gekoppelde inhoud, exports met een goedgekeurde zaak, het hele auditlogboek.",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "E-mailadressen, IP's en apparaten zijn standaard verborgen. Geef aan waarom je ze nodig hebt; de onthulling wordt gelogd.",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "Alles wat een moderator kan, plus account-PII, het goedkeuren van zaaktoegang en de auditvermeldingen van hun team.",
+"Read-only access to the audit log.": "Alleen-lezen toegang tot het auditlogboek.",
+"Reason (for example, a support ticket number)": "Reden (bijvoorbeeld een supportticketnummer)",
+"Reports and their context, content actions, their own audit entries.": "Meldingen en hun context, inhoudsacties, hun eigen auditvermeldingen.",
+"Reveal": "Onthullen",
+"Reveal details for @{username}": "Gegevens van @{username} onthullen",
+"Reveal email and devices": "E-mail en apparaten onthullen",
+"Roles and instance settings. No access to content.": "Rollen en instantie-instellingen. Geen toegang tot inhoud.",
+"Roles updated for @{username}": "Rollen bijgewerkt voor @{username}",
+"Temporary: admin message search, until case-based access replaces it.": "Tijdelijk: zoeken in beheerdersberichten, totdat zaakgebaseerde toegang dit vervangt."
 }

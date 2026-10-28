@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "管理コンソールからのメッセージ内容の閲覧は、ケースベースのアクセスが整備されるまで、一時的なスーパー管理者ロールに限定されています。ADMIN_EMAILS に記載されているオーナーに依頼してください。",
 "Reason (required)": "理由（必須）",
 "This account's messages and uploads": "このアカウントのメッセージとアップロード",
-"e.g. report #123: checking for more spam from this account": "例：報告 #123：このアカウントからのスパムが他にないか確認"
+"e.g. report #123: checking for more spam from this account": "例：報告 #123：このアカウントからのスパムが他にないか確認",
+"Account details; email and devices only through a logged reveal.": "アカウントの詳細。メールとデバイスは、記録される開示操作でのみ確認できます。",
+"Admin roles": "管理者ロール",
+"Admin roles for @{username}": "@{username} の管理者ロール",
+"Case-bound content, exports with an approved case, the whole audit log.": "ケースに紐づくコンテンツ、承認済みケースでのエクスポート、監査ログ全体。",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "メールアドレス、IP、デバイスはデフォルトで非表示です。必要な理由を入力してください。開示は記録されます。",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "モデレーターができることすべて、さらにアカウントの PII、ケースアクセスの承認、チームの監査エントリ。",
+"Read-only access to the audit log.": "監査ログの閲覧専用アクセス。",
+"Reason (for example, a support ticket number)": "理由（例：サポートチケット番号）",
+"Reports and their context, content actions, their own audit entries.": "報告とそのコンテキスト、コンテンツ操作、自分の監査エントリ。",
+"Reveal": "開示",
+"Reveal details for @{username}": "@{username} の詳細を開示",
+"Reveal email and devices": "メールとデバイスを開示",
+"Roles and instance settings. No access to content.": "ロールとインスタンス設定。コンテンツにはアクセスできません。",
+"Roles updated for @{username}": "@{username} のロールを更新しました",
+"Temporary: admin message search, until case-based access replaces it.": "一時的：ケースベースのアクセスに置き換わるまでの、管理者によるメッセージ検索。"
 }

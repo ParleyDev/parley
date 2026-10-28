@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "관리자 콘솔에서 메시지 내용을 읽는 기능은 사례 기반 접근 권한이 구축될 때까지 임시 슈퍼 관리자 역할로 제한됩니다. ADMIN_EMAILS에 등록된 소유자에게 요청하세요.",
 "Reason (required)": "사유(필수)",
 "This account's messages and uploads": "이 계정의 메시지와 업로드",
-"e.g. report #123: checking for more spam from this account": "예: 신고 #123: 이 계정의 추가 스팸 여부 확인"
+"e.g. report #123: checking for more spam from this account": "예: 신고 #123: 이 계정의 추가 스팸 여부 확인",
+"Account details; email and devices only through a logged reveal.": "계정 세부 정보. 이메일과 기기는 기록되는 공개 절차를 통해서만 볼 수 있습니다.",
+"Admin roles": "관리자 역할",
+"Admin roles for @{username}": "@{username}의 관리자 역할",
+"Case-bound content, exports with an approved case, the whole audit log.": "케이스에 연결된 콘텐츠, 승인된 케이스가 있는 내보내기, 전체 감사 로그.",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "이메일 주소, IP, 기기는 기본적으로 숨겨져 있습니다. 필요한 이유를 입력하세요. 공개 내역은 기록됩니다.",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "모더레이터가 할 수 있는 모든 작업, 그리고 계정 PII, 케이스 접근 승인, 팀의 감사 항목.",
+"Read-only access to the audit log.": "감사 로그 읽기 전용 접근.",
+"Reason (for example, a support ticket number)": "사유 (예: 지원 티켓 번호)",
+"Reports and their context, content actions, their own audit entries.": "신고와 그 맥락, 콘텐츠 조치, 본인의 감사 항목.",
+"Reveal": "공개",
+"Reveal details for @{username}": "@{username}의 세부 정보 공개",
+"Reveal email and devices": "이메일 및 기기 공개",
+"Roles and instance settings. No access to content.": "역할과 인스턴스 설정. 콘텐츠에는 접근할 수 없습니다.",
+"Roles updated for @{username}": "@{username}의 역할을 업데이트했습니다",
+"Temporary: admin message search, until case-based access replaces it.": "임시: 케이스 기반 접근이 대체할 때까지 사용하는 관리자 메시지 검색."
 }

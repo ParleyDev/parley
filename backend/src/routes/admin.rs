@@ -47,7 +47,7 @@ struct SweepQuery {
 
 /// Run the orphan-image sweep now (what the background task does every 15 minutes).
 async fn sweep_images(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<SweepQuery>) -> AppResult<Json<Value>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let age = q.min_age_secs.unwrap_or(crate::routes::images::ORPHAN_TTL_SECS as f64).max(0.0);
     let removed = crate::routes::images::sweep_now(&state, age).await;
     audit::record(&state, uid, "maintenance.sweep_images", "", None, "", json!({ "removed": removed, "min_age_secs": age })).await;
@@ -223,9 +223,12 @@ async fn instance_public(State(state): State<AppState>) -> AppResult<Json<Instan
 }
 
 /// Admin: recently sent mail (the in-memory outbox), optionally filtered by recipient. How dev and tests read links.
-async fn admin_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<MailQuery>) -> AppResult<Json<Vec<crate::mail::SentMail>>> {
-    require_admin(&state, uid).await?;
-    Ok(Json(crate::mail::outbox(&state.db, q.to.as_deref(), q.limit).await?))
+/// The outgoing mail log holds addresses and full bodies: a PII permission, and every read is logged.
+async fn admin_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, headers: axum::http::HeaderMap, Query(q): Query<MailQuery>) -> AppResult<Json<Vec<crate::mail::SentMail>>> {
+    let a = crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::AccountPiiReveal).await?;
+    let out = crate::mail::outbox(&state.db, q.to.as_deref(), q.limit).await?;
+    crate::routes::admin_access::log(&state, uid, &a.roles, &headers, crate::routes::admin_access::Entry { action: "pii.mail_log", query: q.to.as_deref().unwrap_or_default(), filters: json!({ "limit": q.limit }), justification: "", targets: &[] }).await?;
+    Ok(Json(out))
 }
 
 #[derive(Deserialize)]
@@ -236,7 +239,7 @@ struct MailQuery {
 
 /// Delete one logged mail.
 async fn delete_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let row: Option<(String, String)> = sqlx::query_as("DELETE FROM mail_log WHERE id = $1 RETURNING to_addr, subject").bind(id).fetch_optional(&state.db).await?;
     let (to, subject) = row.ok_or_else(|| AppError::NotFound("Mail not found".into()))?;
     audit::record(&state, uid, "mail.delete", "mail", Some(id), &to, json!({ "subject": subject })).await;
@@ -245,14 +248,14 @@ async fn delete_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
 
 /// Delete every logged mail, or all for one recipient with `?to=`.
 async fn clear_mail(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<MailQuery>) -> AppResult<Json<Value>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let r = sqlx::query("DELETE FROM mail_log WHERE $1::text IS NULL OR lower(to_addr) = lower($1)").bind(q.to.as_deref()).execute(&state.db).await?;
     audit::record(&state, uid, "mail.clear", "mail", None, q.to.as_deref().unwrap_or(""), json!({ "removed": r.rows_affected() })).await;
     Ok(Json(json!({ "removed": r.rows_affected() })))
 }
 
 async fn mail_settings(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     Ok(Json(json!({ "retention_days": crate::mail::retention_days(&state.db).await })))
 }
 
@@ -263,7 +266,7 @@ struct MailSettingsReq {
 
 /// How long the mail log keeps entries: 1–3650 days, or 0 to keep them until deleted.
 async fn put_mail_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<MailSettingsReq>) -> AppResult<Json<Value>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     if !(0..=3650).contains(&req.retention_days) {
         return Err(AppError::BadRequest("Keep mail for 0 (forever) to 3650 days".into()));
     }
@@ -277,6 +280,7 @@ async fn put_mail_settings(State(state): State<AppState>, AuthUser(uid): AuthUse
 }
 
 async fn stats(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
+    // Instance-wide counts only: any console role may see them.
     require_admin(&state, uid).await?;
     let (users,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE NOT webhook").fetch_one(&state.db).await?;
     let (admins,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE is_admin").fetch_one(&state.db).await?;
@@ -356,13 +360,22 @@ fn pattern(q: &str) -> Option<String> {
 
 /// Filtered, paged user list (newest first). The total for the filter is in the X-Total-Count header so the
 /// response stays a plain array.
-async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<ListQuery>) -> AppResult<axum::response::Response> {
-    require_admin(&state, uid).await?;
+async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, headers: axum::http::HeaderMap, Query(q): Query<ListQuery>) -> AppResult<axum::response::Response> {
+    let a = crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::AccountMetadataRead).await?;
+    let unmasked = a.pii_unmasked();
+    let pii = a.has(crate::routes::admin_access::Perm::AccountPiiReveal);
+    let ip_filter = q.ip.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    if ip_filter.is_some() {
+        if !pii { return Err(AppError::Forbidden) }
+        crate::routes::admin_access::log(&state, uid, &a.roles, &headers, crate::routes::admin_access::Entry { action: "pii.search_ip", query: ip_filter.unwrap_or_default(), filters: json!({}), justification: "", targets: &[] }).await?;
+    }
+    // Looking people up by email is a PII use too.
+    let by_email = pii && q.q.contains('@');
     let online = crate::ws::bus::online_users(&state.db).await;
     let limit = q.limit.unwrap_or(200).clamp(1, 200);
     let before: Option<DateTime<Utc>> = q.joined_before.and_then(|d| d.and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
     let after: Option<DateTime<Utc>> = q.joined_after.and_then(|d| (d + chrono::Duration::days(1)).and_hms_opt(0, 0, 0)).map(|t| t.and_utc());
-    let where_sql = "NOT u.webhook AND ($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR u.email ILIKE $1)
+    let where_sql = "NOT u.webhook AND ($1::text IS NULL OR u.username ILIKE $1 OR u.display_name ILIKE $1 OR ($16 AND u.email ILIKE $1))
          AND ($2::bool IS NULL OR u.is_admin = $2)
          AND ($3::bool IS NULL OR (u.suspended_at IS NOT NULL) = $3)
          AND ($4::bool IS NULL OR (u.email_verified_at IS NOT NULL) = $4)
@@ -377,7 +390,7 @@ async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Quer
     let kind = match q.kind.as_deref() { Some("bots") => "bots", Some("all") => "all", _ => "people" };
     let ip = q.ip.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
     let (total,): (i64,) = sqlx::query_as(&format!("SELECT COUNT(*) FROM users u WHERE {where_sql}"))
-        .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days).bind(0i64).bind(0i64).bind(&ip).bind(kind).bind(q.include_deleted)
+        .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days).bind(0i64).bind(0i64).bind(&ip).bind(kind).bind(q.include_deleted).bind(by_email || pii)
         .fetch_one(&state.db)
         .await?;
     let mut rows = sqlx::query_as::<_, AdminUser>(&format!(
@@ -387,10 +400,14 @@ async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Quer
          FROM users u WHERE {where_sql}
          ORDER BY u.created_at DESC LIMIT $11 OFFSET $12"))
     .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days)
-    .bind(limit).bind(q.offset.max(0)).bind(&ip).bind(kind).bind(q.include_deleted)
+    .bind(limit).bind(q.offset.max(0)).bind(&ip).bind(kind).bind(q.include_deleted).bind(by_email || pii)
     .fetch_all(&state.db)
     .await?;
-    for r in &mut rows { r.online = online.contains(&r.id) }
+    for r in &mut rows {
+        r.online = online.contains(&r.id);
+        if !unmasked { r.email = r.email.as_deref().map(crate::routes::admin_access::mask_email) }
+    }
+    if by_email { crate::routes::admin_access::log(&state, uid, &a.roles, &headers, crate::routes::admin_access::Entry { action: "pii.search_email", query: &q.q, filters: json!({}), justification: "", targets: &rows.iter().map(|r| r.id).collect::<Vec<_>>() }).await?; }
     let mut resp = Json(rows).into_response();
     resp.headers_mut().insert("x-total-count", axum::http::HeaderValue::from(total as u64));
     Ok(resp)
@@ -406,7 +423,8 @@ struct BulkReq {
 
 /// Apply one action to many accounts; the caller is skipped for destructive actions. Each change is audited.
 async fn bulk_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<BulkReq>) -> AppResult<Json<Value>> {
-    require_admin(&state, uid).await?;
+    // Limits are instance settings; everything else is a moderation action.
+    crate::routes::admin_access::require_perm(&state, uid, if req.action == "quota" { crate::routes::admin_access::Perm::InstanceManage } else { crate::routes::admin_access::Perm::ContentAction }).await?;
     if req.ids.len() > 500 {
         return Err(AppError::BadRequest("At most 500 accounts per request".into()));
     }
@@ -486,19 +504,29 @@ fn deserialize_nullable_i64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Op
 }
 
 async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<PatchUser>) -> AppResult<Json<Value>> {
+    // Each change needs its own permission: roles (super admin), account actions (moderation), limits (instance).
+    use crate::routes::admin_access::Perm;
     require_admin(&state, uid).await?;
+    let a = crate::routes::admin_access::access(&state, uid).await?;
+    let need = |p: Perm| if a.has(p) { Ok(()) } else { Err(AppError::Forbidden) };
+    if req.is_admin == Some(false) && id == uid { return Err(AppError::BadRequest("You cannot remove your own admin rights".into())); }
+    if req.is_admin.is_some() { need(Perm::AdminRolesManage)? }
+    if req.suspended.is_some() || req.mfa.is_some() || req.reset_birthdate { need(Perm::ContentAction)? }
+    if req.max_upload_bytes.is_some() || req.upload_quota_bytes.is_some() { need(Perm::InstanceManage)? }
     let exists: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
     if exists.is_none() {
         return Err(AppError::NotFound("User not found".into()));
     }
     if let Some(admin) = req.is_admin {
         if !admin {
-            if id == uid { return Err(AppError::BadRequest("You cannot remove your own admin rights".into())); }
             let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE is_admin AND id <> $1").bind(id).fetch_one(&state.db).await?;
             if n == 0 { return Err(AppError::BadRequest("At least one admin must remain".into())); }
         }
         // Console grants are not tied to ADMIN_EMAILS; a console demotion of a listed email is undone at their next check.
+        // Making someone an admin gives the least role (support) if they have none; removing it takes every role.
         sqlx::query("UPDATE users SET is_admin = $2, admin_via_env = false WHERE id = $1").bind(id).bind(admin).execute(&state.db).await?;
+        if admin { sqlx::query("INSERT INTO admin_roles (user_id, role, granted_by) SELECT $1, 'SUPPORT', $2 WHERE NOT EXISTS (SELECT 1 FROM admin_roles WHERE user_id = $1)").bind(id).bind(uid).execute(&state.db).await?; }
+        else { sqlx::query("DELETE FROM admin_roles WHERE user_id = $1").bind(id).execute(&state.db).await?; }
         audit::record(&state, uid, if admin { "user.promote" } else { "user.demote" }, "user", Some(id), &audit::username(&state, id).await, json!({})).await;
     }
     if let Some(suspended) = req.suspended {
@@ -542,7 +570,7 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
 /// Delete an account now, with no grace period: the servers and apps they own are deleted, then the account is
 /// anonymized like a finished self-deletion (their messages stay, as "Deleted User").
 async fn delete_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
     if id == uid {
         return Err(AppError::BadRequest("You cannot delete your own account from here".into()));
     }
@@ -554,7 +582,7 @@ async fn delete_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
 /// Purge an account: remove the row and everything hanging off it, messages included. For spam and abuse, where
 /// keeping their content would be wrong; normal deletion anonymizes instead.
 async fn purge_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
     if id == uid {
         return Err(AppError::BadRequest("You cannot delete your own account from here".into()));
     }
@@ -610,7 +638,7 @@ struct AdminGuild {
 }
 
 async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<ListQuery>) -> AppResult<Json<Vec<AdminGuild>>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ConversationMetadataRead).await?;
     let rows = sqlx::query_as::<_, AdminGuild>(
         "SELECT g.id, g.name, g.icon_url, g.created_at, g.owner_id, u.username AS owner_username,
                 (SELECT COUNT(*) FROM guild_members m WHERE m.guild_id = g.id) AS member_count,
@@ -627,7 +655,7 @@ async fn list_guilds(State(state): State<AppState>, AuthUser(uid): AuthUser, Que
 }
 
 async fn delete_guild(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
     let name = audit::guild_name(&state, id).await;
     state.hub.voice_evict(|v| v.guild_id == Some(id));
     state.hub.emit_guild(id, "GUILD_DELETE", json!({ "id": id }));
@@ -640,14 +668,14 @@ async fn delete_guild(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 }
 
 async fn get_settings(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<InstanceSettings>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let mut s = load_settings(&state.db).await?;
     s.mail_enabled = crate::mail::enabled(&state.config);
     Ok(Json(s))
 }
 
 async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<InstanceSettings>) -> AppResult<Json<InstanceSettings>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let announcement: String = req.announcement.trim().chars().take(300).collect();
     let before = load_settings(&state.db).await?;
     let mut changed = serde_json::Map::new();
@@ -769,16 +797,25 @@ struct AuditQuery {
 }
 
 /// Newest first, 100 per page; `q` matches actor, action or target name.
+/// The admin audit log, scoped by role: all of it (legal, super admins, auditors), your team's (T&S leads: actions by
+/// moderators and leads), or only your own (moderators).
 async fn list_audit(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<AuditQuery>) -> AppResult<Json<Vec<AuditRow>>> {
-    require_admin(&state, uid).await?;
+    crate::routes::users::require_admin(&state, uid).await?;
+    let a = crate::routes::admin_access::access(&state, uid).await?;
+    use crate::routes::admin_access::Perm::*;
+    let scope = if a.has(AuditReadAll) { "all" } else if a.has(AuditReadTeam) { "team" } else if a.has(AuditReadOwn) { "own" } else { return Err(AppError::Forbidden) };
     let rows = sqlx::query_as::<_, AuditRow>(
         "SELECT id, actor_id, actor_name, action, target_kind, target_id, target_name, details, created_at FROM admin_audit
          WHERE ($1::text IS NULL OR actor_name ILIKE $1 OR action ILIKE $1 OR target_name ILIKE $1)
            AND ($2::uuid IS NULL OR id < $2)
+           AND ($3 = 'all' OR ($3 = 'own' AND actor_id = $4)
+                OR ($3 = 'team' AND EXISTS (SELECT 1 FROM admin_roles r WHERE r.user_id = admin_audit.actor_id AND r.role IN ('MODERATOR', 'TS_LEAD'))))
          ORDER BY id DESC LIMIT 100",
     )
     .bind(pattern(&q.q))
     .bind(q.before)
+    .bind(scope)
+    .bind(uid)
     .fetch_all(&state.db)
     .await?;
     Ok(Json(rows))

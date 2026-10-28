@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "La lectura del contenido de los mensajes desde la consola de administración está restringida al rol temporal de superadministrador mientras se desarrolla el acceso basado en casos. Pídeselo a un propietario incluido en ADMIN_EMAILS.",
 "Reason (required)": "Motivo (obligatorio)",
 "This account's messages and uploads": "Mensajes y archivos subidos de esta cuenta",
-"e.g. report #123: checking for more spam from this account": "p. ej., denuncia n.º 123: comprobar si hay más spam de esta cuenta"
+"e.g. report #123: checking for more spam from this account": "p. ej., denuncia n.º 123: comprobar si hay más spam de esta cuenta",
+"Account details; email and devices only through a logged reveal.": "Datos de la cuenta; correo y dispositivos solo mediante una revelación registrada.",
+"Admin roles": "Roles de administrador",
+"Admin roles for @{username}": "Roles de administrador de @{username}",
+"Case-bound content, exports with an approved case, the whole audit log.": "Contenido vinculado a casos, exportaciones con un caso aprobado, todo el registro de auditoría.",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "Los correos, las IP y los dispositivos están ocultos por defecto. Indica por qué los necesitas; la revelación queda registrada.",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "Todo lo que puede hacer un moderador, más PII de cuentas, aprobar accesos a casos y las entradas de auditoría de su equipo.",
+"Read-only access to the audit log.": "Acceso de solo lectura al registro de auditoría.",
+"Reason (for example, a support ticket number)": "Motivo (por ejemplo, un número de ticket de soporte)",
+"Reports and their context, content actions, their own audit entries.": "Reportes y su contexto, acciones sobre contenido, sus propias entradas de auditoría.",
+"Reveal": "Revelar",
+"Reveal details for @{username}": "Revelar datos de @{username}",
+"Reveal email and devices": "Revelar correo y dispositivos",
+"Roles and instance settings. No access to content.": "Roles y ajustes de la instancia. Sin acceso al contenido.",
+"Roles updated for @{username}": "Roles actualizados para @{username}",
+"Temporary: admin message search, until case-based access replaces it.": "Temporal: búsqueda de mensajes de administrador, hasta que la reemplace el acceso basado en casos."
 }

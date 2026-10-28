@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "Odczyt treści wiadomości z konsoli administratora jest ograniczony do tymczasowej roli superadministratora do czasu stworzenia dostępu opartego na zgłoszeniach. Poproś właściciela wymienionego w ADMIN_EMAILS.",
 "Reason (required)": "Powód (wymagany)",
 "This account's messages and uploads": "Wiadomości i przesłane pliki tego konta",
-"e.g. report #123: checking for more spam from this account": "np. zgłoszenie #123: sprawdzanie, czy to konto wysyła więcej spamu"
+"e.g. report #123: checking for more spam from this account": "np. zgłoszenie #123: sprawdzanie, czy to konto wysyła więcej spamu",
+"Account details; email and devices only through a logged reveal.": "Dane konta; e-mail i urządzenia tylko przez zapisaną w logu odsłonę.",
+"Admin roles": "Role administratora",
+"Admin roles for @{username}": "Role administratora dla @{username}",
+"Case-bound content, exports with an approved case, the whole audit log.": "Treści powiązane ze sprawami, eksporty z zatwierdzoną sprawą, cały dziennik audytu.",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "Adresy e-mail, IP i urządzenia są domyślnie ukryte. Podaj, po co ich potrzebujesz; odsłonięcie jest zapisywane w logu.",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "Wszystko, co może moderator, plus PII kont, zatwierdzanie dostępu do spraw i wpisy audytu jego zespołu.",
+"Read-only access to the audit log.": "Dostęp tylko do odczytu do dziennika audytu.",
+"Reason (for example, a support ticket number)": "Powód (na przykład numer zgłoszenia w pomocy technicznej)",
+"Reports and their context, content actions, their own audit entries.": "Zgłoszenia i ich kontekst, działania na treściach, własne wpisy audytu.",
+"Reveal": "Odsłoń",
+"Reveal details for @{username}": "Odsłoń dane @{username}",
+"Reveal email and devices": "Odsłoń e-mail i urządzenia",
+"Roles and instance settings. No access to content.": "Role i ustawienia instancji. Brak dostępu do treści.",
+"Roles updated for @{username}": "Zaktualizowano role dla @{username}",
+"Temporary: admin message search, until case-based access replaces it.": "Tymczasowo: wyszukiwanie wiadomości przez administratora, dopóki nie zastąpi go dostęp oparty na sprawach."
 }

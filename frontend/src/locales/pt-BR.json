@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "A leitura do conteúdo de mensagens pelo console de administração está restrita à função temporária de superadministrador enquanto o acesso baseado em casos é desenvolvido. Peça a um proprietário listado em ADMIN_EMAILS.",
 "Reason (required)": "Motivo (obrigatório)",
 "This account's messages and uploads": "Mensagens e uploads desta conta",
-"e.g. report #123: checking for more spam from this account": "ex.: denúncia #123: verificando se há mais spam desta conta"
+"e.g. report #123: checking for more spam from this account": "ex.: denúncia #123: verificando se há mais spam desta conta",
+"Account details; email and devices only through a logged reveal.": "Detalhes da conta; e-mail e dispositivos apenas por meio de uma revelação registrada.",
+"Admin roles": "Funções de admin",
+"Admin roles for @{username}": "Funções de admin de @{username}",
+"Case-bound content, exports with an approved case, the whole audit log.": "Conteúdo vinculado a casos, exportações com um caso aprovado, todo o log de auditoria.",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "E-mails, IPs e dispositivos ficam ocultos por padrão. Diga por que você precisa deles; a revelação é registrada.",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "Tudo o que um moderador pode fazer, mais PII de contas, aprovação de acessos a casos e as entradas de auditoria da equipe.",
+"Read-only access to the audit log.": "Acesso somente leitura ao log de auditoria.",
+"Reason (for example, a support ticket number)": "Motivo (por exemplo, o número de um ticket de suporte)",
+"Reports and their context, content actions, their own audit entries.": "Denúncias e seu contexto, ações de conteúdo, as próprias entradas de auditoria.",
+"Reveal": "Revelar",
+"Reveal details for @{username}": "Revelar detalhes de @{username}",
+"Reveal email and devices": "Revelar e-mail e dispositivos",
+"Roles and instance settings. No access to content.": "Funções e configurações da instância. Sem acesso a conteúdo.",
+"Roles updated for @{username}": "Funções atualizadas para @{username}",
+"Temporary: admin message search, until case-based access replaces it.": "Temporário: busca de mensagens de admin, até que o acesso baseado em casos a substitua."
 }

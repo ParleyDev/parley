@@ -420,7 +420,7 @@ async fn join_member(State(state): State<AppState>, AuthUser(bot): AuthUser, Pat
 
 /// `GET /admin/applications`: every app with a bot, newest first, for verifying.
 async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Value>>> {
-    crate::routes::users::require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let rows: Vec<(Uuid, String, String, Option<String>, bool, bool, chrono::DateTime<chrono::Utc>, Option<String>, i64)> = sqlx::query_as(
         "SELECT a.id, a.name, a.description, a.icon_url, a.verified, a.bot_public, a.created_at, o.username,
                 (SELECT COUNT(*) FROM guild_members m WHERE m.user_id = a.bot_user_id) FROM applications a LEFT JOIN users o ON o.id = a.owner_id
@@ -433,7 +433,7 @@ struct VerifyReq { verified: bool }
 
 /// `PATCH /admin/applications/:id`: mark an app (and its bot) verified, or not.
 async fn admin_verify(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<VerifyReq>) -> AppResult<StatusCode> {
-    crate::routes::users::require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let row: Option<(Option<Uuid>, String)> = sqlx::query_as("UPDATE applications SET verified = $2 WHERE id = $1 RETURNING bot_user_id, name").bind(id).bind(req.verified).fetch_optional(&state.db).await?;
     let (bot, name) = row.ok_or_else(|| AppError::NotFound("Application not found".into()))?;
     if let Some(b) = bot {

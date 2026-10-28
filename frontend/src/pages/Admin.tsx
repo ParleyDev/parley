@@ -1,7 +1,8 @@
 import BlockedLinksPane from './AdminBlockedLinks'
 import AppsPane from './AdminApps'
-import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
+import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
+import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
 import { NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
 import { MobileBack } from '../components/HeaderBits'
@@ -14,24 +15,28 @@ import { useT, t as tr, tn } from '../lib/i18n'
 /** Root console for Parley admins: stats, users, servers, instance settings. */
 export default function AdminPage() {
   const t = useT()
+  const [access, setAccess] = useState<AdminAccess | null>(null)
+  useEffect(() => { api.get<AdminAccess>('/admin/access').then(setAccess).catch(() => setAccess({ roles: [], perms: [], content_search: false, all_roles: [] })) }, [])
+  const a = access
   const item = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2.5 text-[15px] font-medium ${active ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`
   const showContent = useShowContent()
   return (
+    <AccessCtx.Provider value={access}>
     <SplitLayout defaultPane="nav" testid={{ 'data-admin': '' }} sidebar={
           <aside className="w-[var(--sidebar-w)] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
             <div className="h-12 px-4 flex items-center gap-2 font-bold text-lg border-b border-line"><ShieldCheck size={20} className="text-success" /> {t('Admin Console')}</div>
             <nav className="p-2 space-y-0.5">
               <NavLink to="/admin" end onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="overview"><LayoutDashboard size={20} /> {t('Overview')}</NavLink>
-              <NavLink to="/admin/users" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="users"><Users size={20} /> {t('Users')}</NavLink>
-              <NavLink to="/admin/servers" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> {t('Servers')}</NavLink>
-              <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> {t('Discovery Queue')}</NavLink>
-              <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> {t('Instance Settings')}</NavLink>
-              <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> {t('Messages')}</NavLink>
-              <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> {t('Reports')}</NavLink>
-              <NavLink to="/admin/blocked-links" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="blocked-links"><Ban size={20} /> {t('Blocked Links')}</NavLink>
-              <NavLink to="/admin/apps" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="apps"><Bot size={20} /> {t('Apps')}</NavLink>
-              <NavLink to="/admin/audit" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="audit"><ScrollText size={20} /> {t('Audit Log')}</NavLink>
-              <NavLink to="/admin/mail" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="mail"><Mail size={20} /> {t('Mail')}</NavLink>
+              {can(a, 'account_metadata_read') && <NavLink to="/admin/users" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="users"><Users size={20} /> {t('Users')}</NavLink>}
+              {can(a, 'conversation_metadata_read') && <NavLink to="/admin/servers" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> {t('Servers')}</NavLink>}
+              {can(a, 'instance_manage') && <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> {t('Discovery Queue')}</NavLink>}
+              {can(a, 'instance_manage') && <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> {t('Instance Settings')}</NavLink>}
+              {a?.content_search && <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> {t('Messages')}</NavLink>}
+              {can(a, 'report_context_read') && <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> {t('Reports')}</NavLink>}
+              {can(a, 'instance_manage') && <NavLink to="/admin/blocked-links" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="blocked-links"><Ban size={20} /> {t('Blocked Links')}</NavLink>}
+              {can(a, 'instance_manage') && <NavLink to="/admin/apps" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="apps"><Bot size={20} /> {t('Apps')}</NavLink>}
+              {can(a, 'audit_read_own', 'audit_read_team', 'audit_read_all') && <NavLink to="/admin/audit" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="audit"><ScrollText size={20} /> {t('Audit Log')}</NavLink>}
+              {can(a, 'account_pii_reveal') && <NavLink to="/admin/mail" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="mail"><Mail size={20} /> {t('Mail')}</NavLink>}
             </nav>
           </aside>
     }>
@@ -52,6 +57,7 @@ export default function AdminPage() {
         </Routes>
       </div>
     </SplitLayout>
+    </AccessCtx.Provider>
   )
 }
 
@@ -94,6 +100,10 @@ const PAGE = 100
 
 function UsersPane() {
   const t = useT()
+  const a = useAccess()
+  const act = can(a, 'content_action'), inst = can(a, 'instance_manage'), manage = can(a, 'admin_roles_manage')
+  const [rolesFor, setRolesFor] = useState<AdminUser | null>(null)
+  const [revealFor, setRevealFor] = useState<AdminUser | null>(null)
   const me = useStore((s) => s.user)
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
@@ -217,15 +227,17 @@ function UsersPane() {
           </div>
         </div>
       )}
-      {selected.size > 0 && (
+      {rolesFor && <RolesDialog user={rolesFor} all={a?.all_roles ?? []} onClose={() => setRolesFor(null)} onSaved={() => { setRolesFor(null); load() }} />}
+      {revealFor && <RevealDialog user={revealFor} onClose={() => setRevealFor(null)} />}
+      {selected.size > 0 && (act || inst) && (
         <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-accent/40 bg-accent/10 px-3 py-2 text-sm" data-admin-bulk-bar>
           <span className="font-semibold" data-admin-bulk-count>{t('{n} selected', { n: selected.size })}</span>
-          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('suspend', t('Suspend'), t('Suspended accounts are logged out everywhere and cannot log in until unsuspended.'), true)} data-admin-bulk="suspend">{t('Suspend')}</button>
-          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('unsuspend', t('Unsuspend'), t('They will be able to log in again.'))} data-admin-bulk="unsuspend">{t('Unsuspend')}</button>
-          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('logout', t('Log out'), t('Every session of the selected accounts is revoked.'))} data-admin-bulk="logout">{t('Log out everywhere')}</button>
-          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('clear_mfa', t('Clear 2FA'), t('Two-factor authentication is removed from the selected accounts; they log in with just their password.'), true)} data-admin-bulk="clear_mfa">{t('Clear 2FA')}</button>
-          <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={bulkQuota} data-admin-bulk="quota">{t('Set quota')}</button>
-          <button type="button" className="btn-danger py-1 text-xs" disabled={busy} onClick={() => bulk('delete', t('Delete'), t('This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as "Deleted User"). This cannot be undone.'), true)} data-admin-bulk="delete">{t('Delete')}</button>
+          {act && <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('suspend', t('Suspend'), t('Suspended accounts are logged out everywhere and cannot log in until unsuspended.'), true)} data-admin-bulk="suspend">{t('Suspend')}</button>}
+          {act && <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('unsuspend', t('Unsuspend'), t('They will be able to log in again.'))} data-admin-bulk="unsuspend">{t('Unsuspend')}</button>}
+          {act && <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('logout', t('Log out'), t('Every session of the selected accounts is revoked.'))} data-admin-bulk="logout">{t('Log out everywhere')}</button>}
+          {act && <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={() => bulk('clear_mfa', t('Clear 2FA'), t('Two-factor authentication is removed from the selected accounts; they log in with just their password.'), true)} data-admin-bulk="clear_mfa">{t('Clear 2FA')}</button>}
+          {inst && <button type="button" className="btn-ghost py-1 text-xs" disabled={busy} onClick={bulkQuota} data-admin-bulk="quota">{t('Set quota')}</button>}
+          {act && <button type="button" className="btn-danger py-1 text-xs" disabled={busy} onClick={() => bulk('delete', t('Delete'), t('This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as "Deleted User"). This cannot be undone.'), true)} data-admin-bulk="delete">{t('Delete')}</button>}
           <button type="button" className="ml-auto text-xs text-text-2 hover:text-text-0" onClick={() => setSelected(new Set())} data-admin-bulk-clear>{t('Clear selection')}</button>
         </div>
       )}
@@ -250,22 +262,23 @@ function UsersPane() {
               {u.mfa_enabled && <span className="rounded bg-sky-500/20 text-sky-300 px-1.5 py-0.5 text-[10px] font-bold" data-badge="mfa">{t('2FA')}</span>}
               {!u.email_verified_at && !u.bot && u.account_state !== 'deleted' && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="unverified">{t('UNVERIFIED')}</span>}
             </div>
-            <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">{t('Email:')} </span>{u.email ?? '—'}</div>
+            <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">{t('Email:')} </span>{u.email ?? '—'}{u.email?.includes('***') && can(a, 'account_pii_reveal') && <button type="button" className="ml-1.5 inline-flex align-middle text-text-2 hover:text-text-0" title={t('Reveal email and devices')} aria-label={t('Reveal email and devices')} onClick={() => setRevealFor(u)} data-admin-reveal><Eye size={14} /></button>}</div>
             <div className="text-sm text-text-1"><span className="md:hidden text-text-2">{t('Servers:')} </span>{u.guild_count}</div>
             <div className="text-xs text-text-2"><span className="md:hidden">{t('Joined:')} </span>{new Date(u.created_at).toLocaleDateString()}</div>
             <div className="flex items-center justify-end gap-1">
-              {u.account_state === 'deleted' && <Tool label={t('Purge account')} onClick={() => purge(u)} testid="purge-user" danger><Eraser size={16} /></Tool>}
+              {u.account_state === 'deleted' && act && <Tool label={t('Purge account')} onClick={() => purge(u)} testid="purge-user" danger><Eraser size={16} /></Tool>}
               {u.id !== me?.id && u.account_state !== 'deleted' && (
                 <>
-                  <Tool label={u.is_admin ? t('Remove admin') : t('Make admin')} onClick={() => patch(u, { is_admin: !u.is_admin }, u.is_admin ? t('@{username} is no longer an admin', { username: u.username }) : t('@{username} is now an admin', { username: u.username }))} testid="toggle-admin">{u.is_admin ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}</Tool>
-                  <Tool label={u.suspended_at ? t('Unsuspend') : t('Suspend')} onClick={() => patch(u, { suspended: !u.suspended_at }, u.suspended_at ? t('@{username} unsuspended', { username: u.username }) : t('@{username} suspended', { username: u.username }))} testid="toggle-suspend" danger={!u.suspended_at}>{u.suspended_at ? <UserCheck size={16} /> : <UserX size={16} />}</Tool>
-                  <Tool label={t('Messages and uploads')} onClick={() => navigate(`/admin/users/${u.id}`)} testid="content"><FolderOpen size={16} /></Tool>
-                  <Tool label={t('Log out of all devices')} onClick={() => logoutAll(u)} testid="logout-all"><LogOut size={16} /></Tool>
-                  <Tool label={t('Storage quota')} onClick={() => setQuotaFor(u)} testid="quota"><HardDrive size={16} /></Tool>
-                  <Tool label={t('Upload size limit')} onClick={() => { setLimitFor(u); setLimitMb(u.max_upload_bytes ? String(Math.round(u.max_upload_bytes / 1048576)) : '') }} testid="upload-limit"><Upload size={16} /></Tool>
-                  {u.mfa_enabled && <Tool label={t('Clear two-factor auth')} onClick={() => patch(u, { mfa: false }, t('Two-factor authentication cleared for @{username}', { username: u.username }))} testid="clear-mfa" danger><KeyRound size={16} /></Tool>}
-                  <Tool label={t('Delete account')} onClick={() => del(u)} testid="delete-user" danger><Trash2 size={16} /></Tool>
-                  <Tool label={t('Purge account')} onClick={() => purge(u)} testid="purge-user" danger><Eraser size={16} /></Tool>
+                  {manage && <Tool label={u.is_admin ? t('Remove admin') : t('Make admin')} onClick={() => patch(u, { is_admin: !u.is_admin }, u.is_admin ? t('@{username} is no longer an admin', { username: u.username }) : t('@{username} is now an admin', { username: u.username }))} testid="toggle-admin">{u.is_admin ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}</Tool>}
+                  {manage && <Tool label={t('Admin roles')} onClick={() => setRolesFor(u)} testid="roles"><UserCog size={16} /></Tool>}
+                  {act && <Tool label={u.suspended_at ? t('Unsuspend') : t('Suspend')} onClick={() => patch(u, { suspended: !u.suspended_at }, u.suspended_at ? t('@{username} unsuspended', { username: u.username }) : t('@{username} suspended', { username: u.username }))} testid="toggle-suspend" danger={!u.suspended_at}>{u.suspended_at ? <UserCheck size={16} /> : <UserX size={16} />}</Tool>}
+                  {a?.content_search && <Tool label={t('Messages and uploads')} onClick={() => navigate(`/admin/users/${u.id}`)} testid="content"><FolderOpen size={16} /></Tool>}
+                  {act && <Tool label={t('Log out of all devices')} onClick={() => logoutAll(u)} testid="logout-all"><LogOut size={16} /></Tool>}
+                  {inst && <Tool label={t('Storage quota')} onClick={() => setQuotaFor(u)} testid="quota"><HardDrive size={16} /></Tool>}
+                  {inst && <Tool label={t('Upload size limit')} onClick={() => { setLimitFor(u); setLimitMb(u.max_upload_bytes ? String(Math.round(u.max_upload_bytes / 1048576)) : '') }} testid="upload-limit"><Upload size={16} /></Tool>}
+                  {u.mfa_enabled && act && <Tool label={t('Clear two-factor auth')} onClick={() => patch(u, { mfa: false }, t('Two-factor authentication cleared for @{username}', { username: u.username }))} testid="clear-mfa" danger><KeyRound size={16} /></Tool>}
+                  {act && <Tool label={t('Delete account')} onClick={() => del(u)} testid="delete-user" danger><Trash2 size={16} /></Tool>}
+                  {act && <Tool label={t('Purge account')} onClick={() => purge(u)} testid="purge-user" danger><Eraser size={16} /></Tool>}
                 </>
               )}
               {u.id === me?.id && <span className="text-xs text-text-2">{t('you')}</span>}
@@ -273,6 +286,76 @@ function UsersPane() {
           </div>
         ))}
         {list && list.length < total && <button type="button" className="w-full py-2 text-sm text-sky-400 hover:bg-bg-3 border-t border-line" onClick={() => load(true)} data-admin-user-more>{t('Load more ({n} remaining)', { n: total - list.length })}</button>}
+      </div>
+    </div>
+  )
+}
+
+/** Grant or take away admin roles (SUPER_ADMIN). Any role opens the console; none closes it. */
+function RolesDialog({ user, all, onClose, onSaved }: { user: AdminUser; all: string[]; onClose: () => void; onSaved: () => void }) {
+  const t = useT()
+  const pushToast = useStore((s) => s.pushToast)
+  const [roles, setRoles] = useState<Set<string> | null>(null)
+  useEffect(() => { api.get<{ id: string; roles: string[] }[]>('/admin/roles').then((l) => setRoles(new Set(l.find((x) => x.id === user.id)?.roles ?? []))).catch((e) => pushToast((e as Error).message, 'error')) }, [user.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const about: Record<string, string> = {
+    SUPPORT: t('Account details; email and devices only through a logged reveal.'),
+    MODERATOR: t('Reports and their context, content actions, their own audit entries.'),
+    TS_LEAD: t('Everything a moderator can do, plus account PII, approving case grants and their team\'s audit entries.'),
+    LEGAL: t('Case-bound content, exports with an approved case, the whole audit log.'),
+    SUPER_ADMIN: t('Roles and instance settings. No access to content.'),
+    AUDITOR: t('Read-only access to the audit log.'),
+    SUPER_ADMIN_TEMP: t('Temporary: admin message search, until case-based access replaces it.'),
+  }
+  const save = async () => {
+    try { await api.put(`/admin/users/${user.id}/roles`, { roles: [...(roles ?? [])] }); pushToast(t('Roles updated for @{username}', { username: user.username })); onSaved() } catch (e) { pushToast((e as Error).message, 'error') }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 safe-pad" onClick={onClose} data-admin-roles-dialog>
+      <div className="pop w-full max-w-md rounded-xl bg-bg-1 border border-line p-5 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold">{t('Admin roles for @{username}', { username: user.username })}</h3>
+        {roles === null ? <p className="text-sm text-text-2">{t('Loading…')}</p> : (
+          <div className="space-y-1.5">
+            {all.map((r) => (
+              <label key={r} className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-bg-3 cursor-pointer">
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-accent" checked={roles.has(r)} onChange={() => setRoles((s) => { const n = new Set(s); if (n.has(r)) n.delete(r); else n.add(r); return n })} data-admin-role={r} />
+                <span><span className="block text-sm font-semibold">{r}</span><span className="block text-xs text-text-2">{about[r] ?? ''}</span></span>
+              </label>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 justify-end"><button type="button" className="btn-ghost py-1.5" onClick={onClose}>{t('Cancel')}</button><button type="button" className="btn-primary py-1.5" disabled={roles === null} onClick={save} data-admin-roles-save>{t('Save')}</button></div>
+      </div>
+    </div>
+  )
+}
+
+/** Unmask someone's email and recent devices. Needs a reason; every reveal is logged. */
+function RevealDialog({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const t = useT()
+  const pushToast = useStore((s) => s.pushToast)
+  const [why, setWhy] = useState('')
+  const [shown, setShown] = useState<{ email: string | null; sessions: { ip: string; user_agent: string; last_seen_at: string }[] } | null>(null)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    try { setShown(await api.post(`/admin/users/${user.id}/reveal`, { justification: why.trim() })) } catch (err) { pushToast((err as Error).message, 'error') }
+  }
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 safe-pad" onClick={onClose} data-admin-reveal-dialog>
+      <div className="pop w-full max-w-lg rounded-xl bg-bg-1 border border-line p-5 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold">{t('Reveal details for @{username}', { username: user.username })}</h3>
+        {shown ? (
+          <div className="space-y-2 text-sm" data-admin-revealed>
+            <div><span className="text-text-2">{t('Email:')}</span> <span className="font-semibold" data-admin-revealed-email>{shown.email ?? '—'}</span></div>
+            {shown.sessions.length > 0 && <ul className="max-h-48 overflow-y-auto rounded-lg border border-line divide-y divide-line text-xs">{shown.sessions.map((x, i) => <li key={i} className="px-2 py-1.5"><span className="font-mono">{x.ip}</span> · {x.user_agent} · {new Date(x.last_seen_at).toLocaleString()}</li>)}</ul>}
+            <div className="flex justify-end"><button type="button" className="btn-ghost py-1.5" onClick={onClose}>{t('Close')}</button></div>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-3">
+            <p className="text-sm text-text-2">{t('Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.')}</p>
+            <input className="input" value={why} onChange={(e) => setWhy(e.target.value)} placeholder={t('Reason (for example, a support ticket number)')} autoFocus data-admin-reveal-why />
+            <div className="flex gap-2 justify-end"><button type="button" className="btn-ghost py-1.5" onClick={onClose}>{t('Cancel')}</button><button type="submit" className="btn-primary py-1.5" disabled={why.trim().length < MIN_WHY} data-admin-reveal-go>{t('Reveal')}</button></div>
+          </form>
+        )}
       </div>
     </div>
   )
@@ -665,9 +748,8 @@ function HitRow({ m, onDeleted }: { m: AdminHit; onDeleted: () => void }) {
 
 /** Whether this admin may read message content (Phase 0: the temporary super-admin role), or null while loading. */
 function useContentAccess() {
-  const [ok, setOk] = useState<boolean | null>(null)
-  useEffect(() => { api.get<{ content_search: boolean }>('/admin/access').then((a) => setOk(a.content_search)).catch(() => setOk(false)) }, [])
-  return ok
+  const a = useAccess()
+  return a ? a.content_search : null
 }
 const MIN_WHY = 10
 

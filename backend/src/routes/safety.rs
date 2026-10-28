@@ -6,7 +6,6 @@ use crate::{
     error::{AppError, AppResult},
     models::Channel,
     perms,
-    routes::users::require_admin,
     state::AppState,
 };
 use axum::{extract::{Path, State}, http::StatusCode, routing::{delete, get, post}, Json, Router};
@@ -101,7 +100,7 @@ pub async fn check_dm_spam(state: &AppState, uid: Uuid, channel_id: Uuid) -> App
 }
 
 async fn list_domains(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Vec<Value>>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let rows: Vec<(String, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as("SELECT domain, reason, created_at FROM blocked_domains ORDER BY domain").fetch_all(&state.db).await?;
     Ok(Json(rows.into_iter().map(|(d, r, t)| json!({ "domain": d, "reason": r, "created_at": t })).collect()))
 }
@@ -110,7 +109,7 @@ async fn list_domains(State(state): State<AppState>, AuthUser(uid): AuthUser) ->
 struct DomainReq { domain: String, #[serde(default)] reason: String }
 
 async fn add_domain(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<DomainReq>) -> AppResult<StatusCode> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let d = req.domain.trim().trim_start_matches("https://").trim_start_matches("http://").trim_start_matches("www.").trim_end_matches('/').to_lowercase();
     if d.is_empty() || !d.contains('.') || d.contains('/') || d.len() > 253 { return Err(AppError::BadRequest("Give a domain like bad.example".into())) }
     sqlx::query("INSERT INTO blocked_domains (domain, reason, added_by) VALUES ($1, $2, $3) ON CONFLICT (domain) DO UPDATE SET reason = EXCLUDED.reason").bind(&d).bind(req.reason.trim()).bind(uid).execute(&state.db).await?;
@@ -119,7 +118,7 @@ async fn add_domain(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
 }
 
 async fn remove_domain(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(domain): Path<String>) -> AppResult<StatusCode> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     sqlx::query("DELETE FROM blocked_domains WHERE domain = $1").bind(domain.to_lowercase()).execute(&state.db).await?;
     crate::audit::record(&state, uid, "safety.unblock_domain", "domain", None, &domain, json!({})).await;
     Ok(StatusCode::NO_CONTENT)

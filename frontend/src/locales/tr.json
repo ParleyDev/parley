@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "Yönetici konsolundan mesaj içeriğini okuma, vaka tabanlı erişim geliştirilene kadar geçici süper yönetici rolüyle sınırlıdır. ADMIN_EMAILS içinde listelenen bir sahipten isteyin.",
 "Reason (required)": "Gerekçe (zorunlu)",
 "This account's messages and uploads": "Bu hesabın mesajları ve yüklemeleri",
-"e.g. report #123: checking for more spam from this account": "ör. şikayet #123: bu hesaptan başka spam olup olmadığını kontrol etme"
+"e.g. report #123: checking for more spam from this account": "ör. şikayet #123: bu hesaptan başka spam olup olmadığını kontrol etme",
+"Account details; email and devices only through a logged reveal.": "Hesap ayrıntıları; e-posta ve cihazlar yalnızca kayda geçen bir gösterim ile.",
+"Admin roles": "Yönetici rolleri",
+"Admin roles for @{username}": "@{username} için yönetici rolleri",
+"Case-bound content, exports with an approved case, the whole audit log.": "Vakaya bağlı içerik, onaylı vakayla dışa aktarmalar, tüm denetim günlüğü.",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "E-posta adresleri, IP'ler ve cihazlar varsayılan olarak gizlidir. Neden gerektiğini belirt; gösterim kaydedilir.",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "Bir moderatörün yapabildiği her şey, ayrıca hesap PII'si, vaka erişimi onayı ve ekibinin denetim kayıtları.",
+"Read-only access to the audit log.": "Denetim günlüğüne salt okunur erişim.",
+"Reason (for example, a support ticket number)": "Gerekçe (örneğin, bir destek talebi numarası)",
+"Reports and their context, content actions, their own audit entries.": "Raporlar ve bağlamları, içerik işlemleri, kendi denetim kayıtları.",
+"Reveal": "Göster",
+"Reveal details for @{username}": "@{username} ayrıntılarını göster",
+"Reveal email and devices": "E-posta ve cihazları göster",
+"Roles and instance settings. No access to content.": "Roller ve örnek ayarları. İçeriğe erişim yok.",
+"Roles updated for @{username}": "@{username} için roller güncellendi",
+"Temporary: admin message search, until case-based access replaces it.": "Geçici: yönetici mesaj araması, vaka tabanlı erişim onun yerini alana kadar."
 }

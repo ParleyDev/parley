@@ -3,7 +3,7 @@
 use crate::{
     auth::{revoke_sessions, AuthSession, AuthUser},
     error::{AppError, AppResult},
-    routes::users::require_admin,
+
     state::AppState,
 };
 use axum::{
@@ -75,13 +75,16 @@ async fn logout_others(State(state): State<AppState>, AuthSession(uid, sid): Aut
     Ok(Json(serde_json::json!({ "revoked": n })))
 }
 
+/// An account's devices for the console: when, not where (IP and user agent are masked; Reveal unmasks them, logged).
 async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<Session>>> {
-    require_admin(&state, uid).await?;
-    Ok(Json(active(&state, id, None).await?))
+    let a = crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::AccountMetadataRead).await?;
+    let mut list = active(&state, id, None).await?;
+    if !a.pii_unmasked() { for s in &mut list { s.ip = "hidden".into(); s.user_agent = "hidden".into() } }
+    Ok(Json(list))
 }
 
 async fn admin_logout_all(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<serde_json::Value>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
     let n = revoke_sessions(&state, id, None, None, "An administrator logged you out of all devices.").await?.len();
     crate::audit::record(&state, uid, "user.logout_all", "user", Some(id), &crate::audit::username(&state, id).await, serde_json::json!({ "revoked": n })).await;
     Ok(Json(serde_json::json!({ "revoked": n })))
@@ -89,7 +92,7 @@ async fn admin_logout_all(State(state): State<AppState>, AuthUser(uid): AuthUser
 
 /// Log one device out of a user's account.
 async fn admin_logout_one(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
     if revoke_sessions(&state, id, Some(sid), None, "An administrator logged this device out.").await?.is_empty() {
         return Err(AppError::NotFound("Session not found".into()));
     }

@@ -5,7 +5,7 @@ use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
     models::{Attachment, AttachmentJson, Message, MessageRow},
-    routes::{admin_access, channels::{hydrate, MESSAGE_SELECT}, search::tsquery, users::require_admin},
+    routes::{admin_access, channels::{hydrate, MESSAGE_SELECT}, search::tsquery},
     state::AppState,
     ws::hub::Target,
 };
@@ -143,7 +143,7 @@ async fn user_content(State(state): State<AppState>, AuthUser(uid): AuthUser, he
 
 /// Delete every message the user wrote. Open clients hear about the most recent 200; the rest vanish on reload.
 async fn purge_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Value>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
     let recent: Vec<(Uuid, Uuid, Option<Uuid>)> = sqlx::query_as("SELECT m.id, m.channel_id, c.guild_id FROM messages m JOIN channels c ON c.id = m.channel_id WHERE m.author_id = $1 ORDER BY m.id DESC LIMIT 200")
         .bind(id)
         .fetch_all(&state.db)
@@ -166,7 +166,7 @@ async fn purge_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, 
 /// Remove every file the user uploaded: attachments (their messages stay, minus the files) and profile images
 /// (avatar/banner are cleared). Emoji and stickers they uploaded belong to servers and are left alone.
 async fn purge_uploads(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Value>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
     let atts: Vec<(Uuid,)> = sqlx::query_as("DELETE FROM attachments WHERE uploader_id = $1 RETURNING id").bind(id).fetch_all(&state.db).await?;
     let imgs: Vec<(Uuid,)> = sqlx::query_as("DELETE FROM images WHERE owner_id = $1 AND kind IN ('avatar', 'banner', 'icon') RETURNING id").bind(id).fetch_all(&state.db).await?;
     for (fid,) in atts.iter().chain(imgs.iter()) {

@@ -5,7 +5,7 @@ use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
     perms,
-    routes::{guilds::{fetch_member, is_banned, GUILD_COLS}, users::{require_admin, validate_image_max}},
+    routes::{guilds::{fetch_member, is_banned, GUILD_COLS}, users::validate_image_max},
     state::AppState,
 };
 use axum::{
@@ -335,7 +335,7 @@ fn default_status() -> String {
 
 /// Admin review queue (pending by default), oldest submission first.
 async fn admin_list(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<AdminQuery>) -> AppResult<Json<Vec<Listing>>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     if !["pending", "approved", "rejected"].contains(&q.status.as_str()) {
         return Err(AppError::BadRequest("Unknown status".into()));
     }
@@ -354,7 +354,7 @@ struct Review {
 }
 
 async fn review(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>, Json(req): Json<Review>) -> AppResult<Json<Listing>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     if !["approved", "rejected", "pending"].contains(&req.status.as_str()) {
         return Err(AppError::BadRequest("Status must be approved, rejected or pending".into()));
     }
@@ -387,7 +387,7 @@ fn deserialize_nullable_i32<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Op
 
 /// Admin: feature a listing (and order it) and/or grant the verified badge. Only approved listings can be featured or verified.
 async fn admin_update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>, Json(req): Json<AdminUpdate>) -> AppResult<Json<Listing>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     let status: Option<(String,)> = sqlx::query_as("SELECT status FROM guild_discovery WHERE guild_id = $1").bind(gid).fetch_optional(&state.db).await?;
     let Some((status,)) = status else { return Err(AppError::NotFound("Listing not found".into())) };
     let featuring = req.featured_order.map(|f| f.is_some()).unwrap_or(false);

@@ -38,7 +38,7 @@ pub fn router() -> Router<AppState> {
 
 /// `POST /admin/deletions/run` (instance admins): finalize every due deletion now instead of at the next run.
 async fn run_now(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
-    crate::routes::users::require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
     Ok(Json(json!({ "finalized": finalize_due(&state).await? })))
 }
 

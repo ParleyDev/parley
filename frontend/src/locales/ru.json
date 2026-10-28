@@ -3421,5 +3421,20 @@
 "Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "Чтение содержимого сообщений из консоли администратора ограничено временной ролью суперадминистратора, пока разрабатывается доступ на основе обращений. Обратитесь к владельцу из списка ADMIN_EMAILS.",
 "Reason (required)": "Причина (обязательно)",
 "This account's messages and uploads": "Сообщения и загрузки этого аккаунта",
-"e.g. report #123: checking for more spam from this account": "напр., жалоба №123: проверка на наличие другого спама от этого аккаунта"
+"e.g. report #123: checking for more spam from this account": "напр., жалоба №123: проверка на наличие другого спама от этого аккаунта",
+"Account details; email and devices only through a logged reveal.": "Данные аккаунта; почта и устройства только через зафиксированное в журнале раскрытие.",
+"Admin roles": "Роли администратора",
+"Admin roles for @{username}": "Роли администратора для @{username}",
+"Case-bound content, exports with an approved case, the whole audit log.": "Контент, привязанный к делам, экспорт с одобренным делом, весь журнал аудита.",
+"Email addresses, IPs and devices are hidden by default. Say why you need them; the reveal is logged.": "Адреса почты, IP и устройства скрыты по умолчанию. Укажи, зачем они тебе нужны; раскрытие записывается в журнал.",
+"Everything a moderator can do, plus account PII, approving case grants and their team's audit entries.": "Всё, что может модератор, плюс PII аккаунтов, одобрение доступа к делам и записи аудита его команды.",
+"Read-only access to the audit log.": "Доступ к журналу аудита только для чтения.",
+"Reason (for example, a support ticket number)": "Причина (например, номер тикета поддержки)",
+"Reports and their context, content actions, their own audit entries.": "Жалобы и их контекст, действия с контентом, собственные записи аудита.",
+"Reveal": "Раскрыть",
+"Reveal details for @{username}": "Раскрыть данные @{username}",
+"Reveal email and devices": "Раскрыть почту и устройства",
+"Roles and instance settings. No access to content.": "Роли и настройки инстанса. Нет доступа к контенту.",
+"Roles updated for @{username}": "Роли обновлены для @{username}",
+"Temporary: admin message search, until case-based access replaces it.": "Временно: поиск сообщений администратором, пока его не заменит доступ на основе дел."
 }

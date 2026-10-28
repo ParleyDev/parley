@@ -4,7 +4,7 @@ use crate::{
     audit,
     auth::AuthUser,
     error::{AppError, AppResult},
-    routes::{channels::require_channel, users::require_admin},
+    routes::channels::require_channel,
     state::AppState,
 };
 use axum::{
@@ -146,7 +146,7 @@ struct ListQuery {
 fn open() -> String { "open".into() }
 
 async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<ListQuery>) -> AppResult<Json<Vec<Report>>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ReportContextRead).await?;
     let status = if q.status == "all" { None } else { Some(q.status) };
     Ok(Json(
         sqlx::query_as::<_, Report>(&format!("{REPORT_SELECT} WHERE ($1::text IS NULL OR r.status = $1) ORDER BY r.id DESC LIMIT 200"))
@@ -170,7 +170,7 @@ struct UpdateReport {
 }
 
 async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<UpdateReport>) -> AppResult<Json<Report>> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
     if !["open", "resolved", "dismissed"].contains(&req.status.as_str()) {
         return Err(AppError::BadRequest("status must be open, resolved or dismissed".into()));
     }
@@ -195,7 +195,7 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
 
 /// Admins may delete any message anywhere (reported content, spam); members of the channel see it vanish.
 async fn admin_delete_message(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
-    require_admin(&state, uid).await?;
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::ContentAction).await?;
     let row: Option<(Uuid, Uuid)> = sqlx::query_as("SELECT channel_id, author_id FROM messages WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
     let Some((cid, author)) = row else { return Err(AppError::NotFound("Message not found".into())) };
     let c = sqlx::query_as::<_, crate::models::Channel>(&format!("SELECT {} FROM channels WHERE id = $1", crate::routes::guilds::CHANNEL_COLS)).bind(cid).fetch_one(&state.db).await?;
