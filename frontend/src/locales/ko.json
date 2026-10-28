@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name} 서버가 커뮤니티 가이드라인 위반으로 제거되었습니다.",
 "{name} was taken down": "{name} 서버가 차단되었습니다",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} 서버는 {date}에 삭제됩니다. 그때까지는 사용자 설정 › 내 계정에서 복원할 수 있습니다.",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "서버는 모든 멤버에게서 즉시 사라지며, 채널, 메시지, 초대가 작동하지 않게 돼. 일정 기간 동안은 복원할 수 있어(날짜는 삭제가 완료되면 표시돼). 그 이후에는 영구적으로 삭제돼."
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "서버는 모든 멤버에게서 즉시 사라지며, 채널, 메시지, 초대가 작동하지 않게 돼. 일정 기간 동안은 복원할 수 있어(날짜는 삭제가 완료되면 표시돼). 그 이후에는 영구적으로 삭제돼.",
+"iPhone and iPad (APNs)": "iPhone 및 iPad (APNs)",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "iOS 앱은 Apple에서 직접 알림을 받습니다. Apple Push Notifications service가 활성화된 키를 만들고(developer.apple.com → Certificates, IDs & Profiles → Keys) .p8 파일을 키 ID, 팀 ID와 함께 여기에 붙여 넣으세요.",
+"Key ID": "키 ID",
+"Team ID": "팀 ID",
+"Bundle ID": "번들 ID",
+"APNs endpoint override (tests only)": "APNs 엔드포인트 재정의(테스트 전용)",
+"leave empty for Apple": "Apple을 사용하려면 비워 두세요"
 }

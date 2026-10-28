@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name} is verwijderd wegens schending van de communityrichtlijnen.",
 "{name} was taken down": "{name} is offline gehaald",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} wordt op {date} verwijderd. Tot die tijd kun je hem herstellen via Gebruikersinstellingen › Mijn account.",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "De server verdwijnt meteen voor alle leden: kanalen, berichten en uitnodigingen werken niet meer. Je kunt hem een tijdje herstellen (de datum zie je zodra het klaar is); daarna wordt hij definitief verwijderd."
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "De server verdwijnt meteen voor alle leden: kanalen, berichten en uitnodigingen werken niet meer. Je kunt hem een tijdje herstellen (de datum zie je zodra het klaar is); daarna wordt hij definitief verwijderd.",
+"iPhone and iPad (APNs)": "iPhone en iPad (APNs)",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "De iOS-app krijgt zijn meldingen rechtstreeks van Apple. Maak een sleutel met Apple Push Notifications service ingeschakeld (developer.apple.com → Certificates, IDs & Profiles → Keys) en plak hier het .p8-bestand met de sleutel-ID en je team-ID.",
+"Key ID": "Sleutel-ID",
+"Team ID": "Team-ID",
+"Bundle ID": "Bundle-ID",
+"APNs endpoint override (tests only)": "APNs-endpoint overschrijven (alleen tests)",
+"leave empty for Apple": "leeg laten voor Apple"
 }

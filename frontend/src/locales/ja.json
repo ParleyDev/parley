@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name}はコミュニティガイドライン違反のため削除されました。",
 "{name} was taken down": "{name}は停止されました",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name}は{date}に削除されます。それまでは「ユーザー設定 › マイアカウント」から復元できます。",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "サーバーはすべてのメンバーからすぐに見えなくなり、チャンネル、メッセージ、招待は機能しなくなります。しばらくの間は復元できます(日付は削除の完了後に表示されます)。その後は完全に削除されます。"
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "サーバーはすべてのメンバーからすぐに見えなくなり、チャンネル、メッセージ、招待は機能しなくなります。しばらくの間は復元できます(日付は削除の完了後に表示されます)。その後は完全に削除されます。",
+"iPhone and iPad (APNs)": "iPhone と iPad（APNs）",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "iOS アプリの通知は Apple から直接届きます。Apple Push Notifications service を有効にしたキーを作成し（developer.apple.com → Certificates, IDs & Profiles → Keys）、.p8 ファイルをキー ID とチーム ID とともにここに貼り付けてください。",
+"Key ID": "キー ID",
+"Team ID": "チーム ID",
+"Bundle ID": "バンドル ID",
+"APNs endpoint override (tests only)": "APNsエンドポイントの上書き（テスト専用）",
+"leave empty for Apple": "空欄の場合はAppleを使用"
 }

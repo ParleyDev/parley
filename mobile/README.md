@@ -56,7 +56,19 @@ Icons and splash: drop a 1024×1024 `assets/icon.png` and `assets/splash.png` in
 
 ## Push
 
-The server sends through Firebase Cloud Messaging (HTTP v1). Create a Firebase project, add the Android app (`com.runparley.app`) and download `google-services.json` into `mobile/android/app/`; add the iOS app, upload your APNs key in Firebase, and put `GoogleService-Info.plist` into `mobile/ios/App/App/` (enable the Push Notifications capability and Background Modes → Remote notifications in Xcode). Then paste the Firebase **service account** JSON (Project settings → Service accounts → Generate new private key) into Admin Console → Instance Settings → Push notifications (no restart needed). The app registers its token after login (`PUT /users/@me/push-tokens`), forgets it on logout, and taps on a notification open the right channel.
+- **iOS** goes straight through Apple (APNs). Create a key with *Apple Push Notifications service* enabled (developer.apple.com → Certificates, IDs & Profiles → Keys), then paste the `.p8` contents, its key ID and your team ID into Admin Console → Instance Settings → Push notifications (no restart needed). TestFlight and App Store builds use Apple's production service; tokens from Xcode debug builds are retried on the sandbox automatically.
+- **Android** goes through Firebase Cloud Messaging (HTTP v1). Create a Firebase project, add the Android app (`com.runparley.app`) and put its `google-services.json` in `mobile/android/app/` (CI: the `GOOGLE_SERVICES_JSON` secret, base64). Paste the Firebase **service account** JSON (Project settings → Service accounts → Generate new private key) into the same admin section.
+
+The app registers its token after login (`PUT /users/@me/push-tokens`), forgets it on logout, and taps on a notification open the right channel.
+
+## Passkeys and security keys in the apps
+
+The apps show the web client in a web view, where both iOS and Android only allow WebAuthn for sites that vouch for the app:
+
+- **iOS:** the app's entitlements claim `webcredentials:app.runparley.com`; the server lists the app in `/.well-known/apple-app-site-association` from `IOS_APP_IDS` (`TEAMID.com.runparley.app`). The App ID needs the Associated Domains capability.
+- **Android:** the app turns on WebAuthn in its web view (`MainActivity`); the server lists the app in `/.well-known/assetlinks.json` and accepts its `android:apk-key-hash:` origin, both from `ANDROID_APP_CERTS`: the SHA-256 fingerprints of Play's app signing key (Play Console → Test and release → App integrity) and of the upload key.
+
+Either way this only covers the hosted service; a self-hosted server would need its own app build.
 
 ## Permissions
 

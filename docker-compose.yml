@@ -46,6 +46,10 @@ services:
       PUSH_ALLOW_HOSTS: ${PUSH_ALLOW_HOSTS:-}
       # iOS apps allowed to use passkeys/security keys from inside the app: TEAMID.com.runparley.app (comma-separated).
       IOS_APP_IDS: ${IOS_APP_IDS:-}
+      # Android app signing certificates (SHA-256, comma-separated: Play app signing key, upload key) for passkeys in
+      # the app; ANDROID_APP_ID overrides the package name.
+      ANDROID_APP_CERTS: ${ANDROID_APP_CERTS:-}
+      ANDROID_APP_ID: ${ANDROID_APP_ID:-}
       # Rate limits as count/seconds. Built-in defaults (register 20/60 per IP, login 30/60 per IP,
       # failed logins 5/60 per IP, messages 10/5 per user, uploads 30/60, GIF proxy 60/60) suit
       # production; the compose defaults below are looser so local development and the e2e suites

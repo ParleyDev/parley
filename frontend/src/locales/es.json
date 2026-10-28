@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name} se retiró por infringir las normas de la comunidad.",
 "{name} was taken down": "{name} fue suspendido",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} se eliminará el {date}. Hasta entonces puedes restaurarlo en Ajustes de usuario › Mi cuenta.",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "El servidor desaparece de inmediato para todos sus miembros: los canales, los mensajes y las invitaciones dejan de funcionar. Puedes restaurarlo durante un tiempo (la fecha se muestra cuando termine); después se elimina definitivamente."
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "El servidor desaparece de inmediato para todos sus miembros: los canales, los mensajes y las invitaciones dejan de funcionar. Puedes restaurarlo durante un tiempo (la fecha se muestra cuando termine); después se elimina definitivamente.",
+"iPhone and iPad (APNs)": "iPhone y iPad (APNs)",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "La app de iOS recibe sus notificaciones directamente de Apple. Crea una clave con Apple Push Notifications service activado (developer.apple.com → Certificates, IDs & Profiles → Keys) y pega aquí el archivo .p8 con su ID de clave y tu ID de equipo.",
+"Key ID": "ID de clave",
+"Team ID": "ID de equipo",
+"Bundle ID": "ID de paquete",
+"APNs endpoint override (tests only)": "Anulación del endpoint de APNs (solo pruebas)",
+"leave empty for Apple": "dejar vacío para Apple"
 }

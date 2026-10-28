@@ -120,6 +120,19 @@ pub struct InstanceSettings {
     /// Test hook: base URL replacing the Google OAuth/FCM hosts.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub fcm_endpoint: String,
+    /// Push for the iOS app straight through Apple: an APNs auth key (.p8 contents, secret), its key ID, the team ID,
+    /// and the app's bundle ID (empty: com.runparley.app). Empty key = iOS pushes go through FCM, if that is set.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub apns_key: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub apns_key_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub apns_team_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub apns_topic: String,
+    /// Test hook: base URL replacing Apple's push hosts.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub apns_endpoint: String,
     /// Derived: push configured (shown to admins and clients).
     #[serde(default)]
     pub push: bool,
@@ -165,6 +178,11 @@ impl InstanceSettings {
         self.av_addr = String::new();
         self.fcm_service_account = String::new();
         self.fcm_endpoint = String::new();
+        self.apns_key = String::new();
+        self.apns_key_id = String::new();
+        self.apns_team_id = String::new();
+        self.apns_topic = String::new();
+        self.apns_endpoint = String::new();
         self.oauth_providers = Value::Null;
         self.oauth_endpoint_override = String::new();
         self
@@ -173,7 +191,7 @@ impl InstanceSettings {
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, translate_url: String::new(), translate_api_key: String::new(), translation: false, llm_url: String::new(), llm_api_key: String::new(), llm_model: String::new(), summaries: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string() };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, translate_url: String::new(), translate_api_key: String::new(), translation: false, llm_url: String::new(), llm_api_key: String::new(), llm_model: String::new(), summaries: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), apns_key: String::new(), apns_key_id: String::new(), apns_team_id: String::new(), apns_topic: String::new(), apns_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string() };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -194,6 +212,11 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "av_fail_closed" => s.av_fail_closed = v.as_bool().unwrap_or(false),
             "fcm_service_account" => s.fcm_service_account = v.as_str().unwrap_or("").to_string(),
             "fcm_endpoint" => s.fcm_endpoint = v.as_str().unwrap_or("").to_string(),
+            "apns_key" => s.apns_key = v.as_str().unwrap_or("").to_string(),
+            "apns_key_id" => s.apns_key_id = v.as_str().unwrap_or("").to_string(),
+            "apns_team_id" => s.apns_team_id = v.as_str().unwrap_or("").to_string(),
+            "apns_topic" => s.apns_topic = v.as_str().unwrap_or("").to_string(),
+            "apns_endpoint" => s.apns_endpoint = v.as_str().unwrap_or("").to_string(),
             "oauth_providers" => s.oauth_providers = v,
             "oauth_endpoint_override" => s.oauth_endpoint_override = v.as_str().unwrap_or("").to_string(),
             "max_upload_bytes" => s.max_upload_bytes = v.as_i64().unwrap_or(0),
@@ -206,7 +229,7 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     s.transcription = s.stt_configured();
     s.translation = !s.translate_url.trim().is_empty();
     s.summaries = !s.llm_url.trim().is_empty() && !s.llm_model.trim().is_empty();
-    s.push = !s.fcm_service_account.trim().is_empty();
+    s.push = !s.fcm_service_account.trim().is_empty() || (!s.apns_key.trim().is_empty() && !s.apns_key_id.trim().is_empty() && !s.apns_team_id.trim().is_empty());
     s.oauth_available = crate::routes::connections::PROVIDERS.iter().filter(|p| {
         let c = s.oauth_providers.get(**p).cloned().unwrap_or(Value::Null);
         !c.get("client_id").and_then(|v| v.as_str()).unwrap_or("").trim().is_empty() && !c.get("client_secret").and_then(|v| v.as_str()).unwrap_or("").trim().is_empty()
@@ -746,6 +769,25 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     }
     if before.fcm_service_account != fcm_sa { changed.insert("fcm_service_account".into(), json!(if fcm_sa.is_empty() { "cleared" } else { "set" })); }
     if before.fcm_endpoint != fcm_endpoint { changed.insert("fcm_endpoint".into(), json!(fcm_endpoint)); }
+    let apns_key = req.apns_key.trim().to_string();
+    let apns_key_id = req.apns_key_id.trim().to_ascii_uppercase();
+    let apns_team_id = req.apns_team_id.trim().to_ascii_uppercase();
+    let apns_topic = req.apns_topic.trim().to_string();
+    let apns_endpoint = req.apns_endpoint.trim().to_string();
+    if !apns_key.is_empty() {
+        if let Err(e) = crate::push::parse_apns_key(&apns_key) { return Err(AppError::BadRequest(format!("APNs key: {e}"))); }
+        let id10 = |s: &str| s.len() == 10 && s.chars().all(|c| c.is_ascii_alphanumeric());
+        if !id10(&apns_key_id) || !id10(&apns_team_id) { return Err(AppError::BadRequest("APNs key ID and team ID are 10 letters or digits each".into())); }
+    }
+    if !apns_topic.is_empty() && !apns_topic.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-') { return Err(AppError::BadRequest("Bundle ID can only have letters, digits, dots and dashes".into())); }
+    if !apns_endpoint.is_empty() && !(apns_endpoint.starts_with("http://") || apns_endpoint.starts_with("https://")) {
+        return Err(AppError::BadRequest("APNs endpoint must be an http(s) URL".into()));
+    }
+    if before.apns_key != apns_key { changed.insert("apns_key".into(), json!(if apns_key.is_empty() { "cleared" } else { "set" })); }
+    if before.apns_key_id != apns_key_id { changed.insert("apns_key_id".into(), json!(apns_key_id)); }
+    if before.apns_team_id != apns_team_id { changed.insert("apns_team_id".into(), json!(apns_team_id)); }
+    if before.apns_topic != apns_topic { changed.insert("apns_topic".into(), json!(apns_topic)); }
+    if before.apns_endpoint != apns_endpoint { changed.insert("apns_endpoint".into(), json!(apns_endpoint)); }
     // OAuth providers: keep only the known ones with string keys.
     let mut oauth = serde_json::Map::new();
     if let Some(obj) = req.oauth_providers.as_object() {
@@ -769,7 +811,7 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("translate_url", json!(tr_url)), ("translate_api_key", json!(tr_key)), ("llm_url", json!(llm_url)), ("llm_api_key", json!(llm_key)), ("llm_model", json!(llm_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override)), ("max_upload_bytes", json!(req.max_upload_bytes))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("translate_url", json!(tr_url)), ("translate_api_key", json!(tr_key)), ("llm_url", json!(llm_url)), ("llm_api_key", json!(llm_key)), ("llm_model", json!(llm_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("apns_key", json!(apns_key)), ("apns_key_id", json!(apns_key_id)), ("apns_team_id", json!(apns_team_id)), ("apns_topic", json!(apns_topic)), ("apns_endpoint", json!(apns_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override)), ("max_upload_bytes", json!(req.max_upload_bytes))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     let mut s = load_settings(&state.db).await?;

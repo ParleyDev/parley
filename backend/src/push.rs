@@ -1,6 +1,8 @@
-//! Push notifications for the native apps through Firebase Cloud Messaging (HTTP v1). Configured in Instance
-//! Settings (`fcm_service_account`: a Firebase service-account JSON; `fcm_endpoint` overrides the Google hosts for
-//! tests). Without it, tokens are stored but nothing is sent. Pushes go to users who are mentioned or DM'd while
+//! Push notifications for the native apps: Firebase Cloud Messaging (HTTP v1) for Android, and Apple's push service
+//! (APNs) directly for iOS. Configured in Instance Settings: `fcm_service_account` (a Firebase service-account JSON)
+//! and `apns_key` / `apns_key_id` / `apns_team_id` / `apns_topic` (an APNs auth key, .p8); the `*_endpoint` settings
+//! replace the Google and Apple hosts for tests. iOS tokens go through FCM only when APNs isn't set up (an app built
+//! with the Firebase SDK). Without either, tokens are stored but nothing is sent. Pushes go to users who are mentioned or DM'd while
 //! they have no open socket anywhere, honouring their mute settings; dead tokens are dropped on UNREGISTERED.
 
 use crate::state::AppState;
@@ -34,7 +36,73 @@ async fn fcm(state: &AppState) -> Option<Fcm> {
     Some(Fcm { project: sa.project_id, email: sa.client_email, key, endpoint: s.fcm_endpoint.trim().trim_end_matches('/').to_string() })
 }
 
-pub async fn enabled(state: &AppState) -> bool { fcm(state).await.is_some() }
+pub async fn enabled(state: &AppState) -> bool { fcm(state).await.is_some() || apns(state).await.is_some() }
+
+struct Apns { key: jsonwebtoken::EncodingKey, key_id: String, team: String, topic: String, endpoint: String }
+
+/// The bundle ID pushes are addressed to when `apns_topic` is empty.
+pub const DEFAULT_APNS_TOPIC: &str = "com.runparley.app";
+
+/// Check an APNs auth key (.p8 contents) before saving it.
+pub fn parse_apns_key(pem: &str) -> Result<(), String> {
+    jsonwebtoken::EncodingKey::from_ec_pem(pem.trim().as_bytes()).map(|_| ()).map_err(|e| format!("not an APNs .p8 key: {e}"))
+}
+
+async fn apns(state: &AppState) -> Option<Apns> {
+    let s = crate::routes::admin::load_settings(&state.db).await.ok()?;
+    if s.apns_key.trim().is_empty() || s.apns_key_id.trim().is_empty() || s.apns_team_id.trim().is_empty() { return None; }
+    let key = jsonwebtoken::EncodingKey::from_ec_pem(s.apns_key.trim().as_bytes()).ok()?;
+    let topic = if s.apns_topic.trim().is_empty() { DEFAULT_APNS_TOPIC.to_string() } else { s.apns_topic.trim().to_string() };
+    Some(Apns { key, key_id: s.apns_key_id.trim().to_string(), team: s.apns_team_id.trim().to_string(), topic, endpoint: s.apns_endpoint.trim().trim_end_matches('/').to_string() })
+}
+
+#[derive(serde::Serialize)]
+struct ApnsClaims<'a> { iss: &'a str, iat: i64 }
+
+/// Provider tokens by key ID: Apple wants them reused, and refreshed between 20 and 60 minutes old.
+static APNS_JWTS: OnceLock<Mutex<HashMap<String, (String, Instant)>>> = OnceLock::new();
+
+fn apns_jwt(a: &Apns) -> Option<String> {
+    let cache = APNS_JWTS.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some((t, at)) = cache.lock().ok()?.get(&a.key_id).cloned() { if at.elapsed() < Duration::from_secs(40 * 60) { return Some(t); } }
+    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::ES256);
+    header.kid = Some(a.key_id.clone());
+    let jwt = jsonwebtoken::encode(&header, &ApnsClaims { iss: &a.team, iat: chrono::Utc::now().timestamp() }, &a.key).ok()?;
+    if let Ok(mut g) = cache.lock() { g.insert(a.key_id.clone(), (jwt.clone(), Instant::now())); }
+    Some(jwt)
+}
+
+/// APNs only speaks HTTP/2; one client keeps the connection open between pushes.
+fn apns_client() -> &'static reqwest::Client {
+    static C: OnceLock<reqwest::Client> = OnceLock::new();
+    C.get_or_init(|| reqwest::Client::builder().timeout(Duration::from_secs(15)).build().unwrap_or_default())
+}
+
+/// Send one notification through APNs. Builds from Xcode get sandbox tokens, TestFlight and App Store builds
+/// production ones: a token production calls bad is tried once on the sandbox. Err(true): the token is dead.
+async fn send_apns(a: &Apns, token: &str, title: &str, body: &str, data: &serde_json::Value) -> Result<(), bool> {
+    let jwt = apns_jwt(a).ok_or(false)?;
+    let mut payload = data.as_object().cloned().unwrap_or_default();
+    payload.retain(|_, v| !v.is_null());
+    let mut aps = json!({ "alert": { "title": title, "body": body }, "sound": "default" });
+    if let Some(c) = data.get("channel_id").and_then(|v| v.as_str()) { aps["thread-id"] = json!(c); }
+    payload.insert("aps".into(), aps);
+    let hosts: Vec<String> = if a.endpoint.is_empty() { vec!["https://api.push.apple.com".into(), "https://api.sandbox.push.apple.com".into()] } else { vec![a.endpoint.clone()] };
+    for (i, host) in hosts.iter().enumerate() {
+        let resp = apns_client().post(format!("{host}/3/device/{token}"))
+            .header("authorization", format!("bearer {jwt}"))
+            .header("apns-topic", &a.topic).header("apns-push-type", "alert").header("apns-priority", "10")
+            .json(&payload).send().await.map_err(|e| { tracing::warn!(error = %e, "APNs send failed"); false })?;
+        let status = resp.status();
+        if status.is_success() { return Ok(()); }
+        let reason = resp.json::<serde_json::Value>().await.ok().and_then(|v| v.get("reason").and_then(|r| r.as_str()).map(String::from)).unwrap_or_default();
+        if reason == "BadDeviceToken" && i + 1 < hosts.len() { continue; }
+        let dead = status.as_u16() == 410 || matches!(reason.as_str(), "BadDeviceToken" | "Unregistered" | "DeviceTokenNotForTopic");
+        tracing::warn!(%status, dead, %reason, "APNs send failed");
+        return Err(dead);
+    }
+    Err(false)
+}
 
 #[derive(serde::Serialize)]
 struct Claims<'a> { iss: &'a str, scope: &'a str, aud: &'a str, iat: i64, exp: i64 }
@@ -58,6 +126,9 @@ async fn access_token(f: &Fcm) -> Option<String> {
 /// Send one notification to one device token. Err(true) means the token is dead and should be removed.
 async fn send_one(f: &Fcm, token: &str, title: &str, body: &str, data: &serde_json::Value) -> Result<(), bool> {
     let at = access_token(f).await.ok_or(false)?;
+    // FCM data is a map of strings: drop nulls (a DM has no guild) and stringify the rest, or the send is refused.
+    let data: serde_json::Map<String, serde_json::Value> = data.as_object().map(|o| o.iter().filter(|(_, v)| !v.is_null())
+        .map(|(k, v)| (k.clone(), json!(v.as_str().map(String::from).unwrap_or_else(|| v.to_string())))).collect()).unwrap_or_default();
     let msg = json!({ "message": { "token": token, "notification": { "title": title, "body": body }, "data": data,
         "android": { "priority": "high", "notification": { "channel_id": "messages" } },
         "apns": { "payload": { "aps": { "sound": "default" } } } } });
@@ -73,12 +144,16 @@ async fn send_one(f: &Fcm, token: &str, title: &str, body: &str, data: &serde_js
 /// Notify `users` (already filtered to offline, unmuted recipients) about a message.
 pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, data: serde_json::Value) {
     crate::webpush::notify(state, users, title, body, &data).await;
-    let Some(f) = fcm(state).await else { return };
-    let f = &f;
-    if users.is_empty() { return; }
-    let rows: Vec<(String, Uuid)> = match sqlx::query_as("SELECT token, user_id FROM push_tokens WHERE user_id = ANY($1)").bind(users).fetch_all(&state.db).await { Ok(r) => r, Err(_) => return };
-    for (token, _) in rows {
-        if let Err(dead) = send_one(f, &token, title, body, &data).await {
+    let (f, a) = (fcm(state).await, apns(state).await);
+    if (f.is_none() && a.is_none()) || users.is_empty() { return; }
+    let rows: Vec<(String, String)> = match sqlx::query_as("SELECT token, platform FROM push_tokens WHERE user_id = ANY($1)").bind(users).fetch_all(&state.db).await { Ok(r) => r, Err(_) => return };
+    for (token, platform) in rows {
+        let sent = match (platform.as_str(), &a, &f) {
+            ("ios", Some(a), _) => send_apns(a, &token, title, body, &data).await,
+            (_, _, Some(f)) => send_one(f, &token, title, body, &data).await,
+            _ => continue,
+        };
+        if let Err(dead) = sent {
             if dead { let _ = sqlx::query("DELETE FROM push_tokens WHERE token = $1").bind(&token).execute(&state.db).await; }
         } else {
             crate::metrics::METRICS.push_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);

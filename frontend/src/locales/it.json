@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name} è stato rimosso per violazione delle linee guida della community.",
 "{name} was taken down": "{name} è stato rimosso",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} verrà eliminato il {date}. Fino ad allora puoi ripristinarlo in Impostazioni utente › Il mio account.",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Il server scompare subito per tutti i suoi membri: canali, messaggi e inviti smettono di funzionare. Puoi ripristinarlo per un certo periodo (la data viene mostrata a eliminazione completata); dopo, viene eliminato definitivamente."
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Il server scompare subito per tutti i suoi membri: canali, messaggi e inviti smettono di funzionare. Puoi ripristinarlo per un certo periodo (la data viene mostrata a eliminazione completata); dopo, viene eliminato definitivamente.",
+"iPhone and iPad (APNs)": "iPhone e iPad (APNs)",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "L’app iOS riceve le notifiche direttamente da Apple. Crea una chiave con Apple Push Notifications service attivo (developer.apple.com → Certificates, IDs & Profiles → Keys) e incolla qui il file .p8 con il suo ID chiave e il tuo ID team.",
+"Key ID": "ID chiave",
+"Team ID": "ID team",
+"Bundle ID": "ID bundle",
+"APNs endpoint override (tests only)": "Override dell’endpoint APNs (solo test)",
+"leave empty for Apple": "lascia vuoto per Apple"
 }

@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name} topluluk kurallarını ihlal ettiği için kaldırıldı.",
 "{name} was taken down": "{name} kaldırıldı",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} {date} tarihinde silinecek. O zamana kadar Kullanıcı Ayarları › Hesabım bölümünden geri yükleyebilirsin.",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Sunucu tüm üyeler için hemen ortadan kalkar: kanallar, mesajlar ve davetler çalışmaz. Bir süre boyunca geri yükleyebilirsin (tarih, silme işlemi tamamlandığında gösterilir); sonrasında kalıcı olarak silinir."
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Sunucu tüm üyeler için hemen ortadan kalkar: kanallar, mesajlar ve davetler çalışmaz. Bir süre boyunca geri yükleyebilirsin (tarih, silme işlemi tamamlandığında gösterilir); sonrasında kalıcı olarak silinir.",
+"iPhone and iPad (APNs)": "iPhone ve iPad (APNs)",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "iOS uygulaması bildirimlerini doğrudan Apple’dan alır. Apple Push Notifications service etkin bir anahtar oluşturun (developer.apple.com → Certificates, IDs & Profiles → Keys) ve .p8 dosyasını anahtar kimliği ve ekip kimliğinizle birlikte buraya yapıştırın.",
+"Key ID": "Anahtar kimliği",
+"Team ID": "Ekip kimliği",
+"Bundle ID": "Paket kimliği",
+"APNs endpoint override (tests only)": "APNs uç noktası geçersiz kılma (yalnızca testler)",
+"leave empty for Apple": "Apple için boş bırakın"
 }

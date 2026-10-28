@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name} foi removido por violar as diretrizes da comunidade.",
 "{name} was taken down": "{name} foi removido",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} será excluído em {date}. Até lá, você pode restaurá-lo em Configurações de usuário › Minha conta.",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "O servidor desaparece imediatamente para todos os membros: canais, mensagens e convites param de funcionar. Você pode restaurá-lo por um tempo (a data é mostrada assim que a exclusão for concluída); depois disso, ele é excluído definitivamente."
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "O servidor desaparece imediatamente para todos os membros: canais, mensagens e convites param de funcionar. Você pode restaurá-lo por um tempo (a data é mostrada assim que a exclusão for concluída); depois disso, ele é excluído definitivamente.",
+"iPhone and iPad (APNs)": "iPhone e iPad (APNs)",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "O app para iOS recebe as notificações diretamente da Apple. Crie uma chave com o Apple Push Notifications service ativado (developer.apple.com → Certificates, IDs & Profiles → Keys) e cole aqui o arquivo .p8 com o ID da chave e o ID da sua equipe.",
+"Key ID": "ID da chave",
+"Team ID": "ID da equipe",
+"Bundle ID": "ID do pacote",
+"APNs endpoint override (tests only)": "Substituição do endpoint do APNs (apenas testes)",
+"leave empty for Apple": "deixe vazio para a Apple"
 }

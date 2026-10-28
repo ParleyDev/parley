@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name} a été retiré pour non-respect des règles de la communauté.",
 "{name} was taken down": "{name} a été suspendu",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} sera supprimé le {date}. Jusque-là, tu peux le restaurer dans Paramètres utilisateur › Mon compte.",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Le serveur disparaît immédiatement pour tous ses membres : les salons, les messages et les invitations ne fonctionnent plus. Tu peux le restaurer pendant un certain temps (la date s'affiche une fois la suppression terminée) ; après cela, il est supprimé définitivement."
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Le serveur disparaît immédiatement pour tous ses membres : les salons, les messages et les invitations ne fonctionnent plus. Tu peux le restaurer pendant un certain temps (la date s'affiche une fois la suppression terminée) ; après cela, il est supprimé définitivement.",
+"iPhone and iPad (APNs)": "iPhone et iPad (APNs)",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "L’app iOS reçoit ses notifications directement d’Apple. Crée une clé avec Apple Push Notifications service activé (developer.apple.com → Certificates, IDs & Profiles → Keys) et colle ici le fichier .p8 avec son ID de clé et ton ID d’équipe.",
+"Key ID": "ID de clé",
+"Team ID": "ID d’équipe",
+"Bundle ID": "ID de bundle",
+"APNs endpoint override (tests only)": "Remplacement du point de terminaison APNs (tests uniquement)",
+"leave empty for Apple": "laisser vide pour Apple"
 }

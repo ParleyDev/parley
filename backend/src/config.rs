@@ -22,6 +22,11 @@ pub struct Config {
     /// iOS apps (TEAMID.bundle.id) allowed to use this server's passkeys and security keys from inside the app,
     /// published in /.well-known/apple-app-site-association. Empty: the file isn't served.
     pub ios_app_ids: Vec<String>,
+    /// The Android app (package name) and the SHA-256 fingerprints of the certificates it is signed with (Play's app
+    /// signing key, and the upload key for sideloaded builds), published in /.well-known/assetlinks.json and accepted
+    /// as passkey origins, so security keys work inside the app. No fingerprints: neither happens.
+    pub android_app_id: String,
+    pub android_app_certs: Vec<String>,
     /// Instance-wide assets (read-only mount is fine): `avatar-decorations/` today. See routes/assets.rs.
     pub assets_dir: std::path::PathBuf,
     /// GIF picker providers; the first one set is used.
@@ -88,6 +93,13 @@ impl Config {
             server_deletion_grace_days: std::env::var("SERVER_DELETION_GRACE_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(7i64).clamp(0, 365),
             takedown_retention_days: std::env::var("TAKEDOWN_RETENTION_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(90i64).clamp(1, 3650),
             ios_app_ids: std::env::var("IOS_APP_IDS").unwrap_or_default().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+            android_app_id: std::env::var("ANDROID_APP_ID").ok().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| "com.runparley.app".into()),
+            // Fingerprints as Play Console and keytool print them (AB:CD:…); colons and case don't matter.
+            android_app_certs: std::env::var("ANDROID_APP_CERTS").unwrap_or_default().split(',')
+                .map(|s| s.chars().filter(|c| c.is_ascii_hexdigit()).collect::<String>().to_ascii_uppercase())
+                .filter(|s| s.len() == 64)
+                .map(|s| s.as_bytes().chunks(2).map(|c| std::str::from_utf8(c).unwrap_or("")).collect::<Vec<_>>().join(":"))
+                .collect(),
             audit_retention_days: std::env::var("AUDIT_RETENTION_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(2555i64).clamp(365, 36500),
             assets_dir: std::env::var("ASSETS_DIR").unwrap_or_else(|_| "./assets".into()).into(),
             tenor_api_key: env_or_file("TENOR_API_KEY").ok_or(std::env::VarError::NotPresent).ok(),

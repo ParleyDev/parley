@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name} wurde wegen Verstoßes gegen die Community-Richtlinien entfernt.",
 "{name} was taken down": "{name} wurde entfernt",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} wird am {date} gelöscht. Bis dahin kannst du den Server unter Benutzereinstellungen › Mein Konto wiederherstellen.",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Der Server verschwindet sofort für alle Mitglieder: Kanäle, Nachrichten und Einladungen funktionieren nicht mehr. Du kannst ihn eine Weile wiederherstellen (das Datum siehst du, sobald der Vorgang abgeschlossen ist); danach wird er endgültig gelöscht."
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "Der Server verschwindet sofort für alle Mitglieder: Kanäle, Nachrichten und Einladungen funktionieren nicht mehr. Du kannst ihn eine Weile wiederherstellen (das Datum siehst du, sobald der Vorgang abgeschlossen ist); danach wird er endgültig gelöscht.",
+"iPhone and iPad (APNs)": "iPhone und iPad (APNs)",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "Die iOS-App erhält ihre Benachrichtigungen direkt von Apple. Erstelle einen Schlüssel mit aktiviertem Apple Push Notifications service (developer.apple.com → Certificates, IDs & Profiles → Keys) und füge hier die .p8-Datei mit ihrer Schlüssel-ID und deiner Team-ID ein.",
+"Key ID": "Schlüssel-ID",
+"Team ID": "Team-ID",
+"Bundle ID": "Bundle-ID",
+"APNs endpoint override (tests only)": "APNs-Endpoint-Überschreibung (nur Tests)",
+"leave empty for Apple": "leer lassen für Apple"
 }

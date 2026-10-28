@@ -3511,5 +3511,12 @@
 "{name} was removed for violating the community guidelines.": "{name} 因违反社区准则已被移除。",
 "{name} was taken down": "{name} 已被下架",
 "{name} will be deleted on {date}. You can restore it until then in User Settings › My Account.": "{name} 将于 {date} 被删除。在此之前,你可以在 用户设置 › 我的账号 中恢复。",
-"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "服务器会立即对所有成员消失:频道、消息和邀请都将失效。你可以在一段时间内恢复它(删除完成后会显示具体日期);之后它将被永久删除。"
+"The server disappears for all its members right away: channels, messages and invites stop working. You can restore it for a while (the date is shown once it's done); after that it is deleted for good.": "服务器会立即对所有成员消失:频道、消息和邀请都将失效。你可以在一段时间内恢复它(删除完成后会显示具体日期);之后它将被永久删除。",
+"iPhone and iPad (APNs)": "iPhone 和 iPad（APNs）",
+"The iOS app gets its notifications straight from Apple. Create a key with Apple Push Notifications service enabled (developer.apple.com → Certificates, IDs & Profiles → Keys) and paste the .p8 file here with its key ID and your team ID.": "iOS 应用直接从 Apple 接收通知。创建一个启用了 Apple Push Notifications service 的密钥（developer.apple.com → Certificates, IDs & Profiles → Keys），然后将 .p8 文件连同其密钥 ID 和你的团队 ID 粘贴到这里。",
+"Key ID": "密钥 ID",
+"Team ID": "团队 ID",
+"Bundle ID": "Bundle ID",
+"APNs endpoint override (tests only)": "APNs 端点覆盖（仅限测试）",
+"leave empty for Apple": "留空则使用 Apple"
 }

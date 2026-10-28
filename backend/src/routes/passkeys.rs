@@ -52,7 +52,15 @@ fn webauthn(state: &AppState) -> Option<&'static Webauthn> {
             tracing::warn!("APP_URL is an IP address; passkeys need a domain name and are disabled");
             return None;
         }
-        WebauthnBuilder::new(&host, &origin).ok()?.rp_name("Parley").allow_any_port(true).build()
+        let mut b = WebauthnBuilder::new(&host, &origin).ok()?.rp_name("Parley").allow_any_port(true);
+        // Inside the Android app, Android signs ceremonies with the app's identity (android:apk-key-hash:<base64url
+        // SHA-256 of its signing certificate>) instead of the site's origin.
+        for fp in &state.config.android_app_certs {
+            let raw: Vec<u8> = fp.split(':').filter_map(|h| u8::from_str_radix(h, 16).ok()).collect();
+            let hash = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, raw);
+            if let Ok(u) = Url::parse(&format!("android:apk-key-hash:{hash}")) { b = b.append_allowed_origin(&u) }
+        }
+        b.build()
             .map_err(|e| tracing::warn!(error = %e, "passkeys disabled: bad relying party from APP_URL"))
             .ok()
     })
