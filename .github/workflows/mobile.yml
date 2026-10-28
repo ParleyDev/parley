@@ -148,8 +148,8 @@ jobs:
     if: needs.gate.outputs.ok == 'true'
     env:
       PARLEY_VERSION: ${{ needs.gate.outputs.version }}
-    # Apple-silicon runners (macos-latest, macos-15) were often never assigned; the Intel pool is reliable.
-    runs-on: macos-15-intel
+    # Xcode 26 (required for App Store uploads) is only on the Apple-silicon images.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0, ref: "${{ needs.gate.outputs.tag }}" }
