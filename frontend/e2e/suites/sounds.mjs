@@ -73,5 +73,11 @@ await pb.click('[data-call-join]'); await pb2.waitForFunction(() => window.__par
 ok('answering in one session silences the other and drops its banner', true)
 await pa.waitForFunction(() => window.__parleyOutRing === false, null, { timeout: 5000 })
 ok('…and stops the outgoing ring', true)
+// Bob hangs up: Alice is just alone in the call now, no ringing; Bob isn't rung back into the call he left.
+await pa.evaluate(() => { window.__parleySfx = [] })
+await pb.click('[data-call-leave]')
+await pb.waitForTimeout(4000)
+ok('when the other person hangs up, the caller is not rung again', await pa.evaluate(() => window.__parleyOutRing !== true && !(window.__parleySfx ?? []).includes('outgoing_ring')))
+ok('and the one who left gets no incoming ring', await pb.evaluate(() => window.__parleyRing !== true) && await pb.locator('[data-incoming-call]').count() === 0)
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

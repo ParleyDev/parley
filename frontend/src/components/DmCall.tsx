@@ -80,7 +80,11 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   }, [screenKeys, tiles.length])
 
   // Outgoing ring: you are the only one in the call → ring every few seconds until someone picks up (45 s max).
-  const waiting = inThis && participants.length === 1 && participants[0]?.user_id === me?.id
+  // Only before anyone has joined: when the other person hangs up, you're simply alone in the call, no ringing.
+  const alone = inThis && participants.length === 1 && participants[0]?.user_id === me?.id
+  const [hadCompany, setHadCompany] = useState(false)
+  useEffect(() => { if (!inThis) setHadCompany(false); else if (participants.length > 1) setHadCompany(true) }, [inThis, participants.length])
+  const waiting = alone && !hadCompany
   useEffect(() => {
     const w = window as unknown as { __parleyOutRing?: boolean }
     if (!waiting || !sfxEnabled('outgoing_ring')) { w.__parleyOutRing = false; return }
@@ -205,7 +209,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
               <ClipButton />
               <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>
             </ControlGroup>
-            <HangUpButton label={t('Leave Call')} onClick={() => voice.leave()} />
+            <HangUpButton label={t('Leave Call')} onClick={() => voice.leave()} data-call-leave="" />
           </ControlBar>
         ) : (
           <button onClick={() => voice.join(channel.id)} disabled={connecting} title={t('Join Call')} className="h-10 px-6 rounded-xl bg-success text-black font-bold flex items-center gap-2 hover:bg-success/80 disabled:opacity-50" data-join-call><Phone size={18} /> {myChannel ? t('Switch to this call') : t('Join Call')}</button>
