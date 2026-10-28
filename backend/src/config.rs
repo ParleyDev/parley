@@ -10,6 +10,10 @@ pub struct Config {
     pub upload_dir: std::path::PathBuf,
     /// Days between asking to delete an account and it being anonymized (signing in before then restores it).
     pub deletion_grace_days: i64,
+    /// Admin cases: messages shown either side of a reported one, hours an approved grant lasts, days a case stays usable.
+    pub report_context_window: i64,
+    pub case_grant_hours: i64,
+    pub case_expiry_days: i64,
     /// Instance-wide assets (read-only mount is fine): `avatar-decorations/` today. See routes/assets.rs.
     pub assets_dir: std::path::PathBuf,
     /// GIF picker providers; the first one set is used.
@@ -70,6 +74,9 @@ impl Config {
                 .unwrap_or_else(|| serde_json::json!([{ "urls": "stun:stun.l.google.com:19302" }])),
             upload_dir: std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "./uploads".into()).into(),
             deletion_grace_days: std::env::var("ACCOUNT_DELETION_GRACE_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(14i64).clamp(0, 365),
+            report_context_window: std::env::var("REPORT_CONTEXT_WINDOW").ok().and_then(|v| v.parse().ok()).unwrap_or(20i64).clamp(0, 200),
+            case_grant_hours: std::env::var("CASE_GRANT_HOURS").ok().and_then(|v| v.parse().ok()).unwrap_or(72i64).clamp(1, 24 * 90),
+            case_expiry_days: std::env::var("CASE_EXPIRY_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(30i64).clamp(1, 3650),
             assets_dir: std::env::var("ASSETS_DIR").unwrap_or_else(|_| "./assets".into()).into(),
             tenor_api_key: env_or_file("TENOR_API_KEY").ok_or(std::env::VarError::NotPresent).ok(),
             giphy_api_key: env_or_file("GIPHY_API_KEY").ok_or(std::env::VarError::NotPresent).ok(),

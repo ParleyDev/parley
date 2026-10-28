@@ -45,6 +45,16 @@ const ANY = 'any'
 // [method, route pattern, concrete path, body, permission(s) (any of)]
 const M = [
   ['GET', '/admin/access', '/admin/access', null, ANY],
+  ['GET', '/admin/cases', '/admin/cases', null, ['report_context_read', 'case_approve']],
+  ['POST', '/admin/cases', '/admin/cases', { kind: 'investigation', subject_kind: 'user', subject_id: X, channel_ids: [X], justification: why }, 'content_search_public'],
+  ['GET', '/admin/cases/:id', `/admin/cases/${X}`, null, ['report_context_read', 'case_approve']],
+  ['POST', '/admin/cases/:id/close', `/admin/cases/${X}/close`, null, ['report_context_read', 'case_approve']],
+  ['GET', '/admin/cases/:id/context', `/admin/cases/${X}/context`, null, 'report_context_read'],
+  ['GET', '/admin/cases/:id/messages', `/admin/cases/${X}/messages?channel_id=${X}`, null, ['report_context_read', 'content_search_public']],
+  ['GET', '/admin/cases/:id/export', `/admin/cases/${X}/export`, null, 'content_export'],
+  ['POST', '/admin/cases/:id/grants', `/admin/cases/${X}/grants`, { kind: 'expand', justification: why }, 'report_context_expand'],
+  ['POST', '/admin/cases/:id/grants/:gid', `/admin/cases/${X}/grants/${X}`, { decision: 'approve' }, 'case_approve'],
+  ['GET', '/admin/case-grants', '/admin/case-grants', null, 'case_approve'],
   ['GET', '/admin/access-log', '/admin/access-log?limit=1', null, 'audit_read_all'],
   ['GET', '/admin/applications', '/admin/applications', null, 'instance_manage'],
   ['PATCH', '/admin/applications/:id', `/admin/applications/${X}`, { verified: false }, 'instance_manage'],
@@ -170,7 +180,7 @@ const navFor = async (u) => {
 let v = await navFor(as.AUDITOR)
 ok('auditors see the audit log only', JSON.stringify(v.nav) === '["audit","overview"]', JSON.stringify(v.nav)); await v.p.close()
 v = await navFor(as.MODERATOR)
-ok('moderators see users, servers, reports and audit', JSON.stringify(v.nav) === '["audit","overview","reports","servers","users"]', JSON.stringify(v.nav))
+ok('moderators see users, servers, reports, cases and audit', JSON.stringify(v.nav) === '["audit","cases","overview","reports","servers","users"]', JSON.stringify(v.nav))
 await v.p.goto(`${WEB}/admin/users`); await v.p.fill('[data-admin-user-search]', `target${S}`); await v.p.waitForSelector(`[data-admin-user="target${S}"]`)
 const tools = async (p) => p.$$eval(`[data-admin-user="target${S}"] [data-admin-action]`, (l) => l.map((x) => x.getAttribute("data-admin-action")))
 let tl = await tools(v.p)

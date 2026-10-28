@@ -1,8 +1,9 @@
 import BlockedLinksPane from './AdminBlockedLinks'
 import AppsPane from './AdminApps'
-import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
+import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
+import CasesPane, { CasePane } from './AdminCases'
 import { NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
 import { MobileBack } from '../components/HeaderBits'
@@ -32,6 +33,7 @@ export default function AdminPage() {
               {can(a, 'instance_manage') && <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> {t('Discovery Queue')}</NavLink>}
               {can(a, 'instance_manage') && <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> {t('Instance Settings')}</NavLink>}
               {a?.content_search && <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> {t('Messages')}</NavLink>}
+              {can(a, 'report_context_read', 'case_approve') && <NavLink to="/admin/cases" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="cases"><Briefcase size={20} /> {t('Cases')}</NavLink>}
               {can(a, 'report_context_read') && <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> {t('Reports')}</NavLink>}
               {can(a, 'instance_manage') && <NavLink to="/admin/blocked-links" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="blocked-links"><Ban size={20} /> {t('Blocked Links')}</NavLink>}
               {can(a, 'instance_manage') && <NavLink to="/admin/apps" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="apps"><Bot size={20} /> {t('Apps')}</NavLink>}
@@ -50,6 +52,8 @@ export default function AdminPage() {
           <Route path="audit" element={<AuditPane />} />
           <Route path="mail" element={<MailPane />} />
           <Route path="reports" element={<ReportsPane />} />
+          <Route path="cases" element={<CasesPane />} />
+          <Route path="cases/:id" element={<CasePane />} />
           <Route path="blocked-links" element={<BlockedLinksPane />} />
           <Route path="apps" element={<AppsPane />} />
           <Route path="messages" element={<MessagesPane />} />
@@ -666,7 +670,7 @@ function AuditPane() {
   )
 }
 
-interface Report { id: string; reporter_id: string | null; reporter_username: string | null; kind: 'message' | 'user'; target_user_id: string | null; target_username: string; message_id: string | null; channel_id: string | null; channel_name: string; guild_id: string | null; guild_name: string; content: string; reason: string; status: 'open' | 'resolved' | 'dismissed'; note: string; created_at: string; resolved_at: string | null; message_exists: boolean; target_suspended: boolean }
+interface Report { id: string; case_id?: string | null; reporter_id: string | null; reporter_username: string | null; kind: 'message' | 'user'; target_user_id: string | null; target_username: string; message_id: string | null; channel_id: string | null; channel_name: string; guild_id: string | null; guild_name: string; content: string; reason: string; status: 'open' | 'resolved' | 'dismissed'; note: string; created_at: string; resolved_at: string | null; message_exists: boolean; target_suspended: boolean }
 
 function ReportsPane() {
   const t = useT()
@@ -710,6 +714,7 @@ function ReportsPane() {
             <div className="mt-3 flex flex-wrap gap-2">
               {r.kind === 'message' && r.message_exists && <button type="button" className="btn-danger py-1 text-xs" onClick={() => act(() => api.delete(`/admin/messages/${r.message_id}`), t('Message deleted'))} data-report-delete-message>{t('Delete message')}</button>}
               {r.target_user_id && !r.target_suspended && <button type="button" className="btn-danger py-1 text-xs" onClick={() => act(() => api.patch(`/admin/users/${r.target_user_id}`, { suspended: true }), t('@{username} suspended', { username: r.target_username }))} data-report-suspend>{t('Suspend @{username}', { username: r.target_username })}</button>}
+              {r.case_id && <NavLink to={`/admin/cases/${r.case_id}`} className="btn-ghost py-1 text-xs" data-report-case>{t('Case')}</NavLink>}
               {r.guild_id && r.channel_id && <a className="btn-ghost py-1 text-xs" href={`/channels/${r.guild_id}/${r.channel_id}?message=${r.message_id}`} target="_blank" rel="noreferrer">{t('Open channel')}</a>}
               {r.status === 'open' ? (
                 <>

@@ -116,6 +116,13 @@ pub async fn require_perm(state: &AppState, uid: Uuid, p: Perm) -> AppResult<Acc
     if a.has(p) { Ok(a) } else { Err(AppError::Forbidden) }
 }
 
+/// Console access with any one of these permissions. 403 otherwise.
+pub async fn require_any(state: &AppState, uid: Uuid, ps: &[Perm]) -> AppResult<Access> {
+    require_admin(state, uid).await?;
+    let a = access(state, uid).await?;
+    if ps.iter().any(|p| a.has(*p)) { Ok(a) } else { Err(AppError::Forbidden) }
+}
+
 /// Phase 0: message content in the console (until case-based search replaces it).
 pub async fn require_content_access(state: &AppState, uid: Uuid) -> AppResult<Vec<String>> {
     require_admin(state, uid).await?;

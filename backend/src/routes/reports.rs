@@ -75,12 +75,16 @@ pub struct Report {
     pub mod_status: String,
     #[sqlx(default)]
     pub mod_note: String,
+    /// The admin case this report opened.
+    #[sqlx(default)]
+    pub case_id: Option<Uuid>,
 }
 
 const REPORT_SELECT: &str = "SELECT r.id, r.reporter_id, u.username AS reporter_username, r.kind, r.target_user_id, r.target_username, r.message_id, r.channel_id, r.channel_name,
     r.guild_id, r.guild_name, r.content, r.reason, r.status, r.resolved_by, r.resolved_at, r.note, r.created_at, r.to_mods, r.mod_status, r.mod_note,
     EXISTS (SELECT 1 FROM messages m WHERE m.id = r.message_id) AS message_exists,
-    EXISTS (SELECT 1 FROM users t WHERE t.id = r.target_user_id AND t.suspended_at IS NOT NULL) AS target_suspended
+    EXISTS (SELECT 1 FROM users t WHERE t.id = r.target_user_id AND t.suspended_at IS NOT NULL) AS target_suspended,
+    (SELECT c.id FROM cases c WHERE c.report_id = r.id) AS case_id
     FROM reports r LEFT JOIN users u ON u.id = r.reporter_id";
 
 async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<CreateReport>) -> AppResult<(StatusCode, Json<Value>)> {
@@ -135,6 +139,9 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req
         }
         _ => return Err(AppError::BadRequest("kind must be message, user or guild".into())),
     }
+    // Every report opens a case: admin access to its context goes through it.
+    let (subject, cid, mid): (Option<Uuid>, Option<Uuid>, Option<Uuid>) = sqlx::query_as("SELECT CASE kind WHEN 'guild' THEN guild_id WHEN 'message' THEN channel_id ELSE target_user_id END, channel_id, message_id FROM reports WHERE id = $1").bind(id).fetch_one(&state.db).await?;
+    crate::routes::cases::open_for_report(&state, id, &req.kind, subject.unwrap_or(id), cid, mid, &reason).await?;
     Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
 }
 
@@ -182,6 +189,7 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
     if res.rows_affected() == 0 {
         return Err(AppError::NotFound("Report not found".into()));
     }
+    crate::routes::cases::follow_report(&state, id, req.status == "open", uid).await?;
     let r = sqlx::query_as::<_, Report>(&format!("{REPORT_SELECT} WHERE r.id = $1")).bind(id).fetch_one(&state.db).await?;
     let clean = |m: &Option<String>| m.as_deref().map(str::trim).filter(|m| !m.is_empty()).map(|m| m.chars().take(crate::routes::notices::MAX_NOTICE).collect::<String>());
     let (to_reporter, to_target) = (clean(&req.message_reporter), clean(&req.message_target));
