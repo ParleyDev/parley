@@ -101,7 +101,7 @@ export function ThreadsPanel({ channel, onClose }: { channel: Channel; onClose: 
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl" data-threads-panel>
+      <div className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl max-md:fixed max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:mt-0 max-md:w-auto max-md:max-w-none max-md:rounded-b-none max-md:pb-[var(--sab)]" data-threads-panel>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
           <MessagesSquare size={16} className="text-text-2" /><span className="font-bold">{t('Threads')}</span>
           <button type="button" onClick={() => setArchived((a) => !a)} className="ml-2 rounded-full bg-bg-3 px-2 py-0.5 text-xs font-semibold text-text-1 hover:text-text-0" data-threads-archived-toggle>{archived ? t('Showing archived') : t('Show archived')}</button>

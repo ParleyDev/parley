@@ -68,7 +68,8 @@ export function RequestBanner({ dm }: { dm: DmChannel }) {
   const other = dm.recipients[0]
   return (
     <div className="shrink-0 m-4 mt-0 rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 flex items-center gap-3 flex-wrap" data-request-banner>
-      <div className="min-w-0 flex-1">
+      {/* A real basis, so on a phone the buttons wrap under the text instead of squeezing it to a word per line. */}
+      <div className="min-w-0 flex-1 basis-60">
         <div className="font-semibold">{dm.request_state === 'spam' ? t('Filtered as spam') : t('Message request')}</div>
         <div className="text-sm text-text-2">{dm.request_state === 'spam' ? t('This looked like spam (a link from a new or unknown account). Be careful with links. Accept only if you know them.') : t('{name} is not on your friends list. Accept to reply and move this chat to your DMs, or ignore it.', { name: other?.display_name ?? t('This person') })}</div>
       </div>

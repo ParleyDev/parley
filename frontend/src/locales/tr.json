@@ -3528,5 +3528,7 @@
 "This phone couldn't register: {error}": "Bu telefon kaydedilemedi: {error}",
 "This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "Bu telefon Apple veya Google’dan anlık bildirim belirteci alamadı. Çevrimiçi olduğunu kontrol edip yeniden deneyin.",
 "iPhone or iPad": "iPhone veya iPad",
-"sent": "gönderildi"
+"sent": "gönderildi",
+"Calls are end-to-end encrypted": "Aramalar uçtan uca şifreli",
+"Encrypt calls end to end": "Aramaları uçtan uca şifrele"
 }

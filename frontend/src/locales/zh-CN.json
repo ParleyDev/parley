@@ -3528,5 +3528,7 @@
 "This phone couldn't register: {error}": "此手机无法注册：{error}",
 "This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "此手机没有从 Apple 或 Google 获得推送令牌。请检查它是否在线，然后重试。",
 "iPhone or iPad": "iPhone 或 iPad",
-"sent": "已发送"
+"sent": "已发送",
+"Calls are end-to-end encrypted": "通话已端到端加密",
+"Encrypt calls end to end": "对通话进行端到端加密"
 }

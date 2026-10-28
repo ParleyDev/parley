@@ -3528,5 +3528,7 @@
 "This phone couldn't register: {error}": "このスマートフォンを登録できませんでした: {error}",
 "This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "このスマートフォンは Apple または Google からプッシュトークンを受け取れませんでした。オンラインか確認して、もう一度お試しください。",
 "iPhone or iPad": "iPhone または iPad",
-"sent": "送信済み"
+"sent": "送信済み",
+"Calls are end-to-end encrypted": "通話はエンドツーエンドで暗号化されています",
+"Encrypt calls end to end": "通話をエンドツーエンドで暗号化"
 }

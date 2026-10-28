@@ -14,7 +14,7 @@ import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Ac
 import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
 import { CameraMenu, ControlBar, ControlButton, ControlGroup, HangUpButton, MicMenu, SplitControl } from './CallControls'
 import { useResizableHeight } from '../lib/resize'
-import { voice } from '../lib/voice'
+import { screenShareSupported, voice } from '../lib/voice'
 import Avatar from './Avatar'
 import CallLock from './CallLock'
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
@@ -207,7 +207,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
               </span>
               <ActivitiesButton channelId={channel.id} />
               <ClipButton />
-              <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>
+              {(screenShareSupported() || localScreen) && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</ControlButton>}
             </ControlGroup>
             <HangUpButton label={t('Leave Call')} onClick={() => voice.leave()} data-call-leave="" />
           </ControlBar>

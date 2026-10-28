@@ -3528,5 +3528,7 @@
 "This phone couldn't register: {error}": "Este celular não conseguiu se registrar: {error}",
 "This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "Este celular não recebeu um token push da Apple ou do Google. Verifique se ele está online e tente de novo.",
 "iPhone or iPad": "iPhone ou iPad",
-"sent": "enviada"
+"sent": "enviada",
+"Calls are end-to-end encrypted": "As chamadas têm criptografia de ponta a ponta",
+"Encrypt calls end to end": "Criptografar chamadas de ponta a ponta"
 }

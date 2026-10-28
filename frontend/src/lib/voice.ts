@@ -41,6 +41,11 @@ interface Peer {
 const CAMERA_MAX_BITRATE = 1_500_000
 const SCREEN_MAX_BITRATE = 3_000_000
 /** Screen share choices: resolution (height; none keeps the source's), frame rate and the bitrate cap that goes with them. */
+/** Whether this device can share its screen: phone browsers and the phone apps can't (no getDisplayMedia, or one that
+ *  always fails), so they don't offer it. */
+export const screenShareSupported = () => typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getDisplayMedia
+  && !(typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches)
+
 export const STREAM_QUALITY: Record<string, { label: string; height?: number; fps: number; bitrate: number }> = {
   auto: { label: 'Source resolution, 30 fps (default)', fps: 30, bitrate: SCREEN_MAX_BITRATE },
   '720p30': { label: '720p, 30 fps (saves bandwidth)', height: 720, fps: 30, bitrate: 2_000_000 },

@@ -69,7 +69,7 @@ function ControlBtn({ children, label, onClick, active, onMenu, menuOpen }: { ch
       <button title={t(label)} onClick={onClick} className={`h-9 w-9 rounded-lg flex items-center justify-center hover:bg-white/10 ${active ? 'text-danger' : 'text-text-0'}`} data-control={label}>
         {children}
       </button>
-      {onMenu && <button title={t('{label} options', { label: t(label.replace(/^Un/, '')) })} onClick={onMenu} className="h-9 w-3.5 -ml-1 rounded-r-lg flex items-center justify-center text-text-1 hover:text-text-0" data-control-menu={label}><ChevronDown size={11} /></button>}
+      {onMenu && <button title={t('{label} options', { label: t(label.replace(/^Un/, '')) })} onClick={onMenu} className="h-9 w-3.5 -ml-1 rounded-r-lg flex items-center justify-center text-text-1 hover:text-text-0 max-md:hidden" data-control-menu={label}><ChevronDown size={11} /></button>}
     </span>
   )
 }

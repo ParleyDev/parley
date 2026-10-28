@@ -11,7 +11,7 @@ import { has, P } from '../lib/perms'
 import { api } from '../lib/api'
 import { isPhone } from '../lib/swipe'
 import type { Channel, User, VoiceState } from '../lib/types'
-import { voice } from '../lib/voice'
+import { screenShareSupported, voice } from '../lib/voice'
 import Avatar from './Avatar'
 import StudioPanel from './StudioPanel'
 import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Activities'
@@ -227,9 +227,10 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         <MobileBack />
         {isStudio ? <Disc3 size={22} className="text-text-2 shrink-0" /> : isStage ? <Radio size={22} className="text-text-2 shrink-0" /> : <Volume2 size={22} className="text-text-2 shrink-0" />}<span className="font-bold truncate">{channel.name}</span>
         {isStudio && liveSession && <span className="flex items-center gap-1.5 rounded-full bg-danger/20 px-2 py-0.5 text-[11px] font-bold uppercase text-danger" data-studio-rec><span className="h-2 w-2 rounded-full bg-danger animate-pulse" />{t('REC · {name}', { name: liveSession.name })}</span>}
-        <CallLock channelId={channel.id} />
+        {/* Phones: the name and the people count; encryption and channel status are a desktop header's details. */}
+        <span className="max-md:hidden flex"><CallLock channelId={channel.id} /></span>
         <span className="text-xs text-text-2 whitespace-nowrap" data-voice-count>{isStage ? t('{n} speaking · {m} listening', { n: tiles.length, m: audience.length }) : t('{n} connected', { n: count })}</span>
-        {channel.kind === 'voice' && <VoiceStatus channel={channel} canSet={inThis || has(myChannelPerms(useStore.getState(), channel.id), P.MANAGE_CHANNELS)} />}
+        {channel.kind === 'voice' && <span className="max-md:hidden contents"><VoiceStatus channel={channel} canSet={inThis || has(myChannelPerms(useStore.getState(), channel.id), P.MANAGE_CHANNELS)} /></span>}
         {inThis && suppressed && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase">{t('Muted by server')}</span>}
         {inThis && !suppressed && myVs?.deaf && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-deafened>{t('Deafened by a moderator')}</span>}
         {inThis && !suppressed && !myVs?.deaf && myVs?.mute && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-muted>{t('Muted by a moderator')}</span>}
@@ -320,7 +321,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                   {channel.guild_id && channel.kind === 'voice' && <InviteToVoice channelId={channel.id} guildId={channel.guild_id} />}
                   {!isStage && <ActivitiesButton channelId={channel.id} />}
                   <ClipButton />
-                  {canStream && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>}
+                  {canStream && (screenShareSupported() || localScreen) && <ControlButton label={localScreen ? t('Stop Sharing') : t('Share Your Screen')} on={!!localScreen} onClick={() => voice.toggleScreen()}>{localScreen ? <MonitorOff size={20} /> : <MonitorUp size={20} />}</ControlButton>}
                   {canSpeak && !suppressed && (
                     <span className="relative flex">
                       <ControlButton label={t('Soundboard')} on={board} onClick={() => setBoard((b) => !b)}><Music2 size={20} /></ControlButton>

@@ -15,7 +15,7 @@ export default function VerifyBanner() {
   const resend = async () => { try { await api.post('/auth/resend-verification', {}); setSent(true); pushToast(t('Verification email sent to {email}', { email: user.email })) } catch (e) { pushToast((e as Error).message, 'error') } }
   return (
     <div className="shrink-0 bg-warn/15 border-b border-warn/40 text-xs px-3 py-1.5 flex items-center justify-center gap-3 text-text-0" data-verify-banner>
-      <span>{required ? t('Please verify your email address to create servers and use Discover.') : t('Please verify your email address.')} {tn('We sent a link to {email}.', { email: <b>{user.email}</b> })}</span>
+      <span>{required ? t('Please verify your email address to create servers and use Discover.') : t('Please verify your email address.')}<span className="max-md:hidden"> {tn('We sent a link to {email}.', { email: <b>{user.email}</b> })}</span></span>
       <button type="button" onClick={resend} disabled={sent} className="font-semibold underline disabled:no-underline disabled:opacity-60" data-resend-verification>{sent ? t('Sent') : t('Resend')}</button>
     </div>
   )

@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import { profileOf } from '../lib/audioProfile'
 import { dmName } from '../lib/dm'
 import { locale, useT } from '../lib/i18n'
-import { voice } from '../lib/voice'
+import { screenShareSupported, voice } from '../lib/voice'
 import { useStore } from '../store'
 import AudioStats from './AudioStats'
 import SoundboardPicker from './SoundboardPicker'
@@ -79,7 +79,7 @@ export default function VoiceConnected() {
       </div>
       <div className="mt-1.5 flex gap-1.5">
         <button type="button" className={`${wide} ${localCamera ? 'text-success' : ''}`} title={localCamera ? t('Turn Off Camera') : t('Turn On Camera')} onClick={() => voice.toggleCamera()} data-voice-camera>{localCamera ? <Video size={18} /> : <VideoOff size={18} />}</button>
-        <button type="button" className={`${wide} ${localScreen ? 'text-success' : ''}`} title={localScreen ? t('Stop Sharing') : t('Share Your Screen')} onClick={() => voice.toggleScreen()} data-voice-screen>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</button>
+        {(screenShareSupported() || localScreen) && <button type="button" className={`${wide} ${localScreen ? 'text-success' : ''}`} title={localScreen ? t('Stop Sharing') : t('Share Your Screen')} onClick={() => voice.toggleScreen()} data-voice-screen>{localScreen ? <MonitorOff size={18} /> : <MonitorUp size={18} />}</button>}
         <span className="relative flex flex-1">
           <button type="button" className={`${wide} ${board ? 'bg-bg-4 text-text-0' : ''}`} title={t('Soundboard')} onClick={() => setBoard((b) => !b)} data-voice-soundboard><Music2 size={18} /></button>
           {board && <>
