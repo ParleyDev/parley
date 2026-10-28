@@ -3493,5 +3493,6 @@
 "Target ID": "目标 ID",
 "case": "案件",
 "searched “{q}”": "搜索了“{q}”",
-"{n} items": "{n} 项"
+"{n} items": "{n} 项",
+"Message searches (per user)": "消息搜索（按用户）"
 }

@@ -3493,5 +3493,6 @@
 "Target ID": "Ziel-ID",
 "case": "Fall",
 "searched “{q}”": "gesucht nach „{q}“",
-"{n} items": "{n} Einträge"
+"{n} items": "{n} Einträge",
+"Message searches (per user)": "Nachrichtensuchen (pro Benutzer)"
 }

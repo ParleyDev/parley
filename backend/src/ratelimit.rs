@@ -1,7 +1,7 @@
 //! Token-bucket rate limiting, in memory, per bucket and key (client IP or user id).
 //!
 //! Limits are `count/seconds` strings from the environment (defaults below): `RL_REGISTER`,
-//! `RL_LOGIN`, `RL_LOGIN_FAIL`, `RL_MESSAGES`, `RL_UPLOADS`, `RL_GIFS`, `RL_MAIL`, `RL_OAUTH` (MCP client registration
+//! `RL_LOGIN`, `RL_LOGIN_FAIL`, `RL_MESSAGES`, `RL_UPLOADS`, `RL_GIFS`, `RL_SEARCH`, `RL_MAIL`, `RL_OAUTH` (MCP client registration
 //! and tokens, per IP: AI services call from a few shared addresses for all their users). A bucket refills
 //! continuously (count tokens per window) so bursts up to `count` are allowed. Exhausted buckets
 //! answer 429 with a `Retry-After` header and a JSON error. Every limited response carries `X-RateLimit-Bucket`,
@@ -28,7 +28,7 @@ pub struct Limit {
 }
 
 /// Buckets an admin may override from Instance Settings.
-pub const BUCKETS: [&str; 9] = ["register", "login", "login_fail", "messages", "uploads", "gifs", "mail", "oauth", "webhooks"];
+pub const BUCKETS: [&str; 10] = ["register", "login", "login_fail", "messages", "uploads", "gifs", "search", "mail", "oauth", "webhooks"];
 
 impl Limit {
     /// `count/seconds`, both positive.
@@ -56,6 +56,7 @@ pub struct Limits {
     pub messages: Limit,
     pub uploads: Limit,
     pub gifs: Limit,
+    pub search: Limit,
     pub mail: Limit,
     pub oauth: Limit,
     pub webhooks: Limit,
@@ -81,6 +82,7 @@ pub static LIMITER: LazyLock<RateLimiter> = LazyLock::new(|| RateLimiter {
         messages: Limit::from_env("RL_MESSAGES", "10/5"),
         uploads: Limit::from_env("RL_UPLOADS", "30/60"),
         gifs: Limit::from_env("RL_GIFS", "60/60"),
+        search: Limit::from_env("RL_SEARCH", "30/60"),
         mail: Limit::from_env("RL_MAIL", "3/600"),
         oauth: Limit::from_env("RL_OAUTH", "300/60"),
         webhooks: Limit::from_env("RL_WEBHOOKS", "30/60"),
@@ -98,6 +100,7 @@ impl RateLimiter {
             "messages" => self.limits.messages,
             "uploads" => self.limits.uploads,
             "gifs" => self.limits.gifs,
+            "search" => self.limits.search,
             "oauth" => self.limits.oauth,
             "webhooks" => self.limits.webhooks,
             _ => self.limits.mail,
@@ -236,6 +239,12 @@ pub async fn rl_uploads(req: Request<Body>, next: Next) -> Response {
 pub async fn rl_gifs(req: Request<Body>, next: Next) -> Response {
     let key = user_key(req.headers(), &SECRET).unwrap_or_else(|| client_ip(req.headers()));
     limited("gifs", LIMITER.limit("gifs"), key, req, next).await
+}
+
+/// Per-user (or IP): message search. Normal product use, so not audit-logged, but each query is a full-text scan.
+pub async fn rl_search(req: Request<Body>, next: Next) -> Response {
+    let key = user_key(req.headers(), &SECRET).unwrap_or_else(|| client_ip(req.headers()));
+    limited("search", LIMITER.limit("search"), key, req, next).await
 }
 
 /// Per-user (or IP): emails we send on request (verification resend, password reset).

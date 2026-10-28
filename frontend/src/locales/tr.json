@@ -3493,5 +3493,6 @@
 "Target ID": "Hedef ID",
 "case": "vaka",
 "searched “{q}”": "“{q}” arandı",
-"{n} items": "{n} öğe"
+"{n} items": "{n} öğe",
+"Message searches (per user)": "Mesaj aramaları (kullanıcı başına)"
 }

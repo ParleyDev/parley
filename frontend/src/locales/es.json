@@ -3493,5 +3493,6 @@
 "Target ID": "ID de destino",
 "case": "caso",
 "searched “{q}”": "buscó «{q}»",
-"{n} items": "{n} elementos"
+"{n} items": "{n} elementos",
+"Message searches (per user)": "Búsquedas de mensajes (por usuario)"
 }

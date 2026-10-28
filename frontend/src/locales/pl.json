@@ -3493,5 +3493,6 @@
 "Target ID": "ID celu",
 "case": "sprawa",
 "searched “{q}”": "wyszukano „{q}”",
-"{n} items": "Elementów: {n}"
+"{n} items": "Elementów: {n}",
+"Message searches (per user)": "Wyszukiwania wiadomości (na użytkownika)"
 }

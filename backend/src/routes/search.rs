@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/search", get(search))
+    Router::new().route("/search", get(search).route_layer(axum::middleware::from_fn(crate::ratelimit::rl_search)))
 }
 
 #[derive(Deserialize)]

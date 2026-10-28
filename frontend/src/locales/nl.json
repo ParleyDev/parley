@@ -3493,5 +3493,6 @@
 "Target ID": "Doel-ID",
 "case": "zaak",
 "searched “{q}”": "zocht naar “{q}”",
-"{n} items": "{n} items"
+"{n} items": "{n} items",
+"Message searches (per user)": "Berichtzoekopdrachten (per gebruiker)"
 }

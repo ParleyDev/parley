@@ -3493,5 +3493,6 @@
 "Target ID": "대상 ID",
 "case": "케이스",
 "searched “{q}”": "“{q}” 검색",
-"{n} items": "{n}개 항목"
+"{n} items": "{n}개 항목",
+"Message searches (per user)": "메시지 검색 (사용자별)"
 }

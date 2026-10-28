@@ -3493,5 +3493,6 @@
 "Target ID": "ID цели",
 "case": "дело",
 "searched “{q}”": "поиск «{q}»",
-"{n} items": "Элементов: {n}"
+"{n} items": "Элементов: {n}",
+"Message searches (per user)": "Поиски сообщений (на пользователя)"
 }

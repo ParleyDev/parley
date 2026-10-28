@@ -3493,5 +3493,6 @@
 "Target ID": "معرّف الهدف",
 "case": "حالة",
 "searched “{q}”": "بحث عن «{q}»",
-"{n} items": "{n} عناصر"
+"{n} items": "{n} عناصر",
+"Message searches (per user)": "عمليات البحث عن الرسائل (لكل مستخدم)"
 }

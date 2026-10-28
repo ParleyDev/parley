@@ -1,0 +1,100 @@
+// Phase 5 (docs/admin-access-and-server-deletion.md): user-facing message search is authorized by membership and
+// channel permissions, decided from the session and applied inside the query. Positive and negative cases, totals and
+// paging, loss of access the moment someone leaves or is removed, tombstoned authors, blocks, deleted messages, the
+// rate limit, and no admin audit entries.
+import { execSync } from 'node:child_process'
+import { S, reg, call, callS, raw, ok, finish, testContainer, openDms, adminToken, PASSWORD } from '../lib.mjs'
+
+const sql = (q) => execSync(`docker exec ${testContainer('db')} psql -U parley -tAc "${q.replace(/"/g, '\\"')}"`).toString().trim()
+const a = await reg('alice'), b = await reg('bob'), c = await reg('carol'), d = await reg('dave'), e = await reg('erin')
+await openDms(a, b, c, d, e)
+const W = `zq${S}`  // a word only this run's messages contain
+const send = (u, ch, text) => call(u.token, 'POST', `/channels/${ch}/messages`, { content: `${text} ${W}` })
+const find = async (u, extra = '') => { const r = await call(u.token, 'GET', `/search?q=${W}${extra}`); return { total: r.total, ids: r.results.map((x) => (x.message ?? x).id) } }
+
+const g = await call(a.token, 'POST', '/guilds', { name: `Find ${S}` }); const pub = g.channels.find((x) => x.kind === 'text')
+const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {})
+for (const u of [b, d, e]) await call(u.token, 'POST', `/invites/${inv.code}`)
+const secret = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'staff-only', kind: 'text' })).body
+await callS(a.token, 'PUT', `/channels/${secret.id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
+const other = await call(c.token, 'POST', '/guilds', { name: `Elsewhere ${S}` }); const otherCh = other.channels.find((x) => x.kind === 'text')
+const mPub = await send(a, pub.id, 'public hello')
+const mSecret = await send(a, secret.id, 'staff secret')
+const mOther = await send(c, otherCh.id, 'not your server')
+const dmAB = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
+const mDm = await send(b, dmAB.id, 'a dm between a and b')
+const dmCD = await call(c.token, 'POST', '/users/@me/channels', { recipient_id: d.user.id })
+const mDmCD = await send(c, dmCD.id, 'a dm between c and d')
+const friend = async (x, y) => { await call(x.token, 'POST', '/users/@me/relationships', { user_id: y.user.id }); await call(y.token, 'PUT', `/users/@me/relationships/${x.user.id}`) }
+await friend(a, b); await friend(a, e)
+const grp = await call(a.token, 'POST', '/users/@me/channels', { recipient_ids: [b.user.id, e.user.id], name: `Group ${S}` })
+const mGrp = await send(e, grp.id, 'in the group')
+const mBob = await send(b, pub.id, 'bob in public')
+const mErin = await send(e, pub.id, 'erin in public')
+
+console.log('-- what members find')
+let r = await find(a)
+ok('server channels, private channels they can read, DMs and groups', [mPub.id, mSecret.id, mDm.id, mGrp.id, mBob.id, mErin.id].every((id) => r.ids.includes(id)))
+r = await find(b)
+ok("bob: the public channel, his DM and the group, not the staff channel", [mPub.id, mDm.id, mGrp.id].every((id) => r.ids.includes(id)) && !r.ids.includes(mSecret.id))
+ok('nothing from servers he is not in, or DMs he is not part of', !r.ids.includes(mOther.id) && !r.ids.includes(mDmCD.id))
+ok('the total counts only what he can see', r.total === r.ids.length && r.total === 5, `${r.total}`)
+const page = await call(b.token, 'GET', `/search?q=${W}&offset=4`)
+ok('paging stays inside the same scope', page.total === 5 && page.results.length === 1)
+r = await find(c)
+ok('carol sees only her own server and her DM', JSON.stringify(r.ids.sort()) === JSON.stringify([mOther.id, mDmCD.id].sort()) && r.total === 2)
+
+console.log('-- naming a conversation does not widen the scope')
+ok("someone else's DM by id is refused", [403, 404].includes((await raw(b.token, 'GET', `/search?q=${W}&channel_id=${dmCD.id}`)).status))
+ok('a channel he cannot read is refused', [403, 404].includes((await raw(b.token, 'GET', `/search?q=${W}&channel_id=${secret.id}`)).status))
+const viaGuild = await callS(b.token, 'GET', `/search?q=${W}&guild_id=${other.id}`)
+ok("a server he is not in gives nothing", viaGuild.status >= 400 || viaGuild.body.total === 0)
+ok('a server he is in, filtered by id, still hides the staff channel', !(await find(b, `&guild_id=${g.id}`)).ids.includes(mSecret.id))
+
+console.log('-- losing access is immediate')
+await call(e.token, 'DELETE', `/channels/${grp.id}/recipients/${e.user.id}`)
+r = await find(e)
+ok('after leaving the group, its messages are gone from her search', !r.ids.includes(mGrp.id))
+ok('her own message there stays, attributed to her, for those still in it', (await call(a.token, 'GET', `/channels/${grp.id}/messages?limit=20`)).some((m) => m.id === mGrp.id && m.author.id === e.user.id))
+await call(d.token, 'DELETE', `/guilds/${g.id}/members/@me`)
+ok('after leaving a server, nothing from it', !(await find(d)).ids.some((id) => [mPub.id, mBob.id, mErin.id].includes(id)))
+await callS(a.token, 'DELETE', `/guilds/${g.id}/members/${e.user.id}`)
+ok('after a kick, nothing from it', !(await find(e)).ids.some((id) => [mPub.id, mBob.id].includes(id)) && (await call(a.token, 'GET', `/channels/${pub.id}/messages?limit=50`)).some((m) => m.id === mErin.id && m.author.id === e.user.id))
+await callS(a.token, 'PUT', `/guilds/${g.id}/bans/${b.user.id}`, { reason: 'search test' })
+r = await find(b)
+ok('after a ban, nothing from that server, DMs still found', !r.ids.includes(mPub.id) && !r.ids.includes(mBob.id) && r.ids.includes(mDm.id))
+ok('message links stop working too', [403, 404].includes((await raw(b.token, 'GET', `/channels/${pub.id}/messages?limit=5`)).status))
+await callS(a.token, 'PUT', `/channels/${pub.id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
+const f = await reg('frank'); await call(f.token, 'POST', `/invites/${inv.code}`)
+ok('channel permission changes apply to search at once', !(await find(f)).ids.includes(mPub.id))
+await callS(a.token, 'PUT', `/channels/${pub.id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 0 })
+ok('and back', (await find(f)).ids.includes(mPub.id))
+
+console.log('-- deleted messages, tombstones, blocks')
+const gone = await send(a, pub.id, 'about to vanish')
+await call(a.token, 'DELETE', `/channels/${pub.id}/messages/${gone.id}`)
+ok('deleted messages never come back', !(await find(a)).ids.includes(gone.id))
+const t = await reg('tomb'); await call(t.token, 'POST', `/invites/${inv.code}`)
+const mTomb = await send(t, pub.id, 'from a soon deleted account')
+await callS(t.token, 'POST', '/users/@me/deletion', { password: PASSWORD })
+sql(`UPDATE users SET deletion_scheduled_for = now() - interval '1 minute' WHERE id = '${t.user.id}'`)
+const admin = await adminToken()
+await call(admin.token, 'POST', '/admin/deletions/run')
+const hit = (await call(a.token, 'GET', `/search?q=${W}`)).results.map((x) => x.message ?? x).find((m) => m.id === mTomb.id)
+ok('messages from deleted accounts are still found, as deleted_user_*', !!hit && /^deleted_user_/.test(hit.author.username) && hit.author.display_name === 'Deleted User', hit && hit.author.username)
+await call(a.token, 'PUT', `/users/@me/relationships/${f.user.id}/block`)
+const mF = await send(f, pub.id, 'from someone alice blocked')
+const inList = (await call(a.token, 'GET', `/channels/${pub.id}/messages?limit=50`)).some((m) => m.id === mF.id)
+ok("blocked authors: search does what the channel view does", (await find(a)).ids.includes(mF.id) === inList)
+
+console.log('-- not audited, but rate limited')
+const n0 = Number(sql('SELECT count(*) FROM admin_access_log'))
+await find(a)
+ok('user searches are not written to the admin log', Number(sql('SELECT count(*) FROM admin_access_log')) === n0)
+const z = await reg('zed')
+let limited = null
+for (let i = 0; i < 40 && !limited; i++) { const res = await raw(z.token, 'GET', `/search?q=${W}`); if (res.status === 429) limited = res }
+ok('searching is rate limited per user', !!limited && limited.headers.get('x-ratelimit-bucket') === 'search' && Number(limited.headers.get('retry-after')) > 0)
+ok('and only for that user', (await raw(a.token, 'GET', `/search?q=${W}`)).status === 200)
+await call(c.token, 'DELETE', `/guilds/${other.id}`); await call(a.token, 'DELETE', `/guilds/${g.id}`)
+await finish()
