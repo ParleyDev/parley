@@ -3414,5 +3414,12 @@
 "We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "Sizinle ilgili bir bildirimi ({what}) inceledik ve topluluk kurallarımızın ihlal edildiğini tespit etmedik. Herhangi bir işlem yapılmadı.",
 "We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "Sizinle ilgili bir bildirimi ({what}) inceledik ve topluluk kurallarımızın ihlal edildiğini tespit ettik. Paylaştıklarınızın bu kurallara uygun olduğundan emin olun; yeni ihlaller hesabınızın askıya alınmasına yol açabilir.",
 "account": "hesap",
-"message": "mesaj"
+"message": "mesaj",
+"Every search is logged with your reason, what you searched for and the messages it returned.": "Her arama; gerekçeniz, aradığınız ifade ve döndürülen mesajlarla birlikte kaydedilir.",
+"Give a reason first": "Önce bir gerekçe girin",
+"Opening someone’s messages is logged with your reason and the messages shown.": "Birinin mesajlarını açmak, gerekçeniz ve gösterilen mesajlarla birlikte kaydedilir.",
+"Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "Yönetici konsolundan mesaj içeriğini okuma, vaka tabanlı erişim geliştirilene kadar geçici süper yönetici rolüyle sınırlıdır. ADMIN_EMAILS içinde listelenen bir sahipten isteyin.",
+"Reason (required)": "Gerekçe (zorunlu)",
+"This account's messages and uploads": "Bu hesabın mesajları ve yüklemeleri",
+"e.g. report #123: checking for more spam from this account": "ör. şikayet #123: bu hesaptan başka spam olup olmadığını kontrol etme"
 }

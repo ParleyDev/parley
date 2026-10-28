@@ -3414,5 +3414,12 @@
 "We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "We hebben een melding over jouw {what} bekeken en geen overtreding van onze communityrichtlijnen gevonden. Er is geen actie ondernomen.",
 "We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "We hebben een melding over jouw {what} bekeken en vastgesteld dat deze onze communityrichtlijnen overtreedt. Zorg ervoor dat wat je plaatst de richtlijnen volgt; bij verdere overtredingen kan je account worden geschorst.",
 "account": "account",
-"message": "bericht"
+"message": "bericht",
+"Every search is logged with your reason, what you searched for and the messages it returned.": "Elke zoekopdracht wordt vastgelegd met je reden, waarnaar je zocht en de berichten die zijn teruggegeven.",
+"Give a reason first": "Geef eerst een reden",
+"Opening someone’s messages is logged with your reason and the messages shown.": "Het openen van iemands berichten wordt vastgelegd met je reden en de getoonde berichten.",
+"Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "Het lezen van berichtinhoud via de beheerconsole is beperkt tot de tijdelijke superbeheerderrol totdat toegang op basis van zaken is gebouwd. Vraag het aan een eigenaar die in ADMIN_EMAILS staat.",
+"Reason (required)": "Reden (verplicht)",
+"This account's messages and uploads": "Berichten en uploads van dit account",
+"e.g. report #123: checking for more spam from this account": "bijv. melding #123: controleren op meer spam van dit account"
 }

@@ -3414,5 +3414,12 @@
 "We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "회원님의 {what}에 대한 신고를 검토한 결과, 커뮤니티 가이드라인 위반은 확인되지 않았습니다. 별도의 조치는 취해지지 않았습니다.",
 "We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "회원님의 {what}에 대한 신고를 검토한 결과, 커뮤니티 가이드라인을 위반한 것으로 확인되었습니다. 게시하는 내용이 가이드라인을 따르도록 유의해 주세요. 위반이 반복되면 계정이 정지될 수 있습니다.",
 "account": "계정",
-"message": "메시지"
+"message": "메시지",
+"Every search is logged with your reason, what you searched for and the messages it returned.": "모든 검색은 사유, 검색어, 반환된 메시지와 함께 기록됩니다.",
+"Give a reason first": "먼저 사유를 입력하세요",
+"Opening someone’s messages is logged with your reason and the messages shown.": "다른 사람의 메시지를 열면 사유와 표시된 메시지가 기록됩니다.",
+"Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "관리자 콘솔에서 메시지 내용을 읽는 기능은 사례 기반 접근 권한이 구축될 때까지 임시 슈퍼 관리자 역할로 제한됩니다. ADMIN_EMAILS에 등록된 소유자에게 요청하세요.",
+"Reason (required)": "사유(필수)",
+"This account's messages and uploads": "이 계정의 메시지와 업로드",
+"e.g. report #123: checking for more spam from this account": "예: 신고 #123: 이 계정의 추가 스팸 여부 확인"
 }

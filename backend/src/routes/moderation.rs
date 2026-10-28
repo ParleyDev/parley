@@ -5,7 +5,7 @@ use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
     models::{Attachment, AttachmentJson, Message, MessageRow},
-    routes::{channels::{hydrate, MESSAGE_SELECT}, search::tsquery, users::require_admin},
+    routes::{admin_access, channels::{hydrate, MESSAGE_SELECT}, search::tsquery, users::require_admin},
     state::AppState,
     ws::hub::Target,
 };
@@ -63,15 +63,20 @@ struct FindQuery {
     q: String,
     user_id: Option<Uuid>,
     before: Option<Uuid>,
+    /// Required: why this search is needed (logged with it).
+    justification: Option<String>,
 }
 
 /// Any message on the instance, newest first, 50 per page: free text (prefix full-text) and/or author.
-async fn find_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(q): Query<FindQuery>) -> AppResult<Json<Vec<Hit>>> {
-    require_admin(&state, uid).await?;
+/// Phase 0 lockdown: `SUPER_ADMIN_TEMP` only, a justification every time, and every search (with the ids it returned)
+/// goes to the append-only access log.
+async fn find_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, headers: axum::http::HeaderMap, Query(q): Query<FindQuery>) -> AppResult<Json<Vec<Hit>>> {
+    let roles = admin_access::require_content_access(&state, uid).await?;
     let tsq = tsquery(&q.q);
     if tsq.is_none() && q.user_id.is_none() {
         return Ok(Json(vec![]));
     }
+    let why = admin_access::justification(q.justification.as_deref())?;
     let rows = sqlx::query_as::<_, MessageRow>(&format!(
         "{MESSAGE_SELECT} WHERE m.kind = 'default' AND ($1::text IS NULL OR m.search @@ to_tsquery('simple', $1)) AND ($2::uuid IS NULL OR m.author_id = $2) AND ($3::uuid IS NULL OR m.id < $3) ORDER BY m.id DESC LIMIT 50"
     ))
@@ -80,6 +85,10 @@ async fn find_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, Q
     .bind(q.before)
     .fetch_all(&state.db)
     .await?;
+    let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
+    admin_access::log(&state, uid, &roles, &headers, admin_access::Entry {
+        action: "content.search", query: &q.q, filters: json!({ "user_id": q.user_id, "before": q.before }), justification: &why, targets: &ids,
+    }).await?;
     Ok(Json(decorate(&state, rows, uid).await?))
 }
 
@@ -103,12 +112,15 @@ struct ImageRow {
     url: String,
 }
 
-/// A user's recent messages and everything they uploaded, with totals.
-async fn user_content(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Value>> {
-    require_admin(&state, uid).await?;
+/// A user's recent messages and everything they uploaded, with totals. Message content: same lockdown as search.
+async fn user_content(State(state): State<AppState>, AuthUser(uid): AuthUser, headers: axum::http::HeaderMap, Path(id): Path<Uuid>, Query(j): Query<admin_access::Justified>) -> AppResult<Json<Value>> {
+    let roles = admin_access::require_content_access(&state, uid).await?;
+    let why = admin_access::justification(j.justification.as_deref())?;
     let user: Option<(String, String)> = sqlx::query_as("SELECT username, display_name FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
     let Some((username, display_name)) = user else { return Err(AppError::NotFound("User not found".into())) };
     let rows = sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE m.author_id = $1 AND m.kind = 'default' ORDER BY m.id DESC LIMIT 50")).bind(id).fetch_all(&state.db).await?;
+    let ids: Vec<Uuid> = rows.iter().map(|r| r.id).collect();
+    admin_access::log(&state, uid, &roles, &headers, admin_access::Entry { action: "content.user", query: "", filters: json!({ "user_id": id }), justification: &why, targets: &ids }).await?;
     let messages = decorate(&state, rows, uid).await?;
     let atts = sqlx::query_as::<_, Attachment>("SELECT id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at FROM attachments WHERE uploader_id = $1 ORDER BY created_at DESC LIMIT 200")
         .bind(id)

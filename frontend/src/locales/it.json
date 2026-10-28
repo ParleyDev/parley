@@ -3414,5 +3414,12 @@
 "We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "Abbiamo esaminato una segnalazione che ti riguarda ({what}) e non abbiamo riscontrato violazioni delle nostre linee guida della community. Non è stato preso alcun provvedimento.",
 "We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "Abbiamo esaminato una segnalazione che ti riguarda ({what}) e abbiamo riscontrato una violazione delle nostre linee guida della community. Assicurati che ciò che pubblichi le rispetti; ulteriori violazioni potrebbero comportare la sospensione del tuo account.",
 "account": "account",
-"message": "messaggio"
+"message": "messaggio",
+"Every search is logged with your reason, what you searched for and the messages it returned.": "Ogni ricerca viene registrata con il tuo motivo, ciò che hai cercato e i messaggi restituiti.",
+"Give a reason first": "Indica prima un motivo",
+"Opening someone’s messages is logged with your reason and the messages shown.": "L’apertura dei messaggi di una persona viene registrata con il tuo motivo e i messaggi mostrati.",
+"Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "La lettura del contenuto dei messaggi dalla console di amministrazione è limitata al ruolo temporaneo di super-admin finché non sarà pronto l’accesso basato sui casi. Rivolgiti a un proprietario elencato in ADMIN_EMAILS.",
+"Reason (required)": "Motivo (obbligatorio)",
+"This account's messages and uploads": "Messaggi e caricamenti di questo account",
+"e.g. report #123: checking for more spam from this account": "es. segnalazione n. 123: verifica di altro spam da questo account"
 }

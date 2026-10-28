@@ -3414,5 +3414,12 @@
 "We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "Мы рассмотрели жалобу, связанную с вами ({what}), и не обнаружили нарушения правил нашего сообщества. Никаких мер не принято.",
 "We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "Мы рассмотрели жалобу, связанную с вами ({what}), и обнаружили нарушение правил нашего сообщества. Следите за тем, чтобы ваши публикации им соответствовали; повторные нарушения могут привести к блокировке вашего аккаунта.",
 "account": "аккаунт",
-"message": "сообщение"
+"message": "сообщение",
+"Every search is logged with your reason, what you searched for and the messages it returned.": "Каждый поиск записывается в журнал вместе с указанной причиной, поисковым запросом и найденными сообщениями.",
+"Give a reason first": "Сначала укажите причину",
+"Opening someone’s messages is logged with your reason and the messages shown.": "Открытие чужих сообщений записывается в журнал вместе с указанной причиной и показанными сообщениями.",
+"Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "Чтение содержимого сообщений из консоли администратора ограничено временной ролью суперадминистратора, пока разрабатывается доступ на основе обращений. Обратитесь к владельцу из списка ADMIN_EMAILS.",
+"Reason (required)": "Причина (обязательно)",
+"This account's messages and uploads": "Сообщения и загрузки этого аккаунта",
+"e.g. report #123: checking for more spam from this account": "напр., жалоба №123: проверка на наличие другого спама от этого аккаунта"
 }

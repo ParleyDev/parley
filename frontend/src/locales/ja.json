@@ -3414,5 +3414,12 @@
 "We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "あなたの{what}に関する報告を確認しましたが、コミュニティガイドラインへの違反は確認されませんでした。措置は取られていません。",
 "We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "あなたの{what}に関する報告を確認し、コミュニティガイドラインに違反していると判断しました。投稿内容がガイドラインに沿うようご注意ください。違反が続くと、アカウントが停止される場合があります。",
 "account": "アカウント",
-"message": "メッセージ"
+"message": "メッセージ",
+"Every search is logged with your reason, what you searched for and the messages it returned.": "検索はすべて、理由、検索内容、返されたメッセージとともに記録されます。",
+"Give a reason first": "先に理由を入力してください",
+"Opening someone’s messages is logged with your reason and the messages shown.": "他のユーザーのメッセージを開くと、理由と表示されたメッセージが記録されます。",
+"Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "管理コンソールからのメッセージ内容の閲覧は、ケースベースのアクセスが整備されるまで、一時的なスーパー管理者ロールに限定されています。ADMIN_EMAILS に記載されているオーナーに依頼してください。",
+"Reason (required)": "理由（必須）",
+"This account's messages and uploads": "このアカウントのメッセージとアップロード",
+"e.g. report #123: checking for more spam from this account": "例：報告 #123：このアカウントからのスパムが他にないか確認"
 }

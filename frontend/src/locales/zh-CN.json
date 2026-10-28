@@ -3414,5 +3414,12 @@
 "We reviewed a report about your {what} and found no breach of our community guidelines. No action has been taken.": "我们审核了一项与你的{what}相关的举报,未发现违反社区准则的情况,因此未采取任何措施。",
 "We reviewed a report about your {what} and found that it breaks our community guidelines. Please make sure what you post follows them; further breaches may lead to your account being suspended.": "我们审核了一项与你的{what}相关的举报,发现其违反了社区准则。请确保你发布的内容符合准则;再次违规可能导致你的账号被封禁。",
 "account": "账号",
-"message": "消息"
+"message": "消息",
+"Every search is logged with your reason, what you searched for and the messages it returned.": "每次搜索都会连同你的理由、搜索内容和返回的消息一起记录。",
+"Give a reason first": "请先说明理由",
+"Opening someone’s messages is logged with your reason and the messages shown.": "查看某人的消息时，会连同你的理由和显示的消息一并记录。",
+"Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.": "在基于案件的访问机制建成之前，管理控制台中读取消息内容仅限临时超级管理员角色。请联系 ADMIN_EMAILS 中列出的所有者。",
+"Reason (required)": "理由（必填）",
+"This account's messages and uploads": "此账号的消息和上传内容",
+"e.g. report #123: checking for more spam from this account": "例如：举报 #123：检查此账号是否还有更多垃圾信息"
 }

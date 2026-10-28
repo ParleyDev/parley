@@ -663,17 +663,44 @@ function HitRow({ m, onDeleted }: { m: AdminHit; onDeleted: () => void }) {
   )
 }
 
+/** Whether this admin may read message content (Phase 0: the temporary super-admin role), or null while loading. */
+function useContentAccess() {
+  const [ok, setOk] = useState<boolean | null>(null)
+  useEffect(() => { api.get<{ content_search: boolean }>('/admin/access').then((a) => setOk(a.content_search)).catch(() => setOk(false)) }, [])
+  return ok
+}
+const MIN_WHY = 10
+
+/** Shown instead of a content tool to admins who may not read message content. */
+function ContentLocked() {
+  const t = useT()
+  return <div className="mt-4 rounded-xl border border-line bg-bg-1 p-4 text-sm text-text-2 max-w-xl" data-admin-content-locked>{t('Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.')}</div>
+}
+
 function MessagesPane() {
   const t = useT()
+  const access = useContentAccess()
   const [q, setQ] = useState('')
+  const [why, setWhy] = useState('')
   const [rows, setRows] = useState<AdminHit[] | null>(null)
-  const load = async () => { if (!q.trim()) { setRows(null); return } try { setRows(await api.get<AdminHit[]>(`/admin/messages?q=${encodeURIComponent(q.trim())}`)) } catch { setRows([]) } }
-  useEffect(() => { const h = setTimeout(load, 250); return () => clearTimeout(h) }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [err, setErr] = useState<string | null>(null)
+  const ready = why.trim().length >= MIN_WHY
+  const load = async () => {
+    setErr(null)
+    if (!q.trim() || !ready) { setRows(null); return }
+    try { setRows(await api.get<AdminHit[]>(`/admin/messages?q=${encodeURIComponent(q.trim())}&justification=${encodeURIComponent(why.trim())}`)) } catch (e) { setErr((e as Error).message); setRows([]) }
+  }
+  useEffect(() => { const h = setTimeout(load, 400); return () => clearTimeout(h) }, [q, why]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (access === false) return <div data-admin-messages><h1 className="text-2xl font-bold">{t('Messages')}</h1><ContentLocked /></div>
   return (
     <div data-admin-messages>
       <h1 className="text-2xl font-bold">{t('Messages')}</h1>
       <p className="text-sm text-text-2 mt-1">{t('Find any message on this instance by its words (prefix match) and delete it. Members of that channel see it disappear.')}</p>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search message text')} data-admin-msg-search className="input mt-4 max-w-md" />
+      <div className="mt-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-text-1 max-w-xl" data-admin-access-notice>{t('Every search is logged with your reason, what you searched for and the messages it returned.')}</div>
+      <label className="label mt-4 block">{t('Reason (required)')}</label>
+      <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder={t('e.g. report #123: checking for more spam from this account')} maxLength={1000} data-admin-msg-why className="input max-w-xl" />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={ready ? t('Search message text') : t('Give a reason first')} disabled={!ready} data-admin-msg-search className="input mt-3 max-w-md" />
+      {err && <p className="mt-2 text-sm text-danger" data-admin-msg-error>{err}</p>}
       <div className="mt-4 rounded-xl border border-line bg-bg-1 overflow-hidden">
         {rows === null && <p className="p-4 text-sm text-text-2">{t('Type to search.')}</p>}
         {rows?.length === 0 && <p className="p-4 text-sm text-text-2" data-admin-msg-empty>{t('No messages match.')}</p>}
@@ -696,11 +723,25 @@ function UserContentPane() {
   const [tab, setTab] = useState<'messages' | 'uploads' | 'sessions'>('messages')
   const [sessions, setSessions] = useState<AdminSession[] | null>(null)
   const loadSessions = async () => { try { setSessions(await api.get<AdminSession[]>(`/admin/users/${id}/sessions`)) } catch { setSessions([]) } }
-  const load = async () => { try { setData(await api.get<UserContent>(`/admin/users/${id}/content`)); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
-  useEffect(() => { load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Their messages are content: give a reason first (logged), like the message search.
+  const access = useContentAccess()
+  const [why, setWhy] = useState('')
+  const [asked, setAsked] = useState(false)
+  const load = async () => { try { setData(await api.get<UserContent>(`/admin/users/${id}/content?justification=${encodeURIComponent(why.trim())}`)); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
+  useEffect(() => { setData(null); setAsked(false) }, [id])
   const navigate = useNavigate()
   const logoutOne = async (sid: string) => { try { await api.delete(`/admin/users/${id}/sessions/${sid}`); pushToast(t('Device logged out')); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
   const logoutAll = async () => { try { const r = await api.delete<{ revoked: number }>(`/admin/users/${id}/sessions`); pushToast(r.revoked === 1 ? t('Logged out of 1 device') : t('Logged out of {n} devices', { n: r.revoked })); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
+  if (access === false) return <div><NavLink to="/admin/users" className="text-xs text-sky-400 hover:underline">{t('← Users')}</NavLink><ContentLocked /></div>
+  if (!asked) return (
+    <form className="max-w-xl space-y-3" onSubmit={(e) => { e.preventDefault(); if (why.trim().length >= MIN_WHY) { setAsked(true); load() } }} data-admin-content-why>
+      <NavLink to="/admin/users" className="text-xs text-sky-400 hover:underline">{t('← Users')}</NavLink>
+      <h1 className="text-2xl font-bold">{t("This account's messages and uploads")}</h1>
+      <p className="text-sm text-text-2">{t('Opening someone’s messages is logged with your reason and the messages shown.')}</p>
+      <input className="input" autoFocus value={why} onChange={(e) => setWhy(e.target.value)} maxLength={1000} placeholder={t('Reason (required)')} data-admin-content-why-input />
+      <button className="btn-primary" disabled={why.trim().length < MIN_WHY} data-admin-content-open>{t('Open')}</button>
+    </form>
+  )
   if (!data) return <p className="text-sm text-text-2">{t('Loading…')}</p>
   const { user, totals } = data
   const used = totals.attachment_bytes + totals.image_bytes
