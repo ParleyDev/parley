@@ -339,6 +339,51 @@ footer a:hover { color: var(--text); }
 
 @keyframes blink { 50% { opacity: .25; } }
 @keyframes talk { 0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 70%, transparent); } 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--signal) 45%, transparent); } }
+/* Profiles showcase: a profile card in a frame, an effect drifting over it, server roles and an In voice card. */
+.you { background: linear-gradient(180deg, var(--ink), #120b1d 35%, var(--ink)); }
+.you-stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(2rem, 5vw, 4.5rem); align-items: center; }
+@media (max-width: 900px) { .you-stage { grid-template-columns: 1fr; } }
+.pcard-wrap { position: relative; width: min(340px, 100%); margin: 3.2rem auto 2.4rem; }
+.pcard { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid #6b3fa0; background: linear-gradient(rgba(17,18,20,.8), rgba(17,18,20,.8)), linear-gradient(135deg, #6b1f5a, #2a3f8a); box-shadow: 0 30px 80px -30px rgba(123,108,255,.55); }
+.pcard .banner { height: 96px; background: linear-gradient(120deg, #e0609a, #8d79ff 55%, #3aa6d8); }
+.pcard .body { padding: 0 1.1rem 1.1rem; display: grid; gap: .7rem; }
+.pcard .avwrap { margin-top: -42px; width: 84px; height: 84px; border-radius: 50%; padding: 5px; background: #1b1626; position: relative; }
+.pcard .avwrap .av { width: 74px; height: 74px; font-size: 26px; }
+.pcard .avwrap::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px dashed #f6b53d; animation: spin 14s linear infinite; }
+.pcard .dot { position: absolute; right: 4px; bottom: 6px; width: 18px; height: 18px; border-radius: 50%; background: var(--signal); border: 4px solid #1b1626; }
+.pcard .nm { display: flex; align-items: center; gap: .45rem; font: 900 1.25rem/1 var(--display); }
+.pcard .nm .styled { background: linear-gradient(90deg, #f0506e, #f6b53d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.pcard .nm .tag-chip { font: 700 .625rem/1 var(--mono); letter-spacing: .06em; padding: .28rem .4rem; border-radius: 5px; background: color-mix(in srgb, #3aa6d8 55%, #111214); box-shadow: inset 0 0 0 1px #3aa6d8; color: #fff; }
+.pcard .user { color: var(--muted); font-size: .8125rem; margin-top: -.35rem; }
+.pcard .btns { display: flex; gap: .4rem; }
+.pcard .btns b { font-size: .8125rem; font-weight: 600; padding: .45rem .8rem; border-radius: 8px; background: var(--violet); }
+.pcard .btns i { width: 32px; border-radius: 8px; background: rgba(0,0,0,.3); display: grid; place-items: center; font-style: normal; font-size: .8125rem; }
+.pcard h4 { margin: 0 0 .3rem; font-size: .75rem; color: var(--text); }
+.pcard .since { font-size: .8125rem; color: var(--muted); }
+.pcard .roles { display: flex; flex-wrap: wrap; gap: .3rem; }
+.pcard .roles span { font-size: .6875rem; padding: .22rem .5rem; border-radius: 6px; background: rgba(255,255,255,.06); display: inline-flex; align-items: center; gap: .3rem; }
+.pcard .roles span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.pcard .voice { border-radius: 10px; background: rgba(0,0,0,.35); padding: .7rem; display: grid; gap: .5rem; font-size: .8125rem; }
+.pcard .voice .faces { display: flex; align-items: center; gap: .6rem; }
+.pcard .voice .faces .av { width: 26px; height: 26px; font-size: 10px; margin-right: -12px; box-shadow: 0 0 0 2px #1b1626; }
+.pcard .voice .join { text-align: center; padding: .4rem; border-radius: 7px; background: rgba(255,255,255,.1); font-weight: 600; }
+/* The frame: vines along the sides, a crown of stars over the top edge, a band below. */
+.pframe { position: absolute; inset: -14px -14px -18px; pointer-events: none; border-radius: 22px; }
+.pframe::before { content: ""; position: absolute; inset: 0; border-radius: 22px; border: 3px solid transparent; background: linear-gradient(140deg, #f6b53d, #e0609a, #8d79ff, #3aa6d8) border-box; -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.pframe .crown { position: absolute; left: 50%; top: -38px; transform: translateX(-50%); font-size: 34px; filter: drop-shadow(0 4px 10px rgba(246,181,61,.5)); }
+.pframe .tail { position: absolute; right: -6px; bottom: -22px; font-size: 30px; transform: rotate(-12deg); }
+/* The effect: sparkles drifting down over the card. */
+.pfx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.pfx span { position: absolute; top: -10%; font-size: 14px; animation: drift 6s linear infinite; opacity: 0; }
+.pfx span:nth-child(1) { left: 12%; animation-delay: 0s; } .pfx span:nth-child(2) { left: 34%; animation-delay: 1.6s; font-size: 10px; } .pfx span:nth-child(3) { left: 58%; animation-delay: 3.1s; }
+.pfx span:nth-child(4) { left: 78%; animation-delay: .8s; font-size: 18px; } .pfx span:nth-child(5) { left: 90%; animation-delay: 4.2s; font-size: 11px; }
+@keyframes drift { 0% { transform: translateY(0) rotate(0); opacity: 0 } 12% { opacity: .95 } 85% { opacity: .8 } 100% { transform: translateY(560px) rotate(200deg); opacity: 0 } }
+@keyframes spin { to { transform: rotate(360deg) } }
+.you-notes { display: grid; gap: 1.6rem; }
+.you-notes div { display: grid; gap: .4rem; }
+.you-notes .k { font: 500 var(--step--1)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--violet); }
+.you-notes h3 { margin: 0; }
+.you-notes p { margin: 0; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
 </style>
 </head>
@@ -349,6 +394,7 @@ footer a:hover { color: var(--text); }
     <a class="brand" href="#top" aria-label="Parley home"><span class="mark" aria-hidden="true"><svg viewBox="123 110 820 820" fill="currentColor"><path d="M151.117 803.03 C151.227 654.363 151.556 505.696 151.775 357.03 L151.869 293.828 C151.89 279.09 151.138 264.07 152.757 249.395 C156.589 214.649 174.048 181.703 199.572 158.102 C220.046 139.17 247.219 126.343 275.067 123.23 C294.408 121.069 314.408 122.408 333.849 122.408 L449.088 122.408 L577.285 122.408 C606.639 122.408 636.516 120.817 665.781 123.208 C705.245 126.433 744.522 138.754 778.606 158.872 C800.606 171.858 823.593 190.019 840.476 209.332 C845.995 215.646 851.791 222.121 856.761 228.889 C858.91 231.816 860.501 235.321 862.89 238.056 C866.527 242.219 868.979 247.05 871.911 251.689 C884.817 272.104 894.233 293.944 901.862 316.83 C913.33 351.233 915.333 386.555 915.069 422.497 C914.909 444.32 910.279 466.744 904.598 487.705 C875.148 596.358 782.571 682.167 668.33 691.039 C646.48 692.735 624.478 692.6 602.574 692.718 L520.034 693.162 C479.384 693.381 446.982 691.823 410.433 713.073 C385.778 727.408 366.596 748.27 345.954 767.668 C325.976 786.443 306.274 805.99 286.87 825.16 C273.658 838.213 259.236 850.413 246.077 863.572 C233.944 875.705 221.442 887.296 209.041 899.025 C202.696 905.026 196.836 912.591 188.789 916.36 C183.842 918.678 178.332 918.517 172.975 918.243 C162.05 917.686 153.045 905.602 151.965 895.528 C150.992 886.461 151.609 876.945 151.46 867.824 C151.106 846.225 151.101 824.632 151.117 803.03 Z M313.836 359.652 C312.332 380.816 313.796 402.623 313.796 423.846 L313.796 554.833 L313.796 600.489 C313.796 604.432 312.097 613.859 317.986 614.398 C324.326 614.977 341.025 594.046 346.54 589.309 C363.918 574.382 379.903 557.852 397.423 543.115 C407.996 534.222 419.246 525.068 432.144 519.612 C462.048 506.963 482.719 507.552 514.288 507.379 L590.646 506.959 C607.318 506.868 624.271 507.675 640.8 505.104 C686.937 497.927 722.978 458.171 726.816 411.787 C731.162 359.269 701.662 309.035 649.615 294.593 C625.439 287.885 598.861 290.67 574.021 290.67 L444.231 290.67 L405.553 290.67 C373.845 290.67 352.772 293.328 330.928 318.553 C321.269 329.707 314.891 344.811 313.836 359.652 Z"/></svg></span>Parley</a>
     <nav aria-label="Sections">
       <a href="#features">Features</a>
+      <a href="#profiles">Profiles</a>
       <a href="#studio">Studio</a>
       <a href="#self-host">Self-host</a>
       <a href="#download">Download</a>
@@ -512,7 +558,7 @@ footer a:hover { color: var(--text); }
         <article class="f w4">
           <span class="tag">Your community, your rules</span>
           <h3>Roles, permissions and the tools to run the place</h3>
-          <p>Coloured and gradient roles with a real hierarchy, per-channel overrides, private channels, timeouts, bans, member screening and an audit log. Custom emoji and stickers per server. Invite links that expire when you choose, from 30 minutes to never, with an optional use limit. List your server in Discover when you want new people to find it, and claim up to three vanity links like /invite/your-name. Put a live badge on your README or site, like the one at the top of this page: it shows who's online and opens your invite.</p>
+          <p>Moving from Discord? Import a server template and your categories, channels, roles and permissions come with you. Coloured and gradient roles with a real hierarchy, per-channel overrides, private channels, timeouts, bans, member screening and an audit log. Custom emoji and stickers per server. Invite links that expire when you choose, from 30 minutes to never, with an optional use limit. List your server in Discover when you want new people to find it, and claim up to three vanity links like /invite/your-name. Put a live badge on your README or site, like the one at the top of this page: it shows who's online and opens your invite.</p>
           <div class="mini roles"><span style="color:#f6b53d">Engineer</span><span style="color:#b6abff">Artist</span><span style="color:#5fbf8a">Regular</span><span style="color:#e0609a">Mod</span><span style="color:var(--muted)">@everyone</span></div>
         </article>
         <article class="f w2">
@@ -536,7 +582,7 @@ footer a:hover { color: var(--text); }
         <article class="f w3">
           <span class="tag">Make it yours</span>
           <h3>Profiles with some personality</h3>
-          <p>Avatar decorations, styled and animated names, clan tags, banners and profile panels. Change your name, pronouns, status, avatar and banner right on the preview card. Hosting your own? Drop PNG, APNG, GIF or WebP decorations into a folder and everyone on your server can pick them, no restart needed.</p>
+          <p>Profile frames, animated effects, nameplates, avatar decorations, styled names, server tags, banners and profile panels, all from one editor with a live preview. Hosting your own? Drop your own decorations, nameplates, effects and frames into a folder and everyone on your server can pick them, no restart needed.</p>
           <div class="mini decor" aria-hidden="true">
             <span class="av c1 d1">M</span><span class="av c3 d2">T</span><span class="av c5 d3">R</span>
             <span class="styled">Mara</span><span class="tag-chip">STU</span>
@@ -567,10 +613,44 @@ footer a:hover { color: var(--text); }
     </div>
   </section>
 
+  <section id="profiles" class="you" aria-labelledby="you-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Channel 02 · You</span>
+        <h2 id="you-title">Show up as you.</h2>
+        <p class="lede">Frames that hang off your card, effects that play when someone opens your profile, nameplates behind your name, and one editor with a live preview for all of it.</p>
+      </div>
+      <div class="you-stage">
+        <div class="pcard-wrap" role="img" aria-label="A profile card for Mara with a gradient frame, a star on top, sparkles drifting over it, a styled name with a server tag, Add Friend and Message buttons, roles, and an In voice card with a Join Voice button.">
+          <div class="pcard" aria-hidden="true">
+            <div class="banner"></div>
+            <div class="body">
+              <div class="avwrap"><span class="av c1">M</span><span class="dot"></span></div>
+              <div class="nm"><span class="styled">Mara</span><span class="tag-chip">⚔️ STU</span></div>
+              <div class="user">mara · she/her</div>
+              <div class="btns"><b>Add Friend</b><i>💬</i><i>⋯</i></div>
+              <div><h4>Member Since</h4><div class="since">Mar 2, 2025 · Jun 28, 2026 in Night Owls</div></div>
+              <div><h4>Roles</h4><div class="roles"><span style="--c:#3ccf7d">Producer</span><span style="--c:#8d79ff">Keys</span><span style="--c:#e39a3b">Night Owl</span></div></div>
+              <div class="voice"><b>In voice</b><div class="faces"><span class="av c1">M</span><span class="av c2">T</span><span class="av c3">I</span><span style="margin-left:16px">🔊 late-night-jam</span></div><div class="join">Join Voice</div></div>
+            </div>
+            <div class="pfx"><span>✨</span><span>⭐</span><span>✨</span><span>💫</span><span>⭐</span></div>
+          </div>
+          <div class="pframe" aria-hidden="true"><span class="crown">🌟</span><span class="tail">🍂</span></div>
+        </div>
+        <div class="you-notes">
+          <div><span class="k">Frames &amp; effects</span><h3>A card that's actually yours</h3><p>Frames reach past the edge of your card and effects play their full animation over it. Hover any effect in the picker to watch it first. Hosting your own server? Drop decorations, nameplates, effects and frames into your assets folder with a <code>metadata.json</code>, no restart needed.</p></div>
+          <div><span class="k">One editor</span><h3>Everything in one place</h3><p>Avatar, decoration, banner, theme, name style, nameplate, effect, frame, tags and badges, with your card updating as you go. Nothing changes until you hit Save.</p></div>
+          <div><span class="k">Knows where you are</span><h3>Profiles in context</h3><p>Open someone in a server and you see their roles there and when they joined, and if they're in voice, a Join Voice button. The full profile adds their activity, mutual friends and servers, wishlist, games and reviews.</p></div>
+          <div><span class="k">Server tags</span><h3>Wear your server</h3><p>Servers design a tag with a badge and a colour, and members wear it next to their name. Click anyone's tag to see the server behind it and apply to join.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section id="studio" class="studio" aria-labelledby="studio-title">
     <div class="wrap">
       <div class="head">
-        <span class="callsign">Channel 02 · Recording Studio</span>
+        <span class="callsign">Channel 03 · Recording Studio</span>
         <h2 id="studio-title">Jam live. Leave with the multitrack.</h2>
         <p class="lede">A studio is a voice channel built for music. Everyone in the band records their own track in full quality, so a bad connection never ruins a take.</p>
       </div>
@@ -596,7 +676,7 @@ footer a:hover { color: var(--text); }
   <section id="self-host" aria-labelledby="host-title">
     <div class="wrap host">
       <div>
-        <span class="callsign">Channel 03 · Self-host</span>
+        <span class="callsign">Channel 04 · Self-host</span>
         <h2 id="host-title" style="margin-top:1.25rem">Your server. Five minutes.</h2>
         <p class="lede">Parley ships as two Docker images and a Postgres database. If your machine runs Docker, it runs Parley: a spare PC, a Raspberry Pi, a NAS or a VPS.</p>
         <div class="plats">
@@ -643,7 +723,7 @@ footer a:hover { color: var(--text); }
   <section id="download" aria-labelledby="dl-title">
     <div class="wrap">
       <div class="head">
-        <span class="callsign">Channel 04 · Apps</span>
+        <span class="callsign">Channel 05 · Apps</span>
         <h2 id="dl-title">Bring Parley with you.</h2>
         <p class="lede">The apps work with app.runparley.com or any Parley server. Type the address once and you're in.</p>
       </div>
