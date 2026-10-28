@@ -148,7 +148,7 @@ jobs:
     if: needs.gate.outputs.ok == 'true'
     env:
       PARLEY_VERSION: ${{ needs.gate.outputs.version }}
-    runs-on: macos-latest
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0, ref: "${{ needs.gate.outputs.tag }}" }
