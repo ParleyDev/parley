@@ -1,4 +1,5 @@
 import { useT } from './lib/i18n'
+import DeleteAccountPage from './pages/DeleteAccount'
 import WidgetPage from './pages/Widget'
 import { LogoNeon } from './components/Logo'
 import { useEffect } from 'react'
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/forgot" element={token ? <Navigate to="/channels/@me" replace /> : <ForgotPage />} />
         <Route path="/reset" element={<ResetPage />} />
         <Route path="/widget/:guildId" element={<WidgetPage />} />
+        <Route path="/delete-account" element={<DeleteAccountPage />} />
         <Route path="/overlay" element={token ? (ready ? <OverlayPage /> : null) : <Navigate to="/login" replace />} />
         <Route path="/developers" element={<DevelopersPage />} />
         <Route path="/login/qr/:id" element={token ? <QrApprovePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />

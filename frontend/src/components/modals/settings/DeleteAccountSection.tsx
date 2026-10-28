@@ -2,18 +2,19 @@ import { useState, type FormEvent } from 'react'
 import { PowerOff, Trash2 } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
-import { useT } from '../../../lib/i18n'
+import { locale, useT } from '../../../lib/i18n'
+import DeleteAccountFlow from '../../DeleteAccountFlow'
 
-/** Danger zone at the bottom of My Account: delete the account after confirming the password (and 2FA code). */
+/** Account Removal: disable the account (log in to undo), or delete it (scheduled, restorable for the grace period). */
 export default function DeleteAccountSection() {
   const t = useT()
   const user = useStore((s) => s.user)
   const logout = useStore((s) => s.logout)
   const pushToast = useStore((s) => s.pushToast)
   const [open, setOpen] = useState<false | 'delete' | 'disable'>(false)
+  const openModal = useStore((s) => s.openModal)
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
-  const [sure, setSure] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (!user) return null
@@ -21,13 +22,8 @@ export default function DeleteAccountSection() {
   const submit = async (e: FormEvent) => {
     e.preventDefault(); setErr(null); setBusy(true)
     try {
-      if (open === 'disable') {
-        await api.post('/users/@me/disable', { password, code: user.mfa_enabled ? code : undefined })
-        pushToast(t('Your account is disabled. Log in again whenever you want it back.'))
-      } else {
-        await api.delete('/users/@me', { password, code: user.mfa_enabled ? code : undefined })
-        pushToast(t('Your account has been deleted.'))
-      }
+      await api.post('/users/@me/disable', { password, code: user.mfa_enabled ? code : undefined })
+      pushToast(t('Your account is disabled. Log in again whenever you want it back.'))
       logout()
     } catch (e) { setErr((e as Error).message); setBusy(false) }
   }
@@ -40,7 +36,7 @@ export default function DeleteAccountSection() {
           <h3 className="font-semibold">{open === 'disable' ? t('Disable Account') : t('Account Removal')}</h3>
           <p className="text-sm text-text-2">{open === 'disable'
             ? t('Disabling logs you out everywhere and hides your account until you log in again. Nothing is deleted.')
-            : t('Disabling your account means you can recover it any time by logging in. Deleting permanently removes your account, the servers you own, your messages and uploads, and cannot be undone.')}</p>
+            : t('Disabling your account means you can recover it any time by logging in. Deleting schedules your account for deletion: sign in within the grace period to restore it, after which your personal data is erased for good.')}</p>
         </div>
       </div>
       {!open ? (
@@ -48,15 +44,23 @@ export default function DeleteAccountSection() {
           <button type="button" className="rounded-md border border-danger/60 hover:bg-danger/10 px-3 py-1.5 text-sm font-medium text-danger" onClick={() => setOpen('disable')} data-disable-open>{t('Disable Account')}</button>
           <button type="button" className="rounded-md bg-danger/90 hover:bg-danger px-3 py-1.5 text-sm font-medium text-white" onClick={() => setOpen('delete')} data-delete-open>{t('Delete Account')}</button>
         </div>
+      ) : open === 'delete' ? (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) setOpen(false) }} data-delete-dialog>
+          <div className="pop w-full max-w-lg rounded-xl bg-bg-1 border border-line p-5 shadow-2xl space-y-3" role="dialog" aria-modal>
+            <h3 className="text-lg font-bold flex items-center gap-2"><Trash2 size={18} className="text-danger" />{t('Delete Account')}</h3>
+            <DeleteAccountFlow onCancel={() => setOpen(false)}
+              onManage={({ guildId, apps }) => { if (guildId) openModal({ kind: 'guildSettings', guildId }); else if (apps) openModal({ kind: 'userSettings', tab: 'applications' }) }}
+              onDone={(at) => { pushToast(t('Your account is scheduled for deletion on {date}. Sign in before then to restore it.', { date: new Date(at).toLocaleDateString(locale(), { year: 'numeric', month: 'long', day: 'numeric' }) })); logout() }} />
+          </div>
+        </div>
       ) : (
         <form onSubmit={submit} className="space-y-3" data-delete-form>
           {err && <div className="rounded-lg bg-danger/15 border border-danger/40 px-3 py-2 text-sm" data-delete-error>{err}</div>}
           <div><label className="label">{t('Password')}</label><input className="input" type="password" autoFocus autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} data-delete-password /></div>
           {user.mfa_enabled && <div><label className="label">{t('Two-factor code')}</label><input className="input max-w-[200px] tracking-widest" autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} data-delete-code /></div>}
-          {open === 'delete' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-danger" checked={sure} onChange={(e) => setSure(e.target.checked)} data-delete-confirm /> {t('I understand this permanently deletes my account and everything I own.')}</label>}
           <div className="flex gap-2">
-            <button className="rounded-md bg-danger/90 hover:bg-danger px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50" disabled={busy || (open === 'delete' && !sure) || !password || (user.mfa_enabled && !code)} data-delete-submit>{busy ? (open === 'disable' ? t('Disabling…') : t('Deleting…')) : open === 'disable' ? t('Disable my account') : t('Delete my account')}</button>
-            <button type="button" className="btn-ghost py-1.5" onClick={() => { setOpen(false); setErr(null); setPassword(''); setCode(''); setSure(false) }}>{t('Cancel')}</button>
+            <button className="rounded-md bg-danger/90 hover:bg-danger px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50" disabled={busy || !password || (user.mfa_enabled && !code)} data-disable-submit>{busy ? t('Disabling…') : t('Disable my account')}</button>
+            <button type="button" className="btn-ghost py-1.5" onClick={() => { setOpen(false); setErr(null); setPassword(''); setCode('') }}>{t('Cancel')}</button>
           </div>
         </form>
       )}

@@ -64,7 +64,8 @@ export const cleanup = async () => {
     const a = await login(ADMIN_EMAIL)
     if (!a.token) { console.log(`  (cleanup skipped: ${ADMIN_EMAIL} cannot log in; set ADMIN_EMAILS on the backend)`); return }
     let n = 0
-    for (const id of created) { const r = await raw(a.token, 'DELETE', `/admin/users/${id}`); if (r.status === 204) n++ }
+    // Purge, not delete: test accounts shouldn't linger as anonymized tombstones.
+    for (const id of created) { const r = await raw(a.token, 'POST', `/admin/users/${id}/purge`); if (r.status === 204) n++ }
     console.log(`  (cleanup: removed ${n}/${created.length} test users)`)
   } catch (e) { console.log('  (cleanup failed:', e.message, ')') }
 }

@@ -4,6 +4,8 @@ export interface User {
   id: string
   username: string
   display_name: string
+  /** The account was deleted: show "Deleted User" with the default avatar, no profile, no way to message them. */
+  deleted?: boolean
   /** Bot account (acts through an app token). */
   bot?: boolean
   /** A bot whose app an administrator verified. */

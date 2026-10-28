@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
         .route("/admin/stats", get(stats))
         .route("/admin/users", get(list_users))
         .route("/admin/users/:id", axum::routing::patch(patch_user).delete(delete_user))
+        .route("/admin/users/:id/purge", axum::routing::post(purge_user))
         .route("/admin/users/bulk", axum::routing::post(bulk_users))
         .route("/admin/guilds", get(list_guilds))
         .route("/admin/guilds/:id", delete(delete_guild))
@@ -425,7 +426,8 @@ async fn bulk_users(State(state): State<AppState>, AuthUser(uid): AuthUser, Json
                 "delete" => {
                     if id == uid { return Err(AppError::BadRequest("You cannot delete your own account from here".into())) }
                     delete_account(&state, id).await?;
-                    audit::record(&state, uid, "user.delete", "user", Some(id), &name, json!({ "bulk": true })).await;
+                    // The record keeps who did it, not who it was: the account is anonymized.
+                    audit::record(&state, uid, "user.delete", "user", Some(id), crate::routes::deletion::DELETED_NAME, json!({ "bulk": true })).await;
                 }
                 "quota" => {
                     let q = req.upload_quota_bytes;
@@ -524,21 +526,47 @@ async fn patch_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     Ok(Json(json!({ "id": id, "is_admin": row.0, "suspended_at": row.1, "mfa_enabled": row.2 })))
 }
 
-/// Delete an account outright (their servers, messages and uploads go with it).
+/// Delete an account now, with no grace period: the servers and apps they own are deleted, then the account is
+/// anonymized like a finished self-deletion (their messages stay, as "Deleted User").
 async fn delete_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
     require_admin(&state, uid).await?;
     if id == uid {
         return Err(AppError::BadRequest("You cannot delete your own account from here".into()));
     }
-    let name = audit::username(&state, id).await;
     delete_account(&state, id).await?;
-    audit::record(&state, uid, "user.delete", "user", Some(id), &name, json!({})).await;
+    audit::record(&state, uid, "user.delete", "user", Some(id), crate::routes::deletion::DELETED_NAME, json!({})).await;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Purge an account: remove the row and everything hanging off it, messages included. For spam and abuse, where
+/// keeping their content would be wrong; normal deletion anonymizes instead.
+async fn purge_user(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
+    require_admin(&state, uid).await?;
+    if id == uid {
+        return Err(AppError::BadRequest("You cannot delete your own account from here".into()));
+    }
+    purge_account(&state, id).await?;
+    audit::record(&state, uid, "user.purge", "user", Some(id), crate::routes::deletion::DELETED_NAME, json!({})).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Admin deletion: delete what they own (servers, apps and their bots), then anonymize the account at once.
+pub async fn delete_account(state: &AppState, id: Uuid) -> AppResult<()> {
+    let owned: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM guilds WHERE owner_id = $1").bind(id).fetch_all(&state.db).await?;
+    for (gid,) in &owned {
+        state.hub.voice_evict(|v| v.guild_id == Some(*gid));
+        sqlx::query("DELETE FROM guilds WHERE id = $1").bind(gid).execute(&state.db).await?;
+        state.hub.emit_guild(*gid, "GUILD_DELETE", json!({ "id": gid }));
+    }
+    let bots: Vec<(Option<Uuid>,)> = sqlx::query_as("DELETE FROM applications WHERE owner_id = $1 RETURNING bot_user_id").bind(id).fetch_all(&state.db).await?;
+    for b in bots.into_iter().filter_map(|b| b.0) { purge_account(state, b).await?; }
+    crate::routes::deletion::finalize_now(state, id).await?;
+    Ok(())
 }
 
 /// Remove an account and everything hanging off it (servers they own, messages, uploads, sessions);
 /// members of their servers and their own open clients hear about it live.
-pub async fn delete_account(state: &AppState, id: Uuid) -> AppResult<()> {
+pub async fn purge_account(state: &AppState, id: Uuid) -> AppResult<()> {
     state.hub.session_forget(id);
     let owned: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM guilds WHERE owner_id = $1").bind(id).fetch_all(&state.db).await?;
     for (gid,) in &owned {

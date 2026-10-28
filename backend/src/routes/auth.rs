@@ -49,6 +49,12 @@ async fn register(State(state): State<AppState>, headers: HeaderMap, Json(req): 
     if !email.contains('@') || email.len() > 254 {
         return Err(AppError::BadRequest("Invalid email".into()));
     }
+    if crate::routes::deletion::reserved_username(&username) {
+        return Err(AppError::BadRequest("That username is reserved".into()));
+    }
+    if crate::routes::deletion::email_blocked(&state, &email).await? {
+        return Err(AppError::BadRequest("This email can't be used to sign up right now".into()));
+    }
     if req.password.len() < 8 {
         return Err(AppError::BadRequest("Password must be at least 8 characters".into()));
     }
@@ -196,8 +202,9 @@ struct LoginReq {
 
 async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<LoginReq>) -> AppResult<Json<Value>> {
     let login = req.login.trim().to_lowercase();
+    // Deleted accounts have no email or password any more; never match one.
     let row: Option<(Uuid, String)> =
-        sqlx::query_as("SELECT id, password_hash FROM users WHERE username = $1 OR email = $1")
+        sqlx::query_as("SELECT id, password_hash FROM users WHERE (username = $1 OR email = $1) AND account_state <> 'deleted' AND password_hash IS NOT NULL")
             .bind(&login)
             .fetch_optional(&state.db)
             .await?;
@@ -226,6 +233,8 @@ async fn login(State(state): State<AppState>, headers: HeaderMap, Json(req): Jso
 }
 
 pub(crate) async fn session(state: &AppState, id: Uuid, headers: &HeaderMap) -> AppResult<Json<Value>> {
+    // Every way of signing in ends here: an account waiting to be deleted gets its date and a restore ticket instead.
+    if let Some(pending) = crate::routes::deletion::pending_login(state, id).await? { return Ok(Json(pending)) }
     // A disabled account comes back to life on its next successful login.
     let reenabled: Option<(bool,)> = sqlx::query_as("UPDATE users SET disabled_at = NULL WHERE id = $1 AND disabled_at IS NOT NULL RETURNING true").bind(id).fetch_optional(&state.db).await?;
     let user = sqlx::query_as::<_, PrivateUser>(&format!("SELECT {PRIVATE_USER_COLS} FROM users WHERE id = $1"))

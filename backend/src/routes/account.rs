@@ -55,6 +55,9 @@ pub const USERNAME_COOLDOWN_HOURS: i64 = 24;
 
 async fn change_username(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<UsernameReq>) -> AppResult<Json<PrivateUser>> {
     let username = req.username.trim().to_lowercase();
+    if crate::routes::deletion::reserved_username(&username) {
+        return Err(AppError::BadRequest("That username is reserved".into()));
+    }
     if !crate::routes::auth::valid_username(&username) {
         return Err(AppError::BadRequest("Username must be 2-32 chars: letters, numbers, _ or .".into()));
     }
@@ -90,6 +93,9 @@ async fn change_email(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     let email = req.email.trim().to_lowercase();
     if !email.contains('@') || email.len() > 254 {
         return Err(AppError::BadRequest("Invalid email".into()));
+    }
+    if crate::routes::deletion::email_blocked(&state, &email).await? {
+        return Err(AppError::BadRequest("This email can't be used right now".into()));
     }
     check_password(&state, uid, &req.password).await?;
     let (current,): (String,) = sqlx::query_as("SELECT email FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
@@ -193,7 +199,7 @@ async fn disable_account(State(state): State<AppState>, AuthUser(uid): AuthUser,
 pub const EXPORT_COOLDOWN_HOURS: i64 = 24;
 pub const EXPORT_KEEP_DAYS: i64 = 7;
 
-fn export_path(state: &AppState, id: Uuid) -> std::path::PathBuf {
+pub(crate) fn export_path(state: &AppState, id: Uuid) -> std::path::PathBuf {
     state.config.upload_dir.join("exports").join(format!("{id}.json"))
 }
 

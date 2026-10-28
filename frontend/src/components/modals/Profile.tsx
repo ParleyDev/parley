@@ -34,8 +34,14 @@ export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose
   const user = useMemo(() => (fetched ? withServerProfile(fetched, serverMember) : null), [fetched, serverMember])
   // The cached copy may be partial (built from a member row), so always fetch the full profile,
   // and refetch whenever the cached copy changes (USER_UPDATE, member list load).
-  useEffect(() => { api.get<UserProfile>(`/users/${userId}`).then(setUser).catch(() => {}) }, [userId, cached])
+  // Not found: an account waiting to be deleted (hidden) or gone.
+  const [gone, setGone] = useState(false)
+  useEffect(() => { api.get<UserProfile>(`/users/${userId}`).then((u) => { setUser(u); setGone(false) }).catch(() => setGone(true)) }, [userId, cached])
 
+  if (gone || user?.deleted) {
+    const card = <DeletedCard deleted={!!user?.deleted} />
+    return anchor ? <Popout anchor={anchor} onClose={onClose}>{card}</Popout> : <Modal onClose={onClose} width="max-w-xs" bare>{card}</Modal>
+  }
   if (anchor) {
     return (
       <Popout anchor={anchor} onClose={onClose}>
@@ -45,6 +51,21 @@ export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose
   }
   if (!user) return <Modal onClose={onClose}><p className="text-text-2">{t('Loading…')}</p></Modal>
   return <FullProfile user={user} inGuild={inGuild} onClose={onClose} initialTab={tab} />
+}
+
+/** In place of a profile: a deleted account (a tombstone), or one that isn't available (being deleted). */
+function DeletedCard({ deleted }: { deleted: boolean }) {
+  const t = useT()
+  return (
+    <div className="rounded-lg bg-[#232428] border border-white/10 shadow-2xl overflow-hidden text-[#dbdee1]" data-profile-deleted={deleted ? 'deleted' : 'unavailable'}>
+      <div className="h-16 bg-[#1e1f22]" />
+      <div className="px-4 -mt-8"><span className="inline-block rounded-full ring-[6px] ring-[#232428]"><Avatar user={{ id: '0', display_name: 'Deleted User', avatar_url: null }} size={64} /></span></div>
+      <div className="px-4 pt-2 pb-4">
+        <div className="text-lg font-bold">{t('Deleted User')}</div>
+        <p className="text-sm text-[#b5bac1]">{deleted ? t('This account was deleted.') : t("This account isn't available.")}</p>
+      </div>
+    </div>
+  )
 }
 
 type FullTab = 'activity' | 'friends' | 'servers' | 'wishlist' | 'games' | 'reviews'

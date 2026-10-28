@@ -144,7 +144,7 @@ async fn update_app(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
 async fn delete_app(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
     let app = own(&state, uid, id).await?;
     sqlx::query("DELETE FROM applications WHERE id = $1").bind(id).execute(&state.db).await?;
-    if let Some(b) = app.bot_user_id { crate::routes::admin::delete_account(&state, b).await?; }
+    if let Some(b) = app.bot_user_id { crate::routes::admin::purge_account(&state, b).await?; }
     Ok(StatusCode::NO_CONTENT)
 }
 

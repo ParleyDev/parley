@@ -38,7 +38,7 @@ struct RelRow {
 
 pub async fn list_for(db: &PgPool, uid: Uuid) -> AppResult<Vec<Relationship>> {
     let rows: Vec<RelRow> = sqlx::query_as(&format!(
-        "SELECT r.kind, r.created_at AS rel_created_at, r.note AS rel_note, {} FROM relationships r JOIN users u ON u.id = r.target_id WHERE r.user_id = $1 ORDER BY u.display_name",
+        "SELECT r.kind, r.created_at AS rel_created_at, r.note AS rel_note, {} FROM relationships r JOIN users u ON u.id = r.target_id WHERE r.user_id = $1 AND u.account_state = 'active' ORDER BY u.display_name",
         USER_COLS.split(", ").map(|c| format!("u.{c}")).collect::<Vec<_>>().join(", ")
     ))
     .bind(uid)
@@ -125,6 +125,10 @@ async fn send_request(
                 .ok_or_else(|| AppError::BadRequest("Hm, didn't work. Double check that the username is correct.".into()))?
         }
         _ => return Err(AppError::BadRequest("Provide a username".into())),
+    };
+    // Nobody can befriend an account that is being (or has been) deleted.
+    let target = if target.account_state == "active" { target } else {
+        return Err(AppError::BadRequest("Hm, didn't work. Double check that the username is correct.".into()))
     };
     if target.id == uid {
         return Err(AppError::BadRequest("You can't add yourself as a friend".into()));

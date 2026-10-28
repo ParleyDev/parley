@@ -119,6 +119,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(ratelimit::prune_loop());
     tokio::spawn(routes::users::expire_statuses(state_for_expiry));
     tokio::spawn(routes::threads::auto_archive(state_for_reminders.clone()));
+    tokio::spawn(routes::deletion::finalize_loop(state_for_reminders.clone()));
     tokio::spawn(routes::integrations::sync_loop(state_for_reminders.clone()));
     tokio::spawn(routes::spotify::poll_loop(state_for_reminders.clone()));
     tokio::spawn(routes::channels::bookmark_reminders(state_for_reminders));

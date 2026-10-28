@@ -13,13 +13,16 @@ import { isRequest } from '../store'
 import Avatar from './Avatar'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup } from '../lib/dm'
-import { useT, tn } from '../lib/i18n'
+import { t as tr, useT, tn } from '../lib/i18n'
 
 /**
  * Message history + composer for any channel (text, DM, or a voice channel's chat).
  * No header: the parent decides how to frame it.
  */
-export default function ChatPane({ channel, readOnly }: { channel: Channel | DmChannel; /** Shown instead of the composer (e.g. a locked thread). */ readOnly?: string }) {
+export default function ChatPane({ channel, readOnly: lockedNote }: { channel: Channel | DmChannel; /** Shown instead of the composer (e.g. a locked thread). */ readOnly?: string }) {
+  // A 1:1 DM with a deleted account stays readable, but nothing can be sent to them.
+  const dmGone = channel.guild_id === null && (channel as DmChannel).kind === 'dm' && !!(channel as DmChannel).recipients?.[0]?.deleted
+  const readOnly = lockedNote ?? (dmGone ? tr("You can't send messages to this user.") : undefined)
   const t = useT()
   const messages = useStore((s) => s.messages[channel.id])
   // App commands here (the / menu and the Apps menus on messages and people).

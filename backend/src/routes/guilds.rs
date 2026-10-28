@@ -524,7 +524,7 @@ async fn list_members(
     require_member(&state.db, id, uid).await?;
     let mut ms = sqlx::query_as::<_, Member>(
         "SELECT m.guild_id, m.user_id, m.nickname, m.joined_at, u.username, u.display_name, u.avatar_url, u.status, u.custom_status, m.timeout_until, m.rules_accepted_at, m.mute, m.deaf, u.avatar_decoration, u.clan_tag, u.name_primary, u.name_accent, u.name_style, u.nameplate, m.quarantined, m.flags, m.guild_avatar, m.guild_banner, m.guild_bio, m.guild_pronouns
-         FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 ORDER BY u.display_name",
+         FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND u.account_state = 'active' ORDER BY u.display_name",
     )
     .bind(id)
     .fetch_all(&state.db)

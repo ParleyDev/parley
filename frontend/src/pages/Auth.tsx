@@ -7,7 +7,11 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useStore } from '../store'
 import type { PrivateUser } from '../lib/types'
-import { useT } from '../lib/i18n'
+import { locale, useT } from '../lib/i18n'
+
+/** What a sign-in answers: a session, or (for an account waiting to be deleted) its date and a restore ticket. */
+type Pending = { pending_deletion: true; scheduled_for: string; restore_ticket: string }
+type SignIn = { token: string; user: PrivateUser; reenabled?: boolean } | Pending
 import { savedAccounts } from '../lib/accounts'
 import AccountSwitcher from '../components/AccountSwitcher'
 
@@ -33,7 +37,10 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   useStore((s) => s.instance.app_url) // re-check support once /instance has said where this server lives
   const canPasskey = mode === 'login' && passkeysSupported()
   const autofill = useRef<AbortController | null>(null)
-  const signedIn = (res: { token: string; user: PrivateUser; reenabled?: boolean }) => {
+  // An account waiting to be deleted: the password was right, but signing in offers to restore it instead.
+  const [pending, setPending] = useState<Pending | null>(null)
+  const signedIn = (res: SignIn) => {
+    if ('pending_deletion' in res) { setMfaTicket(null); setPending(res); return }
     setAuth(res.token, res.user)
     if (res.reenabled) useStore.getState().pushToast(t('Welcome back! Your account has been re-enabled.'))
     navigate(from, { replace: true })
@@ -60,14 +67,12 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     setErr(null); setBusy(true)
     try {
       const res = mode === 'login'
-        ? await api.post<{ token: string; user: PrivateUser; reenabled?: boolean } | { mfa: true; ticket: string; security_keys?: boolean }>('/auth/login', { login: form.login, password: form.password })
+        ? await api.post<SignIn | { mfa: true; ticket: string; security_keys?: boolean }>('/auth/login', { login: form.login, password: form.password })
         : await api.post<{ token: string; user: PrivateUser }>('/auth/register', {
             email: form.email, username: form.username, display_name: form.display_name || undefined, password: form.password,
           })
       if ('mfa' in res) { setMfaTicket(res.ticket); setMfaKeys(!!res.security_keys); setCode(''); return }
-      setAuth(res.token, res.user)
-      if ('reenabled' in res && res.reenabled) useStore.getState().pushToast(t('Welcome back! Your account has been re-enabled.'))
-      navigate(from, { replace: true })
+      signedIn(res)
     } catch (e) {
       setErr((e as Error).message)
     } finally {
@@ -81,8 +86,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     try {
       const begin = await api.post<{ id: string; options: Parameters<typeof getPasskey>[0] }>('/auth/mfa/key/begin', { ticket: mfaTicket })
       const credential = await getPasskey(begin.options)
-      const res = await api.post<{ token: string; user: PrivateUser }>('/auth/mfa/key/finish', { ticket: mfaTicket, id: begin.id, credential })
-      setAuth(res.token, res.user); navigate(from, { replace: true })
+      signedIn(await api.post<SignIn>('/auth/mfa/key/finish', { ticket: mfaTicket, id: begin.id, credential }))
     } catch (e) { const m = passkeyError(e); if (m) setErr(m) } finally { setBusy(false) }
   }
   const qrSession = useCallback((token: string, user: PrivateUser) => { setAuth(token, user); navigate(from, { replace: true }) }, [setAuth, navigate, from])
@@ -90,9 +94,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     e.preventDefault()
     setErr(null); setBusy(true)
     try {
-      const res = await api.post<{ token: string; user: PrivateUser }>('/auth/mfa', { ticket: mfaTicket, code })
-      setAuth(res.token, res.user)
-      navigate(from, { replace: true })
+      signedIn(await api.post<SignIn>('/auth/mfa', { ticket: mfaTicket, code }))
     } catch (e) {
       const msg = (e as Error).message
       setErr(msg)
@@ -103,6 +105,30 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   }
 
   const f = (k: keyof typeof form) => ({ value: form[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value }) })
+
+  const restore = async () => {
+    if (!pending) return
+    setErr(null); setBusy(true)
+    try { const res = await api.post<SignIn>('/auth/restore', { ticket: pending.restore_ticket }); setPending(null); signedIn(res); useStore.getState().pushToast(t('Welcome back! Your account has been restored.')) }
+    catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  if (pending) {
+    const date = new Date(pending.scheduled_for).toLocaleDateString(locale(), { year: 'numeric', month: 'long', day: 'numeric' })
+    return (
+      <div className="h-full overflow-y-auto flex items-center-safe justify-center p-4 relative bg-bg-0">
+        <div className="pop relative w-full max-w-md rounded-2xl bg-bg-1/90 backdrop-blur border border-line p-8 shadow-2xl space-y-4" data-restore-account={pending.scheduled_for}>
+          <div className="flex items-center gap-3">
+            <LogoNeon className="h-10 w-10 rounded-xl shadow-lg shadow-accent/30" />
+            <h1 className="text-xl font-bold leading-tight">{t('Restore your account?')}</h1>
+          </div>
+          <p className="text-[15px] text-text-1">{t('Your account is scheduled for deletion on {date}. Restore it to keep everything as it was.', { date })}</p>
+          {err && <div className="rounded-lg bg-danger/15 border border-danger/40 px-3 py-2 text-sm">{err}</div>}
+          <button className="btn-primary w-full py-2.5" disabled={busy} onClick={restore} data-restore-yes>{busy ? t('Please wait…') : t('Restore my account')}</button>
+          <button type="button" className="btn-ghost w-full py-2.5" onClick={() => { setPending(null); setErr(null) }} data-restore-no>{t('Keep it deleted')}</button>
+        </div>
+      </div>
+    )
+  }
 
   if (mfaTicket) {
     return (

@@ -85,7 +85,7 @@ await p.fill('[data-account-confirm]', 'newpassword2'); await p.click('[data-acc
 ok('the password dialog closes on success', !!(await (await fetch(`${B}/auth/login`, { method: 'POST', headers: H, body: JSON.stringify({ login: `bob_new${S}`, password: 'newpassword2' }) })).json()).token)
 ok('Disable Account is offered (data export lives under Data & Privacy now)', await p.locator('[data-disable-open]').count() === 1)
 await p.screenshot({ path: '164-account.png' })
-await p.click('[data-disable-open]'); await p.waitForSelector('[data-delete-form]'); await p.fill('[data-delete-password]', 'newpassword2'); await p.click('[data-delete-submit]')
+await p.click('[data-disable-open]'); await p.waitForSelector('[data-delete-form]'); await p.fill('[data-delete-password]', 'newpassword2'); await p.click('[data-disable-submit]')
 await p.waitForURL(/\/login/, { timeout: 10000 }); ok('disabling from the UI logs out to the login page', true)
 await p.fill('input[autocomplete^="username"]', `bob_new${S}`); await p.fill('input[type="password"]', 'newpassword2'); await p.keyboard.press('Enter')
 await p.waitForSelector('[data-user-panel-bar]', { timeout: 10000 }); ok('logging back in re-enables and shows the welcome-back toast', await p.locator('text=re-enabled').count() === 1)

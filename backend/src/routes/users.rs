@@ -195,7 +195,7 @@ pub const PROFILE_FRAMES: &[&str] = &["gold", "neon", "vines", "pixel", "frost",
 pub const NAMEPLATES: &[&str] = &["dusk", "ocean", "forest", "candy", "aurora", "mono"];
 pub const PROFILE_EFFECTS: &[&str] = &["sparkles", "snow", "hearts", "confetti", "bubbles"];
 
-pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, verified_bot, name_style, avatar_decoration, clan_tag, clan_tag_guild, panels, profile_privacy, profile_frame, nameplate, profile_effect";
+pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, verified_bot, name_style, avatar_decoration, clan_tag, clan_tag_guild, panels, profile_privacy, profile_frame, nameplate, profile_effect, account_state";
 pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, clan_tag_guild, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect, entrance_sound, client_settings, birthdate, custom_activity, share_activity, house, CASE WHEN birthdate IS NULL THEN 'unknown' WHEN birthdate > (now() - interval '18 years')::date THEN 'teen' ELSE 'adult' END AS age_group";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
@@ -365,17 +365,11 @@ pub struct DeleteMeReq {
 }
 
 /// Self-service account deletion: password (and 2FA code) required; the last admin cannot leave the instance adminless.
-async fn delete_me(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<DeleteMeReq>) -> AppResult<StatusCode> {
+/// `DELETE /users/@me`: same as `POST /users/@me/deletion` (kept for older clients): schedules the deletion.
+async fn delete_me(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<DeleteMeReq>) -> AppResult<Json<serde_json::Value>> {
     crate::routes::mfa::check_password_and_factor(&state, uid, &req.password, req.code.as_deref()).await?;
-    let (is_admin,): (bool,) = sqlx::query_as("SELECT is_admin FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
-    if is_admin {
-        let (others,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE is_admin AND id <> $1").bind(uid).fetch_one(&state.db).await?;
-        if others == 0 {
-            return Err(AppError::BadRequest("You are the only admin. Make someone else an admin before deleting your account.".into()));
-        }
-    }
-    crate::routes::admin::delete_account(&state, uid).await?;
-    Ok(StatusCode::NO_CONTENT)
+    let at = crate::routes::deletion::request_deletion(&state, uid).await?;
+    Ok(Json(json!({ "scheduled_for": at })))
 }
 
 async fn update_me(
@@ -608,6 +602,9 @@ async fn get_user(
         .fetch_optional(&state.db)
         .await?
         .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+    // An account waiting to be deleted is hidden from everyone else; a deleted one is a bare tombstone.
+    if u.account_state == "pending_deletion" && me != id { return Err(AppError::NotFound("User not found".into())) }
+    if u.account_state == "deleted" { return Ok(Json(serde_json::json!(u))) }
     // Friends-only profiles show in full to you and your friends.
     u.reveal = me == id || sqlx::query_as::<_, (bool,)>("SELECT true FROM relationships WHERE user_id = $1 AND target_id = $2 AND kind = 'friend'").bind(me).bind(id).fetch_optional(&state.db).await?.is_some();
     let mutual: Vec<(Uuid, String, Option<String>)> = if me == id {

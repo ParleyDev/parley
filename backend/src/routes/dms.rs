@@ -221,8 +221,10 @@ async fn allows_group_add(db: &PgPool, target: Uuid) -> AppResult<bool> {
 /// May `from` deliver a 1:1 DM to `to` right now? Friends always; otherwise it depends on the recipient's
 /// "who can message you" setting (everyone / friends and server members / friends only).
 pub async fn can_dm(db: &PgPool, from: Uuid, to: Uuid) -> AppResult<bool> {
+    // Accounts being deleted, or deleted, receive nothing (their DMs stay readable, not writable).
+    let (p, state): (String, String) = sqlx::query_as("SELECT dm_privacy, account_state FROM users WHERE id = $1").bind(to).fetch_one(db).await?;
+    if state != "active" { return Ok(false) }
     if are_friends(db, from, to).await? { return Ok(true) }
-    let (p,): (String,) = sqlx::query_as("SELECT dm_privacy FROM users WHERE id = $1").bind(to).fetch_one(db).await?;
     Ok(match p.as_str() {
         "friends" => false,
         "friends_and_servers" => shares_guild_allowing_dms(db, from, to).await?,
@@ -377,6 +379,7 @@ async fn open_dm(
         .fetch_optional(&state.db)
         .await?
         .ok_or_else(|| AppError::NotFound("User not found".into()))?;
+    if recipient.account_state != "active" { return Err(AppError::BadRequest("You can't send messages to this user.".into())) }
 
     if crate::routes::relationships::blocked_either_way(&state.db, uid, req.recipient_id).await? {
         return Err(AppError::Forbidden);
