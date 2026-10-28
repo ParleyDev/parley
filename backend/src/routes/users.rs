@@ -8,7 +8,7 @@ use crate::{
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::{delete, get, put},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -27,6 +27,7 @@ pub fn router() -> Router<AppState> {
         .route("/users/:id/reviews/:rid", delete(delete_review))
         .route("/users/@me/guild-layout", get(get_layout).put(put_layout))
         .route("/users/@me/push-tokens", put(put_push_token).delete(delete_push_token))
+        .route("/users/@me/push-tokens/test", post(test_push))
         .route("/users/@me/notes", get(list_notes))
         .route("/users/@me/notes/:id", put(put_note))
         .route("/users/@me/notification-settings", get(list_notif))
@@ -817,6 +818,11 @@ async fn put_push_token(State(state): State<AppState>, AuthUser(uid): AuthUser, 
 
 #[derive(Deserialize)]
 struct DeletePushToken { token: String }
+/// Send a test notification to each of the caller's registered devices and report the outcome per device.
+async fn test_push(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<serde_json::Value>> {
+    Ok(Json(crate::push::test(&state, uid).await))
+}
+
 async fn delete_push_token(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<DeletePushToken>) -> AppResult<StatusCode> {
     sqlx::query("DELETE FROM push_tokens WHERE token = $1 AND user_id = $2").bind(req.token.trim()).bind(uid).execute(&state.db).await?;
     Ok(StatusCode::NO_CONTENT)

@@ -3518,5 +3518,15 @@
 "Team ID": "팀 ID",
 "Bundle ID": "번들 ID",
 "APNs endpoint override (tests only)": "APNs 엔드포인트 재정의(테스트 전용)",
-"leave empty for Apple": "Apple을 사용하려면 비워 두세요"
+"leave empty for Apple": "Apple을 사용하려면 비워 두세요",
+"Android": "Android",
+"No phones are registered. Open the Parley app, sign in and allow notifications.": "등록된 휴대폰이 없습니다. Parley 앱을 열고 로그인한 다음 알림을 허용하세요.",
+"Notifications are turned off for Parley on this phone. Turn them on in the phone's Settings → Parley → Notifications.": "이 휴대폰에서 Parley 알림이 꺼져 있습니다. 휴대폰 설정 → Parley → 알림에서 켜세요.",
+"Push notifications aren't set up on this server yet.": "이 서버에는 아직 푸시 알림이 설정되지 않았습니다.",
+"Send a test notification to my phones": "내 휴대폰으로 테스트 알림 보내기",
+"Sends one to every phone signed in to the Parley app, even while you are here, and shows whether each one got it.": "여기에 있는 동안에도 Parley 앱에 로그인한 모든 휴대폰에 보내고 각각 받았는지 보여 줍니다.",
+"This phone couldn't register: {error}": "이 휴대폰을 등록하지 못했습니다: {error}",
+"This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "이 휴대폰이 Apple 또는 Google에서 푸시 토큰을 받지 못했습니다. 온라인 상태인지 확인한 다음 다시 시도하세요.",
+"iPhone or iPad": "iPhone 또는 iPad",
+"sent": "보냄"
 }

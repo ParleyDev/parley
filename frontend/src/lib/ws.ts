@@ -160,6 +160,28 @@ export function connectSocket() {
   ws.onerror = () => { /* onclose will fire */ }
 }
 
+/** Native app going to the background: close the socket cleanly, so the server sees the user offline and pushes
+ *  start straight away (a suspended app's socket otherwise lingers, silent). Not during a call, which needs it. */
+let suspended = false
+export function suspendSocket() {
+  const ws = socket
+  if (!ws || voice.currentChannel) return
+  suspended = true
+  ws.onclose = null; ws.onmessage = null
+  if (pingTimer) clearInterval(pingTimer)
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
+  socket = null
+  ws.close()
+  useStore.getState().setConnected(false)
+}
+
+/** Back in the foreground: reconnect at once (resuming, so missed events replay) rather than on the backoff. */
+export function resumeSocket() {
+  if (!suspended) return
+  suspended = false; retry = 0
+  connectSocket()
+}
+
 export function disconnectSocket() {
   closedByUser = true
   if (reconnectTimer) clearTimeout(reconnectTimer)

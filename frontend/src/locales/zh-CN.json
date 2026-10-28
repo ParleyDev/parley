@@ -3518,5 +3518,15 @@
 "Team ID": "团队 ID",
 "Bundle ID": "Bundle ID",
 "APNs endpoint override (tests only)": "APNs 端点覆盖（仅限测试）",
-"leave empty for Apple": "留空则使用 Apple"
+"leave empty for Apple": "留空则使用 Apple",
+"Android": "Android",
+"No phones are registered. Open the Parley app, sign in and allow notifications.": "没有已注册的手机。打开 Parley 应用，登录并允许通知。",
+"Notifications are turned off for Parley on this phone. Turn them on in the phone's Settings → Parley → Notifications.": "此手机上的 Parley 通知已关闭。请在手机的设置 → Parley → 通知中开启。",
+"Push notifications aren't set up on this server yet.": "此服务器尚未设置推送通知。",
+"Send a test notification to my phones": "向我的手机发送测试通知",
+"Sends one to every phone signed in to the Parley app, even while you are here, and shows whether each one got it.": "向每台登录了 Parley 应用的手机发送一条（即使你正在这里），并显示每台是否收到。",
+"This phone couldn't register: {error}": "此手机无法注册：{error}",
+"This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "此手机没有从 Apple 或 Google 获得推送令牌。请检查它是否在线，然后重试。",
+"iPhone or iPad": "iPhone 或 iPad",
+"sent": "已发送"
 }

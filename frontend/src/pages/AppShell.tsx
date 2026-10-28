@@ -57,6 +57,13 @@ export default function AppShell() {
   const ready = useStore((s) => !!s.user && s.connected)
   useEffect(() => { if (ready && unseenEntry()) useStore.getState().openModal({ kind: 'whatsNew' }) }, [ready])
   const connected = useStore((s) => s.connected)
+  // Only say "Reconnecting…" when it takes a moment: coming back to the app or a blip usually reconnects within a second.
+  const [showReconnecting, setShowReconnecting] = useState(false)
+  useEffect(() => {
+    if (connected) { setShowReconnecting(false); return }
+    const id = setTimeout(() => setShowReconnecting(true), 2000)
+    return () => clearTimeout(id)
+  }, [connected])
   const pane = useStore((s) => s.mobilePane)
   const announcement = useStore((s) => s.instance.announcement)
   // Ask for notification permission on the first click/keypress, not at load: Safari/WebKit only allows the
@@ -77,7 +84,7 @@ export default function AppShell() {
       <StreamerBanner />
       <UpdateBanner />
       <div className="flex-1 min-h-0 flex overflow-hidden relative">
-      {!connected && (
+      {!connected && showReconnecting && (
         <div className="absolute top-0 inset-x-0 z-40 bg-warn text-black text-xs font-semibold text-center py-1">{t('Reconnecting…')}</div>
       )}
       {announcement && connected && (

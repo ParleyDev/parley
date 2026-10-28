@@ -9,6 +9,7 @@ import type { NotifPrefsServer, PrivateUser } from '../../../lib/types'
 import { playSfx } from '../../../lib/sfx'
 import { disablePush, enablePush, pushSubscribed, pushSupported } from '../../../lib/webpush'
 import { useT } from '../../../lib/i18n'
+import { isNative, registerPush } from '../../../lib/native'
 
 /** Settings → Notifications: desktop notifications and one switch per sound, Discord-style. */
 export default function NotificationsTab() {
@@ -31,6 +32,22 @@ export default function NotificationsTab() {
       else { await disablePush(); setWebPush(false) }
     } catch (e) { pushToast((e as Error).message, 'error') }
   }
+  // The phone apps: send a test push to every registered device and show what Apple or Google said.
+  type TestResult = { push_enabled: boolean; devices: { platform: string; token_end: string; seen_at: string; ok: boolean; error: string | null }[] }
+  const [test, setTest] = useState<TestResult | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [thisPhone, setThisPhone] = useState<string | null>(null)
+  const sendTest = async () => {
+    setTesting(true)
+    try {
+      if (isNative()) {
+        const r = await registerPush()
+        setThisPhone(r === 'ok' ? null : r === 'denied' ? t('Notifications are turned off for Parley on this phone. Turn them on in the phone\'s Settings → Parley → Notifications.') : r === 'timeout' ? t('This phone didn\'t get a push token from Apple or Google. Check it\'s online, then try again.') : t('This phone couldn\'t register: {error}', { error: r }))
+      }
+      setTest(await api.post<TestResult>('/users/@me/push-tokens/test', {}))
+    } catch (e) { pushToast((e as Error).message, 'error') } finally { setTesting(false) }
+  }
+  const platformName = (p: string) => p === 'ios' ? t('iPhone or iPad') : p === 'android' ? t('Android') : p
   const supported = typeof Notification !== 'undefined'
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported'>(supported ? Notification.permission : 'unsupported')
   const ask = () => { if (!supported) return; Notification.requestPermission().then((p) => setPerm(p)).catch(() => {}) }
@@ -77,6 +94,22 @@ export default function NotificationsTab() {
           <span data-web-push-toggle><Toggle label="Push notifications on this browser" checked={webPush} onChange={(v) => void toggleWebPush(v)} /></span>
           <p className="text-xs text-text-2">{t('Mentions and DMs reach this browser even with every Parley tab closed, with Reply and Mark as Read right on the notification.')}</p>
         </>}
+        <div className="space-y-2" data-push-test>
+          <button type="button" className="btn-ghost border border-line px-3 py-1.5 text-sm" disabled={testing} onClick={() => void sendTest()} data-push-test-send>{testing ? t('Sending…') : t('Send a test notification to my phones')}</button>
+          <p className="text-xs text-text-2">{t('Sends one to every phone signed in to the Parley app, even while you are here, and shows whether each one got it.')}</p>
+          {thisPhone && <p className="text-sm text-danger" data-push-this-phone>{thisPhone}</p>}
+          {test && (
+            <ul className="space-y-1 text-sm" data-push-test-results>
+              {!test.push_enabled && <li className="text-danger">{t('Push notifications aren\'t set up on this server yet.')}</li>}
+              {test.push_enabled && test.devices.length === 0 && <li className="text-text-2">{t('No phones are registered. Open the Parley app, sign in and allow notifications.')}</li>}
+              {test.devices.map((d) => (
+                <li key={d.token_end + d.platform} className={d.ok ? 'text-success' : 'text-danger'} data-push-test-device={d.platform} data-ok={d.ok ? '1' : '0'}>
+                  {platformName(d.platform)} …{d.token_end}: {d.ok ? t('sent') : d.error}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <div className="flex items-center justify-between gap-4">
           <span className="text-[15px]">{t('Push notification inactive timeout')}</span>
           <span className="flex items-center gap-2 text-sm"><input type="number" min={1} max={120} value={timeout_} onChange={(e) => setTimeout_(e.target.value)} onBlur={() => { const n = Math.max(1, Math.min(120, Number(timeout_) || 10)); setTimeout_(String(n)); if (n !== (sp.push_timeout_min ?? 10)) void saveServer({ push_timeout_min: n }) }} className="input w-20 py-1 text-right" data-push-timeout /> {t('minutes')}</span>

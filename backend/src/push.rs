@@ -79,9 +79,9 @@ fn apns_client() -> &'static reqwest::Client {
 }
 
 /// Send one notification through APNs. Builds from Xcode get sandbox tokens, TestFlight and App Store builds
-/// production ones: a token production calls bad is tried once on the sandbox. Err(true): the token is dead.
-async fn send_apns(a: &Apns, token: &str, title: &str, body: &str, data: &serde_json::Value) -> Result<(), bool> {
-    let jwt = apns_jwt(a).ok_or(false)?;
+/// production ones: a token production calls bad is tried once on the sandbox. Err((dead, why)).
+async fn send_apns(a: &Apns, token: &str, title: &str, body: &str, data: &serde_json::Value) -> Result<(), (bool, String)> {
+    let jwt = apns_jwt(a).ok_or((false, "could not sign the APNs provider token".to_string()))?;
     let mut payload = data.as_object().cloned().unwrap_or_default();
     payload.retain(|_, v| !v.is_null());
     let mut aps = json!({ "alert": { "title": title, "body": body }, "sound": "default" });
@@ -92,16 +92,16 @@ async fn send_apns(a: &Apns, token: &str, title: &str, body: &str, data: &serde_
         let resp = apns_client().post(format!("{host}/3/device/{token}"))
             .header("authorization", format!("bearer {jwt}"))
             .header("apns-topic", &a.topic).header("apns-push-type", "alert").header("apns-priority", "10")
-            .json(&payload).send().await.map_err(|e| { tracing::warn!(error = %e, "APNs send failed"); false })?;
+            .json(&payload).send().await.map_err(|e| { tracing::warn!(error = %e, "APNs send failed"); (false, format!("could not reach APNs: {e}")) })?;
         let status = resp.status();
         if status.is_success() { return Ok(()); }
         let reason = resp.json::<serde_json::Value>().await.ok().and_then(|v| v.get("reason").and_then(|r| r.as_str()).map(String::from)).unwrap_or_default();
         if reason == "BadDeviceToken" && i + 1 < hosts.len() { continue; }
         let dead = status.as_u16() == 410 || matches!(reason.as_str(), "BadDeviceToken" | "Unregistered" | "DeviceTokenNotForTopic");
         tracing::warn!(%status, dead, %reason, "APNs send failed");
-        return Err(dead);
+        return Err((dead, format!("APNs {}: {}", status.as_u16(), if reason.is_empty() { "no reason given" } else { &reason })));
     }
-    Err(false)
+    Err((false, "APNs: no host left to try".into()))
 }
 
 #[derive(serde::Serialize)]
@@ -123,22 +123,22 @@ async fn access_token(f: &Fcm) -> Option<String> {
     Some(token)
 }
 
-/// Send one notification to one device token. Err(true) means the token is dead and should be removed.
-async fn send_one(f: &Fcm, token: &str, title: &str, body: &str, data: &serde_json::Value) -> Result<(), bool> {
-    let at = access_token(f).await.ok_or(false)?;
+/// Send one notification to one device token. Err((dead, why)): a dead token should be removed.
+async fn send_one(f: &Fcm, token: &str, title: &str, body: &str, data: &serde_json::Value) -> Result<(), (bool, String)> {
+    let at = access_token(f).await.ok_or((false, "could not get a Firebase access token (check the service account)".to_string()))?;
     // FCM data is a map of strings: drop nulls (a DM has no guild) and stringify the rest, or the send is refused.
     let data: serde_json::Map<String, serde_json::Value> = data.as_object().map(|o| o.iter().filter(|(_, v)| !v.is_null())
         .map(|(k, v)| (k.clone(), json!(v.as_str().map(String::from).unwrap_or_else(|| v.to_string())))).collect()).unwrap_or_default();
     let msg = json!({ "message": { "token": token, "notification": { "title": title, "body": body }, "data": data,
         "android": { "priority": "high", "notification": { "channel_id": "messages" } },
         "apns": { "payload": { "aps": { "sound": "default" } } } } });
-    let resp = reqwest::Client::new().post(send_url(f)).bearer_auth(at).json(&msg).send().await.map_err(|_| false)?;
+    let resp = reqwest::Client::new().post(send_url(f)).bearer_auth(at).json(&msg).send().await.map_err(|e| (false, format!("could not reach FCM: {e}")))?;
     if resp.status().is_success() { return Ok(()); }
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     let dead = status.as_u16() == 404 || text.contains("UNREGISTERED") || text.contains("INVALID_ARGUMENT");
     tracing::warn!(%status, dead, "FCM send failed: {}", text.chars().take(200).collect::<String>());
-    Err(dead)
+    Err((dead, format!("FCM {}: {}", status.as_u16(), text.chars().take(200).collect::<String>())))
 }
 
 /// Notify `users` (already filtered to offline, unmuted recipients) about a message.
@@ -153,12 +153,39 @@ pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, d
             (_, _, Some(f)) => send_one(f, &token, title, body, &data).await,
             _ => continue,
         };
-        if let Err(dead) = sent {
+        if let Err((dead, _)) = sent {
             if dead { let _ = sqlx::query("DELETE FROM push_tokens WHERE token = $1").bind(&token).execute(&state.db).await; }
         } else {
             crate::metrics::METRICS.push_sent.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
     }
+}
+
+/// Settings → Notifications → Send test notification: push to every device the user registered, whether or not they
+/// are online, and report what Apple or Google said about each (dead tokens are dropped as usual).
+pub async fn test(state: &AppState, user: Uuid) -> serde_json::Value {
+    let (f, a) = (fcm(state).await, apns(state).await);
+    let rows: Vec<(String, String, chrono::DateTime<chrono::Utc>)> = sqlx::query_as("SELECT token, platform, seen_at FROM push_tokens WHERE user_id = $1 ORDER BY seen_at DESC")
+        .bind(user).fetch_all(&state.db).await.unwrap_or_default();
+    let mut out = Vec::new();
+    for (token, platform, seen) in rows {
+        let data = json!({ "test": "1" });
+        let sent = match (platform.as_str(), &a, &f) {
+            ("ios", Some(a), _) => Some(send_apns(a, &token, "Parley", "Test notification: push works on this device.", &data).await),
+            ("ios", None, Some(f)) | ("android", _, Some(f)) | ("web", _, Some(f)) => Some(send_one(f, &token, "Parley", "Test notification: push works on this device.", &data).await),
+            _ => None,
+        };
+        let (ok, error) = match sent {
+            Some(Ok(())) => (true, None),
+            Some(Err((dead, why))) => {
+                if dead { let _ = sqlx::query("DELETE FROM push_tokens WHERE token = $1").bind(&token).execute(&state.db).await; }
+                (false, Some(why))
+            }
+            None => (false, Some(if platform == "ios" { "APNs isn't set up on this server".to_string() } else { "Firebase isn't set up on this server".to_string() })),
+        };
+        out.push(json!({ "platform": platform, "token_end": token.chars().rev().take(6).collect::<String>().chars().rev().collect::<String>(), "seen_at": seen, "ok": ok, "error": error }));
+    }
+    json!({ "push_enabled": f.is_some() || a.is_some(), "devices": out })
 }
 
 /// After a message is created: push to DM recipients and mentioned members who have no socket open and have not

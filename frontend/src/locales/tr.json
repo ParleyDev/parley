@@ -3518,5 +3518,15 @@
 "Team ID": "Ekip kimliği",
 "Bundle ID": "Paket kimliği",
 "APNs endpoint override (tests only)": "APNs uç noktası geçersiz kılma (yalnızca testler)",
-"leave empty for Apple": "Apple için boş bırakın"
+"leave empty for Apple": "Apple için boş bırakın",
+"Android": "Android",
+"No phones are registered. Open the Parley app, sign in and allow notifications.": "Kayıtlı telefon yok. Parley uygulamasını açın, oturum açın ve bildirimlere izin verin.",
+"Notifications are turned off for Parley on this phone. Turn them on in the phone's Settings → Parley → Notifications.": "Bu telefonda Parley bildirimleri kapalı. Telefonun Ayarlar → Parley → Bildirimler bölümünden açın.",
+"Push notifications aren't set up on this server yet.": "Bu sunucuda anlık bildirimler henüz ayarlanmadı.",
+"Send a test notification to my phones": "Telefonlarıma test bildirimi gönder",
+"Sends one to every phone signed in to the Parley app, even while you are here, and shows whether each one got it.": "Siz buradayken bile Parley uygulamasında oturum açmış her telefona bir tane gönderir ve her birinin alıp almadığını gösterir.",
+"This phone couldn't register: {error}": "Bu telefon kaydedilemedi: {error}",
+"This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "Bu telefon Apple veya Google’dan anlık bildirim belirteci alamadı. Çevrimiçi olduğunu kontrol edip yeniden deneyin.",
+"iPhone or iPad": "iPhone veya iPad",
+"sent": "gönderildi"
 }

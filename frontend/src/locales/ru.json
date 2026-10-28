@@ -3518,5 +3518,15 @@
 "Team ID": "ID команды",
 "Bundle ID": "ID пакета",
 "APNs endpoint override (tests only)": "Переопределение адреса APNs (только для тестов)",
-"leave empty for Apple": "оставьте пустым для Apple"
+"leave empty for Apple": "оставьте пустым для Apple",
+"Android": "Android",
+"No phones are registered. Open the Parley app, sign in and allow notifications.": "Нет зарегистрированных телефонов. Откройте приложение Parley, войдите и разрешите уведомления.",
+"Notifications are turned off for Parley on this phone. Turn them on in the phone's Settings → Parley → Notifications.": "Уведомления Parley на этом телефоне отключены. Включите их в Настройках телефона → Parley → Уведомления.",
+"Push notifications aren't set up on this server yet.": "Push-уведомления на этом сервере ещё не настроены.",
+"Send a test notification to my phones": "Отправить тестовое уведомление на мои телефоны",
+"Sends one to every phone signed in to the Parley app, even while you are here, and shows whether each one got it.": "Отправляет его на каждый телефон, где выполнен вход в приложение Parley, даже пока вы здесь, и показывает, дошло ли оно.",
+"This phone couldn't register: {error}": "Не удалось зарегистрировать этот телефон: {error}",
+"This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "Этот телефон не получил push-токен от Apple или Google. Проверьте, что он в сети, и попробуйте ещё раз.",
+"iPhone or iPad": "iPhone или iPad",
+"sent": "отправлено"
 }

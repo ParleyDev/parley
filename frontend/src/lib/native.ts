@@ -4,6 +4,7 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { PushNotifications } from '@capacitor/push-notifications'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { api } from './api'
+import { resumeSocket, suspendSocket } from './ws'
 import { useStore } from '../store'
 
 /**
@@ -19,35 +20,55 @@ export const setNativeNavigator = (fn: (path: string) => void) => { navigateTo =
 /** Navigate from outside React (notification clicks, push taps). */
 export const appNavigate = (path: string) => navigateTo?.(path)
 
+/** A tapped notification opens its channel. */
+function openFromPush({ notification }: { notification: { data?: unknown } }) {
+  const d = notification.data as { channel_id?: string; guild_id?: string | null } | undefined
+  if (d?.channel_id) navigateTo?.(`/channels/${d.guild_id ?? '@me'}/${d.channel_id}`)
+}
+
 /** Once at boot: status bar, hardware back button, push taps. */
 export async function initNative() {
   if (!isNative()) return
   document.documentElement.dataset.native = nativePlatform()
   try { await StatusBar.setStyle({ style: Style.Dark }); if (nativePlatform() === 'android') await StatusBar.setBackgroundColor({ color: '#0b0c10' }) } catch { /* plugin missing */ }
+  App.addListener('appStateChange', ({ isActive }) => { if (isActive) resumeSocket(); else suspendSocket() })
   App.addListener('backButton', ({ canGoBack }) => {
     const s = useStore.getState()
     if (s.modal) { s.closeModal(); return }
     if (s.mobilePane === 'content') { s.setMobilePane('nav'); return }
     if (canGoBack) window.history.back(); else App.exitApp()
   })
-  PushNotifications.addListener('pushNotificationActionPerformed', ({ notification }) => {
-    const d = notification.data as { channel_id?: string; guild_id?: string | null } | undefined
-    if (d?.channel_id) navigateTo?.(`/channels/${d.guild_id ?? '@me'}/${d.channel_id}`)
-  })
+  void PushNotifications.addListener('pushNotificationActionPerformed', openFromPush)
 }
 
-let registered = false
-/** After login: ask for permission and send the device token to the server (idempotent per launch). */
-export async function registerPush() {
-  if (!isNative() || registered) return
-  registered = true
-  try {
-    const perm = await PushNotifications.requestPermissions()
-    if (perm.receive !== 'granted') return
-    PushNotifications.addListener('registration', ({ value }) => { void api.put('/users/@me/push-tokens', { platform: nativePlatform(), token: value }).then(() => { try { localStorage.setItem('parley.pushToken', value) } catch { /* ignore */ } }).catch(() => {}) })
-    PushNotifications.addListener('registrationError', (e) => console.warn('push registration failed', e))
-    await PushNotifications.register()
-  } catch (e) { console.warn('push unavailable', e) }
+/** How registering went: 'ok', 'denied' (notifications off for the app), 'timeout' (no token from the OS), or the
+ *  error the OS or the server gave. */
+export type PushRegistration = 'ok' | 'denied' | 'timeout' | 'web' | string
+let registered: Promise<PushRegistration> | null = null
+/** After login: ask for permission and send the device token to the server (once per launch while it works). */
+export function registerPush(): Promise<PushRegistration> {
+  if (!isNative()) return Promise.resolve('web')
+  registered ??= (async (): Promise<PushRegistration> => {
+    try {
+      const perm = await PushNotifications.requestPermissions()
+      if (perm.receive !== 'granted') return 'denied'
+      return await new Promise<PushRegistration>((resolve) => {
+        void PushNotifications.removeAllListeners().then(() => {
+          // removeAllListeners also drops the tap handler from initNative: put it back.
+          void PushNotifications.addListener('pushNotificationActionPerformed', openFromPush)
+          void PushNotifications.addListener('registration', ({ value }) => {
+            api.put('/users/@me/push-tokens', { platform: nativePlatform(), token: value })
+              .then(() => { try { localStorage.setItem('parley.pushToken', value) } catch { /* ignore */ } resolve('ok') })
+              .catch((e) => resolve(`server: ${(e as Error).message}`))
+          })
+          void PushNotifications.addListener('registrationError', (e) => { console.warn('push registration failed', e); resolve(e.error || 'registration failed') })
+          void PushNotifications.register()
+          setTimeout(() => resolve('timeout'), 10_000)
+        })
+      })
+    } catch (e) { console.warn('push unavailable', e); return `unavailable: ${(e as Error).message}` }
+  })().then((r) => { if (r !== 'ok') registered = null; return r })
+  return registered
 }
 
 /** Before logging out: forget this device's token so a signed-out phone stops buzzing. */

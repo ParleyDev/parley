@@ -7,7 +7,8 @@ import { assetFile, isAssetValue, useAssetItem, type FrameItem, type FrameLayer 
  * layer is scaled by card width / inner_width:
  *  - staples hang off the top or bottom edge, reaching `overflow_top` / `overflow_bottom` past it;
  *  - rails and borders run along the sides, cropped to the card's height from their top or centre;
- *  - front layers draw over the card, back layers behind it (only the parts outside the card show).
+ *  - front layers draw over the card, back layers behind it (only the parts outside the card show). Back layers are
+ *    always painted first: metadata often lists the front one first, and a back layer drawn later would cover it.
  */
 export default function ProfileFrame({ value }: { value?: string | null }) {
   const item = useAssetItem<FrameItem>('profile-frames', value)
@@ -53,7 +54,7 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
 
   return (
     <div ref={ref} className="pointer-events-none absolute inset-0 z-[6]" style={box?.inset} aria-hidden data-profile-frame-layers={item.id}>
-      {box && W > 0 && item.layers.map((l, i) => {
+      {box && W > 0 && item.layers.map((l, i) => ({ l, i })).sort((a, b) => Number(a.l.order !== 'back') - Number(b.l.order !== 'back')).map(({ l, i }) => {
         const at = place(l)
         if (l.order === 'back') {
           return (bands.filter((_, b) => !at.along || b >= 2)).map((b, j) => clip(b, img(l, at, b.left, b.top), `${i}-${j}`))

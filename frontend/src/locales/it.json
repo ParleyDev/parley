@@ -3518,5 +3518,15 @@
 "Team ID": "ID team",
 "Bundle ID": "ID bundle",
 "APNs endpoint override (tests only)": "Override dell’endpoint APNs (solo test)",
-"leave empty for Apple": "lascia vuoto per Apple"
+"leave empty for Apple": "lascia vuoto per Apple",
+"Android": "Android",
+"No phones are registered. Open the Parley app, sign in and allow notifications.": "Nessun telefono registrato. Apri l’app Parley, accedi e consenti le notifiche.",
+"Notifications are turned off for Parley on this phone. Turn them on in the phone's Settings → Parley → Notifications.": "Le notifiche di Parley sono disattivate su questo telefono. Attivale in Impostazioni del telefono → Parley → Notifiche.",
+"Push notifications aren't set up on this server yet.": "Le notifiche push non sono ancora configurate su questo server.",
+"Send a test notification to my phones": "Invia una notifica di prova ai miei telefoni",
+"Sends one to every phone signed in to the Parley app, even while you are here, and shows whether each one got it.": "Ne invia una a ogni telefono connesso all’app Parley, anche mentre sei qui, e mostra se ciascuno l’ha ricevuta.",
+"This phone couldn't register: {error}": "Questo telefono non è riuscito a registrarsi: {error}",
+"This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "Questo telefono non ha ricevuto un token push da Apple o Google. Controlla che sia online e riprova.",
+"iPhone or iPad": "iPhone o iPad",
+"sent": "inviata"
 }

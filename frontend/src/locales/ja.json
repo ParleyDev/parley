@@ -3518,5 +3518,15 @@
 "Team ID": "チーム ID",
 "Bundle ID": "バンドル ID",
 "APNs endpoint override (tests only)": "APNsエンドポイントの上書き（テスト専用）",
-"leave empty for Apple": "空欄の場合はAppleを使用"
+"leave empty for Apple": "空欄の場合はAppleを使用",
+"Android": "Android",
+"No phones are registered. Open the Parley app, sign in and allow notifications.": "登録されているスマートフォンはありません。Parley アプリを開いてサインインし、通知を許可してください。",
+"Notifications are turned off for Parley on this phone. Turn them on in the phone's Settings → Parley → Notifications.": "このスマートフォンでは Parley の通知がオフになっています。スマートフォンの設定 → Parley → 通知 でオンにしてください。",
+"Push notifications aren't set up on this server yet.": "このサーバーではまだプッシュ通知が設定されていません。",
+"Send a test notification to my phones": "スマートフォンにテスト通知を送信",
+"Sends one to every phone signed in to the Parley app, even while you are here, and shows whether each one got it.": "ここにいる間でも、Parley アプリにサインインしているすべてのスマートフォンに送信し、それぞれ届いたかを表示します。",
+"This phone couldn't register: {error}": "このスマートフォンを登録できませんでした: {error}",
+"This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "このスマートフォンは Apple または Google からプッシュトークンを受け取れませんでした。オンラインか確認して、もう一度お試しください。",
+"iPhone or iPad": "iPhone または iPad",
+"sent": "送信済み"
 }

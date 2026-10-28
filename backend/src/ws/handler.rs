@@ -291,8 +291,21 @@ async fn run_loop(
     intents: Option<u32>,
 ) {
     let mut last_seq = already_sent;
+    // A phone that suspends the app leaves its socket open but silent, which would keep the user "online" (and their
+    // pushes held back) until TCP gives up. Ping every 30 s (clients answer at the protocol level, bots included)
+    // and drop a socket that has sent nothing for 75 s.
+    let mut ping = tokio::time::interval(std::time::Duration::from_secs(30));
+    ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut heard = tokio::time::Instant::now();
     loop {
         tokio::select! {
+            _ = ping.tick() => {
+                if heard.elapsed() > std::time::Duration::from_secs(75) {
+                    tracing::debug!(user = %user_id, "ws silent for 75 s; closing");
+                    break;
+                }
+                if tx.send(Message::Ping(Vec::new())).await.is_err() { break; }
+            }
             ev = events.recv() => {
                 match ev {
                     Ok(ev) => {
@@ -313,6 +326,7 @@ async fn run_loop(
                 }
             }
             msg = rx.next() => {
+                heard = tokio::time::Instant::now();
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ClientOp>(&text) {

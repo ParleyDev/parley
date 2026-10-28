@@ -3518,5 +3518,15 @@
 "Team ID": "معرّف الفريق",
 "Bundle ID": "معرّف الحزمة",
 "APNs endpoint override (tests only)": "تجاوز نقطة نهاية APNs (للاختبارات فقط)",
-"leave empty for Apple": "اتركه فارغًا لـ Apple"
+"leave empty for Apple": "اتركه فارغًا لـ Apple",
+"Android": "Android",
+"No phones are registered. Open the Parley app, sign in and allow notifications.": "لا توجد هواتف مسجّلة. افتح تطبيق Parley وسجّل الدخول واسمح بالإشعارات.",
+"Notifications are turned off for Parley on this phone. Turn them on in the phone's Settings → Parley → Notifications.": "إشعارات Parley متوقفة على هذا الهاتف. شغّلها من إعدادات الهاتف ← Parley ← الإشعارات.",
+"Push notifications aren't set up on this server yet.": "لم يتم إعداد الإشعارات الفورية على هذا الخادم بعد.",
+"Send a test notification to my phones": "إرسال إشعار تجريبي إلى هواتفي",
+"Sends one to every phone signed in to the Parley app, even while you are here, and shows whether each one got it.": "يرسل إشعارًا إلى كل هاتف مسجّل الدخول في تطبيق Parley، حتى أثناء وجودك هنا، ويوضح ما إذا وصل إلى كل منها.",
+"This phone couldn't register: {error}": "تعذّر تسجيل هذا الهاتف: {error}",
+"This phone didn't get a push token from Apple or Google. Check it's online, then try again.": "لم يحصل هذا الهاتف على رمز إشعارات من Apple أو Google. تأكد من اتصاله بالإنترنت ثم حاول مرة أخرى.",
+"iPhone or iPad": "iPhone أو iPad",
+"sent": "تم الإرسال"
 }
