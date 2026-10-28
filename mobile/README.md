@@ -34,9 +34,9 @@ Android (Play Console app `com.runparley.app`, Play App Signing on, `parley-uplo
 
 | Secret | Value |
 |---|---|
-| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 parley-upload.jks` |
+| `ANDROID_KEYSTORE` | `base64 -w0 parley-upload.jks` |
 | `ANDROID_KEYSTORE_PASSWORD` | keystore password |
-| `ANDROID_KEY_ALIAS` | key alias (`keytool -list -keystore parley-upload.jks`) |
+| `ANDROID_KEY_ALIAS` | key alias, if the keystore holds more than one key |
 | `ANDROID_KEY_PASSWORD` | key password, if different from the keystore's |
 | `PLAY_SERVICE_ACCOUNT_JSON` | JSON key of a Google Cloud service account invited in Play Console → Users and permissions with release rights for the app |
 

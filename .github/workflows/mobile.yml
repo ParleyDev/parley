@@ -46,8 +46,8 @@ jobs:
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice::Release tag '$TAG' is not semver (e.g. v1.2.3); skipping build"
           fi
-  # Android: with the Play upload key in secrets (ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD,
-  # ANDROID_KEY_ALIAS, optional ANDROID_KEY_PASSWORD) the build is release-signed: an AAB for Play and an APK for
+  # Android: with the Play upload key in secrets (ANDROID_KEYSTORE = the .jks base64, ANDROID_KEYSTORE_PASSWORD,
+  # optional ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD) the build is release-signed: an AAB for Play and an APK for
   # sideloading. With PLAY_SERVICE_ACCOUNT_JSON too, the AAB goes to the Play internal testing track; promoting it
   # to production stays a manual step in Play Console. Without the key it falls back to a debug APK.
   android:
@@ -81,14 +81,16 @@ jobs:
       - name: Upload key
         id: key
         env:
-          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
           STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
-          if [ -z "$KEYSTORE" ]; then echo "signed=false" >> "$GITHUB_OUTPUT"; echo "::notice::No ANDROID_KEYSTORE_BASE64 secret; building a debug APK"; exit 0; fi
+          if [ -z "$KEYSTORE" ]; then echo "signed=false" >> "$GITHUB_OUTPUT"; echo "::notice::No ANDROID_KEYSTORE secret; building a debug APK"; exit 0; fi
           printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          # Without an alias secret, use the keystore's only key.
+          if [ -z "$KEY_ALIAS" ]; then KEY_ALIAS=$(keytool -list -keystore "$RUNNER_TEMP/upload.jks" -storepass "$STORE_PASSWORD" | awk -F, '/PrivateKeyEntry/ {print $1; exit}'); fi
           {
             echo "PARLEY_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks"
             echo "PARLEY_KEYSTORE_PASSWORD=$STORE_PASSWORD"
