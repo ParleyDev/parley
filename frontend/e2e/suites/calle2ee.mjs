@@ -108,6 +108,14 @@ const da = await code(pa), db = await code(pb)
 ok('and both sides see the same code', /^\d{4}( \d{4}){4}$/.test(da) && da === db, `${da} / ${db}`)
 const dmTransforms = await pb.evaluate(() => window.__pcs.filter((pc) => pc.connectionState !== 'closed').flatMap((pc) => pc.getTransceivers().flatMap((t) => [t.sender, t.receiver])).every((x) => !!x.transform))
 ok('DM call media goes through the worker', dmTransforms)
+// Toggling from the header during the DM call: leave() marks the DM call quiet, which used to re-run the resync from
+// the store subscription and recurse until the stack overflowed (an endless loop of sounds, the page frozen).
+const responsive = async (p) => { const t0 = Date.now(); await p.evaluate(() => 1); return Date.now() - t0 < 300 }
+await pa.click('[data-dm-e2ee]'); await pa.waitForTimeout(4000)
+ok('switching encryption off mid DM call reconnects both, unencrypted', (await pa.evaluate(() => window.__parleyVoice())).e2ee === false && (await pb.evaluate(() => window.__parleyVoice())).e2ee === false && (await pb.evaluate(() => window.__parleyVoice())).channel === dm.id)
+ok('…without freezing the page', await responsive(pa) && await responsive(pb))
+await pa.click('[data-dm-e2ee]'); await pa.waitForTimeout(4000)
+ok('and back on mid call: both encrypted again', (await pa.evaluate(() => window.__parleyVoice())).e2ee === true && (await pb.evaluate(() => window.__parleyVoice())).e2ee === true && await responsive(pa))
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close()

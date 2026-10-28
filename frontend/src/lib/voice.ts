@@ -255,13 +255,18 @@ class VoiceManager {
    * Encryption switched on or off for the call we're in (possibly while we were still joining): rejoin so the call is
    * rebuilt, and rekeyed, the new way. Returns true when it started a rejoin.
    */
+  private resyncing = false
   private syncE2ee(): boolean {
     const s = useStore.getState()
     const id = this.channelId
-    if (!id || this.joining) return false
+    // leave() updates the store (a DM call is marked quiet), which runs this again from the store subscription while
+    // the old call is half torn down: without the guard that recursed until the stack overflowed, replaying sounds.
+    if (!id || this.joining || this.resyncing) return false
     const e2ee = !!(s.channels[id] ?? s.dms[id])?.e2ee
     if (e2ee === !!this.crypto) return false
-    this.leave(); this.join(id)
+    this.resyncing = true
+    try { this.leave() } finally { this.resyncing = false }
+    void this.join(id)
     s.pushToast(e2ee ? t('This call is now end-to-end encrypted. Reconnecting…') : t('End-to-end encryption was turned off. Reconnecting…'))
     return true
   }
