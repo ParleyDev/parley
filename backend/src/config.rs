@@ -19,6 +19,9 @@ pub struct Config {
     /// Server deletion: days the owner can restore, and days a taken-down server's content is kept for its case.
     pub server_deletion_grace_days: i64,
     pub takedown_retention_days: i64,
+    /// iOS apps (TEAMID.bundle.id) allowed to use this server's passkeys and security keys from inside the app,
+    /// published in /.well-known/apple-app-site-association. Empty: the file isn't served.
+    pub ios_app_ids: Vec<String>,
     /// Instance-wide assets (read-only mount is fine): `avatar-decorations/` today. See routes/assets.rs.
     pub assets_dir: std::path::PathBuf,
     /// GIF picker providers; the first one set is used.
@@ -84,6 +87,7 @@ impl Config {
             case_expiry_days: std::env::var("CASE_EXPIRY_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(30i64).clamp(1, 3650),
             server_deletion_grace_days: std::env::var("SERVER_DELETION_GRACE_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(7i64).clamp(0, 365),
             takedown_retention_days: std::env::var("TAKEDOWN_RETENTION_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(90i64).clamp(1, 3650),
+            ios_app_ids: std::env::var("IOS_APP_IDS").unwrap_or_default().split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
             audit_retention_days: std::env::var("AUDIT_RETENTION_DAYS").ok().and_then(|v| v.parse().ok()).unwrap_or(2555i64).clamp(365, 36500),
             assets_dir: std::env::var("ASSETS_DIR").unwrap_or_else(|_| "./assets".into()).into(),
             tenor_api_key: env_or_file("TENOR_API_KEY").ok_or(std::env::VarError::NotPresent).ok(),

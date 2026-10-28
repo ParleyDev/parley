@@ -98,6 +98,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/health", get(|| async { "ok" }))
         .route("/version", get(|| async { axum::Json(serde_json::json!({ "version": VERSION })) }))
+        .route("/.well-known/apple-app-site-association", get(apple_app_site_association))
         .route("/metrics", get(metrics::endpoint))
         .route("/ws", get(ws::handler::ws_upgrade))
         // The versioned prefix (what the API reference documents) and the original one; both are the same API.
@@ -128,4 +129,12 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("listening on {}", config.bind_addr);
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+/// Apple's app–site association: lets the listed iOS apps use this server's passkeys and security keys inside their
+/// web view (WebAuthn in WKWebView needs the app to be associated with the relying party's domain).
+async fn apple_app_site_association(axum::extract::State(state): axum::extract::State<state::AppState>) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    if state.config.ios_app_ids.is_empty() { return axum::http::StatusCode::NOT_FOUND.into_response() }
+    axum::Json(serde_json::json!({ "webcredentials": { "apps": state.config.ios_app_ids } })).into_response()
 }

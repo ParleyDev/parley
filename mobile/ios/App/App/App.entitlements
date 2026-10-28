@@ -4,5 +4,11 @@
 <dict>
 	<key>aps-environment</key>
 	<string>development</string>
+	<!-- Lets the app use passkeys and security keys for app.runparley.com in its web view; the server lists the app
+	     in /.well-known/apple-app-site-association (IOS_APP_IDS). -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>webcredentials:app.runparley.com</string>
+	</array>
 </dict>
 </plist>
