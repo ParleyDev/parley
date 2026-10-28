@@ -12,6 +12,37 @@ interface Msg { id: string; channel_id: string; content: string; created_at: str
 
 const MIN_WHY = 10
 
+/** A search result before anyone opens it: who, where, when. No content. */
+export interface MetaHit { id: string; channel_id: string; channel_name: string; guild_id: string | null; guild_name: string | null; author_id: string; author_username: string; created_at: string; has_attachments: boolean }
+export interface OpenedMsg { id: string; content: string; attachments?: { id: string; filename: string; url: string }[] }
+
+/** One search result: metadata first; opening its content is a separate, logged action. */
+export function MetaRow({ h, open, onDeleted }: { h: MetaHit; open: () => Promise<OpenedMsg>; onDeleted?: () => void }) {
+  const t = useT()
+  const a = useAccess()
+  const pushToast = useStore((s) => s.pushToast)
+  const [m, setM] = useState<OpenedMsg | null>(null)
+  const show = async () => { try { setM(await open()) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const del = async () => { try { await api.delete(`/admin/messages/${h.id}`); pushToast(t('Message deleted')); onDeleted?.() } catch (e) { pushToast((e as Error).message, 'error') } }
+  return (
+    <div className="px-3 py-2 border-t border-line first:border-t-0 text-sm" data-admin-msg={h.id}>
+      <div className="flex flex-wrap items-center gap-x-2 text-xs text-text-2">
+        <span className="font-semibold text-text-0">@{h.author_username}</span>
+        <span>{h.guild_id ? `${h.guild_name ?? ''} · #${h.channel_name}` : t('Direct message')}</span>
+        <span title={h.created_at}>{new Date(h.created_at).toLocaleString()}</span>
+        {h.has_attachments && <span>📎</span>}
+        <span className="ml-auto flex gap-3">
+          {!m && <button type="button" onClick={show} className="text-sky-400 hover:underline" data-admin-msg-open>{t('Open')}</button>}
+          {can(a, 'content_action') && onDeleted && <button type="button" onClick={del} className="text-danger hover:underline" data-admin-msg-delete>{t('Delete')}</button>}
+        </span>
+      </div>
+      {m && <div className="whitespace-pre-wrap break-words mt-0.5" data-admin-msg-content>{m.content || <i className="text-text-2">{t('(no text)')}</i>}</div>}
+      {m?.attachments && m.attachments.length > 0 && <div className="text-xs text-text-2 mt-0.5">📎 {m.attachments.map((x) => <a key={x.id} className="hover:underline mr-2" href={x.url} target="_blank" rel="noreferrer">{x.filename}</a>)}</div>}
+    </div>
+  )
+}
+
+
 /** Admin › Cases: every route to message content. Reports open cases; investigations and legal cases are opened here. */
 export default function CasesPane() {
   const t = useT()
@@ -112,6 +143,9 @@ export function CasePane() {
   const [reading, setReading] = useState<{ channel: string; messages: Msg[] } | null>(null)
   const [readErr, setReadErr] = useState('')
   const [req, setReq] = useState<{ kind: Grant['kind']; why: string } | null>(null)
+  const [q, setQ] = useState('')
+  const [hits, setHits] = useState<MetaHit[] | null>(null)
+  const [searchErr, setSearchErr] = useState('')
   const load = () => api.get<{ case: Case; grants: Grant[]; scope: Scope[]; context_window: number }>(`/admin/cases/${id}`).then(setData).catch((e) => pushToast((e as Error).message, 'error'))
   useEffect(() => { load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!data) return <p className="text-sm text-text-2">{t('Loading…')}</p>
@@ -124,6 +158,10 @@ export function CasePane() {
       const msgs = await api.get<Msg[]>(`/admin/cases/${c.id}/messages?channel_id=${channel}${before ? `&before=${before}` : ''}`)
       setReading((r) => ({ channel, messages: before && r?.channel === channel ? [...msgs, ...r.messages] : msgs }))
     } catch (e) { setReadErr((e as Error).message) }
+  }
+  const search = async (e: FormEvent) => {
+    e.preventDefault(); setSearchErr('')
+    try { setHits(await api.get<MetaHit[]>(`/admin/cases/${c.id}/search?q=${encodeURIComponent(q.trim())}`)) } catch (err) { setHits(null); setSearchErr((err as Error).message) }
   }
   const ask = async (e: FormEvent) => {
     e.preventDefault(); if (!req) return
@@ -162,6 +200,20 @@ export function CasePane() {
           </button>
         ))}
       </div>
+
+      {live && (
+        <form onSubmit={search} className="mt-4 flex gap-2 max-w-xl" data-case-search-form>
+          <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search within this case')} data-case-search />
+          <button type="submit" className="btn-ghost py-1.5" disabled={!q.trim()} data-case-search-go>{t('Search')}</button>
+        </form>
+      )}
+      {searchErr && <p className="mt-2 text-sm text-danger" data-case-search-error>{searchErr}</p>}
+      {hits && (
+        <div className="mt-2 rounded-xl border border-line" data-case-hits>
+          {hits.length === 0 && <p className="p-3 text-sm text-text-2">{t('No messages match.')}</p>}
+          {hits.map((h) => <MetaRow key={h.id} h={h} open={() => api.post<OpenedMsg>(`/admin/cases/${c.id}/messages/${h.id}/open`)} />)}
+        </div>
+      )}
 
       {c.anchor_message_id && live && (
         <div className="mt-6">

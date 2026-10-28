@@ -209,7 +209,7 @@ pub async fn join_guild(state: &AppState, gid: Uuid, uid: Uuid, via: &str) -> Ap
 }
 
 /// Text channels of an approved Discover server that @everyone may view (what a non-member sees in preview).
-async fn public_channels(db: &PgPool, gid: Uuid) -> AppResult<(perms::GuildCtx, Vec<crate::models::Channel>)> {
+pub async fn public_channels(db: &PgPool, gid: Uuid) -> AppResult<(perms::GuildCtx, Vec<crate::models::Channel>)> {
     let approved: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_discovery WHERE guild_id = $1 AND status = 'approved'").bind(gid).fetch_optional(db).await?;
     if approved.is_none() {
         return Err(AppError::NotFound("Server not found in Discover".into()));

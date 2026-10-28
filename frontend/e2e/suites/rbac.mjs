@@ -30,7 +30,7 @@ const target = await reg('target', `target${S}@example.org`)
 console.log('-- each role holds exactly its permissions')
 for (const r of ROLES) {
   const a = await call(as[r].token, 'GET', '/admin/access')
-  ok(`${r}`, JSON.stringify(a.roles) === JSON.stringify([r]) && JSON.stringify([...a.perms].sort()) === JSON.stringify([...PERMS[r]].sort()) && a.content_search === false, JSON.stringify(a))
+  ok(`${r}`, JSON.stringify(a.roles) === JSON.stringify([r]) && JSON.stringify([...a.perms].sort()) === JSON.stringify([...PERMS[r]].sort()), JSON.stringify(a))
 }
 
 // Nonexistent targets keep allowed calls harmless: the permission check comes first, so a refused role gets 403 and an
@@ -40,7 +40,6 @@ const why = 'rbac matrix: checking access'
 const J = encodeURIComponent(why)
 const settings = await call(admin.token, 'GET', '/admin/settings')
 const mailSettings = await call(admin.token, 'GET', '/admin/mail/settings')
-const TEMP = 'SUPER_ADMIN_TEMP'
 const ANY = 'any'
 // [method, route pattern, concrete path, body, permission(s) (any of)]
 const M = [
@@ -74,9 +73,11 @@ const M = [
   ['GET', '/admin/mail/settings', '/admin/mail/settings', null, 'instance_manage'],
   ['PUT', '/admin/mail/settings', '/admin/mail/settings', mailSettings, 'instance_manage'],
   ['POST', '/admin/maintenance/sweep-images', '/admin/maintenance/sweep-images', null, 'instance_manage'],
-  ['GET', '/admin/messages', `/admin/messages?q=rbac-matrix-${S}&justification=${J}`, null, TEMP],
+  ['GET', '/admin/search/public', `/admin/search/public?q=rbac-matrix-${S}&justification=${J}`, null, 'content_search_public'],
+  ['POST', '/admin/search/public/:mid/open', `/admin/search/public/${X}/open`, { justification: why }, 'content_search_public'],
+  ['GET', '/admin/cases/:id/search', `/admin/cases/${X}/search?q=anything`, null, ['report_context_read', 'content_search_public']],
+  ['POST', '/admin/cases/:id/messages/:mid/open', `/admin/cases/${X}/messages/${X}/open`, null, ['report_context_read', 'content_search_public']],
   ['DELETE', '/admin/messages/:id', `/admin/messages/${X}`, null, 'content_action'],
-  ['GET', '/admin/messages/:id/open', `/admin/messages/${X}/open?justification=${J}`, null, TEMP],
   ['GET', '/admin/reports', '/admin/reports', null, 'report_context_read'],
   ['PATCH', '/admin/reports/:id', `/admin/reports/${X}`, { status: 'resolved' }, 'content_action'],
   ['GET', '/admin/roles', '/admin/roles', null, 'admin_roles_manage'],
@@ -88,7 +89,7 @@ const M = [
   ['PATCH', '/admin/users/:id', `/admin/users/${X}`, { is_admin: true }, 'admin_roles_manage'],
   ['PATCH', '/admin/users/:id', `/admin/users/${X}`, { upload_quota_bytes: null }, 'instance_manage'],
   ['DELETE', '/admin/users/:id', `/admin/users/${X}`, null, 'content_action'],
-  ['GET', '/admin/users/:id/content', `/admin/users/${X}/content?justification=${J}`, null, TEMP],
+  ['GET', '/admin/users/:id/content', `/admin/users/${X}/content`, null, 'account_metadata_read'],
   ['DELETE', '/admin/users/:id/messages', `/admin/users/${X}/messages`, null, 'content_action'],
   ['POST', '/admin/users/:id/purge', `/admin/users/${X}/purge`, null, 'content_action'],
   ['POST', '/admin/users/:id/reveal', `/admin/users/${X}/reveal`, { justification: why }, 'account_pii_reveal'],
@@ -115,7 +116,7 @@ const missing = [...routes].filter((r) => !covered.has(r))
 ok(`${routes.size} admin routes found, all in the matrix`, routes.size > 40 && missing.length === 0, missing.join(', '))
 
 console.log('-- role × endpoint')
-const allowed = (role, need) => need === ANY || (need !== TEMP && [need].flat().some((p) => PERMS[role].includes(p)))
+const allowed = (role, need) => need === ANY || [need].flat().some((p) => PERMS[role].includes(p))
 for (const [method, route, path, body, need] of M) {
   const res = {}
   for (const r of ROLES) res[r] = (await raw(as[r].token, method, path, body)).status
@@ -143,7 +144,7 @@ sql(`UPDATE users SET account_state = 'pending_deletion' WHERE id = '${gone.user
 ok('only active accounts can hold roles', (await raw(sup.token, 'PUT', `/admin/users/${gone.user.id}/roles`, { roles: ['SUPPORT'] })).status === 400)
 const listed = await call(sup.token, 'GET', '/admin/roles')
 ok('the roles list shows who holds what', listed.find((x) => x.id === as.LEGAL.user.id)?.roles.includes('LEGAL'))
-ok('SUPER_ADMIN reads no content', (await raw(sup.token, 'GET', `/admin/users/${target.user.id}/content?justification=${J}`)).status === 403 && (await raw(sup.token, 'GET', `/admin/messages?q=anything-at-all&justification=${J}`)).status === 403)
+ok('SUPER_ADMIN reads no content', (await raw(sup.token, 'GET', `/admin/search/public?q=anything-at-all&justification=${J}`)).status === 403 && (await raw(sup.token, 'GET', '/admin/cases')).status === 403)
 
 console.log('-- PII is masked; reveal is logged')
 const row = async (u) => (await call(u.token, 'GET', `/admin/users?q=target${S}`)).find((x) => x.id === target.user.id)
@@ -180,15 +181,15 @@ const navFor = async (u) => {
 let v = await navFor(as.AUDITOR)
 ok('auditors see the audit log only', JSON.stringify(v.nav) === '["audit","overview"]', JSON.stringify(v.nav)); await v.p.close()
 v = await navFor(as.MODERATOR)
-ok('moderators see users, servers, reports, cases and audit', JSON.stringify(v.nav) === '["audit","cases","overview","reports","servers","users"]', JSON.stringify(v.nav))
+ok('moderators see users, servers, search, reports, cases and audit', JSON.stringify(v.nav) === '["audit","cases","messages","overview","reports","servers","users"]', JSON.stringify(v.nav))
 await v.p.goto(`${WEB}/admin/users`); await v.p.fill('[data-admin-user-search]', `target${S}`); await v.p.waitForSelector(`[data-admin-user="target${S}"]`)
 const tools = async (p) => p.$$eval(`[data-admin-user="target${S}"] [data-admin-action]`, (l) => l.map((x) => x.getAttribute("data-admin-action")))
 let tl = await tools(v.p)
-ok('their row tools are moderation ones', tl.includes('toggle-suspend') && tl.includes('delete-user') && !tl.includes('roles') && !tl.includes('quota') && !tl.includes('content'), JSON.stringify(tl))
+ok('their row tools are moderation ones', tl.includes('toggle-suspend') && tl.includes('delete-user') && !tl.includes('roles') && !tl.includes('quota') && tl.includes('content'), JSON.stringify(tl))
 ok('no reveal for them', (await v.p.locator(`[data-admin-user="target${S}"] [data-admin-reveal]`).count()) === 0); await v.p.close()
 v = await navFor(as.SUPPORT)
 await v.p.goto(`${WEB}/admin/users`); await v.p.fill('[data-admin-user-search]', `target${S}`); await v.p.waitForSelector(`[data-admin-user="target${S}"]`)
-ok('support sees no action tools', (await tools(v.p)).length === 0)
+ok('support sees no action tools, only the account view', JSON.stringify(await tools(v.p)) === '["content"]')
 await v.p.click(`[data-admin-user="target${S}"] [data-admin-reveal]`); await v.p.waitForSelector('[data-admin-reveal-dialog]')
 ok('reveal stays disabled without a real reason', await v.p.isDisabled('[data-admin-reveal-go]'))
 await v.p.fill('[data-admin-reveal-why]', 'ticket 4412: email change'); await v.p.click('[data-admin-reveal-go]')

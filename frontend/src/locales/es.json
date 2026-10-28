@@ -3478,5 +3478,13 @@
 "revoked": "revocado",
 "unnamed": "sin nombre",
 "until {date}": "hasta {date}",
-"your request": "tu solicitud"
+"your request": "tu solicitud",
+"Case (optional)": "Caso (opcional)",
+"Case (required)": "Caso (obligatorio)",
+"Choose an open case": "Elige un caso abierto",
+"Every search and every message you open is logged with your reason.": "Cada búsqueda y cada mensaje que abres se registra con tu motivo.",
+"No case": "Sin caso",
+"Search within this case": "Buscar dentro de este caso",
+"Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Busca en los canales públicos de los servidores listados en Discover. Los resultados muestran quién, dónde y cuándo; abrir un mensaje se registra por separado. Los MD, chats de grupo y canales privados solo son accesibles a través de un caso.",
+"Storage and devices": "Almacenamiento y dispositivos"
 }

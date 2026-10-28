@@ -39,6 +39,8 @@ pub fn router() -> Router<AppState> {
         .route("/admin/cases/:id/close", post(close))
         .route("/admin/cases/:id/context", get(context))
         .route("/admin/cases/:id/messages", get(messages))
+        .route("/admin/cases/:id/search", get(search))
+        .route("/admin/cases/:id/messages/:mid/open", post(open_message))
         .route("/admin/cases/:id/export", get(export))
         .route("/admin/cases/:id/grants", post(request_grant))
         .route("/admin/cases/:id/grants/:gid", post(decide))
@@ -105,12 +107,12 @@ pub async fn follow_report(state: &AppState, report_id: Uuid, open: bool, by: Uu
     Ok(())
 }
 
-async fn load(state: &AppState, id: Uuid) -> AppResult<Case> {
+pub async fn load(state: &AppState, id: Uuid) -> AppResult<Case> {
     sqlx::query_as::<_, Case>(&format!("SELECT {CASE_COLS} FROM cases WHERE id = $1")).bind(id).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Case not found".into()))
 }
 
 /// Content is only read through an open, unexpired case.
-fn usable(c: &Case) -> AppResult<()> {
+pub fn usable(c: &Case) -> AppResult<()> {
     if c.status != "open" { return Err(AppError::BadRequest("This case is closed".into())) }
     if c.expires_at <= Utc::now() { return Err(AppError::BadRequest("This case has expired".into())) }
     Ok(())
@@ -265,6 +267,36 @@ async fn messages(State(state): State<AppState>, AuthUser(uid): AuthUser, header
     let ids: Vec<Uuid> = msgs.iter().map(|m| m.id).collect();
     log_case(&state, uid, &a.roles, &headers, Some(id), Entry { action: "case.messages", query: "", filters: json!({ "channel_id": q.channel_id, "before": q.before, "after": q.after }), justification: "", targets: &ids }).await?;
     Ok(Json(msgs))
+}
+
+#[derive(Deserialize)]
+struct SearchQuery { #[serde(default)] q: String, before: Option<Uuid> }
+
+/// `GET /admin/cases/:id/search?q=`: metadata (sender, conversation, time) for matches in the case conversations this
+/// admin may read right now. Opening one is a separate, logged action.
+async fn search(State(state): State<AppState>, AuthUser(uid): AuthUser, headers: HeaderMap, Path(id): Path<Uuid>, Query(q): Query<SearchQuery>) -> AppResult<Json<Vec<crate::routes::admin_search::MetaHit>>> {
+    let a = require_any(&state, uid, &[ReportContextRead, ContentSearchPublic]).await?;
+    let c = load(&state, id).await?;
+    usable(&c)?;
+    let mut readable = Vec::new();
+    for cid in &c.scope_channel_ids { if may_read(&state, &a, &c, uid, *cid).await.is_ok() { readable.push(*cid) } }
+    if readable.is_empty() { return Err(AppError::Forbidden) }
+    let Some(tsq) = crate::routes::search::tsquery(&q.q) else { return Ok(Json(vec![])) };
+    let hits = crate::routes::admin_search::meta_search(&state, &readable, &tsq, q.before, c.scope_from, c.scope_to).await?;
+    let ids: Vec<Uuid> = hits.iter().map(|h| h.id).collect();
+    log_case(&state, uid, &a.roles, &headers, Some(id), Entry { action: "case.search", query: &q.q, filters: json!({ "channels": readable, "before": q.before }), justification: "", targets: &ids }).await?;
+    Ok(Json(hits))
+}
+
+/// `POST /admin/cases/:id/messages/:mid/open`: one message's content, if it lies in what this admin may read. Logged.
+async fn open_message(State(state): State<AppState>, AuthUser(uid): AuthUser, headers: HeaderMap, Path((id, mid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Message>> {
+    let a = require_any(&state, uid, &[ReportContextRead, ContentSearchPublic]).await?;
+    let c = load(&state, id).await?;
+    let row = sqlx::query_as::<_, MessageRow>(&format!("{MESSAGE_SELECT} WHERE m.id = $1")).bind(mid).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Message not found".into()))?;
+    may_read(&state, &a, &c, uid, row.channel_id).await?;
+    if c.scope_from.is_some_and(|f| row.created_at < f) || c.scope_to.is_some_and(|t| row.created_at > t) { return Err(AppError::Forbidden) }
+    log_case(&state, uid, &a.roles, &headers, Some(id), Entry { action: "case.open_message", query: "", filters: json!({ "channel_id": row.channel_id }), justification: "", targets: &[mid] }).await?;
+    Ok(Json(hydrate(&state.db, vec![row], uid, false).await?.pop().ok_or_else(|| AppError::NotFound("Message not found".into()))?))
 }
 
 /// `GET /admin/cases/:id/export`: everything in scope, for legal, with an approved export grant. Logged.

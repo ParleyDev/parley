@@ -3,6 +3,7 @@ import AppsPane from './AdminApps'
 import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
+import { MetaRow, type MetaHit, type OpenedMsg } from './AdminCases'
 import CasesPane, { CasePane } from './AdminCases'
 import { NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -17,7 +18,7 @@ import { useT, t as tr, tn } from '../lib/i18n'
 export default function AdminPage() {
   const t = useT()
   const [access, setAccess] = useState<AdminAccess | null>(null)
-  useEffect(() => { api.get<AdminAccess>('/admin/access').then(setAccess).catch(() => setAccess({ roles: [], perms: [], content_search: false, all_roles: [] })) }, [])
+  useEffect(() => { api.get<AdminAccess>('/admin/access').then(setAccess).catch(() => setAccess({ roles: [], perms: [], all_roles: [] })) }, [])
   const a = access
   const item = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2.5 text-[15px] font-medium ${active ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`
   const showContent = useShowContent()
@@ -32,7 +33,7 @@ export default function AdminPage() {
               {can(a, 'conversation_metadata_read') && <NavLink to="/admin/servers" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> {t('Servers')}</NavLink>}
               {can(a, 'instance_manage') && <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> {t('Discovery Queue')}</NavLink>}
               {can(a, 'instance_manage') && <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> {t('Instance Settings')}</NavLink>}
-              {a?.content_search && <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> {t('Messages')}</NavLink>}
+              {can(a, 'content_search_public') && <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> {t('Search')}</NavLink>}
               {can(a, 'report_context_read', 'case_approve') && <NavLink to="/admin/cases" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="cases"><Briefcase size={20} /> {t('Cases')}</NavLink>}
               {can(a, 'report_context_read') && <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> {t('Reports')}</NavLink>}
               {can(a, 'instance_manage') && <NavLink to="/admin/blocked-links" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="blocked-links"><Ban size={20} /> {t('Blocked Links')}</NavLink>}
@@ -276,7 +277,7 @@ function UsersPane() {
                   {manage && <Tool label={u.is_admin ? t('Remove admin') : t('Make admin')} onClick={() => patch(u, { is_admin: !u.is_admin }, u.is_admin ? t('@{username} is no longer an admin', { username: u.username }) : t('@{username} is now an admin', { username: u.username }))} testid="toggle-admin">{u.is_admin ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}</Tool>}
                   {manage && <Tool label={t('Admin roles')} onClick={() => setRolesFor(u)} testid="roles"><UserCog size={16} /></Tool>}
                   {act && <Tool label={u.suspended_at ? t('Unsuspend') : t('Suspend')} onClick={() => patch(u, { suspended: !u.suspended_at }, u.suspended_at ? t('@{username} unsuspended', { username: u.username }) : t('@{username} suspended', { username: u.username }))} testid="toggle-suspend" danger={!u.suspended_at}>{u.suspended_at ? <UserCheck size={16} /> : <UserX size={16} />}</Tool>}
-                  {a?.content_search && <Tool label={t('Messages and uploads')} onClick={() => navigate(`/admin/users/${u.id}`)} testid="content"><FolderOpen size={16} /></Tool>}
+                  {can(a, 'account_metadata_read') && <Tool label={t('Storage and devices')} onClick={() => navigate(`/admin/users/${u.id}`)} testid="content"><FolderOpen size={16} /></Tool>}
                   {act && <Tool label={t('Log out of all devices')} onClick={() => logoutAll(u)} testid="logout-all"><LogOut size={16} /></Tool>}
                   {inst && <Tool label={t('Storage quota')} onClick={() => setQuotaFor(u)} testid="quota"><HardDrive size={16} /></Tool>}
                   {inst && <Tool label={t('Upload size limit')} onClick={() => { setLimitFor(u); setLimitMb(u.max_upload_bytes ? String(Math.round(u.max_upload_bytes / 1048576)) : '') }} testid="upload-limit"><Upload size={16} /></Tool>}
@@ -730,108 +731,76 @@ function ReportsPane() {
   )
 }
 
-interface AdminHit { id: string; channel_id: string; content: string; created_at: string; author: { id: string; username: string; display_name: string }; attachments: { id: string; filename: string; url: string; size: number }[]; guild_id: string | null; guild_name: string; channel_name: string }
-
-function HitRow({ m, onDeleted }: { m: AdminHit; onDeleted: () => void }) {
-  const t = useT()
-  const pushToast = useStore((s) => s.pushToast)
-  const del = async () => { try { await api.delete(`/admin/messages/${m.id}`); pushToast(t('Message deleted')); onDeleted() } catch (e) { pushToast((e as Error).message, 'error') } }
-  return (
-    <div className="px-3 py-2 border-t border-line first:border-t-0 text-sm" data-admin-msg={m.id}>
-      <div className="flex flex-wrap items-center gap-x-2 text-xs text-text-2">
-        <span className="font-semibold text-text-0">@{m.author.username}</span>
-        <span>{m.guild_id ? `${m.guild_name} · #${m.channel_name}` : t('Direct message')}</span>
-        <span title={m.created_at}>{new Date(m.created_at).toLocaleString()}</span>
-        <a className="text-sky-400 hover:underline" href={`/channels/${m.guild_id ?? '@me'}/${m.channel_id}?message=${m.id}`} target="_blank" rel="noreferrer">{t('open')}</a>
-        <button type="button" onClick={del} className="ml-auto text-danger hover:underline" data-admin-msg-delete>{t('Delete')}</button>
-      </div>
-      <div className="whitespace-pre-wrap break-words mt-0.5">{m.content || <i className="text-text-2">{t('(no text)')}</i>}</div>
-      {m.attachments?.length > 0 && <div className="text-xs text-text-2 mt-0.5">📎 {m.attachments.map((a) => <a key={a.id} className="hover:underline mr-2" href={a.url} target="_blank" rel="noreferrer">{a.filename}</a>)}</div>}
-    </div>
-  )
-}
-
-/** Whether this admin may read message content (Phase 0: the temporary super-admin role), or null while loading. */
-function useContentAccess() {
-  const a = useAccess()
-  return a ? a.content_search : null
-}
 const MIN_WHY = 10
 
-/** Shown instead of a content tool to admins who may not read message content. */
-function ContentLocked() {
-  const t = useT()
-  return <div className="mt-4 rounded-xl border border-line bg-bg-1 p-4 text-sm text-text-2 max-w-xl" data-admin-content-locked>{t('Reading message content from the admin console is restricted to the temporary super-admin role while case-based access is built. Ask an owner listed in ADMIN_EMAILS.')}</div>
-}
-
+/** Admin › Search: public Discover servers only. T&S leads search freely; moderators and legal under an open case. */
 function MessagesPane() {
   const t = useT()
-  const access = useContentAccess()
+  const a = useAccess()
+  const unbound = !!a?.roles.includes('TS_LEAD')
   const [q, setQ] = useState('')
   const [why, setWhy] = useState('')
-  const [rows, setRows] = useState<AdminHit[] | null>(null)
+  const [caseId, setCaseId] = useState('')
+  const [cases, setCases] = useState<{ id: string; kind: string; justification: string }[]>([])
+  const [rows, setRows] = useState<MetaHit[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
-  const ready = why.trim().length >= MIN_WHY
+  useEffect(() => { api.get<{ id: string; kind: string; justification: string }[]>('/admin/cases?status=open').then(setCases).catch(() => {}) }, [])
+  const ready = why.trim().length >= MIN_WHY && (unbound || !!caseId)
+  const params = () => `justification=${encodeURIComponent(why.trim())}${caseId ? `&case_id=${caseId}` : ''}`
   const load = async () => {
     setErr(null)
     if (!q.trim() || !ready) { setRows(null); return }
-    try { setRows(await api.get<AdminHit[]>(`/admin/messages?q=${encodeURIComponent(q.trim())}&justification=${encodeURIComponent(why.trim())}`)) } catch (e) { setErr((e as Error).message); setRows([]) }
+    try { setRows(await api.get<MetaHit[]>(`/admin/search/public?q=${encodeURIComponent(q.trim())}&${params()}`)) } catch (e) { setErr((e as Error).message); setRows([]) }
   }
-  useEffect(() => { const h = setTimeout(load, 400); return () => clearTimeout(h) }, [q, why]) // eslint-disable-line react-hooks/exhaustive-deps
-  if (access === false) return <div data-admin-messages><h1 className="text-2xl font-bold">{t('Messages')}</h1><ContentLocked /></div>
+  useEffect(() => { const h = setTimeout(load, 400); return () => clearTimeout(h) }, [q, why, caseId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const open = (h: MetaHit) => () => api.post<OpenedMsg>(`/admin/search/public/${h.id}/open`, { justification: why.trim(), case_id: caseId || null })
   return (
     <div data-admin-messages>
-      <h1 className="text-2xl font-bold">{t('Messages')}</h1>
-      <p className="text-sm text-text-2 mt-1">{t('Find any message on this instance by its words (prefix match) and delete it. Members of that channel see it disappear.')}</p>
-      <div className="mt-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-text-1 max-w-xl" data-admin-access-notice>{t('Every search is logged with your reason, what you searched for and the messages it returned.')}</div>
+      <h1 className="text-2xl font-bold">{t('Search')}</h1>
+      <p className="text-sm text-text-2 mt-1">{t('Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.')}</p>
+      <div className="mt-3 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-text-1 max-w-xl" data-admin-access-notice>{t('Every search and every message you open is logged with your reason.')}</div>
       <label className="label mt-4 block">{t('Reason (required)')}</label>
       <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder={t('e.g. report #123: checking for more spam from this account')} maxLength={1000} data-admin-msg-why className="input max-w-xl" />
+      <label className="label mt-3 block">{unbound ? t('Case (optional)') : t('Case (required)')}</label>
+      <select className="input max-w-xl" value={caseId} onChange={(e) => setCaseId(e.target.value)} data-admin-msg-case>
+        <option value="">{unbound ? t('No case') : t('Choose an open case')}</option>
+        {cases.map((c) => <option key={c.id} value={c.id}>{c.justification}</option>)}
+      </select>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={ready ? t('Search message text') : t('Give a reason first')} disabled={!ready} data-admin-msg-search className="input mt-3 max-w-md" />
       {err && <p className="mt-2 text-sm text-danger" data-admin-msg-error>{err}</p>}
       <div className="mt-4 rounded-xl border border-line bg-bg-1 overflow-hidden">
         {rows === null && <p className="p-4 text-sm text-text-2">{t('Type to search.')}</p>}
         {rows?.length === 0 && <p className="p-4 text-sm text-text-2" data-admin-msg-empty>{t('No messages match.')}</p>}
-        {rows?.map((m) => <HitRow key={m.id} m={m} onDeleted={load} />)}
+        {rows?.map((h) => <MetaRow key={h.id} h={h} open={open(h)} onDeleted={load} />)}
       </div>
     </div>
   )
 }
 
-interface UserContent { user: { id: string; username: string; display_name: string }; quota: number | null; quota_override: number | null; messages: AdminHit[]; uploads: { id: string; filename: string; content_type: string; size: number; url: string; message_id: string | null; created_at: string }[]; images: { id: string; kind: string; size: number; url: string; created_at: string }[]; totals: { messages: number; attachments: number; attachment_bytes: number; images: number; image_bytes: number } }
+interface UserContent { user: { id: string; username: string; display_name: string }; quota: number | null; quota_override: number | null; uploads: { id: string; filename: string; content_type: string; size: number; message_id: string | null; created_at: string }[]; images: { id: string; kind: string; size: number; created_at: string }[]; totals: { messages: number; attachments: number; attachment_bytes: number; images: number; image_bytes: number } }
 
 interface AdminSession { id: string; created_at: string; last_seen_at: string; ip: string; user_agent: string }
 
+/** One account's storage and devices, as metadata: names, sizes, dates. Message content needs a case. */
 function UserContentPane() {
   const t = useT()
+  const a = useAccess()
   const { id } = useParams()
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const [data, setData] = useState<UserContent | null>(null)
-  const [tab, setTab] = useState<'messages' | 'uploads' | 'sessions'>('messages')
+  const [tab, setTab] = useState<'uploads' | 'sessions'>('uploads')
   const [sessions, setSessions] = useState<AdminSession[] | null>(null)
   const loadSessions = async () => { try { setSessions(await api.get<AdminSession[]>(`/admin/users/${id}/sessions`)) } catch { setSessions([]) } }
-  // Their messages are content: give a reason first (logged), like the message search.
-  const access = useContentAccess()
-  const [why, setWhy] = useState('')
-  const [asked, setAsked] = useState(false)
-  const load = async () => { try { setData(await api.get<UserContent>(`/admin/users/${id}/content?justification=${encodeURIComponent(why.trim())}`)); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
-  useEffect(() => { setData(null); setAsked(false) }, [id])
+  const load = async () => { try { setData(await api.get<UserContent>(`/admin/users/${id}/content`)); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
+  useEffect(() => { setData(null); load() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
   const navigate = useNavigate()
   const logoutOne = async (sid: string) => { try { await api.delete(`/admin/users/${id}/sessions/${sid}`); pushToast(t('Device logged out')); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
   const logoutAll = async () => { try { const r = await api.delete<{ revoked: number }>(`/admin/users/${id}/sessions`); pushToast(r.revoked === 1 ? t('Logged out of 1 device') : t('Logged out of {n} devices', { n: r.revoked })); loadSessions() } catch (e) { pushToast((e as Error).message, 'error') } }
-  if (access === false) return <div><NavLink to="/admin/users" className="text-xs text-sky-400 hover:underline">{t('← Users')}</NavLink><ContentLocked /></div>
-  if (!asked) return (
-    <form className="max-w-xl space-y-3" onSubmit={(e) => { e.preventDefault(); if (why.trim().length >= MIN_WHY) { setAsked(true); load() } }} data-admin-content-why>
-      <NavLink to="/admin/users" className="text-xs text-sky-400 hover:underline">{t('← Users')}</NavLink>
-      <h1 className="text-2xl font-bold">{t("This account's messages and uploads")}</h1>
-      <p className="text-sm text-text-2">{t('Opening someone’s messages is logged with your reason and the messages shown.')}</p>
-      <input className="input" autoFocus value={why} onChange={(e) => setWhy(e.target.value)} maxLength={1000} placeholder={t('Reason (required)')} data-admin-content-why-input />
-      <button className="btn-primary" disabled={why.trim().length < MIN_WHY} data-admin-content-open>{t('Open')}</button>
-    </form>
-  )
   if (!data) return <p className="text-sm text-text-2">{t('Loading…')}</p>
   const { user, totals } = data
   const used = totals.attachment_bytes + totals.image_bytes
+  const act = can(a, 'content_action')
   const setQuota = async (mb: string) => {
     const v = mb.trim() === '' ? null : Math.round(Number(mb) * 1024 * 1024)
     if (v !== null && (!Number.isFinite(v) || v < 0)) { pushToast(t('Enter a size in MB (0 = unlimited)'), 'error'); return }
@@ -848,24 +817,24 @@ function UserContentPane() {
       <p className="text-sm text-text-2 mt-1" data-admin-content-totals>{t('{messages} messages · {attachments} attachments ({attachmentSize}) · {images} profile/expression images ({imageSize})', { messages: totals.messages.toLocaleString(), attachments: totals.attachments, attachmentSize: formatBytes(totals.attachment_bytes), images: totals.images, imageSize: formatBytes(totals.image_bytes) })}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" data-admin-quota-row>
         <span className="text-text-2">{tn('Storage: {used} of {total}', { used: <b className="text-text-0" data-admin-quota-used>{formatBytes(used)}</b>, total: <b className="text-text-0" data-admin-quota-value>{data.quota === null ? t('unlimited') : formatBytes(data.quota)}</b> })}{data.quota_override !== null && <span className="ml-1 rounded bg-warn/20 text-warn px-1 text-[10px] font-bold">{t('CUSTOM')}</span>}</span>
-        <form className="flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); setQuota((e.currentTarget.elements.namedItem('mb') as HTMLInputElement).value) }}>
+        {can(a, 'instance_manage') && <form className="flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); setQuota((e.currentTarget.elements.namedItem('mb') as HTMLInputElement).value) }}>
           <input name="mb" className="input w-28 py-1 text-xs" placeholder="MB" inputMode="decimal" data-admin-quota-input />
           <button className="btn-ghost py-1 text-xs" data-admin-quota-save>{t('Set quota')}</button>
           <button type="button" className="btn-ghost py-1 text-xs" onClick={() => setQuota('')} data-admin-quota-reset>{t('Default')}</button>
-        </form>
+        </form>}
       </div>
-      <div className="mt-3 flex flex-wrap gap-2">
+      {act && <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className="btn-danger py-1 text-xs" onClick={purgeMessages} disabled={totals.messages === 0} data-admin-purge-messages>{t('Delete all messages')}</button>
         <button type="button" className="btn-danger py-1 text-xs" onClick={purgeUploads} disabled={totals.attachments === 0 && totals.images === 0} data-admin-purge-uploads>{t('Purge uploads')}</button>
-      </div>
+      </div>}
       <div className="mt-5 flex gap-1.5">
-        {(['messages', 'uploads', 'sessions'] as const).map((k) => <button key={k} type="button" onClick={() => setTab(k)} className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${tab === k ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-admin-content-tab={k}>{{ messages: t('messages'), uploads: t('uploads'), sessions: t('sessions') }[k]}</button>)}
+        {(['uploads', 'sessions'] as const).map((k) => <button key={k} type="button" onClick={() => setTab(k)} className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${tab === k ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-admin-content-tab={k}>{{ uploads: t('uploads'), sessions: t('sessions') }[k]}</button>)}
       </div>
       {tab === 'sessions' ? (
         <div className="mt-3 rounded-xl border border-line bg-bg-1 overflow-hidden" data-admin-sessions>
           <div className="flex items-center justify-between px-3 py-2 border-b border-line text-xs text-text-2">
             <span>{sessions ? (sessions.length === 1 ? t('1 active device (last 30 days)') : t('{n} active devices (last 30 days)', { n: sessions.length })) : t('Loading…')}</span>
-            {!!sessions?.length && <button type="button" className="btn-danger py-1 text-xs" onClick={logoutAll} data-admin-logout-all>{t('Log out all')}</button>}
+            {!!sessions?.length && act && <button type="button" className="btn-danger py-1 text-xs" onClick={logoutAll} data-admin-logout-all>{t('Log out all')}</button>}
           </div>
           {sessions?.length === 0 && <p className="p-4 text-sm text-text-2">{t('No active sessions.')}</p>}
           {sessions?.map((sn) => (
@@ -877,27 +846,21 @@ function UserContentPane() {
                   {' · '}{t('signed in {date}', { date: new Date(sn.created_at).toLocaleString() })} · {t('last seen {date}', { date: new Date(sn.last_seen_at).toLocaleString() })}
                 </div>
               </div>
-              <button type="button" className="btn-ghost py-1 text-xs text-danger" onClick={() => logoutOne(sn.id)} data-admin-session-logout>{t('Log out')}</button>
+              {act && <button type="button" className="btn-ghost py-1 text-xs text-danger" onClick={() => logoutOne(sn.id)} data-admin-session-logout>{t('Log out')}</button>}
             </div>
           ))}
-        </div>
-      ) : tab === 'messages' ? (
-        <div className="mt-3 rounded-xl border border-line bg-bg-1 overflow-hidden" data-admin-content-messages>
-          {data.messages.length === 0 && <p className="p-4 text-sm text-text-2">{t('No messages.')}</p>}
-          {data.messages.map((m) => <HitRow key={m.id} m={m} onDeleted={load} />)}
         </div>
       ) : (
         <div className="mt-3 rounded-xl border border-line bg-bg-1 overflow-hidden" data-admin-content-uploads>
           {data.uploads.length === 0 && data.images.length === 0 && <p className="p-4 text-sm text-text-2">{t('No uploads.')}</p>}
           {data.uploads.map((u) => (
             <div key={u.id} className="px-3 py-2 border-t border-line first:border-t-0 text-sm flex items-center gap-3" data-admin-upload={u.id}>
-              <a className="text-sky-400 hover:underline truncate" href={u.url} target="_blank" rel="noreferrer">{u.filename}</a>
+              <span className="truncate">{u.filename}</span>
               <span className="text-xs text-text-2">{u.content_type} · {formatBytes(u.size)} · {new Date(u.created_at).toLocaleString()}</span>
             </div>
           ))}
           {data.images.map((i) => (
             <div key={i.id} className="px-3 py-2 border-t border-line text-sm flex items-center gap-3" data-admin-image={i.id}>
-              <img src={i.url} alt="" className="h-8 w-8 rounded object-cover bg-bg-0" />
               <span className="capitalize">{i.kind}</span>
               <span className="text-xs text-text-2">{formatBytes(i.size)} · {new Date(i.created_at).toLocaleString()}</span>
             </div>

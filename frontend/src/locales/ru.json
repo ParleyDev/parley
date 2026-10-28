@@ -3478,5 +3478,13 @@
 "revoked": "отозвано",
 "unnamed": "без названия",
 "until {date}": "до {date}",
-"your request": "твой запрос"
+"your request": "твой запрос",
+"Case (optional)": "Дело (необязательно)",
+"Case (required)": "Дело (обязательно)",
+"Choose an open case": "Выбери открытое дело",
+"Every search and every message you open is logged with your reason.": "Каждый поиск и каждое открытое тобой сообщение записывается в журнал с твоей причиной.",
+"No case": "Без дела",
+"Search within this case": "Искать в этом деле",
+"Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Ищет в публичных каналах серверов, перечисленных в Discover. Результаты показывают, кто, где и когда; открытие сообщения записывается отдельно. Личные сообщения, групповые чаты и приватные каналы доступны только через дело.",
+"Storage and devices": "Хранилище и устройства"
 }

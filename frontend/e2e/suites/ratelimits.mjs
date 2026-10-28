@@ -40,8 +40,7 @@ r = await raw(b2.token, 'GET', '/users/@me'); ok('the logged-out token no longer
 console.log('-- UI')
 const browser = await chromium.launch(); const errors = []
 const p = await browser.newPage({ viewport: { width: 1440, height: 900 } }); p.on('pageerror', (e) => errors.push(e.message))
-await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), admin.token); await p.goto(`${WEB}/admin/users/${b.user.id}`); await p.waitForSelector('[data-admin-content-why]')
-await p.fill('[data-admin-content-why-input]', 'support: checking their devices'); await p.click('[data-admin-content-open]'); await p.waitForSelector('[data-admin-user-content]')
+await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), admin.token); await p.goto(`${WEB}/admin/users/${b.user.id}`); await p.waitForSelector('[data-admin-user-content]')
 await p.click('button:has-text("sessions")'); await p.waitForSelector('[data-admin-sessions] [data-admin-session]')
 ok('user page lists sessions with log-out buttons', await p.locator('[data-admin-session]').count() === 2 && await p.locator('[data-admin-session-logout]').count() === 2)
 await p.locator('[data-admin-session-logout]').first().click(); await p.waitForFunction(() => document.querySelectorAll('[data-admin-session]').length === 1)

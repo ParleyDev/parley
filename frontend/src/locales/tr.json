@@ -3478,5 +3478,13 @@
 "revoked": "iptal edildi",
 "unnamed": "adsız",
 "until {date}": "{date} tarihine kadar",
-"your request": "isteğin"
+"your request": "isteğin",
+"Case (optional)": "Vaka (isteğe bağlı)",
+"Case (required)": "Vaka (zorunlu)",
+"Choose an open case": "Açık bir vaka seç",
+"Every search and every message you open is logged with your reason.": "Yaptığın her arama ve açtığın her mesaj, gerekçenle birlikte kaydedilir.",
+"No case": "Vaka yok",
+"Search within this case": "Bu vakada ara",
+"Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Discover'da listelenen sunucuların herkese açık kanallarında arar. Sonuçlar kimin, nerede ve ne zaman yazdığını gösterir; bir mesajı açmak ayrıca kaydedilir. DM'lere, grup sohbetlerine ve özel kanallara yalnızca bir vaka üzerinden ulaşılabilir.",
+"Storage and devices": "Depolama ve cihazlar"
 }

@@ -5,13 +5,12 @@
 //! endpoint asks for a permission (`require_perm`); hiding things in the console is only a convenience. SUPER_ADMIN
 //! manages roles and the instance but has no content permissions.
 //!
-//! Phase 0, kept until case-based search replaces it: message content in the console needs SUPER_ADMIN_TEMP, a
-//! justification each time, and goes to the append-only `admin_access_log`. That log also records PII reveals and role
-//! changes. User-facing search (`routes/search.rs`) is a separate path.
+//! Content is never searched globally: admins reach it through cases (`routes/cases.rs`) and the public-server search
+//! (`routes/admin_search.rs`). The append-only `admin_access_log` records every content access, PII reveal and role
+//! change. User-facing search (`routes/search.rs`) is a separate path.
 use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
-    models::Message,
     ratelimit::client_ip,
     routes::users::require_admin,
     state::AppState,
@@ -28,9 +27,8 @@ use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use uuid::Uuid;
 
-pub const SUPER_ADMIN_TEMP: &str = "SUPER_ADMIN_TEMP";
 /// Roles that can be granted, in display order.
-pub const ROLES: &[&str] = &["SUPPORT", "MODERATOR", "TS_LEAD", "LEGAL", "SUPER_ADMIN", "AUDITOR", SUPER_ADMIN_TEMP];
+pub const ROLES: &[&str] = &["SUPPORT", "MODERATOR", "TS_LEAD", "LEGAL", "SUPER_ADMIN", "AUDITOR"];
 /// Shortest justification accepted: enough to say why, not just "x".
 pub const MIN_JUSTIFICATION: usize = 10;
 
@@ -91,18 +89,20 @@ impl Access {
     pub fn has_role(&self, r: &str) -> bool { self.roles.iter().any(|x| x == r) }
     /// T&S leads and legal see emails, IPs and devices in full; others see them masked (support can reveal, logged).
     pub fn pii_unmasked(&self) -> bool { self.has_role("TS_LEAD") || self.has_role("LEGAL") }
+    /// T&S leads search public servers without a case; moderators and legal only under one.
+    pub fn public_search_unbound(&self) -> bool { self.has_role("TS_LEAD") }
 }
 
 fn env_listed(state: &AppState, email: Option<&str>) -> bool {
     email.is_some_and(|e| state.config.admin_emails.iter().any(|a| a.eq_ignore_ascii_case(e)))
 }
 
-/// Roles held: rows in `admin_roles`, plus SUPER_ADMIN, TS_LEAD and SUPER_ADMIN_TEMP for `ADMIN_EMAILS` admins.
+/// Roles held: rows in `admin_roles`, plus SUPER_ADMIN and TS_LEAD for `ADMIN_EMAILS` admins.
 pub async fn access(state: &AppState, uid: Uuid) -> AppResult<Access> {
     let mut roles: Vec<String> = sqlx::query_as::<_, (String,)>("SELECT role FROM admin_roles WHERE user_id = $1").bind(uid).fetch_all(&state.db).await?.into_iter().map(|r| r.0).collect();
     let email: Option<(Option<String>,)> = sqlx::query_as("SELECT email FROM users WHERE id = $1").bind(uid).fetch_optional(&state.db).await?;
     if env_listed(state, email.and_then(|e| e.0).as_deref()) {
-        for r in ["SUPER_ADMIN", "TS_LEAD", SUPER_ADMIN_TEMP] { if !roles.iter().any(|x| x == r) { roles.push(r.into()) } }
+        for r in ["SUPER_ADMIN", "TS_LEAD"] { if !roles.iter().any(|x| x == r) { roles.push(r.into()) } }
     }
     roles.sort_by_key(|r| ROLES.iter().position(|x| x == r).unwrap_or(99));
     let perms = roles.iter().flat_map(|r| perms_for(r).iter().copied()).collect();
@@ -121,13 +121,6 @@ pub async fn require_any(state: &AppState, uid: Uuid, ps: &[Perm]) -> AppResult<
     require_admin(state, uid).await?;
     let a = access(state, uid).await?;
     if ps.iter().any(|p| a.has(*p)) { Ok(a) } else { Err(AppError::Forbidden) }
-}
-
-/// Phase 0: message content in the console (until case-based search replaces it).
-pub async fn require_content_access(state: &AppState, uid: Uuid) -> AppResult<Vec<String>> {
-    require_admin(state, uid).await?;
-    let a = access(state, uid).await?;
-    if a.has_role(SUPER_ADMIN_TEMP) { Ok(a.roles) } else { Err(AppError::Forbidden) }
 }
 
 /// A justification for a content or PII access: required, trimmed, at least `MIN_JUSTIFICATION` characters, at most 1000.
@@ -166,7 +159,6 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/admin/access", get(my_access))
         .route("/admin/access-log", get(read_log))
-        .route("/admin/messages/:id/open", get(open_message))
         .route("/admin/roles", get(list_roles))
         .route("/admin/users/:id/roles", put(set_roles))
         .route("/admin/users/:id/reveal", post(reveal))
@@ -176,7 +168,7 @@ pub fn router() -> Router<AppState> {
 async fn my_access(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
     require_admin(&state, uid).await?;
     let a = access(&state, uid).await?;
-    Ok(Json(json!({ "roles": a.roles, "perms": a.perms, "content_search": a.has_role(SUPER_ADMIN_TEMP), "all_roles": ROLES })))
+    Ok(Json(json!({ "roles": a.roles, "perms": a.perms, "all_roles": ROLES })))
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -195,15 +187,6 @@ async fn read_log(State(state): State<AppState>, AuthUser(uid): AuthUser, Query(
 
 #[derive(Deserialize)]
 pub struct Justified { pub justification: Option<String> }
-
-/// `GET /admin/messages/:id/open?justification=`: one message in full (from a search result), logged as opened.
-async fn open_message(State(state): State<AppState>, AuthUser(uid): AuthUser, headers: HeaderMap, Path(id): Path<Uuid>, Query(q): Query<Justified>) -> AppResult<Json<Message>> {
-    let roles = require_content_access(&state, uid).await?;
-    let why = justification(q.justification.as_deref())?;
-    let m = crate::routes::channels::fetch_message(&state.db, id, uid).await?;
-    log(&state, uid, &roles, &headers, Entry { action: "content.open", query: "", filters: json!({ "channel_id": m.channel_id }), justification: &why, targets: &[id] }).await?;
-    Ok(Json(m))
-}
 
 /// `GET /admin/roles`: everyone holding a role (granted rows; `ADMIN_EMAILS` admins are listed as such).
 async fn list_roles(State(state): State<AppState>, AuthUser(uid): AuthUser) -> AppResult<Json<Value>> {
@@ -279,7 +262,7 @@ mod tests {
         assert!(perms_for("TS_LEAD").contains(&CaseApprove) && !perms_for("MODERATOR").contains(&CaseApprove));
         assert!(perms_for("LEGAL").contains(&ContentExport) && !perms_for("LEGAL").contains(&ContentAction));
         assert_eq!(perms_for("AUDITOR"), &[AuditReadAll]);
-        assert!(ROLES.iter().all(|r| *r == SUPER_ADMIN_TEMP || !perms_for(r).is_empty()));
+        assert!(ROLES.iter().all(|r| !perms_for(r).is_empty()));
         assert!(!ROLES.iter().any(|r| perms_for(r).contains(&ContentExport) && *r != "LEGAL"), "only legal exports");
     }
 

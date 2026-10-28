@@ -3478,5 +3478,13 @@
 "revoked": "取り消し済み",
 "unnamed": "名前なし",
 "until {date}": "{date}まで",
-"your request": "あなたのリクエスト"
+"your request": "あなたのリクエスト",
+"Case (optional)": "ケース(任意)",
+"Case (required)": "ケース(必須)",
+"Choose an open case": "進行中のケースを選択",
+"Every search and every message you open is logged with your reason.": "検索や開いたメッセージはすべて、あなたの理由とともに記録されます。",
+"No case": "ケースなし",
+"Search within this case": "このケース内を検索",
+"Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Discover に掲載されているサーバーの公開チャンネルを検索します。結果には誰が・どこで・いつ投稿したかが表示され、メッセージを開く操作は別途記録されます。DM、グループチャット、非公開チャンネルはケース経由でのみアクセスできます。",
+"Storage and devices": "ストレージとデバイス"
 }

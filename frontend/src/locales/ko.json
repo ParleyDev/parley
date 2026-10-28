@@ -3478,5 +3478,13 @@
 "revoked": "취소됨",
 "unnamed": "이름 없음",
 "until {date}": "{date}까지",
-"your request": "내 요청"
+"your request": "내 요청",
+"Case (optional)": "케이스(선택)",
+"Case (required)": "케이스(필수)",
+"Choose an open case": "진행 중인 케이스를 선택하세요",
+"Every search and every message you open is logged with your reason.": "모든 검색과 열어 본 메시지는 입력한 사유와 함께 기록돼요.",
+"No case": "케이스 없음",
+"Search within this case": "이 케이스에서 검색",
+"Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "Discover에 등록된 서버의 공개 채널을 검색해요. 결과에는 누가, 어디서, 언제 썼는지가 표시되며, 메시지를 여는 것은 별도로 기록돼요. DM, 그룹 채팅, 비공개 채널은 케이스를 통해서만 접근할 수 있어요.",
+"Storage and devices": "저장소 및 기기"
 }

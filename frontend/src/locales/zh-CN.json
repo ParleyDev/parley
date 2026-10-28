@@ -3478,5 +3478,13 @@
 "revoked": "已撤销",
 "unnamed": "未命名",
 "until {date}": "截至 {date}",
-"your request": "你的请求"
+"your request": "你的请求",
+"Case (optional)": "案件(可选)",
+"Case (required)": "案件(必填)",
+"Choose an open case": "选择一个未结案件",
+"Every search and every message you open is logged with your reason.": "你进行的每次搜索和打开的每条消息都会连同你的理由一起记录。",
+"No case": "无案件",
+"Search within this case": "在此案件中搜索",
+"Searches public channels of servers listed in Discover. Results show who, where and when; opening a message is logged separately. DMs, group chats and private channels are only reachable through a case.": "搜索 Discover 中列出的服务器的公开频道。结果会显示谁、在哪里、何时发送;打开消息会另行记录。私信、群聊和私密频道只能通过案件访问。",
+"Storage and devices": "存储与设备"
 }
