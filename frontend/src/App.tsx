@@ -2,7 +2,7 @@ import { useT } from './lib/i18n'
 import DeleteAccountPage from './pages/DeleteAccount'
 import WidgetPage from './pages/Widget'
 import { LogoNeon } from './components/Logo'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useStore } from './store'
 import { connectSocket, disconnectSocket } from './lib/ws'
@@ -24,6 +24,10 @@ import { ForgotPage, ResetPage } from './pages/PasswordReset'
 import { api } from './lib/api'
 import Toasts from './components/Toasts'
 import { useParams } from 'react-router-dom'
+
+// Development tools (the chat simulator): only in `vite dev` or a build made with VITE_DEV_TOOLS=1.
+const DEV_TOOLS = import.meta.env.DEV || import.meta.env.VITE_DEV_TOOLS === '1'
+const ChatSim = DEV_TOOLS ? lazy(() => import('./components/dev/ChatSim')) : null
 
 export default function App() {
   // Re-render everything when the language changes or its catalogue finishes loading.
@@ -54,6 +58,7 @@ export default function App() {
         <Route path="/delete-account" element={<DeleteAccountPage />} />
         <Route path="/overlay" element={token ? (ready ? <OverlayPage /> : null) : <Navigate to="/login" replace />} />
         <Route path="/developers" element={<DevelopersPage />} />
+        {ChatSim && <Route path="/dev/chat-sim" element={token ? (ready ? <Suspense fallback={null}><ChatSim /></Suspense> : null) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />}
         <Route path="/login/qr/:id" element={token ? <QrApprovePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/template/:code" element={token ? <TemplatePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/invite/:code" element={token ? <InvitePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />

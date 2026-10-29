@@ -1,5 +1,5 @@
 // Long channels: the loaded list is a bounded window (400 rows); paging back past it drops the newest and the pane pages
-// forward again on the way down, so the DOM never holds a whole channel.
+// forward again on the way down. On screen only the rows near the viewport are rendered (ChatPane windowing).
 import { chromium } from 'playwright'
 import { WEB, S, reg, call, ok, finish } from '../lib.mjs'
 const users = []; for (const n of ['alice', 'bob', 'carol', 'dave', 'erin', 'fay', 'gus', 'hal', 'ivy', 'jo']) users.push(await reg(n))
@@ -17,7 +17,7 @@ const scroller = () => p.evaluate(() => { const el = document.querySelector('[da
 for (let i = 0; i < 25 && !(await p.locator(`[data-msg-id="${ids[0]}"]`).count()); i++) { await p.evaluate(() => { const el = document.querySelector('[data-msg-id]').closest('.overflow-y-auto'); el.scrollTop = 0 }); await p.waitForTimeout(400) }
 ok('the first message is reachable by scrolling up', await p.locator(`[data-msg-id="${ids[0]}"]`).count() === 1)
 const n = await p.locator('[data-msg-id]').count()
-ok('the DOM holds a bounded window, not the whole channel', n <= 410 && n >= 300, String(n))
+ok('the DOM holds only the rows near the viewport, not the whole loaded window', n <= 120 && n >= 10 && await p.locator('[data-virtual-pad]').count() >= 1, String(n))
 ok('the newest message was dropped from the window and the older-messages pill shows', await p.locator(`[data-msg-id="${ids[479]}"]`).count() === 0 && await p.locator('[data-older-bar]').count() === 1)
 await p.screenshot({ path: '149-long-window.png' })
 await p.evaluate(() => { const el = document.querySelector('[data-msg-id]').closest('.overflow-y-auto'); el.scrollTop = el.scrollHeight })

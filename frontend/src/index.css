@@ -73,6 +73,10 @@
 
 /* Client prefs (Appearance / Accessibility): message group spacing, link underlines, keyboard focus ring. */
 .msg-group-start { margin-top: var(--msg-gap, 17px); }
+/* System rows (calls, joins, encryption changes) start a group like a message, but a run of them reads as one tight
+   list: no space between consecutive ones. */
+.msg-sys { margin-top: var(--msg-gap, 17px); }
+.msg-row[data-sys-row] + .msg-row[data-sys-row] > .msg-sys:first-child { margin-top: 0; }
 :root[data-underline-links="1"] .msg-content a { text-decoration: underline; }
 :root[data-focus-ring="1"] :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 /* Streamer Mode: invite links and codes are blurred on screen (they still copy). */
@@ -82,7 +86,7 @@
 :root[data-theme="light"][data-contrast="high"] { --color-line: #8f939d; --color-text-1: #1b1c20; --color-text-2: #3c3e46; }
 
 /* Chat font scaling (Appearance settings): message bodies and the composer follow --font-scale. */
-.msg-content, textarea.composer-input { font-size: calc(15px * var(--font-scale)) !important; line-height: calc(1.375rem * var(--font-scale)) !important; }
+.msg-content, textarea.composer-input { font-size: calc(16px * var(--font-scale)) !important; line-height: calc(1.375rem * var(--font-scale)) !important; }
 /* The message box's placeholder stays on one line (cut off with an ellipsis) at any text size. */
 textarea.composer-input::placeholder { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -97,7 +101,7 @@ html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* Phones zoom the whole page into a field whose text is under 16px when it gets focus (iOS Safari and installed
    web apps), and the page then pans sideways: the message box keeps at least 16px there, whatever the chat scale. */
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
-  textarea.composer-input { font-size: max(16px, calc(15px * var(--font-scale))) !important; }
+  textarea.composer-input { font-size: max(16px, calc(16px * var(--font-scale))) !important; }
   [contenteditable="true"] { font-size: 16px !important; }
 }
 body {

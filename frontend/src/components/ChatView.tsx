@@ -33,7 +33,9 @@ import { confirmSkipped } from './modals/Confirm'
 
 /** Scroll a loaded message into view and flash it. Returns false when it is not in the DOM. */
 export function jumpToMessage(id: string): boolean {
-  const el = document.querySelector<HTMLElement>(`[data-msg-id="${id}"]`)
+  let el = document.querySelector<HTMLElement>(`[data-msg-id="${id}"]`)
+  // Loaded but not on screen in a long history (only rows near the viewport are rendered): ask its list to show it.
+  if (!el) { window.dispatchEvent(new CustomEvent('parley:reveal', { detail: id })); el = document.querySelector<HTMLElement>(`[data-msg-id="${id}"]`) }
   if (!el) return false
   el.scrollIntoView({ block: 'center' })
   el.classList.add('msg-flash'); setTimeout(() => el.classList.remove('msg-flash'), 1800)

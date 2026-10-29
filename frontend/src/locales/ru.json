@@ -3531,5 +3531,7 @@
 "sent": "отправлено",
 "Calls are end-to-end encrypted": "Звонки защищены сквозным шифрованием",
 "Encrypt calls end to end": "Включить сквозное шифрование звонков",
-"In a call": "Идёт звонок"
+"In a call": "Идёт звонок",
+"1 new message": "1 новое сообщение",
+"{n} new messages": "Новых сообщений: {n}"
 }

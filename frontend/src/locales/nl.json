@@ -3531,5 +3531,7 @@
 "sent": "verzonden",
 "Calls are end-to-end encrypted": "Gesprekken zijn end-to-end versleuteld",
 "Encrypt calls end to end": "Gesprekken end-to-end versleutelen",
-"In a call": "In gesprek"
+"In a call": "In gesprek",
+"1 new message": "1 nieuw bericht",
+"{n} new messages": "{n} nieuwe berichten"
 }

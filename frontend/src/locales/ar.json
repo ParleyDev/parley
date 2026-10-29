@@ -3531,5 +3531,7 @@
 "sent": "تم الإرسال",
 "Calls are end-to-end encrypted": "المكالمات مشفّرة تشفيرًا تامًا بين الطرفين",
 "Encrypt calls end to end": "تشفير المكالمات تشفيرًا تامًا بين الطرفين",
-"In a call": "في مكالمة"
+"In a call": "في مكالمة",
+"1 new message": "رسالة جديدة واحدة",
+"{n} new messages": "{n} رسائل جديدة"
 }

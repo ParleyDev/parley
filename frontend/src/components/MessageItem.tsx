@@ -271,8 +271,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     const [before, after] = joinGreeting(m.id)
     const name = <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>
     return (
-      <div className="group px-4 phone:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
-        <span className="w-10 flex justify-center shrink-0"><UserPlus size={16} className="text-success" /></span>
+      <div className="group msg-sys px-4 phone:px-3 py-0.5 flex items-start gap-4 phone:gap-3 text-base leading-[22px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
+        <span className="w-10 h-[22px] flex items-center justify-center shrink-0"><UserPlus size={16} className="text-success" /></span>
         <span className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
           <span data-join-greeting>{before}{name}{after}</span>
           {joinWave && !isOwn && canReact && (
@@ -280,8 +280,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               <span aria-hidden>👋</span> {waved ? t('Waved') : t('Wave to say hi!')}
             </button>
           )}
+          <SysTime at={m.created_at} />
         </span>
-        <span className="ml-auto text-xs text-text-2 shrink-0" title={new Date(m.created_at).toLocaleString()}>{new Date(m.created_at).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}</span>
       </div>
     )
   }
@@ -312,23 +312,22 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     // A missed call reads from the receiver's side: "You missed a call from Alice."
     if (m.kind === 'call_missed' && !isOwn) {
       return (
-        <div className="px-4 phone:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
-          <span className="w-10 flex justify-center shrink-0">{icon}</span>
-          <span className="min-w-0">{t('You missed a call from')} <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>.</span>
-          <span className="ml-auto text-xs text-text-2 shrink-0" title={new Date(m.created_at).toLocaleString()}>{new Date(m.created_at).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}</span>
+        <div className="msg-sys px-4 phone:px-3 py-0.5 flex items-start gap-4 phone:gap-3 text-base leading-[22px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
+          <span className="w-10 h-[22px] flex items-center justify-center shrink-0">{icon}</span>
+          <span className="min-w-0">{t('You missed a call from')} <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>.{' '}<SysTime at={m.created_at} /></span>
         </div>
       )
     }
     return (
-      <div className="px-4 phone:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
-        <span className="w-10 flex justify-center shrink-0">{icon}</span>
+      <div className="msg-sys px-4 phone:px-3 py-0.5 flex items-start gap-4 phone:gap-3 text-base leading-[22px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
+        <span className="w-10 h-[22px] flex items-center justify-center shrink-0">{icon}</span>
         <span className="min-w-0"><button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>{' '}
           {m.kind === 'channel_follow' ? <span className="msg-content">{renderMarkdown(m.content)}</span> : threadName !== null ? (<>{tn('started a thread: {name}', { name: <button type="button" className="font-medium text-text-0 hover:underline" onClick={() => m.ref_id && setOpenThread(m.ref_id)} data-system-thread={m.ref_id ?? ''}>{threadName}</button> })}</>) : m.content}
           {m.kind === 'pins_add' && m.reply_to && onJumpToReply && (
             <button type="button" onClick={onJumpToReply} className="ml-2 inline-flex items-center gap-0.5 text-xs text-sky-400 hover:underline" data-system-jump={m.reply_to}>{t('See the message')} <ArrowRight size={12} /></button>
           )}
+          {' '}<SysTime at={m.created_at} />
         </span>
-        <span className="ml-auto text-xs text-text-2 shrink-0" title={new Date(m.created_at).toLocaleString()}>{new Date(m.created_at).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}</span>
       </div>
     )
   }
@@ -589,6 +588,11 @@ const deliveryReasons = () => [
 ]
 
 /** Ribbit, the in-app helper: explains why a DM was not delivered. Only the sender sees it. */
+/** A system row's time, right after its text like Discord's. */
+function SysTime({ at }: { at: string }) {
+  return <span className="ml-1 text-xs text-text-2 whitespace-nowrap" title={new Date(at).toLocaleString()} data-sys-time>{new Date(at).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}</span>
+}
+
 function RibbitNotice({ m }: { m: Message }) {
   const t = useT()
   const discardLocal = useStore((s) => s.discardLocal)

@@ -3531,5 +3531,7 @@
 "sent": "gesendet",
 "Calls are end-to-end encrypted": "Anrufe sind Ende-zu-Ende-verschlüsselt",
 "Encrypt calls end to end": "Anrufe Ende-zu-Ende verschlüsseln",
-"In a call": "Im Anruf"
+"In a call": "Im Anruf",
+"1 new message": "1 neue Nachricht",
+"{n} new messages": "{n} neue Nachrichten"
 }

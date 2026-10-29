@@ -3531,5 +3531,7 @@
 "sent": "보냄",
 "Calls are end-to-end encrypted": "통화가 종단 간 암호화되어 있습니다",
 "Encrypt calls end to end": "통화를 종단 간 암호화",
-"In a call": "통화 중"
+"In a call": "통화 중",
+"1 new message": "새 메시지 1개",
+"{n} new messages": "새 메시지 {n}개"
 }

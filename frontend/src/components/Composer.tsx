@@ -227,10 +227,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
     const el = ref.current
     if (!el) return
     // Empty: the one row the textarea has, however long the placeholder (it is cut off, never wrapped). With text,
-    // grow with it (up to 300px).
+    // grow with it line by line up to half the window, then scroll inside.
     if (!value) { el.style.height = ''; return }
     el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 300) + 'px'
+    el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight * 0.5)) + 'px'
   }, [value])
   // Switching channels drops the draft attachments (and cancels in-flight uploads).
   useEffect(() => () => { setPending((ps) => { ps.forEach((p) => { p.handle?.abort(); if (p.preview) URL.revokeObjectURL(p.preview) }); return [] }) }, [channel.id])
@@ -628,19 +628,19 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             <button className="h-9 w-9 rounded-full bg-accent text-white flex items-center justify-center hover:bg-accent-hover disabled:opacity-50" title={t('Send voice message')} onClick={sendRecording} disabled={recBusy} data-voice-send><SendHorizontal size={18} /></button>
           </div>
         ) : (
-        <div className="flex items-end gap-2 px-3 py-2">
+        <div className="flex items-end gap-2 px-3">
           <input ref={fileRef} type="file" multiple className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="files" />
           <input ref={mediaRef} type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="media" />
           <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="camera" />
           <input ref={videoCamRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = '' }} data-file-input="video-camera" />
-          <button className="pb-1 text-text-2 hover:text-text-0" title={t('Attach, poll or voice message')} onClick={(e) => {
+          <button className="pb-[10px] text-text-2 hover:text-text-0" title={t('Attach, poll or voice message')} onClick={(e) => {
             if (window.matchMedia('(pointer: coarse)').matches) { setSheet(true); return }
             const r = (e.currentTarget.closest('[data-composer-box]') ?? e.currentTarget).getBoundingClientRect(); plus.open({ clientX: r.left, clientY: r.top - 8 }, plusItems, { above: true })
           }} aria-haspopup="menu" data-composer-plus><PlusCircle size={22} /></button>
           <textarea ref={ref} rows={1} dir="auto" spellCheck={spellcheck} value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} onPaste={onPaste} placeholder={t('Message {name}', { name })}
             onClick={(e) => updateShortcode(value, e.currentTarget.selectionStart ?? value.length)} onBlur={() => setTimeout(() => { setShortcode(null); setMention(null) }, 150)}
-            className="composer-input flex-1 min-w-0 resize-none bg-transparent py-1.5 text-[15px] outline-none placeholder:text-text-2 max-h-[300px]" />
-                    <div className="relative pb-1 flex shrink-0 items-center gap-2.5">
+            className="composer-input flex-1 min-w-0 resize-none bg-transparent py-[10px] text-base outline-none placeholder:text-text-2 max-h-[50vh]" />
+                    <div className="relative pb-[10px] flex shrink-0 items-center gap-2.5">
             {!narrow && <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title={t('GIF')} data-gif-button><ImagePlay size={22} /></button>}
             {!narrow && <button className={`${picker === 'sticker' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'sticker' ? null : 'sticker'))} title={t('Sticker')} data-sticker-button><Sticker size={22} /></button>}
             <button className={`${picker === 'emoji' ? 'text-warn' : 'text-text-2 hover:text-warn'}`} onClick={() => setPicker((p) => (p === 'emoji' ? null : 'emoji'))} title={t('Emoji')} data-emoji-button><Smile size={22} /></button>
@@ -650,7 +650,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             )}
           </div>
           {/* Taking focus from the text box would close a phone's keyboard after every message. */}
-          <button onMouseDown={(e) => e.preventDefault()} onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-1 hover:text-accent-hover" title={t('Send')} data-composer-send><SendHorizontal size={22} /></button>
+          <button onMouseDown={(e) => e.preventDefault()} onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-[10px] hover:text-accent-hover" title={t('Send')} data-composer-send><SendHorizontal size={22} /></button>
         </div>
         )}
       </div>

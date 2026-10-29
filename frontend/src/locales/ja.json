@@ -3531,5 +3531,7 @@
 "sent": "送信済み",
 "Calls are end-to-end encrypted": "通話はエンドツーエンドで暗号化されています",
 "Encrypt calls end to end": "通話をエンドツーエンドで暗号化",
-"In a call": "通話中"
+"In a call": "通話中",
+"1 new message": "新着メッセージ1件",
+"{n} new messages": "新着メッセージ{n}件"
 }

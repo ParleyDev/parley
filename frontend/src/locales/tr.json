@@ -3531,5 +3531,7 @@
 "sent": "gönderildi",
 "Calls are end-to-end encrypted": "Aramalar uçtan uca şifreli",
 "Encrypt calls end to end": "Aramaları uçtan uca şifrele",
-"In a call": "Aramada"
+"In a call": "Aramada",
+"1 new message": "1 yeni mesaj",
+"{n} new messages": "{n} yeni mesaj"
 }
