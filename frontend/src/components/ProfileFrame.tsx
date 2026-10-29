@@ -6,7 +6,8 @@ import { assetFile, isAssetValue, useAssetItem, type FrameItem, type FrameLayer 
  * positioned and must not clip). Frames are authored for a card `inner_width` wide (1200, Discord's 4x), so every
  * layer is scaled by card width / inner_width:
  *  - staples hang off the top or bottom edge, reaching `overflow_top` / `overflow_bottom` past it;
- *  - rails and borders run along the sides, cropped to the card's height from their top or centre;
+ *  - rails and borders run along the sides, cropped to the card's height from their top or centre, or on a card
+ *    taller than they were drawn for, kept at size at both ends with the middle stretched between;
  *  - front layers draw over the card, back layers behind it: they show everywhere but on the card itself, which is
  *    masked out with its own rounded corners (a rectangular hole would leave the corners empty). Back layers are
  *    always painted first: metadata often lists the front one first, and a back layer drawn later would cover it.
@@ -58,6 +59,14 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
   }
   const img = (l: FrameLayer, at: { left: number; top: number; width: number }, dx = 0, dy = 0): ReactElement =>
     <img src={assetFile('profile-frames', item.id, l.file)} alt="" draggable={false} className="absolute max-w-none select-none" style={{ left: at.left - dx, top: at.top - dy, width: at.width }} data-frame-layer={l.file} />
+  // Rails and borders on a card taller than they were drawn for (the DM panel's full-height card): the top and bottom
+  // 45% keep their size at the card's top and bottom corners and the middle stretches between them.
+  const along = (l: FrameLayer, at: { left: number; top: number; width: number }, dx: number): ReactElement => {
+    const nat = l.height ?? 0
+    if (!nat || nat * s >= H) return img(l, at, dx, 0)
+    const cut = Math.floor(nat * 0.45)
+    return <div className="absolute select-none" style={{ left: at.left - dx, top: 0, width: at.width, height: H, boxSizing: 'border-box', borderStyle: 'solid', borderWidth: `${cut * s}px 0`, borderImageSource: `url("${assetFile('profile-frames', item.id, l.file)}")`, borderImageSlice: `${cut} 0 ${cut} 0 fill`, borderImageWidth: `${cut * s}px 0`, borderImageRepeat: 'stretch' }} data-frame-layer={l.file} data-frame-stretched />
+  }
   const clip = (style: CSSProperties, child: ReactElement, key: string) => <div key={key} className="absolute overflow-hidden" style={style}>{child}</div>
 
   return (
@@ -69,7 +78,7 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
             const at = place(l)
             // Back rails and borders only run alongside the card, from its top edge to its bottom edge.
             return at.along
-              ? clip({ left: 0, top: -back.top, width: back.width, height: H }, img(l, at, back.left, 0), `${i}`)
+              ? clip({ left: 0, top: -back.top, width: back.width, height: H }, along(l, at, back.left), `${i}`)
               : <span key={i}>{img(l, at, back.left, back.top)}</span>
           })}
         </div>
@@ -78,7 +87,7 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
         if (l.order === 'back') return null
         const at = place(l)
         // Rails and borders stop at the card's top and bottom edges; staples hang free.
-        return at.along ? clip({ left: -oh - pad, top: 0, width: W + 2 * (oh + pad), height: H }, img(l, at, -oh - pad, 0), `${i}`) : <span key={i}>{img(l, at)}</span>
+        return at.along ? clip({ left: -oh - pad, top: 0, width: W + 2 * (oh + pad), height: H }, along(l, at, -oh - pad), `${i}`) : <span key={i}>{img(l, at)}</span>
       })}
     </div>
   )

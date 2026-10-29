@@ -159,9 +159,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   }
   const btn = (active: boolean) => `h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${active ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`
 
-  return (
-    <>
-      <main className="flex-1 min-w-0 flex flex-col bg-bg-2">
+  const headerBar = (
         <header className="h-12 shrink-0 px-4 phone:px-2 flex items-center gap-2 border-b border-line shadow-sm">
           <MobileBack />
           {group ? (
@@ -257,11 +255,15 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
             </span>
           </span>
         </header>
+  )
+  const content = (
+    <>
         {isDm && <DmCall channel={channel as DmChannel} />}
         {isDm && !group && other && myAge === 'teen' && relKind !== 'friend' && <TeenDmNotice name={other.display_name} onBlock={() => { void api.put(`/users/@me/relationships/${other.id}/block`).then(() => pushToast(t('{name} blocked', { name: other.display_name }))).catch((e: Error) => pushToast(e.message, 'error')) }} />}
         {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : channel.kind === 'directory' ? <DirectoryView channel={channel as Channel} /> : <ChatPane channel={channel} />}
-      </main>
-      {search !== null ? (
+    </>
+  )
+  const side = search !== null ? (
         <SearchPanel channel={channel} query={search} onClose={() => { setSearch(null); setQuery('') }} onMiss={() => pushToast(t('That message could not be found'), 'error')} />
       ) : threadHere ? (
         <ThreadPanel threadId={openThread!} onClose={() => setOpenThread(null)} />
@@ -269,8 +271,23 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
         <DmProfilePanel userId={other.id} />
       ) : group && dmProfileOpen ? (
         <GroupMembersPanel dm={channel as DmChannel} />
-      ) : null}
-    </>
+      ) : null
+  // Like Discord: with the profile (or a group's members) beside a DM, the header runs across both and the panel starts
+  // under it. Search results and threads keep their own full-height column.
+  const spans = search === null && !threadHere && dmProfileOpen && ((isDm && !!other) || group)
+  // One tree either way, so the chat below (and its scroll position and draft) is never remounted: only the header
+  // moves between the top of the whole view and the top of the chat column.
+  return (
+    <div className="flex-1 min-w-0 flex flex-col bg-bg-2" data-header-spans={spans ? '' : undefined}>
+      {spans && headerBar}
+      <div className="flex-1 min-h-0 flex">
+        <main className="flex-1 min-w-0 flex flex-col">
+          {!spans && headerBar}
+          {content}
+        </main>
+        {side}
+      </div>
+    </div>
   )
 }
 

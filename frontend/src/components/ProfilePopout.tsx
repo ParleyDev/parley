@@ -82,7 +82,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const [bioClamped, setBioClamped] = useState(false)
   const bioRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  useLayoutEffect(() => { const el = bioRef.current; if (el && !full) setBioClamped(el.scrollHeight > el.clientHeight + 1) }, [user.bio, full])
+  useLayoutEffect(() => { const el = bioRef.current; if (el && !full && !panel) setBioClamped(el.scrollHeight > el.clientHeight + 1) }, [user.bio, full, panel])
 
   const isMe = me?.id === user.id
   const ctx = guild ? { guild, roles, member: myMember } : null
@@ -166,10 +166,10 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     ] }
   }
 
-  return (
-    <FrameRoom value={user.profile_frame} bleed={full} className={full ? 'wide:h-full' : ''} innerClassName={full ? 'wide:h-full' : ''}>
-    <div className={`relative w-full ${full ? 'rounded-xl h-full flex flex-col' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
-      <ProfileEffect id={user.profile_effect} />
+  // The card's contents: banner, avatar and body. The DM panel puts them in a scroll area inside a full-height card
+  // (Discord's floating profile panel) with View Full Profile in a footer that always stays in view.
+  const contents = (
+    <>
       {/* Banner with overlaid buttons */}
       <div className={`relative ${full ? 'h-[140px] shrink-0 rounded-t-xl' : 'h-[105px] rounded-t-lg'} bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }}>
         {!full && <div className="absolute right-3 top-3 flex gap-2">
@@ -274,7 +274,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         {activity && !full && <ActivityCard userId={user.id} activity={activity} dark={themed} />}
         {user.bio && (
           <div>
-            <div ref={bioRef} className={`msg-content text-sm leading-[18px] whitespace-pre-wrap break-words ${full ? '' : 'overflow-hidden max-h-[54px]'}`} data-bio>{renderMarkdown(user.bio, { blocks: false })}</div>
+            <div ref={bioRef} className={`msg-content text-sm leading-[18px] whitespace-pre-wrap break-words ${full || panel ? '' : 'overflow-hidden max-h-[54px]'}`} data-bio>{renderMarkdown(user.bio, { blocks: false })}</div>
             {bioClamped && <div className="text-sm leading-[18px] text-[#b5bac1]" aria-hidden>…</div>}
             {bioClamped && <button onClick={() => fullProfile()} className="mt-3 block text-xs font-medium text-[#dbdee1] hover:underline" data-view-full-bio>{t('View Full Bio')}</button>}
           </div>
@@ -341,9 +341,28 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           </div>
         )}
         {rel === 'blocked' && <div className="flex items-center gap-2 text-sm text-text-2"><UserX size={16} /> {t('You blocked this user.')}</div>}
-        {panel && <button onClick={() => fullProfile()} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#2b2d31' }} data-view-full-profile>{t('View Full Profile')}</button>}
       </div>
       </div>
+    </>
+  )
+  if (panel) return (
+    <FrameRoom value={user.profile_frame} className="flex-1 min-h-0 flex flex-col overflow-clip" innerClassName="flex-1 min-h-0 flex flex-col">
+    <div className={`relative flex-1 min-h-0 flex flex-col rounded-lg p-[2px] text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ background: themed ? gradient : '#2b2d31', boxShadow: '0 0 0 1px rgba(255,255,255,0.08)' }} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-[6px]" style={{ background: cardStyle.background }} data-profile-inner>
+        <ProfileEffect id={user.profile_effect} />
+        <div className="profile-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]" data-profile-scroll>{contents}</div>
+        <div className="relative z-[7] shrink-0 p-4" data-profile-footer>
+          <button onClick={() => fullProfile()} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#383a40' }} data-view-full-profile>{t('View Full Profile')}</button>
+        </div>
+      </div>
+    </div>
+    </FrameRoom>
+  )
+  return (
+    <FrameRoom value={user.profile_frame} bleed={full} className={full ? 'wide:h-full' : ''} innerClassName={full ? 'wide:h-full' : ''}>
+    <div className={`relative w-full ${full ? 'rounded-xl h-full flex flex-col' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
+      <ProfileEffect id={user.profile_effect} />
+      {contents}
     </div>
     </FrameRoom>
   )
