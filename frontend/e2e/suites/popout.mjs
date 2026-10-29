@@ -28,6 +28,12 @@ ok('mutual row: 1 Mutual Friend • 2 Mutual Servers, above the bio', await card
 ok('User Reviews panel: No reviews yet', await card.locator('[data-reviews]:has-text("User Reviews"):has-text("No reviews yet")').count()===1)
 ok('in a server the popout shows when they joined it and their roles', await card.locator('[data-member-since-server]').count()===1 && await card.locator('[data-profile-roles]').count()===1)
 ok('message box with emoji button', await card.locator('[data-quick-message]').count()===1 && await card.locator('[data-quick-message]').getAttribute('placeholder')==='Message @Bobby' && await card.locator('button[title="Emoji"]').count()===1)
+// Typing in the box and clearing it, then the emoji button: the picker opens (the button's position used to be read
+// after React had let go of the click, so it threw "reading 'getBoundingClientRect'").
+await card.locator('[data-quick-message]').fill('hello there'); await card.locator('[data-quick-message]').fill('')
+await card.locator('button[title="Emoji"]').click(); await p.waitForTimeout(400)
+ok('after typing and clearing the message box, the emoji button opens the picker', await p.locator('[data-expression-picker]').count()===1 && !(await p.locator('body').innerText()).includes("Couldn't open that"))
+await p.keyboard.press('Escape'); await p.waitForTimeout(200)
 await p.screenshot({ path: '43-popout.png' })
 // … menu
 await card.locator('button[title="More"]').click(); await p.waitForTimeout(250)

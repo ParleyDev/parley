@@ -342,7 +342,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
               placeholder={t('Message @{name}', { name: nickname || user.display_name })} aria-label={t('Message @{name}', { name: user.username })} data-quick-message
               className="w-full h-11 rounded-lg pl-3 pr-10 text-sm text-[#dbdee1] placeholder:text-[#87898c] outline-none border border-transparent focus:border-white/15"
               style={{ background: themed ? 'rgba(0,0,0,0.4)' : '#1e1f22' }} />
-            <button type="button" onClick={(e) => setEmoji((cur) => (cur ? null : e.currentTarget.getBoundingClientRect()))} title={t('Emoji')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#b5bac1] hover:text-[#dbdee1]"><Smile size={20} /></button>
+            <button type="button" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setEmoji((cur) => (cur ? null : r)) }} title={t('Emoji')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#b5bac1] hover:text-[#dbdee1]"><Smile size={20} /></button>
             {emoji && (
               <ExpressionPicker tabs={['emoji']} anchor={emoji} onClose={() => { setEmoji(null); inputRef.current?.focus() }}
                 onEmoji={(em) => setQuick((v) => (v && !/\s$/.test(v) ? v + ' ' : v) + em + ' ')} />
