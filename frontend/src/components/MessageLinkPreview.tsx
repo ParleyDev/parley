@@ -1,4 +1,5 @@
 import { Hash, MessageSquare } from 'lucide-react'
+import { previewText } from '../lib/desktopNotify'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -39,7 +40,7 @@ export default function MessageLinkPreview({ link }: { link: MessageLink }) {
   }, [link.channelId, link.messageId])
   if (!m) return null
   const where = channel?.guild_id ? `#${channel.name}${guild ? ` · ${guild.name}` : ''}` : 'Direct Message'
-  const text = m.content || (m.attachments?.length ? `${m.attachments.length} attachment${m.attachments.length === 1 ? '' : 's'}` : m.poll ? `Poll: ${m.poll.question}` : '')
+  const text = (m.content && previewText(m.content, m.channel_id)) || (m.attachments?.length ? `${m.attachments.length} attachment${m.attachments.length === 1 ? '' : 's'}` : m.poll ? `Poll: ${m.poll.question}` : '')
   const go = () => {
     navigate(`/channels/${link.guildId ?? '@me'}/${link.channelId}`)
     void jumpToMessageAsync(link.channelId, link.messageId)

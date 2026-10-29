@@ -1,4 +1,5 @@
 import { CalendarDays, Flame, MessagesSquare, UserPlus } from 'lucide-react'
+import { notificationText } from '../../lib/desktopNotify'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -37,7 +38,7 @@ export default function ActivityModal({ onClose, guildId }: { onClose: () => voi
             {feed.top_messages.length === 0 ? <p className="text-sm text-text-2">{t('No reactions this week yet.')}</p> : feed.top_messages.map((m) => (
               <button key={m.id} type="button" onClick={() => go(m.channel_id, m.id)} className="mb-1.5 flex w-full items-start gap-2 rounded-lg border border-line bg-bg-1 p-2 text-left hover:bg-bg-3" data-activity-message={m.id}>
                 <Avatar user={m.author} size={28} />
-                <span className="min-w-0 flex-1"><span className="text-sm font-semibold">{m.author.display_name}</span> <span className="text-xs text-text-2">{t('in #{channel} · {when}', { channel: channels[m.channel_id]?.name ?? t('channel'), when: relativeTime(m.created_at) })}</span><span className="line-clamp-2 block text-sm text-text-1">{m.content || <i>{t('Attachment')}</i>}</span></span>
+                <span className="min-w-0 flex-1"><span className="text-sm font-semibold">{m.author.display_name}</span> <span className="text-xs text-text-2">{t('in #{channel} · {when}', { channel: channels[m.channel_id]?.name ?? t('channel'), when: relativeTime(m.created_at) })}</span><span className="line-clamp-2 block text-sm text-text-1">{(m.content && notificationText(m.content, guildId)) || <i>{t('Attachment')}</i>}</span></span>
                 <span className="shrink-0 rounded-full bg-bg-3 px-2 py-0.5 text-xs" title={t('Reactions')}>{m.reactions} ❤</span>
               </button>
             ))}

@@ -1,4 +1,5 @@
 import { ImageIcon, LayoutGrid, List, MessageSquareText, Pin, Plus, Search } from 'lucide-react'
+import { notificationText } from '../lib/desktopNotify'
 import Emoji from './Emoji'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
@@ -88,7 +89,7 @@ export default function ForumView({ channel }: { channel: Channel }) {
               <span className="font-semibold leading-tight break-words flex-1" data-forum-post-title>{th.name}</span>
               {th.pinned_at && <Pin size={14} className="text-warn shrink-0 mt-0.5" />}
             </div>
-            {th.preview && <p className={`text-sm text-text-1 break-words ${layout === 'list' ? 'line-clamp-1' : 'line-clamp-3'}`}>{th.preview}</p>}
+            {th.preview && <p className={`text-sm text-text-1 break-words ${layout === 'list' ? 'line-clamp-1' : 'line-clamp-3'}`}>{notificationText(th.preview, channel.guild_id)}</p>}
             {th.tags.length > 0 && <div className="flex flex-wrap gap-1">{th.tags.map((id) => tagById[id]).filter(Boolean).map((tg) => <span key={tg.id} className="rounded-full bg-bg-3 px-2 py-0.5 text-[11px] font-semibold text-text-1" data-forum-post-tag={tg.id}>{tg.emoji} {tg.name}</span>)}</div>}
             <div className="mt-auto flex items-center gap-2 text-xs text-text-2"><span>@{th.owner_username ?? t('unknown')}</span><span>·</span><span>{th.message_count === 1 ? t('1 message') : t('{n} messages', { n: th.message_count })}</span><span>·</span><span>{relativeTime(th.last_message_at ?? th.created_at)}</span></div>
           </div>

@@ -14,6 +14,11 @@ function userName(id: string, guildId: string | null): string {
 }
 
 /** Message text as it reads in the app: mentions, channels, roles and custom emoji by name; markdown marks dropped. */
+/** `notificationText` for a message in `channelId` (its server looked up): previews, reply headers, labels. */
+export function previewText(content: string, channelId: string): string {
+  return notificationText(content, useStore.getState().channels[channelId]?.guild_id ?? null)
+}
+
 export function notificationText(content: string, guildId: string | null): string {
   const s = useStore.getState()
   return content

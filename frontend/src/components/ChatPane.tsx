@@ -1,4 +1,5 @@
 import { ArrowDown, Hash, Volume2 } from 'lucide-react'
+import { previewText } from '../lib/desktopNotify'
 import { usePhone } from '../lib/swipe'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
@@ -47,7 +48,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   const seen = useRef<string | null>(null)
   useEffect(() => {
     if (!lastMsg) return
-    if (seen.current !== null && lastMsg.id !== seen.current && lastMsg.author.id !== myId && (!lastMsg.kind || lastMsg.kind === 'default')) setAnnounce(`${lastMsg.author.display_name}: ${lastMsg.content || t('sent an attachment')}`)
+    if (seen.current !== null && lastMsg.id !== seen.current && lastMsg.author.id !== myId && (!lastMsg.kind || lastMsg.kind === 'default')) setAnnounce(`${lastMsg.author.display_name}: ${(lastMsg.content && previewText(lastMsg.content, lastMsg.channel_id)) || t('sent an attachment')}`)
     seen.current = lastMsg.id
   }, [lastMsg, myId])
   const hasMore = useStore((s) => s.hasMore[channel.id])

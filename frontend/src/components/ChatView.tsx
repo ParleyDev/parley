@@ -1,4 +1,5 @@
 import { nameplateClass } from '../lib/cosmetics'
+import { previewText } from '../lib/desktopNotify'
 import { isAssetNameplate, NameplateVideo } from './Nameplate'
 import SummariesButton from './Summaries'
 import { AlarmClock, Megaphone, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, MoreVertical, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
@@ -354,7 +355,7 @@ function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
 
 /** A neighbouring message shown faintly around a search result. */
 function ContextLine({ m }: { m: Message }) {
-  return <div className="truncate px-3 py-0.5 text-xs text-text-2" data-search-context-line={m.id}><span className="font-semibold">{m.author.display_name}</span> {m.content || (m.attachments?.length ? '📎' : '')}</div>
+  return <div className="truncate px-3 py-0.5 text-xs text-text-2" data-search-context-line={m.id}><span className="font-semibold">{m.author.display_name}</span> {(m.content && previewText(m.content, m.channel_id)) || (m.attachments?.length ? '📎' : '')}</div>
 }
 
 /** A compact rendering of a message for the pins and search lists, with Jump. */

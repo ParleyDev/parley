@@ -1,4 +1,5 @@
 import { Check, ExternalLink, X } from 'lucide-react'
+import { notificationText } from '../../../lib/desktopNotify'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../../lib/api'
@@ -36,7 +37,7 @@ export default function ReportsTab({ guildId }: { guildId: string }) {
               {r.channel_name && <span className="text-xs text-text-2">{t('in #{channel}', { channel: r.channel_name })}</span>}
               <span className="ml-auto text-xs text-text-2">{formatTime(r.created_at)}</span>
             </div>
-            {r.content && <p className="mt-1 rounded bg-bg-3 px-2 py-1 text-sm text-text-1 break-words">{r.content}</p>}
+            {r.content && <p className="mt-1 rounded bg-bg-3 px-2 py-1 text-sm text-text-1 break-words">{notificationText(r.content, guildId)}</p>}
             <p className="mt-1 text-xs text-text-2">{t('Reason: {reason}', { reason: r.reason })}</p>
             <div className="mt-2 flex items-center gap-2">
               {r.mod_status === 'open' ? (
