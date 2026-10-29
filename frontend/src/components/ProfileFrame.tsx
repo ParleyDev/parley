@@ -38,98 +38,123 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
   if (!isAssetValue(value) || !item?.layout) return null
   const { w: W, h: H } = box ?? { w: 0, h: 0 }
   const s = W / (item.layout.inner_width || 1200)
-  const ot = item.layout.overflow_top * s, ob = item.layout.overflow_bottom * s, oh = item.layout.overflow_horizontal * s
+  // Every offset and size lands on a whole device pixel, so a back piece and its matching front piece (drawn in
+  // separate layers) always come out on the same pixels.
+  const dpr = window.devicePixelRatio || 1
+  const snap = (v: number) => Math.round(v * dpr) / dpr
+  const ot = snap(item.layout.overflow_top * s), ob = snap(item.layout.overflow_bottom * s), oh = snap(item.layout.overflow_horizontal * s)
   const pad = 40
-  // Where back layers may show: everything around the card, never on it. One box over the whole framed area with the
-  // card's rounded shape cut out of it (an SVG mask, even-odd), so the corners of the card are filled too.
-  const back = { left: -oh - pad, top: -ot - pad, width: W + 2 * (oh + pad), height: H + ot + ob + 2 * pad }
+  // Where back layers may show: everything around the card, never on it. The back layer covers the card's box like the
+  // front one (so both place their pieces with the same numbers) and is clipped to the framed area with the card's
+  // rounded shape cut out (even-odd), so the card's corners are filled too.
   const hole = (() => {
     const [tl, tr, br, bl] = (box?.r ?? [0, 0, 0, 0]).map((v) => Math.min(v, W / 2, H / 2))
-    const x = oh + pad, y = ot + pad
-    const card = `M${x + tl} ${y}H${x + W - tr}A${tr} ${tr} 0 0 1 ${x + W} ${y + tr}V${y + H - br}A${br} ${br} 0 0 1 ${x + W - br} ${y + H}H${x + bl}A${bl} ${bl} 0 0 1 ${x} ${y + H - bl}V${y + tl}A${tl} ${tl} 0 0 1 ${x + tl} ${y}Z`
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${back.width}" height="${back.height}"><path fill-rule="evenodd" d="M0 0H${back.width}V${back.height}H0Z${card}"/></svg>`
-    const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
-    return { maskImage: url, WebkitMaskImage: url, maskSize: '100% 100%', WebkitMaskSize: '100% 100%', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' } as CSSProperties
+    const x0 = -oh - pad, y0 = -ot - pad, x1 = W + oh + pad, y1 = H + ob + pad
+    const card = `M${tl} 0H${W - tr}A${tr} ${tr} 0 0 1 ${W} ${tr}V${H - br}A${br} ${br} 0 0 1 ${W - br} ${H}H${bl}A${bl} ${bl} 0 0 1 0 ${H - bl}V${tl}A${tl} ${tl} 0 0 1 ${tl} 0Z`
+    return `path(evenodd, "M${x0} ${y0}H${x1}V${y1}H${x0}Z${card}")`
   })()
   type At = { left: number; width: number; top?: number; bottom?: number; along: boolean }
-  // Staples hang from the card's top edge, or sit on its bottom edge by `bottom` alone, so a card changing height
-  // never leaves them where the old height put them.
+  // Staples hang from the card's top edge (top only) or sit on its bottom edge (bottom only), so a card changing
+  // height never leaves them where the old height put them.
   const place = (l: FrameLayer): At => {
-    const w = (l.width ?? 1312) * s, h = (l.height ?? 0) * s
-    const left = (W - w) / 2
+    const w = snap((l.width ?? 1312) * s), h = (l.height ?? 0) * s
+    const left = snap((W - w) / 2)
     if (l.type === 'staple') return l.anchor === 'bottom' ? { left, width: w, bottom: -ob, along: false } : { left, width: w, top: -ot, along: false }
-    return { left, width: w, top: l.anchor === 'top' ? 0 : (H - h) / 2, along: true }
+    return { left, width: w, top: l.anchor === 'top' ? 0 : snap((H - h) / 2), along: true }
   }
-  /** `dx`, `dy`: where the layer's container starts relative to the card (back layers sit in a larger box). */
-  const img = (l: FrameLayer, at: At, dx = 0, dy = 0, dyBottom = 0): ReactElement =>
+  /** `dx`: where the layer's container starts left of the card (rails sit in a wider clip box). */
+  const img = (l: FrameLayer, at: At, dx = 0): ReactElement =>
     <img src={assetFile('profile-frames', item.id, l.file)} alt="" draggable={false} className="absolute max-w-none select-none"
-      style={{ left: at.left - dx, width: at.width, ...(at.bottom !== undefined ? { bottom: at.bottom + dyBottom } : { top: (at.top ?? 0) - dy }) }} data-frame-layer={l.file} />
+      style={{ left: at.left - dx, width: at.width, ...(at.bottom !== undefined ? { bottom: at.bottom } : { top: at.top }) }} data-frame-layer={l.file} data-frame-order={l.order} />
   // Rails and borders on a card taller than they were drawn for (the DM panel's full-height card): the top and bottom
   // 45% keep their size at the card's top and bottom corners and the middle stretches between them.
   const along = (l: FrameLayer, at: At, dx: number): ReactElement => {
     const nat = l.height ?? 0
-    if (!nat || nat * s >= H) return img(l, at, dx, 0)
-    const cut = Math.floor(nat * 0.45)
-    return <div className="absolute inset-y-0 select-none" style={{ left: at.left - dx, width: at.width, boxSizing: 'border-box', borderStyle: 'solid', borderWidth: `${cut * s}px 0`, borderImageSource: `url("${assetFile('profile-frames', item.id, l.file)}")`, borderImageSlice: `${cut} 0 ${cut} 0 fill`, borderImageWidth: `${cut * s}px 0`, borderImageRepeat: 'stretch' }} data-frame-layer={l.file} data-frame-stretched />
+    if (!nat || nat * s >= H) return img(l, at, dx)
+    const cut = Math.floor(nat * 0.45), cutPx = snap(cut * s)
+    return <div className="absolute inset-y-0 select-none" style={{ left: at.left - dx, width: at.width, boxSizing: 'border-box', borderStyle: 'solid', borderWidth: `${cutPx}px 0`, borderImageSource: `url("${assetFile('profile-frames', item.id, l.file)}")`, borderImageSlice: `${cut} 0 ${cut} 0 fill`, borderImageWidth: `${cutPx}px 0`, borderImageRepeat: 'stretch' }} data-frame-layer={l.file} data-frame-order={l.order} data-frame-stretched />
   }
-  const clip = (style: CSSProperties, child: ReactElement, key: string) => <div key={key} className="absolute overflow-hidden" style={style}>{child}</div>
+  const piece = (l: FrameLayer, i: number) => {
+    const at = place(l)
+    // Rails and borders stop at the card's top and bottom edges; staples hang free.
+    return at.along
+      ? <div key={i} className="absolute overflow-hidden" style={{ left: -oh - pad, width: W + 2 * (oh + pad), top: 0, bottom: 0 }}>{along(l, at, -oh - pad)}</div>
+      : <span key={i}>{img(l, at)}</span>
+  }
 
-  // Two layers around the card: back pieces under it (z 0) and front pieces over everything in it (z 20), the card
-  // itself sitting between as its own stacking context (FrameRoom).
+  // Two layers over the card's box, placing their pieces the same way: back pieces under the card (z 0, clipped to
+  // around it) and front pieces over everything in it (z 20). The card sits between as its own stacking context.
   return (
     <>
       {box && W > 0 && item.layers.some((l) => l.order === 'back') && (
-        <div className="pointer-events-none absolute inset-0 z-0" style={box.inset} aria-hidden data-frame-back-layer>
-          <div className="absolute overflow-hidden" style={{ ...back, ...hole }} data-frame-back>
-            {item.layers.map((l, i) => {
-              if (l.order !== 'back') return null
-              const at = place(l)
-              // Back rails and borders only run alongside the card, from its top edge to its bottom edge.
-              return at.along
-                ? clip({ left: 0, width: back.width, top: ot + pad, bottom: ob + pad }, along(l, at, back.left), `${i}`)
-                : <span key={i}>{img(l, at, back.left, back.top, ob + pad)}</span>
-            })}
-          </div>
+        <div className="pointer-events-none absolute inset-0 z-0" style={{ ...box.inset, clipPath: hole }} aria-hidden data-frame-back-layer data-frame-back>
+          {item.layers.map((l, i) => (l.order === 'back' ? piece(l, i) : null))}
         </div>
       )}
       <div ref={ref} className="pointer-events-none absolute inset-0 z-20" style={box?.inset} aria-hidden data-profile-frame-layers={item.id}>
-        {box && W > 0 && item.layers.map((l, i) => {
-          if (l.order === 'back') return null
-          const at = place(l)
-          // Rails and borders stop at the card's top and bottom edges; staples hang free.
-          return at.along ? clip({ left: -oh - pad, width: W + 2 * (oh + pad), top: 0, bottom: 0 }, along(l, at, -oh - pad), `${i}`) : <span key={i}>{img(l, at)}</span>
-        })}
+        {box && W > 0 && item.layers.map((l, i) => (l.order === 'back' ? null : piece(l, i)))}
       </div>
     </>
   )
+}
+
+/** The DM panel's card width (Discord's): the card keeps it with or without a frame, and the panel widens instead. */
+export const PANEL_CARD_WIDTH = 304
+
+/**
+ * How far a frame reaches past a card `cardWidth` wide (every layer is scaled by cardWidth / inner_width): above,
+ * below and on each side, the side being whichever is wider of the layout's overflow and the widest layer's overhang.
+ */
+export function frameReach(item: FrameItem, cardWidth: number, dpr = 1) {
+  const L = item.layout!, s = cardWidth / (L.inner_width || 1200)
+  // In device pixels like the layers themselves (ProfileFrame snaps each width and centres it on the card), rounded up:
+  // the frame then never pokes past the room it is given, and the room is no wider than it needs to be.
+  const snap = (v: number) => Math.round(v * dpr) / dpr, up = (v: number) => Math.ceil(v * dpr - 1e-6) / dpr
+  const widest = Math.max(0, ...item.layers.map((l) => snap((l.width ?? 1312) * s)))
+  return { top: up(L.overflow_top * s), bottom: up(L.overflow_bottom * s), side: up(Math.max(L.overflow_horizontal * s, (widest - cardWidth) / 2)) }
+}
+
+/** The DM panel's width for a card PANEL_CARD_WIDTH wide wearing `item`: 8px either side of the frame's room. */
+export function panelWidth(item: FrameItem | null) {
+  return PANEL_CARD_WIDTH + 2 * (item?.layout ? frameReach(item, PANEL_CARD_WIDTH, window.devicePixelRatio || 1).side : 0) + 16
 }
 
 /**
  * Room for a card's frame: padding as large as the frame reaches past the card (scaled to the card's width), with the
  * card and its frame inside. Whatever positions, nudges, scrolls or clips the card then sees the whole framed area,
  * so a frame is never cut off by a scroll box or pushed off screen. Without an asset frame it adds nothing.
+ *
+ * `cardWidth` (the DM panel): the card keeps that width and the room grows around it, rounded up to whole device
+ * pixels so a clipping wrapper never cuts the frame; the panel sizes itself to match (frameReach). Otherwise the card
+ * takes what's left of the wrapper after the room, which depends on its width: exact values there, since rounding
+ * would let the two chase each other.
  */
-export function FrameRoom({ value, className = '', innerClassName = '', style, bleed, children, ...rest }: { value?: string | null; className?: string; innerClassName?: string; style?: CSSProperties; children: ReactNode; /** Reserve no room: the frame reaches over whatever is around the card (the full profile's window). */ bleed?: boolean } & Record<`data-${string}`, string | boolean | undefined>) {
+export function FrameRoom({ value, className = '', innerClassName = '', style, bleed, cardWidth, children, ...rest }: { value?: string | null; className?: string; innerClassName?: string; style?: CSSProperties; children: ReactNode; /** Reserve no room: the frame reaches over whatever is around the card (the full profile's window). */ bleed?: boolean; cardWidth?: number } & Record<`data-${string}`, string | boolean | undefined>) {
   const item = useAssetItem<FrameItem>('profile-frames', value)
   const ref = useRef<HTMLDivElement>(null)
   const [w, setW] = useState(0)
   useLayoutEffect(() => {
     const el = ref.current
-    if (!el || !item || typeof ResizeObserver === 'undefined') return
+    if (!el || !item || cardWidth || typeof ResizeObserver === 'undefined') return
     const measure = () => setW(el.offsetWidth)
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [item])
+  }, [item, cardWidth])
   const L = item?.layout
-  const s = L && w ? w / (L.inner_width || 1200) : 0
-  const pad: CSSProperties = !L || !s || bleed ? {} : { paddingTop: L.overflow_top * s, paddingBottom: L.overflow_bottom * s, paddingLeft: L.overflow_horizontal * s, paddingRight: L.overflow_horizontal * s }
+  const cw = cardWidth ?? w
+  let pad: CSSProperties = {}
+  if (item && L && cw && !bleed) {
+    // Exact values when the card's width depends on the room; whole device pixels for a fixed card (see frameReach).
+    const r = cardWidth ? frameReach(item, cw, window.devicePixelRatio || 1) : { top: L.overflow_top * cw / (L.inner_width || 1200), bottom: L.overflow_bottom * cw / (L.inner_width || 1200), side: L.overflow_horizontal * cw / (L.inner_width || 1200) }
+    pad = { paddingTop: r.top, paddingBottom: r.bottom, paddingLeft: r.side, paddingRight: r.side }
+  }
   return (
     <div className={className} style={{ ...style, ...pad }} data-frame-wrap data-frame-room={item ? item.id : undefined} {...rest}>
-      {/* Its own stacking context: the frame's back layer (z 0), the card (z 1, see .frame-card) and the front layer
-          (z 20) stack inside it and never against what is around the card. */}
-      <div ref={ref} className={`relative isolate ${innerClassName}`}>
+      {/* Its own stacking context: the frame's back layer (z 0), the card (z 1) and the front layer (z 20) stack
+          inside it and never against what is around the card. */}
+      <div ref={ref} className={`relative isolate ${innerClassName}`} style={cardWidth ? { width: cardWidth } : undefined}>
         {children}
         <ProfileFrame value={value} />
       </div>

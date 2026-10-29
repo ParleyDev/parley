@@ -17,7 +17,7 @@ import { Badges, ClanTag } from './Flair'
 import { colorRole } from './StyledName'
 import { frameClass } from '../lib/cosmetics'
 import ProfileEffect from './ProfileEffect'
-import { FrameRoom } from './ProfileFrame'
+import { FrameRoom, PANEL_CARD_WIDTH } from './ProfileFrame'
 import { LogoMark } from './Logo'
 import RolePicker from './RolePicker'
 import VoiceCard from './VoiceCard'
@@ -349,7 +349,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     </>
   )
   if (panel) return (
-    <FrameRoom value={user.profile_frame} className="flex-1 min-h-0 flex flex-col overflow-clip" innerClassName="flex-1 min-h-0 flex flex-col">
+    <FrameRoom value={user.profile_frame} cardWidth={PANEL_CARD_WIDTH} className="flex-1 min-h-0 flex flex-col items-start overflow-clip" innerClassName="flex-1 min-h-0 flex flex-col">
     <div className={`relative z-[1] isolate flex-1 min-h-0 flex flex-col rounded-lg p-[2px] text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ background: themed ? gradient : surface, boxShadow: '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.32), 0 2px 6px rgba(0,0,0,0.2)' }} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
       <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-[6px]" style={{ background: themed ? cardStyle.background : surface }} data-profile-inner>
         <ProfileEffect id={user.profile_effect} />

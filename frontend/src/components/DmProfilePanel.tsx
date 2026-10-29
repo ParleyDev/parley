@@ -4,10 +4,12 @@ import { useStore } from '../store'
 import { useT } from '../lib/i18n'
 import type { UserProfile } from '../lib/types'
 import ProfilePopout from './ProfilePopout'
+import { panelWidth } from './ProfileFrame'
+import { useAssetItem, type FrameItem } from '../lib/assetCatalog'
 
 /**
- * Right-hand panel in a DM: the recipient's profile as Discord's floating card, filling the panel's height under the
- * header with 8px around it (plus whatever the profile frame reaches past the card, reserved by FrameRoom), its
+ * Right-hand panel in a DM: the recipient's profile as Discord's floating card (304px), filling the panel's height under
+ * the header with 8px around it (plus whatever the profile frame reaches past the card, reserved by FrameRoom), its
  * contents scrolling inside. Nothing in it ever scrolls the panel itself, sideways or down.
  */
 export default function DmProfilePanel({ userId }: { userId: string }) {
@@ -15,8 +17,11 @@ export default function DmProfilePanel({ userId }: { userId: string }) {
   const cached = useStore((s) => s.users[userId])
   const [user, setUser] = useState<UserProfile | null>(null)
   useEffect(() => { api.get<UserProfile>(`/users/${userId}`).then(setUser).catch(() => {}) }, [userId, cached])
+  // Like Discord: the card keeps its width with a frame on, and the panel widens to fit the frame (8px either side).
+  const frame = useAssetItem<FrameItem>('profile-frames', user?.profile_frame)
+  const width = panelWidth(frame)
   return (
-    <aside className="w-[320px] shrink-0 bg-bg-2 overflow-hidden p-2 flex flex-col phone:hidden" data-dm-profile>
+    <aside className="shrink-0 bg-bg-2 overflow-hidden p-2 flex flex-col phone:hidden" style={{ width }} data-dm-profile>
       {user ? <ProfilePopout user={user} onClose={() => {}} variant="panel" /> : <div className="p-2 text-sm text-text-2">{t('Loading…')}</div>}
     </aside>
   )

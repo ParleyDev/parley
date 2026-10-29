@@ -74,13 +74,13 @@ const geo = await card.evaluate((c) => {
   const cr = c.getBoundingClientRect(), s = cr.width / 1200
   const img = (f) => c.parentElement.querySelector(`[data-frame-layer="${f}"]`)
   const top = img('front_staple_top.png').getBoundingClientRect(), rail = img('front_rail_center.png'), railBox = rail.parentElement.getBoundingClientRect()
-  // Back layers live in one box over the whole framed area, masked by an even-odd path that cuts out the card with
-  // its own rounded corners (a rectangular hole left the corners empty).
-  const back = c.parentElement.querySelector('[data-frame-back]'), br = back?.getBoundingClientRect()
-  const mask = back ? decodeURIComponent(getComputedStyle(back).maskImage || getComputedStyle(back).webkitMaskImage || '') : ''
+  // Back layers sit over the card's box like the front ones, clipped by an even-odd path: the whole framed area with
+  // the card cut out, its own rounded corners included (a rectangular hole left the corners empty).
+  const back = c.parentElement.querySelector('[data-frame-back]')
+  const clip = back ? getComputedStyle(back).clipPath : ''
   const radius = parseFloat(getComputedStyle(c).borderTopLeftRadius) || 0
-  const covers = !!br && br.left < cr.left && br.top < cr.top && br.right > cr.right && br.bottom > cr.bottom
-  const overlaps = covers && /evenodd/.test(mask) && (radius === 0 || / A\d|A[\d.]+ [\d.]+ 0 0 1/.test(mask)) ? 0 : 1
+  const outside = /M\s*-[\d.]+[\s,]+-[\d.]+/.test(clip)
+  const overlaps = back && outside && /evenodd/.test(clip) && (radius === 0 || /A\s*[\d.]+[\s,]+[\d.]+[\s,]+0[\s,]+0[\s,]+1/.test(clip)) ? 0 : 1
   // Same stacking context, so DOM order is paint order: back layers must come first even though metadata lists a front one first.
   const order = [...c.parentElement.querySelectorAll('[data-frame-layer]')].map((e) => e.dataset.frameLayer.startsWith('back') ? 'b' : 'f').join('')
   return { s, topOver: Math.round(cr.top - top.top), want: Math.round(304 * s), topW: Math.round(top.width), wantW: Math.round(1312 * s), railH: Math.round(railBox.height), cardH: Math.round(cr.height), overlaps, order }
