@@ -1,3 +1,5 @@
+import ThemePreviewBar from '../components/ThemePreviewBar'
+import { lookOf, setGuildLook, useColorThemes } from '../lib/colorThemes'
 import { toggleOverlay } from '../lib/overlay'
 import { FAMILY_CODE_KEY } from '../components/modals/settings/FamilyTab'
 import { saveClip } from '../lib/clips'
@@ -81,6 +83,7 @@ export default function AppShell() {
       <a href="#messages" onClick={(e) => { e.preventDefault(); (document.querySelector<HTMLElement>('[data-message-list]') ?? document.querySelector<HTMLElement>('main'))?.focus() }}
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[300] focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-white" data-skip-link>{t('Skip to messages')}</a>
       <Shortcuts />
+      <ThemePreviewBar />
       <VerifyBanner />
       <StreamerBanner />
       <UpdateBanner />
@@ -167,6 +170,10 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
   const navigate = useNavigate()
 
   useEffect(() => { if (guild && !hasMembers) loadMembers(guildId) }, [guild, guildId, hasMembers, loadMembers])
+  // The server's colour theme while you're in it (Appearance decides whether it beats your own).
+  const themeList = useColorThemes()
+  const guildTheme = JSON.stringify(guild?.theme ?? null)
+  useEffect(() => { setGuildLook(lookOf(guild?.theme)); return () => setGuildLook(null) }, [guildTheme, themeList]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (guild && !channel && !channelOverride) navigate(`/channels/${guildId}`, { replace: true }) }, [guild, channel, guildId, navigate, channelOverride])
 
   if (!guild) return <MissingGuild guildId={guildId} />

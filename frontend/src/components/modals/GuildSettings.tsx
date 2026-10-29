@@ -1,4 +1,5 @@
-import { Award, Blocks, Bot, ChartColumn, ClipboardList, DoorOpen, LayoutTemplate, ListChecks, Flag, PanelsTopLeft, Compass, Crown, ShieldAlert, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Tag, Trash2, Users } from 'lucide-react'
+import ServerThemeTab from './settings/ServerThemeTab'
+import { Award, Blocks, Bot, ChartColumn, ClipboardList, DoorOpen, LayoutTemplate, ListChecks, Flag, PanelsTopLeft, Compass, Crown, ShieldAlert, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Tag, Trash2, Users, Palette } from 'lucide-react'
 import { useState } from 'react'
 import { myGuildPerms, useStore } from '../../store'
 import { has, P } from '../../lib/perms'
@@ -27,7 +28,7 @@ import InsightsTab from './settings/InsightsTab'
 import IntegrationsTab from './settings/IntegrationsTab'
 import ServerTagTab from './settings/ServerTagTab'
 
-type Tab = 'overview' | 'tag' | 'safety' | 'automod' | 'welcome' | 'onboarding' | 'template' | 'applications' | 'insights' | 'integrations' | 'widget' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
+type Tab = 'overview' | 'theme' | 'tag' | 'safety' | 'automod' | 'welcome' | 'onboarding' | 'template' | 'applications' | 'insights' | 'integrations' | 'widget' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
 
 export default function GuildSettingsModal({ onClose, guildId, tab: requested }: { onClose: () => void; guildId: string; tab?: Tab }) {
   const t = useT()
@@ -52,7 +53,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   type Item = { id: Tab; label: string; icon: React.ReactNode }
   const sec = (title: string | undefined, list: (Item | false)[]) => ({ title, items: list.filter((x): x is Item => !!x) })
   const sections = [
-    sec(guild.name, [canOverview && { id: 'overview', label: 'Server Profile', icon: <SlidersHorizontal size={16} /> }, canOverview && { id: 'tag', label: 'Server Tag', icon: <Tag size={16} /> }, canOverview && { id: 'insights', label: 'Insights', icon: <ChartColumn size={16} /> }]),
+    sec(guild.name, [canOverview && { id: 'overview', label: 'Server Profile', icon: <SlidersHorizontal size={16} /> }, canOverview && { id: 'theme', label: 'Server Theme', icon: <Palette size={16} /> }, canOverview && { id: 'tag', label: 'Server Tag', icon: <Tag size={16} /> }, canOverview && { id: 'insights', label: 'Insights', icon: <ChartColumn size={16} /> }]),
     sec('Expression', [canExpr && { id: 'emoji', label: 'Emoji', icon: <Smile size={16} /> }, canExpr && { id: 'stickers', label: 'Stickers', icon: <Sticker size={16} /> }, canExpr && { id: 'soundboard', label: 'Soundboard', icon: <Music2 size={16} /> }]),
     sec('People', [{ id: 'members', label: 'Members', icon: <Users size={16} /> }, { id: 'roles', label: 'Roles', icon: <Shield size={16} /> }, canOverview && { id: 'invites', label: 'Invites', icon: <Link2 size={16} /> }, canReview && { id: 'applications', label: 'Access', icon: <ClipboardList size={16} /> }]),
     sec('Apps', [canOverview && { id: 'integrations', label: 'Integrations', icon: <Blocks size={16} /> }, canOverview && { id: 'widget', label: 'Widget', icon: <PanelsTopLeft size={16} /> }, canOverview && { id: 'badge', label: 'Badge', icon: <Award size={16} /> }]),
@@ -73,6 +74,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
       ) : undefined}
     >
       {tab === 'overview' && canOverview && <GuildOverviewTab guildId={guildId} />}
+      {tab === 'theme' && canOverview && <ServerThemeTab guildId={guildId} />}
       {tab === 'tag' && canOverview && <ServerTagTab guildId={guildId} onTab={(x) => setTab(x)} />}
       {tab === 'safety' && canOverview && <SafetyTab guildId={guildId} />}
       {tab === 'automod' && canOverview && <AutomodTab guildId={guildId} />}

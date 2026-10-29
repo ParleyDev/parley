@@ -165,6 +165,19 @@ fn set_app_icon(app: AppHandle, window: WebviewWindow, png: Vec<u8>) -> Result<(
     Ok(())
 }
 
+/// The app's theme: dark or light window chrome and background (lib/themeShells in the web app).
+#[tauri::command]
+fn set_theme(window: WebviewWindow, dark: bool, color: Option<String>) -> Result<(), String> {
+    // The window theme drives the title bar on Windows and macOS; the background shows while the page repaints.
+    window.set_theme(Some(if dark { tauri::Theme::Dark } else { tauri::Theme::Light })).map_err(|e| e.to_string())?;
+    if let Some(c) = color.as_deref().and_then(|c| c.strip_prefix('#')).filter(|c| c.len() == 6) {
+        if let Ok(n) = u32::from_str_radix(c, 16) {
+            let _ = window.set_background_color(Some(tauri::window::Color((n >> 16) as u8, (n >> 8) as u8, n as u8, 255)));
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn set_zoom(window: WebviewWindow, factor: f64) -> Result<(), String> {
     if !factor.is_finite() { return Err("bad zoom".into()); }
@@ -322,7 +335,7 @@ pub fn run() {
         .manage(Pending(Mutex::new(None)))
         .manage(Ptt::default())
         .manage(Tray(std::sync::atomic::AtomicBool::new(false)))
-        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon, overlay])
+        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, set_theme, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon, overlay])
         .setup(|app| {
             let handle = app.handle().clone();
             // AppImages and dev builds aren't registered for parley:// by an installer.

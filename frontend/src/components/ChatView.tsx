@@ -160,8 +160,12 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
   }
   const btn = (active: boolean) => `h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${active ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`
 
+  // Like Discord: with the profile (or a group's members) beside a DM, or a server's member list beside a channel, the
+  // header runs across both and the panel starts under it. Search results and threads keep their own full-height column.
+  const membersOpen = useStore((s) => s.membersOpen)
+  const spans = search === null && !threadHere && ((dmProfileOpen && ((isDm && !!other) || group)) || (!!members && membersOpen))
   const headerBar = (
-        <header className="h-12 shrink-0 px-4 phone:px-2 flex items-center gap-2 border-b border-line shadow-sm">
+        <header className={`h-12 shrink-0 px-4 phone:px-2 flex items-center gap-2 border-b border-line shadow-sm ${spans ? "bg-bg-2" : ""}`}>
           <MobileBack />
           {group ? (
             <>
@@ -273,17 +277,14 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
       ) : group && dmProfileOpen ? (
         <GroupMembersPanel dm={channel as DmChannel} />
       ) : members ?? null
-  // Like Discord: with the profile (or a group's members) beside a DM, or a server's member list beside a channel, the
-  // header runs across both and the panel starts under it. Search results and threads keep their own full-height column.
-  const membersOpen = useStore((s) => s.membersOpen)
-  const spans = search === null && !threadHere && ((dmProfileOpen && ((isDm && !!other) || group)) || (!!members && membersOpen))
   // One tree either way, so the chat below (and its scroll position and draft) is never remounted: only the header
   // moves between the top of the whole view and the top of the chat column.
   return (
-    <div className="flex-1 min-w-0 flex flex-col bg-bg-2" data-header-spans={spans ? '' : undefined}>
+    <div className="flex-1 min-w-0 flex flex-col" data-header-spans={spans ? '' : undefined}>
       {spans && headerBar}
       <div className="flex-1 min-h-0 flex">
-        <main className="flex-1 min-w-0 flex flex-col">
+        {/* One see-through layer per area (the chat, the side panel), so a colour theme tints them all alike. */}
+        <main className="flex-1 min-w-0 flex flex-col bg-bg-2">
           {!spans && headerBar}
           {content}
         </main>

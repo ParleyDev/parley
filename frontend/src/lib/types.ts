@@ -157,6 +157,8 @@ export interface Guild {
   afk_timeout?: number
   rules_channel_id?: string | null
   welcome_screen?: WelcomeScreen
+  /** The server's colour theme for its members: a theme from the list, or its own gradient. */
+  theme?: { id?: string; custom?: import('./colorThemes').Look } | null
   widget_enabled?: boolean
   widget_invite?: string
   invite_splash_url?: string | null

@@ -1,6 +1,6 @@
 import { api } from './api'
 import { STORAGE_PREFIX } from './brand'
-import { getAppearance, setAppearance, type Appearance } from './appearance'
+import { getAppearance, setAppearance, THEME_KEYS, type Appearance } from './appearance'
 import { getKeybinds, replaceKeybinds } from './keybinds'
 import { getNotifPrefs, setNotifPrefs, type NotifPrefs } from './notifPrefs'
 import { getPrefs, setPrefs, type ClientPrefs } from './prefs'
@@ -18,12 +18,20 @@ const setLocalRev = (r: number) => { try { localStorage.setItem(REV, String(r)) 
 export const syncEnabled = () => { try { return localStorage.getItem(ON) !== '0' } catch { return true } }
 export function setSyncEnabled(on: boolean) { try { localStorage.setItem(ON, on ? '1' : '0') } catch { /* ignore */ } if (on) void push() }
 
+/** "Sync theme across my devices" off: this device neither sends nor takes the theme (the switch itself never syncs). */
+function themeless(a: Partial<Appearance>): Partial<Appearance> {
+  const out: Partial<Appearance> = { ...a }
+  delete out.syncTheme
+  if (!getAppearance().syncTheme) for (const k of THEME_KEYS) delete out[k]
+  return out
+}
+
 let applying = false
 let timer: ReturnType<typeof setTimeout> | null = null
 
 async function push() {
   if (!syncEnabled()) return
-  const blob: SyncedSettings = { rev: Date.now(), appearance: getAppearance(), prefs: getPrefs(), notif: getNotifPrefs(), keybinds: getKeybinds() }
+  const blob: SyncedSettings = { rev: Date.now(), appearance: themeless(getAppearance()), prefs: getPrefs(), notif: getNotifPrefs(), keybinds: getKeybinds() }
   setLocalRev(blob.rev)
   try { await api.put('/users/@me/client-settings', blob) } catch { /* next change retries */ }
 }
@@ -34,7 +42,7 @@ export function receive(s: Partial<SyncedSettings> | null | undefined) {
   if (s.rev <= localRev()) { if (s.rev < localRev()) void push(); return }
   applying = true
   try {
-    if (s.appearance) setAppearance(s.appearance)
+    if (s.appearance) setAppearance(themeless(s.appearance))
     if (s.prefs) setPrefs(s.prefs)
     if (s.notif) setNotifPrefs(s.notif)
     if (s.keybinds) replaceKeybinds(s.keybinds)

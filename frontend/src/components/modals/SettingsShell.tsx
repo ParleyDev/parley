@@ -1,5 +1,5 @@
 import { t } from '../../lib/i18n'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Check } from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 
 export interface NavSection<T extends string> { title?: string; items: { id: T; label: string; icon?: ReactNode }[] }
@@ -82,7 +82,10 @@ export function Toggle({ label, checked, onChange, disabled }: { label?: string;
       {label && <span className="text-[15px]">{t(label)}</span>}
       <button type="button" role="switch" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)}
         className={`relative h-6 w-10 shrink-0 rounded-full transition ${checked ? 'bg-success' : 'bg-bg-4'}`}>
-        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${checked ? 'left-[18px]' : 'left-0.5'}`} />
+        {/* With "Show on/off indicators" (Accessibility) the knob carries a check or a cross. */}
+        <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition flex items-center justify-center ${checked ? 'left-[18px] text-success' : 'left-0.5 text-text-2'}`}>
+          <span className="toggle-icon hidden" aria-hidden>{checked ? <Check size={13} strokeWidth={3} /> : <X size={12} strokeWidth={3} />}</span>
+        </span>
       </button>
     </label>
   )

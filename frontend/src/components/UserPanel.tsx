@@ -2,7 +2,7 @@ import { ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, Settings } from 'lu
 import { voice } from '../lib/voice'
 import { useState, type ReactNode } from 'react'
 import { useStore } from '../store'
-import { profileCardStyle } from '../lib/profileLook'
+import { profileCardStyle, profileColors } from '../lib/profileLook'
 import { nameplateClass } from '../lib/cosmetics'
 import { NameplateVideo } from './Nameplate'
 import Avatar from './Avatar'
@@ -27,7 +27,8 @@ export default function UserPanel() {
   const deaf = useStore((s) => s.selfDeaf)
   if (!user) return null
 
-  const cardStyle = profileCardStyle(user, 0.72)
+  // Your profile theme when you have one; otherwise the theme's raised surface, so light and colour themes fit too.
+  const cardStyle = profileColors(user).themed ? profileCardStyle(user, 0.72) : { background: 'var(--color-bg-3)', borderColor: 'var(--color-line)' }
   const statusLabel = statuses().find((s) => s.v === user.status)?.label ?? t('Online')
 
   return (

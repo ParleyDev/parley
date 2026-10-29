@@ -21,6 +21,12 @@ export interface ClientPrefs {
   // Accessibility
   /** UI saturation, % (0–100). */
   saturation: number
+  /** Apply the saturation setting to colours people chose (role and name colours, profile themes) too. */
+  saturateCustom: boolean
+  /** Show display name styles (fonts, effects, gradient colours); off shows every name plainly. */
+  nameStyles: boolean
+  /** Check and cross icons inside toggles, so on and off don't rely on colour alone. */
+  toggleIndicators: boolean
   underlineLinks: boolean
   animatedEmoji: boolean
   autoplayGifs: boolean
@@ -85,7 +91,7 @@ export interface ClientPrefs {
 
 export const DEFAULT_PREFS: ClientPrefs = {
   accent: null, messageGap: 17, zoom: 100, compactAvatars: false, roleColors: 'name',
-  saturation: 100, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, ttsPlayback: true, entranceSounds: true, warnLinks: true, spellcheck: true, doubleTapReact: true, quickReaction: '❤️', focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
+  saturation: 100, saturateCustom: true, nameStyles: true, toggleIndicators: false, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, ttsPlayback: true, entranceSounds: true, warnLinks: true, spellcheck: true, doubleTapReact: true, quickReaction: '❤️', focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
   inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
   streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true, streamerAuto: false, clips: false, clipSeconds: 30, clipVoices: true, clipMyVoice: true, appIcon: 'default', overlay: false, overlayLocked: true,
   developerMode: true,
@@ -105,7 +111,7 @@ function load(): ClientPrefs {
     return {
       accent: typeof p.accent === 'string' && /^#[0-9a-f]{6}$/i.test(p.accent) ? p.accent : null,
       messageGap: clamp(p.messageGap, 0, 24, 17), zoom: clamp(p.zoom, 50, 200, 100), compactAvatars: bool(p.compactAvatars, false), roleColors: oneOf(p.roleColors, ['name', 'next', 'off'] as const, 'name'),
-      saturation: clamp(p.saturation, 0, 100, 100), underlineLinks: bool(p.underlineLinks, false), animatedEmoji: bool(p.animatedEmoji, true), autoplayGifs: bool(p.autoplayGifs, true),
+      saturation: clamp(p.saturation, 0, 100, 100), saturateCustom: bool(p.saturateCustom, true), nameStyles: bool(p.nameStyles, true), toggleIndicators: bool(p.toggleIndicators, false), underlineLinks: bool(p.underlineLinks, false), animatedEmoji: bool(p.animatedEmoji, true), autoplayGifs: bool(p.autoplayGifs, true),
       stickerAnimation: oneOf(p.stickerAnimation, ['always', 'interaction', 'never'] as const, 'always'), ttsRate: clamp(p.ttsRate, 0.5, 2, 1), ttsPlayback: bool(p.ttsPlayback, true), entranceSounds: bool(p.entranceSounds, true), warnLinks: bool(p.warnLinks, true), spellcheck: bool(p.spellcheck, true), doubleTapReact: bool(p.doubleTapReact, true), quickReaction: typeof p.quickReaction === 'string' && p.quickReaction.trim() && [...p.quickReaction].length <= 8 ? p.quickReaction : '❤️', focusRing: bool(p.focusRing, false), timeFormat: oneOf(p.timeFormat, ['auto', '12', '24'] as const, 'auto'), nameAnimation: oneOf(p.nameAnimation, ['hover', 'always', 'never'] as const, 'hover'),
       inlineAttachments: bool(p.inlineAttachments, true), linkMedia: bool(p.linkMedia, true), embeds: bool(p.embeds, true), emoticons: bool(p.emoticons, true), showReactions: bool(p.showReactions, true),
       spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'),
@@ -136,6 +142,11 @@ export function applyPrefs(p: ClientPrefs = current) {
   // The desktop app zooms natively; browsers get CSS zoom (their own Ctrl +/- still works on top).
   ;(el.style as CSSStyleDeclaration & { zoom?: string }).zoom = desktop.zoom(p.zoom / 100) || p.zoom === 100 ? '' : `${p.zoom}%`
   document.body.style.filter = p.saturation === 100 ? '' : `saturate(${p.saturation}%)`
+  // Custom colours kept at full strength: undo the app-wide saturation on them (as far as it can be undone).
+  el.dataset.keepCustom = p.saturation < 100 && !p.saturateCustom ? '1' : '0'
+  el.style.setProperty('--sat-undo', String(Math.min(10, 100 / Math.max(10, p.saturation))))
+  el.dataset.nameStyles = p.nameStyles ? '1' : '0'
+  el.dataset.toggleIcons = p.toggleIndicators ? '1' : '0'
   el.dataset.underlineLinks = p.underlineLinks ? '1' : '0'
   el.dataset.focusRing = p.focusRing ? '1' : '0'
   el.dataset.compactAvatars = p.compactAvatars ? '1' : '0'

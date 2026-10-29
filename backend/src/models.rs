@@ -336,6 +336,10 @@ pub struct Guild {
     #[sqlx(default)]
     #[serde(default)]
     pub welcome_screen: serde_json::Value,
+    /// The server's colour theme ({id} or {custom}); members see it unless they keep their own.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub theme: Option<serde_json::Value>,
     /// Public widget (JSON + embed) and the invite code its Join button uses.
     #[sqlx(default)]
     #[serde(default)]

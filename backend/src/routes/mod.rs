@@ -1,4 +1,5 @@
 pub mod account;
+pub mod themes;
 pub mod admin;
 pub mod applications;
 pub mod admin_access;
@@ -74,6 +75,7 @@ use axum::Router;
 pub fn api_router() -> Router<AppState> {
     Router::new()
         .merge(auth::router())
+        .merge(themes::router())
         .merge(users::router())
         .merge(web_push::router())
         .merge(captions::router())

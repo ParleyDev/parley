@@ -1,3 +1,4 @@
+import { loadThemes, setThemes, type ColorTheme } from './colorThemes'
 import { isOverlay } from './desktop'
 import { pushCaption } from './captions'
 import { mentionsMe, useStore, type ReadyPayload } from '../store'
@@ -52,6 +53,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'GUILD_UPDATE'; d: Guild }
   | { t: 'GUILD_EMOJIS_UPDATE'; d: { guild_id: string; emojis: Emoji[] } }
   | { t: 'INSTANCE_UPDATE'; d: { registration_enabled: boolean; announcement: string } }
+  | { t: 'THEMES_UPDATE'; d: { themes: ColorTheme[] } }
   | { t: 'SESSION_REVOKED'; d: { reason: string } }
   | { t: 'NOTIFICATION_SETTINGS_UPDATE'; d: NotifSetting & { deleted?: boolean } }
   | { t: 'GUILD_STICKERS_UPDATE'; d: { guild_id: string; stickers: Sticker[] } }
@@ -203,7 +205,7 @@ export function sendTyping(channelId: string) {
 function handle(ev: Ev) {
   const s = useStore.getState()
   switch (ev.t) {
-    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void s.loadNotes(); void s.loadMyThreads(); void s.loadLiveEvents(); receiveSettings(ev.d.user.client_settings); void registerPush(); void refreshPush(); voice.onReconnect(); break
+    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void loadThemes(); void s.loadNotes(); void s.loadMyThreads(); void s.loadLiveEvents(); receiveSettings(ev.d.user.client_settings); void registerPush(); void refreshPush(); voice.onReconnect(); break
     // The server replayed everything we missed; state is already current, no need to rebuild it.
     case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); break
     case 'RESYNC': lastSeq = 0; instanceId = null; socket?.close(); break
@@ -270,6 +272,7 @@ function handle(ev: Ev) {
     case 'GUILD_UPDATE': s.upsertGuild(ev.d); break
     case 'GUILD_EMOJIS_UPDATE': s.setGuildEmojis(ev.d.guild_id, ev.d.emojis); break
     case 'INSTANCE_UPDATE': s.setInstance(ev.d); break
+    case 'THEMES_UPDATE': setThemes(ev.d.themes); break
     case 'SESSION_REVOKED': s.pushToast(ev.d.reason, 'error'); s.logout(); break
     case 'NOTIFICATION_SETTINGS_UPDATE': s.setNotifSetting(ev.d); break
     case 'GUILD_STICKERS_UPDATE': s.setGuildStickers(ev.d.guild_id, ev.d.stickers); break

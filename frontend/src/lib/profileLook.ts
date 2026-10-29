@@ -1,13 +1,18 @@
 import type { CSSProperties } from 'react'
 import { colorFor } from './format'
+import { getAppearance } from './appearance'
+import { useStore } from '../store'
 
 /** What a profile card is drawn from. */
 type Themed = { id: string; theme_primary?: string | null; theme_accent?: string | null }
 
 /** The profile's theme colours: chosen ones, or one derived from the id. */
+/** Appearance → "Apply theme to other users' profiles" off: other people's cards show plainly (yours never changes). */
 export function profileColors(u: Themed): { themed: boolean; primary: string; gradient: string } {
-  const primary = u.theme_primary ?? colorFor(u.id)
-  return { themed: !!u.theme_primary, primary, gradient: `linear-gradient(135deg, ${primary}, ${u.theme_accent ?? primary})` }
+  const showTheirs = getAppearance().profileThemes || useStore.getState().user?.id === u.id
+  const chosen = showTheirs ? u.theme_primary : null
+  const primary = chosen ?? colorFor(u.id)
+  return { themed: !!chosen, primary, gradient: `linear-gradient(135deg, ${primary}, ${(showTheirs ? u.theme_accent : null) ?? primary})` }
 }
 
 /**

@@ -36,7 +36,8 @@ function openFromPush({ notification }: { notification: { data?: unknown } }) {
 export async function initNative() {
   if (!isNative()) return
   document.documentElement.dataset.native = nativePlatform()
-  try { await StatusBar.setStyle({ style: Style.Dark }); if (nativePlatform() === 'android') await StatusBar.setBackgroundColor({ color: '#0b0c10' }) } catch { /* plugin missing */ }
+  // The status bar follows the theme (lib/themeShells); start from the current one.
+  try { const light = document.documentElement.dataset.theme === 'light'; await StatusBar.setStyle({ style: light ? Style.Light : Style.Dark }) } catch { /* plugin missing */ }
   if (nativePlatform() === 'ios') Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => {})
   App.addListener('appStateChange', ({ isActive }) => { if (isActive) { resumeSocket(); void voice.resumeAfterBackground() } else suspendSocket() })
   App.addListener('backButton', ({ canGoBack }) => {

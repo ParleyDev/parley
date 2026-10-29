@@ -33,7 +33,7 @@ const measure = (p) => p.evaluate(() => {
     asideScroll: { sw: aside.scrollWidth, cw: aside.clientWidth, sh: aside.scrollHeight, ch: aside.clientHeight },
     pageX: document.documentElement.scrollWidth > innerWidth, tops: staple('top'), bottoms: staple('bottom'),
     radius: getComputedStyle(card).borderTopLeftRadius, innerBg: getComputedStyle(aside.querySelector('[data-profile-inner]')).backgroundColor, innerRadius: getComputedStyle(aside.querySelector('[data-profile-inner]')).borderTopLeftRadius,
-    shadow: getComputedStyle(card).boxShadow, border: getComputedStyle(aside).borderLeftWidth, bg: getComputedStyle(aside).backgroundColor, chatBg: getComputedStyle(document.querySelector('[data-header-spans]')).backgroundColor,
+    shadow: getComputedStyle(card).boxShadow, border: getComputedStyle(aside).borderLeftWidth, bg: getComputedStyle(aside).backgroundColor, chatBg: getComputedStyle(document.querySelector('[data-header-spans] main')).backgroundColor,
   }
 })
 

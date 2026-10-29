@@ -48,7 +48,7 @@ pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
     v
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications, tag, tag_badge, tag_color, partnered, explicit_filter, summaries_enabled";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications, tag, tag_badge, tag_color, partnered, explicit_filter, summaries_enabled, theme";
 pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality, forum_layout, forum_sort, forum_require_tag, forum_default_reaction, news, media";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -214,6 +214,9 @@ struct UpdateGuild {
     /// A voice channel in this server, or null for none.
     #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
     afk_channel_id: Option<Option<Uuid>>,
+    /// The server's colour theme for its members ({id} or {custom}), or null for none.
+    #[serde(default, deserialize_with = "deserialize_nullable_value")]
+    theme: Option<Option<serde_json::Value>>,
     /// Seconds: 60, 300, 900, 1800 or 3600.
     afk_timeout: Option<i32>,
     /// A text channel in this server, or null for none.
@@ -295,6 +298,10 @@ async fn update_guild(
         let Some(cid) = cid else { continue };
         let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind = $3").bind(cid).bind(id).bind(kind).fetch_optional(&state.db).await?;
         if ok.is_none() { return Err(AppError::BadRequest(format!("{what} in this server"))) }
+    }
+    if let Some(th) = &req.theme {
+        let v = match th { Some(v) => Some(crate::routes::themes::valid_guild_theme(&state, v).await?), None => None };
+        sqlx::query("UPDATE guilds SET theme = $2 WHERE id = $1").bind(id).bind(&v).execute(&state.db).await?;
     }
     if req.afk_timeout.map(|t| ![60, 300, 900, 1800, 3600].contains(&t)).unwrap_or(false) {
         return Err(AppError::BadRequest("afk_timeout must be 60, 300, 900, 1800 or 3600 seconds".into()));
@@ -406,6 +413,7 @@ async fn update_guild(
     if let Some(v) = req.afk_timeout { changed.insert("afk_timeout".into(), json!(v)); }
     if req.rules_channel_id.is_some() { changed.insert("rules_channel".into(), json!(g.rules_channel_id)); }
     if welcome.is_some() { changed.insert("welcome_screen".into(), json!(true)); }
+    if req.theme.is_some() { changed.insert("theme".into(), json!(true)); }
     if let Some(v) = req.widget_enabled { changed.insert("widget".into(), json!(v)); }
     if req.invite_splash_url.is_some() { changed.insert("invite_splash".into(), json!(g.invite_splash_url.is_some())); }
     if let Some(v) = req.mfa_level { changed.insert("mfa_required".into(), json!(v == 1)); }
@@ -1073,4 +1081,10 @@ async fn reorder_channels(
     perms::resync_visibility(&state, id, &before).await?;
     crate::audit::guild(&state, id, uid, "channel.reorder", "guild", Some(id), "", json!({ "count": req.items.len() })).await;
     Ok(Json(perms::guild_channels(&state.db, id).await?))
+}
+
+/// Absent = None (unchanged), null = Some(None) (cleared), a value = Some(Some(value)).
+fn deserialize_nullable_value<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<serde_json::Value>>, D::Error> {
+    use serde::Deserialize;
+    Ok(Some(Option::<serde_json::Value>::deserialize(d)?))
 }

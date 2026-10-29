@@ -1,6 +1,7 @@
+import ThemesPane from './AdminThemes'
 import BlockedLinksPane from './AdminBlockedLinks'
 import AppsPane from './AdminApps'
-import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload } from 'lucide-react'
+import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
 import { MetaRow, type MetaHit, type OpenedMsg } from './AdminCases'
@@ -33,6 +34,7 @@ export default function AdminPage() {
               {can(a, 'conversation_metadata_read') && <NavLink to="/admin/servers" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> {t('Servers')}</NavLink>}
               {can(a, 'instance_manage') && <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> {t('Discovery Queue')}</NavLink>}
               {can(a, 'instance_manage') && <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> {t('Instance Settings')}</NavLink>}
+              {can(a, 'instance_manage') && <NavLink to="/admin/themes" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="themes"><Palette size={20} /> {t('Themes')}</NavLink>}
               {can(a, 'content_search_public') && <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> {t('Search')}</NavLink>}
               {can(a, 'report_context_read', 'case_approve') && <NavLink to="/admin/cases" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="cases"><Briefcase size={20} /> {t('Cases')}</NavLink>}
               {can(a, 'report_context_read') && <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> {t('Reports')}</NavLink>}
@@ -50,6 +52,7 @@ export default function AdminPage() {
           <Route path="users" element={<UsersPane />} />
           <Route path="servers" element={<ServersPane />} />
           <Route path="settings" element={<SettingsPane />} />
+          <Route path="themes" element={<ThemesPane />} />
           <Route path="audit" element={<AuditPane />} />
           <Route path="mail" element={<MailPane />} />
           <Route path="reports" element={<ReportsPane />} />

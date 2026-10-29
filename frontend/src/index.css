@@ -46,25 +46,35 @@
    popovers, tooltips, settings) gets a solid surface so what's underneath doesn't bleed through and hurt legibility. */
 :root:not([data-theme="light"])[data-palette="aurora"] { --color-float: #171230; --color-float-2: #1f1a3d; }
 :root:not([data-theme="light"])[data-palette="sunset"] { --color-float: #26121f; --color-float-2: #321a2b; }
-/* A profile frame's wrapper is only room for the frame: it stays see-through and the card inside gets the surface. */
-:root:not([data-theme="light"])[data-palette="aurora"] .pop:not([data-profile-popout]):not([data-frame-wrap]):not([data-modal-bare]),
-:root:not([data-theme="light"])[data-palette="sunset"] .pop:not([data-profile-popout]):not([data-frame-wrap]):not([data-modal-bare]),
-:root:not([data-theme="light"])[data-palette="aurora"] [data-profile-popout] > *:not([data-frame-wrap]),
-:root:not([data-theme="light"])[data-palette="sunset"] [data-profile-popout] > *:not([data-frame-wrap]),
-:root:not([data-theme="light"]):is([data-palette="aurora"], [data-palette="sunset"]) [data-frame-wrap] > div > :is([data-profile-card], [data-user-menu]) { background-color: var(--color-float) !important; }
+/* Colour themes (lib/colorThemes): the gradient behind the whole app; their variables are set inline on <html>. */
+:root[data-color-theme] body { background: var(--app-gradient) fixed; }
+/* Every see-through look (the gradient palettes and colour themes, data-see-through) keeps floating things solid.
+   A profile frame's wrapper is only room for the frame: it stays see-through and the card inside gets the surface. */
+:root[data-see-through] .pop:not([data-profile-popout]):not([data-frame-wrap]):not([data-modal-bare]),
+:root[data-see-through] [data-profile-popout] > *:not([data-frame-wrap]),
+:root[data-see-through] [data-frame-wrap] > div > :is([data-profile-card], [data-user-menu]),
+:root[data-see-through] [data-settings-frame], :root[data-see-through] [data-full-profile], :root[data-see-through] [data-inbox] { background-color: var(--color-float) !important; }
 /* Phones and tablets: panes that cover the rest of the app (navigation, member list, side panels) get the solid
    surface too, or the hidden content underneath shows through them. */
 @media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
-  :root:not([data-theme="light"]):is([data-palette="aurora"], [data-palette="sunset"]) [data-layer] { background-color: var(--color-float) !important; }
+  :root[data-see-through] [data-layer] { background-color: var(--color-float) !important; }
 }
 @media (max-width: 1023px) {
-  :root:not([data-theme="light"]):is([data-palette="aurora"], [data-palette="sunset"]) [data-layer="lg"] { background-color: var(--color-float) !important; }
+  :root[data-see-through] [data-layer="lg"] { background-color: var(--color-float) !important; }
 }
 /* Inside a floating surface, the translucent layers stack on solid ground: keep them readable but distinct. */
-:root:not([data-theme="light"])[data-palette="aurora"] .pop .bg-bg-1,
-:root:not([data-theme="light"])[data-palette="sunset"] .pop .bg-bg-1,
-:root:not([data-theme="light"])[data-palette="aurora"] .pop .bg-bg-0,
-:root:not([data-theme="light"])[data-palette="sunset"] .pop .bg-bg-0 { background-color: var(--color-float-2); }
+:root[data-see-through] :is(.pop, [data-settings-frame], [data-full-profile]) :is(.bg-bg-1, .bg-bg-0) { background-color: var(--color-float-2); }
+
+/* Accessibility → "Apply saturation setting to custom colours" off: names, role colours and profile themes keep theirs. */
+:root[data-keep-custom="1"] :is([data-role-colors], [data-name-effect], [data-role-pill], [data-profile-card], [data-nameplate]) { filter: saturate(var(--sat-undo)); }
+
+/* Accessibility → "Show on/off indicators": a check or cross inside every switch. */
+:root[data-toggle-icons="1"] .toggle-icon { display: inline-flex; }
+/* Accessibility → "Enable display name styles" off: every name in plain text (your profile editor still shows yours). */
+:root[data-name-styles="0"] :is([class^="nf-"], [class*=" nf-"], [class^="ne-"], [class*=" ne-"]):not([data-profile-editor] *) {
+  font-family: inherit !important; font-style: inherit !important; font-variant: normal !important; letter-spacing: normal !important; text-transform: none !important;
+  color: inherit !important; background: none !important; -webkit-text-fill-color: currentColor !important; text-shadow: none !important; animation: none !important; filter: none !important;
+}
 
 /* UI density: rows in the channel list, DM list and member list. */
 :root[data-ui-density="compact"] :is([data-channel-item] > a, aside a[data-dm-row], aside a[data-group-row], [data-member-row]) { padding-top: 2px !important; padding-bottom: 2px !important; }

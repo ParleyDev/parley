@@ -1,18 +1,14 @@
 import { useState } from 'react'
-import { Check, Monitor, Moon, Sun } from 'lucide-react'
+import { Check } from 'lucide-react'
 import { setSyncEnabled, syncEnabled } from '../../../lib/settingsSync'
-import { FONT_SCALES, PALETTES, resolvedTheme, setAppearance, useAppearance, type Density, type Theme, type UiDensity } from '../../../lib/appearance'
+import { FONT_SCALES, setAppearance, useAppearance, type Density, type UiDensity } from '../../../lib/appearance'
 import { renderMarkdown } from '../../../lib/markdown'
-import { t, useT } from '../../../lib/i18n'
+import { useT } from '../../../lib/i18n'
 import { ACCENTS, setPrefs, usePrefs } from '../../../lib/prefs'
 import { Toggle } from '../SettingsShell'
 import { APP_ICONS, iconUrl } from '../../../lib/appIcon'
+import ThemeSection from './ThemeSection'
 
-const themes = (): { id: Theme; label: string; icon: React.ReactNode }[] => [
-  { id: 'dark', label: t('Dark'), icon: <Moon size={16} /> },
-  { id: 'light', label: t('Light'), icon: <Sun size={16} /> },
-  { id: 'system', label: t('Sync with system'), icon: <Monitor size={16} /> },
-]
 
 /** User Settings → Appearance: theme, chat font scale and message density. Stored per browser. */
 export default function AppearanceTab() {
@@ -32,29 +28,7 @@ export default function AppearanceTab() {
         <input type="checkbox" className="h-5 w-5 accent-accent" checked={sync} onChange={(e) => { setSyncEnabled(e.target.checked); setSync(e.target.checked) }} data-sync-settings />
       </label>
 
-      <section>
-        <h3 className="label">{t('Theme')}</h3>
-        <div className="grid grid-cols-3 phone:grid-cols-1 gap-2" data-theme-options>
-          {themes().map((th) => (
-            <button key={th.id} type="button" onClick={() => setAppearance({ theme: th.id })} className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm text-left ${a.theme === th.id ? 'border-accent bg-accent/15 text-text-0' : 'border-line text-text-1 hover:bg-bg-3'}`} data-theme-option={th.id} aria-pressed={a.theme === th.id}>
-              {th.icon}<span className="flex-1">{th.label}</span>{a.theme === th.id && <Check size={16} className="text-accent" />}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h3 className="label">{t('Dark theme colours')}</h3>
-        <div className={`flex flex-wrap gap-3 ${resolvedTheme(a) === 'light' ? 'opacity-50' : ''}`} data-palette-options>
-          {PALETTES.map((x) => (
-            <button key={x.id} type="button" onClick={() => setAppearance({ palette: x.id })} className="flex flex-col items-center gap-1 text-xs" data-palette-option={x.id} aria-pressed={a.palette === x.id} title={x.label}>
-              <span className={`h-12 w-12 rounded-full border-2 ${a.palette === x.id ? 'border-accent' : 'border-line'}`} style={{ background: x.swatch }} />
-              <span className={a.palette === x.id ? 'text-text-0 font-semibold' : 'text-text-2'}>{x.label}</span>
-            </button>
-          ))}
-        </div>
-        {resolvedTheme(a) === 'light' && <p className="mt-2 text-xs text-text-2">{t('These apply when the dark theme is showing.')}</p>}
-      </section>
+      <ThemeSection />
 
       <AppIconPicker />
 

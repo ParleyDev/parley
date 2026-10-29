@@ -17,11 +17,17 @@ export default function AccessibilityTab() {
         <p className="text-xs text-text-2">{t("Turns off pop-ins, fades and pulses. Your system's reduce-motion setting is honoured either way.")}</p>
         <span data-high-contrast-row><Toggle label="High contrast" checked={a.highContrast} onChange={(v) => setAppearance({ highContrast: v })} /></span>
         <p className="text-xs text-text-2">{t('Brighter secondary text and borders.')}</p>
+        <span data-sync-contrast-row><Toggle label="Sync contrast settings" checked={a.syncContrast} onChange={(v) => setAppearance({ syncContrast: v })} /></span>
+        <p className="text-xs text-text-2">{t("Follow your device's increased-contrast and forced-colours settings. High contrast and reduced motion show colour themes as their plain base.")}</p>
         <div>
           <div className="flex justify-between"><label className="label">{t('Saturation')}</label><span className="text-xs text-text-2">{p.saturation}%</span></div>
           <input type="range" min={0} max={100} step={5} value={p.saturation} onChange={(e) => setPrefs({ saturation: Number(e.target.value) })} className="w-full accent-accent" data-saturation />
           <p className="text-xs text-text-2">{t('Lower it to tone down colours across the app (helps with some kinds of colour sensitivity).')}</p>
         </div>
+        <span data-saturate-custom-row><Toggle label="Apply saturation setting to custom colours" checked={p.saturateCustom} onChange={(v) => setPrefs({ saturateCustom: v })} /></span>
+        <p className="text-xs text-text-2">{t('Off: role colours, name colours and profile themes keep their own colours when saturation is lowered.')}</p>
+        <span data-toggle-indicators-row><Toggle label="Show on/off indicators" checked={p.toggleIndicators} onChange={(v) => setPrefs({ toggleIndicators: v })} /></span>
+        <p className="text-xs text-text-2">{t("A check or a cross inside switches, so on and off don't rely on colour.")}</p>
         <Toggle label="Always underline links" checked={p.underlineLinks} onChange={(v) => setPrefs({ underlineLinks: v })} />
         <Toggle label="Show a focus ring when navigating with the keyboard" checked={p.focusRing} onChange={(v) => setPrefs({ focusRing: v })} />
       </section>
@@ -29,6 +35,9 @@ export default function AccessibilityTab() {
       <div className="h-px bg-line" />
 
       <section className="space-y-3">
+        <h3 className="label">{t('Display names')}</h3>
+        <span data-name-styles-row><Toggle label="Enable display name styles" checked={p.nameStyles} onChange={(v) => setPrefs({ nameStyles: v })} /></span>
+        <p className="text-xs text-text-2">{t("Off: everyone's name shows in plain text, without fonts, effects or gradient colours.")}</p>
         <h3 className="label">{t('Animation')}</h3>
         <Toggle label="Play animated emoji" checked={p.animatedEmoji} onChange={(v) => setPrefs({ animatedEmoji: v })} />
         <Toggle label="Automatically play GIFs" checked={p.autoplayGifs} onChange={(v) => setPrefs({ autoplayGifs: v })} />
