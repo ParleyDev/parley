@@ -16,7 +16,7 @@ export default function DmProfilePanel({ userId }: { userId: string }) {
   const [user, setUser] = useState<UserProfile | null>(null)
   useEffect(() => { api.get<UserProfile>(`/users/${userId}`).then(setUser).catch(() => {}) }, [userId, cached])
   return (
-    <aside className="w-[320px] shrink-0 bg-bg-3 overflow-hidden p-2 flex flex-col phone:hidden" data-dm-profile>
+    <aside className="w-[320px] shrink-0 bg-bg-2 overflow-hidden p-2 flex flex-col phone:hidden" data-dm-profile>
       {user ? <ProfilePopout user={user} onClose={() => {}} variant="panel" /> : <div className="p-2 text-sm text-text-2">{t('Loading…')}</div>}
     </aside>
   )

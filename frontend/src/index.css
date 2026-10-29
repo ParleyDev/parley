@@ -91,6 +91,10 @@
 :root[data-contrast="high"] { --color-line: #5a5f70; --color-text-1: #dde0e6; --color-text-2: #a9aebb; }
 :root[data-theme="light"][data-contrast="high"] { --color-line: #8f939d; --color-text-1: #1b1c20; --color-text-2: #3c3e46; }
 
+/* The message box (one line) and your panel at the bottom left share one height, so their tops and bottoms line up
+   like Discord's: 56px inside a 1px border. --dock-pad centres one 22px line of text in the box. */
+:root { --dock-h: 58px; --dock-pad: calc((var(--dock-h) - 2px - 22px) / 2); }
+
 /* Chat font scaling (Appearance settings): message bodies and the composer follow --font-scale. */
 .msg-content, textarea.composer-input { font-size: calc(16px * var(--font-scale)) !important; line-height: calc(1.375rem * var(--font-scale)) !important; }
 /* The message box's placeholder stays on one line (cut off with an ellipsis) at any text size. */

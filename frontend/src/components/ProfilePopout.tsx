@@ -94,6 +94,9 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const nameStyle = look.style
 
   const { themed, gradient } = profileColors(user)
+  // The plain card's surface (also its avatar ring and status bubble): the DM panel uses the theme's raised colour, a
+  // step lighter than the chat, so the card is the one surface that stands out there.
+  const surface = panel ? 'var(--color-bg-3)' : '#232428'
   const cardStyle = profileCardStyle(user)
 
   const act = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
@@ -191,12 +194,12 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           </div>
         </div>}
         {user.custom_status && (
-          <div className={`absolute ${full ? 'left-[156px] max-w-[260px]' : 'left-[104px] max-w-[180px]'} bottom-[-14px] rounded-xl px-3 py-1.5 text-sm shadow-lg truncate`} style={{ background: themed ? '#1a1527' : '#232428' }} data-custom-status title={user.custom_status}>{user.custom_status}</div>
+          <div className={`absolute ${full ? 'left-[156px] max-w-[260px]' : 'left-[104px] max-w-[180px]'} bottom-[-14px] rounded-xl px-3 py-1.5 text-sm shadow-lg truncate`} style={{ background: themed ? '#1a1527' : surface }} data-custom-status title={user.custom_status}>{user.custom_status}</div>
         )}
       </div>
       {/* Avatar */}
       <div className={full ? 'px-5 -mt-[64px]' : 'px-4 -mt-[42px]'}>
-        <div className="inline-block rounded-full" style={{ boxShadow: `0 0 0 ${full ? 8 : 6}px ${themed ? '#1a1527' : '#232428'}` }}>
+        <div className="inline-block rounded-full" style={{ boxShadow: `0 0 0 ${full ? 8 : 6}px ${themed ? '#1a1527' : surface}` }}>
           {user.avatar_url
             ? <button type="button" onClick={() => setViewAvatar(true)} className="block rounded-full cursor-zoom-in" title={t('View Avatar')} aria-label={t('View Avatar')} data-view-avatar><Avatar user={user} size={full ? 120 : 80} presence animate /></button>
             : <Avatar user={user} size={full ? 120 : 80} presence animate />}
@@ -347,8 +350,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   )
   if (panel) return (
     <FrameRoom value={user.profile_frame} className="flex-1 min-h-0 flex flex-col overflow-clip" innerClassName="flex-1 min-h-0 flex flex-col">
-    <div className={`relative flex-1 min-h-0 flex flex-col rounded-lg p-[2px] text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ background: themed ? gradient : '#2b2d31', boxShadow: '0 0 0 1px rgba(255,255,255,0.08)' }} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
-      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-[6px]" style={{ background: cardStyle.background }} data-profile-inner>
+    <div className={`relative z-[1] isolate flex-1 min-h-0 flex flex-col rounded-lg p-[2px] text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ background: themed ? gradient : surface, boxShadow: '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.32), 0 2px 6px rgba(0,0,0,0.2)' }} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-[6px]" style={{ background: themed ? cardStyle.background : surface }} data-profile-inner>
         <ProfileEffect id={user.profile_effect} />
         <div className="profile-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]" data-profile-scroll>{contents}</div>
         <div className="relative z-[7] shrink-0 p-4" data-profile-footer>
@@ -360,7 +363,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   )
   return (
     <FrameRoom value={user.profile_frame} bleed={full} className={full ? 'wide:h-full' : ''} innerClassName={full ? 'wide:h-full' : ''}>
-    <div className={`relative w-full ${full ? 'rounded-xl h-full flex flex-col' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
+    <div className={`relative z-[1] isolate w-full ${full ? 'rounded-xl h-full flex flex-col' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
       <ProfileEffect id={user.profile_effect} />
       {contents}
     </div>

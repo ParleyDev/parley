@@ -1,6 +1,6 @@
 // The chat's layout and scrolling, against the dev chat simulator (/dev/chat-sim: two fake DMs of 500 messages, only in
 // builds made with VITE_DEV_TOOLS=1) and a real DM: the message box in the layout under the list (not over it), 16/22
-// text, a 44px box growing to half the window, compact system rows, and the list holding still or following the bottom
+// text, a 58px box (your panel's height) growing to half the window, compact system rows, and the list holding still or following the bottom
 // as it should, with only the rows near the viewport in the DOM.
 import { chromium } from 'playwright'
 import { WEB, reg, call, ok, openDms, finish } from '../lib.mjs'
@@ -57,7 +57,7 @@ for (const [label, p] of hasSim ? [['desktop', sim], ['phone', await mk(true)]] 
   let g = await geo(p)
   ok(`${label}: opens at the bottom at once`, g.fromBottom <= 1, JSON.stringify(g))
   ok(`${label}: the list ends above the message box, not under it`, g.listBottom <= g.boxTop + 1 && g.lastBottom <= g.boxTop, JSON.stringify(g))
-  ok(`${label}: one-line message box is about 44px`, g.boxH >= 42 && g.boxH <= 48, String(g.boxH))
+  ok(`${label}: one-line message box is 58px (56 inside a 1px border)`, g.boxH === 58, String(g.boxH))
   const font = await p.evaluate(() => { const c = getComputedStyle(document.querySelector('.msg-content')), t = getComputedStyle(document.querySelector('textarea.composer-input')); return [c.fontSize, c.lineHeight, t.fontSize, t.lineHeight] })
   ok(`${label}: message and box text 16px / 22px`, font.join() === '16px,22px,16px,22px', font.join())
   if (shots) await p.screenshot({ path: `${shots}/after-sim-${label}.png` })

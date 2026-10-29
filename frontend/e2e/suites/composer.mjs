@@ -33,7 +33,7 @@ await p.click('[data-emoji-button]'); await p.waitForTimeout(300)
 ok('and the emoji picker still offers GIFs and stickers', await p.locator('text=GIFs').count() + await p.locator('text=Stickers').count() >= 1)
 await p.keyboard.press('Escape'); await p.mouse.click(200, 200); await p.waitForTimeout(200)
 await p.fill('textarea', 'one\ntwo\nthree'); await p.waitForTimeout(150)
-ok('typed lines still grow the box', (await box()).h > empty.h * 2)
+ok('typed lines still grow the box (by two more lines)', (await box()).h >= empty.h + 40)
 await p.fill('textarea', ''); await p.waitForTimeout(150)
 ok('and clearing it goes back to one line', (await box()).h === empty.h)
 

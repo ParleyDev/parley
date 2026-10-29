@@ -51,45 +51,56 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
     const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`
     return { maskImage: url, WebkitMaskImage: url, maskSize: '100% 100%', WebkitMaskSize: '100% 100%', maskRepeat: 'no-repeat', WebkitMaskRepeat: 'no-repeat' } as CSSProperties
   })()
-  const place = (l: FrameLayer) => {
+  type At = { left: number; width: number; top?: number; bottom?: number; along: boolean }
+  // Staples hang from the card's top edge, or sit on its bottom edge by `bottom` alone, so a card changing height
+  // never leaves them where the old height put them.
+  const place = (l: FrameLayer): At => {
     const w = (l.width ?? 1312) * s, h = (l.height ?? 0) * s
     const left = (W - w) / 2
-    if (l.type === 'staple') return { left, top: l.anchor === 'bottom' ? H + ob - h : -ot, width: w, along: false }
-    return { left, top: l.anchor === 'top' ? 0 : (H - h) / 2, width: w, along: true }
+    if (l.type === 'staple') return l.anchor === 'bottom' ? { left, width: w, bottom: -ob, along: false } : { left, width: w, top: -ot, along: false }
+    return { left, width: w, top: l.anchor === 'top' ? 0 : (H - h) / 2, along: true }
   }
-  const img = (l: FrameLayer, at: { left: number; top: number; width: number }, dx = 0, dy = 0): ReactElement =>
-    <img src={assetFile('profile-frames', item.id, l.file)} alt="" draggable={false} className="absolute max-w-none select-none" style={{ left: at.left - dx, top: at.top - dy, width: at.width }} data-frame-layer={l.file} />
+  /** `dx`, `dy`: where the layer's container starts relative to the card (back layers sit in a larger box). */
+  const img = (l: FrameLayer, at: At, dx = 0, dy = 0, dyBottom = 0): ReactElement =>
+    <img src={assetFile('profile-frames', item.id, l.file)} alt="" draggable={false} className="absolute max-w-none select-none"
+      style={{ left: at.left - dx, width: at.width, ...(at.bottom !== undefined ? { bottom: at.bottom + dyBottom } : { top: (at.top ?? 0) - dy }) }} data-frame-layer={l.file} />
   // Rails and borders on a card taller than they were drawn for (the DM panel's full-height card): the top and bottom
   // 45% keep their size at the card's top and bottom corners and the middle stretches between them.
-  const along = (l: FrameLayer, at: { left: number; top: number; width: number }, dx: number): ReactElement => {
+  const along = (l: FrameLayer, at: At, dx: number): ReactElement => {
     const nat = l.height ?? 0
     if (!nat || nat * s >= H) return img(l, at, dx, 0)
     const cut = Math.floor(nat * 0.45)
-    return <div className="absolute select-none" style={{ left: at.left - dx, top: 0, width: at.width, height: H, boxSizing: 'border-box', borderStyle: 'solid', borderWidth: `${cut * s}px 0`, borderImageSource: `url("${assetFile('profile-frames', item.id, l.file)}")`, borderImageSlice: `${cut} 0 ${cut} 0 fill`, borderImageWidth: `${cut * s}px 0`, borderImageRepeat: 'stretch' }} data-frame-layer={l.file} data-frame-stretched />
+    return <div className="absolute inset-y-0 select-none" style={{ left: at.left - dx, width: at.width, boxSizing: 'border-box', borderStyle: 'solid', borderWidth: `${cut * s}px 0`, borderImageSource: `url("${assetFile('profile-frames', item.id, l.file)}")`, borderImageSlice: `${cut} 0 ${cut} 0 fill`, borderImageWidth: `${cut * s}px 0`, borderImageRepeat: 'stretch' }} data-frame-layer={l.file} data-frame-stretched />
   }
   const clip = (style: CSSProperties, child: ReactElement, key: string) => <div key={key} className="absolute overflow-hidden" style={style}>{child}</div>
 
+  // Two layers around the card: back pieces under it (z 0) and front pieces over everything in it (z 20), the card
+  // itself sitting between as its own stacking context (FrameRoom).
   return (
-    <div ref={ref} className="pointer-events-none absolute inset-0 z-[6]" style={box?.inset} aria-hidden data-profile-frame-layers={item.id}>
+    <>
       {box && W > 0 && item.layers.some((l) => l.order === 'back') && (
-        <div className="absolute overflow-hidden" style={{ ...back, ...hole }} data-frame-back>
-          {item.layers.map((l, i) => {
-            if (l.order !== 'back') return null
-            const at = place(l)
-            // Back rails and borders only run alongside the card, from its top edge to its bottom edge.
-            return at.along
-              ? clip({ left: 0, top: -back.top, width: back.width, height: H }, along(l, at, back.left), `${i}`)
-              : <span key={i}>{img(l, at, back.left, back.top)}</span>
-          })}
+        <div className="pointer-events-none absolute inset-0 z-0" style={box.inset} aria-hidden data-frame-back-layer>
+          <div className="absolute overflow-hidden" style={{ ...back, ...hole }} data-frame-back>
+            {item.layers.map((l, i) => {
+              if (l.order !== 'back') return null
+              const at = place(l)
+              // Back rails and borders only run alongside the card, from its top edge to its bottom edge.
+              return at.along
+                ? clip({ left: 0, width: back.width, top: ot + pad, bottom: ob + pad }, along(l, at, back.left), `${i}`)
+                : <span key={i}>{img(l, at, back.left, back.top, ob + pad)}</span>
+            })}
+          </div>
         </div>
       )}
-      {box && W > 0 && item.layers.map((l, i) => {
-        if (l.order === 'back') return null
-        const at = place(l)
-        // Rails and borders stop at the card's top and bottom edges; staples hang free.
-        return at.along ? clip({ left: -oh - pad, top: 0, width: W + 2 * (oh + pad), height: H }, along(l, at, -oh - pad), `${i}`) : <span key={i}>{img(l, at)}</span>
-      })}
-    </div>
+      <div ref={ref} className="pointer-events-none absolute inset-0 z-20" style={box?.inset} aria-hidden data-profile-frame-layers={item.id}>
+        {box && W > 0 && item.layers.map((l, i) => {
+          if (l.order === 'back') return null
+          const at = place(l)
+          // Rails and borders stop at the card's top and bottom edges; staples hang free.
+          return at.along ? clip({ left: -oh - pad, width: W + 2 * (oh + pad), top: 0, bottom: 0 }, along(l, at, -oh - pad), `${i}`) : <span key={i}>{img(l, at)}</span>
+        })}
+      </div>
+    </>
   )
 }
 
@@ -116,7 +127,9 @@ export function FrameRoom({ value, className = '', innerClassName = '', style, b
   const pad: CSSProperties = !L || !s || bleed ? {} : { paddingTop: L.overflow_top * s, paddingBottom: L.overflow_bottom * s, paddingLeft: L.overflow_horizontal * s, paddingRight: L.overflow_horizontal * s }
   return (
     <div className={className} style={{ ...style, ...pad }} data-frame-wrap data-frame-room={item ? item.id : undefined} {...rest}>
-      <div ref={ref} className={`relative ${innerClassName}`}>
+      {/* Its own stacking context: the frame's back layer (z 0), the card (z 1, see .frame-card) and the front layer
+          (z 20) stack inside it and never against what is around the card. */}
+      <div ref={ref} className={`relative isolate ${innerClassName}`}>
         {children}
         <ProfileFrame value={value} />
       </div>
