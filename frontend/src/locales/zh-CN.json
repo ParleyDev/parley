@@ -3533,5 +3533,10 @@
 "Encrypt calls end to end": "对通话进行端到端加密",
 "In a call": "通话中",
 "1 new message": "1 条新消息",
-"{n} new messages": "{n} 条新消息"
+"{n} new messages": "{n} 条新消息",
+"Reminders": "提醒",
+"Right-click a message and choose Bookmark Message to keep it here.": "右键点击消息并选择“添加书签”即可保存在这里。",
+"Server ID": "服务器 ID",
+"Use Remind Me on a message and it shows up here.": "对消息使用“提醒我”，它就会出现在这里。",
+"Verification email sent": "验证邮件已发送"
 }

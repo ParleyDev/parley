@@ -54,6 +54,14 @@ export function loadEmojiGroups(): Promise<EmojiGroup[]> {
 }
 export const emojiGroupsSync = () => groupsCache
 
+let slugIndex: Map<string, string> | null = null
+/** `:rocket:` shortcodes in plain text (custom statuses) as the emoji themselves, once the set is loaded. */
+export function expandShortcodes(text: string): string {
+  if (!groupsCache || !text.includes(':')) return text
+  if (!slugIndex) { slugIndex = new Map(); for (const g of groupsCache) for (const e of g.emojis) { slugIndex.set(e.slug, e.emoji); for (const a of e.aliases) if (!slugIndex.has(a)) slugIndex.set(a, e.emoji) } }
+  return text.replace(/:([a-z0-9_+-]{2,40}):/g, (m, slug: string) => slugIndex!.get(slug) ?? m)
+}
+
 /** Custom emoji tokens as they appear in message text and reaction keys: `<:name:id>` / `<a:name:id>`. */
 const CUSTOM_RE = /^<(a?):([A-Za-z0-9_]{2,32}):([0-9a-f-]{36})>$/
 export const CUSTOM_TOKEN_SRC = '<a?:[A-Za-z0-9_]{2,32}:[0-9a-f-]{36}>'

@@ -3533,5 +3533,10 @@
 "Encrypt calls end to end": "Aramaları uçtan uca şifrele",
 "In a call": "Aramada",
 "1 new message": "1 yeni mesaj",
-"{n} new messages": "{n} yeni mesaj"
+"{n} new messages": "{n} yeni mesaj",
+"Reminders": "Hatırlatıcılar",
+"Right-click a message and choose Bookmark Message to keep it here.": "Bir mesaja sağ tıklayıp Yer İmlerine Ekle'yi seçerek burada sakla.",
+"Server ID": "Sunucu Kimliği",
+"Use Remind Me on a message and it shows up here.": "Bir mesajda Bana Hatırlat'ı kullan, burada görünsün.",
+"Verification email sent": "Doğrulama e-postası gönderildi"
 }

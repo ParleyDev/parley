@@ -3533,5 +3533,10 @@
 "Encrypt calls end to end": "Szyfruj połączenia end-to-end",
 "In a call": "W rozmowie",
 "1 new message": "1 nowa wiadomość",
-"{n} new messages": "Nowe wiadomości: {n}"
+"{n} new messages": "Nowe wiadomości: {n}",
+"Reminders": "Przypomnienia",
+"Right-click a message and choose Bookmark Message to keep it here.": "Kliknij wiadomość prawym przyciskiem i wybierz Dodaj zakładkę, aby trzymać ją tutaj.",
+"Server ID": "ID serwera",
+"Use Remind Me on a message and it shows up here.": "Użyj Przypomnij mi przy wiadomości, a pojawi się tutaj.",
+"Verification email sent": "Wysłano e-mail weryfikacyjny"
 }

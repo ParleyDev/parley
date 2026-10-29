@@ -93,10 +93,10 @@ try {
   const g2 = (await call(alice, 'GET', `/guilds/${g.id}`)).body
   check('owner_id now bob', g2.owner_id === bob.id)
   await ap.click('aside button:has-text("Ban Land")'); await ap.waitForTimeout(300)
-  check('alice menu now offers Leave Server', await ap.locator('button:has-text("Leave Server")').count() === 1 && await ap.locator('button:has-text("Delete Server")').count() === 0)
+  check('alice menu now offers Leave Server', await ap.locator('button:has-text("Leave Server")').count() === 1)
   await ap.keyboard.press('Escape')
   await bp.click('aside button:has-text("Ban Land")'); await bp.waitForTimeout(300)
-  check('bob menu now offers Delete Server (live GUILD_UPDATE)', await bp.locator('button:has-text("Delete Server")').count() === 1)
+  check('bob is the owner now: no Leave Server in his menu (live GUILD_UPDATE; deleting lives in Server Settings)', await bp.locator('button:has-text("Leave Server")').count() === 0 && await bp.locator('button:has-text("Server Settings")').count() === 1)
   await bp.keyboard.press('Escape')
   await bp.waitForTimeout(300)
   check('crown moved to bob in member list', await bp.locator('aside button:has-text("Bob") svg.lucide-crown').count() === 1 && await bp.locator('aside button:has-text("Alice") svg.lucide-crown').count() === 0)

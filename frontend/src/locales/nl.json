@@ -3533,5 +3533,10 @@
 "Encrypt calls end to end": "Gesprekken end-to-end versleutelen",
 "In a call": "In gesprek",
 "1 new message": "1 nieuw bericht",
-"{n} new messages": "{n} nieuwe berichten"
+"{n} new messages": "{n} nieuwe berichten",
+"Reminders": "Herinneringen",
+"Right-click a message and choose Bookmark Message to keep it here.": "Klik met de rechtermuisknop op een bericht en kies Bladwijzer toevoegen om het hier te bewaren.",
+"Server ID": "Server-ID",
+"Use Remind Me on a message and it shows up here.": "Gebruik Herinner me bij een bericht en het verschijnt hier.",
+"Verification email sent": "Verificatie-e-mail verzonden"
 }

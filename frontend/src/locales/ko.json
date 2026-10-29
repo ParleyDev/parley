@@ -3533,5 +3533,10 @@
 "Encrypt calls end to end": "통화를 종단 간 암호화",
 "In a call": "통화 중",
 "1 new message": "새 메시지 1개",
-"{n} new messages": "새 메시지 {n}개"
+"{n} new messages": "새 메시지 {n}개",
+"Reminders": "알림",
+"Right-click a message and choose Bookmark Message to keep it here.": "메시지를 마우스 오른쪽 버튼으로 클릭하고 북마크를 선택하면 여기에 보관됩니다.",
+"Server ID": "서버 ID",
+"Use Remind Me on a message and it shows up here.": "메시지에서 나중에 알림을 사용하면 여기에 표시됩니다.",
+"Verification email sent": "인증 이메일을 보냈어요"
 }

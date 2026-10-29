@@ -12,7 +12,7 @@ import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import { takeWelcome } from '../lib/welcome'
 import { VoiceTimer } from './CallExtras'
-import { Bell, BellOff, BookOpenCheck, ListChecks, Tags, DoorOpen, Flag, Eye, EyeOff, Pin, PinOff } from 'lucide-react'
+import { Bell, BellOff, BookOpenCheck, ListChecks, Tags, DoorOpen, Flag, EyeOff, Pin, PinOff, Check } from 'lucide-react'
 import { togglePinned } from '../lib/pins'
 
 const NO_PINS: string[] = []
@@ -239,7 +239,6 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       try { await api.delete(`/guilds/${guildId}/members/@me`); removeGuild(guildId); navigate('/channels/@me') } catch (e) { pushToast((e as Error).message, 'error') }
     },
   })
-  const del = () => openModal({ kind: 'deleteServer', guildId })
 
   return (
     <aside aria-label={t('Channels')} className="w-[var(--sidebar-w)] tab:w-[224px] phone:w-auto phone:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
@@ -267,16 +266,17 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
               <MenuItem icon={<Pencil size={16} />} onClick={() => openModal({ kind: 'serverProfile', guildId })}>{t('Edit Server Profile')}</MenuItem>
               <MenuItem icon={<ListChecks size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId })}>{t('Browse Channels')}</MenuItem>
               {(Object.values(allRoles).some((r) => r.self_assignable || r.requirements) || onboardingOn) && <MenuItem icon={<Tags size={16} />} onClick={() => openModal({ kind: 'browseChannels', guildId, tab: 'roles' })}>{t('Channels & Roles')}</MenuItem>}
-              <MenuItem icon={hideMuted ? <Eye size={16} /> : <EyeOff size={16} />} onClick={() => { setMenu(false); toggleHideMuted() }}>{hideMuted ? t('Show Muted Channels') : t('Hide Muted Channels')}</MenuItem>
+              <MenuItem icon={<EyeOff size={16} />} checked={hideMuted} onClick={() => { setMenu(false); toggleHideMuted() }}>{t('Hide Muted Channels')}</MenuItem>
               {guild.welcome_screen?.enabled && <MenuItem icon={<DoorOpen size={16} />} onClick={() => openModal({ kind: 'welcome', guildId })}>{t('Welcome Screen')}</MenuItem>}
               <MenuItem icon={<ShieldCheck size={16} />} onClick={() => openModal({ kind: 'guildPrivacy', guildId })}>{t('Privacy Settings')}</MenuItem>
               {canManageGuild && <MenuItem icon={<Settings size={16} />} onClick={() => openModal({ kind: 'guildSettings', guildId })}>{t('Server Settings')}</MenuItem>}
               {canCreate && <MenuItem icon={<Plus size={16} />} onClick={() => openModal({ kind: 'createChannel', guildId })}>{t('Create Channel')}</MenuItem>}
               <div className="h-px bg-line my-1" />
               {!isOwner && <MenuItem icon={<Flag size={16} />} onClick={() => openModal({ kind: 'report', userId: guild.owner_id, name: guild.name, guildId, server: true })} danger>{t('Report Server')}</MenuItem>}
-              {isOwner
-                ? <MenuItem icon={<Trash2 size={16} />} onClick={del} danger>{t('Delete Server')}</MenuItem>
-                : <MenuItem icon={<LogOut size={16} />} onClick={leave} danger>{t('Leave Server')}</MenuItem>}
+              {/* Like Discord: deleting a server lives in Server Settings (Overview), behind typing its name; the quick menu
+                  only offers leaving, to everyone but the owner. */}
+              {!isOwner && <MenuItem icon={<LogOut size={16} />} onClick={leave} danger>{t('Leave Server')}</MenuItem>}
+              {getPrefs().developerMode && <><div className="h-px bg-line my-1" /><MenuItem icon={<Copy size={16} />} onClick={() => void copyText(t('Server ID'), guildId)}>{t('Copy Server ID')}</MenuItem></>}
             </div>
           </>
         )}
@@ -363,10 +363,17 @@ function dropTarget(list: HTMLElement, y: number, dragId: string, dragCategory: 
   return { kind: 'channel', parent: group, before: null, line: at(below) + 1, key: `g:${group}:end` }
 }
 
-function MenuItem({ children, icon, onClick, danger, accent }: { children: React.ReactNode; icon: React.ReactNode; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; danger?: boolean; accent?: boolean }) {
+/** A server menu row, like Discord's: the icon at the left, and a checkbox at the right for on/off items. */
+function MenuItem({ children, icon, onClick, danger, accent, checked }: { children: React.ReactNode; icon: React.ReactNode; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; danger?: boolean; accent?: boolean; checked?: boolean }) {
   return (
-    <button onClick={onClick} className={`w-full flex items-center justify-between rounded-md px-2.5 py-2 hover:bg-accent hover:text-white ${danger ? 'text-danger' : accent ? 'text-accent' : 'text-text-1'}`}>
-      <span>{children}</span>{icon}
+    <button onClick={onClick} role={checked === undefined ? 'menuitem' : 'menuitemcheckbox'} aria-checked={checked} className={`group/mi w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 hover:bg-accent hover:text-white ${danger ? 'text-danger' : accent ? 'text-accent' : 'text-text-1'}`}>
+      <span className="shrink-0 flex w-4 justify-center" data-menu-icon>{icon}</span>
+      <span className="min-w-0 flex-1 text-left">{children}</span>
+      {checked !== undefined && (
+        <span className={`shrink-0 h-[18px] w-[18px] rounded flex items-center justify-center border ${checked ? 'bg-accent border-accent text-white group-hover/mi:bg-white group-hover/mi:text-accent group-hover/mi:border-white' : 'border-text-2 group-hover/mi:border-white'}`} data-menu-check={checked ? 'on' : 'off'}>
+          {checked && <Check size={13} strokeWidth={3} />}
+        </span>
+      )}
     </button>
   )
 }

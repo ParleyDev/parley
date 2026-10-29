@@ -3533,5 +3533,10 @@
 "Encrypt calls end to end": "通話をエンドツーエンドで暗号化",
 "In a call": "通話中",
 "1 new message": "新着メッセージ1件",
-"{n} new messages": "新着メッセージ{n}件"
+"{n} new messages": "新着メッセージ{n}件",
+"Reminders": "リマインダー",
+"Right-click a message and choose Bookmark Message to keep it here.": "メッセージを右クリックして「ブックマーク」を選ぶと、ここに保存されます。",
+"Server ID": "サーバーID",
+"Use Remind Me on a message and it shows up here.": "メッセージで「リマインド」を使うと、ここに表示されます。",
+"Verification email sent": "確認メールを送信しました"
 }

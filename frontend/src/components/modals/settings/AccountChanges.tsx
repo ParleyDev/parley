@@ -1,9 +1,9 @@
+import MaskedEmail from '../../MaskedEmail'
 import { ShieldAlert, ShieldCheck } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import type { PrivateUser } from '../../../lib/types'
-import { usePrefs } from '../../../lib/prefs'
 import { t, useT } from '../../../lib/i18n'
 
 type Kind = 'username' | 'email' | 'password'
@@ -16,7 +16,6 @@ export function AccountChanges({ only = ['username', 'email', 'password'] }: { o
   const setAuth = useStore((s) => s.setAuth)
   const pushToast = useStore((s) => s.pushToast)
   const [open, setOpen] = useState<Kind | null>(null)
-  const streamer = usePrefs().streamer && usePrefs().streamerHideInfo
   const [pending, setPending] = useState<string | null>(null)
   const [value, setValue] = useState('')
   const [password, setPassword] = useState('')
@@ -54,7 +53,7 @@ export function AccountChanges({ only = ['username', 'email', 'password'] }: { o
     <>
       <div className="space-y-5">
         {only.includes('username') && <Row label={t('Username')} value={user.username} kind="username" />}
-        {only.includes('email') && <Row label={t('Email')} value={streamer ? <span data-streamer-masked title={t('Hidden by Streamer Mode')}>{user.email.replace(/^(.).*(@).*$/, '$1••••••$2••••••')}</span> : user.email} kind="email" hint={pending ? t('Waiting for you to confirm {email}', { email: pending }) : user.email_verified_at ? undefined : t('Not verified yet')} />}
+        {only.includes('email') && <Row label={t('Email')} value={<MaskedEmail email={user.email} />} kind="email" hint={pending ? t('Waiting for you to confirm {email}', { email: pending }) : user.email_verified_at ? undefined : t('Not verified yet')} />}
         {only.includes('password') && <Row label={t('Password')} value="" kind="password" />}
       </div>
       {open && (

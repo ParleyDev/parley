@@ -11,6 +11,7 @@ import type { DmChannel, Relationship, User } from '../lib/types'
 import Avatar from './Avatar'
 import GettingStarted from './GettingStarted'
 import { toggleIgnored, toggleOnlineAlert } from '../lib/userLists'
+import StatusText from './StatusText'
 import { MobileBack } from './HeaderBits'
 import StyledName from './StyledName'
 import { useT } from '../lib/i18n'
@@ -165,16 +166,16 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
   const wave = () => act(async () => { setWaved(true); const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); await api.post(`/channels/${c.id}/messages`, { content: '👋' }); pushToast(t('You waved at {name}', { name: u.display_name })) })
   const remove = () => act(() => api.delete(`/users/@me/relationships/${u.id}`))
   const block = () => act(() => api.put(`/users/@me/relationships/${u.id}/block`))
-  const sub = r.kind === 'incoming' ? t('Incoming Friend Request') : r.kind === 'outgoing' ? t('Outgoing Friend Request') : r.kind === 'blocked' ? t('Blocked') : online ? t('Online') : t('Offline')
+  const sub = r.kind === 'incoming' ? t('Incoming Friend Request') : r.kind === 'outgoing' ? t('Outgoing Friend Request') : r.kind === 'blocked' ? t('Blocked') : <StatusText userId={u.id} fallback={u.custom_status} online={online} />
   const Btn = ({ title, onClick, children, danger }: { title: string; onClick: () => void; children: React.ReactNode; danger?: boolean }) => (
-    <button title={title} onClick={onClick} className={`h-9 w-9 rounded-full bg-bg-1 flex items-center justify-center text-text-2 ${danger ? 'hover:text-danger' : 'hover:text-text-0'}`}>{children}</button>
+    <button title={title} onClick={onClick} className={`h-9 w-9 rounded-full flex items-center justify-center text-text-2 group-hover:bg-bg-1 ${danger ? 'hover:text-danger' : 'hover:text-text-0'}`} data-friend-action>{children}</button>
   )
   return (
     <div className="group flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-bg-3" data-motion-row>
       <button onClick={(e) => openModal({ kind: 'profile', userId: u.id, anchor: anchorOf(e) })}><Avatar user={u} size={36} presence={r.kind === 'friend'} /></button>
       <div className="min-w-0 flex-1">
         <div className="font-semibold truncate"><StyledName userId={u.id}>{u.display_name}</StyledName> <span className="text-text-2 font-normal text-sm opacity-0 group-hover:opacity-100 phone:opacity-100">@{u.username}</span></div>
-        <div className="text-xs text-text-2">{sub}</div>
+        <div className="text-xs text-text-2 min-w-0" data-friend-sub>{sub}</div>
         {r.note && (r.kind === 'incoming' || r.kind === 'outgoing') && <div className="mt-0.5 truncate text-sm text-text-1" title={r.note} data-request-note>“{r.note}”</div>}
       </div>
       <div className="flex items-center gap-2 relative">

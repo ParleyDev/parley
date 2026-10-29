@@ -3533,5 +3533,10 @@
 "Encrypt calls end to end": "تشفير المكالمات تشفيرًا تامًا بين الطرفين",
 "In a call": "في مكالمة",
 "1 new message": "رسالة جديدة واحدة",
-"{n} new messages": "{n} رسائل جديدة"
+"{n} new messages": "{n} رسائل جديدة",
+"Reminders": "التذكيرات",
+"Right-click a message and choose Bookmark Message to keep it here.": "انقر بزر الماوس الأيمن على رسالة واختر «إضافة إشارة مرجعية» لتحتفظ بها هنا.",
+"Server ID": "معرّف الخادم",
+"Use Remind Me on a message and it shows up here.": "استخدم «ذكّرني» على رسالة وستظهر هنا.",
+"Verification email sent": "تم إرسال رسالة التحقق"
 }

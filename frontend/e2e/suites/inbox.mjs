@@ -48,7 +48,7 @@ await p.goto(`${WEB}/channels/@me`); await p.waitForSelector('[data-user-panel-b
 await p.waitForFunction(() => document.querySelector('link[rel="icon"]')?.href.startsWith('data:'))
 ok('the tab icon carries a badge while mentions and requests wait', await p.locator('[data-inbox-count]').count() === 1)
 await p.click('[data-inbox-toggle]'); await p.waitForSelector(`[data-inbox-item="${men.id}"]`)
-ok('the Inbox lists the mention with where it happened', (await p.textContent(`[data-inbox-item="${men.id}"]`)).includes(`#${tc.name}`))
+ok('the Inbox lists the mention with where it happened', (await p.textContent(`[data-inbox-row="${men.id}"]`)).includes(tc.name))
 const row = await p.textContent(`[data-inbox-item="${men.id}"]`)
 ok('mentions in the Inbox read as names, not ids', row.includes('hey @Bob look') && !row.includes(b.user.id), row)
 await p.click(`[data-inbox-item="${men.id}"]`); await p.waitForSelector(`[data-msg-id="${men.id}"]`, { timeout: 15000 })

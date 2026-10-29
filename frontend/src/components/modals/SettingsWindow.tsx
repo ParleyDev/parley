@@ -124,8 +124,9 @@ export default function SettingsWindow<T extends string>({ groups, tab, onTab, o
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex pop safe-area phone:bg-bg-1 phone:backdrop-blur-none" role="dialog" aria-modal data-settings-view={menu ? 'menu' : 'section'} data-settings-window>
       {/* The margin around the window lives here: the safe-area padding on the overlay would override it. */}
-      <div className="flex-1 min-w-0 flex justify-center wide:p-4 lg:p-6" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="w-full max-w-[1320px] flex rounded-xl border border-line bg-bg-1 shadow-2xl overflow-hidden phone:rounded-none phone:border-0 phone:flex-col">
+      {/* Centred with room above and below, like Discord's, rather than running edge to edge. */}
+      <div className="flex-1 min-w-0 flex items-center justify-center wide:px-6 wide:py-10 lg:px-10 lg:py-14" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="w-full max-w-[1320px] wide:h-[min(900px,100%)] phone:h-full flex rounded-xl border border-line bg-bg-1 shadow-2xl overflow-hidden phone:rounded-none phone:border-0 phone:flex-col" data-settings-frame>
         <nav className={`w-[272px] shrink-0 bg-bg-0/60 border-r border-line/60 flex flex-col min-h-0 phone:w-full phone:flex-1 phone:border-r-0 phone:bg-bg-1 ${menu ? '' : 'phone:hidden'}`} data-settings-nav>
           <div className="wide:hidden h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line"><span className="font-bold text-lg truncate flex-1">{t(title)}</span>
             <button onClick={onClose} title={t('Close')} className="h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-settings-close><X size={22} /></button></div>

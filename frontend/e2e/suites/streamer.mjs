@@ -21,7 +21,7 @@ await p.evaluate(() => { window.__parleySfx = [] }); await p.goto(`${WEB}/channe
 await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'quiet please' }); await p.waitForTimeout(800)
 ok('sounds are muted', (await p.evaluate(() => window.__parleySfx ?? [])).length === 0)
 await p.click('button[title="User Settings"]'); await p.waitForSelector('[data-account-row="email"]')
-ok('the email is masked in My Account', await p.locator('[data-streamer-masked]').count() === 1 && !(await p.textContent('[data-account-value="email"]')).includes(`bob${S}@x.io`))
+ok('the email is hidden in My Account', await p.locator('[data-account-value="email"] [data-streamer-masked]').count() === 1 && !(await p.textContent('[data-account-value="email"]')).includes(`bob${S}@x.io`))
 await p.locator('button', { hasText: /^Streamer Mode$/ }).first().click(); await p.waitForSelector('[data-streamer-tab]')
 await p.locator('[data-streamer-toggle] [role=switch]').click(); await p.waitForFunction(() => !document.querySelector('[data-streamer-banner]'))
 ok('the tab switch turns it off (banner gone)', true)

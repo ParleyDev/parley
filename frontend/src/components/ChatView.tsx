@@ -8,7 +8,7 @@ import { dmName, isGroup, nameOf } from '../lib/dm'
 import { uploadImage } from '../lib/upload'
 import { anchorOf } from '../lib/anchor'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { Channel, DmChannel, Message, PrivateUser } from '../lib/types'
 import { BirthdateForm, TeenDmNotice } from './AgeSafety'
 import { api } from '../lib/api'
@@ -83,7 +83,7 @@ function useEscape(onClose: () => void) {
   }, [onClose])
 }
 
-export default function ChatView({ channel }: { channel: Channel | DmChannel }) {
+export default function ChatView({ channel, members }: { channel: Channel | DmChannel; /** A server channel's member list, beside the chat under the header. */ members?: ReactNode }) {
   const t = useT()
   const isDm = channel.guild_id === null
   const [ageOk, setAgeOk] = useState(() => nsfwAccepted(channel.id))
@@ -271,10 +271,11 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
         <DmProfilePanel userId={other.id} />
       ) : group && dmProfileOpen ? (
         <GroupMembersPanel dm={channel as DmChannel} />
-      ) : null
-  // Like Discord: with the profile (or a group's members) beside a DM, the header runs across both and the panel starts
-  // under it. Search results and threads keep their own full-height column.
-  const spans = search === null && !threadHere && dmProfileOpen && ((isDm && !!other) || group)
+      ) : members ?? null
+  // Like Discord: with the profile (or a group's members) beside a DM, or a server's member list beside a channel, the
+  // header runs across both and the panel starts under it. Search results and threads keep their own full-height column.
+  const membersOpen = useStore((s) => s.membersOpen)
+  const spans = search === null && !threadHere && ((dmProfileOpen && ((isDm && !!other) || group)) || (!!members && membersOpen))
   // One tree either way, so the chat below (and its scroll position and draft) is never remounted: only the header
   // moves between the top of the whole view and the top of the chat column.
   return (

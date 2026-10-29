@@ -99,11 +99,11 @@ function FullProfile({ user, inGuild, onClose, initialTab }: { user: UserProfile
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [onClose])
-  const tabs: { id: FullTab; label: string }[] = [
+  const tabs: { id: FullTab; label: string; count?: number }[] = [
     { id: 'activity', label: t('Activity') },
     ...(isMe ? [] : [
-      { id: 'friends' as FullTab, label: friends.length === 0 ? t('No Mutual Friends') : friends.length === 1 ? t('1 Mutual Friend') : t('{n} Mutual Friends', { n: friends.length }) },
-      { id: 'servers' as FullTab, label: mutual.length === 0 ? t('No Mutual Servers') : mutual.length === 1 ? t('1 Mutual Server') : t('{n} Mutual Servers', { n: mutual.length }) },
+      { id: 'friends' as FullTab, label: t('Mutual Friends'), count: friends.length },
+      { id: 'servers' as FullTab, label: t('Mutual Servers'), count: mutual.length },
     ]),
     ...(wishlist.length ? [{ id: 'wishlist' as FullTab, label: t('Wishlist') }] : []),
     ...(games.length ? [{ id: 'games' as FullTab, label: t('Games') }] : []),
@@ -122,10 +122,14 @@ function FullProfile({ user, inGuild, onClose, initialTab }: { user: UserProfile
             <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" />
           </div>
           <div className="flex-1 min-w-0 min-h-0 flex flex-col wide:pt-2" data-full-profile-tabs>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 border-b border-white/10 mb-4 pr-10" role="tablist">
+            {/* One line of tabs, like Discord's: short labels with the count beside them, and a row that scrolls sideways
+                (no bar) rather than wrapping when there are many. */}
+            <div className="flex flex-nowrap gap-x-6 overflow-x-auto scrollbar-none border-b border-white/10 mb-4 mr-10" role="tablist" data-profile-tabs>
               {tabs.map((x) => (
                 <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}
-                  className={`shrink-0 pb-2.5 -mb-px border-b-2 text-[15px] font-semibold ${tab === x.id ? 'border-white text-white' : 'border-transparent text-[#b5bac1] hover:text-[#dbdee1]'}`} data-profile-tab={x.id}>{x.label}</button>
+                  className={`shrink-0 whitespace-nowrap pb-2.5 border-b-2 text-[15px] font-semibold ${tab === x.id ? 'border-white text-white' : 'border-transparent text-[#b5bac1] hover:text-[#dbdee1]'}`} data-profile-tab={x.id}>
+                  {x.label}{x.count ? <span className="ml-1.5 font-normal opacity-70">{x.count}</span> : null}
+                </button>
               ))}
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3">
@@ -257,8 +261,11 @@ function Popout({ anchor, onClose, children }: { anchor: Anchor; onClose: () => 
       if (anchor.x + anchor.w + GAP + W <= vw - PAD) left = anchor.x + anchor.w + GAP
       else if (anchor.x - GAP - W >= PAD) left = anchor.x - GAP - W
       else left = Math.max(PAD, Math.min(anchor.x, vw - W - PAD))
-      // Align the card's top with the anchor, keep it on screen.
-      const top = Math.max(PAD, Math.min(anchor.y - (cs ? parseFloat(cs.paddingTop) || 0 : 0), vh - h - PAD))
+      // Align the card's top with the anchor (the clicked row), then keep the whole framed box on screen and below the
+      // channel header and the banner above it, so it never covers the header's buttons or loses its frame's top.
+      const header = document.querySelector<HTMLElement>('[data-header-spans] > header, main > header')
+      const minTop = Math.max(PAD, (header?.getBoundingClientRect().bottom ?? 0) + GAP)
+      const top = Math.max(minTop, Math.min(anchor.y - (cs ? parseFloat(cs.paddingTop) || 0 : 0), vh - h - PAD))
       setStyle((o) => (o && o.left === left && o.top === top && o.width === W ? o : { position: 'fixed', left, top, width: W }))
     }
     place()

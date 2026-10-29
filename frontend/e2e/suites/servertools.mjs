@@ -49,7 +49,9 @@ await pa.click(`aside button:has-text("Tools ${S}")`); await pa.click('text=Hide
 ok('Hide Muted Channels hides them', await pa.locator(`[data-channel-item="${quiet.id}"]`).count() === 0)
 await pa.reload(); await pa.waitForTimeout(900)
 ok('and is remembered', await pa.locator(`[data-channel-item="${quiet.id}"]`).count() === 0)
-await pa.click(`aside button:has-text("Tools ${S}")`); await pa.click('text=Show Muted Channels'); await pa.waitForTimeout(300)
+await pa.click(`aside button:has-text("Tools ${S}")`)
+ok('Hide Muted Channels shows its checkbox ticked', await pa.locator('button[role=menuitemcheckbox][aria-checked=true]:has-text("Hide Muted Channels")').count() === 1)
+await pa.click('text=Hide Muted Channels'); await pa.waitForTimeout(300)
 ok('Show brings them back', await pa.locator(`[data-channel-item="${quiet.id}"]`).count() === 1)
 
 console.log('-- joining sends the full settings')

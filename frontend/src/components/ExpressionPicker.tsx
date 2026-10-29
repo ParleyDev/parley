@@ -113,13 +113,15 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
   const [favs, setFavs] = useState(favoriteEmoji)
   const results = useMemo(() => (groups && q.trim() ? searchEmoji(q, groups, allCustom, 90) : null), [q, groups, allCustom])
   const jump = (id: string) => gridRef.current?.querySelector<HTMLElement>(`[data-section="${id}"]`)?.scrollIntoView({ block: 'start' })
-  const nameOf = (token: string) => { const c = /^<a?:([^:]+):/.exec(token); return c ? `:${c[1]}:` : token }
+  // Frequently used and favourites are stored as the emoji themselves: name them like the rest (":joy:") in the preview.
+  const slugs = useMemo(() => new Map((groups ?? []).flatMap((g) => g.emojis.map((e) => [e.emoji, e.slug] as const))), [groups])
+  const nameOf = (token: string) => { const c = /^<a?:([^:]+):/.exec(token); if (c) return `:${c[1]}:`; const slug = slugs.get(token) ?? slugs.get(token.replace(/\u{1F3FB}|\u{1F3FC}|\u{1F3FD}|\u{1F3FE}|\u{1F3FF}/gu, '')); return slug ? `:${slug}:` : token }
 
   const cell = (token: string, label: string, key: string, base?: string) => (
     <button key={key} type="button" onClick={() => { if (base) rememberEmojiTone(base, toneOf(token)); onPick(token) }} onMouseEnter={() => setHover({ token, name: label })} title={label} data-emoji-btn={label} data-emoji-toned={base ? toneOf(token) : undefined}
       onContextMenu={(e) => { if (!base) return; e.preventDefault(); const r = e.currentTarget.getBoundingClientRect(); setVariants({ base, label, x: r.left, y: r.top }) }}
-      className="h-10 w-10 rounded-md flex items-center justify-center text-[26px] hover:bg-white/10 leading-none">
-      <Emoji value={token} size={30} />
+      className="h-10 w-10 rounded-md flex items-center justify-center hover:bg-white/10 leading-none">
+      <Emoji value={token} size={32} glyph={30} />
     </button>
   )
   const unicodeCell = (e: { emoji: string; tone: boolean }, label: string, key: string) => cell(e.tone ? applyTone(e.emoji, toneFor(e.emoji)) : e.emoji, label, key, e.tone ? e.emoji : undefined)

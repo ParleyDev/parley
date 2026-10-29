@@ -3533,5 +3533,10 @@
 "Encrypt calls end to end": "Включить сквозное шифрование звонков",
 "In a call": "Идёт звонок",
 "1 new message": "1 новое сообщение",
-"{n} new messages": "Новых сообщений: {n}"
+"{n} new messages": "Новых сообщений: {n}",
+"Reminders": "Напоминания",
+"Right-click a message and choose Bookmark Message to keep it here.": "Нажмите на сообщение правой кнопкой и выберите «Добавить в закладки», чтобы сохранить его здесь.",
+"Server ID": "ID сервера",
+"Use Remind Me on a message and it shows up here.": "Используйте «Напомнить мне» на сообщении, и оно появится здесь.",
+"Verification email sent": "Письмо для подтверждения отправлено"
 }

@@ -67,11 +67,13 @@ export default function AppShell() {
   const announcement = useStore((s) => s.instance.announcement)
   // Ask for notification permission on the first click/keypress, not at load: Safari/WebKit only allows the
   // prompt from a user gesture (and logs an error otherwise), and Chrome ranks gesture-driven prompts better.
+  // After the click has finished, never on pointerdown: Chrome's permission bubble opening between the press and the
+  // release swallowed that first click (View Full Profile, the settings gear did nothing until clicked again).
   useEffect(() => {
     if (!('Notification' in window) || Notification.permission !== 'default') return
-    const ask = () => { try { Notification.requestPermission() } catch { /* ignore */ } cleanup() }
-    const cleanup = () => { window.removeEventListener('pointerdown', ask); window.removeEventListener('keydown', ask) }
-    window.addEventListener('pointerdown', ask, { once: true }); window.addEventListener('keydown', ask, { once: true })
+    const ask = () => { cleanup(); setTimeout(() => { try { void Notification.requestPermission() } catch { /* ignore */ } }, 0) }
+    const cleanup = () => { window.removeEventListener('click', ask); window.removeEventListener('keyup', ask) }
+    window.addEventListener('click', ask); window.addEventListener('keyup', ask)
     return cleanup
   }, [])
   return (
@@ -171,8 +173,10 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
   if (!channel || channel.guild_id !== guildId) return <div className="flex-1 phone:hidden" />
   return (
     <>
-      {channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio' ? <VoiceView channel={channel} /> : <ChatView channel={channel} />}
-      <MemberList guildId={guildId} />
+      {/* Text channels take the member list beside the chat under their header (Discord); voice views keep it beside them. */}
+      {channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
+        ? <><VoiceView channel={channel} /><MemberList guildId={guildId} /></>
+        : <ChatView channel={channel} members={<MemberList guildId={guildId} />} />}
     </>
   )
 }

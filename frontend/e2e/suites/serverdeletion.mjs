@@ -118,9 +118,11 @@ const browser = await chromium.launch(); const errors = []
 const page = async (u) => { const p = await browser.newPage({ viewport: { width: 1400, height: 900 } }); p.on('pageerror', (x) => errors.push(x.message)); await p.goto(`${WEB}/login`); await p.evaluate((tk) => localStorage.setItem('parley.token', tk), u.token); return p }
 const p = await page(o)
 await p.goto(`${WEB}/channels/${C.g.id}/${C.ch.id}`); await p.waitForSelector(`aside button:has-text("${C.g.name}")`)
-await p.click(`aside button:has-text("${C.g.name}")`); await p.click('button:has-text("Delete Server")')
+await p.click(`aside button:has-text("${C.g.name}")`)
+ok('the quick menu has no Delete Server (it lives in Server Settings, like Discord)', await p.locator('button:has-text("Delete Server")').count() === 0)
+await p.click('button:has-text("Server Settings")'); await p.click('[role=dialog] button[title="Delete Server"], [role=dialog] button:has-text("Delete Server")')
 await p.waitForSelector('[data-delete-server]')
-ok('the menu opens the confirmation, which waits for the name and password', await p.isDisabled('[data-delete-server-go]'))
+ok('Server Settings opens the confirmation, which waits for the name and password', await p.isDisabled('[data-delete-server-go]'))
 await p.fill('[data-delete-server-name]', C.g.name); await p.fill('[data-delete-server-password]', PASSWORD)
 await p.click('[data-delete-server-go]'); await p.waitForSelector('[data-delete-server]', { state: 'detached' })
 ok('deleting from the dialog takes it away', (await raw(o.token, 'GET', `/guilds/${C.g.id}`)).status === 410 && (await p.locator(`aside button:has-text("${C.g.name}")`).count()) === 0)
