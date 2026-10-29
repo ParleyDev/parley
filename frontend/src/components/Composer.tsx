@@ -1,7 +1,7 @@
 import { BarChart3, Camera, Eye, Timer, Video, EyeOff, FileText, FolderOpen, ImagePlay, Images, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { recordEmoji } from '../lib/recentEmoji'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { isUnread, myChannelPerms, useStore } from '../store'
 import { sendTyping } from '../lib/ws'
 import { convertEmoticons, getPrefs, usePrefs } from '../lib/prefs'
@@ -31,14 +31,18 @@ const MAX_CHARS = 2000
 const charCount = (s: string) => [...s].length
 
 
-interface Props { channel: Channel | DmChannel; reply: Message | null; onCancelReply: () => void; onSent: () => void }
+interface Props {
+  channel: Channel | DmChannel; reply: Message | null; onCancelReply: () => void; onSent: () => void
+  /** Wraps the text box's size change so the chat above can keep its place (see ChatPane). */
+  onResize?: (apply: () => void) => void
+}
 
 /** `alt`: a description for screen readers and hover, sent with the message. */
 interface Pending { key: number; file: File; preview: string | null; progress: number; done: Attachment | null; error: string | null; handle: UploadHandle | null; alt?: string }
 
 let pendingSeq = 1
 
-export default function Composer({ channel, reply, onCancelReply, onSent }: Props) {
+export default function Composer({ channel, reply, onCancelReply, onSent, onResize }: Props) {
   const spellcheck = usePrefs().spellcheck
   const t = useT()
   const sendMessage = useStore((s) => s.sendMessage)
@@ -223,14 +227,19 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   // keyboard over the chat. Choosing Reply is a deliberate "I want to type", so it focuses everywhere.
   useEffect(() => { if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) ref.current?.focus() }, [channel.id])
   useEffect(() => { if (reply) ref.current?.focus() }, [reply])
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     // Empty: the one row the textarea has, however long the placeholder (it is cut off, never wrapped). With text,
-    // grow with it line by line up to half the window, then scroll inside.
-    if (!value) { el.style.height = ''; return }
-    el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight * 0.5)) + 'px'
+    // grow with it line by line up to half the window, then scroll inside. The chat above keeps its place across the
+    // change (pinned to the bottom stays pinned), whether it grows one line or many at once (a paste, a draft).
+    const apply = () => {
+      if (!value) { el.style.height = ''; return }
+      el.style.height = 'auto'
+      el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight * 0.5)) + 'px'
+    }
+    if (onResize) onResize(apply); else apply()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value])
   // Switching channels drops the draft attachments (and cancels in-flight uploads).
   useEffect(() => () => { setPending((ps) => { ps.forEach((p) => { p.handle?.abort(); if (p.preview) URL.revokeObjectURL(p.preview) }); return [] }) }, [channel.id])

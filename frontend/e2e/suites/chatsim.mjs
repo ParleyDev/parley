@@ -70,6 +70,20 @@ for (const [label, p] of hasSim ? [['desktop', sim], ['phone', await mk(true)]] 
   ok(`${label}: the box stops growing at half the window`, g.boxH <= vh * 0.5 + 4 && g.boxH > vh * 0.4, `${g.boxH} of ${vh}`)
   await p.fill('textarea', ''); await p.waitForTimeout(300)
   ok(`${label}: and shrinks back, still pinned`, (await geo(p)).fromBottom <= 1)
+  // Many lines in one input event (a paste): pinned straight away, before any resize observer could run, and after.
+  const instant = await p.evaluate(() => {
+    const t = document.querySelector('textarea'), el = document.querySelector('[data-message-list]')
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, 'pasted 1\npasted 2\npasted 3\npasted 4\npasted 5\npasted 6\npasted 7')
+    t.dispatchEvent(new Event('input', { bubbles: true }))
+    return Math.round(el.scrollHeight - el.scrollTop - el.clientHeight)
+  })
+  await p.waitForTimeout(400); g = await geo(p)
+  ok(`${label}: a 7-line paste in one go keeps the list pinned (at once and after)`, instant <= 1 && g.fromBottom <= 1 && g.boxH > 150 && g.lastBottom <= g.boxTop, JSON.stringify({ instant, g }))
+  // The same draft restored on coming back to the conversation.
+  await p.click('[data-sim-dm="sim-dm-b"]'); await p.waitForSelector('[data-row-id]'); await p.waitForTimeout(400)
+  await p.click('[data-sim-dm="sim-dm-a"]'); await p.waitForTimeout(600); g = await geo(p)
+  ok(`${label}: a multi-line draft restored on return keeps the list pinned`, g.fromBottom <= 1 && g.boxH > 150 && g.lastBottom <= g.boxTop, JSON.stringify(g))
+  await p.fill('textarea', ''); await p.waitForTimeout(300)
 
   // Older pages: three of them, each prepended above what's on screen.
   await p.evaluate(() => { const el = document.querySelector('[data-message-list]'); el.scrollTop = el.scrollHeight - el.clientHeight - 700 }); await p.waitForTimeout(300)
@@ -130,6 +144,16 @@ for (const [label, p] of [['desktop', await mk(false)], ['phone', await mk(true)
   ok(`${label}: consecutive ones form a tight list`, sys[1].top - sys[0].top === sys[0].h && sys[2].top - sys[1].top === sys[1].h)
   ok(`${label}: the icon sits in the avatar column`, sys.every((s) => s.iconL === avatar.l && s.iconW === avatar.w), JSON.stringify({ sys: sys[0], avatar }))
   ok(`${label}: the time follows the text in 12px, not at the far edge`, sys.every((s) => s.timeFont === '12px' && s.timeRight < s.rowRight - 40), JSON.stringify(sys[0]))
+  const pasted = await p.evaluate(() => {
+    const t = document.querySelector('textarea'), el = document.querySelector('[data-message-list]')
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, 'a\nb\nc\nd\ne\nf')
+    t.dispatchEvent(new Event('input', { bubbles: true }))
+    const r = Math.round(el.scrollHeight - el.scrollTop - el.clientHeight)
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(t, ''); t.dispatchEvent(new Event('input', { bubbles: true }))
+    return r
+  })
+  ok(`${label}: a multi-line paste in the real DM stays pinned`, pasted <= 1, String(pasted))
+  await p.waitForTimeout(300)
   const g = await geo(p)
   ok(`${label}: the list ends above the message box`, g.listBottom <= g.boxTop + 1 && g.fromBottom <= 1, JSON.stringify(g))
   if (shots) await p.screenshot({ path: `${shots}/after-dm-${label}.png` })

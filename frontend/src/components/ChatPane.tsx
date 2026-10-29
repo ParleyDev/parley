@@ -334,6 +334,15 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     return () => window.removeEventListener('parley:reveal', on)
   }, [channel.id])
 
+  // The message box changing size (many lines pasted at once, a restored draft): note whether the list was at the
+  // bottom before, and put it back there right after, in the same frame, rather than relying on the resize observer.
+  const keepPinned = useCallback((apply: () => void) => {
+    const el = scrollRef.current
+    const pinned = !!el && !hasNewer && (stickBottom.current || el.scrollHeight - el.scrollTop - el.clientHeight < 40)
+    apply()
+    if (!el) return
+    if (pinned) { stickBottom.current = true; el.scrollTop = el.scrollHeight; seenHeight.current = el.scrollHeight } else settle()
+  }, [hasNewer, settle])
   const scrollToBottom = () => { stickBottom.current = true; const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }
   /** Reply header click: scroll to the original, loading older history if needed. */
   const jumpTo = async (id: string) => {
@@ -410,7 +419,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       ))}
       </div>
       <div className="relative shrink-0" data-chat-bottom>
-      {readOnly ? <div className="mx-4 mb-4 rounded-lg bg-bg-3 px-4 py-3 text-sm text-text-2" data-readonly-note>{readOnly}</div> : channel.guild_id === null && isRequest(channel as DmChannel) ? <RequestBanner dm={channel as DmChannel} /> : <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} />}
+      {readOnly ? <div className="mx-4 mb-4 rounded-lg bg-bg-3 px-4 py-3 text-sm text-text-2" data-readonly-note>{readOnly}</div> : channel.guild_id === null && isRequest(channel as DmChannel) ? <RequestBanner dm={channel as DmChannel} /> : <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} onResize={keepPinned} />}
       </div>
       </div>
     </>
