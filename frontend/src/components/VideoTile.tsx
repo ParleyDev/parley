@@ -83,6 +83,6 @@ export function StreamGate({ user, big, canWatch, onWatch, channelId }: { user: 
 export function StopWatching({ onStop }: { onStop: () => void }) {
   const t = useT()
   return (
-    <button type="button" onClick={(e) => { e.stopPropagation(); onStop() }} title={t('Stop Watching')} aria-label={t('Stop Watching')} className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0" data-stop-watching><EyeOff size={14} /></button>
+    <button type="button" onClick={(e) => { e.stopPropagation(); onStop() }} title={t('Stop Watching')} aria-label={t('Stop Watching')} className="rounded-md bg-bg-0/80 p-1.5 text-text-1 opacity-0 group-hover:opacity-100 phone:opacity-100 hover:text-text-0" data-stop-watching><EyeOff size={14} /></button>
   )
 }

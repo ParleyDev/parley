@@ -115,13 +115,13 @@ function FullProfile({ user, inGuild, onClose, initialTab }: { user: UserProfile
   const panel = 'rounded-xl bg-black/25 p-3'
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="flex-1 min-w-0 h-full flex items-center justify-center md:px-10 md:py-14 max-md:p-2" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-        <div className="pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1] max-md:flex-col max-md:p-4 max-md:gap-4 max-md:overflow-y-auto" role="dialog" aria-modal aria-label={user.display_name} data-full-profile>
+      <div className="flex-1 min-w-0 h-full flex items-center justify-center wide:px-10 wide:py-14 phone:p-2" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+        <div className="pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1] phone:flex-col phone:p-4 phone:gap-4 phone:overflow-y-auto" role="dialog" aria-modal aria-label={user.display_name} data-full-profile>
           <button type="button" onClick={onClose} className="absolute right-3 top-3 z-20 h-9 w-9 rounded-lg bg-black/30 hover:bg-black/50 flex items-center justify-center" title={t('Close')} aria-label={t('Close')} data-full-profile-close><X size={20} /></button>
-          <div className="w-[400px] shrink-0 md:h-full max-md:w-full" data-full-profile-card>
+          <div className="w-[400px] shrink-0 wide:h-full phone:w-full" data-full-profile-card>
             <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" />
           </div>
-          <div className="flex-1 min-w-0 min-h-0 flex flex-col md:pt-2" data-full-profile-tabs>
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col wide:pt-2" data-full-profile-tabs>
             <div className="flex flex-wrap gap-x-6 gap-y-1 border-b border-white/10 mb-4 pr-10" role="tablist">
               {tabs.map((x) => (
                 <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}

@@ -126,7 +126,7 @@ export default function ServerTagTab({ guildId, onTab }: { guildId: string; onTa
       </div>
 
       {dirty && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 md:left-[calc(50%+116px)] z-10 w-[min(700px,calc(100vw-32px))] rounded-lg bg-bg-0 shadow-2xl border border-line px-4 py-2.5 flex items-center gap-3 pop" data-server-tag-savebar>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 wide:left-[calc(50%+116px)] z-10 w-[min(700px,calc(100vw-32px))] rounded-lg bg-bg-0 shadow-2xl border border-line px-4 py-2.5 flex items-center gap-3 pop" data-server-tag-savebar>
           <span className="flex-1 text-sm font-medium">{t('Careful — you have unsaved changes!')}</span>
           <button type="button" className="text-sm hover:underline" onClick={reset}>{t('Reset')}</button>
           <button type="button" className="btn-primary py-1.5 bg-success hover:bg-success/90" disabled={busy || (!!tag && tag.length < 2)} onClick={() => save({ tag: tag || null, badge, color })} data-server-tag-save>{t('Save Changes')}</button>

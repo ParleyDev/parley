@@ -25,7 +25,7 @@ export default function AdminPage() {
   return (
     <AccessCtx.Provider value={access}>
     <SplitLayout defaultPane="nav" testid={{ 'data-admin': '' }} sidebar={
-          <aside className="w-[var(--sidebar-w)] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
+          <aside className="w-[var(--sidebar-w)] tab:w-[224px] phone:flex-1 shrink-0 bg-bg-1 flex flex-col">
             <div className="h-12 px-4 flex items-center gap-2 font-bold text-lg border-b border-line"><ShieldCheck size={20} className="text-success" /> {t('Admin Console')}</div>
             <nav className="p-2 space-y-0.5">
               <NavLink to="/admin" end onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="overview"><LayoutDashboard size={20} /> {t('Overview')}</NavLink>
@@ -43,8 +43,8 @@ export default function AdminPage() {
             </nav>
           </aside>
     }>
-      <div className="md:hidden h-12 shrink-0 px-2 flex items-center gap-1 border-b border-line"><MobileBack /><span className="font-bold">{t('Admin Console')}</span></div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-10 py-8 max-md:px-4 max-md:py-5">
+      <div className="wide:hidden h-12 shrink-0 px-2 flex items-center gap-1 border-b border-line"><MobileBack /><span className="font-bold">{t('Admin Console')}</span></div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-10 py-8 phone:px-4 phone:py-5">
         <Routes>
           <Route index element={<Overview />} />
           <Route path="users" element={<UsersPane />} />
@@ -247,14 +247,14 @@ function UsersPane() {
         </div>
       )}
       <div className="mt-4 rounded-xl border border-line overflow-hidden">
-        <div className="grid grid-cols-[28px_1fr_1fr_90px_110px_200px] gap-3 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-text-2 bg-bg-0/40 max-md:hidden items-center">
+        <div className="grid grid-cols-[28px_1fr_1fr_90px_110px_200px] gap-3 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-text-2 bg-bg-0/40 phone:hidden items-center">
           <input type="checkbox" className="h-4 w-4 accent-accent" checked={allSelected} onChange={toggleAll} aria-label={t('Select all')} data-admin-select-all />
           <span>{t('User')}</span><span>{t('Email')}</span><span>{t('Servers')}</span><span>{t('Joined')}</span><span />
         </div>
         {list === null && <p className="p-4 text-sm text-text-2">{t('Loading…')}</p>}
         {list?.length === 0 && <p className="p-4 text-sm text-text-2">{t('No users match.')}</p>}
         {list?.map((u) => (
-          <div key={u.id} className={`grid grid-cols-[28px_1fr_1fr_90px_110px_200px] max-md:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40 ${selected.has(u.id) ? 'bg-accent/5' : ''}`} data-admin-user={u.username} data-selected={selected.has(u.id) ? '1' : '0'}>
+          <div key={u.id} className={`grid grid-cols-[28px_1fr_1fr_90px_110px_200px] phone:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40 ${selected.has(u.id) ? 'bg-accent/5' : ''}`} data-admin-user={u.username} data-selected={selected.has(u.id) ? '1' : '0'}>
             <input type="checkbox" className="h-4 w-4 accent-accent" checked={selected.has(u.id)} disabled={u.id === me?.id || u.account_state === 'deleted'} onChange={() => toggle(u.id)} aria-label={t('Select @{username}', { username: u.username })} data-admin-select />
             <div className="min-w-0 flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full shrink-0 ${u.online ? 'bg-success' : 'bg-text-2'}`} />
@@ -267,9 +267,9 @@ function UsersPane() {
               {u.mfa_enabled && <span className="rounded bg-sky-500/20 text-sky-300 px-1.5 py-0.5 text-[10px] font-bold" data-badge="mfa">{t('2FA')}</span>}
               {!u.email_verified_at && !u.bot && u.account_state !== 'deleted' && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="unverified">{t('UNVERIFIED')}</span>}
             </div>
-            <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">{t('Email:')} </span>{u.email ?? '—'}{u.email?.includes('***') && can(a, 'account_pii_reveal') && <button type="button" className="ml-1.5 inline-flex align-middle text-text-2 hover:text-text-0" title={t('Reveal email and devices')} aria-label={t('Reveal email and devices')} onClick={() => setRevealFor(u)} data-admin-reveal><Eye size={14} /></button>}</div>
-            <div className="text-sm text-text-1"><span className="md:hidden text-text-2">{t('Servers:')} </span>{u.guild_count}</div>
-            <div className="text-xs text-text-2"><span className="md:hidden">{t('Joined:')} </span>{new Date(u.created_at).toLocaleDateString()}</div>
+            <div className="text-sm text-text-1 truncate"><span className="wide:hidden text-text-2">{t('Email:')} </span>{u.email ?? '—'}{u.email?.includes('***') && can(a, 'account_pii_reveal') && <button type="button" className="ml-1.5 inline-flex align-middle text-text-2 hover:text-text-0" title={t('Reveal email and devices')} aria-label={t('Reveal email and devices')} onClick={() => setRevealFor(u)} data-admin-reveal><Eye size={14} /></button>}</div>
+            <div className="text-sm text-text-1"><span className="wide:hidden text-text-2">{t('Servers:')} </span>{u.guild_count}</div>
+            <div className="text-xs text-text-2"><span className="wide:hidden">{t('Joined:')} </span>{new Date(u.created_at).toLocaleDateString()}</div>
             <div className="flex items-center justify-end gap-1">
               {u.account_state === 'deleted' && act && <Tool label={t('Purge account')} onClick={() => purge(u)} testid="purge-user" danger><Eraser size={16} /></Tool>}
               {u.id !== me?.id && u.account_state !== 'deleted' && (
@@ -386,21 +386,21 @@ function ServersPane() {
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search by server name or owner')} data-admin-guild-search className="input mt-4 max-w-md" />
       {takingDown && <TakedownDialog guild={takingDown} onClose={() => setTakingDown(null)} onDone={() => { setTakingDown(null); load() }} />}
       <div className="mt-4 rounded-xl border border-line overflow-hidden">
-        <div className="grid grid-cols-[1fr_160px_100px_110px_120px_60px] gap-3 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-text-2 bg-bg-0/40 max-md:hidden"><span>{t('Server')}</span><span>{t('Owner')}</span><span>{t('Members')}</span><span>{t('Messages')}</span><span>{t('Discover')}</span><span /></div>
+        <div className="grid grid-cols-[1fr_160px_100px_110px_120px_60px] gap-3 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-text-2 bg-bg-0/40 phone:hidden"><span>{t('Server')}</span><span>{t('Owner')}</span><span>{t('Members')}</span><span>{t('Messages')}</span><span>{t('Discover')}</span><span /></div>
         {list === null && <p className="p-4 text-sm text-text-2">{t('Loading…')}</p>}
         {list?.length === 0 && <p className="p-4 text-sm text-text-2">{t('No servers match.')}</p>}
         {list?.map((g) => (
-          <div key={g.id} className="grid grid-cols-[1fr_160px_100px_110px_120px_60px] max-md:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40" data-admin-guild={g.name}>
+          <div key={g.id} className="grid grid-cols-[1fr_160px_100px_110px_120px_60px] phone:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40" data-admin-guild={g.name}>
             <div className="min-w-0 flex items-center gap-2">
               <span className="h-8 w-8 rounded-xl overflow-hidden flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>{g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name)}</span>
               <span className="min-w-0"><span className="block truncate font-semibold">{g.name}</span><span className="block truncate text-xs text-text-2">{new Date(g.created_at).toLocaleDateString()}</span></span>
               {g.state === 'pending_deletion' && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="pending-deletion">{t('DELETING {date}', { date: g.deletion_scheduled_for ? new Date(g.deletion_scheduled_for).toLocaleDateString() : '' })}</span>}
               {g.state === 'taken_down' && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="taken-down">{t('TAKEN DOWN')}</span>}
             </div>
-            <div className="text-sm text-text-1 truncate"><span className="md:hidden text-text-2">{t('Owner:')} </span>@{g.owner_username}</div>
-            <div className="text-sm text-text-1"><span className="md:hidden text-text-2">{t('Members:')} </span>{g.member_count}</div>
-            <div className="text-sm text-text-1"><span className="md:hidden text-text-2">{t('Messages:')} </span>{g.message_count.toLocaleString()}</div>
-            <div className="text-xs"><span className="md:hidden text-text-2">{t('Discover:')} </span>{g.discovery_status ? <span className={`rounded px-1.5 py-0.5 font-bold uppercase ${g.discovery_status === 'approved' ? 'bg-success/20 text-success' : g.discovery_status === 'rejected' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{g.discovery_status}</span> : <span className="text-text-2">—</span>}</div>
+            <div className="text-sm text-text-1 truncate"><span className="wide:hidden text-text-2">{t('Owner:')} </span>@{g.owner_username}</div>
+            <div className="text-sm text-text-1"><span className="wide:hidden text-text-2">{t('Members:')} </span>{g.member_count}</div>
+            <div className="text-sm text-text-1"><span className="wide:hidden text-text-2">{t('Messages:')} </span>{g.message_count.toLocaleString()}</div>
+            <div className="text-xs"><span className="wide:hidden text-text-2">{t('Discover:')} </span>{g.discovery_status ? <span className={`rounded px-1.5 py-0.5 font-bold uppercase ${g.discovery_status === 'approved' ? 'bg-success/20 text-success' : g.discovery_status === 'rejected' ? 'bg-danger/20 text-danger' : 'bg-warn/20 text-warn'}`}>{g.discovery_status}</span> : <span className="text-text-2">—</span>}</div>
             <div className="flex justify-end gap-1">
               {can(a, 'content_action') && g.state !== 'taken_down' && <Tool label={t('Take down')} onClick={() => setTakingDown(g)} testid="takedown-guild" danger><Ban size={16} /></Tool>}
               {can(a, 'content_action') && <Tool label={t('Delete server')} onClick={() => del(g)} testid="delete-guild" danger><Gavel size={16} /></Tool>}
@@ -492,7 +492,7 @@ function SettingsPane() {
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-voice>
         <div><span className="block font-semibold">{t('Voice: LiveKit SFU')}</span><span className="block text-sm text-text-2">{t('Leave empty for peer-to-peer calls (fine up to about six people). Enter a LiveKit server to route all voice, video and screen share through it; the server mints join tokens from the channel permissions.')}</span></div>
         <div><label className="label">{t('LiveKit URL (what browsers connect to)')}</label><input className="input" value={lkUrl} onChange={(e) => setLkUrl(e.target.value)} placeholder="wss://livekit.example.com or ws://localhost:7880" data-admin-livekit-url /></div>
-        <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+        <div className="grid grid-cols-2 gap-3 phone:grid-cols-1">
           <div><label className="label">{t('API key')}</label><input className="input" value={lkKey} onChange={(e) => setLkKey(e.target.value)} placeholder="devkey" autoComplete="off" data-admin-livekit-key /></div>
           <div><label className="label">{t('API secret')}</label><input className="input" type="password" value={lkSecret} onChange={(e) => setLkSecret(e.target.value)} placeholder="secret" autoComplete="new-password" data-admin-livekit-secret /></div>
         </div>
@@ -501,7 +501,7 @@ function SettingsPane() {
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-stt>
         <div><span className="block font-semibold">{t('Voice message transcription')}</span><span className="block text-sm text-text-2">{tn('Any OpenAI-compatible speech-to-text server ({endpoint}): the bundled Whisper container ({command}, URL {url}), or a hosted API with a key. Leave the URL empty to turn it off.', { endpoint: <code>POST /v1/audio/transcriptions</code>, command: <code>docker compose --profile stt up -d</code>, url: <code>http://stt:8000</code> })}</span></div>
         <div><label className="label">{t('Transcription server URL')}</label><input className="input" value={sttUrl} onChange={(e) => setSttUrl(e.target.value)} placeholder="http://stt:8000 or https://api.openai.com" data-admin-stt-url /></div>
-        <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+        <div className="grid grid-cols-2 gap-3 phone:grid-cols-1">
           <div><label className="label">{t('API key (optional)')}</label><input className="input" type="password" value={sttKey} onChange={(e) => setSttKey(e.target.value)} autoComplete="new-password" data-admin-stt-key /></div>
           <div><label className="label">{t('Model')}</label><input className="input" value={sttModel} onChange={(e) => setSttModel(e.target.value)} placeholder="Systran/faster-whisper-base.en or whisper-1" data-admin-stt-model /></div>
         </div>
@@ -509,7 +509,7 @@ function SettingsPane() {
       </div>
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-translate>
         <div><span className="block font-semibold">{t('Message translation')}</span><span className="block text-sm text-text-2">{tn('A LibreTranslate-compatible server ({endpoint}), self-hosted or a provider. Adds Translate to message menus; translations are cached per message.', { endpoint: <code>POST /translate</code> })}</span></div>
-        <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+        <div className="grid grid-cols-2 gap-3 phone:grid-cols-1">
           <div><label className="label">{t('Translation server URL')}</label><input className="input" value={trUrl} onChange={(e) => setTrUrl(e.target.value)} placeholder="http://libretranslate:5000" data-admin-translate-url /></div>
           <div><label className="label">{t('API key (optional)')}</label><input className="input" type="password" value={trKey} onChange={(e) => setTrKey(e.target.value)} autoComplete="new-password" data-admin-translate-key /></div>
         </div>
@@ -518,7 +518,7 @@ function SettingsPane() {
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-llm>
         <div><span className="block font-semibold">{t('AI channel summaries')}</span><span className="block text-sm text-text-2">{tn('Any OpenAI-compatible chat server ({endpoint}): a local model or a provider. Members get a Summaries button in server text channels; the last 48 hours of that channel are sent to it when asked. Server owners can turn it off.', { endpoint: <code>POST /v1/chat/completions</code> })}</span></div>
         <div><label className="label">{t('Chat server URL')}</label><input className="input" value={llmUrl} onChange={(e) => setLlmUrl(e.target.value)} placeholder="http://ollama:11434 or https://api.openai.com" data-admin-llm-url /></div>
-        <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+        <div className="grid grid-cols-2 gap-3 phone:grid-cols-1">
           <div><label className="label">{t('API key (optional)')}</label><input className="input" type="password" value={llmKey} onChange={(e) => setLlmKey(e.target.value)} autoComplete="new-password" data-admin-llm-key /></div>
           <div><label className="label">{t('Model')}</label><input className="input" value={llmModel} onChange={(e) => setLlmModel(e.target.value)} placeholder="llama3.1 or gpt-4o-mini" data-admin-llm-model /></div>
         </div>
@@ -541,7 +541,7 @@ function SettingsPane() {
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-oauth>
         <div><span className="block font-semibold">{t('Linked accounts (OAuth)')}</span><span className="block text-sm text-text-2">{tn('Let members connect GitHub, GitLab, Twitch, YouTube, Reddit and Spotify from Settings → Connections (Twitch and YouTube creators can also give their subscribers a server role). Register an OAuth app at each provider with the callback URL {url} and paste its keys.', { url: <code>{instance.app_url ?? ''}/api/connections/&lt;provider&gt;/callback</code> })}</span></div>
         {(['github', 'gitlab', 'twitch', 'youtube', 'reddit', 'spotify'] as const).map((p) => (
-          <div key={p} className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+          <div key={p} className="grid grid-cols-2 gap-3 phone:grid-cols-1">
             <div><label className="label capitalize">{t('{provider} client ID', { provider: p })}</label><input className="input" value={oauth[p]?.client_id ?? ''} onChange={(e) => setOauth({ ...oauth, [p]: { client_id: e.target.value, client_secret: oauth[p]?.client_secret ?? '' } })} autoComplete="off" data-admin-oauth-id={p} /></div>
             <div><label className="label capitalize">{t('{provider} client secret', { provider: p })}</label><input className="input" type="password" value={oauth[p]?.client_secret ?? ''} onChange={(e) => setOauth({ ...oauth, [p]: { client_id: oauth[p]?.client_id ?? '', client_secret: e.target.value } })} autoComplete="off" data-admin-oauth-secret={p} /></div>
           </div>
@@ -554,14 +554,14 @@ function SettingsPane() {
       </div>
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-av>
         <div><span className="block font-semibold">{t('Antivirus (ClamAV)')}</span><span className="block text-sm text-text-2">{tn('Every upload (attachments, voice messages, profile images, emoji) is scanned by a ClamAV daemon before it is stored. {command} runs one; enter {address}. Leave empty to skip scanning.', { command: <code>docker compose --profile av up -d</code>, address: <code>clamav:3310</code> })}</span></div>
-        <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+        <div className="grid grid-cols-2 gap-3 phone:grid-cols-1">
           <div><label className="label">{t('clamd address (host:port)')}</label><input className="input" value={avAddr} onChange={(e) => setAvAddr(e.target.value)} placeholder="clamav:3310" data-admin-av-addr /></div>
           <label className="flex items-center justify-between rounded-xl border border-line bg-bg-0/40 p-3 cursor-pointer"><span><span className="block text-sm font-semibold">{t('Fail closed')}</span><span className="block text-xs text-text-2">{t('Refuse uploads while the scanner is unreachable (otherwise they pass with an error logged).')}</span></span><input type="checkbox" checked={avClosed} onChange={(e) => setAvClosed(e.target.checked)} className="h-5 w-5 accent-accent" data-admin-av-closed /></label>
         </div>
       </div>
       <div className="rounded-xl border border-line bg-bg-1 p-4 space-y-3" data-admin-rate-limits>
         <div><span className="block font-semibold">{t('Rate limits')}</span><span className="block text-sm text-text-2">{tn("Requests allowed per window as {format}, e.g. {example}. Blank uses the server's RL_* environment value (shown as the placeholder). Applies immediately on this instance; other instances pick it up on restart.", { format: <code>count/seconds</code>, example: <code>10/5</code> })}</span></div>
-        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+        <div className="grid grid-cols-3 gap-3 phone:grid-cols-1">
           {([['register', t('Registrations (per IP)')], ['login', t('Logins (per IP)')], ['login_fail', t('Failed logins (per IP)')], ['oauth', t('AI assistant sign-ins and tokens (per IP)')], ['messages', t('Messages (per user)')], ['uploads', t('Uploads (per user)')], ['gifs', t('GIF searches (per user)')], ['search', t('Message searches (per user)')], ['mail', t('Emails sent (per user)')], ['webhooks', t('Webhook messages (per webhook)')]] as const).map(([k, label]) => (
             <div key={k}><label className="label">{label}</label><input className="input" value={rl[k] ?? ''} onChange={(e) => setRl({ ...rl, [k]: e.target.value })} placeholder={rlDefaults[k] ?? ''} data-admin-rl={k} /></div>
           ))}
@@ -651,10 +651,10 @@ function MailPane() {
           const st = ms[m.status ?? 'logged'] ?? ms.logged
           return (
             <div key={m.id} className="border-t border-line first:border-t-0" data-admin-mail-row data-mail-status={m.status ?? 'logged'}>
-              <button type="button" onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i} className="w-full grid grid-cols-[76px_170px_minmax(0,1fr)] max-md:grid-cols-[76px_minmax(0,1fr)] gap-x-4 gap-y-0.5 px-3 py-2 text-left text-sm hover:bg-bg-3">
+              <button type="button" onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i} className="w-full grid grid-cols-[76px_170px_minmax(0,1fr)] phone:grid-cols-[76px_minmax(0,1fr)] gap-x-4 gap-y-0.5 px-3 py-2 text-left text-sm hover:bg-bg-3">
                 <span className={`self-start justify-self-start rounded px-1.5 py-0.5 text-[11px] font-bold ${st.cls}`} title={st.hint}>{st.label}</span>
-                <span className="text-xs text-text-2 pt-0.5 max-md:hidden" title={m.sent_at}>{new Date(m.sent_at).toLocaleString()}</span>
-                <span className="min-w-0"><span className="block truncate font-semibold">{m.subject}</span><span className="block truncate text-xs text-text-2">{t('to {email}', { email: m.to })}<span className="md:hidden"> · {new Date(m.sent_at).toLocaleString()}</span></span></span>
+                <span className="text-xs text-text-2 pt-0.5 phone:hidden" title={m.sent_at}>{new Date(m.sent_at).toLocaleString()}</span>
+                <span className="min-w-0"><span className="block truncate font-semibold">{m.subject}</span><span className="block truncate text-xs text-text-2">{t('to {email}', { email: m.to })}<span className="wide:hidden"> · {new Date(m.sent_at).toLocaleString()}</span></span></span>
               </button>
               {open === i && (
                 <div className="px-3 pb-3 text-sm" data-admin-mail-detail>
@@ -710,7 +710,7 @@ function AuditPane() {
       <div className="mt-4 rounded-xl border border-line bg-bg-1 overflow-hidden">
         {rows.length === 0 && <div className="px-3 py-6 text-sm text-text-2 text-center" data-admin-audit-empty>{busy ? t('Loading…') : t('Nothing logged yet.')}</div>}
         {rows.map((r) => (
-          <div key={r.id} className="grid grid-cols-[170px_1fr] max-md:grid-cols-1 gap-x-4 gap-y-0.5 px-3 py-2 border-t border-line first:border-t-0 text-sm" data-admin-audit-row data-audit-action={r.action}>
+          <div key={r.id} className="grid grid-cols-[170px_1fr] phone:grid-cols-1 gap-x-4 gap-y-0.5 px-3 py-2 border-t border-line first:border-t-0 text-sm" data-admin-audit-row data-audit-action={r.action}>
             <div className="text-xs text-text-2 pt-0.5" title={r.created_at}>{new Date(r.created_at).toLocaleString()}</div>
             <div className="min-w-0">
               <span className="font-semibold">@{r.actor_name || t('unknown')}</span> <span className="text-text-1">{actionLabels()[r.action] ?? r.action}</span>

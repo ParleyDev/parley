@@ -66,7 +66,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
       tab={tab} onTab={setTab} onClose={onClose} wide={tab !== 'overview'} title="Server Settings" startOnMenu={!requested}
       sections={sections}
       footer={isOwner ? (
-        <div className="flex flex-col max-md:flex-row gap-0.5">
+        <div className="flex flex-col phone:flex-row gap-0.5">
           <button onClick={() => openModal({ kind: 'transferOwnership', guildId })} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-text-1 hover:bg-bg-3 hover:text-text-0 whitespace-nowrap" title={t('Transfer Ownership')}><span>{t('Transfer Ownership')}</span><Crown size={16} /></button>
           <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title={t('Delete Server')}><span>{t('Delete Server')}</span><Trash2 size={16} /></button>
         </div>

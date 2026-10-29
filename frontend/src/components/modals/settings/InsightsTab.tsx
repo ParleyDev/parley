@@ -61,7 +61,7 @@ export default function InsightsTab({ guildId }: { guildId: string }) {
       {err && <p className="text-sm text-danger">{err}</p>}
       {!data ? !err && <p className="text-sm text-text-2">{t('Loading…')}</p> : (
         <>
-          <div className="grid grid-cols-4 gap-2 max-md:grid-cols-2">
+          <div className="grid grid-cols-4 gap-2 phone:grid-cols-2">
             {tile(t('Members'), data.totals.members.toLocaleString(), undefined, 'members')}
             {tile(t('Net growth'), `${data.totals.joins - data.totals.leaves >= 0 ? '+' : ''}${(data.totals.joins - data.totals.leaves).toLocaleString()}`, t('{joined} joined · {left} left', { joined: data.totals.joins, left: data.totals.leaves }), 'net')}
             {tile(t('Messages'), data.totals.messages.toLocaleString(), undefined, 'messages')}
@@ -70,7 +70,7 @@ export default function InsightsTab({ guildId }: { guildId: string }) {
           <DailyBars title={t('New members')} data={data.daily} field="joins" />
           <DailyBars title={t('Messages')} data={data.daily} field="messages" />
           <DailyBars title={t('Members who talked')} data={data.daily} field="communicators" />
-          <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+          <div className="grid grid-cols-2 gap-3 phone:grid-cols-1">
             <section className="rounded-xl border border-line bg-bg-1 p-3" data-insights-channels>
               <h2 className="mb-2 text-sm font-semibold">{t('Busiest channels')}</h2>
               {data.top_channels.length === 0 ? <p className="text-sm text-text-2">{t('No messages yet.')}</p> : data.top_channels.map((c) => (

@@ -17,7 +17,7 @@ const Compact = createContext(false)
 export function ControlBar({ compact = false, children }: { compact?: boolean; children: ReactNode }) {
   return (
     <Compact.Provider value={compact}>
-      <div className="flex flex-wrap items-center justify-center gap-2 max-md:gap-1.5">{children}</div>
+      <div className="flex flex-wrap items-center justify-center gap-2 phone:gap-1.5">{children}</div>
     </Compact.Provider>
   )
 }
@@ -90,7 +90,7 @@ export function SplitControl({ chevronLabel, menuKind, menu, align = 'start', ch
   return (
     <span ref={ref} className="flex items-center">
       {children}
-      <button type="button" title={t(chevronLabel)} aria-label={t(chevronLabel)} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`${compact ? 'h-9' : 'h-10'} w-6 shrink-0 rounded-lg flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0 max-md:hidden ${open ? 'bg-bg-3 text-text-0' : ''}`} data-device-chevron={menuKind}>
+      <button type="button" title={t(chevronLabel)} aria-label={t(chevronLabel)} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={`${compact ? 'h-9' : 'h-10'} w-6 shrink-0 rounded-lg flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0 phone:hidden ${open ? 'bg-bg-3 text-text-0' : ''}`} data-device-chevron={menuKind}>
         {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
       </button>
       {open && <CallMenu anchor={ref} align={align} onClose={() => setOpen(false)}>{menu(() => setOpen(false))}</CallMenu>}

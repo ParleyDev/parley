@@ -44,7 +44,7 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
   }
   const addPerson = async (uid: string) => { try { await api.put(`/threads/${threadId}/members/${uid}`); setAddQ(''); void loadPeople() } catch (e) { pushToast((e as Error).message, 'error') } }
   return (
-    <aside className="w-[460px] shrink-0 bg-bg-1 border-l border-line flex flex-col max-md:w-full max-md:border-l-0" data-thread-panel={threadId} data-thread-archived={archived ? '1' : '0'}>
+    <aside className="w-[460px] shrink-0 bg-bg-1 border-l border-line flex flex-col phone:w-full phone:border-l-0" data-thread-panel={threadId} data-thread-archived={archived ? '1' : '0'}>
       <div className="h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line">
         <MessagesSquare size={16} className="text-text-2 shrink-0" /><span className="font-bold truncate" data-thread-title>{thread.name}</span>
         {archived && <span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold text-text-2">{t('ARCHIVED')}</span>}
@@ -101,7 +101,7 @@ export function ThreadsPanel({ channel, onClose }: { channel: Channel; onClose: 
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl max-md:fixed max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:mt-0 max-md:w-auto max-md:max-w-none max-md:rounded-b-none max-md:pb-[var(--sab)]" data-threads-panel>
+      <div className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl phone:fixed phone:inset-x-0 phone:top-auto phone:bottom-0 phone:mt-0 phone:w-auto phone:max-w-none phone:rounded-b-none phone:pb-[var(--sab)]" data-threads-panel>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
           <MessagesSquare size={16} className="text-text-2" /><span className="font-bold">{t('Threads')}</span>
           <button type="button" onClick={() => setArchived((a) => !a)} className="ml-2 rounded-full bg-bg-3 px-2 py-0.5 text-xs font-semibold text-text-1 hover:text-text-0" data-threads-archived-toggle>{archived ? t('Showing archived') : t('Show archived')}</button>

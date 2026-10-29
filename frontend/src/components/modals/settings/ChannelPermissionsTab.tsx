@@ -90,8 +90,8 @@ export default function ChannelPermissionsTab({ channelId }: { channelId: string
         <p className="text-sm text-text-2 mt-1">{t('Only selected members and roles will be able to view this channel.')}</p>
       </div>
 
-      <div className="mt-6 flex gap-6 max-md:flex-col">
-        <div className="w-60 max-md:w-full shrink-0">
+      <div className="mt-6 flex gap-6 phone:flex-col">
+        <div className="w-60 phone:w-full shrink-0">
           <div className="flex items-center justify-between mb-2 relative">
             <span className="label mb-0">{t('Roles / Members')}</span>
             <button onClick={() => setAdding((a) => !a)} className="text-text-2 hover:text-text-0" title={t('Add role or member')}><Plus size={16} /></button>

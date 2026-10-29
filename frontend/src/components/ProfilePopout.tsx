@@ -167,7 +167,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   }
 
   return (
-    <FrameRoom value={user.profile_frame} bleed={full} className={full ? 'md:h-full' : ''} innerClassName={full ? 'md:h-full' : ''}>
+    <FrameRoom value={user.profile_frame} bleed={full} className={full ? 'wide:h-full' : ''} innerClassName={full ? 'wide:h-full' : ''}>
     <div className={`relative w-full ${full ? 'rounded-xl h-full flex flex-col' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
       <ProfileEffect id={user.profile_effect} />
       {/* Banner with overlaid buttons */}

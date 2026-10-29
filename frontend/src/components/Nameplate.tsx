@@ -15,7 +15,7 @@ const touchOnly = () => typeof matchMedia !== 'undefined' && (matchMedia('(hover
  * (the row needs `relative isolate overflow-hidden`), shows its first frame, and plays while the row (or the
  * `hoverRoot` ancestor) is hovered.
  */
-export function NameplateVideo({ value, hoverRoot }: { value?: string | null; hoverRoot?: string }) {
+export function NameplateVideo({ value, hoverRoot, always = false }: { value?: string | null; hoverRoot?: string; /** Keep it playing, not just on hover: your own panel, the open conversation. */ always?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null)
   const [asImage, setAsImage] = useState(touchOnly)
   useEffect(() => { setAsImage(touchOnly()) }, [value])
@@ -23,10 +23,11 @@ export function NameplateVideo({ value, hoverRoot }: { value?: string | null; ho
     const v = ref.current, row = hoverRoot ? v?.closest<HTMLElement>(hoverRoot) : v?.parentElement
     if (!v || !row) return
     const on = () => { if (!reduced()) void v.play().catch(() => {}) }
-    const off = () => { v.pause() }
+    const off = () => { if (!always) v.pause() }
+    if (always) on()
     row.addEventListener('mouseenter', on); row.addEventListener('mouseleave', off)
     return () => { row.removeEventListener('mouseenter', on); row.removeEventListener('mouseleave', off) }
-  }, [value, hoverRoot])
+  }, [value, hoverRoot, always])
   if (!isAssetNameplate(value)) return null
   if (asImage) return <img key={value} src={`${nameplateSrc(value)}/anim`} alt="" draggable={false} onError={() => setAsImage(false)} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" aria-hidden data-nameplate-video={value.slice(6)} data-nameplate-image />
   return <video key={value} ref={ref} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />

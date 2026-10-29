@@ -9,26 +9,17 @@ import { HangUpButton } from './CallControls'
 /**
  * Phones: one call tile, screen share or Activity across the whole screen. Browsers on iPhone can't make a page
  * element fullscreen and a double-click isn't a phone gesture, so a tap opens this instead. Tapping it shows or hides
- * its controls (close, mute, hang up), which also fade after a few seconds. Where the browser allows (Android), it
- * also goes truly fullscreen, and `landscape` turns a screen share sideways. Escape and the Android back button close it.
+ * its controls (close, mute, hang up), which also fade after a few seconds. It stays an overlay inside the app: going
+ * truly fullscreen or locking the orientation changed the screen size under the rest of the layout, which then
+ * didn't recover on exit. Turn the phone to watch sideways. Escape and the Android back button close it.
  */
-export default function PhoneStage({ title, onClose, landscape = false, children }: { title: string; onClose: () => void; landscape?: boolean; children: ReactNode }) {
+export default function PhoneStage({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const t = useT()
   const ref = useRef<HTMLDivElement>(null)
   const [chrome, setChrome] = useState(true)
   const muted = useStore((s) => s.selfMute || s.selfDeaf)
   const inCall = useStore((s) => !!s.myVoiceChannelId)
   useEffect(() => { if (!chrome) return; const id = setTimeout(() => setChrome(false), 3500); return () => clearTimeout(id) }, [chrome])
-  useEffect(() => {
-    const el = ref.current
-    type Orientation = { lock?: (o: string) => Promise<void>; unlock?: () => void }
-    const orientation = (screen as unknown as { orientation?: Orientation }).orientation
-    el?.requestFullscreen?.().then(() => { if (landscape) void orientation?.lock?.('landscape')?.catch(() => {}) }).catch(() => {})
-    return () => {
-      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
-      try { orientation?.unlock?.() } catch { /* not locked */ }
-    }
-  }, [landscape])
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     const back = (e: Event) => { e.preventDefault(); onClose() }
@@ -59,7 +50,7 @@ export default function PhoneStage({ title, onClose, landscape = false, children
 export function ExpandButton({ onClick }: { onClick: () => void }) {
   const t = useT()
   return (
-    <button type="button" onClick={(e) => { e.stopPropagation(); onClick() }} title={t('Fullscreen')} aria-label={t('Fullscreen')} className="absolute right-2 top-2 z-20 h-9 w-9 rounded-full bg-black/60 text-white flex items-center justify-center md:hidden" data-phone-expand>
+    <button type="button" onClick={(e) => { e.stopPropagation(); onClick() }} title={t('Fullscreen')} aria-label={t('Fullscreen')} className="absolute right-2 top-2 z-20 h-9 w-9 rounded-full bg-black/60 text-white flex items-center justify-center wide:hidden" data-phone-expand>
       <Maximize2 size={18} />
     </button>
   )

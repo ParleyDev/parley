@@ -45,7 +45,7 @@ export default function ForumView({ channel }: { channel: Channel }) {
     .sort((a, b) => (b.pinned_at ? 1 : 0) - (a.pinned_at ? 1 : 0) || (sort === 'created' ? b.created_at.localeCompare(a.created_at) : (b.last_message_at ?? b.created_at).localeCompare(a.last_message_at ?? a.created_at)))
   const tagById = Object.fromEntries(tags.map((th) => [th.id, th]))
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 max-md:px-3" data-forum={channel.id}>
+    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 phone:px-3" data-forum={channel.id}>
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {has(perms, P.SEND_MESSAGES) && <button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'newPost', channelId: channel.id })} data-forum-new><Plus size={16} /> {t('New Post')}</button>}
         <select className="input w-auto py-1.5 text-sm" value={sort} onChange={(e) => setSort(e.target.value as 'activity' | 'created')} data-forum-sort>

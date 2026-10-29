@@ -5,7 +5,7 @@ import { dmName, isGroup } from '../lib/dm'
 import { api } from '../lib/api'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import { togglePinned } from '../lib/pins'
 import { nameplateClass } from '../lib/cosmetics'
 import { isUnread, messageRequests, pendingCount, showsUnread, spamRequests, useStore } from '../store'
@@ -18,6 +18,8 @@ import { useT } from '../lib/i18n'
 
 export default function DmSidebar() {
   const t = useT()
+  // The open conversation's nameplate keeps playing; the rest play on hover.
+  const openId = useMatch('/channels/@me/:channelId')?.params.channelId
   const dms = useStore((s) => s.dms)
   const users = useStore((s) => s.users)
   const notes = useStore((s) => s.notes)
@@ -63,7 +65,7 @@ export default function DmSidebar() {
   const spam = useStore((s) => spamRequests(s).length)
 
   return (
-    <aside aria-label={t('Direct messages')} className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
+    <aside aria-label={t('Direct messages')} className="w-[var(--sidebar-w)] tab:w-[224px] phone:w-auto phone:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="h-12 px-2.5 flex items-center border-b border-line">
         <button onClick={() => openModal({ kind: 'newDm' })} className="w-full rounded-md bg-bg-0/60 px-2 py-1.5 text-left text-sm text-text-2 hover:text-text-1">{t('Find or start a conversation')}</button>
       </div>
@@ -107,7 +109,7 @@ export default function DmSidebar() {
     const muted = mutedTarget(notifSettings, d.id)
     return (
       <NavLink key={d.id} to={`/channels/@me/${d.id}`} data-motion-row onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, dmMenu(d, other, e))} data-dm-row={group ? d.id : other?.id} data-group-row={group ? d.id : undefined} data-muted={muted ? 'true' : undefined} data-unread={unread ? 'true' : undefined} className={({ isActive }) => `group ${!group && nameplateClass(other?.nameplate) ? `${nameplateClass(other?.nameplate)} np-hover` : ''} ${!group && isAssetNameplate(other?.nameplate) ? 'np-hover relative isolate overflow-hidden' : ''} flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
-        {!group && <NameplateVideo value={other?.nameplate} />}
+        {!group && <NameplateVideo value={other?.nameplate} always={openId === d.id} />}
         {group ? <GroupIcon dm={d} size={32} /> : other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
         {group ? (
           <span className="min-w-0 flex-1 leading-tight">

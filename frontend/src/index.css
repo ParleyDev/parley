@@ -54,7 +54,7 @@
 :root:not([data-theme="light"]):is([data-palette="aurora"], [data-palette="sunset"]) [data-frame-wrap] > div > :is([data-profile-card], [data-user-menu]) { background-color: var(--color-float) !important; }
 /* Phones and tablets: panes that cover the rest of the app (navigation, member list, side panels) get the solid
    surface too, or the hidden content underneath shows through them. */
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   :root:not([data-theme="light"]):is([data-palette="aurora"], [data-palette="sunset"]) [data-layer] { background-color: var(--color-float) !important; }
 }
 @media (max-width: 1023px) {
@@ -104,8 +104,23 @@ body {
   @apply bg-bg-2 text-text-0 font-sans antialiased;
   overscroll-behavior: none;
 }
-/* Tablets (768–1023px): sidebars stay but shrink, the member list becomes an overlay. */
-@custom-variant tab (@media (min-width: 768px) and (max-width: 1023px));
+/* What counts as a phone: narrow, or short with only a finger to point with (a phone on its side, 844×390), which
+   keeps the phone layout instead of a desktop one squeezed into a phone's height. Use phone: / wide: rather than
+   Tailwind's max-md: / md:, which only look at the width;
+   lib/swipe.ts PHONE_QUERY is the same for scripts. A short desktop window (a mouse) stays desktop. */
+@custom-variant phone {
+  @media (max-width: 767px) { @slot; }
+  @media (max-height: 500px) and (pointer: coarse) { @slot; }
+}
+@custom-variant wide {
+  @media (min-width: 768px) and (min-height: 501px) { @slot; }
+  @media (min-width: 768px) and (pointer: fine) { @slot; }
+}
+/* Tablets (768–1023px): sidebars stay but shrink, the member list becomes an overlay. Not a phone on its side. */
+@custom-variant tab {
+  @media (min-width: 768px) and (max-width: 1023px) and (min-height: 501px) { @slot; }
+  @media (min-width: 768px) and (max-width: 1023px) and (pointer: fine) { @slot; }
+}
 /* Notched phones and Android's edge-to-edge system bars: keep chrome out of the safe areas (viewport-fit=cover is set
    in index.html). The bottom matters on Android, where the 3-button nav bar otherwise covers the composer and self card.
    Capacitor's SystemBars plugin also injects --safe-area-inset-* for WebViews whose env() values are unreliable. */
@@ -129,7 +144,7 @@ body {
 :root[data-motion="reduced"] .pop, :root[data-motion="reduced"] .fade-in, :root[data-motion="reduced"] .animate-ping, :root[data-motion="reduced"] .animate-pulse { animation: none !important; }
 :root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { transition-duration: 0s !important; scroll-behavior: auto !important; }
 /* iOS zooms into inputs smaller than 16px; keep them at 16px on phones. */
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   input, textarea, select { font-size: 16px !important; }
 }
 
@@ -204,7 +219,7 @@ body {
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0 } to { transform: none; opacity: 1 } }
 .sheet-up { animation: sheet-up .18s ease-out both; }
 /* Phones: holding a message opens its sheet, so no iOS callout or text selection on the way. */
-@media (pointer: coarse) and (max-width: 767px) { [data-msg-id] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
+@media (pointer: coarse) and (max-width: 767px), (pointer: coarse) and (max-height: 500px) { [data-msg-id] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
 @keyframes bounce-dot { 0%, 80%, 100% { transform: translateY(0) } 40% { transform: translateY(-4px) } }
 .typing-dot { animation: bounce-dot 1.2s infinite; }
 .typing-dot:nth-child(2) { animation-delay: .15s }

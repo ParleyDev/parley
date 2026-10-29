@@ -9,7 +9,7 @@ import { useUserMenu } from './UserContextMenu'
 import { useUserAudioMap } from '../lib/userAudio'
 import { has, P } from '../lib/perms'
 import { api } from '../lib/api'
-import { usePhone } from '../lib/swipe'
+import { useLandscape, usePhone } from '../lib/swipe'
 import type { Channel, User, VoiceState } from '../lib/types'
 import { screenShareSupported, voice } from '../lib/voice'
 import Avatar from './Avatar'
@@ -163,6 +163,9 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const count = participants.length
 
   const phone = usePhone()
+  // Filling a phone's screen: stacked in portrait, side by side once it's turned sideways (two per row at most).
+  const landscape = useLandscape()
+  const fillCols = landscape ? Math.min(2, Math.max(1, shown.length)) : shown.length >= 3 ? 2 : 1
   const videoFit = useVideoFit()
   // Right-click a tile: the person's menu, with their volume and local mute while you're in the call.
   const userMenu = useUserMenu(channel.guild_id)
@@ -226,14 +229,14 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   return (
     <main className="flex-1 min-w-0 flex flex-col bg-bg-0 relative">
       {tileMenu.menu && <ContextMenu {...tileMenu.menu} onClose={tileMenu.close} label={t('Participant')} />}
-      <header className="h-12 shrink-0 px-4 max-md:px-2 flex items-center gap-2 border-b border-line">
+      <header className="h-12 shrink-0 px-4 phone:px-2 flex items-center gap-2 border-b border-line">
         <MobileBack />
         {isStudio ? <Disc3 size={22} className="text-text-2 shrink-0" /> : isStage ? <Radio size={22} className="text-text-2 shrink-0" /> : <Volume2 size={22} className="text-text-2 shrink-0" />}<span className="font-bold truncate">{channel.name}</span>
         {isStudio && liveSession && <span className="flex items-center gap-1.5 rounded-full bg-danger/20 px-2 py-0.5 text-[11px] font-bold uppercase text-danger" data-studio-rec><span className="h-2 w-2 rounded-full bg-danger animate-pulse" />{t('REC · {name}', { name: liveSession.name })}</span>}
         {/* Phones: the name and the people count; encryption and channel status are a desktop header's details. */}
-        <span className="max-md:hidden flex"><CallLock channelId={channel.id} /></span>
+        <span className="phone:hidden flex"><CallLock channelId={channel.id} /></span>
         <span className="text-xs text-text-2 whitespace-nowrap" data-voice-count>{isStage ? t('{n} speaking · {m} listening', { n: tiles.length, m: audience.length }) : t('{n} connected', { n: count })}</span>
-        {channel.kind === 'voice' && <span className="max-md:hidden contents"><VoiceStatus channel={channel} canSet={inThis || has(myChannelPerms(useStore.getState(), channel.id), P.MANAGE_CHANNELS)} /></span>}
+        {channel.kind === 'voice' && <span className="phone:hidden contents"><VoiceStatus channel={channel} canSet={inThis || has(myChannelPerms(useStore.getState(), channel.id), P.MANAGE_CHANNELS)} /></span>}
         {inThis && suppressed && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase">{t('Muted by server')}</span>}
         {inThis && !suppressed && myVs?.deaf && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-deafened>{t('Deafened by a moderator')}</span>}
         {inThis && !suppressed && !myVs?.deaf && myVs?.mute && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-muted>{t('Muted by a moderator')}</span>}
@@ -246,7 +249,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {/* Stage */}
         <div className="flex-1 min-w-0 flex flex-col">
           {preJoin ? <PreJoin channel={channel} participants={participants} users={users} canConnect={canConnect} connecting={connecting} switching={!!myChannel} recording={liveSession?.name} /> : (
-          <div className="flex-1 min-h-0 overflow-hidden p-4 max-md:p-2 flex flex-col gap-3">
+          <div className="flex-1 min-h-0 overflow-hidden p-4 phone:p-2 flex flex-col gap-3">
             {!isStage && <ActivityChips channelId={channel.id} inCall={inThis} />}
             {count === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center">
@@ -258,7 +261,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
               <>
                 <div className="relative flex-1 min-h-0"><ActivityFrame session={activity} />{phone && <ExpandButton onClick={() => setStage('activity')} />}</div>
                 <div className="shrink-0 flex gap-3 overflow-x-auto pb-1">
-                  {shown.map((x) => <div key={x.key} className="w-40 max-md:w-28 shrink-0">{renderTile(x, false)}</div>)}
+                  {shown.map((x) => <div key={x.key} className="w-40 phone:w-28 shrink-0">{renderTile(x, false)}</div>)}
                 </div>
               </>
             ) : focusTile ? (
@@ -266,18 +269,18 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 <div className="flex-1 min-h-0">{renderTile(focusTile, true)}</div>
                 {strip.length > 0 && (
                   <div className="shrink-0 flex gap-3 overflow-x-auto pb-1">
-                    {strip.map((x) => <div key={x.key} className="w-48 max-md:w-36 shrink-0">{renderTile(x, false)}</div>)}
+                    {strip.map((x) => <div key={x.key} className="w-48 phone:w-36 shrink-0">{renderTile(x, false)}</div>)}
                   </div>
                 )}
               </>
             ) : (
               phone && shown.length <= 4 ? (
                 // Phones with a few people: the tiles share the whole height instead of sitting small at the top.
-                <div className="flex-1 min-h-0 grid gap-2" data-voice-grid data-voice-grid-fill style={{ gridTemplateColumns: shown.length >= 3 ? 'repeat(2, minmax(0, 1fr))' : '1fr', gridTemplateRows: `repeat(${shown.length >= 3 ? 2 : shown.length}, minmax(0, 1fr))` }}>
+                <div className="flex-1 min-h-0 grid gap-2" data-voice-grid data-voice-grid-fill style={{ gridTemplateColumns: `repeat(${fillCols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${Math.ceil(shown.length / fillCols)}, minmax(0, 1fr))` }}>
                   {shown.map((x) => renderTile(x, false, true))}
                 </div>
               ) : <div className="flex-1 overflow-y-auto">
-                <div className="grid gap-4 max-md:gap-2 justify-center content-start" data-voice-grid style={{ gridTemplateColumns: phone ? (shown.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))') : `repeat(auto-fit, minmax(min(240px, 100%), ${shown.length <= 2 ? '480px' : '340px'}))` }}>
+                <div className="grid gap-4 phone:gap-2 justify-center content-start" data-voice-grid style={{ gridTemplateColumns: phone ? (shown.length === 1 ? '1fr' : 'repeat(2, minmax(0, 1fr))') : `repeat(auto-fit, minmax(min(240px, 100%), ${shown.length <= 2 ? '480px' : '340px'}))` }}>
                   {shown.map((x) => renderTile(x, false))}
                 </div>
               </div>
@@ -305,7 +308,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           </div>
 
           )}
-          {!preJoin && <div className="shrink-0 px-3 pt-3 pb-4 max-md:px-2 max-md:pb-3 border-t border-line" data-voice-controls>
+          {!preJoin && <div className="shrink-0 px-3 pt-3 pb-4 phone:px-2 phone:pb-3 border-t border-line" data-voice-controls>
               <ControlBar>
                 <ControlGroup>
                   <SplitControl chevronLabel={t('Microphone options')} menuKind="input" menu={(close) => <MicMenu close={close} />}>
@@ -369,21 +372,21 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           const tile = stage === 'activity' ? null : shown.find((x) => x.key === stage)
           if (stage === 'activity' ? !activity : !tile) { queueMicrotask(() => setStage(null)); return null }
           return (
-            <PhoneStage title={tile ? (tile.user?.display_name ?? channel.name) : channel.name} landscape={tile?.kind === 'screen'} onClose={() => setStage(null)}>
+            <PhoneStage title={tile ? (tile.user?.display_name ?? channel.name) : channel.name} onClose={() => setStage(null)}>
               {tile ? renderTile(tile, true) : <ActivityFrame session={activity!} />}
             </PhoneStage>
           )
         })()}
         {/* Chat: side panel on wide screens, full overlay on phones. */}
         {chat && (
-          <section className="relative flex flex-col bg-bg-2 border-l border-line shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10" data-layer="md" style={{ width: chatPanel.width }} data-voice-chat-panel>
+          <section className="relative flex flex-col bg-bg-2 border-l border-line shrink-0 phone:absolute phone:inset-0 phone:w-auto phone:border-l-0 phone:z-10" data-layer="md" style={{ width: chatPanel.width }} data-voice-chat-panel>
             <div {...chatPanel.handleProps} />
             <div className="h-12 shrink-0 px-3 flex items-center gap-2 border-b border-line">
               <MessageSquare size={18} className="text-text-2" />
               <span className="font-bold truncate">{channel.name}</span>
               <span className="text-xs text-text-2">{t('chat')}</span>
               {inThis && (
-                <span className="ml-auto flex items-center gap-1 md:hidden">
+                <span className="ml-auto flex items-center gap-1 wide:hidden">
                   <button title={selfMute ? t('Unmute') : t('Mute')} onClick={() => voice.setMute(!selfMute)} className={`h-8 w-8 rounded-md flex items-center justify-center hover:bg-bg-3 ${selfMute ? 'text-danger' : 'text-text-1'}`}>{selfMute ? <MicOff size={18} /> : <Mic size={18} />}</button>
                   <button title={t('Disconnect')} onClick={() => voice.leave()} className="h-8 w-8 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-danger"><PhoneOff size={18} /></button>
                 </span>
@@ -432,7 +435,7 @@ function PreJoin({ channel, participants, users, canConnect, connecting, switchi
       {people.length > 0 && (
         <div className="flex max-w-[520px] flex-wrap justify-center gap-2" data-prejoin-people>
           {people.slice(0, 6).map((u) => (
-            <div key={u.id} title={u.display_name} className="flex h-[88px] w-[156px] max-md:h-16 max-md:w-28 items-center justify-center rounded-lg bg-bg-3" style={u.theme_accent ? { backgroundColor: u.theme_accent } : undefined}>
+            <div key={u.id} title={u.display_name} className="flex h-[88px] w-[156px] phone:h-16 phone:w-28 items-center justify-center rounded-lg bg-bg-3" style={u.theme_accent ? { backgroundColor: u.theme_accent } : undefined}>
               <Avatar user={u} size={44} />
             </div>
           ))}
@@ -440,7 +443,7 @@ function PreJoin({ channel, participants, users, canConnect, connecting, switchi
       )}
       <div className="max-w-full">
         {recording !== undefined && <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-danger/20 px-2.5 py-0.5 text-[11px] font-bold uppercase text-danger" data-prejoin-rec><span className="h-2 w-2 rounded-full bg-danger animate-pulse" />{t('Recording')}{recording ? ` · ${recording}` : ''}</span>}
-        <h2 className="flex items-center justify-center gap-2 text-3xl max-md:text-2xl font-bold"><Icon size={30} className="text-text-1 shrink-0" /><span className="truncate">{channel.name}</span></h2>
+        <h2 className="flex items-center justify-center gap-2 text-3xl phone:text-2xl font-bold"><Icon size={30} className="text-text-1 shrink-0" /><span className="truncate">{channel.name}</span></h2>
         {isStage && channel.topic && <p className="mt-1 text-sm text-text-0">{channel.topic}</p>}
         <p className="mt-1.5 text-sm text-text-1" data-prejoin-who>{who}</p>
       </div>

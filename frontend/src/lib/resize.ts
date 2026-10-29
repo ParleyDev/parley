@@ -42,10 +42,10 @@ function useResizable(edge: Edge, key: string, initial: number, min: number, max
     onKeyDown: (e: React.KeyboardEvent) => { if (e.key === grow || e.key === shrink) { e.preventDefault(); const w = clamp(size + (e.key === grow ? 24 : -24)); setSize(w); save(w) } },
     role: 'separator' as const, 'aria-orientation': (axis === 'x' ? 'vertical' : 'horizontal') as 'vertical' | 'horizontal', 'aria-valuenow': size, tabIndex: 0, title: 'Drag to resize · double-click to reset',
     className: edge === 'left'
-      ? 'absolute left-0 top-0 bottom-0 w-2 -ml-1 cursor-col-resize z-20 hover:bg-accent/40 active:bg-accent/60 max-md:hidden'
+      ? 'absolute left-0 top-0 bottom-0 w-2 -ml-1 cursor-col-resize z-20 hover:bg-accent/40 active:bg-accent/60 phone:hidden'
       : edge === 'right'
         ? 'absolute right-0 top-0 bottom-0 w-2 -mr-1 cursor-col-resize z-30 hover:bg-accent/40 active:bg-accent/60 max-lg:hidden'
-        : 'absolute left-0 right-0 bottom-0 h-2 -mb-1 cursor-row-resize z-20 hover:bg-accent/40 active:bg-accent/60 max-md:hidden',
+        : 'absolute left-0 right-0 bottom-0 h-2 -mb-1 cursor-row-resize z-20 hover:bg-accent/40 active:bg-accent/60 phone:hidden',
     'data-resize-handle': key,
   }
   return { size, setContainer: (el: HTMLElement | null) => { containerRef.current = el }, handleProps }

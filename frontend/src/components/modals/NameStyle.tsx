@@ -45,17 +45,17 @@ export default function NameStyleModal({ onClose, name, value, onApply, title: t
   const surprise = () => { const s = surpriseStyle(); setFont(s.font); setEffect(s.effect); setColors(s.colors); setNone(false) }
   return (
     <Modal title={title} onClose={onClose} width="max-w-4xl" footer={<><button type="button" className="btn-ghost mr-auto" onClick={surprise} data-name-surprise><Sparkles size={14} /> {t('Surprise Me')}</button><button type="button" className="btn-ghost" onClick={onClose}>{t('Cancel')}</button><button type="button" className="btn-primary" onClick={() => onApply({ font, effect, colors: none ? [] : cur })} data-name-apply>{t('Apply')}</button></>}>
-      <div className="grid grid-cols-[1fr_320px] max-md:grid-cols-1 gap-6" data-name-style-modal data-name-mode={mode}>
+      <div className="grid grid-cols-[1fr_320px] phone:grid-cols-1 gap-6" data-name-style-modal data-name-mode={mode}>
         <div className="space-y-5">
           <section>
             <h3 className="label">{t('Choose font')}</h3>
-            <div className="grid grid-cols-4 max-md:grid-cols-3 gap-2" data-font-options>
+            <div className="grid grid-cols-4 phone:grid-cols-3 gap-2" data-font-options>
               {FONTS.map((f) => <button key={f.id} type="button" onClick={() => setFont(f.id)} title={f.label} className={`h-14 rounded-lg border text-xl font-semibold ${font === f.id ? 'border-accent bg-accent/15' : 'border-line bg-bg-1 hover:border-text-2'} ${f.id !== 'default' ? `nf-${f.id}` : ''}`} data-font={f.id} aria-pressed={font === f.id}>Gg</button>)}
             </div>
           </section>
           <section>
             <h3 className="label">{t('Choose effect')}</h3>
-            <div className="grid grid-cols-4 max-md:grid-cols-3 gap-2" data-effect-options>
+            <div className="grid grid-cols-4 phone:grid-cols-3 gap-2" data-effect-options>
               {EFFECTS.map((e) => { const l = sample(e.id); return <button key={e.id} type="button" onClick={() => pickEffect(e.id)} className={`h-14 rounded-lg border text-[15px] font-semibold ${effect === e.id ? 'border-accent bg-accent/15' : 'border-line bg-bg-1 hover:border-text-2'}`} data-effect={e.id} aria-pressed={effect === e.id}><span className={l.className} style={l.style}>{e.label}</span></button> })}
             </div>
           </section>

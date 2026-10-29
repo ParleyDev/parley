@@ -17,7 +17,7 @@ export default function AppDirectoryPage() {
   const tags = [...new Set((list ?? []).flatMap((a) => a.tags))].sort()
   const add = (a: DirApp, server: boolean) => navigate(`/oauth2/authorize?client_id=${a.client_id}&scope=${encodeURIComponent(server ? 'bot applications.commands' : 'applications.commands')}${server ? `&permissions=${a.install_permissions}` : ''}`)
   return (
-    <div className="h-full overflow-y-auto bg-bg-0 p-6 max-md:p-3" data-app-directory>
+    <div className="h-full overflow-y-auto bg-bg-0 p-6 phone:p-3" data-app-directory>
       <div className="mx-auto max-w-4xl space-y-4">
         <div className="flex items-center gap-3">
           <button type="button" className="rounded-full p-1.5 text-text-2 hover:bg-bg-3" onClick={() => navigate(-1)} title={t('Back')}><ArrowLeft size={20} /></button>
@@ -26,7 +26,7 @@ export default function AppDirectoryPage() {
         <div className="relative"><input className="input pl-9" placeholder={t('Search apps')} value={q} onChange={(e) => setQ(e.target.value)} data-app-search /><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" /></div>
         {tags.length > 0 && <div className="flex flex-wrap gap-1.5">{['', ...tags].map((tg) => <button key={tg || 'all'} type="button" onClick={() => setTag(tg)} className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${tag === tg ? 'bg-accent text-white' : 'bg-bg-3 text-text-1'}`} data-app-tag={tg || 'all'}>{tg || t('All')}</button>)}</div>}
         {list === null ? <p className="text-sm text-text-2">{t('Loading…')}</p> : list.length === 0 ? <p className="text-sm text-text-2">{t('No apps found.')}</p> : (
-          <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+          <div className="grid grid-cols-2 gap-3 phone:grid-cols-1">
             {list.map((a) => (
               <div key={a.id} className="flex flex-col gap-2 rounded-xl border border-line bg-bg-1 p-4" data-directory-app={a.id}>
                 <div className="flex items-center gap-3">

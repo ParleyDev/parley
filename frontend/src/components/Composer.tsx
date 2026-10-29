@@ -505,7 +505,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
 
   if (!canSend) {
     return (
-      <div className="shrink-0 px-4 pb-2 pt-1 max-md:px-2 max-md:pb-2">
+      <div className="shrink-0 px-4 pb-2 pt-1 phone:px-2 phone:pb-2">
         {rulesPending && applying
           ? <div className="rounded-xl bg-accent/10 border border-accent/40 px-4 py-3 text-[15px] text-text-1 flex items-center gap-3" data-application-gate><span className="flex-1">{tn('{guild} reviews new members. Apply to start chatting.', { guild: <b>{rulesGuild?.name}</b> })}</span><button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'application', guildId: channel.guild_id! })} data-application-open>{t('Apply')}</button></div>
           : rulesPending
@@ -523,7 +523,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
   }
 
   return (
-    <div className="shrink-0 px-4 pb-2 pt-1 max-md:px-2 max-md:pb-2 relative">
+    <div className="shrink-0 px-4 pb-2 pt-1 phone:px-2 phone:pb-2 relative">
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-accent/20 backdrop-blur-[2px]">
           <div className="rounded-2xl border-2 border-dashed border-accent bg-bg-1/90 px-10 py-8 text-center pop">
@@ -532,37 +532,46 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
           </div>
         </div>
       )}
-      {slow > 0 && (
-        <div className={`absolute -top-5 right-5 h-5 z-10 flex items-center gap-1 text-xs ${cooling ? 'text-text-0 font-semibold' : 'text-text-2'}`} title={slowExempt ? t('Slowmode is {time}, but you are exempt', { time: shortDuration(slow) }) : t('Slowmode is on: one message every {time}', { time: shortDuration(slow) })} data-slowmode={cooling ? 'cooling' : 'on'}>
-          <Timer size={13} />{cooling ? shortDuration((coolUntil - now) / 1000) : slowExempt ? t('Slowmode (exempt)') : t('Slowmode {time}', { time: shortDuration(slow) })}
+      {/* Typing and slowmode share one strip over the bottom of the chat: a solid background with a short fade above,
+          so it reads as part of the message box rather than text printed over messages. Nothing to say: no strip. */}
+      {(slow > 0 || typers.length > 0) && (
+        <div className="pointer-events-none absolute bottom-full inset-x-0 z-10" data-composer-status>
+          <div className="h-3 bg-gradient-to-t from-bg-2 to-transparent" />
+          <div className="h-5 bg-bg-2 px-5 phone:px-3 flex items-center gap-3 text-xs text-text-1">
+            <span className="min-w-0 flex-1 flex items-center gap-1.5 truncate" data-typing-row>
+              {typers.length > 0 && (
+                <>
+                  <span className="flex gap-0.5"><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /></span>
+                  <span>{tn(typers.length > 3 ? '{names} and others are typing…' : typers.length === 1 ? '{names} is typing…' : '{names} are typing…', { names: <b>{typers.slice(0, 3).join(', ')}</b> })}</span>
+                </>
+              )}
+            </span>
+            {slow > 0 && (
+              <span className={`pointer-events-auto shrink-0 flex items-center gap-1 ${cooling ? 'text-text-0 font-semibold' : 'text-text-2'}`} title={slowExempt ? t('Slowmode is {time}, but you are exempt', { time: shortDuration(slow) }) : t('Slowmode is on: one message every {time}', { time: shortDuration(slow) })} data-slowmode={cooling ? 'cooling' : 'on'}>
+                <Timer size={13} />{cooling ? shortDuration((coolUntil - now) / 1000) : slowExempt ? t('Slowmode (exempt)') : t('Slowmode {time}', { time: shortDuration(slow) })}
+              </span>
+            )}
+          </div>
         </div>
       )}
-      <div className="absolute -top-5 left-5 right-5 h-5 text-xs text-text-1 flex items-center gap-1.5 pointer-events-none" data-typing-row>
-        {typers.length > 0 && (
-          <>
-            <span className="flex gap-0.5"><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /></span>
-            <span>{tn(typers.length > 3 ? '{names} and others are typing…' : typers.length === 1 ? '{names} is typing…' : '{names} are typing…', { names: <b>{typers.slice(0, 3).join(', ')}</b> })}</span>
-          </>
-        )}
-      </div>
-      <FormatToolbar textarea={ref} onChange={setValue} className="absolute -top-8 left-4 max-md:left-2 z-20" />
+      <FormatToolbar textarea={ref} onChange={setValue} className="absolute -top-8 left-4 phone:left-2 z-20" />
       {mention && mentionItems.length > 0 && (
-        <MentionSuggest items={mentionItems} active={mentionIdx} trigger={mention.trigger} query={mention.query} onPick={pickMention} onHover={setMentionIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
+        <MentionSuggest items={mentionItems} active={mentionIdx} trigger={mention.trigger} query={mention.query} onPick={pickMention} onHover={setMentionIdx} className="bottom-full left-4 right-4 phone:left-2 phone:right-2 mb-2" />
       )}
       {typingCmd && (optionSuggestions.length > 0 ? (
-        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label={t('Suggestions')} data-option-suggest>
+        <div className="absolute bottom-full left-4 right-4 phone:left-2 phone:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label={t('Suggestions')} data-option-suggest>
           <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{typingCmd.opt?.name}</div>
           {optionSuggestions.map((c, i) => (
             <button key={`${c.name}:${c.value}`} type="button" role="option" aria-selected={i === autoIdx} onMouseDown={(e) => { e.preventDefault(); pickOption(c) }} onMouseEnter={() => setAutoIdx(i)} className={`w-full px-3 py-1.5 text-left text-sm ${i === autoIdx ? 'bg-bg-3' : ''}`} data-option-choice={c.name}>{c.name}</button>
           ))}
         </div>
       ) : typingCmd.cmd.options.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-lg border border-line bg-bg-1 px-3 py-1.5 text-xs text-text-2 shadow" data-option-hints>
+        <div className="absolute bottom-full left-4 right-4 phone:left-2 phone:right-2 mb-2 z-30 rounded-lg border border-line bg-bg-1 px-3 py-1.5 text-xs text-text-2 shadow" data-option-hints>
           <span className="font-semibold text-text-1">/{typingCmd.cmd.name}</span>{' '}{typingCmd.cmd.options.map((o) => <span key={o.name} className={`mr-2 ${o.required ? 'text-text-1' : ''}`}>{optionHint(o)}{o.required ? '' : '?'}</span>)}
         </div>
       ))}
       {commands.length > 0 && (
-        <div className="absolute bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label={t('Commands')} data-command-suggest>
+        <div className="absolute bottom-full left-4 right-4 phone:left-2 phone:right-2 mb-2 z-30 rounded-xl border border-line bg-bg-1 py-2 shadow-xl pop" role="listbox" aria-label={t('Commands')} data-command-suggest>
           <div className="px-3 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Commands')}</div>
           {commands.map((c, i) => (
             <button key={c.name} type="button" role="option" aria-selected={i === cmdIdx} onMouseDown={(e) => { e.preventDefault(); pickCommand(c) }} onMouseEnter={() => setCmdIdx(i)}
@@ -575,9 +584,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
         </div>
       )}
       {shortcode && suggestions.length > 0 && !mention && (
-        <ShortcodeSuggest query={shortcode.query} items={suggestions} active={suggestIdx} onPick={pickSuggestion} onHover={setSuggestIdx} className="bottom-full left-4 right-4 max-md:left-2 max-md:right-2 mb-2" />
+        <ShortcodeSuggest query={shortcode.query} items={suggestions} active={suggestIdx} onPick={pickSuggestion} onHover={setSuggestIdx} className="bottom-full left-4 right-4 phone:left-2 phone:right-2 mb-2" />
       )}
-      <div ref={boxRef} className="rounded-xl bg-bg-3 border border-line focus-within:border-accent/50 transition" data-composer-box data-composer-narrow={narrow ? '1' : undefined}>
+      <div ref={boxRef} className="rounded-xl bg-bg-3 border border-line shadow-lg shadow-black/25 focus-within:border-accent/50 transition" data-composer-box data-composer-narrow={narrow ? '1' : undefined}>
         {reply && (
           <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-xl">
             <span>{tn('Replying to {name}', { name: <b className="text-text-0">{reply.author.display_name}</b> })}</span>
@@ -615,7 +624,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
             <div className="flex h-8 min-w-0 flex-1 items-center justify-end gap-[2px] overflow-hidden" data-voice-levels>
               {Array.from({ length: 40 }, (_, i) => { const v = rec?.levels[rec.levels.length - 40 + i] ?? 0; return <span key={i} className="w-[3px] shrink-0 rounded-full bg-accent transition-[height] duration-100" style={{ height: `${Math.max(10, v * 100)}%`, opacity: 0.4 + v * 0.6 }} /> })}
             </div>
-            <span className="text-xs text-text-2 max-md:hidden">{recBusy ? t('Sending…') : t('Recording…')}</span>
+            <span className="text-xs text-text-2 phone:hidden">{recBusy ? t('Sending…') : t('Recording…')}</span>
             <button className="h-9 w-9 rounded-full bg-accent text-white flex items-center justify-center hover:bg-accent-hover disabled:opacity-50" title={t('Send voice message')} onClick={sendRecording} disabled={recBusy} data-voice-send><SendHorizontal size={18} /></button>
           </div>
         ) : (
@@ -640,7 +649,8 @@ export default function Composer({ channel, reply, onCancelReply, onSent }: Prop
                 onEmoji={(token) => { insert(token); recordEmoji(token) }} onSticker={sendSticker} onGif={sendGif} />
             )}
           </div>
-          <button onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-1 hover:text-accent-hover" title={t('Send')}><SendHorizontal size={22} /></button>
+          {/* Taking focus from the text box would close a phone's keyboard after every message. */}
+          <button onMouseDown={(e) => e.preventDefault()} onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-1 hover:text-accent-hover" title={t('Send')} data-composer-send><SendHorizontal size={22} /></button>
         </div>
         )}
       </div>

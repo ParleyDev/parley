@@ -59,7 +59,7 @@ export default function StickersTab({ guildId }: { guildId: string }) {
       </div>
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/apng" className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = '' }} data-sticker-file />
       {(file || editing) ? (
-        <form onSubmit={submit} className="rounded-xl border border-line bg-bg-0/40 p-4 flex gap-4 max-md:flex-col" data-sticker-form>
+        <form onSubmit={submit} className="rounded-xl border border-line bg-bg-0/40 p-4 flex gap-4 phone:flex-col" data-sticker-form>
           <div className="h-32 w-32 shrink-0 rounded-lg bg-bg-3 flex items-center justify-center overflow-hidden">{preview && <img src={preview} alt="" className="max-h-full max-w-full object-contain" />}</div>
           <div className="flex-1 space-y-3 min-w-0">
             <div><label className="label">{t('Name')}</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={30} minLength={2} required data-sticker-name /></div>

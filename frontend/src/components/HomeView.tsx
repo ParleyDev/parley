@@ -50,7 +50,7 @@ export default function HomeView() {
 
   return (
     <main className="flex-1 min-w-0 flex flex-col bg-bg-2">
-      <header className="h-12 shrink-0 px-4 max-md:px-2 flex items-center gap-2 border-b border-line overflow-x-auto">
+      <header className="h-12 shrink-0 px-4 phone:px-2 flex items-center gap-2 border-b border-line overflow-x-auto">
         <MobileBack />
         <Users size={22} className="text-text-2 shrink-0" /><span className="font-bold">{t('Friends')}</span>
         <span className="mx-2 h-6 w-px bg-line shrink-0" />
@@ -65,7 +65,7 @@ export default function HomeView() {
       <div className="flex flex-1 min-h-0">
       {tab === 'add' ? <AddFriend /> : (
         <div className="flex-1 min-h-0 min-w-0 overflow-y-auto">
-          <div className="p-6 max-md:p-3 w-full">
+          <div className="p-6 phone:p-3 w-full">
             <GettingStarted onAddFriend={() => setTab('add')} />
             <div className="relative mb-5">
               <input className="input pl-9 py-2" placeholder={t('Search')} value={q} onChange={(e) => setQ(e.target.value)} />
@@ -173,7 +173,7 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
     <div className="group flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-bg-3" data-motion-row>
       <button onClick={(e) => openModal({ kind: 'profile', userId: u.id, anchor: anchorOf(e) })}><Avatar user={u} size={36} presence={r.kind === 'friend'} /></button>
       <div className="min-w-0 flex-1">
-        <div className="font-semibold truncate"><StyledName userId={u.id}>{u.display_name}</StyledName> <span className="text-text-2 font-normal text-sm opacity-0 group-hover:opacity-100 max-md:opacity-100">@{u.username}</span></div>
+        <div className="font-semibold truncate"><StyledName userId={u.id}>{u.display_name}</StyledName> <span className="text-text-2 font-normal text-sm opacity-0 group-hover:opacity-100 phone:opacity-100">@{u.username}</span></div>
         <div className="text-xs text-text-2">{sub}</div>
         {r.note && (r.kind === 'incoming' || r.kind === 'outgoing') && <div className="mt-0.5 truncate text-sm text-text-1" title={r.note} data-request-note>“{r.note}”</div>}
       </div>
@@ -234,7 +234,7 @@ function AddFriend() {
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="p-6 max-md:p-3 w-full">
+      <div className="p-6 phone:p-3 w-full">
         <h2 className="font-bold uppercase text-sm tracking-wide">{t('Add Friend')}</h2>
         <p className="text-sm text-text-2 mt-1">{t('You can add friends with their username.')}</p>
         <form onSubmit={submit} className={`mt-4 flex items-center gap-2 rounded-lg bg-bg-0/60 border p-1 pl-3 ${msg ? (msg.ok ? 'border-success' : 'border-danger') : 'border-line focus-within:border-accent/70'}`}>

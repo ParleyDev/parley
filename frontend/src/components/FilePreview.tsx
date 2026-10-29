@@ -7,7 +7,7 @@ import { useT } from '../lib/i18n'
 
 /** Extensions shown as text, mapped to a highlight.js language ('' = plain text). */
 const TEXT_EXT: Record<string, string> = {
-  txt: '', log: '', csv: '', tsv: '', ini: 'ini', conf: '', cfg: '', env: '', md: 'markdown', markdown: 'markdown',
+  txt: '', log: '', csv: '', tsv: '', ini: 'ini', conf: '', cfg: '', env: '', wide: 'markdown', markdown: 'markdown',
   js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', json: 'json',
   py: 'python', rs: 'rust', go: 'go', java: 'java', kt: 'kotlin', cs: 'csharp', c: 'c', h: 'c', cpp: 'cpp', cc: 'cpp', hpp: 'cpp',
   css: 'css', scss: 'scss', html: 'xml', xml: 'xml', svg: 'xml', sql: 'sql', yaml: 'yaml', yml: 'yaml', toml: 'ini',

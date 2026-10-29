@@ -49,7 +49,7 @@ export default function WelcomeTab({ guildId }: { guildId: string }) {
         <label className="label">{t('Suggested channels')} <span className="normal-case font-normal text-text-2">{t('(up to 5)')}</span></label>
         <div className="space-y-2">
           {rows.map((r, i) => (
-            <div key={i} className="flex gap-2 max-md:flex-wrap" data-welcome-row={i}>
+            <div key={i} className="flex gap-2 phone:flex-wrap" data-welcome-row={i}>
               <input className="input w-12 shrink-0 px-0 text-center text-lg" value={r.emoji} onChange={(e) => set(i, { emoji: e.target.value })} maxLength={64} placeholder="✨" aria-label={t('Emoji')} data-welcome-emoji={i} />
               <select className="input w-44 shrink-0" value={r.channel_id} onChange={(e) => set(i, { channel_id: e.target.value })} data-welcome-pick={i}>
                 <option value="">{t('Pick a channel')}</option>

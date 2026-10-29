@@ -151,7 +151,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
   const rows = Math.max(1, Math.ceil(tiles.length / cols))
   const rowHeight = Math.max(80, (stage.height - 80 - (rows - 1) * 12) / rows)
   return (
-    <section ref={(el) => stage.setContainer(el?.parentElement ?? null)} style={{ height: stage.height }} className="relative shrink-0 border-b border-line bg-bg-0 px-4 pt-3 pb-2 flex flex-col max-md:h-auto max-md:max-h-[55vh]" data-dm-call data-call-height={stage.height}>
+    <section ref={(el) => stage.setContainer(el?.parentElement ?? null)} style={{ height: stage.height }} className="relative shrink-0 border-b border-line bg-bg-0 px-4 pt-3 pb-2 flex flex-col phone:h-auto phone:max-h-[55vh]" data-dm-call data-call-height={stage.height}>
       {tileMenu.menu && <ContextMenu {...tileMenu.menu} onClose={tileMenu.close} label={t('Participant')} />}
       <div className="flex-1 min-h-0 flex flex-col gap-2">
         {inThis && <ActivityChips channelId={channel.id} inCall />}
@@ -185,7 +185,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         </div>
       )}
       <div className="relative mt-2 shrink-0 flex justify-center pb-1">
-        <span className="absolute left-0 top-1/2 -translate-y-1/2 max-md:hidden"><CallLock channelId={channel.id} /></span>
+        <span className="absolute left-0 top-1/2 -translate-y-1/2 phone:hidden"><CallLock channelId={channel.id} /></span>
         {inThis ? (
           <ControlBar compact>
             <ControlGroup>
@@ -229,7 +229,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         const tile = phoneStage === 'activity' ? null : tiles.find((x) => x.key === phoneStage)
         if (phoneStage === 'activity' ? !activity : !tile) { queueMicrotask(() => setPhoneStage(null)); return null }
         return (
-          <PhoneStage title={tile?.user?.display_name ?? t('Call')} landscape={tile?.kind === 'screen'} onClose={() => setPhoneStage(null)}>
+          <PhoneStage title={tile?.user?.display_name ?? t('Call')} onClose={() => setPhoneStage(null)}>
             {tile ? renderTile(tile, true) : <ActivityFrame session={activity!} />}
           </PhoneStage>
         )

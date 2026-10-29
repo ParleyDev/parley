@@ -24,7 +24,7 @@ export default function DiscoverPage() {
   const showContent = useShowContent()
   return (
     <SplitLayout defaultPane="content" testid={{ 'data-discover': '' }} sidebar={
-          <aside className="w-[var(--sidebar-w)] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
+          <aside className="w-[var(--sidebar-w)] tab:w-[224px] phone:flex-1 shrink-0 bg-bg-1 flex flex-col">
             <div className="h-12 px-4 flex items-center font-bold text-lg border-b border-line">{t('Discover')}</div>
             <nav className="p-2 space-y-0.5">
               <NavLink to="/discover" end onClick={showContent} className={({ isActive }) => item(isActive)} data-discover-servers><Server size={20} /> {t('Servers')}</NavLink>
@@ -120,9 +120,9 @@ function Browse() {
 
   return (
     <div className="min-h-full flex flex-col">
-      <div ref={barRef} className="sticky top-0 z-10 h-14 shrink-0 flex items-center px-4 max-md:px-2 bg-bg-2/95 backdrop-blur border-b border-line" data-discover-tabs data-nav-mode={hidden.length ? 'more' : searchCompact ? 'compact' : 'full'}>
+      <div ref={barRef} className="sticky top-0 z-10 h-14 shrink-0 flex items-center px-4 phone:px-2 bg-bg-2/95 backdrop-blur border-b border-line" data-discover-tabs data-nav-mode={hidden.length ? 'more' : searchCompact ? 'compact' : 'full'}>
         <MobileBack />
-        <Compass size={22} className="text-text-2 mr-2 shrink-0 max-md:hidden" />
+        <Compass size={22} className="text-text-2 mr-2 shrink-0 phone:hidden" />
         {/* Offscreen copy used only for measuring natural tab widths. */}
         <div className="flex-1 min-w-0 flex items-center gap-0.5 h-full" data-tab-strip>
           {shown.map((tb) => <button key={tb.id} type="button" onClick={() => setCategory(tb.id)} data-discover-tab={tb.id} className={tabCls(category === tb.id)}>{tb.label}</button>)}
@@ -155,13 +155,13 @@ function Browse() {
           )}
         </div>
       </div>
-      <div className="relative overflow-hidden px-10 py-16 max-md:px-5 max-md:py-10" style={{ background: 'linear-gradient(110deg, #1b1f6b 0%, #2a2f9b 45%, #1a3a8a 100%)' }} data-discover-hero>
+      <div className="relative overflow-hidden px-10 py-16 phone:px-5 phone:py-10" style={{ background: 'linear-gradient(110deg, #1b1f6b 0%, #2a2f9b 45%, #1a3a8a 100%)' }} data-discover-hero>
         <div className="absolute inset-0 opacity-30" style={{ background: 'radial-gradient(circle at 80% 20%, rgba(255,255,255,0.35), transparent 40%), radial-gradient(circle at 20% 90%, rgba(120,180,255,0.4), transparent 45%)' }} />
-        <h1 className="relative text-4xl max-md:text-2xl font-black uppercase tracking-tight leading-[1.05] text-white max-w-[640px]">{t('Find your community on Parley')}</h1>
+        <h1 className="relative text-4xl phone:text-2xl font-black uppercase tracking-tight leading-[1.05] text-white max-w-[640px]">{t('Find your community on Parley')}</h1>
         <p className="relative mt-3 text-white/80">{t("From gaming, to music, to learning, there's a place for you.")}</p>
         <a href="/app-directory" className="relative mt-4 inline-flex rounded-full bg-white/15 px-3 py-1 text-sm font-semibold text-white hover:bg-white/25" data-discover-apps>{t('Looking for bots? Browse the App Directory →')}</a>
       </div>
-      <div className="px-10 py-8 max-md:px-5">
+      <div className="px-10 py-8 phone:px-5">
         <h2 className="text-xl font-bold mb-4">{term ? t('Results for "{term}"', { term }) : category === 'home' ? t('Featured Servers') : t('{category} Servers', { category: t(categoryLabel(category)) })}</h2>
         {error && <p className="text-sm text-danger">{error}</p>}
         {list === null && <p className="text-sm text-text-2">{t('Loading…')}</p>}
@@ -236,7 +236,7 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
     try { await api.patch(`/admin/discovery/${l.guild_id}`, patch); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
   return (
-    <div className="px-10 py-8 max-md:px-4" data-review-queue>
+    <div className="px-10 py-8 phone:px-4" data-review-queue>
       <div className="flex items-center gap-2"><MobileBack /><h1 className="text-2xl font-bold">{t('Discovery review')}</h1></div>
       <p className="text-sm text-text-2 mt-1">{t('Servers submitted for Discover. Approved servers are public to everyone on this Parley instance.')}</p>
       <div className="mt-4 flex gap-1 border-b border-line">
@@ -246,7 +246,7 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
         {list === null && <p className="text-sm text-text-2">{t('Loading…')}</p>}
         {list?.length === 0 && <p className="text-sm text-text-2 py-6">{t('Nothing {status} right now.', { status: t(status) })}</p>}
         {list?.map((l) => (
-          <div key={l.guild_id} className="rounded-xl border border-line bg-bg-1 p-4 flex gap-4 max-md:flex-col" data-review-item={l.guild_id}>
+          <div key={l.guild_id} className="rounded-xl border border-line bg-bg-1 p-4 flex gap-4 phone:flex-col" data-review-item={l.guild_id}>
             <div className="h-20 w-32 shrink-0 rounded-lg bg-cover bg-center" style={l.banner_url ? { backgroundImage: `url(${l.banner_url})` } : { background: `linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 font-bold">{l.name}<span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold uppercase text-text-1">{t(categoryLabel(l.category))}</span><span className="text-xs font-normal text-text-2">{t('{n} members', { n: l.member_count })}</span></div>
@@ -295,7 +295,7 @@ function LiveStages() {
     navigate(`/channels/${st.guild.id}/${st.channel.id}`)
   }
   return (
-    <div className="px-10 py-8 max-md:px-5" data-live-stages>
+    <div className="px-10 py-8 phone:px-5" data-live-stages>
       <div className="flex items-center gap-2 mb-1"><MobileBack /><h1 className="text-2xl font-bold">{t('Live Stages')}</h1></div>
       <p className="text-sm text-text-2 mb-5">{t('Talks, shows and Q&As happening now in your servers and across Discover.')}</p>
       {list === null && <p className="text-sm text-text-2">{t('Loading…')}</p>}

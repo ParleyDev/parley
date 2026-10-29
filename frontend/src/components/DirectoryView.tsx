@@ -35,7 +35,7 @@ export default function DirectoryView({ channel }: { channel: Channel }) {
   const remove = async (e: Entry) => { try { await api.delete(`/channels/${channel.id}/directory/${e.guild_id}`); setList((l) => l?.filter((x) => x.guild_id !== e.guild_id) ?? null) } catch (err) { pushToast((err as Error).message, 'error') } }
   const canRemove = (e: Entry) => has(perms, P.MANAGE_CHANNELS) || (guilds[e.guild_id] && has(myGuildPerms(useStore.getState(), e.guild_id), P.MANAGE_GUILD))
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 max-md:px-3" data-directory={channel.id}>
+    <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 phone:px-3" data-directory={channel.id}>
       {channel.topic && <p className="mb-3 text-sm text-text-1">{channel.topic}</p>}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {has(perms, P.SEND_MESSAGES) && <button type="button" className="btn-primary py-1.5" onClick={() => setAdding(true)} data-directory-add><Plus size={16} /> {t('Add Your Server')}</button>}

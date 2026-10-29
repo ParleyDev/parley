@@ -51,7 +51,7 @@ export default function BansTab({ guildId }: { guildId: string }) {
                 {b.reason ? ` · ${b.reason}` : ` · ${t('No reason given')}`}
               </div>
             </div>
-            <button onClick={() => unban(b.user_id, b.display_name)} className="btn-ghost py-1.5 shrink-0" title={t('Revoke ban')}><ShieldOff size={16} /><span className="max-md:hidden">{t('Revoke Ban')}</span></button>
+            <button onClick={() => unban(b.user_id, b.display_name)} className="btn-ghost py-1.5 shrink-0" title={t('Revoke ban')}><ShieldOff size={16} /><span className="phone:hidden">{t('Revoke Ban')}</span></button>
           </div>
         ))}
       </div>

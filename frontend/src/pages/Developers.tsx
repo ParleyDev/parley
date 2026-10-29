@@ -26,9 +26,9 @@ export default function DevelopersPage() {
   const base = spec?.servers[0]?.url ?? '/api/v1'
   return (
     <div className="h-full overflow-y-auto bg-bg-0 text-text-0" data-developers>
-      <div className="mx-auto max-w-4xl space-y-8 p-6 max-md:p-3">
+      <div className="mx-auto max-w-4xl space-y-8 p-6 phone:p-3">
         <header><h1 className="text-3xl font-bold">{t('{app} for developers', { app: APP_NAME })}</h1><p className="mt-2 text-text-2">{t('Build bots and apps: OAuth2, a REST API at {base}, a gateway for events, commands and interactions.', { base })}</p></header>
-        <section className="grid grid-cols-2 gap-3 max-md:grid-cols-1 text-sm" data-dev-guide>
+        <section className="grid grid-cols-2 gap-3 phone:grid-cols-1 text-sm" data-dev-guide>
           {[
             [t('Get started'), t('Create an app in User Settings › Applications, add a bot, and copy its token. Invite it with the link generator there, choosing its permissions.')],
             [t('Authentication'), t('Bots send Authorization: Bot <token>. Apps send Authorization: Bearer <access token> from the OAuth2 code (or client_credentials) grant.')],

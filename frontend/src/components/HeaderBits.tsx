@@ -7,7 +7,7 @@ export function MobileBack() {
   const t = useT()
   const setMobilePane = useStore((s) => s.setMobilePane)
   return (
-    <button onClick={() => setMobilePane('nav')} title={t('Channels')} className="md:hidden -ml-1 mr-1 h-9 w-9 shrink-0 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0">
+    <button onClick={() => setMobilePane('nav')} title={t('Channels')} className="wide:hidden -ml-1 mr-1 h-9 w-9 shrink-0 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0">
       <Menu size={22} />
     </button>
   )

@@ -104,7 +104,7 @@ export default function MembersTab({ guildId }: { guildId: string }) {
             <div key={m.user_id} className="py-3 flex items-center gap-3" data-members-row={m.user_id}>
               {isMod && <input type="checkbox" className="h-4 w-4 accent-accent" disabled={!outranksOf(m.user_id)} checked={picked.has(m.user_id)} onChange={() => togglePick(m.user_id)} aria-label={t('Select {name}', { name: m.nickname ?? m.display_name })} data-members-pick={m.user_id} />}
               <button onClick={(e) => openModal({ kind: 'profile', userId: m.user_id, anchor: anchorOf(e) })}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={36} presence /></button>
-              <div className="min-w-0 w-48 max-md:w-32 shrink-0">
+              <div className="min-w-0 w-48 phone:w-32 shrink-0">
                 <div className="font-semibold truncate flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId}>{m.nickname ?? m.display_name}</StyledName>{isOwner && <Crown size={13} className="text-warn shrink-0" />}</div>
                 <div className="text-xs text-text-2 truncate">@{m.username}</div>
                 {joins[m.user_id] && <div className="text-[11px] text-text-2 truncate" title={t('How they joined')} data-member-joined-via={m.user_id}>{joinLabel(joins[m.user_id])}</div>}

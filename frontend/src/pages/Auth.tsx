@@ -211,7 +211,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           )}
         </p>
       </form>
-      {mode === 'login' && <div className="pop hidden w-64 shrink-0 items-center justify-center rounded-2xl border border-line bg-bg-1/90 p-6 shadow-2xl backdrop-blur md:flex"><QrLogin onSession={qrSession} /></div>}
+      {mode === 'login' && <div className="pop hidden w-64 shrink-0 items-center justify-center rounded-2xl border border-line bg-bg-1/90 p-6 shadow-2xl backdrop-blur wide:flex"><QrLogin onSession={qrSession} /></div>}
       </div>
     </div>
   )

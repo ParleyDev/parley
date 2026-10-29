@@ -15,7 +15,7 @@ export default function LanguageTab() {
       <select className="sr-only" value={language} onChange={(e) => setLanguage(e.target.value as Language)} aria-label={t('Language')} data-language-select>
         {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
       </select>
-      <div className="grid grid-cols-2 max-md:grid-cols-1 gap-2" data-language-options>
+      <div className="grid grid-cols-2 phone:grid-cols-1 gap-2" data-language-options>
         {LANGUAGES.map((l) => { const pct = l.id === 'system' ? null : Math.round(coverage(l.id as Resolved) * 100); return (
           <button key={l.id} type="button" onClick={() => setLanguage(l.id)} className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 text-left ${language === l.id ? 'border-accent bg-accent/15 text-text-0' : 'border-line hover:bg-bg-3'}`} data-language={l.id}>
             <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{l.id === 'system' ? t('Match system') : l.native}</span><span className="block text-xs text-text-2">{l.id === 'system' ? t('Follows your browser') : l.label}{pct !== null && pct < 100 ? ` · ${t('{pct}% translated', { pct })}` : ''}</span></span>

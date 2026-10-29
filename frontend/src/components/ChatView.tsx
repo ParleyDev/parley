@@ -160,7 +160,7 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
   return (
     <>
       <main className="flex-1 min-w-0 flex flex-col bg-bg-2">
-        <header className="h-12 shrink-0 px-4 max-md:px-2 flex items-center gap-2 border-b border-line shadow-sm">
+        <header className="h-12 shrink-0 px-4 phone:px-2 flex items-center gap-2 border-b border-line shadow-sm">
           <MobileBack />
           {group ? (
             <>
@@ -172,20 +172,20 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               ) : (
                 <button onClick={() => { setNameDraft(channel.name ?? ''); setRenaming(true) }} title={t('Rename group')} className="font-bold truncate hover:underline text-left" data-group-name>{dmName(channel as DmChannel, users, notes)}</button>
               )}
-              <span className="text-xs text-text-2 whitespace-nowrap max-md:hidden" data-group-count>{t('{n} members', { n: (channel as DmChannel).recipients.length + 1 })}</span>
+              <span className="text-xs text-text-2 whitespace-nowrap phone:hidden" data-group-count>{t('{n} members', { n: (channel as DmChannel).recipients.length + 1 })}</span>
             </>
           ) : isDm && other ? (
             <>
               <Avatar user={other} size={24} presence />
               <span className="font-bold truncate" data-dm-header-name>{nameOf(other, notes)}</span>
-              {other.custom_status && <span className="text-sm text-text-1 truncate max-md:hidden" data-header-status>{other.custom_status}</span>}
+              {other.custom_status && <span className="text-sm text-text-1 truncate phone:hidden" data-header-status>{other.custom_status}</span>}
             </>
           ) : (
             <>
               {channel.kind === 'forum' ? <MessageSquareText size={22} className="text-text-2 shrink-0" /> : <Hash size={22} className="text-text-2 shrink-0" />}
               <span className="font-bold truncate">{channel.name}</span>
               {channel.nsfw && <span className="ml-1 rounded bg-danger/20 px-1.5 py-0.5 text-[10px] font-bold text-danger" title={t('Age-restricted channel')} data-nsfw-badge>18+</span>}
-              {channel.topic && <><span className="mx-2 h-6 w-px bg-line max-md:hidden" /><span className="text-sm text-text-2 truncate max-md:hidden">{channel.topic}</span></>}
+              {channel.topic && <><span className="mx-2 h-6 w-px bg-line phone:hidden" /><span className="text-sm text-text-2 truncate phone:hidden">{channel.topic}</span></>}
             </>
           )}
           <span className="ml-auto flex items-center gap-0.5">
@@ -195,20 +195,20 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               <>
                 <button onClick={() => startCall(false)} title={t('Start Voice Call')} className={btn(myVoice === channel.id)} data-start-call><Phone size={20} /></button>
                 <button onClick={() => startCall(true)} title={t('Start Video Call')} className={btn(false)} data-start-video><Video size={20} /></button>
-                <button onClick={toggleE2ee} title={channel.e2ee ? t('Calls here are end-to-end encrypted. Click to turn it off.') : t('Turn on end-to-end encryption for calls')} aria-pressed={!!channel.e2ee} className={`${btn(!!channel.e2ee)} max-md:hidden`} data-dm-e2ee={channel.e2ee ? '1' : '0'}>{channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />}</button>
+                <button onClick={toggleE2ee} title={channel.e2ee ? t('Calls here are end-to-end encrypted. Click to turn it off.') : t('Turn on end-to-end encryption for calls')} aria-pressed={!!channel.e2ee} className={`${btn(!!channel.e2ee)} phone:hidden`} data-dm-e2ee={channel.e2ee ? '1' : '0'}>{channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />}</button>
               </>
             )}
-            {!isDm && channel.news && <button onClick={() => openModal({ kind: 'followChannel', channelId: channel.id })} title={t('Follow')} className="flex items-center gap-1 rounded-md bg-bg-3 px-2 py-1 text-sm font-medium hover:bg-bg-4 max-md:hidden" data-follow-channel><Megaphone size={16} />{t('Follow')}</button>}
+            {!isDm && channel.news && <button onClick={() => openModal({ kind: 'followChannel', channelId: channel.id })} title={t('Follow')} className="flex items-center gap-1 rounded-md bg-bg-3 px-2 py-1 text-sm font-medium hover:bg-bg-4 phone:hidden" data-follow-channel><Megaphone size={16} />{t('Follow')}</button>}
             {!isDm && channel.kind === 'text' && (
               <span className="relative">
-                <button onClick={() => setThreads((v) => !v)} title={t('Threads')} className={`${btn(threads)} max-md:hidden`} data-threads-toggle><MessagesSquare size={20} /></button>
+                <button onClick={() => setThreads((v) => !v)} title={t('Threads')} className={`${btn(threads)} phone:hidden`} data-threads-toggle><MessagesSquare size={20} /></button>
                 {threads && <ThreadsPanel channel={channel as Channel} onClose={() => setThreads(false)} />}
               </span>
             )}
             <span className="relative">
-              <button onClick={() => setDatePick((d) => !d)} title={t('Jump to date')} className={`${btn(datePick)} max-md:hidden`} data-jump-date-btn><CalendarDays size={20} /></button>
+              <button onClick={() => setDatePick((d) => !d)} title={t('Jump to date')} className={`${btn(datePick)} phone:hidden`} data-jump-date-btn><CalendarDays size={20} /></button>
               {datePick && (
-                <form className="pop absolute right-0 top-full mt-2 z-40 flex items-center gap-2 rounded-xl bg-bg-1 border border-line shadow-2xl p-3 max-md:fixed max-md:inset-x-2 max-md:top-auto max-md:bottom-[calc(1rem+var(--sab))] max-md:mt-0" data-jump-date-pop
+                <form className="pop absolute right-0 top-full mt-2 z-40 flex items-center gap-2 rounded-xl bg-bg-1 border border-line shadow-2xl p-3 phone:fixed phone:inset-x-2 phone:top-auto phone:bottom-[calc(1rem+var(--sab))] phone:mt-0" data-jump-date-pop
                   onSubmit={async (e) => { e.preventDefault(); const d = (e.currentTarget.elements.namedItem('date') as HTMLInputElement).value; if (!d) return; setDatePick(false); const found = await jumpToDate(channel.id, d); if (!found) pushToast(t('No messages on or after that date'), 'error') }}>
                   <input name="date" type="date" required className="input py-1 text-sm" max={new Date().toISOString().slice(0, 10)} data-jump-date />
                   <button className="btn-primary py-1 text-sm" data-jump-date-go>{t('Go')}</button>
@@ -216,16 +216,16 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               )}
             </span>
             <span className="relative">
-              <button onClick={() => setPins((p) => !p)} title={t('Pinned Messages')} className={`${btn(pins)} max-md:hidden`} data-pins-toggle><Pin size={20} /></button>
+              <button onClick={() => setPins((p) => !p)} title={t('Pinned Messages')} className={`${btn(pins)} phone:hidden`} data-pins-toggle><Pin size={20} /></button>
               {pins && <PinnedPanel channel={channel} onClose={() => setPins(false)} />}
             </span>
             <span className="relative">
-              <button onClick={() => setBookmarks((b) => !b)} title={t('Bookmarks')} className={`${btn(bookmarks)} max-md:hidden`} data-bookmarks-toggle><Bookmark size={20} /></button>
+              <button onClick={() => setBookmarks((b) => !b)} title={t('Bookmarks')} className={`${btn(bookmarks)} phone:hidden`} data-bookmarks-toggle><Bookmark size={20} /></button>
               {bookmarks && <BookmarksPanel channelId={channel.id} onClose={() => setBookmarks(false)} />}
             </span>
-            {isDm && <button onClick={() => openModal({ kind: 'groupMembers', channelId: channel.id })} title={group ? t('Add Friends to Group') : t('Add Friends to DM')} className={`${btn(false)} max-md:hidden`} data-add-to-group><UserPlus size={20} /></button>}
-            {isDm && !group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? t('Hide User Profile') : t('Show User Profile')} className={`${btn(dmProfileOpen)} max-md:hidden`} data-profile-toggle><CircleUserRound size={20} /></button>}
-            {group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? t('Hide Member List') : t('Show Member List')} className={`${btn(dmProfileOpen)} max-md:hidden`} data-group-members-toggle><Users size={20} /></button>}
+            {isDm && <button onClick={() => openModal({ kind: 'groupMembers', channelId: channel.id })} title={group ? t('Add Friends to Group') : t('Add Friends to DM')} className={`${btn(false)} phone:hidden`} data-add-to-group><UserPlus size={20} /></button>}
+            {isDm && !group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? t('Hide User Profile') : t('Show User Profile')} className={`${btn(dmProfileOpen)} phone:hidden`} data-profile-toggle><CircleUserRound size={20} /></button>}
+            {group && <button onClick={() => setDmProfileOpen(!dmProfileOpen)} title={dmProfileOpen ? t('Hide Member List') : t('Show Member List')} className={`${btn(dmProfileOpen)} phone:hidden`} data-group-members-toggle><Users size={20} /></button>}
             {!isDm && <MembersToggle />}
             <button type="button" onClick={(e) => more.open(e, ([
               { label: t('Search'), icon: <Search size={18} />, onClick: () => setPhoneSearch(true) },
@@ -236,13 +236,13 @@ export default function ChatView({ channel }: { channel: Channel | DmChannel }) 
               !isDm && channel.news && { label: t('Follow'), icon: <Megaphone size={18} />, onClick: () => openModal({ kind: 'followChannel', channelId: channel.id }) },
               isDm && { label: group ? t('Add Friends to Group') : t('Add Friends to DM'), icon: <UserPlus size={18} />, onClick: () => openModal({ kind: 'groupMembers', channelId: channel.id }) },
               isDm && { label: channel.e2ee ? t('Calls are end-to-end encrypted') : t('Encrypt calls end to end'), icon: channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />, onClick: toggleE2ee },
-            ] as (MenuEntry | false)[]).filter((x): x is MenuEntry => !!x))} title={t('More')} className={`${btn(false)} md:hidden`} data-header-more><MoreVertical size={20} /></button>
+            ] as (MenuEntry | false)[]).filter((x): x is MenuEntry => !!x))} title={t('More')} className={`${btn(false)} wide:hidden`} data-header-more><MoreVertical size={20} /></button>
             {more.menu && <ContextMenu {...more.menu} onClose={more.close} label={t('More')} />}
-            <span className={`relative ml-1 ${phoneSearch ? 'max-md:absolute max-md:inset-x-2 max-md:top-2 max-md:z-30 max-md:ml-0 max-md:flex max-md:items-center max-md:gap-1 max-md:bg-bg-2' : 'max-md:hidden'}`} data-search-box>
+            <span className={`relative ml-1 ${phoneSearch ? 'phone:absolute phone:inset-x-2 phone:top-2 phone:z-30 phone:ml-0 phone:flex phone:items-center phone:gap-1 phone:bg-bg-2' : 'phone:hidden'}`} data-search-box>
               <input value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onSearchKey} onFocus={() => setSearchFocus(true)} onBlur={() => setTimeout(() => setSearchFocus(false), 150)} placeholder={isDm && other ? t('Search {name}', { name: other.username }) : t('Search')} title={t('Filters: from:user in:channel has:link|image|file before:date after:date pinned:true')} aria-label={t('Search messages')} data-search-input
-                className="h-7 w-36 focus:w-56 transition-[width] rounded-md bg-bg-0 border border-line pl-2 pr-7 text-sm outline-none focus:border-accent/60 max-md:h-9 max-md:w-full max-md:focus:w-full" />
-              <Search size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-2 pointer-events-none max-md:hidden" />
-              {phoneSearch && <button type="button" onClick={() => { setPhoneSearch(false); setQuery('') }} title={t('Close search')} className="md:hidden h-9 w-9 shrink-0 flex items-center justify-center rounded-md text-text-2" data-phone-search-close><X size={18} /></button>}
+                className="h-7 w-36 focus:w-56 transition-[width] rounded-md bg-bg-0 border border-line pl-2 pr-7 text-sm outline-none focus:border-accent/60 phone:h-9 phone:w-full phone:focus:w-full" />
+              <Search size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-text-2 pointer-events-none phone:hidden" />
+              {phoneSearch && <button type="button" onClick={() => { setPhoneSearch(false); setQuery('') }} title={t('Close search')} className="wide:hidden h-9 w-9 shrink-0 flex items-center justify-center rounded-md text-text-2" data-phone-search-close><X size={18} /></button>}
               {searchFocus && suggestions.length > 0 && (
                 <div className="pop absolute right-0 top-full z-40 mt-1 w-64 rounded-lg border border-line bg-bg-0 p-1 shadow-2xl" data-search-suggest>
                   {suggestions.map((sg, i) => (
@@ -377,7 +377,7 @@ function GroupMembersPanel({ dm }: { dm: DmChannel }) {
   const leave = () => openModal({ kind: 'confirm', title: t('Leave \'{name}\'', { name: dmName(dm, users, notes) }), body: t('You will stop receiving messages from this group unless someone adds you back.'), danger: true, confirmLabel: t('Leave Group'),
     action: async () => { try { await api.delete(`/channels/${dm.id}/recipients/${me?.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
   return (
-    <aside className="w-60 shrink-0 bg-bg-1 border-l border-line overflow-y-auto px-2 pt-4 max-md:hidden flex flex-col" data-group-members>
+    <aside className="w-60 shrink-0 bg-bg-1 border-l border-line overflow-y-auto px-2 pt-4 phone:hidden flex flex-col" data-group-members>
       <h3 className="px-2 mb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Members')} — {members.length}</h3>
       <div className="space-y-0.5">
         {members.map((u) => (
@@ -440,7 +440,7 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl max-md:fixed max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:mt-0 max-md:w-auto max-md:max-w-none max-md:rounded-b-none max-md:pb-[var(--sab)]" data-bookmarks-panel>
+      <div className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl phone:fixed phone:inset-x-0 phone:top-auto phone:bottom-0 phone:mt-0 phone:w-auto phone:max-w-none phone:rounded-b-none phone:pb-[var(--sab)]" data-bookmarks-panel>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-line"><Bookmark size={16} className="text-text-2" /><span className="font-bold">{t('Bookmarks')}</span><button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0"><X size={16} /></button></div>
         <div className="overflow-y-auto p-3 space-y-2">
           {list === null && <p className="text-sm text-text-2 p-3">{t('Loading…')}</p>}
@@ -498,7 +498,7 @@ function PinnedPanel({ channel, onClose }: { channel: Channel | DmChannel; onClo
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div ref={ref} className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl max-md:fixed max-md:inset-x-0 max-md:top-auto max-md:bottom-0 max-md:mt-0 max-md:w-auto max-md:max-w-none max-md:rounded-b-none max-md:pb-[var(--sab)]" data-pins-panel>
+      <div ref={ref} className="pop absolute right-0 top-full mt-2 z-40 w-[420px] max-w-[calc(100vw-16px)] max-h-[70vh] flex flex-col rounded-xl bg-bg-1 border border-line shadow-2xl phone:fixed phone:inset-x-0 phone:top-auto phone:bottom-0 phone:mt-0 phone:w-auto phone:max-w-none phone:rounded-b-none phone:pb-[var(--sab)]" data-pins-panel>
         <div className="flex items-center gap-2 px-4 py-3 border-b border-line"><Pin size={16} className="text-text-2" /><span className="font-bold">{t('Pinned Messages')}</span><button onClick={onClose} className="ml-auto text-text-2 hover:text-text-0"><X size={16} /></button></div>
         <div className="overflow-y-auto p-3 space-y-2">
           {pins === null && <p className="text-sm text-text-2 p-3">{t('Loading…')}</p>}
@@ -539,7 +539,7 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
   }
   const chip = (id: SearchScope, label: string) => <button key={id} type="button" onClick={() => setScope(id)} className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${scope === id ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-search-scope={id} aria-pressed={scope === id}>{label}</button>
   return (
-    <aside className="w-[420px] shrink-0 bg-bg-1 border-l border-line flex flex-col max-md:hidden" data-search-panel>
+    <aside className="w-[420px] shrink-0 bg-bg-1 border-l border-line flex flex-col phone:hidden" data-search-panel>
       <div className="h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line">
         <Search size={16} className="text-text-2" /><span className="font-bold truncate">{t('Results for "{query}"', { query })}</span>
         {res && <span className="text-xs text-text-2" data-search-total>{res.total}</span>}

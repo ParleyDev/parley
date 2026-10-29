@@ -14,6 +14,8 @@ import { useStore } from '../store'
  * app's WebView, where `window.Capacitor` exists; everything here is a no-op in a normal browser.
  */
 const KeepAwake = registerPlugin<{ keepAwake(): Promise<void>; allowSleep(): Promise<void> }>('KeepAwake')
+/** iOS: the app's keyboard without the form accessory bar (the up / down / ✓ pill above it). App 0.16+. */
+const Keyboard = registerPlugin<{ setAccessoryBarVisible(o: { isVisible: boolean }): Promise<void> }>('Keyboard')
 /** Android: the "In a call" foreground service that keeps the mic and audio going in the background (app 0.16+). */
 const CallKeepAlive = registerPlugin<{ start(o: { title: string }): Promise<void>; stop(): Promise<void> }>('CallKeepAlive')
 
@@ -35,6 +37,7 @@ export async function initNative() {
   if (!isNative()) return
   document.documentElement.dataset.native = nativePlatform()
   try { await StatusBar.setStyle({ style: Style.Dark }); if (nativePlatform() === 'android') await StatusBar.setBackgroundColor({ color: '#0b0c10' }) } catch { /* plugin missing */ }
+  if (nativePlatform() === 'ios') Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => {})
   App.addListener('appStateChange', ({ isActive }) => { if (isActive) { resumeSocket(); void voice.resumeAfterBackground() } else suspendSocket() })
   App.addListener('backButton', ({ canGoBack }) => {
     const s = useStore.getState()

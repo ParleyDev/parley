@@ -34,7 +34,7 @@ export default function AppearanceTab() {
 
       <section>
         <h3 className="label">{t('Theme')}</h3>
-        <div className="grid grid-cols-3 max-md:grid-cols-1 gap-2" data-theme-options>
+        <div className="grid grid-cols-3 phone:grid-cols-1 gap-2" data-theme-options>
           {themes().map((th) => (
             <button key={th.id} type="button" onClick={() => setAppearance({ theme: th.id })} className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm text-left ${a.theme === th.id ? 'border-accent bg-accent/15 text-text-0' : 'border-line text-text-1 hover:bg-bg-3'}`} data-theme-option={th.id} aria-pressed={a.theme === th.id}>
               {th.icon}<span className="flex-1">{th.label}</span>{a.theme === th.id && <Check size={16} className="text-accent" />}
@@ -84,7 +84,7 @@ export default function AppearanceTab() {
 
       <section>
         <h3 className="label">{t('Message display')}</h3>
-        <div className="grid grid-cols-2 max-md:grid-cols-1 gap-2" data-density-options>
+        <div className="grid grid-cols-2 phone:grid-cols-1 gap-2" data-density-options>
           {([['cozy', t('Cozy'), t('Modern, beautiful, and easy on your eyes.')], ['compact', t('Compact'), t('Fit more messages on screen at one time.')]] as [Density, string, string][]).map(([id, label, desc]) => (
             <button key={id} type="button" onClick={() => setAppearance({ density: id })} className={`rounded-lg border px-3 py-2.5 text-left ${a.density === id ? 'border-accent bg-accent/15' : 'border-line hover:bg-bg-3'}`} data-density-option={id} aria-pressed={a.density === id}>
               <div className="text-sm font-semibold flex items-center justify-between">{label}{a.density === id && <Check size={16} className="text-accent" />}</div>
@@ -96,7 +96,7 @@ export default function AppearanceTab() {
 
       <section>
         <h3 className="label">{t('UI density')}</h3>
-        <div className="grid grid-cols-3 max-md:grid-cols-1 gap-2" data-ui-density-options>
+        <div className="grid grid-cols-3 phone:grid-cols-1 gap-2" data-ui-density-options>
           {([['compact', t('Compact')], ['default', t('Default')], ['spacious', t('Spacious')]] as [UiDensity, string][]).map(([id, label]) => (
             <button key={id} type="button" onClick={() => setAppearance({ uiDensity: id })} className={`flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm ${a.uiDensity === id ? 'border-accent bg-accent/15 text-text-0' : 'border-line text-text-1 hover:bg-bg-3'}`} data-ui-density-option={id} aria-pressed={a.uiDensity === id}>
               {label}{a.uiDensity === id && <Check size={16} className="text-accent" />}

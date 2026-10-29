@@ -50,7 +50,7 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
   return (
     <form onSubmit={submit} className="space-y-6">
       <h1 className="text-xl font-bold">{t('Server Overview')}</h1>
-      <div className="flex items-start gap-6 max-md:flex-col">
+      <div className="flex items-start gap-6 phone:flex-col">
         <ImagePicker value={icon} onChange={setIcon} label={name} id={guildId} kind="icon" />
         <div className="flex-1 w-full"><label className="label">{t('Server name')}</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required /></div>
       </div>
@@ -90,7 +90,7 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
       </section>
       <section className="space-y-3" data-afk-settings>
         <h2 className="text-xs font-bold uppercase tracking-wider text-text-2">{t('Inactive channel')}</h2>
-        <div className="flex gap-3 max-md:flex-col">
+        <div className="flex gap-3 phone:flex-col">
           <div className="flex-1">
             <label className="label" htmlFor="afk-channel">{t('Inactive channel')}</label>
             <select id="afk-channel" className="input" value={afkChannel} onChange={(e) => setAfkChannel(e.target.value)} data-afk-channel>

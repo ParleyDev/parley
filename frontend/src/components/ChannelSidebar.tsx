@@ -242,7 +242,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const del = () => openModal({ kind: 'deleteServer', guildId })
 
   return (
-    <aside aria-label={t('Channels')} className="w-[var(--sidebar-w)] tab:w-[224px] max-md:w-auto max-md:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
+    <aside aria-label={t('Channels')} className="w-[var(--sidebar-w)] tab:w-[224px] phone:w-auto phone:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="relative">
         {guild.banner_url ? (
           <div className="relative h-[135px] bg-cover bg-center" style={{ backgroundImage: `url(${guild.banner_url})` }} data-guild-banner>
@@ -379,7 +379,7 @@ function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, drag
         <button onClick={onToggle} className="flex items-center gap-0.5 py-1 pl-0.5 min-w-0" data-category-toggle>
           <ChevronDown size={12} className={`shrink-0 transition ${open ? '' : '-rotate-90'}`} /><span className="truncate">{label}</span>
         </button>
-        {onAdd && <button onClick={onAdd} title={t('Create Channel')} className="opacity-0 group-hover:opacity-100 max-md:opacity-100 hover:text-text-0" data-category-add><Plus size={16} /></button>}
+        {onAdd && <button onClick={onAdd} title={t('Create Channel')} className="opacity-0 group-hover:opacity-100 phone:opacity-100 hover:text-text-0" data-category-add><Plus size={16} /></button>}
       </div>
       <div className="mt-0.5 space-y-0.5 min-h-1">{children}</div>
     </div>
@@ -433,7 +433,7 @@ function ChannelRow({ to, icon, name, unread, mentions = 0, muted, locked, count
       {locked && <Lock size={12} className="text-text-2 shrink-0" aria-label={t('End-to-end encrypted calls')} data-e2ee-icon />}
       {muted && <BellOff size={13} className="text-text-2 shrink-0" data-muted-icon />}
       {mentions > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center" data-mention-badge={mentions}>{mentions}</span>}
-      {onSettings && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 max-md:hidden text-text-2 hover:text-text-0" title={t('Edit Channel')}><Settings size={14} /></button>}
+      {onSettings && <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); onSettings() }} className="opacity-0 group-hover:opacity-100 phone:hidden text-text-2 hover:text-text-0" title={t('Edit Channel')}><Settings size={14} /></button>}
     </NavLink>
   )
 }

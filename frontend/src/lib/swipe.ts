@@ -31,11 +31,21 @@ export function useSwipe(handlers: { onLeft?: () => void; onRight?: () => void }
 }
 
 /** Media query as React state (phones: max-width 767px). */
-export const isPhone = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches
+/** A phone layout: narrow, or a phone on its side (short, touch only). The same as index.css's max-md variant. */
+export const PHONE_QUERY = '(max-width: 767px), (max-height: 500px) and (pointer: coarse)'
+export const isPhone = () => typeof window !== 'undefined' && window.matchMedia(PHONE_QUERY).matches
 
 /** Phone-sized layout? Re-evaluated on resize/rotation. */
 export function usePhone() {
   const [p, setP] = useState(isPhone)
-  useEffect(() => { const mq = window.matchMedia('(max-width: 767px)'); const on = () => setP(mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on) }, [])
+  useEffect(() => { const mq = window.matchMedia(PHONE_QUERY); const on = () => setP(mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on) }, [])
   return p
+}
+
+/** Wider than tall (a phone turned sideways), re-evaluated on rotation. */
+export function useLandscape() {
+  const q = '(orientation: landscape)'
+  const [l, setL] = useState(() => typeof window !== 'undefined' && window.matchMedia(q).matches)
+  useEffect(() => { const mq = window.matchMedia(q); const on = () => setL(mq.matches); mq.addEventListener('change', on); return () => mq.removeEventListener('change', on) }, [])
+  return l
 }

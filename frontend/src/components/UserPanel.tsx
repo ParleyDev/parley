@@ -37,7 +37,7 @@ export default function UserPanel() {
         {/* Your nameplate as the panel's background (Discord shows it here), playing while the panel is hovered. It sits
             at z 0 under the panel's content (z 1); no `isolate` on the panel, which would trap the menu's click-away
             backdrop inside it. */}
-        {user.nameplate && <div className={`pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-xl ${nameplateClass(user.nameplate)}`} data-panel-nameplate={user.nameplate} aria-hidden><NameplateVideo value={user.nameplate} hoverRoot="[data-user-panel]" /></div>}
+        {user.nameplate && <div className={`pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-xl ${nameplateClass(user.nameplate)}`} data-panel-nameplate={user.nameplate} aria-hidden><NameplateVideo value={user.nameplate} hoverRoot="[data-user-panel]" always /></div>}
         <button onClick={() => setOpen((o) => !o)} className="relative z-[1] flex items-center gap-2 min-w-0 flex-1 rounded-lg pl-1 pr-1 py-1 hover:bg-white/10 text-left" data-panel-self data-motion-row>
           <span className="rounded-full ring-2 ring-black/20"><Avatar user={user} size={40} presence /></span>
           <div className="min-w-0 flex-1">
@@ -69,7 +69,7 @@ function ControlBtn({ children, label, onClick, active, onMenu, menuOpen }: { ch
       <button title={t(label)} onClick={onClick} className={`h-9 w-9 rounded-lg flex items-center justify-center hover:bg-white/10 ${active ? 'text-danger' : 'text-text-0'}`} data-control={label}>
         {children}
       </button>
-      {onMenu && <button title={t('{label} options', { label: t(label.replace(/^Un/, '')) })} onClick={onMenu} className="h-9 w-3.5 -ml-1 rounded-r-lg flex items-center justify-center text-text-1 hover:text-text-0 max-md:hidden" data-control-menu={label}><ChevronDown size={11} /></button>}
+      {onMenu && <button title={t('{label} options', { label: t(label.replace(/^Un/, '')) })} onClick={onMenu} className="h-9 w-3.5 -ml-1 rounded-r-lg flex items-center justify-center text-text-1 hover:text-text-0 phone:hidden" data-control-menu={label}><ChevronDown size={11} /></button>}
     </span>
   )
 }

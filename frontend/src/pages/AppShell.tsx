@@ -23,7 +23,7 @@ import UserPanel from '../components/UserPanel'
 import { NavColumn } from '../components/SplitLayout'
 import VerifyBanner from '../components/VerifyBanner'
 import { lastChannel, rememberChannel } from '../lib/dm'
-import { useSwipe } from '../lib/swipe'
+import { isPhone, useSwipe } from '../lib/swipe'
 import { useKeybinds } from '../lib/keybinds'
 import { isDesktop, setNativeNavigator } from '../lib/native'
 import { voice } from '../lib/voice'
@@ -95,7 +95,7 @@ export default function AppShell() {
           <Routes>
             <Route path="@me/*" element={<DmSidebar />} />
             <Route path=":guildId/*" element={<GuildSidebar />} />
-            <Route path="*" element={<div className="w-[var(--sidebar-w)] tab:w-[224px] max-md:flex-1 bg-bg-1" />} />
+            <Route path="*" element={<div className="w-[var(--sidebar-w)] tab:w-[224px] phone:flex-1 bg-bg-1" />} />
           </Routes>
         </div>
         {/* Discord's self card floats across the bottom of both the server column and the channel list. */}
@@ -149,7 +149,7 @@ function GuildRedirect() {
   // Rendering never waits for the navigation: the URL is fixed up for bookmarks/reloads, but the view is already there.
   useEffect(() => { if (guild && targetId) navigate(`/channels/${guildId}/${targetId}`, { replace: true }) }, [guild, guildId, targetId, navigate])
   if (!guild) return <MissingGuild guildId={guildId} />
-  if (!targetId) return <div className="flex-1 max-md:hidden" />
+  if (!targetId) return <div className="flex-1 phone:hidden" />
   return <GuildMain channelOverride={targetId} />
 }
 
@@ -168,7 +168,7 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
   useEffect(() => { if (guild && !channel && !channelOverride) navigate(`/channels/${guildId}`, { replace: true }) }, [guild, channel, guildId, navigate, channelOverride])
 
   if (!guild) return <MissingGuild guildId={guildId} />
-  if (!channel || channel.guild_id !== guildId) return <div className="flex-1 max-md:hidden" />
+  if (!channel || channel.guild_id !== guildId) return <div className="flex-1 phone:hidden" />
   return (
     <>
       {channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio' ? <VoiceView channel={channel} /> : <ChatView channel={channel} />}
@@ -220,7 +220,7 @@ function Shortcuts() {
     onRight: () => { if (membersOpen) setMembersOpen(false); else if (pane === 'content') setMobilePane('nav') },
     onLeft: () => { if (pane === 'content' && inGuild && !membersOpen) setMembersOpen(true) },
   }), [membersOpen, pane, inGuild, setMembersOpen, setMobilePane])
-  useSwipe(swipe, typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches)
+  useSwipe(swipe, isPhone())
   // Alt+↑/↓ walk the sidebar as it is shown (categories, collapsed ones, pins aside, or the DM list), so the
   // order always matches what you see; the unread variants skip to the next row marked unread.
   const step = (dir: -1 | 1, unreadOnly = false) => {

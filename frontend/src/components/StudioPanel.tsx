@@ -19,7 +19,7 @@ export default function StudioPanel({ channelId, canManage, onClose, width, hand
   const del = (s: StudioSession) => openModal({ kind: 'confirm', title: t('Delete {name}', { name: s.name }), body: s.tracks.length === 1 ? t('Removes the session and its {n} track. This cannot be undone.', { n: s.tracks.length }) : t('Removes the session and its {n} tracks. This cannot be undone.', { n: s.tracks.length }), danger: true, confirmLabel: t('Delete'),
     action: async () => { try { await api.delete(`/channels/${channelId}/studio/sessions/${s.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
   return (
-    <section className="relative flex flex-col bg-bg-2 border-l border-line shrink-0 max-md:absolute max-md:inset-0 max-md:w-auto max-md:border-l-0 max-md:z-10" data-layer="md" style={{ width: width ?? 420 }} data-studio-panel>
+    <section className="relative flex flex-col bg-bg-2 border-l border-line shrink-0 phone:absolute phone:inset-0 phone:w-auto phone:border-l-0 phone:z-10" data-layer="md" style={{ width: width ?? 420 }} data-studio-panel>
       {handle}
       <div className="h-12 shrink-0 px-3 flex items-center gap-2 border-b border-line"><span className="font-bold">{t('Sessions')}</span><span className="text-xs text-text-2">{sessions ? sessions.length : '…'}</span><button onClick={onClose} title={t('Close')} className="ml-auto h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><X size={18} /></button></div>
       <div className="flex-1 overflow-y-auto p-3 space-y-2">

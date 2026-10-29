@@ -58,7 +58,7 @@ export default function ExpressionPicker({ tabs = ['gif', 'sticker', 'emoji'], i
 
   const panel = (
     <div ref={ref} data-expression-picker data-picker-tab={tab} onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}
-      className={`pop flex flex-col rounded-xl bg-[#2b2d31] border border-white/10 shadow-2xl text-text-0 overflow-hidden ${anchor ? 'fixed z-[110]' : `absolute z-[110] ${className}`} max-md:!fixed max-md:!inset-x-2 max-md:!bottom-2 max-md:!top-auto max-md:!w-auto`}
+      className={`pop flex flex-col rounded-xl bg-[#2b2d31] border border-white/10 shadow-2xl text-text-0 overflow-hidden ${anchor ? 'fixed z-[110]' : `absolute z-[110] ${className}`} phone:!fixed phone:!inset-x-2 phone:!bottom-2 phone:!top-auto phone:!w-auto`}
       style={anchor ? { width: Math.min(W, window.innerWidth - 16), height: Math.min(H, window.innerHeight - 16), left: pos?.left ?? -9999, top: pos?.top ?? -9999 } : { width: Math.min(W, window.innerWidth - 16), height: Math.min(H, window.innerHeight - 16) }}>
       {tabs.length > 1 && (
         <div className="flex items-center gap-1 px-3 pt-2 border-b border-white/5 shrink-0">
@@ -67,7 +67,7 @@ export default function ExpressionPicker({ tabs = ['gif', 'sticker', 'emoji'], i
               {tb === 'gif' ? t('GIFs') : tb === 'sticker' ? t('Stickers') : t('Emoji')}
             </button>
           ))}
-          <button type="button" onClick={onClose} className="ml-auto text-text-2 hover:text-text-0 md:hidden" title={t('Close')}><X size={18} /></button>
+          <button type="button" onClick={onClose} className="ml-auto text-text-2 hover:text-text-0 wide:hidden" title={t('Close')}><X size={18} /></button>
         </div>
       )}
       {tab === 'emoji' && <EmojiTab guildId={guildId} onPick={(token) => { onEmoji?.(token) }} />}

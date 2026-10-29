@@ -48,6 +48,17 @@ await p.locator('[data-phone-stage]').tap({ position: { x: 195, y: 420 } }); awa
 await p.locator('[data-phone-stage-close]').tap(); await p.waitForTimeout(300)
 ok('close returns to the call', await p.locator('[data-phone-stage]').count() === 0 && await p.locator('[data-voice-controls]').isVisible())
 
+console.log('-- layout survives the full-screen view and rotation')
+const layout = () => p.evaluate(() => { const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)] }; return JSON.stringify([r('main header'), r('[data-voice-controls]'), r('[data-voice-grid]'), innerWidth, innerHeight]) })
+const before0 = await layout()
+for (let i = 0; i < 2; i++) { await p.locator('[data-voice-tile]').first().tap(); await p.waitForSelector('[data-phone-stage]'); await p.locator('[data-phone-stage-close]').tap(); await p.waitForTimeout(300) }
+ok('opening and closing the full-screen view leaves the layout as it was', await layout() === before0, `${before0} vs ${await layout()}`)
+await p.setViewportSize({ width: 844, height: 390 }); await p.waitForTimeout(600)
+const land = await p.evaluate(() => ({ more: !!document.querySelector('[data-phone-call-more]'), cols: getComputedStyle(document.querySelector('[data-voice-grid]')).gridTemplateColumns.split(' ').length, overflow: document.documentElement.scrollWidth > innerWidth, bar: (() => { const b = document.querySelector('[data-voice-controls]').getBoundingClientRect(); return b.bottom <= innerHeight + 1 })() }))
+ok('turned sideways it keeps the phone call layout, tiles side by side, nothing off screen', land.more && land.cols === 2 && !land.overflow && land.bar, JSON.stringify(land))
+await p.setViewportSize({ width: 390, height: 844 }); await p.waitForTimeout(600)
+ok('and back upright it is as it was', await layout() === before0, `${before0} vs ${await layout()}`)
+
 console.log('-- back from the background')
 const before = await p.evaluate(() => window.__parleyMic.info())
 await p.evaluate(() => window.__parleyMic.end())

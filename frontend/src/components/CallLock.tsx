@@ -23,7 +23,7 @@ export default function CallLock({ channelId, compact }: { channelId: string; co
     <span className="relative inline-flex">
       <button type="button" onClick={() => setOpen((o) => !o)} className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold text-success hover:bg-success/10 ${compact ? '' : 'whitespace-nowrap'}`}
         title={t('End-to-end encrypted: only the people in the call can see and hear it')} aria-expanded={open} data-call-lock>
-        <Lock size={13} />{compact ? null : <span className="max-md:hidden">{t('End-to-end encrypted')}</span>}
+        <Lock size={13} />{compact ? null : <span className="phone:hidden">{t('End-to-end encrypted')}</span>}
       </button>
       {open && (
         <>

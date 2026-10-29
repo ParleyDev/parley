@@ -1,3 +1,4 @@
+import { isPhone } from '../lib/swipe'
 import { useEffect, type CSSProperties, type ReactNode } from 'react'
 import GuildBar from './GuildBar'
 import Modals from './modals'
@@ -15,7 +16,7 @@ import { useT } from '../lib/i18n'
 export default function SplitLayout({ sidebar, children, defaultPane = 'nav', testid }: { sidebar: ReactNode; children: ReactNode; defaultPane?: 'nav' | 'content'; testid?: Record<string, string> }) {
   const pane = useStore((s) => s.mobilePane)
   const setMobilePane = useStore((s) => s.setMobilePane)
-  useEffect(() => { if (window.matchMedia('(max-width: 767px)').matches) setMobilePane(defaultPane) }, [defaultPane, setMobilePane])
+  useEffect(() => { if (isPhone()) setMobilePane(defaultPane) }, [defaultPane, setMobilePane])
   return (
     <div className="h-full flex overflow-hidden relative safe-area" {...testid}>
       <NavColumn hidden={pane === 'content'}>
@@ -25,7 +26,7 @@ export default function SplitLayout({ sidebar, children, defaultPane = 'nav', te
         </div>
         <UserPanel />
       </NavColumn>
-      <main className={`flex-1 min-w-0 flex flex-col bg-bg-2 ${pane === 'nav' ? 'max-md:hidden' : ''}`}>{children}</main>
+      <main className={`flex-1 min-w-0 flex flex-col bg-bg-2 ${pane === 'nav' ? 'phone:hidden' : ''}`}>{children}</main>
       <Modals />
     </div>
   )
@@ -45,7 +46,7 @@ export function NavColumn({ hidden, children }: { hidden: boolean; children: Rea
   const t = useT()
   const { width, handleProps } = useResizableSidebar('sidebar', 272, 224, 450)
   return (
-    <div style={{ '--sidebar-w': `${width}px` } as CSSProperties} className={`relative flex flex-col h-full shrink-0 w-[calc(72px_+_var(--sidebar-w))] tab:w-[296px] max-md:w-auto max-md:absolute max-md:inset-0 max-md:z-20 ${hidden ? 'max-md:hidden' : ''}`} data-layer="md">
+    <div style={{ '--sidebar-w': `${width}px` } as CSSProperties} className={`relative flex flex-col h-full shrink-0 w-[calc(72px_+_var(--sidebar-w))] tab:w-[296px] phone:w-auto phone:absolute phone:inset-0 phone:z-20 ${hidden ? 'phone:hidden' : ''}`} data-layer="md">
       {children}
       <div {...handleProps} aria-label={t('Resize sidebar')} data-sidebar-resizer />
     </div>

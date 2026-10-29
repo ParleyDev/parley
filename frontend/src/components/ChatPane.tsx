@@ -1,4 +1,5 @@
 import { ArrowDown, Hash, Volume2 } from 'lucide-react'
+import { usePhone } from '../lib/swipe'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '../store'
 import { api } from '../lib/api'
@@ -157,8 +158,9 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     prevFirst.current = messages?.[0]?.id ?? null
   }, [messages, firstUnreadId, hasNewer])
 
-  // Late-loading content (thumbnails, link cards, poll results) grows the list after the first paint;
-  // when pinned to the bottom, follow it so the view never drifts up.
+  // Late-loading content (thumbnails, link cards, poll results) grows the list after the first paint, and the
+  // on-screen keyboard shrinks the list itself: when pinned to the bottom, follow either, so the newest messages stay
+  // in view right above the text box.
   useEffect(() => {
     const el = scrollRef.current, content = contentRef.current
     if (!el || !content || typeof ResizeObserver === 'undefined') return
@@ -167,11 +169,25 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       prevHeight.current = el.scrollHeight
     })
     ro.observe(content)
+    ro.observe(el)
     return () => ro.disconnect()
   }, [channel.id])
 
-  // "You're viewing older messages" once the reader is well above the bottom.
+  // "You're viewing older messages" once the reader is well up the history: about a screen and a half above the newest
+  // message, not as soon as they nudge the list.
   const [away, setAway] = useState(false)
+  // The message box floats over the bottom of the chat; the list keeps that much room under the newest message.
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const [bottomH, setBottomH] = useState(0)
+  useEffect(() => {
+    const el = bottomRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => setBottomH(el.offsetHeight))
+    ro.observe(el)
+    setBottomH(el.offsetHeight)
+    return () => ro.disconnect()
+  }, [])
+  const phone = usePhone()
   useEffect(() => { setAway(false) }, [channel.id])
   useEffect(() => { if (hasNewer) stickBottom.current = false }, [hasNewer])
   const onScroll = useCallback(() => {
@@ -179,7 +195,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     if (!el) return
     const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     stickBottom.current = !hasNewer && fromBottom < 40
-    setAway(fromBottom > 300)
+    setAway(fromBottom > Math.max(600, el.clientHeight * 1.5))
     if (el.scrollTop < 120 && hasMore !== false && !loading && messages?.length) {
       prevHeight.current = el.scrollHeight
       const first = el.querySelector<HTMLElement>('[data-msg-id]')
@@ -205,7 +221,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       <div className="relative flex-1 min-h-0 flex flex-col">
       <div aria-live="polite" aria-atomic="true" className="sr-only" data-live-region>{announce}</div>
       <div ref={scrollRef} onScroll={onScroll} role="log" aria-label={t('Messages in {name}', { name: channel.name || t('this conversation') })} tabIndex={0} className="flex-1 min-h-0 overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>
-        <div ref={contentRef} className="min-h-full flex flex-col justify-end">
+        <div ref={contentRef} className="min-h-full flex flex-col justify-end" style={{ paddingBottom: bottomH }}>
           {hasMore === false || (messages && messages.length < 50 && !loading) ? (
             <ChannelIntro channel={channel} />
           ) : loading ? (
@@ -240,18 +256,23 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
           </div>
         </div>
       </div>
-      {(away || hasNewer) && (
-        <div className="pointer-events-none absolute inset-x-4 bottom-2 flex justify-center" data-older-bar>
+      {(away || hasNewer) && (phone ? (
+        // Phones: a small round button at the right instead of the pill across the chat.
+        <button type="button" onClick={async () => { if (hasNewer) { await loadLatest(channel.id); stickBottom.current = true; requestAnimationFrame(() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }); return } const el = scrollRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); stickBottom.current = true }} title={t('Jump to Present')} aria-label={t('Jump to Present')}
+          className="pop absolute right-3 z-20 h-10 w-10 rounded-full border border-line bg-bg-1/95 text-text-0 shadow-lg flex items-center justify-center" style={{ bottom: bottomH + 12 }} data-older-bar data-jump-present><ArrowDown size={18} /></button>
+      ) : (
+        <div className="pointer-events-none absolute inset-x-4 z-20 flex justify-center" style={{ bottom: bottomH + 8 }} data-older-bar>
           <button type="button" onClick={async () => { if (hasNewer) { await loadLatest(channel.id); stickBottom.current = true; requestAnimationFrame(() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }); return } const el = scrollRef.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); stickBottom.current = true }}
             className="pointer-events-auto pop flex items-center gap-3 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white shadow-xl hover:bg-accent-hover" data-jump-present>
             <span>{t("You're viewing older messages")}</span>
             <span className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-xs">{t('Jump to Present')} <ArrowDown size={12} /></span>
           </button>
         </div>
-      )}
-      </div>
-
+      ))}
+      <div ref={bottomRef} className="absolute inset-x-0 bottom-0 z-10" data-chat-bottom>
       {readOnly ? <div className="mx-4 mb-4 rounded-lg bg-bg-3 px-4 py-3 text-sm text-text-2" data-readonly-note>{readOnly}</div> : channel.guild_id === null && isRequest(channel as DmChannel) ? <RequestBanner dm={channel as DmChannel} /> : <Composer channel={channel} reply={reply} onCancelReply={() => setReply(null)} onSent={scrollToBottom} />}
+      </div>
+      </div>
     </>
   )
 }

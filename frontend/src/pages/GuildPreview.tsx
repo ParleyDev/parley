@@ -40,7 +40,7 @@ export default function GuildPreviewPage() {
   }
   return (
     <SplitLayout defaultPane="content" testid={{ 'data-guild-preview': guildId }} sidebar={
-          <aside className="w-[var(--sidebar-w)] tab:w-[224px] max-md:flex-1 shrink-0 bg-bg-1 flex flex-col">
+          <aside className="w-[var(--sidebar-w)] tab:w-[224px] phone:flex-1 shrink-0 bg-bg-1 flex flex-col">
             {pv ? (
               <>
                 {pv.guild.banner_url ? (
@@ -64,11 +64,11 @@ export default function GuildPreviewPage() {
             ) : <div className="p-4 text-sm text-text-2">{t('Loading…')}</div>}
           </aside>
     }>
-        <header className="h-12 shrink-0 px-4 max-md:px-2 flex items-center gap-2 border-b border-line shadow-sm">
+        <header className="h-12 shrink-0 px-4 phone:px-2 flex items-center gap-2 border-b border-line shadow-sm">
           <MobileBack />
-          <button type="button" onClick={() => navigate('/discover')} className="h-8 w-8 -ml-2 max-md:ml-0 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title={t('Back to Discover')}><ChevronLeft size={20} /></button>
+          <button type="button" onClick={() => navigate('/discover')} className="h-8 w-8 -ml-2 phone:ml-0 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title={t('Back to Discover')}><ChevronLeft size={20} /></button>
           {channel ? <><Hash size={22} className="text-text-2 shrink-0" /><span className="font-bold truncate">{channel.name}</span>{channel.topic && <><span className="mx-2 h-6 w-px bg-line" /><span className="text-sm text-text-2 truncate">{channel.topic}</span></>}</> : <span className="font-bold">{t('Preview')}</span>}
-          {pv?.listing && <span className="ml-auto flex items-center gap-3 text-xs text-text-2 max-md:hidden"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />{t('{n} Online', { n: pv.listing.online_count.toLocaleString() })}</span><span className="flex items-center gap-1.5"><Users size={12} />{t('{n} Members', { n: pv.listing.member_count.toLocaleString() })}</span></span>}
+          {pv?.listing && <span className="ml-auto flex items-center gap-3 text-xs text-text-2 phone:hidden"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-success" />{t('{n} Online', { n: pv.listing.online_count.toLocaleString() })}</span><span className="flex items-center gap-1.5"><Users size={12} />{t('{n} Members', { n: pv.listing.member_count.toLocaleString() })}</span></span>}
         </header>
         {pv?.guild.rules && (
           <details className="shrink-0 mx-4 mt-3 rounded-xl border border-line bg-bg-1 px-4 py-2 text-sm" data-preview-rules>
@@ -77,13 +77,13 @@ export default function GuildPreviewPage() {
           </details>
         )}
         {pv && channel ? <PreviewMessages guildId={guildId} channel={channel} guild={pv.guild} /> : <div className="flex-1" />}
-        <div className="shrink-0 m-4 mt-0 rounded-xl bg-bg-1 border border-line px-4 py-3 flex items-center gap-4 max-md:flex-col max-md:items-stretch" data-preview-bar>
+        <div className="shrink-0 m-4 mt-0 rounded-xl bg-bg-1 border border-line px-4 py-3 flex items-center gap-4 phone:flex-col phone:items-stretch" data-preview-bar>
           <span className="h-10 w-10 rounded-xl overflow-hidden flex items-center justify-center text-white font-bold shrink-0" style={{ background: pv?.guild.icon_url ? undefined : colorFor(guildId) }}>{pv?.guild.icon_url ? <img src={pv.guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(pv?.guild.name ?? '?')}</span>
           <div className="min-w-0 flex-1">
             <div className="font-bold">{t('You are currently in preview mode.')}</div>
             <div className="text-sm text-text-2">{t('Join this server to start chatting')}{pv?.listing?.description ? ` — ${pv.listing.description}` : '.'}{pv?.guild.rules_required ? ` ${t('You will be asked to accept its rules first.')}` : ''}</div>
           </div>
-          <button type="button" onClick={join} disabled={joining || !pv} className="btn-primary bg-success hover:bg-success/80 text-black whitespace-nowrap max-md:justify-center" data-preview-join>{joining ? t('Joining…') : t('Join {name}', { name: pv?.guild.name ?? t('Server') })}</button>
+          <button type="button" onClick={join} disabled={joining || !pv} className="btn-primary bg-success hover:bg-success/80 text-black whitespace-nowrap phone:justify-center" data-preview-join>{joining ? t('Joining…') : t('Join {name}', { name: pv?.guild.name ?? t('Server') })}</button>
         </div>
     </SplitLayout>
   )

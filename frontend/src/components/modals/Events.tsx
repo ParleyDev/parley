@@ -60,7 +60,7 @@ export default function EventsModal({ onClose, guildId }: { onClose: () => void;
               {d.cover && <button type="button" className="absolute right-1 top-1 rounded-full bg-bg-0/80 p-1" title={t('Remove cover')} onClick={() => set({ cover: null })}><X size={14} /></button>}
             </div>
             <div><label className="label">{t('Name')}</label><input className="input" value={d.name} onChange={(e) => set({ name: e.target.value })} maxLength={100} minLength={2} required data-event-name /></div>
-            <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1">
+            <div className="grid grid-cols-2 gap-3 phone:grid-cols-1">
               <div><label className="label">{t('Starts')}</label><input type="datetime-local" className="input" value={d.starts} onChange={(e) => set({ starts: e.target.value })} required data-event-starts /></div>
               <div><label className="label">{t('Ends (optional)')}</label><input type="datetime-local" className="input" value={d.ends} onChange={(e) => set({ ends: e.target.value })} data-event-ends /></div>
             </div>

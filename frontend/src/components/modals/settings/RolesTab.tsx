@@ -87,9 +87,9 @@ export default function RolesTab({ guildId }: { guildId: string }) {
     <div>
       <h1 className="text-xl font-bold">{t('Roles')}</h1>
       <p className="text-sm text-text-2 mt-1">{t('Use roles to group your members and assign permissions. Roles higher in the list outrank those below.')}</p>
-      <div className="mt-6 flex gap-6 max-md:flex-col">
+      <div className="mt-6 flex gap-6 phone:flex-col">
         {/* Role list */}
-        <div className="w-60 max-md:w-full shrink-0">
+        <div className="w-60 phone:w-full shrink-0">
           {canManage && <button onClick={create} className="btn-primary w-full mb-3"><Plus size={16} /> {t('Create Role')}</button>}
           <div className="space-y-0.5">
             {list.map((r) => {
@@ -105,7 +105,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
                   <span className={`truncate flex-1 text-sm font-medium ${roleLook(r).className}`} style={roleLook(r).style}>{r.name}</span>
                   {r.id !== guildId && counts[r.id] !== undefined && <span className="shrink-0 text-[11px] tabular-nums text-text-2" title={counts[r.id] === 1 ? t('1 member') : t('{n} members', { n: counts[r.id] })} data-role-count={r.id}>{counts[r.id]}</span>}
                   {mine && (
-                    <span className="flex opacity-0 group-hover:opacity-100 max-md:opacity-100">
+                    <span className="flex opacity-0 group-hover:opacity-100 phone:opacity-100">
                       <button title={t('Move up')} disabled={r.position >= maxPos} onClick={(e) => { e.stopPropagation(); move(r, 1) }} className="h-6 w-6 rounded flex items-center justify-center hover:bg-bg-2 disabled:opacity-30"><ChevronUp size={14} /></button>
                       <button title={t('Move down')} disabled={r.position <= 1} onClick={(e) => { e.stopPropagation(); move(r, -1) }} className="h-6 w-6 rounded flex items-center justify-center hover:bg-bg-2 disabled:opacity-30"><ChevronDown size={14} /></button>
                     </span>

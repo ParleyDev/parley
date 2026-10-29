@@ -35,7 +35,7 @@ export default function AutomodTab({ guildId }: { guildId: string }) {
         <h1 className="text-xl font-bold">{t('AutoMod')}</h1>
         <p className="mt-1 text-sm text-text-2">{t('Stop unwanted messages and nicknames automatically. People who can manage the server are never filtered.')}</p>
       </div>
-      <div className="grid grid-cols-2 max-md:grid-cols-1 gap-2">
+      <div className="grid grid-cols-2 phone:grid-cols-1 gap-2">
         {kinds().map((k) => (
           <button key={k.trigger} type="button" onClick={() => create(k.trigger)} className="flex items-start gap-3 rounded-xl border border-line bg-bg-1 p-3 text-left hover:border-text-2" data-automod-new={k.trigger}>
             <span className="mt-0.5 text-text-2">{k.icon}</span><span><span className="flex items-center gap-1 font-semibold text-sm">{k.label} <Plus size={13} /></span><span className="block text-xs text-text-2">{k.desc}</span></span>

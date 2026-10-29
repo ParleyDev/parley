@@ -17,6 +17,9 @@ const config: CapacitorConfig = {
     SplashScreen: { launchShowDuration: 800, backgroundColor: '#0b0c10', showSpinner: false },
     StatusBar: { style: 'DARK', backgroundColor: '#0b0c10' },
     PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] },
+    // The keyboard shrinks the web view instead of iOS scrolling the whole page up to reveal the text box (the page
+    // jumping and the messages ending up behind the keyboard). The web app hides iOS's form accessory bar.
+    Keyboard: { resize: 'native', resizeOnFullScreen: true },
   },
 }
 

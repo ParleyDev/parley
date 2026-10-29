@@ -25,7 +25,7 @@ export function useContextMenu() {
 }
 
 /** Touch phones get menus as a bottom sheet (Discord mobile's long-press sheet) instead of a cursor popup. */
-const sheetMode = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px) and (pointer: coarse)').matches
+const sheetMode = () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px) and (pointer: coarse), (max-height: 500px) and (pointer: coarse)').matches
 
 /** Discord-style context menu rendered in a portal at a viewport point, flipping to stay on screen. */
 export default function ContextMenu({ x, y, items, above, onClose, label }: MenuState & { onClose: () => void; label?: string }) {

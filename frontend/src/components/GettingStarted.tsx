@@ -32,7 +32,7 @@ export default function GettingStarted({ onAddFriend }: { onAddFriend: () => voi
         <button type="button" onClick={dismiss} className="ml-auto text-text-2 hover:text-text-0" title={t('Dismiss')} aria-label={t('Dismiss getting started')} data-getting-started-dismiss><X size={16} /></button>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg-3"><div className="h-full bg-success transition-all" style={{ width: `${((steps.length - left) / steps.length) * 100}%` }} /></div>
-      <ul className="mt-3 grid grid-cols-2 max-md:grid-cols-1 gap-1.5">
+      <ul className="mt-3 grid grid-cols-2 phone:grid-cols-1 gap-1.5">
         {steps.map((s) => (
           <li key={s.id}>
             <button type="button" disabled={s.done} onClick={s.go} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm ${s.done ? 'text-text-2 line-through' : 'text-text-0 hover:bg-bg-3'}`} data-getting-started-step={s.id} data-done={s.done ? '1' : '0'}>

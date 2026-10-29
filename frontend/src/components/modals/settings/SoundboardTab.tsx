@@ -48,7 +48,7 @@ export default function SoundboardTab({ guildId }: { guildId: string }) {
       {file ? (
         <form onSubmit={submit} className="rounded-xl border border-line bg-bg-0/40 p-4 space-y-3" data-sound-form>
           <div className="text-sm text-text-2">{file.name} · {Math.round(file.size / 1024)} KB</div>
-          <div className="grid grid-cols-[1fr_80px_140px] gap-3 max-md:grid-cols-1">
+          <div className="grid grid-cols-[1fr_80px_140px] gap-3 phone:grid-cols-1">
             <div><label className="label">{t('Name')}</label><input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={32} minLength={2} required data-sound-name /></div>
             <div><label className="label">{t('Emoji')}</label><input className="input text-center" value={emoji} onChange={(e) => setEmoji(e.target.value)} maxLength={8} placeholder="🔊" data-sound-emoji /></div>
             <div><label className="label">{t('Volume {n}%', { n: volume })}</label><input type="range" min={5} max={100} value={volume} onChange={(e) => setVolume(Number(e.target.value))} className="w-full accent-accent" data-sound-volume /></div>

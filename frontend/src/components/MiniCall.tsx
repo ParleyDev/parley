@@ -30,7 +30,7 @@ export default function MiniCall() {
   const back = () => navigate(channel.guild_id ? `/channels/${channel.guild_id}/${channel.id}` : `/channels/@me/${channel.id}`)
   const pip = async () => { try { await ref.current?.requestPictureInPicture() } catch { useStore.getState().pushToast(t('Picture-in-picture is not available here'), 'error') } }
   return (
-    <div className="pop fixed bottom-24 right-4 z-40 w-72 max-md:w-56 overflow-hidden rounded-xl border border-line bg-bg-0 shadow-2xl" data-mini-call={pick?.[0]}>
+    <div className="pop fixed bottom-24 right-4 z-40 w-72 phone:w-56 overflow-hidden rounded-xl border border-line bg-bg-0 shadow-2xl" data-mini-call={pick?.[0]}>
       <button type="button" onClick={back} className="group relative block aspect-video w-full" title={t('Back to the call')}>
         <video ref={ref} autoPlay playsInline muted className="h-full w-full object-contain bg-black" />
         <span className="absolute left-2 bottom-2 rounded-md bg-bg-0/80 px-1.5 py-0.5 text-xs font-semibold">{users[pick![0]]?.display_name ?? t('Call')} · {channel.name || t('Call')}</span>

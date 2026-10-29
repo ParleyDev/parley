@@ -271,7 +271,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     const [before, after] = joinGreeting(m.id)
     const name = <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>
     return (
-      <div className="group px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
+      <div className="group px-4 phone:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
         <span className="w-10 flex justify-center shrink-0"><UserPlus size={16} className="text-success" /></span>
         <span className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1">
           <span data-join-greeting>{before}{name}{after}</span>
@@ -302,7 +302,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     // AutoMod alerts: the rule, who, where and what, with mentions rendered.
     if (m.kind === 'automod_alert') {
       return (
-        <div className="mx-4 max-md:mx-3 my-1 flex items-start gap-3 rounded-lg border-l-4 border-warn bg-warn/5 px-3 py-2 text-[15px] text-text-1" data-msg-id={m.id} data-system={m.kind}>
+        <div className="mx-4 phone:mx-3 my-1 flex items-start gap-3 rounded-lg border-l-4 border-warn bg-warn/5 px-3 py-2 text-[15px] text-text-1" data-msg-id={m.id} data-system={m.kind}>
           <ShieldAlert size={18} className="mt-0.5 shrink-0 text-warn" />
           <span className="msg-content min-w-0 break-words">{renderMarkdown(m.content)}</span>
           <span className="ml-auto text-xs text-text-2 shrink-0">{new Date(m.created_at).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}</span>
@@ -312,7 +312,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     // A missed call reads from the receiver's side: "You missed a call from Alice."
     if (m.kind === 'call_missed' && !isOwn) {
       return (
-        <div className="px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
+        <div className="px-4 phone:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
           <span className="w-10 flex justify-center shrink-0">{icon}</span>
           <span className="min-w-0">{t('You missed a call from')} <button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>.</span>
           <span className="ml-auto text-xs text-text-2 shrink-0" title={new Date(m.created_at).toLocaleString()}>{new Date(m.created_at).toLocaleTimeString(locale(), { hour: 'numeric', minute: '2-digit' })}</span>
@@ -320,7 +320,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       )
     }
     return (
-      <div className="px-4 max-md:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
+      <div className="px-4 phone:px-3 py-1.5 mt-2 flex items-center gap-3 text-[15px] text-text-2" data-msg-id={m.id} data-system={m.kind}>
         <span className="w-10 flex justify-center shrink-0">{icon}</span>
         <span className="min-w-0"><button type="button" className="font-medium text-text-0 hover:underline" onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: { x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} data-msg-author>{authorName}</button>{' '}
           {m.kind === 'channel_follow' ? <span className="msg-content">{renderMarkdown(m.content)}</span> : threadName !== null ? (<>{tn('started a thread: {name}', { name: <button type="button" className="font-medium text-text-0 hover:underline" onClick={() => m.ref_id && setOpenThread(m.ref_id)} data-system-thread={m.ref_id ?? ''}>{threadName}</button> })}</>) : m.content}
@@ -335,7 +335,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
 
   if ((blocked || ignored) && !revealed) {
     return (
-      <div className="px-4 max-md:px-3 py-1 flex items-center gap-2 text-xs text-text-2" data-msg-id={m.id} data-hidden-msg={blocked ? 'blocked' : 'ignored'}>
+      <div className="px-4 phone:px-3 py-1 flex items-center gap-2 text-xs text-text-2" data-msg-id={m.id} data-hidden-msg={blocked ? 'blocked' : 'ignored'}>
         <span className="flex-1 border-t border-line" />
         <span>{blocked ? t('1 blocked message') : t('1 ignored message')}</span>
         <button onClick={() => setRevealed(true)} className="text-sky-400 hover:underline">{t('Show message')}</button>
@@ -345,7 +345,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   }
   return (
     <AvatarMotion.Provider value={motion}>
-    <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${authorName}: ${m.content.slice(0, 200)}`} onPointerDown={longPress.bind.onPointerDown} onPointerMove={longPress.bind.onPointerMove} onPointerCancel={longPress.bind.onPointerCancel} onPointerUp={(e) => { longPress.bind.onPointerUp(); onTap(e) }} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local || m.ephemeral || longPress.isTouch()) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (longPress.fired()) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 max-md:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'max-md:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+    <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${authorName}: ${m.content.slice(0, 200)}`} onPointerDown={longPress.bind.onPointerDown} onPointerMove={longPress.bind.onPointerMove} onPointerCancel={longPress.bind.onPointerCancel} onPointerUp={(e) => { longPress.bind.onPointerUp(); onTap(e) }} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local || m.ephemeral || longPress.isTouch()) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (longPress.fired()) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 phone:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'phone:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
       {m.interaction && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" data-interaction-header={m.interaction.name}>
           {tn('{user} used {command}', { user: <span className="font-semibold text-text-1">{m.interaction.user.display_name}</span>, command: <span className="font-semibold text-sky-400">/{m.interaction.name}</span> })}
@@ -356,11 +356,11 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyNick || replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{replyTarget.content || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 ' + t('Attachment') : '')}</span></>) : <i data-reply-preview="deleted">{t('Original message was deleted')}</i>}
         </div>
       )}
-      <div className={`flex ${compact ? 'gap-2' : 'gap-4 max-md:gap-3'}`}>
+      <div className={`flex ${compact ? 'gap-2' : 'gap-4 phone:gap-3'}`}>
         {compact ? (
-          <div className="w-12 max-md:w-10 shrink-0 text-right text-[11px] text-text-2 pt-[3px] select-none" data-msg-compact>{formatShortTime(m.created_at)}</div>
+          <div className="w-12 phone:w-10 shrink-0 text-right text-[11px] text-text-2 pt-[3px] select-none" data-msg-compact>{formatShortTime(m.created_at)}</div>
         ) : grouped ? (
-          <div className="w-10 max-md:w-8 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
+          <div className="w-10 phone:w-8 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
         ) : (
           <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} className="shrink-0 self-start" data-msg-avatar><Avatar user={authorShown} size={40} /></button>
         )}
@@ -453,7 +453,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       {emojiHover.tip}
       {!editing && m.local === 'failed' && <FailedActions m={m} tapped={tapped} />}
       {!editing && !m.local && !m.ephemeral && (
-        <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
+        <div className={`absolute -top-3 right-4 phone:right-2 hidden group-hover:flex ${tapped ? 'phone:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg overflow-visible`}>
           {m.pinned_at && <span className="h-8 px-1.5 flex items-center text-text-2" title={t('Pinned')}><Pin size={13} /></span>}
           {canReact && frequent.map((e) => <button key={e} title={t('React with {emoji}', { emoji: e })} onClick={() => react(e, !!m.reactions.find((r) => r.emoji === e && r.me))} className="h-8 w-8 flex items-center justify-center text-base hover:bg-bg-3 first:rounded-l-lg" data-quick-react><Emoji value={e} size={20} /></button>)}
           {canReact && <div className="relative" ref={pickerAnchor}>
@@ -573,7 +573,7 @@ function FailedActions({ m, tapped }: { m: Message; tapped: boolean }) {
   const discardLocal = useStore((s) => s.discardLocal)
   const [busy, setBusy] = useState(false)
   return (
-    <div className={`absolute -top-3 right-4 max-md:right-2 hidden group-hover:flex ${tapped ? 'max-md:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg`} data-failed-actions>
+    <div className={`absolute -top-3 right-4 phone:right-2 hidden group-hover:flex ${tapped ? 'phone:flex' : ''} items-center rounded-lg bg-bg-1 border border-line shadow-lg`} data-failed-actions>
       <Tool label={busy ? t('Retrying…') : t('Retry')} onClick={() => { if (busy) return; setBusy(true); retryLocal(m.channel_id, m.id).finally(() => setBusy(false)) }}><RotateCw size={16} className={busy ? 'animate-spin' : ''} /></Tool>
       <Tool label={t('Delete')} danger onClick={() => discardLocal(m.channel_id, m.id)}><Trash2 size={16} /></Tool>
     </div>
@@ -594,9 +594,9 @@ function RibbitNotice({ m }: { m: Message }) {
   const discardLocal = useStore((s) => s.discardLocal)
   const [reasons, setReasons] = useState(false)
   return (
-    <div className="group relative mt-[17px] py-2 pl-[14px] pr-4 max-md:pl-[10px] max-md:pr-3 border-l-2 border-accent bg-accent/10" data-msg-id={m.id} data-ribbit data-local="notice">
-      <div className="flex gap-4 max-md:gap-3">
-        <img src={m.author.avatar_url ?? ''} alt="" className="h-10 w-10 max-md:h-8 max-md:w-8 shrink-0 rounded-full" draggable={false} data-msg-avatar />
+    <div className="group relative mt-[17px] py-2 pl-[14px] pr-4 phone:pl-[10px] phone:pr-3 border-l-2 border-accent bg-accent/10" data-msg-id={m.id} data-ribbit data-local="notice">
+      <div className="flex gap-4 phone:gap-3">
+        <img src={m.author.avatar_url ?? ''} alt="" className="h-10 w-10 phone:h-8 phone:w-8 shrink-0 rounded-full" draggable={false} data-msg-avatar />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 leading-[1.375rem] h-[1.375rem]" data-msg-header>
             <span className="font-medium text-text-0">{m.author.display_name}</span>
