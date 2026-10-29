@@ -15,7 +15,7 @@ async fn widget(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResul
     let g: Option<(String, Option<String>, bool, String)> = sqlx::query_as("SELECT name, icon_url, widget_enabled, widget_invite FROM guilds WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
     let Some((name, icon, enabled, invite)) = g else { return Err(AppError::NotFound("Server not found".into())) };
     if !enabled { return Err(AppError::Forbidden) }
-    let online = crate::ws::bus::online_users(&state.db).await;
+    let online = crate::ws::bus::visible_online_users(&state.db).await;
     let idle = crate::ws::bus::idle_users(&state.db).await;
     let rows: Vec<(Uuid, String, Option<String>, String)> = sqlx::query_as(
         "SELECT u.id, COALESCE(m.nickname, u.display_name), u.avatar_url, u.status FROM guild_members m JOIN users u ON u.id = m.user_id

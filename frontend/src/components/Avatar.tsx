@@ -86,7 +86,7 @@ export default function Avatar({ user, size = 32, presence = false, className = 
         <img src={decorationUrl(assetId, !moving)} alt="" aria-hidden draggable={false} loading="lazy" decoding="async" onError={() => setBroken(assetId)}
           className="absolute pointer-events-none select-none max-w-none" style={{ width: '120%', height: '120%', left: '-10%', top: '-10%' }} data-decoration={decoration} />
       )}
-      {presence && <PresenceBadge size={dot} color={statusColor(status, online)} kind={online ? presenceKind(platforms) : 'dot'} title={presenceTitle(status, online, platforms)} />}
+      {presence && <PresenceBadge size={dot} color={statusColor(status, online)} kind={online && status !== 'invisible' && status !== 'offline' ? presenceKind(platforms) : 'dot'} title={presenceTitle(status, online, platforms)} />}
     </div>
   )
 }

@@ -78,7 +78,7 @@ async fn decorate(state: &AppState, uid: Uuid, mut rows: Vec<Listing>) -> AppRes
     if rows.is_empty() {
         return Ok(rows);
     }
-    let online = crate::ws::bus::online_users(&state.db).await;
+    let online = crate::ws::bus::visible_online_users(&state.db).await;
     let ids: Vec<Uuid> = rows.iter().map(|l| l.guild_id).collect();
     // One grouped query for every listing on the page instead of two per row.
     let stats: Vec<(Uuid, i64, bool)> = sqlx::query_as(

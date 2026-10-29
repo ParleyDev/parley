@@ -107,7 +107,9 @@ impl Serialize for User {
         static NULL: serde_json::Value = serde_json::Value::Null;
         UserWire {
             id: self.id, username: &self.username, display_name: &self.display_name, avatar_url: &self.avatar_url,
-            bio: if hidden { "" } else { &self.bio }, status: &self.status, created_at: self.created_at,
+            bio: if hidden { "" } else { &self.bio },
+            // Invisible goes out as offline, so nobody can tell it was picked (your own PrivateUser keeps it).
+            status: if self.status == "invisible" { "offline" } else { &self.status }, created_at: self.created_at,
             banner_url: if hidden { None } else { self.banner_url.as_ref() }, theme_primary: &self.theme_primary, theme_accent: &self.theme_accent,
             pronouns: if hidden { "" } else { &self.pronouns }, name_primary: &self.name_primary, name_accent: &self.name_accent,
             bot: self.bot, verified_bot: self.verified_bot, name_style: &self.name_style, custom_status: &self.custom_status, avatar_decoration: &self.avatar_decoration,
@@ -538,6 +540,8 @@ pub struct Member {
     pub username: String,
     pub display_name: String,
     pub avatar_url: Option<String>,
+    /// Invisible goes out as offline (members are only ever shown to other people).
+    #[serde(serialize_with = "public_status")]
     pub status: String,
     /// Name style fields so lists can paint names without a separate user lookup.
     #[sqlx(default)]
@@ -1045,4 +1049,9 @@ pub struct Pagination {
 
 fn default_audio_mode() -> String {
     "voice".into()
+}
+
+/// A status as anyone else may see it: Invisible reads as offline.
+fn public_status<S: serde::Serializer>(status: &str, s: S) -> Result<S::Ok, S::Error> {
+    s.serialize_str(if status == "invisible" { "offline" } else { status })
 }

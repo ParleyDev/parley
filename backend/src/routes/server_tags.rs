@@ -106,7 +106,7 @@ async fn card(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
         FROM guilds g WHERE g.id = $1")
         .bind(gid).bind(uid).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Server not found".into()))?;
     if c.tag.is_none() && !c.member { return Err(AppError::NotFound("Server not found".into())) }
-    let online = crate::ws::bus::online_users(&state.db).await;
+    let online = crate::ws::bus::visible_online_users(&state.db).await;
     let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1 AND user_id = ANY($2)").bind(gid).bind(&online).fetch_one(&state.db).await?;
     c.online_count = n;
     if !c.member && !crate::routes::guilds::is_banned(&state.db, gid, uid).await? { c.join = joinable(&state.db, gid).await?; }

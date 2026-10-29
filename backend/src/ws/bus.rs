@@ -142,16 +142,23 @@ pub async fn is_idle(db: &PgPool, user: Uuid) -> bool {
 pub async fn idle_users(db: &PgPool) -> Vec<Uuid> {
     sqlx::query_as::<_, (Uuid,)>(
         "SELECT user_id FROM presence WHERE updated_at > now() - make_interval(secs => $1)
+           AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')
          GROUP BY user_id HAVING SUM(sockets) > 0 AND SUM(idle) >= SUM(sockets)")
         .bind(STALE_SECS as f64).fetch_all(db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default()
 }
 
 /// Tell everyone where `user` stands now: online or not, on which platforms, and whether they are away.
+/// Someone set to Invisible is announced as offline, with no devices and not idle: their status, the device icons and
+/// the away state would all give them away.
 pub async fn announce(state: &AppState, user: Uuid) {
     let platforms = platforms_for(&state.db, user).await;
-    let online = global_sockets(&state.db, user).await.unwrap_or(0) > 0;
+    let online = global_sockets(&state.db, user).await.unwrap_or(0) > 0 && !invisible(&state.db, user).await;
     let idle = online && is_idle(&state.db, user).await;
     state.hub.emit_all("PRESENCE_UPDATE", serde_json::json!({ "user_id": user, "online": online, "platforms": if online { platforms } else { Vec::new() }, "idle": idle }));
+}
+
+async fn invisible(db: &PgPool, user: Uuid) -> bool {
+    sqlx::query_as::<_, (bool,)>("SELECT status = 'invisible' FROM users WHERE id = $1").bind(user).fetch_optional(db).await.ok().flatten().map(|r| r.0).unwrap_or(false)
 }
 
 /// Platforms a user currently has sockets on, across instances (web / desktop / mobile / vr).
@@ -166,7 +173,8 @@ pub async fn platforms_for(db: &PgPool, user: Uuid) -> Vec<String> {
 pub async fn online_platforms(db: &PgPool) -> Vec<(Uuid, Vec<String>)> {
     sqlx::query_as::<_, (Uuid, Vec<String>)>(
         "SELECT p.user_id, array_agg(DISTINCT e.key ORDER BY e.key) FROM presence p, jsonb_each_text(p.platforms) e
-         WHERE p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1) AND e.value::int > 0 GROUP BY p.user_id")
+         WHERE p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1) AND e.value::int > 0
+           AND p.user_id NOT IN (SELECT id FROM users WHERE status = 'invisible') GROUP BY p.user_id")
         .bind(STALE_SECS as f64).fetch_all(db).await.unwrap_or_default()
 }
 
@@ -174,6 +182,18 @@ async fn global_sockets(db: &PgPool, user: Uuid) -> sqlx::Result<i64> {
     let (n,): (i64,) = sqlx::query_as("SELECT COALESCE(SUM(sockets), 0)::bigint FROM presence WHERE user_id = $1 AND updated_at > now() - make_interval(secs => $2)")
         .bind(user).bind(STALE_SECS as f64).fetch_one(db).await?;
     Ok(n)
+}
+
+/// Everyone others may see as online: connected and not set to Invisible. What READY, widgets, invite previews and
+/// online counts show; `online_users` (the truth) is only for deciding whether to push or mail someone.
+pub async fn visible_online_users(db: &PgPool) -> Vec<Uuid> {
+    sqlx::query_as::<_, (Uuid,)>("SELECT DISTINCT user_id FROM presence WHERE sockets > 0 AND updated_at > now() - make_interval(secs => $1)
+         AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')")
+        .bind(STALE_SECS as f64)
+        .fetch_all(db)
+        .await
+        .map(|r| r.into_iter().map(|x| x.0).collect())
+        .unwrap_or_default()
 }
 
 /// Everyone with a live socket on any instance.

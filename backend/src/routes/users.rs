@@ -417,6 +417,7 @@ async fn update_me(
     if req.custom_status_for_secs.map(|s| !(60..=7 * 86400).contains(&s)).unwrap_or(false) {
         return Err(AppError::BadRequest("A custom status can clear after a minute to 7 days".into()));
     }
+    let status_changed = req.status.is_some();
     if let Some(s) = &req.status {
         if !["online", "idle", "dnd", "invisible"].contains(&s.as_str()) {
             return Err(AppError::BadRequest("Invalid status".into()));
@@ -536,6 +537,8 @@ async fn update_me(
 
     let public = User::from(&u);
     state.hub.emit_all("USER_UPDATE", json!(public));
+    // Going Invisible shows you offline (no devices, not away) at once; coming back shows you online again.
+    if status_changed { crate::ws::bus::announce(&state, uid).await; }
     // Your other devices: settings only you see.
     if req.pinned_channels.is_some() { state.hub.emit_users(vec![uid], "USER_SETTINGS_UPDATE", json!({ "pinned_channels": u.pinned_channels })); }
     if req.ignored_users.is_some() || req.online_alerts.is_some() { state.hub.emit_users(vec![uid], "USER_SETTINGS_UPDATE", json!({ "ignored_users": u.ignored_users, "online_alerts": u.online_alerts })); }
@@ -549,6 +552,8 @@ pub async fn expire_statuses(state: AppState) {
         tokio::time::sleep(std::time::Duration::from_secs(15)).await;
         let mut ids: Vec<Uuid> = sqlx::query_as::<_, (Uuid,)>("UPDATE users SET status = 'online', status_expires_at = NULL WHERE status_expires_at <= now() RETURNING id")
             .fetch_all(&state.db).await.unwrap_or_default().into_iter().map(|r| r.0).collect();
+        // An Invisible that ran out: they show up online again.
+        for id in &ids { crate::ws::bus::announce(&state, *id).await; }
         ids.extend(sqlx::query_as::<_, (Uuid,)>("UPDATE users SET custom_status = '', custom_status_expires_at = NULL WHERE custom_status_expires_at <= now() RETURNING id")
             .fetch_all(&state.db).await.unwrap_or_default().into_iter().map(|r| r.0));
         if ids.is_empty() { continue }

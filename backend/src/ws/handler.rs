@@ -215,7 +215,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     let events = state.hub.subscribe();
     let seq_at_subscribe = state.hub.current_seq();
     let first = crate::ws::bus::connect(&state, user_id, &platform, idle).await;
-    let online = crate::ws::bus::online_users(&state.db).await;
+    let online = crate::ws::bus::visible_online_users(&state.db).await;
     let idle_users = crate::ws::bus::idle_users(&state.db).await;
     let activities = crate::routes::spotify::ready_activities(&state.db, user_id).await;
     let platforms: serde_json::Map<String, Value> = crate::ws::bus::online_platforms(&state.db).await.into_iter().map(|(u, p)| (u.to_string(), json!(p))).collect();
