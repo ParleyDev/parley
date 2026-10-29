@@ -108,7 +108,8 @@ export default function InboxButton() {
 
   /** One message in full: avatar, name, time and the text, with the actions on the right. */
   const card = (m: Placed, actions: React.ReactNode, attrs: Record<string, string>, extra?: React.ReactNode) => (
-    <div key={m.id} className="group relative rounded-lg bg-bg-2 border border-line/70 p-3 hover:border-line" {...attrs}>
+    <div key={m.id} role="button" tabIndex={0} onClick={(e) => { if (!(e.target as HTMLElement).closest('button, a')) jump(m) }} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) jump(m) }}
+      className="group relative cursor-pointer rounded-lg bg-bg-2 border border-line/70 p-3 hover:border-line hover:bg-bg-3/60" {...attrs}>
       <div className="flex gap-3">
         <Avatar user={m.author} size={36} />
         <div className="min-w-0 flex-1">

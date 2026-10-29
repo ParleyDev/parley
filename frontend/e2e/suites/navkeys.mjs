@@ -55,7 +55,7 @@ ok('Ctrl+Alt+↑ comes back', here().startsWith(`/channels/${g.id}`))
 await blur(); await p.keyboard.press('Control+i'); await p.waitForTimeout(300)
 ok('Ctrl+I opens the inbox', await p.locator('[data-inbox]').count() === 1)
 await p.keyboard.press('Escape'); await p.mouse.click(700, 400); await blur(); await p.keyboard.press('Control+p'); await p.waitForTimeout(300)
-ok('Ctrl+P shows pinned messages', /Pinned Messages/.test(await p.locator('main').innerText()))
+ok('Ctrl+P shows pinned messages', /Pinned Messages/.test(await p.locator('body').innerText()))
 
 console.log('-- unread pills and marking read')
 await p.goto(`${WEB}/channels/${g.id}/${general.id}`); await p.waitForTimeout(800)
