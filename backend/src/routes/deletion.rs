@@ -152,6 +152,11 @@ pub async fn finalize_loop(state: AppState) {
             Ok(_) => {}
             Err(e) => tracing::warn!(error = ?e, "account deletion run failed"),
         }
+        match crate::signup_guard::purge_unverified(&state).await {
+            Ok(n) if n > 0 => tracing::info!(accounts = n, "removed accounts that never verified their email"),
+            Ok(_) => {}
+            Err(e) => tracing::warn!(error = ?e, "unverified account cleanup failed"),
+        }
         match crate::routes::server_deletion::finalize_due(&state).await {
             Ok(n) if n > 0 => tracing::info!(servers = n, "finalized server deletions"),
             Ok(_) => {}

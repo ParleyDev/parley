@@ -115,6 +115,7 @@ async fn send_request(
     AuthUser(uid): AuthUser,
     Json(req): Json<SendRequest>,
 ) -> AppResult<(StatusCode, Json<Relationship>)> {
+    crate::signup_guard::require_can_post(&state, uid).await?;
     let target = match (req.user_id, req.username.as_deref().map(str::trim)) {
         (Some(id), _) => fetch_user(&state.db, id).await?,
         (None, Some(name)) if !name.is_empty() => {

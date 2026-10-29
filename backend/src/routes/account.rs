@@ -97,6 +97,7 @@ async fn change_email(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if crate::routes::deletion::email_blocked(&state, &email).await? {
         return Err(AppError::BadRequest("This email can't be used right now".into()));
     }
+    crate::signup_guard::check_email(&crate::routes::admin::load_settings(&state.db).await?, &email).await?;
     check_password(&state, uid, &req.password).await?;
     let (current,): (String,) = sqlx::query_as("SELECT email FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
     if current == email {

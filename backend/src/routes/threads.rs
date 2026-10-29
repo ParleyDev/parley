@@ -147,6 +147,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
         return Err(AppError::BadRequest("Threads can only be created in text or forum channels".into()));
     }
     perms::check(p, perms::SEND_MESSAGES)?;
+    crate::signup_guard::require_can_post(&state, uid).await?;
     let name = clean_name(&req.name)?;
     let is_forum = parent.kind == "forum";
     let content = req.content.trim_end().to_string();

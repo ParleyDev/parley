@@ -64,6 +64,31 @@ pub struct InstanceSettings {
     /// Whether the server can send mail at all (so the UI can hide resend when it cannot).
     #[serde(default)]
     pub mail_enabled: bool,
+    /// Sign-up protection (see signup_guard): unverified accounts can read but not post (needs mail).
+    #[serde(default)]
+    pub unverified_read_only: bool,
+    /// Refuse the built-in list of throwaway email services.
+    #[serde(default)]
+    pub block_disposable_emails: bool,
+    /// More email domains to refuse, one per line (admin only).
+    #[serde(default)]
+    pub blocked_email_domains: String,
+    /// Refuse email domains that can't receive mail (no MX record).
+    #[serde(default)]
+    pub check_email_domain: bool,
+    /// CAPTCHA on sign-up: "" (off), "turnstile" or "hcaptcha", with its site key (public) and secret.
+    #[serde(default)]
+    pub captcha_provider: String,
+    #[serde(default)]
+    pub captcha_site_key: String,
+    #[serde(default)]
+    pub captcha_secret: String,
+    /// Where tokens are checked instead of the provider's own endpoint (tests).
+    #[serde(default)]
+    pub captcha_verify_url: String,
+    /// Remove accounts that haven't confirmed their email after this many days (0 = keep them; needs mail).
+    #[serde(default)]
+    pub unverified_delete_days: i64,
     /// Voice transport: "mesh" (peer to peer, default) or "sfu" when a LiveKit server is configured.
     #[serde(default)]
     pub voice_mode: String,
@@ -185,13 +210,18 @@ impl InstanceSettings {
         self.apns_endpoint = String::new();
         self.oauth_providers = Value::Null;
         self.oauth_endpoint_override = String::new();
+        self.blocked_email_domains = String::new();
+        self.captcha_secret = String::new();
+        self.captcha_verify_url = String::new();
+        // The site key is public by design (the sign-up page needs it), and only shown when the CAPTCHA is complete.
+        if self.captcha_provider.is_empty() { self.captcha_site_key = String::new() }
         self
     }
 }
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, translate_url: String::new(), translate_api_key: String::new(), translation: false, llm_url: String::new(), llm_api_key: String::new(), llm_model: String::new(), summaries: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), apns_key: String::new(), apns_key_id: String::new(), apns_team_id: String::new(), apns_topic: String::new(), apns_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string() };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, translate_url: String::new(), translate_api_key: String::new(), translation: false, llm_url: String::new(), llm_api_key: String::new(), llm_model: String::new(), summaries: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), apns_key: String::new(), apns_key_id: String::new(), apns_team_id: String::new(), apns_topic: String::new(), apns_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string(), unverified_read_only: false, block_disposable_emails: false, blocked_email_domains: String::new(), check_email_domain: false, captcha_provider: String::new(), captcha_site_key: String::new(), captcha_secret: String::new(), captcha_verify_url: String::new(), unverified_delete_days: 0 };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -220,6 +250,15 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "oauth_providers" => s.oauth_providers = v,
             "oauth_endpoint_override" => s.oauth_endpoint_override = v.as_str().unwrap_or("").to_string(),
             "max_upload_bytes" => s.max_upload_bytes = v.as_i64().unwrap_or(0),
+            "unverified_read_only" => s.unverified_read_only = v.as_bool().unwrap_or(false),
+            "block_disposable_emails" => s.block_disposable_emails = v.as_bool().unwrap_or(false),
+            "blocked_email_domains" => s.blocked_email_domains = v.as_str().unwrap_or("").to_string(),
+            "check_email_domain" => s.check_email_domain = v.as_bool().unwrap_or(false),
+            "captcha_provider" => s.captcha_provider = v.as_str().unwrap_or("").to_string(),
+            "captcha_site_key" => s.captcha_site_key = v.as_str().unwrap_or("").to_string(),
+            "captcha_secret" => s.captcha_secret = v.as_str().unwrap_or("").to_string(),
+            "captcha_verify_url" => s.captcha_verify_url = v.as_str().unwrap_or("").to_string(),
+            "unverified_delete_days" => s.unverified_delete_days = v.as_i64().unwrap_or(0),
             "rate_limits" => s.rate_limits = v.as_object().map(|o| o.iter().filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string()))).collect()).unwrap_or_default(),
             _ => {}
         }
@@ -807,12 +846,38 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if before.oauth_providers != oauth { changed.insert("oauth_providers".into(), json!(oauth.as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()).unwrap_or_default())); }
     if before.oauth_endpoint_override != oauth_override { changed.insert("oauth_endpoint_override".into(), json!(oauth_override)); }
     if req.max_upload_bytes < 0 || req.max_upload_bytes > 4 * 1024 * 1024 * 1024 { return Err(AppError::BadRequest("Max upload size must be between 0 (default) and 4 GB".into())); }
+    let captcha_provider = req.captcha_provider.trim().to_string();
+    if !["", "turnstile", "hcaptcha"].contains(&captcha_provider.as_str()) { return Err(AppError::BadRequest("CAPTCHA provider must be turnstile, hcaptcha or empty".into())); }
+    let captcha_site_key = req.captcha_site_key.trim().to_string();
+    let captcha_secret = req.captcha_secret.trim().to_string();
+    if !captcha_provider.is_empty() && (captcha_site_key.is_empty() || captcha_secret.is_empty()) { return Err(AppError::BadRequest("A CAPTCHA needs both its site key and secret".into())); }
+    let captcha_verify_url = req.captcha_verify_url.trim().to_string();
+    if !captcha_verify_url.is_empty() && !(captcha_verify_url.starts_with("http://") || captcha_verify_url.starts_with("https://")) { return Err(AppError::BadRequest("CAPTCHA verify URL must be an http(s) URL".into())); }
+    let blocked_domains = crate::signup_guard::parse_domains(&req.blocked_email_domains).join("\n");
+    if !(0..=365).contains(&req.unverified_delete_days) { return Err(AppError::BadRequest("Days before removing unverified accounts must be between 0 (never) and 365".into())); }
+    for (k, b, a) in [("unverified_read_only", before.unverified_read_only, req.unverified_read_only), ("block_disposable_emails", before.block_disposable_emails, req.block_disposable_emails), ("check_email_domain", before.check_email_domain, req.check_email_domain)] {
+        if b != a { changed.insert(k.into(), json!(a)); }
+    }
+    if before.blocked_email_domains != blocked_domains { changed.insert("blocked_email_domains".into(), json!(blocked_domains.lines().count())); }
+    if before.captcha_provider != captcha_provider { changed.insert("captcha_provider".into(), json!(captcha_provider)); }
+    if before.captcha_site_key != captcha_site_key { changed.insert("captcha_site_key".into(), json!(captcha_site_key)); }
+    if before.captcha_secret != captcha_secret { changed.insert("captcha_secret".into(), json!(if captcha_secret.is_empty() { "cleared" } else { "set" })); }
+    if before.captcha_verify_url != captcha_verify_url { changed.insert("captcha_verify_url".into(), json!(captcha_verify_url)); }
+    if before.unverified_delete_days != req.unverified_delete_days { changed.insert("unverified_delete_days".into(), json!(req.unverified_delete_days)); }
     if before.max_upload_bytes != req.max_upload_bytes { changed.insert("max_upload_bytes".into(), json!(req.max_upload_bytes)); }
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
+    for (k, v) in [("unverified_read_only", json!(req.unverified_read_only)), ("block_disposable_emails", json!(req.block_disposable_emails)), ("blocked_email_domains", json!(blocked_domains)), ("check_email_domain", json!(req.check_email_domain)), ("captcha_provider", json!(captcha_provider)), ("captcha_site_key", json!(captcha_site_key)), ("captcha_secret", json!(captcha_secret)), ("captcha_verify_url", json!(captcha_verify_url)), ("unverified_delete_days", json!(req.unverified_delete_days))] {
+        sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
+    }
     for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("translate_url", json!(tr_url)), ("translate_api_key", json!(tr_key)), ("llm_url", json!(llm_url)), ("llm_api_key", json!(llm_key)), ("llm_model", json!(llm_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("apns_key", json!(apns_key)), ("apns_key_id", json!(apns_key_id)), ("apns_team_id", json!(apns_team_id)), ("apns_topic", json!(apns_topic)), ("apns_endpoint", json!(apns_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override)), ("max_upload_bytes", json!(req.max_upload_bytes))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
+    }
+    // Turning on (or changing) the removal of unverified accounts applies straight away, not at the next run.
+    if req.unverified_delete_days > 0 && before.unverified_delete_days != req.unverified_delete_days {
+        let st = state.clone();
+        tokio::spawn(async move { if let Err(e) = crate::signup_guard::purge_unverified(&st).await { tracing::warn!(error = ?e, "unverified account cleanup failed") } });
     }
     let mut s = load_settings(&state.db).await?;
     crate::ratelimit::LIMITER.apply_overrides(&s.rate_limits);

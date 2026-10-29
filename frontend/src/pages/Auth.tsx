@@ -5,6 +5,7 @@ import { getPasskey, passkeyError, passkeysSupported, signInWithPasskey } from '
 import QrLogin from '../components/QrLogin'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
+import Captcha from '../components/Captcha'
 import { useStore } from '../store'
 import type { PrivateUser } from '../lib/types'
 import { locale, useT } from '../lib/i18n'
@@ -24,6 +25,12 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [form, setForm] = useState({ login: '', email: '', username: '', display_name: '', password: '' })
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // The instance's sign-up CAPTCHA, when it has one: its token goes with the registration (each token works once).
+  const captchaProvider = useStore((s) => s.instance.captcha_provider ?? '')
+  const captchaSiteKey = useStore((s) => s.instance.captcha_site_key ?? '')
+  const captcha = captchaProvider && captchaSiteKey ? { provider: captchaProvider, siteKey: captchaSiteKey } : null
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaRound, setCaptchaRound] = useState(0)
   // Set when the password was right but the account has 2FA: the ticket proves step one to /auth/mfa.
   const [mfaTicket, setMfaTicket] = useState<string | null>(null)
   const [mfaKeys, setMfaKeys] = useState(false)
@@ -70,11 +77,13 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
         ? await api.post<SignIn | { mfa: true; ticket: string; security_keys?: boolean }>('/auth/login', { login: form.login, password: form.password })
         : await api.post<{ token: string; user: PrivateUser }>('/auth/register', {
             email: form.email, username: form.username, display_name: form.display_name || undefined, password: form.password,
+            ...(captcha ? { captcha_token: captchaToken ?? '' } : {}),
           })
       if ('mfa' in res) { setMfaTicket(res.ticket); setMfaKeys(!!res.security_keys); setCode(''); return }
       signedIn(res)
     } catch (e) {
       setErr((e as Error).message)
+      if (mode === 'register' && captcha) { setCaptchaToken(null); setCaptchaRound((n) => n + 1) }
     } finally {
       setBusy(false)
     }
@@ -195,7 +204,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           </div>
         </div>
 
-        <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || closed}>{busy ? t('Please wait…') : mode === 'login' ? t('Log In') : t('Continue')}</button>
+        {mode === 'register' && captcha && !closed && <div className="mt-4"><Captcha provider={captcha.provider} siteKey={captcha.siteKey} onToken={setCaptchaToken} resetKey={captchaRound} /></div>}
+        <button className="btn-primary w-full mt-6 py-2.5" disabled={busy || closed || (mode === 'register' && !!captcha && !captchaToken)}>{busy ? t('Please wait…') : mode === 'login' ? t('Log In') : t('Continue')}</button>
         {canPasskey && (
           <>
             <div className="my-3 flex items-center gap-3 text-xs uppercase tracking-wider text-text-2"><span className="h-px flex-1 bg-line" />{t('or')}<span className="h-px flex-1 bg-line" /></div>

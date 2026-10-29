@@ -12,6 +12,7 @@ mod metrics;
 mod mfa;
 mod ratelimit;
 mod routes;
+mod signup_guard;
 mod state;
 mod mcp;
 mod voice_audio;

@@ -30,6 +30,9 @@ struct RegisterReq {
     email: String,
     password: String,
     display_name: Option<String>,
+    /// The CAPTCHA widget's token, when the instance has a CAPTCHA on sign-up.
+    #[serde(default)]
+    captcha_token: Option<String>,
 }
 
 pub fn valid_username(u: &str) -> bool {
@@ -38,7 +41,8 @@ pub fn valid_username(u: &str) -> bool {
 }
 
 async fn register(State(state): State<AppState>, headers: HeaderMap, Json(req): Json<RegisterReq>) -> AppResult<Json<Value>> {
-    if !crate::routes::admin::load_settings(&state.db).await?.registration_enabled {
+    let settings = crate::routes::admin::load_settings(&state.db).await?;
+    if !settings.registration_enabled {
         return Err(AppError::Forbidden);
     }
     let username = req.username.trim().to_lowercase();
@@ -58,6 +62,8 @@ async fn register(State(state): State<AppState>, headers: HeaderMap, Json(req): 
     if req.password.len() < 8 {
         return Err(AppError::BadRequest("Password must be at least 8 characters".into()));
     }
+    crate::signup_guard::check_email(&settings, &email).await?;
+    crate::signup_guard::check_captcha(&settings, req.captcha_token.as_deref(), &client_ip(&headers)).await?;
     let display_name = req
         .display_name
         .map(|d| d.trim().to_string())

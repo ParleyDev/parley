@@ -81,7 +81,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
   const gated = level > 0 && !!myMember && !!me && rulesGuild?.owner_id !== me.id && !myMember.roles.length
   const accountWait = gated && level >= 2 ? new Date(me!.created_at).getTime() + 5 * 60_000 - Date.now() : 0
   const memberWait = gated && level >= 3 ? new Date(myMember!.joined_at).getTime() + 10 * 60_000 - Date.now() : 0
-  const verifyBlock = !gated ? null
+  // The instance keeps unverified accounts read-only (Instance Settings → Sign-up protection); the server enforces it.
+  const instanceReadOnly = useStore((s) => !!s.instance.unverified_read_only && s.instance.mail_enabled !== false) && !!me && !me.email_verified_at && !me.bot && !(me as { is_admin?: boolean }).is_admin
+  const verifyBlock = instanceReadOnly ? t('Verify your email address to post. Check your inbox, or resend the link from the banner at the top.')
+    : !gated ? null
     : !me!.email_verified_at ? t('This server requires a verified email address before you can talk. Check your inbox for the verification link.')
     : accountWait > 0 ? t('This server requires an account older than 5 minutes. You can talk in {time}.', { time: shortDuration(accountWait / 1000) })
     : memberWait > 0 ? t('This server asks new members to look around for 10 minutes first. You can talk in {time}.', { time: shortDuration(memberWait / 1000) })

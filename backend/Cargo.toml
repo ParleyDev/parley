@@ -30,6 +30,7 @@ base64 = "0.22"
 infer = "0.16"
 imagesize = "0.13"
 tokio-util = { version = "0.7", features = ["io"] }
+hickory-resolver = { version = "0.24", default-features = false, features = ["tokio-runtime", "system-config"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "http2"] }
 hmac = "0.12"
 hkdf = "0.12"

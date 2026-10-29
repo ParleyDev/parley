@@ -364,6 +364,7 @@ async fn open_dm(
     AuthUser(uid): AuthUser,
     Json(req): Json<OpenDm>,
 ) -> AppResult<(StatusCode, Json<DmChannel>)> {
+    crate::signup_guard::require_can_post(&state, uid).await?;
     let mut ids: Vec<Uuid> = req.recipient_ids.into_iter().filter(|r| *r != uid).collect();
     ids.sort();
     ids.dedup();

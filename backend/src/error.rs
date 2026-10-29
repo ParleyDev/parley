@@ -28,6 +28,9 @@ pub enum AppError {
     /// `reason` (`pending_deletion`, `taken_down` or `deleted`), so clients say "This server is no longer available".
     #[error("server unavailable")]
     ServerUnavailable(&'static str),
+    /// The instance keeps unverified accounts read-only (403, code "email_unverified").
+    #[error("email_unverified")]
+    EmailUnverified,
     #[error("{0}")]
     Conflict(String),
     /// 429 with a message: a per-feature cooldown (username changes, ...).
@@ -61,6 +64,9 @@ impl IntoResponse for AppError {
             AppError::NotFound(m) => (StatusCode::NOT_FOUND, m.clone()),
             AppError::ServerUnavailable(reason) => {
                 return (StatusCode::GONE, Json(json!({ "error": "This server is no longer available.", "code": "server_unavailable", "reason": reason }))).into_response();
+            }
+            AppError::EmailUnverified => {
+                return (StatusCode::FORBIDDEN, Json(json!({ "error": "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.", "code": "email_unverified" }))).into_response();
             }
             AppError::Conflict(m) => (StatusCode::CONFLICT, m.clone()),
             AppError::TooMany(m) => (StatusCode::TOO_MANY_REQUESTS, m.clone()),

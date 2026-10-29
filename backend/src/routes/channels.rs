@@ -520,6 +520,7 @@ pub(crate) async fn create_message(
 ) -> AppResult<(StatusCode, Json<Message>)> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
+    crate::signup_guard::require_can_post(&state, uid).await?;
     check_age(&state.db, &c, uid).await?;
     if let Some(gid) = c.guild_id {
         crate::routes::guilds::check_rules(&state.db, gid, uid).await?;
@@ -992,6 +993,7 @@ async fn add_reaction(
 ) -> AppResult<StatusCode> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::ADD_REACTIONS)?;
+    crate::signup_guard::require_can_post(&state, uid).await?;
     if !valid_emoji(&emoji) {
         return Err(AppError::BadRequest("Invalid emoji".into()));
     }
