@@ -411,7 +411,7 @@ function VoiceParticipants({ channelId, onUserMenu }: { channelId: string; onUse
         return (
           <button key={p.user_id} onClick={(e) => openModal({ kind: 'profile', userId: p.user_id, anchor: anchorOf(e) })} onContextMenu={(e) => onUserMenu(e, { id: u.id, display_name: u.display_name, nickname: members?.[p.user_id]?.nickname })} className="w-full flex items-center gap-2 rounded-md px-1.5 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 text-left">
             <span className={`rounded-full ${speaking[p.user_id] ? 'ring-2 ring-success' : ''}`}><Avatar user={u} size={22} /></span>
-            <StyledName userId={p.user_id} guildId={guildId} className="truncate flex-1">{members?.[p.user_id]?.nickname ?? u.display_name}</StyledName>
+            <StyledName userId={p.user_id} guildId={guildId} className="truncate flex-1">{members?.[p.user_id]?.nickname || u.display_name}</StyledName>
             {p.self_stream && <span className="rounded bg-danger px-1 text-[9px] font-extrabold text-white">{t('LIVE')}</span>}
             {p.self_video && <Video size={14} className="text-text-2" />}
             {/* A moderator's server deafen or mute shows in red; your own choices in grey. */}

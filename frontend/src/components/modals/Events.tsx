@@ -109,7 +109,7 @@ export default function EventsModal({ onClose, guildId }: { onClose: () => void;
               </div>
               {people?.id === e.id && (
                 <div className="flex flex-wrap gap-2 border-t border-line px-3 py-2" data-event-people-list>
-                  {people.list.map((u) => <span key={u.id} className="flex items-center gap-1 rounded-full bg-bg-3 py-0.5 pl-0.5 pr-2 text-xs"><Avatar user={u} size={18} />{u.nickname ?? u.display_name}</span>)}
+                  {people.list.map((u) => <span key={u.id} className="flex items-center gap-1 rounded-full bg-bg-3 py-0.5 pl-0.5 pr-2 text-xs"><Avatar user={u} size={18} />{u.nickname || u.display_name}</span>)}
                   {people.list.length === 0 && <span className="text-xs text-text-2">{t('Nobody yet.')}</span>}
                 </div>
               )}

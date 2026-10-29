@@ -54,7 +54,7 @@ export function useUserMenu(guildId?: string | null) {
   const act = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
 
   return (u: MenuUser, anchor?: DOMRect | null): MenuEntry[] => {
-    const name = u.nickname ?? u.display_name
+    const name = u.nickname || u.display_name
     const isMe = me?.id === u.id
     const rel = relationships[u.id]?.kind
     const ignored = !!me?.ignored_users?.includes(u.id), alerts = !!me?.online_alerts?.includes(u.id)

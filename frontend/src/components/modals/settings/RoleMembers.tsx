@@ -33,9 +33,9 @@ export default function RoleMembers({ guildId, roleId, editable }: { guildId: st
     setBusy(false); setPicked(new Set()); setAdding(false); pushToast(n === 1 ? t('Added 1 member') : t('Added {n} members', { n })); await load()
   }
   const have = new Set((rows ?? []).map((r) => r.id))
-  const candidates = useMemo(() => Object.values(members ?? {}).filter((m) => !have.has(m.user_id) && (!q || (m.nickname ?? m.display_name).toLowerCase().includes(q.toLowerCase()) || m.username.toLowerCase().includes(q.toLowerCase())))
-    .sort((a, b) => (a.nickname ?? a.display_name).localeCompare(b.nickname ?? b.display_name)).slice(0, 100), [members, rows, q]) // eslint-disable-line react-hooks/exhaustive-deps
-  const shown = (rows ?? []).filter((r) => !q || (r.nickname ?? r.display_name).toLowerCase().includes(q.toLowerCase()))
+  const candidates = useMemo(() => Object.values(members ?? {}).filter((m) => !have.has(m.user_id) && (!q || (m.nickname || m.display_name).toLowerCase().includes(q.toLowerCase()) || m.username.toLowerCase().includes(q.toLowerCase())))
+    .sort((a, b) => (a.nickname || a.display_name).localeCompare(b.nickname || b.display_name)).slice(0, 100), [members, rows, q]) // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = (rows ?? []).filter((r) => !q || (r.nickname || r.display_name).toLowerCase().includes(q.toLowerCase()))
   return (
     <div className="space-y-3" data-role-members>
       <div className="flex gap-2">
@@ -50,7 +50,7 @@ export default function RoleMembers({ guildId, roleId, editable }: { guildId: st
               <label key={m.user_id} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-bg-3" data-role-add-option={m.user_id}>
                 <input type="checkbox" className="h-4 w-4 accent-accent" checked={picked.has(m.user_id)} onChange={() => setPicked((p) => { const n = new Set(p); if (n.has(m.user_id)) n.delete(m.user_id); else n.add(m.user_id); return n })} />
                 <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={24} />
-                <span className="truncate text-sm">{m.nickname ?? m.display_name}</span><span className="truncate text-xs text-text-2">@{m.username}</span>
+                <span className="truncate text-sm">{m.nickname || m.display_name}</span><span className="truncate text-xs text-text-2">@{m.username}</span>
               </label>
             ))}
           </div>
@@ -63,7 +63,7 @@ export default function RoleMembers({ guildId, roleId, editable }: { guildId: st
           {shown.map((r) => (
             <div key={r.id} className="flex items-center gap-3 py-2" data-role-member={r.id}>
               <Avatar user={r} size={28} />
-              <span className="min-w-0 flex-1 truncate text-sm">{r.nickname ?? r.display_name}</span>
+              <span className="min-w-0 flex-1 truncate text-sm">{r.nickname || r.display_name}</span>
               {editable && <button type="button" onClick={() => remove(r.id)} title={t('Remove from role')} className="rounded p-1 text-text-2 hover:bg-danger/10 hover:text-danger" data-role-member-remove={r.id}><X size={15} /></button>}
             </div>
           ))}

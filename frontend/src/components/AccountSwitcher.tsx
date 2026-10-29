@@ -27,7 +27,7 @@ export default function AccountSwitcher({ signedIn = true }: { signedIn?: boolea
         <div key={a.id} className="group flex items-center rounded-md hover:bg-bg-3" data-account-row={a.username}>
           <button type="button" disabled={busy} onClick={() => pick(a)} className="flex flex-1 min-w-0 items-center gap-2 px-2 py-1.5 text-left" title={isActive(a) ? t('Current account') : t('Switch to @{name}', { name: a.username })}>
             <Avatar user={a} size={24} />
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm text-text-0">{a.display_name}</span><span className="block truncate text-xs text-text-2">@{a.username}</span></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm text-text-0">{a.display_name || a.username}</span><span className="block truncate text-xs text-text-2">@{a.username}</span></span>
             {isActive(a) && <Check size={14} className="text-success shrink-0" />}
           </button>
           {!isActive(a) && <button type="button" onClick={() => forget(a)} className="mr-1 h-6 w-6 shrink-0 rounded flex items-center justify-center text-text-2 hover:text-danger opacity-60 group-hover:opacity-100" title={t('Remove from this device')} data-account-forget><X size={14} /></button>}

@@ -34,7 +34,7 @@ export function useMentionItems(trigger: '@' | '#' | null, query: string, channe
       return out.slice(0, 10)
     }
     if (guildId) {
-      for (const m of members) { const name = m.nickname ?? m.display_name; if (hit(name) || hit(m.username)) out.push({ kind: 'user', id: m.user_id, label: name, sub: `@${m.username}`, avatar: { id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url } }) }
+      for (const m of members) { const name = m.nickname || m.display_name; if (hit(name) || hit(m.username)) out.push({ kind: 'user', id: m.user_id, label: name, sub: `@${m.username}`, avatar: { id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url } }) }
       for (const r of sortedRoles(roles)) if (r.id !== guildId && hit(r.name)) out.push({ kind: 'role', id: r.id, label: r.name, color: r.color })
       if (hit('everyone')) out.push({ kind: 'everyone', id: 'everyone', label: 'everyone', sub: 'Notify everyone in this channel' })
       if (hit('here')) out.push({ kind: 'here', id: 'here', label: 'here', sub: 'Notify everyone online in this channel' })

@@ -23,7 +23,7 @@ export default function BanMemberModal({ onClose, guildId, userId, kick }: { onC
   const [history, setHistory] = useState(0)
   const [busy, setBusy] = useState(false)
   if (!guild) return null
-  const name = member?.nickname ?? member?.display_name ?? user?.display_name ?? t('this user')
+  const name = member?.nickname || member?.display_name || user?.display_name || t('this user')
 
   const go = async () => {
     setBusy(true)

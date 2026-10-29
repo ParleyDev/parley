@@ -66,7 +66,7 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
       <div className="rounded-xl bg-bg-0/50 border border-line p-4">
         <div className="flex items-center gap-2 font-semibold"><Crown size={16} className="text-warn" /> {t('Server owner')}</div>
         <p className="text-sm text-text-2 mt-1">
-          {guild.owner_id === me?.id ? t('You own this server. Transferring ownership hands over full control, including deleting the server.') : t('This server is owned by {name}.', { name: ownerMember ? (ownerMember.nickname ?? ownerMember.display_name) : t('another member') })}
+          {guild.owner_id === me?.id ? t('You own this server. Transferring ownership hands over full control, including deleting the server.') : t('This server is owned by {name}.', { name: ownerMember ? (ownerMember.nickname || ownerMember.display_name) : t('another member') })}
         </p>
         {guild.owner_id === me?.id && <button type="button" className="btn-ghost mt-3" onClick={() => openModal({ kind: 'transferOwnership', guildId })}><Crown size={16} /> {t('Transfer Ownership')}</button>}
       </div>

@@ -22,7 +22,7 @@ export function useSearchSuggestions(query: string, channel: Channel | DmChannel
     }
     const [, key, v] = m, lv = v.toLowerCase()
     if (key === 'from' || key === 'mentions') {
-      const people = channel.guild_id ? Object.values(members ?? {}).map((x) => ({ username: x.username, name: x.nickname ?? x.display_name })) : (channel as DmChannel).recipients.map((r) => ({ username: r.username, name: r.display_name }))
+      const people = channel.guild_id ? Object.values(members ?? {}).map((x) => ({ username: x.username, name: x.nickname || x.display_name })) : (channel as DmChannel).recipients.map((r) => ({ username: r.username, name: r.display_name }))
       return people.filter((p) => p.username.toLowerCase().startsWith(lv) || p.name.toLowerCase().startsWith(lv)).slice(0, 8).map((p) => ({ label: p.name, detail: `@${p.username}`, value: `${key}:${p.username}` }))
     }
     if (key === 'in' && channel.guild_id) return Object.values(channels).filter((c) => c.guild_id === channel.guild_id && (c.kind === 'text' || c.kind === 'voice') && c.name.toLowerCase().startsWith(lv)).slice(0, 8).map((c) => ({ label: `#${c.name}`, value: `in:${c.name}` }))

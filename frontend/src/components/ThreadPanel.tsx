@@ -61,8 +61,8 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
                 {(joined || isMod) && (
                   <div className="mt-2 border-t border-line pt-2">
                     <div className="flex items-center gap-1"><UserPlus size={14} className="text-text-2" /><input className="input py-1 text-xs" placeholder={t('Add someone')} value={addQ} onChange={(e) => setAddQ(e.target.value)} data-thread-add-search /></div>
-                    {addQ && Object.values(guildMembers ?? {}).filter((m) => !people.some((p) => p.id === m.user_id) && (m.nickname ?? m.display_name).toLowerCase().includes(addQ.toLowerCase())).slice(0, 6).map((m) => (
-                      <button key={m.user_id} type="button" onClick={() => addPerson(m.user_id)} className="mt-1 flex w-full items-center gap-2 rounded px-1 py-1 text-left text-sm hover:bg-bg-3" data-thread-add={m.user_id}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={18} /><span className="truncate">{m.nickname ?? m.display_name}</span></button>
+                    {addQ && Object.values(guildMembers ?? {}).filter((m) => !people.some((p) => p.id === m.user_id) && (m.nickname || m.display_name).toLowerCase().includes(addQ.toLowerCase())).slice(0, 6).map((m) => (
+                      <button key={m.user_id} type="button" onClick={() => addPerson(m.user_id)} className="mt-1 flex w-full items-center gap-2 rounded px-1 py-1 text-left text-sm hover:bg-bg-3" data-thread-add={m.user_id}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={18} /><span className="truncate">{m.nickname || m.display_name}</span></button>
                     ))}
                   </div>
                 )}

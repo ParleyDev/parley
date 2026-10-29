@@ -131,7 +131,7 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
       </div>
       <div className="relative px-4 pt-2 pb-3 space-y-2">
         <div>
-          <div className="text-xl font-bold leading-6 truncate flex items-center gap-1.5"><StyledName userId={user.id}>{user.display_name}</StyledName></div>
+          <div className="text-xl font-bold leading-6 truncate flex items-center gap-1.5"><StyledName userId={user.id}>{user.display_name || user.username}</StyledName></div>
           <div className="text-sm flex flex-wrap items-center gap-x-1.5"><span>{user.username}</span>{user.pronouns ? <><span className="opacity-60">•</span><span>{user.pronouns}</span></> : null}<Badges badges={profile?.badges} /></div>
         </div>
         {user.bio && <div className="msg-content text-sm leading-[18px] whitespace-pre-wrap break-words max-h-[54px] overflow-hidden" data-user-menu-bio>{renderMarkdown(user.bio, { blocks: false })}</div>}

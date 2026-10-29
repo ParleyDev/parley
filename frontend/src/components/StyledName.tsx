@@ -63,6 +63,6 @@ export default function StyledName({ userId, guildId, children, className, style
   const src = styled(user) ? user : styled(member) ? member : user ?? member
   const look = useRole ? roleLook(role) : nameLook(src)
   // Your friend nickname for them wins everywhere, like Discord.
-  const label = nick || (children ?? member?.nickname ?? user?.display_name ?? 'Unknown')
+  const label = nick || children || member?.nickname || user?.display_name || user?.username || 'Unknown'
   return <span className={`${className ?? ''} ${look.className}`.trim()} style={{ ...style, ...look.style }} data-role-colors={mode} data-name-effect={useRole ? (role.name_style?.effect ?? (role.color_accent ? 'gradient' : 'solid')) : (src?.name_style?.effect ?? (src?.name_accent ? 'gradient' : src?.name_primary ? 'solid' : undefined))}>{label}{mode === 'next' && role && <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: role.color ?? undefined }} title={role.name} data-role-dot />}</span>
 }

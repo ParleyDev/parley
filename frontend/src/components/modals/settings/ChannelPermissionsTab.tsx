@@ -62,7 +62,7 @@ export default function ChannelPermissionsTab({ channelId }: { channelId: string
   const sel = ows.find((o) => o.id === selected) ?? { id: selected, kind: roles[selected] ? 'role' as const : 'member' as const, allow: 0, deny: 0 }
   const selRole = roles[selected]
   const selMember = members?.[selected]
-  const selName = selRole ? selRole.name : selMember ? (selMember.nickname ?? selMember.display_name) : t('Unknown')
+  const selName = selRole ? selRole.name : selMember ? (selMember.nickname || selMember.display_name) : t('Unknown')
   const selEditable = selRole ? canManageRole(ctx, me.id, selRole) : true
   const relevant = PERMS.filter((p) => p.channel && (p.channel === 'both' || p.channel === channel.kind))
 
@@ -108,7 +108,7 @@ export default function ChannelPermissionsTab({ channelId }: { channelId: string
                   {addableMembers.length > 0 && <div className="px-2 py-1 text-[11px] font-bold uppercase text-text-2">{t('Members')}</div>}
                   {addableMembers.map((m) => (
                     <button key={m.user_id} onClick={() => { setAdding(false); put(m.user_id, 'member', 0, 0).then(() => setSelected(m.user_id)) }} className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-bg-3 text-left">
-                      <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={20} /><span className="truncate">{m.nickname ?? m.display_name}</span>
+                      <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={20} /><span className="truncate">{m.nickname || m.display_name}</span>
                     </button>
                   ))}
                 </div>
@@ -123,7 +123,7 @@ export default function ChannelPermissionsTab({ channelId }: { channelId: string
             ))}
             {memberTargets.map((m) => (
               <button key={m.user_id} onClick={() => setSelected(m.user_id)} className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-left ${selected === m.user_id ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3'}`}>
-                <UserIcon size={14} /><span className="truncate">{m.nickname ?? m.display_name}</span>
+                <UserIcon size={14} /><span className="truncate">{m.nickname || m.display_name}</span>
               </button>
             ))}
           </div>

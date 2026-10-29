@@ -43,7 +43,7 @@ export default function MembersTab({ guildId }: { guildId: string }) {
     .filter((m) => !roleFilter || (roleFilter === '__none' ? !m.roles?.length : m.roles?.includes(roleFilter)))
     .sort((a, b) => sort === 'joined_new' ? time(b.joined_at) - time(a.joined_at) : sort === 'joined_old' ? time(a.joined_at) - time(b.joined_at)
       : sort === 'account_new' ? time(joins[b.user_id]?.account_created_at) - time(joins[a.user_id]?.account_created_at)
-      : (a.nickname ?? a.display_name).localeCompare(b.nickname ?? b.display_name))
+      : (a.nickname || a.display_name).localeCompare(b.nickname || b.display_name))
   const isMod = has(myPerms, P.KICK_MEMBERS) || has(myPerms, P.BAN_MEMBERS) || has(myPerms, P.MODERATE_MEMBERS)
   const outranksOf = (uid: string) => { const m = members?.[uid]; return !!m && uid !== me.id && guild.owner_id !== uid && (guild.owner_id === me.id || highestPosition(ctx, me.id) > highestPosition({ ...ctx, member: m }, uid)) }
   const togglePick = (uid: string) => setPicked((p) => { const n = new Set(p); if (n.has(uid)) n.delete(uid); else n.add(uid); return n })
@@ -102,10 +102,10 @@ export default function MembersTab({ guildId }: { guildId: string }) {
           const canTransfer = guild.owner_id === me.id && m.user_id !== me.id
           return (
             <div key={m.user_id} className="py-3 flex items-center gap-3" data-members-row={m.user_id}>
-              {isMod && <input type="checkbox" className="h-4 w-4 accent-accent" disabled={!outranksOf(m.user_id)} checked={picked.has(m.user_id)} onChange={() => togglePick(m.user_id)} aria-label={t('Select {name}', { name: m.nickname ?? m.display_name })} data-members-pick={m.user_id} />}
+              {isMod && <input type="checkbox" className="h-4 w-4 accent-accent" disabled={!outranksOf(m.user_id)} checked={picked.has(m.user_id)} onChange={() => togglePick(m.user_id)} aria-label={t('Select {name}', { name: m.nickname || m.display_name })} data-members-pick={m.user_id} />}
               <button onClick={(e) => openModal({ kind: 'profile', userId: m.user_id, anchor: anchorOf(e) })}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={36} presence /></button>
               <div className="min-w-0 w-48 phone:w-32 shrink-0">
-                <div className="font-semibold truncate flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId}>{m.nickname ?? m.display_name}</StyledName>{isOwner && <Crown size={13} className="text-warn shrink-0" />}</div>
+                <div className="font-semibold truncate flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId}>{m.nickname || m.display_name}</StyledName>{isOwner && <Crown size={13} className="text-warn shrink-0" />}</div>
                 <div className="text-xs text-text-2 truncate">@{m.username}</div>
                 {joins[m.user_id] && <div className="text-[11px] text-text-2 truncate" title={t('How they joined')} data-member-joined-via={m.user_id}>{joinLabel(joins[m.user_id])}</div>}
                 {joins[m.user_id] && <div className="text-[11px] text-text-2 truncate" data-member-ages={m.user_id}>{t('Joined {joined} · account {account}', { joined: shortDate(m.joined_at), account: shortDate(joins[m.user_id].account_created_at) })}{joins[m.user_id].warnings ? <span className="ml-1 text-warn">· {joins[m.user_id].warnings === 1 ? t('1 warning') : t('{n} warnings', { n: joins[m.user_id].warnings ?? 0 })}</span> : null}</div>}

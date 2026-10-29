@@ -31,7 +31,7 @@ export default function ModViewModal({ onClose, guildId, userId }: { onClose: ()
   const t = useT()
   const load = useCallback(() => api.get<ModInfo>(`/guilds/${guildId}/members/${userId}/mod-info`).then(setInfo).catch((e: Error) => { pushToast(e.message, 'error'); onClose() }), [guildId, userId, pushToast, onClose])
   useEffect(() => { void load() }, [load])
-  const name = member?.nickname ?? member?.display_name ?? user?.display_name ?? t('Member')
+  const name = member?.nickname || member?.display_name || user?.display_name || t('Member')
   const warn = async () => {
     setBusy(true)
     try { await api.post(`/guilds/${guildId}/members/${userId}/warnings`, { reason }); setReason(''); pushToast(t('{name} was warned', { name })); await load() } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }

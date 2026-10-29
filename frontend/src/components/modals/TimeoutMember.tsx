@@ -17,7 +17,7 @@ export default function TimeoutMemberModal({ onClose, guildId, userId }: { onClo
   const [busy, setBusy] = useState(false)
   const t = useT()
   if (!guild) return null
-  const name = member?.nickname ?? member?.display_name ?? t('this member')
+  const name = member?.nickname || member?.display_name || t('this member')
 
   const apply = async () => {
     setBusy(true)

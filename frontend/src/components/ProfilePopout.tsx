@@ -133,7 +133,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const inviteTargets = myGuilds.filter((g) => !mutual.some((m) => m.id === g.id))
   const friendNote = useStore((s) => s.notes[user.id])
   const setNote = useStore((s) => s.setNote)
-  const nickname = member?.nickname ?? friendNote?.nickname ?? null
+  const nickname = member?.nickname || friendNote?.nickname || null
   const [nickEdit, setNickEdit] = useState<string | null>(null)
   const [noteDraft, setNoteDraft] = useState<string | null>(null)
   const saveNick = () => { const v = nickEdit ?? ''; setNickEdit(null); if (v.trim() === (friendNote?.nickname ?? '')) return; act(() => setNote(user.id, { nickname: v })) }
@@ -155,8 +155,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
       ...(rel === 'friend' ? [{ label: t('Remove Friend'), danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] : []),
       rel === 'blocked' ? { label: t('Unblock'), onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) } : { label: t('Block'), danger: true, onClick: block },
       ...(canKick || canBan ? ['sep' as const] : []),
-      ...(canKick ? [{ label: t('Kick {name}', { name: nickname ?? user.display_name }), danger: true, icon: <UserMinus size={16} />, onClick: kick }] : []),
-      ...(canBan ? [{ label: t('Ban {name}', { name: nickname ?? user.display_name }), danger: true, icon: <Gavel size={16} />, onClick: ban }] : []),
+      ...(canKick ? [{ label: t('Kick {name}', { name: nickname || user.display_name }), danger: true, icon: <UserMinus size={16} />, onClick: kick }] : []),
+      ...(canBan ? [{ label: t('Ban {name}', { name: nickname || user.display_name }), danger: true, icon: <Gavel size={16} />, onClick: ban }] : []),
       'sep',
       copyMenu(),
     ]
@@ -214,7 +214,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
               <input autoFocus value={nickEdit} maxLength={32} onChange={(e) => setNickEdit(e.target.value)} onBlur={saveNick} onKeyDown={(e) => { if (e.key === 'Enter') saveNick(); if (e.key === 'Escape') setNickEdit(null) }} placeholder={user.display_name}
                 className="h-7 w-48 rounded-md bg-black/30 border border-white/20 px-2 text-sm font-bold outline-none" data-friend-nick-input />
             ) : (
-              <span className={look.className} style={nameStyle} data-profile-name>{nickname ?? user.display_name}</span>
+              <span className={look.className} style={nameStyle} data-profile-name>{nickname || user.display_name || user.username}</span>
             )}
             <ClanTag userId={user.id} tag={user.clan_tag} />
             <Badges badges={user.badges} />
@@ -333,7 +333,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         {!panel && !full && !isMe && rel !== 'blocked' && (
           <div className="relative">
             <input ref={inputRef} value={quick} onChange={(e) => setQuick(e.target.value)} onKeyDown={onQuickKey} disabled={sending} maxLength={2000}
-              placeholder={t('Message @{name}', { name: nickname ?? user.display_name })} aria-label={t('Message @{name}', { name: user.username })} data-quick-message
+              placeholder={t('Message @{name}', { name: nickname || user.display_name })} aria-label={t('Message @{name}', { name: user.username })} data-quick-message
               className="w-full h-11 rounded-lg pl-3 pr-10 text-sm text-[#dbdee1] placeholder:text-[#87898c] outline-none border border-transparent focus:border-white/15"
               style={{ background: themed ? 'rgba(0,0,0,0.4)' : '#1e1f22' }} />
             <button type="button" onClick={(e) => setEmoji((cur) => (cur ? null : e.currentTarget.getBoundingClientRect()))} title={t('Emoji')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#b5bac1] hover:text-[#dbdee1]"><Smile size={20} /></button>

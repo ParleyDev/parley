@@ -117,7 +117,7 @@ export function InviteToVoice({ channelId, guildId }: { channelId: string; guild
   useEffect(() => { if (open && !members) void useStore.getState().loadMembers(guildId) }, [open, members, guildId])
   const picks = useMemo(() => Object.values(members ?? {})
     .filter((m) => m.user_id !== me && online[m.user_id] && voiceStates[m.user_id]?.channel_id !== channelId)
-    .sort((a, b) => Number(relationships[b.user_id]?.kind === 'friend') - Number(relationships[a.user_id]?.kind === 'friend') || (a.nickname ?? a.display_name).localeCompare(b.nickname ?? b.display_name))
+    .sort((a, b) => Number(relationships[b.user_id]?.kind === 'friend') - Number(relationships[a.user_id]?.kind === 'friend') || (a.nickname || a.display_name).localeCompare(b.nickname || b.display_name))
     .slice(0, 12), [members, me, online, voiceStates, channelId, relationships])
   const invite = async (uid: string) => {
     try { await api.post(`/channels/${channelId}/voice-invite`, { user_id: uid }); setSent((x) => ({ ...x, [uid]: true })) } catch (e) { pushToast((e as Error).message, 'error') }
@@ -133,7 +133,7 @@ export function InviteToVoice({ channelId, guildId }: { channelId: string; guild
             {!members ? <p className="px-2 py-3 text-sm text-text-2">{t('Loading…')}</p> : picks.length === 0 ? <p className="px-2 py-3 text-sm text-text-2">{t('Nobody else is online right now.')}</p> : picks.map((m) => (
               <div key={m.user_id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-bg-3" data-voice-invite-row={m.user_id}>
                 <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={24} />
-                <span className="min-w-0 flex-1 truncate text-sm">{m.nickname ?? m.display_name}{relationships[m.user_id]?.kind === 'friend' && <span className="ml-1 text-[10px] text-text-2">{t('friend')}</span>}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{m.nickname || m.display_name}{relationships[m.user_id]?.kind === 'friend' && <span className="ml-1 text-[10px] text-text-2">{t('friend')}</span>}</span>
                 <button type="button" disabled={!!sent[m.user_id]} onClick={() => invite(m.user_id)} className="rounded-md bg-success px-2 py-0.5 text-xs font-semibold text-black hover:bg-success/80 disabled:bg-bg-4 disabled:text-text-2" data-voice-invite-send={m.user_id}>{sent[m.user_id] ? t('Invited') : t('Invite')}</button>
               </div>
             ))}
