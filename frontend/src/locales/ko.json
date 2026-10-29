@@ -3556,5 +3556,6 @@
 "Until they confirm their email they can read, but not send messages, react, start DMs or send friend requests.": "이메일을 확인하기 전까지는 읽을 수만 있고 메시지 보내기, 반응, DM 시작, 친구 요청은 할 수 없어요.",
 "Unverified accounts are read-only": "미인증 계정은 읽기 전용",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "글을 쓰려면 이메일 주소를 인증하세요. 받은편지함을 확인하거나 위쪽 배너에서 링크를 다시 보내세요.",
-"leave empty for the provider's": "비워 두면 제공업체 기본값"
+"leave empty for the provider's": "비워 두면 제공업체 기본값",
+"Edit Note": "메모 편집"
 }

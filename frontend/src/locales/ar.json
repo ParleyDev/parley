@@ -3556,5 +3556,6 @@
 "Until they confirm their email they can read, but not send messages, react, start DMs or send friend requests.": "إلى أن يؤكدوا بريدهم يمكنهم القراءة فقط، دون إرسال رسائل أو تفاعلات أو بدء رسائل خاصة أو إرسال طلبات صداقة.",
 "Unverified accounts are read-only": "الحسابات غير المؤكدة للقراءة فقط",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "أكّد عنوان بريدك للنشر. تحقق من صندوق الوارد أو أعد إرسال الرابط من الشريط في الأعلى.",
-"leave empty for the provider's": "اتركه فارغًا لاستخدام رابط المزوّد"
+"leave empty for the provider's": "اتركه فارغًا لاستخدام رابط المزوّد",
+"Edit Note": "تعديل الملاحظة"
 }

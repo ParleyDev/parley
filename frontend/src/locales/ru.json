@@ -3556,5 +3556,6 @@
 "Until they confirm their email they can read, but not send messages, react, start DMs or send friend requests.": "Пока они не подтвердят почту, они могут читать, но не отправлять сообщения, ставить реакции, начинать ЛС или отправлять заявки в друзья.",
 "Unverified accounts are read-only": "Неподтверждённые аккаунты только для чтения",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "Подтвердите адрес почты, чтобы писать. Проверьте входящие или отправьте ссылку повторно из баннера вверху.",
-"leave empty for the provider's": "оставьте пустым для адреса провайдера"
+"leave empty for the provider's": "оставьте пустым для адреса провайдера",
+"Edit Note": "Изменить заметку"
 }

@@ -3556,5 +3556,6 @@
 "Until they confirm their email they can read, but not send messages, react, start DMs or send friend requests.": "E-postalarını doğrulayana kadar okuyabilirler ama mesaj gönderemez, tepki veremez, DM başlatamaz veya arkadaşlık isteği gönderemezler.",
 "Unverified accounts are read-only": "Doğrulanmamış hesaplar salt okunur",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "Paylaşım yapmak için e-posta adresini doğrula. Gelen kutunu kontrol et veya yukarıdaki banttan bağlantıyı yeniden gönder.",
-"leave empty for the provider's": "sağlayıcınınki için boş bırak"
+"leave empty for the provider's": "sağlayıcınınki için boş bırak",
+"Edit Note": "Notu düzenle"
 }

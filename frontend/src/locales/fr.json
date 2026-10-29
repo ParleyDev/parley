@@ -3556,5 +3556,6 @@
 "Until they confirm their email they can read, but not send messages, react, start DMs or send friend requests.": "Tant qu’ils n’ont pas confirmé leur e-mail, ils peuvent lire, mais pas envoyer de messages, réagir, ouvrir de MP ni envoyer de demandes d’ami.",
 "Unverified accounts are read-only": "Les comptes non vérifiés sont en lecture seule",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "Vérifie ton adresse e-mail pour publier. Regarde ta boîte de réception ou renvoie le lien depuis la bannière en haut.",
-"leave empty for the provider's": "laisser vide pour celle du fournisseur"
+"leave empty for the provider's": "laisser vide pour celle du fournisseur",
+"Edit Note": "Modifier la note"
 }

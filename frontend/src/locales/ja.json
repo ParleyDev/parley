@@ -3556,5 +3556,6 @@
 "Until they confirm their email they can read, but not send messages, react, start DMs or send friend requests.": "メールを確認するまでは閲覧のみで、メッセージ送信、リアクション、DMの開始、フレンド申請はできません。",
 "Unverified accounts are read-only": "未認証アカウントは読み取り専用",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "投稿するにはメールアドレスを認証してください。受信トレイを確認するか、上部のバナーからリンクを再送してください。",
-"leave empty for the provider's": "空欄でプロバイダーの既定値"
+"leave empty for the provider's": "空欄でプロバイダーの既定値",
+"Edit Note": "メモを編集"
 }

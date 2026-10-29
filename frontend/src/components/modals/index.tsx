@@ -72,7 +72,7 @@ export default function Modals() {
     case 'channelSettings': return <ChannelSettingsModal onClose={close} channelId={modal!.channelId} tab={modal!.tab} />
     case 'userSettings': return <UserSettingsModal onClose={close} tab={modal!.tab} />
     case 'newDm': return <NewDmModal onClose={close} />
-    case 'profile': return <ProfileModal onClose={close} userId={modal!.userId} anchor={modal!.anchor} tab={modal!.tab} />
+    case 'profile': return <ProfileModal onClose={close} userId={modal!.userId} anchor={modal!.anchor} tab={modal!.tab} note={modal!.note} />
     case 'confirm': return <ConfirmModal onClose={close} {...modal} />
     case 'deleteServer': return <DeleteServerModal onClose={close} guildId={modal!.guildId} />
     case 'image': return <ImageLightbox onClose={close} url={modal!.url} name={modal!.name} items={modal!.items} index={modal!.index} />

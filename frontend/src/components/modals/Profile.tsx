@@ -26,7 +26,7 @@ const PAD = 8
 /** Full profiles fetched this session: reopening one shows it whole at once (frame, effect, banner) while it refreshes. */
 const profiles = new Map<string, UserProfile>()
 
-export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose: () => void; userId: string; anchor?: Anchor; tab?: FullTab | 'roles' }) {
+export default function ProfileModal({ onClose, userId, anchor, tab, note }: { onClose: () => void; userId: string; anchor?: Anchor; tab?: FullTab | 'roles'; note?: boolean }) {
   const t = useT()
   const cached = useStore((s) => s.users[userId])
   const { pathname } = useLocation()
@@ -57,7 +57,7 @@ export default function ProfileModal({ onClose, userId, anchor, tab }: { onClose
     )
   }
   if (!user) return <Modal onClose={onClose}><p className="text-text-2">{t('Loading…')}</p></Modal>
-  return <FullProfile user={user} inGuild={inGuild} onClose={onClose} initialTab={tab} />
+  return <FullProfile user={user} inGuild={inGuild} onClose={onClose} initialTab={tab} focusNote={note} />
 }
 
 /** In place of a profile: a deleted account (a tombstone), or one that isn't available (being deleted). */
@@ -82,7 +82,7 @@ type FullTab = 'activity' | 'friends' | 'servers' | 'wishlist' | 'games' | 'revi
  * edge) and tabs on the right: what they're doing (voice, activity), mutual friends and servers, their wishlist and
  * games when they have some, and reviews. In a server the card carries that server's roles and join date.
  */
-function FullProfile({ user, inGuild, onClose, initialTab }: { user: UserProfile; inGuild?: string; onClose: () => void; initialTab?: FullTab | 'roles' }) {
+function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: UserProfile; inGuild?: string; onClose: () => void; initialTab?: FullTab | 'roles'; focusNote?: boolean }) {
   const t = useT()
   const userId = user.id
   const me = useStore((s) => s.user)
@@ -119,7 +119,7 @@ function FullProfile({ user, inGuild, onClose, initialTab }: { user: UserProfile
         <div className="pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1] phone:flex-col phone:p-4 phone:gap-4 phone:overflow-y-auto" role="dialog" aria-modal aria-label={user.display_name} data-full-profile>
           <button type="button" onClick={onClose} className="absolute right-3 top-3 z-20 h-9 w-9 rounded-lg bg-black/30 hover:bg-black/50 flex items-center justify-center" title={t('Close')} aria-label={t('Close')} data-full-profile-close><X size={20} /></button>
           <div className="w-[400px] shrink-0 wide:h-full phone:w-full" data-full-profile-card>
-            <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" />
+            <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" focusNote={focusNote} />
           </div>
           <div className="flex-1 min-w-0 min-h-0 flex flex-col wide:pt-2" data-full-profile-tabs>
             {/* One line of tabs, like Discord's: short labels with the count beside them, and a row that scrolls sideways

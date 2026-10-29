@@ -1,8 +1,9 @@
+import { usePrefs } from '../lib/prefs'
 import { Check, Clock, MessageSquare, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
 import { nameLook } from '../lib/nameStyle'
 import { roleLook } from './StyledName'
 import { locale, useT } from '../lib/i18n'
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
@@ -38,6 +39,8 @@ interface Props {
    *  'full': the card of the full profile — tall, scrolling inside, with the actions under the name, both Member
    *  Since dates, roles and your note; the full profile puts its tabs beside it. */
   variant?: 'popout' | 'panel' | 'full'
+  /** Full profile opened from "Add Note" / "Edit Note": put the cursor in the note. */
+  focusNote?: boolean
 }
 
 /**
@@ -45,7 +48,7 @@ interface Props {
  * "username • pronouns", a clamped bio with "View Full Bio", mutual servers, and a
  * "Message @user" box. Everything else lives in the full profile ("View Full Profile").
  */
-export default function ProfilePopout({ user, guildId, onClose, variant = 'popout' }: Props) {
+export default function ProfilePopout({ user, guildId, onClose, variant = 'popout', focusNote }: Props) {
   const panel = variant === 'panel'
   const full = variant === 'full'
   const me = useStore((s) => s.user)
@@ -138,6 +141,13 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const [noteDraft, setNoteDraft] = useState<string | null>(null)
   const saveNick = () => { const v = nickEdit ?? ''; setNickEdit(null); if (v.trim() === (friendNote?.nickname ?? '')) return; act(() => setNote(user.id, { nickname: v })) }
   const saveNoteText = () => { const v = noteDraft; setNoteDraft(null); if (v === null || v === (friendNote?.note ?? '')) return; act(() => setNote(user.id, { note: v })) }
+  // Autosave while typing (and on blur, above): the draft stays in the box, so nothing jumps under the cursor.
+  const noteTimer = useRef<number | undefined>(undefined)
+  const noteRef = useRef<HTMLTextAreaElement>(null)
+  const saveNoteValue = (v: string) => { if (v === (useStore.getState().notes[user.id]?.note ?? '')) return; void setNote(user.id, { note: v }).catch(() => {}) }
+  useEffect(() => () => clearTimeout(noteTimer.current), [])
+  useEffect(() => { if (focusNote) { const el = noteRef.current; el?.focus(); el?.setSelectionRange(el.value.length, el.value.length) } }, [focusNote])
+  const streamer = usePrefs().streamer
 
   const menuItems: MenuEntry[] = isMe
     ? [
@@ -147,6 +157,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     ]
     : [
       { label: t('View Full Profile'), onClick: fullProfile },
+      ...(streamer ? [] : [{ label: friendNote?.note ? t('Edit Note') : t('Add Note'), onClick: () => { onClose(); openModal({ kind: 'profile', userId: user.id, note: true }) } }]),
       ...(inviteTargets.length ? [{ label: t('Invite to Server'), children: inviteTargets.map((g) => ({ label: g.name, icon: <GuildDot g={g} />, onClick: () => invite(g) })) }] : []),
       'sep',
       ...(rel === undefined ? [{ label: t('Add Friend'), onClick: () => act(() => api.post('/users/@me/relationships', { user_id: user.id })) }] : []),
@@ -248,13 +259,6 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             </span>
           </div>
         )}
-        {!isMe && !full && (
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-[#b5bac1] mb-1">{t('Note')}</div>
-            <textarea value={noteDraft ?? friendNote?.note ?? ''} onChange={(e) => setNoteDraft(e.target.value)} onBlur={saveNoteText} maxLength={256} rows={noteDraft || friendNote?.note ? 3 : 1} placeholder={t('Click to add a note')}
-              className="w-full resize-none rounded-md bg-black/20 px-2 py-1 text-sm outline-none placeholder:text-[#b5bac1]/70 focus:bg-black/30" data-profile-note />
-          </div>
-        )}
         {!full && (friends.length > 0 || mutual.length > 0) && (
           <button onClick={() => fullProfile(friends.length ? 'friends' : 'servers')} className="flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px] leading-4 text-[#b5bac1] hover:text-[#dbdee1]" data-mutual>
             {friends.length > 0 && (
@@ -323,10 +327,12 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           </div>
         )}
         {!full && <VoiceCard userId={user.id} onJoin={onClose} dark={themed} />}
-        {full && !isMe && (
-          <div>
+        {/* Your private note: only in the full profile (never the popout or the DM panel, where a shared or streamed
+            screen would show it), never on your own profile, and not at all in Streamer Mode. Saves as you type. */}
+        {full && !isMe && !streamer && (
+          <div data-profile-note-section>
             <h3 className="text-xs font-bold mb-1">{t('Note (only visible to you)')}</h3>
-            <textarea value={noteDraft ?? friendNote?.note ?? ''} onChange={(e) => setNoteDraft(e.target.value)} onBlur={saveNoteText} maxLength={256} rows={noteDraft || friendNote?.note ? 3 : 1} placeholder={t('Click to add a note')}
+            <textarea ref={noteRef} autoFocus={focusNote} value={noteDraft ?? friendNote?.note ?? ''} onChange={(e) => { setNoteDraft(e.target.value); clearTimeout(noteTimer.current); noteTimer.current = window.setTimeout(() => saveNoteValue(e.target.value), 800) }} onBlur={() => { clearTimeout(noteTimer.current); saveNoteText() }} maxLength={256} rows={noteDraft || friendNote?.note ? 3 : 1} placeholder={t('Click to add a note')}
               className="w-full resize-none rounded-md bg-transparent px-0 py-1 text-sm italic outline-none placeholder:text-[#b5bac1]/80 focus:bg-black/20 focus:px-2 focus:not-italic" data-profile-note />
           </div>
         )}

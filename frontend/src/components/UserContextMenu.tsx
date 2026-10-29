@@ -131,7 +131,8 @@ export function useUserMenu(guildId?: string | null) {
       ...mention,
       { label: 'Message', icon: <MessageSquare size={16} />, onClick: message },
       ...(rel !== 'blocked' && !u.bot ? [{ label: 'Call', icon: <Phone size={16} />, onClick: call }] : []),
-      { label: 'Add Note', icon: <NotebookPen size={16} />, onClick: profile },
+      // Notes open the full profile at the note field; none in Streamer Mode, where notes are hidden.
+      ...(getPrefs().streamer ? [] : [{ label: st.notes[u.id]?.note ? 'Edit Note' : 'Add Note', icon: <NotebookPen size={16} />, onClick: () => openModal({ kind: 'profile', userId: u.id, note: true }) }]),
       ...(userApps.length && here ? [{ label: 'Apps', icon: <AppWindow size={16} />, children: userApps.map((c) => ({ label: c.name, onClick: () => act(() => api.post('/interactions', { command_id: c.id, channel_id: here, target_id: u.id })) })) }] : []),
       ...(nickname.length || roleMenu.length || inviteMenu.length ? ['sep' as const] : []),
       ...nickname,
