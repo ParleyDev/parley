@@ -3557,5 +3557,9 @@
 "Unverified accounts are read-only": "Unbestätigte Konten sind schreibgeschützt",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "Bestätige deine E-Mail-Adresse, um zu schreiben. Sieh in deinem Posteingang nach oder sende den Link über das Banner oben erneut.",
 "leave empty for the provider's": "leer lassen für den des Anbieters",
-"Edit Note": "Notiz bearbeiten"
+"Edit Note": "Notiz bearbeiten",
+"Edit Per-server Profile": "Serverprofil bearbeiten",
+"Visible only to those in the server": "Nur für Mitglieder des Servers sichtbar",
+"Edit Main Profile": "Hauptprofil bearbeiten",
+"Default profile and visible to everyone": "Standardprofil, für alle sichtbar"
 }

@@ -3557,5 +3557,9 @@
 "Unverified accounts are read-only": "Gli account non verificati sono di sola lettura",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "Verifica il tuo indirizzo email per scrivere. Controlla la posta, o rinvia il link dal banner in alto.",
 "leave empty for the provider's": "lascia vuoto per quello del fornitore",
-"Edit Note": "Modifica nota"
+"Edit Note": "Modifica nota",
+"Edit Per-server Profile": "Modifica profilo del server",
+"Visible only to those in the server": "Visibile solo a chi è nel server",
+"Edit Main Profile": "Modifica profilo principale",
+"Default profile and visible to everyone": "Profilo predefinito, visibile a tutti"
 }

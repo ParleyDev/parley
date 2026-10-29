@@ -3557,5 +3557,9 @@
 "Unverified accounts are read-only": "Doğrulanmamış hesaplar salt okunur",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "Paylaşım yapmak için e-posta adresini doğrula. Gelen kutunu kontrol et veya yukarıdaki banttan bağlantıyı yeniden gönder.",
 "leave empty for the provider's": "sağlayıcınınki için boş bırak",
-"Edit Note": "Notu düzenle"
+"Edit Note": "Notu düzenle",
+"Edit Per-server Profile": "Sunucuya özel profili düzenle",
+"Visible only to those in the server": "Yalnızca sunucudakiler görebilir",
+"Edit Main Profile": "Ana profili düzenle",
+"Default profile and visible to everyone": "Varsayılan profil, herkes görebilir"
 }

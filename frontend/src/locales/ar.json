@@ -3557,5 +3557,9 @@
 "Unverified accounts are read-only": "الحسابات غير المؤكدة للقراءة فقط",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "أكّد عنوان بريدك للنشر. تحقق من صندوق الوارد أو أعد إرسال الرابط من الشريط في الأعلى.",
 "leave empty for the provider's": "اتركه فارغًا لاستخدام رابط المزوّد",
-"Edit Note": "تعديل الملاحظة"
+"Edit Note": "تعديل الملاحظة",
+"Edit Per-server Profile": "تعديل الملف الشخصي للخادم",
+"Visible only to those in the server": "لا يراه إلا من في الخادم",
+"Edit Main Profile": "تعديل الملف الشخصي الرئيسي",
+"Default profile and visible to everyone": "الملف الافتراضي ويراه الجميع"
 }

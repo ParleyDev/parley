@@ -3557,5 +3557,9 @@
 "Unverified accounts are read-only": "未認証アカウントは読み取り専用",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "投稿するにはメールアドレスを認証してください。受信トレイを確認するか、上部のバナーからリンクを再送してください。",
 "leave empty for the provider's": "空欄でプロバイダーの既定値",
-"Edit Note": "メモを編集"
+"Edit Note": "メモを編集",
+"Edit Per-server Profile": "サーバー別プロフィールを編集",
+"Visible only to those in the server": "このサーバーのメンバーにのみ表示",
+"Edit Main Profile": "メインプロフィールを編集",
+"Default profile and visible to everyone": "デフォルトのプロフィールで、全員に表示"
 }

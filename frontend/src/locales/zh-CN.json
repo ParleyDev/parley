@@ -3557,5 +3557,9 @@
 "Unverified accounts are read-only": "未验证账号为只读",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "请验证你的邮箱地址后再发言。查看收件箱，或通过顶部横幅重新发送链接。",
 "leave empty for the provider's": "留空则使用服务商的地址",
-"Edit Note": "编辑备注"
+"Edit Note": "编辑备注",
+"Edit Per-server Profile": "编辑服务器个人资料",
+"Visible only to those in the server": "仅服务器内成员可见",
+"Edit Main Profile": "编辑主个人资料",
+"Default profile and visible to everyone": "默认资料，所有人可见"
 }

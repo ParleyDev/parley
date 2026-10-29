@@ -3557,5 +3557,9 @@
 "Unverified accounts are read-only": "Неподтверждённые аккаунты только для чтения",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "Подтвердите адрес почты, чтобы писать. Проверьте входящие или отправьте ссылку повторно из баннера вверху.",
 "leave empty for the provider's": "оставьте пустым для адреса провайдера",
-"Edit Note": "Изменить заметку"
+"Edit Note": "Изменить заметку",
+"Edit Per-server Profile": "Изменить профиль сервера",
+"Visible only to those in the server": "Видят только участники сервера",
+"Edit Main Profile": "Изменить основной профиль",
+"Default profile and visible to everyone": "Профиль по умолчанию, виден всем"
 }

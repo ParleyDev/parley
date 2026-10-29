@@ -3557,5 +3557,9 @@
 "Unverified accounts are read-only": "미인증 계정은 읽기 전용",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "글을 쓰려면 이메일 주소를 인증하세요. 받은편지함을 확인하거나 위쪽 배너에서 링크를 다시 보내세요.",
 "leave empty for the provider's": "비워 두면 제공업체 기본값",
-"Edit Note": "메모 편집"
+"Edit Note": "메모 편집",
+"Edit Per-server Profile": "서버별 프로필 편집",
+"Visible only to those in the server": "서버에 있는 사람에게만 보여요",
+"Edit Main Profile": "기본 프로필 편집",
+"Default profile and visible to everyone": "기본 프로필이며 모두에게 보여요"
 }

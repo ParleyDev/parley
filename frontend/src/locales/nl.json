@@ -3557,5 +3557,9 @@
 "Unverified accounts are read-only": "Niet-geverifieerde accounts zijn alleen-lezen",
 "Verify your email address to post. Check your inbox, or resend the link from the banner at the top.": "Verifieer je e-mailadres om te posten. Kijk in je inbox, of stuur de link opnieuw via de banner bovenaan.",
 "leave empty for the provider's": "leeg laten voor die van de provider",
-"Edit Note": "Notitie bewerken"
+"Edit Note": "Notitie bewerken",
+"Edit Per-server Profile": "Serverprofiel bewerken",
+"Visible only to those in the server": "Alleen zichtbaar voor mensen in de server",
+"Edit Main Profile": "Hoofdprofiel bewerken",
+"Default profile and visible to everyone": "Standaardprofiel, zichtbaar voor iedereen"
 }

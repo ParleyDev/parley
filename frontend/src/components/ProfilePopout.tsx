@@ -1,5 +1,5 @@
 import { usePrefs } from '../lib/prefs'
-import { Check, Clock, MessageSquare, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX } from 'lucide-react'
+import { Check, Clock, MessageSquare, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX, User as UserIcon } from 'lucide-react'
 import { nameLook } from '../lib/nameStyle'
 import { roleLook } from './StyledName'
 import { locale, useT } from '../lib/i18n'
@@ -149,9 +149,35 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   useEffect(() => { if (focusNote) { const el = noteRef.current; el?.focus(); el?.setSelectionRange(el.value.length, el.value.length) } }, [focusNote])
   const streamer = usePrefs().streamer
 
+  // Your own profile, opened in a server: Edit Profile asks which one, like Discord (the server's own profile, seen only
+  // there, or your main one, seen everywhere). Anywhere else it goes straight to the main profile.
+  const [editChoice, setEditChoice] = useState(false)
+  const editMain = () => { setEditChoice(false); onClose(); openModal({ kind: 'editProfile' }) }
+  const editServer = () => { setEditChoice(false); onClose(); if (guildId) openModal({ kind: 'serverProfile', guildId }) }
+  const editProfile = () => { if (guildId) setEditChoice((v) => !v); else editMain() }
+  const editChoiceRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!editChoice) return
+    const away = (e: PointerEvent) => { if (!editChoiceRef.current?.contains(e.target as Node)) setEditChoice(false) }
+    const esc = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setEditChoice(false) } }
+    document.addEventListener('pointerdown', away, true); window.addEventListener('keydown', esc, true)
+    return () => { document.removeEventListener('pointerdown', away, true); window.removeEventListener('keydown', esc, true) }
+  }, [editChoice])
+  const editChoices = (place: string) => editChoice && (
+    <div className={`absolute z-30 w-[280px] rounded-lg bg-[#111214] border border-white/10 p-1.5 shadow-2xl text-left ${place}`} role="menu" data-edit-profile-menu>
+      <button type="button" role="menuitem" onClick={editServer} className="w-full flex items-start gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-accent hover:text-white group/ep" data-edit-server-profile>
+        <Pencil size={16} className="mt-0.5 shrink-0" /><span className="min-w-0"><span className="block text-sm font-semibold">{t('Edit Per-server Profile')}</span><span className="block text-xs text-[#b5bac1] group-hover/ep:text-white/85">{t('Visible only to those in the server')}</span></span>
+      </button>
+      <button type="button" role="menuitem" onClick={editMain} className="w-full flex items-start gap-2.5 rounded-md px-2.5 py-2 text-left hover:bg-accent hover:text-white group/ep" data-edit-main-profile>
+        <UserIcon size={16} className="mt-0.5 shrink-0" /><span className="min-w-0"><span className="block text-sm font-semibold">{t('Edit Main Profile')}</span><span className="block text-xs text-[#b5bac1] group-hover/ep:text-white/85">{t('Default profile and visible to everyone')}</span></span>
+      </button>
+    </div>
+  )
   const menuItems: MenuEntry[] = isMe
     ? [
-      { label: t('Edit Profile'), icon: <Pencil size={16} />, onClick: () => { onClose(); openModal({ kind: 'editProfile' }) } },
+      guildId
+        ? { label: t('Edit Profile'), icon: <Pencil size={16} />, children: [{ label: t('Edit Per-server Profile'), onClick: editServer }, { label: t('Edit Main Profile'), onClick: editMain }] }
+        : { label: t('Edit Profile'), icon: <Pencil size={16} />, onClick: editMain },
       'sep',
       copyMenu(),
     ]
@@ -242,7 +268,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         {full && (
           // Discord's full profile: the actions sit under the name, the main one spelled out.
           <div className="flex items-center gap-2" data-full-actions>
-            {isMe ? <button onClick={() => { onClose(); openModal({ kind: 'editProfile' }) }} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-edit-profile><Pencil size={15} />{t('Edit Profile')}</button>
+            {isMe ? <span className="relative" ref={editChoiceRef}><button onClick={editProfile} aria-expanded={guildId ? editChoice : undefined} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-edit-profile><Pencil size={15} />{t('Edit Profile')}</button>{editChoices('left-0 top-full mt-2')}</span>
               : rel === undefined ? <button onClick={() => act(() => api.post('/users/@me/relationships', { user_id: user.id }))} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-add-friend><UserPlus size={16} />{t('Add Friend')}</button>
               : rel === 'incoming' ? <button onClick={() => act(() => api.put(`/users/@me/relationships/${user.id}`))} className="h-9 rounded-lg bg-success hover:brightness-110 px-4 text-sm font-semibold text-black flex items-center gap-1.5"><Check size={16} />{t('Accept')}</button>
               : rel !== 'blocked' ? <button onClick={() => act(async () => { const c = await openDm(); onClose(); navigate(`/channels/@me/${c.id}`) })} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-message><MessageSquare size={16} />{t('Message')}</button> : null}
@@ -334,6 +360,14 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             <h3 className="text-xs font-bold mb-1">{t('Note (only visible to you)')}</h3>
             <textarea ref={noteRef} autoFocus={focusNote} value={noteDraft ?? friendNote?.note ?? ''} onChange={(e) => { setNoteDraft(e.target.value); clearTimeout(noteTimer.current); noteTimer.current = window.setTimeout(() => saveNoteValue(e.target.value), 800) }} onBlur={() => { clearTimeout(noteTimer.current); saveNoteText() }} maxLength={256} rows={noteDraft || friendNote?.note ? 3 : 1} placeholder={t('Click to add a note')}
               className="w-full resize-none rounded-md bg-transparent px-0 py-1 text-sm italic outline-none placeholder:text-[#b5bac1]/80 focus:bg-black/20 focus:px-2 focus:not-italic" data-profile-note />
+          </div>
+        )}
+        {!panel && !full && isMe && (
+          <div className="relative" ref={editChoiceRef}>
+            <button type="button" onClick={editProfile} aria-expanded={guildId ? editChoice : undefined} className="w-full h-10 rounded-lg text-sm font-semibold flex items-center justify-center gap-2 hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.4)' : '#2b2d31' }} data-popout-edit-profile>
+              <Pencil size={15} />{t('Edit Profile')}
+            </button>
+            {editChoices('left-0 right-0 w-auto bottom-full mb-2')}
           </div>
         )}
         {!panel && !full && !isMe && rel !== 'blocked' && (
