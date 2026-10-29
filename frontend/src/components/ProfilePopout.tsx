@@ -353,7 +353,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     <div className={`relative z-[1] isolate flex-1 min-h-0 flex flex-col rounded-lg p-[2px] text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ background: themed ? gradient : surface, boxShadow: '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.32), 0 2px 6px rgba(0,0,0,0.2)' }} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
       <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-[6px]" style={{ background: themed ? cardStyle.background : surface }} data-profile-inner>
         <ProfileEffect id={user.profile_effect} />
-        <div className="profile-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]" data-profile-scroll>{contents}</div>
+        <div className="scroller-thin-fade flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain" data-profile-scroll>{contents}</div>
         <div className="relative z-[7] shrink-0 p-4" data-profile-footer>
           <button onClick={() => fullProfile()} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#383a40' }} data-view-full-profile>{t('View Full Profile')}</button>
         </div>

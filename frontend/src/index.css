@@ -76,12 +76,6 @@
 /* System rows (calls, joins, encryption changes) start a group like a message, but a run of them reads as one tight
    list: no space between consecutive ones. */
 .msg-sys { margin-top: var(--msg-gap, 17px); }
-/* The DM profile card's scroll area: a thin scrollbar that only shows while hovering or scrolling. */
-.profile-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; transition: scrollbar-color .2s; }
-.profile-scroll:hover, .profile-scroll:focus-within { scrollbar-color: rgb(255 255 255 / .28) transparent; }
-.profile-scroll::-webkit-scrollbar { width: 6px; }
-.profile-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
-.profile-scroll:hover::-webkit-scrollbar-thumb { background: rgb(255 255 255 / .28); }
 .msg-row[data-sys-row] + .msg-row[data-sys-row] > .msg-sys:first-child { margin-top: 0; }
 :root[data-underline-links="1"] .msg-content a { text-decoration: underline; }
 :root[data-focus-ring="1"] :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
@@ -162,10 +156,31 @@ body {
   input, textarea, select { font-size: 16px !important; }
 }
 
-* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
-*::-webkit-scrollbar { width: 8px; height: 8px; }
-*::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 8px; }
-*::-webkit-scrollbar-track { background: transparent; }
+/* Scrollbars, like Discord's: only while the pointer is over the area or it is being scrolled (lib/scrolling.ts adds
+   .scrolling for a second after the reader scrolls), with the room for them always kept so nothing shifts.
+   - .scroller-auto, the chat's message list: a 16px bar, its thumb drawn 8px wide.
+   - .scroller-thin-fade, everything else (and every overflow-*-auto box by default): an 8px bar, thumb 4px wide.
+   Blink and WebKit draw them with ::-webkit-scrollbar, shown for .hovering (set by lib/scrolling.ts: Chromium doesn't
+   repaint them when only :hover changes). Chrome ignores those once a box sets the standard scrollbar-width/-color,
+   so those are for Firefox only. Touch screens keep their own overlay scrollbars. */
+:root { --scroll-thumb-auto: hsl(234 5% 42%); --scroll-thumb-thin: hsl(235 5% 39%); }
+:root[data-theme="light"] { --scroll-thumb-auto: #c4c9d1; --scroll-thumb-thin: #c4c9d1; }
+@media (hover: hover) and (pointer: fine) {
+  .scroller-thin-fade, .overflow-y-auto, .overflow-auto, .overflow-y-scroll, .scroller-auto { scrollbar-gutter: stable; }
+  *::-webkit-scrollbar { width: 8px; height: 8px; background: transparent; }
+  *::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; border: 0; }
+  *::-webkit-scrollbar-thumb { background-color: transparent; background-clip: padding-box; border: 2px solid transparent; border-radius: 4px; min-height: 40px; }
+  .hovering::-webkit-scrollbar-thumb, .scrolling::-webkit-scrollbar-thumb { background-color: var(--scroll-thumb-thin); }
+  .scroller-auto::-webkit-scrollbar { width: 16px; height: 16px; }
+  .scroller-auto::-webkit-scrollbar-thumb { border-width: 4px; border-radius: 8px; min-height: 40px; }
+  .scroller-auto.hovering::-webkit-scrollbar-thumb, .scroller-auto.scrolling::-webkit-scrollbar-thumb { background-color: var(--scroll-thumb-auto); }
+  @supports not selector(::-webkit-scrollbar) {
+    * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+    :is(.scroller-thin-fade, .overflow-y-auto, .overflow-auto, .overflow-x-auto, .overflow-y-scroll, textarea):hover, .scrolling { scrollbar-color: var(--scroll-thumb-thin) transparent; }
+    .scroller-auto { scrollbar-width: auto; scrollbar-color: transparent transparent; }
+    .scroller-auto:hover, .scroller-auto.scrolling { scrollbar-color: var(--scroll-thumb-auto) transparent; }
+  }
+}
 
 /* Markdown in messages and bios */
 .msg-content h1 { @apply text-2xl font-bold leading-tight mt-2 mb-1; }

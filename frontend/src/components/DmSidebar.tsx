@@ -69,7 +69,7 @@ export default function DmSidebar() {
       <div className="h-12 px-2.5 flex items-center border-b border-line">
         <button onClick={() => openModal({ kind: 'newDm' })} className="w-full rounded-md bg-bg-0/60 px-2 py-1.5 text-left text-sm text-text-2 hover:text-text-1">{t('Find or start a conversation')}</button>
       </div>
-      <div className="flex-1 overflow-y-auto px-2 pt-2">
+      <div className="flex-1 overflow-y-auto px-2 pt-2" data-dm-list>
         <NavLink to="/channels/@me" end onClick={() => setMobilePane('content')} className={({ isActive }) => `flex items-center gap-3 rounded-md px-2 py-2 text-[15px] font-medium ${isActive ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>
           <Users size={20} /> {t('Friends')}
           {pending > 0 && <span className="ml-auto min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center">{pending}</span>}

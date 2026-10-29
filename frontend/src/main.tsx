@@ -12,6 +12,7 @@ import { initPwa } from './lib/webpush'
 import { initViewport } from './lib/viewport'
 import { installSettingsSync } from './lib/settingsSync'
 import { installArrowNav } from './lib/arrowNav'
+import { installScrollingClass } from './lib/scrolling'
 import { followOtherTabs } from './lib/accounts'
 import { useStore } from './store'
 import { initStreamerAuto } from './lib/streamerAuto'
@@ -29,6 +30,7 @@ initPwa()
 initViewport()
 installSettingsSync()
 installArrowNav()
+installScrollingClass()
 initStreamerAuto()
 initClips()
 initAppIcon()
