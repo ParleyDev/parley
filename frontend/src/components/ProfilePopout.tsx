@@ -27,6 +27,7 @@ import { ActivityCard } from './SpotifyActivity'
 import ContextMenu, { type MenuEntry, type MenuState } from './ContextMenu'
 import ImageLightbox from './modals/ImageLightbox'
 import { createPortal } from 'react-dom'
+import { usePhone } from '../lib/swipe'
 
 export const POPOUT_W = 300
 
@@ -51,6 +52,9 @@ interface Props {
 export default function ProfilePopout({ user, guildId, onClose, variant = 'popout', focusNote }: Props) {
   const panel = variant === 'panel'
   const full = variant === 'full'
+  // The full profile's frame reaches over the window around the card; on a phone that window is a sheet with no room
+  // to spare, so the frame gets room of its own like a popout's.
+  const phone = usePhone()
   const me = useStore((s) => s.user)
   const rel = useStore((s) => s.relationships[user.id]?.kind)
   const live = useStore((s) => !!s.voiceStates[user.id]?.self_stream)
@@ -268,7 +272,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         {full && (
           // Discord's full profile: the actions sit under the name, the main one spelled out.
           <div className="flex items-center gap-2" data-full-actions>
-            {isMe ? <span className="relative" ref={editChoiceRef}><button onClick={editProfile} aria-expanded={guildId ? editChoice : undefined} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-edit-profile><Pencil size={15} />{t('Edit Profile')}</button>{editChoices('left-0 top-full mt-2')}</span>
+            {isMe ? <span className="relative phone:flex-1" ref={editChoiceRef}><button onClick={editProfile} aria-expanded={guildId ? editChoice : undefined} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center justify-center gap-1.5 phone:w-full phone:h-10" data-full-edit-profile><Pencil size={15} />{t('Edit Profile')}</button>{editChoices('left-0 top-full mt-2')}</span>
               : rel === undefined ? <button onClick={() => act(() => api.post('/users/@me/relationships', { user_id: user.id }))} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-add-friend><UserPlus size={16} />{t('Add Friend')}</button>
               : rel === 'incoming' ? <button onClick={() => act(() => api.put(`/users/@me/relationships/${user.id}`))} className="h-9 rounded-lg bg-success hover:brightness-110 px-4 text-sm font-semibold text-black flex items-center gap-1.5"><Check size={16} />{t('Accept')}</button>
               : rel !== 'blocked' ? <button onClick={() => act(async () => { const c = await openDm(); onClose(); navigate(`/channels/@me/${c.id}`) })} className="h-9 rounded-lg bg-accent hover:brightness-110 px-4 text-sm font-semibold text-white flex items-center gap-1.5" data-full-message><MessageSquare size={16} />{t('Message')}</button> : null}
@@ -402,7 +406,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     </FrameRoom>
   )
   return (
-    <FrameRoom value={user.profile_frame} bleed={full} className={full ? 'wide:h-full' : ''} innerClassName={full ? 'wide:h-full' : ''}>
+    <FrameRoom value={user.profile_frame} bleed={full && !phone} className={full ? 'wide:h-full' : ''} innerClassName={full ? 'wide:h-full' : ''}>
     <div className={`relative z-[1] isolate w-full ${full ? 'rounded-xl h-full flex flex-col' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
       <ProfileEffect id={user.profile_effect} />
       {contents}

@@ -117,7 +117,8 @@ export function testContainer(kind) {
 export async function openProfileEditor(p, { section, tab } = {}) {
   if (!(await p.locator('[data-profile-editor]').count())) {
     await p.keyboard.press('Escape').catch(() => {})
-    await p.click('[data-panel-self]'); await p.click('[data-user-menu-edit]'); await p.waitForSelector('[data-profile-editor]')
+    // Desktop opens the self menu; a phone slides up your profile, whose Edit Profile button opens the editor.
+    await p.click('[data-panel-self]'); await p.click('[data-user-menu-edit], [data-profile-sheet] [data-full-edit-profile]'); await p.waitForSelector('[data-profile-editor]')
   }
   if (tab) await p.click(`[data-editor-tab="${tab}"]`)
   if (section) { await p.click(`[data-editor-section="${section}"]`); await p.waitForSelector(`[data-editor-panel="${section}"]`) }

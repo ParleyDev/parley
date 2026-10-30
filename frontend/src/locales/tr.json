@@ -3621,5 +3621,7 @@
 "Your custom theme": "Özel temanız",
 "Your own theme": "Kendi temanız",
 "colours": "renk",
-"{name} copy": "{name} kopyası"
+"{name} copy": "{name} kopyası",
+"Accounts": "Hesaplar",
+"Admin": "Yönetici"
 }

@@ -3621,5 +3621,7 @@
 "Your custom theme": "カスタムテーマ",
 "Your own theme": "自分のテーマ",
 "colours": "色",
-"{name} copy": "{name} のコピー"
+"{name} copy": "{name} のコピー",
+"Accounts": "アカウント",
+"Admin": "管理"
 }

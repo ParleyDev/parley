@@ -3621,5 +3621,7 @@
 "Your custom theme": "你的自定义主题",
 "Your own theme": "你自己的主题",
 "colours": "种颜色",
-"{name} copy": "{name} 副本"
+"{name} copy": "{name} 副本",
+"Accounts": "账号",
+"Admin": "管理"
 }

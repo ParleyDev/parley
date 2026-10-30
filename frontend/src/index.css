@@ -158,8 +158,8 @@ body {
 .safe-corner { bottom: calc(1rem + var(--sab)); right: calc(1rem + var(--sar)); }
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
 /* Reduced motion: the OS setting or the Appearance toggle turns animations and transitions off. */
-@media (prefers-reduced-motion: reduce) { .pop, .fade-in, .animate-ping, .animate-pulse, .animate-spin { animation: none !important; } *, *::before, *::after { transition-duration: 0s !important; scroll-behavior: auto !important; } }
-:root[data-motion="reduced"] .pop, :root[data-motion="reduced"] .fade-in, :root[data-motion="reduced"] .animate-ping, :root[data-motion="reduced"] .animate-pulse { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .pop, .sheet-rise, .fade-in, .animate-ping, .animate-pulse, .animate-spin { animation: none !important; } *, *::before, *::after { transition-duration: 0s !important; scroll-behavior: auto !important; } }
+:root[data-motion="reduced"] .pop, :root[data-motion="reduced"] .sheet-rise, :root[data-motion="reduced"] .fade-in, :root[data-motion="reduced"] .animate-ping, :root[data-motion="reduced"] .animate-pulse { animation: none !important; }
 :root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { transition-duration: 0s !important; scroll-behavior: auto !important; }
 /* iOS zooms into inputs smaller than 16px; keep them at 16px on phones. */
 @media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
@@ -255,6 +255,10 @@ body {
 .call-react { animation: call-react 2.5s ease-out forwards }
 @keyframes pop { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: none } }
 .pop { animation: pop .14s ease-out both; }
+/* A phone sheet that slides up from the bottom (Discord mobile's profile), and back down when closed or dragged away. */
+@keyframes sheet-rise { from { transform: translateY(100%) } to { transform: none } }
+.sheet-rise { animation: sheet-rise .32s cubic-bezier(.2, .8, .2, 1) backwards; }
+.sheet-rise[data-closing] { animation: none; transform: translateY(100%); transition: transform .22s ease-in; }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0 } to { transform: none; opacity: 1 } }
 .sheet-up { animation: sheet-up .18s ease-out both; }
 /* Phones: holding a message opens its sheet, so no iOS callout or text selection on the way. */

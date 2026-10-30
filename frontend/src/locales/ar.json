@@ -3621,5 +3621,7 @@
 "Your custom theme": "سمتك المخصصة",
 "Your own theme": "سمتك الخاصة",
 "colours": "ألوان",
-"{name} copy": "نسخة من {name}"
+"{name} copy": "نسخة من {name}",
+"Accounts": "الحسابات",
+"Admin": "المشرف"
 }

@@ -16,7 +16,7 @@ import ProfileEffect from './ProfileEffect'
 import { FrameRoom } from './ProfileFrame'
 import StyledName from './StyledName'
 
-const statusDurations = () => [
+export const statusDurations = () => [
   { label: tr('For 15 minutes'), secs: 15 * 60 }, { label: tr('For 1 hour'), secs: 3600 }, { label: tr('For 8 hours'), secs: 8 * 3600 },
   { label: tr('For 24 hours'), secs: 86400 }, { label: tr('For 3 days'), secs: 3 * 86400 },
 ]
@@ -26,6 +26,15 @@ export const statuses = (): { v: string; label: string; color: string; note?: st
   { v: 'dnd', label: tr('Do Not Disturb'), color: '#f0506e', note: tr('You will not receive desktop notifications') },
   { v: 'invisible', label: tr('Invisible'), color: '#7d8394', note: tr('You will appear offline') },
 ]
+
+/** Set your status, for a while or until changed. */
+export async function applyStatus(v: string, forSecs?: number) {
+  try {
+    // Keep the returned account (it carries status_expires_at, which the public USER_UPDATE leaves out).
+    const u = await api.patch<PrivateUser>('/users/@me', { status: v, ...(forSecs ? { status_for_secs: forSecs } : {}) })
+    const st = useStore.getState(); if (st.token) st.setAuth(st.token, u)
+  } catch (e) { useStore.getState().pushToast((e as Error).message, 'error') }
+}
 
 /** A status dot, drawn like Discord's (DND a bar, Invisible a ring, Idle a moon). */
 export function StatusDot({ v, size = 10 }: { v: string; size?: number }) {
@@ -102,14 +111,7 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
   const [durations, setDurations] = useState<string | null>(null)
   useEffect(() => { api.get<UserProfile>(`/users/${user.id}`).then(setProfile).catch(() => {}) }, [user.id])
 
-  const setStatus = async (v: string, forSecs?: number) => {
-    onClose()
-    try {
-      // Keep the returned account (it carries status_expires_at, which the public USER_UPDATE leaves out).
-      const u = await api.patch<PrivateUser>('/users/@me', { status: v, ...(forSecs ? { status_for_secs: forSecs } : {}) })
-      const st = useStore.getState(); if (st.token) st.setAuth(st.token, u)
-    } catch (e) { pushToast((e as Error).message, 'error') }
-  }
+  const setStatus = (v: string, forSecs?: number) => { onClose(); void applyStatus(v, forSecs) }
   const until = user.status !== 'online' && user.status_expires_at && new Date(user.status_expires_at).getTime() > Date.now()
     ? new Date(user.status_expires_at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : null
   const current = statuses().find((s) => s.v === user.status) ?? statuses()[0]

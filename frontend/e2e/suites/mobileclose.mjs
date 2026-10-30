@@ -11,7 +11,7 @@ console.log('-- profile editor on a phone')
 const m = await (await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })).newPage(); m.on('pageerror', (e) => errors.push(e.message))
 await m.goto(`${WEB}/login`); await m.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await m.goto(`${WEB}/channels/@me`); await m.waitForSelector('[data-panel-self]'); await m.waitForTimeout(800)
-await m.tap('[data-panel-self]'); await m.tap('[data-user-menu-edit]'); await m.waitForSelector('[data-profile-editor]'); await m.waitForTimeout(400)
+await m.tap('[data-panel-self]'); await m.tap('[data-profile-sheet] [data-full-edit-profile]'); await m.waitForSelector('[data-profile-editor]'); await m.waitForTimeout(400)
 const reachable = () => m.evaluate(() => {
   const b = [...document.querySelectorAll('[data-edit-profile-close]')].find((x) => x.offsetParent !== null)
   if (!b) return { ok: false, why: 'none visible' }

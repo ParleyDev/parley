@@ -3621,5 +3621,7 @@
 "Your custom theme": "Ваша тема",
 "Your own theme": "Ваша собственная тема",
 "colours": "цвета",
-"{name} copy": "{name} (копия)"
+"{name} copy": "{name} (копия)",
+"Accounts": "Аккаунты",
+"Admin": "Админ"
 }

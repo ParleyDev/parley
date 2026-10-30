@@ -3621,5 +3621,7 @@
 "Your custom theme": "Je eigen thema",
 "Your own theme": "Je eigen thema",
 "colours": "kleuren",
-"{name} copy": "Kopie van {name}"
+"{name} copy": "Kopie van {name}",
+"Accounts": "Accounts",
+"Admin": "Beheer"
 }

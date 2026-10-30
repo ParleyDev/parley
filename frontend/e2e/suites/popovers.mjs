@@ -44,7 +44,7 @@ ok('switch accounts flies out too, outside the menu', (await p.locator('[data-ac
 ok('your nameplate is the user panel background, not in the menu', await p.locator('[data-user-panel] > [data-panel-nameplate] [data-nameplate-video="e2e_wave"]').count() === 1 && await p.locator('[data-user-menu] [data-nameplate-video]').count() === 0)
 ok('it fills the panel behind its content', await p.locator('[data-panel-nameplate]').evaluate((w) => { const r = w.getBoundingClientRect(), pr = w.parentElement.getBoundingClientRect(); return Math.abs(r.height - pr.height) <= 2 && getComputedStyle(w).zIndex === '0' }), await p.locator('[data-panel-nameplate]').evaluate((w) => JSON.stringify([w.getBoundingClientRect().height, w.parentElement.getBoundingClientRect().height, getComputedStyle(w).zIndex])))
 await p.keyboard.press('Escape'); await p.mouse.click(700, 450); await p.waitForTimeout(200)
-const narrow = await mk(a, `/channels/@me`, { width: 600, height: 900 })
+const narrow = await mk(a, `/channels/@me`, { width: 780, height: 900 })
 await narrow.click('[data-panel-self]'); await narrow.waitForSelector('[data-user-menu]'); await narrow.waitForTimeout(400)
 const nb = await narrow.locator('[data-user-menu]').boundingBox()
 await narrow.click('[data-status-menu]'); await narrow.waitForSelector('[data-status-option="dnd"]'); await narrow.waitForTimeout(400)

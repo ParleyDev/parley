@@ -3621,5 +3621,7 @@
 "Your custom theme": "나만의 테마",
 "Your own theme": "나만의 테마",
 "colours": "색",
-"{name} copy": "{name} 사본"
+"{name} copy": "{name} 사본",
+"Accounts": "계정",
+"Admin": "관리자"
 }

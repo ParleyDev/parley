@@ -12,6 +12,8 @@ import Avatar from '../Avatar'
 import VoiceCard from '../VoiceCard'
 import { ActivityCard } from '../SpotifyActivity'
 import { X } from 'lucide-react'
+import SelfDock from '../SelfDock'
+import { usePhone } from '../../lib/swipe'
 import { useT } from '../../lib/i18n'
 
 const GAP = 8
@@ -94,11 +96,37 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
   const friends = user.mutual_friends ?? []
   const wishlist = user.panels?.wishlist ?? []
   const games = user.panels?.games ?? []
+  // On a phone it is a sheet that slides up to the top (Discord mobile), and slides back down when closed or dragged.
+  const phone = usePhone()
+  const sheet = useRef<HTMLDivElement>(null)
+  const scroller = useRef<HTMLDivElement>(null)
+  const [closing, setClosing] = useState(false)
+  const dismiss = () => {
+    if (!phone) return onClose()
+    if (sheet.current) { sheet.current.style.transform = ''; sheet.current.style.transition = '' }
+    setClosing(true)
+    window.setTimeout(onClose, 220)
+  }
+  const drag = useRef<{ y: number; dy: number } | null>(null)
+  const onTouchStart = (e: React.TouchEvent) => { drag.current = (scroller.current?.scrollTop ?? 0) <= 0 && !(e.target as HTMLElement).closest('[data-self-dock-panel]') ? { y: e.touches[0].clientY, dy: 0 } : null }
+  const onTouchMove = (e: React.TouchEvent) => {
+    const d = drag.current; const el = sheet.current
+    if (!d || !el) return
+    d.dy = Math.max(0, e.touches[0].clientY - d.y)
+    if (d.dy > 0 && (scroller.current?.scrollTop ?? 0) <= 0) { el.style.transition = 'none'; el.style.transform = `translateY(${d.dy}px)` }
+  }
+  const onTouchEnd = () => {
+    const d = drag.current; const el = sheet.current; drag.current = null
+    if (!d || !el || d.dy === 0) return
+    if (d.dy > 110) dismiss()
+    else { el.style.transition = 'transform .2s ease-out'; el.style.transform = '' }
+  }
+  const dismissRef = useRef(dismiss); dismissRef.current = dismiss
   useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[data-context-menu], [data-lightbox], [data-account-dialog]')) { e.stopImmediatePropagation(); onClose() } }
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[data-context-menu], [data-lightbox], [data-account-dialog]')) { e.stopImmediatePropagation(); dismissRef.current() } }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [onClose])
+  }, [])
   const tabs: { id: FullTab; label: string; count?: number }[] = [
     { id: 'activity', label: t('Activity') },
     ...(isMe ? [] : [
@@ -114,17 +142,19 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
   const row = 'w-full flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-white/[.06]'
   const panel = 'rounded-xl bg-black/25 p-3'
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="flex-1 min-w-0 h-full flex items-center justify-center wide:px-10 wide:py-14 phone:p-2" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-        <div className="pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1] phone:flex-col phone:p-4 phone:gap-4 phone:overflow-y-auto" role="dialog" aria-modal aria-label={user.display_name} data-full-profile>
-          <button type="button" onClick={onClose} className="absolute right-3 top-3 z-20 h-9 w-9 rounded-lg bg-black/30 hover:bg-black/50 flex items-center justify-center" title={t('Close')} aria-label={t('Close')} data-full-profile-close><X size={20} /></button>
+    <div className={phone ? `fixed inset-0 z-50 flex flex-col justify-end pt-[calc(env(safe-area-inset-top)+8px)] transition-colors duration-200 ${closing ? 'bg-black/0' : 'bg-black/60'}` : 'fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad'} onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
+      <div className={phone ? 'flex-1 min-h-0 flex flex-col justify-end' : 'flex-1 min-w-0 h-full flex items-center justify-center wide:px-10 wide:py-14'} onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
+        <div ref={sheet} className={phone ? 'sheet-rise relative w-full h-full overflow-hidden rounded-t-2xl border-t border-line bg-bg-1 shadow-2xl text-[#dbdee1]' : 'pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1]'}
+          role="dialog" aria-modal aria-label={user.display_name} data-full-profile data-profile-sheet={phone || undefined} data-closing={closing || undefined} onTouchStart={phone ? onTouchStart : undefined} onTouchMove={phone ? onTouchMove : undefined} onTouchEnd={phone ? onTouchEnd : undefined}>
+          <div ref={scroller} className={phone ? 'h-full overflow-y-auto overscroll-contain flex flex-col gap-4 p-3 pb-28' : 'contents'} data-profile-sheet-scroll={phone || undefined}>
+          <button type="button" onClick={dismiss} className={`absolute z-20 h-9 w-9 flex items-center justify-center ${phone ? 'left-5 top-5 rounded-full bg-black/50' : 'right-3 top-3 rounded-lg bg-black/30 hover:bg-black/50'}`} title={t('Close')} aria-label={t('Close')} data-full-profile-close><X size={20} /></button>
           <div className="w-[400px] shrink-0 wide:h-full phone:w-full" data-full-profile-card>
             <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" focusNote={focusNote} />
           </div>
-          <div className="flex-1 min-w-0 min-h-0 flex flex-col wide:pt-2" data-full-profile-tabs>
+          <div className="flex-1 min-w-0 min-h-0 flex flex-col wide:pt-2 phone:flex-none" data-full-profile-tabs>
             {/* One line of tabs, like Discord's: short labels with the count beside them, and a row that scrolls sideways
                 (no bar) rather than wrapping when there are many. */}
-            <div className="flex flex-nowrap gap-x-6 overflow-x-auto scrollbar-none border-b border-white/10 mb-4 mr-10" role="tablist" data-profile-tabs>
+            <div className="flex flex-nowrap gap-x-6 overflow-x-auto scrollbar-none border-b border-white/10 mb-4 wide:mr-10" role="tablist" data-profile-tabs>
               {tabs.map((x) => (
                 <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}
                   className={`shrink-0 whitespace-nowrap pb-2.5 border-b-2 text-[15px] font-semibold ${tab === x.id ? 'border-white text-white' : 'border-transparent text-[#b5bac1] hover:text-[#dbdee1]'}`} data-profile-tab={x.id}>
@@ -132,7 +162,7 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
                 </button>
               ))}
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3 phone:flex-none phone:overflow-visible">
               {tab === 'activity' && (
                 <div className="space-y-3" data-profile-activity>
                   <VoiceCard userId={userId} onJoin={onClose} dark />
@@ -168,6 +198,8 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
               {tab === 'reviews' && <div className={panel}><Reviews userId={userId} light isMe={isMe} /></div>}
             </div>
           </div>
+          </div>
+          {phone && isMe && <SelfDock onClose={onClose} />}
         </div>
       </div>
     </div>

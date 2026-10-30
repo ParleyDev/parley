@@ -3621,5 +3621,7 @@
 "Your custom theme": "Il tuo tema personalizzato",
 "Your own theme": "Il tuo tema",
 "colours": "colori",
-"{name} copy": "Copia di {name}"
+"{name} copy": "Copia di {name}",
+"Accounts": "Account",
+"Admin": "Admin"
 }
