@@ -45,15 +45,18 @@ ok('and it goes', true)
 await p.locator('[data-panel-self]').tap(); await p.waitForSelector('[data-profile-sheet]'); await p.waitForTimeout(450)
 const cdp = await p.context().newCDPSession(p)
 const touch = async (type, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: 200, y }] })
+const sheetTop = async () => (await p.locator('[data-profile-sheet]').boundingBox()).y
+const top0 = await sheetTop()
 await touch('touchStart', 300); for (let y = 320; y <= 500; y += 30) await touch('touchMove', y)
-const dragged = await p.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('[data-profile-sheet]')).transform).m42)
-ok('it follows a finger down', dragged > 120, String(dragged))
-await touch('touchEnd', 500)
-await p.waitForFunction(() => !document.querySelector('[data-profile-sheet]'))
-ok('dragged far enough, it closes', true)
-await p.locator('[data-panel-self]').tap(); await p.waitForSelector('[data-profile-sheet]'); await p.waitForTimeout(450)
-await touch('touchStart', 300); await touch('touchMove', 340); await touch('touchEnd', 340); await p.waitForTimeout(300)
-ok('a short drag springs back', await p.locator('[data-profile-sheet]').count() === 1 && await p.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('[data-profile-sheet]')).transform).m42) === 0)
+ok('dragging down does not move the sheet', Math.abs((await sheetTop()) - top0) < 1)
+await touch('touchEnd', 500); await p.waitForTimeout(300)
+ok('and it stays open', await p.locator('[data-profile-sheet]').count() === 1 && Math.abs((await sheetTop()) - top0) < 1)
+await p.evaluate(() => { const el = document.querySelector('[data-profile-sheet-scroll]'); el.querySelector('[data-profile-tabs]').insertAdjacentHTML('afterend', '<div style="height:1200px" data-filler></div>') })
+await touch('touchStart', 600); for (let y = 580; y >= 200; y -= 40) await touch('touchMove', y); await touch('touchEnd', 200); await p.waitForTimeout(400)
+const scrolled = await p.evaluate(() => document.querySelector('[data-profile-sheet-scroll]').scrollTop)
+ok('swiping up scrolls what is in it, while the sheet stays', scrolled > 100 && Math.abs((await sheetTop()) - top0) < 1, String(scrolled))
+const card = await p.locator('[data-profile-sheet] [data-profile-card]').boundingBox(), sh = await p.locator('[data-profile-sheet]').boundingBox()
+ok('the profile card is the sheet, not a box inside it', card && Math.abs(card.x - sh.x) < 1 && Math.abs(card.width - sh.width) < 1 && Math.abs(card.y - sh.y) < 1 && Math.abs(card.height - sh.height) < 1, JSON.stringify({ card, sh }))
 await p.locator('[data-self-dock-settings]').tap(); await p.waitForSelector('[data-settings-frame], [role=dialog][aria-label*="Settings"]', { timeout: 5000 }).catch(() => {})
 ok('Settings opens your settings', await p.locator('[data-profile-sheet]').count() === 0 && await p.locator('[data-settings-frame]').count() > 0)
 
@@ -63,20 +66,18 @@ await call(a.token, 'PATCH', '/users/@me', { profile_frame: 'asset:e2e_frame', p
 await p.goto(`${WEB}/channels/@me`); await p.waitForSelector('[data-user-panel]')
 await p.locator('[data-panel-self]').tap(); await p.waitForSelector('[data-profile-sheet] [data-frame-room]'); await p.waitForTimeout(700)
 const framed = await p.evaluate(() => {
-  const room = document.querySelector('[data-profile-sheet] [data-frame-room]'), r = room.getBoundingClientRect(), cut = []
-  if (r.left < -1 || r.right > innerWidth + 1 || r.top < -1) cut.push('viewport')
-  // Up to the sheet's fixed backdrop: the app layout behind it can't clip it.
-  for (let el = room.parentElement; el && el !== document.body; el = el.parentElement) {
-    const cs = getComputedStyle(el)
-    if (/(hidden|auto|scroll|clip)/.test(cs.overflow + cs.overflowX + cs.overflowY)) { const e = el.getBoundingClientRect(); if (r.left < e.left - 1 || r.right > e.right + 1 || r.top < e.top - 1) cut.push(el.className.split(' ').slice(0, 3).join('.')) }
-    if (cs.position === 'fixed') break
-  }
-  const card = document.querySelector('[data-profile-sheet] [data-profile-card]').getBoundingClientRect()
-  return { cut, pad: parseFloat(getComputedStyle(room).paddingTop), room: [r.left, r.top, r.right], card: [card.left, card.top, card.right], frame: document.querySelector('[data-profile-sheet] [data-profile-card]').dataset.profileFrame }
+  const sheet = document.querySelector('[data-profile-sheet]'), card = document.querySelector('[data-profile-sheet] [data-profile-card]')
+  const layers = [...document.querySelectorAll('[data-profile-sheet] [data-frame-layer]')].map((e) => e.getBoundingClientRect())
+  const s = sheet.getBoundingClientRect(), c = card.getBoundingClientRect()
+  const clip = getComputedStyle(sheet).clipPath
+  const fb = document.querySelector('[data-profile-sheet] [data-profile-frame-layers]').getBoundingClientRect()
+  return { box: [fb.left, fb.top, fb.right, fb.bottom], frame: card.dataset.profileFrame, s: [s.left, s.top, s.right, s.bottom], c: [c.left, c.top, c.right, c.bottom], clip, layers: layers.length, past: layers.filter((r) => r.left < s.left - 1 || r.right > s.right + 1 || r.bottom > s.bottom + 1).length }
 })
-ok('the frame is on your card in the sheet', framed.frame === 'asset:e2e_frame', JSON.stringify(framed))
-ok('the whole framed area is on screen and not cut by the sheet', framed.cut.length === 0 && framed.pad > 10, JSON.stringify(framed))
-ok('the card sits inside the frame room', framed.card[0] >= framed.room[0] && framed.card[2] <= framed.room[2] && framed.card[1] >= framed.room[1], JSON.stringify(framed))
+ok('the frame is on the sheet', framed.frame === 'asset:e2e_frame', JSON.stringify(framed))
+ok('the card fills the sheet edge to edge', Math.abs(framed.c[0] - framed.s[0]) < 1 && Math.abs(framed.c[2] - framed.s[2]) < 1 && Math.abs(framed.c[3] - framed.s[3]) < 1, JSON.stringify(framed))
+ok('the sheet cuts the frame at its sides and bottom, and lets it reach over the top', /^inset\(-\d+px 0(px)?( 0(px)?){0,2}\)$/.test(framed.clip), framed.clip)
+ok('the frame reaches past the sheet sideways (so it is cut there)', framed.past > 0, JSON.stringify(framed))
+ok('its bottom edge lies below the sheet, out of sight', framed.box[3] > framed.s[3] + 100, JSON.stringify(framed))
 await p.screenshot({ path: 'selfsheet-frame.png' })
 await p.locator('[data-full-profile-close]').tap(); await p.waitForFunction(() => !document.querySelector('[data-profile-sheet]'))
 

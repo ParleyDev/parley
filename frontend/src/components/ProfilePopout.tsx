@@ -3,7 +3,7 @@ import { Check, Clock, MessageSquare, Crown, Lock, UserCheck, Gavel, MoreHorizon
 import { nameLook } from '../lib/nameStyle'
 import { roleLook } from './StyledName'
 import { locale, useT } from '../lib/i18n'
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
@@ -27,7 +27,6 @@ import { ActivityCard } from './SpotifyActivity'
 import ContextMenu, { type MenuEntry, type MenuState } from './ContextMenu'
 import ImageLightbox from './modals/ImageLightbox'
 import { createPortal } from 'react-dom'
-import { usePhone } from '../lib/swipe'
 
 export const POPOUT_W = 300
 
@@ -42,6 +41,10 @@ interface Props {
   variant?: 'popout' | 'panel' | 'full'
   /** Full profile opened from "Add Note" / "Edit Note": put the cursor in the note. */
   focusNote?: boolean
+  /** The phone sheet: the card is the whole sheet (frame cut at its edges), its contents and `after` (the tabs) scroll
+   *  inside it. */
+  sheet?: boolean
+  after?: ReactNode
 }
 
 /**
@@ -49,12 +52,9 @@ interface Props {
  * "username • pronouns", a clamped bio with "View Full Bio", mutual servers, and a
  * "Message @user" box. Everything else lives in the full profile ("View Full Profile").
  */
-export default function ProfilePopout({ user, guildId, onClose, variant = 'popout', focusNote }: Props) {
+export default function ProfilePopout({ user, guildId, onClose, variant = 'popout', focusNote, sheet, after }: Props) {
   const panel = variant === 'panel'
   const full = variant === 'full'
-  // The full profile's frame reaches over the window around the card; on a phone that window is a sheet with no room
-  // to spare, so the frame gets room of its own like a popout's.
-  const phone = usePhone()
   const me = useStore((s) => s.user)
   const rel = useStore((s) => s.relationships[user.id]?.kind)
   const live = useStore((s) => !!s.voiceStates[user.id]?.self_stream)
@@ -392,6 +392,16 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
       </div>
     </>
   )
+  if (sheet) return (
+    // The frame reaches over the sheet's top and the sheet cuts it at the sides and bottom (see FullProfile). It is fitted
+    // to a box half a screen taller than the card, so its bottom edge lies below the sheet, out of sight, like Discord's.
+    <FrameRoom value={user.profile_frame} bleed className="h-full" innerClassName="h-[calc(100%+50vh)]">
+    <div className={`relative z-[1] isolate w-full h-[calc(100%-50vh)] flex flex-col rounded-t-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ ...cardStyle, borderWidth: 0 }} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant="sheet">
+      <ProfileEffect id={user.profile_effect} />
+      <div className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-2xl pb-28" data-profile-sheet-scroll>{contents}{after}</div>
+    </div>
+    </FrameRoom>
+  )
   if (panel) return (
     <FrameRoom value={user.profile_frame} cardWidth={PANEL_CARD_WIDTH} className="flex-1 min-h-0 flex flex-col items-start overflow-clip" innerClassName="flex-1 min-h-0 flex flex-col">
     <div className={`relative z-[1] isolate flex-1 min-h-0 flex flex-col rounded-lg p-[2px] text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ background: themed ? gradient : surface, boxShadow: '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.32), 0 2px 6px rgba(0,0,0,0.2)' }} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
@@ -406,7 +416,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     </FrameRoom>
   )
   return (
-    <FrameRoom value={user.profile_frame} bleed={full && !phone} className={full ? 'wide:h-full' : ''} innerClassName={full ? 'wide:h-full' : ''}>
+    <FrameRoom value={user.profile_frame} bleed={full} className={full ? 'wide:h-full' : ''} innerClassName={full ? 'wide:h-full' : ''}>
     <div className={`relative z-[1] isolate w-full ${full ? 'rounded-xl h-full flex flex-col' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
       <ProfileEffect id={user.profile_effect} />
       {contents}

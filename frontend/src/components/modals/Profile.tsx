@@ -96,30 +96,14 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
   const friends = user.mutual_friends ?? []
   const wishlist = user.panels?.wishlist ?? []
   const games = user.panels?.games ?? []
-  // On a phone it is a sheet that slides up to the top (Discord mobile), and slides back down when closed or dragged.
+  // On a phone it is a sheet that slides up to near the top (Discord mobile) and back down when closed. The sheet itself
+  // stays put; only what is in it scrolls.
   const phone = usePhone()
-  const sheet = useRef<HTMLDivElement>(null)
-  const scroller = useRef<HTMLDivElement>(null)
   const [closing, setClosing] = useState(false)
   const dismiss = () => {
     if (!phone) return onClose()
-    if (sheet.current) { sheet.current.style.transform = ''; sheet.current.style.transition = '' }
     setClosing(true)
     window.setTimeout(onClose, 220)
-  }
-  const drag = useRef<{ y: number; dy: number } | null>(null)
-  const onTouchStart = (e: React.TouchEvent) => { drag.current = (scroller.current?.scrollTop ?? 0) <= 0 && !(e.target as HTMLElement).closest('[data-self-dock-panel]') ? { y: e.touches[0].clientY, dy: 0 } : null }
-  const onTouchMove = (e: React.TouchEvent) => {
-    const d = drag.current; const el = sheet.current
-    if (!d || !el) return
-    d.dy = Math.max(0, e.touches[0].clientY - d.y)
-    if (d.dy > 0 && (scroller.current?.scrollTop ?? 0) <= 0) { el.style.transition = 'none'; el.style.transform = `translateY(${d.dy}px)` }
-  }
-  const onTouchEnd = () => {
-    const d = drag.current; const el = sheet.current; drag.current = null
-    if (!d || !el || d.dy === 0) return
-    if (d.dy > 110) dismiss()
-    else { el.style.transition = 'transform .2s ease-out'; el.style.transform = '' }
   }
   const dismissRef = useRef(dismiss); dismissRef.current = dismiss
   useEffect(() => {
@@ -141,65 +125,78 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
   const empty = (msg: string) => <p className="py-10 text-center text-sm text-[#b5bac1]">{msg}</p>
   const row = 'w-full flex items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-white/[.06]'
   const panel = 'rounded-xl bg-black/25 p-3'
+  const tabBlock = (
+    <div className="flex-1 min-w-0 min-h-0 flex flex-col wide:pt-2 phone:flex-none phone:px-4 phone:pt-4" data-full-profile-tabs>
+      {/* One line of tabs, like Discord's: short labels with the count beside them, and a row that scrolls sideways
+          (no bar) rather than wrapping when there are many. */}
+      <div className="flex flex-nowrap gap-x-6 overflow-x-auto scrollbar-none border-b border-white/10 mb-4 wide:mr-10" role="tablist" data-profile-tabs>
+        {tabs.map((x) => (
+          <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}
+            className={`shrink-0 whitespace-nowrap pb-2.5 border-b-2 text-[15px] font-semibold ${tab === x.id ? 'border-white text-white' : 'border-transparent text-[#b5bac1] hover:text-[#dbdee1]'}`} data-profile-tab={x.id}>
+            {x.label}{x.count ? <span className="ml-1.5 font-normal opacity-70">{x.count}</span> : null}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3 phone:flex-none phone:overflow-visible">
+        {tab === 'activity' && (
+          <div className="space-y-3" data-profile-activity>
+            <VoiceCard userId={userId} onJoin={onClose} dark />
+            {activity && <div><div className="text-xs font-bold text-[#b5bac1] mb-2">{t('Current activity')}</div><ActivityCard userId={userId} activity={activity} dark /></div>}
+            {!activity && <ActivityEmpty userId={userId} />}
+          </div>
+        )}
+        {tab === 'friends' && (friends.length === 0 ? empty(t('No mutual friends')) : (
+          <ul className="space-y-0.5" data-mutual-friends>
+            {friends.map((f) => (
+              <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className={row}><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={40} /><span className="truncate font-semibold">{f.display_name}</span></button></li>
+            ))}
+          </ul>
+        ))}
+        {tab === 'servers' && (mutual.length === 0 ? empty(t('No mutual servers')) : (
+          <ul className="space-y-0.5" data-mutual-list>
+            {mutual.map((g) => (
+              <li key={g.id}>
+                <button onClick={() => { onClose(); navigate(`/channels/${g.id}`) }} className={row}>
+                  {g.icon_url ? <img src={g.icon_url} alt="" className="h-10 w-10 rounded-xl object-cover" /> : <span className="h-10 w-10 rounded-xl text-white text-xs font-bold flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>}
+                  <span className="truncate font-semibold">{g.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ))}
+        {tab === 'wishlist' && (
+          <ul className={`${panel} space-y-1`} data-panel-wishlist>{wishlist.map((it, i) => <li key={i} className="truncate">{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="hover:underline">{it.title}</a> : it.title}</li>)}</ul>
+        )}
+        {tab === 'games' && (
+          <ul className="flex flex-wrap gap-2" data-panel-games>{games.map((it, i) => <li key={i} className="rounded-lg bg-black/25 px-3 py-1.5 text-sm">{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="hover:underline">{it.title}</a> : it.title}</li>)}</ul>
+        )}
+        {tab === 'reviews' && <div className={panel}><Reviews userId={userId} light isMe={isMe} /></div>}
+      </div>
+    </div>
+  )
+  const close = <button type="button" onClick={dismiss} className={`absolute z-30 h-9 w-9 flex items-center justify-center ${phone ? 'left-4 top-4 rounded-full bg-black/50' : 'right-3 top-3 rounded-lg bg-black/30 hover:bg-black/50'}`} title={t('Close')} aria-label={t('Close')} data-full-profile-close><X size={20} /></button>
+  if (phone) {
+    // The sheet is the card: full width, its frame reaching over the top and cut off at the sides and bottom.
+    const framed = !!user.profile_frame
+    return (
+      <div className={`fixed inset-0 z-50 flex flex-col justify-end transition-colors duration-200 ${framed ? 'pt-[calc(env(safe-area-inset-top)+48px)]' : 'pt-[calc(env(safe-area-inset-top)+8px)]'} ${closing ? 'bg-black/0' : 'bg-black/60'}`} onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
+        <div className="sheet-rise relative w-full flex-1 min-h-0 [clip-path:inset(-200px_0_0_0)]" role="dialog" aria-modal aria-label={user.display_name} data-full-profile data-profile-sheet data-closing={closing || undefined}>
+          <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" sheet after={tabBlock} focusNote={focusNote} />
+          {close}
+          {isMe && <SelfDock onClose={onClose} />}
+        </div>
+      </div>
+    )
+  }
   return (
-    <div className={phone ? `fixed inset-0 z-50 flex flex-col justify-end pt-[calc(env(safe-area-inset-top)+8px)] transition-colors duration-200 ${closing ? 'bg-black/0' : 'bg-black/60'}` : 'fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad'} onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
-      <div className={phone ? 'flex-1 min-h-0 flex flex-col justify-end' : 'flex-1 min-w-0 h-full flex items-center justify-center wide:px-10 wide:py-14'} onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
-        <div ref={sheet} className={phone ? 'sheet-rise relative w-full h-full overflow-hidden rounded-t-2xl border-t border-line bg-bg-1 shadow-2xl text-[#dbdee1]' : 'pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1]'}
-          role="dialog" aria-modal aria-label={user.display_name} data-full-profile data-profile-sheet={phone || undefined} data-closing={closing || undefined} onTouchStart={phone ? onTouchStart : undefined} onTouchMove={phone ? onTouchMove : undefined} onTouchEnd={phone ? onTouchEnd : undefined}>
-          <div ref={scroller} className={phone ? 'h-full overflow-y-auto overscroll-contain flex flex-col gap-4 p-3 pb-28' : 'contents'} data-profile-sheet-scroll={phone || undefined}>
-          <button type="button" onClick={dismiss} className={`absolute z-20 h-9 w-9 flex items-center justify-center ${phone ? 'left-5 top-5 rounded-full bg-black/50' : 'right-3 top-3 rounded-lg bg-black/30 hover:bg-black/50'}`} title={t('Close')} aria-label={t('Close')} data-full-profile-close><X size={20} /></button>
-          <div className="w-[400px] shrink-0 wide:h-full phone:w-full" data-full-profile-card>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
+      <div className="flex-1 min-w-0 h-full flex items-center justify-center wide:px-10 wide:py-14" onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
+        <div className="pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1]" role="dialog" aria-modal aria-label={user.display_name} data-full-profile>
+          {close}
+          <div className="w-[400px] shrink-0 h-full" data-full-profile-card>
             <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" focusNote={focusNote} />
           </div>
-          <div className="flex-1 min-w-0 min-h-0 flex flex-col wide:pt-2 phone:flex-none" data-full-profile-tabs>
-            {/* One line of tabs, like Discord's: short labels with the count beside them, and a row that scrolls sideways
-                (no bar) rather than wrapping when there are many. */}
-            <div className="flex flex-nowrap gap-x-6 overflow-x-auto scrollbar-none border-b border-white/10 mb-4 wide:mr-10" role="tablist" data-profile-tabs>
-              {tabs.map((x) => (
-                <button key={x.id} type="button" role="tab" aria-selected={tab === x.id} onClick={() => setTab(x.id)}
-                  className={`shrink-0 whitespace-nowrap pb-2.5 border-b-2 text-[15px] font-semibold ${tab === x.id ? 'border-white text-white' : 'border-transparent text-[#b5bac1] hover:text-[#dbdee1]'}`} data-profile-tab={x.id}>
-                  {x.label}{x.count ? <span className="ml-1.5 font-normal opacity-70">{x.count}</span> : null}
-                </button>
-              ))}
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-3 phone:flex-none phone:overflow-visible">
-              {tab === 'activity' && (
-                <div className="space-y-3" data-profile-activity>
-                  <VoiceCard userId={userId} onJoin={onClose} dark />
-                  {activity && <div><div className="text-xs font-bold text-[#b5bac1] mb-2">{t('Current activity')}</div><ActivityCard userId={userId} activity={activity} dark /></div>}
-                  {!activity && <ActivityEmpty userId={userId} />}
-                </div>
-              )}
-              {tab === 'friends' && (friends.length === 0 ? empty(t('No mutual friends')) : (
-                <ul className="space-y-0.5" data-mutual-friends>
-                  {friends.map((f) => (
-                    <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className={row}><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={40} /><span className="truncate font-semibold">{f.display_name}</span></button></li>
-                  ))}
-                </ul>
-              ))}
-              {tab === 'servers' && (mutual.length === 0 ? empty(t('No mutual servers')) : (
-                <ul className="space-y-0.5" data-mutual-list>
-                  {mutual.map((g) => (
-                    <li key={g.id}>
-                      <button onClick={() => { onClose(); navigate(`/channels/${g.id}`) }} className={row}>
-                        {g.icon_url ? <img src={g.icon_url} alt="" className="h-10 w-10 rounded-xl object-cover" /> : <span className="h-10 w-10 rounded-xl text-white text-xs font-bold flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>}
-                        <span className="truncate font-semibold">{g.name}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ))}
-              {tab === 'wishlist' && (
-                <ul className={`${panel} space-y-1`} data-panel-wishlist>{wishlist.map((it, i) => <li key={i} className="truncate">{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="hover:underline">{it.title}</a> : it.title}</li>)}</ul>
-              )}
-              {tab === 'games' && (
-                <ul className="flex flex-wrap gap-2" data-panel-games>{games.map((it, i) => <li key={i} className="rounded-lg bg-black/25 px-3 py-1.5 text-sm">{it.url ? <a href={it.url} target="_blank" rel="noreferrer" className="hover:underline">{it.title}</a> : it.title}</li>)}</ul>
-              )}
-              {tab === 'reviews' && <div className={panel}><Reviews userId={userId} light isMe={isMe} /></div>}
-            </div>
-          </div>
-          </div>
-          {phone && isMe && <SelfDock onClose={onClose} />}
+          {tabBlock}
         </div>
       </div>
     </div>
