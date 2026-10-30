@@ -14,6 +14,7 @@ import { ActivityCard } from '../SpotifyActivity'
 import { X } from 'lucide-react'
 import SelfDock from '../SelfDock'
 import { usePhone } from '../../lib/swipe'
+import { useSwipeDismiss } from '../../lib/sheetDrag'
 import { useT } from '../../lib/i18n'
 
 const GAP = 8
@@ -96,9 +97,11 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
   const friends = user.mutual_friends ?? []
   const wishlist = user.panels?.wishlist ?? []
   const games = user.panels?.games ?? []
-  // On a phone it is a sheet that slides up to near the top (Discord mobile) and back down when closed. The sheet itself
-  // stays put; only what is in it scrolls.
+  // On a phone it is a sheet that slides up to near the top (Discord mobile) and back down when closed or swiped down
+  // (from the top of its content); otherwise the sheet stays put and only what is in it scrolls.
   const phone = usePhone()
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const swipe = useSwipeDismiss(sheetRef, onClose)
   const [closing, setClosing] = useState(false)
   const dismiss = () => {
     if (!phone) return onClose()
@@ -180,7 +183,7 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
     const framed = !!user.profile_frame
     return (
       <div className={`fixed inset-0 z-50 flex flex-col justify-end transition-colors duration-200 ${framed ? 'pt-[calc(env(safe-area-inset-top)+48px)]' : 'pt-[calc(env(safe-area-inset-top)+8px)]'} ${closing ? 'bg-black/0' : 'bg-black/60'}`} onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
-        <div className="sheet-rise relative w-full flex-1 min-h-0 [clip-path:inset(-200px_0_0_0)]" role="dialog" aria-modal aria-label={user.display_name} data-full-profile data-profile-sheet data-closing={closing || undefined}>
+        <div ref={sheetRef} {...swipe} className="sheet-rise relative w-full flex-1 min-h-0 [clip-path:inset(-200px_0_0_0)]" role="dialog" aria-modal aria-label={user.display_name} data-full-profile data-profile-sheet data-closing={closing || undefined}>
           <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" sheet after={tabBlock} focusNote={focusNote} />
           {close}
           {isMe && <SelfDock onClose={onClose} />}
@@ -268,6 +271,8 @@ function Reviews({ userId, light, isMe }: { userId: string; light: boolean; isMe
  */
 function Popout({ anchor, onClose, children }: { anchor: Anchor; onClose: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const swipe = useSwipeDismiss(sheetRef, onClose)
   const [style, setStyle] = useState<CSSProperties | null>(null)
   const wide = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
   useEffect(() => {
@@ -307,7 +312,7 @@ function Popout({ anchor, onClose, children }: { anchor: Anchor; onClose: () => 
   if (!wide) {
     return (
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 safe-area" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-        <div className="sheet-up w-full max-h-[90vh] overflow-y-auto rounded-t-lg" role="dialog" aria-modal data-profile-sheet>{children}</div>
+        <div ref={sheetRef} {...swipe} className="sheet-up w-full max-h-[90vh] overflow-y-auto overscroll-contain rounded-t-lg" role="dialog" aria-modal data-profile-sheet>{children}</div>
       </div>
     )
   }

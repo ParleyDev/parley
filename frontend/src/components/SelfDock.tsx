@@ -27,7 +27,7 @@ export default function SelfDock({ onClose }: { onClose: () => void }) {
     <>
       {panel && <div className="absolute inset-0 z-30 bg-black/40" onClick={() => setPanel(null)} data-self-dock-backdrop />}
       {panel && (
-        <div className="absolute inset-x-0 bottom-0 z-40 max-h-[70%] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-white/10 bg-[var(--color-float)] p-2 pb-[calc(env(safe-area-inset-bottom)+8px)] shadow-2xl sheet-up" role="menu" data-self-dock-panel={panel}>
+        <div className="absolute inset-x-0 bottom-0 z-40 max-h-[70%] overflow-y-auto overscroll-contain rounded-t-2xl border-t border-white/10 bg-[var(--color-float)] p-2 pb-[calc(env(safe-area-inset-bottom)+8px)] shadow-2xl sheet-up" role="menu" data-self-dock-panel={panel} data-no-sheet-drag>
           <div className="mx-auto mb-2 mt-1 h-1 w-10 rounded-full bg-white/20" />
           {panel === 'status' && (
             <>
