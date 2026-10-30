@@ -11,6 +11,9 @@ project(':capacitor-app').projectDir = new File('../node_modules/@capacitor/app/
 include ':capacitor-haptics'
 project(':capacitor-haptics').projectDir = new File('../node_modules/@capacitor/haptics/android')
 
+include ':capacitor-keyboard'
+project(':capacitor-keyboard').projectDir = new File('../node_modules/@capacitor/keyboard/android')
+
 include ':capacitor-push-notifications'
 project(':capacitor-push-notifications').projectDir = new File('../node_modules/@capacitor/push-notifications/android')
 

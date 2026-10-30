@@ -14,7 +14,8 @@ const config: CapacitorConfig = {
   android: { allowMixedContent: false },
   ios: { contentInset: 'never', limitsNavigationsToAppBoundDomains: false },
   plugins: {
-    SplashScreen: { launchShowDuration: 800, backgroundColor: '#0b0c10', showSpinner: false },
+    // The launch screen's colour (the neon logo's own background), so nothing flashes between it and the app.
+    SplashScreen: { launchShowDuration: 800, launchFadeOutDuration: 300, backgroundColor: '#010928', showSpinner: false },
     StatusBar: { style: 'DARK', backgroundColor: '#0b0c10' },
     PushNotifications: { presentationOptions: ['badge', 'sound', 'alert'] },
     // The keyboard shrinks the web view instead of iOS scrolling the whole page up to reveal the text box (the page

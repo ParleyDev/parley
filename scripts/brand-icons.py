@@ -14,6 +14,9 @@ neon glow turns to mush at 16 px). Outputs:
   desktop/www/logo.png, mobile/www/logo.png          connect screens of the desktop and mobile apps
   mobile/android/app/src/main/res/mipmap-*/          Android launcher icons (legacy, round, adaptive foreground)
   mobile/ios/App/App/Assets.xcassets/AppIcon...      iOS app icon (opaque 1024 px)
+  mobile/android/app/src/main/res/drawable*/splash.png    Android launch screen (each density and orientation)
+  mobile/android/app/src/main/res/drawable-*/splash_icon.png  Android 12+ launch icon (the system draws it on BG)
+  mobile/ios/App/App/Assets.xcassets/Splash.imageset  iOS launch screen (2732 px square, cropped to fit)
 
 Masks that may crop to a circle (Android adaptive icons, the web "maskable" icon) keep only the middle third or so,
 so those versions shrink the artwork and feather it into a matching background so the glow never gets clipped.
@@ -43,6 +46,19 @@ def padded(size: int, scale: float = 0.8) -> Image.Image:
     mask = mask.filter(ImageFilter.GaussianBlur(edge / 2))
     off = (size - inner) // 2
     canvas.paste(art, (off, off), mask)
+    return canvas
+
+
+def glow(size: int, scale: float, w: int | None = None, h: int | None = None) -> Image.Image:
+    """The artwork at `scale` of `size`, centred on a w x h BG canvas with its edges faded out in a soft circle,
+    so it sits on a plain background with no visible square (launch screens)."""
+    w, h = w or size, h or size
+    canvas = Image.new("RGB", (w, h), BG)
+    inner = int(size * scale)
+    mask = Image.new("L", (inner, inner), 0)
+    edge = inner // 10
+    ImageDraw.Draw(mask).ellipse([edge, edge, inner - edge, inner - edge], fill=255)
+    canvas.paste(neon(inner), ((w - inner) // 2, (h - inner) // 2), mask.filter(ImageFilter.GaussianBlur(edge * 0.8)))
     return canvas
 
 
@@ -102,3 +118,17 @@ for dpi, scale in {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4
 
 # iOS wants a square, opaque 1024 px icon and rounds it itself.
 save(neon(1024), "mobile/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png")
+
+# Launch screens: the neon logo on its own background colour (capacitor.config.ts uses the same colour, so the hand-off
+# to the connect screen doesn't flash). Android stretches splash.png over the window, hence one per orientation.
+android_res = "mobile/android/app/src/main/res"
+for dpi, (w, h) in {"mdpi": (320, 480), "hdpi": (480, 800), "xhdpi": (720, 1280), "xxhdpi": (960, 1600), "xxxhdpi": (1280, 1920)}.items():
+    save(glow(w, 0.62, w, h), f"{android_res}/drawable-port-{dpi}/splash.png")
+    save(glow(w, 0.62, h, w), f"{android_res}/drawable-land-{dpi}/splash.png")
+save(glow(320, 0.62, 480, 320), f"{android_res}/drawable/splash.png")
+# Android 12+ draws its own launch screen: this icon (240 dp, shown through a 160 dp circle) on windowSplashScreenBackground.
+for dpi, scale in {"mdpi": 1, "hdpi": 1.5, "xhdpi": 2, "xxhdpi": 3, "xxxhdpi": 4}.items():
+    save(glow(int(240 * scale), 0.66), f"{android_res}/drawable-{dpi}/splash_icon.png")
+# iOS fills the screen with this square (aspect fill), so on a phone only the middle ~45% of its width shows.
+for name in ("splash-2732x2732.png", "splash-2732x2732-1.png", "splash-2732x2732-2.png"):
+    save(glow(2732, 0.26), f"mobile/ios/App/App/Assets.xcassets/Splash.imageset/{name}")
