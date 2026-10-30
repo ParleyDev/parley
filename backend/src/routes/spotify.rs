@@ -209,6 +209,12 @@ pub async fn audience(db: &sqlx::PgPool, uid: Uuid) -> Vec<Uuid> {
 }
 
 async fn emit(state: &AppState, uid: Uuid, d: Value) {
+    // Someone Invisible shows as offline, so a new activity would give them away: only their own sessions hear it, and
+    // everyone else gets it when they're back (reannounce).
+    if !d["activity"].is_null() {
+        let invisible = sqlx::query_as::<_, (bool,)>("SELECT status = 'invisible' FROM users WHERE id = $1").bind(uid).fetch_optional(&state.db).await.ok().flatten().is_some_and(|r| r.0);
+        if invisible { return state.hub.emit_users(vec![uid], "ACTIVITY_UPDATE", d) }
+    }
     state.hub.emit_users(audience(&state.db, uid).await, "ACTIVITY_UPDATE", d);
 }
 

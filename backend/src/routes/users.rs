@@ -538,7 +538,12 @@ async fn update_me(
     let public = User::from(&u);
     state.hub.emit_all("USER_UPDATE", json!(public));
     // Going Invisible shows you offline (no devices, not away) at once; coming back shows you online again.
-    if status_changed { crate::ws::bus::announce(&state, uid).await; }
+    if status_changed {
+        crate::ws::bus::announce(&state, uid).await;
+        // Going Invisible showed them offline, and clients drop an offline user's activity: send it again on the way
+        // back (reannounce skips anyone still invisible).
+        crate::routes::spotify::reannounce(&state, uid).await;
+    }
     // Your other devices: settings only you see.
     if req.pinned_channels.is_some() { state.hub.emit_users(vec![uid], "USER_SETTINGS_UPDATE", json!({ "pinned_channels": u.pinned_channels })); }
     if req.ignored_users.is_some() || req.online_alerts.is_some() { state.hub.emit_users(vec![uid], "USER_SETTINGS_UPDATE", json!({ "ignored_users": u.ignored_users, "online_alerts": u.online_alerts })); }
