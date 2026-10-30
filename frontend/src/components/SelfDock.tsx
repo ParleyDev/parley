@@ -40,7 +40,7 @@ export default function SelfDock({ onClose }: { onClose: () => void }) {
                   <div className="flex items-center">
                     <button type="button" onClick={() => set(s.v)} className={`${row} items-start`} aria-pressed={user.status === s.v} data-status-option={s.v}>
                       <span className="mt-1.5 flex"><StatusDot v={s.v} size={12} /></span>
-                      <span className="min-w-0"><span className={`block font-semibold ${user.status === s.v ? 'text-white' : ''}`}>{s.label}</span>{s.note && <span className="block text-xs text-text-2">{s.note}</span>}</span>
+                      <span className="min-w-0"><span className={`block font-semibold ${user.status === s.v ? 'text-text-0' : 'text-text-1'}`}>{s.label}</span>{s.note && <span className="block text-xs text-text-2">{s.note}</span>}</span>
                     </button>
                     {s.v !== 'online' && (
                       <button type="button" onClick={() => setDurations((d) => (d === s.v ? null : s.v))} className="shrink-0 rounded-lg p-3 text-text-2" aria-label={t('{status} for a while', { status: s.label })} aria-expanded={durations === s.v} data-status-durations={s.v}>

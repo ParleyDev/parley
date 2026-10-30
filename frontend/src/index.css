@@ -34,6 +34,11 @@
   --scrollbar-thumb: #c4c9d1;
 }
 :root { --scrollbar-thumb: #2c2f3b; --font-scale: 1; --msg-gap: 17px; }
+/* Floating surfaces (sheets, docks, menus): the theme's raised colour, which see-through looks replace with a solid one. */
+:root { --color-float: var(--color-bg-1); --color-float-2: var(--color-bg-2); }
+/* Things drawn dark whatever the theme (the self menu and its flyouts, like Discord's): theme-coloured pieces inside
+   them (the account switcher, rows, dividers) use dark-surface colours, so a light theme's dark text never lands on them. */
+.dark-scope { color: #dbdee1; --color-text-0: #f2f3f5; --color-text-1: #dbdee1; --color-text-2: #949ba4; --color-bg-3: rgb(255 255 255 / .08); --color-bg-4: rgb(255 255 255 / .13); --color-line: rgb(255 255 255 / .1); }
 /* Dark palettes (ignored by the light theme). Gradients tint the window and let it show through the panels. */
 :root:not([data-theme="light"])[data-palette="ash"] { --color-bg-0: #1e1f22; --color-bg-1: #2b2d31; --color-bg-2: #313338; --color-bg-3: #383a40; --color-bg-4: #404249; --color-line: #3f4147; --scrollbar-thumb: #4e5058; }
 :root:not([data-theme="light"])[data-palette="onyx"] { --color-bg-0: #000000; --color-bg-1: #0a0a0b; --color-bg-2: #0f0f11; --color-bg-3: #18181b; --color-bg-4: #222226; --color-line: #1f1f23; --scrollbar-thumb: #26262b; }
@@ -49,10 +54,12 @@
 /* Colour themes (lib/colorThemes): the gradient behind the whole app; their variables are set inline on <html>. */
 :root[data-color-theme] body { background: var(--app-gradient) fixed; }
 /* Every see-through look (the gradient palettes and colour themes, data-see-through) keeps floating things solid.
-   A profile frame's wrapper is only room for the frame: it stays see-through and the card inside gets the surface. */
-:root[data-see-through] .pop:not([data-profile-popout]):not([data-frame-wrap]):not([data-modal-bare]),
-:root[data-see-through] [data-profile-popout] > *:not([data-frame-wrap]),
-:root[data-see-through] [data-frame-wrap] > div > :is([data-profile-card], [data-user-menu]),
+   A profile frame's wrapper is only room for the frame: it stays see-through and the card inside gets the surface.
+   Things with a solid colour of their own (data-solid: profile cards, the self menu; or a fixed bg-[#…]) keep it:
+   they're drawn for it, and a light theme's float colour under their light text would make it unreadable. */
+:root[data-see-through] .pop:not([data-profile-popout]):not([data-frame-wrap]):not([data-modal-bare]):not([data-solid]):not([class*="bg-[#"]),
+:root[data-see-through] [data-profile-popout] > *:not([data-frame-wrap]):not([data-solid]),
+:root[data-see-through] [data-frame-wrap] > div > :is([data-profile-card], [data-user-menu]):not([data-solid]),
 :root[data-see-through] [data-settings-frame], :root[data-see-through] [data-full-profile], :root[data-see-through] [data-inbox] { background-color: var(--color-float) !important; }
 /* Phones and tablets: panes that cover the rest of the app (navigation, member list, side panels) get the solid
    surface too, or the hidden content underneath shows through them. */

@@ -71,7 +71,7 @@ function Flyout({ anchor, width, children }: { anchor: HTMLElement | null; width
     // The outer box only positions (its padding bridges the gap for the pointer) and stays see-through; the panel is
     // the floating surface, so themes that give floating surfaces a solid background colour only the panel.
     <div ref={ref} className="fixed z-[130]" style={pos ? { left: pos.left, top: pos.top, paddingLeft: pos.pad, paddingRight: pos.side === 'left' ? GAP : 0 } : { left: -9999, top: 0 }} role="menu" data-flyout-side={pos?.side}>
-      <div className="pop rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5" style={{ width }} data-flyout-panel>{children}</div>
+      <div className="pop dark-scope rounded-xl bg-[#232428] border border-white/10 shadow-2xl p-1.5" style={{ width }} data-flyout-panel>{children}</div>
     </div>,
     document.body,
   )
@@ -122,7 +122,7 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
   return (
     // The frame's room is part of the floating box, so placement and keep-on-screen account for the frame too.
     <FrameRoom value={user.profile_frame} className="pop absolute bottom-full left-0 mb-2 z-40">
-    <div className={`relative w-[300px] max-w-[calc(100vw-16px)] rounded-xl border shadow-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={profileCardStyle(user)} data-user-menu data-profile-frame={user.profile_frame || undefined}>
+    <div className={`dark-scope relative w-[300px] max-w-[calc(100vw-16px)] rounded-xl border shadow-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={profileCardStyle(user)} data-user-menu data-solid data-profile-frame={user.profile_frame || undefined}>
       <ProfileEffect id={user.profile_effect} />
       <div className="relative h-[100px] rounded-t-xl bg-cover bg-center" style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }} />
       <div className="relative px-4 -mt-10 flex items-end gap-2">

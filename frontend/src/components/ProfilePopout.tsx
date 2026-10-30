@@ -396,7 +396,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     // The frame reaches over the sheet's top and the sheet cuts it at the sides and bottom (see FullProfile). It is fitted
     // to a box half a screen taller than the card, so its bottom edge lies below the sheet, out of sight, like Discord's.
     <FrameRoom value={user.profile_frame} bleed className="h-full" innerClassName="h-[calc(100%+50vh)]">
-    <div className={`relative z-[1] isolate w-full h-[calc(100%-50vh)] flex flex-col rounded-t-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ ...cardStyle, borderWidth: 0 }} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant="sheet">
+    <div className={`dark-scope relative z-[1] isolate w-full h-[calc(100%-50vh)] flex flex-col rounded-t-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ ...cardStyle, borderWidth: 0 }} data-profile-card data-solid data-profile-frame={user.profile_frame || undefined} data-profile-variant="sheet">
       <ProfileEffect id={user.profile_effect} />
       <div className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-2xl pb-28" data-profile-sheet-scroll>{contents}{after}</div>
     </div>
@@ -417,7 +417,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   )
   return (
     <FrameRoom value={user.profile_frame} bleed={full} className={full ? 'wide:h-full' : ''} innerClassName={full ? 'wide:h-full' : ''}>
-    <div className={`relative z-[1] isolate w-full ${full ? 'rounded-xl h-full flex flex-col' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
+    <div className={`dark-scope relative z-[1] isolate w-full ${full ? 'rounded-xl h-full flex flex-col' : 'rounded-lg'} border text-[#dbdee1] shadow-2xl overflow-visible ${frameClass(user.profile_frame)}`} style={cardStyle} data-profile-card data-solid data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
       <ProfileEffect id={user.profile_effect} />
       {contents}
     </div>
