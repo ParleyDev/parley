@@ -72,7 +72,8 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'EVENT_UPDATE'; d: { guild_id: string } }
   | { t: 'EVENT_START'; d: { id: string; guild_id: string; name: string; channel_id: string | null; location: string } }
   | { t: 'STUDIO_UPDATE'; d: { channel_id: string } }
-  | { t: 'STUDIO_SESSION'; d: { channel_id: string; action: 'start' | 'stop'; session_id: string; name?: string; started_at?: string } }
+  | { t: 'STUDIO_SESSION'; d: { channel_id: string; action: 'start' | 'stop'; session_id: string; name?: string; started_at?: string; armed?: string[] | null } }
+  | { t: 'STUDIO_TRACK'; d: { channel_id: string; session_id: string; track_id: string; user_id: string; size: number } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
   | { t: 'VOICE_ERROR'; d: { message: string } }
@@ -338,6 +339,7 @@ function handle(ev: Ev) {
     }
     case 'STUDIO_UPDATE': void s.loadStudio(ev.d.channel_id); break
     case 'STUDIO_SESSION': studio.onSession(ev.d); void s.loadStudio(ev.d.channel_id); break
+    case 'STUDIO_TRACK': s.studioTrackSize(ev.d.channel_id, ev.d.track_id, ev.d.size); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break
     case 'VOICE_MOVE': if (s.myVoiceChannelId) { s.pushToast(t('A moderator moved you to another voice channel')); voice.join(ev.d.channel_id) } break

@@ -1,7 +1,7 @@
 import { CaptionsButton, CaptionsOverlay } from './Captions'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useShallow } from 'zustand/react/shallow'
-import { Disc3, Hand, Megaphone, HeadphoneOff, ListMusic, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
+import { Disc3, Hand, SlidersHorizontal, Megaphone, HeadphoneOff, ListMusic, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
 import ContextMenu, { useContextMenu } from './ContextMenu'
@@ -14,12 +14,13 @@ import type { Channel, User, VoiceState } from '../lib/types'
 import { screenShareSupported, voice } from '../lib/voice'
 import Avatar from './Avatar'
 import StudioPanel from './StudioPanel'
+import StudioConsole from './StudioConsole'
 import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Activities'
 import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
 import { CameraMenu, CheckRow, ControlBar, ControlButton, ControlGroup, HangUpButton, MenuControl, MenuDivider, MicMenu, PhoneMore, SettingsRow, SplitControl } from './CallControls'
 import PhoneStage, { ExpandButton } from './PhoneStage'
 import { useResizablePanel } from '../lib/resize'
-import { studio as studioRec } from '../lib/studio'
+import { startTake, studio as studioRec } from '../lib/studio'
 import CallLock from './CallLock'
 import SoundboardPicker from './SoundboardPicker'
 import { ConnQuality, InviteToVoice, ReactButton, StreamViewers, TileReactions, ZoomPan } from './CallExtras'
@@ -32,6 +33,7 @@ type Tile = { key: string; userId: string; kind: 'camera' | 'screen'; user: User
 
 const CHAT_KEY = `${STORAGE_PREFIX}voiceChat`
 const VIEW_KEY = `${STORAGE_PREFIX}voiceView`
+const CONSOLE_KEY = `${STORAGE_PREFIX}studioConsole`
 const loadView = (): { self: boolean; nonVideo: boolean } => { try { return { self: true, nonVideo: true, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}') } } catch { return { self: true, nonVideo: true } } }
 
 export default function VoiceView({ channel }: { channel: Channel }) {
@@ -75,13 +77,16 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   // Stage moderators: Manage Channels, or Mute + Move Members on this stage (backend perms::stage_mod).
   const isMod = has(perms, P.MANAGE_CHANNELS) || (has(perms, P.MUTE_MEMBERS) && has(perms, P.MOVE_MEMBERS)) || isEngineer
   const [sessionsOpen, setSessionsOpen] = useState(false)
+  // The engineer's console (StudioConsole) takes the stage, with the band's tiles in a strip; open by default.
+  const [consoleOpen, setConsoleOpen] = useState(() => { try { return localStorage.getItem(CONSOLE_KEY) !== '0' } catch { return true } })
+  const toggleConsole = () => setConsoleOpen((o) => { try { localStorage.setItem(CONSOLE_KEY, o ? '0' : '1') } catch { /* ignore */ } return !o })
   const chatPanel = useResizablePanel('voiceChat', 400)
   const sessionsPanel = useResizablePanel('studioSessions', 420)
   const liveSession = useStore((s) => (isStudio ? s.studio[channel.id]?.find((x) => !x.ended_at) : undefined))
   const [recBusy, setRecBusy] = useState(false)
   const record = async () => {
     setRecBusy(true)
-    try { if (liveSession) await api.post(`/channels/${channel.id}/studio/sessions/${liveSession.id}/stop`); else await api.post(`/channels/${channel.id}/studio/sessions`, { name: '' }) } catch (e) { pushToast((e as Error).message, 'error') } finally { setRecBusy(false) }
+    try { if (liveSession) await api.post(`/channels/${channel.id}/studio/sessions/${liveSession.id}/stop`); else await startTake(channel.id) } catch (e) { pushToast((e as Error).message, 'error') } finally { setRecBusy(false) }
   }
   const setRole = async (uid: string, role: 'engineer' | 'artist' | 'audience') => { try { await api.put(`/channels/${channel.id}/studio/role/${uid}`, { role }); setRoleMenu(null) } catch (e) { pushToast((e as Error).message, 'error') } }
   const [roleMenu, setRoleMenu] = useState<string | null>(null)
@@ -241,6 +246,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {inThis && !suppressed && myVs?.deaf && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-deafened>{t('Deafened by a moderator')}</span>}
         {inThis && !suppressed && !myVs?.deaf && myVs?.mute && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-muted>{t('Muted by a moderator')}</span>}
         <span className="ml-auto flex items-center gap-1">
+          {isEngineer && inThis && <button onClick={toggleConsole} title={consoleOpen ? t('Hide console') : t('Show console')} className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${consoleOpen ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} aria-pressed={consoleOpen} data-studio-console-toggle><SlidersHorizontal size={20} /></button>}
           {isStudio && <button onClick={() => setSessionsOpen((o) => !o)} title={t('Sessions')} className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${sessionsOpen ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-studio-toggle><ListMusic size={20} /></button>}
           {chatToggle}<MembersToggle /></span>
       </header>
@@ -257,6 +263,13 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 <h2 className="text-2xl font-bold">{channel.name}</h2>
                 <p className="text-text-2 mt-2 max-w-sm">{t('No one is here yet. Join to start a call, or say something in chat.')}</p>
               </div>
+            ) : isEngineer && consoleOpen ? (
+              <>
+                <StudioConsole channel={channel} onClose={toggleConsole} />
+                {shown.length > 0 && <div className="shrink-0 flex gap-3 overflow-x-auto pb-1" data-console-tiles>
+                  {shown.map((x) => <div key={x.key} className="w-48 phone:w-28 shrink-0">{renderTile(x, false)}</div>)}
+                </div>}
+              </>
             ) : activity ? (
               <>
                 <div className="relative flex-1 min-h-0"><ActivityFrame session={activity} />{phone && <ExpandButton onClick={() => setStage('activity')} />}</div>

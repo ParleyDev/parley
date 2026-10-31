@@ -1,4 +1,6 @@
+import { create } from 'zustand'
 import { api, getToken } from './api'
+import { STORAGE_PREFIX } from './brand'
 import { useStore } from '../store'
 import { voice } from './voice'
 import { t } from '../lib/i18n'
@@ -19,12 +21,13 @@ class StudioRecorder {
 
   get recording() { return !!this.rec }
 
-  onSession(d: { channel_id: string; action: 'start' | 'stop'; session_id: string; started_at?: string }) {
+  onSession(d: { channel_id: string; action: 'start' | 'stop'; session_id: string; started_at?: string; armed?: string[] | null }) {
     const s = useStore.getState()
     if (d.action === 'stop') { if (this.sessionId === d.session_id) void this.stop(); return }
     if (s.myVoiceChannelId !== d.channel_id) return
     const mine = s.user ? s.voiceStates[s.user.id] : undefined
     if (!mine || mine.suppress) return   // audience is not recorded
+    if (d.armed && !d.armed.includes(mine.user_id)) return   // the engineer left this track unarmed
     void this.start(d.session_id, d.started_at ? new Date(d.started_at).getTime() : Date.now())
   }
 
@@ -77,3 +80,29 @@ class StudioRecorder {
 }
 
 export const studio = new StudioRecorder()
+
+const ARMS_KEY = `${STORAGE_PREFIX}studioDisarmed`
+const loadArms = (): Record<string, string[]> => { try { return JSON.parse(localStorage.getItem(ARMS_KEY) ?? '{}') } catch { return {} } }
+
+/** The engineer's record-arm switches, per studio channel. Stored as who is *disarmed* so a newcomer to the band is
+ *  armed by default; kept in this browser across reloads. */
+export const useStudioArms = create<{ disarmed: Record<string, string[]>; toggle: (channelId: string, userId: string) => void }>((set) => ({
+  disarmed: loadArms(),
+  toggle: (channelId, userId) => set((s) => {
+    const cur = s.disarmed[channelId] ?? []
+    const disarmed = { ...s.disarmed, [channelId]: cur.includes(userId) ? cur.filter((x) => x !== userId) : [...cur, userId] }
+    try { localStorage.setItem(ARMS_KEY, JSON.stringify(disarmed)) } catch { /* ignore */ }
+    return { disarmed }
+  }),
+}))
+
+/** Band members of a studio channel right now: everyone in it who is not in the audience. */
+export const bandOf = (channelId: string) => Object.values(useStore.getState().voiceStates).filter((v) => v.channel_id === channelId && !v.suppress).map((v) => v.user_id)
+
+/** Start a take with the armed band members (the engineer's console and the Record button share this). */
+export async function startTake(channelId: string, name = '') {
+  const off = useStudioArms.getState().disarmed[channelId] ?? []
+  const armed = bandOf(channelId).filter((id) => !off.includes(id))
+  if (!armed.length) throw new Error(t('Arm at least one track to record'))
+  return api.post(`/channels/${channelId}/studio/sessions`, { name, armed })
+}

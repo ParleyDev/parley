@@ -1134,6 +1134,17 @@ class VoiceManager {
     if (room) { try { await room.disconnect(false) } catch { /* ignore */ } }
   }
 
+  /** Latest RMS (0..1) of each remote participant's audio, for the studio console's meters (not in the store: it
+   *  changes ten times a second and only the console polls it). */
+  readonly levels = new Map<string, number>()
+
+  /** Input level 0..1 of a participant: remote peers from their meter, yourself from the mic before the talk gate. */
+  level(userId: string): number {
+    const s = useStore.getState()
+    if (userId === s.user?.id) return s.selfMute || s.selfDeaf ? 0 : Math.max(0, Math.min(1, (s.inputLevel + 60) / 60))
+    return Math.min(1, Math.sqrt(this.levels.get(userId) ?? 0) * 2)
+  }
+
   /** RMS voice-activity meter for a remote stream → store.speaking. Returns a stop function. */
   private remoteMeter(stream: MediaStream, userId: string): () => void {
     try {
@@ -1149,13 +1160,15 @@ class VoiceManager {
         analyser.getByteTimeDomainData(buf)
         let sum = 0
         for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v }
-        const loud = Math.sqrt(sum / buf.length) > 0.02
+        const rms = Math.sqrt(sum / buf.length)
+        this.levels.set(userId, rms)
+        const loud = rms > 0.02
         const s = useStore.getState()
         const now = Date.now()
         if (loud) { quietSince = 0; s.setSpeaking(userId, true) }
         else if (s.speaking[userId]) { quietSince ||= now; if (now - quietSince > 250) s.setSpeaking(userId, false) }
       }, 100)
-      return () => { clearInterval(id); try { src.disconnect() } catch { /* ignore */ } }
+      return () => { clearInterval(id); this.levels.delete(userId); try { src.disconnect() } catch { /* ignore */ } }
     } catch {
       return () => {}
     }

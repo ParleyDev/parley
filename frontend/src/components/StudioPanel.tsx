@@ -1,7 +1,8 @@
-import { Download, Pause, Play, Square, Trash2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { api, getToken } from '../lib/api'
-import type { StudioSession, StudioTrack } from '../lib/types'
+import { Download, Play, Square, Trash2, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { api } from '../lib/api'
+import type { StudioSession } from '../lib/types'
+import { useMultitrack } from '../lib/multitrack'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
 
@@ -51,101 +52,31 @@ export default function StudioPanel({ channelId, canManage, onClose, width, hand
   )
 }
 
-type Loaded = { track: StudioTrack; buffer: AudioBuffer; gain: number; mute: boolean; solo: boolean }
-
-/** Multitrack player: decodes every finished track, plays them aligned by offset with per-track gain / mute / solo,
- *  and renders a WAV mixdown offline for download. */
+/** Multitrack player: plays every finished track aligned by offset with per-track gain / mute / solo, and renders a
+ *  WAV mixdown offline for download. */
 function Mixer({ session }: { session: StudioSession }) {
   const pushToast = useStore((s) => s.pushToast)
   const t = useT()
-  const [tracks, setTracks] = useState<Loaded[] | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [playing, setPlaying] = useState(false)
-  const [pos, setPos] = useState(0)
-  const ctxRef = useRef<AudioContext | null>(null)
-  const nodes = useRef<{ src: AudioBufferSourceNode; gain: GainNode }[]>([])
-  const startedAt = useRef(0)
-  const raf = useRef(0)
-  const length = tracks ? Math.max(0, ...tracks.map((trk) => trk.track.offset_ms / 1000 + trk.buffer.duration)) : 0
-
-  const load = async () => {
-    setLoading(true)
-    try {
-      const ctx = (ctxRef.current ??= new AudioContext())
-      const token = getToken()
-      const out: Loaded[] = []
-      for (const trk of session.tracks.filter((trk) => trk.done && trk.size > 0)) {
-        const r = await fetch(trk.url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-        if (!r.ok) throw new Error(`${trk.display_name}: ${r.status}`)
-        const buffer = await ctx.decodeAudioData(await r.arrayBuffer())
-        out.push({ track: trk, buffer, gain: 1, mute: false, solo: false })
-      }
-      setTracks(out)
-      ;(window as unknown as { __parleyMix?: unknown }).__parleyMix = { tracks: out.length, seconds: Math.max(0, ...out.map((trk) => trk.buffer.duration)) }
-    } catch (e) { pushToast(t('Could not load tracks: {error}', { error: (e as Error).message }), 'error') } finally { setLoading(false) }
-  }
-  const audible = (trk: Loaded, all: Loaded[]) => !trk.mute && (!all.some((x) => x.solo) || trk.solo)
-  const stop = () => { nodes.current.forEach((n) => { try { n.src.stop() } catch { /* already stopped */ } }); nodes.current = []; cancelAnimationFrame(raf.current); setPlaying(false) }
-  const play = () => {
-    if (!tracks || !ctxRef.current) return
-    const ctx = ctxRef.current; ctx.resume().catch(() => {})
-    stop()
-    const t0 = ctx.currentTime + 0.05
-    nodes.current = tracks.map((trk) => {
-      const src = ctx.createBufferSource(); src.buffer = trk.buffer
-      const gain = ctx.createGain(); gain.gain.value = audible(trk, tracks) ? trk.gain : 0
-      src.connect(gain).connect(ctx.destination)
-      src.start(t0 + trk.track.offset_ms / 1000)
-      return { src, gain }
-    })
-    startedAt.current = t0; setPlaying(true)
-    const tick = () => { const p = ctx.currentTime - startedAt.current; setPos(p); if (p >= length) { stop(); setPos(0); return } raf.current = requestAnimationFrame(tick) }
-    raf.current = requestAnimationFrame(tick)
-  }
-  const update = (i: number, patch: Partial<Loaded>) => setTracks((cur) => { if (!cur) return cur; const next = cur.map((trk, j) => (j === i ? { ...trk, ...patch } : trk)); nodes.current.forEach((n, j) => { n.gain.gain.value = audible(next[j], next) ? next[j].gain : 0 }); return next })
-  const exportWav = async () => {
-    if (!tracks?.length) return
-    const rate = 48000
-    const off = new OfflineAudioContext(2, Math.ceil(length * rate), rate)
-    for (const trk of tracks) { if (!audible(trk, tracks)) continue; const src = off.createBufferSource(); src.buffer = trk.buffer; const g = off.createGain(); g.gain.value = trk.gain; src.connect(g).connect(off.destination); src.start(trk.track.offset_ms / 1000) }
-    const mix = await off.startRendering()
-    const wav = encodeWav(mix)
-    ;(window as unknown as { __parleyMix?: Record<string, unknown> }).__parleyMix = { ...((window as unknown as { __parleyMix?: Record<string, unknown> }).__parleyMix ?? {}), exportedBytes: wav.byteLength }
-    const url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }))
-    const a = document.createElement('a'); a.href = url; a.download = `${session.name} - mix.wav`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 5000)
-  }
-  useEffect(() => () => { stop(); ctxRef.current?.close().catch(() => {}) }, [])  // eslint-disable-line react-hooks/exhaustive-deps
-  if (!tracks) return <button type="button" onClick={load} disabled={loading} className="btn-ghost w-full justify-center text-sm" data-mix-load>{loading ? t('Decoding…') : t('Open in multitrack player')}</button>
+  const mt = useMultitrack(session)
+  useEffect(() => { if (mt.error) pushToast(t('Could not load tracks: {error}', { error: mt.error }), 'error') }, [mt.error])  // eslint-disable-line react-hooks/exhaustive-deps
+  if (!mt.tracks) return <button type="button" onClick={mt.load} disabled={mt.loading} className="btn-ghost w-full justify-center text-sm" data-mix-load>{mt.loading ? t('Decoding…') : t('Open in multitrack player')}</button>
   return (
     <div className="rounded-lg bg-bg-0/50 p-2 space-y-2" data-mixer>
       <div className="flex items-center gap-2">
-        <button type="button" onClick={playing ? stop : play} className="h-8 w-8 rounded-full bg-accent text-white flex items-center justify-center" title={playing ? t('Stop') : t('Play all')} data-mix-play>{playing ? <Square size={14} /> : <Play size={14} />}</button>
-        <div className="flex-1 h-1.5 rounded bg-bg-4 overflow-hidden"><div className="h-full bg-accent" style={{ width: `${length ? Math.min(100, (pos / length) * 100) : 0}%` }} /></div>
-        <span className="text-xs tabular-nums text-text-2">{fmt(pos * 1000)} / {fmt(length * 1000)}</span>
-        <button type="button" onClick={exportWav} className="btn-ghost py-1 text-xs" title={t('Render all audible tracks to one WAV')} data-mix-export><Download size={14} /> {t('Export mix')}</button>
+        <button type="button" onClick={mt.playing ? mt.stop : () => mt.play(0)} className="h-8 w-8 rounded-full bg-accent text-white flex items-center justify-center" title={mt.playing ? t('Stop') : t('Play all')} data-mix-play>{mt.playing ? <Square size={14} /> : <Play size={14} />}</button>
+        <div className="flex-1 h-1.5 rounded bg-bg-4 overflow-hidden"><div className="h-full bg-accent" style={{ width: `${mt.length ? Math.min(100, (mt.pos / mt.length) * 100) : 0}%` }} /></div>
+        <span className="text-xs tabular-nums text-text-2">{fmt(mt.pos * 1000)} / {fmt(mt.length * 1000)}</span>
+        <button type="button" onClick={mt.exportWav} className="btn-ghost py-1 text-xs" title={t('Render all audible tracks to one WAV')} data-mix-export><Download size={14} /> {t('Export mix')}</button>
       </div>
-      {tracks.map((trk, i) => (
+      {mt.tracks.map((trk, i) => (
         <div key={trk.track.id} className="flex items-center gap-2 text-xs" data-mix-track={trk.track.id}>
           <span className="w-24 truncate" title={trk.track.display_name}>{trk.track.display_name}</span>
-          <button type="button" onClick={() => update(i, { mute: !trk.mute })} className={`rounded px-1.5 py-0.5 font-bold ${trk.mute ? 'bg-danger text-white' : 'bg-bg-3 text-text-2'}`} data-mix-mute aria-pressed={trk.mute}>M</button>
-          <button type="button" onClick={() => update(i, { solo: !trk.solo })} className={`rounded px-1.5 py-0.5 font-bold ${trk.solo ? 'bg-warn text-black' : 'bg-bg-3 text-text-2'}`} data-mix-solo aria-pressed={trk.solo}>S</button>
-          <input type="range" min={0} max={150} value={Math.round(trk.gain * 100)} onChange={(e) => update(i, { gain: Number(e.target.value) / 100 })} className="flex-1 accent-accent" title={`${Math.round(trk.gain * 100)}%`} data-mix-gain />
+          <button type="button" onClick={() => mt.update(i, { mute: !trk.mute })} className={`rounded px-1.5 py-0.5 font-bold ${trk.mute ? 'bg-danger text-white' : 'bg-bg-3 text-text-2'}`} data-mix-mute aria-pressed={trk.mute}>M</button>
+          <button type="button" onClick={() => mt.update(i, { solo: !trk.solo })} className={`rounded px-1.5 py-0.5 font-bold ${trk.solo ? 'bg-warn text-black' : 'bg-bg-3 text-text-2'}`} data-mix-solo aria-pressed={trk.solo}>S</button>
+          <input type="range" min={0} max={150} value={Math.round(trk.gain * 100)} onChange={(e) => mt.update(i, { gain: Number(e.target.value) / 100 })} className="flex-1 accent-accent" title={`${Math.round(trk.gain * 100)}%`} data-mix-gain />
           <span className="w-10 text-right tabular-nums text-text-2">{Math.round(trk.gain * 100)}%</span>
-          {playing && <Pause size={12} className="invisible" />}
         </div>
       ))}
     </div>
   )
-}
-
-/** 16-bit PCM WAV from an AudioBuffer. */
-function encodeWav(buf: AudioBuffer): ArrayBuffer {
-  const ch = buf.numberOfChannels, n = buf.length, rate = buf.sampleRate
-  const out = new ArrayBuffer(44 + n * ch * 2); const v = new DataView(out)
-  const str = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)) }
-  str(0, 'RIFF'); v.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true); v.setUint32(24, rate, true); v.setUint32(28, rate * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * ch * 2, true)
-  const chans = Array.from({ length: ch }, (_, c) => buf.getChannelData(c))
-  let o = 44
-  for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { const s = Math.max(-1, Math.min(1, chans[c][i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2 }
-  return out
 }

@@ -62,6 +62,8 @@ pub struct Session {
     pub started_by: Option<Uuid>,
     pub started_at: DateTime<Utc>,
     pub ended_at: Option<DateTime<Utc>>,
+    /// Band members armed for this take; `None` records the whole band.
+    pub armed: Option<Vec<Uuid>>,
     #[sqlx(skip)]
     #[serde(default)]
     pub tracks: Vec<Track>,
@@ -69,7 +71,7 @@ pub struct Session {
 
 const TRACK_SELECT: &str = "SELECT t.id, t.session_id, t.user_id, t.content_type, t.size, t.duration_ms, t.offset_ms, t.done, t.created_at, COALESCE(u.display_name, 'Unknown') AS display_name
     FROM studio_tracks t LEFT JOIN users u ON u.id = t.user_id";
-const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_at, ended_at";
+const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_at, ended_at, armed";
 
 fn track_path(state: &AppState, tid: Uuid) -> std::path::PathBuf { state.config.upload_dir.join(format!("studio-{tid}.webm")) }
 
@@ -159,20 +161,23 @@ async fn list_sessions(State(state): State<AppState>, AuthUser(uid): AuthUser, P
 }
 
 #[derive(Deserialize)]
-struct StartReq { #[serde(default)] name: String }
+struct StartReq { #[serde(default)] name: String, armed: Option<Vec<Uuid>> }
 
 /// The engineer starts a recording session: everyone in the channel learns the session id and server start time;
-/// band members' clients begin recording their own mic and upload it as a track.
+/// band members' clients begin recording their own mic and upload it as a track. `armed` (from the engineer's console)
+/// limits the take to those members; left out, the whole band records.
 async fn start_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<StartReq>) -> AppResult<(StatusCode, Json<Session>)> {
     let (c, _) = studio_channel(&state.db, id, uid).await?;
     if !perms::is_engineer(&state.db, id, uid).await? { return Err(AppError::Forbidden); }
     let open: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_sessions WHERE channel_id = $1 AND ended_at IS NULL").bind(id).fetch_optional(&state.db).await?;
     if open.is_some() { return Err(AppError::Conflict("A session is already recording".into())); }
     let name: String = { let n: String = req.name.trim().chars().take(80).collect(); if n.is_empty() { format!("Session {}", Utc::now().format("%Y-%m-%d %H:%M")) } else { n } };
+    let armed = req.armed.map(|mut a| { a.sort(); a.dedup(); a.truncate(64); a });
+    if armed.as_ref().is_some_and(|a| a.is_empty()) { return Err(AppError::BadRequest("Arm at least one track".into())); }
     let sid = Uuid::now_v7();
-    let s = sqlx::query_as::<_, Session>(&format!("INSERT INTO studio_sessions (id, channel_id, guild_id, name, started_by) VALUES ($1, $2, $3, $4, $5) RETURNING {SESSION_COLS}"))
-        .bind(sid).bind(id).bind(c.guild_id).bind(&name).bind(uid).fetch_one(&state.db).await?;
-    broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": id, "action": "start", "session_id": sid, "name": name, "started_at": s.started_at })).await?;
+    let s = sqlx::query_as::<_, Session>(&format!("INSERT INTO studio_sessions (id, channel_id, guild_id, name, started_by, armed) VALUES ($1, $2, $3, $4, $5, $6) RETURNING {SESSION_COLS}"))
+        .bind(sid).bind(id).bind(c.guild_id).bind(&name).bind(uid).bind(&armed).fetch_one(&state.db).await?;
+    broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": id, "action": "start", "session_id": sid, "name": name, "started_at": s.started_at, "armed": armed })).await?;
     crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.record", "channel", Some(id), &c.name, json!({ "session": sid })).await;
     Ok((StatusCode::CREATED, Json(s)))
 }
@@ -203,12 +208,13 @@ struct NewTrack { #[serde(default)] offset_ms: i32, content_type: Option<String>
 
 /// A band member registers its track for the open session (one per user per session).
 async fn create_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(sid): Path<Uuid>, Json(req): Json<NewTrack>) -> AppResult<(StatusCode, Json<Track>)> {
-    let sess: Option<(Uuid, Option<DateTime<Utc>>)> = sqlx::query_as("SELECT channel_id, ended_at FROM studio_sessions WHERE id = $1").bind(sid).fetch_optional(&state.db).await?;
-    let Some((channel_id, ended)) = sess else { return Err(AppError::NotFound("Session not found".into())) };
+    let sess: Option<(Uuid, Option<DateTime<Utc>>, Option<Vec<Uuid>>)> = sqlx::query_as("SELECT channel_id, ended_at, armed FROM studio_sessions WHERE id = $1").bind(sid).fetch_optional(&state.db).await?;
+    let Some((channel_id, ended, armed)) = sess else { return Err(AppError::NotFound("Session not found".into())) };
     if ended.is_some() { return Err(AppError::BadRequest("That session has ended".into())); }
     let (c, _) = studio_channel(&state.db, channel_id, uid).await?;
     let vs = state.hub.voice_state(uid).filter(|v| v.channel_id == channel_id).ok_or_else(|| AppError::BadRequest("Join the studio first".into()))?;
     if vs.suppress { return Err(AppError::Forbidden); }
+    if armed.is_some_and(|a| !a.contains(&uid)) { return Err(AppError::BadRequest("Your track is not armed for this take".into())); }
     let existing: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_tracks WHERE session_id = $1 AND user_id = $2").bind(sid).bind(uid).fetch_optional(&state.db).await?;
     if existing.is_some() { return Err(AppError::Conflict("You already have a track in this session".into())); }
     let ct = req.content_type.filter(|t| t.starts_with("audio/")).unwrap_or_else(|| "audio/webm".into());
@@ -230,7 +236,8 @@ async fn own_open_track(db: &PgPool, sid: Uuid, tid: Uuid, uid: Uuid) -> AppResu
     Ok(size)
 }
 
-/// Append a MediaRecorder chunk (raw bytes) to the caller's track.
+/// Append a MediaRecorder chunk (raw bytes) to the caller's track. The studio hears `STUDIO_TRACK` with the new size so
+/// the engineer's console can draw the take growing.
 async fn append_chunk(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((sid, tid)): Path<(Uuid, Uuid)>, body: Bytes) -> AppResult<Json<serde_json::Value>> {
     let size = own_open_track(&state.db, sid, tid, uid).await?;
     if size + body.len() as i64 > MAX_TRACK_BYTES { return Err(AppError::BadRequest("Track too large".into())); }
@@ -238,6 +245,8 @@ async fn append_chunk(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     f.write_all(&body).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     f.flush().await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     let (new_size,): (i64,) = sqlx::query_as("UPDATE studio_tracks SET size = size + $3 WHERE id = $1 AND session_id = $2 RETURNING size").bind(tid).bind(sid).bind(body.len() as i64).fetch_one(&state.db).await?;
+    let (channel_id,): (Uuid,) = sqlx::query_as("SELECT channel_id FROM studio_sessions WHERE id = $1").bind(sid).fetch_one(&state.db).await?;
+    if let Ok(c) = channel_json(&state, channel_id).await { broadcast(&state, &c, "STUDIO_TRACK", json!({ "channel_id": channel_id, "session_id": sid, "track_id": tid, "user_id": uid, "size": new_size })).await?; }
     Ok(Json(json!({ "size": new_size })))
 }
 

@@ -149,6 +149,8 @@ interface State {
   /** Recording Studio sessions per studio channel; refreshed on STUDIO_UPDATE / STUDIO_SESSION. */
   studio: Record<string, StudioSession[]>
   loadStudio: (channelId: string) => Promise<void>
+  /** A band member's take grew (STUDIO_TRACK while recording). */
+  studioTrackSize: (channelId: string, trackId: string, size: number) => void
   setSounds: (guildId: string, sounds: Sound[]) => void
   loadSounds: (guildId: string) => Promise<void>
   /** Message ids the user has bookmarked. */
@@ -523,6 +525,11 @@ export const useStore = create<State>((set, get) => ({
   sounds: {},
   studio: {},
   loadStudio: async (channelId) => { try { const list = await api.get<StudioSession[]>(`/channels/${channelId}/studio/sessions`); set((s) => ({ studio: { ...s.studio, [channelId]: list } })) } catch { /* ignore */ } },
+  studioTrackSize: (channelId, trackId, size) => set((s) => {
+    const list = s.studio[channelId]
+    if (!list?.some((x) => x.tracks.some((tr) => tr.id === trackId))) return {}
+    return { studio: { ...s.studio, [channelId]: list.map((x) => ({ ...x, tracks: x.tracks.map((tr) => (tr.id === trackId ? { ...tr, size: Math.max(tr.size, size) } : tr)) })) } }
+  }),
   events: {},
   liveEvents: {},
   loadLiveEvents: async () => {
