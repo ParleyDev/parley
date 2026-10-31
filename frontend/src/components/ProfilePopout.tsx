@@ -398,7 +398,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     <FrameRoom value={user.profile_frame} bleed className="h-full" innerClassName="h-[calc(100%+50vh)]">
     <div className={`dark-scope relative z-[1] isolate w-full h-[calc(100%-50vh)] flex flex-col rounded-t-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ ...cardStyle, borderWidth: 0 }} data-profile-card data-solid data-profile-frame={user.profile_frame || undefined} data-profile-variant="sheet">
       <ProfileEffect id={user.profile_effect} />
-      <div className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-2xl pb-28" data-profile-sheet-scroll>{contents}{after}</div>
+      <div className="relative flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain rounded-t-2xl pb-28" style={{ scrollbarGutter: 'auto' }} data-profile-sheet-scroll>{contents}{after}</div>
     </div>
     </FrameRoom>
   )
@@ -407,7 +407,9 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     <div className={`relative z-[1] isolate flex-1 min-h-0 flex flex-col rounded-lg p-[2px] text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={{ background: themed ? gradient : surface, boxShadow: '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.32), 0 2px 6px rgba(0,0,0,0.2)' }} data-profile-card data-profile-frame={user.profile_frame || undefined} data-profile-variant={variant}>
       <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-[6px]" style={{ background: themed ? cardStyle.background : surface }} data-profile-inner>
         <ProfileEffect id={user.profile_effect} />
-        <div className="scroller-thin-fade flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain" data-profile-scroll>{contents}</div>
+        {/* Bar room only when the card overflows (not the app's always-reserved gutter): the banner scrolls with the card
+            and has to reach both edges. */}
+        <div className="scroller-thin-fade flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain" style={{ scrollbarGutter: 'auto' }} data-profile-scroll>{contents}</div>
         <div className="relative z-[7] shrink-0 p-4" data-profile-footer>
           <button onClick={() => fullProfile()} className="w-full rounded-lg py-2.5 text-sm font-semibold hover:brightness-110" style={{ background: themed ? 'rgba(0,0,0,0.35)' : '#383a40' }} data-view-full-profile>{t('View Full Profile')}</button>
         </div>

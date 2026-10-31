@@ -50,6 +50,11 @@ await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForSelector(`text=mess
 await check('chat message list (16px)', '[data-message-list]', 16, 'chat')
 await check('DM list (8px)', '[data-dm-list]', 8, 'dmlist')
 await check('profile panel (8px)', '[data-dm-profile] [data-profile-scroll]', 8, 'profile')
+const palDm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: others[0].user.id })
+await p.goto(`${WEB}/channels/@me/${palDm.id}`); await p.waitForSelector('[data-dm-profile] [data-profile-scroll]'); await p.waitForTimeout(800)
+const fit = await p.locator('[data-dm-profile] [data-profile-scroll]').evaluate((el) => ({ gutter: el.offsetWidth - el.clientWidth, banner: Math.round(el.firstElementChild.getBoundingClientRect().width), box: Math.round(el.getBoundingClientRect().width), overflow: el.scrollHeight > el.clientHeight }))
+ok('a profile that fits keeps no bar room, so its banner reaches both edges of the card', !fit.overflow && fit.gutter === 0 && fit.banner === fit.box, JSON.stringify(fit))
+await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForSelector(`text=message 39 ${S}`); await p.waitForTimeout(1200)
 
 console.log('-- while scrolling, without hover')
 await p.mouse.move(5, 300)
