@@ -305,29 +305,38 @@ function Fader({ value, onChange, get, id, label }: { value: number; onChange: (
   )
 }
 
-/** A level meter redrawn every frame without re-rendering. */
+/** Meter zones, like a hardware VU: green for most of the travel, amber near the top, red only at the very top. */
+const zones = (dir: string) => `linear-gradient(to ${dir}, var(--color-success) 0 72%, var(--color-warn) 72% 90%, var(--color-danger) 90% 100%)`
+/** LED segments: thin gaps cut into the lit bar. */
+const segments = (dir: string, px: number) => `repeating-linear-gradient(to ${dir}, #000 0 ${px - 1}px, transparent ${px - 1}px ${px}px)`
+
+/**
+ * A level meter redrawn every frame without re-rendering: a dark track, the lit part in fixed colour zones (so the
+ * colour tells you how hot it is, not the background), and a peak-hold tick that falls back after a moment.
+ */
 function Meter({ get, id, vertical }: { get: () => number; id: string; vertical?: boolean }) {
-  const cover = useRef<HTMLDivElement>(null)
+  const lit = useRef<HTMLDivElement>(null)
+  const peak = useRef<HTMLDivElement>(null)
   const getRef = useRef(get)
   getRef.current = get
   useEffect(() => {
-    let raf = 0
+    let raf = 0, hold = 0, holdAt = 0
     const tick = () => {
-      const l = getRef.current()
-      const el = cover.current
-      if (el) { el.style[vertical ? 'height' : 'width'] = `${Math.round((1 - l) * 100)}%`; el.parentElement!.dataset.level = l.toFixed(2) }
+      const l = getRef.current(), now = performance.now()
+      if (l >= hold || now - holdAt > 1200) { hold = Math.max(l, hold - 0.02); if (l >= hold) holdAt = now }
+      const off = `${((1 - l) * 100).toFixed(1)}%`
+      if (lit.current) { lit.current.style.clipPath = vertical ? `inset(${off} 0 0 0)` : `inset(0 ${off} 0 0)`; lit.current.parentElement!.dataset.level = l.toFixed(2) }
+      if (peak.current) { peak.current.style[vertical ? 'bottom' : 'left'] = `calc(${(hold * 100).toFixed(1)}% - 1px)`; peak.current.style.opacity = hold > 0.02 ? '1' : '0' }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [vertical])
-  return vertical ? (
-    <div className="relative h-full w-2 overflow-hidden rounded bg-gradient-to-t from-success via-warn to-danger" data-console-meter={id}>
-      <div ref={cover} className="absolute inset-x-0 top-0 bg-bg-4" style={{ height: '100%' }} />
-    </div>
-  ) : (
-    <div className="relative h-1.5 w-full overflow-hidden rounded bg-gradient-to-r from-success via-warn to-danger" data-console-meter={id}>
-      <div ref={cover} className="absolute inset-y-0 right-0 bg-bg-4" style={{ width: '100%' }} />
+  const dir = vertical ? 'top' : 'right'
+  return (
+    <div className={`relative overflow-hidden rounded-sm bg-black/55 ring-1 ring-inset ring-white/5 ${vertical ? 'h-full w-2.5' : 'h-2 w-full'}`} data-console-meter={id}>
+      <div ref={lit} className="absolute inset-0" style={{ background: zones(dir), clipPath: vertical ? 'inset(100% 0 0 0)' : 'inset(0 100% 0 0)', WebkitMaskImage: vertical ? segments(dir, 4) : undefined, maskImage: vertical ? segments(dir, 4) : undefined }} />
+      <div ref={peak} className={`absolute bg-white/80 opacity-0 ${vertical ? 'inset-x-0 h-0.5' : 'inset-y-0 w-0.5'}`} />
     </div>
   )
 }
