@@ -264,8 +264,15 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 .console .top .rec::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hot); animation: blink 1.4s infinite; }
 .console .top .time { margin-left: auto; font: 500 1.05rem/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
 .console .export { font: 600 .8125rem/1 var(--body); color: var(--text); border: 1px solid var(--rule); border-radius: 8px; padding: .55rem .8rem; background: var(--panel-2); }
+.console .tempo { display: flex; flex-wrap: wrap; gap: .35rem; }
+.console .tempo span { font: 500 .75rem/1 var(--mono); color: var(--muted); border: 1px solid var(--rule); border-radius: 7px; padding: .4rem .55rem; background: var(--panel-2); }
+.console .tempo span.on { background: #f6b53d; border-color: #f6b53d; color: #1a1300; }
+.console .top .bb { font: 500 .8125rem/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); border: 1px solid var(--rule); border-radius: 7px; padding: .4rem .55rem; }
+.console .views { display: flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--rule); }
+.console .views span { font: 600 .75rem/1 var(--body); padding: .45rem .65rem; border-radius: 6px; color: var(--faint); }
+.console .views span.on { background: var(--rule); color: var(--text); }
 .tracks { position: relative; }
-.track { display: grid; grid-template-columns: 210px minmax(0, 1fr); border-bottom: 1px solid var(--rule); }
+.track { display: grid; grid-template-columns: 290px minmax(0, 1fr); border-bottom: 1px solid var(--rule); }
 .track:last-child { border-bottom: 0; }
 .track .meta { padding: .9rem 1.25rem; display: flex; align-items: center; gap: .75rem; border-right: 1px solid var(--rule); min-width: 0; }
 .track .meta .av { width: 34px; height: 34px; font-size: 12px; }
@@ -275,10 +282,13 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 .track .ms { display: flex; gap: 4px; margin-left: auto; }
 .track .ms i { font: 700 .6875rem/1 var(--mono); font-style: normal; width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; background: var(--panel-2); color: var(--faint); border: 1px solid var(--rule); }
 .track .ms i.solo { background: #f6b53d; color: #1a1300; border-color: #f6b53d; }
+.track .ms i.arm { background: var(--hot); color: #fff; border-color: var(--hot); }
+.track .vu { display: block; height: 6px; margin-top: .45rem; border-radius: 2px; background: #06060a; box-shadow: inset 0 0 0 1px var(--rule); overflow: hidden; }
+.track .vu i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #3ccf7d 0 72%, #f6b53d 72% 90%, var(--hot) 90%); clip-path: inset(0 calc(100% - var(--l, .5) * 100%) 0 0); transition: clip-path .12s linear; }
 .track canvas { width: 100%; height: 76px; display: block; }
-.playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); left: calc(210px + 38%); box-shadow: 0 0 12px var(--text); pointer-events: none; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); left: calc(290px + 38%); box-shadow: 0 0 12px var(--text); pointer-events: none; }
 @media (max-width: 720px) { .track { grid-template-columns: minmax(0, 1fr); } .track .meta { border-right: 0; border-bottom: 1px solid var(--rule); } .playhead { display: none; } }
-.studio-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; margin-top: 2.5rem; }
+.studio-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem 2.5rem; margin-top: 2.5rem; }
 .studio-notes div { display: grid; gap: .5rem; align-content: start; }
 .studio-notes p { color: var(--muted); }
 .studio-notes .k { font: 500 .75rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--violet); }
@@ -652,23 +662,26 @@ footer a:hover { color: var(--text); }
       <div class="head">
         <span class="callsign">Channel 03 · Recording Studio</span>
         <h2 id="studio-title">Jam live. Leave with the multitrack.</h2>
-        <p class="lede">A studio is a voice channel built for music. Everyone in the band records their own track in full quality, so a bad connection never ruins a take.</p>
+        <p class="lede">A studio is a voice channel built for music, with a console for the engineer. Everyone in the band records their own track in full quality, so a bad connection never ruins a take.</p>
       </div>
 
-      <div class="console" role="img" aria-label="A finished studio session called Take 3 with three tracks: keys, vocals and bass, each with mute and solo controls, and an Export mix button.">
-        <div class="top" aria-hidden="true"><strong>Take 3</strong><span class="rec">RECORDING</span><span class="time" id="clock">00:02:47.30</span><span class="export">Export mix · WAV</span></div>
+      <div class="console" role="img" aria-label="The engineer's console recording Take 3 at 120 BPM in 4/4 with the metronome on: three armed tracks, keys, vocals and bass, each with a level meter, and the bass punched in partway through the take.">
+        <div class="top" aria-hidden="true"><strong>Take 3</strong><span class="rec">RECORDING</span><span class="tempo"><span>120 BPM</span><span>4/4</span><span class="on">Click</span><span>1 bar count-in</span></span><span class="time" id="clock">00:02:47.30</span><span class="bb" id="beat">84.3</span><span class="views"><span class="on">Arrangement</span><span>Mixer</span></span></div>
         <div class="tracks" aria-hidden="true">
-          <div class="track"><div class="meta"><span class="av c1">M</span><div><b>Mara</b><small>Keys · 48 kHz stereo</small></div><span class="ms"><i>M</i><i>S</i></span></div><canvas data-seed="3" data-hue="#7b6cff"></canvas></div>
-          <div class="track"><div class="meta"><span class="av c2">T</span><div><b>Theo</b><small>Vocals · 48 kHz stereo</small></div><span class="ms"><i>M</i><i class="solo">S</i></span></div><canvas data-seed="11" data-hue="#3ccf7d"></canvas></div>
-          <div class="track"><div class="meta"><span class="av c3">I</span><div><b>Ivy</b><small>Bass · 48 kHz stereo</small></div><span class="ms"><i>M</i><i>S</i></span></div><canvas data-seed="27" data-hue="#e39a3b"></canvas></div>
+          <div class="track"><div class="meta"><span class="av c1">M</span><div><b>Mara</b><small>Keys · stereo</small><span class="vu"><i style="--l:.55"></i></span></div><span class="ms"><i class="arm">R</i><i>M</i><i>S</i></span></div><canvas data-seed="3" data-hue="#7b6cff"></canvas></div>
+          <div class="track"><div class="meta"><span class="av c2">T</span><div><b>Theo</b><small>Vocals · stereo</small><span class="vu"><i style="--l:.78"></i></span></div><span class="ms"><i class="arm">R</i><i>M</i><i class="solo">S</i></span></div><canvas data-seed="11" data-hue="#3ccf7d"></canvas></div>
+          <div class="track"><div class="meta"><span class="av c3">I</span><div><b>Ivy</b><small>Bass · punch-in</small><span class="vu"><i style="--l:.4"></i></span></div><span class="ms"><i class="arm">R</i><i>M</i><i>S</i></span></div><canvas data-seed="27" data-hue="#e39a3b" data-start="0.2"></canvas></div>
           <span class="playhead"></span>
         </div>
       </div>
 
       <div class="studio-notes">
+        <div><span class="k">Engineer's console</span><h3>Arrangement and Mixer</h3><p>The engineer gets a small DAW: lanes on a timeline that grow as the band plays, and a mixer with a strip per artist for pan, fader, mute, solo and arm. Tab switches views, like Ableton Live.</p></div>
+        <div><span class="k">Arm &amp; punch in</span><h3>Record who you need, when you need</h3><p>Arm only the players a take needs. Arm someone mid-take and they punch in on the spot; disarm them and they punch out. Late arrivals to the band join the take automatically.</p></div>
+        <div><span class="k">Metronome</span><h3>Everyone on the same click</h3><p>Set the tempo and time signature, turn on the click and add a count-in of one to four bars. Each player hears it in their own ears, in time with the take, and it never ends up in the recording.</p></div>
         <div><span class="k">Engineers &amp; band</span><h3>Roles made for sessions</h3><p>Engineers start and stop takes. Artists are heard and recorded. Everyone else listens from the audience until an engineer brings them in.</p></div>
         <div><span class="k">Hi-fi audio</span><h3>Music doesn't get treated like speech</h3><p>High-fidelity channels switch off noise suppression and echo cancellation, send stereo Opus at up to 510 kbps, and can drop to 10 ms frames for tighter timing.</p></div>
-        <div><span class="k">Mix in the browser</span><h3>Play back, solo, export</h3><p>Every take opens in a multitrack player with per-track gain, mute and solo, lined up automatically. Export renders a 48 kHz, 16-bit WAV of the mix.</p></div>
+        <div><span class="k">Mix in the browser</span><h3>Play back, solo, export</h3><p>Every take opens with waveforms lined up automatically, live meters, per-track gain, pan, mute and solo, and a master fader. Export renders a 48 kHz, 16-bit WAV of the mix.</p></div>
       </div>
     </div>
   </section>
@@ -813,8 +826,10 @@ footer a:hover { color: var(--text); }
     g.clearRect(0, 0, w, h)
     const bw = 3 * dpr, gap = 2 * dpr
     let level = 0.4
+    const start = Number(c.dataset.start ?? 0) * w
     for (let x = 0, i = 0; x < w; x += bw + gap, i++) {
       level += (r() - 0.5) * 0.25; level = Math.max(0.05, Math.min(1, level))
+      if (x < start) continue   // punched in later in the take
       const silent = Math.sin(i / 23 + Number(c.dataset.seed)) > 0.82
       const l = silent ? 0.04 : level * (0.55 + r() * 0.45), rr = silent ? 0.04 : level * (0.55 + r() * 0.45)
       g.fillStyle = c.dataset.hue
@@ -836,7 +851,11 @@ footer a:hover { color: var(--text); }
 
   // Session clock.
   const clock = document.getElementById('clock'); let cs = 16730
-  if (!still) setInterval(() => { cs += 7; const s = Math.floor(cs / 100); clock.textContent = `00:${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}.${String(cs % 100).padStart(2, '0')}` }, 70)
+  // Bar.beat at 120 BPM in 4/4 (two beats a second), and the lanes' meters bouncing with the music.
+  const beat = document.getElementById('beat'), meters = [...document.querySelectorAll('.track .vu i')], mr = rand(99)
+  const tickClock = () => { const s = Math.floor(cs / 100); clock.textContent = `00:${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}.${String(cs % 100).padStart(2, '0')}`; const b = Math.floor(cs / 50); beat.textContent = `${Math.floor(b / 4) + 1}.${(b % 4) + 1}` }
+  tickClock()
+  if (!still) setInterval(() => { cs += 7; tickClock(); meters.forEach((m, i) => m.style.setProperty('--l', (0.25 + mr() * 0.5 + (i === 1 ? 0.15 : 0)).toFixed(2))) }, 70)
 
   // Downloads: ask GitHub for the latest release and link each file directly. The static names above stay if
   // this fails (offline, rate limited), and their links still lead to the release page.
