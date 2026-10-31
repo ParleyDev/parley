@@ -3645,5 +3645,22 @@
 "Take": "录音条",
 "Waiting for every track to finish uploading…": "正在等待所有音轨上传完成…",
 "{kb} KB": "{kb} KB",
-"{n} of {m} armed": "已预备 {n}/{m}"
+"{n} of {m} armed": "已预备 {n}/{m}",
+"1 bar": "1 小节",
+"Arrangement (Tab)": "编排 (Tab)",
+"Bar.beat": "小节.拍",
+"Console view": "控制台视图",
+"Count-in": "预备拍",
+"Count-in · {name}": "预备拍 · {name}",
+"Master": "主输出",
+"Metronome: off": "节拍器：关",
+"Metronome: on": "节拍器：开",
+"Mixer (Tab)": "调音台 (Tab)",
+"No count-in": "无预备拍",
+"Pan": "声像",
+"Press Record to start the first take.": "按录音开始第一条录音。",
+"Punched out": "已插出",
+"Tempo (BPM)": "速度 (BPM)",
+"Time signature": "拍号",
+"{n} bars": "{n} 小节"
 }

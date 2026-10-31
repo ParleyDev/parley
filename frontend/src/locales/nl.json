@@ -3645,5 +3645,22 @@
 "Take": "Take",
 "Waiting for every track to finish uploading…": "Wachten tot alle sporen zijn geüpload…",
 "{kb} KB": "{kb} KB",
-"{n} of {m} armed": "{n} van {m} gewapend"
+"{n} of {m} armed": "{n} van {m} gewapend",
+"1 bar": "1 maat",
+"Arrangement (Tab)": "Arrangement (Tab)",
+"Bar.beat": "Maat.tel",
+"Console view": "Consoleweergave",
+"Count-in": "Aftellen",
+"Count-in · {name}": "Aftellen · {name}",
+"Master": "Master",
+"Metronome: off": "Metronoom: uit",
+"Metronome: on": "Metronoom: aan",
+"Mixer (Tab)": "Mixer (Tab)",
+"No count-in": "Niet aftellen",
+"Pan": "Panning",
+"Press Record to start the first take.": "Druk op Opnemen om de eerste take te starten.",
+"Punched out": "Uitgepuncht",
+"Tempo (BPM)": "Tempo (BPM)",
+"Time signature": "Maatsoort",
+"{n} bars": "{n} maten"
 }

@@ -72,7 +72,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'EVENT_UPDATE'; d: { guild_id: string } }
   | { t: 'EVENT_START'; d: { id: string; guild_id: string; name: string; channel_id: string | null; location: string } }
   | { t: 'STUDIO_UPDATE'; d: { channel_id: string } }
-  | { t: 'STUDIO_SESSION'; d: { channel_id: string; action: 'start' | 'stop'; session_id: string; name?: string; started_at?: string; armed?: string[] | null } }
+  | { t: 'STUDIO_SESSION'; d: { channel_id: string; action: 'start' | 'stop'; session_id: string; name?: string; started_at?: string; armed?: string[] | null; bpm?: number; beats?: number; click?: boolean; count_in_ms?: number } }
   | { t: 'STUDIO_TRACK'; d: { channel_id: string; session_id: string; track_id: string; user_id: string; size: number } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }

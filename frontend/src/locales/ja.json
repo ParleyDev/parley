@@ -3645,5 +3645,22 @@
 "Take": "テイク",
 "Waiting for every track to finish uploading…": "すべてのトラックのアップロード完了を待っています…",
 "{kb} KB": "{kb} KB",
-"{n} of {m} armed": "{m} 中 {n} が録音待機"
+"{n} of {m} armed": "{m} 中 {n} が録音待機",
+"1 bar": "1小節",
+"Arrangement (Tab)": "アレンジメント (Tab)",
+"Bar.beat": "小節.拍",
+"Console view": "コンソール表示",
+"Count-in": "カウントイン",
+"Count-in · {name}": "カウントイン · {name}",
+"Master": "マスター",
+"Metronome: off": "メトロノーム: オフ",
+"Metronome: on": "メトロノーム: オン",
+"Mixer (Tab)": "ミキサー (Tab)",
+"No count-in": "カウントインなし",
+"Pan": "パン",
+"Press Record to start the first take.": "録音を押して最初のテイクを始めましょう。",
+"Punched out": "パンチアウト済み",
+"Tempo (BPM)": "テンポ (BPM)",
+"Time signature": "拍子",
+"{n} bars": "{n}小節"
 }

@@ -3645,5 +3645,22 @@
 "Take": "Çekim",
 "Waiting for every track to finish uploading…": "Tüm parçaların yüklenmesi bekleniyor…",
 "{kb} KB": "{kb} KB",
-"{n} of {m} armed": "{m} parçadan {n} tanesi hazır"
+"{n} of {m} armed": "{m} parçadan {n} tanesi hazır",
+"1 bar": "1 ölçü",
+"Arrangement (Tab)": "Düzenleme (Tab)",
+"Bar.beat": "Ölçü.vuruş",
+"Console view": "Konsol görünümü",
+"Count-in": "Sayım",
+"Count-in · {name}": "Sayım · {name}",
+"Master": "Master",
+"Metronome: off": "Metronom: kapalı",
+"Metronome: on": "Metronom: açık",
+"Mixer (Tab)": "Mikser (Tab)",
+"No count-in": "Sayım yok",
+"Pan": "Pan",
+"Press Record to start the first take.": "İlk çekimi başlatmak için Kaydet'e basın.",
+"Punched out": "Kayıttan çıktı",
+"Tempo (BPM)": "Tempo (BPM)",
+"Time signature": "Ölçü birimi",
+"{n} bars": "{n} ölçü"
 }

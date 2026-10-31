@@ -2,7 +2,7 @@ import { Download, Play, Square, Trash2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { StudioSession } from '../lib/types'
-import { useMultitrack } from '../lib/multitrack'
+import { laneKey, laneMix, useMultitrack, type LaneMix } from '../lib/multitrack'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
 
@@ -52,31 +52,33 @@ export default function StudioPanel({ channelId, canManage, onClose, width, hand
   )
 }
 
-/** Multitrack player: plays every finished track aligned by offset with per-track gain / mute / solo, and renders a
+/** Multitrack player: plays every finished clip aligned by offset with per-member gain / mute / solo, and renders a
  *  WAV mixdown offline for download. */
 function Mixer({ session }: { session: StudioSession }) {
   const pushToast = useStore((s) => s.pushToast)
   const t = useT()
-  const mt = useMultitrack(session)
+  const [mix, setMix] = useState<Record<string, LaneMix>>({})
+  const mt = useMultitrack(session, mix)
+  const set = (key: string, patch: Partial<LaneMix>) => setMix((m) => ({ ...m, [key]: { ...laneMix(m, key), ...patch } }))
   useEffect(() => { if (mt.error) pushToast(t('Could not load tracks: {error}', { error: mt.error }), 'error') }, [mt.error])  // eslint-disable-line react-hooks/exhaustive-deps
   if (!mt.tracks) return <button type="button" onClick={mt.load} disabled={mt.loading} className="btn-ghost w-full justify-center text-sm" data-mix-load>{mt.loading ? t('Decoding…') : t('Open in multitrack player')}</button>
   return (
     <div className="rounded-lg bg-bg-0/50 p-2 space-y-2" data-mixer>
       <div className="flex items-center gap-2">
-        <button type="button" onClick={mt.playing ? mt.stop : () => mt.play(0)} className="h-8 w-8 rounded-full bg-accent text-white flex items-center justify-center" title={mt.playing ? t('Stop') : t('Play all')} data-mix-play>{mt.playing ? <Square size={14} /> : <Play size={14} />}</button>
-        <div className="flex-1 h-1.5 rounded bg-bg-4 overflow-hidden"><div className="h-full bg-accent" style={{ width: `${mt.length ? Math.min(100, (mt.pos / mt.length) * 100) : 0}%` }} /></div>
+        <button type="button" onClick={mt.playing ? mt.stop : () => mt.play(mt.start)} className="h-8 w-8 rounded-full bg-accent text-white flex items-center justify-center" title={mt.playing ? t('Stop') : t('Play all')} data-mix-play>{mt.playing ? <Square size={14} /> : <Play size={14} />}</button>
+        <div className="flex-1 h-1.5 rounded bg-bg-4 overflow-hidden"><div className="h-full bg-accent" style={{ width: `${mt.length ? Math.min(100, Math.max(0, (mt.pos / mt.length) * 100)) : 0}%` }} /></div>
         <span className="text-xs tabular-nums text-text-2">{fmt(mt.pos * 1000)} / {fmt(mt.length * 1000)}</span>
         <button type="button" onClick={mt.exportWav} className="btn-ghost py-1 text-xs" title={t('Render all audible tracks to one WAV')} data-mix-export><Download size={14} /> {t('Export mix')}</button>
       </div>
-      {mt.tracks.map((trk, i) => (
-        <div key={trk.track.id} className="flex items-center gap-2 text-xs" data-mix-track={trk.track.id}>
-          <span className="w-24 truncate" title={trk.track.display_name}>{trk.track.display_name}</span>
-          <button type="button" onClick={() => mt.update(i, { mute: !trk.mute })} className={`rounded px-1.5 py-0.5 font-bold ${trk.mute ? 'bg-danger text-white' : 'bg-bg-3 text-text-2'}`} data-mix-mute aria-pressed={trk.mute}>M</button>
-          <button type="button" onClick={() => mt.update(i, { solo: !trk.solo })} className={`rounded px-1.5 py-0.5 font-bold ${trk.solo ? 'bg-warn text-black' : 'bg-bg-3 text-text-2'}`} data-mix-solo aria-pressed={trk.solo}>S</button>
-          <input type="range" min={0} max={150} value={Math.round(trk.gain * 100)} onChange={(e) => mt.update(i, { gain: Number(e.target.value) / 100 })} className="flex-1 accent-accent" title={`${Math.round(trk.gain * 100)}%`} data-mix-gain />
-          <span className="w-10 text-right tabular-nums text-text-2">{Math.round(trk.gain * 100)}%</span>
+      {mt.keys.map((key) => { const m = laneMix(mix, key); const name = mt.tracks!.find((x) => laneKey(x.track) === key)?.track.display_name ?? key; return (
+        <div key={key} className="flex items-center gap-2 text-xs" data-mix-track={key}>
+          <span className="w-24 truncate" title={name}>{name}</span>
+          <button type="button" onClick={() => set(key, { mute: !m.mute })} className={`rounded px-1.5 py-0.5 font-bold ${m.mute ? 'bg-danger text-white' : 'bg-bg-3 text-text-2'}`} data-mix-mute aria-pressed={m.mute}>M</button>
+          <button type="button" onClick={() => set(key, { solo: !m.solo })} className={`rounded px-1.5 py-0.5 font-bold ${m.solo ? 'bg-warn text-black' : 'bg-bg-3 text-text-2'}`} data-mix-solo aria-pressed={m.solo}>S</button>
+          <input type="range" min={0} max={150} value={Math.round(m.gain * 100)} onChange={(e) => set(key, { gain: Number(e.target.value) / 100 })} className="flex-1 accent-accent" title={`${Math.round(m.gain * 100)}%`} data-mix-gain />
+          <span className="w-10 text-right tabular-nums text-text-2">{Math.round(m.gain * 100)}%</span>
         </div>
-      ))}
+      ) })}
     </div>
   )
 }

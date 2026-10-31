@@ -3645,5 +3645,22 @@
 "Take": "테이크",
 "Waiting for every track to finish uploading…": "모든 트랙의 업로드가 끝나기를 기다리는 중…",
 "{kb} KB": "{kb} KB",
-"{n} of {m} armed": "{m}개 중 {n}개 녹음 대기"
+"{n} of {m} armed": "{m}개 중 {n}개 녹음 대기",
+"1 bar": "1마디",
+"Arrangement (Tab)": "어레인지먼트 (Tab)",
+"Bar.beat": "마디.박",
+"Console view": "콘솔 보기",
+"Count-in": "카운트인",
+"Count-in · {name}": "카운트인 · {name}",
+"Master": "마스터",
+"Metronome: off": "메트로놈: 끔",
+"Metronome: on": "메트로놈: 켬",
+"Mixer (Tab)": "믹서 (Tab)",
+"No count-in": "카운트인 없음",
+"Pan": "팬",
+"Press Record to start the first take.": "녹음을 눌러 첫 테이크를 시작하세요.",
+"Punched out": "펀치 아웃됨",
+"Tempo (BPM)": "템포 (BPM)",
+"Time signature": "박자",
+"{n} bars": "{n}마디"
 }

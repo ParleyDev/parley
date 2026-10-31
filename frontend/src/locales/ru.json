@@ -3645,5 +3645,22 @@
 "Take": "Дубль",
 "Waiting for every track to finish uploading…": "Ждём, пока все дорожки загрузятся…",
 "{kb} KB": "{kb} КБ",
-"{n} of {m} armed": "{n} из {m} на записи"
+"{n} of {m} armed": "{n} из {m} на записи",
+"1 bar": "1 такт",
+"Arrangement (Tab)": "Аранжировка (Tab)",
+"Bar.beat": "Такт.доля",
+"Console view": "Вид пульта",
+"Count-in": "Отсчёт",
+"Count-in · {name}": "Отсчёт · {name}",
+"Master": "Мастер",
+"Metronome: off": "Метроном: выкл.",
+"Metronome: on": "Метроном: вкл.",
+"Mixer (Tab)": "Микшер (Tab)",
+"No count-in": "Без отсчёта",
+"Pan": "Панорама",
+"Press Record to start the first take.": "Нажмите «Запись», чтобы начать первый дубль.",
+"Punched out": "Панч-аут",
+"Tempo (BPM)": "Темп (BPM)",
+"Time signature": "Размер",
+"{n} bars": "{n} такта"
 }

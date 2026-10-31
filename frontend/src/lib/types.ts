@@ -209,6 +209,8 @@ export interface Channel {
   voice_status?: string
   /** Studio channels: the engineers (several allowed). */
   engineer_ids?: string[]
+  /** Studio channels: the console's shared settings. */
+  studio?: StudioConfig
   overwrites?: Overwrite[]
   /** Spoiler channel: a warning before you first see it; media stays blurred until clicked. */
   spoiler?: boolean
@@ -228,7 +230,9 @@ export interface Channel {
 
 /** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */
 export interface StudioTrack { id: string; session_id: string; user_id: string | null; content_type: string; size: number; duration_ms: number | null; offset_ms: number; done: boolean; created_at: string; display_name: string; url: string }
-export interface StudioSession { id: string; channel_id: string; guild_id: string; name: string; started_by: string | null; started_at: string; ended_at: string | null; armed: string[] | null; tracks: StudioTrack[] }
+export interface StudioSession { id: string; channel_id: string; guild_id: string; name: string; started_by: string | null; started_at: string; ended_at: string | null; armed: string[] | null; bpm: number; beats: number; click: boolean; count_in_ms: number; tracks: StudioTrack[] }
+/** A studio's console settings, shared by its engineers: tempo, beats per bar, metronome, count-in bars, disarmed members. */
+export interface StudioConfig { bpm: number; beats: number; click: boolean; count_in: number; disarmed: string[] }
 
 export interface Overwrite { id: string; kind: 'role' | 'member'; allow: number; deny: number }
 

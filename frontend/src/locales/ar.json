@@ -3645,5 +3645,22 @@
 "Take": "تسجيلة",
 "Waiting for every track to finish uploading…": "بانتظار اكتمال رفع كل المسارات…",
 "{kb} KB": "{kb} ك.ب",
-"{n} of {m} armed": "{n} من {m} مُجهّزة"
+"{n} of {m} armed": "{n} من {m} مُجهّزة",
+"1 bar": "مازورة واحدة",
+"Arrangement (Tab)": "الترتيب (Tab)",
+"Bar.beat": "مازورة.نبضة",
+"Console view": "عرض وحدة التحكم",
+"Count-in": "العدّ التمهيدي",
+"Count-in · {name}": "العدّ التمهيدي · {name}",
+"Master": "الرئيسي",
+"Metronome: off": "المترونوم: متوقف",
+"Metronome: on": "المترونوم: يعمل",
+"Mixer (Tab)": "المازج (Tab)",
+"No count-in": "بدون عدّ تمهيدي",
+"Pan": "التوزيع",
+"Press Record to start the first take.": "اضغط تسجيل لبدء التسجيلة الأولى.",
+"Punched out": "خرج من التسجيل",
+"Tempo (BPM)": "الإيقاع (BPM)",
+"Time signature": "الميزان",
+"{n} bars": "{n} مازورات"
 }

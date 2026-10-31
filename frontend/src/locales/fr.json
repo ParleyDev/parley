@@ -3645,5 +3645,22 @@
 "Take": "Prise",
 "Waiting for every track to finish uploading…": "En attente de la fin de l’envoi de toutes les pistes…",
 "{kb} KB": "{kb} Ko",
-"{n} of {m} armed": "{n} sur {m} armées"
+"{n} of {m} armed": "{n} sur {m} armées",
+"1 bar": "1 mesure",
+"Arrangement (Tab)": "Arrangement (Tab)",
+"Bar.beat": "Mesure.temps",
+"Console view": "Vue de la console",
+"Count-in": "Décompte",
+"Count-in · {name}": "Décompte · {name}",
+"Master": "Master",
+"Metronome: off": "Métronome : désactivé",
+"Metronome: on": "Métronome : activé",
+"Mixer (Tab)": "Mixeur (Tab)",
+"No count-in": "Pas de décompte",
+"Pan": "Panoramique",
+"Press Record to start the first take.": "Appuyez sur Enregistrer pour lancer la première prise.",
+"Punched out": "Punch out",
+"Tempo (BPM)": "Tempo (BPM)",
+"Time signature": "Signature rythmique",
+"{n} bars": "{n} mesures"
 }

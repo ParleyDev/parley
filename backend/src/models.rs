@@ -476,6 +476,10 @@ pub struct Channel {
     #[sqlx(skip)]
     #[serde(default)]
     pub engineer_ids: Vec<Uuid>,
+    /// Studio channels: the console's shared settings; filled by `perms::attach_overwrites`.
+    #[sqlx(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub studio: Option<StudioConfig>,
     /// Permission overwrites; filled by `perms::attach_overwrites` for guild channels.
     #[sqlx(skip)]
     #[serde(default)]
@@ -1058,4 +1062,19 @@ fn default_audio_mode() -> String {
 /// A status as anyone else may see it: Invisible reads as offline.
 fn public_status<S: serde::Serializer>(status: &str, s: S) -> Result<S::Ok, S::Error> {
     s.serialize_str(if status == "invisible" { "offline" } else { status })
+}
+
+/// A studio's console settings (shared by its engineers): metronome tempo, beats per bar, click on/off, count-in bars,
+/// and the band members who are disarmed.
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct StudioConfig {
+    pub bpm: i32,
+    pub beats: i32,
+    pub click: bool,
+    pub count_in: i32,
+    pub disarmed: Vec<Uuid>,
+}
+
+impl Default for StudioConfig {
+    fn default() -> Self { Self { bpm: 120, beats: 4, click: false, count_in: 0, disarmed: vec![] } }
 }
