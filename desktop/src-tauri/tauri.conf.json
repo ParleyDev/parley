@@ -13,10 +13,16 @@
     }
   },
   "plugins": {
-    "deep-link": { "desktop": { "schemes": ["parley"] } }
+    "deep-link": { "desktop": { "schemes": ["parley"] } },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDExMTg2MzBDMkQ4MTlBMjAKUldRZ21vRXRER01ZRVZBZlFrUG1jOU1DQmhVelY2TncvT3hqYjFzVFJUbHJBYkpqVXdUVnNWdlAK",
+      "endpoints": ["https://github.com/ParleyDev/parley/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "license": "Apache-2.0",
     "targets": "all",
     "category": "SocialNetworking",

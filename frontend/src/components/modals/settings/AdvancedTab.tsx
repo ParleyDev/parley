@@ -7,6 +7,7 @@ import { useStore } from '../../../store'
 import { Toggle } from '../SettingsShell'
 import { tn, useT } from '../../../lib/i18n'
 import { prettyCombo, useKeybindMap } from '../../../lib/keybinds'
+import { checkForUpdate, RELEASES, useDesktopUpdate } from '../../../lib/desktopUpdate'
 
 /** Settings → Advanced: developer mode, debug logging and log download, platform-only switches. */
 export default function AdvancedTab() {
@@ -48,6 +49,8 @@ export default function AdvancedTab() {
           <p className="text-xs text-text-2">{ds.tray ? t('Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.') + ' ' : ''}{t('Starts quietly in the background with your computer. Zoom with Ctrl + = / - / 0 (⌘ on a Mac); Appearance → Zoom level sets it too.')}</p>
         </section>
         <div className="h-px bg-line" />
+        <AppUpdates version={ds.version} />
+        <div className="h-px bg-line" />
       </>}
       <section className="space-y-3">
         {ds
@@ -56,5 +59,37 @@ export default function AdvancedTab() {
         <p className="text-xs text-text-2">{ds ? <>{t('Uses your graphics card to draw Parley. Turn it off if the window flickers, stays blank or video looks wrong.')}{hwAtLaunch !== null && hwAtLaunch !== ds.hardware_acceleration && <b className="text-warn" data-desktop-restart> {t('Restart Parley to apply.')}</b>}</> : isNative() ? t('Managed by the operating system on this platform.') : t('Set by your browser (chrome://settings/system or the equivalent); the web app cannot change it.')}</p>
       </section>
     </div>
+  )
+}
+
+/** The desktop app's version and updates: check now, restart into a downloaded update, or (AppImage-less Linux,
+ *  apps from before the updater) a link to download the new version. */
+function AppUpdates({ version }: { version: string }) {
+  const t = useT()
+  const u = useDesktopUpdate()
+  const s = u.kind === 'shell' ? u.status : null
+  const pct = s?.total ? Math.round((s.downloaded / s.total) * 100) : null
+  const line = u.kind === 'download' ? t('Version {version} is out. This app can\'t update itself: download the new one.', { version: u.version })
+    : !s ? t('Updates are checked automatically.')
+    : s.state === 'checking' ? t('Checking for updates…')
+    : s.state === 'downloading' ? (pct !== null ? t('Downloading {version}… {pct}%', { version: s.version ?? '', pct }) : t('Downloading {version}…', { version: s.version ?? '' }))
+    : s.state === 'ready' ? t('Version {version} is downloaded. Restart Parley to finish updating.', { version: s.version ?? '' })
+    : s.state === 'none' ? t('Parley is up to date.')
+    : s.state === 'unsupported' ? t('This install updates through your package manager, or download the latest version.')
+    : s.state === 'error' ? t('Couldn\'t check for updates: {error}', { error: s.error ?? '' })
+    : t('Updates are checked automatically.')
+  return (
+    <section className="space-y-3" data-app-updates={s?.state ?? u.kind}>
+      <label className="label">{t('App updates')}</label>
+      <p className="text-sm text-text-1">{t('Parley desktop {version}', { version: s?.current || version })}</p>
+      <p className="text-sm text-text-2" data-app-update-line>{line}</p>
+      {s?.state === 'downloading' && pct !== null && <div className="h-1.5 rounded-full bg-bg-4 overflow-hidden"><div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} /></div>}
+      <div className="flex flex-wrap gap-2">
+        {s?.state === 'ready'
+          ? <button type="button" className="btn-primary" onClick={() => void desktop.installUpdate().catch(() => {})} data-app-update-install>{t('Restart to update')}</button>
+          : s && s.state !== 'unsupported' && <button type="button" className="btn-ghost bg-bg-3" disabled={s.state === 'checking' || s.state === 'downloading'} onClick={() => void checkForUpdate()} data-app-update-check>{t('Check for updates')}</button>}
+        {(u.kind === 'download' || s?.state === 'unsupported' || s?.state === 'error') && <a href={RELEASES} target="_blank" rel="noreferrer" className="btn-ghost bg-bg-3" data-app-update-download>{t('Download the latest version')}</a>}
+      </div>
+    </section>
   )
 }

@@ -63,7 +63,7 @@ const desk = async (frame, prefsOff) => {
   await d.goto(`${WEB}/channels/${g.id}/${ch.id}`); await d.waitForSelector('[data-message-list]'); await d.waitForTimeout(800)
   return d
 }
-const calls = (d) => d.evaluate(() => window.__calls.filter((x) => !['desktop_settings', 'state', 'set_badge', 'set_zoom', 'set_theme', 'set_app_icon', 'set_ptt_key', 'streaming_apps', 'flash'].includes(x)))
+const calls = (d) => d.evaluate(() => window.__calls.filter((x) => !['desktop_settings', 'update_status', 'state', 'set_badge', 'set_zoom', 'set_theme', 'set_app_icon', 'set_ptt_key', 'streaming_apps', 'flash'].includes(x)))
 console.log('-- frameless desktop window')
 const dw = await desk('custom', true)
 ok('desktop: the title bar shows even with the setting off (the window has no frame)', await dw.locator('[data-title-bar="custom"]').count() === 1)

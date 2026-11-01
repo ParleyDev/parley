@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import { APP_NAME, APP_VERSION } from '../lib/brand'
 import { useT } from '../lib/i18n'
+import { desktop } from '../lib/desktop'
+import { RELEASES, useDesktopUpdate } from '../lib/desktopUpdate'
+import { useTitleBarShown } from '../lib/titleBar'
 
 /** Server version file; null when unavailable (dev server, network error). */
 async function servedVersion(): Promise<string | null> {
@@ -33,6 +36,21 @@ export default function UpdateBanner() {
     const t = window.setInterval(check, 15 * 60 * 1000)
     return () => { alive = false; document.removeEventListener('visibilitychange', onVis); window.clearInterval(t) }
   }, [readyCount])
+  const app = useDesktopUpdate()
+  const titleBar = useTitleBarShown()
+  // The desktop app's own update, when there's no title bar to show it in.
+  if (!latest && !titleBar && app.kind === 'shell' && app.status.state === 'ready') return (
+    <div className="shrink-0 bg-success text-black text-xs font-semibold flex items-center justify-center gap-3 py-1 px-3" data-desktop-update-banner="ready">
+      <span>{t('Parley {version} is ready to install.', { version: app.status.version ?? '' })}</span>
+      <button type="button" className="inline-flex items-center gap-1 rounded bg-black/15 hover:bg-black/25 px-2 py-0.5" onClick={() => void desktop.installUpdate().catch(() => {})} data-desktop-update-install><RefreshCw size={12} /> {t('Restart to update')}</button>
+    </div>
+  )
+  if (!latest && !titleBar && app.kind === 'download') return (
+    <div className="shrink-0 bg-success text-black text-xs font-semibold flex items-center justify-center gap-3 py-1 px-3" data-desktop-update-banner="download">
+      <span>{t('A new version of the Parley app is out ({version}).', { version: app.version })}</span>
+      <a href={RELEASES} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded bg-black/15 hover:bg-black/25 px-2 py-0.5">{t('Download')}</a>
+    </div>
+  )
   if (!latest) return null
   // Phones: a full-height bar with a short line and a thumb-sized Reload button.
   return (

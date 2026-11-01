@@ -48,6 +48,9 @@ const page = (step) => `<!doctype html><meta charset=utf-8><title>shell test</ti
     await t('winMaxed', () => inv('window_control', { action: 'state' }))
     await t('winRestore', () => inv('window_control', { action: 'maximize' }))
     await t('winBad', () => inv('window_control', { action: 'explode' }))
+    await t('updStatus', () => inv('update_status'))
+    await t('updCheck', () => inv('check_update'))
+    await t('updInstall', () => inv('install_update'))
     // The fallback strip arrives for a page with no title bar of its own.
     await new Promise((r) => setTimeout(r, 3000))
     out.fallbackBar = !!document.getElementById('parley-shell-bar')
@@ -84,6 +87,8 @@ ok('desktop_settings', r.settings?.version && r.settings.autostart === false && 
 ok('the window has no system frame: the page draws the title bar', r.settings?.frame === 'custom', JSON.stringify(r.settings))
 // Maximising is a request to the window manager, and Xvfb has none: check the commands answer, not the outcome.
 ok('window_control answers state, maximise and restore', [r.winState, r.winMax, r.winMaxed, r.winRestore].every((v) => typeof v === 'boolean'), JSON.stringify({ s: r.winState, m: r.winMax, mm: r.winMaxed, r: r.winRestore }))
+ok('a debug build reports updates as unsupported and never checks', r.updStatus?.current && r.updCheck?.state === 'unsupported', JSON.stringify({ s: r.updStatus, c: r.updCheck }))
+ok('installing with no update downloaded is refused', String(r.updInstall).startsWith('error'), String(r.updInstall))
 ok('an unknown window action is refused', String(r.winBad).startsWith('error'), String(r.winBad))
 ok('a page without a title bar gets the shell\'s strip to move and close the window', r.fallbackBar === true)
 ok('badge, flash and zoom', r.badge === 'ok' && r.flash === 'ok' && r.zoom === 'ok', JSON.stringify(r))

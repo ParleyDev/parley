@@ -1,9 +1,10 @@
-import { ArrowLeft, ArrowRight, Copy, Inbox, Minus, Square, Users, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeft, ArrowRight, Copy, Inbox, Minus, Square, Users, X } from 'lucide-react'
 import { useEffect, useState, type ReactNode, type MouseEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { desktop } from '../lib/desktop'
 import { useDesktopFrame, useTitleBarShown } from '../lib/titleBar'
+import { RELEASES, useDesktopUpdate } from '../lib/desktopUpdate'
 import { colorFor, initials } from '../lib/format'
 import { dmName, isGroup } from '../lib/dm'
 import { useT } from '../lib/i18n'
@@ -22,6 +23,23 @@ const nav = (window as unknown as { navigation?: { canGoBack?: boolean; canGoFor
  */
 export default function TitleBar() {
   return useTitleBarShown() ? <Bar /> : null
+}
+
+/** Discord's green arrow: a desktop app update is downloaded (restart into it), or, for apps from before the updater,
+ *  a newer one is out to download. */
+export function UpdateButton() {
+  const t = useT()
+  const u = useDesktopUpdate()
+  const cls = 'h-7 w-7 rounded-md flex items-center justify-center text-success hover:bg-white/10'
+  if (u.kind === 'shell' && u.status.state === 'ready') {
+    const tip = t('Restart to update to {version}', { version: u.status.version ?? '' })
+    return <button type="button" onClick={() => void desktop.installUpdate().catch(() => {})} title={tip} aria-label={tip} className={cls} data-desktop-update="ready"><ArrowDownToLine size={18} /></button>
+  }
+  if (u.kind === 'download') {
+    const tip = t('Parley {version} is out: download the new app', { version: u.version })
+    return <a href={RELEASES} target="_blank" rel="noreferrer" title={tip} aria-label={tip} className={cls} data-desktop-update="download"><ArrowDownToLine size={18} /></a>
+  }
+  return null
 }
 
 /** Minimise, maximise/restore and close for the frameless desktop window (Windows, Linux). */
@@ -79,7 +97,7 @@ function Bar() {
       <div className="pointer-events-none absolute inset-x-28 inset-y-0 flex items-center justify-center gap-2 font-semibold text-text-0" data-title-bar-place>
         <span className="shrink-0 flex text-text-1">{icon}</span><span className="truncate" data-title-bar-name>{title}</span>
       </div>
-      <div className="ml-auto flex items-center" data-title-bar-actions><InboxButton inTitleBar />{frame === 'custom' && <WindowControls />}</div>
+      <div className="ml-auto flex items-center" data-title-bar-actions><UpdateButton /><InboxButton inTitleBar />{frame === 'custom' && <WindowControls />}</div>
     </div>
   )
 }

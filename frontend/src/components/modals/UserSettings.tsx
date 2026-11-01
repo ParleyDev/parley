@@ -62,7 +62,7 @@ export default function UserSettingsModal({ onClose, tab: requested }: { onClose
       { id: 'language', label: 'Language', icon: <Globe size={18} />, keywords: 'locale translate' },
       { id: 'streamer', label: 'Streamer Mode', icon: <Radio size={18} /> },
       { id: 'clips', label: 'Clips', icon: <Scissors size={18} /> },
-      { id: 'advanced', label: 'Advanced', icon: <Wrench size={18} />, keywords: 'developer mode hardware acceleration' },
+      { id: 'advanced', label: 'Advanced', icon: <Wrench size={18} />, keywords: 'developer mode hardware acceleration desktop app update version' },
     ] },
     { title: 'Developer', items: [{ id: 'applications', label: 'Applications', icon: <Blocks size={18} />, keywords: 'bots api tokens' }] },
   ]

@@ -31,6 +31,7 @@ use tauri::{AppHandle, Manager, UserAttentionType, WebviewUrl, WebviewWindow, We
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_updater::{Update, UpdaterExt};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -145,6 +146,90 @@ fn fallback_bar_script() -> String {
   bar.addEventListener('click', (e) => {{ const a = e.target.closest('button')?.dataset.a; if (a) call(a) }})
   document.documentElement.appendChild(bar)
 }}, 2500)"#)
+}
+
+/// App updates from GitHub Releases (tauri.conf.json → plugins.updater; the release workflow signs the builds and
+/// publishes latest.json). Checked a little after launch and every few hours; a newer version downloads in the
+/// background and installs when the user chooses to restart (the web client's title bar / Settings ask for it).
+#[derive(Clone, Serialize, Default)]
+struct UpdateStatus {
+    /// idle, checking, none (up to date), downloading, ready (restart to update), unsupported, error
+    state: &'static str,
+    version: Option<String>,
+    notes: Option<String>,
+    downloaded: u64,
+    total: Option<u64>,
+    error: Option<String>,
+    current: &'static str,
+}
+#[derive(Default)]
+struct Updates { status: Mutex<UpdateStatus>, ready: Mutex<Option<(Update, Vec<u8>)>> }
+
+/// Linux updates only replace AppImages; .deb/.rpm installs update through the package (the web client links the
+/// release page). Debug builds never update.
+fn updates_supported() -> bool {
+    !cfg!(debug_assertions) && (!cfg!(target_os = "linux") || std::env::var_os("APPIMAGE").is_some())
+}
+
+fn set_update(app: &AppHandle, f: impl FnOnce(&mut UpdateStatus)) {
+    if let Ok(mut s) = app.state::<Updates>().status.lock() { f(&mut s); s.current = VERSION; }
+}
+
+/// Claim the check: false when one is running, an update is already waiting, or updates can't apply here.
+fn begin_check(app: &AppHandle) -> bool {
+    let updates = app.state::<Updates>();
+    let Ok(mut s) = updates.status.lock() else { return false };
+    if matches!(s.state, "checking" | "downloading" | "ready") { return false; }
+    if !updates_supported() { *s = UpdateStatus { state: "unsupported", current: VERSION, ..Default::default() }; return false; }
+    s.state = "checking"; s.error = None; s.current = VERSION;
+    true
+}
+
+async fn check_for_update(app: AppHandle) {
+    if begin_check(&app) { run_check(app).await }
+}
+
+async fn run_check(app: AppHandle) {
+    let found = match app.updater() { Ok(u) => u.check().await, Err(e) => Err(e) };
+    match found {
+        Ok(Some(update)) => {
+            set_update(&app, |s| { s.state = "downloading"; s.version = Some(update.version.clone()); s.notes = update.body.clone(); s.downloaded = 0; s.total = None; });
+            let a = app.clone();
+            let got = update.download(move |chunk, total| set_update(&a, |s| { s.downloaded += chunk as u64; s.total = total; }), || {}).await;
+            match got {
+                Ok(bytes) => {
+                    if let Ok(mut r) = app.state::<Updates>().ready.lock() { *r = Some((update, bytes)); }
+                    set_update(&app, |s| s.state = "ready");
+                }
+                Err(e) => set_update(&app, |s| { s.state = "error"; s.error = Some(e.to_string()); }),
+            }
+        }
+        Ok(None) => set_update(&app, |s| { s.state = "none"; s.version = None; }),
+        Err(e) => set_update(&app, |s| { s.state = "error"; s.error = Some(e.to_string()); }),
+    }
+}
+
+#[tauri::command]
+fn update_status(app: AppHandle) -> UpdateStatus {
+    let mut s = app.state::<Updates>().status.lock().map(|s| s.clone()).unwrap_or_default();
+    s.current = VERSION;
+    s
+}
+
+/// Settings → Check for updates: start a check (unless one is running or an update is waiting) and report.
+#[tauri::command]
+fn check_update(app: AppHandle) -> UpdateStatus {
+    if begin_check(&app) { tauri::async_runtime::spawn(run_check(app.clone())); }
+    update_status(app)
+}
+
+/// Install the downloaded update and restart into it (on Windows the installer closes the app itself).
+#[tauri::command]
+fn install_update(app: AppHandle) -> Result<(), String> {
+    let ready = app.state::<Updates>().ready.lock().map_err(|e| e.to_string())?.take();
+    let (update, bytes) = ready.ok_or("No update is ready")?;
+    update.install(bytes).map_err(|e| e.to_string())?;
+    app.restart();
 }
 
 /// Unread mentions on the dock / taskbar icon (a red dot overlay on Windows, which has no count badge).
@@ -370,11 +455,13 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .manage(Pending(Mutex::new(None)))
         .manage(Ptt::default())
+        .manage(Updates::default())
         .manage(Tray(std::sync::atomic::AtomicBool::new(false)))
-        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, set_theme, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon, overlay, window_control])
+        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, set_theme, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon, overlay, window_control, update_status, check_update, install_update])
         .setup(|app| {
             let handle = app.handle().clone();
             // AppImages and dev builds aren't registered for parley:// by an installer.
@@ -442,7 +529,7 @@ pub fn run() {
                     true
                 })
                 .on_page_load(|w, payload| {
-                    if payload.event() == PageLoadEvent::Finished { let _ = w.eval(&fallback_bar_script()); }
+                    if payload.event() == PageLoadEvent::Finished { let _ = w.eval(fallback_bar_script()); }
                     // Reached a server with a deep link waiting: go there.
                     if payload.event() != PageLoadEvent::Finished || !matches!(payload.url().scheme(), "http" | "https") { return; }
                     let pending = w.app_handle().state::<Pending>().0.lock().ok().and_then(|mut p| p.take());
@@ -455,6 +542,14 @@ pub fn run() {
             }
             if std::env::args().any(|a| a == "--autostart") && load_prefs(app.handle()).start_minimized {
                 if has_tray(app.handle()) && load_prefs(app.handle()).minimize_to_tray { let _ = window.hide(); } else { let _ = window.minimize(); }
+            }
+            // Look for an app update shortly after launch, then every six hours.
+            {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(15));
+                    loop { tauri::async_runtime::block_on(check_for_update(h.clone())); std::thread::sleep(Duration::from_secs(6 * 3600)); }
+                });
             }
             // Close (and, when chosen, minimise) to the tray instead of quitting.
             {

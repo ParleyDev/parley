@@ -20,6 +20,9 @@ export interface DesktopSettings { autostart: boolean; start_minimized: boolean;
   /** The window has no system frame (shells from 0.21 on): "custom" = draw minimise/maximise/close, "mac" = leave room for the traffic lights. */
   frame?: 'custom' | 'mac' }
 
+/** The shell's updater: checks GitHub Releases, downloads in the background, installs on restart. */
+export interface UpdateStatus { state: 'idle' | 'checking' | 'none' | 'downloading' | 'ready' | 'unsupported' | 'error'; version?: string | null; notes?: string | null; downloaded: number; total?: number | null; error?: string | null; current: string }
+
 let lastBadge = -1
 export const desktop = {
   badge(count: number) { const i = invoke(); if (!i || isOverlay() || count === lastBadge) return; lastBadge = count; i('set_badge', { count: Math.max(0, Math.min(count, 9999)) }).catch(() => {}) },
@@ -37,5 +40,10 @@ export const desktop = {
   streamingApps: (): Promise<boolean | null> => invoke()?.<boolean>('streaming_apps').catch(() => null) ?? Promise.resolve(null),
   /** The page's own window controls and title bar drag; resolves to whether the window is maximised. */
   window: (action: 'minimize' | 'maximize' | 'close' | 'drag' | 'state'): Promise<boolean> => invoke()?.<boolean>('window_control', { action }).catch(() => false) ?? Promise.resolve(false),
+  /** App updates (shells from 0.21 on); null when the shell has no updater. */
+  updateStatus: (): Promise<UpdateStatus | null> => invoke()?.<UpdateStatus>('update_status').catch(() => null) ?? Promise.resolve(null),
+  checkUpdate: (): Promise<UpdateStatus | null> => invoke()?.<UpdateStatus>('check_update').catch(() => null) ?? Promise.resolve(null),
+  /** Installs the downloaded update and restarts the app into it. */
+  installUpdate: (): Promise<void> => invoke()?.<void>('install_update') ?? Promise.reject(new Error('Not in the desktop app')),
   setSettings: (s: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean; closeToTray?: boolean; minimizeToTray?: boolean }) => invoke()?.<DesktopSettings>('set_desktop_settings', s) ?? Promise.reject(new Error('Not in the desktop app')),
 }

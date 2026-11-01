@@ -74,7 +74,11 @@ jobs:
       - name: Generate icons
         run: npx tauri icon assets/icon.png
         working-directory: desktop
+      # Signs the update bundles (createUpdaterArtifacts) with the key whose public half is in tauri.conf.json.
       - uses: tauri-apps/tauri-action@v0
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
           # Installers: .msi + .exe (Windows), .dmg + .app (macOS), .AppImage + .deb + .rpm (Linux)
@@ -89,6 +93,8 @@ jobs:
             desktop/src-tauri/target/release/bundle/appimage/*.AppImage
             desktop/src-tauri/target/release/bundle/deb/*.deb
             desktop/src-tauri/target/release/bundle/rpm/*.rpm
+            desktop/src-tauri/target/release/bundle/macos/*.app.tar.gz
+            desktop/src-tauri/target/release/bundle/*/*.sig
           if-no-files-found: warn
       # Published release: attach this platform's installers to it (re-runs replace them).
       - name: Attach installers to the release
@@ -102,5 +108,34 @@ jobs:
           b=desktop/src-tauri/target/release/bundle
           files=($b/msi/*.msi $b/nsis/*.exe $b/dmg/*.dmg $b/appimage/*.AppImage $b/deb/*.deb $b/rpm/*.rpm)
           if [ ${#files[@]} -eq 0 ]; then echo "::error::no installers were built"; exit 1; fi
+          # Update bundles and their signatures, for latest.json (the manifest job).
+          files+=($b/macos/*.app.tar.gz $b/*/*.sig)
           printf 'attaching %s\n' "${files[@]}"
           gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+  # The app updater's manifest (desktop/src-tauri/tauri.conf.json → plugins.updater reads
+  # releases/latest/download/latest.json): the version, notes and, per platform, the signed bundle and its signature.
+  # Linux updates the AppImage, macOS the .app.tar.gz, Windows runs the NSIS installer.
+  manifest:
+    needs: [gate, build]
+    if: needs.gate.outputs.tag != ''
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.gate.outputs.tag }}
+          VERSION: ${{ needs.gate.outputs.version }}
+        run: |
+          mkdir sigs && cd sigs
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.sig'
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG"
+          entry() { [ -f "$2.sig" ] && jq -n --arg k "$1" --arg sig "$(cat "$2.sig")" --arg url "$base/$2" '{($k): {signature: $sig, url: $url}}' || echo '{}'; }
+          exe=$(ls *-setup.exe.sig 2>/dev/null | head -1); exe=${exe%.sig}
+          app=$(ls *.app.tar.gz.sig 2>/dev/null | head -1); app=${app%.sig}
+          img=$(ls *.AppImage.sig 2>/dev/null | head -1); img=${img%.sig}
+          platforms=$(jq -s 'add' <(entry windows-x86_64 "$exe") <(entry darwin-aarch64 "$app") <(entry linux-x86_64 "$img"))
+          if [ "$platforms" = '{}' ]; then echo "::error::no signed update bundles on the release (is TAURI_SIGNING_PRIVATE_KEY set?)"; exit 1; fi
+          rel=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body,publishedAt)
+          jq -n --arg v "$VERSION" --argjson rel "$rel" --argjson p "$platforms" \
+            '{version: $v, notes: ($rel.body // "" | .[0:4000]), pub_date: $rel.publishedAt, platforms: $p}' > latest.json
+          cat latest.json
+          gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"
