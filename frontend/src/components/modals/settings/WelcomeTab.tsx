@@ -5,6 +5,7 @@ import type { Guild } from '../../../lib/types'
 import { useStore } from '../../../store'
 import WelcomeModal from '../Welcome'
 import { useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 type Row = { channel_id: string; description: string; emoji: string }
 
@@ -51,10 +52,10 @@ export default function WelcomeTab({ guildId }: { guildId: string }) {
           {rows.map((r, i) => (
             <div key={i} className="flex gap-2 phone:flex-wrap" data-welcome-row={i}>
               <input className="input w-12 shrink-0 px-0 text-center text-lg" value={r.emoji} onChange={(e) => set(i, { emoji: e.target.value })} maxLength={64} placeholder="✨" aria-label={t('Emoji')} data-welcome-emoji={i} />
-              <select className="input w-44 shrink-0" value={r.channel_id} onChange={(e) => set(i, { channel_id: e.target.value })} data-welcome-pick={i}>
+              <Dropdown className="input w-44 shrink-0" value={r.channel_id} onChange={(e) => set(i, { channel_id: e.target.value })} data-welcome-pick={i}>
                 <option value="">{t('Pick a channel')}</option>
                 {options.map((c) => <option key={c.id} value={c.id}>{c.kind === 'voice' ? '🔊 ' : '#'}{c.name}</option>)}
-              </select>
+              </Dropdown>
               <input className="input min-w-0 flex-1" value={r.description} onChange={(e) => set(i, { description: e.target.value })} maxLength={50} placeholder={t('Say hi and introduce yourself')} data-welcome-text={i} />
               <button type="button" onClick={() => setRows(rows.filter((_, j) => j !== i))} className="shrink-0 text-text-2 hover:text-danger" title={t('Remove')}><X size={16} /></button>
             </div>

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Modal from '../Modal'
 import { useStore } from '../../store'
 import { useT } from '../../lib/i18n'
+import Dropdown from '../Dropdown'
 
 const DURATIONS: [string, number | null][] = [['1 hour', 1], ['4 hours', 4], ['8 hours', 8], ['24 hours', 24], ['3 days', 72], ['1 week', 168], ['No end time', null]]
 
@@ -46,9 +47,9 @@ export default function CreatePollModal({ onClose, channelId }: { onClose: () =>
         <div className="flex flex-wrap gap-4 items-center">
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-accent" checked={multi} onChange={(e) => setMulti(e.target.checked)} data-poll-multi /> {t('Allow multiple answers')}</label>
           <label className="flex items-center gap-2 text-sm">{t('Duration')}
-            <select className="input w-auto py-1" value={duration ?? ''} onChange={(e) => setDuration(e.target.value === '' ? null : Number(e.target.value))} data-poll-duration>
+            <Dropdown className="input w-auto py-1" value={duration ?? ''} onChange={(e) => setDuration(e.target.value === '' ? null : Number(e.target.value))} data-poll-duration>
               {DURATIONS.map(([l, v]) => <option key={l} value={v ?? ''}>{t(l)}</option>)}
-            </select>
+            </Dropdown>
           </label>
         </div>
       </div>

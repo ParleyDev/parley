@@ -62,7 +62,7 @@ ok('your choices are remembered', saved?.volume === 40 && saved?.hideVideo === t
 
 console.log('-- stream quality')
 await pa.click('button[title="User Settings"]'); await pa.click('[role=dialog] button:has-text("Voice & Video")'); await pa.waitForSelector('[data-stream-quality]')
-await pa.selectOption('#stream-quality', '1080p60'); await pa.keyboard.press('Escape'); await pa.waitForTimeout(300)
+await pa.selectOption('#stream-quality + select', '1080p60'); await pa.keyboard.press('Escape'); await pa.waitForTimeout(300)
 await pa.click('text=Join Voice').catch(() => {}); await pa.waitForSelector('[data-voice-leave]')
 await pa.click('button[aria-label="Share Your Screen"], button[title="Share Your Screen"]'); await pa.waitForTimeout(800)
 const cons = await pa.evaluate(() => window.__displayConstraints)

@@ -7,6 +7,7 @@ import VideoTile from '../../VideoTile'
 import EntranceSound from '../../EntranceSound'
 import { desktopBridge } from '../../../lib/desktop'
 import { useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 interface Devices { inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[]; cameras: MediaDeviceInfo[]; labelsHidden: boolean }
 
@@ -177,9 +178,9 @@ export default function VoiceVideoTab() {
         <Select label={t('Camera')} value={st.cameraDeviceId} onChange={set('cameraDeviceId')} options={devices.cameras} />
         <div data-stream-quality>
           <label className="label" htmlFor="stream-quality">{t('Screen share quality')}</label>
-          <select id="stream-quality" className="input" value={st.streamQuality} onChange={(e) => update({ streamQuality: e.target.value })}>
+          <Dropdown id="stream-quality" className="input" value={st.streamQuality} onChange={(e) => update({ streamQuality: e.target.value })}>
             {Object.entries(STREAM_QUALITY).map(([k, q]) => <option key={k} value={k}>{t(q.label)}</option>)}
-          </select>
+          </Dropdown>
           <p className="mt-1 text-xs text-text-2">{t('Applies the next time you share your screen. Higher settings need a faster upload; viewers on slow connections may see it stutter.')}</p>
         </div>
       </section>
@@ -192,10 +193,10 @@ function Select({ label, value, onChange, options, disabled, note }: { label: st
   return (
     <div>
       <label className="label">{label}</label>
-      <select className="input" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+      <Dropdown className="input" value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
         <option value="">{t('Default')}</option>
         {options.filter((d) => d.deviceId && d.deviceId !== 'default').map((d, i) => <option key={d.deviceId} value={d.deviceId}>{d.label || `${label} ${i + 1}`}</option>)}
-      </select>
+      </Dropdown>
       {note && <p className="mt-1 text-xs text-text-2">{note}</p>}
     </div>
   )

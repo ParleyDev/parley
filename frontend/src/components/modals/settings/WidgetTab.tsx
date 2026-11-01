@@ -6,6 +6,7 @@ import { useStore } from '../../../store'
 import { publicOrigin } from '../../InviteCard'
 import ImagePicker from '../ImagePicker'
 import { useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 /** Server Settings › Widget: a public widget (JSON and an embeddable page) and the invite page's background. */
 export default function WidgetTab({ guildId }: { guildId: string }) {
@@ -32,10 +33,10 @@ export default function WidgetTab({ guildId }: { guildId: string }) {
       </label>
       <div>
         <label className="label" htmlFor="widget-invite">{t('Join button invite')}</label>
-        <select id="widget-invite" className="input w-auto max-w-full" value={guild.widget_invite ?? ''} onChange={(e) => save({ widget_invite: e.target.value })} data-widget-invite>
+        <Dropdown id="widget-invite" className="input w-auto max-w-full" value={guild.widget_invite ?? ''} onChange={(e) => save({ widget_invite: e.target.value })} data-widget-invite>
           <option value="">{t('No Join button')}</option>
           {(invites ?? []).filter((i) => !i.max_uses && !i.expires_at).map((i) => <option key={i.code} value={i.code}>{i.code}</option>)}
-        </select>
+        </Dropdown>
         <p className="mt-1 text-xs text-text-2">{t('Only invites that never expire are listed. Make one in Invites.')}</p>
       </div>
       <div className="space-y-2">

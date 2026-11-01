@@ -9,6 +9,7 @@ import { useStore } from '../store'
 import Avatar from '../components/Avatar'
 import type { User } from '../lib/types'
 import { useT, tn } from '../lib/i18n'
+import Dropdown from '../components/Dropdown'
 
 interface Info { app: { id: string; name: string; description: string; client_id: string; has_bot: boolean; owner: User | null; icon_url?: string | null; verified?: boolean }; scopes: { id: string; description: string }[]; redirect_uri: string | null; state: string | null; permissions?: number; guilds: { id: string; name: string; icon_url: string | null; my_permissions?: number }[] }
 
@@ -58,7 +59,7 @@ export default function OAuthPage() {
               <div className="mt-4">
                 <label className="label">{t('Add to server')}</label>
                 {info.guilds.length === 0 ? <p className="text-sm text-danger">{t('You do not manage any server to add the bot to.')}</p> : (
-                  <select className="input" value={guild} onChange={(e) => setGuild(e.target.value)} data-oauth-guild>{info.guilds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select>
+                  <Dropdown className="input" value={guild} onChange={(e) => setGuild(e.target.value)} data-oauth-guild>{info.guilds.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</Dropdown>
                 )}
               </div>
             )}

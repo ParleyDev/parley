@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import type { Role } from '../lib/types'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
+import Dropdown from './Dropdown'
 
 export interface Requirements { account_age_days?: number; verified_email?: boolean; connection?: string; app?: { app_id: string; key: string; type?: number; label?: string; value: number | boolean | string } }
 const PROVIDERS: [string, string][] = [['', 'None'], ['github', 'GitHub'], ['gitlab', 'GitLab'], ['twitch', 'Twitch'], ['youtube', 'YouTube'], ['reddit', 'Reddit'], ['spotify', 'Spotify']]
@@ -33,16 +34,16 @@ export function RequirementsEditor({ guildId, role, editable }: { guildId: strin
       {on && <>
         <label className="flex items-center gap-2 text-sm">{t('Account at least')} <input type="number" min={0} max={3650} className="input w-20 py-1" value={r.account_age_days ?? ''} onChange={(e) => setR({ ...r, account_age_days: Number(e.target.value) || undefined })} data-linked-age /> {t('days old')}</label>
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="accent-accent" checked={!!r.verified_email} onChange={(e) => setR({ ...r, verified_email: e.target.checked || undefined })} data-linked-email />{t('A verified email')}</label>
-        <label className="flex items-center gap-2 text-sm">{t('A linked account:')} <select className="input w-auto py-1" value={r.connection ?? ''} onChange={(e) => setR({ ...r, connection: e.target.value || undefined })} data-linked-connection>{PROVIDERS.map(([v, l]) => <option key={v} value={v}>{v === '' ? t('None') : l}</option>)}</select></label>
+        <label className="flex items-center gap-2 text-sm">{t('A linked account:')} <Dropdown className="input w-auto py-1" value={r.connection ?? ''} onChange={(e) => setR({ ...r, connection: e.target.value || undefined })} data-linked-connection>{PROVIDERS.map(([v, l]) => <option key={v} value={v}>{v === '' ? t('None') : l}</option>)}</Dropdown></label>
         {apps.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-sm" data-linked-app>
             {t('From an app:')}
-            <select className="input w-auto py-1" value={r.app ? `${r.app.app_id}:${r.app.key}` : ''} onChange={(e) => { const [id, key] = e.target.value.split(':'); setR({ ...r, app: id ? { app_id: id, key, value: 1 } : undefined }) }}>
+            <Dropdown className="input w-auto py-1" value={r.app ? `${r.app.app_id}:${r.app.key}` : ''} onChange={(e) => { const [id, key] = e.target.value.split(':'); setR({ ...r, app: id ? { app_id: id, key, value: 1 } : undefined }) }}>
               <option value="">{t('None')}</option>
               {apps.flatMap((a) => a.meta.map((m) => <option key={`${a.id}:${m.key}`} value={`${a.id}:${m.key}`}>{a.name}: {m.name}</option>))}
-            </select>
+            </Dropdown>
             {meta && r.app && (meta.type >= 7
-              ? <select className="input w-auto py-1" value={String(r.app.value)} onChange={(e) => setR({ ...r, app: { ...r.app!, value: e.target.value === 'true' } })}><option value="true">{t('is yes')}</option><option value="false">{t('is no')}</option></select>
+              ? <Dropdown className="input w-auto py-1" value={String(r.app.value)} onChange={(e) => setR({ ...r, app: { ...r.app!, value: e.target.value === 'true' } })}><option value="true">{t('is yes')}</option><option value="false">{t('is no')}</option></Dropdown>
               : <><span>{({ 1: t('at most'), 2: t('at least'), 3: t('equal to'), 4: t('not'), 5: t('within (days)'), 6: t('at least (days ago)') } as Record<number, string>)[meta.type]}</span><input type="number" className="input w-24 py-1" value={Number(r.app.value)} onChange={(e) => setR({ ...r, app: { ...r.app!, value: Number(e.target.value) } })} /></>)}
           </div>
         )}

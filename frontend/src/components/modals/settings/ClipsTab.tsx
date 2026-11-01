@@ -5,6 +5,7 @@ import { deleteClip, useClips, type Clip } from '../../../lib/clips'
 import { prettyCombo, useKeybindMap } from '../../../lib/keybinds'
 import { locale, tn, useT } from '../../../lib/i18n'
 import { Toggle } from '../SettingsShell'
+import Dropdown from '../../Dropdown'
 
 /** Settings → Clips: keep the last few seconds of calls ready to save, and the clips saved on this device. */
 export default function ClipsTab() {
@@ -20,9 +21,9 @@ export default function ClipsTab() {
         <span data-clips-enable><Toggle label={t('Enable Clips')} checked={p.clips} onChange={(v) => setPrefs({ clips: v })} /></span>
         <div>
           <label className="label" htmlFor="clip-length">{t('Clip length')}</label>
-          <select id="clip-length" className="input w-48" value={p.clipSeconds} onChange={(e) => setPrefs({ clipSeconds: Number(e.target.value) as 15 | 30 | 60 })} data-clip-length>
+          <Dropdown id="clip-length" className="input w-48" value={p.clipSeconds} onChange={(e) => setPrefs({ clipSeconds: Number(e.target.value) as 15 | 30 | 60 })} data-clip-length>
             <option value={15}>{t('15 seconds')}</option><option value={30}>{t('30 seconds')}</option><option value={60}>{t('1 minute')}</option>
-          </select>
+          </Dropdown>
         </div>
         <Toggle label={t("Include the call's voices")} checked={p.clipVoices} onChange={(v) => setPrefs({ clipVoices: v })} />
         <Toggle label={t('Include my voice')} checked={p.clipMyVoice} onChange={(v) => setPrefs({ clipMyVoice: v })} />

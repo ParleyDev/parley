@@ -6,6 +6,7 @@ import type { Guild } from '../../../lib/types'
 import { useStore } from '../../../store'
 import ImagePicker from '../ImagePicker'
 import { useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 const MAX_DESC = 300
 
@@ -56,9 +57,9 @@ export default function DiscoveryTab({ guildId }: { guildId: string }) {
       )}
       <div>
         <label className="label">{t('Category')}</label>
-        <select className="input" value={category} onChange={(e) => setCategory(e.target.value)} data-discovery-category>
+        <Dropdown className="input" value={category} onChange={(e) => setCategory(e.target.value)} data-discovery-category>
           {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{t(c.label)}</option>)}
-        </select>
+        </Dropdown>
       </div>
       <div>
         <label className="label">{t('Description')}</label>

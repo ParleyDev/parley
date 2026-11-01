@@ -1,6 +1,7 @@
 import { api } from '../lib/api'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
+import Dropdown from './Dropdown'
 
 /** Profile: wear one of your servers' tags instead of typing your own. */
 export function WearServerTag() {
@@ -15,10 +16,10 @@ export function WearServerTag() {
   return (
     <div data-wear-server-tag>
       <label className="label">{t("Or wear a server's tag")}</label>
-      <select className="input w-auto" value={current} onChange={(e) => wear(e.target.value)} data-wear-tag-select>
+      <Dropdown className="input w-auto" value={current} onChange={(e) => wear(e.target.value)} data-wear-tag-select>
         <option value="">{t('None')}</option>
         {tagged.map((g) => <option key={g.id} value={g.id}>{g.tag_badge ? `${g.tag_badge} ` : ''}{g.tag} · {g.name}</option>)}
-      </select>
+      </Dropdown>
     </div>
   )
 }

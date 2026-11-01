@@ -8,6 +8,7 @@ import { has, P } from '../../lib/perms'
 import { uploadImage } from '../../lib/upload'
 import type { GuildEvent } from '../../lib/types'
 import { myGuildPerms, useStore } from '../../store'
+import Dropdown from '../Dropdown'
 
 const fmt = (iso: string) => new Date(iso).toLocaleString(locale(), { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 const toLocalInput = (d: Date) => { const p = (n: number) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}` }
@@ -64,12 +65,12 @@ export default function EventsModal({ onClose, guildId }: { onClose: () => void;
               <div><label className="label">{t('Starts')}</label><input type="datetime-local" className="input" value={d.starts} onChange={(e) => set({ starts: e.target.value })} required data-event-starts /></div>
               <div><label className="label">{t('Ends (optional)')}</label><input type="datetime-local" className="input" value={d.ends} onChange={(e) => set({ ends: e.target.value })} data-event-ends /></div>
             </div>
-            <div><label className="label">{t('Repeats')}</label><select className="input" value={d.recurrence} onChange={(e) => set({ recurrence: e.target.value as Draft['recurrence'] })} data-event-repeat>{repeatOptions().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></div>
+            <div><label className="label">{t('Repeats')}</label><Dropdown className="input" value={d.recurrence} onChange={(e) => set({ recurrence: e.target.value as Draft['recurrence'] })} data-event-repeat>{repeatOptions().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Dropdown></div>
             <div><label className="label">{t('Where')}</label>
-              <select className="input" value={d.where} onChange={(e) => set({ where: e.target.value })} data-event-channel>
+              <Dropdown className="input" value={d.where} onChange={(e) => set({ where: e.target.value })} data-event-channel>
                 <option value="">{t('Somewhere else (enter a location)')}</option>
                 {voiceChannels.map((c) => <option key={c.id} value={c.id}>{c.kind === 'stage' ? '🎙 ' : '🔊 '}{c.name}</option>)}
-              </select>
+              </Dropdown>
             </div>
             {!d.where && <div><label className="label">{t('Location')}</label><input className="input" value={d.location} onChange={(e) => set({ location: e.target.value })} maxLength={200} placeholder={t('A link or an address')} required data-event-location /></div>}
             <div><label className="label">{t('Description')}</label><textarea className="input resize-none" rows={3} value={d.description} onChange={(e) => set({ description: e.target.value })} maxLength={1000} data-event-description /></div>

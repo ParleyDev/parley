@@ -8,6 +8,7 @@ import { useStore } from '../../store'
 import type { DmChannel, Invite } from '../../lib/types'
 import Avatar from '../Avatar'
 import { useT } from '../../lib/i18n'
+import Dropdown from '../Dropdown'
 
 export default function InviteModal({ onClose, guildId }: { onClose: () => void; guildId: string }) {
   const t = useT()
@@ -62,9 +63,9 @@ export default function InviteModal({ onClose, guildId }: { onClose: () => void;
         <div className="mt-3 rounded-lg border border-line bg-bg-0/40 p-3 space-y-3" data-invite-settings>
           <div className="grid grid-cols-2 gap-3 max-[420px]:grid-cols-1">
             <div><label className="label">{t('Expire after')}</label>
-              <select className="input" value={maxAge} onChange={(e) => setMaxAge(Number(e.target.value))} data-invite-expiry>{EXPIRY.map((o) => <option key={o.s} value={o.s}>{t(o.label)}</option>)}</select></div>
+              <Dropdown className="input" value={maxAge} onChange={(e) => setMaxAge(Number(e.target.value))} data-invite-expiry>{EXPIRY.map((o) => <option key={o.s} value={o.s}>{t(o.label)}</option>)}</Dropdown></div>
             <div><label className="label">{t('Max number of uses')}</label>
-              <select className="input" value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} data-invite-uses>{USES.map((o) => <option key={o.n} value={o.n}>{t(o.label)}</option>)}</select></div>
+              <Dropdown className="input" value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} data-invite-uses>{USES.map((o) => <option key={o.n} value={o.n}>{t(o.label)}</option>)}</Dropdown></div>
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-ghost py-1.5" onClick={() => setEditing(false)}>{t('Cancel')}</button>

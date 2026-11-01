@@ -8,6 +8,7 @@ import { useStore } from '../../../store'
 import { useT } from '../../../lib/i18n'
 import Avatar from '../../Avatar'
 import { publicOrigin } from '../../InviteCard'
+import Dropdown from '../../Dropdown'
 
 /**
  * Server Settings › Invites: every live invite with who made it, uses and expiry, to revoke; a quick form to make one
@@ -112,9 +113,9 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
         <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">{t('Create an invite')}</h2>
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[9rem] flex-1"><label className="label">{t('Expire after')}</label>
-            <select className="input" value={maxAge} onChange={(e) => setMaxAge(Number(e.target.value))} data-new-invite-expiry>{EXPIRY.map((o) => <option key={o.s} value={o.s}>{o.label}</option>)}</select></div>
+            <Dropdown className="input" value={maxAge} onChange={(e) => setMaxAge(Number(e.target.value))} data-new-invite-expiry>{EXPIRY.map((o) => <option key={o.s} value={o.s}>{o.label}</option>)}</Dropdown></div>
           <div className="min-w-[9rem] flex-1"><label className="label">{t('Max number of uses')}</label>
-            <select className="input" value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} data-new-invite-uses>{USES.map((o) => <option key={o.n} value={o.n}>{o.label}</option>)}</select></div>
+            <Dropdown className="input" value={maxUses} onChange={(e) => setMaxUses(Number(e.target.value))} data-new-invite-uses>{USES.map((o) => <option key={o.n} value={o.n}>{o.label}</option>)}</Dropdown></div>
           <button type="button" className="btn-primary" disabled={busy} onClick={async () => { const inv = await create({ max_age: maxAge, max_uses: maxUses, temporary }); if (inv) copy(inv.code) }} data-new-invite>{t('Create and copy')}</button>
         </div>
         <label className="mt-3 flex items-start gap-2 text-sm cursor-pointer" data-new-invite-temporary>

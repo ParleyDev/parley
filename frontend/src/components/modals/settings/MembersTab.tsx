@@ -10,6 +10,7 @@ import RolePicker from '../../RolePicker'
 import ModViewModal from '../ModView'
 import ConfirmModal from '../Confirm'
 import { t, useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 export default function MembersTab({ guildId }: { guildId: string }) {
   useT() // re-render when the language changes
@@ -73,17 +74,17 @@ export default function MembersTab({ guildId }: { guildId: string }) {
           <input className="input pl-9" placeholder={t('Search members')} value={q} onChange={(e) => setQ(e.target.value)} />
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />
         </div>
-        <select className="input w-auto" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} aria-label={t('Filter by role')} data-members-role-filter>
+        <Dropdown className="input w-auto" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} aria-label={t('Filter by role')} data-members-role-filter>
           <option value="">{t('All roles')}</option>
           <option value="__none">{t('No roles')}</option>
           {Object.values(roles).filter((r) => r.name !== '@everyone').sort((a, b) => b.position - a.position).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>
-        <select className="input w-auto" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label={t('Sort')} data-members-sort>
+        </Dropdown>
+        <Dropdown className="input w-auto" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label={t('Sort')} data-members-sort>
           <option value="name">{t('Name')}</option>
           <option value="joined_new">{t('Newest members')}</option>
           <option value="joined_old">{t('Oldest members')}</option>
           <option value="account_new">{t('Newest accounts')}</option>
-        </select>
+        </Dropdown>
       </div>
       {picked.size > 0 && (
         <div className="sticky top-0 z-10 mb-2 flex items-center gap-2 rounded-lg border border-line bg-bg-0 px-3 py-2 text-sm" data-members-bulk>

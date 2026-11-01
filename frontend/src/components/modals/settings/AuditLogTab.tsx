@@ -4,6 +4,7 @@ import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import { relativeTime } from '../../../lib/ua'
 import { t, useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 interface Row { id: string; actor_id: string | null; actor_name: string; action: string; target_kind: string; target_id: string | null; target_name: string; details: Record<string, unknown>; created_at: string }
 
@@ -76,13 +77,13 @@ export default function AuditLogTab({ guildId }: { guildId: string }) {
           <input className="input pl-9" placeholder={t('Filter by member, action or target')} value={q} onChange={(e) => setQ(e.target.value)} data-guild-audit-search />
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-2" />
         </div>
-        <select className="input w-auto" value={actor} onChange={(e) => setActor(e.target.value)} aria-label={t('Filter by user')} data-audit-filter-user>
+        <Dropdown className="input w-auto" value={actor} onChange={(e) => setActor(e.target.value)} aria-label={t('Filter by user')} data-audit-filter-user>
           <option value="">{t('All users')}</option>
           {actors.map((m) => <option key={m.user_id} value={m.user_id}>{m.nickname || m.display_name}</option>)}
-        </select>
-        <select className="input w-auto" value={action} onChange={(e) => setAction(e.target.value)} aria-label={t('Filter by action')} data-audit-filter-action>
+        </Dropdown>
+        <Dropdown className="input w-auto" value={action} onChange={(e) => setAction(e.target.value)} aria-label={t('Filter by action')} data-audit-filter-action>
           {ACTION_FILTERS.map(([v, label]) => <option key={v} value={v}>{t(label)}</option>)}
-        </select>
+        </Dropdown>
       </div>
       {rows && rows.length === 0 && <div className="rounded-xl border border-dashed border-line p-8 text-center text-sm text-text-2" data-guild-audit-empty>{busy ? t('Loading…') : t('Nothing logged yet.')}</div>}
       <div className="divide-y divide-line">

@@ -23,6 +23,7 @@ import DecorationGallery from '../modals/settings/DecorationGallery'
 import Emoji from '../Emoji'
 import ExpressionPicker from '../ExpressionPicker'
 import { surprise, TYPING_ANIMATIONS, TypingGlyphs } from '../TypingIndicator'
+import Dropdown from '../Dropdown'
 
 const MAX_BIO = 400
 
@@ -305,10 +306,10 @@ export default function ProfileEditor() {
         </div>
         <div>
           <Heading>{t('Who can see your full profile')}</Heading>
-          <select className="input w-full" value={d.privacy} onChange={(e) => set('privacy')(e.target.value as 'everyone' | 'friends')} data-profile-privacy>
+          <Dropdown className="input w-full" value={d.privacy} onChange={(e) => set('privacy')(e.target.value as 'everyone' | 'friends')} data-profile-privacy>
             <option value="everyone">{t('Everyone')}</option>
             <option value="friends">{t('Friends only')}</option>
-          </select>
+          </Dropdown>
           <p className="mt-1 text-xs text-text-2">{t('Friends only hides your about me, banner, pronouns and panels from everyone else.')}</p>
         </div>
       </aside>
@@ -408,9 +409,9 @@ function ActivityTab() {
   return (
     <div className="space-y-2" data-editor-activity>
       <div className="flex gap-2">
-        <select className="input w-36 shrink-0" value={type} onChange={(e) => setType(e.target.value as ManualActivity['type'])} aria-label={t('Activity type')}>
+        <Dropdown className="input w-36 shrink-0" value={type} onChange={(e) => setType(e.target.value as ManualActivity['type'])} aria-label={t('Activity type')}>
           <option value="playing">{t('Playing')}</option><option value="watching">{t('Watching')}</option><option value="listening">{t('Listening to')}</option><option value="competing">{t('Competing in')}</option>
-        </select>
+        </Dropdown>
         <input className="input" value={name} onChange={(e) => setName(e.target.value)} maxLength={128} placeholder="Factorio" />
       </div>
       <div className="flex gap-2">

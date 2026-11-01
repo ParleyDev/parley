@@ -6,6 +6,7 @@ import type { InviteListing } from '../../../lib/types'
 import { useStore } from '../../../store'
 import { Toggle } from '../SettingsShell'
 import { useT, tn } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 /**
  * Server Settings › Badge: the server's README badge. Turn it on or off, set its label, colour, counts and default
@@ -76,13 +77,13 @@ export default function BadgeTab({ guildId, onInvites }: { guildId: string; onIn
               <div className="min-w-[12rem] flex-1"><label className="label">{t('Label')}</label>
                 <input className="input" value={draft.label} maxLength={32} placeholder="Parley" onChange={(e) => set({ label: e.target.value })} disabled={!draft.enabled} data-badge-label /></div>
               <div className="min-w-[12rem] flex-1"><label className="label">{t('Show')}</label>
-                <select className="input" value={draft.show} onChange={(e) => set({ show: e.target.value as BadgeShow })} disabled={!draft.enabled} data-badge-show>
+                <Dropdown className="input" value={draft.show} onChange={(e) => set({ show: e.target.value as BadgeShow })} disabled={!draft.enabled} data-badge-show>
                   {BADGE_SHOW.map((o) => <option key={o.id} value={o.id}>{t(o.label)}</option>)}
-                </select></div>
+                </Dropdown></div>
               <div className="min-w-[12rem] flex-1"><label className="label">{t('Style')}</label>
-                <select className="input" value={draft.style} onChange={(e) => set({ style: e.target.value as BadgeStyle })} disabled={!draft.enabled} data-badge-style>
+                <Dropdown className="input" value={draft.style} onChange={(e) => set({ style: e.target.value as BadgeStyle })} disabled={!draft.enabled} data-badge-style>
                   {BADGE_STYLES.map((o) => <option key={o.id} value={o.id}>{t(o.label)}</option>)}
-                </select></div>
+                </Dropdown></div>
             </div>
             <div>
               <label className="label">{t('Colour')}</label>
@@ -117,9 +118,9 @@ export default function BadgeTab({ guildId, onInvites }: { guildId: string; onIn
               <>
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="min-w-[12rem] flex-1"><label className="label">{t('Invite')}</label>
-                    <select className="input" value={invite.code} onChange={(e) => setCode(e.target.value)} data-badge-invite>
+                    <Dropdown className="input" value={invite.code} onChange={(e) => setCode(e.target.value)} data-badge-invite>
                       {list.map((i) => <option key={i.code} value={i.code}>{i.vanity ? `/invite/${i.code}` : `${i.code} · ${i.expires_at ? t('expires {when}', { when: expiresIn(i) }) : t('never expires')}`}</option>)}
-                    </select></div>
+                    </Dropdown></div>
                   <button type="button" className="btn-primary" onClick={() => copyText(badgeMarkdown(invite.code, undefined, guild.name), 'md')} data-badge-copy="markdown">
                     {copied === 'md' ? <Check size={16} /> : <Copy size={16} />} {t('Copy Markdown')}</button>
                   <button type="button" className="btn-ghost" onClick={() => copyText(badgeHtml(invite.code, undefined, guild.name), 'html')} data-badge-copy="html">

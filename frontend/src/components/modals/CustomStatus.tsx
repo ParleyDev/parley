@@ -6,6 +6,7 @@ import { useStore } from '../../store'
 import type { ManualActivity, PrivateUser } from '../../lib/types'
 import { QUICK_EMOJI } from '../../lib/emoji'
 import { useT } from '../../lib/i18n'
+import Dropdown from '../Dropdown'
 
 /** Set the free-text status shown under your name in DMs, member lists and your profile card. */
 export default function CustomStatusModal({ onClose }: { onClose: () => void }) {
@@ -61,23 +62,23 @@ export default function CustomStatusModal({ onClose }: { onClose: () => void }) 
       </div>
       <p className="mt-2 text-xs text-text-2">{t('Shown next to your name in DMs, member lists and your profile.')}</p>
       <label className="label mt-4" htmlFor="clear-after">{t('Clear after')}</label>
-      <select id="clear-after" className="input" value={clearAfter} onChange={(e) => setClearAfter(e.target.value)} data-clear-after>
+      <Dropdown id="clear-after" className="input" value={clearAfter} onChange={(e) => setClearAfter(e.target.value)} data-clear-after>
         <option value="today">{t('Today')}</option>
         <option value={String(4 * 3600)}>{t('4 hours')}</option>
         <option value="3600">{t('1 hour')}</option>
         <option value="1800">{t('30 minutes')}</option>
         <option value="never">{t("Don't clear")}</option>
-      </select>
+      </Dropdown>
       {user?.custom_status && user.custom_status_expires_at && <p className="mt-1 text-xs text-text-2" data-clears-at>{t('Your current status clears {when}.', { when: new Date(user.custom_status_expires_at).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }) })}</p>}
       <div className="h-px bg-line my-4" />
       <label className="label" htmlFor="activity-name">{t('Activity')}</label>
       <div className="flex gap-2" data-custom-activity>
-        <select className="input w-36 shrink-0" value={actType} onChange={(e) => setActType(e.target.value as ManualActivity['type'])} aria-label={t('Activity type')} data-activity-type-select>
+        <Dropdown className="input w-36 shrink-0" value={actType} onChange={(e) => setActType(e.target.value as ManualActivity['type'])} aria-label={t('Activity type')} data-activity-type-select>
           <option value="playing">{t('Playing')}</option>
           <option value="watching">{t('Watching')}</option>
           <option value="listening">{t('Listening to')}</option>
           <option value="competing">{t('Competing in')}</option>
-        </select>
+        </Dropdown>
         <input id="activity-name" className="input" value={actName} onChange={(e) => setActName(e.target.value)} maxLength={128} placeholder="Factorio" data-activity-name-input />
       </div>
       <div className="mt-2 flex items-center gap-2">

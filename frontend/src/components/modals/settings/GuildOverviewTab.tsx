@@ -5,6 +5,7 @@ import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import type { Guild } from '../../../lib/types'
 import { useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 export default function GuildOverviewTab({ guildId }: { guildId: string }) {
   const guild = useStore((s) => s.guilds[guildId])
@@ -74,10 +75,10 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
         <h2 className="text-xs font-bold uppercase tracking-wider text-text-2">{t('System messages')}</h2>
         <div>
           <label className="label" htmlFor="system-channel">{t('System messages channel')}</label>
-          <select id="system-channel" className="input" value={systemChannel} onChange={(e) => setSystemChannel(e.target.value)} data-system-channel>
+          <Dropdown id="system-channel" className="input" value={systemChannel} onChange={(e) => setSystemChannel(e.target.value)} data-system-channel>
             <option value="">{t('First text channel')}{textChannels[0] ? ` (#${textChannels[0].name})` : ''}</option>
             {textChannels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}
-          </select>
+          </Dropdown>
         </div>
         <label className="flex items-center justify-between gap-4 rounded-xl border border-line bg-bg-1 p-3 cursor-pointer">
           <span className="text-sm">{t('Send a message when someone joins')}</span>
@@ -93,16 +94,16 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
         <div className="flex gap-3 phone:flex-col">
           <div className="flex-1">
             <label className="label" htmlFor="afk-channel">{t('Inactive channel')}</label>
-            <select id="afk-channel" className="input" value={afkChannel} onChange={(e) => setAfkChannel(e.target.value)} data-afk-channel>
+            <Dropdown id="afk-channel" className="input" value={afkChannel} onChange={(e) => setAfkChannel(e.target.value)} data-afk-channel>
               <option value="">{t('No inactive channel')}</option>
               {voiceChannels.map((c) => <option key={c.id} value={c.id}>🔊 {c.name}</option>)}
-            </select>
+            </Dropdown>
           </div>
           <div className="flex-1">
             <label className="label" htmlFor="afk-timeout">{t('Inactive timeout')}</label>
-            <select id="afk-timeout" className="input" value={afkTimeout} onChange={(e) => setAfkTimeout(Number(e.target.value))} disabled={!afkChannel} data-afk-timeout>
+            <Dropdown id="afk-timeout" className="input" value={afkTimeout} onChange={(e) => setAfkTimeout(Number(e.target.value))} disabled={!afkChannel} data-afk-timeout>
               {[[60, '1 minute'], [300, '5 minutes'], [900, '15 minutes'], [1800, '30 minutes'], [3600, '1 hour']].map(([v, l]) => <option key={v} value={v}>{t(String(l))}</option>)}
-            </select>
+            </Dropdown>
           </div>
         </div>
         <p className="text-xs text-text-2">{t('Members who haven\'t spoken in voice for longer than the timeout are moved here and muted.')}</p>
@@ -118,10 +119,10 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
       </section>
       <div className="space-y-2" data-guild-rules>
         <label className="label" htmlFor="rules-channel">{t('Rules channel')}</label>
-        <select id="rules-channel" className="input" value={rulesChannel} onChange={(e) => setRulesChannel(e.target.value)} data-rules-channel>
+        <Dropdown id="rules-channel" className="input" value={rulesChannel} onChange={(e) => setRulesChannel(e.target.value)} data-rules-channel>
           <option value="">{t('None')}</option>
           {textChannels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}
-        </select>
+        </Dropdown>
         <p className="text-xs text-text-2">{t('Gets a rulebook icon in the channel list and is linked from the welcome screen and the rules prompt.')}</p>
         <label className="label pt-2">{t('Server rules')}</label>
         <textarea value={rules} onChange={(e) => setRules(e.target.value)} rows={6} maxLength={4000} placeholder={'1. Be kind.\n2. No spam.\nMarkdown works.'} className="input resize-y font-mono text-sm" data-guild-rules-text />

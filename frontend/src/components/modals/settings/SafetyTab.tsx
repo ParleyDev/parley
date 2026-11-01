@@ -5,6 +5,7 @@ import type { Guild } from '../../../lib/types'
 import { useStore } from '../../../store'
 import { Toggle } from '../SettingsShell'
 import { t, useT, tn } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 const levels = (): { level: number; label: string; detail: string }[] => [
   { level: 0, label: t('None'), detail: t('Anyone can talk as soon as they join.') },
@@ -55,9 +56,9 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
             {dmsPaused
               ? <button type="button" className="btn-primary" onClick={() => save({ pause_dms_hours: 0 }, t('DMs resumed'))} data-pause-dms="on"><Play size={14} /> {t('Resume')}</button>
               : <span className="flex items-center gap-2">
-                  <select className="input w-auto py-1.5" value={pauseFor} onChange={(e) => setPauseFor(Number(e.target.value))} aria-label={t('Pause DMs for')} data-pause-dms-hours>
+                  <Dropdown className="input w-auto py-1.5" value={pauseFor} onChange={(e) => setPauseFor(Number(e.target.value))} aria-label={t('Pause DMs for')} data-pause-dms-hours>
                     {PAUSE_HOURS.map((h) => <option key={h} value={h}>{h === 1 ? t('1 hour') : t('{n} hours', { n: h })}</option>)}
-                  </select>
+                  </Dropdown>
                   <button type="button" className="btn-ghost" onClick={() => save({ pause_dms_hours: pauseFor }, t('DMs paused for {duration}', { duration: pauseFor === 1 ? t('1 hour') : t('{n} hours', { n: pauseFor }) }))} data-pause-dms="off"><Pause size={14} /> {t('Pause')}</button>
                 </span>}
           </div>
@@ -70,9 +71,9 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
           <label className="flex items-center justify-between gap-4 cursor-pointer"><span><span className="block text-[15px] font-medium">{t('Pause invites when joins spike')}</span><span className="block text-xs text-text-2">{t('New members who arrive in the spike are flagged for review, and moderators get an alert.')}</span></span>
             <input type="checkbox" className="h-5 w-5 accent-accent" checked={guild.raid_protection ?? true} onChange={(e) => save({ raid_protection: e.target.checked }, e.target.checked ? t('Raid protection on') : t('Raid protection off'))} data-raid-toggle /></label>
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <label className="flex items-center gap-2">{tn('A spike is {count} joins in a minute', { count: <select className="input w-auto py-1" value={guild.raid_threshold ?? 10} onChange={(e) => save({ raid_threshold: Number(e.target.value) }, t('Raid threshold saved'))} data-raid-threshold>{[3, 5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}</select> })}</label>
+            <label className="flex items-center gap-2">{tn('A spike is {count} joins in a minute', { count: <Dropdown className="input w-auto py-1" value={guild.raid_threshold ?? 10} onChange={(e) => save({ raid_threshold: Number(e.target.value) }, t('Raid threshold saved'))} data-raid-threshold>{[3, 5, 10, 20, 50].map((n) => <option key={n} value={n}>{n}</option>)}</Dropdown> })}</label>
             <label className="flex items-center gap-2">{t('Alerts go to')}
-              <select className="input w-auto py-1" value={guild.safety_alerts_channel_id ?? ''} onChange={(e) => save({ safety_alerts_channel_id: e.target.value || null }, t('Alerts channel saved'))} data-raid-alerts><option value="">{t('the system channel')}</option>{textChannels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}</select></label>
+              <Dropdown className="input w-auto py-1" value={guild.safety_alerts_channel_id ?? ''} onChange={(e) => save({ safety_alerts_channel_id: e.target.value || null }, t('Alerts channel saved'))} data-raid-alerts><option value="">{t('the system channel')}</option>{textChannels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}</Dropdown></label>
           </div>
         </div>
       </section>

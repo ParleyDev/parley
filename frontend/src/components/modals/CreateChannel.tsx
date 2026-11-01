@@ -8,6 +8,7 @@ import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import type { Channel } from '../../lib/types'
 import { useT } from '../../lib/i18n'
+import Dropdown from '../Dropdown'
 
 export default function CreateChannelModal({ onClose, guildId, parentId = null }: { onClose: () => void; guildId: string; parentId?: string | null }) {
   const t = useT()
@@ -63,10 +64,10 @@ export default function CreateChannelModal({ onClose, guildId, parentId = null }
         {kind !== 'category' && categories.length > 0 && (
           <div>
             <label className="label">{t('Category')}</label>
-            <select className="input" value={parent} onChange={(e) => setParent(e.target.value)} data-channel-parent>
+            <Dropdown className="input" value={parent} onChange={(e) => setParent(e.target.value)} data-channel-parent>
               <option value="">{t('No category')}</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
+            </Dropdown>
           </div>
         )}
         <div className="rounded-lg border border-line bg-bg-3 p-3">

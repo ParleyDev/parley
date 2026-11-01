@@ -10,6 +10,7 @@ import type { Channel, StudioConfig, StudioSession, StudioTrack, User, VoiceStat
 import { voice } from '../lib/voice'
 import { useStore, voiceParticipants } from '../store'
 import Avatar from './Avatar'
+import Dropdown from './Dropdown'
 
 const VIEW_KEY = `${STORAGE_PREFIX}studioConsoleView`
 type View = 'arrange' | 'mixer'
@@ -113,14 +114,14 @@ export default function StudioConsole({ channel, onClose }: { channel: Channel; 
       <div className="shrink-0 flex phone:flex-wrap items-center gap-2 px-3 py-2 border-b border-line bg-bg-2">
         <div className="flex shrink-0 items-center gap-1">
           <input value={bpmDraft ?? String(cfg.bpm)} onChange={(e) => setBpmDraft(e.target.value.replace(/\D/g, '').slice(0, 3))} onBlur={commitBpm} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }} inputMode="numeric" title={t('Tempo (BPM)')} aria-label={t('Tempo (BPM)')} className="input h-8 w-14 px-1 text-center font-mono text-sm tabular-nums" data-console-bpm />
-          <select value={cfg.beats} onChange={(e) => void config({ beats: Number(e.target.value) })} title={t('Time signature')} aria-label={t('Time signature')} className="input h-8 w-14 px-1 text-sm" data-console-beats>
+          <Dropdown value={cfg.beats} onChange={(e) => void config({ beats: Number(e.target.value) })} title={t('Time signature')} aria-label={t('Time signature')} className="input h-8 w-[4.5rem] px-2 text-sm" data-console-beats>
             {[2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{n}/4</option>)}
-          </select>
+          </Dropdown>
           <button type="button" onClick={() => void config({ click: !cfg.click })} title={cfg.click ? t('Metronome: on') : t('Metronome: off')} aria-pressed={cfg.click} className={`h-8 w-8 rounded-md flex items-center justify-center ${cfg.click ? 'bg-warn text-black' : 'text-text-2 hover:bg-bg-3 hover:text-text-0'}`} data-console-click><Metronome size={16} /></button>
-          <select value={cfg.count_in} onChange={(e) => void config({ count_in: Number(e.target.value) })} title={t('Count-in')} aria-label={t('Count-in')} className="input h-8 w-24 px-1 text-sm" data-console-countin>
+          <Dropdown value={cfg.count_in} onChange={(e) => void config({ count_in: Number(e.target.value) })} title={t('Count-in')} aria-label={t('Count-in')} className="input h-8 w-24 px-1 text-sm" data-console-countin>
             <option value={0}>{t('No count-in')}</option>
             {[1, 2, 4].map((n) => <option key={n} value={n}>{n === 1 ? t('1 bar') : t('{n} bars', { n })}</option>)}
-          </select>
+          </Dropdown>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button type="button" onClick={() => mt.seek(mt.start)} disabled={!!live || !mt.tracks} title={t('Return to zero')} className="h-9 w-9 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 disabled:opacity-40" data-console-rtz><SkipBack size={18} /></button>
@@ -147,9 +148,9 @@ export default function StudioConsole({ channel, onClose }: { channel: Channel; 
         <span className="whitespace-nowrap text-text-2" data-console-armed>{t('{n} of {m} armed', { n: armedCount, m: band.length })}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {!live && finished.length > 0 && (
-            <select value={take?.id ?? ''} onChange={(e) => setPick(e.target.value)} className="input h-8 w-40 text-sm" title={t('Take')} aria-label={t('Take')} data-console-take>
+            <Dropdown value={take?.id ?? ''} onChange={(e) => setPick(e.target.value)} className="input h-8 w-40 text-sm" title={t('Take')} aria-label={t('Take')} data-console-take>
               {finished.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-            </select>
+            </Dropdown>
           )}
           {mt.tracks && <button type="button" onClick={mt.exportWav} className="btn-ghost h-8 py-1 text-xs whitespace-nowrap" title={t('Render all audible tracks to one WAV')} data-console-export><Download size={14} /> {t('Export mix')}</button>}
         </span>

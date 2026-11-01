@@ -4,6 +4,7 @@ import { has, P } from '../../lib/perms'
 import { myChannelPerms, useStore } from '../../store'
 import Modal from '../Modal'
 import { useT } from '../../lib/i18n'
+import Dropdown from '../Dropdown'
 
 /** Follow an announcement channel into a text channel of one of your servers (where you have Manage Channels). */
 export default function FollowChannelModal({ onClose, channelId }: { onClose: () => void; channelId: string }) {
@@ -35,9 +36,9 @@ export default function FollowChannelModal({ onClose, channelId }: { onClose: ()
         {servers.length === 0 ? <p className="text-sm text-text-1">{t('You need Manage Channels in a server to follow channels into it.')}</p> : (
           <>
             <div><label className="label" htmlFor="follow-guild">{t('Server')}</label>
-              <select id="follow-guild" className="input" value={guildId} onChange={(e) => { setGuildId(e.target.value); setTarget('') }} data-follow-guild>{servers.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
+              <Dropdown id="follow-guild" className="input" value={guildId} onChange={(e) => { setGuildId(e.target.value); setTarget('') }} data-follow-guild>{servers.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</Dropdown></div>
             <div><label className="label" htmlFor="follow-channel">{t('Channel')}</label>
-              <select id="follow-channel" className="input" value={pick} onChange={(e) => setTarget(e.target.value)} data-follow-target>{inGuild.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}</select></div>
+              <Dropdown id="follow-channel" className="input" value={pick} onChange={(e) => setTarget(e.target.value)} data-follow-target>{inGuild.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}</Dropdown></div>
           </>
         )}
       </div>

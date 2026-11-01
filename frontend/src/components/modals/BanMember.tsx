@@ -3,6 +3,7 @@ import Modal from '../Modal'
 import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import { t, useT, tn } from '../../lib/i18n'
+import Dropdown from '../Dropdown'
 
 /** How much of a banned member's recent history to delete with them (Discord's choices). */
 const historyOptions = (): { label: string; seconds: number }[] => [
@@ -45,9 +46,9 @@ export default function BanMemberModal({ onClose, guildId, userId, kick }: { onC
       {!kick && (
         <>
           <label className="label mt-4" htmlFor="ban-history">{t('Delete message history')}</label>
-          <select id="ban-history" className="input" value={history} onChange={(e) => setHistory(Number(e.target.value))} data-ban-history>
+          <Dropdown id="ban-history" className="input" value={history} onChange={(e) => setHistory(Number(e.target.value))} data-ban-history>
             {historyOptions().map((h) => <option key={h.seconds} value={h.seconds}>{h.label}</option>)}
-          </select>
+          </Dropdown>
         </>
       )}
       <label className="label mt-4" htmlFor="mod-reason">{kick ? t('Reason for kick') : t('Reason for ban')}</label>

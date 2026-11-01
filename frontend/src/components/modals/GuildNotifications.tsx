@@ -5,6 +5,7 @@ import type { NotifSetting } from '../../lib/notify'
 import { useStore } from '../../store'
 import Modal from '../Modal'
 import { t, useT } from '../../lib/i18n'
+import Dropdown from '../Dropdown'
 
 const mutes = (): [string, number][] => [[t('15 minutes'), 15], [t('1 hour'), 60], [t('3 hours'), 180], [t('8 hours'), 480], [t('24 hours'), 1440], [t('Until I turn it back on'), 0]]
 
@@ -34,7 +35,7 @@ export default function GuildNotificationsModal({ onClose, guildId }: { onClose:
         <div className="flex items-center gap-3 rounded-xl border border-line bg-bg-1 p-3">
           <span className="flex-1 text-sm">{muted ? (cur.muted_until && new Date(cur.muted_until).getFullYear() < 2100 ? t("Muted until {date}. You won't get notifications from this server.", { date: new Date(cur.muted_until).toLocaleString() }) : t("Muted. You won't get notifications from this server.")) : t('Mute {name}', { name: guild.name })}</span>
           {muted ? <button type="button" className="btn-primary py-1" onClick={() => put(guildId, { unmute: true })} data-gn-unmute>{t('Unmute')}</button> : <>
-            <select className="input w-auto py-1" value={muteFor} onChange={(e) => setMuteFor(Number(e.target.value))} data-gn-mute-for>{mutes().map(([l, v]) => <option key={v} value={v}>{l}</option>)}</select>
+            <Dropdown className="input w-auto py-1" value={muteFor} onChange={(e) => setMuteFor(Number(e.target.value))} data-gn-mute-for>{mutes().map(([l, v]) => <option key={v} value={v}>{l}</option>)}</Dropdown>
             <button type="button" className="btn-ghost py-1" onClick={() => put(guildId, { mute_minutes: muteFor })} data-gn-mute>{t('Mute')}</button></>}
         </div>
         <section>
@@ -56,12 +57,12 @@ export default function GuildNotificationsModal({ onClose, guildId }: { onClose:
             {overrides.map((c) => (
               <div key={c.id} className="flex items-center gap-2 rounded-lg bg-bg-1 px-2 py-1.5 text-sm" data-gn-override={c.id}>
                 <span className="flex-1 truncate">{c.kind === 'category' ? c.name.toUpperCase() : `#${c.name}`}</span>
-                <select className="input w-auto py-0.5 text-xs" value={settings[c.id].level} onChange={(e) => put(c.id, { level: e.target.value })}>{[['default', t('Default')], ['all', t('All')], ['mentions', t('Mentions')], ['nothing', t('Nothing')]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+                <Dropdown className="input w-auto py-0.5 text-xs" value={settings[c.id].level} onChange={(e) => put(c.id, { level: e.target.value })}>{[['default', t('Default')], ['all', t('All')], ['mentions', t('Mentions')], ['nothing', t('Nothing')]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Dropdown>
                 <button type="button" title={t('Remove override')} className="text-text-2 hover:text-danger" onClick={() => put(c.id, { level: 'default', unmute: true })}><Trash2 size={14} /></button>
               </div>
             ))}
             <div className="flex gap-2">
-              <select className="input flex-1 py-1 text-sm" value={addChannel} onChange={(e) => setAddChannel(e.target.value)} data-gn-add-channel><option value="">{t('Add a channel or category…')}</option>{list.filter((c) => !overrides.includes(c)).map((c) => <option key={c.id} value={c.id}>{c.kind === 'category' ? c.name.toUpperCase() : `#${c.name}`}</option>)}</select>
+              <Dropdown className="input flex-1 py-1 text-sm" value={addChannel} onChange={(e) => setAddChannel(e.target.value)} data-gn-add-channel><option value="">{t('Add a channel or category…')}</option>{list.filter((c) => !overrides.includes(c)).map((c) => <option key={c.id} value={c.id}>{c.kind === 'category' ? c.name.toUpperCase() : `#${c.name}`}</option>)}</Dropdown>
               <button type="button" className="btn-ghost py-1" disabled={!addChannel} onClick={() => { void put(addChannel, { level: 'mentions' }); setAddChannel('') }} data-gn-add>{t('Add')}</button>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
 import { can, useAccess } from './adminAccess'
+import Dropdown from '../components/Dropdown'
 
 interface Case { id: string; kind: 'report' | 'investigation' | 'legal'; subject_kind: string; subject_id: string; report_id: string | null; anchor_message_id: string | null; opened_by: string | null; justification: string; status: 'open' | 'closed'; scope_channel_ids: string[]; scope_from: string | null; scope_to: string | null; expires_at: string; created_at: string }
 interface Grant { id: string; case_id: string; kind: 'expand' | 'private_access' | 'export'; requested_by: string; justification: string; channel_ids: string[]; status: 'pending' | 'approved' | 'denied' | 'revoked'; decided_by: string | null; expires_at: string | null; created_at: string }
@@ -112,13 +113,13 @@ function OpenCase({ onClose }: { onClose: () => void }) {
       <form className="pop w-full max-w-lg rounded-xl bg-bg-1 border border-line p-5 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <h3 className="text-lg font-bold">{t('Open a case')}</h3>
         <div className="flex gap-2">
-          <select className="input" value={kind} onChange={(e) => setKind(e.target.value as 'investigation' | 'legal')} data-case-kind>
+          <Dropdown className="input" value={kind} onChange={(e) => setKind(e.target.value as 'investigation' | 'legal')} data-case-kind>
             {can(a, 'content_search_public') && <option value="investigation">{t('Investigation')}</option>}
             {can(a, 'content_export') && <option value="legal">{t('Legal')}</option>}
-          </select>
-          <select className="input" value={subjectKind} onChange={(e) => setSubjectKind(e.target.value)} data-case-subject-kind>
+          </Dropdown>
+          <Dropdown className="input" value={subjectKind} onChange={(e) => setSubjectKind(e.target.value)} data-case-subject-kind>
             <option value="user">{t('User')}</option><option value="conversation">{t('Conversation')}</option><option value="server">{t('Server')}</option>
-          </select>
+          </Dropdown>
         </div>
         <input className="input" value={subject} onChange={(e) => setSubject(e.target.value)} placeholder={t('Subject ID')} data-case-subject />
         <input className="input" value={channels} onChange={(e) => setChannels(e.target.value)} placeholder={t('Channel IDs in scope (comma separated)')} data-case-channels />
@@ -262,7 +263,7 @@ export function CasePane() {
       </div>
       {live && kinds.length > 0 && (req ? (
         <form onSubmit={ask} className="mt-3 flex flex-wrap gap-2 items-center" data-case-request-form>
-          <select className="input w-auto" value={req.kind} onChange={(e) => setReq({ ...req, kind: e.target.value as Grant['kind'] })} data-case-request-kind>{kinds.map((k) => <option key={k} value={k}>{grantLabel(t, k)}</option>)}</select>
+          <Dropdown className="input w-auto" value={req.kind} onChange={(e) => setReq({ ...req, kind: e.target.value as Grant['kind'] })} data-case-request-kind>{kinds.map((k) => <option key={k} value={k}>{grantLabel(t, k)}</option>)}</Dropdown>
           <input className="input flex-1 min-w-[200px]" value={req.why} onChange={(e) => setReq({ ...req, why: e.target.value })} placeholder={t('Why you need it')} data-case-request-why />
           <button type="submit" className="btn-primary py-1.5" disabled={req.why.trim().length < MIN_WHY} data-case-request-go>{t('Request')}</button>
         </form>

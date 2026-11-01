@@ -5,6 +5,7 @@ import { EMPTY_ROLES, P, sortedRoles } from '../../../lib/perms'
 import type { Onboarding, OnboardingQuestion } from '../../../lib/types'
 import { useStore } from '../../../store'
 import { useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 /** Roles an answer may never grant (mirrors perms::SELF_GRANT_FORBIDDEN). */
 const FORBIDDEN = P.ADMINISTRATOR | P.KICK_MEMBERS | P.BAN_MEMBERS | P.MANAGE_CHANNELS | P.MANAGE_GUILD | P.MANAGE_MESSAGES | P.MANAGE_ROLES | P.MODERATE_MEMBERS | P.MANAGE_NICKNAMES | P.MUTE_MEMBERS | P.DEAFEN_MEMBERS | P.MOVE_MEMBERS | P.MANAGE_THREADS | P.MANAGE_EVENTS | P.MANAGE_EXPRESSIONS | P.VIEW_AUDIT_LOG | P.MENTION_EVERYONE
@@ -58,14 +59,14 @@ export default function OnboardingTab({ guildId }: { guildId: string }) {
               <input className="input min-w-0 flex-1" value={o.label} maxLength={50} onChange={(e) => setO(i, k, { label: e.target.value })} placeholder={t('Answer')} data-onboarding-label={`${i}-${k}`} />
               <button type="button" className="text-text-2 hover:text-danger" title={t('Remove answer')} onClick={() => setQ(i, { options: q.options.filter((_, j) => j !== k) })}><X size={16} /></button>
               <div className="flex w-full flex-wrap gap-2 text-xs">
-                <select className="input w-auto py-1 text-xs" value="" onChange={(e) => e.target.value && setO(i, k, { role_ids: [...o.role_ids, e.target.value] })} data-onboarding-addrole={`${i}-${k}`}>
+                <Dropdown className="input w-auto py-1 text-xs" value="" onChange={(e) => e.target.value && setO(i, k, { role_ids: [...o.role_ids, e.target.value] })} data-onboarding-addrole={`${i}-${k}`}>
                   <option value="">{t('+ Role')}</option>
                   {grantable.filter((r) => !o.role_ids.includes(r.id)).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-                <select className="input w-auto py-1 text-xs" value="" onChange={(e) => e.target.value && setO(i, k, { channel_ids: [...o.channel_ids, e.target.value] })} data-onboarding-addchan={`${i}-${k}`}>
+                </Dropdown>
+                <Dropdown className="input w-auto py-1 text-xs" value="" onChange={(e) => e.target.value && setO(i, k, { channel_ids: [...o.channel_ids, e.target.value] })} data-onboarding-addchan={`${i}-${k}`}>
                   <option value="">{t('+ Channel')}</option>
                   {chans.filter((c) => !o.channel_ids.includes(c.id)).map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}
-                </select>
+                </Dropdown>
                 {o.role_ids.map((r) => <span key={r} className="flex items-center gap-1 rounded-full bg-bg-4 px-2 py-0.5">@{roles[r]?.name ?? 'role'}<button type="button" onClick={() => setO(i, k, { role_ids: o.role_ids.filter((x) => x !== r) })}><X size={12} /></button></span>)}
                 {o.channel_ids.map((c) => <span key={c} className="flex items-center gap-1 rounded-full bg-bg-4 px-2 py-0.5">#{channels[c]?.name ?? 'channel'}<button type="button" onClick={() => setO(i, k, { channel_ids: o.channel_ids.filter((x) => x !== c) })}><X size={12} /></button></span>)}
               </div>

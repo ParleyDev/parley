@@ -8,6 +8,7 @@ import { myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
 import { relativeTime } from '../lib/ua'
 import { useT } from '../lib/i18n'
+import Dropdown from './Dropdown'
 
 /** Main area of a forum channel: pinned-first post list with tag filter and sort, plus New Post. */
 export default function ForumView({ channel }: { channel: Channel }) {
@@ -49,10 +50,10 @@ export default function ForumView({ channel }: { channel: Channel }) {
     <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 phone:px-3" data-forum={channel.id}>
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {has(perms, P.SEND_MESSAGES) && <button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'newPost', channelId: channel.id })} data-forum-new><Plus size={16} /> {t('New Post')}</button>}
-        <select className="input w-auto py-1.5 text-sm" value={sort} onChange={(e) => setSort(e.target.value as 'activity' | 'created')} data-forum-sort>
+        <Dropdown className="input w-auto py-1.5 text-sm" value={sort} onChange={(e) => setSort(e.target.value as 'activity' | 'created')} data-forum-sort>
           <option value="activity">{t('Latest activity')}</option>
           <option value="created">{t('Newest posts')}</option>
-        </select>
+        </Dropdown>
         <button type="button" onClick={() => setArchived((a) => !a)} className={`rounded-full px-2.5 py-1 text-xs font-semibold ${archived ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-forum-archived>{archived ? t('Showing archived') : t('Archived')}</button>
         <span className="relative"><input className="input w-44 py-1.5 pl-7 text-sm" placeholder={t('Search posts')} value={q} onChange={(e) => setQ(e.target.value)} data-forum-search /><Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-2" /></span>
         <span className="flex rounded-md border border-line" data-forum-layout={layout}>

@@ -31,6 +31,7 @@ import { remindLabel, setReminder } from '../lib/reminders'
 import { applySuggestion, useSearchSuggestions } from './SearchSuggest'
 import DirectoryView from './DirectoryView'
 import { confirmSkipped } from './modals/Confirm'
+import Dropdown from './Dropdown'
 
 /** Scroll a loaded message into view and flash it. Returns false when it is not in the DOM. */
 export function jumpToMessage(id: string): boolean {
@@ -485,11 +486,11 @@ function BookmarksPanel({ channelId, onClose }: { channelId: string; onClose: ()
                         <button className="btn-ghost py-0.5 text-xs" data-bookmark-new-folder-save>{t('Save')}</button>
                       </form>
                     ) : (
-                      <select value={m.folder} onChange={(e) => moveTo(m, e.target.value)} title={t('Move to folder')} className="rounded bg-bg-0 border border-line px-1 py-0.5 text-[11px] text-text-1" data-bookmark-move>
+                      <Dropdown value={m.folder} onChange={(e) => moveTo(m, e.target.value)} title={t('Move to folder')} className="rounded bg-bg-0 border border-line px-1 py-0.5 text-[11px] text-text-1" data-bookmark-move>
                         <option value="">{t('No folder')}</option>
                         {folders.filter(Boolean).map((n) => <option key={n} value={n}>{n}</option>)}
                         <option value="__new__">{t('New folder…')}</option>
-                      </select>
+                      </Dropdown>
                     )}
                     <button type="button" onClick={() => shift(m, -1)} disabled={i === 0} title={t('Move up')} className="rounded px-1 text-text-2 hover:text-text-0 disabled:opacity-30" data-bookmark-up>▲</button>
                     <button type="button" onClick={() => shift(m, 1)} disabled={i === arr.length - 1} title={t('Move down')} className="rounded px-1 text-text-2 hover:text-text-0 disabled:opacity-30" data-bookmark-down>▼</button>
@@ -571,9 +572,9 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
         {chip('channel', isDm ? t('This conversation') : t('This channel'))}
         {!isDm && chip('guild', t('This server'))}
         {chip('all', t('Everywhere'))}
-        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-xs text-text-1" aria-label={t('Sort results')} data-search-sort>
+        <Dropdown value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="ml-auto rounded bg-bg-3 px-1.5 py-0.5 text-xs text-text-1" aria-label={t('Sort results')} data-search-sort>
           <option value="newest">{t('Newest')}</option><option value="oldest">{t('Oldest')}</option><option value="relevant">{t('Most relevant')}</option>
-        </select>
+        </Dropdown>
         <label className="flex items-center gap-1 text-xs text-text-2 cursor-pointer" title={t('Show the message before and after each result')}><input type="checkbox" className="h-3.5 w-3.5 accent-accent" checked={context} onChange={(e) => setContext(e.target.checked)} data-search-context /> {t('Context')}</label>
       </div>
       <div className="overflow-y-auto p-3 space-y-2">

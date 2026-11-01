@@ -13,6 +13,7 @@ import FollowersTab from './settings/FollowersTab'
 import StageModeratorsTab from './settings/StageModeratorsTab'
 import { DEFAULT_BITRATE, MAX_BITRATE, MIN_BITRATE, type AudioMode } from '../../lib/audioProfile'
 import { useT } from '../../lib/i18n'
+import Dropdown from '../Dropdown'
 
 type Tab = 'overview' | 'permissions' | 'tags' | 'integrations' | 'stageMods'
 
@@ -38,12 +39,12 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
     },
   })
 
-  const items: { id: Tab; label: string; icon: React.ReactNode }[] = []
-  if (canEdit) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} /> })
-  if (canEdit && channel.kind === 'forum') items.push({ id: 'tags', label: 'Tags', icon: <Tag size={16} /> })
-  if (canEdit && channel.kind === 'text') items.push({ id: 'integrations', label: 'Integrations', icon: <Blocks size={16} /> })
-  if (canPerms) items.push({ id: 'permissions', label: 'Permissions', icon: <Lock size={16} /> })
-  if (canPerms && channel.kind === 'stage') items.push({ id: 'stageMods', label: 'Stage Moderators', icon: <Shield size={16} /> })
+  const items: { id: Tab; label: string; icon: React.ReactNode; keywords?: string }[] = []
+  if (canEdit) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} />, keywords: 'name topic slowmode nsfw age-restricted bitrate video quality user limit region' })
+  if (canEdit && channel.kind === 'forum') items.push({ id: 'tags', label: 'Tags', icon: <Tag size={16} />, keywords: 'forum post tags' })
+  if (canEdit && channel.kind === 'text') items.push({ id: 'integrations', label: 'Integrations', icon: <Blocks size={16} />, keywords: 'webhooks follow' })
+  if (canPerms) items.push({ id: 'permissions', label: 'Permissions', icon: <Lock size={16} />, keywords: 'roles members access private overwrites' })
+  if (canPerms && channel.kind === 'stage') items.push({ id: 'stageMods', label: 'Stage Moderators', icon: <Shield size={16} />, keywords: 'stage speakers moderators' })
 
   return (
     <SettingsShell<Tab>
@@ -100,8 +101,8 @@ function Overview({ channel }: { channel: Channel }) {
         <div className="space-y-3" data-forum-settings>
           <div><label className="label">{t('Post guidelines')}</label><textarea className="input resize-none" rows={3} value={topic} onChange={(e) => setTopic(e.target.value)} maxLength={1024} placeholder={t('What should people post here?')} data-forum-guidelines /></div>
           <div className="flex flex-wrap gap-3">
-            <label className="text-sm">{t('Default layout')} <select className="input ml-1 w-auto py-1" value={forumLayout} onChange={(e) => setForumLayout(e.target.value as 'gallery' | 'list')} data-forum-layout-setting><option value="gallery">{t('Gallery')}</option><option value="list">{t('List')}</option></select></label>
-            <label className="text-sm">{t('Default sort')} <select className="input ml-1 w-auto py-1" value={forumSort} onChange={(e) => setForumSort(e.target.value as 'activity' | 'created')} data-forum-sort-setting><option value="activity">{t('Latest activity')}</option><option value="created">{t('Newest posts')}</option></select></label>
+            <label className="text-sm">{t('Default layout')} <Dropdown className="input ml-1 w-auto py-1" value={forumLayout} onChange={(e) => setForumLayout(e.target.value as 'gallery' | 'list')} data-forum-layout-setting><option value="gallery">{t('Gallery')}</option><option value="list">{t('List')}</option></Dropdown></label>
+            <label className="text-sm">{t('Default sort')} <Dropdown className="input ml-1 w-auto py-1" value={forumSort} onChange={(e) => setForumSort(e.target.value as 'activity' | 'created')} data-forum-sort-setting><option value="activity">{t('Latest activity')}</option><option value="created">{t('Newest posts')}</option></Dropdown></label>
             <label className="text-sm">{t('Default reaction')} <input className="input ml-1 inline-block w-14 py-1 text-center" value={defaultReaction} onChange={(e) => setDefaultReaction(e.target.value)} maxLength={16} placeholder="👍" data-forum-reaction-setting /></label>
           </div>
           <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" className="h-4 w-4 accent-accent" checked={requireTag} onChange={(e) => setRequireTag(e.target.checked)} data-forum-require-tag /> {t('Require a tag on new posts')}</label>
@@ -111,9 +112,9 @@ function Overview({ channel }: { channel: Channel }) {
       {hasSlowmode && (
         <div data-channel-slowmode>
           <label className="label" htmlFor="slowmode">{t('Slowmode')}</label>
-          <select id="slowmode" className="input" value={slowmode} onChange={(e) => setSlowmode(Number(e.target.value))}>
+          <Dropdown id="slowmode" className="input" value={slowmode} onChange={(e) => setSlowmode(Number(e.target.value))}>
             {SLOWMODE.map((o) => <option key={o.seconds} value={o.seconds}>{t(o.label)}</option>)}
-          </select>
+          </Dropdown>
           <p className="mt-1 text-xs text-text-2">{t('Members can send one message per this interval. Members who can manage messages or this channel are exempt.')}</p>
         </div>
       )}
@@ -154,10 +155,10 @@ function Overview({ channel }: { channel: Channel }) {
       {channel.kind === 'voice' && (
         <div data-channel-video-quality>
           <label className="label" htmlFor="video-quality">{t('Video quality')}</label>
-          <select id="video-quality" className="input w-auto" value={videoQuality} onChange={(e) => setVideoQuality(e.target.value as 'auto' | 'full')} data-video-quality>
+          <Dropdown id="video-quality" className="input w-auto" value={videoQuality} onChange={(e) => setVideoQuality(e.target.value as 'auto' | 'full')} data-video-quality>
             <option value="auto">{t('Auto (720p)')}</option>
             <option value="full">{t('Full (1080p)')}</option>
-          </select>
+          </Dropdown>
           <p className="mt-1 text-xs text-text-2">{t('Camera resolution for everyone in this channel. Full uses more bandwidth.')}</p>
         </div>
       )}

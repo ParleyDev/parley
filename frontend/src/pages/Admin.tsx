@@ -14,6 +14,7 @@ import { formatBytes } from '../lib/upload'
 import { colorFor, initials } from '../lib/format'
 import { useStore } from '../store'
 import { useT, t as tr, tn } from '../lib/i18n'
+import Dropdown from '../components/Dropdown'
 
 /** Root console for Parley admins: stats, users, servers, instance settings. */
 export default function AdminPage() {
@@ -187,9 +188,9 @@ function UsersPane() {
     openModal({ kind: 'confirm', title: selected.size === 1 ? t('{label} 1 account', { label }) : t('{label} {n} accounts', { label, n: selected.size }), body, danger, confirmLabel: label, action: () => runBulk(action, extra) })
   const bulkQuota = () => { const mb = window.prompt(t('Storage quota in MB for the selected accounts (0 = unlimited, empty = instance default)'), ''); if (mb === null) return; const v = mb.trim() === '' ? null : Math.round(Number(mb) * 1024 * 1024); if (v !== null && !Number.isFinite(v)) { pushToast(t('Enter a number of MB'), 'error'); return } runBulk('quota', { upload_quota_bytes: v }) }
   const tri = (k: keyof UserFilters, label: string, yes: string, no: string) => (
-    <select className="input w-auto py-1 text-xs" value={filters[k]} onChange={(e) => setFilters({ ...filters, [k]: e.target.value })} data-admin-filter={k} aria-label={label}>
+    <Dropdown className="input w-auto py-1 text-xs" value={filters[k]} onChange={(e) => setFilters({ ...filters, [k]: e.target.value })} data-admin-filter={k} aria-label={label}>
       <option value="">{t('{label}: any', { label })}</option><option value="true">{yes}</option><option value="false">{no}</option>
-    </select>
+    </Dropdown>
   )
   const activeFilters = Object.values(filters).filter((v) => v !== '').length
   return (
@@ -431,10 +432,10 @@ function TakedownDialog({ guild, onClose, onDone }: { guild: AdminGuild; onClose
       <div className="pop w-full max-w-md rounded-xl bg-bg-1 border border-line p-5 space-y-3 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-bold">{t("Take down '{name}'", { name: guild.name })}</h3>
         <p className="text-sm text-text-2">{t('Members lose the server at once and are told it was removed for violating the community guidelines. The owner cannot restore it. Its content is kept for the case, then deleted.')}</p>
-        <select className="input" value={caseId} onChange={(e) => setCaseId(e.target.value)} data-takedown-case>
+        <Dropdown className="input" value={caseId} onChange={(e) => setCaseId(e.target.value)} data-takedown-case>
           <option value="">{t('Choose an open case')}</option>
           {cases.map((c) => <option key={c.id} value={c.id}>{c.justification}</option>)}
-        </select>
+        </Dropdown>
         <input className="input" value={why} onChange={(e) => setWhy(e.target.value)} placeholder={t('Reason (required)')} data-takedown-why />
         <div className="flex justify-end gap-2"><button type="button" className="btn-ghost py-1.5" onClick={onClose}>{t('Cancel')}</button><button type="button" className="btn-danger py-1.5" disabled={!caseId || why.trim().length < MIN_WHY} onClick={go} data-takedown-go>{t('Take down')}</button></div>
       </div>
@@ -501,7 +502,7 @@ function SettingsPane() {
           <input type="checkbox" checked={guard.mx} onChange={(e) => setGuard({ ...guard, mx: e.target.checked })} className="h-5 w-5 shrink-0 accent-accent" data-admin-check-domain /></label>
         <div className="flex items-center gap-2"><span className="text-sm font-semibold">{t('Remove accounts that never verify after')}</span><input type="number" min={1} max={365} className="input w-24" placeholder={t('never')} value={guard.purgeDays} onChange={(e) => setGuard({ ...guard, purgeDays: e.target.value })} data-admin-purge-days /><span className="text-sm text-text-2">{t('days')}</span></div>
         <div className="grid grid-cols-3 gap-3 phone:grid-cols-1">
-          <div><label className="label">{t('CAPTCHA on sign-up')}</label><select className="input" value={guard.captcha} onChange={(e) => setGuard({ ...guard, captcha: e.target.value })} data-admin-captcha><option value="">{t('Off')}</option><option value="turnstile">Cloudflare Turnstile</option><option value="hcaptcha">hCaptcha</option></select></div>
+          <div><label className="label">{t('CAPTCHA on sign-up')}</label><Dropdown className="input" value={guard.captcha} onChange={(e) => setGuard({ ...guard, captcha: e.target.value })} data-admin-captcha><option value="">{t('Off')}</option><option value="turnstile">Cloudflare Turnstile</option><option value="hcaptcha">hCaptcha</option></Dropdown></div>
           <div><label className="label">{t('Site key')}</label><input className="input font-mono" value={guard.siteKey} onChange={(e) => setGuard({ ...guard, siteKey: e.target.value })} autoComplete="off" data-admin-captcha-site /></div>
           <div><label className="label">{t('Secret key')}</label><input className="input font-mono" type="password" value={guard.secret} onChange={(e) => setGuard({ ...guard, secret: e.target.value })} autoComplete="new-password" data-admin-captcha-secret /></div>
         </div>
@@ -653,10 +654,10 @@ function MailPane() {
       <div className="mt-4 flex flex-wrap items-center gap-3">
         <input value={to} onChange={(e) => setTo(e.target.value)} placeholder={t('Filter by recipient email')} type="email" className="input max-w-md" data-admin-mail-search />
         <label className="flex items-center gap-2 text-sm text-text-1">{t('Keep emails for')}
-          <select className="input w-auto py-1.5" value={keep ?? ''} disabled={keep === null} onChange={(e) => saveKeep(Number(e.target.value))} data-admin-mail-keep>
+          <Dropdown className="input w-auto py-1.5" value={keep ?? ''} disabled={keep === null} onChange={(e) => saveKeep(Number(e.target.value))} data-admin-mail-keep>
             {keep !== null && !keepOptions().some(([d]) => d === keep) && <option value={keep}>{t('{n} days', { n: keep })}</option>}
             {keepOptions().map(([d, label]) => <option key={d} value={d}>{label}</option>)}
-          </select>
+          </Dropdown>
         </label>
         {(rows?.length ?? 0) > 0 && (confirmClear ? (
           <span className="flex items-center gap-2 text-sm" data-admin-mail-clear-confirm>{filter ? t('Delete every email to {email}?', { email: to.trim() }) : t('Delete every logged email?')}
@@ -845,10 +846,10 @@ function MessagesPane() {
       <label className="label mt-4 block">{t('Reason (required)')}</label>
       <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder={t('e.g. report #123: checking for more spam from this account')} maxLength={1000} data-admin-msg-why className="input max-w-xl" />
       <label className="label mt-3 block">{unbound ? t('Case (optional)') : t('Case (required)')}</label>
-      <select className="input max-w-xl" value={caseId} onChange={(e) => setCaseId(e.target.value)} data-admin-msg-case>
+      <Dropdown className="input max-w-xl" value={caseId} onChange={(e) => setCaseId(e.target.value)} data-admin-msg-case>
         <option value="">{unbound ? t('No case') : t('Choose an open case')}</option>
         {cases.map((c) => <option key={c.id} value={c.id}>{c.justification}</option>)}
-      </select>
+      </Dropdown>
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={ready ? t('Search message text') : t('Give a reason first')} disabled={!ready} data-admin-msg-search className="input mt-3 max-w-md" />
       {err && <p className="mt-2 text-sm text-danger" data-admin-msg-error>{err}</p>}
       <div className="mt-4 rounded-xl border border-line bg-bg-1 overflow-hidden">

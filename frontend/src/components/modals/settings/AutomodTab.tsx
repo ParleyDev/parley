@@ -4,6 +4,7 @@ import { api } from '../../../lib/api'
 import { EMPTY_ROLES, sortedRoles } from '../../../lib/perms'
 import { useStore } from '../../../store'
 import { t, useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 interface Rule { id: string; name: string; enabled: boolean; trigger: 'keyword' | 'mention_spam' | 'link_spam' | 'name'; keywords: string[]; regexes: string[]; allow: string[]; mention_limit: number; block: boolean; block_message: string; alert_channel_id: string | null; timeout_secs: number; exempt_roles: string[]; exempt_channels: string[] }
 const kinds = (): { trigger: Rule['trigger']; label: string; desc: string; icon: React.ReactNode }[] => [
@@ -78,10 +79,10 @@ function RuleCard({ r, open, onToggle, onSave, onDelete, textChannels, roles }: 
             <label className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4 accent-accent" checked={d.block} onChange={(e) => setD({ ...d, block: e.target.checked })} data-automod-block /> {r.trigger === 'name' ? t('Block the nickname') : t('Block the message')}</label>
             {d.block && <input className="input" value={d.block_message} onChange={(e) => setD({ ...d, block_message: e.target.value })} maxLength={150} placeholder={t('Custom message shown to the member (optional)')} data-automod-block-message />}
             <label className="flex items-center gap-2">{t('Send an alert to')}
-              <select className="input w-auto py-1" value={d.alert_channel_id ?? ''} onChange={(e) => setD({ ...d, alert_channel_id: e.target.value || null })} data-automod-alert><option value="">{t('no channel')}</option>{textChannels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}</select>
+              <Dropdown className="input w-auto py-1" value={d.alert_channel_id ?? ''} onChange={(e) => setD({ ...d, alert_channel_id: e.target.value || null })} data-automod-alert><option value="">{t('no channel')}</option>{textChannels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}</Dropdown>
             </label>
             <label className="flex items-center gap-2">{t('Then')}
-              <select className="input w-auto py-1" value={d.timeout_secs} onChange={(e) => setD({ ...d, timeout_secs: Number(e.target.value) })} data-automod-timeout>{timeouts().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+              <Dropdown className="input w-auto py-1" value={d.timeout_secs} onChange={(e) => setD({ ...d, timeout_secs: Number(e.target.value) })} data-automod-timeout>{timeouts().map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Dropdown>
             </label>
           </div>
           <div>

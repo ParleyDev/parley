@@ -4,6 +4,7 @@ import { api } from '../../../lib/api'
 import { has, P } from '../../../lib/perms'
 import { useStore } from '../../../store'
 import { useT } from '../../../lib/i18n'
+import Dropdown from '../../Dropdown'
 
 const MOD = P.MUTE_MEMBERS | P.MOVE_MEMBERS
 
@@ -52,11 +53,11 @@ export default function StageModeratorsTab({ channelId }: { channelId: string })
         ))}
       </div>
       <div className="flex gap-2">
-        <select className="input flex-1" value={pick} onChange={(e) => setPick(e.target.value)} data-stage-mod-pick>
+        <Dropdown className="input flex-1" value={pick} onChange={(e) => setPick(e.target.value)} data-stage-mod-pick>
           <option value="">{t('Add a role or member…')}</option>
           <optgroup label={t('Roles')}>{Object.values(roles ?? {}).filter((r) => r.id !== guildId && !taken.has(r.id)).sort((a, b) => b.position - a.position).map((r) => <option key={r.id} value={`role:${r.id}`}>@{r.name}</option>)}</optgroup>
           <optgroup label={t('Members')}>{Object.values(members ?? {}).filter((m) => !taken.has(m.user_id)).slice(0, 200).map((m) => <option key={m.user_id} value={`member:${m.user_id}`}>{m.nickname || m.display_name}</option>)}</optgroup>
-        </select>
+        </Dropdown>
         <button type="button" className="btn-primary" disabled={!pick} onClick={() => void add()} data-stage-mod-add>{t('Add')}</button>
       </div>
     </div>

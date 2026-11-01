@@ -1,0 +1,79 @@
+// Themed dropdowns stand in for native selects (mouse, keyboard, type-ahead, phones get a sheet), and Server Settings
+// has a search box that finds sections by name or keyword.
+import { chromium } from 'playwright'
+import { WEB, S, reg, call, ok, finish } from '../lib.mjs'
+const a = await reg('alice')
+const g = await call(a.token, 'POST', '/guilds', { name: `Drop ${S}` })
+for (const name of ['announcements', 'bots', 'chat']) await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name, kind: 'text' })
+const browser = await chromium.launch(); const errors = []
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
+await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+await p.goto(`${WEB}/channels/${g.id}`); await p.waitForSelector(`aside button:has-text("Drop ${S}")`)
+await p.click(`aside button:has-text("Drop ${S}")`); await p.click('button:has-text("Server Settings")'); await p.waitForSelector('[data-settings-search]')
+
+// ---- search ----
+const tabs = () => p.locator('[data-settings-nav] [data-settings-tab]').evaluateAll((els) => els.map((e) => e.getAttribute('data-settings-tab')))
+await p.fill('[data-settings-search]', 'ban')
+ok('search: "ban" finds Bans (and Members, which mentions banning)', (await tabs()).includes('bans') && !(await tabs()).includes('emoji'), (await tabs()).join(','))
+await p.fill('[data-settings-search]', 'raid')
+ok('search: a keyword ("raid") finds Safety Setup', JSON.stringify(await tabs()) === '["safety"]', (await tabs()).join(','))
+await p.fill('[data-settings-search]', 'moderation')
+ok('search: a group title finds its sections', (await tabs()).includes('automod') && (await tabs()).includes('audit'))
+await p.fill('[data-settings-search]', 'zzqx')
+ok('search: no match says so', await p.locator('[data-settings-no-results]').count() === 1)
+await p.fill('[data-settings-search]', 'audit')
+await p.press('[data-settings-search]', 'Enter'); await p.waitForTimeout(300)
+ok('search: Enter opens the first match', await p.locator('[data-settings-tab="audit"].bg-bg-4').count() === 1)
+await p.press('[data-settings-search]', 'Escape')
+ok('search: Escape clears the search, the settings stay open', await p.inputValue('[data-settings-search]') === '' && await p.locator('[data-settings-search]').count() === 1)
+ok('search: the full section list is back', (await tabs()).length > 10)
+
+// ---- dropdowns ----
+await p.click('[data-settings-tab="overview"]'); await p.waitForSelector('[data-system-channel]', { state: 'attached' })
+const trigger = p.locator('button#system-channel')
+ok('dropdown: a styled button replaces the native select', await trigger.getAttribute('role') === 'combobox' && await trigger.isVisible())
+ok('dropdown: shows the current choice', (await trigger.innerText()).includes('First text channel'))
+await trigger.click(); await p.waitForSelector('[data-dropdown-list]'); await p.waitForTimeout(250)
+const listBox = await p.locator('[data-dropdown-popup]').boundingBox(); const trigBox = await trigger.boundingBox()
+const below = listBox && trigBox && listBox.y >= trigBox.y + trigBox.height && listBox.y < trigBox.y + trigBox.height + 12
+const above = listBox && trigBox && listBox.y + listBox.height <= trigBox.y && listBox.y + listBox.height > trigBox.y - 12
+ok('dropdown: the list floats right next to the button (above when there is no room below), at least as wide', (below || above) && listBox.width >= trigBox.width - 1, JSON.stringify({ listBox, trigBox }))
+await p.keyboard.press('Escape'); await trigger.evaluate((el) => el.scrollIntoView({ block: 'start' })); await trigger.click(); await p.waitForSelector('[data-dropdown-list]'); await p.waitForTimeout(250)
+{ const l = await p.locator('[data-dropdown-popup]').boundingBox(), b = await trigger.boundingBox(); ok('dropdown: with room below, it opens below', l.y >= b.y + b.height) }
+ok('dropdown: every option is listed, the chosen one checked', await p.locator('[data-dropdown-option]').count() === 5 && await p.locator('[data-dropdown-option][aria-selected="true"]').count() === 1)
+await p.waitForTimeout(300); await p.screenshot({ path: 'dropdown-open.png' })
+await p.locator('[data-dropdown-option]', { hasText: '#bots' }).click()
+ok('dropdown: clicking an option picks it and closes the list', (await trigger.innerText()).includes('#bots') && await p.locator('[data-dropdown-list]').count() === 0)
+ok('dropdown: the hidden select follows (forms and tests see the value)', (await p.locator('select[data-system-channel] option:checked').innerText()) === '#bots')
+// keyboard
+await trigger.focus(); await p.keyboard.press('ArrowDown'); await p.waitForSelector('[data-dropdown-list]')
+await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter')
+ok('dropdown: arrow keys and Enter pick the next option', (await trigger.innerText()).includes('#chat'))
+await p.keyboard.press('Enter'); await p.keyboard.press('Home'); await p.keyboard.press('Enter')
+ok('dropdown: Home jumps to the first option', (await trigger.innerText()).includes('First text channel'))
+await p.keyboard.press('Space'); await p.keyboard.type('an'); await p.keyboard.press('Enter')
+ok('dropdown: typing jumps to a matching option', (await trigger.innerText()).includes('#announcements'))
+await p.keyboard.press('ArrowDown'); await p.waitForSelector('[data-dropdown-list]'); await p.keyboard.press('Escape')
+ok('dropdown: Escape closes the list but not the settings', await p.locator('[data-dropdown-list]').count() === 0 && await p.locator('[data-settings-search]').count() === 1)
+await trigger.click(); await p.mouse.click(1300, 120)
+ok('dropdown: clicking elsewhere closes it', await p.locator('[data-dropdown-list]').count() === 0)
+ok('dropdown: a disabled dropdown does not open', await p.locator('button#afk-timeout').isDisabled())
+await p.selectOption('select[data-system-channel]', { label: '#chat' })
+ok('dropdown: selectOption on the hidden select still drives it', (await trigger.innerText()).includes('#chat'))
+
+// ---- phones: the list is a sheet ----
+const ph = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); const pp = await ph.newPage(); pp.on('pageerror', (e) => errors.push(e.message))
+await pp.goto(`${WEB}/login`); await pp.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+await pp.goto(`${WEB}/channels/@me`); await pp.click('button[title="User Settings"]'); await pp.click('[data-settings-tab="voice"]')
+const st = pp.locator('button#stream-quality'); await st.scrollIntoViewIfNeeded(); await st.tap()
+await pp.waitForSelector('[data-dropdown-list]'); await pp.waitForTimeout(300)
+const sheet = await pp.locator('[data-dropdown-popup] > div').boundingBox()
+ok('phone: the list opens as a sheet along the bottom of the screen', sheet && Math.abs(sheet.y + sheet.height - 844) < 2 && sheet.width >= 388, JSON.stringify(sheet))
+const row = await pp.locator('[data-dropdown-option]').first().boundingBox()
+ok('phone: options are big enough to tap', row && row.height >= 44, JSON.stringify(row))
+await pp.screenshot({ path: 'dropdown-phone.png' })
+const before = await st.innerText(); await pp.locator('[data-dropdown-option][aria-selected="false"]').first().tap()
+ok('phone: tapping an option picks it and closes the sheet', (await st.innerText()) !== before && await pp.locator('[data-dropdown-list]').count() === 0)
+await ph.close()
+ok('no page errors', errors.length === 0, errors.join('\n'))
+await browser.close(); await finish()

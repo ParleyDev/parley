@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import type { ThreadInfo } from '../../lib/types'
 import { useT } from '../../lib/i18n'
+import Dropdown from '../Dropdown'
 
 /** Name a new thread; started from a message (card under it) or from the channel's Threads panel. */
 export default function CreateThreadModal({ onClose, channelId, messageId, suggested = '' }: { onClose: () => void; channelId: string; messageId?: string; suggested?: string }) {
@@ -30,9 +31,9 @@ export default function CreateThreadModal({ onClose, channelId, messageId, sugge
         <label className="label">{t('Thread name')}</label>
         <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} maxLength={100} required placeholder={t('New Thread')} data-thread-name />
         <label className="label mt-3" htmlFor="thread-archive">{t('Hide after inactivity')}</label>
-        <select id="thread-archive" className="input" value={archiveAfter} onChange={(e) => setArchiveAfter(Number(e.target.value))} data-thread-archive-after>
+        <Dropdown id="thread-archive" className="input" value={archiveAfter} onChange={(e) => setArchiveAfter(Number(e.target.value))} data-thread-archive-after>
           {[[60, t('1 hour')], [1440, t('24 hours')], [4320, t('3 days')], [10080, t('1 week')]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
+        </Dropdown>
         {!messageId && parentKind === 'text' && <label className="mt-3 flex items-start gap-2 text-sm cursor-pointer"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-accent" checked={priv} onChange={(e) => setPriv(e.target.checked)} data-thread-private /><span><span className="font-semibold">{t('Private Thread')}</span><span className="block text-xs text-text-2">{t('Only people you add (and moderators) can see it.')}</span></span></label>}
         <p className="mt-2 text-xs text-text-2">{messageId ? t('The thread starts from that message and appears as a card under it.') : t('Threads keep side conversations out of the main channel; everyone who can read the channel can join.')}</p>
       </form>

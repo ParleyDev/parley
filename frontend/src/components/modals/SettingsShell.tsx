@@ -1,10 +1,11 @@
 import { t } from '../../lib/i18n'
-import { ChevronLeft, ChevronRight, X, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X, Check, Search } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSwipeBack } from '../../lib/paneDrag'
 import { usePhone } from '../../lib/swipe'
 
-export interface NavSection<T extends string> { title?: string; items: { id: T; label: string; icon?: ReactNode }[] }
+/** `keywords`: words that find a section from the search box besides its label. */
+export interface NavSection<T extends string> { title?: string; items: { id: T; label: string; icon?: ReactNode; keywords?: string }[] }
 
 interface Props<T extends string> {
   sections: NavSection<T>[]
@@ -37,7 +38,21 @@ export default function SettingsShell<T extends string>({ sections, tab, onTab, 
   // Phones: swipe a section right to go back to the list.
   const sectionRef = useRef<HTMLDivElement>(null)
   useSwipeBack(sectionRef, usePhone() && !menu, () => setMenu(true))
-  const current = sections.flatMap((sec) => sec.items).find((it) => it.id === tab)
+  const items = sections.flatMap((sec) => sec.items)
+  const current = items.find((it) => it.id === tab)
+  const searchable = items.length > 6
+  const [q, setQ] = useState('')
+  const needle = searchable ? q.trim().toLowerCase() : ''
+  // Every word must match the label, the keywords or the group's title (so "mod" finds the Moderation pages).
+  const found = !needle ? [] : sections.flatMap((sec) => sec.items.filter((it) => {
+    const hay = `${t(it.label)} ${it.label} ${it.keywords ?? ''} ${sec.title ?? ''}`.toLowerCase()
+    return needle.split(/\s+/).every((w) => hay.includes(w))
+  }))
+  const navBtn = (it: NavSection<T>['items'][number]) => (
+    <button key={it.id} onClick={() => pick(it.id)} data-settings-tab={it.id} className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[15px] font-medium text-left phone:rounded-none phone:gap-3 phone:px-3 phone:py-3 phone:border-b phone:border-line/60 phone:last:border-b-0 ${tab === it.id ? 'bg-bg-4 text-text-0 phone:bg-transparent' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>
+      <span className="wide:hidden flex">{it.icon}</span><span className="flex-1 truncate">{t(it.label)}</span><ChevronRight size={16} className="wide:hidden text-text-2" />
+    </button>
+  )
   const closeBtn = <button onClick={onClose} title={t('Close')} className="wide:hidden ml-auto h-9 w-9 shrink-0 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-settings-close><X size={22} /></button>
 
   return (
@@ -45,20 +60,25 @@ export default function SettingsShell<T extends string>({ sections, tab, onTab, 
       <nav className={`wide:flex-[1_0_232px] shrink-0 bg-bg-0/60 flex justify-end phone:w-full phone:flex-1 phone:min-h-0 phone:flex-col phone:justify-start phone:bg-bg-1 ${menu ? '' : 'phone:hidden'}`} data-settings-nav>
         <div className="wide:hidden h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line"><span className="font-bold text-lg truncate">{t(title)}</span>{closeBtn}</div>
         <div className="w-[218px] py-14 pr-2 pl-5 space-y-0.5 overflow-y-auto phone:w-full phone:pl-3 phone:flex-1 phone:overflow-y-auto phone:px-3 phone:py-3 phone:space-y-0">
-          {sections.map((sec, i) => (
+          {searchable && <label className="flex items-center gap-2 h-8 rounded-md bg-bg-1 border border-line px-2 mb-2 focus-within:border-accent phone:h-10 phone:mb-3 phone:rounded-lg phone:bg-bg-0/60">
+            <Search size={14} className="text-text-2 shrink-0" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && found[0]) pick(found[0].id); if (e.key === 'Escape' && q) { e.stopPropagation(); setQ('') } }}
+              placeholder={t('Search')} aria-label={t('Search settings')} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-text-2" data-settings-search />
+            {q && <button type="button" onClick={() => setQ('')} aria-label={t('Clear')} className="text-text-2 hover:text-text-0"><X size={14} /></button>}
+          </label>}
+          {needle && (found.length ? (
+            <div className="phone:rounded-xl phone:bg-bg-0/60 phone:overflow-hidden" data-settings-results>{found.map(navBtn)}</div>
+          ) : <p className="px-2.5 py-2 text-sm text-text-2" data-settings-no-results>{t('Nothing matches.')}</p>)}
+          {!needle && sections.map((sec, i) => (
             <div key={i} className="phone:mb-4">
               {i > 0 && <div className="h-px bg-line/70 mx-2.5 my-2.5 phone:hidden" />}
               {sec.title && <h3 className="px-2.5 mb-1 pt-0.5 text-[12px] font-semibold text-text-2 truncate phone:uppercase phone:text-[11px] phone:font-bold phone:tracking-wider" data-settings-section>{t(sec.title)}</h3>}
               <div className="phone:rounded-xl phone:bg-bg-0/60 phone:overflow-hidden">
-                {sec.items.map((it) => (
-                  <button key={it.id} onClick={() => pick(it.id)} data-settings-tab={it.id} className={`w-full flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[15px] font-medium text-left phone:rounded-none phone:gap-3 phone:px-3 phone:py-3 phone:border-b phone:border-line/60 phone:last:border-b-0 ${tab === it.id ? 'bg-bg-4 text-text-0 phone:bg-transparent' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>
-                    <span className="wide:hidden flex">{it.icon}</span><span className="flex-1 truncate">{t(it.label)}</span><ChevronRight size={16} className="wide:hidden text-text-2" />
-                  </button>
-                ))}
+                {sec.items.map(navBtn)}
               </div>
             </div>
           ))}
-          {footer && <div className="phone:rounded-xl phone:bg-bg-0/60 phone:overflow-hidden phone:p-1"><div className="h-px bg-line my-3 mx-2 phone:hidden" />{footer}</div>}
+          {footer && !needle && <div className="phone:rounded-xl phone:bg-bg-0/60 phone:overflow-hidden phone:p-1"><div className="h-px bg-line my-3 mx-2 phone:hidden" />{footer}</div>}
         </div>
       </nav>
       <div ref={sectionRef} className={`wide:flex-[1_1_800px] phone:flex-1 min-w-0 min-h-0 flex flex-col ${menu ? 'phone:hidden' : ''}`} data-settings-section-pane>

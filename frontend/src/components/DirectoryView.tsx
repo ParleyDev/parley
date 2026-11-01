@@ -9,6 +9,7 @@ import { markJoined } from '../lib/welcome'
 import { myChannelPerms, myGuildPerms, useStore } from '../store'
 import Modal from './Modal'
 import { t as tr, useT } from '../lib/i18n'
+import Dropdown from './Dropdown'
 
 interface Entry { guild_id: string; name: string; icon_url: string | null; description: string; category: string; invite_code: string; member_count: number; joined: boolean; partnered: boolean }
 const CATEGORIES = ['gaming', 'music', 'education', 'science', 'entertainment', 'creative', 'community', 'other']
@@ -79,8 +80,8 @@ function AddServer({ channel, onClose }: { channel: Channel; onClose: () => void
     <Modal title={t('Add your server')} subtitle={t('to #{name}', { name: channel.name })} onClose={onClose} width="max-w-md" footer={<><button type="button" className="btn-ghost" onClick={onClose}>{t('Cancel')}</button><button type="button" className="btn-primary" disabled={!gid} onClick={add} data-directory-add-confirm>{t('Add')}</button></>}>
       {mine.length === 0 ? <p className="text-sm text-text-2">{t('You need Manage Server in a server to list it here.')}</p> : (
         <div className="space-y-3" data-directory-add-form>
-          <div><label className="label">{t('Server')}</label><select className="input" value={gid} onChange={(e) => { setGid(e.target.value); setDescription(guilds[e.target.value]?.description ?? '') }} data-directory-pick>{mine.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
-          <div><label className="label">{t('Category')}</label><select className="input capitalize" value={category} onChange={(e) => setCategory(e.target.value)} data-directory-category>{CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}</select></div>
+          <div><label className="label">{t('Server')}</label><Dropdown className="input" value={gid} onChange={(e) => { setGid(e.target.value); setDescription(guilds[e.target.value]?.description ?? '') }} data-directory-pick>{mine.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</Dropdown></div>
+          <div><label className="label">{t('Category')}</label><Dropdown className="input capitalize" value={category} onChange={(e) => setCategory(e.target.value)} data-directory-category>{CATEGORIES.map((c) => <option key={c} value={c}>{categoryLabel(c)}</option>)}</Dropdown></div>
           <div><label className="label">{t('Description')}</label><textarea className="input resize-none" rows={3} maxLength={200} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("What's your server about?")} data-directory-desc /></div>
           <p className="text-xs text-text-2">{t("Listing makes an invite that doesn't expire, so members here can join from the directory.")}</p>
         </div>
