@@ -128,7 +128,7 @@ console.log('-- mobile sheet')
 await p.click('button[title="Member List"]'); await p.waitForTimeout(300)
 await p.locator(`[data-member-row="${b.user.id}"]`).first().tap(); await p.waitForTimeout(500)
 const sheet=p.locator('[data-profile-sheet]'); const sb=await sheet.boundingBox()
-ok('mobile: bottom sheet full width, flush with bottom, same popout content', await sheet.count()===1 && sb && Math.round(sb.width)===390 && Math.round(sb.y+sb.height)===844 && await sheet.locator('[data-quick-message]').count()===1 && await sheet.locator('button[title="More"]').count()===1, JSON.stringify(sb))
+ok('mobile: the full profile sheet (like your own), full width, flush with bottom, with message and More', await sheet.count()===1 && sb && Math.round(sb.width)===390 && Math.round(sb.y+sb.height)===844 && await sheet.locator('[data-profile-card][data-profile-variant="sheet"]').count()===1 && await sheet.locator('[data-full-message], [data-full-message-icon]').count()>=1 && await sheet.locator('button[title="More"]').count()===1, JSON.stringify(sb))
 await p.screenshot({ path: '46-popout-mobile.png' })
 await ctx.close()
 }

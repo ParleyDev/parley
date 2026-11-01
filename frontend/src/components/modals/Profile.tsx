@@ -22,7 +22,7 @@ const PAD = 8
 
 /**
  * A user's profile. With an anchor (something was clicked) it is Discord's compact popout
- * beside that element on wide screens, or a bottom sheet on phones. Without one (deep link,
+ * beside that element on wide screens; on phones it is the full profile sheet. Without one (deep link,
  * "View Full Profile") it is the full profile modal: card with Member Since, roles, mutual
  * servers and the action buttons.
  */
@@ -31,6 +31,7 @@ const profiles = new Map<string, UserProfile>()
 
 export default function ProfileModal({ onClose, userId, anchor, tab, note }: { onClose: () => void; userId: string; anchor?: Anchor; tab?: FullTab | 'roles'; note?: boolean }) {
   const t = useT()
+  const phone = usePhone()
   const cached = useStore((s) => s.users[userId])
   const { pathname } = useLocation()
   const guildId = matchPath('/channels/:guildId/*', pathname)?.params.guildId
@@ -52,7 +53,8 @@ export default function ProfileModal({ onClose, userId, anchor, tab, note }: { o
     const card = <DeletedCard deleted={!!user?.deleted} />
     return anchor ? <Popout anchor={anchor} onClose={onClose}>{card}</Popout> : <Modal onClose={onClose} width="max-w-xs" bare>{card}</Modal>
   }
-  if (anchor) {
+  // On a phone every profile is the same sheet (the one your own opens in): a tap opens it rather than a small card.
+  if (anchor && !phone) {
     return (
       <Popout anchor={anchor} onClose={onClose}>
         {!complete ? null : user ? <ProfilePopout user={user} guildId={inGuild} onClose={onClose} /> : <div className="rounded-lg bg-[#232428] p-6 text-text-2">{t('Loading…')}</div>}
