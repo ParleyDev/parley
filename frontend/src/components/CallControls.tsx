@@ -162,7 +162,7 @@ export function MenuDivider() { return <div className="my-1.5 h-px bg-line" /> }
 function NavRow({ title, sub, onClick, ...data }: { title: string; sub: string; onClick: () => void } & Record<`data-${string}`, string | undefined>) {
   return (
     <button type="button" role="menuitem" onClick={onClick} className="w-full flex items-center gap-2 rounded-md px-2.5 py-2 text-left hover:bg-bg-3" {...data}>
-      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-text-0">{title}</span><span className="block truncate text-xs text-text-2">{sub}</span></span>
+      <span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-text-0">{title}</span><span className="block line-clamp-2 text-xs text-text-2 [overflow-wrap:anywhere]" title={sub}>{sub}</span></span>
       <ChevronRight size={16} className="shrink-0 text-text-2" />
     </button>
   )

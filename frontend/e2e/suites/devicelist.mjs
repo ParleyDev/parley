@@ -8,7 +8,7 @@ const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream',
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 600 }, permissions: ['microphone', 'camera'] })
 // 30 devices of each kind, far more than fit in a 600px window.
 await ctx.addInitScript(() => {
-  const fake = ['audioinput', 'audiooutput', 'videoinput'].flatMap((kind) => Array.from({ length: 30 }, (_, i) => ({ kind, deviceId: `${kind}-${i}`, groupId: 'g', label: `${kind} device number ${i + 1}`, toJSON() { return this } })))
+  const fake = ['audioinput', 'audiooutput', 'videoinput'].flatMap((kind) => Array.from({ length: 30 }, (_, i) => ({ kind, deviceId: `${kind}-${i}`, groupId: 'g', label: kind === 'audioinput' ? `Microphone Array (Realtek High Definition Audio with Intel Smart Sound Technology) - Port ${i + 1}` : `${kind} device number ${i + 1}`, toJSON() { return this } })))
   const md = navigator.mediaDevices
   if (md) md.enumerateDevices = async () => fake
 })
@@ -37,6 +37,10 @@ ok('user panel: the device list scrolls inside the menu', await scrolls('[data-d
 const panelMenuH = await p.locator('[data-device-menu="input"]').evaluate((el) => el.getBoundingClientRect().height)
 ok('user panel: the menu stays compact', panelMenuH < 360, String(panelMenuH))
 await p.waitForTimeout(400); await p.screenshot({ path: 'devicelist-panel.png' })
+const label = p.locator('[data-device-menu="input"] [data-device-option="audioinput-29"] [data-device-label]')
+ok('user panel: a long device name is shown whole, wrapped, not cut off', await label.evaluate((el) => el.scrollWidth <= el.clientWidth && getComputedStyle(el).textOverflow !== 'ellipsis' && el.getBoundingClientRect().height > 30))
+ok('user panel: the ending that tells devices apart is visible', (await label.innerText()).endsWith('Port 30'))
+ok('user panel: the full name is also in the tooltip', (await p.locator('[data-device-option="audioinput-29"]').getAttribute('title'))?.endsWith('Port 30'))
 const pick1 = await pickLast('[data-device-menu="input"]')
 ok('user panel: the last input device can be reached and picked', pick1.visible && (await settings()).inputDeviceId === 'audioinput-29', JSON.stringify(pick1))
 

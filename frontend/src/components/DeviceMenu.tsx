@@ -41,11 +41,15 @@ export function DeviceOptions({ kind, onPicked }: { kind: DeviceKind; onPicked: 
     <div className="max-h-[min(18rem,45dvh)] overflow-y-auto overscroll-contain" data-device-list>
       {list === null && <div className="px-2 py-1.5 text-sm text-text-2">{t('Looking for devices…')}</div>}
       {list?.length === 0 && <div className="px-2 py-1.5 text-sm text-text-2">{t('No devices found. Allow access first, or check your system settings.')}</div>}
-      {list && [{ deviceId: '', label: t('Default') } as Pick<MediaDeviceInfo, 'deviceId' | 'label'>, ...list.filter((d) => d.deviceId !== 'default' && d.deviceId !== '')].map((d, i) => (
-        <button key={d.deviceId || 'default'} role="menuitemradio" aria-checked={current === d.deviceId} onClick={() => pick(d.deviceId)} className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-left hover:bg-accent hover:text-white ${current === d.deviceId ? 'text-text-0' : 'text-text-1'}`} data-device-option={d.deviceId || 'default'}>
-          <span className="w-4 shrink-0">{current === d.deviceId && <Check size={14} />}</span><span className="truncate">{d.label || (i === 0 ? t('Default') : `${names()[kind]} ${i}`)}</span>
-        </button>
-      ))}
+      {list && [{ deviceId: '', label: t('Default') } as Pick<MediaDeviceInfo, 'deviceId' | 'label'>, ...list.filter((d) => d.deviceId !== 'default' && d.deviceId !== '')].map((d, i) => {
+        // Whole name, wrapped: devices often share a long prefix and differ only at the end.
+        const label = d.label || (i === 0 ? t('Default') : `${names()[kind]} ${i}`)
+        return (
+          <button key={d.deviceId || 'default'} role="menuitemradio" aria-checked={current === d.deviceId} title={label} onClick={() => pick(d.deviceId)} className={`w-full flex items-start gap-2 rounded-md px-2 py-1.5 text-sm text-left hover:bg-accent hover:text-white ${current === d.deviceId ? 'text-text-0' : 'text-text-1'}`} data-device-option={d.deviceId || 'default'}>
+            <span className="mt-0.5 w-4 shrink-0">{current === d.deviceId && <Check size={14} />}</span><span className="min-w-0 leading-snug [overflow-wrap:anywhere]" data-device-label>{label}</span>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -58,7 +62,7 @@ export default function DeviceMenu({ kind, onClose, align = 'right' }: { kind: D
   return (
     <>
       <div className="fixed inset-0 z-30" onClick={onClose} />
-      <div className={`pop absolute bottom-full ${pos} mb-2 z-40 w-64 rounded-xl bg-bg-0 border border-line shadow-2xl p-2`} data-device-menu={kind} role="menu">
+      <div className={`pop absolute bottom-full ${pos} mb-2 z-40 w-80 max-w-[calc(100vw-1rem)] rounded-xl bg-bg-0 border border-line shadow-2xl p-2`} data-device-menu={kind} role="menu">
         <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{titles()[kind]}</div>
         <DeviceOptions kind={kind} onPicked={onClose} />
         <div className="h-px bg-line my-1" />
