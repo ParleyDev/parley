@@ -81,4 +81,4 @@ _Add a brief overview of your project architecture_
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+- **Conventional Commits** for every commit subject: `type(scope)!: summary`, types `feat fix perf refactor docs style test build ci chore revert`, scope optional and lower case (`feat(desktop): …`, `fix(voice): …`), `!` or a `BREAKING CHANGE:` footer for breaking changes. Releases are `chore(release): X.Y.Z`. `scripts/commit-lint.sh` (commit-msg hook) enforces it; `scripts/version.mjs` reads the types to pick the next version (feat → minor, fix/perf/other → patch, breaking → major).

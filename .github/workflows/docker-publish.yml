@@ -2,7 +2,7 @@ name: Publish Docker images
 
 # main: only when something that goes into the images changes (e2e tests, docs and media do not). Release tags always
 # publish: GitHub does not apply path filters to tag pushes. Run by hand to republish.
-# A release pushes its "Release X.Y.Z" commit to main and then tags that same commit, which would build it twice: the
+# A release pushes its "chore(release): X.Y.Z" commit ("Release X.Y.Z" before Conventional Commits) to main and then tags that same commit, which would build it twice: the
 # main push skips release commits and the tag build publishes them, including `latest` when the tag is main's head.
 on:
   push:
@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   check-token:
-    if: github.ref_type == 'tag' || !startsWith(github.event.head_commit.message, 'Release ')
+    if: github.ref_type == 'tag' || !(startsWith(github.event.head_commit.message, 'Release ') || startsWith(github.event.head_commit.message, 'chore(release): '))
     runs-on: ubuntu-latest
     outputs:
       configured: ${{ steps.check.outputs.configured }}

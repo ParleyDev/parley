@@ -2,10 +2,12 @@
 // One version for every artifact. The release version lives in /VERSION (semver). Builds come in three channels:
 //   release      a commit tagged v<VERSION>: <VERSION>
 //   prerelease   any other clean commit on main, which is what production runs: the next release as a pre-release,
-//                <next>-pre.<commits since the last release tag>. The next release is a minor bump when a feature
-//                (or epic) was closed in the issue tracker (.beads/issues.jsonl) since that tag, otherwise a patch;
-//                a "Bump: major|minor|patch" line in a commit message since the tag asks for at least that much, and
-//                a /VERSION already raised past the tag (a release being prepared) is the next release itself.
+//                <next>-pre.<commits since the last release tag>. The next release follows the Conventional Commits
+//                since that tag (scripts/commit-lint.sh): a breaking change (`feat!:`, a BREAKING CHANGE footer) is
+//                a major bump, a `feat` a minor one, anything else a patch. Commits from before Conventional Commits
+//                count as a feature when a feature or epic was closed in the issue tracker (.beads/issues.jsonl)
+//                since the tag. A "Bump: major|minor|patch" line asks for at least that much, and a /VERSION
+//                already raised past the tag (a release being prepared) is the next release itself.
 //   dev          everything else (other branches, local changes): <VERSION>-dev.<commits on this branch>
 //                (+ ".dirty" when the tree has local changes)
 // and the short commit hash is appended as build metadata for display (+<sha>), never in package versions, so a
@@ -45,9 +47,19 @@ function nextRelease() {
   const rank = { patch: 0, minor: 1, major: 2 }
   let bump = 0
   if (tag) {
-    for (const m of git(`log --format=%B ${tag}..HEAD`).matchAll(/^Bump:\s*(major|minor|patch)\s*$/gim)) bump = Math.max(bump, rank[m[1].toLowerCase()])
+    // One record per commit: subject, then body (%x1e separates commits).
+    const commits = git(`log --format=%s%n%b%x1e ${tag}..HEAD`).split('\x1e').map((c) => c.trim()).filter(Boolean)
+    let legacy = false
+    for (const c of commits) {
+      const subject = c.split('\n')[0]
+      const cc = /^(\w+)(\([^)]*\))?(!)?: /.exec(subject)
+      if (cc?.[3] || /^BREAKING[ -]CHANGE: /m.test(c)) bump = 2
+      else if (cc?.[1] === 'feat') bump = Math.max(bump, 1)
+      else if (!cc && !/^(Merge|Revert) /.test(subject)) legacy = true
+      for (const m of c.matchAll(/^Bump:\s*(major|minor|patch)\s*$/gim)) bump = Math.max(bump, rank[m[1].toLowerCase()])
+    }
     const after = git(`log -1 --format=%cI ${tag}`)
-    try {
+    if (legacy) try {
       for (const line of readFileSync(join(root, '.beads/issues.jsonl'), 'utf8').split('\n')) {
         if (!line.includes('"closed_at"')) continue
         const i = JSON.parse(line)

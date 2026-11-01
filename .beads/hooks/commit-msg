@@ -1,3 +1,5 @@
 #!/usr/bin/env sh
 # Identity guard: reject person/agent trailers and foreign identities in commit messages.
 "$(git rev-parse --show-toplevel)/scripts/identity-guard.sh" commit-msg "$1" || exit 1
+# Conventional Commits subject (scripts/version.mjs reads the types to pick the next release).
+"$(git rev-parse --show-toplevel)/scripts/commit-lint.sh" "$1" || exit 1

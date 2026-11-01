@@ -125,3 +125,7 @@ bd prime                # Refresh Beads context
 
 **Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/core-concepts/sync-concepts.md for details and anti-patterns.
 <!-- END BEADS CODEX SETUP -->
+
+## Conventions & Patterns
+
+- **Conventional Commits** for every commit subject: `type(scope)!: summary`, types `feat fix perf refactor docs style test build ci chore revert`, scope optional and lower case (`feat(desktop): …`, `fix(voice): …`), `!` or a `BREAKING CHANGE:` footer for breaking changes. Releases are `chore(release): X.Y.Z`. `scripts/commit-lint.sh` (commit-msg hook) enforces it; `scripts/version.mjs` reads the types to pick the next version (feat → minor, fix/perf/other → patch, breaking → major).
