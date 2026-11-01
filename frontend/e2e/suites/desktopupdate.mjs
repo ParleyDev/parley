@@ -47,6 +47,8 @@ ok('the update channel starts on Stable', (await p.locator('button#update-channe
 await p.click('button#update-channel'); await p.locator('[data-dropdown-option="dev"]').click(); await p.waitForTimeout(800)
 const chc = await p.evaluate(() => window.__calls)
 ok('picking Development switches the shell\'s channel and checks again', chc.includes('channel:dev') && chc.includes('check_update') && (await p.locator('button#update-channel').innerText()).startsWith('Development'), JSON.stringify(chc))
+{ const t1 = await p.locator('[data-desktop-autostart]').boundingBox(), t2 = await p.locator('[data-desktop-minimized]').boundingBox()
+  ok('the desktop toggles have room between them', t1 && t2 && t2.y - (t1.y + t1.height) >= 8, JSON.stringify({ t1, t2 })) }
 ok('Settings shows the version and that it is up to date', /Parley desktop 0\.21\.0/.test(await p.locator('[data-app-updates]').innerText()) && /up to date/.test(await p.locator('[data-app-update-line]').innerText()))
 await p.context().close()
 

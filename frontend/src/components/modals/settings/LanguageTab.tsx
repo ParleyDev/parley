@@ -25,7 +25,7 @@ export default function LanguageTab() {
       </div>
       <div className="h-px bg-line" />
       <section className="space-y-2">
-        <span data-spellcheck-toggle><Toggle label={t('Enable spellcheck')} checked={p.spellcheck} onChange={(v) => setPrefs({ spellcheck: v })} /></span>
+        <span className="block" data-spellcheck-toggle><Toggle label={t('Enable spellcheck')} checked={p.spellcheck} onChange={(v) => setPrefs({ spellcheck: v })} /></span>
         <p className="text-xs text-text-2">{t('Underlines misspelt words in the message box. Checks the languages set up in your {where}.', { where: /ParleyDesktop\//.test(navigator.userAgent) ? t('operating system') : t('browser') })}</p>
       </section>
     </div>

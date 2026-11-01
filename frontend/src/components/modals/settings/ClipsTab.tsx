@@ -18,7 +18,7 @@ export default function ClipsTab() {
       <h2 className="text-xl font-bold">{t('Clips')}</h2>
       <p className="text-sm text-text-2">{tn('Save the last moments of a call or a stream you are watching with {combo} or the scissors in the call bar. Clips stay on this device.', { combo: <b>{prettyCombo(kb.saveClip)}</b> })}</p>
       <section className="space-y-3">
-        <span data-clips-enable><Toggle label={t('Enable Clips')} checked={p.clips} onChange={(v) => setPrefs({ clips: v })} /></span>
+        <span className="block" data-clips-enable><Toggle label={t('Enable Clips')} checked={p.clips} onChange={(v) => setPrefs({ clips: v })} /></span>
         <div>
           <label className="label" htmlFor="clip-length">{t('Clip length')}</label>
           <Dropdown id="clip-length" className="input w-48" value={p.clipSeconds} onChange={(e) => setPrefs({ clipSeconds: Number(e.target.value) as 15 | 30 | 60 })} data-clip-length>

@@ -15,8 +15,8 @@ export default function StreamerTab() {
       <h2 className="text-xl font-bold">{t('Streamer Mode')}</h2>
       <p className="text-sm text-text-2">{tn('For when the app is on screen: hides your email and other personal details, blurs invite links and codes, and keeps sounds and notifications from interrupting. Toggle it with {combo} (Keybinds) or the banner.', { combo: <b>{prettyCombo(kb.toggleStreamer)}</b> })}</p>
       <section className="space-y-3">
-        <span data-streamer-toggle><Toggle label="Enable Streamer Mode" checked={p.streamer} onChange={(v) => setPrefs({ streamer: v })} /></span>
-        <span data-streamer-auto><Toggle label="Automatically enable when OBS or XSplit is running" checked={desktopBridge() && p.streamerAuto} onChange={(v) => setPrefs({ streamerAuto: v })} disabled={!desktopBridge()} /></span>
+        <span className="block" data-streamer-toggle><Toggle label="Enable Streamer Mode" checked={p.streamer} onChange={(v) => setPrefs({ streamer: v })} /></span>
+        <span className="block" data-streamer-auto><Toggle label="Automatically enable when OBS or XSplit is running" checked={desktopBridge() && p.streamerAuto} onChange={(v) => setPrefs({ streamerAuto: v })} disabled={!desktopBridge()} /></span>
         <p className="text-xs text-text-2">{desktopBridge() ? t('Turns Streamer Mode on when OBS, Streamlabs or XSplit starts, and back off when it quits.') : isNative() ? t('Not available on this platform yet.') : t('Only the desktop app can see other programs; a browser cannot.')}</p>
       </section>
       <div className="h-px bg-line" />

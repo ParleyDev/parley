@@ -26,10 +26,10 @@ export default function DataPrivacyTab() {
 
       <section className="space-y-3">
         <h3 className="label">{t('Privacy controls')}</h3>
-        <span data-privacy-receipts><Toggle label={t('Show that I have read direct messages')} checked={user.show_read_receipts !== false} onChange={(v) => save({ show_read_receipts: v })} /></span>
+        <span className="block" data-privacy-receipts><Toggle label={t('Show that I have read direct messages')} checked={user.show_read_receipts !== false} onChange={(v) => save({ show_read_receipts: v })} /></span>
         <p className="text-xs text-text-2">{t('Off: nobody sees a "Seen" marker on messages you read. You will still see theirs if they allow it.')}</p>
-        <span data-privacy-typing><Toggle label={t('Show when I am typing')} checked={user.show_typing !== false} onChange={(v) => save({ show_typing: v })} /></span>
-        <span data-privacy-activity><Toggle label={t('Share my activity status')} checked={user.share_activity !== false} onChange={(v) => save({ share_activity: v })} /></span>
+        <span className="block" data-privacy-typing><Toggle label={t('Show when I am typing')} checked={user.show_typing !== false} onChange={(v) => save({ show_typing: v })} /></span>
+        <span className="block" data-privacy-activity><Toggle label={t('Share my activity status')} checked={user.share_activity !== false} onChange={(v) => save({ share_activity: v })} /></span>
         <p className="text-xs text-text-2">{t('Shows what you are listening to on Spotify, or the activity you set yourself, next to your name. Off: nobody sees either.')}</p>
         <p className="text-xs text-text-2">{t('Off: the "… is typing" line never shows for you. Your online status is controlled from the status picker (choose Invisible to appear offline).')}</p>
       </section>

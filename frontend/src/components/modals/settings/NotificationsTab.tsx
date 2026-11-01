@@ -91,7 +91,7 @@ export default function NotificationsTab() {
       <section className="space-y-3" data-server-notif-prefs>
         <label className="label">{t('Push notifications')}</label>
         {pushSupported() && <>
-          <span data-web-push-toggle><Toggle label="Push notifications on this browser" checked={webPush} onChange={(v) => void toggleWebPush(v)} /></span>
+          <span className="block" data-web-push-toggle><Toggle label="Push notifications on this browser" checked={webPush} onChange={(v) => void toggleWebPush(v)} /></span>
           <p className="text-xs text-text-2">{t('Mentions and DMs reach this browser even with every Parley tab closed, with Reply and Mark as Read right on the notification.')}</p>
         </>}
         <div className="space-y-2" data-push-test>
