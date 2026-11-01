@@ -146,7 +146,7 @@ function CallMenu({ anchor, align, onClose, children }: { anchor: RefObject<HTML
   return createPortal(
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div role="menu" style={{ left: pos.left, bottom: pos.bottom, width: pos.width, maxHeight: `calc(100vh - ${pos.bottom + 16}px)` }} className="pop fixed z-50 overflow-y-auto rounded-xl border border-line bg-bg-1 p-2 shadow-2xl" data-call-menu>
+      <div role="menu" style={{ left: pos.left, bottom: pos.bottom, width: pos.width, maxHeight: window.innerHeight - pos.bottom - 16 }} className="pop fixed z-50 overflow-y-auto rounded-xl border border-line bg-bg-1 p-2 shadow-2xl" data-call-menu>
         {children}
       </div>
     </>,

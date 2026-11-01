@@ -29,7 +29,8 @@ export function deviceLabel(kind: DeviceKind, list: MediaDeviceInfo[] | null, id
   return list?.find((d) => d.deviceId === id)?.label || names()[kind]
 }
 
-/** The radio list of devices (Default first); picking one applies it live and calls `onPicked`. */
+/** The radio list of devices (Default first); picking one applies it live and calls `onPicked`. A long list scrolls
+ *  inside its own box so the menu stays compact and every device stays reachable. */
 export function DeviceOptions({ kind, onPicked }: { kind: DeviceKind; onPicked: () => void }) {
   const t = useT()
   const update = useStore((s) => s.updateVoiceSettings)
@@ -37,7 +38,7 @@ export function DeviceOptions({ kind, onPicked }: { kind: DeviceKind; onPicked: 
   const current = useCurrentDevice(kind)
   const pick = (id: string) => { update(kind === 'input' ? { inputDeviceId: id } : kind === 'output' ? { outputDeviceId: id } : { cameraDeviceId: id }); onPicked() }
   return (
-    <>
+    <div className="max-h-[min(18rem,45dvh)] overflow-y-auto overscroll-contain" data-device-list>
       {list === null && <div className="px-2 py-1.5 text-sm text-text-2">{t('Looking for devices…')}</div>}
       {list?.length === 0 && <div className="px-2 py-1.5 text-sm text-text-2">{t('No devices found. Allow access first, or check your system settings.')}</div>}
       {list && [{ deviceId: '', label: t('Default') } as Pick<MediaDeviceInfo, 'deviceId' | 'label'>, ...list.filter((d) => d.deviceId !== 'default' && d.deviceId !== '')].map((d, i) => (
@@ -45,7 +46,7 @@ export function DeviceOptions({ kind, onPicked }: { kind: DeviceKind; onPicked: 
           <span className="w-4 shrink-0">{current === d.deviceId && <Check size={14} />}</span><span className="truncate">{d.label || (i === 0 ? t('Default') : `${names()[kind]} ${i}`)}</span>
         </button>
       ))}
-    </>
+    </div>
   )
 }
 
