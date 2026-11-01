@@ -65,17 +65,21 @@ function audio(): HTMLAudioElement {
 }
 
 // Live visualisation: one analyser on the shared element. Only for files from this origin: a cross-origin file
-// routed through Web Audio without CORS would play as silence.
+// routed through Web Audio without CORS would play as silence. Never on iOS: WebKit treats an element routed through
+// Web Audio as Web Audio, which stops when the app goes to the background (and obeys the silent switch); there the
+// visualiser runs its synthetic motion and the file keeps playing behind the lock screen.
 let ctx: AudioContext | null = null
 let node: AnalyserNode | null = null
 const sameOrigin = (url: string) => { try { return new URL(url, location.href).origin === location.origin } catch { return false } }
+const ios = () => /iP(hone|ad|od)/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1)
 function wire() {
-  if (node || !state.track || !sameOrigin(state.track.url)) return
+  if (node || !state.track || !sameOrigin(state.track.url) || ios()) return
   try {
     ctx = new AudioContext()
     const src = ctx.createMediaElementSource(audio())
     node = ctx.createAnalyser(); node.fftSize = 256; node.smoothingTimeConstant = 0.78
     src.connect(node); node.connect(ctx.destination)
+    audio().dataset.analysed = ''
   } catch { node = null }
 }
 /** The analyser for the visualiser, when the playing file can be analysed. */
