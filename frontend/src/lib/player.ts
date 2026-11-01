@@ -77,11 +77,44 @@ function wire() {
   try {
     ctx = new AudioContext()
     const src = ctx.createMediaElementSource(audio())
-    node = ctx.createAnalyser(); node.fftSize = 256; node.smoothingTimeConstant = 0.78
+    node = ctx.createAnalyser(); node.fftSize = 2048; node.smoothingTimeConstant = 0.78
     src.connect(node); node.connect(ctx.destination)
     audio().dataset.analysed = ''
   } catch { node = null }
 }
+/**
+ * Visualiser data made by the server (backend audio_viz.rs): a timeline of frequency bands the visualiser replays in
+ * step with the stream, so it reacts to the music on every platform without Web Audio, plus a peak waveform for seek
+ * bars. A few KB per minute; the audio itself still streams once.
+ */
+export interface Viz { fps: number; bands: number; offset: number; frames: number; peaks: Uint8Array; data: Uint8Array }
+export function parseViz(buf: ArrayBuffer): Viz | null {
+  const b = new Uint8Array(buf)
+  if (b.length < 16 || String.fromCharCode(...b.subarray(0, 4)) !== 'PVZ1') return null
+  const v = new DataView(buf)
+  const fps = b[4], bands = b[5], offset = v.getUint16(6, true) / 1000, frames = v.getUint32(8, true), np = v.getUint16(12, true)
+  const peaks = b.subarray(16, 16 + np), data = b.subarray(16 + np)
+  return { fps, bands, offset, frames: Math.min(frames, Math.floor(data.length / Math.max(1, bands))), peaks, data }
+}
+/** `/api/attachments/<id>/<file>` → its visualiser data. */
+export const vizUrl = (url: string, peaksOnly = false) => url.replace(/\/[^/?#]+(?:[?#].*)?$/, '/viz') + (peaksOnly ? '?peaks=1' : '')
+const vizCache = new Map<string, Promise<Viz | null>>()
+export function loadViz(url: string, peaksOnly = false): Promise<Viz | null> {
+  const key = vizUrl(url, peaksOnly)
+  let p = vizCache.get(key)
+  if (!p) {
+    p = fetch(key).then((r) => (r.ok ? r.arrayBuffer() : null)).then((b) => (b ? parseViz(b) : null)).catch(() => null)
+    p.then((v) => { if (!v) setTimeout(() => vizCache.delete(key), 30_000) })
+    vizCache.set(key, p)
+  }
+  return p
+}
+let timelineFor: string | null = null, timelineData: Viz | null = null
+/** The playing track's visualiser timeline, once it has arrived. */
+export const timeline = () => (state.track && timelineFor === state.track.id ? timelineData : null)
+/** The playhead right now (smoother than the state's, which moves on timeupdate). */
+export const currentTime = () => el?.currentTime ?? 0
+
 /** The analyser for the visualiser, when the playing file can be analysed. */
 export const analyser = () => (state.track && sameOrigin(state.track.url) ? node : null)
 
@@ -112,6 +145,8 @@ export async function play(track: Track, opts: { at?: number; speed?: number } =
     a.pause()
     a.src = track.url
     set({ track, pos: opts.at ?? 0, duration: 0, speed: opts.speed ?? 1 })
+    timelineFor = null; timelineData = null
+    void loadViz(track.url).then((v) => { if (v && state.track?.id === track.id) { timelineFor = track.id; timelineData = v } })
     if (opts.at) { const at = opts.at; a.addEventListener('loadedmetadata', () => { a.currentTime = at }, { once: true }) }
     mediaSession()
   } else {

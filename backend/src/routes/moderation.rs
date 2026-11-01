@@ -79,7 +79,7 @@ async fn purge_messages(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     // Their system notices (joins, pins…) go too, but are not counted as purged messages.
     sqlx::query("DELETE FROM messages WHERE author_id = $1").bind(id).execute(&state.db).await?;
     for (fid,) in files {
-        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.viz"))).await;
     }
     for (mid, cid, gid) in recent {
         let target = match gid { Some(g) => Target::Guild(g), None => Target::Users(sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM channel_members WHERE channel_id = $1").bind(cid).fetch_all(&state.db).await?.into_iter().map(|r| r.0).collect()) };
@@ -96,7 +96,7 @@ async fn purge_uploads(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     let atts: Vec<(Uuid,)> = sqlx::query_as("DELETE FROM attachments WHERE uploader_id = $1 RETURNING id").bind(id).fetch_all(&state.db).await?;
     let imgs: Vec<(Uuid,)> = sqlx::query_as("DELETE FROM images WHERE owner_id = $1 AND kind IN ('avatar', 'banner', 'icon') RETURNING id").bind(id).fetch_all(&state.db).await?;
     for (fid,) in atts.iter().chain(imgs.iter()) {
-        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.viz"))).await;
     }
     sqlx::query("UPDATE users SET avatar_url = NULL, banner_url = NULL WHERE id = $1 AND (avatar_url LIKE '/api/images/%' OR banner_url LIKE '/api/images/%')").bind(id).execute(&state.db).await?;
     if let Ok(public) = sqlx::query_as::<_, crate::models::User>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::USER_COLS)).bind(id).fetch_one(&state.db).await {

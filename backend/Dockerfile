@@ -1,6 +1,7 @@
 # ---- ffmpeg stage ----
-# A minimal ffmpeg for two jobs: converting recorded voice messages (WebM/Ogg with Opus or Vorbis) to AAC .m4a so
-# every browser, iPhones included, can play them (src/voice_audio.rs), and turning WebM nameplates (VP8/VP9 with
+# A minimal ffmpeg for three jobs: converting recorded voice messages (WebM/Ogg with Opus or Vorbis) to AAC .m4a so
+# every browser, iPhones included, can play them (src/voice_audio.rs), decoding audio files (MP3, AAC, FLAC, ALAC,
+# WAV, Ogg) to raw PCM for the players' visualiser data (src/audio_viz.rs), and turning WebM nameplates (VP8/VP9 with
 # transparency, which needs libvpx's decoders) into animated WebP for the phone apps (src/routes/assets.rs). A few MB
 # instead of Debian's ~450 MB package. The release tarball is pinned by SHA-256 (verified against FFmpeg's release signing key
 # FCF9 86EA 15E6 E293 A564 4F10 B432 2F04 D676 58D8 when the pin was set).
@@ -14,8 +15,9 @@ RUN curl -fsSL -o ffmpeg.tar.xz "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VER
  && tar -xJf ffmpeg.tar.xz --strip-components=1 \
  && ./configure --disable-everything --disable-autodetect --disable-doc --disable-network --disable-ffplay --disable-ffprobe \
       --disable-x86asm --enable-small --disable-debug \
-      --enable-protocol=file,pipe --enable-demuxer=matroska,ogg,mov,wav --enable-muxer=mp4,ipod \
-      --enable-decoder=opus,vorbis,aac,flac,pcm_s16le --enable-encoder=aac --enable-parser=opus,vorbis,aac,flac \
+      --enable-protocol=file,pipe --enable-demuxer=matroska,ogg,mov,wav,mp3,flac,aac --enable-muxer=mp4,ipod,pcm_f32le \
+      --enable-decoder=opus,vorbis,aac,flac,alac,mp3float,mp3,pcm_s16le,pcm_s16be,pcm_u8,pcm_s24le,pcm_s32le,pcm_f32le \
+      --enable-encoder=aac,pcm_f32le --enable-parser=opus,vorbis,aac,flac,mpegaudio \
       --enable-filter=abuffer,abuffersink,aformat,aresample,anull --enable-swresample \
       --enable-libvpx --enable-libwebp --enable-decoder=libvpx_vp8,libvpx_vp9 --enable-parser=vp8,vp9 \
       --enable-encoder=libwebp_anim --enable-muxer=webp --enable-filter=buffer,buffersink,format,null,scale --enable-swscale \

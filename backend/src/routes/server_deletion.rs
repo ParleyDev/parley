@@ -192,7 +192,7 @@ pub async fn finalize(state: &AppState, gid: Uuid, kind: &str) -> AppResult<bool
     tx.commit().await?;
     for (fid,) in files {
         let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await;
-        let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.viz"))).await;
     }
     Ok(true)
 }

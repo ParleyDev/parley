@@ -2,7 +2,7 @@ import { Activity, AudioLines, CircleDot, Download, EyeOff, Pause, Play, Volume1
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import type { Attachment } from '../lib/types'
 import { formatBytes } from '../lib/upload'
-import { seek, setSpeed, setVolume, toggle, usePlayer, type Track } from '../lib/player'
+import { loadViz, seek, setSpeed, setVolume, toggle, usePlayer, type Track } from '../lib/player'
 import { setPrefs, usePrefs } from '../lib/prefs'
 import { fileMenu, saveFile } from '../lib/fileActions'
 import { usePhone } from '../lib/swipe'
@@ -26,24 +26,57 @@ function useDuration(url: string) {
   return d
 }
 
-/** A seek bar: drag or click anywhere on it, arrow keys step five seconds. */
-export function Scrubber({ pos, duration, onSeek, className = '' }: { pos: number; duration: number; onSeek: (sec: number) => void; className?: string }) {
+/** The file's peak waveform from the server's visualiser data (null until it arrives, or when there is none). */
+function usePeaks(url: string) {
+  const [peaks, setPeaks] = useState<Uint8Array | null>(null)
+  useEffect(() => { let live = true; void loadViz(url, true).then((v) => { if (live && v?.peaks.length) setPeaks(v.peaks) }); return () => { live = false } }, [url])
+  return peaks
+}
+
+/** A seek bar: drag or click anywhere on it, arrow keys step five seconds. With `peaks` it is a slim capsule with the
+ *  file's waveform inside, the played part tinted with the accent. */
+export function Scrubber({ pos, duration, onSeek, className = '', peaks }: { pos: number; duration: number; onSeek: (sec: number) => void; className?: string; peaks?: Uint8Array | null }) {
   const t = useT()
   const [drag, setDrag] = useState<number | null>(null)
   const frac = drag ?? (duration ? Math.min(1, pos / duration) : 0)
   const at = (e: RPointerEvent<HTMLDivElement>) => { const r = e.currentTarget.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) }
   return (
     <div role="slider" tabIndex={0} aria-label={t('Seek')} aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(frac * duration)} aria-valuetext={fmtTime(frac * duration)}
-      className={`group relative flex h-4 cursor-pointer touch-none items-center ${className}`} data-scrubber
+      className={`group relative flex ${peaks ? 'h-5' : 'h-4'} cursor-pointer touch-none items-center ${className}`} data-scrubber data-progress={frac.toFixed(3)} data-wave={peaks ? '1' : undefined}
       onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setDrag(at(e)) }}
       onPointerMove={(e) => { if (drag != null) setDrag(at(e)) }}
       onPointerUp={(e) => { if (drag != null) { onSeek(at(e) * duration); setDrag(null) } }}
       onPointerCancel={() => setDrag(null)}
       onKeyDown={(e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); onSeek(Math.max(0, Math.min(duration, frac * duration + (e.key === 'ArrowRight' ? 5 : -5)))) } }}>
-      <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-text-2/25">
-        <div className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${frac * 100}%` }} data-scrubber-fill />
-      </div>
-      <span className={`pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow ring-2 ring-accent transition-opacity ${drag != null ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}`} style={{ left: `${frac * 100}%` }} />
+      {peaks ? (
+        <div className="relative h-full w-full overflow-hidden rounded-full border border-line bg-bg-0/50">
+          <WaveBars peaks={peaks} className="text-text-2/40" />
+          <div className="absolute inset-0 bg-accent/20" style={{ clipPath: `inset(0 ${100 - frac * 100}% 0 0)` }} data-scrubber-fill><WaveBars peaks={peaks} className="text-accent" /></div>
+        </div>
+      ) : (
+        <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-text-2/25">
+          <div className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${frac * 100}%` }} data-scrubber-fill />
+        </div>
+      )}
+      {peaks
+        ? <span className={`pointer-events-none absolute inset-y-0.5 w-[3px] -translate-x-1/2 rounded-full bg-white shadow transition-opacity ${drag != null ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}`} style={{ left: `${frac * 100}%` }} />
+        : <span className={`pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow ring-2 ring-accent transition-opacity ${drag != null ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}`} style={{ left: `${frac * 100}%` }} />}
+    </div>
+  )
+}
+
+const WAVE_BARS = 80
+/** The peaks as a row of rounded bars, centred, in currentColor. */
+function WaveBars({ peaks, className }: { peaks: Uint8Array; className: string }) {
+  const bars = Array.from({ length: WAVE_BARS }, (_, i) => {
+    const a = Math.floor((i * peaks.length) / WAVE_BARS), z = Math.max(a + 1, Math.floor(((i + 1) * peaks.length) / WAVE_BARS))
+    let m = 0
+    for (let k = a; k < z; k++) m = Math.max(m, peaks[k])
+    return m / 255
+  })
+  return (
+    <div className={`absolute inset-y-0 inset-x-2.5 flex items-center gap-[2px] ${className}`} aria-hidden>
+      {bars.map((v, i) => <span key={i} className="min-w-0 flex-1 rounded-full bg-current" style={{ height: `${Math.max(12, v * 64)}%` }} />)}
     </div>
   )
 }
@@ -61,6 +94,7 @@ export default function AudioPlayer({ a, track }: { a: Attachment; track: Track 
   const cur = p.track?.id === a.id
   const playing = cur && p.playing
   const probed = useDuration(a.url)
+  const peaks = usePeaks(a.url)
   const duration = (cur && p.duration) || probed
   const pos = cur ? p.pos : 0
   const [speed, setLocalSpeed] = useState(1)
@@ -106,7 +140,7 @@ export default function AudioPlayer({ a, track }: { a: Attachment; track: Track 
         </button>
       )}
       <div className="relative px-3 pb-2.5 pt-1.5">
-        <Scrubber pos={pos} duration={duration} onSeek={(sec) => seek(track, sec)} />
+        <Scrubber pos={pos} duration={duration} onSeek={(sec) => seek(track, sec)} peaks={peaks} />
         <div className="mt-0.5 flex items-center gap-2 text-[11px] tabular-nums text-text-2">
           <span data-audio-pos>{fmtTime(pos)}</span>
           <span className="ml-auto flex items-center gap-1">

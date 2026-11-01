@@ -31,6 +31,19 @@ const head = async (q) => (await fetch(`${B.replace(/\/api$/, '')}${song.att.url
 ok('audio is served inline for playing', /^inline/.test(await head('')))
 ok('?download=1 asks for a download (the Android app saves those)', /^attachment; filename="Night_Drive.wav"/.test(await head('?download=1')), await head('?download=1'))
 
+console.log('-- visualiser data')
+const vz = await fetch(`${B}/attachments/${song.att.id}/viz`)
+const vb = Buffer.from(await vz.arrayBuffer())
+const frames = vb.length >= 16 ? vb.readUInt32LE(8) : 0
+ok('the server analyses the file: PVZ1, 15 fps, 32 bands, a frame per 1/15 s', vz.status === 200 && vb.subarray(0, 4).toString() === 'PVZ1' && vb[4] === 15 && vb[5] === 32 && frames >= 80 && frames <= 92 && vb.length === 16 + 256 + frames * 32, `${vz.status} ${vb.length} ${frames}`)
+ok('a few KB a second, not the file again', vb.length < song.att.size / 4, `${vb.length} vs ${song.att.size}`)
+const band = (f) => { const row = vb.subarray(16 + 256 + f * 32, 16 + 256 + (f + 1) * 32); return row.indexOf(Math.max(...row)) }
+ok('it follows the music (the sweep climbs through the bands)', band(frames - 8) > band(8), `${band(8)} → ${band(frames - 8)}`)
+const pk = await fetch(`${B}/attachments/${song.att.id}/viz?peaks=1`)
+ok('?peaks=1 is just the waveform for the seek bar', (await pk.arrayBuffer()).byteLength === 16 + 256)
+ok('immutable, so clients cache it', /immutable/.test(vz.headers.get('cache-control') ?? ''))
+ok('videos have none', (await fetch(`${B}/attachments/${clip.att.id}/viz`)).status === 404)
+
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] }); const errors = []
 const open = async (tok, opts) => {
   const ctx = await browser.newContext(opts); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
@@ -53,9 +66,10 @@ ok('a roomy card, not a bare <audio> bar', box && box.width >= 400 && box.height
 await card.locator('[data-audio-play]').click(); await p.waitForTimeout(1200)
 ok('Play plays it through the app-wide player', (await card.getAttribute('data-playing')) === '1' && !(await player(p)).paused && (await player(p)).src.includes(song.att.id))
 const viz = card.locator('[data-audio-viz]')
-ok('desktop: the live visualiser reads the real audio (Web Audio analyser)', await p.evaluate(() => 'analysed' in document.querySelector('audio[data-player]').dataset))
+ok('the card\'s seek bar is the file\'s waveform', await card.locator('[data-scrubber][data-wave="1"]').count() === 1)
+ok('the visualiser follows the server\'s timeline for the track', (await viz.getAttribute('data-source')) === 'timeline', await viz.getAttribute('data-source'))
 ok('the visualiser is live and drawing', (await viz.getAttribute('data-viz-live')) === '1' && await lit(viz) > 200, String(await lit(viz)))
-ok('the seek bar moves', parseFloat(await card.locator('[data-scrubber-fill]').evaluate((e) => e.style.width)) > 5)
+ok('the seek bar moves', parseFloat(await card.locator('[data-scrubber]').getAttribute('data-progress')) > 0.05)
 await card.screenshot({ path: 'audio-bars.png' })
 const modes = []
 for (let i = 0; i < 4; i++) { modes.push(await card.locator('[data-audio-viz-mode]').getAttribute('data-audio-viz-mode')); await card.locator('[data-audio-viz-mode]').click(); await p.waitForTimeout(400); if (i < 2) await card.screenshot({ path: `audio-${['wave', 'orb'][i]}.png` }) }
@@ -81,7 +95,7 @@ await p.click('[data-now-playing-toggle]'); await p.waitForTimeout(200)
 ok('pause from the bar', (await player(p)).paused && (await bar.getAttribute('data-playing')) === '0')
 await p.click('[data-now-playing-title]'); await p.waitForTimeout(1200)
 ok('the title goes back to the message', new URL(p.url()).pathname.endsWith(ch.id) && await p.locator(`[data-audio-player="${song.att.id}"]`).isVisible())
-ok('and the card shows where it was', parseFloat(await p.locator(`[data-audio-player="${song.att.id}"] [data-scrubber-fill]`).evaluate((e) => e.style.width)) > 5)
+ok('and the card shows where it was', parseFloat(await p.locator(`[data-audio-player="${song.att.id}"] [data-scrubber]`).getAttribute('data-progress')) > 0.05)
 await p.locator(`[data-voice-message="${voiceMsg.att.id}"] [data-voice-play]`).click(); await p.waitForTimeout(400)
 ok('a voice message plays through the same player, replacing the song', (await player(p)).src.includes(voiceMsg.att.id) && (await p.locator(`[data-audio-player="${song.att.id}"]`).getAttribute('data-playing')) === '0' && (await p.locator(`[data-voice-message="${voiceMsg.att.id}"]`).getAttribute('data-playing')) === '1')
 await p.waitForTimeout(2000)
@@ -133,7 +147,7 @@ await ic.locator('[data-audio-play]').tap(); await ip.waitForTimeout(1000)
 const ipl = await player(ip)
 ok('iPhone: it plays', ipl && !ipl.paused && ipl.t > 0.3, JSON.stringify(ipl))
 ok('iPhone: the audio stays out of Web Audio, so it keeps playing in the background', await ip.evaluate(() => !('analysed' in document.querySelector('audio[data-player]').dataset)))
-ok('iPhone: the visualiser still moves (synthetic)', (await ic.locator('[data-audio-viz]').getAttribute('data-viz-live')) === '1' && await lit(ic.locator('[data-audio-viz]')) > 100)
+ok('iPhone: the visualiser still reacts to the music (the server\'s timeline)', (await ic.locator('[data-audio-viz]').getAttribute('data-source')) === 'timeline' && await lit(ic.locator('[data-audio-viz]')) > 100, await ic.locator('[data-audio-viz]').getAttribute('data-source'))
 await ip.context().close()
 
 ok('no page errors', errors.length === 0, errors.join(' | '))

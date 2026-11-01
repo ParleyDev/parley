@@ -1,4 +1,5 @@
 mod audit;
+mod audio_viz;
 mod av;
 mod auth;
 mod config;

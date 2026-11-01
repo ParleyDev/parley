@@ -786,7 +786,7 @@ async fn delete_message(
         return Err(AppError::Forbidden);
     }
     for (fid,) in files {
-        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.viz"))).await;
     }
     let target = target_for(&state.db, &c).await?;
     state.hub.emit(target, "MESSAGE_DELETE", json!({ "id": mid, "channel_id": id, "guild_id": c.guild_id }));
@@ -892,7 +892,7 @@ pub async fn delete_many(state: &AppState, ids: &[Uuid]) -> AppResult<usize> {
     let files: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM attachments WHERE message_id = ANY($1)").bind(ids).fetch_all(&state.db).await?;
     let gone: Vec<(Uuid, Uuid)> = sqlx::query_as("DELETE FROM messages WHERE id = ANY($1) RETURNING id, channel_id").bind(ids).fetch_all(&state.db).await?;
     for (fid,) in files {
-        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await;
+        let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.viz"))).await;
     }
     let mut by_channel: std::collections::HashMap<Uuid, Vec<Uuid>> = std::collections::HashMap::new();
     for (mid, cid) in &gone { by_channel.entry(*cid).or_default().push(*mid); }

@@ -44,6 +44,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/channels/:id/attachments", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(BODY_CEILING)))
         .route("/attachments/:id/thumb", get(serve_thumb))
+        .route("/attachments/:id/viz", get(serve_viz))
         .route("/attachments/:id/listened", post(mark_listened))
         .route("/attachments/:id/transcribe", post(retranscribe))
         .route("/attachments/:id/:filename", get(serve))
@@ -186,6 +187,11 @@ async fn upload(
     .bind(if voice { waveform } else { None })
     .fetch_one(&state.db)
     .await?;
+    // Visualiser data, ready before anyone presses play (see audio_viz.rs).
+    if crate::audio_viz::is_audio(&att.content_type) {
+        let dir = state.config.upload_dir.clone();
+        tokio::spawn(crate::audio_viz::ensure(path.clone(), crate::audio_viz::viz_path(&dir, id)));
+    }
     Ok((StatusCode::CREATED, Json(att)))
 }
 
@@ -250,6 +256,26 @@ async fn serve(State(state): State<AppState>, Path((id, _filename)): Path<(Uuid,
     h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'; style-src 'unsafe-inline'; media-src 'self'; img-src 'self'"));
     if part.is_some() { *resp.status_mut() = StatusCode::PARTIAL_CONTENT; }
     Ok(resp.into_response())
+}
+
+#[derive(Deserialize, Default)]
+struct VizQuery { #[serde(default)] peaks: Option<String> }
+
+/// An audio attachment's visualiser data (audio_viz.rs), made on first request for files uploaded before it existed.
+/// `?peaks=1` returns only the waveform for seek bars.
+async fn serve_viz(State(state): State<AppState>, Path(id): Path<Uuid>, Query(q): Query<VizQuery>) -> AppResult<Response> {
+    let ct: Option<String> = sqlx::query_scalar("SELECT content_type FROM attachments WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    let ct = ct.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    if !crate::audio_viz::is_audio(&ct) { return Err(AppError::NotFound("Not audio".into())); }
+    let dir = &state.config.upload_dir;
+    let bytes = crate::audio_viz::ensure(dir.join(id.to_string()), crate::audio_viz::viz_path(dir, id)).await
+        .ok_or_else(|| AppError::NotFound("No visualiser data".into()))?;
+    let body = if q.peaks.is_some() { crate::audio_viz::peaks_only(&bytes).to_vec() } else { bytes };
+    let mut resp = Response::new(Body::from(body));
+    let h = resp.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream"));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=31536000, immutable"));
+    Ok(resp)
 }
 
 /// The server-made thumbnail of an image attachment (same caching as the file itself).
