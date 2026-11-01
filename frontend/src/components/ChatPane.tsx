@@ -1,4 +1,4 @@
-import { ArrowDown, Hash, Volume2 } from 'lucide-react'
+import { ArrowDown, CheckCheck, Hash, Volume2, X } from 'lucide-react'
 import { previewText } from '../lib/desktopNotify'
 import { usePhone } from '../lib/swipe'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -8,7 +8,7 @@ import { api } from '../lib/api'
 import Tooltip from './Tooltip'
 import { jumpToMessage, jumpToMessageAsync } from './ChatView'
 import type { Channel, DmChannel, Message } from '../lib/types'
-import { formatDateDivider, sameDay } from '../lib/format'
+import { formatDateDivider, formatShortTime, formatTime, sameDay } from '../lib/format'
 import MessageItem from './MessageItem'
 import Composer from './Composer'
 import { RequestBanner } from './RequestsView'
@@ -124,6 +124,17 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     if (!m || (readAtOpen === null && messages[0].id === m.id)) return null
     return m.id
   })()
+
+  // "N new messages since …" over the top of the chat while there is a New divider, until dismissed.
+  const [bannerOff, setBannerOff] = useState<string | null>(null)
+  const unread = (() => {
+    if (!firstUnreadId || !messages || bannerOff === channel.id) return null
+    const from = messages.findIndex((x) => x.id === firstUnreadId)
+    const n = messages.slice(from).filter((x) => (x.author.id !== user?.id || !!x.webhook_id) && !x.local).length
+    const at = messages[from].created_at
+    return { n, more: !!hasNewer, since: sameDay(at, new Date().toISOString()) ? formatShortTime(at) : formatTime(at) }
+  })()
+  const toDivider = () => scrollRef.current?.querySelector<HTMLElement>('[data-unread-divider]')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 
   // Mark read when viewing and tab visible.
   useEffect(() => {
@@ -367,6 +378,16 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       <div className="flex-1 min-h-0 flex flex-col" data-chat-column>
       <div aria-live="polite" aria-atomic="true" className="sr-only" data-live-region>{announce}</div>
       <div className="relative flex-1 min-h-0 flex flex-col">
+      {unread && (
+        <div className="absolute inset-x-0 top-0 z-20 flex items-center bg-accent text-white shadow-md phone:shadow-none wide:inset-x-4 wide:rounded-b-lg" data-unread-banner>
+          <button type="button" onClick={toDivider} className="min-w-0 flex-1 truncate px-4 py-1.5 text-left text-sm font-semibold phone:py-2.5 phone:text-[15px]" data-unread-jump>
+            {unread.n === 1 && !unread.more ? t('1 new message since {time}', { time: unread.since }) : t('{n} new messages since {time}', { n: `${unread.n}${unread.more ? '+' : ''}`, time: unread.since })}
+          </button>
+          {phone
+            ? <button type="button" onClick={() => setBannerOff(channel.id)} aria-label={t('Dismiss')} className="h-11 w-11 shrink-0 flex items-center justify-center" data-unread-dismiss><X size={22} /></button>
+            : <button type="button" onClick={() => setBannerOff(channel.id)} className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold hover:underline" data-unread-dismiss>{t('Mark As Read')}<CheckCheck size={16} /></button>}
+        </div>
+      )}
       <div ref={scrollRef} onScroll={onScroll} role="log" aria-label={t('Messages in {name}', { name: channel.name || t('this conversation') })} tabIndex={0} className="scroller-auto flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>
         <div ref={contentRef} className="relative min-h-full flex flex-col justify-end">
           {hasMore === false || (messages && messages.length < 50 && !loading) ? (
@@ -386,8 +407,12 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
                     </div>
                   )}
                   {firstUnreadId === m.id && (
-                    <div className="relative mx-4 my-1 flex items-center" data-unread-divider>
-                      <div className="h-px flex-1 bg-danger" /><span className="rounded-sm bg-danger px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">{t('New')}</span>
+                    // Desktop: a red line ending in a NEW tag. Phones: NEW MESSAGES centred between two lines, like Discord mobile.
+                    <div className="relative mx-4 my-1 flex items-center phone:mx-3 phone:my-3 phone:gap-3" data-unread-divider>
+                      <div className="h-px flex-1 bg-danger" />
+                      {phone
+                        ? <><span className="text-[13px] font-semibold uppercase tracking-wide text-danger">{t('New messages')}</span><div className="h-px flex-1 bg-danger" /></>
+                        : <span className="rounded-sm bg-danger px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">{t('New')}</span>}
                     </div>
                   )}
                   <MessageItem message={m} grouped={grouped} isOwn={m.author.id === user?.id} onReply={() => setReply(m)} replyTarget={m.reply_to ? list.find((x) => x.id === m.reply_to) ?? m.referenced ?? null : null} onJumpToReply={m.reply_to ? () => jumpTo(m.reply_to!) : undefined} />
