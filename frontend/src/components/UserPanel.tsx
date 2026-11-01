@@ -1,6 +1,6 @@
-import { ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, Settings } from 'lucide-react'
+import { ChevronDown, Headphones, HeadphoneOff, Info, Mic, MicOff, Settings } from 'lucide-react'
 import { voice } from '../lib/voice'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
 import { profileCardStyle, profileColors } from '../lib/profileLook'
 import { nameplateClass } from '../lib/cosmetics'
@@ -12,6 +12,8 @@ import StyledName from './StyledName'
 import UserMenu, { statuses } from './UserMenu'
 import { useT } from '../lib/i18n'
 import { isPhone } from '../lib/swipe'
+import { APP_VERSION } from '../lib/brand'
+import { desktop, desktopBridge } from '../lib/desktop'
 
 /**
  * The self card at the bottom of the sidebar, Discord-style: a floating rounded panel tinted
@@ -35,6 +37,7 @@ export default function UserPanel() {
   return (
     <div className="shrink-0 w-full min-w-0 p-2 pt-0" style={{ background: 'linear-gradient(90deg, var(--color-bg-0) 72px, var(--color-bg-1) 72px)' }} data-user-panel-bar>
       <VoiceConnected />
+      <BuildInfo />
       <div className="relative h-[var(--dock-h)] rounded-lg border shadow-lg pl-2 pr-1.5 flex items-center gap-0.5" style={cardStyle} data-user-panel>
         {/* Your nameplate as the panel's background (Discord shows it here), playing while the panel is hovered. It sits
             at z 0 under the panel's content (z 1); no `isolate` on the panel, which would trap the menu's click-away
@@ -76,3 +79,23 @@ function ControlBtn({ children, label, onClick, active, onMenu, menuOpen }: { ch
   )
 }
 
+/** The desktop app's build line above the user panel, like Discord's: update channel, web build (commit) and app
+ *  version. Click to copy it for a bug report. */
+function BuildInfo() {
+  const t = useT()
+  const pushToast = useStore((s) => s.pushToast)
+  const [app, setApp] = useState<{ version: string; channel: 'stable' | 'dev' } | null>(null)
+  useEffect(() => {
+    if (!desktopBridge()) return
+    void desktop.settings().then((s) => setApp({ version: s.version, channel: s.update_channel ?? (s.version.includes('-') ? 'dev' : 'stable') })).catch(() => {})
+  }, [])
+  if (!app) return null
+  const [web, sha] = APP_VERSION.split('+')
+  const text = `${app.channel === 'dev' ? t('Development') : t('Stable')} ${web}${sha ? ` (${sha})` : ''} | ${t('Desktop {version}', { version: app.version })}`
+  const copy = () => { void navigator.clipboard?.writeText(text).then(() => pushToast(t('Copied build info'))).catch(() => {}) }
+  return (
+    <button type="button" onClick={copy} title={t('Copy build info')} className="mb-1 flex max-w-full items-center gap-1 px-1 text-[11px] leading-4 text-text-2 hover:text-text-1 phone:hidden" data-build-info>
+      <Info size={11} className="shrink-0" /><span className="truncate">{text}</span>
+    </button>
+  )
+}
