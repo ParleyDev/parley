@@ -100,6 +100,12 @@ export function haptic(style: 'light' | 'medium' = 'light') {
   Haptics.impact({ style: style === 'light' ? ImpactStyle.Light : ImpactStyle.Medium }).catch(() => {})
 }
 
+/** Phones: put the on-screen keyboard away (leaving a chat), by taking the focus off whatever field holds it. */
+export function dismissKeyboard() {
+  const el = typeof document === 'undefined' ? null : document.activeElement
+  if (el instanceof HTMLElement && el.matches('input, textarea, [contenteditable="true"]')) el.blur()
+}
+
 /** A subtle tick under the finger for small confirmations (a reaction added): the app's haptics, or a short buzz in
  *  touch browsers that can vibrate (Android; iOS Safari cannot). Nothing with a mouse. */
 export function tapFeedback() {

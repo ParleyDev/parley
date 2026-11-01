@@ -1,5 +1,5 @@
-// Phones: swipe gestures like Discord. A right swipe pulls the chat along with the finger and pushes the channel list
-// in (a left swipe on the list goes back); short drags spring back; a message swiped left replies; a left swipe
+// Phones: swipe gestures like Discord. A right swipe slides the chat off the channel list, which stays put underneath
+// (a peek; a left swipe on the list goes back), and puts the keyboard away; short drags spring back; a message swiped left replies; a left swipe
 // elsewhere on a server chat opens the member list; settings sections swipe right back to the list.
 import { chromium, devices } from 'playwright'
 import { WEB, S, reg, call, ok, finish } from '../lib.mjs'
@@ -29,8 +29,8 @@ await p.goto(`${WEB}/channels/${g.id}/${ch.id}`); await p.waitForSelector(`[data
 console.log('-- chat ⇄ channel list')
 ok('starts on the chat', await pane() === 'content')
 let release = await drag(60, 400, 110, 4, { hold: true })
-const mid = await p.evaluate(() => { const box = document.querySelector('[data-pane-drag]'); const c = document.querySelector('[data-pane-content]').firstElementChild?.getBoundingClientRect(); const n = document.querySelector('[data-layer="md"]').getBoundingClientRect(); return { dragging: !!box, content: Math.round(c?.left ?? -1), nav: Math.round(n.right) } })
-ok('the chat follows the finger and the list slides in beside it', mid.dragging && mid.content > 80 && mid.content < 140 && Math.abs(mid.nav - mid.content) <= 2, JSON.stringify(mid))
+const mid = await p.evaluate(() => { const box = document.querySelector('[data-pane-drag]'); const c = document.querySelector('[data-pane-content]').firstElementChild?.getBoundingClientRect(); const nav = document.querySelector('[data-layer="md"]'), n = nav.getBoundingClientRect(); return { dragging: !!box, content: Math.round(c?.left ?? -1), nav: [Math.round(n.left), Math.round(n.right)], peek: nav.contains(document.elementFromPoint(40, 300)), covered: !nav.contains(document.elementFromPoint(300, 300)) } })
+ok('the chat follows the finger, revealing the list that stays put underneath', mid.dragging && mid.content > 80 && mid.content < 140 && mid.nav[0] === 0 && mid.nav[1] === 390 && mid.peek && mid.covered, JSON.stringify(mid))
 await release()
 ok('a short drag springs back to the chat', await pane() === 'content' && await p.locator('[data-pane-drag]').count() === 0)
 await drag(40, 400, 250, 6)
@@ -43,6 +43,22 @@ await drag(330, 400, -260, 4)
 ok('and a long drag left closes it', await pane() === 'content')
 await drag(200, 500, 6, -200)
 ok('scrolling up and down never moves the panes', await pane() === 'content' && await p.locator('[data-pane-drag]').count() === 0)
+
+console.log('-- the keyboard goes away when leaving the chat')
+const typing = () => p.evaluate(() => document.activeElement?.matches('textarea, [contenteditable="true"]') ?? false)
+await p.locator('textarea').first().focus()
+ok('typing in the chat', await typing())
+release = await drag(40, 400, 90, 2, { hold: true })
+ok('peeking at the list puts the keyboard away', !(await typing()))
+await release()
+await p.locator('textarea').first().focus()
+await drag(40, 400, 250, 6)
+ok('the list is open, keyboard away', await pane() === 'nav' && !(await typing()))
+await drag(330, 400, -260, 4)
+await p.locator('textarea').first().focus()
+await p.evaluate(() => { history.pushState({}, '', '/channels/@me'); dispatchEvent(new PopStateEvent('popstate')) }); await p.waitForTimeout(400)
+ok('navigating to another page puts it away too', !(await typing()))
+await p.goto(`${WEB}/channels/${g.id}/${ch.id}`); await p.waitForSelector(`[data-msg-id="${target.id}"]`); await p.waitForTimeout(1200)
 
 console.log('-- swipe a message to reply')
 const row = await p.locator(`[data-msg-id="${target.id}"]`).boundingBox()

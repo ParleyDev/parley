@@ -45,13 +45,15 @@
 :root:not([data-theme="light"])[data-palette="midnight"] { --color-bg-0: #070a14; --color-bg-1: #0d1220; --color-bg-2: #121a2c; --color-bg-3: #1a2338; --color-bg-4: #232e47; --color-line: #1f2a42; --color-accent: #4f8cff; --color-accent-hover: #3b74e0; --scrollbar-thumb: #26314d; }
 :root:not([data-theme="light"])[data-palette="aurora"] { --color-bg-0: rgb(10 8 24 / .55); --color-bg-1: rgb(18 14 38 / .55); --color-bg-2: rgb(20 18 40 / .35); --color-bg-3: rgb(255 255 255 / .07); --color-bg-4: rgb(255 255 255 / .12); --color-line: rgb(255 255 255 / .09); --color-accent: #8b5cf6; --color-accent-hover: #7c3aed; }
 :root:not([data-theme="light"])[data-palette="sunset"] { --color-bg-0: rgb(24 8 14 / .55); --color-bg-1: rgb(36 12 24 / .55); --color-bg-2: rgb(36 14 30 / .35); --color-bg-3: rgb(255 255 255 / .07); --color-bg-4: rgb(255 255 255 / .12); --color-line: rgb(255 255 255 / .09); --color-accent: #f97362; --color-accent-hover: #e55a4a; }
-:root:not([data-theme="light"])[data-palette="aurora"] body { background: linear-gradient(135deg, #2b1a4f 0%, #14213d 50%, #0f3b46 100%) fixed; }
-:root:not([data-theme="light"])[data-palette="sunset"] body { background: linear-gradient(135deg, #4a1c2c 0%, #2c1838 55%, #3b2350 100%) fixed; }
+:root:not([data-theme="light"])[data-palette="aurora"] { --app-backdrop: linear-gradient(135deg, #2b1a4f 0%, #14213d 50%, #0f3b46 100%); }
+:root:not([data-theme="light"])[data-palette="sunset"] { --app-backdrop: linear-gradient(135deg, #4a1c2c 0%, #2c1838 55%, #3b2350 100%); }
+:root:not([data-theme="light"]):is([data-palette="aurora"], [data-palette="sunset"]) body { background: var(--app-backdrop) fixed; }
 /* The see-through palettes let the gradient show behind the app, but anything floating over it (menus, dialogs,
    popovers, tooltips, settings) gets a solid surface so what's underneath doesn't bleed through and hurt legibility. */
 :root:not([data-theme="light"])[data-palette="aurora"] { --color-float: #171230; --color-float-2: #1f1a3d; }
 :root:not([data-theme="light"])[data-palette="sunset"] { --color-float: #26121f; --color-float-2: #321a2b; }
 /* Colour themes (lib/colorThemes): the gradient behind the whole app; their variables are set inline on <html>. */
+:root[data-color-theme] { --app-backdrop: var(--app-gradient); }
 :root[data-color-theme] body { background: var(--app-gradient) fixed; }
 /* Every see-through look (the gradient palettes and colour themes, data-see-through) keeps floating things solid.
    A profile frame's wrapper is only room for the frame: it stays see-through and the card inside gets the surface.
@@ -168,11 +170,12 @@ body {
 @media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .safe-strips[data-phone-pane="nav"]::before, .safe-strips[data-phone-pane="nav"]::after { background: linear-gradient(90deg, var(--color-bg-0) 72px, var(--color-bg-1) 72px), var(--color-float, var(--color-bg-1)); }
 }
-/* Phones: dragging between the channel list and the chat (lib/paneDrag). Both panes show and move together with the
-   finger, --pane-p going from 0 (chat) to 1 (list); data-pane-anim settles them. */
-[data-pane-drag] > [data-layer="md"] { display: flex !important; transform: translate3d(calc((var(--pane-p, 0) - 1) * 100%), 0, 0); will-change: transform; }
-[data-pane-drag] > [data-pane-content] { display: flex; flex: 1 1 0%; min-width: 0; min-height: 0; transform: translate3d(calc(var(--pane-p, 0) * 100%), 0, 0); will-change: transform; }
-[data-pane-anim] > :is([data-layer="md"], [data-pane-content]) { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+/* Phones: dragging between the channel list and the chat (lib/paneDrag). The list stays put underneath and the chat
+   slides off it with the finger (a peek before committing), --pane-p going from 0 (chat) to 1 (list); data-pane-anim
+   settles it. The chat gets the app's backdrop while it moves, or a see-through theme would show the list through it. */
+[data-pane-drag] > [data-layer="md"] { display: flex !important; }
+[data-pane-drag] > [data-pane-content] { display: flex; flex: 1 1 0%; min-width: 0; min-height: 0; position: relative; z-index: 21; background: var(--app-backdrop, var(--color-bg-2)); box-shadow: -10px 0 24px rgb(0 0 0 / calc(.35 * (1 - var(--pane-p, 0)))); transform: translate3d(calc(var(--pane-p, 0) * 100%), 0, 0); will-change: transform; }
+[data-pane-anim] > [data-pane-content] { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
 /* Swiping a message left to reply (MessageItem): the row follows the finger; the arrow stays put at the right edge. */
 [data-msg-id][data-swiping] { transform: translate3d(var(--swipe-x, 0px), 0, 0); }
 [data-msg-id][data-swipe-back] { transition: transform .18s ease-out; }

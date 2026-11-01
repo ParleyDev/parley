@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { tapFeedback } from './native'
+import { dismissKeyboard, tapFeedback } from './native'
 
 type Pane = 'nav' | 'content'
 interface Opts {
@@ -24,11 +24,11 @@ function skipTarget(el: Element | null): boolean {
 }
 
 /**
- * Phones: drag between the navigation pane and the content, like Discord. A right swipe on the content pulls it
- * along with the finger and pushes the server/channel list in from the left; a left swipe on the list does the
- * reverse. Let go past a third of the way (or flick) to finish, otherwise it springs back. The container gets
+ * Phones: drag between the navigation pane and the content, like Discord. A right swipe on the content slides it
+ * off with the finger, revealing the server/channel list that stays put underneath (a peek before committing); a
+ * left swipe on the list slides the content back over it. Let go past a third of the way (or flick) to finish, otherwise it springs back. The container gets
  * `data-pane-drag` and `--pane-p` (0 = content, 1 = navigation) while a finger or the settle animation moves it;
- * index.css moves `[data-layer="md"]` and `[data-pane-content]` from those. Messages mark their own left swipes
+ * index.css shows `[data-layer="md"]` and moves `[data-pane-content]` from those. Messages mark their own left swipes
  * (reply) with `__parleySwipe`, which this leaves alone.
  */
 export function usePaneDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
@@ -74,6 +74,8 @@ export function usePaneDrag(ref: RefObject<HTMLElement | null>, opts: Opts) {
           w = el.getBoundingClientRect().width || window.innerWidth
           from = pane === 'nav' ? 1 : 0; ticked = false
           el.dataset.paneDrag = ''; set(from)
+          // Peeking at the list puts the keyboard away, like leaving the chat.
+          if (pane === 'content') dismissKeyboard()
         }
       }
       if (mode !== 'drag') return

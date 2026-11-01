@@ -28,7 +28,7 @@ import { lastChannel, rememberChannel } from '../lib/dm'
 import { usePhone } from '../lib/swipe'
 import { usePaneDrag } from '../lib/paneDrag'
 import { useKeybinds } from '../lib/keybinds'
-import { isDesktop, setNativeNavigator } from '../lib/native'
+import { dismissKeyboard, isDesktop, setNativeNavigator } from '../lib/native'
 import { voice } from '../lib/voice'
 import { initBadge } from '../lib/badge'
 import { installLinkGuard } from '../lib/links'
@@ -71,7 +71,11 @@ export default function AppShell() {
   // in a server, and a right swipe closes it again.
   const panes = useRef<HTMLDivElement>(null)
   const phone = usePhone()
-  const inGuild = !/^\/channels\/@me(\/|$)/.test(useLocation().pathname)
+  const { pathname } = useLocation()
+  const inGuild = !/^\/channels\/@me(\/|$)/.test(pathname)
+  // Leaving a chat (back to the list, or anywhere else) puts the keyboard away. The composer never takes the focus by
+  // itself on a touch screen, so this can't fight a chat that was just opened.
+  useEffect(() => { if (phone) dismissKeyboard() }, [phone, pane, pathname])
   const membersOpen = useStore((s) => s.membersOpen)
   const setMembersOpen = useStore((s) => s.setMembersOpen)
   const setMobilePane = useStore((s) => s.setMobilePane)
