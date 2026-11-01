@@ -273,7 +273,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
       ) : threadHere ? (
         <ThreadPanel threadId={openThread!} onClose={() => setOpenThread(null)} />
       ) : isDm && other && dmProfileOpen ? (
-        <DmProfilePanel userId={other.id} />
+        <DmProfilePanel userId={other.id} channelId={channel.id} />
       ) : group && dmProfileOpen ? (
         <GroupMembersPanel dm={channel as DmChannel} />
       ) : members ?? null

@@ -21,6 +21,8 @@ ok('a valid indicator is saved and cleaned up', ti.emojis?.join() === '🤍,,�
 const empty = await call(a.token, 'PATCH', '/users/@me', { typing_indicator: { emojis: ['', '', ''], animation: 'spin', text: '' } })
 ok('an empty one resets to the default', JSON.stringify(empty.typing_indicator) === '{}')
 
+await call(a.token, 'PATCH', '/users/@me', { name_style: { font: 'default', effect: 'neon', colors: ['#57f287'] } })
+const named = await call(a.token, 'POST', `/channels/${ch.id}/messages`, { content: 'styled name' })
 const browser = await chromium.launch(); const errors = []
 const open = async (u) => {
   const p = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage(); p.on('pageerror', (e) => errors.push(e.message))
@@ -69,6 +71,12 @@ await pa.locator('[data-composer-box] textarea').type('hello')
 await pb.waitForSelector('[data-typing-row] [data-typing-glyphs="pulse"]', { timeout: 5000 }).catch(() => {})
 const row = await pb.locator('[data-typing-row]').innerText()
 ok('their emoji and animation', await pb.locator('[data-typing-row] [data-typing-glyphs="pulse"] [data-typing-emoji]').count() === 1)
+const playing = () => pb.evaluate(() => [...document.querySelectorAll('[data-typing-row] .typing-dot')].map((el) => { const cs = getComputedStyle(el); return cs.animationName !== 'none' && cs.animationPlayState === 'running' }))
+await pb.mouse.move(5, 5)
+ok('it animates without hovering anything (name animation "on hover" leaves it alone)', (await playing()).length === 1 && (await playing()).every(Boolean), JSON.stringify(await playing()))
+const neon = () => pb.evaluate((id) => getComputedStyle(document.querySelector(`[data-msg-id="${id}"] .ne-neon`)).animationPlayState, named.id)
+const still = await neon(); await pb.hover(`[data-msg-id="${named.id}"]`); const moving = await neon(); await pb.mouse.move(5, 5)
+ok('while animated names still wait for a hover', still === 'paused' && moving === 'running', `${still} ${moving}`)
 ok('and their text after the name', row.includes(a.user.display_name) && row.includes('is babbling…') && !/is typing/.test(row), row)
 await pb.screenshot({ path: 'e2e/out/typing-row.png', clip: { x: 300, y: 780, width: 900, height: 120 } })
 
@@ -78,6 +86,20 @@ const pc = await (async () => { const c = await reg('carol'); await call(c.token
 await call(pc.token, 'POST', `/channels/${ch.id}/typing`); await pa.locator('[data-composer-box] textarea').type('!')
 await pb.waitForTimeout(600)
 ok('share the default indicator', /are typing/.test(await pb.locator('[data-typing-row]').innerText()) && await pb.locator('[data-typing-row] [data-typing-glyphs="dots"]').count() === 1)
+
+console.log('-- DMs')
+const dm = await call(b.token, 'POST', '/users/@me/channels', { recipient_id: a.user.id })
+await pb.goto(`${WEB}/channels/@me/${dm.id}`); await pb.waitForSelector(`[data-dm-row="${a.user.id}"]`); await pb.waitForTimeout(1000)
+if (!(await pb.locator('[data-dm-profile]').count())) await pb.click('[data-profile-toggle]').catch(() => {})
+ok('the DM row shows the status dot while they are quiet', await pb.locator(`[data-dm-row="${a.user.id}"] [data-presence="typing"]`).count() === 0)
+await call(a.token, 'POST', `/channels/${dm.id}/typing`)
+await pb.waitForSelector(`[data-dm-row="${a.user.id}"] [data-presence="typing"]`, { timeout: 5000 }).catch(() => {})
+ok('typing in the DM turns their avatar badge in the DM list into the typing pill', await pb.locator(`[data-dm-row="${a.user.id}"] [data-presence="typing"]`).count() === 1)
+ok('the pill animates without hovering', await pb.evaluate(() => [...document.querySelectorAll('[data-presence="typing"] .typing-dot')].every((el) => getComputedStyle(el).animationPlayState === 'running' && getComputedStyle(el).animationName !== 'none')))
+ok('and on their profile beside the DM', await pb.locator('[data-dm-profile] [data-presence="typing"]').count() === 1)
+await pb.screenshot({ path: 'e2e/out/typing-dm.png' })
+await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'there' }); await pb.waitForTimeout(800)
+ok('sending the message brings the status dot back', await pb.locator(`[data-dm-row="${a.user.id}"] [data-presence="typing"]`).count() === 0 && await pb.locator(`[data-dm-row="${a.user.id}"] [data-presence]`).count() === 1)
 
 console.log('-- privacy')
 await call(a.token, 'PATCH', '/users/@me/privacy', { show_typing: false })

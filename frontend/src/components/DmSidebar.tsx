@@ -110,7 +110,7 @@ export default function DmSidebar() {
     return (
       <NavLink key={d.id} to={`/channels/@me/${d.id}`} data-motion-row onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, dmMenu(d, other, e))} data-dm-row={group ? d.id : other?.id} data-group-row={group ? d.id : undefined} data-muted={muted ? 'true' : undefined} data-unread={unread ? 'true' : undefined} className={({ isActive }) => `group ${!group && nameplateClass(other?.nameplate) ? `${nameplateClass(other?.nameplate)} np-hover` : ''} ${!group && isAssetNameplate(other?.nameplate) ? 'np-hover relative isolate overflow-hidden' : ''} flex items-center gap-3 rounded-md px-2 py-1.5 ${isActive ? 'bg-bg-4 text-text-0' : unread ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
         {!group && <NameplateVideo value={other?.nameplate} always={openId === d.id} />}
-        {group ? <GroupIcon dm={d} size={32} /> : other ? <Avatar user={other} size={32} presence /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
+        {group ? <GroupIcon dm={d} size={32} /> : other ? <Avatar user={other} size={32} presence typingIn={d.id} /> : <div className="h-8 w-8 rounded-full bg-bg-4" />}
         {group ? (
           <span className="min-w-0 flex-1 leading-tight">
             <span className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{dmName(d, users, notes)}</span>

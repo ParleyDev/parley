@@ -284,7 +284,6 @@ body {
 .typing-anim-spin .typing-dot { animation: typing-spin 1.6s linear infinite }
 .typing-anim-jiggle .typing-dot { animation: typing-jiggle .5s ease-in-out infinite }
 .typing-anim-none .typing-dot { animation: none }
-@media (prefers-reduced-motion: reduce) { .typing-dot { animation: none !important } }
 
 /* Custom emoji (<:name:id>) inline in text, reactions and pickers; jumbo when a message is only emoji. */
 .emoji { display: inline-block; width: 1.375em; height: 1.375em; vertical-align: -0.3em; object-fit: contain; }
@@ -340,13 +339,13 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 @keyframes ne-wobble { 0%, 100% { transform: scale(1, 1); } 33% { transform: scale(1.05, .95); } 66% { transform: scale(.96, 1.04); } }
 @keyframes ne-glitch { 0%, 86%, 100% { text-shadow: none; transform: none; } 88% { text-shadow: -2px 0 var(--n2), 2px 0 #0ff; transform: translateX(1px); } 91% { text-shadow: 2px 0 var(--n2), -2px 0 #0ff; transform: translateX(-1px); } 94% { text-shadow: -1px 0 var(--n2), 1px 0 #0ff; transform: translateX(.5px); } 97% { text-shadow: none; transform: none; } }
 @keyframes ne-wave { 0%, 100% { transform: translateY(0); } 25% { transform: translateY(-1.5px); } 75% { transform: translateY(1.5px); } }
-:root[data-motion="reduced"] [class*="ne-"] { animation: none !important; }
+:root[data-motion="reduced"] :is([class^="ne-"], [class*=" ne-"]) { animation: none !important; }
 /* Name animations: paused until the message, row, card or dialog holding the name is hovered (default). */
-:root[data-name-anim="hover"] [class*="ne-"] { animation-play-state: paused; }
-:root[data-name-anim="hover"] :is([data-msg-id], [data-dm-row], [data-group-row], [data-member-list] li, [data-dm-profile], [data-profile-card], [data-name-style-card], [data-role-style-card], [role="dialog"] [data-name-preview-chat], [role="dialog"] [data-effect-options], aside a, button):hover [class*="ne-"], :root[data-name-anim="hover"] [class*="ne-"]:hover { animation-play-state: running; }
+:root[data-name-anim="hover"] :is([class^="ne-"], [class*=" ne-"]) { animation-play-state: paused; }
+:root[data-name-anim="hover"] :is([data-msg-id], [data-dm-row], [data-group-row], [data-member-list] li, [data-dm-profile], [data-profile-card], [data-name-style-card], [data-role-style-card], [role="dialog"] [data-name-preview-chat], [role="dialog"] [data-effect-options], aside a, button):hover :is([class^="ne-"], [class*=" ne-"]), :root[data-name-anim="hover"] :is([class^="ne-"], [class*=" ne-"]):hover { animation-play-state: running; }
 /* Profiles (cards and popouts) always play their name effect, like their avatar and decoration (lib/motion.ts). */
-:root[data-name-anim="hover"] [data-profile-card] [class*="ne-"] { animation-play-state: running; }
-:root[data-name-anim="never"] [class*="ne-"] { animation: none !important; }
+:root[data-name-anim="hover"] [data-profile-card] :is([class^="ne-"], [class*=" ne-"]) { animation-play-state: running; }
+:root[data-name-anim="never"] :is([class^="ne-"], [class*=" ne-"]) { animation: none !important; }
 
 /* Profile frames (border around the profile card) and nameplates (behind names in lists). */
 /* Only gives the frame a positioning context; never override a floating card's own absolute/fixed placement. */

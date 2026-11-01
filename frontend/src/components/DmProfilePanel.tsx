@@ -12,7 +12,7 @@ import { useAssetItem, type FrameItem } from '../lib/assetCatalog'
  * the header with 8px around it (plus whatever the profile frame reaches past the card, reserved by FrameRoom), its
  * contents scrolling inside. Nothing in it ever scrolls the panel itself, sideways or down.
  */
-export default function DmProfilePanel({ userId }: { userId: string }) {
+export default function DmProfilePanel({ userId, channelId }: { userId: string; channelId?: string }) {
   const t = useT()
   const cached = useStore((s) => s.users[userId])
   const [user, setUser] = useState<UserProfile | null>(null)
@@ -22,7 +22,7 @@ export default function DmProfilePanel({ userId }: { userId: string }) {
   const width = panelWidth(frame)
   return (
     <aside className="shrink-0 bg-bg-2 overflow-hidden p-2 flex flex-col phone:hidden" style={{ width }} data-dm-profile>
-      {user ? <ProfilePopout user={user} onClose={() => {}} variant="panel" /> : <div className="p-2 text-sm text-text-2">{t('Loading…')}</div>}
+      {user ? <ProfilePopout user={user} onClose={() => {}} variant="panel" typingIn={channelId} /> : <div className="p-2 text-sm text-text-2">{t('Loading…')}</div>}
     </aside>
   )
 }

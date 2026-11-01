@@ -13,6 +13,8 @@ interface Props {
   animate?: boolean
   size?: number
   presence?: boolean
+  /** A DM: while this user is typing in it, the presence badge becomes Discord's typing pill. */
+  typingIn?: string
   className?: string
 }
 
@@ -41,12 +43,13 @@ const DECORATION_STYLE: Record<string, React.CSSProperties> = {
   ember: { boxShadow: 'inset 0 0 0 2px #f97316, 0 0 8px 2px rgba(249,115,22,.6)' },
 }
 
-export default function Avatar({ user, size = 32, presence = false, className = '', decoration: override, animate = false }: Props) {
+export default function Avatar({ user, size = 32, presence = false, typingIn, className = '', decoration: override, animate = false }: Props) {
   const online = useStore((s) => !!s.online[user.id])
   const platforms = useStore((s) => s.platforms[user.id])
   const status = useStore((s) => shownStatus(s.users[user.id]?.status ?? user.status, !!s.idle[user.id]))
   // `decoration` forces a frame (previews, unsaved drafts); otherwise the live store value, then the user object's.
   const decoration = useStore((s) => override ?? s.users[user.id]?.avatar_decoration ?? user.avatar_decoration ?? '')
+  const typing = useStore((s) => !!typingIn && !!s.typing[typingIn]?.[user.id])
   const dot = Math.max(8, Math.round(size * 0.32))
   const assetId = size >= 20 ? assetDecorationId(decoration) : null
   const [hover, setHover] = useState(false)
@@ -86,8 +89,18 @@ export default function Avatar({ user, size = 32, presence = false, className = 
         <img src={decorationUrl(assetId, !moving)} alt="" aria-hidden draggable={false} loading="lazy" decoding="async" onError={() => setBroken(assetId)}
           className="absolute pointer-events-none select-none max-w-none" style={{ width: '120%', height: '120%', left: '-10%', top: '-10%' }} data-decoration={decoration} />
       )}
-      {presence && <PresenceBadge size={dot} color={statusColor(status, online)} kind={online && status !== 'invisible' && status !== 'offline' ? presenceKind(platforms) : 'dot'} title={presenceTitle(status, online, platforms)} />}
+      {presence && typing ? <TypingBadge size={dot} color={statusColor(status, online)} /> : presence && <PresenceBadge size={dot} color={statusColor(status, online)} kind={online && status !== 'invisible' && status !== 'offline' ? presenceKind(platforms) : 'dot'} title={presenceTitle(status, online, platforms)} />}
     </div>
+  )
+}
+
+/** In place of the status dot while they type: a pill of the status colour with three bouncing dots. */
+function TypingBadge({ size, color }: { size: number; color: string }) {
+  const h = Math.max(10, size), w = Math.round(h * 2.1), d = Math.max(2, Math.round(h * 0.26))
+  return (
+    <span className="absolute flex items-center justify-center gap-[2px] rounded-full ring-[3px] ring-bg-1" style={{ width: w, height: h, right: -Math.round(w * 0.3), bottom: -1, background: color }} title="Typing…" data-presence="typing">
+      {[0, 1, 2].map((i) => <i key={i} className="typing-dot inline-block rounded-full bg-bg-1" style={{ width: d, height: d }} />)}
+    </span>
   )
 }
 

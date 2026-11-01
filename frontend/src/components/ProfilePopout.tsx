@@ -45,6 +45,8 @@ interface Props {
    *  inside it. */
   sheet?: boolean
   after?: ReactNode
+  /** The DM this card sits beside: the avatar shows when they are typing in it. */
+  typingIn?: string
 }
 
 /**
@@ -52,7 +54,7 @@ interface Props {
  * "username • pronouns", a clamped bio with "View Full Bio", mutual servers, and a
  * "Message @user" box. Everything else lives in the full profile ("View Full Profile").
  */
-export default function ProfilePopout({ user, guildId, onClose, variant = 'popout', focusNote, sheet, after }: Props) {
+export default function ProfilePopout({ user, guildId, onClose, variant = 'popout', focusNote, sheet, after, typingIn }: Props) {
   const panel = variant === 'panel'
   const full = variant === 'full'
   const me = useStore((s) => s.user)
@@ -242,8 +244,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
       <div className={full ? 'px-5 -mt-[64px]' : 'px-4 -mt-[42px]'}>
         <div className="inline-block rounded-full" style={{ boxShadow: `0 0 0 ${full ? 8 : 6}px ${themed ? '#1a1527' : surface}` }}>
           {user.avatar_url
-            ? <button type="button" onClick={() => setViewAvatar(true)} className="block rounded-full cursor-zoom-in" title={t('View Avatar')} aria-label={t('View Avatar')} data-view-avatar><Avatar user={user} size={full ? 120 : 80} presence animate /></button>
-            : <Avatar user={user} size={full ? 120 : 80} presence animate />}
+            ? <button type="button" onClick={() => setViewAvatar(true)} className="block rounded-full cursor-zoom-in" title={t('View Avatar')} aria-label={t('View Avatar')} data-view-avatar><Avatar user={user} size={full ? 120 : 80} presence typingIn={typingIn} animate /></button>
+            : <Avatar user={user} size={full ? 120 : 80} presence typingIn={typingIn} animate />}
         </div>
         {viewAvatar && user.avatar_url && createPortal(<div className="relative z-[160]"><ImageLightbox url={user.avatar_url} name={user.display_name} onClose={() => setViewAvatar(false)} /></div>, document.body)}
       </div>
