@@ -45,5 +45,56 @@ await ph.goto(`${WEB}/channels/${g.id}/${ch.id}`); await ph.waitForTimeout(1500)
 ok('phones have no title bar', await ph.locator('[data-title-bar]').count() === 0)
 ok('and keep the inbox in the header', await ph.locator('[data-inbox-toggle]').count() >= 1)
 
+// Desktop app (bridge faked: the ParleyDesktop user agent and a recording invoke)
+const desk = async (frame, prefsOff) => {
+  const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) ParleyDesktop/0.21.0' })
+  await c.addInitScript(([frame, off]) => {
+    window.__calls = []
+    window.__TAURI_INTERNALS__ = { invoke: async (cmd, args) => {
+      window.__calls.push(cmd === 'window_control' ? args.action : cmd)
+      if (cmd === 'desktop_settings') return { autostart: false, start_minimized: false, hardware_acceleration: true, version: '0.21.0', ...(frame ? { frame } : {}) }
+      if (cmd === 'window_control') return args.action === 'maximize'
+      return null
+    } }
+    if (off) { const k = Object.keys(localStorage).find((x) => x.endsWith('prefs')) ?? 'parley.prefs'; const v = JSON.parse(localStorage.getItem(k) ?? '{}'); v.titleBar = false; localStorage.setItem(k, JSON.stringify(v)) }
+  }, [frame, prefsOff])
+  const d = await c.newPage(); d.on('pageerror', (e) => errors.push(e.message))
+  await d.goto(`${WEB}/login`); await d.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+  await d.goto(`${WEB}/channels/${g.id}/${ch.id}`); await d.waitForSelector('[data-message-list]'); await d.waitForTimeout(800)
+  return d
+}
+const calls = (d) => d.evaluate(() => window.__calls.filter((x) => !['desktop_settings', 'state', 'set_badge', 'set_zoom', 'set_theme', 'set_app_icon', 'set_ptt_key', 'streaming_apps', 'flash'].includes(x)))
+console.log('-- frameless desktop window')
+const dw = await desk('custom', true)
+ok('desktop: the title bar shows even with the setting off (the window has no frame)', await dw.locator('[data-title-bar="custom"]').count() === 1)
+ok('desktop: minimise, maximise and close buttons at the right', await dw.locator('[data-window-controls] [data-window]').count() === 3)
+const ctl = await dw.locator('[data-window-controls]').boundingBox()
+ok('desktop: flush with the window\'s right edge', ctl && Math.abs(ctl.x + ctl.width - 1440) < 2, JSON.stringify(ctl))
+ok('desktop: the server list drops its back/forward arrows (the title bar has them)', await dw.locator('[data-history-nav]').count() === 0)
+await dw.click('[data-window="minimize"]'); await dw.click('[data-window="maximize"]'); await dw.click('[data-window="close"]')
+const bb = await dw.locator('[data-title-bar]').boundingBox()
+await dw.mouse.move(bb.x + 300, bb.y + bb.height / 2); await dw.mouse.down(); await dw.mouse.up()
+await dw.mouse.dblclick(bb.x + 300, bb.y + bb.height / 2)
+const got = await calls(dw)
+ok('desktop: the buttons minimise, maximise and close the window', JSON.stringify(got.slice(0, 3)) === '["minimize","maximize","close"]', JSON.stringify(got))
+ok('desktop: pressing on the empty bar drags the window, a double-click maximises', got.slice(3).includes('drag') && got.slice(3).includes('maximize'), JSON.stringify(got))
+ok('desktop: after maximising, the button offers Restore', (await dw.locator('[data-window="maximize"]').getAttribute('title')) === 'Restore')
+await dw.screenshot({ path: 'titlebar-desktop.png' })
+await dw.click('[data-user-panel] [data-control="User Settings"]'); await dw.click('[data-settings-tab="appearance"]')
+ok('desktop: the Show title bar setting is on and locked', await dw.locator('label:has-text("Show title bar") button[role=switch]').isDisabled() && (await dw.locator('label:has-text("Show title bar") button[role=switch]').getAttribute('aria-checked')) === 'true')
+await dw.context().close()
+console.log('-- macOS window')
+const mw = await desk('mac', false)
+const pad = await mw.locator('[data-title-bar]').evaluate((el) => parseFloat(getComputedStyle(el).paddingLeft))
+ok('macOS: no drawn buttons, room for the traffic lights', await mw.locator('[data-window-controls]').count() === 0 && pad >= 78, String(pad))
+await mw.context().close()
+console.log('-- older desktop app (system frame)')
+const ow = await desk(null, true)
+ok('older app with the setting off: no title bar, the server list keeps its arrows', await ow.locator('[data-title-bar]').count() === 0 && await ow.locator('[data-history-nav]').count() === 1)
+await ow.context().close()
+const on2 = await desk(null, false)
+ok('older app with the title bar on: arrows only in the title bar, no window buttons', await on2.locator('[data-history-nav]').count() === 0 && await on2.locator('[data-title-back]').count() === 1 && await on2.locator('[data-window-controls]').count() === 0)
+await on2.context().close()
+
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await browser.close(); await finish()

@@ -16,7 +16,9 @@ const invoke = (): Invoke | null => {
 
 export const desktopBridge = () => !!invoke()
 
-export interface DesktopSettings { autostart: boolean; start_minimized: boolean; hardware_acceleration: boolean; close_to_tray?: boolean; minimize_to_tray?: boolean; tray?: boolean; version: string }
+export interface DesktopSettings { autostart: boolean; start_minimized: boolean; hardware_acceleration: boolean; close_to_tray?: boolean; minimize_to_tray?: boolean; tray?: boolean; version: string
+  /** The window has no system frame (shells from 0.21 on): "custom" = draw minimise/maximise/close, "mac" = leave room for the traffic lights. */
+  frame?: 'custom' | 'mac' }
 
 let lastBadge = -1
 export const desktop = {
@@ -33,5 +35,7 @@ export const desktop = {
   appIcon(png: Uint8Array) { invoke()?.('set_app_icon', { png: Array.from(png) }).catch(() => {}) },
   /** Is OBS or XSplit running? Null when the shell can't tell (older shells, browsers). */
   streamingApps: (): Promise<boolean | null> => invoke()?.<boolean>('streaming_apps').catch(() => null) ?? Promise.resolve(null),
+  /** The page's own window controls and title bar drag; resolves to whether the window is maximised. */
+  window: (action: 'minimize' | 'maximize' | 'close' | 'drag' | 'state'): Promise<boolean> => invoke()?.<boolean>('window_control', { action }).catch(() => false) ?? Promise.resolve(false),
   setSettings: (s: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean; closeToTray?: boolean; minimizeToTray?: boolean }) => invoke()?.<DesktopSettings>('set_desktop_settings', s) ?? Promise.reject(new Error('Not in the desktop app')),
 }

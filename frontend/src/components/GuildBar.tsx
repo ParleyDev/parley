@@ -19,6 +19,7 @@ import { mutedTarget } from '../lib/notify'
 import { useT } from '../lib/i18n'
 import { isDesktop } from '../lib/native'
 import { ActivityBadge, GuildActivityCard, hasActivity, useGuildActivity } from './GuildActivity'
+import { useTitleBarShown } from '../lib/titleBar'
 
 type FolderItem = Extract<LayoutItem, { kind: 'folder' }>
 const OPEN_KEY = 'parley.folderOpen'
@@ -170,10 +171,11 @@ export default function GuildBar() {
     )
   }
 
+  const titleBar = useTitleBarShown()
   return (
     <nav aria-label={t('Servers')} className="w-[72px] shrink-0 bg-bg-0 flex flex-col items-center py-3 gap-2 overflow-y-auto overflow-x-hidden" data-guild-bar>
-      {/* The desktop app has no browser chrome, so it gets its own back and forward buttons. */}
-      {isDesktop() && (
+      {/* The desktop app has no browser chrome, so it gets its own back and forward buttons, unless the title bar has them. */}
+      {isDesktop() && !titleBar && (
         <div className="flex gap-1 -mt-1" data-history-nav>
           <button type="button" onClick={() => history.back()} className="h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title={t('Back (Alt+Left)')} aria-label={t('Back')} data-history-back><ArrowLeft size={14} /></button>
           <button type="button" onClick={() => history.forward()} className="h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" title={t('Forward (Alt+Right)')} aria-label={t('Forward')} data-history-forward><ArrowRight size={14} /></button>

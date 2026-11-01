@@ -22,10 +22,17 @@
     .link { width: auto; margin-top: 16px; padding: 0; background: none; color: #9a98ff; font-size: 14px; font-weight: 600; }
     #f[hidden], #official[hidden] { display: none; }
     .recent button { background: #1a1b23; color: #b8bcc8; font-weight: 500; margin-top: 8px; text-align: left; }
+    /* The window has no system frame: this strip drags it and (off macOS) carries the window buttons. */
+    #bar { position: fixed; top: 0; left: 0; right: 0; height: 32px; display: flex; justify-content: flex-end; -webkit-user-select: none; user-select: none; }
+    #bar.mac { padding-left: 78px; }
+    #bar button { width: 46px; margin: 0; padding: 0; border-radius: 0; background: none; color: #b8bcc8; font-size: 15px; font-weight: 400; }
+    #bar button:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+    #bar button.x:hover { background: #e81123; }
     .logo { width: 64px; height: 64px; border-radius: 18px; margin-bottom: 16px; box-shadow: 0 10px 30px -8px rgba(77, 140, 255, .55); }
   </style>
 </head>
 <body>
+  <div id="bar" data-title-bar><button data-a="minimize" title="Minimise" aria-label="Minimise">&#x2013;</button><button data-a="maximize" title="Maximise" aria-label="Maximise">&#x25A1;</button><button data-a="close" class="x" title="Close" aria-label="Close">&#x2715;</button></div>
   <main>
     <img class="logo" src="logo.png" alt="Parley" width="64" height="64">
     <h1>Welcome to Parley</h1>
@@ -44,6 +51,12 @@
     <div class="recent" id="recent"></div>
   </main>
   <script>
+    {
+      const bar = document.getElementById('bar'), call = (action) => window.__TAURI_INTERNALS__?.invoke('window_control', { action }).catch(() => {})
+      if (/Macintosh/.test(navigator.userAgent)) { bar.className = 'mac'; bar.replaceChildren() }
+      bar.addEventListener('mousedown', (e) => { if (e.button === 0 && e.target === bar) call(e.detail === 2 ? 'maximize' : 'drag') })
+      bar.addEventListener('click', (e) => { const a = e.target.closest('button')?.dataset.a; if (a) call(a) })
+    }
     const KEY = 'parley.servers'
     // Parley's hosted instance: the one-tap default. Self-hosted servers go through the "different server" form.
     const HOSTED = 'https://app.runparley.com'

@@ -1,9 +1,9 @@
-import { ArrowLeft, ArrowRight, Inbox, Users } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { ArrowLeft, ArrowRight, Copy, Inbox, Minus, Square, Users, X } from 'lucide-react'
+import { useEffect, useState, type ReactNode, type MouseEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
-import { usePrefs } from '../lib/prefs'
-import { usePhone } from '../lib/swipe'
+import { desktop } from '../lib/desktop'
+import { useDesktopFrame, useTitleBarShown } from '../lib/titleBar'
 import { colorFor, initials } from '../lib/format'
 import { dmName, isGroup } from '../lib/dm'
 import { useT } from '../lib/i18n'
@@ -17,13 +17,30 @@ const nav = (window as unknown as { navigation?: { canGoBack?: boolean; canGoFor
 /**
  * Discord's title bar: a slim strip across the top of every view on wide screens with back/forward, where you are
  * (the server, the DM or Friends) and the inbox. Paints nothing of its own so themes run through it. Settings →
- * Appearance → Show title bar; never on phones.
+ * Appearance → Show title bar; never on phones. In the frameless desktop app it is always there: it drags the window
+ * (double-click maximises) and carries minimise/maximise/close, or leaves room for the macOS traffic lights.
  */
 export default function TitleBar() {
-  const on = usePrefs().titleBar
-  const phone = usePhone()
-  if (!on || phone) return null
-  return <Bar />
+  return useTitleBarShown() ? <Bar /> : null
+}
+
+/** Minimise, maximise/restore and close for the frameless desktop window (Windows, Linux). */
+function WindowControls() {
+  const t = useT()
+  const [max, setMax] = useState(false)
+  useEffect(() => {
+    const sync = () => void desktop.window('state').then(setMax)
+    sync(); window.addEventListener('resize', sync)
+    return () => window.removeEventListener('resize', sync)
+  }, [])
+  const btn = 'h-9 w-[46px] flex items-center justify-center text-text-1 hover:bg-white/10 hover:text-text-0'
+  return (
+    <div className="flex self-stretch -mr-2 ml-1" data-window-controls>
+      <button type="button" onClick={() => void desktop.window('minimize')} title={t('Minimise')} aria-label={t('Minimise')} className={btn} data-window="minimize"><Minus size={16} /></button>
+      <button type="button" onClick={() => void desktop.window('maximize').then(setMax)} title={max ? t('Restore') : t('Maximise')} aria-label={max ? t('Restore') : t('Maximise')} className={btn} data-window="maximize">{max ? <Copy size={13} className="-scale-x-100" /> : <Square size={13} />}</button>
+      <button type="button" onClick={() => void desktop.window('close')} title={t('Close')} aria-label={t('Close')} className={`${btn} hover:!bg-[#e81123] hover:!text-white`} data-window="close"><X size={18} /></button>
+    </div>
+  )
 }
 
 function Bar() {
@@ -35,6 +52,9 @@ function Bar() {
   const dm = useStore((s) => (first === '@me' && second && second !== 'requests' ? s.dms[second] : undefined))
   const users = useStore((s) => s.users)
   const notes = useStore((s) => s.notes)
+  const frame = useDesktopFrame()
+  // The bar's empty space drags the window; a double-click maximises, like a system title bar.
+  const drag = (e: MouseEvent) => { if (frame && e.button === 0 && e.target === e.currentTarget) void desktop.window(e.detail === 2 ? 'maximize' : 'drag') }
 
   let icon: ReactNode = <Users size={16} />, title = t('Friends')
   if (guild) {
@@ -51,7 +71,7 @@ function Bar() {
   }
   const arrow = 'h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-white/10 hover:text-text-0 disabled:opacity-40 disabled:hover:bg-transparent'
   return (
-    <div className="relative z-30 shrink-0 h-9 flex items-center px-2 text-sm" data-title-bar>
+    <div onMouseDown={drag} className={`relative z-30 shrink-0 h-9 flex items-center px-2 text-sm select-none ${frame === 'mac' ? 'pl-[78px]' : ''}`} data-title-bar={frame ?? ''}>
       <div className="flex items-center gap-0.5">
         <button type="button" onClick={() => navigate(-1)} disabled={nav?.canGoBack === false} title={t('Back')} aria-label={t('Back')} className={arrow} data-title-back><ArrowLeft size={16} /></button>
         <button type="button" onClick={() => navigate(1)} disabled={nav?.canGoForward === false} title={t('Forward')} aria-label={t('Forward')} className={arrow} data-title-forward><ArrowRight size={16} /></button>
@@ -59,7 +79,7 @@ function Bar() {
       <div className="pointer-events-none absolute inset-x-28 inset-y-0 flex items-center justify-center gap-2 font-semibold text-text-0" data-title-bar-place>
         <span className="shrink-0 flex text-text-1">{icon}</span><span className="truncate" data-title-bar-name>{title}</span>
       </div>
-      <div className="ml-auto flex items-center" data-title-bar-actions><InboxButton inTitleBar /></div>
+      <div className="ml-auto flex items-center" data-title-bar-actions><InboxButton inTitleBar />{frame === 'custom' && <WindowControls />}</div>
     </div>
   )
 }

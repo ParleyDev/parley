@@ -76,13 +76,17 @@ fn save_prefs(app: &AppHandle, p: &Prefs) -> Result<(), String> {
 }
 
 #[derive(Serialize)]
-struct DesktopSettings { autostart: bool, start_minimized: bool, hardware_acceleration: bool, close_to_tray: bool, minimize_to_tray: bool, tray: bool, version: &'static str }
+struct DesktopSettings { autostart: bool, start_minimized: bool, hardware_acceleration: bool, close_to_tray: bool, minimize_to_tray: bool, tray: bool, version: &'static str, frame: &'static str }
+
+/// The window has no system frame: "custom" (Windows, Linux) means the page draws minimise/maximise/close; "mac"
+/// keeps the traffic lights over the page's title bar, which leaves room for them.
+const FRAME: &str = if cfg!(target_os = "macos") { "mac" } else { "custom" };
 
 fn settings(app: &AppHandle) -> DesktopSettings {
     let p = load_prefs(app);
     DesktopSettings {
         autostart: app.autolaunch().is_enabled().unwrap_or(false), start_minimized: p.start_minimized, hardware_acceleration: p.hardware_acceleration.unwrap_or(true),
-        close_to_tray: p.close_to_tray.unwrap_or(true), minimize_to_tray: p.minimize_to_tray, tray: has_tray(app), version: VERSION,
+        close_to_tray: p.close_to_tray.unwrap_or(true), minimize_to_tray: p.minimize_to_tray, tray: has_tray(app), version: VERSION, frame: FRAME,
     }
 }
 
@@ -106,6 +110,41 @@ fn set_desktop_settings(app: AppHandle, autostart: Option<bool>, start_minimized
         save_prefs(&app, &p)?;
     }
     Ok(settings(&app))
+}
+
+/// The page's own window controls and title bar drag. Closing and minimising still go through the tray handling
+/// (close / minimise to tray). Returns whether the window is now maximised.
+#[tauri::command]
+fn window_control(window: WebviewWindow, action: String) -> Result<bool, String> {
+    match action.as_str() {
+        "minimize" => window.minimize(),
+        "maximize" => if window.is_maximized().unwrap_or(false) { window.unmaximize() } else { window.maximize() },
+        "close" => window.close(),
+        "drag" => window.start_dragging(),
+        "state" => Ok(()),
+        _ => return Err(format!("unknown window action {action}")),
+    }
+    .map_err(|e| e.to_string())?;
+    Ok(window.is_maximized().unwrap_or(false))
+}
+
+/// A page that doesn't draw a title bar (a server running an older web client, an error page) would leave the
+/// frameless window with no way to move or close it: after a moment, give it a slim strip that drags the window and,
+/// off macOS, carries minimise/maximise/close.
+fn fallback_bar_script() -> String {
+    let buttons = if cfg!(target_os = "macos") { "" } else {
+        "<button data-a=\"minimize\" title=\"Minimise\">&#x2013;</button><button data-a=\"maximize\" title=\"Maximise\">&#x25A1;</button><button data-a=\"close\" title=\"Close\" class=\"x\">&#x2715;</button>"
+    };
+    let pad = if cfg!(target_os = "macos") { 78 } else { 8 };
+    format!(r#"setTimeout(() => {{
+  if (document.querySelector('[data-title-bar]') || document.getElementById('parley-shell-bar')) return
+  const call = (action) => window.__TAURI_INTERNALS__?.invoke('window_control', {{ action }}).catch(() => {{}})
+  const bar = document.createElement('div'); bar.id = 'parley-shell-bar'
+  bar.innerHTML = '<style>#parley-shell-bar{{position:fixed;top:0;left:0;right:0;height:28px;z-index:2147483647;display:flex;justify-content:flex-end;padding-left:{pad}px;background:rgba(0,0,0,.35);-webkit-user-select:none;user-select:none}}#parley-shell-bar button{{width:46px;border:0;background:none;color:#ddd;font:14px system-ui}}#parley-shell-bar button:hover{{background:rgba(255,255,255,.12)}}#parley-shell-bar button.x:hover{{background:#e81123;color:#fff}}</style>{buttons}'
+  bar.addEventListener('mousedown', (e) => {{ if (e.button === 0 && e.target === bar) call(e.detail === 2 ? 'maximize' : 'drag') }})
+  bar.addEventListener('click', (e) => {{ const a = e.target.closest('button')?.dataset.a; if (a) call(a) }})
+  document.documentElement.appendChild(bar)
+}}, 2500)"#)
 }
 
 /// Unread mentions on the dock / taskbar icon (a red dot overlay on Windows, which has no count badge).
@@ -335,7 +374,7 @@ pub fn run() {
         .manage(Pending(Mutex::new(None)))
         .manage(Ptt::default())
         .manage(Tray(std::sync::atomic::AtomicBool::new(false)))
-        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, set_theme, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon, overlay])
+        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, set_theme, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon, overlay, window_control])
         .setup(|app| {
             let handle = app.handle().clone();
             // AppImages and dev builds aren't registered for parley:// by an installer.
@@ -354,6 +393,11 @@ pub fn run() {
             let builder = if no_gpu { builder.additional_browser_args("--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --disable-gpu") } else { builder };
             #[cfg(not(any(windows, target_os = "linux")))]
             let _ = no_gpu;
+            // No system frame: the page draws the title bar and window controls (macOS keeps its traffic lights).
+            #[cfg(target_os = "macos")]
+            let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+            #[cfg(not(target_os = "macos"))]
+            let builder = builder.decorations(false);
             let window = builder
                 .title("Parley")
                 .inner_size(1280.0, 820.0)
@@ -398,6 +442,7 @@ pub fn run() {
                     true
                 })
                 .on_page_load(|w, payload| {
+                    if payload.event() == PageLoadEvent::Finished { let _ = w.eval(&fallback_bar_script()); }
                     // Reached a server with a deep link waiting: go there.
                     if payload.event() != PageLoadEvent::Finished || !matches!(payload.url().scheme(), "http" | "https") { return; }
                     let pending = w.app_handle().state::<Pending>().0.lock().ok().and_then(|mut p| p.take());

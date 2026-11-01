@@ -8,6 +8,7 @@ import { ACCENTS, setPrefs, usePrefs } from '../../../lib/prefs'
 import { Toggle } from '../SettingsShell'
 import { APP_ICONS, iconUrl } from '../../../lib/appIcon'
 import ThemeSection from './ThemeSection'
+import { useDesktopFrame } from '../../../lib/titleBar'
 
 
 /** User Settings → Appearance: theme, chat font scale and message density. Stored per browser. */
@@ -15,6 +16,7 @@ export default function AppearanceTab() {
   const t = useT()
   const a = useAppearance()
   const p = usePrefs()
+  const frame = useDesktopFrame()
   const [sync, setSync] = useState(syncEnabled)
   return (
     <div className="space-y-8" data-appearance>
@@ -92,8 +94,8 @@ export default function AppearanceTab() {
       </section>
 
       <section className="space-y-3">
-        <Toggle label={t('Show title bar')} checked={p.titleBar} onChange={(v) => setPrefs({ titleBar: v })} />
-        <p className="text-xs text-text-2 -mt-1">{t('A bar across the top with back and forward, where you are and your inbox. Not shown on phones.')}</p>
+        <Toggle label={t('Show title bar')} checked={p.titleBar || !!frame} disabled={!!frame} onChange={(v) => setPrefs({ titleBar: v })} />
+        <p className="text-xs text-text-2 -mt-1">{frame ? t('Always shown in the desktop app, where it moves the window and holds its buttons.') : t('A bar across the top with back and forward, where you are and your inbox. Not shown on phones.')}</p>
         <Toggle label={t('Show avatars in compact mode')} checked={p.compactAvatars} onChange={(v) => setPrefs({ compactAvatars: v })} />
         <div>
           <h3 className="label">{t('Role colours')}</h3>

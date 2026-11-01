@@ -42,6 +42,15 @@ const page = (step) => `<!doctype html><meta charset=utf-8><title>shell test</ti
     await t('icon', () => inv('set_app_icon', { png: Array.from(png) }))
     await t('iconReset', () => inv('set_app_icon', { png: [] }))
     await t('iconBad', () => inv('set_app_icon', { png: [1, 2, 3] }))
+    await t('winState', () => inv('window_control', { action: 'state' }))
+    await t('winMax', () => inv('window_control', { action: 'maximize' }))
+    await new Promise((r) => setTimeout(r, 600))
+    await t('winMaxed', () => inv('window_control', { action: 'state' }))
+    await t('winRestore', () => inv('window_control', { action: 'maximize' }))
+    await t('winBad', () => inv('window_control', { action: 'explode' }))
+    // The fallback strip arrives for a page with no title bar of its own.
+    await new Promise((r) => setTimeout(r, 3000))
+    out.fallbackBar = !!document.getElementById('parley-shell-bar')
   }
   if (inv && ${step} === 2) await t('off', () => inv('set_desktop_settings', { autostart: false }))
   if (inv && ${step} === 2) await t('overlayLocked', () => inv('overlay', { show: true, locked: true }))
@@ -72,6 +81,11 @@ ok('the page loads in the shell', await wait(() => results['1']))
 const r = results['1'] ?? {}
 ok('it can reach the shell', r.ipc === true, JSON.stringify(r))
 ok('desktop_settings', r.settings?.version && r.settings.autostart === false && r.settings.start_minimized === false && r.settings.hardware_acceleration === true, JSON.stringify(r.settings))
+ok('the window has no system frame: the page draws the title bar', r.settings?.frame === 'custom', JSON.stringify(r.settings))
+// Maximising is a request to the window manager, and Xvfb has none: check the commands answer, not the outcome.
+ok('window_control answers state, maximise and restore', [r.winState, r.winMax, r.winMaxed, r.winRestore].every((v) => typeof v === 'boolean'), JSON.stringify({ s: r.winState, m: r.winMax, mm: r.winMaxed, r: r.winRestore }))
+ok('an unknown window action is refused', String(r.winBad).startsWith('error'), String(r.winBad))
+ok('a page without a title bar gets the shell\'s strip to move and close the window', r.fallbackBar === true)
 ok('badge, flash and zoom', r.badge === 'ok' && r.flash === 'ok' && r.zoom === 'ok', JSON.stringify(r))
 ok('a bad zoom is refused', String(r.badZoom).startsWith('error'))
 ok('startup settings change', r.after?.autostart === true && r.after?.start_minimized === true && r.after?.hardware_acceleration === false, JSON.stringify(r.after))
