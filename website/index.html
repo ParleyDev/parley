@@ -335,6 +335,15 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 .dl .go { font: 600 .875rem/1 var(--body); color: var(--muted); transition: transform .15s ease, color .15s ease; white-space: nowrap; }
 @media (max-width: 720px) { .dl .row { grid-template-columns: minmax(0, 1fr) auto; } .dl .files { grid-column: 1 / -1; grid-row: 2; } }
 .note { margin-top: 1.25rem; color: var(--faint); font-size: .875rem; }
+/* Stable / Development switch above the downloads. */
+.channels { display: inline-flex; gap: .25rem; margin-top: clamp(2rem, 4vw, 2.75rem); padding: .25rem; border: 1px solid var(--rule); border-radius: 999px; background: var(--panel); }
+.channels button { font: 600 .875rem/1 var(--body); color: var(--muted); background: none; border: 0; border-radius: 999px; padding: .6rem 1.1rem; cursor: pointer; }
+.channels button[aria-selected="true"] { background: var(--violet); color: #fff; }
+.channels button:not([aria-selected="true"]):hover { color: var(--text); }
+.channels + .dl { margin-top: 1rem; }
+.devnote { display: none; margin-top: 1rem; color: var(--muted); font-size: .9375rem; }
+#download[data-channel="dev"] .devnote { display: block; }
+#download[data-channel="dev"] .stable-only { display: none; }
 
 /* ---- finale ---- */
 .finale { text-align: left; overflow: hidden; position: relative; isolation: isolate; border-top: 1px solid var(--rule); }
@@ -740,6 +749,11 @@ footer a:hover { color: var(--text); }
         <h2 id="dl-title">Bring Parley with you.</h2>
         <p class="lede">The apps work with app.runparley.com or any Parley server. Type the address once and you're in.</p>
       </div>
+      <div class="channels" role="tablist" aria-label="Release channel">
+        <button type="button" role="tab" aria-selected="true" data-channel="stable">Stable</button>
+        <button type="button" role="tab" aria-selected="false" data-channel="dev">Development</button>
+      </div>
+      <p class="devnote" id="devnote">Development builds come from every change, as soon as it's made, so expect rough edges. Pick <b>Development</b> under Settings → Advanced → Update channel in the desktop app to keep getting them.</p>
       <div class="dl" id="downloads">
         <div class="row"><span class="os">Windows</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="x64-setup\.exe$">Parley_0.20.0_x64-setup.exe</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.msi$">Parley_0.20.0_x64_en-US.msi</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
         <div class="row"><span class="os">macOS</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.dmg$">Parley_0.20.0_aarch64.dmg</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
@@ -747,7 +761,7 @@ footer a:hover { color: var(--text); }
         <div class="row"><span class="os">Android</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.apk$">Parley_0.20.0_android.apk</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
         <div class="row"><span class="os">Web</span><span class="files"><span>Any modern browser, on your server's address</span></span><a class="go" href="#self-host">Set up →</a></div>
       </div>
-      <p class="note">Downloads come straight from the <a href="https://github.com/ParleyDev/parley/releases/latest">latest GitHub release</a>. The Mac build is for Apple Silicon. iOS builds from source for now.</p>
+      <p class="note"><span class="stable-only">Downloads come straight from the <a href="https://github.com/ParleyDev/parley/releases/latest">latest GitHub release</a>.</span> The Mac build is for Apple Silicon. iOS builds from source for now.</p>
     </div>
   </section>
 
@@ -857,20 +871,37 @@ footer a:hover { color: var(--text); }
   tickClock()
   if (!still) setInterval(() => { cs += 7; tickClock(); meters.forEach((m, i) => m.style.setProperty('--l', (0.25 + mr() * 0.5 + (i === 1 ? 0.15 : 0)).toFixed(2))) }, 70)
 
-  // Downloads: ask GitHub for the latest release and link each file directly. The static names above stay if
-  // this fails (offline, rate limited), and their links still lead to the release page.
-  fetch('https://api.github.com/repos/ParleyDev/parley/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
-    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-    .then((rel) => {
-      const tag = document.getElementById('release-tag'), pill = document.getElementById('release-pill')
-      if (rel.tag_name) tag.textContent = rel.tag_name
-      if (rel.html_url) { pill.href = rel.html_url; document.querySelectorAll('#downloads .go[href*="releases"]').forEach((a) => (a.href = rel.html_url)) }
-      document.querySelectorAll('#downloads [data-asset]').forEach((a) => {
-        const asset = (rel.assets || []).find((x) => new RegExp(a.dataset.asset).test(x.name))
-        if (asset) { a.textContent = asset.name; a.href = asset.browser_download_url }
-      })
+  // Downloads: ask GitHub for the latest release (Stable) or the rolling `dev` prerelease (Development, rebuilt on
+  // every change) and link each file directly. The static names above stay if this fails (offline, rate limited),
+  // and their links still lead to the release page.
+  const api = (path) => fetch(`https://api.github.com/repos/ParleyDev/parley/releases/${path}`, { headers: { Accept: 'application/vnd.github+json' } }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+  const feeds = { stable: api('latest'), dev: null }
+  const section = document.getElementById('download'), devnote = document.getElementById('devnote'), devText = devnote.innerHTML
+  const show = (rel, channel) => {
+    if (section.dataset.channel !== channel) return
+    document.querySelectorAll('#downloads .go[href*="releases"]').forEach((a) => (a.href = rel.html_url || 'https://github.com/ParleyDev/parley/releases'))
+    document.querySelectorAll('#downloads [data-asset]').forEach((a) => {
+      const asset = (rel.assets || []).find((x) => new RegExp(a.dataset.asset).test(x.name))
+      a.hidden = channel === 'dev' && !asset
+      if (asset) { a.textContent = asset.name; a.href = asset.browser_download_url }
     })
-    .catch(() => {})
+    // The dev prerelease is titled "Development build (0.21.0-pre.16)".
+    if (channel === 'dev') devnote.innerHTML = `<b>${(/\(([^)]+)\)/.exec(rel.name || '') || [])[1] || 'Latest build'}</b>, built ${new Date(rel.published_at || rel.created_at).toLocaleDateString()}. ${devText}`
+  }
+  feeds.stable.then((rel) => {
+    const tag = document.getElementById('release-tag'), pill = document.getElementById('release-pill')
+    if (rel.tag_name) tag.textContent = rel.tag_name
+    if (rel.html_url) pill.href = rel.html_url
+    show(rel, 'stable')
+  }).catch(() => {})
+  section.dataset.channel = 'stable'
+  document.querySelectorAll('.channels [data-channel]').forEach((b) => b.addEventListener('click', () => {
+    const channel = b.dataset.channel
+    section.dataset.channel = channel
+    document.querySelectorAll('.channels [data-channel]').forEach((x) => x.setAttribute('aria-selected', String(x === b)))
+    if (channel === 'dev' && !feeds.dev) feeds.dev = api('tags/dev')
+    feeds[channel].then((rel) => show(rel, channel)).catch(() => { if (channel === 'dev') devnote.innerHTML = `No development build is published right now. ${devText}` })
+  }))
 
   // Copy the self-host commands (only the lines that start with $).
   const btn = document.getElementById('copy')
