@@ -61,7 +61,8 @@ jobs:
           echo "display=$(node scripts/version.mjs)" >> "$GITHUB_OUTPUT"
           echo "version=$(node scripts/version.mjs --version)" >> "$GITHUB_OUTPUT"
           echo "channel=$(node scripts/version.mjs --json | node -pe 'JSON.parse(require("fs").readFileSync(0)).channel')" >> "$GITHUB_OUTPUT"
-      # `latest` follows main: a main build, or a release tag on main's current head (not an older commit tagged later).
+      # `latest` is the newest release: a release tag on main's current head (not an older commit tagged later).
+      # Main builds between releases are pre-releases (0.21.0-pre.11, scripts/version.mjs) and move `pre`.
       - name: Is this main's head
         id: head
         run: echo "latest=$([ "$GITHUB_REF" = refs/heads/main ] || [ "$(git rev-parse origin/main)" = "$(git rev-parse HEAD)" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
@@ -78,11 +79,12 @@ jobs:
         with:
           images: ${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable=${{ steps.head.outputs.latest == 'true' }}
+            type=raw,value=latest,enable=${{ steps.ver.outputs.channel == 'release' && steps.head.outputs.latest == 'true' }}
+            type=raw,value=pre,enable=${{ steps.ver.outputs.channel == 'prerelease' }}
             type=ref,event=tag
             type=sha,prefix=sha-
-            # The plain version (0.12.0) belongs to the release; main builds also report it but go out as latest and sha-.
-            type=raw,value=${{ steps.ver.outputs.version }},enable=${{ steps.ver.outputs.channel != 'production' }}
+            # Every build's own version: 0.21.0 for a release, 0.21.0-pre.11 between releases.
+            type=raw,value=${{ steps.ver.outputs.version }}
       - name: Build and push
         uses: docker/build-push-action@v7
         with:

@@ -4,8 +4,8 @@
 #   ops/upgrade.sh               # backup → build → roll → check
 #   ops/upgrade.sh --no-backup
 #   ops/upgrade.sh --dev         # allow a dev build (another branch, or local changes that go into the images)
-# A clean main commit builds as production (0.12.0+<sha>), a release tag as the release; anything else is a dev build,
-# which is refused without --dev. PARLEY_VERSION in the environment wins over the computed version.
+# A clean main commit builds as a pre-release of the next version (0.21.0-pre.11+<sha>), a release tag as the release;
+# anything else is a dev build, which is refused without --dev. PARLEY_VERSION in the environment wins over the computed version.
 # Rollback (README "Upgrades and rollback"): git checkout <previous tag>; MIGRATIONS_IGNORE_MISSING=1 ops/upgrade.sh --dev
 set -eu
 cd "$(dirname "$0")/.."
