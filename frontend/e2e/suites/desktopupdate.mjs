@@ -12,11 +12,12 @@ const open = async (statuses, version = '0.21.0') => {
   const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, userAgent: `Mozilla/5.0 (X11; Linux x86_64) ParleyDesktop/${version}` })
   await c.route('https://api.github.com/repos/ParleyDev/parley/releases/latest', (r) => r.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ tag_name: 'v0.22.0' }) }))
   await c.addInitScript(([statuses, version]) => {
-    window.__calls = []; let i = 0
+    window.__calls = []; window.__channel = 'stable'; let i = 0
     const next = () => statuses[Math.min(i++, statuses.length - 1)]
-    window.__TAURI_INTERNALS__ = { invoke: async (cmd) => {
-      window.__calls.push(cmd)
-      if (cmd === 'desktop_settings') return { autostart: false, start_minimized: false, hardware_acceleration: true, version, frame: 'custom' }
+    window.__TAURI_INTERNALS__ = { invoke: async (cmd, args) => {
+      window.__calls.push(cmd === 'set_desktop_settings' && args?.updateChannel ? `channel:${args.updateChannel}` : cmd)
+      if (cmd === 'set_desktop_settings' && args?.updateChannel) window.__channel = args.updateChannel
+      if (cmd === 'desktop_settings' || cmd === 'set_desktop_settings') return { autostart: false, start_minimized: false, hardware_acceleration: true, version, frame: 'custom', ...(statuses ? { update_channel: window.__channel } : {}) }
       if (cmd === 'update_status' || cmd === 'check_update') { if (!statuses) throw new Error('Command update_status not found'); return { downloaded: 0, current: version, ...next() } }
       if (cmd === 'install_update') return null
       if (cmd === 'window_control') return false
@@ -34,6 +35,10 @@ console.log('-- up to date')
 let p = await open([{ state: 'none' }])
 ok('no update arrow when the app is up to date', await p.locator('[data-desktop-update]').count() === 0)
 await advanced(p)
+ok('the update channel starts on Stable', (await p.locator('button#update-channel').innerText()).startsWith('Stable'))
+await p.click('button#update-channel'); await p.locator('[data-dropdown-option="dev"]').click(); await p.waitForTimeout(800)
+const chc = await p.evaluate(() => window.__calls)
+ok('picking Development switches the shell\'s channel and checks again', chc.includes('channel:dev') && chc.includes('check_update') && (await p.locator('button#update-channel').innerText()).startsWith('Development'), JSON.stringify(chc))
 ok('Settings shows the version and that it is up to date', /Parley desktop 0\.21\.0/.test(await p.locator('[data-app-updates]').innerText()) && /up to date/.test(await p.locator('[data-app-update-line]').innerText()))
 await p.context().close()
 
@@ -68,6 +73,7 @@ await p.context().close()
 console.log('-- Linux .deb install')
 p = await open([{ state: 'unsupported' }])
 await advanced(p)
+ok('no channel picker where the app can\'t update itself', await p.locator('[data-update-channel]').count() === 0)
 ok('a package install is pointed at its package manager or the download', /package manager/.test(await p.locator('[data-app-update-line]').innerText()) && await p.locator('[data-app-update-check]').count() === 0 && await p.locator('[data-app-update-download]').count() === 1)
 await p.context().close()
 

@@ -51,6 +51,9 @@ const page = (step) => `<!doctype html><meta charset=utf-8><title>shell test</ti
     await t('updStatus', () => inv('update_status'))
     await t('updCheck', () => inv('check_update'))
     await t('updInstall', () => inv('install_update'))
+    await t('chanDev', () => inv('set_desktop_settings', { updateChannel: 'dev' }))
+    await t('chanBad', () => inv('set_desktop_settings', { updateChannel: 'nightly' }))
+    await t('chanStable', () => inv('set_desktop_settings', { updateChannel: 'stable' }))
     // The fallback strip arrives for a page with no title bar of its own.
     await new Promise((r) => setTimeout(r, 3000))
     out.fallbackBar = !!document.getElementById('parley-shell-bar')
@@ -88,6 +91,8 @@ ok('the window has no system frame: the page draws the title bar', r.settings?.f
 // Maximising is a request to the window manager, and Xvfb has none: check the commands answer, not the outcome.
 ok('window_control answers state, maximise and restore', [r.winState, r.winMax, r.winMaxed, r.winRestore].every((v) => typeof v === 'boolean'), JSON.stringify({ s: r.winState, m: r.winMax, mm: r.winMaxed, r: r.winRestore }))
 ok('a debug build reports updates as unsupported and never checks', r.updStatus?.current && r.updCheck?.state === 'unsupported', JSON.stringify({ s: r.updStatus, c: r.updCheck }))
+ok('the update channel switches between stable and dev', r.chanDev?.update_channel === 'dev' && r.chanStable?.update_channel === 'stable', JSON.stringify({ d: r.chanDev?.update_channel, s: r.chanStable?.update_channel }))
+ok('an unknown channel is refused', String(r.chanBad).startsWith('error'), String(r.chanBad))
 ok('installing with no update downloaded is refused', String(r.updInstall).startsWith('error'), String(r.updInstall))
 ok('an unknown window action is refused', String(r.winBad).startsWith('error'), String(r.winBad))
 ok('a page without a title bar gets the shell\'s strip to move and close the window', r.fallbackBar === true)

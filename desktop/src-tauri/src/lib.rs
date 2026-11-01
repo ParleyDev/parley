@@ -66,6 +66,21 @@ struct Prefs {
     /// None = on: the close button hides the window to the tray (when there is one).
     #[serde(default)] close_to_tray: Option<bool>,
     #[serde(default)] minimize_to_tray: bool,
+    /// App updates: "stable" (releases) or "dev" (every build of main). None = the channel this build came from.
+    #[serde(default)] update_channel: Option<String>,
+}
+
+/// Where each update channel's manifest lives: the latest release, or the rolling "Development build" prerelease.
+const STABLE_FEED: &str = "https://github.com/ParleyDev/parley/releases/latest/download/latest.json";
+const DEV_FEED: &str = "https://github.com/ParleyDev/parley/releases/download/dev/latest.json";
+
+/// The chosen update channel; a pre-release build (0.21.0-pre.13) follows development builds unless told otherwise.
+fn update_channel(p: &Prefs) -> &'static str {
+    match p.update_channel.as_deref() {
+        Some("dev") => "dev",
+        Some("stable") => "stable",
+        _ => if VERSION.contains('-') { "dev" } else { "stable" },
+    }
 }
 
 fn prefs_path(app: &AppHandle) -> Option<std::path::PathBuf> { app.path().app_config_dir().ok().map(|d| d.join("desktop.json")) }
@@ -77,7 +92,7 @@ fn save_prefs(app: &AppHandle, p: &Prefs) -> Result<(), String> {
 }
 
 #[derive(Serialize)]
-struct DesktopSettings { autostart: bool, start_minimized: bool, hardware_acceleration: bool, close_to_tray: bool, minimize_to_tray: bool, tray: bool, version: &'static str, frame: &'static str }
+struct DesktopSettings { autostart: bool, start_minimized: bool, hardware_acceleration: bool, close_to_tray: bool, minimize_to_tray: bool, tray: bool, version: &'static str, frame: &'static str, update_channel: &'static str }
 
 /// The window has no system frame: "custom" (Windows, Linux) means the page draws minimise/maximise/close; "mac"
 /// keeps the traffic lights over the page's title bar, which leaves room for them.
@@ -87,7 +102,7 @@ fn settings(app: &AppHandle) -> DesktopSettings {
     let p = load_prefs(app);
     DesktopSettings {
         autostart: app.autolaunch().is_enabled().unwrap_or(false), start_minimized: p.start_minimized, hardware_acceleration: p.hardware_acceleration.unwrap_or(true),
-        close_to_tray: p.close_to_tray.unwrap_or(true), minimize_to_tray: p.minimize_to_tray, tray: has_tray(app), version: VERSION, frame: FRAME,
+        close_to_tray: p.close_to_tray.unwrap_or(true), minimize_to_tray: p.minimize_to_tray, tray: has_tray(app), version: VERSION, frame: FRAME, update_channel: update_channel(&p),
     }
 }
 
@@ -97,7 +112,19 @@ fn desktop_settings(app: AppHandle) -> DesktopSettings { settings(&app) }
 /// Settings → Windows/Desktop: open on login, and start minimised when it does.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-fn set_desktop_settings(app: AppHandle, autostart: Option<bool>, start_minimized: Option<bool>, hardware_acceleration: Option<bool>, close_to_tray: Option<bool>, minimize_to_tray: Option<bool>) -> Result<DesktopSettings, String> {
+fn set_desktop_settings(app: AppHandle, autostart: Option<bool>, start_minimized: Option<bool>, hardware_acceleration: Option<bool>, close_to_tray: Option<bool>, minimize_to_tray: Option<bool>, update_channel: Option<String>) -> Result<DesktopSettings, String> {
+    if let Some(c) = update_channel.as_deref() {
+        if c != "stable" && c != "dev" { return Err(format!("unknown update channel {c}")); }
+        let mut p = load_prefs(&app);
+        if p.update_channel.as_deref() != Some(c) {
+            p.update_channel = Some(c.to_string());
+            save_prefs(&app, &p)?;
+            // Another channel: forget what the old one found and look again.
+            if let Ok(mut r) = app.state::<Updates>().ready.lock() { *r = None; }
+            set_update(&app, |s| { *s = UpdateStatus::default(); s.state = "idle"; });
+            if begin_check(&app) { tauri::async_runtime::spawn(run_check(app.clone())); }
+        }
+    }
     if let Some(on) = autostart {
         let l = app.autolaunch();
         if on { l.enable() } else { l.disable() }.map_err(|e| e.to_string())?;
@@ -190,7 +217,16 @@ async fn check_for_update(app: AppHandle) {
 }
 
 async fn run_check(app: AppHandle) {
-    let found = match app.updater() { Ok(u) => u.check().await, Err(e) => Err(e) };
+    // The channel's feed, and the app's own version (0.21.0-pre.13) rather than the installer's (0.21.0+13, which
+    // can't tell development builds apart) to decide what is newer.
+    let feed = if update_channel(&load_prefs(&app)) == "dev" { DEV_FEED } else { STABLE_FEED };
+    let mine = semver::Version::parse(VERSION).ok();
+    let updater = url::Url::parse(feed).map_err(|e| e.to_string()).and_then(|u| {
+        app.updater_builder().endpoints(vec![u]).map_err(|e| e.to_string())?
+            .version_comparator(move |current, remote| remote.version > *mine.as_ref().unwrap_or(&current))
+            .build().map_err(|e| e.to_string())
+    });
+    let found = match updater { Ok(u) => u.check().await.map_err(|e| e.to_string()), Err(e) => Err(e) };
     match found {
         Ok(Some(update)) => {
             set_update(&app, |s| { s.state = "downloading"; s.version = Some(update.version.clone()); s.notes = update.body.clone(); s.downloaded = 0; s.total = None; });

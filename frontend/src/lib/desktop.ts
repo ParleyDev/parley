@@ -18,7 +18,9 @@ export const desktopBridge = () => !!invoke()
 
 export interface DesktopSettings { autostart: boolean; start_minimized: boolean; hardware_acceleration: boolean; close_to_tray?: boolean; minimize_to_tray?: boolean; tray?: boolean; version: string
   /** The window has no system frame (shells from 0.21 on): "custom" = draw minimise/maximise/close, "mac" = leave room for the traffic lights. */
-  frame?: 'custom' | 'mac' }
+  frame?: 'custom' | 'mac'
+  /** App updates follow releases (stable) or every build of main (dev). Shells from 0.21 on. */
+  update_channel?: 'stable' | 'dev' }
 
 /** The shell's updater: checks GitHub Releases, downloads in the background, installs on restart. */
 export interface UpdateStatus { state: 'idle' | 'checking' | 'none' | 'downloading' | 'ready' | 'unsupported' | 'error'; version?: string | null; notes?: string | null; downloaded: number; total?: number | null; error?: string | null; current: string }
@@ -45,5 +47,5 @@ export const desktop = {
   checkUpdate: (): Promise<UpdateStatus | null> => invoke()?.<UpdateStatus>('check_update').catch(() => null) ?? Promise.resolve(null),
   /** Installs the downloaded update and restarts the app into it. */
   installUpdate: (): Promise<void> => invoke()?.<void>('install_update') ?? Promise.reject(new Error('Not in the desktop app')),
-  setSettings: (s: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean; closeToTray?: boolean; minimizeToTray?: boolean }) => invoke()?.<DesktopSettings>('set_desktop_settings', s) ?? Promise.reject(new Error('Not in the desktop app')),
+  setSettings: (s: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean; closeToTray?: boolean; minimizeToTray?: boolean; updateChannel?: 'stable' | 'dev' }) => invoke()?.<DesktopSettings>('set_desktop_settings', s) ?? Promise.reject(new Error('Not in the desktop app')),
 }

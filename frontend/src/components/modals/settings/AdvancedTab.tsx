@@ -8,6 +8,7 @@ import { Toggle } from '../SettingsShell'
 import { tn, useT } from '../../../lib/i18n'
 import { prettyCombo, useKeybindMap } from '../../../lib/keybinds'
 import { checkForUpdate, RELEASES, useDesktopUpdate } from '../../../lib/desktopUpdate'
+import Dropdown from '../../Dropdown'
 
 /** Settings → Advanced: developer mode, debug logging and log download, platform-only switches. */
 export default function AdvancedTab() {
@@ -19,7 +20,7 @@ export default function AdvancedTab() {
   const [ds, setDs] = useState<DesktopSettings | null>(null)
   const [hwAtLaunch, setHwAtLaunch] = useState<boolean | null>(null)
   useEffect(() => { if (desktopBridge()) void desktop.settings().then((s) => { setDs(s); setHwAtLaunch(s.hardware_acceleration) }).catch(() => {}) }, [])
-  const change = (patch: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean; closeToTray?: boolean; minimizeToTray?: boolean }) => { void desktop.setSettings(patch).then(setDs).catch((e) => pushToast(String((e as Error).message ?? e), 'error')) }
+  const change = (patch: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean; closeToTray?: boolean; minimizeToTray?: boolean; updateChannel?: 'stable' | 'dev' }) => { void desktop.setSettings(patch).then(setDs).catch((e) => pushToast(String((e as Error).message ?? e), 'error')) }
   return (
     <div className="space-y-6" data-advanced-tab>
       <h2 className="text-xl font-bold">{t('Advanced')}</h2>
@@ -49,7 +50,7 @@ export default function AdvancedTab() {
           <p className="text-xs text-text-2">{ds.tray ? t('Closing the window keeps Parley running in the tray, so calls and notifications carry on; quit from the tray icon.') + ' ' : ''}{t('Starts quietly in the background with your computer. Zoom with Ctrl + = / - / 0 (⌘ on a Mac); Appearance → Zoom level sets it too.')}</p>
         </section>
         <div className="h-px bg-line" />
-        <AppUpdates version={ds.version} />
+        <AppUpdates version={ds.version} channel={ds.update_channel} onChannel={(c) => { change({ updateChannel: c }); setTimeout(() => void checkForUpdate(), 300) }} />
         <div className="h-px bg-line" />
       </>}
       <section className="space-y-3">
@@ -64,7 +65,7 @@ export default function AdvancedTab() {
 
 /** The desktop app's version and updates: check now, restart into a downloaded update, or (AppImage-less Linux,
  *  apps from before the updater) a link to download the new version. */
-function AppUpdates({ version }: { version: string }) {
+function AppUpdates({ version, channel, onChannel }: { version: string; channel?: 'stable' | 'dev'; onChannel: (c: 'stable' | 'dev') => void }) {
   const t = useT()
   const u = useDesktopUpdate()
   const s = u.kind === 'shell' ? u.status : null
@@ -82,6 +83,16 @@ function AppUpdates({ version }: { version: string }) {
     <section className="space-y-3" data-app-updates={s?.state ?? u.kind}>
       <label className="label">{t('App updates')}</label>
       <p className="text-sm text-text-1">{t('Parley desktop {version}', { version: s?.current || version })}</p>
+      {channel && s && s.state !== 'unsupported' && (
+        <div>
+          <label className="label" htmlFor="update-channel">{t('Update channel')}</label>
+          <Dropdown id="update-channel" className="input w-auto" value={channel} onChange={(e) => onChannel(e.target.value as 'stable' | 'dev')} data-update-channel>
+            <option value="stable">{t('Stable: releases only')}</option>
+            <option value="dev">{t('Development: every new build')}</option>
+          </Dropdown>
+          <p className="mt-1 text-xs text-text-2">{t('Development builds arrive as soon as they are made and may have rough edges. Switching back to Stable waits for the next release rather than going back.')}</p>
+        </div>
+      )}
       <p className="text-sm text-text-2" data-app-update-line>{line}</p>
       {s?.state === 'downloading' && pct !== null && <div className="h-1.5 rounded-full bg-bg-4 overflow-hidden"><div className="h-full bg-accent transition-all" style={{ width: `${pct}%` }} /></div>}
       <div className="flex flex-wrap gap-2">

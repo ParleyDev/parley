@@ -2785,6 +2785,7 @@ version = "0.1.0"
 dependencies = [
  "device_query",
  "libloading 0.8.9",
+ "semver",
  "serde",
  "serde_json",
  "sysinfo",
