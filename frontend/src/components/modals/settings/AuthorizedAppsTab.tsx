@@ -5,7 +5,7 @@ import { useStore } from '../../../store'
 import { t as tr, useT } from '../../../lib/i18n'
 import type { AuthorizedApp } from '../../../lib/types'
 
-const mcpScopes = (): Record<string, string> => ({ 'mcp.read': tr('Read'), 'mcp.notifications': tr('Notifications'), 'mcp.send': tr('Send messages'), 'mcp.manage': tr('Manage servers') })
+const mcpScopes = (): Record<string, string> => ({ 'mcp.read': tr('Read'), 'mcp.notifications': tr('Notifications'), 'mcp.send': tr('Send messages'), 'mcp.manage': tr('Manage servers'), 'mcp.admin': tr('Announce as Parley') })
 interface McpGrant { id: string; name: string; client_uri: string | null; scopes: string[]; since: string; last_used_at: string | null }
 
 const scopeLabels = (): Record<string, string> => ({ identify: tr('Read your profile'), email: tr('Read your email'), guilds: tr('See your servers'), 'messages.read': tr('Read messages'), 'messages.write': tr('Send messages as you'), bot: tr('Add its bot to servers') })

@@ -574,6 +574,7 @@ mod tests {
             widget_enabled: false,
             widget_invite: String::new(),
             invite_splash_url: None,
+            theme: None,
         };
         let mut everyone = role(gid, 0, DEFAULT_EVERYONE);
         everyone.id = gid; // @everyone shares the guild id

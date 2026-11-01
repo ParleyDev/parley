@@ -21,11 +21,12 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 /// What an MCP client may be allowed to do, with the wording the consent page shows.
-pub const SCOPES: [(&str, &str); 4] = [
+pub const SCOPES: [(&str, &str); 5] = [
     ("mcp.read", "Read your servers, channels, DMs and messages, and search them"),
     ("mcp.notifications", "See your unread messages and mentions, and mark channels as read"),
     ("mcp.send", "Send, edit and react to messages and DMs as you"),
     ("mcp.manage", "Manage servers as you: create and edit channels, pin and delete messages, time out, kick and ban (only where you already have permission)"),
+    ("mcp.admin", "Post announcements as the Parley account (only if you are an instance admin)"),
 ];
 /// Granted when a client asks for no particular scope. Managing is opt-in.
 pub const DEFAULT_SCOPES: [&str; 3] = ["mcp.read", "mcp.notifications", "mcp.send"];

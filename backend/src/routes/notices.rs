@@ -1,13 +1,18 @@
 //! Official notices: messages from the instance itself, sent by its system account ("Parley", verified) as a DM the
 //! person can read but not answer, the way Discord's official messages arrive. Admins send them when they act on a
-//! report (to the reporter, the reported user, or both).
+//! report (to the reporter, the reported user, or both), and post announcements (release notes) in a server channel
+//! as that account.
 use crate::{
+    audit,
+    auth::AuthUser,
     error::{AppError, AppResult},
-    models::{Channel, DmChannel, User},
+    models::{Channel, DmChannel, Message, User},
     routes::{guilds::CHANNEL_COLS, users::USER_COLS},
     state::AppState,
 };
-use serde_json::json;
+use axum::{extract::State, http::StatusCode, Json};
+use serde::Deserialize;
+use serde_json::{json, Value};
 use uuid::Uuid;
 
 /// The longest notice an admin can send.
@@ -67,4 +72,42 @@ pub async fn send(state: &AppState, to: Uuid, content: &str) -> AppResult<()> {
     }
     crate::routes::channels::system_message(state, &channel, sys, "default", &content, vec![], None, None).await?;
     Ok(())
+}
+
+#[derive(Deserialize)]
+pub struct Announce {
+    channel_id: Uuid,
+    content: String,
+    /// In an announcement channel, also publish it to every channel following it (the default).
+    #[serde(default = "yes")]
+    publish: bool,
+}
+fn yes() -> bool { true }
+
+/// `POST /admin/announce` (Instance Manage): post `content` in a server's text or announcement channel as the system
+/// account ("Parley"), the way release notes are announced. Mentions count (`@everyone` pings), and in an announcement
+/// channel the post is published to its followers unless `publish` is false. Audited.
+pub async fn announce(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<Announce>) -> AppResult<(StatusCode, Json<Value>)> {
+    crate::routes::admin_access::require_perm(&state, uid, crate::routes::admin_access::Perm::InstanceManage).await?;
+    let content = crate::routes::channels::tidy_content(&req.content);
+    if content.trim().is_empty() || content.chars().count() > 2000 { return Err(AppError::BadRequest("Message must be 1-2000 characters".into())) }
+    let c = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(req.channel_id).fetch_optional(&state.db).await?
+        .ok_or_else(|| AppError::NotFound("Channel not found".into()))?;
+    if c.guild_id.is_none() || c.kind != "text" { return Err(AppError::BadRequest("Announcements go in a server's text or announcement channel".into())) }
+    let sys = system_user(&state).await?;
+    let (m_users, m_roles, m_everyone) = crate::routes::channels::parse_mentions(&content);
+    let mid = Uuid::now_v7();
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, mentions, mention_roles, mention_everyone) VALUES ($1, $2, $3, $4, $5, $6, $7)")
+        .bind(mid).bind(c.id).bind(sys).bind(&content).bind(&m_users).bind(&m_roles).bind(m_everyone)
+        .execute(&state.db).await?;
+    crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let msg = crate::routes::channels::fetch_message(&state.db, mid, uid).await?;
+    state.hub.emit(crate::routes::channels::target_for(&state.db, &c).await?, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
+    crate::push::after_message(state.clone(), msg.clone(), c.clone());
+    let (published, msg): (Option<usize>, Message) = if c.news && req.publish {
+        let (n, m) = crate::routes::announcements::publish(&state, &c, mid, uid).await?;
+        (Some(n), m)
+    } else { (None, msg) };
+    audit::record(&state, uid, "announce.post", "channel", Some(c.id), &c.name, json!({ "message_id": mid, "published_to": published })).await;
+    Ok((StatusCode::CREATED, Json(json!({ "message": msg, "published_to": published }))))
 }

@@ -90,6 +90,7 @@ const REST_ALLOW: &[(&str, &str, &str)] = &[
     ("PUT", "/guilds/*/bans/*", "mcp.manage"),
     ("DELETE", "/guilds/*/bans/*", "mcp.manage"),
     ("POST", "/guilds/*/invites", "mcp.manage"),
+    ("POST", "/admin/announce", "mcp.admin"),
 ];
 
 /// Whether an MCP token with `scopes` may make this REST call. Paths with or without the `/api` prefix.
@@ -271,5 +272,9 @@ mod tests {
                        (Method::DELETE, &format!("/users/@me/mcp-grants/{id}")), (Method::DELETE, "/guilds/@me/members/@me"), (Method::DELETE, &format!("/guilds/{id}"))] {
             assert!(!rest_allows(&all, &m, p), "{m} {p}");
         }
+        // The admin scope reaches the announcement endpoint and nothing else of the admin API.
+        let admin = s(&["mcp.admin"]);
+        assert!(rest_allows(&admin, &Method::POST, "/api/admin/announce"));
+        assert!(!rest_allows(&admin, &Method::GET, "/admin/users") && !rest_allows(&admin, &Method::POST, &format!("/channels/{id}/messages")));
     }
 }

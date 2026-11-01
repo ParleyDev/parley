@@ -17,7 +17,7 @@ interface Info { client: { name: string; client_uri: string | null }; redirect_u
  */
 export default function McpAuthorizePage() {
   const t = useT()
-  const LABEL: Record<string, string> = { 'mcp.read': t('Read'), 'mcp.notifications': t('Notifications'), 'mcp.send': t('Send messages'), 'mcp.manage': t('Manage servers') }
+  const LABEL: Record<string, string> = { 'mcp.read': t('Read'), 'mcp.notifications': t('Notifications'), 'mcp.send': t('Send messages'), 'mcp.manage': t('Manage servers'), 'mcp.admin': t('Announce as Parley') }
   const [params] = useSearchParams()
   const me = useStore((s) => s.user)
   const [info, setInfo] = useState<Info | null>(null)

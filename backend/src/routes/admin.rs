@@ -36,6 +36,7 @@ pub fn router() -> Router<AppState> {
         .route("/admin/mail/settings", get(mail_settings).put(put_mail_settings))
         .route("/admin/mail/:id", axum::routing::delete(delete_mail))
         .route("/admin/audit", get(list_audit))
+        .route("/admin/announce", axum::routing::post(crate::routes::notices::announce))
         .route("/admin/maintenance/sweep-images", axum::routing::post(sweep_images))
 }
 

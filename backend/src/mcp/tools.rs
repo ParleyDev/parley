@@ -120,6 +120,9 @@ const TOOLS: &[Tool] = &[
         schema: || obj(json!({ "server_id": id("Server id"),
             "max_uses": { "type": "integer", "enum": [1, 5, 10, 25, 50, 100], "description": "How many people can use it" },
             "max_age": { "type": "integer", "enum": [1800, 3600, 21600, 43200, 86400, 604800, 2592000], "description": "Seconds until it expires (30 minutes to 30 days)" } }), &["server_id"]) },
+    Tool { name: "announce", title: "Post an announcement as Parley", scope: "mcp.admin", read_only: false, destructive: false,
+        description: "Instance admins only: post a message as the official Parley account in a server's text or announcement channel (release notes and the like). @everyone pings. In an announcement channel it is also published to following channels unless publish is false.",
+        schema: || obj(json!({ "channel_id": id("Text or announcement channel id"), "content": { "type": "string", "minLength": 1, "maxLength": 2000, "description": "Text (Markdown, links, @everyone)" }, "publish": { "type": "boolean", "description": "Publish to following channels (default true)" } }), &["channel_id", "content"]) },
 ];
 
 /// The tools this connection's scopes allow, in MCP `tools/list` shape.
@@ -304,6 +307,13 @@ async fn run(c: &Caller, name: &str, a: &Value) -> Result<Value, String> {
             let v = api(c, Method::POST, &format!("/guilds/{}/invites", uuid(a, "server_id")?), Some(body)).await?;
             let code = v["code"].as_str().unwrap_or("");
             json!({ "code": code, "url": format!("{base}/invite/{code}"), "max_uses": v["max_uses"], "expires_at": v["expires_at"] })
+        }
+        "announce" => {
+            let body = json!({ "channel_id": uuid(a, "channel_id")?, "content": text(a, "content")?, "publish": a.get("publish").and_then(Value::as_bool).unwrap_or(true) });
+            let v = api(c, Method::POST, "/admin/announce", Some(body)).await?;
+            let mut out = message(base, &v["message"]);
+            out["published_to"] = v["published_to"].clone();
+            out
         }
         _ => return Err(format!("Unknown tool {name}")),
     })

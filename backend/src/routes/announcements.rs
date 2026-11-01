@@ -82,6 +82,15 @@ async fn crosspost(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(
     let msg = fetch_message(&state.db, mid, uid).await?;
     if msg.channel_id != id || msg.kind != "default" { return Err(AppError::NotFound("Message not found".into())) }
     if msg.author.id != uid { perms::check(p, perms::MANAGE_MESSAGES)?; } else { perms::check(p, perms::SEND_MESSAGES)?; }
+    let (sent, updated) = publish(&state, &src, mid, uid).await?;
+    Ok(Json(json!({ "channels": sent, "message": updated })))
+}
+
+/// Publish post `mid` of announcement channel `src` (already checked): mark it published and copy it to every channel
+/// following `src`. Returns how many channels got it and the updated post, seen by `viewer`.
+pub async fn publish(state: &AppState, src: &Channel, mid: Uuid, viewer: Uuid) -> AppResult<(usize, crate::models::Message)> {
+    let (id, uid) = (src.id, viewer);
+    let msg = fetch_message(&state.db, mid, uid).await?;
     let res = sqlx::query("UPDATE messages SET crosspost = '{\"published\": true}'::jsonb WHERE id = $1 AND crosspost IS NULL").bind(mid).execute(&state.db).await?;
     if res.rows_affected() == 0 { return Err(AppError::Conflict("This message has already been published".into())) }
     let gid = src.guild_id.unwrap_or_default();
@@ -110,6 +119,6 @@ async fn crosspost(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(
         sent += 1;
     }
     let updated = fetch_message(&state.db, mid, uid).await?;
-    state.hub.emit(target_for(&state.db, &src).await?, "MESSAGE_UPDATE", json!({ "message": updated, "guild_id": src.guild_id }));
-    Ok(Json(json!({ "channels": sent, "message": updated })))
+    state.hub.emit(target_for(&state.db, src).await?, "MESSAGE_UPDATE", json!({ "message": updated, "guild_id": src.guild_id }));
+    Ok((sent, updated))
 }
