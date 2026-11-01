@@ -1,5 +1,5 @@
 // Custom typing indicators: up to three emoji, an animation and the text after your name, picked in the profile
-// editor (Surprise Me, Reset) and sent with TYPING_START so others see them in the composer's typing row.
+// Settings → Chat (Surprise Me, Reset; saved as you change it) and sent with TYPING_START so others see them in the composer's typing row.
 import { chromium } from 'playwright'
 import { WEB, S, reg, call, callS, ok, finish } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob')
@@ -40,8 +40,12 @@ await pa.locator('[data-composer-box] textarea').fill('')
 
 console.log('-- editor')
 await pa.click('[data-panel-self]'); await pa.click('[data-user-menu-edit]'); await pa.waitForSelector('[data-profile-editor]')
-await pa.click('[data-editor-section="typing"]'); await pa.waitForSelector('[data-typing-editor]')
-ok('the Typing Indicator panel opens with a preview', /is typing/.test(await pa.locator('[data-typing-preview]').innerText()))
+ok('Edit Profile no longer has a Typing Indicator section', await pa.locator('[data-editor-section="typing"], [data-typing-editor]').count() === 0)
+await pa.keyboard.press('Escape'); await pa.waitForTimeout(300)
+await pa.click('[data-user-panel] [data-control="User Settings"]'); await pa.fill('[data-settings-search]', 'typing')
+ok('searching settings for "typing" finds Chat', await pa.locator('[data-settings-nav] [data-settings-tab="chat"]').count() === 1)
+await pa.click('[data-settings-tab="chat"]'); await pa.waitForSelector('[data-typing-editor]')
+ok('Settings → Chat has the Typing Indicator with a preview', /is typing/.test(await pa.locator('[data-typing-preview]').innerText()))
 await pa.click('[data-typing-slot="0"]'); await pa.waitForSelector('[data-expression-picker]')
 await pa.locator('[data-expression-picker] [data-emoji-btn]').first().click(); await pa.waitForTimeout(200)
 const picked = await pa.locator('[data-typing-preview] [data-typing-emoji]').first().getAttribute('data-typing-emoji')
@@ -56,11 +60,9 @@ await pa.click('[data-typing-reset]')
 ok('Reset goes back to the default', await pa.locator('[data-typing-preview] [data-typing-glyphs="dots"]').count() === 1 && await pa.inputValue('[data-typing-text]') === '')
 await pa.click('[data-typing-slot="1"]'); await pa.waitForSelector('[data-expression-picker]'); await pa.locator('[data-expression-picker] [data-emoji-btn]').nth(3).click()
 await pa.click('[data-typing-animation="pulse"]'); await pa.fill('[data-typing-text]', 'is babbling…')
-await pa.click('[data-editor-panel-close]')
-ok('the tile previews it', /is babbling/.test(await pa.locator('[data-editor-section="typing"]').innerText()))
-await pa.click('[data-editor-savebar] .btn-primary'); await pa.waitForTimeout(800)
+await pa.waitForTimeout(1200)
 const me = await call(a.token, 'GET', '/users/@me')
-ok('Save stores it', me.typing_indicator?.animation === 'pulse' && me.typing_indicator?.text === 'is babbling…' && me.typing_indicator.emojis.filter(Boolean).length === 1, JSON.stringify(me.typing_indicator))
+ok('it saves as you change it, no Save button', me.typing_indicator?.animation === 'pulse' && me.typing_indicator?.text === 'is babbling…' && me.typing_indicator.emojis.filter(Boolean).length === 1, JSON.stringify(me.typing_indicator))
 await pa.screenshot({ path: 'e2e/out/typing-editor.png' })
 
 console.log('-- others see it')

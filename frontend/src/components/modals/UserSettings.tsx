@@ -56,7 +56,7 @@ export default function UserSettingsModal({ onClose, tab: requested }: { onClose
       { id: 'appearance', label: 'Appearance', icon: <Paintbrush size={18} />, keywords: 'theme dark light palette compact font zoom' },
       { id: 'accessibility', label: 'Accessibility', icon: <Accessibility size={18} />, keywords: 'motion contrast saturation captions' },
       { id: 'voice', label: 'Voice & Video', icon: <Mic size={18} />, keywords: 'microphone input output camera noise' },
-      { id: 'chat', label: 'Chat', icon: <MessageSquareText size={18} />, keywords: 'emoji embeds stickers gif' },
+      { id: 'chat', label: 'Chat', icon: <MessageSquareText size={18} />, keywords: 'emoji embeds stickers gif typing indicator' },
       { id: 'notifications', label: 'Notifications', icon: <Bell size={18} />, keywords: 'push sounds desktop' },
       { id: 'keybinds', label: 'Keybinds', icon: <Keyboard size={18} />, keywords: 'shortcuts push to talk' },
       { id: 'language', label: 'Language', icon: <Globe size={18} />, keywords: 'locale translate' },

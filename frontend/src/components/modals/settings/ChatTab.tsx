@@ -1,8 +1,9 @@
 import { setPrefs, usePrefs } from '../../../lib/prefs'
 import { Toggle } from '../SettingsShell'
 import { useT } from '../../../lib/i18n'
+import TypingIndicatorSection from './TypingIndicatorSection'
 
-/** Settings → Chat: what shows inline, emoji conversion, reactions, spoilers, suggestions, media size. */
+/** Settings → Chat: your typing indicator, what shows inline, emoji conversion, reactions, spoilers, suggestions, media size. */
 export default function ChatTab() {
   const t = useT()
   const p = usePrefs()
@@ -12,6 +13,10 @@ export default function ChatTab() {
   return (
     <div className="space-y-6" data-chat-tab>
       <h2 className="text-xl font-bold">{t('Chat')}</h2>
+
+      <TypingIndicatorSection />
+
+      <div className="h-px bg-line" />
 
       <section className="space-y-3">
         <h3 className="label">{t('Display images, videos and links')}</h3>
