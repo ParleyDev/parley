@@ -78,9 +78,12 @@ export default function Dropdown({ value, onChange, children, className = 'input
       <button ref={btn} type="button" id={id} title={title} style={style} disabled={disabled} onClick={() => (open ? setOpen(false) : show())} onKeyDown={onKey}
         role="combobox" aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? list : undefined} aria-label={ariaLabel} aria-activedescendant={open && active >= 0 ? `${list}-${active}` : undefined}
         className={`${className} !flex items-center gap-2 text-left cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${open ? 'border-accent/70 ring-2 ring-accent/20' : ''}`} data-dropdown>
-        {/* Every label stacked in one cell, the chosen one visible: the button is as wide as the longest, like a native select. */}
+        {/* Every label stacked in one cell, the chosen one visible: the button is as wide as the longest, like a native select.
+            The others are drawn with CSS content so they never count as the button's text (search, screen readers, tests). */}
         <span className="grid min-w-0 flex-1">
-          {opts.map((o) => <span key={o.value} className={`col-start-1 row-start-1 truncate ${o === chosen ? '' : 'invisible'}`} aria-hidden={o !== chosen}>{o.label}</span>)}
+          {opts.map((o) => o === chosen
+            ? <span key={o.value} className="col-start-1 row-start-1 truncate">{o.label}</span>
+            : <span key={o.value} className="invisible col-start-1 row-start-1 truncate before:content-[attr(data-sizer)]" data-sizer={o.text} aria-hidden />)}
           {!chosen && <span className="col-start-1 row-start-1">&nbsp;</span>}
         </span>
         <ChevronDown size={small ? 12 : 16} className={`shrink-0 text-text-2 transition-transform ${open ? 'rotate-180' : ''}`} />

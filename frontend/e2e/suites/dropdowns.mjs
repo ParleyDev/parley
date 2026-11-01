@@ -33,6 +33,7 @@ await p.click('[data-settings-tab="overview"]'); await p.waitForSelector('[data-
 const trigger = p.locator('button#system-channel')
 ok('dropdown: a styled button replaces the native select', await trigger.getAttribute('role') === 'combobox' && await trigger.isVisible())
 ok('dropdown: shows the current choice', (await trigger.innerText()).includes('First text channel'))
+ok('dropdown: the button\'s text is only the current choice (other options never count as its text)', (await trigger.textContent()).trim() === (await trigger.innerText()).trim() && !(await trigger.textContent()).includes('#bots'), await trigger.textContent())
 await trigger.click(); await p.waitForSelector('[data-dropdown-list]'); await p.waitForTimeout(250)
 const listBox = await p.locator('[data-dropdown-popup]').boundingBox(); const trigBox = await trigger.boundingBox()
 const below = listBox && trigBox && listBox.y >= trigBox.y + trigBox.height && listBox.y < trigBox.y + trigBox.height + 12
