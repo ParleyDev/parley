@@ -17,7 +17,7 @@ const other = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'e
 const wav = (sec, name) => {
   const n = 8000 * sec; const buf = Buffer.alloc(44 + n)
   buf.write('RIFF', 0); buf.writeUInt32LE(36 + n, 4); buf.write('WAVEfmt ', 8); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22); buf.writeUInt32LE(8000, 24); buf.writeUInt32LE(8000, 28); buf.writeUInt16LE(1, 32); buf.writeUInt16LE(8, 34); buf.write('data', 36); buf.writeUInt32LE(n, 40)
-  for (let i = 0; i < n; i++) buf[44 + i] = 128 + Math.round(90 * Math.sin((i * (0.2 + (i / n) * 0.6)) / 2))
+  for (let i = 0; i < n; i++) buf[44 + i] = 128 + Math.round(90 * (0.25 + 0.75 * Math.abs(Math.sin((i / n) * Math.PI * 5))) * Math.sin((i * (0.2 + (i / n) * 0.6)) / 2))
   return { buffer: buf, mimeType: 'audio/wav', name }
 }
 const post = async (tok, file, fields) => { const att = await (await multi(tok, `/channels/${ch.id}/attachments`, file, fields)).json(); const m = (await callS(tok, 'POST', `/channels/${ch.id}/messages`, { content: '', attachment_ids: [att.id] })).body; return { att, m } }
@@ -70,6 +70,16 @@ ok('the card\'s seek bar is the file\'s waveform', await card.locator('[data-scr
 ok('the visualiser follows the server\'s timeline for the track', (await viz.getAttribute('data-source')) === 'timeline', await viz.getAttribute('data-source'))
 ok('the visualiser is live and drawing', (await viz.getAttribute('data-viz-live')) === '1' && await lit(viz) > 200, String(await lit(viz)))
 ok('the seek bar moves', parseFloat(await card.locator('[data-scrubber]').getAttribute('data-progress')) > 0.05)
+const bars = card.locator('[data-wave-bars] span')
+ok('the waveform is a fixed 64 bars', await bars.count() === 64)
+const played1 = await card.locator('[data-wave-bars] [data-played]').count()
+await p.waitForTimeout(1500)
+const played2 = await card.locator('[data-wave-bars] [data-played]').count()
+ok('played bars light up as it goes', played1 > 0 && played2 > played1, `${played1} → ${played2}`)
+const tone = await card.evaluate((c) => { const b = [...c.querySelectorAll('[data-wave-bars] [data-played]')]; return { first: +getComputedStyle(b[0]).opacity, last: +getComputedStyle(b.at(-1)).opacity, rest: +getComputedStyle(c.querySelector('[data-wave-bars] span:not([data-played])')).opacity } })
+ok('from a soft tint at the start to full at the playhead; the rest stay subtle', tone.first < tone.last && tone.last > 0.9 && tone.rest < 0.4, JSON.stringify(tone))
+const sb = await card.locator('[data-scrubber]').boundingBox(), th = await card.locator('[data-scrubber-thumb]').boundingBox()
+ok('the seek line and its dot run across the middle of the waveform', th && Math.abs((th.y + th.height / 2) - (sb.y + sb.height / 2)) < 2, JSON.stringify({ sb, th }))
 await card.screenshot({ path: 'audio-bars.png' })
 const modes = []
 for (let i = 0; i < 4; i++) { modes.push(await card.locator('[data-audio-viz-mode]').getAttribute('data-audio-viz-mode')); await card.locator('[data-audio-viz-mode]').click(); await p.waitForTimeout(400); if (i < 2) await card.screenshot({ path: `audio-${['wave', 'orb'][i]}.png` }) }

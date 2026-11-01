@@ -33,8 +33,9 @@ function usePeaks(url: string) {
   return peaks
 }
 
-/** A seek bar: drag or click anywhere on it, arrow keys step five seconds. With `peaks` it is a slim capsule with the
- *  file's waveform inside, the played part tinted with the accent. */
+/** A seek bar: drag or click anywhere on it, arrow keys step five seconds. With `peaks` the file's waveform sits
+ *  behind it as a fixed row of thin bars, the seek line across their middle; played bars take the accent, from a soft
+ *  tint at the start to full strength at the playhead, the rest stay a subtle grey. */
 export function Scrubber({ pos, duration, onSeek, className = '', peaks }: { pos: number; duration: number; onSeek: (sec: number) => void; className?: string; peaks?: Uint8Array | null }) {
   const t = useT()
   const [drag, setDrag] = useState<number | null>(null)
@@ -42,16 +43,17 @@ export function Scrubber({ pos, duration, onSeek, className = '', peaks }: { pos
   const at = (e: RPointerEvent<HTMLDivElement>) => { const r = e.currentTarget.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) }
   return (
     <div role="slider" tabIndex={0} aria-label={t('Seek')} aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(frac * duration)} aria-valuetext={fmtTime(frac * duration)}
-      className={`group relative flex ${peaks ? 'h-5' : 'h-4'} cursor-pointer touch-none items-center ${className}`} data-scrubber data-progress={frac.toFixed(3)} data-wave={peaks ? '1' : undefined}
+      className={`group relative flex ${peaks ? 'h-10' : 'h-4'} cursor-pointer touch-none items-center ${className}`} data-scrubber data-progress={frac.toFixed(3)} data-wave={peaks ? '1' : undefined}
       onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setDrag(at(e)) }}
       onPointerMove={(e) => { if (drag != null) setDrag(at(e)) }}
       onPointerUp={(e) => { if (drag != null) { onSeek(at(e) * duration); setDrag(null) } }}
       onPointerCancel={() => setDrag(null)}
       onKeyDown={(e) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); onSeek(Math.max(0, Math.min(duration, frac * duration + (e.key === 'ArrowRight' ? 5 : -5)))) } }}>
       {peaks ? (
-        <div className="relative h-full w-full overflow-hidden rounded-full border border-line bg-bg-0/50">
-          <WaveBars peaks={peaks} className="text-text-2/40" />
-          <div className="absolute inset-0 bg-accent/20" style={{ clipPath: `inset(0 ${100 - frac * 100}% 0 0)` }} data-scrubber-fill><WaveBars peaks={peaks} className="text-accent" /></div>
+        <div className="relative h-full w-full">
+          <WaveBars peaks={peaks} frac={frac} />
+          <div className="absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-text-2/35" />
+          <div className="absolute left-0 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-accent" style={{ width: `${frac * 100}%` }} data-scrubber-fill />
         </div>
       ) : (
         <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-text-2/25">
@@ -59,15 +61,16 @@ export function Scrubber({ pos, duration, onSeek, className = '', peaks }: { pos
         </div>
       )}
       {peaks
-        ? <span className={`pointer-events-none absolute inset-y-0.5 w-[3px] -translate-x-1/2 rounded-full bg-white shadow transition-opacity ${drag != null ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}`} style={{ left: `${frac * 100}%` }} />
+        ? <span className={`pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent shadow ring-2 ring-bg-2 transition-transform ${drag != null ? 'scale-125' : 'group-hover:scale-125'}`} style={{ left: `${frac * 100}%` }} data-scrubber-thumb />
         : <span className={`pointer-events-none absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow ring-2 ring-accent transition-opacity ${drag != null ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'}`} style={{ left: `${frac * 100}%` }} />}
     </div>
   )
 }
 
-const WAVE_BARS = 80
-/** The peaks as a row of rounded bars, centred, in currentColor. */
-function WaveBars({ peaks, className }: { peaks: Uint8Array; className: string }) {
+/** Always this many bars, however long the track. */
+const WAVE_BARS = 64
+/** The peaks as a row of thin bars, centred; `frac` colours the played ones. */
+function WaveBars({ peaks, frac }: { peaks: Uint8Array; frac: number }) {
   const bars = Array.from({ length: WAVE_BARS }, (_, i) => {
     const a = Math.floor((i * peaks.length) / WAVE_BARS), z = Math.max(a + 1, Math.floor(((i + 1) * peaks.length) / WAVE_BARS))
     let m = 0
@@ -75,8 +78,13 @@ function WaveBars({ peaks, className }: { peaks: Uint8Array; className: string }
     return m / 255
   })
   return (
-    <div className={`absolute inset-y-0 inset-x-2.5 flex items-center gap-[2px] ${className}`} aria-hidden>
-      {bars.map((v, i) => <span key={i} className="min-w-0 flex-1 rounded-full bg-current" style={{ height: `${Math.max(12, v * 64)}%` }} />)}
+    <div className="absolute inset-0 flex items-center justify-between" aria-hidden data-wave-bars>
+      {bars.map((v, i) => {
+        const at = (i + 0.5) / WAVE_BARS
+        const played = at <= frac
+        return <span key={i} className={`w-[2px] shrink-0 rounded-full transition-colors duration-200 ${played ? 'bg-accent' : 'bg-text-2'}`}
+          style={{ height: `${Math.max(14, v * 100)}%`, opacity: played ? 0.35 + 0.65 * (frac ? at / frac : 1) : 0.28 }} data-played={played ? '1' : undefined} />
+      })}
     </div>
   )
 }
