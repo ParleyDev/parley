@@ -436,12 +436,12 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
           {unseen > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 rounded-full bg-danger px-1 text-[11px] font-bold leading-5 text-white text-center" data-new-count={unseen}>{unseen > 99 ? '99+' : unseen}</span>}
         </button>
       ) : (
+        // Discord's bar: a dark strip floating over the chat, what you're looking at on the left, the jump on the right.
         <div className="pointer-events-none absolute inset-x-4 bottom-2 z-20 flex justify-center" data-older-bar>
-          <button type="button" onClick={jumpToPresent}
-            className="pointer-events-auto pop flex items-center gap-3 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-white shadow-xl hover:bg-accent-hover" data-jump-present>
-            <span data-new-count={unseen || undefined}>{unseen > 0 ? (unseen === 1 ? t('1 new message') : t('{n} new messages', { n: unseen > 99 ? '99+' : unseen })) : t("You're viewing older messages")}</span>
-            <span className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 text-xs">{t('Jump to Present')} <ArrowDown size={12} /></span>
-          </button>
+          <div className="pointer-events-auto pop flex items-center gap-4 rounded-xl border border-line bg-bg-1/95 py-1.5 pl-4 pr-1.5 shadow-xl backdrop-blur-sm">
+            <span className="text-sm font-semibold text-text-1" data-new-count={unseen || undefined}>{unseen > 0 ? (unseen === 1 ? t('1 New Message') : t('{n} New Messages', { n: unseen > 99 ? '99+' : unseen })) : t("You're Viewing Older Messages")}</span>
+            <button type="button" onClick={jumpToPresent} className="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover" data-jump-present>{t('Jump To Present')}</button>
+          </div>
         </div>
       ))}
       </div>

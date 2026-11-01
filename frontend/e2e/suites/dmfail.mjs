@@ -76,7 +76,8 @@ ok('a short scroll up shows no bar yet (it waits for about a screen and a half)'
 // Well up the history (it pages older messages in and holds the view, so keep going up until it's far enough).
 for (let i = 0; i < 6 && !(await pa.locator('[data-older-bar]').count()); i++) { await pa.evaluate(() => { const el = document.querySelector('[data-msg-id]').closest('.overflow-y-auto'); el.scrollTop = 0 }); await pa.waitForTimeout(700) }
 await pa.waitForSelector('[data-older-bar]')
-ok('scrolling up shows "You\'re viewing older messages" with Jump to Present', (await pa.locator('[data-older-bar]').textContent()).includes("You're viewing older messages") && await pa.locator('[data-jump-present]').count() === 1)
+ok('scrolling up shows "You\'re viewing older messages" with Jump to Present', (await pa.locator('[data-older-bar]').textContent()).includes("You're Viewing Older Messages") && await pa.locator('[data-jump-present]').count() === 1)
+{ const bb = await pa.locator('[data-older-bar] > div').boundingBox(); if (bb) await pa.screenshot({ path: 'jump-present.png', clip: { x: bb.x - 20, y: bb.y - 20, width: bb.width + 40, height: bb.height + 40 } }) }
 await pa.screenshot({ path: '138-older-bar.png' })
 await pa.click('[data-jump-present]')
 await pa.waitForFunction(() => { const el = document.querySelector('[data-msg-id]').closest('.overflow-y-auto'); return !document.querySelector('[data-older-bar]') && el.scrollHeight - el.scrollTop - el.clientHeight < 40 })
