@@ -71,7 +71,7 @@ console.log('-- 4. server layout')
 await p.goto(`${WEB}/channels/${g.id}/${text.id}`); await p.waitForSelector('[data-member-list]'); await p.waitForTimeout(800)
 const lay = await p.evaluate(() => { const h = document.querySelector('[data-header-spans] > header')?.getBoundingClientRect(), m = document.querySelector('[data-member-list]').getBoundingClientRect(), stats = document.querySelector('[data-member-stats]')?.getBoundingClientRect(), first = document.querySelector('[data-member-list] h3')?.getBoundingClientRect(); return { h: h && [h.right, h.bottom], m: [m.top, m.right], stats: stats && stats.top, first: first && first.top, vw: innerWidth } })
 ok('the channel header runs across the member list, which starts under it', lay.h && lay.h[0] >= lay.vw - 1 && lay.m[0] >= lay.h[1] - 1, JSON.stringify(lay))
-ok('the list opens on its groups; the counts sit below them', lay.first < (lay.stats ?? Infinity), JSON.stringify(lay))
+ok('the counts sit at the top of the list, above its groups', lay.stats !== undefined && lay.stats < lay.first, JSON.stringify(lay))
 ok('members show their custom status under the name', await p.locator('[data-member-list] [data-member-status]:has-text("shipping")').count() === 1)
 await shot(p, 'server')
 
