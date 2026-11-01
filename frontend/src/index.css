@@ -220,6 +220,10 @@ body {
     .scroller-auto:hover, .scroller-auto.scrolling { scrollbar-color: var(--scroll-thumb-auto) transparent; }
   }
 }
+/* The server list scrolls without a scrollbar, like Discord's: a reserved gutter would push its icons off centre and
+   clip the selection pill at its left edge. */
+[data-guild-bar] { scrollbar-gutter: auto; scrollbar-width: none; }
+[data-guild-bar]::-webkit-scrollbar { display: none; }
 
 /* Markdown in messages and bios */
 .msg-content h1 { @apply text-2xl font-bold leading-tight mt-2 mb-1; }

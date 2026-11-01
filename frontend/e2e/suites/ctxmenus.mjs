@@ -17,6 +17,8 @@ await p.goto(`${WEB}/channels/${g.id}/${tc}`); await p.waitForTimeout(1000)
 console.log('-- server bar')
 ok('nav has no horizontal overflow', (await p.locator('[data-guild-bar]').evaluate(n=>n.scrollWidth<=n.clientWidth)))
 ok('active server shows the tall pill, others none/unread', (await p.locator(`[data-guild-icon="${g.id}"] [data-pill]`).getAttribute('data-pill'))==='active')
+{ const pb = await p.locator(`[data-guild-icon="${g.id}"] [data-pill]`).boundingBox(), bar = await p.locator('[data-guild-bar]').boundingBox()
+  ok('the pill sits on the server list\'s left edge, fully visible (no scrollbar gutter pushing it out)', pb && bar && Math.abs(pb.x - bar.x) < 1 && pb.width >= 3, JSON.stringify({ pb, bar })) }
 await p.hover(`[data-guild-icon="${g2.id}"]`); await p.waitForTimeout(250)
 ok('tooltip renders in a portal (body child), not inside the nav', await p.locator('body > [data-guild-tip]:has-text("Other")').count()===1 && await p.locator('[data-guild-bar] [data-guild-tip]').count()===0)
 ok('server icons are rounded squares', (await p.locator(`[data-guild-icon="${g.id}"] div.h-12`).evaluate(n=>getComputedStyle(n).borderRadius))==='16px')
