@@ -295,7 +295,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       const i = list.findIndex((x) => x.id === m.id)
       const prev = i > 0 ? list[i - 1].id : null
       setReadState(m.channel_id, prev)
-      try { if (prev) await api.put(`/channels/${m.channel_id}/read`, { message_id: prev }) } catch (err) { pushToast((err as Error).message, 'error') }
+      try { if (prev) await api.put(`/channels/${m.channel_id}/read`, { message_id: prev, unread: true }) } catch (err) { pushToast((err as Error).message, 'error') }
     }
     const link = `${location.origin}/channels/${guildId ?? '@me'}/${m.channel_id}?message=${m.id}`
     const toggleBookmark = async () => {

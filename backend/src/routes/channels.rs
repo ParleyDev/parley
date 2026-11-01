@@ -1201,6 +1201,10 @@ async fn delete_overwrite(
 #[derive(Deserialize)]
 pub(crate) struct MarkRead {
     message_id: Uuid,
+    /// Mark Unread: move the pointer back on purpose. Otherwise it only ever moves forward, so a device that missed
+    /// newer messages can't drag it back (and take everyone's "seen" marker with it).
+    #[serde(default)]
+    unread: bool,
 }
 
 pub(crate) async fn mark_read(
@@ -1211,20 +1215,22 @@ pub(crate) async fn mark_read(
 ) -> AppResult<StatusCode> {
     let c = require_channel(&state.db, id, uid).await?;
     let prev: Option<(Option<Uuid>,)> = sqlx::query_as("SELECT last_read_msg FROM read_states WHERE user_id = $1 AND channel_id = $2").bind(uid).bind(id).fetch_optional(&state.db).await?;
-    sqlx::query(
+    let (now,): (Uuid,) = sqlx::query_as(
         "INSERT INTO read_states (user_id, channel_id, last_read_msg) VALUES ($1, $2, $3)
-         ON CONFLICT (user_id, channel_id) DO UPDATE SET last_read_msg = EXCLUDED.last_read_msg",
+         ON CONFLICT (user_id, channel_id) DO UPDATE SET last_read_msg =
+           CASE WHEN $4 THEN EXCLUDED.last_read_msg ELSE GREATEST(read_states.last_read_msg, EXCLUDED.last_read_msg) END
+         RETURNING last_read_msg",
     )
-    .bind(uid).bind(id).bind(req.message_id).execute(&state.db).await?;
-    state.hub.emit_users(vec![uid], "READ_STATE_UPDATE", json!({ "channel_id": id, "last_read_msg": req.message_id }));
+    .bind(uid).bind(id).bind(req.message_id).bind(req.unread).fetch_one(&state.db).await?;
+    state.hub.emit_users(vec![uid], "READ_STATE_UPDATE", json!({ "channel_id": id, "last_read_msg": now }));
     crate::webpush::clear_elsewhere(&state, uid, sid, id);
     // Read receipt for everyone else in the channel, only when the pointer actually moved forward and the
     // reader has not turned receipts off.
-    let advanced = prev.and_then(|p| p.0).map(|p| req.message_id > p).unwrap_or(true);
+    let advanced = prev.and_then(|p| p.0).map(|p| now > p).unwrap_or(true);
     let (shows,): (bool,) = sqlx::query_as("SELECT show_read_receipts FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
     if advanced && shows {
         if let Ok(target) = target_for(&state.db, &c).await {
-            state.hub.emit(target, "READ_RECEIPT", json!({ "channel_id": id, "user_id": uid, "message_id": req.message_id }));
+            state.hub.emit(target, "READ_RECEIPT", json!({ "channel_id": id, "user_id": uid, "message_id": now }));
         }
     }
     Ok(StatusCode::NO_CONTENT)

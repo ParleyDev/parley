@@ -956,8 +956,9 @@ export const useStore = create<State>((set, get) => ({
   },
   markRead: async (channelId) => {
     const s = get()
-    const last = s.lastMessageId[channelId]
-    if (!last || s.readStates[channelId] === last) return
+    const last = s.lastMessageId[channelId], read = s.readStates[channelId]
+    // Only ever forward: a device that missed newer messages must not move the pointer (and others' "seen") back.
+    if (!last || (read && read >= last)) return
     s.setReadState(channelId, last)
     try { await api.put(`/channels/${channelId}/read`, { message_id: last }) } catch { /* ignore */ }
   },

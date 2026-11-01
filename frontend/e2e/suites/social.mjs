@@ -22,6 +22,16 @@ const n = events.filter((e) => e.t === 'READ_RECEIPT').length
 await callS(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m1.id }); await new Promise((r) => setTimeout(r, 300))
 ok('re-marking the same message emits nothing', events.filter((e) => e.t === 'READ_RECEIPT').length === n)
 ok('outsiders cannot read receipts', (await raw(c.token, 'GET', `/channels/${dm.id}/receipts`)).status !== 200)
+// A device that missed newer messages marks an older one read: the pointer (and the receipt) must not go back.
+const m1b = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'still there?' })
+await callS(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m1b.id }); await new Promise((r) => setTimeout(r, 300))
+const before = events.filter((e) => e.t === 'READ_RECEIPT').length
+await callS(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m1.id }); await new Promise((r) => setTimeout(r, 300))
+const at = async () => (await call(a.token, 'GET', `/channels/${dm.id}/receipts`)).find((x) => x.user_id === b.user.id)?.message_id
+ok('a stale mark-read from another device does not move the receipt back', await at() === m1b.id && events.filter((e) => e.t === 'READ_RECEIPT').length === before)
+await callS(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m1.id, unread: true })
+ok('Mark Unread still moves it back on purpose', await at() === m1.id)
+await callS(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m1b.id })
 ws.close()
 
 console.log('-- invite preview')
@@ -39,6 +49,11 @@ ok('a newer unread message of yours moves the marker off the run (no gap inside 
 const pb = await mk(b.token, `${WEB}/channels/@me/${dm.id}`); await pb.waitForSelector(`[data-msg-id="${m2.id}"]`)
 await pa.waitForFunction((id) => { const el = document.querySelector(`[data-read-by]`); return el && el.previousElementSibling?.getAttribute('data-msg-id') === id }, m2.id)
 ok('when bob views the DM the marker moves to the newest message live', true)
+// Bob's other device, which never saw m2, marks the DM read; alice leaves and comes back: "Seen" stays.
+await callS(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m1.id })
+await pa.goto(`${WEB}/channels/@me`); await pa.waitForTimeout(500)
+await pa.goto(`${WEB}/channels/@me/${dm.id}`); await pa.waitForSelector(`[data-msg-id="${m2.id}"]`); await pa.waitForTimeout(1200)
+ok('leaving and re-entering the DM keeps "Seen" under the newest message', await pa.evaluate((id) => document.querySelector('[data-read-by]')?.previousElementSibling?.getAttribute('data-msg-id') === id, m2.id))
 await pa.screenshot({ path: '118-seen.png' })
 await pb.close()
 // server channel: stacked avatars + reply jump + invite card
