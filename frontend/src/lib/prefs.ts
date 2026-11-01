@@ -16,6 +16,8 @@ export interface ClientPrefs {
   zoom: number
   /** Show avatars in compact mode. */
   compactAvatars: boolean
+  /** Discord's title bar across the top of every view (wide screens): back/forward, where you are, the inbox. */
+  titleBar: boolean
   /** Role colours: in names, as a dot next to names, or off. */
   roleColors: 'name' | 'next' | 'off'
   // Accessibility
@@ -90,7 +92,7 @@ export interface ClientPrefs {
 }
 
 export const DEFAULT_PREFS: ClientPrefs = {
-  accent: null, messageGap: 17, zoom: 100, compactAvatars: false, roleColors: 'name',
+  accent: null, messageGap: 17, zoom: 100, compactAvatars: false, titleBar: true, roleColors: 'name',
   saturation: 100, saturateCustom: true, nameStyles: true, toggleIndicators: false, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, ttsPlayback: true, entranceSounds: true, warnLinks: true, spellcheck: true, doubleTapReact: true, quickReaction: '❤️', focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
   inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
   streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true, streamerAuto: false, clips: false, clipSeconds: 30, clipVoices: true, clipMyVoice: true, appIcon: 'default', overlay: false, overlayLocked: true,
@@ -110,7 +112,7 @@ function load(): ClientPrefs {
     const p = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<ClientPrefs>
     return {
       accent: typeof p.accent === 'string' && /^#[0-9a-f]{6}$/i.test(p.accent) ? p.accent : null,
-      messageGap: clamp(p.messageGap, 0, 24, 17), zoom: clamp(p.zoom, 50, 200, 100), compactAvatars: bool(p.compactAvatars, false), roleColors: oneOf(p.roleColors, ['name', 'next', 'off'] as const, 'name'),
+      messageGap: clamp(p.messageGap, 0, 24, 17), zoom: clamp(p.zoom, 50, 200, 100), compactAvatars: bool(p.compactAvatars, false), titleBar: bool(p.titleBar, true), roleColors: oneOf(p.roleColors, ['name', 'next', 'off'] as const, 'name'),
       saturation: clamp(p.saturation, 0, 100, 100), saturateCustom: bool(p.saturateCustom, true), nameStyles: bool(p.nameStyles, true), toggleIndicators: bool(p.toggleIndicators, false), underlineLinks: bool(p.underlineLinks, false), animatedEmoji: bool(p.animatedEmoji, true), autoplayGifs: bool(p.autoplayGifs, true),
       stickerAnimation: oneOf(p.stickerAnimation, ['always', 'interaction', 'never'] as const, 'always'), ttsRate: clamp(p.ttsRate, 0.5, 2, 1), ttsPlayback: bool(p.ttsPlayback, true), entranceSounds: bool(p.entranceSounds, true), warnLinks: bool(p.warnLinks, true), spellcheck: bool(p.spellcheck, true), doubleTapReact: bool(p.doubleTapReact, true), quickReaction: typeof p.quickReaction === 'string' && p.quickReaction.trim() && [...p.quickReaction].length <= 8 ? p.quickReaction : '❤️', focusRing: bool(p.focusRing, false), timeFormat: oneOf(p.timeFormat, ['auto', '12', '24'] as const, 'auto'), nameAnimation: oneOf(p.nameAnimation, ['hover', 'always', 'never'] as const, 'hover'),
       inlineAttachments: bool(p.inlineAttachments, true), linkMedia: bool(p.linkMedia, true), embeds: bool(p.embeds, true), emoticons: bool(p.emoticons, true), showReactions: bool(p.showReactions, true),

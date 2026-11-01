@@ -12,6 +12,8 @@ import { jumpToMessageAsync } from './ChatView'
 import { badgeCount } from '../lib/badge'
 import { renderMarkdown } from '../lib/markdown'
 import { remindLabel, setReminder } from '../lib/reminders'
+import { usePrefs } from '../lib/prefs'
+import { usePhone } from '../lib/swipe'
 
 const HIDDEN_KEY = `${STORAGE_PREFIX}inboxHidden`
 const TAB_KEY = `${STORAGE_PREFIX}inboxTab`
@@ -27,7 +29,15 @@ type Placed = Message & { guild_id?: string | null; guild_name?: string; channel
  * read one by one or all at once), Mentions (last 30 days), Bookmarks, Reminders (bookmarks with a Remind Me time) and
  * Highlights. Every message shows in full with who wrote it and where, and a Jump button.
  */
-export default function InboxButton() {
+/** The inbox. With the title bar on (wide screens) it lives there instead of in the channel headers. */
+export default function InboxButton({ inTitleBar }: { inTitleBar?: boolean }) {
+  const titleBar = usePrefs().titleBar
+  const phone = usePhone()
+  if (!inTitleBar && titleBar && !phone) return null
+  return <InboxMenu />
+}
+
+function InboxMenu() {
   const t = useT()
   const [open, setOpen] = useState(false)
   const [tab, setTabState] = useState<Tab>(loadTab)

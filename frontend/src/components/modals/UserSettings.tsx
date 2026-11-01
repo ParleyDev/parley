@@ -53,7 +53,7 @@ export default function UserSettingsModal({ onClose, tab: requested }: { onClose
       { id: 'apps', label: 'Authorized Apps', icon: <KeyRound size={18} />, keywords: 'oauth' },
     ] },
     { title: 'App Settings', items: [
-      { id: 'appearance', label: 'Appearance', icon: <Paintbrush size={18} />, keywords: 'theme dark light palette compact font zoom' },
+      { id: 'appearance', label: 'Appearance', icon: <Paintbrush size={18} />, keywords: 'theme dark light palette compact font zoom title bar' },
       { id: 'accessibility', label: 'Accessibility', icon: <Accessibility size={18} />, keywords: 'motion contrast saturation captions' },
       { id: 'voice', label: 'Voice & Video', icon: <Mic size={18} />, keywords: 'microphone input output camera noise' },
       { id: 'chat', label: 'Chat', icon: <MessageSquareText size={18} />, keywords: 'emoji embeds stickers gif typing indicator' },

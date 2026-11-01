@@ -92,6 +92,8 @@ export default function AppearanceTab() {
       </section>
 
       <section className="space-y-3">
+        <Toggle label={t('Show title bar')} checked={p.titleBar} onChange={(v) => setPrefs({ titleBar: v })} />
+        <p className="text-xs text-text-2 -mt-1">{t('A bar across the top with back and forward, where you are and your inbox. Not shown on phones.')}</p>
         <Toggle label={t('Show avatars in compact mode')} checked={p.compactAvatars} onChange={(v) => setPrefs({ compactAvatars: v })} />
         <div>
           <h3 className="label">{t('Role colours')}</h3>

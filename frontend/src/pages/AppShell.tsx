@@ -37,6 +37,7 @@ import StreamerBanner from '../components/StreamerBanner'
 import UpdateBanner from '../components/UpdateBanner'
 import { useMemo } from 'react'
 import { t, useT } from '../lib/i18n'
+import TitleBar from '../components/TitleBar'
 
 /**
  * Two route trees share the URL: one picks the sidebar, one picks the main content.
@@ -97,6 +98,7 @@ export default function AppShell() {
       <a href="#messages" onClick={(e) => { e.preventDefault(); (document.querySelector<HTMLElement>('[data-message-list]') ?? document.querySelector<HTMLElement>('main'))?.focus() }}
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[300] focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-white" data-skip-link>{t('Skip to messages')}</a>
       <Shortcuts />
+      <TitleBar />
       <ThemePreviewBar />
       <VerifyBanner />
       <StreamerBanner />
