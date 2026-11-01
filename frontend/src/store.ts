@@ -23,7 +23,7 @@ const writeLocal = (uid: string, channelId: string, rows: Message[]) => {
 /** The in-app "system app" that explains undelivered messages: a friendly frog. */
 const FROG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#57c26b"/><circle cx="20" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="44" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="20" cy="22" r="6" fill="#fff"/><circle cx="44" cy="22" r="6" fill="#fff"/><circle cx="21.5" cy="23" r="3" fill="#1f2937"/><circle cx="45.5" cy="23" r="3" fill="#1f2937"/><circle cx="22.5" cy="21.5" r="1" fill="#fff"/><circle cx="46.5" cy="21.5" r="1" fill="#fff"/><path d="M18 40q14 12 28 0" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/><circle cx="14" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/><circle cx="50" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/></svg>`)
 export const RIBBIT = { id: 'ribbit', username: 'ribbit', display_name: 'Ribbit', avatar_url: FROG, bio: '', status: '', created_at: new Date(0).toISOString(), banner_url: null, theme_primary: null, theme_accent: null, pronouns: '', name_primary: null } as unknown as User
-import type { Activity, Poll, ThreadInfo } from './lib/types'
+import type { Activity, Poll, ThreadInfo, TypingIndicator } from './lib/types'
 import type { Ban, Channel, DmChannel, Draft, Emoji, Guild, GuildEvent, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sound, Sticker, StudioSession, User, UserNote, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
@@ -202,6 +202,8 @@ interface State {
   setActivity: (userId: string, activity: Activity | null) => void
   users: Record<string, User>
   typing: Record<string, Record<string, number>>
+  /** Each typist's custom indicator, as last sent with their TYPING_START. */
+  typingStyles: Record<string, TypingIndicator | undefined>
   readStates: Record<string, string | null>
   lastMessageId: Record<string, string>
   activeChannelId: string | null
@@ -286,7 +288,7 @@ interface State {
   sendPoll: (channelId: string, poll: { question: string; options: string[]; emojis?: (string | null)[]; multi: boolean; duration_hours: number | null }) => Promise<void>
   setPresence: (userId: string, online: boolean, platforms?: string[], idle?: boolean) => void
   upsertUser: (u: User) => void
-  setTyping: (channelId: string, userId: string) => void
+  setTyping: (channelId: string, userId: string, indicator?: TypingIndicator) => void
   pruneTyping: () => void
   setReadState: (channelId: string, msgId: string | null) => void
   /** channel -> other user -> newest message they have read (read receipts). */
@@ -403,6 +405,7 @@ export const useStore = create<State>((set, get) => ({
   idle: {},
   users: {},
   typing: {},
+  typingStyles: {},
   readStates: {},
   receipts: {},
   lastMessageId: {},
@@ -447,7 +450,7 @@ export const useStore = create<State>((set, get) => ({
     setToken(null)
     set({
       token: null, user: null, ready: false, connected: false, guilds: {}, guildOrder: [], guildLayout: [], channels: {}, dms: {}, relationships: {},
-      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, mentionCounts: {}, notifSettings: {}, messages: {}, hasMore: {}, online: {}, idle: {}, users: {}, typing: {}, readStates: {}, lastMessageId: {}, modal: null,
+      members: {}, membersLoaded: {}, bans: {}, bansLoaded: {}, roles: {}, emojis: {}, stickers: {}, bookmarks: {}, mentionCounts: {}, notifSettings: {}, messages: {}, hasMore: {}, online: {}, idle: {}, users: {}, typing: {}, typingStyles: {}, readStates: {}, lastMessageId: {}, modal: null,
       voiceStates: {}, myVoiceChannelId: null, voiceConnecting: false, speaking: {}, peerStatus: {}, localCamera: null, localScreen: null, remoteMedia: {}, watching: {},
     })
   },
@@ -752,8 +755,9 @@ export const useStore = create<State>((set, get) => ({
     const relationships = s.relationships[u.id] ? { ...s.relationships, [u.id]: { ...s.relationships[u.id], user: u } } : s.relationships
     return { users: { ...s.users, [u.id]: u }, members, dms, messages, user, relationships }
   }),
-  setTyping: (channelId, userId) => set((s) => ({
+  setTyping: (channelId, userId, indicator) => set((s) => ({
     typing: { ...s.typing, [channelId]: { ...(s.typing[channelId] ?? {}), [userId]: Date.now() } },
+    typingStyles: JSON.stringify(s.typingStyles[userId]) === JSON.stringify(indicator) ? s.typingStyles : { ...s.typingStyles, [userId]: indicator },
   })),
   pruneTyping: () => set((s) => {
     const now = Date.now()

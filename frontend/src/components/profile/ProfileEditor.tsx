@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { Camera, ChevronDown, Pipette, Trash2, X } from 'lucide-react'
+import { Ban, Camera, ChevronDown, Dices, Pipette, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api } from '../../lib/api'
 import { NAMEPLATES, PROFILE_EFFECTS, PROFILE_FRAMES, nameplateClass } from '../../lib/cosmetics'
@@ -8,7 +8,7 @@ import { colorFor } from '../../lib/format'
 import { useT } from '../../lib/i18n'
 import { colorsOf, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../lib/nameStyle'
 import { prepareImage, uploadImage } from '../../lib/upload'
-import { DECORATIONS, type ManualActivity, type PanelItem, type PrivateUser } from '../../lib/types'
+import { DECORATIONS, type ManualActivity, type PanelItem, type PrivateUser, type TypingAnimation } from '../../lib/types'
 import { useStore } from '../../store'
 import Avatar from '../Avatar'
 import { badgeIcon, HOUSES } from '../Flair'
@@ -20,12 +20,17 @@ import { WearServerTag } from '../ServerTag'
 import ImagePicker from '../modals/ImagePicker'
 import NameStyleModal from '../modals/NameStyle'
 import DecorationGallery from '../modals/settings/DecorationGallery'
+import Emoji from '../Emoji'
+import ExpressionPicker from '../ExpressionPicker'
+import { surprise, TYPING_ANIMATIONS, TypingGlyphs } from '../TypingIndicator'
 
 const MAX_BIO = 400
 
 /** The user's saved style as the editor's draft (colours fall back to the classic fields). */
 const styleOfUser = (u: PrivateUser | null | undefined): NameStyle => ({ font: (u?.name_style?.font as NameFont) ?? 'default', effect: (u?.name_style?.effect as NameEffect) ?? (u?.name_accent ? 'gradient' : 'solid'), colors: colorsOf(u ?? undefined) })
 const toLines = (items?: PanelItem[]) => (items ?? []).map((i) => (i.url ? `${i.title} | ${i.url}` : i.title)).join('\n')
+/** The saved typing indicator as three emoji slots, an animation and text. */
+const typingOf = (u: PrivateUser) => { const ti = u.typing_indicator ?? {}; return { emojis: [0, 1, 2].map((i) => ti.emojis?.[i] ?? ''), animation: ti.animation ?? 'wave' as TypingAnimation, text: ti.text ?? '' } }
 const fromLines = (text: string): PanelItem[] => text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [title, url] = l.split('|').map((x) => x.trim()); return url ? { title, url } : { title } })
 
 /** Everything the profile editor changes, as an unsaved draft of the signed-in user. */
@@ -37,7 +42,7 @@ function useProfileDraft(user: PrivateUser) {
     avatar: user.avatar_url ?? null, banner: user.banner_url ?? null, primary: user.theme_primary ?? null, accent: user.theme_accent ?? null,
     decoration: user.avatar_decoration ?? '', clanTag: user.clan_tag ?? '', nameStyle: styleOfUser(user),
     wishlist: toLines(user.panels?.wishlist), games: toLines(user.panels?.games), privacy: (user.profile_privacy ?? 'everyone') as 'everyone' | 'friends',
-    frame: user.profile_frame ?? '', plate: user.nameplate ?? '', effect: user.profile_effect ?? '',
+    frame: user.profile_frame ?? '', plate: user.nameplate ?? '', effect: user.profile_effect ?? '', typing: typingOf(user),
   })
   const initial = () => initialOf(user)
   const [d, setD] = useState(initial)
@@ -53,7 +58,7 @@ function useProfileDraft(user: PrivateUser) {
       const u = await api.patch<PrivateUser>('/users/@me', {
         display_name: d.display, pronouns: d.pronouns, custom_status: d.customStatus, bio: d.bio, avatar_url: d.avatar ?? '', banner_url: d.banner ?? '', theme_primary: d.primary ?? '', theme_accent: d.accent ?? '',
         avatar_decoration: d.decoration, clan_tag: d.clanTag, name_style: d.nameStyle, panels: { wishlist: fromLines(d.wishlist), games: fromLines(d.games) },
-        profile_privacy: d.privacy, profile_frame: d.frame, nameplate: d.plate, profile_effect: d.effect,
+        profile_privacy: d.privacy, profile_frame: d.frame, nameplate: d.plate, profile_effect: d.effect, typing_indicator: d.typing,
       })
       const st = useStore.getState(); if (st.token) st.setAuth(st.token, u)
       setD(initialOf(u)); pushToast(t('Profile saved'))
@@ -69,7 +74,7 @@ function useProfileDraft(user: PrivateUser) {
   return { d, set, dirty, save, busy, uploading, upload, reset: () => setD(initial()) }
 }
 
-type Section = 'nameplate' | 'avatar' | 'decoration' | 'theme' | 'banner' | 'effect' | 'frame' | 'tag' | 'badges'
+type Section = 'nameplate' | 'avatar' | 'decoration' | 'theme' | 'banner' | 'effect' | 'frame' | 'tag' | 'badges' | 'typing'
 
 /** A tile in the left column: a little preview of the setting that opens its picker. */
 function Tile({ section, open, onOpen, label, children, className = '' }: { section: Section; open: Section | null; onOpen: (s: Section) => void; label: string; children: ReactNode; className?: string }) {
@@ -100,6 +105,7 @@ export default function ProfileEditor() {
   const [styleOpen, setStyleOpen] = useState(false)
   const [tab, setTab] = useState<'about' | 'activity' | 'wishlist' | 'games'>('about')
   const [who, setWho] = useState(false)
+  const [slot, setSlot] = useState<{ i: number; rect: DOMRect } | null>(null)
   // Escape closes an open picker first (the overlay closes on the next one).
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape' && section && !document.querySelector('[data-name-style-modal]')) setSection(null) }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [section])
   const bioRef = useRef<HTMLTextAreaElement>(null)
@@ -114,6 +120,8 @@ export default function ProfileEditor() {
     onAvatarFile: (f) => void upload('avatar', f), onAvatarRemove: () => set('avatar')(null), onBannerFile: (f) => void upload('banner', f), onBannerRemove: () => set('banner')(null),
     status: presence, onStatus: (v) => { api.patch('/users/@me', { status: v }).catch((e) => pushToast((e as Error).message, 'error')) }, busy: uploading,
   }
+  const setTyping = (patch: Partial<typeof d.typing>) => set('typing')({ ...d.typing, ...patch })
+  const typingText = d.typing.text.trim() || t('is typing…')
   const chip = (on: boolean) => `rounded-lg border px-2.5 py-1 text-sm ${on ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`
 
   const panel: Record<Section, { title: string; body: ReactNode }> = {
@@ -196,6 +204,42 @@ export default function ProfileEditor() {
       </div>
     ) },
     badges: { title: t('House badge'), body: <HousePicker /> },
+    typing: { title: t('Typing Indicator'), body: (
+      <div className="space-y-4" data-typing-editor>
+        <div className="flex h-24 items-center justify-center gap-2 rounded-xl bg-black/25 text-sm text-text-1" data-typing-preview>
+          <TypingGlyphs style={d.typing} size={18} /><span className="truncate"><b>{d.display || user.display_name}</b> {typingText}</span>
+        </div>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1.5">{t('Emojis')}</div>
+          <div className="grid grid-cols-3 gap-2">
+            {d.typing.emojis.map((e, i) => (
+              <div key={i} className="group relative">
+                <button type="button" onClick={(ev) => setSlot({ i, rect: ev.currentTarget.getBoundingClientRect() })} className={`flex h-16 w-full items-center justify-center rounded-xl border-2 bg-black/25 ${slot?.i === i ? 'border-accent' : 'border-transparent hover:border-white/40'}`} aria-label={t('Emoji {n}', { n: i + 1 })} data-typing-slot={i}>
+                  {e ? <Emoji value={e} size={30} glyph={30} /> : <Plus size={20} className="text-text-2" />}
+                </button>
+                {e && <button type="button" onClick={() => setTyping({ emojis: d.typing.emojis.map((x, j) => (j === i ? '' : x)) })} className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 items-center justify-center rounded-full bg-bg-0 text-text-2 shadow hover:text-danger group-hover:flex" aria-label={t('Remove')} data-typing-slot-clear={i}><X size={12} /></button>}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1.5">{t('Animation')}</div>
+          <div className="flex flex-wrap gap-2">
+            {TYPING_ANIMATIONS.map((a) => <button key={a} type="button" onClick={() => setTyping({ animation: a })} className={`flex items-center gap-2 ${chip(d.typing.animation === a)}`} aria-pressed={d.typing.animation === a} data-typing-animation={a}><TypingGlyphs style={{ emojis: [], animation: a }} />{({ wave: t('Wave'), bounce: t('Bounce'), pulse: t('Pulse'), spin: t('Spin'), jiggle: t('Jiggle'), none: t('None') })[a]}</button>)}
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-1.5">{t('Text')}</div>
+          <input className="input w-full" maxLength={32} value={d.typing.text} onChange={(e) => setTyping({ text: e.target.value })} placeholder={t('is typing…')} data-typing-text />
+          <p className="mt-1 text-xs text-text-2">{t('When you are typing, others see this instead of the default typing indicator.')}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="flex items-center justify-center gap-2 rounded-xl bg-bg-3 py-2.5 text-sm font-semibold text-text-0 hover:bg-bg-4" onClick={() => set('typing')(surprise(t))} data-typing-surprise><Dices size={18} />{t('Surprise Me')}</button>
+          <button type="button" className="flex items-center justify-center gap-2 rounded-xl bg-bg-3 py-2.5 text-sm font-semibold text-text-0 hover:bg-bg-4" onClick={() => set('typing')({ emojis: ['', '', ''], animation: 'wave', text: '' })} data-typing-reset><Ban size={18} />{t('Reset')}</button>
+        </div>
+        {slot && <ExpressionPicker tabs={['emoji']} anchor={slot.rect} onClose={() => setSlot(null)} onEmoji={(tok) => { setTyping({ emojis: d.typing.emojis.map((x, j) => (j === slot.i ? tok : x)) }); setSlot(null) }} />}
+      </div>
+    ) },
   }
   const plateUser = { id: user.id, display_name: d.display, avatar_url: d.avatar }
 
@@ -252,6 +296,12 @@ export default function ProfileEditor() {
             <Tile section="tag" open={section} onOpen={setSection} label={t('Clan tag')} className="h-14 flex items-center justify-center font-bold tracking-wide">{d.clanTag || <span className="text-sm font-normal text-text-2">{t('Clan tag')}</span>}</Tile>
             <Tile section="badges" open={section} onOpen={setSection} label={t('House badge')} className="h-14 flex items-center justify-center gap-2 text-sm">{user.house ? badgeIcon(`house_${user.house}`) : null}<span className="text-text-2">{t('Badges')}</span></Tile>
           </div>
+        </div>
+        <div>
+          <Heading>{t('Typing Indicator')}</Heading>
+          <Tile section="typing" open={section} onOpen={setSection} label={t('Typing Indicator')} className="w-full h-12 flex items-center justify-center gap-2 px-3 text-xs text-text-1">
+            <TypingGlyphs style={d.typing} /><span className="truncate">{typingText}</span>
+          </Tile>
         </div>
         <div>
           <Heading>{t('Who can see your full profile')}</Heading>

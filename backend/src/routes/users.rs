@@ -197,7 +197,7 @@ pub const NAMEPLATES: &[&str] = &["dusk", "ocean", "forest", "candy", "aurora", 
 pub const PROFILE_EFFECTS: &[&str] = &["sparkles", "snow", "hearts", "confetti", "bubbles"];
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, verified_bot, name_style, avatar_decoration, clan_tag, clan_tag_guild, panels, profile_privacy, profile_frame, nameplate, profile_effect, account_state, system";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, clan_tag_guild, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect, entrance_sound, client_settings, birthdate, custom_activity, share_activity, house, CASE WHEN birthdate IS NULL THEN 'unknown' WHEN birthdate > (now() - interval '18 years')::date THEN 'teen' ELSE 'adult' END AS age_group";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, typing_indicator, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, clan_tag_guild, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect, entrance_sound, client_settings, birthdate, custom_activity, share_activity, house, CASE WHEN birthdate IS NULL THEN 'unknown' WHEN birthdate > (now() - interval '18 years')::date THEN 'teen' ELSE 'adult' END AS age_group";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -276,6 +276,8 @@ struct UpdateMe {
     profile_effect: Option<String>,
     /// A house badge: ember, tide, grove, or '' for none.
     house: Option<String>,
+    /// A custom typing indicator {emojis: up to 3, animation, text}; {} resets it.
+    typing_indicator: Option<serde_json::Value>,
     /// Ignored people (up to 500).
     ignored_users: Option<Vec<Uuid>>,
     /// Friends to be told about when they come online (up to 200).
@@ -288,6 +290,33 @@ struct UpdateMe {
     avatar_decoration: Option<String>,
     clan_tag: Option<String>,
     panels: Option<serde_json::Value>,
+}
+
+pub const TYPING_ANIMATIONS: &[&str] = &["wave", "bounce", "pulse", "spin", "jiggle", "none"];
+
+/// Check a typing indicator: up to three emoji (unicode, or a custom `<:name:id>`), a known animation and up to 32
+/// characters of text. Anything empty is dropped, so `{}` is the default indicator.
+pub fn validate_typing_indicator(v: &serde_json::Value) -> AppResult<serde_json::Value> {
+    let o = v.as_object().ok_or_else(|| AppError::BadRequest("typing_indicator must be an object".into()))?;
+    let custom = regex::Regex::new(r"^<a?:[A-Za-z0-9_]{2,32}:[0-9a-f-]{36}>$").unwrap();
+    let mut emojis = Vec::new();
+    if let Some(list) = o.get("emojis") {
+        let list = list.as_array().ok_or_else(|| AppError::BadRequest("emojis must be a list".into()))?;
+        if list.len() > 3 { return Err(AppError::BadRequest("Up to three emoji".into())) }
+        for e in list {
+            let e = e.as_str().ok_or_else(|| AppError::BadRequest("emojis must be strings".into()))?.trim();
+            let ok = e.is_empty() || custom.is_match(e) || (e.chars().count() <= 16 && !e.chars().any(|c| c.is_alphanumeric() || c.is_whitespace() || c == '<' || c == '>'));
+            if !ok { return Err(AppError::BadRequest("Not an emoji".into())) }
+            emojis.push(serde_json::Value::String(e.to_string()));
+        }
+    }
+    let animation = o.get("animation").and_then(|x| x.as_str()).unwrap_or("wave");
+    if !TYPING_ANIMATIONS.contains(&animation) { return Err(AppError::BadRequest(format!("Unknown animation {animation}"))) }
+    let text: String = o.get("text").and_then(|x| x.as_str()).unwrap_or("").split_whitespace().collect::<Vec<_>>().join(" ");
+    if text.chars().count() > 32 { return Err(AppError::BadRequest("Typing text is up to 32 characters".into())) }
+    let any = emojis.iter().any(|e| e.as_str() != Some(""));
+    if !any && text.is_empty() { return Ok(serde_json::json!({})) }
+    Ok(serde_json::json!({ "emojis": emojis, "animation": animation, "text": text }))
 }
 
 /// Check a {font, effect, colors} style; returns the cleaned style plus (first colour, second colour for gradients).
@@ -460,6 +489,10 @@ async fn update_me(
             };
             if !v.is_empty() && !asset && !list.contains(&v.as_str()) { return Err(AppError::BadRequest(format!("Unknown {what}"))) }
         }
+    }
+    if let Some(v) = &req.typing_indicator {
+        let v = validate_typing_indicator(v)?;
+        sqlx::query("UPDATE users SET typing_indicator = $2 WHERE id = $1").bind(uid).bind(v).execute(&state.db).await?;
     }
     if let Some(h) = &req.house {
         if !["", "ember", "tide", "grove"].contains(&h.as_str()) { return Err(AppError::BadRequest("house is ember, tide, grove or empty".into())) }

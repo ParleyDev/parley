@@ -1073,6 +1073,13 @@ async fn remove_user_reaction(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// TYPING_START, with the typist's custom indicator when they have one.
+pub fn typing_event(channel_id: Uuid, user_id: Uuid, style: serde_json::Value) -> serde_json::Value {
+    let mut d = json!({ "channel_id": channel_id, "user_id": user_id });
+    if style.as_object().map(|o| !o.is_empty()).unwrap_or(false) { d["indicator"] = style }
+    d
+}
+
 async fn typing(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
@@ -1080,8 +1087,10 @@ async fn typing(
 ) -> AppResult<StatusCode> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     perms::check(p, perms::SEND_MESSAGES)?;
+    let (shows, style): (bool, serde_json::Value) = sqlx::query_as("SELECT show_typing, typing_indicator FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    if !shows { return Ok(StatusCode::NO_CONTENT) }
     let target = target_for(&state.db, &c).await?;
-    state.hub.emit(target, "TYPING_START", json!({ "channel_id": id, "user_id": uid }));
+    state.hub.emit(target, "TYPING_START", typing_event(id, uid, style));
     Ok(StatusCode::NO_CONTENT)
 }
 

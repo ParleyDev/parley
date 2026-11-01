@@ -3662,5 +3662,22 @@
 "Punched out": "Kayıttan çıktı",
 "Tempo (BPM)": "Tempo (BPM)",
 "Time signature": "Ölçü birimi",
-"{n} bars": "{n} ölçü"
+"{n} bars": "{n} ölçü",
+"Bounce": "Zıplama",
+"Emoji {n}": "Emoji {n}",
+"Emojis": "Emojiler",
+"Jiggle": "Kıpırdama",
+"Pulse": "Nabız",
+"Spin": "Dönme",
+"Typing Indicator": "Yazma göstergesi",
+"When you are typing, others see this instead of the default typing indicator.": "Sen yazarken diğerleri varsayılan yazma göstergesi yerine bunu görür.",
+"is babbling…": "gevezelik ediyor…",
+"is choosing words…": "kelimelerini seçiyor…",
+"is composing a masterpiece…": "bir başyapıt besteliyor…",
+"is cooking…": "bir şeyler pişiriyor…",
+"is on a roll…": "coştu…",
+"is plotting…": "plan kuruyor…",
+"is spilling the tea…": "dedikodu yapıyor…",
+"is thinking hard…": "derin düşünüyor…",
+"is typing…": "yazıyor…"
 }

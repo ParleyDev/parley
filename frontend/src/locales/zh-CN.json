@@ -3662,5 +3662,22 @@
 "Punched out": "已插出",
 "Tempo (BPM)": "速度 (BPM)",
 "Time signature": "拍号",
-"{n} bars": "{n} 小节"
+"{n} bars": "{n} 小节",
+"Bounce": "弹跳",
+"Emoji {n}": "表情 {n}",
+"Emojis": "表情",
+"Jiggle": "摇摆",
+"Pulse": "脉动",
+"Spin": "旋转",
+"Typing Indicator": "输入状态指示",
+"When you are typing, others see this instead of the default typing indicator.": "你输入时，其他人会看到这个，而不是默认的输入提示。",
+"is babbling…": "正在叽叽喳喳…",
+"is choosing words…": "正在斟酌用词…",
+"is composing a masterpiece…": "正在谱写杰作…",
+"is cooking…": "正在酝酿什么…",
+"is on a roll…": "正在兴头上…",
+"is plotting…": "正在密谋…",
+"is spilling the tea…": "正在爆料…",
+"is thinking hard…": "正在冥思苦想…",
+"is typing…": "正在输入…"
 }

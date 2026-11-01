@@ -3662,5 +3662,22 @@
 "Punched out": "パンチアウト済み",
 "Tempo (BPM)": "テンポ (BPM)",
 "Time signature": "拍子",
-"{n} bars": "{n}小節"
+"{n} bars": "{n}小節",
+"Bounce": "バウンス",
+"Emoji {n}": "絵文字 {n}",
+"Emojis": "絵文字",
+"Jiggle": "ゆらゆら",
+"Pulse": "パルス",
+"Spin": "スピン",
+"Typing Indicator": "入力中インジケーター",
+"When you are typing, others see this instead of the default typing indicator.": "あなたが入力しているとき、他の人にはデフォルトの入力中表示の代わりにこれが表示されます。",
+"is babbling…": "がおしゃべり中…",
+"is choosing words…": "が言葉を選んでいます…",
+"is composing a masterpiece…": "が傑作を作曲中…",
+"is cooking…": "が何か仕込み中…",
+"is on a roll…": "がノリノリ…",
+"is plotting…": "が企み中…",
+"is spilling the tea…": "が暴露中…",
+"is thinking hard…": "が考え中…",
+"is typing…": "が入力中…"
 }

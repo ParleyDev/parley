@@ -3662,5 +3662,22 @@
 "Punched out": "خرج من التسجيل",
 "Tempo (BPM)": "الإيقاع (BPM)",
 "Time signature": "الميزان",
-"{n} bars": "{n} مازورات"
+"{n} bars": "{n} مازورات",
+"Bounce": "ارتداد",
+"Emoji {n}": "إيموجي {n}",
+"Emojis": "الإيموجي",
+"Jiggle": "اهتزاز",
+"Pulse": "نبض",
+"Spin": "دوران",
+"Typing Indicator": "مؤشر الكتابة",
+"When you are typing, others see this instead of the default typing indicator.": "عندما تكتب، يرى الآخرون هذا بدلاً من مؤشر الكتابة الافتراضي.",
+"is babbling…": "يثرثر…",
+"is choosing words…": "يختار كلماته…",
+"is composing a masterpiece…": "يؤلف تحفة فنية…",
+"is cooking…": "يطبخ شيئاً…",
+"is on a roll…": "في أوج حماسه…",
+"is plotting…": "يخطط لشيء…",
+"is spilling the tea…": "يكشف الأسرار…",
+"is thinking hard…": "يفكر بعمق…",
+"is typing…": "يكتب…"
 }

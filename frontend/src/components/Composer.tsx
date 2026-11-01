@@ -14,6 +14,7 @@ import { VoiceRecorder } from '../lib/voiceRecorder'
 import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
 import ExpressionPicker, { type PickerTab } from './ExpressionPicker'
+import { TypingGlyphs } from './TypingIndicator'
 import ShortcodeSuggest, { shortcodeAt, useShortcodeSuggestions, type Suggestion } from './ShortcodeSuggest'
 import MentionSuggest, { applyMentions, mentionAt, useMentionItems, type MentionItem } from './MentionSuggest'
 import { dmName, isGroup } from '../lib/dm'
@@ -462,7 +463,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
     if (files.length) { e.preventDefault(); addFiles(files) }
   }
 
-  const typers = Object.keys(typing ?? {}).map((id) => users[id]?.display_name ?? t('Someone'))
+  const typerIds = Object.keys(typing ?? {})
+  const typers = typerIds.map((id) => users[id]?.display_name ?? t('Someone'))
+  // One typist shows their own indicator (emoji, animation, text); several share the default.
+  const typingStyle = useStore((s) => (typerIds.length === 1 ? s.typingStyles[typerIds[0]] : undefined))
 
   /** Insert text at the caret (emoji picks), keeping focus in the textarea. */
   const insert = (text: string) => {
@@ -553,8 +557,8 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
             <span className="min-w-0 flex-1 flex items-center gap-1.5 truncate" data-typing-row>
               {typers.length > 0 && (
                 <>
-                  <span className="flex gap-0.5"><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /><i className="typing-dot h-1.5 w-1.5 rounded-full bg-text-1 inline-block" /></span>
-                  <span>{tn(typers.length > 3 ? '{names} and others are typing…' : typers.length === 1 ? '{names} is typing…' : '{names} are typing…', { names: <b>{typers.slice(0, 3).join(', ')}</b> })}</span>
+                  <TypingGlyphs style={typingStyle} />
+                  <span>{typingStyle?.text ? <><b>{typers[0]}</b> {typingStyle.text}</> : tn(typers.length > 3 ? '{names} and others are typing…' : typers.length === 1 ? '{names} is typing…' : '{names} are typing…', { names: <b>{typers.slice(0, 3).join(', ')}</b> })}</span>
                 </>
               )}
             </span>

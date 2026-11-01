@@ -3662,5 +3662,22 @@
 "Punched out": "Uitgepuncht",
 "Tempo (BPM)": "Tempo (BPM)",
 "Time signature": "Maatsoort",
-"{n} bars": "{n} maten"
+"{n} bars": "{n} maten",
+"Bounce": "Stuiteren",
+"Emoji {n}": "Emoji {n}",
+"Emojis": "Emoji's",
+"Jiggle": "Wiebelen",
+"Pulse": "Pulseren",
+"Spin": "Draaien",
+"Typing Indicator": "Typindicator",
+"When you are typing, others see this instead of the default typing indicator.": "Als je typt, zien anderen dit in plaats van de standaard typindicator.",
+"is babbling…": "kletst…",
+"is choosing words…": "kiest de woorden…",
+"is composing a masterpiece…": "componeert een meesterwerk…",
+"is cooking…": "kookt iets…",
+"is on a roll…": "is op dreef…",
+"is plotting…": "smeedt plannen…",
+"is spilling the tea…": "doet een boekje open…",
+"is thinking hard…": "denkt diep na…",
+"is typing…": "typt…"
 }

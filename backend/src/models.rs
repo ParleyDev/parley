@@ -195,6 +195,10 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default = "default_true")]
     pub show_typing: bool,
+    /// A custom typing indicator: {emojis, animation, text}; empty for the default.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub typing_indicator: serde_json::Value,
     /// Sensitive media: {non_friend_dms: show|blur, restricted: show|blur}; DM spam filter: none | non_friends | all.
     #[sqlx(default)]
     #[serde(default)]

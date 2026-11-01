@@ -70,6 +70,8 @@ export interface PrivateUser extends User {
   /** Data & Privacy: others see Seen on your DMs / see you typing. */
   show_read_receipts?: boolean
   show_typing?: boolean
+  /** A custom typing indicator ({} or missing: the default dots and "is typing…"). */
+  typing_indicator?: TypingIndicator
   /** Share Spotify and hand-set activities (default on). */
   share_activity?: boolean
   custom_activity?: ManualActivity | null
@@ -503,3 +505,7 @@ export type PeerStatus = 'connecting' | 'connected' | 'failed'
 export interface Application { id: string; owner_id: string; name: string; description: string; client_id: string; redirect_uris: string[]; bot_user_id: string | null; created_at: string; privileged_intents?: number; icon_url?: string | null; bot_public?: boolean; verified?: boolean; listed?: boolean; install_permissions?: number; tags?: string[]; activity_url?: string | null; client_secret?: string; bot?: User | null; authorized_users?: number }
 /** An app holding a token for you (Settings → Authorized Apps). */
 export interface AuthorizedApp { id: string; name: string; description: string; owner: string | null; scopes: string[]; since: string }
+
+export type TypingAnimation = 'wave' | 'bounce' | 'pulse' | 'spin' | 'jiggle' | 'none'
+/** Up to three emoji, how they move, and the text after the typist's name (empty: "is typing…"). */
+export interface TypingIndicator { emojis?: string[]; animation?: TypingAnimation; text?: string }

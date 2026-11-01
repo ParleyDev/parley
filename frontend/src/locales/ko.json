@@ -3662,5 +3662,22 @@
 "Punched out": "펀치 아웃됨",
 "Tempo (BPM)": "템포 (BPM)",
 "Time signature": "박자",
-"{n} bars": "{n}마디"
+"{n} bars": "{n}마디",
+"Bounce": "통통",
+"Emoji {n}": "이모지 {n}",
+"Emojis": "이모지",
+"Jiggle": "흔들흔들",
+"Pulse": "펄스",
+"Spin": "회전",
+"Typing Indicator": "입력 표시",
+"When you are typing, others see this instead of the default typing indicator.": "입력 중일 때 다른 사람에게 기본 입력 표시 대신 이것이 보입니다.",
+"is babbling…": "님이 수다 떠는 중…",
+"is choosing words…": "님이 단어를 고르는 중…",
+"is composing a masterpiece…": "님이 걸작을 작곡하는 중…",
+"is cooking…": "님이 뭔가 요리 중…",
+"is on a roll…": "님이 신났어요…",
+"is plotting…": "님이 계획을 꾸미는 중…",
+"is spilling the tea…": "님이 썰 푸는 중…",
+"is thinking hard…": "님이 골똘히 생각 중…",
+"is typing…": "님이 입력 중…"
 }

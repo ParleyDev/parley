@@ -5,7 +5,7 @@ import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { VoiceInvite } from '../store'
 import { applyActivityUpdate, dispatchSessionEvent, type CallActivity } from './activities'
-import type { Activity, Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, User, VoiceState } from './types'
+import type { Activity, Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, TypingIndicator, User, VoiceState } from './types'
 import { voice } from './voice'
 import type { E2eeSignal } from './e2ee'
 import { playSfx } from './sfx'
@@ -34,7 +34,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'BOOKMARK_REMINDER'; d: { message: Message; guild_id: string | null; channel_name: string } }
   | { t: 'POLL_UPDATE'; d: { channel_id: string; message_id: string; poll: Poll } }
   | { t: 'THREAD_UPDATE'; d: ThreadInfo }
-  | { t: 'TYPING_START'; d: { channel_id: string; user_id: string } }
+  | { t: 'TYPING_START'; d: { channel_id: string; user_id: string; indicator?: TypingIndicator } }
   | { t: 'PRESENCE_UPDATE'; d: { user_id: string; online: boolean; platforms?: string[]; idle?: boolean } }
   | { t: 'ACTIVITY_UPDATE'; d: { user_id: string; activity: Activity | null } }
   | { t: 'FAMILY_UPDATE'; d: Record<string, never> }
@@ -249,7 +249,7 @@ function handle(ev: Ev) {
     }
     case 'POLL_UPDATE': s.applyPollUpdate(ev.d.channel_id, ev.d.message_id, ev.d.poll); break
     case 'THREAD_UPDATE': s.upsertThread(ev.d); break
-    case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id); break
+    case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id, ev.d.indicator); break
     case 'PRESENCE_UPDATE': {
       // Friend-online alerts: only on the offline → online edge.
       const cameOnline = ev.d.online && !s.online[ev.d.user_id]

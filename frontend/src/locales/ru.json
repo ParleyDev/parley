@@ -3662,5 +3662,22 @@
 "Punched out": "Панч-аут",
 "Tempo (BPM)": "Темп (BPM)",
 "Time signature": "Размер",
-"{n} bars": "{n} такта"
+"{n} bars": "{n} такта",
+"Bounce": "Прыжки",
+"Emoji {n}": "Эмодзи {n}",
+"Emojis": "Эмодзи",
+"Jiggle": "Покачивание",
+"Pulse": "Пульс",
+"Spin": "Вращение",
+"Typing Indicator": "Индикатор набора",
+"When you are typing, others see this instead of the default typing indicator.": "Когда вы печатаете, другие видят это вместо стандартного индикатора набора.",
+"is babbling…": "болтает…",
+"is choosing words…": "подбирает слова…",
+"is composing a masterpiece…": "сочиняет шедевр…",
+"is cooking…": "что-то готовит…",
+"is on a roll…": "в ударе…",
+"is plotting…": "что-то замышляет…",
+"is spilling the tea…": "выкладывает сплетни…",
+"is thinking hard…": "усиленно думает…",
+"is typing…": "печатает…"
 }

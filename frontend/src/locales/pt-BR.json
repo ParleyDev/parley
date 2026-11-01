@@ -3662,5 +3662,22 @@
 "Punched out": "Punch out",
 "Tempo (BPM)": "Andamento (BPM)",
 "Time signature": "Fórmula de compasso",
-"{n} bars": "{n} compassos"
+"{n} bars": "{n} compassos",
+"Bounce": "Pulo",
+"Emoji {n}": "Emoji {n}",
+"Emojis": "Emojis",
+"Jiggle": "Balanço",
+"Pulse": "Pulso",
+"Spin": "Giro",
+"Typing Indicator": "Indicador de digitação",
+"When you are typing, others see this instead of the default typing indicator.": "Quando você digita, os outros veem isto em vez do indicador de digitação padrão.",
+"is babbling…": "está tagarelando…",
+"is choosing words…": "está escolhendo as palavras…",
+"is composing a masterpiece…": "está compondo uma obra-prima…",
+"is cooking…": "está cozinhando algo…",
+"is on a roll…": "está inspirado…",
+"is plotting…": "está tramando…",
+"is spilling the tea…": "está soltando a fofoca…",
+"is thinking hard…": "está pensando muito…",
+"is typing…": "está digitando…"
 }
