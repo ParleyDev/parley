@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   check-token:
-    if: github.ref_type == 'tag' || !(startsWith(github.event.head_commit.message, 'Release ') || startsWith(github.event.head_commit.message, 'chore(release): '))
+    if: "github.ref_type == 'tag' || !(startsWith(github.event.head_commit.message, 'Release ') || startsWith(github.event.head_commit.message, 'chore(release): '))"
     runs-on: ubuntu-latest
     outputs:
       configured: ${{ steps.check.outputs.configured }}

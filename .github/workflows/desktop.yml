@@ -1,5 +1,10 @@
 name: desktop
 on:
+  # Every change to the desktop app on main: a development build (0.21.0-pre.13) on the rolling `dev` prerelease,
+  # which the app's Development update channel follows (scripts/dev-release.sh). A newer push cancels a running one.
+  push:
+    branches: [main]
+    paths: ['desktop/**', 'scripts/version.mjs', 'scripts/dev-release.sh', 'VERSION', '.github/workflows/desktop.yml']
   # Publishing a GitHub release (including pre-releases) builds it; the gate job checks the tag is semver.
   release:
     types: [published]
@@ -14,6 +19,9 @@ on:
 # Attaching build outputs to the GitHub release needs write access to repository contents.
 permissions:
   contents: write
+concurrency:
+  group: desktop-${{ github.event_name == 'push' && 'dev' || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 jobs:
   # Releases build only for semver tags (v1.2.3, 1.2.3, v2.0.0-rc.1, v1.2.3+build.5); manual runs without a tag
   # always build. The tag becomes the version of every artifact (scripts/version.mjs, PARLEY_VERSION), the code
@@ -24,17 +32,30 @@ jobs:
       ok: ${{ steps.check.outputs.ok }}
       version: ${{ steps.check.outputs.version }}
       tag: ${{ steps.check.outputs.tag }}
+      ref: ${{ steps.check.outputs.ref }}
     steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'push'
+        with: { fetch-depth: 0 }
       - id: check
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          MSG: ${{ github.event.head_commit.message }}
         run: |
+          # A push to main: the development build. Release commits are built by their release instead.
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            case "$MSG" in "Release "*|"chore(release): "*) echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice::Release commit: the release builds it"; exit 0 ;; esac
+            v=$(node scripts/version.mjs --version)
+            echo "ok=true" >> "$GITHUB_OUTPUT"; echo "version=$v" >> "$GITHUB_OUTPUT"; echo "tag=dev" >> "$GITHUB_OUTPUT"; echo "ref=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            scripts/dev-release.sh prepare "$v"
+            exit 0
+          fi
           if [ -z "$TAG" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "::error::No GitHub release with tag '$TAG'"; exit 1; fi
           SEMVER='^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$'
           if printf '%s' "$TAG" | grep -qE "$SEMVER"; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"; echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"; echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "ok=true" >> "$GITHUB_OUTPUT"; echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"; echo "tag=$TAG" >> "$GITHUB_OUTPUT"; echo "ref=$TAG" >> "$GITHUB_OUTPUT"
             echo "Release $TAG: building version ${TAG#v}"
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"; echo "::notice::Release tag '$TAG' is not semver (e.g. v1.2.3); skipping build"
@@ -58,7 +79,7 @@ jobs:
     steps:
       # Full history and tags: scripts/version.mjs counts commits and detects release tags.
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0, ref: "${{ needs.gate.outputs.tag }}" }
+        with: { fetch-depth: 0, ref: "${{ needs.gate.outputs.ref }}" }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - uses: dtolnay/rust-toolchain@stable
@@ -120,6 +141,14 @@ jobs:
     if: needs.gate.outputs.tag != ''
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ needs.gate.outputs.ref }}" }
+      # The rolling dev prerelease: drop the previous build's installers first, so only this build's are left.
+      - name: Remove the previous development build
+        if: needs.gate.outputs.tag == 'dev'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/dev-release.sh prune '\.(msi|exe|dmg|AppImage|deb|rpm|sig|app\.tar\.gz)$'
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.gate.outputs.tag }}
