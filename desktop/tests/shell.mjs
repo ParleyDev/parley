@@ -4,8 +4,8 @@
 // through XTest with a tiny helper: XKEY=/path/to/xkey, built from tests/xkey.c). Build first: (cd src-tauri && cargo build)
 //   dbus-run-session -- xvfb-run -a node tests/shell.mjs
 import { createServer } from 'node:http'
-import { spawn } from 'node:child_process'
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -82,12 +82,20 @@ const env = { ...process.env, HOME: home, XDG_CONFIG_HOME: join(home, '.config')
 const wait = async (f, ms = 20000) => { const t = Date.now(); while (!f() && Date.now() - t < ms) await new Promise((r) => setTimeout(r, 200)); return f() }
 
 console.log('-- commands from the server page')
+// A window state saved by a framed build (decorated) must not bring the system frame back.
+mkdirSync(join(home, '.config/us.vic10.parley.desktop'), { recursive: true })
+writeFileSync(join(home, '.config/us.vic10.parley.desktop/.window-state.json'), JSON.stringify({ main: { width: 1280, height: 820, x: 40, y: 40, prev_x: 40, prev_y: 40, maximized: false, visible: true, decorated: true, fullscreen: false } }))
 const app = spawn(bin, [], { env, stdio: 'inherit' })
 ok('the page loads in the shell', await wait(() => results['1']))
 const r = results['1'] ?? {}
 ok('it can reach the shell', r.ipc === true, JSON.stringify(r))
 ok('desktop_settings', r.settings?.version && r.settings.autostart === false && r.settings.start_minimized === false && r.settings.hardware_acceleration === true, JSON.stringify(r.settings))
 ok('the window has no system frame: the page draws the title bar', r.settings?.frame === 'custom', JSON.stringify(r.settings))
+// GTK marks an undecorated window with Motif hints: flags 0x2 (decorations), decorations 0x0. (Without a window
+// manager, turning decorations back on doesn't show here, so this can't catch a restored frame on Windows; the
+// window-state plugin is kept away from decorations for that.)
+const motif = (() => { try { return execFileSync('xprop', ['-name', 'Parley', '_MOTIF_WM_HINTS'], { env }).toString() } catch (e) { return String(e) } })()
+ok('the window opens without a system frame', /=\s*0x2, 0x0/.test(motif), motif.trim())
 // Maximising is a request to the window manager, and Xvfb has none: check the commands answer, not the outcome.
 ok('window_control answers state, maximise and restore', [r.winState, r.winMax, r.winMaxed, r.winRestore].every((v) => typeof v === 'boolean'), JSON.stringify({ s: r.winState, m: r.winMax, mm: r.winMaxed, r: r.winRestore }))
 ok('a debug build reports updates as unsupported and never checks', r.updStatus?.current && r.updCheck?.state === 'unsupported', JSON.stringify({ s: r.updStatus, c: r.updCheck }))

@@ -489,7 +489,9 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Size, position and maximised state, but never the system frame: a state saved by a framed build would
+        // otherwise bring it back on top of the page's own title bar.
+        .plugin(tauri_plugin_window_state::Builder::default().with_state_flags(tauri_plugin_window_state::StateFlags::all() - tauri_plugin_window_state::StateFlags::DECORATIONS).build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
@@ -572,6 +574,8 @@ pub fn run() {
                     if let Some(next) = pending.and_then(|p| payload.url().join(&p).ok()) { let _ = w.navigate(next); }
                 })
                 .build()?;
+            #[cfg(not(target_os = "macos"))]
+            let _ = window.set_decorations(false);
             match build_tray(app.handle()) {
                 Ok(()) => app.state::<Tray>().0.store(true, std::sync::atomic::Ordering::Relaxed),
                 Err(e) => eprintln!("no tray icon: {e}"),
