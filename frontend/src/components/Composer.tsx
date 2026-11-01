@@ -604,7 +604,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
       )}
       <div ref={boxRef} className="rounded-lg bg-bg-3 border border-line shadow-lg shadow-black/25 focus-within:border-accent/50 transition" data-composer-box data-composer-narrow={narrow ? '1' : undefined}>
         {reply && (
-          <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-lg">
+          <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-lg" data-reply-banner>
             <span>{tn('Replying to {name}', { name: <b className="text-text-0">{reply.author.display_name}</b> })}</span>
             <button onClick={onCancelReply} className="text-text-2 hover:text-text-0"><X size={14} /></button>
           </div>

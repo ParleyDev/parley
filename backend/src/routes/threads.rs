@@ -150,7 +150,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
     crate::signup_guard::require_can_post(&state, uid).await?;
     let name = clean_name(&req.name)?;
     let is_forum = parent.kind == "forum";
-    let content = req.content.trim_end().to_string();
+    let content = crate::routes::channels::tidy_content(&req.content);
     if is_forum && ((content.trim().is_empty() && req.attachment_ids.is_empty()) || content.chars().count() > 2000) {
         return Err(AppError::BadRequest("A post needs a message of 1-2000 characters".into()));
     }

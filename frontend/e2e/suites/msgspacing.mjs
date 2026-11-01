@@ -1,0 +1,41 @@
+// Messages in a row sit evenly: no blank lines kept at the start or end of a message, and the "Seen" marker only
+// under your own message at the end of a run, never splitting a group (or under the other person's messages).
+import { chromium, devices } from 'playwright'
+import { WEB, S, reg, call, ok, finish } from '../lib.mjs'
+const a = await reg('alice'), b = await reg('bob')
+const g = await call(a.token, 'POST', '/guilds', { name: `Spacing ${S}` }); const ch = g.channels.find((x) => x.kind === 'text')
+const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`)
+
+console.log('-- blank lines')
+const lead = await call(b.token, 'POST', `/channels/${ch.id}/messages`, { content: '\n\n  \nhello\n\n' })
+ok('blank lines before and after a message are dropped', lead.content === 'hello', JSON.stringify(lead.content))
+const indent = await call(b.token, 'POST', `/channels/${ch.id}/messages`, { content: '\n    indented first line\nsecond' })
+ok('the first line keeps its own indentation', indent.content === '    indented first line\nsecond', JSON.stringify(indent.content))
+const block = await call(b.token, 'POST', `/channels/${ch.id}/messages`, { content: '```\n\ncode\n```' })
+ok('blank lines inside the message stay', block.content === '```\n\ncode\n```')
+const ed = await call(b.token, 'PATCH', `/channels/${ch.id}/messages/${lead.id}`, { content: '\n\nedited\n' })
+ok('and edits are tidied the same way', ed.content === 'edited', JSON.stringify(ed.content))
+const th = await call(b.token, 'POST', `/channels/${ch.id}/threads`, { name: 'thr', message_id: lead.id }).catch(() => null)
+if (th?.id) { const tm = await call(b.token, 'POST', `/channels/${th.id}/messages`, { content: '\n\nin thread' }); ok('in threads too', tm.content === 'in thread', JSON.stringify(tm.content)) }
+
+console.log('-- Seen marker')
+const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
+const mb = await call(b.token, 'POST', `/channels/${dm.id}/messages`, { content: 'from bob' })
+await call(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: mb.id })
+const m1 = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'one' })
+await call(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m1.id })
+const m2 = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'two' })
+const m3 = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'three' })
+const browser = await chromium.launch(); const errors = []
+const p = await (await browser.newContext({ ...devices['iPhone 13'] })).newPage(); p.on('pageerror', (e) => errors.push(e.message))
+await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForSelector(`[data-msg-id="${m3.id}"]`); await p.waitForTimeout(1500)
+ok('bob reading only the first of your run shows no marker inside it', await p.locator('[data-read-by]').count() === 0)
+const gaps = await p.evaluate((ids) => ids.map((id) => document.querySelector(`[data-row-id="${id}"]`).getBoundingClientRect()).map((r, i, all) => (i ? Math.round(r.top - all[i - 1].bottom) : 0)).slice(1), [m1.id, m2.id, m3.id])
+ok('so the run is evenly spaced', gaps.every((x) => x === 0), JSON.stringify(gaps))
+await call(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: m3.id }); await p.waitForTimeout(1200)
+ok('when he catches up, "Seen" sits under your last message', await p.locator('[data-read-by]').count() === 1 && await p.locator(`[data-row-id="${m3.id}"] [data-read-by]`).count() === 1)
+ok("never under bob's own message", await p.locator(`[data-row-id="${mb.id}"] [data-read-by]`).count() === 0)
+ok('no page errors', errors.length === 0, errors.join(' | '))
+await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
+await browser.close(); await finish()

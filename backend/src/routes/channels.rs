@@ -537,7 +537,7 @@ pub(crate) async fn create_message(
     if c.kind == "thread" { crate::routes::threads::check_locked(&state.db, c.id, p).await?; }
     if let Some(gid) = c.guild_id { check_verification(&state.db, gid, uid).await?; }
     check_slowmode(&state.db, &c, p, uid).await?;
-    let content = req.content.trim_end().to_string();
+    let content = tidy_content(&req.content);
     let embeds = match &req.embeds {
         Some(e) if !(e.is_array() && e.as_array().map(|a| a.is_empty()).unwrap_or(true)) => {
             let (bot,): (bool,) = sqlx::query_as("SELECT bot FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
@@ -708,7 +708,7 @@ async fn edit_message(
         state.hub.emit(target, "MESSAGE_UPDATE", json!({ "message": msg, "guild_id": c.guild_id }));
         return Ok(Json(msg));
     };
-    let content = content.trim_end().to_string();
+    let content = tidy_content(&content);
     if content.trim().is_empty() || content.chars().count() > 2000 {
         return Err(AppError::BadRequest("Message must be 1-2000 characters".into()));
     }
@@ -1078,6 +1078,16 @@ pub fn typing_event(channel_id: Uuid, user_id: Uuid, style: serde_json::Value) -
     let mut d = json!({ "channel_id": channel_id, "user_id": user_id });
     if style.as_object().map(|o| !o.is_empty()).unwrap_or(false) { d["indicator"] = style }
     d
+}
+
+/// Message text without blank lines before it or whitespace after it (an extra Return on a phone keyboard would
+/// otherwise show as empty space in the chat). The first line keeps its own indentation.
+pub fn tidy_content(s: &str) -> String {
+    let s = s.trim_end();
+    match s.find(|c: char| !c.is_whitespace()) {
+        Some(i) => s[s[..i].rfind('\n').map(|n| n + 1).unwrap_or(0)..].to_string(),
+        None => String::new(),
+    }
 }
 
 async fn typing(

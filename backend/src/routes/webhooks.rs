@@ -146,7 +146,7 @@ struct ExecQ { #[serde(default)] wait: bool }
 async fn execute(State(state): State<AppState>, Path((id, token)): Path<(Uuid, String)>, Query(q): Query<ExecQ>, Json(req): Json<ExecuteIn>) -> AppResult<axum::response::Response> {
     use axum::response::IntoResponse;
     let (w, author) = by_token(&state, id, &token).await?;
-    let content: String = req.content.trim_end().to_string();
+    let content: String = crate::routes::channels::tidy_content(&req.content);
     if content.chars().count() > 2000 { return Err(AppError::BadRequest("content is at most 2000 characters".into())) }
     let embeds = match &req.embeds { Some(e) if e.as_array().map(|a| !a.is_empty()).unwrap_or(false) => Some(clean_embeds(e)?), _ => None };
     if content.trim().is_empty() && embeds.is_none() { return Err(AppError::BadRequest("Send content or at least one embed".into())) }

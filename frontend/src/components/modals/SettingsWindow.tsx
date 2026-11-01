@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useSwipeBack } from '../../lib/paneDrag'
+import { usePhone } from '../../lib/swipe'
 import { t } from '../../lib/i18n'
 
 export interface WindowItem<T extends string> {
@@ -62,6 +64,9 @@ export const windowButton = 'h-10 shrink-0 rounded-lg bg-bg-3 hover:bg-bg-4 px-5
  */
 export default function SettingsWindow<T extends string>({ groups, tab, onTab, onClose, header, footer, children, title = 'Settings', startOnMenu = true, scrollTo }: Props<T>) {
   const [menu, setMenu] = useState(startOnMenu)
+  // Phones: swipe a section right to go back to the list.
+  const sectionRef = useRef<HTMLDivElement>(null)
+  useSwipeBack(sectionRef, usePhone() && !menu, () => setMenu(true))
   const [q, setQ] = useState('')
   const [active, setActive] = useState<string | null>(null)
   const body = useRef<HTMLDivElement>(null)
@@ -150,7 +155,7 @@ export default function SettingsWindow<T extends string>({ groups, tab, onTab, o
             {footer && !needle && <><div className="h-px bg-line/70 mx-2 my-2.5" />{footer}</>}
           </div>
         </nav>
-        <div className={`flex-1 min-w-0 min-h-0 flex flex-col ${menu ? 'phone:hidden' : ''}`}>
+        <div ref={sectionRef} className={`flex-1 min-w-0 min-h-0 flex flex-col ${menu ? 'phone:hidden' : ''}`} data-settings-section-pane>
           <div className="h-14 shrink-0 flex items-center gap-2 px-6 border-b border-line/60 phone:h-12 phone:px-2">
             <button onClick={() => setMenu(true)} className="wide:hidden h-9 flex items-center gap-0.5 rounded-md pl-1 pr-2 text-text-1 hover:bg-bg-3 hover:text-text-0" data-settings-back><ChevronLeft size={22} /><span className="text-[15px]">{t(title)}</span></button>
             <span className="min-w-0 flex-1 truncate font-semibold text-[15px] phone:text-center" data-settings-title>{current?.label ? t(current.label) : ''}</span>

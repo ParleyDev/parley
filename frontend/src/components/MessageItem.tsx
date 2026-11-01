@@ -186,6 +186,57 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     if (now - lastTap.current < 320) { lastTap.current = 0; setTappedMessage(null); window.getSelection()?.removeAllRanges(); const q = prefs.quickReaction; void react(q, !!m.reactions.find((r) => r.emoji === q && r.me)) }
     else lastTap.current = now
   }
+  // Phones: swipe a message left to reply, like Discord. It follows the finger with a reply arrow, ticks at the
+  // threshold, and replies on release. The touch is marked so the pane swipe (lib/paneDrag) leaves it alone.
+  const swipeOk = useRef(false)
+  swipeOk.current = !m.local && !m.ephemeral && !editing
+  const replyRef = useRef(onReply)
+  replyRef.current = onReply
+  useEffect(() => {
+    const el = rowRef.current
+    if (!el) return
+    const REPLY_AT = 64
+    let s: { x: number; y: number } | null = null
+    let mode: 'none' | 'swipe' = 'none'
+    let dx = 0, ticked = false
+    const start = (e: TouchEvent) => {
+      s = null; mode = 'none'
+      const t = e.touches[0]
+      if (!swipeOk.current || e.touches.length !== 1 || !t || (e.target as HTMLElement).closest('input, textarea, [data-no-swipe]')) return
+      Object.assign(e, { __parleySwipe: true })
+      s = { x: t.clientX, y: t.clientY }; dx = 0; ticked = false
+    }
+    const move = (e: TouchEvent) => {
+      const t = e.touches[0]
+      if (!s || !t) return
+      const ddx = t.clientX - s.x, ddy = t.clientY - s.y
+      if (mode === 'none') {
+        if (Math.abs(ddx) < 10 && Math.abs(ddy) < 10) return
+        if (ddx < 0 && Math.abs(ddx) > Math.abs(ddy) * 1.2) { mode = 'swipe'; el.dataset.swiping = '' } else { s = null; return }
+      }
+      if (e.cancelable) e.preventDefault()
+      dx = Math.max(-96, Math.min(0, ddx))
+      el.style.setProperty('--swipe-x', `${dx}px`)
+      el.style.setProperty('--swipe-o', String(Math.min(1, -dx / REPLY_AT)))
+      const past = dx <= -REPLY_AT
+      if (past && !ticked) { ticked = true; tapFeedback() } else if (!past) ticked = false
+    }
+    const end = () => {
+      if (mode === 'swipe') {
+        const go = dx <= -REPLY_AT
+        el.dataset.swipeBack = ''
+        el.style.setProperty('--swipe-x', '0px'); el.style.setProperty('--swipe-o', '0')
+        window.setTimeout(() => { delete el.dataset.swiping; delete el.dataset.swipeBack; el.style.removeProperty('--swipe-x'); el.style.removeProperty('--swipe-o') }, 200)
+        if (go) replyRef.current()
+      }
+      s = null; mode = 'none'
+    }
+    el.addEventListener('touchstart', start, { passive: true })
+    el.addEventListener('touchmove', move, { passive: false })
+    el.addEventListener('touchend', end, { passive: true })
+    el.addEventListener('touchcancel', end, { passive: true })
+    return () => { el.removeEventListener('touchstart', start); el.removeEventListener('touchmove', move); el.removeEventListener('touchend', end); el.removeEventListener('touchcancel', end) }
+  }, [])
   // iOS turns a double tap into a word selection (or a zoom) at touchend: cancel the second tap's touchend when it is
   // a double-tap reaction, so only the reaction happens.
   const doubleTapOk = useRef(false)
@@ -363,6 +414,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   return (
     <AvatarMotion.Provider value={motion}>
     <div ref={rowRef} {...motionBind} tabIndex={-1} aria-label={`${authorName}: ${previewText(m.content, m.channel_id).slice(0, 200)}`} onPointerDown={longPress.bind.onPointerDown} onPointerMove={longPress.bind.onPointerMove} onPointerCancel={longPress.bind.onPointerCancel} onPointerUp={(e) => { longPress.bind.onPointerUp(); onTap(e) }} data-msg-id={m.id} data-local={m.local} data-can-moderate={guildId !== undefined && has(perms, P.MANAGE_MESSAGES) ? '1' : '0'} onContextMenu={(e) => { if (m.local || m.ephemeral || longPress.isTouch()) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('a, textarea, input, [data-msg-avatar], [data-msg-author]')) ctx.open(e, contextItems(e)) }} onClick={(e) => { if (longPress.fired()) { e.preventDefault(); return } if (!(e.target as HTMLElement).closest('button, a, textarea, .uemoji, img.emoji')) setTappedMessage(tapped ? null : m.id) }} className={`group relative px-4 phone:px-3 hover:bg-bg-0/30 ${mentioned ? 'msg-mentioned' : ''} ${tapped ? 'phone:bg-bg-0/30' : ''} ${grouped || compact ? 'py-0.5' : 'msg-group-start py-0.5'} ${m.reply_to ? 'pt-1' : ''}`}>
+      <span className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 h-8 w-8 items-center justify-center rounded-full bg-bg-4 text-text-0 shadow" style={{ right: 'calc(10px + var(--swipe-x, 0px))', opacity: 'var(--swipe-o, 0)' }} aria-hidden data-swipe-reply><Reply size={16} /></span>
       {m.interaction && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" data-interaction-header={m.interaction.name}>
           {tn('{user} used {command}', { user: <span className="font-semibold text-text-1">{m.interaction.user.display_name}</span>, command: <span className="font-semibold text-sky-400">/{m.interaction.name}</span> })}

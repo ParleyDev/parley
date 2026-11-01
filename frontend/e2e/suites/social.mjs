@@ -35,7 +35,7 @@ const pa = await mk(a.token, `${WEB}/channels/@me/${dm.id}`); await pa.waitForSe
 await pa.waitForSelector(`[data-read-by="${b.user.id}"]`)
 ok('DM shows "Seen" under the last message bob read', (await pa.textContent(`[data-read-by="${b.user.id}"]`)).includes('Seen'))
 const m2 = await call(a.token, 'POST', `/channels/${dm.id}/messages`, { content: 'and this?' }); await pa.waitForSelector(`[data-msg-id="${m2.id}"]`)
-ok('a newer unread message has no marker', await pa.locator(`[data-msg-id="${m2.id}"] ~ [data-read-by]`).count() === 0 && await pa.locator('[data-read-by]').count() === 1)
+ok('a newer unread message of yours moves the marker off the run (no gap inside it) until they read it', await pa.locator('[data-read-by]').count() === 0)
 const pb = await mk(b.token, `${WEB}/channels/@me/${dm.id}`); await pb.waitForSelector(`[data-msg-id="${m2.id}"]`)
 await pa.waitForFunction((id) => { const el = document.querySelector(`[data-read-by]`); return el && el.previousElementSibling?.getAttribute('data-msg-id') === id }, m2.id)
 ok('when bob views the DM the marker moves to the newest message live', true)

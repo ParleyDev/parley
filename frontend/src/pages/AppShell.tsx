@@ -4,7 +4,7 @@ import { toggleOverlay } from '../lib/overlay'
 import { FAMILY_CODE_KEY } from '../components/modals/settings/FamilyTab'
 import { saveClip } from '../lib/clips'
 import { unseenEntry } from '../lib/changelog'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store'
 import { api, ApiError } from '../lib/api'
@@ -25,7 +25,8 @@ import UserPanel from '../components/UserPanel'
 import { NavColumn } from '../components/SplitLayout'
 import VerifyBanner from '../components/VerifyBanner'
 import { lastChannel, rememberChannel } from '../lib/dm'
-import { isPhone, useSwipe } from '../lib/swipe'
+import { usePhone } from '../lib/swipe'
+import { usePaneDrag } from '../lib/paneDrag'
 import { useKeybinds } from '../lib/keybinds'
 import { isDesktop, setNativeNavigator } from '../lib/native'
 import { voice } from '../lib/voice'
@@ -66,6 +67,15 @@ export default function AppShell() {
     return () => clearTimeout(id)
   }, [connected])
   const pane = useStore((s) => s.mobilePane)
+  // Phones: drag between the channel list and the chat (lib/paneDrag); a left swipe on the chat opens the member list
+  // in a server, and a right swipe closes it again.
+  const panes = useRef<HTMLDivElement>(null)
+  const phone = usePhone()
+  const inGuild = !/^\/channels\/@me(\/|$)/.test(useLocation().pathname)
+  const membersOpen = useStore((s) => s.membersOpen)
+  const setMembersOpen = useStore((s) => s.setMembersOpen)
+  const setMobilePane = useStore((s) => s.setMobilePane)
+  usePaneDrag(panes, { enabled: phone, pane, onPane: setMobilePane, onLeft: inGuild && !membersOpen ? () => setMembersOpen(true) : undefined, onRightInstead: membersOpen ? () => setMembersOpen(false) : undefined })
   const announcement = useStore((s) => s.instance.announcement)
   // Ask for notification permission on the first click/keypress, not at load: Safari/WebKit only allows the
   // prompt from a user gesture (and logs an error otherwise), and Chrome ranks gesture-driven prompts better.
@@ -79,7 +89,7 @@ export default function AppShell() {
     return cleanup
   }, [])
   return (
-    <div className="h-full flex flex-col overflow-hidden relative safe-area">
+    <div className="h-full flex flex-col overflow-hidden relative safe-area safe-strips" data-phone-pane={pane}>
       <a href="#messages" onClick={(e) => { e.preventDefault(); (document.querySelector<HTMLElement>('[data-message-list]') ?? document.querySelector<HTMLElement>('main'))?.focus() }}
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-[300] focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-white" data-skip-link>{t('Skip to messages')}</a>
       <Shortcuts />
@@ -87,7 +97,7 @@ export default function AppShell() {
       <VerifyBanner />
       <StreamerBanner />
       <UpdateBanner />
-      <div className="flex-1 min-h-0 flex overflow-hidden relative">
+      <div ref={panes} className="flex-1 min-h-0 flex overflow-hidden relative">
       {!connected && showReconnecting && (
         <div className="absolute top-0 inset-x-0 z-40 bg-warn text-black text-xs font-semibold text-center py-1">{t('Reconnecting…')}</div>
       )}
@@ -106,6 +116,7 @@ export default function AppShell() {
         {/* Discord's self card floats across the bottom of both the server column and the channel list. */}
         <UserPanel />
       </NavColumn>
+      <div className="contents" data-pane-content>
       <ErrorBoundary>
       <Routes>
         <Route path="@me" element={<HomeView />} />
@@ -116,6 +127,7 @@ export default function AppShell() {
         <Route path="*" element={<Navigate to="/channels/@me" replace />} />
       </Routes>
       </ErrorBoundary>
+      </div>
       <Modals />
       <IncomingCall />
       <VoiceInviteBanner />
@@ -213,7 +225,7 @@ function MissingGuild({ guildId }: { guildId: string }) {
   )
 }
 
-/** Phone swipes (content → channel list / member list) and the rebindable keyboard shortcuts. Renders nothing. */
+/** The rebindable keyboard shortcuts. Renders nothing. */
 function Shortcuts() {
   const nav = useNavigate()
   useEffect(() => { setNativeNavigator((p) => nav(p)) }, [nav])
@@ -221,19 +233,10 @@ function Shortcuts() {
   const { pathname } = useLocation()
   const [, guildId, channelId] = /^\/channels\/([^/]+)(?:\/([^/]+))?/.exec(pathname) ?? []
   const navigate = useNavigate()
-  const pane = useStore((s) => s.mobilePane)
-  const membersOpen = useStore((s) => s.membersOpen)
   const setMembersOpen = useStore((s) => s.setMembersOpen)
-  const setMobilePane = useStore((s) => s.setMobilePane)
   const openModal = useStore((s) => s.openModal)
   const selfMute = useStore((s) => s.selfMute)
   const selfDeaf = useStore((s) => s.selfDeaf)
-  const inGuild = !!guildId && guildId !== '@me'
-  const swipe = useMemo(() => ({
-    onRight: () => { if (membersOpen) setMembersOpen(false); else if (pane === 'content') setMobilePane('nav') },
-    onLeft: () => { if (pane === 'content' && inGuild && !membersOpen) setMembersOpen(true) },
-  }), [membersOpen, pane, inGuild, setMembersOpen, setMobilePane])
-  useSwipe(swipe, isPhone())
   // Alt+↑/↓ walk the sidebar as it is shown (categories, collapsed ones, pins aside, or the DM list), so the
   // order always matches what you see; the unread variants skip to the next row marked unread.
   const step = (dir: -1 | 1, unreadOnly = false) => {

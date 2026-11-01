@@ -47,8 +47,8 @@ console.log('mobile text channel: chat visible', await vis(pm,'textarea'), 'side
 await pm.fill('textarea','from phone'); await pm.press('textarea','Enter'); await pm.waitForSelector('main >> text=from phone')
 await pm.screenshot({path:'17-m-chat.png'})
 // swipe gestures: plain events carrying touch-shaped data. WebKit forbids constructing Touch objects from script,
-// and Playwright's touchscreen has no drag; the app's swipe handler only reads clientX/clientY.
-const swipe=async(p,dx)=>p.evaluate((dx)=>{const el=document.querySelector('main')||document.body; const mk=(type,x)=>{const t={identifier:1,target:el,clientX:x,clientY:300}; const e=new Event(type,{bubbles:true}); Object.defineProperty(e,'touches',{value:type==='touchend'?[]:[t]}); Object.defineProperty(e,'changedTouches',{value:[t]}); el.dispatchEvent(e)}; mk('touchstart',dx>0?20:300); mk('touchend',dx>0?20+dx:300+dx)},dx)
+// and Playwright's touchscreen has no drag; the app's swipe handlers only read clientX/clientY (start, moves, end).
+const swipe=async(p,dx)=>p.evaluate((dx)=>{const el=document.querySelector('main')||document.body; const mk=(type,x)=>{const t={identifier:1,target:el,clientX:x,clientY:300}; const e=new Event(type,{bubbles:true}); Object.defineProperty(e,'touches',{value:type==='touchend'?[]:[t]}); Object.defineProperty(e,'changedTouches',{value:[t]}); el.dispatchEvent(e)}; const x0=dx>0?20:300; mk('touchstart',x0); for(let i=1;i<=6;i++) mk('touchmove',x0+dx*i/6); mk('touchend',x0+dx)},dx)
 await swipe(pm,160); await pm.waitForTimeout(300)
 ok('swipe right opens the channel list', await vis(pm,'[data-channel-list]'))
 await pm.click(`aside a[href="/channels/${g.id}/${tc}"]`); await pm.waitForSelector('textarea'); await pm.waitForTimeout(300)

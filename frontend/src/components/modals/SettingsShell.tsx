@@ -1,6 +1,8 @@
 import { t } from '../../lib/i18n'
 import { ChevronLeft, ChevronRight, X, Check } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useSwipeBack } from '../../lib/paneDrag'
+import { usePhone } from '../../lib/swipe'
 
 export interface NavSection<T extends string> { title?: string; items: { id: T; label: string; icon?: ReactNode }[] }
 
@@ -32,6 +34,9 @@ export default function SettingsShell<T extends string>({ sections, tab, onTab, 
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
   const pick = (id: T) => { onTab(id); setMenu(false) }
+  // Phones: swipe a section right to go back to the list.
+  const sectionRef = useRef<HTMLDivElement>(null)
+  useSwipeBack(sectionRef, usePhone() && !menu, () => setMenu(true))
   const current = sections.flatMap((sec) => sec.items).find((it) => it.id === tab)
   const closeBtn = <button onClick={onClose} title={t('Close')} className="wide:hidden ml-auto h-9 w-9 shrink-0 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-settings-close><X size={22} /></button>
 
@@ -56,7 +61,7 @@ export default function SettingsShell<T extends string>({ sections, tab, onTab, 
           {footer && <div className="phone:rounded-xl phone:bg-bg-0/60 phone:overflow-hidden phone:p-1"><div className="h-px bg-line my-3 mx-2 phone:hidden" />{footer}</div>}
         </div>
       </nav>
-      <div className={`wide:flex-[1_1_800px] phone:flex-1 min-w-0 min-h-0 flex flex-col ${menu ? 'phone:hidden' : ''}`}>
+      <div ref={sectionRef} className={`wide:flex-[1_1_800px] phone:flex-1 min-w-0 min-h-0 flex flex-col ${menu ? 'phone:hidden' : ''}`} data-settings-section-pane>
         <div className="wide:hidden h-12 shrink-0 flex items-center gap-1 pl-1 pr-3 border-b border-line">
           <button onClick={() => setMenu(true)} className="h-9 flex items-center gap-0.5 rounded-md pl-1 pr-2 text-text-1 hover:bg-bg-3 hover:text-text-0" data-settings-back><ChevronLeft size={22} /><span className="text-[15px]">{t(title)}</span></button>
           <span className="min-w-0 flex-1 truncate text-center font-semibold" data-settings-title>{current?.label ? t(current.label) : ''}</span>

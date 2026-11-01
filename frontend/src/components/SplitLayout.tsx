@@ -18,7 +18,7 @@ export default function SplitLayout({ sidebar, children, defaultPane = 'nav', te
   const setMobilePane = useStore((s) => s.setMobilePane)
   useEffect(() => { if (isPhone()) setMobilePane(defaultPane) }, [defaultPane, setMobilePane])
   return (
-    <div className="h-full flex overflow-hidden relative safe-area" {...testid}>
+    <div className="h-full flex overflow-hidden relative safe-area safe-strips" data-phone-pane={pane} {...testid}>
       <NavColumn hidden={pane === 'content'}>
         <div className="flex flex-1 min-h-0">
           <GuildBar />

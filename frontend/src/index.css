@@ -159,6 +159,25 @@ body {
 :root[data-keyboard="open"] { --sab: 0px; }
 /* Full-bleed surfaces (the app shell, full-screen settings): exactly clear of the system bars. */
 .safe-area { padding: var(--sat) var(--sar) var(--sab) var(--sal); }
+/* The app shell's status-bar and home-bar strips get the chat's tint: see-through themes would otherwise show the bare
+   gradient there as bands of another colour (solid themes already match: their page colour is the chat's). */
+.safe-strips::before, .safe-strips::after { content: ''; position: absolute; inset-inline: 0; z-index: 0; pointer-events: none; background: var(--color-bg-2); }
+.safe-strips::before { top: 0; height: var(--sat); }
+.safe-strips::after { bottom: 0; height: var(--sab); }
+/* Phones showing the navigation pane: its colours instead (the server rail, then the list, on the pane's surface). */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .safe-strips[data-phone-pane="nav"]::before, .safe-strips[data-phone-pane="nav"]::after { background: linear-gradient(90deg, var(--color-bg-0) 72px, var(--color-bg-1) 72px), var(--color-float, var(--color-bg-1)); }
+}
+/* Phones: dragging between the channel list and the chat (lib/paneDrag). Both panes show and move together with the
+   finger, --pane-p going from 0 (chat) to 1 (list); data-pane-anim settles them. */
+[data-pane-drag] > [data-layer="md"] { display: flex !important; transform: translate3d(calc((var(--pane-p, 0) - 1) * 100%), 0, 0); will-change: transform; }
+[data-pane-drag] > [data-pane-content] { display: flex; flex: 1 1 0%; min-width: 0; min-height: 0; transform: translate3d(calc(var(--pane-p, 0) * 100%), 0, 0); will-change: transform; }
+[data-pane-anim] > :is([data-layer="md"], [data-pane-content]) { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+/* Swiping a message left to reply (MessageItem): the row follows the finger; the arrow stays put at the right edge. */
+[data-msg-id][data-swiping] { transform: translate3d(var(--swipe-x, 0px), 0, 0); }
+[data-msg-id][data-swipe-back] { transition: transform .18s ease-out; }
+[data-swipe-reply] { display: none; }
+[data-swiping] > [data-swipe-reply] { display: flex; }
 /* Overlays that centre a dialog: at least 1rem around it, more where a system bar needs it. */
 .safe-pad { padding: max(1rem, var(--sat)) max(1rem, var(--sar)) max(1rem, var(--sab)) max(1rem, var(--sal)); }
 /* Things pinned to the bottom-right corner (toasts, the incoming-call card). */
