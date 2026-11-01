@@ -81,7 +81,7 @@ export default function MemberList({ guildId }: { guildId: string }) {
         <button onClick={() => setOpen(false)} className="ml-auto h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0"><X size={20} /></button>
       </div>
       {/* Parley's counts at the top of the list: online in this channel, server members, in voice. */}
-      <div className="mb-4 flex items-center gap-5 px-2 text-[15px] font-semibold tabular-nums text-text-2" data-member-stats>
+      <div className="mb-4 flex items-center justify-center gap-5 px-2 text-[15px] font-semibold tabular-nums text-text-2" data-member-stats>
         <Tooltip tip={t('{n} online in this channel', { n: onlineHere })}><span className="flex items-center gap-2 text-success" data-member-stat="online-here" data-member-stat-value={onlineHere}><Circle size={14} className="fill-current" />{onlineHere}</span></Tooltip>
         <Tooltip tip={t('{n} total server members', { n: all.length })}><span className="flex items-center gap-2" data-member-stat="total" data-member-stat-value={all.length}><Circle size={14} strokeWidth={3} />{all.length}</span></Tooltip>
         <Tooltip tip={t('{n} members in voice', { n: inVoice })}><span className="flex items-center gap-1.5" data-member-stat="voice" data-member-stat-value={inVoice}><Mic size={15} />{inVoice}</span></Tooltip>
