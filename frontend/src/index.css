@@ -327,6 +327,14 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 /* Horizontal strips that scroll without showing a scrollbar (Discover's category tabs). */
 .scrollbar-none { scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
+/* While the typing/slowmode strip shows over the bottom of the chat, the messages fade out beneath it instead of the
+   strip painting a band, so colour themes and gradients run unbroken down to the message box. Room is kept at the end
+   of the list so the newest message stays above the strip. */
+[data-chat-column]:has([data-composer-status]) [data-message-list] {
+  -webkit-mask-image: linear-gradient(to top, transparent 12px, #000 32px);
+  mask-image: linear-gradient(to top, transparent 12px, #000 32px);
+}
+[data-chat-column]:has([data-composer-status]) [data-message-list] > div { padding-bottom: 20px; }
 .fade-x { mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 20px), transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 20px, #000 calc(100% - 20px), transparent); }
 
 /* Mention pills (<@user>, <@&role>, <#channel>, @everyone); .mention-me marks ones aimed at you. */

@@ -364,7 +364,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
 
   return (
     <>
-      <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex-1 min-h-0 flex flex-col" data-chat-column>
       <div aria-live="polite" aria-atomic="true" className="sr-only" data-live-region>{announce}</div>
       <div className="relative flex-1 min-h-0 flex flex-col">
       <div ref={scrollRef} onScroll={onScroll} role="log" aria-label={t('Messages in {name}', { name: channel.name || t('this conversation') })} tabIndex={0} className="scroller-auto flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>

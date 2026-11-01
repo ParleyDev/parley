@@ -548,12 +548,12 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
           </div>
         </div>
       )}
-      {/* Typing and slowmode share one strip over the bottom of the chat: a solid background with a short fade above,
-          so it reads as part of the message box rather than text printed over messages. Nothing to say: no strip. */}
+      {/* Typing and slowmode share one strip over the bottom of the chat. It paints nothing: the message list fades out
+          beneath it (index.css, [data-chat-column]:has([data-composer-status])), so any theme or gradient shows through
+          and it reads as part of the message box. Nothing to say: no strip. */}
       {(slow > 0 || typers.length > 0) && (
         <div className="pointer-events-none absolute bottom-full inset-x-0 z-10" data-composer-status>
-          <div className="h-3 bg-gradient-to-t from-bg-2 to-transparent" />
-          <div className="h-5 bg-bg-2 px-5 phone:px-3 flex items-center gap-3 text-xs text-text-1">
+          <div className="h-5 px-5 phone:px-3 flex items-center gap-3 text-xs text-text-1">
             <span className="min-w-0 flex-1 flex items-center gap-1.5 truncate" data-typing-row>
               {typers.length > 0 && (
                 <>

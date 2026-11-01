@@ -59,8 +59,17 @@ ok('well up the history a phone gets a small round button at the right, not the 
 await p.locator('[data-jump-present]').tap(); await p.waitForFunction(() => !document.querySelector('[data-jump-present]'))
 ok('it takes you back to the newest message', await p.locator('text=filler 69').isVisible())
 await raw(a.token, 'PATCH', `/channels/${kb.id}`, { rate_limit_per_user: 10 }); await p.waitForSelector('[data-composer-status]')
-const strip = await p.evaluate(() => getComputedStyle(document.querySelector('[data-composer-status] > div:last-child')).backgroundColor)
-ok('slowmode shows in a strip with a solid background above the message box', strip && !/rgba\(0, 0, 0, 0\)|transparent/.test(strip), strip)
+await p.waitForTimeout(300)
+const look = await p.evaluate(() => {
+  const strip = document.querySelector('[data-composer-status]'), list = document.querySelector('[data-message-list]')
+  const bgs = [strip, ...strip.querySelectorAll('*')].map((el) => getComputedStyle(el).backgroundColor).filter((c) => !/rgba\(0, 0, 0, 0\)|transparent/.test(c))
+  const mask = getComputedStyle(list).maskImage || getComputedStyle(list).webkitMaskImage
+  const rows = [...list.querySelectorAll('[data-msg-id]')], last = rows[rows.length - 1]
+  return { bgs, mask, lastBottom: last?.getBoundingClientRect().bottom, stripTop: strip.getBoundingClientRect().top }
+})
+ok('slowmode shows in a strip that paints no band of its own (themes show through)', look.bgs.length === 0, JSON.stringify(look.bgs))
+ok('the messages fade out beneath the strip instead', /gradient/.test(look.mask ?? ''), look.mask)
+ok('the newest message stays above the strip', look.lastBottom <= look.stripTop + 1, JSON.stringify(look))
 
 await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForTimeout(800)
 ok('a DM header on a phone shows the name', await p.locator('[data-dm-header-name]').isVisible())
