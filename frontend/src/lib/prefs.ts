@@ -65,6 +65,8 @@ export interface ClientPrefs {
   spoilers: 'click' | 'moderate' | 'always'
   emojiSuggestions: boolean
   mediaSize: 'small' | 'medium' | 'large'
+  /** The audio player's live visualisation. */
+  audioViz: 'bars' | 'wave' | 'orb' | 'off'
   // Streamer Mode
   streamer: boolean
   streamerHideInfo: boolean
@@ -94,7 +96,7 @@ export interface ClientPrefs {
 export const DEFAULT_PREFS: ClientPrefs = {
   accent: null, messageGap: 17, zoom: 100, compactAvatars: false, titleBar: true, roleColors: 'name',
   saturation: 100, saturateCustom: true, nameStyles: true, toggleIndicators: false, underlineLinks: false, animatedEmoji: true, autoplayGifs: true, stickerAnimation: 'always', ttsRate: 1, ttsPlayback: true, entranceSounds: true, warnLinks: true, spellcheck: true, doubleTapReact: true, quickReaction: '❤️', focusRing: false, timeFormat: 'auto', nameAnimation: 'hover',
-  inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium',
+  inlineAttachments: true, linkMedia: true, embeds: true, emoticons: true, showReactions: true, spoilers: 'click', emojiSuggestions: true, mediaSize: 'medium', audioViz: 'bars',
   streamer: false, streamerHideInfo: true, streamerHideInvites: true, streamerMuteSounds: true, streamerMuteNotifications: true, streamerAuto: false, clips: false, clipSeconds: 30, clipVoices: true, clipMyVoice: true, appIcon: 'default', overlay: false, overlayLocked: true,
   developerMode: true,
   trustedHosts: [],
@@ -116,7 +118,7 @@ function load(): ClientPrefs {
       saturation: clamp(p.saturation, 0, 100, 100), saturateCustom: bool(p.saturateCustom, true), nameStyles: bool(p.nameStyles, true), toggleIndicators: bool(p.toggleIndicators, false), underlineLinks: bool(p.underlineLinks, false), animatedEmoji: bool(p.animatedEmoji, true), autoplayGifs: bool(p.autoplayGifs, true),
       stickerAnimation: oneOf(p.stickerAnimation, ['always', 'interaction', 'never'] as const, 'always'), ttsRate: clamp(p.ttsRate, 0.5, 2, 1), ttsPlayback: bool(p.ttsPlayback, true), entranceSounds: bool(p.entranceSounds, true), warnLinks: bool(p.warnLinks, true), spellcheck: bool(p.spellcheck, true), doubleTapReact: bool(p.doubleTapReact, true), quickReaction: typeof p.quickReaction === 'string' && p.quickReaction.trim() && [...p.quickReaction].length <= 8 ? p.quickReaction : '❤️', focusRing: bool(p.focusRing, false), timeFormat: oneOf(p.timeFormat, ['auto', '12', '24'] as const, 'auto'), nameAnimation: oneOf(p.nameAnimation, ['hover', 'always', 'never'] as const, 'hover'),
       inlineAttachments: bool(p.inlineAttachments, true), linkMedia: bool(p.linkMedia, true), embeds: bool(p.embeds, true), emoticons: bool(p.emoticons, true), showReactions: bool(p.showReactions, true),
-      spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'),
+      spoilers: oneOf(p.spoilers, ['click', 'moderate', 'always'] as const, 'click'), emojiSuggestions: bool(p.emojiSuggestions, true), mediaSize: oneOf(p.mediaSize, ['small', 'medium', 'large'] as const, 'medium'), audioViz: oneOf(p.audioViz, ['bars', 'wave', 'orb', 'off'] as const, 'bars'),
       streamer: bool(p.streamer, false), streamerHideInfo: bool(p.streamerHideInfo, true), streamerHideInvites: bool(p.streamerHideInvites, true), streamerMuteSounds: bool(p.streamerMuteSounds, true), streamerMuteNotifications: bool(p.streamerMuteNotifications, true), streamerAuto: bool(p.streamerAuto, false),
       clips: bool(p.clips, false), clipSeconds: oneOf(p.clipSeconds, [15, 30, 60] as const, 30), clipVoices: bool(p.clipVoices, true), clipMyVoice: bool(p.clipMyVoice, true), appIcon: typeof p.appIcon === 'string' && /^[a-z]{1,20}$/.test(p.appIcon) ? p.appIcon : 'default',
       overlay: bool(p.overlay, false), overlayLocked: bool(p.overlayLocked, true),

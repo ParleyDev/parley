@@ -1,44 +1,37 @@
 import { ChevronDown, Headphones, Pause, Play } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { api } from '../lib/api'
 import type { Attachment } from '../lib/types'
 import { useStore } from '../store'
+import { seek as seekTrack, setSpeed as setPlayerSpeed, toggle as toggleTrack, usePlaying, type Track } from '../lib/player'
 import Tooltip from './Tooltip'
 import { useT } from '../lib/i18n'
 
 const fmt = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 const SPEEDS = [1, 1.5, 2]
-/** Playing past this much of the clip counts as having listened. */
-const LISTENED_AT = 0.8
 
-/** Snazzy voice-message player: waveform bars that fill as it plays, click-to-seek, speed toggle, optional transcript, listened state. */
-export default function VoiceMessage({ a, mine }: { a: Attachment; mine?: boolean }) {
-  const audio = useRef<HTMLAudioElement>(null)
+/** Snazzy voice-message player: waveform bars that fill as it plays, click-to-seek, speed toggle, optional transcript,
+ *  listened state. Plays through the app-wide player (lib/player), which keeps going after you leave the chat and
+ *  tells the server once it has been heard (past 80%). */
+export default function VoiceMessage({ a, mine, track }: { a: Attachment; mine?: boolean; track: Track }) {
   const me = useStore((s) => s.user?.id)
   const users = useStore((s) => s.users)
   const transcription = useStore((s) => s.instance.transcription)
   const pushToast = useStore((s) => s.pushToast)
-  const [playing, setPlaying] = useState(false)
-  const [pos, setPos] = useState(0)
+  const p = usePlaying(a.id)
+  const playing = !!p?.playing
+  const pos = p ? p.pos * 1000 : 0
   const [speed, setSpeed] = useState(1)
   const [showText, setShowText] = useState(false)
   const t = useT()
-  const reported = useRef(false)
   const bars = a.waveform ? Uint8Array.from(atob(a.waveform), (c) => c.charCodeAt(0)) : new Uint8Array(64).fill(80)
   const total = a.duration_ms ?? 0
   const listened = !!me && !!a.listened_by?.includes(me)
   const listeners = (a.listened_by ?? []).filter((u) => u !== me)
-  useEffect(() => { const el = audio.current; if (!el) return; const onTime = () => setPos(el.currentTime * 1000); el.addEventListener('timeupdate', onTime); return () => el.removeEventListener('timeupdate', onTime) }, [])
-  // Past 80% (or to the end) once: tell the server so the sender sees it was heard. Own messages never count.
-  useEffect(() => {
-    if (mine || listened || reported.current || !total) return
-    if (pos / total < LISTENED_AT) return
-    reported.current = true
-    api.post(`/attachments/${a.id}/listened`).catch(() => { reported.current = false })
-  }, [pos, total, mine, listened, a.id])
-  const toggle = () => { const el = audio.current; if (!el) return; if (el.paused) { el.playbackRate = speed; el.play().catch(() => {}) } else el.pause() }
-  const seek = (frac: number) => { const el = audio.current; if (!el || !total) return; el.currentTime = (frac * total) / 1000; setPos(frac * total) }
-  const cycleSpeed = () => { const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setSpeed(next); if (audio.current) audio.current.playbackRate = next }
+  const tr: Track = { ...track, listen: !mine && !listened }
+  const toggle = () => toggleTrack(tr, { speed })
+  const seek = (frac: number) => { if (total) seekTrack(tr, (frac * total) / 1000) }
+  const cycleSpeed = () => { const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setSpeed(next); if (p) setPlayerSpeed(next) }
   const progress = total ? Math.min(1, pos / total) : 0
   const names = listeners.map((u) => users[u]?.display_name ?? t('Someone'))
   const tip = names.length === 0 ? '' : names.length <= 3 ? t('Listened by {names}', { names: names.join(', ') }) : t('Listened by {names} and {n} others', { names: names.slice(0, 2).join(', '), n: names.length - 2 })
@@ -49,7 +42,6 @@ export default function VoiceMessage({ a, mine }: { a: Attachment; mine?: boolea
   return (
     <div className="mt-1 w-full max-w-[360px]" data-voice-message={a.id} data-playing={playing ? '1' : '0'} data-duration={total} data-listened={listened ? '1' : '0'} data-listeners={listeners.length} data-transcript={status ?? 'none'}>
       <div className={`flex items-center gap-3 rounded-full px-3 py-2 ${mine ? 'bg-accent text-white' : 'bg-bg-3 text-text-0'}`}>
-        <audio ref={audio} src={a.url} preload="metadata" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setPos(total); setTimeout(() => setPos(0), 400) }} />
         <button type="button" onClick={toggle} className={`relative h-9 w-9 shrink-0 rounded-full flex items-center justify-center ${mine ? 'bg-white/20 hover:bg-white/30' : 'bg-accent text-white hover:bg-accent-hover'}`} title={playing ? t('Pause') : t('Play')} data-voice-play>
           {playing ? <Pause size={16} /> : <Play size={16} className="ml-0.5" />}
         </button>

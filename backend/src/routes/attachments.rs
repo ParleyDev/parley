@@ -14,12 +14,13 @@ use crate::{
 use crate::ratelimit::rl_uploads;
 use axum::{middleware::from_fn,
     body::Body,
-    extract::{DefaultBodyLimit, Multipart, Path, State},
+    extract::{DefaultBodyLimit, Multipart, Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
+use serde::Deserialize;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -59,7 +60,7 @@ fn sanitize_filename(raw: &str) -> String {
 
 /// Browsers will render these inline; everything else is forced to download.
 fn inline_type(ct: &str) -> bool {
-    matches!(ct, "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/avif" | "video/mp4" | "video/webm" | "audio/mpeg" | "audio/ogg" | "audio/wav" | "audio/webm" | "audio/mp4" | "application/pdf" | "text/plain")
+    matches!(ct, "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/avif" | "video/mp4" | "video/webm" | "audio/mpeg" | "audio/ogg" | "audio/wav" | "audio/x-wav" | "audio/wave" | "audio/flac" | "audio/x-flac" | "audio/aac" | "audio/x-m4a" | "audio/webm" | "audio/mp4" | "application/pdf" | "text/plain")
 }
 
 async fn upload(
@@ -203,7 +204,12 @@ fn byte_range(headers: &HeaderMap, len: u64) -> Option<Result<(u64, u64), ()>> {
     Some(Ok((start, end)))
 }
 
-async fn serve(State(state): State<AppState>, Path((id, _filename)): Path<(Uuid, String)>, headers: HeaderMap) -> AppResult<Response> {
+/// `?download=1` asks for the file as a download even when it could play or show inline (phones' Save button: the
+/// Android app hands such responses to the system's download manager).
+#[derive(Deserialize, Default)]
+struct ServeQuery { #[serde(default)] download: Option<String> }
+
+async fn serve(State(state): State<AppState>, Path((id, _filename)): Path<(Uuid, String)>, Query(q): Query<ServeQuery>, headers: HeaderMap) -> AppResult<Response> {
     let att = sqlx::query_as::<_, Attachment>(&format!("SELECT {ATTACHMENT_COLS} FROM attachments WHERE id = $1"))
         .bind(id)
         .fetch_optional(&state.db)
@@ -227,7 +233,7 @@ async fn serve(State(state): State<AppState>, Path((id, _filename)): Path<(Uuid,
     let body_len = part.map(|(s, e)| e - s + 1).unwrap_or(len);
     use tokio::io::AsyncReadExt;
     let stream = tokio_util::io::ReaderStream::new(file.take(body_len));
-    let disposition = if inline_type(&att.content_type) { "inline" } else { "attachment" };
+    let disposition = if inline_type(&att.content_type) && q.download.is_none() { "inline" } else { "attachment" };
     let ascii_name: String = att.filename.chars().map(|c| if c.is_ascii_graphic() || c == ' ' { c } else { '_' }).collect::<String>().replace('"', "_");
     let mut resp = Response::new(Body::from_stream(stream));
     let h = resp.headers_mut();

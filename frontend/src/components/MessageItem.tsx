@@ -501,7 +501,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                   ? <FrozenGif src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" mode={prefs.stickerAnimation === 'never' ? 'never' : 'hover'} data-msg-sticker={m.sticker.name} />
                   : <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
-              <Attachments items={blockMedia ? (m.attachments ?? []).filter((a) => !/^(image|video)\//.test(a.content_type)) : spoilerChannel ? (m.attachments ?? []).map((a) => (/^(image|video)\//.test(a.content_type) && !a.filename.startsWith('SPOILER_') ? { ...a, filename: `SPOILER_${a.filename}` } : a)) : m.attachments ?? []} mine={isOwn} sensitive={mediaLevel === 'filter' ? 'filter' : sensitive} enforced={enforcedFilter} />
+              <Attachments items={blockMedia ? (m.attachments ?? []).filter((a) => !/^(image|video)\//.test(a.content_type)) : spoilerChannel ? (m.attachments ?? []).map((a) => (/^(image|video)\//.test(a.content_type) && !a.filename.startsWith('SPOILER_') ? { ...a, filename: `SPOILER_${a.filename}` } : a)) : m.attachments ?? []} mine={isOwn} sensitive={mediaLevel === 'filter' ? 'filter' : sensitive} enforced={enforcedFilter} context={{ artist: serverNick || m.author.display_name, where: { guildId: guildId ?? null, channelId: m.channel_id, messageId: m.id } }} />
             </>
           )}
           {m.reactions.length > 0 && prefs.showReactions && (
