@@ -100,6 +100,14 @@ export function haptic(style: 'light' | 'medium' = 'light') {
   Haptics.impact({ style: style === 'light' ? ImpactStyle.Light : ImpactStyle.Medium }).catch(() => {})
 }
 
+/** A subtle tick under the finger for small confirmations (a reaction added): the app's haptics, or a short buzz in
+ *  touch browsers that can vibrate (Android; iOS Safari cannot). Nothing with a mouse. */
+export function tapFeedback() {
+  if (isNative()) { haptic('light'); return }
+  if (typeof window === 'undefined' || !window.matchMedia('(pointer: coarse)').matches) return
+  try { navigator.vibrate?.(8) } catch { /* ignore */ }
+}
+
 /** Back to the app's connect screen to pick another server. */
 /** Running inside the Tauri desktop shell (its window carries a ParleyDesktop marker in the user agent). */
 export const isDesktop = () => typeof navigator !== 'undefined' && /ParleyDesktop\//.test(navigator.userAgent)

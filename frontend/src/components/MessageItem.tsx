@@ -5,6 +5,7 @@ import RoleIcon from './RoleIcon'
 import { locale, t, useT, tn } from '../lib/i18n'
 import { createPortal } from 'react-dom'
 import { useLongPress } from '../lib/longPress'
+import { tapFeedback } from '../lib/native'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { ClanTag } from './Flair'
@@ -169,7 +170,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const react = async (emoji: string, has: boolean, burst = false) => {
     setPicker(null); setSuperPicker(null)
     const path = `/channels/${m.channel_id}/messages/${m.id}/reactions/${encodeURIComponent(emoji)}${burst ? '?burst=true' : ''}`
-    if (!has) recordEmoji(emoji)
+    if (!has) { recordEmoji(emoji); tapFeedback() }
     try { has ? await api.delete(path) : await api.put(path) } catch (e) { pushToast((e as Error).message, 'error') }
   }
 
@@ -182,9 +183,25 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
     if (e.pointerType !== 'touch' || !prefs.doubleTapReact || !canReact || m.local || m.ephemeral) return
     if ((e.target as HTMLElement).closest('button, a, textarea, input, img, video')) return
     const now = Date.now()
-    if (now - lastTap.current < 320) { lastTap.current = 0; const q = prefs.quickReaction; void react(q, !!m.reactions.find((r) => r.emoji === q && r.me)) }
+    if (now - lastTap.current < 320) { lastTap.current = 0; setTappedMessage(null); window.getSelection()?.removeAllRanges(); const q = prefs.quickReaction; void react(q, !!m.reactions.find((r) => r.emoji === q && r.me)) }
     else lastTap.current = now
   }
+  // iOS turns a double tap into a word selection (or a zoom) at touchend: cancel the second tap's touchend when it is
+  // a double-tap reaction, so only the reaction happens.
+  const doubleTapOk = useRef(false)
+  doubleTapOk.current = !!prefs.doubleTapReact && canReact && !m.local && !m.ephemeral
+  useEffect(() => {
+    const el = rowRef.current
+    if (!el) return
+    let last = 0
+    const end = (e: TouchEvent) => {
+      if (e.touches.length || e.changedTouches.length !== 1 || !doubleTapOk.current || (e.target as HTMLElement).closest('button, a, textarea, input, img, video')) { last = 0; return }
+      const now = Date.now()
+      if (now - last < 320) { last = 0; if (e.cancelable) e.preventDefault() } else last = now
+    }
+    el.addEventListener('touchend', end, { passive: false })
+    return () => el.removeEventListener('touchend', end)
+  }, [])
   const media = soleMediaUrl(m.content)
   const links = media ? [] : previewLinks(m.content)
   const link = links[0] ?? null
@@ -360,7 +377,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
         {compact ? (
           <div className="w-12 phone:w-10 shrink-0 text-right text-[11px] text-text-2 pt-[3px] select-none" data-msg-compact>{formatShortTime(m.created_at)}</div>
         ) : grouped ? (
-          <div className="w-10 phone:w-8 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
+          <div className="w-10 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
         ) : (
           <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} className="shrink-0 self-start" data-msg-avatar><Avatar user={authorShown} size={40} /></button>
         )}

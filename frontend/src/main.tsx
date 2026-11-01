@@ -20,6 +20,7 @@ import { initClips } from './lib/clips'
 import { initAppIcon } from './lib/appIcon'
 import { initOverlayHost } from './lib/overlay'
 import { installKeepInView } from './lib/keepInView'
+import { installTouchHold } from './lib/touchHold'
 
 initAppearance()
 initPrefs()
@@ -36,6 +37,7 @@ initClips()
 initAppIcon()
 initOverlayHost()
 installKeepInView()
+installTouchHold()
 followOtherTabs(() => ({ token: useStore.getState().token, userId: useStore.getState().user?.id ?? null }), (token) => useStore.setState({ token }))
 
 // First paint waits (briefly) for the chosen language's catalogue, so a non-English UI doesn't flash English.

@@ -19,6 +19,8 @@ export function useLongPress(onLong: (at: { clientX: number; clientY: number }) 
     bind: {
       onPointerDown: (e: PointerEvent) => {
         touch.current = e.pointerType === 'touch'
+        // This element handles its own hold: the app-wide one (lib/touchHold) leaves it alone.
+        if (touch.current) Object.assign(e.nativeEvent, { __parleyHold: true })
         if (!touch.current || (e.target as HTMLElement).closest('textarea, input')) return
         didFire.current = false
         const at = { clientX: e.clientX, clientY: e.clientY }
