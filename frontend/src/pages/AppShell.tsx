@@ -134,8 +134,10 @@ function DmChat() {
   const { channelId = '' } = useParams()
   const dm = useStore((s) => s.dms[channelId])
   const setMobilePane = useStore((s) => s.setMobilePane)
-  // Any way of landing on a DM (sidebar, profile "Message", search) should reveal it on phones.
-  useEffect(() => { if (dm) setMobilePane('content') }, [channelId, dm, setMobilePane])
+  // Any way of landing on a DM (sidebar, profile "Message", search) should reveal it on phones. Only on landing: the
+  // DM object changes with every message, and a phone that went back to the DM list keeps the DM's URL.
+  const exists = !!dm
+  useEffect(() => { if (exists) setMobilePane('content') }, [channelId, exists, setMobilePane])
   if (!dm) return <Navigate to="/channels/@me" replace />
   return <ChatView channel={dm} />
 }
