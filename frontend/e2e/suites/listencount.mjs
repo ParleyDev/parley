@@ -1,6 +1,8 @@
-// Listen counts on audio files: a play counts after 30 s heard from the start (half of a shorter track), every time
-// someone listens from the start again; seeking ahead doesn't add listening time, the uploader's own plays don't
-// count, and the card shows plays and listeners (who, in a menu) live for everyone in the channel.
+// Listen counts on audio files, as streaming services count them: a listening session counts as a play after 30 s
+// heard (half of a shorter track), wherever it started; replays and going back to the start count again; seeking
+// doesn't add listening time; speed doesn't matter; the uploader's plays count; there's no cap. Plays heard with no
+// signal, or just before the app closed, arrive later and count once. The card shows plays and listeners (who, in a
+// menu) live for everyone, and knows the track's length without fetching the file.
 import { chromium } from 'playwright'
 import { WEB, S, reg, call, raw, multi, ok, finish } from '../lib.mjs'
 
@@ -17,79 +19,119 @@ const wav = (sec, name) => {
   return { buffer: buf, mimeType: 'audio/wav', name }
 }
 const post = async (file, fields) => { const att = await (await multi(a.token, `/channels/${ch.id}/attachments`, file, fields)).json(); await call(a.token, 'POST', `/channels/${ch.id}/messages`, { content: '', attachment_ids: [att.id] }); return att }
-// 6 s: a play is 3 s of listening.
+// 6 s: a play is 3 s of listening; one listener's plays are at least 1.35 s apart (a play at double speed).
 const song = await post(wav(6, 'Loop.wav'))
 const voice = await post(wav(1, 'voice-message.wav'), { duration_ms: '1000', waveform: Buffer.alloc(64, 90).toString('base64') })
 const att = async () => (await call(a.token, 'GET', `/channels/${ch.id}/messages?limit=10`)).flatMap((m) => m.attachments ?? []).find((k) => k.id === song.id)
-const played = (u, id = song.id) => raw(u.token, 'POST', `/attachments/${id}/played`)
-// Let the server make the visualiser data (it knows the length from it).
-for (let i = 0; i < 20; i++) { if ((await raw(a.token, 'GET', `/attachments/${song.id}/viz?peaks=1`)).status === 200) break; await new Promise((r) => setTimeout(r, 250)) }
+const played = (u, body, id = song.id) => raw(u.token, 'POST', `/attachments/${id}/played`, body)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+for (let i = 0; i < 40 && !(await att()).media_ms; i++) await sleep(250)
 
 console.log('-- server')
-let r = await played(b)
+const s1 = crypto.randomUUID()
+let r = await played(b, { session: s1, at: Date.now() })
 let s = await att()
 ok('a play counts and its listener is recorded', r.status === 204 && s.plays === 1 && s.listened_by?.includes(b.user.id), `${r.status} ${JSON.stringify(s)}`)
-await played(b)
-ok('the same listener can\'t count again sooner than a play takes', (await att()).plays === 1)
-await played(a)
-ok('the uploader\'s own plays don\'t count', (await att()).plays === 1 && !(await att()).listened_by?.includes(a.user.id))
-ok('voice messages aren\'t counted this way', (await played(b, voice.id)).status === 400)
-ok('someone outside the channel can\'t count plays', [403, 404].includes((await played(x)).status))
-await new Promise((res) => setTimeout(res, 3000))
-await played(b)
+await played(b, { session: s1, at: Date.now() })
+ok('the same session sent again (a retry) counts once', (await att()).plays === 1)
+await played(b, { session: crypto.randomUUID(), at: Date.now() })
+ok('a second play sooner than one could take doesn\'t count', (await att()).plays === 1)
+await sleep(1600)
+await played(b, { session: crypto.randomUUID(), at: Date.now() })
+ok('a replay counts: 2 plays, still 1 listener', (await att()).plays === 2 && (await att()).listened_by.length === 1)
+await played(a, { session: crypto.randomUUID(), at: Date.now() })
 s = await att()
-ok('a repeat listen counts again: 2 plays, still 1 listener', s.plays === 2 && s.listened_by?.length === 1, JSON.stringify(s))
+ok('the uploader\'s plays count too', s.plays === 3 && s.listened_by.includes(a.user.id), JSON.stringify(s))
+await played(b, { session: crypto.randomUUID(), at: Date.now() - 3600_000 })
+ok('a play sent late (offline at the time) counts at its own time', (await att()).plays === 4)
+await sleep(1600)
+ok('older clients without a session still count', (await played(b)).status === 204 && (await att()).plays === 5)
+ok('voice messages aren\'t counted this way', (await played(b, {}, voice.id)).status === 400)
+ok('someone outside the channel can\'t count plays', [403, 404].includes((await played(x, {})).status))
+ok('the server knows the length (6 s)', Math.abs(((await att()).media_ms ?? 0) - 6000) < 150, String((await att()).media_ms))
 
 const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] }); const errors = []
-const open = async (tok) => {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
+const fetchedFile = new Set()
+const open = async (tok, ctx) => {
+  ctx ??= await browser.newContext({ viewport: { width: 1280, height: 860 } })
+  const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
+  p.on('request', (q) => { if (q.url().includes(`/attachments/${song.id}/Loop.wav`)) fetchedFile.add(tok) })
   await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok)
   await p.goto(`${WEB}/channels/${g.id}/${ch.id}`); await p.waitForSelector(`[data-audio-player="${song.id}"]`)
   return p
 }
 const card = (p) => p.locator(`[data-audio-player="${song.id}"]`)
-const count = async (p) => ({ plays: Number(await card(p).locator('[data-audio-plays]').getAttribute('data-audio-plays').catch(() => 0)), listeners: Number(await card(p).locator('[data-audio-listeners]').getAttribute('data-audio-listeners').catch(() => 0)) })
-const waitPlays = (p, n, timeout = 8000) => p.waitForFunction(([id, n]) => Number(document.querySelector(`[data-audio-player="${id}"] [data-audio-plays]`)?.getAttribute('data-audio-plays')) === n, [song.id, n], { timeout }).then(() => true, () => false)
+const count = async (p) => ({ plays: Number(await card(p).locator('[data-audio-plays]').getAttribute('data-audio-plays', { timeout: 1000 }).catch(() => 0)), listeners: Number(await card(p).locator('[data-audio-listeners]').getAttribute('data-audio-listeners', { timeout: 1000 }).catch(() => 0)) })
+const waitPlays = (p, n, timeout = 9000) => p.waitForFunction(([id, n]) => Number(document.querySelector(`[data-audio-player="${id}"] [data-audio-plays]`)?.getAttribute('data-audio-plays')) === n, [song.id, n], { timeout }).then(() => true, () => false)
+const ended = (p) => p.waitForFunction(() => { const el = document.querySelector('audio[data-player]'); return !el || !el.src || el.ended }, null, { timeout: 12000 }).catch(() => {})
+const scrubTo = async (p, frac) => { const bb = await card(p).locator('[data-scrubber][data-wave="1"]').boundingBox(); await p.mouse.click(bb.x + bb.width * frac, bb.y + bb.height / 2) }
+const outbox = (p) => p.evaluate(() => JSON.parse(localStorage.getItem('parley.playsOutbox') ?? '[]').length)
 
 console.log('-- the card')
 const pb = await open(b.token)
-ok('the card shows plays and listeners', JSON.stringify(await count(pb)) === JSON.stringify({ plays: 2, listeners: 1 }), JSON.stringify(await count(pb)))
+ok('the card shows plays and listeners', JSON.stringify(await count(pb)) === JSON.stringify({ plays: 5, listeners: 2 }), JSON.stringify(await count(pb)))
+await card(pb).locator('[data-audio-duration]').waitFor()
+ok('it shows the length without fetching the file', (await card(pb).locator('[data-audio-duration]').innerText()) === '0:06' && !fetchedFile.has(b.token), `${await card(pb).locator('[data-audio-duration]').innerText()} ${fetchedFile.has(b.token)}`)
 
-console.log('-- listening from the start counts, live for everyone')
+console.log('-- listening, from wherever it starts')
 const pc = await open(c.token)
+await scrubTo(pc, 0.25)
+await pc.waitForTimeout(1200)
+ok('starting partway: not yet', (await att()).plays === 5)
+ok('then it counts, live on everyone\'s card', await waitPlays(pb, 6) && (await count(pb)).listeners === 3, JSON.stringify(await count(pb)))
+await pc.waitForTimeout(300)
+await scrubTo(pc, 0.02)
+ok('going back to the start after a counted play counts again', await waitPlays(pb, 7), JSON.stringify(await count(pb)))
+await ended(pc)
+await card(pc).locator('[data-audio-speed]').click(); await card(pc).locator('[data-audio-speed]').click(); await card(pc).locator('[data-audio-speed]').click()
+ok('(at double speed)', (await card(pc).locator('[data-audio-speed]').innerText()) === '2×')
 await card(pc).locator('[data-audio-play]').click()
-await pc.waitForTimeout(1500)
-ok('not yet: under half the track heard', (await att()).plays === 2)
-ok('then it counts, and the other listener\'s card moves live', await waitPlays(pb, 3) && (await count(pb)).listeners === 2, JSON.stringify(await count(pb)))
-ok('the listener\'s own card too', await waitPlays(pc, 3))
-await pc.waitForFunction((id) => document.querySelector(`[data-audio-player="${id}"]`)?.getAttribute('data-playing') === '0', song.id, { timeout: 8000 }).catch(() => {})
+ok('playing it again at double speed counts again', await waitPlays(pb, 8), JSON.stringify(await count(pb)))
+await ended(pc)
 await card(pc).locator('[data-audio-play]').click()
-ok('playing it again from the start counts again', await waitPlays(pb, 4), JSON.stringify(await count(pb)))
-ok('still the same listeners', (await count(pb)).listeners === 2)
+await pc.waitForTimeout(400)
+await pc.evaluate(() => { document.querySelector('audio[data-player]').currentTime = 5 })
+await ended(pc); await pc.waitForTimeout(600)
+ok('skipping ahead isn\'t listening', (await att()).plays === 8, String((await att()).plays))
 
-console.log('-- skipping ahead isn\'t listening')
-const pd = await open(d.token)
+console.log('-- phones: no signal, then back')
+const dctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+let pd = await open(d.token, dctx)
+// The signal drops once the track has loaded (as a phone has buffered it).
 await card(pd).locator('[data-audio-play]').click()
-await pd.waitForTimeout(300)
-await pd.evaluate(() => { document.querySelector('audio[data-player]').currentTime = 4.2 })
-await pd.waitForFunction(() => document.querySelector('audio[data-player]')?.ended, null, { timeout: 8000 }).catch(() => {})
-await pd.waitForTimeout(800)
-ok('a play that jumped to the end doesn\'t count', (await att()).plays === 4, String((await att()).plays))
-await card(pd).locator('[data-audio-play]').click()
-ok('listening from the start afterwards does', await waitPlays(pb, 5))
+await pd.waitForTimeout(300); await dctx.setOffline(true)
+await pd.waitForTimeout(3900)
+ok('a play heard with no signal waits in the outbox', (await att()).plays === 8 && await outbox(pd) === 1, `${(await att()).plays} ${await outbox(pd)}`)
+await dctx.setOffline(false)
+ok('and counts when the signal comes back', await waitPlays(pb, 9))
+ok('the outbox empties', await pd.waitForFunction(() => !localStorage.getItem('parley.playsOutbox'), null, { timeout: 4000 }).then(() => true, () => false))
 
-console.log('-- the uploader\'s own listening')
+console.log('-- phones: the app closed before it could send')
+await ended(pd)
+await card(pd).locator('[data-audio-play]').click()
+await pd.waitForTimeout(300); await dctx.setOffline(true)
+await pd.waitForTimeout(3900)
+ok('heard offline, then the app closes', await outbox(pd) === 1)
+await pd.close()
+await dctx.setOffline(false)
+pd = await open(d.token, dctx)
+ok('it counts on the next launch', await waitPlays(pb, 10, 12000), JSON.stringify(await count(pb)))
+await pd.waitForFunction(() => !localStorage.getItem('parley.playsOutbox'), null, { timeout: 4000 }).catch(() => {})
+ok('once', (await att()).plays === 10 && await outbox(pd) === 0, `${(await att()).plays} ${await outbox(pd)}`)
+
+console.log('-- the uploader')
 const pa = await open(a.token)
 await card(pa).locator('[data-audio-play]').click()
-await pa.waitForTimeout(4500)
-ok('doesn\'t count', (await att()).plays === 5)
+ok('the uploader\'s own listening counts', await waitPlays(pb, 11))
 
 console.log('-- who listened')
+await ended(pa)
 await card(pa).locator('[data-audio-listeners]').click()
 const menu = pa.locator('[data-context-menu]')
 await menu.waitFor()
 const names = await menu.innerText()
-ok('the listeners menu names everyone who listened', /3 listeners/i.test(names) && [b, c, d].every((u) => names.includes(u.user.display_name)), names)
+ok('the listeners menu names everyone who listened', /4 listeners/i.test(names) && [a, b, c, d].every((u) => names.includes(u.user.display_name)), names)
+await pa.waitForTimeout(400)
 await pa.screenshot({ path: 'listencount-menu.png' })
 await menu.locator('[data-menu-item]').first().click()
 ok('picking one opens their profile', await pa.locator('[data-profile-card], [role="dialog"]').first().waitFor({ timeout: 4000 }).then(() => true, () => false))

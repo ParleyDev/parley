@@ -342,6 +342,8 @@ export interface Attachment {
   listened_by?: string[]
   /** Audio files: times played (who played them is in listened_by). */
   plays?: number
+  /** Audio files: length, once the server has analysed the file. */
+  media_ms?: number
   /** Alt text, set by the uploader. */
   description?: string | null
 }

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { api } from './api'
+import { api, getToken } from './api'
+import { STORAGE_PREFIX } from './brand'
 
 /**
  * One audio player for the whole app. Audio attachments and voice messages play through it rather than an <audio> in
@@ -17,8 +18,10 @@ export interface Track {
   where?: { guildId: string | null; channelId: string; messageId: string }
   /** Report "listened" past 80% (voice messages from someone else). */
   listen?: boolean
-  /** Count plays (audio files from someone else): see `countPlays`. */
+  /** Count plays (audio files): see `countPlays`. */
   count?: boolean
+  /** Seconds, when known before the file loads. */
+  length?: number
 }
 export interface PlayerState {
   track: Track | null
@@ -37,24 +40,68 @@ const set = (patch: Partial<PlayerState>) => { state = { ...state, ...patch }; s
 const reported = new Set<string>()
 
 /**
- * Play counting: a play counts once it has been heard from the start for 30 s, or half of a shorter track. Only time
- * actually played adds up (seeking ahead doesn't), and going back to the start (or playing it again after it ended)
- * begins a new play that can count again. Starting partway through doesn't count.
+ * Play counting, as streaming services do it: a listening session counts as a play once 30 s of it have been heard,
+ * or half of a shorter track, wherever it started. Only time actually played adds up (seeking doesn't), measured on
+ * the track's own clock so speed doesn't matter. Pressing play on a track, playing it again after it ended, or going
+ * back to its first seconds after a counted play starts a new session, which counts again.
+ *
+ * Counted plays go through an outbox in localStorage and are sent with keepalive, so a play heard with no signal,
+ * or just before the app was closed, still arrives (on the next send, coming back online or the next launch). Each
+ * carries its session id, so a retry never counts twice, and when it counted.
  */
 const PLAY_SECONDS = 30
-let listening: { id: string; heard: number; last: number; done: boolean; jumped?: boolean } | null = null
+const RESTART_WITHIN = 5
+interface Session { sid: string; id: string; heard: number; last: number; done: boolean; jumped?: boolean }
+let listening: Session | null = null
+const newSession = (id: string, t: number): Session => ({ sid: crypto.randomUUID(), id, heard: 0, last: t, done: false })
 function countPlays(t: number) {
   const tr = state.track
   if (!tr?.count) return
-  if (!listening || listening.id !== tr.id || (t < 1 && listening.last > 2)) listening = { id: tr.id, heard: 0, last: t, done: t > 2 }
+  if (!listening || listening.id !== tr.id) listening = newSession(tr.id, t)
   // Any forward movement that isn't a seek was played, even a long gap (timeupdate is sparse in the background).
   const d = t - listening.last
   if (d > 0 && !listening.jumped) listening.heard += d
   listening.last = t
-  if (!listening.done && state.duration && listening.heard >= Math.min(PLAY_SECONDS, state.duration / 2)) {
+  const length = state.duration || tr.length || 0
+  if (!listening.done && length && listening.heard >= Math.min(PLAY_SECONDS, length / 2)) {
     listening.done = true
-    api.post(`/attachments/${tr.id}/played`).catch(() => {})
+    sendPlay({ id: tr.id, session: listening.sid, at: Date.now() })
   }
+}
+
+interface Play { id: string; session: string; at: number }
+const OUTBOX = `${STORAGE_PREFIX}playsOutbox`
+const WEEK = 7 * 24 * 3600 * 1000
+const readOutbox = (): Play[] => { try { const v = JSON.parse(localStorage.getItem(OUTBOX) ?? '[]'); return Array.isArray(v) ? v.filter((p) => p && Date.now() - p.at < WEEK) : [] } catch { return [] } }
+const writeOutbox = (list: Play[]) => { try { if (list.length) localStorage.setItem(OUTBOX, JSON.stringify(list.slice(-200))); else localStorage.removeItem(OUTBOX) } catch { /* ignore */ } }
+function sendPlay(p: Play) { writeOutbox([...readOutbox().filter((q) => q.session !== p.session), p]); void flushPlays() }
+let flushing = false
+/** Send the plays waiting in the outbox. Kept on network errors, server errors and while signed out. */
+export async function flushPlays() {
+  if (flushing || !navigator.onLine) return
+  const token = getToken()
+  const list = readOutbox()
+  if (!token || !list.length) return
+  flushing = true
+  try {
+    for (const p of list) {
+      let keep = true
+      try {
+        const res = await fetch(`/api/attachments/${p.id}/played`, { method: 'POST', keepalive: true, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ session: p.session, at: p.at }) })
+        keep = res.status === 401 || res.status === 408 || res.status === 429 || res.status >= 500
+      } catch { /* offline: keep */ }
+      if (!keep) writeOutbox(readOutbox().filter((q) => q.session !== p.session))
+      else break
+    }
+  } finally { flushing = false }
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => void flushPlays())
+  // Catch up when the app comes back (the phone may have been playing with the page asleep), and send what's
+  // waiting before it goes away.
+  document.addEventListener('visibilitychange', () => { if (el && state.track) countPlays(el.currentTime); void flushPlays() })
+  window.addEventListener('pagehide', () => { if (el && state.track) countPlays(el.currentTime); void flushPlays() })
+  setTimeout(() => void flushPlays(), 3000)
 }
 
 function readVolume() { try { const v = Number(localStorage.getItem('parley.playerVolume')); return Number.isFinite(v) && v > 0 && v <= 1 ? v : 1 } catch { return 1 } }
@@ -68,8 +115,9 @@ function audio(): HTMLAudioElement {
   el.addEventListener('pause', () => set({ playing: false }))
   el.addEventListener('loadedmetadata', () => set({ duration: Number.isFinite(el!.duration) ? el!.duration : 0 }))
   el.addEventListener('durationchange', () => { if (Number.isFinite(el!.duration)) set({ duration: el!.duration }) })
-  // Jumps aren't listening; a jump back to the start begins a new play.
-  el.addEventListener('seeking', () => { if (listening) { if (el!.currentTime < 1) listening = null; else listening.jumped = true } })
+  // Jumps aren't listening; going back to the start after a counted play begins a new one.
+  el.addEventListener('seeking', () => { if (listening) { if (listening.done && el!.currentTime <= RESTART_WITHIN) listening = null; else listening.jumped = true } })
+  el.addEventListener('pause', () => { if (state.track) countPlays(el!.currentTime) })
   el.addEventListener('seeked', () => { if (listening) { listening.jumped = false; listening.last = el!.currentTime } })
   el.addEventListener('timeupdate', () => {
     set({ pos: el!.currentTime })
@@ -172,8 +220,7 @@ export async function play(track: Track, opts: { at?: number; speed?: number } =
   if (state.track?.id !== track.id) {
     a.pause()
     a.src = track.url
-    // Starting partway through isn't a play.
-    listening = opts.at && opts.at > 2 ? { id: track.id, heard: 0, last: opts.at, done: true } : null
+    listening = null
     set({ track, pos: opts.at ?? 0, duration: 0, speed: opts.speed ?? 1 })
     timelineFor = null; timelineData = null
     void loadViz(track.url).then((v) => { if (v && state.track?.id === track.id) { timelineFor = track.id; timelineData = v } })

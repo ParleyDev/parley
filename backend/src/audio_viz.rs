@@ -6,7 +6,7 @@
 //! files. Clients fetch a few KB per minute of audio and replay it in step with the stream.
 //!
 //! Format (little endian): "PVZ1", fps u8, bands u8, offset_ms u16 (frame 0's centre), frames u32, peaks u16,
-//! reserved u16, then `peaks` bytes, then `frames * bands` bytes. A 0-byte file marks a file that couldn't be
+//! tail u16 (samples after the last frame's window, for the exact length; 0 in older files), then `peaks` bytes, then `frames * bands` bytes. A 0-byte file marks a file that couldn't be
 //! analysed.
 use rustfft::{num_complex::Complex, FftPlanner};
 use std::path::{Path, PathBuf};
@@ -98,6 +98,8 @@ struct Analyser {
     db: Vec<f32>,
     peak: Vec<f32>,
     scratch: Vec<Complex<f32>>,
+    /// Samples taken in (up to the length limit).
+    samples: u64,
 }
 
 impl Analyser {
@@ -113,14 +115,16 @@ impl Analyser {
             let z = ((f1 / bin_hz).ceil() as usize).max(a + 1).min(WIN / 2);
             (a, z, 3.0 * ((f0 * f1).sqrt() / 1000.0).log2())
         }).collect();
-        Analyser { buf: Vec::with_capacity(WIN * 4), fft, window, bands, db: Vec::new(), peak: Vec::new(), scratch: vec![Complex::default(); WIN] }
+        Analyser { buf: Vec::with_capacity(WIN * 4), fft, window, bands, db: Vec::new(), peak: Vec::new(), scratch: vec![Complex::default(); WIN], samples: 0 }
     }
 
     fn frames(&self) -> usize { self.peak.len() }
 
     fn push(&mut self, samples: impl Iterator<Item = f32>) {
         if self.frames() >= (MAX_SECONDS * FPS) as usize { self.buf.clear(); return; }
+        let before = self.buf.len();
         self.buf.extend(samples);
+        self.samples += (self.buf.len() - before) as u64;
         let mut start = 0;
         while self.buf.len() - start >= WIN && self.frames() < (MAX_SECONDS * FPS) as usize {
             self.frame(start);
@@ -161,11 +165,39 @@ impl Analyser {
         out.extend_from_slice(&((WIN as u32 * 500 / RATE) as u16).to_le_bytes());
         out.extend_from_slice(&(frames as u32).to_le_bytes());
         out.extend_from_slice(&(PEAKS as u16).to_le_bytes());
-        out.extend_from_slice(&0u16.to_le_bytes());
+        let covered = (frames as u64).saturating_sub(1) * HOP as u64 + WIN as u64;
+        out.extend_from_slice(&(self.samples.saturating_sub(covered).min(u16::MAX as u64) as u16).to_le_bytes());
         out.extend_from_slice(&peaks);
         out.extend(self.db.iter().map(|v| level(*v)));
         out
     }
+}
+
+/// Visualiser data for attachment `id`, made if needed, with the file's length recorded on the attachment
+/// (`media_ms`, which players show and play counting goes by).
+pub async fn ensure_recorded(db: sqlx::PgPool, dir: PathBuf, id: Uuid) -> Option<Vec<u8>> {
+    let bytes = ensure(dir.join(id.to_string()), viz_path(&dir, id)).await?;
+    if let Some(ms) = length_ms(&bytes) {
+        let _ = sqlx::query("UPDATE attachments SET media_ms = $2 WHERE id = $1 AND media_ms IS DISTINCT FROM $2").bind(id).bind(ms).execute(&db).await;
+    }
+    Some(bytes)
+}
+
+fn length_ms(bytes: &[u8]) -> Option<i32> {
+    if bytes.len() < HEADER || &bytes[..4] != b"PVZ1" || bytes[4] == 0 { return None; }
+    let frames = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]) as u64;
+    // Frames are HOP samples apart and each covers a WIN-sample window; then the tail (older files: half a hop).
+    let tail = match u16::from_le_bytes([bytes[14], bytes[15]]) { 0 => HOP as u64 / 2, t => t as u64 };
+    Some(((frames.saturating_sub(1) * HOP as u64 + WIN as u64 + tail) * 1000 / RATE as u64) as i32)
+}
+
+/// Once at start-up: visualiser data and lengths for audio uploaded before either existed.
+pub async fn backfill(db: sqlx::PgPool, dir: PathBuf) {
+    tokio::time::sleep(std::time::Duration::from_secs(25)).await;
+    let ids: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM attachments WHERE media_ms IS NULL AND duration_ms IS NULL AND content_type ILIKE 'audio/%' AND message_id IS NOT NULL ORDER BY created_at DESC LIMIT 2000")
+        .fetch_all(&db).await.unwrap_or_default();
+    for (id,) in &ids { ensure_recorded(db.clone(), dir.clone(), *id).await; }
+    if !ids.is_empty() { tracing::info!(files = ids.len(), "audio lengths backfilled"); }
 }
 
 /// The length of the audio the visualiser data at `path` covers, in seconds, if it's there.
@@ -204,5 +236,6 @@ mod tests {
         assert_eq!(loudest(10), band_of(1000.0));
         assert_eq!(loudest(frames - 10), band_of(100.0));
         assert!(peaks_only(&out).len() == HEADER + PEAKS);
+        assert_eq!(length_ms(&out), Some(4000));
     }
 }

@@ -51,7 +51,7 @@ pub fn router() -> Router<AppState> {
         .route("/attachments/:id/:filename", get(serve))
 }
 
-pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform, transcript, transcript_status, description, plays";
+pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform, transcript, transcript_status, description, plays, media_ms";
 
 fn sanitize_filename(raw: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("file");
@@ -194,8 +194,7 @@ async fn upload(
     .await?;
     // Visualiser data, ready before anyone presses play (see audio_viz.rs).
     if crate::audio_viz::is_audio(&att.content_type) {
-        let dir = state.config.upload_dir.clone();
-        tokio::spawn(crate::audio_viz::ensure(path.clone(), crate::audio_viz::viz_path(&dir, id)));
+        tokio::spawn(crate::audio_viz::ensure_recorded(state.db.clone(), state.config.upload_dir.clone(), id));
     }
     Ok((StatusCode::CREATED, Json(att)))
 }
@@ -272,8 +271,7 @@ async fn serve_viz(State(state): State<AppState>, Path(id): Path<Uuid>, Query(q)
     let ct: Option<String> = sqlx::query_scalar("SELECT content_type FROM attachments WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
     let ct = ct.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
     if !crate::audio_viz::is_audio(&ct) { return Err(AppError::NotFound("Not audio".into())); }
-    let dir = &state.config.upload_dir;
-    let bytes = crate::audio_viz::ensure(dir.join(id.to_string()), crate::audio_viz::viz_path(dir, id)).await
+    let bytes = crate::audio_viz::ensure_recorded(state.db.clone(), state.config.upload_dir.clone(), id).await
         .ok_or_else(|| AppError::NotFound("No visualiser data".into()))?;
     let body = if q.peaks.is_some() { crate::audio_viz::peaks_only(&bytes).to_vec() } else { bytes };
     let mut resp = Response::new(Body::from(body));
@@ -383,27 +381,48 @@ async fn mark_listened(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `POST /attachments/:id/played`: the caller listened to an audio file from the start for 30 s (or half of a shorter
-/// track). Each such play counts; the uploader's own don't, and one listener can't count again sooner than a play
-/// could take. Tells the channel so every card's count moves.
-async fn mark_played(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
-    let att: Option<(Uuid, Option<Uuid>, Uuid, String, Option<i32>)> = sqlx::query_as("SELECT channel_id, message_id, uploader_id, content_type, duration_ms FROM attachments WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
-    let (channel_id, message_id, uploader, ct, voice) = att.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+#[derive(serde::Deserialize, Default)]
+struct PlayedBody {
+    /// The client's listening session: a play retried after a dropped connection counts once.
+    session: Option<Uuid>,
+    /// When the play counted on the client (ms since the epoch): plays sent late (offline, app restarted) keep their time.
+    at: Option<i64>,
+}
+
+/// `POST /attachments/:id/played`: the caller has listened to an audio file for 30 s (or half of a shorter track) in
+/// one listening session, from wherever it started. Every session counts, the uploader's included; the same session
+/// counts once, and one listener's plays must be at least as far apart as a play at double speed takes. Tells the
+/// channel so every card's count moves.
+async fn mark_played(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, body: Option<Json<PlayedBody>>) -> AppResult<StatusCode> {
+    let body = body.map(|b| b.0).unwrap_or_default();
+    let att: Option<(Uuid, Option<Uuid>, String, Option<i32>, Option<i32>)> = sqlx::query_as("SELECT channel_id, message_id, content_type, duration_ms, media_ms FROM attachments WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    let (channel_id, message_id, ct, voice, media_ms) = att.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
     let Some(message_id) = message_id else { return Err(AppError::NotFound("Attachment not found".into())) };
     if !crate::audio_viz::is_audio(&ct) || voice.is_some() { return Err(AppError::BadRequest("Not an audio file".into())); }
     let c = crate::routes::channels::require_channel(&state.db, channel_id, uid).await?;
-    if uploader == uid { return Ok(StatusCode::NO_CONTENT); }
-    // The least listening a play takes, from the visualiser data's length when there is some.
-    let secs = crate::audio_viz::seconds(&crate::audio_viz::viz_path(&state.config.upload_dir, id)).await;
-    let gap = secs.map(|s| (s / 2.0).min(30.0)).unwrap_or(30.0).max(1.0) * 0.9;
-    let counted: Option<(bool,)> = sqlx::query_as(
-        "INSERT INTO attachment_listens (attachment_id, user_id) VALUES ($1, $2)
-         ON CONFLICT (attachment_id, user_id) DO UPDATE SET last_played_at = now()
-           WHERE attachment_listens.last_played_at < now() - make_interval(secs => $3)
-         RETURNING (xmax = 0)",
-    ).bind(id).bind(uid).bind(gap as f64).fetch_optional(&state.db).await?;
-    let Some((first,)) = counted else { return Ok(StatusCode::NO_CONTENT) };
-    let plays: i32 = sqlx::query_scalar("UPDATE attachments SET plays = plays + 1 WHERE id = $1 RETURNING plays").bind(id).fetch_one(&state.db).await?;
+    let secs = match media_ms {
+        Some(ms) => Some(ms as f32 / 1000.0),
+        None => crate::audio_viz::seconds(&crate::audio_viz::viz_path(&state.config.upload_dir, id)).await,
+    };
+    let need = secs.map(|s| (s / 2.0).min(30.0)).unwrap_or(30.0).max(1.0);
+    // Players go up to double speed.
+    let gap = need / 2.0 * 0.9;
+    let now = chrono::Utc::now();
+    let at = body.at.and_then(chrono::DateTime::from_timestamp_millis).map(|t| t.clamp(now - chrono::Duration::days(7), now)).unwrap_or(now);
+    let session = body.session.unwrap_or_else(Uuid::new_v4);
+    let mut tx = state.db.begin().await?;
+    // One listener's plays of one file, one at a time.
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1::text || $2::text, 0))").bind(id).bind(uid).execute(&mut *tx).await?;
+    let close: bool = sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM attachment_plays WHERE attachment_id = $1 AND user_id = $2 AND id <> $3 AND played_at > $4 - make_interval(secs => $5) AND played_at < $4 + make_interval(secs => $5))")
+        .bind(id).bind(uid).bind(session).bind(at).bind(gap as f64).fetch_one(&mut *tx).await?;
+    if close { return Ok(StatusCode::NO_CONTENT); }
+    let new = sqlx::query("INSERT INTO attachment_plays (id, attachment_id, user_id, played_at) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO NOTHING")
+        .bind(session).bind(id).bind(uid).bind(at).execute(&mut *tx).await?.rows_affected() > 0;
+    if !new { return Ok(StatusCode::NO_CONTENT); }
+    let first = sqlx::query("INSERT INTO attachment_listens (attachment_id, user_id, last_played_at) VALUES ($1, $2, $3) ON CONFLICT (attachment_id, user_id) DO UPDATE SET last_played_at = GREATEST(attachment_listens.last_played_at, EXCLUDED.last_played_at) RETURNING (xmax = 0)")
+        .bind(id).bind(uid).bind(at).fetch_one(&mut *tx).await.map(|r| sqlx::Row::get::<bool, _>(&r, 0))?;
+    let plays: i32 = sqlx::query_scalar("UPDATE attachments SET plays = plays + 1 WHERE id = $1 RETURNING plays").bind(id).fetch_one(&mut *tx).await?;
+    tx.commit().await?;
     let target = crate::routes::channels::target_for(&state.db, &c).await?;
     state.hub.emit(target, "AUDIO_PLAYED", serde_json::json!({ "channel_id": channel_id, "message_id": message_id, "attachment_id": id, "user_id": uid, "plays": plays, "first": first, "guild_id": c.guild_id }));
     Ok(StatusCode::NO_CONTENT)

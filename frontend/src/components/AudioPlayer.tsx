@@ -17,15 +17,16 @@ const SPEEDS = [1, 1.25, 1.5, 2, 0.75]
 const VIZ = ['bars', 'wave', 'orb', 'off'] as const
 
 /** An audio file's length without downloading it: the browser reads just the header. */
-function useDuration(url: string) {
+function useDuration(url: string, known?: number) {
   const [d, setD] = useState(0)
   useEffect(() => {
+    if (known) return
     const a = new Audio(); a.preload = 'metadata'
     const on = () => { if (Number.isFinite(a.duration)) setD(a.duration) }
     a.addEventListener('loadedmetadata', on); a.src = url
     return () => { a.removeEventListener('loadedmetadata', on); a.removeAttribute('src'); a.load() }
-  }, [url])
-  return d
+  }, [url, known])
+  return known || d
 }
 
 /** The file's peak waveform from the server's visualiser data (null until it arrives, or when there is none). */
@@ -96,17 +97,19 @@ function WaveBars({ peaks, frac }: { peaks: Uint8Array; frac: number }) {
  * them, or off), a seek bar, speed and volume. It plays through the app-wide player, so it keeps going when you leave
  * the chat. Download saves it; on phones it opens Save / Share / Copy Link / Open.
  */
-export default function AudioPlayer({ a, track: base, mine }: { a: Attachment; track: Track; mine?: boolean }) {
+export default function AudioPlayer({ a, track: base }: { a: Attachment; track: Track }) {
   const t = useT()
   const users = useStore((s) => s.users)
   const openModal = useStore((s) => s.openModal)
-  const track: Track = { ...base, count: !mine }
+  // The server's length (from its analysis, which stops at two hours), so the card needn't fetch the file to show it.
+  const known = a.media_ms && a.media_ms < 7_100_000 ? a.media_ms / 1000 : undefined
+  const track: Track = { ...base, count: true, length: known }
   const phone = usePhone()
   const prefs = usePrefs()
   const p = usePlayer()
   const cur = p.track?.id === a.id
   const playing = cur && p.playing
-  const probed = useDuration(a.url)
+  const probed = useDuration(a.url, known)
   const peaks = usePeaks(a.url)
   const duration = (cur && p.duration) || probed
   const pos = cur ? p.pos : 0
