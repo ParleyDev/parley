@@ -303,6 +303,20 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   useEffect(() => { setAway(false); setSeenAtBottom(null) }, [channel.id])
   useEffect(() => { if (hasNewer) stickBottom.current = false }, [hasNewer])
   const unseen = seenAtBottom === null || !messages ? 0 : messages.filter((m) => m.id > seenAtBottom && !m.local && m.author.id !== myId).length
+  // The "N new messages" banner goes once the reader has reached the newest message, as on Discord: soon after they
+  // scroll down to it, or after a few seconds when everything new already fit on screen (time to notice it).
+  const readerScrolled = useRef(false)
+  const bannerTimer = useRef(0)
+  useEffect(() => { readerScrolled.current = false; return () => { clearTimeout(bannerTimer.current); bannerTimer.current = 0 } }, [channel.id])
+  const showingBanner = !!unread
+  useEffect(() => {
+    const el = scrollRef.current
+    const atBottom = !!el && !hasNewer && initialScrollDone.current && el.scrollHeight - el.scrollTop - el.clientHeight < 40
+    if (!showingBanner || !atBottom) { clearTimeout(bannerTimer.current); bannerTimer.current = 0; return }
+    if (bannerTimer.current) return
+    const id = channel.id
+    bannerTimer.current = window.setTimeout(() => { bannerTimer.current = 0; setBannerOff(id) }, readerScrolled.current ? 600 : 4000)
+  }, [showingBanner, seenAtBottom, away, messages, hasNewer, channel.id])
   const frame = useRef(0)
   const onScroll = useCallback(() => {
     const el = scrollRef.current
@@ -388,7 +402,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
             : <button type="button" onClick={() => setBannerOff(channel.id)} className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold hover:underline" data-unread-dismiss>{t('Mark As Read')}<CheckCheck size={16} /></button>}
         </div>
       )}
-      <div ref={scrollRef} onScroll={onScroll} role="log" aria-label={t('Messages in {name}', { name: channel.name || t('this conversation') })} tabIndex={0} className="scroller-auto flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>
+      <div ref={scrollRef} onScroll={onScroll} onWheel={() => { readerScrolled.current = true }} onTouchMove={() => { readerScrolled.current = true }} onKeyDown={() => { readerScrolled.current = true }} role="log" aria-label={t('Messages in {name}', { name: channel.name || t('this conversation') })} tabIndex={0} className="scroller-auto flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>
         <div ref={contentRef} className="relative min-h-full flex flex-col justify-end">
           {hasMore === false || (messages && messages.length < 50 && !loading) ? (
             <ChannelIntro channel={channel} />
