@@ -1,8 +1,9 @@
 # ---- ffmpeg stage ----
-# A minimal ffmpeg for three jobs: converting recorded voice messages (WebM/Ogg with Opus or Vorbis) to AAC .m4a so
+# A minimal ffmpeg for four jobs: converting recorded voice messages (WebM/Ogg with Opus or Vorbis) to AAC .m4a so
 # every browser, iPhones included, can play them (src/voice_audio.rs), decoding audio files (MP3, AAC, FLAC, ALAC,
 # WAV, Ogg) to raw PCM for the players' visualiser data (src/audio_viz.rs), and turning WebM nameplates (VP8/VP9 with
-# transparency, which needs libvpx's decoders) into animated WebP for the phone apps (src/routes/assets.rs). A few MB
+# transparency, which needs libvpx's decoders) into animated WebP for the phone apps (src/routes/assets.rs), and grabbing a poster frame from video uploads
+# (H.264, HEVC, MPEG-4, VP8/VP9) as JPEG (src/video_thumb.rs). A few MB
 # instead of Debian's ~450 MB package. The release tarball is pinned by SHA-256 (verified against FFmpeg's release signing key
 # FCF9 86EA 15E6 E293 A564 4F10 B432 2F04 D676 58D8 when the pin was set).
 FROM debian:bookworm-slim AS ffmpeg
@@ -20,7 +21,8 @@ RUN curl -fsSL -o ffmpeg.tar.xz "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VER
       --enable-encoder=aac,pcm_f32le --enable-parser=opus,vorbis,aac,flac,mpegaudio \
       --enable-filter=abuffer,abuffersink,aformat,aresample,anull --enable-swresample \
       --enable-libvpx --enable-libwebp --enable-decoder=libvpx_vp8,libvpx_vp9 --enable-parser=vp8,vp9 \
-      --enable-encoder=libwebp_anim --enable-muxer=webp --enable-filter=buffer,buffersink,format,null,scale --enable-swscale \
+      --enable-decoder=h264,hevc,mpeg4 --enable-parser=h264,hevc,mpeg4video --enable-encoder=mjpeg --enable-muxer=image2 \
+      --enable-encoder=libwebp_anim --enable-muxer=webp --enable-filter=buffer,buffersink,format,null,scale,transpose,hflip,vflip --enable-swscale \
  && make -j"$(nproc)" ffmpeg && strip ffmpeg && install -m 0755 ffmpeg /usr/local/bin/ffmpeg
 
 # ---- build stage ----

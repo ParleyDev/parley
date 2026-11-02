@@ -192,14 +192,16 @@ function InlineVideo({ a, maxW, maxH }: { a: Attachment; maxW: number; maxH: num
   const openModal = useStore((s) => s.openModal)
   const [dims, setDims] = useState<{ w: number; h: number; d: number } | null>(null)
   const W = Math.round(maxW * 1.25), H = Math.round(maxH * 1.25)
-  const w = dims?.w || 16, h = dims?.h || 9
+  // The server's poster frame gives the shape before anything loads.
+  const w = dims?.w || a.width || 16, h = dims?.h || a.height || 9
   const scale = Math.min(W / w, H / h)
   const open = () => openModal({ kind: 'video', url: a.url, name: a.filename })
   return (
     <button type="button" onClick={open} className="group relative block max-w-full overflow-hidden rounded-lg border border-line bg-black hover:border-text-2"
       style={{ width: Math.round(w * scale), aspectRatio: `${w} / ${h}` }} title={a.filename} aria-label={t('Play {name}', { name: a.filename })} data-inline-video={a.id}>
-      {/* #t: Safari and phones show the first frame as the poster instead of black. */}
-      <video src={`${a.url}#t=0.1`} preload="metadata" muted playsInline tabIndex={-1} className="pointer-events-none h-full w-full object-contain"
+      {/* The server's poster frame: the phone apps' web views don't paint a frame until the video plays. Without one,
+          #t has Safari show the first frame instead of black. */}
+      <video src={a.thumb_url ? a.url : `${a.url}#t=0.1`} poster={a.thumb_url} preload="metadata" muted playsInline tabIndex={-1} className="pointer-events-none h-full w-full object-contain" data-inline-video-poster={a.thumb_url ? 'server' : 'frame'}
         onLoadedMetadata={(e) => { const v = e.currentTarget; setDims({ w: v.videoWidth, h: v.videoHeight, d: v.duration }) }} />
       <span className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" aria-hidden />
       <span className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-transform group-hover:scale-110 group-hover:bg-accent" aria-hidden>

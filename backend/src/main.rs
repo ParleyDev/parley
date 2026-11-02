@@ -16,6 +16,7 @@ mod routes;
 mod signup_guard;
 mod state;
 mod mcp;
+mod video_thumb;
 mod voice_audio;
 mod ws;
 
@@ -117,6 +118,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_expiry = state_for_sweep.clone();
     let state_for_reminders = state_for_sweep.clone();
     tokio::spawn(routes::attachments::sweep_orphans(state_for_sweep.clone()));
+    tokio::spawn(video_thumb::backfill(state_for_sweep.db.clone(), state_for_sweep.config.upload_dir.clone()));
     tokio::spawn(voice_audio::convert_backlog(state_for_sweep.clone()));
     tokio::spawn(routes::assets::convert_nameplates(state_for_sweep.clone()));
     tokio::spawn(routes::storage::fix_orientation_backlog(state_for_sweep.clone()));

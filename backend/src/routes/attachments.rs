@@ -62,7 +62,7 @@ fn sanitize_filename(raw: &str) -> String {
 
 /// Browsers will render these inline; everything else is forced to download.
 fn inline_type(ct: &str) -> bool {
-    matches!(ct, "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/avif" | "video/mp4" | "video/webm" | "audio/mpeg" | "audio/ogg" | "audio/wav" | "audio/x-wav" | "audio/wave" | "audio/flac" | "audio/x-flac" | "audio/aac" | "audio/x-m4a" | "audio/webm" | "audio/mp4" | "application/pdf" | "text/plain")
+    matches!(ct, "image/png" | "image/jpeg" | "image/gif" | "image/webp" | "image/avif" | "video/mp4" | "video/webm" | "video/quicktime" | "audio/mpeg" | "audio/ogg" | "audio/wav" | "audio/x-wav" | "audio/wave" | "audio/flac" | "audio/x-flac" | "audio/aac" | "audio/x-m4a" | "audio/webm" | "audio/mp4" | "application/pdf" | "text/plain")
 }
 
 async fn upload(
@@ -167,7 +167,11 @@ async fn upload(
             Err(e) => tracing::warn!(attachment = %id, error = %e, "voice message kept in its recorded format"),
         }
     }
-    let thumb_type = crate::routes::storage::make_thumbnail(path.clone(), &content_type, width, height).await;
+    let mut thumb_type = crate::routes::storage::make_thumbnail(path.clone(), &content_type, width, height).await;
+    // Videos: a poster frame, which is also where their size comes from.
+    let (width, height) = if crate::video_thumb::is_video(&content_type) {
+        match crate::video_thumb::make(&path).await { Some((w, h)) => { thumb_type = Some("image/jpeg".into()); (Some(w), Some(h)) } None => (width, height) }
+    } else { (width, height) };
     crate::metrics::METRICS.uploads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     crate::metrics::METRICS.upload_bytes.fetch_add(size as u64, std::sync::atomic::Ordering::Relaxed);
     let voice = content_type.starts_with("audio/") && duration_ms.is_some();
@@ -279,7 +283,7 @@ async fn serve_viz(State(state): State<AppState>, Path(id): Path<Uuid>, Query(q)
     Ok(resp)
 }
 
-/// The server-made thumbnail of an image attachment (same caching as the file itself).
+/// The server-made thumbnail of an image attachment, or a video's poster frame (same caching as the file itself).
 async fn serve_thumb(State(state): State<AppState>, Path(id): Path<Uuid>) -> AppResult<Response> {
     let att = sqlx::query_as::<_, Attachment>(&format!("SELECT {ATTACHMENT_COLS} FROM attachments WHERE id = $1"))
         .bind(id)

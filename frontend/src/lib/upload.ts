@@ -49,7 +49,7 @@ export function formatBytes(n: number): string {
 }
 
 export const isImage = (ct: string) => /^image\/(png|jpeg|gif|webp|avif)$/.test(ct)
-export const isVideo = (ct: string) => /^video\/(mp4|webm)$/.test(ct)
+export const isVideo = (ct: string) => /^video\/(mp4|webm|quicktime)$/.test(ct)
 export const isAudio = (ct: string) => /^audio\//.test(ct)
 
 export const MAX_PROFILE_IMAGE_BYTES = 8 * 1024 * 1024
