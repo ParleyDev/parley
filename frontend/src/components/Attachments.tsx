@@ -164,7 +164,7 @@ function One({ a, mine, gallery = [], context }: { a: Attachment; mine?: boolean
           return <VoiceMessage key={a.id} a={a} mine={!!mine} track={{ ...track, title: context?.artist ? t('Voice message from {name}', { name: context.artist }) : t('Voice message') }} />
         }
         if (isAudio(a.content_type)) {
-          return <AudioPlayer key={a.id} a={a} track={{ ...track, title: a.filename.replace(/\.[a-z0-9]{1,5}$/i, '').replace(/_+/g, ' ') }} />
+          return <AudioPlayer key={a.id} a={a} mine={!!mine} track={{ ...track, title: a.filename.replace(/\.[a-z0-9]{1,5}$/i, '').replace(/_+/g, ' ') }} />
         }
         if (inline && isTextFile(a)) return <TextPreview key={a.id} a={a} />
         if (isPdf(a)) return <PdfCard key={a.id} a={a} />

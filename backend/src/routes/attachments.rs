@@ -46,11 +46,12 @@ pub fn router() -> Router<AppState> {
         .route("/attachments/:id/thumb", get(serve_thumb))
         .route("/attachments/:id/viz", get(serve_viz))
         .route("/attachments/:id/listened", post(mark_listened))
+        .route("/attachments/:id/played", post(mark_played))
         .route("/attachments/:id/transcribe", post(retranscribe))
         .route("/attachments/:id/:filename", get(serve))
 }
 
-pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform, transcript, transcript_status, description";
+pub const ATTACHMENT_COLS: &str = "id, message_id, uploader_id, channel_id, filename, content_type, size, width, height, created_at, thumb_type, duration_ms, waveform, transcript, transcript_status, description, plays";
 
 fn sanitize_filename(raw: &str) -> String {
     let base = raw.rsplit(['/', '\\']).next().unwrap_or("file");
@@ -310,7 +311,8 @@ pub async fn attachments_for(db: &PgPool, message_ids: &[Uuid]) -> AppResult<Has
     .bind(message_ids)
     .fetch_all(db)
     .await?;
-    let voice: Vec<Uuid> = rows.iter().filter(|a| a.duration_ms.is_some()).map(|a| a.id).collect();
+    // Who has listened: voice messages and audio files.
+    let voice: Vec<Uuid> = rows.iter().filter(|a| a.duration_ms.is_some() || crate::audio_viz::is_audio(&a.content_type)).map(|a| a.id).collect();
     let mut listens: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
     if !voice.is_empty() {
         let l: Vec<(Uuid, Uuid)> = sqlx::query_as("SELECT attachment_id, user_id FROM attachment_listens WHERE attachment_id = ANY($1) ORDER BY created_at").bind(&voice).fetch_all(db).await?;
@@ -374,6 +376,32 @@ async fn mark_listened(State(state): State<AppState>, AuthUser(uid): AuthUser, P
         let target = crate::routes::channels::target_for(&state.db, &c).await?;
         state.hub.emit(target, "VOICE_LISTENED", serde_json::json!({ "channel_id": channel_id, "message_id": message_id, "attachment_id": id, "user_id": uid, "guild_id": c.guild_id }));
     }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /attachments/:id/played`: the caller listened to an audio file from the start for 30 s (or half of a shorter
+/// track). Each such play counts; the uploader's own don't, and one listener can't count again sooner than a play
+/// could take. Tells the channel so every card's count moves.
+async fn mark_played(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
+    let att: Option<(Uuid, Option<Uuid>, Uuid, String, Option<i32>)> = sqlx::query_as("SELECT channel_id, message_id, uploader_id, content_type, duration_ms FROM attachments WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+    let (channel_id, message_id, uploader, ct, voice) = att.ok_or_else(|| AppError::NotFound("Attachment not found".into()))?;
+    let Some(message_id) = message_id else { return Err(AppError::NotFound("Attachment not found".into())) };
+    if !crate::audio_viz::is_audio(&ct) || voice.is_some() { return Err(AppError::BadRequest("Not an audio file".into())); }
+    let c = crate::routes::channels::require_channel(&state.db, channel_id, uid).await?;
+    if uploader == uid { return Ok(StatusCode::NO_CONTENT); }
+    // The least listening a play takes, from the visualiser data's length when there is some.
+    let secs = crate::audio_viz::seconds(&crate::audio_viz::viz_path(&state.config.upload_dir, id)).await;
+    let gap = secs.map(|s| (s / 2.0).min(30.0)).unwrap_or(30.0).max(1.0) * 0.9;
+    let counted: Option<(bool,)> = sqlx::query_as(
+        "INSERT INTO attachment_listens (attachment_id, user_id) VALUES ($1, $2)
+         ON CONFLICT (attachment_id, user_id) DO UPDATE SET last_played_at = now()
+           WHERE attachment_listens.last_played_at < now() - make_interval(secs => $3)
+         RETURNING (xmax = 0)",
+    ).bind(id).bind(uid).bind(gap as f64).fetch_optional(&state.db).await?;
+    let Some((first,)) = counted else { return Ok(StatusCode::NO_CONTENT) };
+    let plays: i32 = sqlx::query_scalar("UPDATE attachments SET plays = plays + 1 WHERE id = $1 RETURNING plays").bind(id).fetch_one(&state.db).await?;
+    let target = crate::routes::channels::target_for(&state.db, &c).await?;
+    state.hub.emit(target, "AUDIO_PLAYED", serde_json::json!({ "channel_id": channel_id, "message_id": message_id, "attachment_id": id, "user_id": uid, "plays": plays, "first": first, "guild_id": c.guild_id }));
     Ok(StatusCode::NO_CONTENT)
 }
 

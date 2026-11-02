@@ -1,5 +1,5 @@
-import { Activity, AudioLines, CircleDot, Download, EyeOff, Pause, Play, Volume1, Volume2, VolumeX } from 'lucide-react'
-import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
+import { Activity, AudioLines, CircleDot, Download, EyeOff, Headphones, Pause, Play, Volume1, Volume2, VolumeX } from 'lucide-react'
+import { useEffect, useRef, useState, type MouseEvent as RMouseEvent, type PointerEvent as RPointerEvent } from 'react'
 import type { Attachment } from '../lib/types'
 import { formatBytes } from '../lib/upload'
 import { loadViz, seek, setSpeed, setVolume, toggle, usePlayer, type Track } from '../lib/player'
@@ -9,6 +9,8 @@ import { usePhone } from '../lib/swipe'
 import { useT } from '../lib/i18n'
 import ContextMenu, { useContextMenu } from './ContextMenu'
 import AudioVisualizer from './AudioVisualizer'
+import Avatar from './Avatar'
+import { useStore } from '../store'
 
 export const fmtTime = (sec: number) => { const s = Math.max(0, Math.floor(sec)); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(s % 60).padStart(2, '0')}` }
 const SPEEDS = [1, 1.25, 1.5, 2, 0.75]
@@ -94,8 +96,11 @@ function WaveBars({ peaks, frac }: { peaks: Uint8Array; frac: number }) {
  * them, or off), a seek bar, speed and volume. It plays through the app-wide player, so it keeps going when you leave
  * the chat. Download saves it; on phones it opens Save / Share / Copy Link / Open.
  */
-export default function AudioPlayer({ a, track }: { a: Attachment; track: Track }) {
+export default function AudioPlayer({ a, track: base, mine }: { a: Attachment; track: Track; mine?: boolean }) {
   const t = useT()
+  const users = useStore((s) => s.users)
+  const openModal = useStore((s) => s.openModal)
+  const track: Track = { ...base, count: !mine }
   const phone = usePhone()
   const prefs = usePrefs()
   const p = usePlayer()
@@ -119,6 +124,14 @@ export default function AudioPlayer({ a, track }: { a: Attachment; track: Track 
   const items = fileMenu(a.url, a.filename)
   const openMenu = () => { const r = dl.current?.getBoundingClientRect(); if (r) menu.open({ clientX: r.left, clientY: r.top }, items, { above: true }) }
   const iconBtn = 'h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-text-2 hover:bg-white/10 hover:text-text-0'
+  const plays = a.plays ?? 0
+  const listeners = a.listened_by ?? []
+  const names = listeners.map((u) => users[u]?.display_name ?? t('Someone'))
+  const listenersTip = names.length <= 3 ? t('Listened by {names}', { names: names.join(', ') }) : t('Listened by {names} and {n} others', { names: names.slice(0, 2).join(', '), n: names.length - 2 })
+  const showListeners = (e: RMouseEvent) => menu.open(e, [
+    { node: <div className="px-2 pb-1 pt-0.5 text-xs font-bold uppercase tracking-wide text-text-2">{listeners.length === 1 ? t('1 listener') : t('{n} listeners', { n: listeners.length })}</div> },
+    ...listeners.map((u) => ({ label: users[u]?.display_name ?? t('Someone'), icon: users[u] ? <Avatar user={users[u]} size={20} /> : <Headphones size={16} />, onClick: () => openModal({ kind: 'profile', userId: u }) })),
+  ])
   const VolIcon = p.volume === 0 ? VolumeX : p.volume < 0.5 ? Volume1 : Volume2
 
   return (
@@ -137,6 +150,10 @@ export default function AudioPlayer({ a, track }: { a: Attachment; track: Track 
             {ext && <span className="rounded bg-bg-4 px-1 py-px text-[10px] font-bold tracking-wide text-text-1">{ext}</span>}
             <span>{formatBytes(a.size)}</span>
             {duration > 0 && <><span aria-hidden>·</span><span className="tabular-nums">{fmtTime(duration)}</span></>}
+            {plays > 0 && <><span aria-hidden>·</span><span className="flex items-center gap-0.5 tabular-nums" title={plays === 1 ? t('1 play') : t('{n} plays', { n: plays.toLocaleString() })} data-audio-plays={plays}><Play size={10} fill="currentColor" />{plays.toLocaleString()}</span></>}
+            {listeners.length > 0 && (
+              <button type="button" onClick={showListeners} className="flex items-center gap-0.5 rounded px-0.5 tabular-nums hover:bg-white/10 hover:text-text-0" title={listenersTip} aria-label={listeners.length === 1 ? t('1 listener') : t('{n} listeners', { n: listeners.length })} data-audio-listeners={listeners.length}><Headphones size={11} />{listeners.length.toLocaleString()}</button>
+            )}
           </div>
         </div>
         <button type="button" onClick={() => setPrefs({ audioViz: nextViz })} className={iconBtn} title={t('Visualiser: {mode} (click for {next})', { mode: vizLabel[viz], next: vizLabel[nextViz] })} aria-label={t('Visualiser: {mode}', { mode: vizLabel[viz] })} data-audio-viz-mode={viz}>{vizIcon}</button>

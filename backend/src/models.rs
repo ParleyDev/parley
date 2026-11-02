@@ -837,9 +837,12 @@ pub struct Attachment {
     /// Alt text, set by the uploader.
     #[sqlx(default)]
     pub description: Option<String>,
-    /// Users who have listened to (most of) this voice message; filled by `attachments_for`.
+    /// Users who have listened to (most of) this voice message, or played this audio file; filled by `attachments_for`.
     #[sqlx(default)]
     pub listened_by: Vec<Uuid>,
+    /// Audio files: how many times it has been played.
+    #[sqlx(default)]
+    pub plays: i32,
 }
 
 #[derive(Serialize)]
@@ -865,14 +868,18 @@ pub struct AttachmentJson {
     pub description: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub listened_by: Vec<Uuid>,
+    #[serde(skip_serializing_if = "is_zero")]
+    pub plays: i32,
 }
+
+fn is_zero(n: &i32) -> bool { *n == 0 }
 
 impl From<Attachment> for AttachmentJson {
     fn from(a: Attachment) -> Self {
         let url = a.url();
         // `?v=2`: thumbnails are cached as immutable, and v2 ones honour EXIF orientation; bump when they change.
         let thumb_url = a.thumb_type.as_ref().map(|_| format!("/api/attachments/{}/thumb?v=2", a.id));
-        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, description: a.description, listened_by: a.listened_by }
+        AttachmentJson { id: a.id, filename: a.filename, content_type: a.content_type, size: a.size, width: a.width, height: a.height, url, thumb_url, duration_ms: a.duration_ms, waveform: a.waveform, transcript: a.transcript, transcript_status: a.transcript_status, description: a.description, listened_by: a.listened_by, plays: a.plays }
     }
 }
 

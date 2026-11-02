@@ -340,6 +340,8 @@ export interface Attachment {
   transcript?: string
   transcript_status?: 'pending' | 'done' | 'failed'
   listened_by?: string[]
+  /** Audio files: times played (who played them is in listened_by). */
+  plays?: number
   /** Alt text, set by the uploader. */
   description?: string | null
 }

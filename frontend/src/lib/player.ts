@@ -17,6 +17,8 @@ export interface Track {
   where?: { guildId: string | null; channelId: string; messageId: string }
   /** Report "listened" past 80% (voice messages from someone else). */
   listen?: boolean
+  /** Count plays (audio files from someone else): see `countPlays`. */
+  count?: boolean
 }
 export interface PlayerState {
   track: Track | null
@@ -34,6 +36,27 @@ const subs = new Set<() => void>()
 const set = (patch: Partial<PlayerState>) => { state = { ...state, ...patch }; subs.forEach((f) => f()) }
 const reported = new Set<string>()
 
+/**
+ * Play counting: a play counts once it has been heard from the start for 30 s, or half of a shorter track. Only time
+ * actually played adds up (seeking ahead doesn't), and going back to the start (or playing it again after it ended)
+ * begins a new play that can count again. Starting partway through doesn't count.
+ */
+const PLAY_SECONDS = 30
+let listening: { id: string; heard: number; last: number; done: boolean; jumped?: boolean } | null = null
+function countPlays(t: number) {
+  const tr = state.track
+  if (!tr?.count) return
+  if (!listening || listening.id !== tr.id || (t < 1 && listening.last > 2)) listening = { id: tr.id, heard: 0, last: t, done: t > 2 }
+  // Any forward movement that isn't a seek was played, even a long gap (timeupdate is sparse in the background).
+  const d = t - listening.last
+  if (d > 0 && !listening.jumped) listening.heard += d
+  listening.last = t
+  if (!listening.done && state.duration && listening.heard >= Math.min(PLAY_SECONDS, state.duration / 2)) {
+    listening.done = true
+    api.post(`/attachments/${tr.id}/played`).catch(() => {})
+  }
+}
+
 function readVolume() { try { const v = Number(localStorage.getItem('parley.playerVolume')); return Number.isFinite(v) && v > 0 && v <= 1 ? v : 1 } catch { return 1 } }
 
 let el: HTMLAudioElement | null = null
@@ -45,8 +68,12 @@ function audio(): HTMLAudioElement {
   el.addEventListener('pause', () => set({ playing: false }))
   el.addEventListener('loadedmetadata', () => set({ duration: Number.isFinite(el!.duration) ? el!.duration : 0 }))
   el.addEventListener('durationchange', () => { if (Number.isFinite(el!.duration)) set({ duration: el!.duration }) })
+  // Jumps aren't listening; a jump back to the start begins a new play.
+  el.addEventListener('seeking', () => { if (listening) { if (el!.currentTime < 1) listening = null; else listening.jumped = true } })
+  el.addEventListener('seeked', () => { if (listening) { listening.jumped = false; listening.last = el!.currentTime } })
   el.addEventListener('timeupdate', () => {
     set({ pos: el!.currentTime })
+    countPlays(el!.currentTime)
     const tr = state.track
     if (tr?.listen && !reported.has(tr.id) && state.duration && el!.currentTime / state.duration >= LISTENED_AT) {
       reported.add(tr.id)
@@ -55,6 +82,7 @@ function audio(): HTMLAudioElement {
   })
   el.addEventListener('ended', () => {
     const tr = state.track
+    listening = null
     if (tr?.listen && !reported.has(tr.id)) { reported.add(tr.id); api.post(`/attachments/${tr.id}/listened`).catch(() => reported.delete(tr.id)) }
     set({ playing: false, pos: state.duration })
     // A moment at the end (the bar fills), then the player clears.
@@ -144,6 +172,8 @@ export async function play(track: Track, opts: { at?: number; speed?: number } =
   if (state.track?.id !== track.id) {
     a.pause()
     a.src = track.url
+    // Starting partway through isn't a play.
+    listening = opts.at && opts.at > 2 ? { id: track.id, heard: 0, last: opts.at, done: true } : null
     set({ track, pos: opts.at ?? 0, duration: 0, speed: opts.speed ?? 1 })
     timelineFor = null; timelineData = null
     void loadViz(track.url).then((v) => { if (v && state.track?.id === track.id) { timelineFor = track.id; timelineData = v } })
@@ -170,6 +200,7 @@ export function seek(track: Track, sec: number) { if (state.track?.id === track.
 export function setSpeed(speed: number) { set({ speed }); if (el) el.playbackRate = speed }
 export function setVolume(volume: number) { set({ volume }); if (el) el.volume = volume; try { localStorage.setItem('parley.playerVolume', String(volume)) } catch { /* ignore */ } }
 export function stop() {
+  listening = null
   if (el) { el.pause(); el.removeAttribute('src'); el.load() }
   set({ track: null, playing: false, pos: 0, duration: 0 })
   try { if (navigator.mediaSession) navigator.mediaSession.metadata = null } catch { /* ignore */ }

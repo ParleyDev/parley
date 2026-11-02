@@ -67,6 +67,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'READ_STATE_UPDATE'; d: { channel_id: string; last_read_msg: string } }
   | { t: 'READ_RECEIPT'; d: { channel_id: string; user_id: string; message_id: string } }
   | { t: 'VOICE_LISTENED'; d: { channel_id: string; message_id: string; attachment_id: string; user_id: string } }
+  | { t: 'AUDIO_PLAYED'; d: { channel_id: string; message_id: string; attachment_id: string; user_id: string; plays: number } }
   | { t: 'SOUNDBOARD_PLAY'; d: { channel_id: string; guild_id: string | null; user_id: string; sound: Sound & { builtin?: boolean }; entrance?: boolean } }
   | { t: 'SOUNDBOARD_UPDATE'; d: { guild_id: string; sounds: Sound[] } }
   | { t: 'EVENT_UPDATE'; d: { guild_id: string } }
@@ -310,6 +311,7 @@ function handle(ev: Ev) {
     case 'READ_STATE_UPDATE': s.setReadState(ev.d.channel_id, ev.d.last_read_msg); clearChannelNotifications(ev.d.channel_id); break
     case 'READ_RECEIPT': if (ev.d.user_id !== s.user?.id) s.applyReceipt(ev.d.channel_id, ev.d.user_id, ev.d.message_id); break
     case 'VOICE_LISTENED': s.applyListened(ev.d.channel_id, ev.d.message_id, ev.d.attachment_id, ev.d.user_id); break
+    case 'AUDIO_PLAYED': s.applyListened(ev.d.channel_id, ev.d.message_id, ev.d.attachment_id, ev.d.user_id, ev.d.plays); break
     case 'VOICE_STATE_UPDATE': {
       // You left a DM call from another device: same as leaving here (no ring for that call any more).
       const before = s.voiceStates[ev.d.user_id]?.channel_id

@@ -23,7 +23,7 @@ const writeLocal = (uid: string, channelId: string, rows: Message[]) => {
 /** The in-app "system app" that explains undelivered messages: a friendly frog. */
 const FROG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#57c26b"/><circle cx="20" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="44" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="20" cy="22" r="6" fill="#fff"/><circle cx="44" cy="22" r="6" fill="#fff"/><circle cx="21.5" cy="23" r="3" fill="#1f2937"/><circle cx="45.5" cy="23" r="3" fill="#1f2937"/><circle cx="22.5" cy="21.5" r="1" fill="#fff"/><circle cx="46.5" cy="21.5" r="1" fill="#fff"/><path d="M18 40q14 12 28 0" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/><circle cx="14" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/><circle cx="50" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/></svg>`)
 export const RIBBIT = { id: 'ribbit', username: 'ribbit', display_name: 'Ribbit', avatar_url: FROG, bio: '', status: '', created_at: new Date(0).toISOString(), banner_url: null, theme_primary: null, theme_accent: null, pronouns: '', name_primary: null } as unknown as User
-import type { Activity, Poll, ThreadInfo, TypingIndicator } from './lib/types'
+import type { Activity, Attachment, Poll, ThreadInfo, TypingIndicator } from './lib/types'
 import type { Ban, Channel, DmChannel, Draft, Emoji, Guild, GuildEvent, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sound, Sticker, StudioSession, User, UserNote, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
@@ -296,8 +296,8 @@ interface State {
   receipts: Record<string, Record<string, string>>
   setReceipts: (channelId: string, list: { user_id: string; message_id: string }[]) => void
   applyReceipt: (channelId: string, userId: string, messageId: string) => void
-  /** Someone listened to a voice message: add them to the attachment's listened_by. */
-  applyListened: (channelId: string, messageId: string, attachmentId: string, userId: string) => void
+  /** Someone listened to a voice message or played an audio file: add them to the attachment's listened_by (and set its play count). */
+  applyListened: (channelId: string, messageId: string, attachmentId: string, userId: string, plays?: number) => void
   /** The server refused to deliver a DM: keep it in the list in red with a Ribbit notice under it. */
   failDelivery: (channelId: string, draft: Draft) => void
   /** Send a failed message again; on success it becomes a real message and the notice goes away. */
@@ -856,10 +856,15 @@ export const useStore = create<State>((set, get) => ({
     if (s.user) writeLocal(s.user.id, channelId, next.filter((m) => m.local))
     return { messages: { ...s.messages, [channelId]: next } }
   }),
-  applyListened: (channelId, messageId, attachmentId, userId) => set((s) => {
+  applyListened: (channelId, messageId, attachmentId, userId, plays) => set((s) => {
     const list = s.messages[channelId]
     if (!list?.some((m) => m.id === messageId)) return {}
-    return { messages: { ...s.messages, [channelId]: list.map((m) => (m.id !== messageId ? m : { ...m, attachments: (m.attachments ?? []).map((a) => (a.id !== attachmentId || a.listened_by?.includes(userId) ? a : { ...a, listened_by: [...(a.listened_by ?? []), userId] })) })) } }
+    const apply = (a: Attachment): Attachment => {
+      if (a.id !== attachmentId) return a
+      const listened_by = a.listened_by?.includes(userId) ? a.listened_by : [...(a.listened_by ?? []), userId]
+      return plays == null ? (listened_by === a.listened_by ? a : { ...a, listened_by }) : { ...a, listened_by, plays: Math.max(plays, a.plays ?? 0) }
+    }
+    return { messages: { ...s.messages, [channelId]: list.map((m) => (m.id !== messageId ? m : { ...m, attachments: (m.attachments ?? []).map(apply) })) } }
   }),
   loadUntil: async (channelId, messageId) => {
     for (let i = 0; i < 60; i++) {

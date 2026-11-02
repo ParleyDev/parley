@@ -168,6 +168,15 @@ impl Analyser {
     }
 }
 
+/// The length of the audio the visualiser data at `path` covers, in seconds, if it's there.
+pub async fn seconds(path: &Path) -> Option<f32> {
+    let mut f = tokio::fs::File::open(path).await.ok()?;
+    let mut h = [0u8; HEADER];
+    f.read_exact(&mut h).await.ok()?;
+    if &h[..4] != b"PVZ1" || h[4] == 0 { return None; }
+    Some(u32::from_le_bytes([h[8], h[9], h[10], h[11]]) as f32 / h[4] as f32)
+}
+
 /// Just the header and the peak waveform (seek bars), without the timeline.
 pub fn peaks_only(bytes: &[u8]) -> &[u8] {
     let n = bytes.get(12..14).map(|b| u16::from_le_bytes([b[0], b[1]]) as usize).unwrap_or(0);
