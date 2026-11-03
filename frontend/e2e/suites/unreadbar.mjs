@@ -51,7 +51,7 @@ ok('opening a DM removes it from the server bar', await p.locator(`[data-unread-
 await p.click(`[data-unread-dm="${dmC.id}"]`, { button: 'right' }); await p.click('[data-context-menu] [data-menu-item="Mark As Read"]')
 await p.waitForFunction(() => !document.querySelector('[data-unread-dm]'), null, { timeout: 5000 }).catch(() => {})
 ok('Mark As Read from its menu removes it too', await p.locator('[data-unread-dm]').count() === 0)
-await p.goto(`${WEB}/channels/${g2.id}/${t2.id}`); await p.waitForFunction((gid) => !document.querySelector(`[data-guild-icon="${gid}"] [data-guild-mentions]`), g2.id, { timeout: 5000 }).catch(() => {})
+await p.goto(`${WEB}/channels/${g2.id}/${t2.id}`); await p.waitForSelector(`[data-guild-icon="${g2.id}"]`); await p.waitForFunction((gid) => !document.querySelector(`[data-guild-icon="${gid}"] [data-guild-mentions]`), g2.id, { timeout: 5000 }).catch(() => {})
 ok('reading the channel clears the server ping count', await p.locator(`[data-guild-icon="${g2.id}"] [data-guild-mentions]`).count() === 0)
 await p.reload(); await p.waitForSelector('[data-guild-bar]'); await p.waitForTimeout(500)
 ok('and they stay cleared after a reload', await p.locator('[data-unread-dm]').count() === 0 && await p.locator(`[data-guild-icon="${g2.id}"] [data-guild-mentions]`).count() === 0)

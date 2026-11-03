@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { flushSync } from 'react-dom'
 import { useStore } from '../store'
 import { api } from '../lib/api'
+import { isLooking } from '../lib/ws'
 import Tooltip from './Tooltip'
 import { jumpToMessage, jumpToMessageAsync } from './ChatView'
 import type { Channel, DmChannel, Message } from '../lib/types'
@@ -136,14 +137,6 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   })()
   const toDivider = () => scrollRef.current?.querySelector<HTMLElement>('[data-unread-divider]')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 
-  // Mark read when viewing and tab visible.
-  useEffect(() => {
-    const mark = () => { if (document.visibilityState === 'visible') markRead(channel.id) }
-    mark()
-    document.addEventListener('visibilitychange', mark)
-    window.addEventListener('focus', mark)
-    return () => { document.removeEventListener('visibilitychange', mark); window.removeEventListener('focus', mark) }
-  }, [channel.id, lastId, markRead])
 
   // Rows on screen: every message in short histories; past VIRTUALIZE_AT only those within OVERSCAN of the viewport,
   // with spacers (measured heights, or estimates for rows never shown) standing in for the rest.
@@ -268,6 +261,8 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       settle()
     }
     if (stickBottom.current && messages?.length) setSeenAtBottom(messages[messages.length - 1].id)
+    // Landed (or settled) at the newest message: that counts as seeing it.
+    if (initialScrollDone.current) markIfSeen()
     const f = requestAnimationFrame(updateRange)
     return () => cancelAnimationFrame(f)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -317,6 +312,25 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     const id = channel.id
     bannerTimer.current = window.setTimeout(() => { bannerTimer.current = 0; setBannerOff(id) }, readerScrolled.current ? 600 : 4000)
   }, [showingBanner, seenAtBottom, away, messages, hasNewer, channel.id])
+  // Mark read only what the reader has seen, as Discord does: the window in front and focused, the reader not away, and
+  // the newest message on screen (at the bottom, with nothing newer to load). Otherwise new messages stay unread, with
+  // the New line, until they come back, focus the window or scroll down to them.
+  const latest = useRef({ hasNewer, newest: messages?.[messages.length - 1]?.id })
+  latest.current = { hasNewer, newest: messages?.[messages.length - 1]?.id }
+  const markIfSeen = useCallback(() => {
+    const el = scrollRef.current, { hasNewer, newest } = latest.current
+    const last = useStore.getState().lastMessageId[channel.id]
+    if (!el || !initialScrollDone.current || hasNewer || !newest || (last && newest < last)) return
+    if (el.scrollHeight - el.scrollTop - el.clientHeight >= 40 || !isLooking()) return
+    markRead(channel.id)
+  }, [channel.id, markRead])
+  useEffect(() => {
+    markIfSeen()
+    document.addEventListener('visibilitychange', markIfSeen)
+    window.addEventListener('focus', markIfSeen)
+    window.addEventListener('parley:present', markIfSeen)
+    return () => { document.removeEventListener('visibilitychange', markIfSeen); window.removeEventListener('focus', markIfSeen); window.removeEventListener('parley:present', markIfSeen) }
+  }, [lastId, messages, hasNewer, markIfSeen])
   const frame = useRef(0)
   const onScroll = useCallback(() => {
     const el = scrollRef.current
@@ -331,11 +345,12 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     if (stickBottom.current || !anchor.current) savedPos.delete(channel.id)
     else savedPos.set(channel.id, { id: anchor.current.id, offset: anchor.current.top - el.getBoundingClientRect().top })
     if (stickBottom.current && messages?.length) setSeenAtBottom(messages[messages.length - 1].id)
+    if (stickBottom.current) markIfSeen()
     setAway(fromBottom > Math.max(600, el.clientHeight * 1.5))
     cancelAnimationFrame(frame.current); frame.current = requestAnimationFrame(updateRange)
     if (el.scrollTop < 120 && hasMore !== false && !loading && messages?.length) loadMessages(channel.id, messages[0].id)
     if (hasNewer && fromBottom < 160 && !loading) loadNewer(channel.id)
-  }, [channel.id, hasMore, hasNewer, loading, messages, loadMessages, loadNewer, recordAnchor, updateRange])
+  }, [channel.id, hasMore, hasNewer, loading, messages, loadMessages, loadNewer, recordAnchor, updateRange, markIfSeen])
 
   // Still at the top when a page finishes loading (the reader got there while it was in flight, so no scroll event
   // is coming): load the next one.
