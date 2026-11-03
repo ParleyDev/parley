@@ -38,6 +38,9 @@ export const desktop = {
   pttKey: (code: string | null): Promise<boolean> => invoke()?.<boolean>('set_ptt_key', { code }).catch(() => false) ?? Promise.resolve(false),
   /** The window, taskbar and tray icon (PNG bytes); empty resets it. */
   appIcon(png: Uint8Array) { invoke()?.('set_app_icon', { png: Array.from(png) }).catch(() => {}) },
+  /** Seconds since the last keyboard or mouse input anywhere on the computer. Null when the shell can't tell (older
+   *  shells, browsers, Wayland). */
+  inputIdle: (): Promise<number | null> => invoke()?.<number | null>('input_idle').catch(() => null) ?? Promise.resolve(null),
   /** Is OBS or XSplit running? Null when the shell can't tell (older shells, browsers). */
   streamingApps: (): Promise<boolean | null> => invoke()?.<boolean>('streaming_apps').catch(() => null) ?? Promise.resolve(null),
   /** The page's own window controls and title bar drag; resolves to whether the window is maximised. */

@@ -29,8 +29,10 @@ ok('others cannot', (await raw(b.token, 'GET', `/guilds/${g.id}/member-joins`)).
 const role = await call(a.token, 'POST', `/guilds/${g.id}/roles`, { name: 'Keeper' })
 await call(a.token, 'PATCH', `/guilds/${g.id}/members/${e.user.id}`, { roles: [role.id] })
 const dave = await open(d, `/channels/${g.id}/${general.id}`); const erin = await open(e, `/channels/${g.id}/${general.id}`)
-await dave.ctx.close(); await erin.ctx.close(); await new Promise((r) => setTimeout(r, 1500))
-const left = await members()
+// Offline once the presence grace period (a few seconds on the test backends) has run out.
+await dave.ctx.close(); await erin.ctx.close()
+let left = await members()
+for (let i = 0; i < 40 && left.includes(d.user.id); i++) { await new Promise((r) => setTimeout(r, 250)); left = await members() }
 ok('going offline removes a temporary member without a role', !left.includes(d.user.id))
 ok('but not one who was given a role', left.includes(e.user.id))
 

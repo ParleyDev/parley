@@ -1,5 +1,5 @@
 import { loadThemes, setThemes, type ColorTheme } from './colorThemes'
-import { isOverlay } from './desktop'
+import { desktop, desktopBridge, isOverlay } from './desktop'
 import { pushCaption } from './captions'
 import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
@@ -115,7 +115,7 @@ let lastSeq = 0
 /** Backend instance that numbered lastSeq; a resume is only valid against the same one. */
 let instanceId: string | null = null
 /** Debug counters (also handy for tests): how often we resumed vs. got a fresh READY. */
-export const wsStats = { resumed: 0, ready: 0, replayed: 0, /** No input for this long counts as away (tests shorten it). */ idleAfter: 10 * 60_000, /** Re-check away now (tests). */ checkIdle: () => checkIdle(), /** Drop the socket as a network blip would (debugging/tests); it reconnects and resumes. */ drop: () => { socket?.close() }, /** Drop and forget the sequence: the next connect is a full READY (as after a server restart). */ resync: () => { lastSeq = 0; instanceId = null; socket?.close() } }
+export const wsStats = { resumed: 0, ready: 0, replayed: 0, /** No input for this long counts as away (tests shorten it). */ idleAfter: 5 * 60_000, /** Re-check away now (tests). */ checkIdle: () => checkIdle(), /** Drop the socket as a network blip would (debugging/tests); it reconnects and resumes. */ drop: () => { socket?.close() }, /** Drop and forget the sequence: the next connect is a full READY (as after a server restart). */ resync: () => { lastSeq = 0; instanceId = null; socket?.close() } }
 let retry = 0
 let closedByUser = false
 let pingTimer: ReturnType<typeof setInterval> | null = null
@@ -128,7 +128,7 @@ export function connectSocket() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
   const resume = lastSeq > 0 && useStore.getState().ready ? `&seq=${lastSeq}${instanceId ? `&instance=${instanceId}` : ''}` : ''
   reportedIdle = isAway()
-  const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}&platform=${clientPlatform()}${reportedIdle ? '&idle=1' : ''}${resume}`)
+  const ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}&platform=${clientPlatform()}${reportedIdle ? '&idle=1' : ''}&away_after=${Math.round(wsStats.idleAfter / 1000)}${resume}`)
   socket = ws
 
   ws.onopen = () => {
@@ -164,13 +164,15 @@ export function connectSocket() {
   ws.onerror = () => { /* onclose will fire */ }
 }
 
-/** Native app going to the background: close the socket cleanly, so the server sees the user offline and pushes
- *  start straight away (a suspended app's socket otherwise lingers, silent). Not during a call, which needs it. */
+/** Native app going to the background: close the socket cleanly, so pushes start straight away (a suspended app's
+ *  socket otherwise lingers, silent). The server shows the user idle for a while rather than offline at once. Not
+ *  during a call, which needs it. */
 let suspended = false
 export function suspendSocket() {
   const ws = socket
   if (!ws || voice.currentChannel) return
   suspended = true
+  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ op: 'suspend' }))
   ws.onclose = null; ws.onmessage = null
   if (pingTimer) clearInterval(pingTimer)
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
@@ -401,19 +403,19 @@ function speak(m: Message, current: boolean) {
   try { if (!isOverlay() && 'speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = getPrefs().ttsRate; speechSynthesis.speak(u) } } catch { /* ignore */ }
 }
 
-// Activity pings: tell the server we are at the keyboard (at most once a minute) so push notifications wait
-// for the inactive timeout instead of firing while we are reading.
+// Activity pings: tell the server we are at the keyboard (at most once a minute) so push notifications wait for the
+// inactive timeout instead of firing while we are reading, and so the server can show us idle by itself once they
+// stop (our own timers may not run in a hidden window). `force`: input seen outside the window (the desktop app).
 let lastActivity = 0
-function activity() {
-  if (document.visibilityState !== 'visible') return
+function activity(force?: boolean) {
+  if (force !== true && document.visibilityState !== 'visible') return
   const now = Date.now()
-  if (now - lastActivity < 60_000) return
-  lastActivity = now
-  sendOp({ op: 'activity' })
+  if (now - lastActivity < Math.min(60_000, wsStats.idleAfter / 3)) return
+  if (sendOp({ op: 'activity' })) lastActivity = now
 }
 if (typeof window !== 'undefined') {
-  for (const ev of ['keydown', 'pointerdown', 'focus']) window.addEventListener(ev, activity, { passive: true })
-  document.addEventListener('visibilitychange', activity)
+  for (const ev of ['keydown', 'pointerdown', 'pointermove', 'wheel', 'touchstart', 'focus']) window.addEventListener(ev, () => activity(), { passive: true })
+  document.addEventListener('visibilitychange', () => activity())
 }
 
 // Automatic idle: this client reports the user away after a stretch with no input, or as soon as the mobile app goes
@@ -431,8 +433,30 @@ function checkIdle() {
   if (away !== reportedIdle && sendOp({ op: 'idle', idle: away })) reportedIdle = away
 }
 function onInput() {
+  const back = Date.now() - lastInput >= wsStats.idleAfter
   lastInput = Date.now()
   if (reportedIdle) checkIdle()
+  // Back after being away: what is on screen now counts as read (see ChatPane).
+  if (back) window.dispatchEvent(new Event('parley:present'))
+}
+
+/** Whether the user is looking at this window: shown, focused (the phone apps' web views always are while in front)
+ *  and not away. What decides whether new messages on screen count as read. */
+export function isLooking(): boolean {
+  if (document.visibilityState !== 'visible') return false
+  if (!isNative() && !document.hasFocus()) return false
+  return Date.now() - lastInput < wsStats.idleAfter
+}
+
+// The desktop app sees input anywhere on the computer: someone working in another app is here, and someone who left
+// the computer is away even with Parley in front.
+if (typeof window !== 'undefined' && desktopBridge() && !isOverlay()) {
+  setInterval(() => {
+    void desktop.inputIdle().then((secs) => {
+      if (secs === null) return
+      if (secs < 20) { onInput(); activity(true) }
+    })
+  }, 15_000)
 }
 if (typeof window !== 'undefined') {
   for (const ev of ['keydown', 'pointerdown', 'pointermove', 'wheel', 'touchstart', 'focus']) window.addEventListener(ev, onInput, { passive: true })

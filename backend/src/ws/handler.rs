@@ -32,6 +32,10 @@ pub struct WsQuery {
     platform: Option<String>,
     /// 1 when the client connects already away (e.g. a mobile app reconnecting in the background).
     idle: Option<u8>,
+    /// Seconds without input before the server shows this socket away by itself, even when the client's own timers
+    /// stop (a hidden or minimised window). People's apps send it; without it (bots, older clients) a socket is timed
+    /// only once it reports input (`activity`/`idle`), with 300 s.
+    away_after: Option<u64>,
     /// Bots (token `bot_…`): which events they want (see `ws::intents`). Default: everything not privileged.
     intents: Option<u32>,
 }
@@ -64,7 +68,9 @@ pub async fn ws_upgrade(
     };
     let platform = q.platform.as_deref().filter(|p| crate::ws::bus::PLATFORMS.contains(p)).unwrap_or("web").to_string();
     let idle = q.idle.unwrap_or(0) != 0;
-    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid, resume, platform, idle, intents))
+    let timed = q.away_after.is_some();
+    let away_after = std::time::Duration::from_secs(q.away_after.unwrap_or(300).clamp(2, 3600));
+    ws.on_upgrade(move |socket| handle_socket(socket, state, uid, sid, resume, platform, idle, (timed, away_after), intents))
 }
 
 #[derive(Deserialize)]
@@ -83,6 +89,8 @@ enum ClientOp {
     Activity,
     /// The user went away from this client (no input for a while, or the app went to the background) or came back.
     Idle { idle: bool },
+    /// The phone app is going to the background and closing this socket: show the user idle for a while, not offline.
+    Suspend,
     /// Started or stopped watching someone's screen share in the same call.
     StreamWatch { user_id: Uuid, on: bool },
     /// A floating emoji reaction in the call.
@@ -92,7 +100,7 @@ enum ClientOp {
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid, resume_from: Option<u64>, platform: String, idle: bool, intents: Option<u32>) {
+async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, session_id: Uuid, resume_from: Option<u64>, platform: String, idle: bool, away_after: (bool, std::time::Duration), intents: Option<u32>) {
     let (mut tx, mut rx) = socket.split();
 
     // --- Resume: replay what this client missed if it is all still buffered ---
@@ -115,20 +123,20 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             crate::metrics::METRICS.ws_resumes.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let resumed = json!({ "t": "RESUMED", "d": { "replayed": relevant.len(), "from": after }, "s": state.hub.current_seq(), "i": state.hub.instance_id });
             if tx.send(Message::Text(resumed.to_string())).await.is_err() {
-                crate::ws::bus::disconnect(&state, user_id, &platform, idle).await;
+                crate::ws::bus::disconnect(&state, user_id, &platform, idle, false).await;
                 return;
             }
             for ev in &relevant {
                 let Some(payload) = crate::ws::intents::filter(intents, &ev.payload, user_id) else { continue };
                 if tx.send(Message::Text(payload.to_string())).await.is_err() {
-                    crate::ws::bus::disconnect(&state, user_id, &platform, idle).await;
+                    crate::ws::bus::disconnect(&state, user_id, &platform, idle, false).await;
                     return;
                 }
             }
             crate::ws::bus::announce(&state, user_id).await;
             if first { crate::routes::spotify::reannounce(&state, user_id).await; }
             let session = state.hub.next_session();
-            run_loop(&state, user_id, session_id, session, my_guilds, events, last, &mut tx, &mut rx, &platform, idle, intents).await;
+            run_loop(&state, user_id, session_id, session, my_guilds, events, last, &mut tx, &mut rx, &platform, idle, away_after, intents).await;
             return;
         }
         tracing::debug!(user = %user_id, after, "resume gap not buffered; sending READY");
@@ -252,7 +260,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
         }
     });
     if tx.send(Message::Text(ready.to_string())).await.is_err() {
-        crate::ws::bus::disconnect(&state, user_id, &platform, idle).await;
+        crate::ws::bus::disconnect(&state, user_id, &platform, idle, false).await;
         return;
     }
     crate::metrics::METRICS.ws_connects.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -261,7 +269,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
     // Others dropped this person's activity when they went offline; send it again.
     if first { crate::routes::spotify::reannounce(&state, user_id).await; }
 
-    run_loop(&state, user_id, session_id, session, my_guilds, events, seq_at_subscribe, &mut tx, &mut rx, &platform, idle, intents).await;
+    run_loop(&state, user_id, session_id, session, my_guilds, events, seq_at_subscribe, &mut tx, &mut rx, &platform, idle, away_after, intents).await;
 }
 
 fn matches_target(target: &Target, user_id: Uuid, session_id: Uuid, my_guilds: &HashSet<Uuid>) -> bool {
@@ -287,24 +295,48 @@ async fn run_loop(
     tx: &mut futures::stream::SplitSink<WebSocket, Message>,
     rx: &mut futures::stream::SplitStream<WebSocket>,
     platform: &str,
-    mut idle: bool,
+    client_idle: bool,
+    (timed, away_after): (bool, std::time::Duration),
     intents: Option<u32>,
 ) {
     let mut last_seq = already_sent;
     // A phone that suspends the app leaves its socket open but silent, which would keep the user "online" (and their
     // pushes held back) until TCP gives up. Ping every 30 s (clients answer at the protocol level, bots included)
     // and drop a socket that has sent nothing for 75 s.
-    let mut ping = tokio::time::interval(std::time::Duration::from_secs(30));
+    // Away is this socket's own say (`client_idle`) or the server's: no input reported for `away_after`, so someone who
+    // walks away shows idle even when their client's timers have stopped. A call counts as being here. Only clients
+    // that ask to be timed or report input (people's apps, not bots) are.
+    let mut client_idle = client_idle;
+    let mut quiet = false;
+    let mut reports_input = timed || client_idle;
+    let mut last_input = tokio::time::Instant::now();
+    let mut idle = client_idle;
+    let mut suspended = false;
+    let tick = std::time::Duration::from_secs(30).min(away_after / 3).max(std::time::Duration::from_secs(1));
+    let mut ping = tokio::time::interval(tick);
     ping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut heard = tokio::time::Instant::now();
+    let mut pinged = tokio::time::Instant::now();
     loop {
+        // Sockets count towards Idle per socket; only announce when the user as a whole goes away or comes back.
+        let now_idle = client_idle || quiet;
+        if now_idle != idle {
+            let before = crate::ws::bus::is_idle(&state.db, user_id).await;
+            crate::ws::bus::set_idle(state, user_id, now_idle).await;
+            idle = now_idle;
+            if crate::ws::bus::is_idle(&state.db, user_id).await != before { crate::ws::bus::announce(state, user_id).await; }
+        }
         tokio::select! {
             _ = ping.tick() => {
                 if heard.elapsed() > std::time::Duration::from_secs(75) {
                     tracing::debug!(user = %user_id, "ws silent for 75 s; closing");
                     break;
                 }
-                if tx.send(Message::Ping(Vec::new())).await.is_err() { break; }
+                quiet = reports_input && last_input.elapsed() >= away_after && state.hub.voice_state(user_id).is_none();
+                if pinged.elapsed() >= std::time::Duration::from_secs(30) - tick / 2 {
+                    pinged = tokio::time::Instant::now();
+                    if tx.send(Message::Ping(Vec::new())).await.is_err() { break; }
+                }
             }
             ev = events.recv() => {
                 match ev {
@@ -330,13 +362,15 @@ async fn run_loop(
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ClientOp>(&text) {
-                            // Per-socket state: only announce when the user as a whole goes away or comes back.
-                            Ok(ClientOp::Idle { idle: now }) => if now != idle {
-                                let before = crate::ws::bus::is_idle(&state.db, user_id).await;
-                                crate::ws::bus::set_idle(state, user_id, now).await;
-                                idle = now;
-                                if crate::ws::bus::is_idle(&state.db, user_id).await != before { crate::ws::bus::announce(state, user_id).await; }
-                            },
+                            Ok(ClientOp::Idle { idle: now }) => {
+                                reports_input = true; client_idle = now;
+                                if !now { last_input = tokio::time::Instant::now(); quiet = false; }
+                            }
+                            Ok(ClientOp::Activity) => {
+                                reports_input = true; last_input = tokio::time::Instant::now(); quiet = false; client_idle = false;
+                                handle_client_op(state, user_id, session, ClientOp::Activity, tx).await;
+                            }
+                            Ok(ClientOp::Suspend) => { suspended = true; client_idle = true; }
                             Ok(op) => handle_client_op(state, user_id, session, op, tx).await,
                             Err(_) => {}
                         }
@@ -353,11 +387,7 @@ async fn run_loop(
     if let Some(prev) = state.hub.voice_leave(user_id, Some(session)) {
         emit_voice_leave(state, &prev);
     }
-    if crate::ws::bus::disconnect(state, user_id, platform, idle).await {
-        // Offline everywhere now: temporary members without a role leave their temporary servers.
-        let st = state.clone();
-        tokio::spawn(async move { crate::routes::guilds::drop_temporary(&st, user_id).await });
-    }
+    crate::ws::bus::disconnect(state, user_id, platform, idle, suspended).await;
     crate::ws::bus::announce(state, user_id).await;
 }
 
@@ -548,7 +578,7 @@ async fn handle_client_op(
             let _ = tx.send(Message::Text(json!({"t":"PONG","d":{}}).to_string())).await;
         }
         // Handled in run_loop, which owns the socket's idle flag.
-        ClientOp::Idle { .. } => {}
+        ClientOp::Idle { .. } | ClientOp::Suspend => {}
         ClientOp::Activity => {
             let _ = sqlx::query("UPDATE users SET active_at = now() WHERE id = $1").bind(user_id).execute(&state.db).await;
         }

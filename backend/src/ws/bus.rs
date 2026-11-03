@@ -97,7 +97,14 @@ pub async fn heartbeat(state: AppState) {
     }
 }
 
-/// Register a socket; true when the user was offline everywhere before (announce PRESENCE_UPDATE online).
+/// How long someone still shows online after their last connection closes, so a refresh, a network blip or a server
+/// restart doesn't flash them offline (`PRESENCE_GRACE_SECS`, default 30).
+pub fn grace_secs() -> i64 { env_secs("PRESENCE_GRACE_SECS", 30) }
+/// How long a phone app put in the background shows as idle before offline (`PRESENCE_PHONE_LINGER_SECS`, default 300).
+pub fn phone_linger_secs() -> i64 { env_secs("PRESENCE_PHONE_LINGER_SECS", 300) }
+fn env_secs(key: &str, default: i64) -> i64 { std::env::var(key).ok().and_then(|v| v.parse().ok()).filter(|n: &i64| *n >= 0).unwrap_or(default) }
+
+/// Register a socket; true when the user had no socket anywhere before.
 pub const PLATFORMS: [&str; 4] = ["web", "desktop", "mobile", "vr"];
 
 /// `idle`: the socket starts out away (a client connecting from the background).
@@ -109,19 +116,45 @@ pub async fn connect(state: &AppState, user: Uuid, platform: &str, idle: bool) -
          ON CONFLICT (user_id, instance_id) DO UPDATE SET sockets = presence.sockets + 1, updated_at = now(), idle = presence.idle + $4,
            platforms = jsonb_set(presence.platforms, ARRAY[$3::text], to_jsonb(COALESCE((presence.platforms->>$3)::int, 0) + 1))")
         .bind(user).bind(state.hub.instance_id).bind(platform).bind(idle as i32).execute(&state.db).await;
+    let _ = sqlx::query("DELETE FROM presence_linger WHERE user_id = $1").bind(user).execute(&state.db).await;
     before == 0
 }
 
-/// Drop a socket (`idle`: it was reporting away); true when the user is now offline everywhere.
-pub async fn disconnect(state: &AppState, user: Uuid, platform: &str, idle: bool) -> bool {
+/// Drop a socket (`idle`: it was reporting away). When it was the user's last, they linger: still online for the grace
+/// period, or idle for a while when a phone app went to the background (`suspended`); `linger_sweep` takes them
+/// offline after that.
+pub async fn disconnect(state: &AppState, user: Uuid, platform: &str, idle: bool, suspended: bool) {
     state.hub.disconnect(user);
+    // Whether the user as a whole was away, so lingering keeps showing what others saw.
+    let was_idle = is_idle(&state.db, user).await;
     let _ = sqlx::query(
         "UPDATE presence SET sockets = GREATEST(sockets - 1, 0), updated_at = now(), idle = GREATEST(idle - $4, 0),
            platforms = jsonb_set(platforms, ARRAY[$3::text], to_jsonb(GREATEST(COALESCE((platforms->>$3)::int, 0) - 1, 0)))
          WHERE user_id = $1 AND instance_id = $2")
         .bind(user).bind(state.hub.instance_id).bind(platform).bind(idle as i32).execute(&state.db).await;
     let _ = sqlx::query("DELETE FROM presence WHERE user_id = $1 AND instance_id = $2 AND sockets <= 0").bind(user).bind(state.hub.instance_id).execute(&state.db).await;
-    global_sockets(&state.db, user).await.unwrap_or(0) == 0
+    if global_sockets(&state.db, user).await.unwrap_or(0) > 0 { return; }
+    let secs = if suspended { phone_linger_secs() } else { grace_secs() };
+    let _ = sqlx::query(
+        "INSERT INTO presence_linger (user_id, until, idle, platforms) VALUES ($1, now() + make_interval(secs => $2), $3, ARRAY[$4])
+         ON CONFLICT (user_id) DO UPDATE SET until = GREATEST(presence_linger.until, EXCLUDED.until), idle = EXCLUDED.idle, platforms = EXCLUDED.platforms")
+        .bind(user).bind(secs as f64).bind(suspended || was_idle).bind(platform).execute(&state.db).await;
+}
+
+/// Takes people offline once their linger runs out (every instance sweeps; each row is claimed by one). Then they
+/// leave temporary servers where they have no role.
+pub async fn linger_sweep(state: AppState) {
+    let every = std::time::Duration::from_secs((grace_secs() / 3).clamp(1, 5) as u64);
+    loop {
+        tokio::time::sleep(every).await;
+        let gone: Vec<(Uuid,)> = sqlx::query_as("DELETE FROM presence_linger WHERE until <= now() RETURNING user_id").fetch_all(&state.db).await.unwrap_or_default();
+        for (user,) in gone {
+            if global_sockets(&state.db, user).await.unwrap_or(0) > 0 { continue; }
+            announce(&state, user).await;
+            let st = state.clone();
+            tokio::spawn(async move { crate::routes::guilds::drop_temporary(&st, user).await });
+        }
+    }
 }
 
 /// A socket went away from the keyboard (`idle`) or came back.
@@ -130,11 +163,12 @@ pub async fn set_idle(state: &AppState, user: Uuid, idle: bool) {
         .bind(user).bind(state.hub.instance_id).bind(if idle { 1 } else { -1 }).execute(&state.db).await;
 }
 
-/// Online, but every socket is away: shown as Idle unless the user picked a status.
+/// Online, but every socket is away (or lingering away): shown as Idle unless the user picked a status.
 pub async fn is_idle(db: &PgPool, user: Uuid) -> bool {
     sqlx::query_as::<_, (bool,)>(
-        "SELECT COALESCE(SUM(sockets), 0) > 0 AND COALESCE(SUM(idle), 0) >= COALESCE(SUM(sockets), 0) FROM presence
-         WHERE user_id = $1 AND updated_at > now() - make_interval(secs => $2)")
+        "SELECT CASE WHEN COALESCE(SUM(sockets), 0) > 0 THEN COALESCE(SUM(idle), 0) >= SUM(sockets)
+                     ELSE EXISTS (SELECT 1 FROM presence_linger WHERE user_id = $1 AND until > now() AND idle) END
+         FROM presence WHERE user_id = $1 AND updated_at > now() - make_interval(secs => $2)")
         .bind(user).bind(STALE_SECS as f64).fetch_one(db).await.map(|r| r.0).unwrap_or(false)
 }
 
@@ -143,7 +177,11 @@ pub async fn idle_users(db: &PgPool) -> Vec<Uuid> {
     sqlx::query_as::<_, (Uuid,)>(
         "SELECT user_id FROM presence WHERE updated_at > now() - make_interval(secs => $1)
            AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')
-         GROUP BY user_id HAVING SUM(sockets) > 0 AND SUM(idle) >= SUM(sockets)")
+         GROUP BY user_id HAVING SUM(sockets) > 0 AND SUM(idle) >= SUM(sockets)
+         UNION
+         SELECT user_id FROM presence_linger l WHERE until > now() AND idle
+           AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')
+           AND NOT EXISTS (SELECT 1 FROM presence p WHERE p.user_id = l.user_id AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1))")
         .bind(STALE_SECS as f64).fetch_all(db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default()
 }
 
@@ -152,21 +190,29 @@ pub async fn idle_users(db: &PgPool) -> Vec<Uuid> {
 /// the away state would all give them away.
 pub async fn announce(state: &AppState, user: Uuid) {
     let platforms = platforms_for(&state.db, user).await;
-    let online = global_sockets(&state.db, user).await.unwrap_or(0) > 0 && !invisible(&state.db, user).await;
+    let online = (global_sockets(&state.db, user).await.unwrap_or(0) > 0 || lingering(&state.db, user).await) && !invisible(&state.db, user).await;
     let idle = online && is_idle(&state.db, user).await;
     state.hub.emit_all("PRESENCE_UPDATE", serde_json::json!({ "user_id": user, "online": online, "platforms": if online { platforms } else { Vec::new() }, "idle": idle }));
+}
+
+async fn lingering(db: &PgPool, user: Uuid) -> bool {
+    sqlx::query_as::<_, (bool,)>("SELECT EXISTS (SELECT 1 FROM presence_linger WHERE user_id = $1 AND until > now())").bind(user).fetch_one(db).await.map(|r| r.0).unwrap_or(false)
 }
 
 async fn invisible(db: &PgPool, user: Uuid) -> bool {
     sqlx::query_as::<_, (bool,)>("SELECT status = 'invisible' FROM users WHERE id = $1").bind(user).fetch_optional(db).await.ok().flatten().map(|r| r.0).unwrap_or(false)
 }
 
-/// Platforms a user currently has sockets on, across instances (web / desktop / mobile / vr).
+/// Platforms a user currently has sockets on, across instances (web / desktop / mobile / vr), or was last on while
+/// lingering.
 pub async fn platforms_for(db: &PgPool, user: Uuid) -> Vec<String> {
-    sqlx::query_as::<_, (String,)>(
+    let live: Vec<String> = sqlx::query_as::<_, (String,)>(
         "SELECT e.key FROM presence p, jsonb_each_text(p.platforms) e
          WHERE p.user_id = $1 AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $2) AND e.value::int > 0 GROUP BY e.key ORDER BY e.key")
-        .bind(user).bind(STALE_SECS as f64).fetch_all(db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default()
+        .bind(user).bind(STALE_SECS as f64).fetch_all(db).await.map(|r| r.into_iter().map(|x| x.0).collect()).unwrap_or_default();
+    if !live.is_empty() { return live; }
+    sqlx::query_as::<_, (Vec<String>,)>("SELECT platforms FROM presence_linger WHERE user_id = $1 AND until > now()")
+        .bind(user).fetch_optional(db).await.ok().flatten().map(|r| r.0).unwrap_or_default()
 }
 
 /// Everyone online with their platforms, for READY.
@@ -174,7 +220,11 @@ pub async fn online_platforms(db: &PgPool) -> Vec<(Uuid, Vec<String>)> {
     sqlx::query_as::<_, (Uuid, Vec<String>)>(
         "SELECT p.user_id, array_agg(DISTINCT e.key ORDER BY e.key) FROM presence p, jsonb_each_text(p.platforms) e
          WHERE p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1) AND e.value::int > 0
-           AND p.user_id NOT IN (SELECT id FROM users WHERE status = 'invisible') GROUP BY p.user_id")
+           AND p.user_id NOT IN (SELECT id FROM users WHERE status = 'invisible') GROUP BY p.user_id
+         UNION ALL
+         SELECT l.user_id, l.platforms FROM presence_linger l WHERE l.until > now()
+           AND l.user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')
+           AND NOT EXISTS (SELECT 1 FROM presence p WHERE p.user_id = l.user_id AND p.sockets > 0 AND p.updated_at > now() - make_interval(secs => $1))")
         .bind(STALE_SECS as f64).fetch_all(db).await.unwrap_or_default()
 }
 
@@ -184,11 +234,13 @@ async fn global_sockets(db: &PgPool, user: Uuid) -> sqlx::Result<i64> {
     Ok(n)
 }
 
-/// Everyone others may see as online: connected and not set to Invisible. What READY, widgets, invite previews and
-/// online counts show; `online_users` (the truth) is only for deciding whether to push or mail someone.
+/// Everyone others may see as online: connected (or lingering just after) and not set to Invisible. What READY,
+/// widgets, invite previews and online counts show; `online_users` (the truth) is only for deciding whether to push or
+/// mail someone.
 pub async fn visible_online_users(db: &PgPool) -> Vec<Uuid> {
-    sqlx::query_as::<_, (Uuid,)>("SELECT DISTINCT user_id FROM presence WHERE sockets > 0 AND updated_at > now() - make_interval(secs => $1)
-         AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')")
+    sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM presence WHERE sockets > 0 AND updated_at > now() - make_interval(secs => $1)
+         AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')
+         UNION SELECT user_id FROM presence_linger WHERE until > now() AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')")
         .bind(STALE_SECS as f64)
         .fetch_all(db)
         .await

@@ -407,6 +407,39 @@ fn set_ptt_key(app: AppHandle, code: Option<String>) -> bool {
     true
 }
 
+/// When input (a key held, the pointer moved) was last seen anywhere on the computer, polled on a thread of its own
+/// once the page first asks.
+#[derive(Default)]
+struct InputSeen { started: Mutex<bool>, at: Arc<Mutex<Option<std::time::Instant>>> }
+
+/// Seconds since the last keyboard or mouse input on the computer, so the page can tell someone working in another
+/// app (here) from someone who left the computer (away). None when input can't be read (e.g. Wayland).
+#[tauri::command]
+fn input_idle(app: AppHandle) -> Option<u64> {
+    let state = app.state::<InputSeen>();
+    if let Ok(mut started) = state.started.lock() {
+        if !*started {
+            if DeviceState::checked_new().is_none() { return None; }
+            *started = true;
+            if let Ok(mut at) = state.at.lock() { *at = Some(std::time::Instant::now()); }
+            let at = state.at.clone();
+            std::thread::spawn(move || {
+                let Some(dev) = DeviceState::checked_new() else { return };
+                let (mut mouse, mut keys) = (dev.get_mouse(), dev.get_keys());
+                loop {
+                    std::thread::sleep(Duration::from_millis(1000));
+                    let (m, k) = (dev.get_mouse(), dev.get_keys());
+                    if m.coords != mouse.coords || m.button_pressed != mouse.button_pressed || k != keys {
+                        if let Ok(mut at) = at.lock() { *at = Some(std::time::Instant::now()); }
+                    }
+                    (mouse, keys) = (m, k);
+                }
+            });
+        }
+    }
+    state.at.lock().ok().and_then(|a| *a).map(|t| t.elapsed().as_secs())
+}
+
 /// Whether a tray icon was created (Linux desktops without a status area have none).
 struct Tray(std::sync::atomic::AtomicBool);
 fn has_tray(app: &AppHandle) -> bool { app.state::<Tray>().0.load(std::sync::atomic::Ordering::Relaxed) }
@@ -497,9 +530,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(Pending(Mutex::new(None)))
         .manage(Ptt::default())
+        .manage(InputSeen::default())
         .manage(Updates::default())
         .manage(Tray(std::sync::atomic::AtomicBool::new(false)))
-        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, set_theme, desktop_settings, set_desktop_settings, set_ptt_key, streaming_apps, set_app_icon, overlay, window_control, update_status, check_update, install_update])
+        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, set_theme, desktop_settings, set_desktop_settings, set_ptt_key, input_idle, streaming_apps, set_app_icon, overlay, window_control, update_status, check_update, install_update])
         .setup(|app| {
             let handle = app.handle().clone();
             // AppImages and dev builds aren't registered for parley:// by an installer.

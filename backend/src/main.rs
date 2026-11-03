@@ -75,6 +75,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(ws::bus::publisher(state.clone(), bus_rx));
     tokio::spawn(ws::bus::listener(state.clone()));
     tokio::spawn(ws::bus::heartbeat(state.clone()));
+    tokio::spawn(ws::bus::linger_sweep(state.clone()));
     tracing::info!(instance = %state.hub.instance_id, "instance id");
 
     let cors = if config.cors_origins.is_empty() {
