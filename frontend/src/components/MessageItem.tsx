@@ -21,7 +21,7 @@ import { useAppearance } from '../lib/appearance'
 import PollCard from './PollCard'
 import LinkEmbed, { previewLinks } from './LinkEmbed'
 import { remindLabel, remindPresets, setReminder } from '../lib/reminders'
-import MessageLinkPreview, { messageLinks } from './MessageLinkPreview'
+import MessageLinkPreview, { messageLinks, withoutMessageLinks } from './MessageLinkPreview'
 import { suggestReactions } from '../lib/suggestReactions'
 import InviteCard, { inviteCodes } from './InviteCard'
 import StyledName from './StyledName'
@@ -256,6 +256,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const media = soleMediaUrl(m.content)
   const links = media ? [] : previewLinks(m.content)
   const link = links[0] ?? null
+  const msgLinks = useMemo(() => m.suppress_embeds ? [] : messageLinks(m.content).filter((l) => l.messageId !== m.id), [m.content, m.suppress_embeds, m.id])
+  const shownContent = useMemo(() => msgLinks.length ? withoutMessageLinks(m.content, msgLinks) : m.content, [m.content, msgLinks])
   // Sensitive media: blur pictures and videos from non-friends in DMs, and in age-restricted channels, by preference.
   // Spoiler channels hide every picture and video behind a click.
   const spoilerChannel = useStore((s) => !!s.channels[m.channel_id]?.spoiler)
@@ -458,9 +460,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
               {m.forwarded_from && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded><Forward size={13} /> {t('Forwarded')}</div>}
               {m.forwarded_unavailable && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded="unavailable"><Forward size={13} /> {t("Forwarded from a server that's no longer available")}</div>}
               {m.crosspost?.channel_name && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-crosspost-from={m.crosspost.channel_id}><Megaphone size={13} /><span className="rounded bg-accent/80 px-1 text-[10px] font-bold uppercase text-white">{t('Server')}</span> {m.crosspost.guild_name} · #{m.crosspost.channel_name}</div>}
-              {(m.content || m.edited_at) && !media && (
+              {(shownContent || m.edited_at) && !media && (
                 <div dir="auto" onClick={emojiHover.onClick} className={`msg-content text-[15px] leading-[1.375rem] break-words whitespace-pre-wrap ${m.local === 'failed' ? 'text-danger' : 'text-text-0'} ${isJumbo(m.content) ? 'jumbo' : ''}`}>
-                  {renderMarkdown(m.content)}
+                  {renderMarkdown(shownContent)}
                   {m.crosspost?.published && <span className="ml-1 inline-flex items-center gap-0.5 text-[10px] text-text-2" title={t('Published to following channels')} data-published><Megaphone size={10} />{t('published')}</span>}
                   {m.edited_at && <button type="button" onClick={(e) => { e.stopPropagation(); openModal({ kind: 'editHistory', channelId: m.channel_id, messageId: m.id }) }} title={t('Edited {when} — click to see the history', { when: new Date(m.edited_at).toLocaleString() })} className="ml-1 text-[10px] text-text-2 hover:underline" data-edited>{t('(edited)')}</button>}
                 </div>
@@ -486,7 +488,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                 </div>
               )}
               {inviteCodes(m.content, [appUrl]).map((code) => <InviteCard key={code} code={code} />)}
-              {!m.suppress_embeds && messageLinks(m.content).filter((l) => l.messageId !== m.id).map((l) => <MessageLinkPreview key={l.messageId} link={l} />)}
+              {msgLinks.map((l) => <MessageLinkPreview key={l.messageId} link={l} fallback={shownContent !== m.content && !shownContent.includes(l.url)} />)}
               {m.poll && <PollCard m={m} poll={m.poll} />}
               {m.thread && (
                 <button type="button" onClick={(e) => { e.stopPropagation(); setOpenThread(m.thread!.id) }} className="mt-1 flex max-w-[520px] items-center gap-2 rounded-lg border border-line bg-bg-1 px-3 py-2 text-left text-sm hover:border-text-2" data-thread-card={m.thread.id} data-thread-count={m.thread.message_count}>

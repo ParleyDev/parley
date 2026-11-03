@@ -9,24 +9,36 @@ import Avatar from './Avatar'
 import { jumpToMessageAsync } from './ChatView'
 import { publicOrigin } from './InviteCard'
 
-export interface MessageLink { guildId: string | null; channelId: string; messageId: string }
+export interface MessageLink { guildId: string | null; channelId: string; messageId: string; url: string }
 
 const ID = '[0-9a-f-]{36}'
+
+const linkPattern = () => {
+  const origins = Array.from(new Set([location.origin, publicOrigin()])).map((o) => o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return `(?:${origins.join('|')})/channels/(@me|${ID})/(${ID})(?:\\?message=|/)(${ID})`
+}
 
 /** Links to messages on this instance in a message body (at most three): `/channels/<guild|@me>/<channel>?message=<id>` or `…/<channel>/<id>`. */
 export function messageLinks(content: string): MessageLink[] {
   if (!content || !content.includes('/channels/')) return []
-  const origins = Array.from(new Set([location.origin, publicOrigin()])).map((o) => o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  const re = new RegExp(`(?:${origins.join('|')})/channels/(@me|${ID})/(${ID})(?:\\?message=|/)(${ID})`, 'gi')
   const out: MessageLink[] = []
-  for (const m of content.matchAll(re)) if (!out.some((l) => l.messageId === m[3])) out.push({ guildId: m[1] === '@me' ? null : m[1], channelId: m[2], messageId: m[3] })
+  for (const m of content.matchAll(new RegExp(linkPattern(), 'gi'))) if (!out.some((l) => l.messageId === m[3])) out.push({ guildId: m[1] === '@me' ? null : m[1], channelId: m[2], messageId: m[3], url: m[0] })
   return out.slice(0, 3)
+}
+
+/** The message text without the links that show as cards when they lead or end it (a shared link shows its card, not its URL). */
+export function withoutMessageLinks(content: string, links: MessageLink[]): string {
+  const ids = new Set(links.map((l) => l.messageId.toLowerCase()))
+  const edge = new RegExp(`^\\s*<?${linkPattern()}>?(?=\\s|$)|(?:^|\\s)<?${linkPattern()}>?\\s*$`, 'i')
+  let out = content
+  for (let m = out.match(edge); m && ids.has((m[3] ?? m[6]).toLowerCase()); m = out.match(edge)) out = (out.slice(0, m.index) + out.slice(m.index! + m[0].length)).trim()
+  return out
 }
 
 const cache = new Map<string, Promise<Message | null>>()
 
 /** A quote card for a linked message: who wrote it, where, and the start of it; click to jump there. */
-export default function MessageLinkPreview({ link }: { link: MessageLink }) {
+export default function MessageLinkPreview({ link, fallback }: { link: MessageLink; fallback?: boolean }) {
   const [m, setM] = useState<Message | null | undefined>(undefined)
   const channel = useStore((s) => s.channels[link.channelId] ?? s.dms[link.channelId])
   const guild = useStore((s) => (link.guildId ? s.guilds[link.guildId] : undefined))
@@ -38,6 +50,8 @@ export default function MessageLinkPreview({ link }: { link: MessageLink }) {
     p.then((x) => { if (live) setM(x) })
     return () => { live = false }
   }, [link.channelId, link.messageId])
+  // A message this reader can't see: the link itself, when it isn't in the text shown.
+  if (m === null && fallback) return <a href={link.url} target="_blank" rel="noopener noreferrer" className="block text-sky-400 hover:underline break-all" data-message-link-fallback>{link.url}</a>
   if (!m) return null
   const where = channel?.guild_id ? `#${channel.name}${guild ? ` · ${guild.name}` : ''}` : 'Direct Message'
   const text = (m.content && previewText(m.content, m.channel_id)) || (m.attachments?.length ? `${m.attachments.length} attachment${m.attachments.length === 1 ? '' : 's'}` : m.poll ? `Poll: ${m.poll.question}` : '')
