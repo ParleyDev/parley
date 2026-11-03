@@ -163,8 +163,12 @@ jobs:
           img=$(ls *.AppImage.sig 2>/dev/null | head -1); img=${img%.sig}
           platforms=$(jq -s 'add' <(entry windows-x86_64 "$exe") <(entry darwin-aarch64 "$app") <(entry linux-x86_64 "$img"))
           if [ "$platforms" = '{}' ]; then echo "::error::no signed update bundles on the release (is TAURI_SIGNING_PRIVATE_KEY set?)"; exit 1; fi
+          # Announce exactly the version the bundles were signed with (the updater refuses a mismatch): the installer's,
+          # 0.22.0+4 for a development build, which the app reads back as 0.22.0-pre.4 when comparing.
+          signed=$(base64 -d < "$(ls *.sig | head -1)" 2>/dev/null | sed -n 's/^trusted comment: .*version:\([^\t]*\).*$/\1/p' | head -1)
+          v=${signed:-$VERSION}
           rel=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body,publishedAt)
-          jq -n --arg v "$VERSION" --argjson rel "$rel" --argjson p "$platforms" \
+          jq -n --arg v "$v" --argjson rel "$rel" --argjson p "$platforms" \
             '{version: $v, notes: ($rel.body // "" | .[0:4000]), pub_date: $rel.publishedAt, platforms: $p}' > latest.json
           cat latest.json
           gh release upload "$TAG" latest.json --clobber --repo "$GITHUB_REPOSITORY"

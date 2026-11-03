@@ -212,6 +212,19 @@ fn begin_check(app: &AppHandle) -> bool {
     true
 }
 
+/// A feed announces the version its bundles were signed with, which for development builds is the installer's
+/// (0.22.0+4, build metadata the comparison ignores); read that as the app version it stands for (0.22.0-pre.4).
+fn app_version(v: &semver::Version) -> semver::Version {
+    match v.build.as_str().parse::<u64>() {
+        Ok(n) if v.pre.is_empty() => {
+            let mut a = semver::Version::new(v.major, v.minor, v.patch);
+            a.pre = semver::Prerelease::new(&format!("pre.{n}")).unwrap_or_default();
+            a
+        }
+        _ => v.clone(),
+    }
+}
+
 async fn check_for_update(app: AppHandle) {
     if begin_check(&app) { run_check(app).await }
 }
@@ -223,7 +236,7 @@ async fn run_check(app: AppHandle) {
     let mine = semver::Version::parse(VERSION).ok();
     let updater = url::Url::parse(feed).map_err(|e| e.to_string()).and_then(|u| {
         app.updater_builder().endpoints(vec![u]).map_err(|e| e.to_string())?
-            .version_comparator(move |current, remote| remote.version > *mine.as_ref().unwrap_or(&current))
+            .version_comparator(move |current, remote| app_version(&remote.version) > *mine.as_ref().unwrap_or(&current))
             .build().map_err(|e| e.to_string())
     });
     let found = match updater { Ok(u) => u.check().await.map_err(|e| e.to_string()), Err(e) => Err(e) };
@@ -643,7 +656,20 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{deep_path, is_streaming_app, keycode};
+    use super::{app_version, deep_path, is_streaming_app, keycode};
+    #[test]
+    fn feed_versions() {
+        let v = |s: &str| semver::Version::parse(s).unwrap();
+        // A development build's signed installer version stands for the app version it was built as.
+        assert_eq!(app_version(&v("0.22.0+4")), v("0.22.0-pre.4"));
+        assert!(app_version(&v("0.22.0+5")) > v("0.22.0-pre.4"));
+        assert!(app_version(&v("0.22.0+4")) <= v("0.22.0-pre.4"), "the installed build isn't offered again");
+        assert!(app_version(&v("0.22.0+4")) > v("0.21.0"));
+        assert!(app_version(&v("0.22.0+12")) > v("0.22.0-pre.4"), "numeric, not text");
+        // Releases are newer than their development builds and are left as they are.
+        assert_eq!(app_version(&v("0.22.0")), v("0.22.0"));
+        assert!(app_version(&v("0.22.0")) > v("0.22.0-pre.40"));
+    }
     #[test]
     fn streaming_names() {
         assert!(is_streaming_app("obs64.exe") && is_streaming_app("obs") && is_streaming_app("XSplit.Core.exe") && is_streaming_app("Streamlabs OBS.exe"));
