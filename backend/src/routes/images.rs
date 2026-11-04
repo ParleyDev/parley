@@ -251,10 +251,11 @@ pub async fn delete_image(state: &AppState, id: Uuid) {
     let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{id}.still.png"))).await;
 }
 
-/// If `old` was one of ours and is no longer referenced by `new`, remove it.
+/// If `old` was one of ours, isn't `new` and nothing else still shows it (a Discover listing can share a server's
+/// banner), remove it.
 pub async fn release_replaced(state: &AppState, old: Option<&str>, new: Option<&str>) {
     if let Some(id) = old.and_then(image_id) {
-        if new.and_then(image_id) != Some(id) {
+        if new.and_then(image_id) != Some(id) && orphan_query(&state.db, 0.0, Some(id)).await.contains(&id) {
             delete_image(state, id).await;
         }
     }
@@ -263,8 +264,12 @@ pub async fn release_replaced(state: &AppState, old: Option<&str>, new: Option<&
 /// Images nothing points at any more: not a user's avatar/banner, a server's icon/banner, a Discover
 /// listing's banner, an emoji or a sticker. `min_age_secs` keeps uploads that are still being attached.
 pub async fn orphan_image_ids(db: &sqlx::PgPool, min_age_secs: f64) -> Vec<Uuid> {
+    orphan_query(db, min_age_secs, None).await
+}
+
+async fn orphan_query(db: &sqlx::PgPool, min_age_secs: f64, only: Option<Uuid>) -> Vec<Uuid> {
     sqlx::query_as::<_, (Uuid,)>(
-        "SELECT i.id FROM images i WHERE i.created_at < now() - make_interval(secs => $1)
+        "SELECT i.id FROM images i WHERE i.created_at <= now() - make_interval(secs => $1) AND ($2::uuid IS NULL OR i.id = $2)
            AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_url = '/api/images/' || i.id::text OR u.banner_url = '/api/images/' || i.id::text OR '/api/images/' || i.id::text = ANY(u.avatar_history))
            AND NOT EXISTS (SELECT 1 FROM guilds g WHERE g.icon_url = '/api/images/' || i.id::text OR g.banner_url = '/api/images/' || i.id::text OR g.invite_splash_url = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM guild_discovery d WHERE d.banner_url = '/api/images/' || i.id::text)
@@ -275,6 +280,7 @@ pub async fn orphan_image_ids(db: &sqlx::PgPool, min_age_secs: f64) -> Vec<Uuid>
            AND NOT EXISTS (SELECT 1 FROM stickers s WHERE s.id = i.id)",
     )
     .bind(min_age_secs)
+    .bind(only)
     .fetch_all(db)
     .await
     .unwrap_or_default()

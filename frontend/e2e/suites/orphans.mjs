@@ -18,4 +18,15 @@ ok('profile avatar and banner survive', await status(avatar.url) === 200 && awai
 ok('the stray upload is gone', await status(stray.url) === 404)
 ok('the server still has its banner', (await call(a.token, 'GET', `/guilds/${g.id}`)).banner_url === banner.url)
 ok('audit records the sweep', (await call(admin.token, 'GET', '/admin/audit')).some((e) => e.action === 'maintenance.sweep_images' && e.details.removed === 1))
+
+// The Discover listing set up with the server's own banner (the settings tab's default), then the server banner changed:
+// the listing still shows the old picture, so it must stay.
+const g2 = await call(a.token, 'POST', '/guilds', { name: `Shared ${S}` })
+const shared = await up('banner'), next = await up('banner')
+await callS(a.token, 'PATCH', `/guilds/${g2.id}`, { banner_url: shared.url })
+await callS(a.token, 'PUT', `/guilds/${g2.id}/discovery`, { description: 'A banner shared with the listing.', category: 'gaming', banner_url: shared.url })
+await callS(a.token, 'PATCH', `/guilds/${g2.id}`, { banner_url: next.url })
+ok('changing the server banner keeps a picture its Discover listing still shows', await status(shared.url) === 200)
+await callS(a.token, 'PUT', `/guilds/${g2.id}/discovery`, { description: 'A banner shared with the listing.', category: 'gaming', banner_url: next.url })
+ok('the listing moving to the server\'s new banner frees the old one', await status(shared.url) === 404 && await status(next.url) === 200)
 await finish()

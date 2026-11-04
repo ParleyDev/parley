@@ -297,6 +297,7 @@ async fn put_listing(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
         return Err(AppError::BadRequest("Unknown category".into()));
     }
     validate_image_max(&req.banner_url, 1024 * 1024)?;
+    let old: Option<(Option<String>,)> = sqlx::query_as("SELECT banner_url FROM guild_discovery WHERE guild_id = $1").bind(id).fetch_optional(&state.db).await?;
     sqlx::query(
         "INSERT INTO guild_discovery (guild_id, description, category, banner_url, status, submitted_by, submitted_at)
          VALUES ($1, $2, $3, NULLIF($4, ''), 'pending', $5, now())
@@ -309,17 +310,21 @@ async fn put_listing(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
     .bind(id)
     .bind(&description)
     .bind(&req.category)
-    .bind(req.banner_url)
+    .bind(&req.banner_url)
     .bind(uid)
     .execute(&state.db)
     .await?;
+    if let (Some((Some(old),)), Some(new)) = (&old, &req.banner_url) {
+        crate::routes::images::release_replaced(&state, Some(old), Some(new.as_str()).filter(|s| !s.is_empty())).await;
+    }
     crate::audit::guild(&state, id, uid, "discovery.submit", "guild", Some(id), &crate::audit::guild_name(&state, id).await, json!({ "category": req.category })).await;
     Ok(Json(listing_for(&state, uid, id).await?.ok_or_else(|| AppError::NotFound("Listing not found".into()))?))
 }
 
 async fn delete_listing(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<StatusCode> {
     require_manage(&state.db, id, uid).await?;
-    sqlx::query("DELETE FROM guild_discovery WHERE guild_id = $1").bind(id).execute(&state.db).await?;
+    let old: Option<(Option<String>,)> = sqlx::query_as("DELETE FROM guild_discovery WHERE guild_id = $1 RETURNING banner_url").bind(id).fetch_optional(&state.db).await?;
+    crate::routes::images::release_replaced(&state, old.and_then(|o| o.0).as_deref(), None).await;
     crate::audit::guild(&state, id, uid, "discovery.withdraw", "guild", Some(id), &crate::audit::guild_name(&state, id).await, json!({})).await;
     Ok(StatusCode::NO_CONTENT)
 }

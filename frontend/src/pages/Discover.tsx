@@ -199,7 +199,7 @@ function ServerCard({ l }: { l: Listing }) {
   }
   return (
     <div role="button" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open() }} data-server-card={l.guild_id} className="group text-left rounded-xl bg-bg-1 border border-line hover:border-text-2 hover:-translate-y-0.5 transition overflow-visible flex flex-col cursor-pointer">
-      <div className="relative h-[140px] rounded-t-xl bg-cover bg-center" style={l.banner_url ? { backgroundImage: `url(${l.banner_url})` } : { background: `linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }}>
+      <div className="relative h-[140px] rounded-t-xl bg-cover bg-center" style={{ backgroundImage: `${l.banner_url ? `url("${l.banner_url}"), ` : ''}linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }}>
         {l.featured_order !== null && <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow" data-featured>{t('Featured')}</span>}
         <span className="absolute left-3 -bottom-6 h-12 w-12 rounded-2xl ring-4 ring-bg-1 overflow-hidden flex items-center justify-center text-white font-bold" style={{ background: l.icon_url ? undefined : colorFor(l.guild_id) }}>
           {l.icon_url ? <img src={l.icon_url} alt="" className="h-full w-full object-cover" /> : initials(l.name)}
@@ -247,7 +247,7 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
         {list?.length === 0 && <p className="text-sm text-text-2 py-6">{t('Nothing {status} right now.', { status: t(status) })}</p>}
         {list?.map((l) => (
           <div key={l.guild_id} className="rounded-xl border border-line bg-bg-1 p-4 flex gap-4 phone:flex-col" data-review-item={l.guild_id}>
-            <div className="h-20 w-32 shrink-0 rounded-lg bg-cover bg-center" style={l.banner_url ? { backgroundImage: `url(${l.banner_url})` } : { background: `linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }} />
+            <div className="h-20 w-32 shrink-0 rounded-lg bg-cover bg-center" style={{ backgroundImage: `${l.banner_url ? `url("${l.banner_url}"), ` : ''}linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 font-bold">{l.name}<span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold uppercase text-text-1">{t(categoryLabel(l.category))}</span><span className="text-xs font-normal text-text-2">{t('{n} members', { n: l.member_count })}</span></div>
               <p className="text-sm text-text-1 mt-1">{l.description}</p>
