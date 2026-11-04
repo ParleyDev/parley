@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState } from 'react'
 import { colorFor, initials } from '../lib/format'
 import { assetDecorationId, decorationUrl } from '../lib/decorations'
+import { useCustomCosmetic } from '../lib/cosmetics'
 import { AvatarMotion, mayAnimate, stillImageUrl } from '../lib/motion'
 import { useStore } from '../store'
 
@@ -52,6 +53,7 @@ export default function Avatar({ user, size = 32, presence = false, typingIn, cl
   const typing = useStore((s) => !!typingIn && !!s.typing[typingIn]?.[user.id])
   const dot = Math.max(8, Math.round(size * 0.32))
   const assetId = size >= 20 ? assetDecorationId(decoration) : null
+  const custom = useCustomCosmetic('decoration', size >= 20 ? decoration : null)
   const [hover, setHover] = useState(false)
   const [broken, setBroken] = useState<string | null>(null)
   const inMotion = useContext(AvatarMotion)
@@ -87,6 +89,10 @@ export default function Avatar({ user, size = 32, presence = false, typingIn, cl
       {/* Image decorations are square overlays at 1.2x the avatar, centred, with a transparent middle (Discord's layout). */}
       {assetId && broken !== assetId && (
         <img src={decorationUrl(assetId, !moving)} alt="" aria-hidden draggable={false} loading="lazy" decoding="async" onError={() => setBroken(assetId)}
+          className="absolute pointer-events-none select-none max-w-none" style={{ width: '120%', height: '120%', left: '-10%', top: '-10%' }} data-decoration={decoration} />
+      )}
+      {custom?.data.image && (
+        <img src={moving ? custom.data.image : stillImageUrl(custom.data.image)} alt="" aria-hidden draggable={false} loading="lazy" decoding="async"
           className="absolute pointer-events-none select-none max-w-none" style={{ width: '120%', height: '120%', left: '-10%', top: '-10%' }} data-decoration={decoration} />
       )}
       {presence && typing ? <TypingBadge size={dot} color={statusColor(status, online)} /> : presence && <PresenceBadge size={dot} color={statusColor(status, online)} kind={online && status !== 'invisible' && status !== 'offline' ? presenceKind(platforms) : 'dot'} title={presenceTitle(status, online, platforms)} />}

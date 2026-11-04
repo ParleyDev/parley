@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { PROFILE_EFFECTS } from '../lib/cosmetics'
+import { PROFILE_EFFECTS, isCustom, useCustomCosmetic } from '../lib/cosmetics'
 import { assetFile, isAssetValue, loadBlob, useAssetItem, type EffectItem, type EffectLayer } from '../lib/assetCatalog'
 
 const reducedMotion = () => document.documentElement.dataset.motion === 'reduced' || matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -10,12 +10,26 @@ const reducedMotion = () => document.documentElement.dataset.motion === 'reduced
  */
 export default function ProfileEffect({ id }: { id?: string | null }) {
   if (id && isAssetValue(id)) return <AssetEffect value={id} />
+  if (isCustom(id)) return <CustomEffect value={id} />
   const fx = PROFILE_EFFECTS.find((e) => e.id === (id as string | null | undefined))
   if (!fx) return null
+  return <Bits value={fx.id} fall={fx.fall} bit={fx.glyph} />
+}
+
+/** An admin's own effect: their emoji or picture, drifting like the built-in ones. */
+function CustomEffect({ value }: { value: string }) {
+  const fx = useCustomCosmetic('effect', value)
+  if (!fx) return null
+  const bit = fx.data.image ? <img src={fx.data.image} alt="" className="h-[1em] w-auto" draggable={false} /> : fx.data.glyph
+  return <Bits value={value} fall={fx.data.fall !== false} bit={bit} />
+}
+
+/** A few glyphs drifting down (`fall`) or floating up over the card. */
+function Bits({ value, fall, bit }: { value: string; fall: boolean; bit: React.ReactNode }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-[5] overflow-hidden rounded-[inherit]" aria-hidden data-profile-effect={fx.id} data-effect-motion={fx.fall ? 'fall' : 'rise'}>
+    <div className="pointer-events-none absolute inset-0 z-[5] overflow-hidden rounded-[inherit]" aria-hidden data-profile-effect={value} data-effect-motion={fall ? 'fall' : 'rise'}>
       {Array.from({ length: 10 }, (_, i) => (
-        <span key={i} className={`pe-bit absolute text-sm ${fx.fall ? 'pe-fall' : ''}`} style={{ left: `${(i * 37) % 100}%`, animationDelay: `${(i * 0.7) % 5}s`, animationDuration: `${4 + (i % 4)}s`, fontSize: `${10 + (i % 3) * 4}px` }}>{fx.glyph}</span>
+        <span key={i} className={`pe-bit absolute text-sm ${fall ? 'pe-fall' : ''}`} style={{ left: `${(i * 37) % 100}%`, animationDelay: `${(i * 0.7) % 5}s`, animationDuration: `${4 + (i % 4)}s`, fontSize: `${10 + (i % 3) * 4}px` }}>{bit}</span>
       ))}
     </div>
   )

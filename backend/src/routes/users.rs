@@ -454,7 +454,7 @@ async fn update_me(
     }
     validate_image(&req.avatar_url)?;
     if let Some(d) = &req.avatar_decoration {
-        if !DECORATIONS.contains(&d.as_str()) && !crate::routes::assets::decoration_exists(&state.config, d).await {
+        if !crate::routes::cosmetics::allowed(&state, "decoration", d).await {
             return Err(AppError::BadRequest("Unknown avatar decoration".into()));
         }
     }
@@ -479,15 +479,10 @@ async fn update_me(
     if req.profile_privacy.as_deref().map(|p| p != "everyone" && p != "friends").unwrap_or(false) {
         return Err(AppError::BadRequest("profile_privacy must be 'everyone' or 'friends'".into()));
     }
-    for (v, list, what) in [(&req.profile_frame, PROFILE_FRAMES, "frame"), (&req.nameplate, NAMEPLATES, "nameplate"), (&req.profile_effect, PROFILE_EFFECTS, "profile effect")] {
+    // Built-in presets, the instance's assets folder (`asset:<id>`) or the admins' own (`custom:<id>`), and not turned off.
+    for (v, kind, what) in [(&req.profile_frame, "frame", "frame"), (&req.nameplate, "nameplate", "nameplate"), (&req.profile_effect, "effect", "profile effect")] {
         if let Some(v) = v {
-            // Each can also come from the instance's assets folder (`asset:<id>`).
-            let asset = v.starts_with(crate::routes::assets::ASSET_PREFIX) && match what {
-                "nameplate" => crate::routes::assets::nameplate_exists(&state.config, v).await,
-                "frame" => crate::routes::asset_layers::frame_exists(&state.config, v).await,
-                _ => crate::routes::asset_layers::effect_exists(&state.config, v).await,
-            };
-            if !v.is_empty() && !asset && !list.contains(&v.as_str()) { return Err(AppError::BadRequest(format!("Unknown {what}"))) }
+            if !crate::routes::cosmetics::allowed(&state, kind, v).await { return Err(AppError::BadRequest(format!("Unknown {what}"))) }
         }
     }
     if let Some(v) = &req.typing_indicator {

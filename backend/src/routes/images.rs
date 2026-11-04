@@ -179,8 +179,8 @@ async fn upload(
     Query(q): Query<UploadQuery>,
     multipart: Multipart,
 ) -> AppResult<(StatusCode, Json<Image>)> {
-    if !matches!(q.kind.as_str(), "avatar" | "banner" | "icon") {
-        return Err(AppError::BadRequest("kind must be avatar, banner or icon".into()));
+    if !matches!(q.kind.as_str(), "avatar" | "banner" | "icon" | "cosmetic") {
+        return Err(AppError::BadRequest("kind must be avatar, banner, icon or cosmetic".into()));
     }
     let (img, _) = store_image(&state, uid, &q.kind, multipart, MAX_PROFILE_IMAGE).await?;
     Ok((StatusCode::CREATED, Json(img)))
@@ -262,7 +262,7 @@ pub async fn release_replaced(state: &AppState, old: Option<&str>, new: Option<&
 }
 
 /// Images nothing points at any more: not a user's avatar/banner, a server's icon/banner, a Discover
-/// listing's banner, an emoji or a sticker. `min_age_secs` keeps uploads that are still being attached.
+/// listing's banner, a custom cosmetic, an emoji or a sticker. `min_age_secs` keeps uploads that are still being attached.
 pub async fn orphan_image_ids(db: &sqlx::PgPool, min_age_secs: f64) -> Vec<Uuid> {
     orphan_query(db, min_age_secs, None).await
 }
@@ -273,6 +273,7 @@ async fn orphan_query(db: &sqlx::PgPool, min_age_secs: f64, only: Option<Uuid>) 
            AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_url = '/api/images/' || i.id::text OR u.banner_url = '/api/images/' || i.id::text OR '/api/images/' || i.id::text = ANY(u.avatar_history))
            AND NOT EXISTS (SELECT 1 FROM guilds g WHERE g.icon_url = '/api/images/' || i.id::text OR g.banner_url = '/api/images/' || i.id::text OR g.invite_splash_url = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM guild_discovery d WHERE d.banner_url = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM cosmetics c WHERE c.data->>'image' = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM guild_members gm WHERE gm.guild_avatar = '/api/images/' || i.id::text OR gm.guild_banner = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM guild_events ev WHERE ev.cover_url = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM roles r WHERE r.icon = '/api/images/' || i.id::text)

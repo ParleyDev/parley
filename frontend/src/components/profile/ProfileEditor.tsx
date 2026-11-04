@@ -2,7 +2,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { Camera, ChevronDown, Pipette, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api } from '../../lib/api'
-import { NAMEPLATES, PROFILE_EFFECTS, PROFILE_FRAMES, nameplateClass } from '../../lib/cosmetics'
+import { NAMEPLATES, PROFILE_EFFECTS, PROFILE_FRAMES, nameplateClass, useOptions } from '../../lib/cosmetics'
 import { FORMATS, toggleWrap } from '../../lib/editor'
 import { colorFor } from '../../lib/format'
 import { useT } from '../../lib/i18n'
@@ -115,13 +115,18 @@ export default function ProfileEditor() {
     onAvatarFile: (f) => void upload('avatar', f), onAvatarRemove: () => set('avatar')(null), onBannerFile: (f) => void upload('banner', f), onBannerRemove: () => set('banner')(null),
     status: presence, onStatus: (v) => { api.patch('/users/@me', { status: v }).catch((e) => pushToast((e as Error).message, 'error')) }, busy: uploading,
   }
+  // Built-in options as admins left them (some turned off or renamed), then the ones they made.
+  const plates = useOptions('nameplate', NAMEPLATES), decorations = useOptions('decoration', DECORATIONS)
+  const effects = useOptions('effect', PROFILE_EFFECTS), frames = useOptions('frame', PROFILE_FRAMES)
+  const pickedEffect = effects.find((e) => e.id && e.id === d.effect)
+  const effectBit = !pickedEffect ? undefined : 'data' in pickedEffect ? (pickedEffect.data.image ? <img src={pickedEffect.data.image} alt={pickedEffect.label} className="h-8 w-8 object-contain" /> : pickedEffect.data.glyph) : pickedEffect.glyph
   const chip = (on: boolean) => `rounded-lg border px-2.5 py-1 text-sm ${on ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`
 
   const panel: Record<Section, { title: string; body: ReactNode }> = {
     nameplate: { title: t('Nameplate'), body: (
       <>
         <div className="flex flex-wrap gap-2">
-          {[{ id: '', label: t('None') }, ...NAMEPLATES].map((n) => <button key={n.id || 'none'} type="button" onClick={() => set('plate')(n.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${nameplateClass(n.id)} ${d.plate === n.id ? 'border-accent' : 'border-line hover:border-text-2'}`} data-nameplate-option={n.id || 'none'} aria-pressed={d.plate === n.id}>{n.label}</button>)}
+          {[{ id: '', label: t('None') }, ...plates].map((n) => <button key={n.id || 'none'} type="button" onClick={() => set('plate')(n.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${nameplateClass(n.id)} ${d.plate === n.id ? 'border-accent' : 'border-line hover:border-text-2'}`} data-nameplate-option={n.id || 'none'} aria-pressed={d.plate === n.id}>{n.label}</button>)}
         </div>
         <AssetNameplatePicker value={d.plate} onPick={set('plate')} />
         <p className="mt-2 text-xs text-text-2">{t('Shown behind your name in member lists and DMs.')}</p>
@@ -144,7 +149,7 @@ export default function ProfileEditor() {
     decoration: { title: t('Avatar decoration'), body: (
       <>
         <div className="flex flex-wrap gap-2" data-decoration-options>
-          {DECORATIONS.map((x) => (
+          {decorations.map((x) => (
             <button key={x.id} type="button" onClick={() => set('decoration')(x.id)} className={`flex items-center gap-2 ${chip(d.decoration === x.id)} py-1.5`} data-decoration-option={x.id} aria-pressed={d.decoration === x.id}>
               <Avatar user={{ ...user, avatar_url: d.avatar }} decoration={x.id} size={28} />{x.label}
             </button>
@@ -180,13 +185,13 @@ export default function ProfileEditor() {
     ) },
     effect: { title: t('Profile effect'), body: (
       <div className="flex flex-wrap gap-2">
-        {[{ id: '', label: t('None'), glyph: '' }, ...PROFILE_EFFECTS].map((e) => <button key={e.id || 'none'} type="button" onClick={() => set('effect')(e.id)} className={chip(d.effect === e.id)} data-effect-option={e.id || 'none'} aria-pressed={d.effect === e.id}>{e.glyph} {e.label}</button>)}
+        {[{ id: '', label: t('None'), glyph: '' }, ...effects].map((e) => <button key={e.id || 'none'} type="button" onClick={() => set('effect')(e.id)} className={chip(d.effect === e.id)} data-effect-option={e.id || 'none'} aria-pressed={d.effect === e.id}>{'data' in e && e.data.image ? <img src={e.data.image} alt="" className="inline h-4 w-4 object-contain" /> : 'data' in e ? e.data.glyph : e.glyph} {e.label}</button>)}
         <div className="w-full"><LayeredPicker kind="profile-effects" value={d.effect} onPick={set('effect')} /></div>
       </div>
     ) },
     frame: { title: t('Profile frame'), body: (
       <div className="flex flex-wrap gap-2">
-        {[{ id: '', label: t('None') }, ...PROFILE_FRAMES].map((f) => <button key={f.id || 'none'} type="button" onClick={() => set('frame')(f.id)} className={chip(d.frame === f.id)} data-frame-option={f.id || 'none'} aria-pressed={d.frame === f.id}>{f.label}</button>)}
+        {[{ id: '', label: t('None') }, ...frames].map((f) => <button key={f.id || 'none'} type="button" onClick={() => set('frame')(f.id)} className={chip(d.frame === f.id)} data-frame-option={f.id || 'none'} aria-pressed={d.frame === f.id}>{f.label}</button>)}
         <div className="w-full"><LayeredPicker kind="profile-frames" value={d.frame} onPick={set('frame')} /></div>
       </div>
     ) },
@@ -243,8 +248,8 @@ export default function ProfileEditor() {
         <div>
           <Heading>{t('Profile Effect & Frame')}</Heading>
           <div className="grid grid-cols-2 gap-2">
-            <Tile section="effect" open={section} onOpen={setSection} label={t('Profile effect')} className="aspect-square flex items-center justify-center text-2xl">{PROFILE_EFFECTS.find((e) => e.id === d.effect)?.glyph ?? (effectItem && layeredThumb('profile-effects', effectItem) ? <img src={layeredThumb('profile-effects', effectItem)!} alt={effectItem.name} className="absolute inset-0 h-full w-full object-cover object-top" /> : <span className="text-sm text-text-2">{t('None')}</span>)}</Tile>
-            <Tile section="frame" open={section} onOpen={setSection} label={t('Profile frame')} className="aspect-square flex items-center justify-center text-sm">{PROFILE_FRAMES.find((f) => f.id === d.frame)?.label ?? (frameItem ? <img src={layeredThumb('profile-frames', frameItem)!} alt={frameItem.name} className="absolute inset-1 h-[calc(100%-8px)] w-[calc(100%-8px)] object-contain" /> : <span className="text-text-2">{t('None')}</span>)}</Tile>
+            <Tile section="effect" open={section} onOpen={setSection} label={t('Profile effect')} className="aspect-square flex items-center justify-center text-2xl">{effectBit ?? (effectItem && layeredThumb('profile-effects', effectItem) ? <img src={layeredThumb('profile-effects', effectItem)!} alt={effectItem.name} className="absolute inset-0 h-full w-full object-cover object-top" /> : <span className="text-sm text-text-2">{t('None')}</span>)}</Tile>
+            <Tile section="frame" open={section} onOpen={setSection} label={t('Profile frame')} className="aspect-square flex items-center justify-center text-sm">{frames.find((f) => f.id && f.id === d.frame)?.label ?? (frameItem ? <img src={layeredThumb('profile-frames', frameItem)!} alt={frameItem.name} className="absolute inset-1 h-[calc(100%-8px)] w-[calc(100%-8px)] object-contain" /> : <span className="text-text-2">{t('None')}</span>)}</Tile>
           </div>
         </div>
         <div>

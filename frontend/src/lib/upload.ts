@@ -89,8 +89,8 @@ export async function prepareImage(file: File, maxW: number, maxH: number): Prom
   return new File([blob], file.name.replace(/\.[^.]+$/, '') + (type === 'image/png' ? '.png' : type === 'image/webp' ? '.webp' : '.jpg'), { type })
 }
 
-/** Upload an avatar, banner or server icon; returns its served URL. */
-export async function uploadImage(kind: 'avatar' | 'banner' | 'icon', file: File): Promise<UploadedImage> {
+/** Upload an avatar, banner, server icon or an admin's cosmetic picture; returns its served URL. */
+export async function uploadImage(kind: 'avatar' | 'banner' | 'icon' | 'cosmetic', file: File): Promise<UploadedImage> {
   const form = new FormData()
   form.append('file', file, file.name)
   const token = getToken()

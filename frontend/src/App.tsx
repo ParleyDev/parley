@@ -23,6 +23,7 @@ import OverlayPage from './pages/Overlay'
 import { ForgotPage, ResetPage } from './pages/PasswordReset'
 import { api } from './lib/api'
 import Toasts from './components/Toasts'
+import CosmeticStyles from './components/CosmeticStyles'
 import { useParams } from 'react-router-dom'
 
 // Development tools (the chat simulator): only in `vite dev` or a build made with VITE_DEV_TOOLS=1.
@@ -78,6 +79,7 @@ export default function App() {
         <Route path="*" element={<Navigate to={token ? '/channels/@me' : '/login'} replace />} />
       </Routes>
       <Toasts />
+      <CosmeticStyles />
     </>
   )
 }

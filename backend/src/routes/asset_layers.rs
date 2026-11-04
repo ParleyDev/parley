@@ -162,13 +162,22 @@ pub fn scan_layered(dir: &std::path::Path) -> LayerIndex {
     idx
 }
 
-async fn list_effects(State(state): State<AppState>) -> Response { list_response(&effects(&state.config).await.list) }
-async fn list_frames(State(state): State<AppState>) -> Response { list_response(&frames(&state.config).await.list) }
+async fn list_effects(State(state): State<AppState>) -> Response { list_response("effect", &effects(&state.config).await.list) }
+async fn list_frames(State(state): State<AppState>) -> Response { list_response("frame", &frames(&state.config).await.list) }
 
-/// The catalogue changes only when the folder does; let clients keep it for a few minutes.
-fn list_response(list: &[Layered]) -> Response {
+/// The catalogue, without the ones an admin turned off and under the names admins gave them. It changes when the
+/// folder or an admin does; clients keep it a minute (and drop a turned-off one at once from COSMETICS_UPDATE).
+fn list_response(kind: &str, list: &[Layered]) -> Response {
+    let list: Vec<Layered> = list.iter().filter(|d| !super::cosmetics::is_off(kind, &format!("{ASSET_PREFIX}{}", d.id))).map(|d| {
+        let mut d = d.clone();
+        if let Some((name, description)) = super::cosmetics::renamed(kind, &format!("{ASSET_PREFIX}{}", d.id)) {
+            if let Some(n) = name { d.name = n }
+            if let Some(x) = description { d.description = x }
+        }
+        d
+    }).collect();
     let mut resp = Json(list).into_response();
-    resp.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=300"));
+    resp.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=60"));
     resp
 }
 
