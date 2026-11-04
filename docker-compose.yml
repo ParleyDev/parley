@@ -30,10 +30,11 @@ services:
       # JSON array of RTCIceServer objects; add a TURN server for users behind strict NATs.
       ICE_SERVERS: ${ICE_SERVERS:-[{"urls":"stun:stun.l.google.com:19302"}]}
       UPLOAD_DIR: /data/uploads
-      # Instance-wide assets, mounted read-only from ASSETS_PATH: avatar-decorations/ (PNG/APNG/GIF/WebP),
-      # nameplates/ (WebM/MP4), and profile-effects/ and profile-frames/ (one folder of layers each). A metadata.json
-      # in each kind's folder names and describes them (effects and frames need it for their layers). New or removed
-      # files show up within a minute, no restart.
+      # Instance-wide assets, mounted from ASSETS_PATH: avatar-decorations/ (PNG/APNG/GIF/WebP), nameplates/
+      # (WebM/MP4), and profile-effects/ and profile-frames/ (one folder of layers each). A metadata.json in each kind's
+      # folder names and describes them (effects and frames need it for their layers). New, changed or removed files
+      # show up within a minute, no restart. Admin console → Cosmetics adds and edits items here (their files and
+      # metadata.json entries); mount it :ro to lock the folder, and adding and editing there then fail.
       ASSETS_DIR: /data/assets
       # Per-user storage quota for attachments and profile images, in bytes (0 = unlimited; admins can override per user).
       UPLOAD_QUOTA_BYTES: ${UPLOAD_QUOTA_BYTES:-1073741824}
@@ -80,7 +81,7 @@ services:
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
     volumes:
       - uploads:/data/uploads
-      - ${ASSETS_PATH:-./assets}:/data/assets:ro
+      - ${ASSETS_PATH:-./assets}:/data/assets:rw
     depends_on:
       db:
         condition: service_healthy

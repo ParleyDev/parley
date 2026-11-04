@@ -93,6 +93,9 @@ async fn index_of(config: &Config, kind: &'static str) -> Arc<LayerIndex> {
     idx
 }
 
+/// Drop a kind's cached index so the next look rescans the folder (after the admin console wrote to it).
+pub fn forget(kind: &str) { INDEX.write().unwrap().retain(|k, _| *k != kind); }
+
 pub async fn effects(config: &Config) -> Arc<LayerIndex> { index_of(config, EFFECTS_DIR).await }
 pub async fn frames(config: &Config) -> Arc<LayerIndex> { index_of(config, FRAMES_DIR).await }
 
@@ -165,17 +168,10 @@ pub fn scan_layered(dir: &std::path::Path) -> LayerIndex {
 async fn list_effects(State(state): State<AppState>) -> Response { list_response("effect", &effects(&state.config).await.list) }
 async fn list_frames(State(state): State<AppState>) -> Response { list_response("frame", &frames(&state.config).await.list) }
 
-/// The catalogue, without the ones an admin turned off and under the names admins gave them. It changes when the
-/// folder or an admin does; clients keep it a minute (and drop a turned-off one at once from COSMETICS_UPDATE).
+/// The catalogue, without the ones an admin turned off or deleted. It changes when the folder or an admin does;
+/// clients keep it a minute (and refetch it at once on COSMETICS_UPDATE).
 fn list_response(kind: &str, list: &[Layered]) -> Response {
-    let list: Vec<Layered> = list.iter().filter(|d| !super::cosmetics::is_off(kind, &format!("{ASSET_PREFIX}{}", d.id))).map(|d| {
-        let mut d = d.clone();
-        if let Some((name, description)) = super::cosmetics::renamed(kind, &format!("{ASSET_PREFIX}{}", d.id)) {
-            if let Some(n) = name { d.name = n }
-            if let Some(x) = description { d.description = x }
-        }
-        d
-    }).collect();
+    let list: Vec<Layered> = list.iter().filter(|d| !super::cosmetics::is_off(kind, &format!("{ASSET_PREFIX}{}", d.id))).cloned().collect();
     let mut resp = Json(list).into_response();
     resp.headers_mut().insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=60"));
     resp
@@ -197,7 +193,8 @@ fn image_response(body: Body, ct: &str, etag: &str) -> Response {
     let mut resp = Response::new(body);
     let h = resp.headers_mut();
     h.insert(header::CONTENT_TYPE, HeaderValue::from_str(ct).unwrap_or(HeaderValue::from_static("image/png")));
-    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=86400"));
+    // Short, then revalidated by ETag: an admin can replace a file in place (asset_admin.rs).
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=300"));
     if let Ok(v) = HeaderValue::from_str(etag) { h.insert(header::ETAG, v); }
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'"));

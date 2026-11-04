@@ -119,7 +119,7 @@ export default function ProfileEditor() {
   const plates = useOptions('nameplate', NAMEPLATES), decorations = useOptions('decoration', DECORATIONS)
   const effects = useOptions('effect', PROFILE_EFFECTS), frames = useOptions('frame', PROFILE_FRAMES)
   const pickedEffect = effects.find((e) => e.id && e.id === d.effect)
-  const effectBit = !pickedEffect ? undefined : 'data' in pickedEffect ? (pickedEffect.data.image ? <img src={pickedEffect.data.image} alt={pickedEffect.label} className="h-8 w-8 object-contain" /> : pickedEffect.data.glyph) : pickedEffect.glyph
+  const effectBit = !pickedEffect ? undefined : 'data' in pickedEffect ? pickedEffect.data.glyph : pickedEffect.glyph
   const chip = (on: boolean) => `rounded-lg border px-2.5 py-1 text-sm ${on ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`
 
   const panel: Record<Section, { title: string; body: ReactNode }> = {
@@ -185,7 +185,7 @@ export default function ProfileEditor() {
     ) },
     effect: { title: t('Profile effect'), body: (
       <div className="flex flex-wrap gap-2">
-        {[{ id: '', label: t('None'), glyph: '' }, ...effects].map((e) => <button key={e.id || 'none'} type="button" onClick={() => set('effect')(e.id)} className={chip(d.effect === e.id)} data-effect-option={e.id || 'none'} aria-pressed={d.effect === e.id}>{'data' in e && e.data.image ? <img src={e.data.image} alt="" className="inline h-4 w-4 object-contain" /> : 'data' in e ? e.data.glyph : e.glyph} {e.label}</button>)}
+        {[{ id: '', label: t('None'), glyph: '' }, ...effects].map((e) => <button key={e.id || 'none'} type="button" onClick={() => set('effect')(e.id)} className={chip(d.effect === e.id)} data-effect-option={e.id || 'none'} aria-pressed={d.effect === e.id}>{'data' in e ? e.data.glyph : e.glyph} {e.label}</button>)}
         <div className="w-full"><LayeredPicker kind="profile-effects" value={d.effect} onPick={set('effect')} /></div>
       </div>
     ) },

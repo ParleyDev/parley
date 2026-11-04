@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { folderVersion, useFolderVersion } from './assetCatalog'
 
 /**
  * Image avatar decorations from the server's assets folder (`ASSETS_DIR/avatar-decorations/`). A user's
@@ -12,15 +13,18 @@ export const assetDecorationId = (v: string | undefined | null) => (v?.startsWit
 export const decorationUrl = (id: string, still = false) => `/api/assets/avatar-decorations/${encodeURIComponent(id)}${still ? '/static' : ''}`
 
 let cached: Promise<AssetDecoration[]> | null = null
+let cachedAt = 0
 export function loadDecorations(): Promise<AssetDecoration[]> {
-  cached ??= fetch('/api/assets/avatar-decorations').then((r) => (r.ok ? r.json() : [])).catch(() => { cached = null; return [] })
+  if (cachedAt !== folderVersion()) { cached = null; cachedAt = folderVersion() }
+  cached ??= fetch(`/api/assets/avatar-decorations${cachedAt ? `?v=${cachedAt}` : ''}`).then((r) => (r.ok ? r.json() : [])).catch(() => { cached = null; return [] })
   return cached
 }
 
 /** The server's decoration catalog (fetched once per page load); null while loading. */
 export function useAssetDecorations(): AssetDecoration[] | null {
   const [list, setList] = useState<AssetDecoration[] | null>(null)
-  useEffect(() => { let live = true; void loadDecorations().then((l) => { if (live) setList(l) }); return () => { live = false } }, [])
+  const v = useFolderVersion()
+  useEffect(() => { let live = true; void loadDecorations().then((l) => { if (live) setList(l) }); return () => { live = false } }, [v])
   return list
 }
 

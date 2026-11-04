@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useT } from '../lib/i18n'
+import { useFolderVersion } from '../lib/assetCatalog'
 
 /** A nameplate from the instance's assets folder (`asset:<id>`): a short video loop. Built-in ones are CSS classes. */
 export const isAssetNameplate = (v?: string | null): v is string => !!v && v.startsWith('asset:')
@@ -40,7 +41,8 @@ export function AssetNameplatePicker({ value, onPick }: { value: string; onPick:
   const t = useT()
   const [list, setList] = useState<AssetNameplate[] | null>(null)
   const [q, setQ] = useState('')
-  useEffect(() => { fetch('/api/assets/nameplates').then((r) => r.json()).then(setList).catch(() => setList([])) }, [])
+  const v = useFolderVersion()
+  useEffect(() => { fetch(`/api/assets/nameplates${v ? `?v=${v}` : ''}`).then((r) => r.json()).then(setList).catch(() => setList([])) }, [v])
   if (!list || list.length === 0) return null
   const shown = list.filter((n) => !q || n.name.toLowerCase().includes(q.toLowerCase()) || !!n.description?.toLowerCase().includes(q.toLowerCase()))
   return (

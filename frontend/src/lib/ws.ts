@@ -1,5 +1,6 @@
 import { loadThemes, setThemes, type ColorTheme } from './colorThemes'
 import { loadCosmetics, setCosmetics, type CosmeticRow } from './cosmetics'
+import { folderChanged } from './assetCatalog'
 import { desktop, desktopBridge, isOverlay } from './desktop'
 import { pushCaption } from './captions'
 import { mentionsMe, useStore, type ReadyPayload } from '../store'
@@ -279,7 +280,7 @@ function handle(ev: Ev) {
     case 'GUILD_EMOJIS_UPDATE': s.setGuildEmojis(ev.d.guild_id, ev.d.emojis); break
     case 'INSTANCE_UPDATE': s.setInstance(ev.d); break
     case 'THEMES_UPDATE': setThemes(ev.d.themes); break
-    case 'COSMETICS_UPDATE': setCosmetics(ev.d.cosmetics); break
+    case 'COSMETICS_UPDATE': setCosmetics(ev.d.cosmetics); folderChanged(); break
     case 'SESSION_REVOKED': s.pushToast(ev.d.reason, 'error'); s.logout(); break
     case 'NOTIFICATION_SETTINGS_UPDATE': s.setNotifSetting(ev.d); break
     case 'GUILD_STICKERS_UPDATE': s.setGuildStickers(ev.d.guild_id, ev.d.stickers); break

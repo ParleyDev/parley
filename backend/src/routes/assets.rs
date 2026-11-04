@@ -66,6 +66,11 @@ pub struct Index {
     pub list: Vec<Decoration>,
     by_id: HashMap<String, usize>,
 }
+impl Decoration {
+    /// Its file's name in the folder.
+    pub fn file_name(&self) -> String { self.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default() }
+}
+
 impl Index {
     pub fn get(&self, id: &str) -> Option<&Decoration> { self.by_id.get(id).map(|&i| &self.list[i]) }
 }
@@ -84,6 +89,9 @@ async fn index_of(config: &Config, kind: &'static str) -> Arc<Index> {
     INDEX.write().unwrap().insert(kind, (Instant::now(), idx.clone()));
     idx
 }
+
+/// Drop a kind's cached index so the next look rescans the folder (after the admin console wrote to it).
+pub fn forget(kind: &str) { INDEX.write().unwrap().retain(|k, _| *k != kind); }
 
 pub async fn decorations(config: &Config) -> Arc<Index> { index_of(config, DECORATIONS_DIR).await }
 pub async fn nameplates(config: &Config) -> Arc<Index> { index_of(config, NAMEPLATES_DIR).await }
@@ -184,25 +192,12 @@ async fn list_nameplates(State(state): State<AppState>) -> Json<Vec<Decoration>>
     Json(shown("nameplate", &nameplates(&state.config).await.list))
 }
 
-/// The list as people see it: without the ones an admin turned off, under the names admins gave them.
+/// The list as people see it: without the ones an admin turned off or deleted.
 fn shown(kind: &str, list: &[Decoration]) -> Vec<Decoration> {
-    list.iter().filter(|d| !super::cosmetics::is_off(kind, &format!("{ASSET_PREFIX}{}", d.id))).map(|d| {
-        let mut d = d.clone();
-        if let Some((name, description)) = super::cosmetics::renamed(kind, &format!("{ASSET_PREFIX}{}", d.id)) {
-            if let Some(n) = name { d.name = n }
-            if description.is_some() { d.description = description }
-        }
-        d
-    }).collect()
-}
-
-/// A file an admin turned off isn't served (its owners stop showing it).
-fn check_on(kind: &str, id: &str) -> AppResult<()> {
-    if super::cosmetics::is_off(kind, &format!("{ASSET_PREFIX}{id}")) { Err(AppError::NotFound("Turned off".into())) } else { Ok(()) }
+    list.iter().filter(|d| !super::cosmetics::is_off(kind, &format!("{ASSET_PREFIX}{}", d.id))).cloned().collect()
 }
 
 async fn serve_nameplate(State(state): State<AppState>, Path(id): Path<String>, headers: HeaderMap) -> AppResult<Response> {
-    check_on("nameplate", &id)?;
     let d = nameplates(&state.config).await.get(&id).cloned().ok_or_else(|| AppError::NotFound("Unknown nameplate".into()))?;
     let etag = format!("\"{}\"", d.tag);
     if not_modified(&headers, &etag) { return Ok(StatusCode::NOT_MODIFIED.into_response()); }
@@ -219,7 +214,6 @@ fn anim_cache(config: &Config, d: &Decoration) -> PathBuf {
 /// transparency at all; Android shows an empty player until each video starts). Image nameplates are served as they
 /// are. A video one answers 404 until `convert_nameplates` has made it, and clients keep using the video meanwhile.
 async fn serve_nameplate_anim(State(state): State<AppState>, Path(id): Path<String>, headers: HeaderMap) -> AppResult<Response> {
-    check_on("nameplate", &id)?;
     let d = nameplates(&state.config).await.get(&id).cloned().ok_or_else(|| AppError::NotFound("Unknown nameplate".into()))?;
     if !d.content_type.starts_with("video/") { return serve_nameplate(State(state), Path(id), headers).await; }
     let etag = format!("\"w-{}\"", d.tag);
@@ -293,7 +287,8 @@ fn image_response(body: Body, ct: &str, etag: &str) -> Response {
     let mut resp = Response::new(body);
     let h = resp.headers_mut();
     h.insert(header::CONTENT_TYPE, HeaderValue::from_str(ct).unwrap_or(HeaderValue::from_static("image/png")));
-    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=86400"));
+    // Short, then revalidated by ETag: an admin can replace a file in place (asset_admin.rs).
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=300"));
     if let Ok(v) = HeaderValue::from_str(etag) { h.insert(header::ETAG, v); }
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     h.insert(header::CONTENT_SECURITY_POLICY, HeaderValue::from_static("default-src 'none'"));
@@ -305,7 +300,6 @@ fn not_modified(headers: &HeaderMap, etag: &str) -> bool {
 }
 
 async fn find(state: &AppState, id: &str) -> AppResult<Decoration> {
-    check_on("decoration", id)?;
     decorations(&state.config).await.get(id).cloned().ok_or_else(|| AppError::NotFound("Unknown decoration".into()))
 }
 

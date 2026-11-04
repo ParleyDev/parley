@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 
 /** Layered cosmetics from the instance's assets folder (see backend routes/asset_layers.rs). */
 export type LayeredKind = 'profile-effects' | 'profile-frames'
@@ -14,11 +14,20 @@ export const assetFile = (kind: LayeredKind, id: string, file: string) => `/api/
 
 const lists = new Map<LayeredKind, Promise<LayeredItem[]>>()
 const loaded = new Map<LayeredKind, LayeredItem[]>()
-/** The catalogue of a kind, fetched once per page load. */
+
+// The assets folder's lists change when an admin adds, edits, turns off or deletes something (COSMETICS_UPDATE):
+// each change bumps this, and every list is fetched again.
+let version = 0
+const listeners = new Set<() => void>()
+export function folderChanged() { version++; lists.clear(); loaded.clear(); listeners.forEach((l) => l()) }
+export function useFolderVersion(): number { return useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l) } }, () => version, () => version) }
+export const folderVersion = () => version
+
+/** The catalogue of a kind, fetched once per page load (and again after a change). */
 export function loadCatalog(kind: LayeredKind): Promise<LayeredItem[]> {
   let p = lists.get(kind)
   if (!p) {
-    p = fetch(`/api/assets/${kind}`).then((r) => (r.ok ? r.json() : [])).catch(() => []).then((l: LayeredItem[]) => { loaded.set(kind, l); return l })
+    p = fetch(`/api/assets/${kind}${version ? `?v=${version}` : ''}`).then((r) => (r.ok ? r.json() : [])).catch(() => []).then((l: LayeredItem[]) => { loaded.set(kind, l); return l })
     lists.set(kind, p)
   }
   return p
@@ -26,7 +35,8 @@ export function loadCatalog(kind: LayeredKind): Promise<LayeredItem[]> {
 
 export function useCatalog<T extends LayeredItem>(kind: LayeredKind): T[] | null {
   const [list, setList] = useState<T[] | null>(() => (loaded.get(kind) as T[] | undefined) ?? null)
-  useEffect(() => { if (!kind) return; let live = true; void loadCatalog(kind).then((l) => { if (live) setList(l as T[]) }); return () => { live = false } }, [kind])
+  const v = useFolderVersion()
+  useEffect(() => { if (!kind) return; let live = true; void loadCatalog(kind).then((l) => { if (live) setList(l as T[]) }); return () => { live = false } }, [kind, v])
   return list
 }
 

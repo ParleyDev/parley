@@ -16,12 +16,11 @@ export default function ProfileEffect({ id }: { id?: string | null }) {
   return <Bits value={fx.id} fall={fx.fall} bit={fx.glyph} />
 }
 
-/** An admin's own effect: their emoji or picture, drifting like the built-in ones. */
+/** An admin's own effect: their emoji, drifting like the built-in ones. */
 function CustomEffect({ value }: { value: string }) {
   const fx = useCustomCosmetic('effect', value)
   if (!fx) return null
-  const bit = fx.data.image ? <img src={fx.data.image} alt="" className="h-[1em] w-auto" draggable={false} /> : fx.data.glyph
-  return <Bits value={value} fall={fx.data.fall !== false} bit={bit} />
+  return <Bits value={value} fall={fx.data.fall !== false} bit={fx.data.glyph} />
 }
 
 /** A few glyphs drifting down (`fall`) or floating up over the card. */
