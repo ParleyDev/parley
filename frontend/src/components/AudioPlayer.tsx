@@ -100,6 +100,10 @@ function WaveBars({ peaks, frac }: { peaks: Uint8Array; frac: number }) {
 export default function AudioPlayer({ a, track: base }: { a: Attachment; track: Track }) {
   const t = useT()
   const users = useStore((s) => s.users)
+  // In a server, listeners show under their server name and avatar (like the member list).
+  const members = useStore((s) => (base.where?.guildId ? s.members[base.where.guildId] : undefined))
+  const nameOf = (u: string) => members?.[u]?.nickname || users[u]?.display_name || t('Someone')
+  const avatarOf = (u: string) => (members?.[u]?.guild_avatar ? { ...users[u], avatar_url: members[u].guild_avatar! } : users[u])
   const openModal = useStore((s) => s.openModal)
   // The server's length (from its analysis, which stops at two hours), so the card needn't fetch the file to show it.
   const known = a.media_ms && a.media_ms < 7_100_000 ? a.media_ms / 1000 : undefined
@@ -129,11 +133,11 @@ export default function AudioPlayer({ a, track: base }: { a: Attachment; track: 
   const iconBtn = 'h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-text-2 hover:bg-white/10 hover:text-text-0'
   const plays = a.plays ?? 0
   const listeners = a.listened_by ?? []
-  const names = listeners.map((u) => users[u]?.display_name ?? t('Someone'))
+  const names = listeners.map(nameOf)
   const listenersTip = names.length <= 3 ? t('Listened by {names}', { names: names.join(', ') }) : t('Listened by {names} and {n} others', { names: names.slice(0, 2).join(', '), n: names.length - 2 })
   const showListeners = (e: RMouseEvent) => menu.open(e, [
     { node: <div className="px-2 pb-1 pt-0.5 text-xs font-bold uppercase tracking-wide text-text-2">{listeners.length === 1 ? t('1 listener') : t('{n} listeners', { n: listeners.length })}</div> },
-    ...listeners.map((u) => ({ label: users[u]?.display_name ?? t('Someone'), icon: users[u] ? <Avatar user={users[u]} size={20} /> : <Headphones size={16} />, onClick: () => openModal({ kind: 'profile', userId: u }) })),
+    ...listeners.map((u) => ({ label: nameOf(u), icon: users[u] ? <Avatar user={avatarOf(u)} size={20} /> : <Headphones size={16} />, onClick: () => openModal({ kind: 'profile', userId: u }) })),
   ])
   const VolIcon = p.volume === 0 ? VolumeX : p.volume < 0.5 ? Volume1 : Volume2
 
