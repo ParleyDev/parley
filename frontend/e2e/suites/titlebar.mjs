@@ -1,7 +1,7 @@
 // Discord's title bar on wide screens: back/forward, where you are (server, DM, Friends) and the inbox, which leaves
 // the channel headers while the bar is on. Settings → Appearance → Show title bar turns it off; never on phones.
 import { chromium } from 'playwright'
-import { WEB, S, reg, call, ok, finish } from '../lib.mjs'
+import { WEB, S, reg, call, ok, finish, adminToken } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob')
 const g = await call(a.token, 'POST', '/guilds', { name: `Bar ${S}` }); const ch = g.channels.find((x) => x.kind === 'text')
 const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
@@ -28,6 +28,20 @@ await p.click('[data-title-back]'); await p.waitForTimeout(500)
 ok('Back goes to the previous view', new URL(p.url()).pathname === `/channels/${g.id}/${ch.id}`, p.url())
 await p.click('[data-title-forward]'); await p.waitForTimeout(500)
 ok('Forward comes back', new URL(p.url()).pathname === `/channels/@me/${dm.id}`, p.url())
+
+// Pages outside the chat keep the bar (in the desktop app it is the window's drag strip and close button).
+await p.goto(`${WEB}/discover`); await p.waitForSelector('[data-title-bar]')
+ok('Discover keeps the title bar and names itself', (await place()) === 'Discover')
+const admin = await adminToken()
+const actx = await browser.newContext({ viewport: { width: 1440, height: 900 } }); const pa = await actx.newPage(); pa.on('pageerror', (e) => errors.push(e.message))
+await pa.goto(`${WEB}/login`); await pa.evaluate((t) => localStorage.setItem('parley.token', t), admin.token)
+await pa.goto(`${WEB}/channels/@me`); await pa.waitForSelector('[data-title-bar]')
+await pa.goto(`${WEB}/admin`); await pa.waitForSelector('[data-admin]')
+ok('so does the admin console', await pa.locator('[data-title-bar]').count() === 1 && (await pa.locator('[data-title-bar-name]').innerText()) === 'Admin Console')
+await pa.click('[data-title-back]'); await pa.waitForTimeout(500)
+ok('and Back leaves it', new URL(pa.url()).pathname === '/channels/@me', pa.url())
+await actx.close()
+await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForSelector('[data-message-list]')
 
 // Off in settings
 await p.click('[data-user-panel] [data-control="User Settings"]'); await p.click('[data-settings-tab="appearance"]')

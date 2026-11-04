@@ -1,4 +1,4 @@
-import { ArrowDownToLine, ArrowLeft, ArrowRight, Copy, Inbox, Minus, Square, Users, X } from 'lucide-react'
+import { ArrowDownToLine, ArrowLeft, ArrowRight, Compass, Copy, Inbox, Minus, ShieldCheck, Square, Users, X } from 'lucide-react'
 import { useEffect, useState, type ReactNode, type MouseEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
@@ -65,7 +65,7 @@ function Bar() {
   const t = useT()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const [, , first, second] = pathname.split('/')
+  const [, root, first, second] = pathname.split('/')
   const guild = useStore((s) => (first && first !== '@me' ? s.guilds[first] : undefined))
   const dm = useStore((s) => (first === '@me' && second && second !== 'requests' ? s.dms[second] : undefined))
   const users = useStore((s) => s.users)
@@ -87,6 +87,9 @@ function Bar() {
   } else if (first === '@me' && second) {
     title = t('Direct Messages')
   }
+  // Pages outside the chat (SplitLayout) name themselves.
+  if (root === 'admin') { icon = <ShieldCheck size={16} />; title = t('Admin Console') }
+  else if (root === 'discover') { icon = <Compass size={16} />; title = t('Discover') }
   const arrow = 'h-6 w-6 rounded-md flex items-center justify-center text-text-2 hover:bg-white/10 hover:text-text-0 disabled:opacity-40 disabled:hover:bg-transparent'
   return (
     <div onMouseDown={drag} className={`relative z-30 shrink-0 h-9 flex items-center px-2 text-sm select-none ${frame === 'mac' ? 'pl-[78px]' : ''}`} data-title-bar={frame ?? ''}>
