@@ -28,6 +28,23 @@ const rowHeights = new Map<string, number>()
 /** Where the reader left each channel when scrolled up: the topmost visible row and its offset from the top. */
 const savedPos = new Map<string, { id: string; offset: number }>()
 
+/** Touch screens. */
+const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
+/**
+ * Move the list by `d` to keep the reader's row in place. WebKit (iOS) ignores a script setting the scroll position
+ * while a fling or the top bounce is still moving the list: after older messages were added above, the list stayed
+ * at the top and loaded page after page in a flash. On touch screens a big move (a page added, not a row measured)
+ * stops the list scrolling for the write, which ends the fling and makes it stick.
+ */
+function shiftBy(el: HTMLElement, d: number) {
+  if (!coarse || Math.abs(d) < 50) { el.scrollTop += d; return }
+  const o = el.style.overflowY
+  el.style.overflowY = 'hidden'
+  el.scrollTop += d
+  void el.offsetHeight
+  el.style.overflowY = o
+}
+
 /**
  * Message history + composer for any channel (text, DM, or a voice channel's chat).
  * No header: the parent decides how to frame it.
@@ -198,7 +215,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     // The anchored row left the DOM (the rendered range moved past it): anchor on what is there now.
     if (!node) { recordAnchor(); return }
     const d = node.getBoundingClientRect().top - a.top
-    if (Math.abs(d) >= 0.5) el.scrollTop += d
+    if (Math.abs(d) >= 0.5) shiftBy(el, d)
   }, [recordAnchor])
   /** Which rows should be in the DOM for the current scroll position. The rendered rows are kept while they still
    *  cover at least half the overscan on both sides (and aren't far too many), so measuring them can't make the range
