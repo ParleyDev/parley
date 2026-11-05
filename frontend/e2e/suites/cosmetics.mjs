@@ -31,6 +31,15 @@ const metaOf = (kind) => JSON.parse(inAssets(`cat '${metaFile(kind)}'`))
 // Put the folder back as it was afterwards.
 const before = ASSETS ? Object.fromEntries(Object.keys(DIRS).map((k) => [k, existsSync(metaFile(k)) ? inAssets(`cat '${metaFile(k)}'`) : null])) : {}
 const made = []
+// The folder as it was: this run's files gone, each metadata.json back to its old text. Also when a check throws.
+let restored = false
+const restoreFolder = () => {
+  if (!ASSETS || restored) return
+  restored = true
+  for (const p of made) inAssets(`rm -rf '${p}'`)
+  for (const [k, text] of Object.entries(before)) { if (text === null) inAssets(`rm -f '${metaFile(k)}'`); else inAssets(`cat > '${metaFile(k)}'`, text) }
+}
+process.on('exit', restoreFolder)
 const fixture = (...p) => new Blob([readFileSync(join(FIX, ...p))], { type: 'image/png' })
 const folderForm = async (method, kind, id, meta, files, origin = B) => {
   const form = new FormData()
@@ -182,15 +191,34 @@ await pa.waitForSelector('[data-cosmetic-list="decoration"]')
 ok('Cosmetics is in the admin console, with the folder items', await pa.locator(`[data-cosmetic-row="${halo}"] [data-cosmetic-source="folder"]`).count() === 1 && await pa.locator('[data-cosmetic-row="gold"]').count() === 1 && await pa.locator('[data-cosmetics-read-only]').count() === 0)
 await pa.click('[data-cosmetic-new-folder]'); await pa.fill('[data-cosmetic-name-input]', `E2E From Console ${S}`)
 await pa.setInputFiles('[data-cosmetic-file="single"]', join(FIX, 'assets', 'avatar-decorations', 'e2e_ring.png'))
+ok('the editor previews the picked file before it is saved', (await pa.locator('[data-cosmetic-live-preview] [data-draft-decoration]').first().getAttribute('src').catch(() => ''))?.startsWith('blob:'))
 await pa.click('[data-cosmetic-save]'); await pa.waitForTimeout(1000)
 const fromConsole = (await list('decoration')).find((d) => d.name === `E2E From Console ${S}`)
 ok('adding a decoration from the console writes it to the folder', fromConsole?.source === 'folder' && await pa.locator(`[data-cosmetic-row="${fromConsole.value}"]`).count() === 1, JSON.stringify(fromConsole))
 if (ASSETS && fromConsole) made.push(join('avatar-decorations', `${fromConsole.value.slice(6)}.png`))
 await pa.click('[data-cosmetic-kind="effect"]'); await pa.waitForSelector(`[data-cosmetic-row="${glitter}"]`)
+// Edit from far down the page: the editor opens over it, Save in view without scrolling back up.
+await pa.evaluate(() => document.querySelector('[data-cosmetic-list]')?.closest('.overflow-y-auto')?.scrollTo(0, 1e6))
 await pa.click(`[data-cosmetic-edit="${glitter}"]`); await pa.waitForSelector('[data-cosmetic-layer="1"]')
-await pa.fill('[data-cosmetic-field="loop_delay_ms-1"]', '1500'); await pa.click('[data-cosmetic-save]'); await pa.waitForTimeout(1000)
+const inView = async (p, sel) => { const b = await p.locator(sel).boundingBox(); const v = p.viewportSize(); return !!b && b.y >= 0 && b.y + b.height <= v.height && b.x >= 0 && b.x + b.width <= v.width }
+ok('editing opens over the page with Save in view', await inView(pa, '[data-cosmetic-save]') && await inView(pa, '[data-cosmetic-name-input]'))
+await pa.waitForSelector('[data-cosmetic-live-preview] [data-effect-layers="2"] [data-effect-layer]', { timeout: 3000 }).catch(() => {})
+ok('beside a live preview playing its layers', await pa.locator('[data-cosmetic-live-preview] [data-effect-layer]').count() > 0)
+await pa.fill('[data-cosmetic-field="loop_delay_ms-1"]', '1500')
+await pa.screenshot({ path: 'cosmetics-sheet.png' })
+await pa.click('[data-cosmetic-save]'); await pa.waitForTimeout(1000)
 ok('editing an effect\'s timing from the console', (await effects()).find((e) => e.id === glitterId)?.layers[1].loop_delay_ms === 1500)
 await pa.click('[data-cosmetic-kind="frame"]'); await pa.waitForSelector('[data-cosmetic-list="frame"] [data-cosmetic-row="gold"]')
+await pa.click(`[data-cosmetic-edit="${vines}"]`); await pa.waitForSelector('[data-cosmetic-live-preview] [data-frame-layer]', { timeout: 4000 }).catch(() => {})
+ok('a folder frame previews around a card', await pa.locator('[data-cosmetic-live-preview] [data-frame-room] [data-frame-layer]').count() > 0)
+const top = async () => pa.locator('[data-cosmetic-live-preview] [data-frame-wrap]').evaluate((e) => parseFloat(getComputedStyle(e).paddingTop))
+const before1 = await top(); await pa.fill('[data-cosmetic-field="overflow_top"]', '300'); await pa.waitForTimeout(200)
+ok('and follows the layout as it is typed', (await top()) > before1, `${before1}`)
+await pa.keyboard.press('Escape'); await pa.waitForTimeout(200)
+ok('Escape closes it without saving', await pa.locator('[data-cosmetic-folder-draft]').count() === 0 && (await framesNow()).find((f) => f.id === vinesId)?.layout.overflow_top !== 300, JSON.stringify((await framesNow()).find((f) => f.id === vinesId)?.layout))
+await pa.click('[data-cosmetic-new]'); await pa.fill('[data-cosmetic-color="0"]', '#00ff00')
+ok('a colour frame previews its colours as they are picked', /rgb\(0, 255, 0\)/.test(await pa.locator('[data-cosmetic-live-preview] [data-cosmetic-preview-card]').evaluate((e) => getComputedStyle(e).boxShadow)))
+await pa.click('[data-cosmetic-draft] button[aria-label="Close"]')
 ok('a built-in that is off shows as off, its preview still drawn', (await pa.getAttribute('[data-cosmetic-row="gold"]', 'data-cosmetic-enabled')) === '0' && (await pa.locator('[data-cosmetic-row="gold"] [data-cosmetic-preview] .pf').evaluate((e) => getComputedStyle(e).boxShadow)) !== 'none')
 await pa.click('[data-cosmetic-toggle="gold"]'); await pa.waitForTimeout(600)
 ok('turning it back on', (await list('frame')).find((f) => f.value === 'gold').enabled)
@@ -202,16 +230,30 @@ ok('Show deleted lists it, and Restore brings it back', !(await list('frame')).f
 await pa.click('[data-cosmetic-kind="effect"]'); await pa.waitForSelector(`[data-cosmetic-row="${glitter}"]`); await pa.waitForTimeout(400)
 await pa.screenshot({ path: 'cosmetics-admin.png' })
 
+console.log('-- on a phone')
+const pm = await (await browser.newContext({ viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true })).newPage(); pm.on('pageerror', (e) => errors.push(e.message))
+await pm.goto(`${WEB}/login`); await pm.evaluate((t) => localStorage.setItem('parley.token', t), admin.token); await pm.goto(`${WEB}/admin`)
+await pm.click('[data-admin-nav="cosmetics"]')
+await pm.waitForSelector('[data-cosmetic-list="decoration"]', { timeout: 8000 }).catch(() => {})
+const fits = (p) => p.evaluate(() => [...document.querySelectorAll('[data-admin-cosmetics] *')].every((e) => e.getBoundingClientRect().right <= innerWidth + 1))
+ok('the list fits a phone, nothing off the side', await fits(pm))
+await pm.screenshot({ path: 'cosmetics-mobile.png' })
+await pm.click('[data-cosmetic-kind="effect"]'); await pm.waitForSelector(`[data-cosmetic-row="${glitter}"]`)
+await pm.click(`[data-cosmetic-edit="${glitter}"]`); await pm.waitForSelector('[data-cosmetic-layer="1"]'); await pm.waitForTimeout(500)
+const sheet = await pm.locator('[data-cosmetic-folder-draft]').boundingBox()
+ok('the editor takes the whole phone screen, Save at the bottom', !!sheet && sheet.width === 390 && await inView(pm, '[data-cosmetic-save]') && await pm.locator('[data-cosmetic-live-preview]').isHidden(), JSON.stringify(sheet))
+await pm.screenshot({ path: 'cosmetics-mobile-edit.png' })
+await pm.click('[data-cosmetic-tab="preview"]')
+ok('Preview swaps the form for the preview', await pm.locator('[data-cosmetic-live-preview]').isVisible() && await pm.locator('[data-cosmetic-form]').isHidden() && await inView(pm, '[data-cosmetic-save]'))
+await pm.waitForTimeout(500); await pm.screenshot({ path: 'cosmetics-mobile-preview.png' })
+await pm.click('[data-cosmetic-folder-draft] button[aria-label="Close"]')
+
 console.log('-- deleting Parley\'s own')
 r = await raw(admin.token, 'DELETE', `/admin/cosmetics/frame/${enc(frame.value)}`)
 ok('deleting a custom frame takes it off everyone who had it', r.status === 204 && !(await call(b.token, 'GET', '/users/@me')).profile_frame && !(await list('frame')).some((f) => f.value === frame.value))
 
 for (const [k, v] of [['effect', effect.value], ['nameplate', plate.value]]) await raw(admin.token, 'DELETE', `/admin/cosmetics/${k}/${enc(v)}`)
 await patch('frame', 'neon', { name: '' }); await patch('frame', 'gold', { enabled: true })
-// The folder as it was: this run's files gone, each metadata.json back to its old text.
-if (ASSETS) {
-  for (const p of made) inAssets(`rm -rf '${p}'`)
-  for (const [k, text] of Object.entries(before)) { if (text === null) inAssets(`rm -f '${metaFile(k)}'`); else inAssets(`cat > '${metaFile(k)}'`, text) }
-}
+restoreFolder()
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await browser.close(); await finish()

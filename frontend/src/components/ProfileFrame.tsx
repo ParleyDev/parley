@@ -12,8 +12,10 @@ import { assetFile, isAssetValue, useAssetItem, type FrameItem, type FrameLayer 
  *    masked out with its own rounded corners (a rectangular hole would leave the corners empty). Back layers are
  *    always painted first: metadata often lists the front one first, and a back layer drawn later would cover it.
  */
-export default function ProfileFrame({ value }: { value?: string | null }) {
-  const item = useAssetItem<FrameItem>('profile-frames', value)
+export default function ProfileFrame({ value, draft }: { value?: string | null; draft?: FrameDraft }) {
+  const listed = useAssetItem<FrameItem>('profile-frames', draft ? null : value)
+  const item = draft?.item ?? listed
+  const src = (file: string) => (draft ? draft.fileUrl(file) : assetFile('profile-frames', item!.id, file))
   const ref = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState<{ w: number; h: number; r: number[]; inset: CSSProperties } | null>(null)
   useLayoutEffect(() => {
@@ -35,7 +37,7 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
     ro.observe(el)
     return () => ro.disconnect()
   }, [item])
-  if (!isAssetValue(value) || !item?.layout) return null
+  if ((!draft && !isAssetValue(value)) || !item?.layout) return null
   const { w: W, h: H } = box ?? { w: 0, h: 0 }
   const s = W / (item.layout.inner_width || 1200)
   // Every offset and size lands on a whole device pixel, so a back piece and its matching front piece (drawn in
@@ -64,7 +66,7 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
   }
   /** `dx`: where the layer's container starts left of the card (rails sit in a wider clip box). */
   const img = (l: FrameLayer, at: At, dx = 0): ReactElement =>
-    <img src={assetFile('profile-frames', item.id, l.file)} alt="" draggable={false} className="absolute max-w-none select-none"
+    <img src={src(l.file)} alt="" draggable={false} className="absolute max-w-none select-none"
       style={{ left: at.left - dx, width: at.width, ...(at.bottom !== undefined ? { bottom: at.bottom } : { top: at.top }) }} data-frame-layer={l.file} data-frame-order={l.order} />
   // Rails and borders on a card taller than they were drawn for (the DM panel's full-height card): the top and bottom
   // 45% keep their size at the card's top and bottom corners and the middle stretches between them.
@@ -72,7 +74,7 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
     const nat = l.height ?? 0
     if (!nat || nat * s >= H) return img(l, at, dx)
     const cut = Math.floor(nat * 0.45), cutPx = snap(cut * s)
-    return <div className="absolute inset-y-0 select-none" style={{ left: at.left - dx, width: at.width, boxSizing: 'border-box', borderStyle: 'solid', borderWidth: `${cutPx}px 0`, borderImageSource: `url("${assetFile('profile-frames', item.id, l.file)}")`, borderImageSlice: `${cut} 0 ${cut} 0 fill`, borderImageWidth: `${cutPx}px 0`, borderImageRepeat: 'stretch' }} data-frame-layer={l.file} data-frame-order={l.order} data-frame-stretched />
+    return <div className="absolute inset-y-0 select-none" style={{ left: at.left - dx, width: at.width, boxSizing: 'border-box', borderStyle: 'solid', borderWidth: `${cutPx}px 0`, borderImageSource: `url("${src(l.file)}")`, borderImageSlice: `${cut} 0 ${cut} 0 fill`, borderImageWidth: `${cutPx}px 0`, borderImageRepeat: 'stretch' }} data-frame-layer={l.file} data-frame-order={l.order} data-frame-stretched />
   }
   const piece = (l: FrameLayer, i: number) => {
     const at = place(l)
@@ -97,6 +99,9 @@ export default function ProfileFrame({ value }: { value?: string | null }) {
     </>
   )
 }
+
+/** A frame that isn't saved yet (the admin console's preview): its entry, and where each of its files is. */
+export interface FrameDraft { item: FrameItem; fileUrl: (file: string) => string }
 
 /** The DM panel's card width (Discord's): the card keeps it with or without a frame, and the panel widens instead. */
 export const PANEL_CARD_WIDTH = 304
@@ -129,8 +134,9 @@ export function panelWidth(item: FrameItem | null) {
  * takes what's left of the wrapper after the room, which depends on its width: exact values there, since rounding
  * would let the two chase each other.
  */
-export function FrameRoom({ value, className = '', innerClassName = '', style, bleed, cardWidth, children, ...rest }: { value?: string | null; className?: string; innerClassName?: string; style?: CSSProperties; children: ReactNode; /** Reserve no room: the frame reaches over whatever is around the card (the full profile's window). */ bleed?: boolean; cardWidth?: number } & Record<`data-${string}`, string | boolean | undefined>) {
-  const item = useAssetItem<FrameItem>('profile-frames', value)
+export function FrameRoom({ value, draft, className = '', innerClassName = '', style, bleed, cardWidth, children, ...rest }: { value?: string | null; draft?: FrameDraft; className?: string; innerClassName?: string; style?: CSSProperties; children: ReactNode; /** Reserve no room: the frame reaches over whatever is around the card (the full profile's window). */ bleed?: boolean; cardWidth?: number } & Record<`data-${string}`, string | boolean | undefined>) {
+  const listed = useAssetItem<FrameItem>('profile-frames', draft ? null : value)
+  const item = draft?.item ?? listed
   const ref = useRef<HTMLDivElement>(null)
   const [w, setW] = useState(0)
   useLayoutEffect(() => {
@@ -156,7 +162,7 @@ export function FrameRoom({ value, className = '', innerClassName = '', style, b
           inside it and never against what is around the card. */}
       <div ref={ref} className={`relative isolate ${innerClassName}`} style={cardWidth ? { width: cardWidth } : undefined}>
         {children}
-        <ProfileFrame value={value} />
+        <ProfileFrame value={value} draft={draft} />
       </div>
     </div>
   )

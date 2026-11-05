@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { PROFILE_EFFECTS, isCustom, useCustomCosmetic } from '../lib/cosmetics'
 import { assetFile, isAssetValue, loadBlob, useAssetItem, type EffectItem, type EffectLayer } from '../lib/assetCatalog'
 
@@ -24,7 +24,7 @@ function CustomEffect({ value }: { value: string }) {
 }
 
 /** A few glyphs drifting down (`fall`) or floating up over the card. */
-function Bits({ value, fall, bit }: { value: string; fall: boolean; bit: React.ReactNode }) {
+export function Bits({ value, fall, bit }: { value: string; fall: boolean; bit: React.ReactNode }) {
   return (
     <div className="pointer-events-none absolute inset-0 z-[5] overflow-hidden rounded-[inherit]" aria-hidden data-profile-effect={value} data-effect-motion={fall ? 'fall' : 'rise'}>
       {Array.from({ length: 10 }, (_, i) => (
@@ -41,31 +41,39 @@ function Bits({ value, fall, bit }: { value: string; fall: boolean; bit: React.R
  */
 function AssetEffect({ value }: { value: string }) {
   const item = useAssetItem<EffectItem>('profile-effects', value)
-  const [reduced] = useState(reducedMotion)
+  const id = item?.id
+  // Stable, so a layer only restarts when it changes.
+  const fileUrl = useCallback((f: string) => assetFile('profile-effects', id ?? '', f), [id])
   if (!item) return null
+  return <EffectLayers value={value} item={item} fileUrl={fileUrl} />
+}
+
+/** An effect's layers played over the card; also an unsaved one in the admin console (its files as `fileUrl`). */
+export function EffectLayers({ value, item, fileUrl }: { value: string; item: EffectItem; fileUrl: (file: string) => string }) {
+  const [reduced] = useState(reducedMotion)
   const still = item.reduced_motion ?? item.still
   return (
     <div className="pointer-events-none absolute inset-0 z-[5] overflow-hidden rounded-[inherit] isolate" aria-hidden data-profile-effect={value} data-effect-layers={item.layers.length}>
       {reduced
-        ? still && <img src={assetFile('profile-effects', item.id, still)} alt="" className="absolute inset-x-0 top-0 w-full" data-effect-still />
-        : item.layers.map((l, i) => <Layer key={`${item.id}-${i}`} id={item.id} layer={l} />)}
+        ? still && <img src={fileUrl(still)} alt="" className="absolute inset-x-0 top-0 w-full" data-effect-still />
+        : item.layers.map((l, i) => <Layer key={`${item.id}-${i}`} layer={l} fileUrl={fileUrl} />)}
     </div>
   )
 }
 
-function Layer({ id, layer }: { id: string; layer: EffectLayer }) {
+function Layer({ layer, fileUrl }: { layer: EffectLayer; fileUrl: (file: string) => string }) {
   const [src, setSrc] = useState<string | null>(null)
   useEffect(() => {
     let alive = true, url: string | null = null
     const timers: number[] = []
     const files = [layer.file, ...(layer.random_variants ?? [])]
     // Start downloading now so the layer is ready by its start time.
-    files.forEach((f) => { loadBlob(assetFile('profile-effects', id, f)).catch(() => {}) })
+    files.forEach((f) => { loadBlob(fileUrl(f)).catch(() => {}) })
     const later = (fn: () => void, ms: number) => { timers.push(window.setTimeout(fn, ms)) }
     const play = async () => {
       const file = files[Math.floor(Math.random() * files.length)]
       let blob: Blob
-      try { blob = await loadBlob(assetFile('profile-effects', id, file)) } catch { return }
+      try { blob = await loadBlob(fileUrl(file)) } catch { return }
       if (!alive) return
       const next = URL.createObjectURL(blob)
       if (url) URL.revokeObjectURL(url)
@@ -78,7 +86,7 @@ function Layer({ id, layer }: { id: string; layer: EffectLayer }) {
     }
     later(() => void play(), layer.start_ms)
     return () => { alive = false; timers.forEach(clearTimeout); if (url) URL.revokeObjectURL(url) }
-  }, [id, layer])
+  }, [layer, fileUrl])
   if (!src) return null
   return <img src={src} alt="" className="absolute inset-x-0 top-0 w-full max-w-none" style={{ zIndex: layer.z_index }} data-effect-layer={layer.file} />
 }
