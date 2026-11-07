@@ -446,7 +446,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
             {rows.slice(first, last + 1).map(({ m, newDay, grouped, endsRun }) => {
               const sys = !!m.kind && m.kind !== 'default'
               return (
-                <div key={m.id} ref={observeRow} className="msg-row" data-row-id={m.id} data-sys-row={sys ? '' : undefined}>
+                <div key={m.id} ref={observeRow} className="msg-row relative" data-row-id={m.id} data-sys-row={sys ? '' : undefined}>
                   {newDay && (
                     <div className="relative my-4 mx-4 flex items-center">
                       <div className="h-px flex-1 bg-line" /><span className="px-2 text-[11px] font-semibold text-text-2">{formatDateDivider(m.created_at)}</span><div className="h-px flex-1 bg-line" />
@@ -462,9 +462,10 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
                     </div>
                   )}
                   <MessageItem message={m} grouped={grouped} isOwn={m.author.id === user?.id} onReply={() => setReply(m)} replyTarget={m.reply_to ? list.find((x) => x.id === m.reply_to) ?? m.referenced ?? null : null} onJumpToReply={m.reply_to ? () => jumpTo(m.reply_to!) : undefined} />
-                  {/* Seen: only under your own message, at the end of a run, so it never opens a gap inside a group. */}
+                  {/* Seen: only under your own message, at the end of a run. Out of the flow, hanging into the space before
+                      the next group, so it never changes the spacing of the chat. */}
                   {(() => { const r = m.author.id === user?.id && endsRun ? readersOf(m.id) : []; if (!r.length) return null; const names = r.map((id) => users[id]?.display_name ?? t('Someone')); return (
-                    <div className="flex items-center justify-end gap-1 px-4 pb-1 -mt-0.5" data-read-by={r.join(',')}>
+                    <div className="absolute right-4 top-full z-10 -mt-1 flex items-center gap-1 phone:right-3" data-read-by={r.join(',')}>
                       <Tooltip tip={t('Seen by {names}', { names: names.join(', ') })}><span className="flex items-center gap-1 text-[11px] text-text-2">{isDm ? t('Seen') : null}<span className="flex -space-x-1">{r.slice(0, 4).map((id) => { const u = users[id]; return u ? <Avatar key={id} user={u} size={14} /> : null })}</span>{r.length > 4 ? <span>+{r.length - 4}</span> : null}</span></Tooltip>
                     </div>) })()}
                 </div>
