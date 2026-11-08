@@ -408,8 +408,20 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     stickBottom.current = false
     if (!(await jumpToMessageAsync(channel.id, id))) pushToast(t('The original message could not be found'), 'error')
   }
-  // Read receipts: for each message, who has read exactly up to it (one marker per reader).
-  const readersOf = (id: string) => Object.entries(receipts ?? {}).filter(([uid, mid]) => mid === id && uid !== user?.id).map(([uid]) => uid)
+  // Read receipts: each reader's marker sits under the last of your runs they have read up to. Their receipt is often a
+  // later message (their own reply, or someone else's), so this can't be an exact id match.
+  const seenAt = (() => {
+    const at: Record<string, string[]> = {}
+    const ends = rows.filter((r) => r.endsRun && r.m.author.id === user?.id && !r.m.local).map((r) => r.m.id)
+    for (const [uid, mid] of Object.entries(receipts ?? {})) {
+      if (uid === user?.id) continue
+      let hit: string | undefined
+      for (const id of ends) { if (id <= mid) hit = id; else break }
+      if (hit) (at[hit] ??= []).push(uid)
+    }
+    return at
+  })()
+  const readersOf = (id: string) => seenAt[id] ?? []
   const isDm = channel.guild_id === null && !('recipients' in channel && (channel as DmChannel).recipients.length > 1)
 
   const jumpToPresent = async () => {
