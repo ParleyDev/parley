@@ -189,6 +189,17 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
   .vs .row > * { padding: .7rem 1rem; }
 }
 .vs-note { margin-top: .8rem; color: var(--faint); font-size: var(--step--1); }
+.only { margin-top: 3rem; }
+.only-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1rem; margin-bottom: 1rem; }
+.only-head h3 { margin: 0; font-size: var(--step-2); }
+.only-head p { margin: 0; color: var(--muted); }
+.only ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--rule); border-radius: 22px; overflow: hidden; background: var(--panel); }
+.only li { padding: 1.1rem 1.25rem; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); margin: -1px 0 0 -1px; min-width: 0; display: grid; gap: .3rem; align-content: start; }
+.only li b { font-weight: 600; }
+.only li b::before { content: "✓ "; color: var(--signal); }
+.only li span { color: var(--muted); font-size: .9375rem; }
+@media (max-width: 980px) { .only ul { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .only ul { grid-template-columns: minmax(0, 1fr); } }
 .reasons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.25rem; margin-top: 2.5rem; }
 @media (max-width: 980px) { .reasons { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .reasons { grid-template-columns: minmax(0, 1fr); } }
@@ -584,6 +595,20 @@ footer a:hover { color: var(--text); }
         <div class="row" role="row"><span class="what" role="cell">Source code</span><span class="them" role="cell">Closed</span><span class="us" role="cell">Open, Apache-2.0</span></div>
       </div>
       <p class="vs-note">Discord's limits as publicly listed in November 2026. Discord changes its plans often.</p>
+
+      <div class="only" aria-labelledby="only-title">
+        <div class="only-head"><h3 id="only-title">Only on Parley</h3><p>Things Discord doesn't offer on any plan.</p></div>
+        <ul>
+          <li><b>Read receipts</b><span>"Seen" in DMs, and the avatars of who has read up to each message in groups and channels.</span></li>
+          <li><b>Edit history</b><span>Click "(edited)" to see every earlier version of a message, not just the latest.</span></li>
+          <li><b>Recording studio</b><span>A clean track per musician, an arrangement view, a mixer and a metronome, with a WAV export of the mix.</span></li>
+          <li><b>A real music player</b><span>Visualiser, a now-playing bar that follows you between channels, and listen counts.</span></li>
+          <li><b>User reviews</b><span>Leave a short note on someone's profile. They can delete any note they don't want.</span></li>
+          <li><b>Your own instance</b><span>Run it yourself, with your own admin console, Discover queue and decorations folder.</span></li>
+          <li><b>AI assistant connector</b><span>Let Claude or another MCP client read and post as you, only with the permissions you grant.</span></li>
+          <li><b>Mods control scheduling</b><span>Turn scheduled messages off for a whole server or for chosen channels.</span></li>
+        </ul>
+      </div>
 
       <div class="reasons">
         <article>
