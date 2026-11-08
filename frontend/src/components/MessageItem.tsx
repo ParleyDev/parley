@@ -429,9 +429,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       )}
       <div className={`flex ${compact ? 'gap-2' : 'gap-4 phone:gap-3'}`}>
         {compact ? (
-          <div className="w-12 phone:w-10 shrink-0 text-right text-[11px] text-text-2 pt-[3px] select-none" data-msg-compact>{formatShortTime(m.created_at)}</div>
+          <div className="w-12 phone:w-10 flex shrink-0 justify-end whitespace-nowrap text-right text-[11px] text-text-2 pt-[3px] select-none" data-msg-compact>{formatShortTime(m.created_at)}</div>
         ) : grouped ? (
-          <div className="w-10 shrink-0 text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none">{formatShortTime(m.created_at)}</div>
+          <div className="w-10 flex shrink-0 justify-end whitespace-nowrap text-right text-[10px] text-text-2 opacity-0 group-hover:opacity-100 pt-1 select-none" data-msg-gutter-time>{formatShortTime(m.created_at)}</div>
         ) : (
           <button onClick={(e) => openModal({ kind: 'profile', userId: m.author.id, anchor: anchorOf(e) })} onContextMenu={(e) => ctx.open(e, userMenu(m.author, e.currentTarget.getBoundingClientRect()))} className="shrink-0 self-start" data-msg-avatar><Avatar user={authorShown} size={40} /></button>
         )}

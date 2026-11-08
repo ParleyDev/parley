@@ -45,6 +45,19 @@ await call(b.token, 'PUT', `/channels/${dm.id}/read`, { message_id: mb2.id })
 await p.goto(`${WEB}/channels/@me`); await p.waitForTimeout(500)
 await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForSelector(`[data-msg-id="${mb2.id}"]`); await p.waitForTimeout(1200)
 ok('after leaving and coming back (his read now past your messages), "Seen" is still under your last message', await p.locator(`[data-row-id="${m3.id}"] [data-read-by]`).count() === 1 && await p.locator('[data-read-by]').count() === 1)
+console.log('-- a run sent at 12 o\'clock (desktop)')
+// The hidden hover time in a grouped message's gutter ("12:09 AM") was too wide for it and wrapped onto a second
+// line, making every grouped message taller than its text: a gap between the messages of a run from the third on.
+const o = ((12 - new Date(m2.created_at).getUTCHours() + 36) % 24) - 12
+const tz = o === 0 ? 'Etc/GMT' : `Etc/GMT${o > 0 ? '-' : '+'}${Math.abs(o)}`
+const pt = await (await browser.newContext({ viewport: { width: 1280, height: 800 }, timezoneId: tz, locale: 'en-US' })).newPage(); pt.on('pageerror', (e) => errors.push(e.message))
+await pt.goto(`${WEB}/login`); await pt.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+await pt.goto(`${WEB}/channels/@me/${dm.id}`); await pt.waitForSelector(`[data-msg-id="${m3.id}"]`); await pt.waitForTimeout(800)
+const tight = await pt.evaluate((ids) => ids.map((id) => { const row = document.querySelector(`[data-msg-id="${id}"]`), time = row.querySelector('[data-msg-gutter-time]'), text = row.querySelector('.msg-content'); return { time: time.textContent, row: row.getBoundingClientRect().height, text: text.getBoundingClientRect().height, clear: time.getBoundingClientRect().right <= text.getBoundingClientRect().left } }), [m2.id, m3.id])
+ok('the gutter time reads 12 o\'clock', tight.every((x) => /^12:\d\d [AP]M$/.test(x.time)), JSON.stringify(tight.map((x) => x.time)))
+ok('grouped messages are only as tall as their text', tight.every((x) => x.row - x.text <= 4.5), JSON.stringify(tight))
+ok('and the time stays clear of the text', tight.every((x) => x.clear))
+await pt.close()
 console.log('-- Seen above a NEW line (desktop)')
 const c = await reg('carol'); const inv2 = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(c.token, 'POST', `/invites/${inv2.code}`)
 const dm2 = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: c.user.id })
