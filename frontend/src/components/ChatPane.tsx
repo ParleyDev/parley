@@ -201,13 +201,16 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     anchor.current = null
   }, [])
   /** The list's height when it was last settled or scrolled: a scroll event at another height came from the content
-   *  changing (the browser clamping the position), not from the reader. */
+   *  changing (the browser clamping the position), not from the reader. Likewise the visible height: the keyboard
+   *  opening shrinks the list, and the scroll events of that resize are not the reader scrolling up. */
   const seenHeight = useRef(0)
+  const seenClient = useRef(0)
   /** Pinned: follow the bottom. Otherwise put the anchored row back where it was. */
   const settle = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     seenHeight.current = el.scrollHeight
+    seenClient.current = el.clientHeight
     if (stickBottom.current) { el.scrollTop = el.scrollHeight; return }
     const a = anchor.current
     if (!a) return
@@ -354,7 +357,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     if (!el) return
     // Scroll events are dispatched before resize observers run: when the content just changed height, put things back
     // first instead of reading the browser's clamped position as the reader scrolling.
-    if (el.scrollHeight !== seenHeight.current) settle()
+    if (el.scrollHeight !== seenHeight.current || el.clientHeight !== seenClient.current) settle()
     const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     stickBottom.current = !hasNewer && fromBottom < 40
     recordAnchor()
@@ -399,7 +402,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     const pinned = !!el && !hasNewer && (stickBottom.current || el.scrollHeight - el.scrollTop - el.clientHeight < 40)
     apply()
     if (!el) return
-    if (pinned) { stickBottom.current = true; el.scrollTop = el.scrollHeight; seenHeight.current = el.scrollHeight } else settle()
+    if (pinned) { stickBottom.current = true; el.scrollTop = el.scrollHeight; seenHeight.current = el.scrollHeight; seenClient.current = el.clientHeight } else settle()
   }, [hasNewer, settle])
   const scrollToBottom = () => { stickBottom.current = true; const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }
   /** Reply header click: scroll to the original, loading older history if needed. */
