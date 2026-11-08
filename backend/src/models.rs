@@ -392,6 +392,10 @@ pub struct Guild {
     #[sqlx(default)]
     #[serde(default)]
     pub summaries_enabled: bool,
+    /// Scheduled messages turned off for the whole server (per channel it is the Schedule Messages permission).
+    #[sqlx(default)]
+    #[serde(default)]
+    pub scheduled_off: bool,
 }
 
 fn default_all() -> String { "all".into() }

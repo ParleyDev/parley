@@ -177,6 +177,8 @@ export interface Guild {
   explicit_filter?: 'off' | 'no_roles' | 'all'
   /** AI channel summaries offered here (when the instance has them). */
   summaries_enabled?: boolean
+  /** Scheduled messages turned off server-wide. */
+  scheduled_off?: boolean
   applications?: { enabled?: boolean; questions?: ApplicationQuestion[] }
 }
 

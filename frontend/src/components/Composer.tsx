@@ -1,4 +1,4 @@
-import { BarChart3, Camera, Eye, Timer, Video, EyeOff, FileText, FolderOpen, ImagePlay, Images, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
+import { BarChart3, CalendarClock, Camera, Eye, Timer, Video, EyeOff, FileText, FolderOpen, ImagePlay, Images, Mic, PlusCircle, SendHorizontal, Smile, Sticker, Trash2, Upload, X } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { recordEmoji } from '../lib/recentEmoji'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
@@ -23,6 +23,7 @@ import { api } from '../lib/api'
 import { optionHint, commandMatches, runCommand, type SlashCommand } from '../lib/commands'
 import { getDraft, saveDraft } from '../lib/drafts'
 import { shortDuration } from '../lib/slowmode'
+import { scheduleMessage, useScheduled, whenLabel } from '../lib/scheduled'
 
 /** When each channel's slowmode lets you send again (ms), kept across channel switches. */
 const cooldowns = new Map<string, number>()
@@ -97,6 +98,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
   }, [verifyBlock, accountWait, memberWait])
   const canSend = has(perms, P.SEND_MESSAGES) && !timedOut && !rulesPending && !verifyBlock
   const canAttach = canSend && (channel.guild_id === null || has(perms, P.ATTACH_FILES))
+  // Send later: anywhere you can send, unless the server turned it off or denies Schedule Messages in this channel.
+  const canSchedule = canSend && (!channel.guild_id || (!rulesGuild?.scheduled_off && has(perms, P.SCHEDULE_MESSAGES)))
+  const scheduledHere = useScheduled((s) => (s.list ?? []).filter((x) => x.channel_id === channel.id).length)
   const [value, setValue] = useState('')
   const userId = useStore((s) => s.user?.id)
   const setEditTarget = useStore((s) => s.setEditTarget)
@@ -375,6 +379,28 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
     } finally { setSending(false) }
   }
 
+  /** Schedule Message: what's in the box (and its finished uploads and reply) goes into the dialog to be sent later. */
+  const openSchedule = () => {
+    if (!canSchedule) return
+    if (value.trim().startsWith('/')) { pushToast(t("Commands can't be scheduled"), 'error'); return }
+    if (uploading) { pushToast(t('Wait for your files to finish uploading'), 'error'); return }
+    const ids = ready.map((p) => p.done!.id)
+    const replyTo = reply?.id ?? null
+    const snapshot = pending
+    openModal({ kind: 'scheduleMessage', channelId: channel.id, content: value.trim(), files: ids.length, action: async (text, at) => {
+      const content = applyMentions(getPrefs().emoticons ? convertEmoticons(text) : text, picked)
+      await scheduleMessage(channel.id, { content, send_at: at.toISOString(), reply_to: replyTo, attachment_ids: ids })
+      snapshot.forEach((p) => { if (p.preview) URL.revokeObjectURL(p.preview) })
+      setValue(''); setPending([]); setPicked({}); setMention(null); onCancelReply()
+      clearTimeout(draftTimer.current); saveDraft(userId, channel.id, '', {})
+      pushToast(t('Message scheduled for {when}', { when: whenLabel(at) }))
+    } })
+  }
+  // The send button: right-click (desktop) or a long press (touch) offers Schedule Message, as in Discord.
+  const sendMenu = useContextMenu()
+  const press = useRef<{ timer: number; fired: boolean } | null>(null)
+  const endPress = () => { if (press.current) clearTimeout(press.current.timer) }
+
   /** Replace the `:query` being typed with the chosen emoji (plus a space) and restore the caret. */
   const pickSuggestion = (sug: Suggestion) => {
     const el = ref.current
@@ -513,6 +539,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
     { label: 'Upload a File', icon: <Upload size={16} />, disabled: !canAttach, onClick: () => fileRef.current?.click() },
     { label: 'Create Poll', icon: <BarChart3 size={16} />, onClick: () => openModal({ kind: 'createPoll', channelId: channel.id }) },
     ...(typeof MediaRecorder !== 'undefined' ? [{ label: 'Record Voice Message', icon: <Mic size={16} />, disabled: !canAttach, onClick: () => { void startRecording() } }] : []),
+    ...(canSchedule ? [{ label: 'Schedule Message', icon: <CalendarClock size={16} />, onClick: openSchedule }] : []),
   ]
   const sendGif = async (g: { url: string }) => {
     setSending(true)
@@ -602,6 +629,13 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
       {shortcode && suggestions.length > 0 && !mention && (
         <ShortcodeSuggest query={shortcode.query} items={suggestions} active={suggestIdx} onPick={pickSuggestion} onHover={setSuggestIdx} className="bottom-full left-4 right-4 phone:left-2 phone:right-2 mb-2" />
       )}
+      {scheduledHere > 0 && (
+        <div className="mb-1 flex items-center gap-1.5 px-1 text-xs text-text-2" data-scheduled-here>
+          <CalendarClock size={13} />
+          <span>{scheduledHere === 1 ? t('You have 1 scheduled message here.') : t('You have {n} scheduled messages here.', { n: scheduledHere })}</span>
+          <button type="button" className="font-semibold text-sky-400 hover:underline" onClick={() => window.dispatchEvent(new CustomEvent('parley:inbox', { detail: { tab: 'scheduled' } }))} data-scheduled-view>{t('View')}</button>
+        </div>
+      )}
       <div ref={boxRef} className="rounded-lg bg-bg-3 border border-line shadow-lg shadow-black/25 focus-within:border-accent/50 transition" data-composer-box data-composer-narrow={narrow ? '1' : undefined}>
         {reply && (
           <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-lg" data-reply-banner>
@@ -659,6 +693,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
                     <div className="relative pb-[var(--dock-pad)] flex shrink-0 items-center gap-2.5">
             {!narrow && <button className={`${picker === 'gif' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'gif' ? null : 'gif'))} title={t('GIF')} data-gif-button><ImagePlay size={22} /></button>}
             {!narrow && <button className={`${picker === 'sticker' ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} onClick={() => setPicker((p) => (p === 'sticker' ? null : 'sticker'))} title={t('Sticker')} data-sticker-button><Sticker size={22} /></button>}
+            {!narrow && canSchedule && <button className="text-text-2 hover:text-text-0" onClick={openSchedule} title={t('Schedule Message')} data-schedule-button><CalendarClock size={22} /></button>}
             <button className={`${picker === 'emoji' ? 'text-warn' : 'text-text-2 hover:text-warn'}`} onClick={() => setPicker((p) => (p === 'emoji' ? null : 'emoji'))} title={t('Emoji')} data-emoji-button><Smile size={22} /></button>
             {picker && (
               <ExpressionPicker initial={picker} guildId={channel.guild_id} className="bottom-full right-0 mb-3" onClose={() => setPicker(null)}
@@ -666,7 +701,25 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
             )}
           </div>
           {/* Taking focus from the text box would close a phone's keyboard after every message. */}
-          <button onMouseDown={(e) => e.preventDefault()} onClick={submit} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-[var(--dock-pad)] hover:text-accent-hover" title={t('Send')} data-composer-send><SendHorizontal size={22} /></button>
+          <button onMouseDown={(e) => e.preventDefault()} disabled={!canSubmit} className="text-accent disabled:text-text-2 pb-[var(--dock-pad)] hover:text-accent-hover select-none [-webkit-touch-callout:none]" title={t('Send')} data-composer-send
+            onClick={() => { if (press.current?.fired) { press.current = null; return } void submit() }}
+            onPointerDown={(e) => {
+              if (e.pointerType !== 'touch' || !canSchedule) return
+              const p = { timer: 0, fired: false }
+              p.timer = window.setTimeout(() => { p.fired = true; navigator.vibrate?.(10); openSchedule() }, 450)
+              press.current = p
+            }}
+            onPointerUp={endPress} onPointerLeave={endPress} onPointerCancel={endPress}
+            // Lifting the finger after a long press would fire a mousedown on the dialog's backdrop, closing it at once.
+            onTouchEnd={(e) => { if (press.current?.fired) e.preventDefault() }}
+            onContextMenu={(e) => {
+              // Touch: the long press handles it. Cancelling this too (with the touchend above) makes Chrome drop the next tap.
+              if (window.matchMedia('(pointer: coarse)').matches) return
+              e.preventDefault()
+              if (!canSchedule) return
+              const r = e.currentTarget.getBoundingClientRect()
+              sendMenu.open({ clientX: r.right, clientY: r.top - 8 }, [{ label: 'Schedule Message', icon: <CalendarClock size={16} />, onClick: openSchedule }], { above: true })
+            }}><SendHorizontal size={22} /></button>
         </div>
         )}
       </div>
@@ -678,8 +731,9 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
         </div>
       )}
       {plus.menu && <ContextMenu {...plus.menu} onClose={plus.close} label={t('Add to message')} />}
+      {sendMenu.menu && <ContextMenu {...sendMenu.menu} onClose={sendMenu.close} label={t('Send options')} />}
       {sheet && (
-        <AttachSheet onClose={() => setSheet(false)} canAttach={canAttach} canRecord={typeof MediaRecorder !== 'undefined'}
+        <AttachSheet onClose={() => setSheet(false)} canAttach={canAttach} canRecord={typeof MediaRecorder !== 'undefined'} canSchedule={canSchedule}
           onPick={(what) => {
             setSheet(false)
             if (what === 'media') mediaRef.current?.click()
@@ -687,6 +741,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
             else if (what === 'video') videoCamRef.current?.click()
             else if (what === 'files') fileRef.current?.click()
             else if (what === 'poll') openModal({ kind: 'createPoll', channelId: channel.id })
+            else if (what === 'schedule') openSchedule()
             else void startRecording()
           }} />
       )}
@@ -694,11 +749,11 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
   )
 }
 
-type AttachKind = 'media' | 'camera' | 'video' | 'files' | 'poll' | 'voice'
+type AttachKind = 'media' | 'camera' | 'video' | 'files' | 'poll' | 'voice' | 'schedule'
 
 /** Touch devices: what "+" adds, as a bottom sheet of big targets. Photos, Take photo, Record video and Files open the phone's own
  *  pickers (on iOS the Photos one is the system photo library), so there is no separate "upload" step. */
-function AttachSheet({ onPick, onClose, canAttach, canRecord }: { onPick: (k: AttachKind) => void; onClose: () => void; canAttach: boolean; canRecord: boolean }) {
+function AttachSheet({ onPick, onClose, canAttach, canRecord, canSchedule }: { onPick: (k: AttachKind) => void; onClose: () => void; canAttach: boolean; canRecord: boolean; canSchedule: boolean }) {
   const t = useT()
   useEffect(() => { const k = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose() }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k) }, [onClose])
   const items: { id: AttachKind; label: string; icon: React.ReactNode; tint: string; show: boolean }[] = [
@@ -708,6 +763,7 @@ function AttachSheet({ onPick, onClose, canAttach, canRecord }: { onPick: (k: At
     { id: 'files', label: 'Files', icon: <FolderOpen size={24} />, tint: 'bg-bg-4 text-text-0', show: canAttach },
     { id: 'poll', label: 'Poll', icon: <BarChart3 size={24} />, tint: 'bg-success text-black', show: true },
     { id: 'voice', label: 'Voice message', icon: <Mic size={24} />, tint: 'bg-danger text-white', show: canAttach && canRecord },
+    { id: 'schedule', label: 'Schedule', icon: <CalendarClock size={24} />, tint: 'bg-warn text-black', show: canSchedule },
   ]
   return (
     <div className="fixed inset-0 z-[90] flex items-end bg-black/50" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }} data-attach-sheet>

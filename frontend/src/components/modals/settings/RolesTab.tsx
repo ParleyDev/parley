@@ -51,7 +51,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
   const [pane, setPane] = useState<'display' | 'members'>('display')
   const [dragId, setDragId] = useState<string | null>(null)
   if (!guild || !ctx) return null
-  const dirty = !!(role && draft && (draft.name !== role.name || JSON.stringify(draft.name_style) !== JSON.stringify(styleOfRole(role)) || draft.permissions !== role.permissions || draft.hoist !== role.hoist || draft.icon !== (role.icon ?? null) || draft.mentionable !== !!role.mentionable || draft.self_assignable !== !!role.self_assignable))
+  const dirty = !!(role && draft && (draft.name !== role.name || JSON.stringify(draft.name_style) !== JSON.stringify(styleOfRole(role)) || (draft.permissions >>> 0) !== (role.permissions >>> 0) || draft.hoist !== role.hoist || draft.icon !== (role.icon ?? null) || draft.mentionable !== !!role.mentionable || draft.self_assignable !== !!role.self_assignable))
 
   const create = async () => {
     try {

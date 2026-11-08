@@ -143,7 +143,7 @@ export default function ChannelPermissionsTab({ channelId }: { channelId: string
               const v: Tri = has(sel.allow, bit) ? 'allow' : has(sel.deny, bit) ? 'deny' : 'neutral'
               const can = selEditable && (isAdmin || has(myPerms, bit))
               return (
-                <div key={p.key} className="py-3 flex items-start justify-between gap-4">
+                <div key={p.key} className="py-3 flex items-start justify-between gap-4" data-perm-row={p.key}>
                   <div className="min-w-0"><div className="text-[15px] font-medium">{t(p.label)}</div><div className="text-sm text-text-2">{t(p.desc)}</div></div>
                   <div className={`flex rounded-md border border-line overflow-hidden shrink-0 ${can ? '' : 'opacity-50 pointer-events-none'}`}>
                     <TriBtn on={v === 'deny'} cls="bg-danger text-white" onClick={() => setTri(bit, 'deny')} title={t('Deny')}><X size={14} /></TriBtn>

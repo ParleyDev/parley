@@ -28,6 +28,9 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
   const [afkTimeout, setAfkTimeout] = useState(guild?.afk_timeout ?? 300)
   const [rulesChannel, setRulesChannel] = useState(guild?.rules_channel_id ?? '')
   const channels = useStore((s) => s.channels)
+  const toggleScheduled = async (on: boolean) => {
+    try { upsertGuild(await api.patch<Guild>(`/guilds/${guildId}`, { scheduled_off: !on })); pushToast(on ? t('Scheduled messages on') : t('Scheduled messages off')) } catch (e) { pushToast((e as Error).message, 'error') }
+  }
   const voiceChannels = useMemo(() => Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'voice').sort((a, b) => a.position - b.position), [channels, guildId])
   const textChannels = useMemo(() => Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'text').sort((a, b) => a.position - b.position), [channels, guildId])
   const [busy, setBusy] = useState(false)
@@ -116,6 +119,13 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
             <input type="radio" name="default-notif" checked={defaultNotif === v} onChange={() => setDefaultNotif(v)} className="h-4 w-4 accent-accent" data-default-notif={v} />{t(label)}
           </label>
         ))}
+      </section>
+      <section className="space-y-2" data-scheduled-setting>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-text-2">{t('Scheduled messages')}</h2>
+        <label className="flex items-center justify-between gap-4 rounded-xl border border-line bg-bg-1 p-3 cursor-pointer">
+          <span><span className="block font-semibold text-sm">{t('Let members schedule messages')}</span><span className="block text-xs text-text-2">{t('Off: nobody can schedule messages in this server, and ones already scheduled fail when due. To keep them out of some channels only, deny Schedule Messages in those channels\' permissions.')}</span></span>
+          <input type="checkbox" checked={!guild.scheduled_off} onChange={(e) => void toggleScheduled(e.target.checked)} className="h-5 w-5 accent-accent" data-scheduled-toggle />
+        </label>
       </section>
       <div className="space-y-2" data-guild-rules>
         <label className="label" htmlFor="rules-channel">{t('Rules channel')}</label>

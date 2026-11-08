@@ -1,4 +1,4 @@
-import { AlarmClock, Bookmark, CheckCheck, Hash, Inbox, MessageSquare, X } from 'lucide-react'
+import { AlarmClock, AlertTriangle, Bookmark, CalendarClock, CheckCheck, Hash, Inbox, MessageSquare, Paperclip, Pencil, SendHorizontal, Trash2, X } from 'lucide-react'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { locale, useT } from '../lib/i18n'
 import { useEffect, useRef, useState } from 'react'
@@ -13,11 +13,12 @@ import { badgeCount } from '../lib/badge'
 import { renderMarkdown } from '../lib/markdown'
 import { remindLabel, setReminder } from '../lib/reminders'
 import { useTitleBarShown } from '../lib/titleBar'
+import { deleteScheduled, MAX_SCHEDULED, sendScheduledNow, updateScheduled, useScheduled, whenLabel, type Scheduled } from '../lib/scheduled'
 
 const HIDDEN_KEY = `${STORAGE_PREFIX}inboxHidden`
 const TAB_KEY = `${STORAGE_PREFIX}inboxTab`
 const loadHidden = (): string[] => { try { const v = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]'); return Array.isArray(v) ? v : [] } catch { return [] } }
-const TABS = ['unreads', 'mentions', 'bookmarks', 'reminders', 'highlights'] as const
+const TABS = ['unreads', 'mentions', 'bookmarks', 'reminders', 'highlights', 'scheduled'] as const
 type Tab = (typeof TABS)[number]
 const loadTab = (): Tab => { try { const v = localStorage.getItem(TAB_KEY) as Tab | null; return v && TABS.includes(v) ? v : 'mentions' } catch { return 'mentions' } }
 
@@ -26,7 +27,8 @@ type Placed = Message & { guild_id?: string | null; guild_name?: string; channel
 /**
  * The header Inbox, like Discord's: a tall panel under the button with Unreads (the new messages in each channel, mark
  * read one by one or all at once), Mentions (last 30 days), Bookmarks, Reminders (bookmarks with a Remind Me time) and
- * Highlights. Every message shows in full with who wrote it and where, and a Jump button.
+ * Highlights, and Scheduled (your messages waiting to be sent: Send Now, Edit or Delete). Every message shows in full
+ * with who wrote it and where, and a Jump button.
  */
 /** The inbox. With the title bar on (wide screens) it lives there instead of in the channel headers. */
 export default function InboxButton({ inTitleBar }: { inTitleBar?: boolean }) {
@@ -62,12 +64,22 @@ function InboxMenu() {
   // Viewport position under the button, reaching most of the way down the window. The panel is portalled to <body>
   // because headers scroll horizontally on phones (overflow-x-auto), which would clip an absolutely positioned child.
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null)
-  const toggle = () => {
-    if (open) { setOpen(false); return }
+  const show = () => {
     const r = ref.current!.getBoundingClientRect()
     setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) })
     setOpen(true)
   }
+  const toggle = () => { if (open) setOpen(false); else show() }
+  // "View" under the message box opens a given tab (the Scheduled one).
+  useEffect(() => {
+    const onOpen = (e: Event) => { const tab = (e as CustomEvent<{ tab?: Tab }>).detail?.tab; if (tab && TABS.includes(tab)) setTab(tab); if (ref.current?.offsetParent) show() }
+    window.addEventListener('parley:inbox', onOpen)
+    return () => window.removeEventListener('parley:inbox', onOpen)
+  })
+  const scheduled = useScheduled((s) => s.list)
+  // The tab strip scrolls sideways on narrow panels: keep the open tab in view.
+  useEffect(() => { if (open) panel.current?.querySelector('[data-inbox-tab][aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }) }, [open, tab])
+  const openModal = useStore((s) => s.openModal)
   const unreads = Object.keys(lastMessageId).filter((id) => (channels[id] || dms[id]) && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds }, id))
     .sort((a, b) => (lastMessageId[b] ?? '').localeCompare(lastMessageId[a] ?? ''))
   useEffect(() => { if (open) api.get<Message[]>('/users/@me/mentions').then(setList).catch(() => setList([])) }, [open])
@@ -85,7 +97,8 @@ function InboxMenu() {
   }, [open, tab, unreadKey])
   useEffect(() => {
     if (!open) return
-    const onDown = (e: PointerEvent) => { const node = e.target as Node; if (!ref.current?.contains(node) && !panel.current?.contains(node)) setOpen(false) }
+    // Not while using a dialog opened from here (editing a scheduled message).
+    const onDown = (e: PointerEvent) => { const node = e.target as Node; if (!ref.current?.contains(node) && !panel.current?.contains(node) && !(node as Element).closest?.('[role="dialog"], [data-context-menu]')) setOpen(false) }
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
     const onResize = () => setOpen(false)
     window.addEventListener('pointerdown', onDown); window.addEventListener('keydown', onKey); window.addEventListener('resize', onResize)
@@ -109,7 +122,12 @@ function InboxMenu() {
   const clearReminder = async (m: Placed) => { try { await setReminder(m.id, null); setSaved((l) => (l ?? []).map((x) => (x.id === m.id ? { ...x, remind_at: null } : x))) } catch (e) { pushToast((e as Error).message, 'error') } }
   const mentions = (list ?? []).filter((m) => !hidden.includes(m.id))
   const reminders = (saved ?? []).filter((m) => m.remind_at).sort((a, b) => (a.remind_at! < b.remind_at! ? -1 : 1))
-  const label: Record<Tab, string> = { unreads: t('Unreads'), mentions: t('Mentions'), bookmarks: t('Bookmarks'), reminders: t('Reminders'), highlights: t('Highlights') }
+  const label: Record<Tab, string> = { unreads: t('Unreads'), mentions: t('Mentions'), bookmarks: t('Bookmarks'), reminders: t('Reminders'), highlights: t('Highlights'), scheduled: t('Scheduled') }
+  const sendNow = async (x: Scheduled) => { try { await sendScheduledNow(x.id); pushToast(t('Message sent')) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const removeScheduled = async (x: Scheduled) => { try { await deleteScheduled(x.id); pushToast(t('Scheduled message deleted')) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const editScheduled = (x: Scheduled) => openModal({ kind: 'scheduleMessage', channelId: x.channel_id, content: x.content, sendAt: x.status === 'failed' ? undefined : x.send_at, files: x.attachments.length, editing: true,
+    action: async (content, at) => { await updateScheduled(x.id, { content, send_at: at.toISOString() }); pushToast(t('Scheduled for {when}', { when: whenLabel(at) })) } })
+  const textBtn = 'h-8 rounded-full px-3 flex items-center gap-1.5 text-xs font-semibold border border-line bg-bg-2 text-text-1 hover:text-text-0 hover:bg-bg-3 disabled:opacity-50'
   const empty = (text: string) => <p className="px-4 py-10 text-center text-sm text-text-2">{text}</p>
   const loading = <p className="px-4 py-6 text-sm text-text-2">{t('Loading…')}</p>
   const iconBtn = 'h-8 w-8 rounded-full flex items-center justify-center text-text-2 bg-bg-2 hover:text-text-0 border border-line'
@@ -162,6 +180,7 @@ function InboxMenu() {
               {TABS.map((id) => (
                 <button key={id} type="button" role="tab" onClick={() => setTab(id)} className={`shrink-0 whitespace-nowrap px-2 pb-2 border-b-2 text-sm font-semibold ${tab === id ? 'border-accent text-text-0' : 'border-transparent text-text-2 hover:text-text-0'}`} data-inbox-tab={id} aria-selected={tab === id} aria-pressed={tab === id}>
                   {label[id]}{id === 'unreads' && unreads.length > 0 && <span className="ml-1 text-[11px] text-text-2">{unreads.length}</span>}
+                  {id === 'scheduled' && (scheduled?.length ?? 0) > 0 && <span className={`ml-1 text-[11px] ${scheduled!.some((x) => x.status === 'failed') ? 'text-danger' : 'text-text-2'}`}>{scheduled!.length}</span>}
                 </button>
               ))}
             </div>
@@ -217,6 +236,33 @@ function InboxMenu() {
                     {card(m, null, {}, <div className="mt-1 text-[11px] text-text-2">{t('{n} reactions', { n: m.reactions.reduce((n, r) => n + r.count, 0) })}</div>)}
                   </section>
                 ))}
+              </div>
+            )}
+            {tab === 'scheduled' && (
+              <div data-inbox-scheduled>
+                {scheduled === null ? loading : scheduled.length === 0 ? empty(t('Nothing scheduled. Right-click Send (or press and hold it on a phone) to send a message later.')) : (
+                  <>
+                    <p className="px-1 pt-2 text-xs text-text-2" data-scheduled-count>{t('{n} of {max} scheduled', { n: scheduled.length, max: MAX_SCHEDULED })}</p>
+                    {scheduled.map((x) => (
+                      <section key={x.id} className="mb-2" data-scheduled-item={x.id} data-scheduled-status={x.status}>
+                        {heading(x.channel_id)}
+                        <div className={`rounded-lg border p-3 ${x.status === 'failed' ? 'border-danger/50 bg-danger/5' : 'border-line/70 bg-bg-2'}`}>
+                          <div className={`mb-1 flex items-center gap-1.5 text-xs font-semibold ${x.status === 'failed' ? 'text-danger' : 'text-text-1'}`} data-scheduled-when>
+                            {x.status === 'failed' ? <><AlertTriangle size={13} />{t('Not sent')}</> : <><CalendarClock size={13} />{t('Sends {when}', { when: whenLabel(new Date(x.send_at)) })}</>}
+                          </div>
+                          {x.status === 'failed' && x.error && <p className="mb-1 text-xs text-text-1" data-scheduled-error>{x.error}</p>}
+                          {x.content && <div className="msg-content text-sm text-text-1 break-words max-h-[9.5rem] overflow-hidden" data-scheduled-text>{renderMarkdown(x.content)}</div>}
+                          {x.attachments.length > 0 && <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-text-2">{x.attachments.map((a) => <span key={a.id} className="flex items-center gap-1"><Paperclip size={11} />{a.filename}</span>)}</div>}
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <button type="button" className={textBtn} disabled={x.status === 'sending'} onClick={() => void sendNow(x)} data-scheduled-send={x.id}><SendHorizontal size={13} />{t('Send Now')}</button>
+                            <button type="button" className={textBtn} disabled={x.status === 'sending'} onClick={() => editScheduled(x)} data-scheduled-edit={x.id}><Pencil size={13} />{t('Edit')}</button>
+                            <button type="button" className={`${textBtn} hover:!text-danger`} disabled={x.status === 'sending'} onClick={() => void removeScheduled(x)} data-scheduled-delete={x.id}><Trash2 size={13} />{t('Delete')}</button>
+                          </div>
+                        </div>
+                      </section>
+                    ))}
+                  </>
+                )}
               </div>
             )}
           </div>

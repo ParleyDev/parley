@@ -70,6 +70,7 @@ export type ModalKind =
   | { kind: 'editHistory'; channelId: string; messageId: string }
   | { kind: 'report'; messageId?: string; userId: string; name: string; guildId?: string | null; server?: boolean }
   | { kind: 'createPoll'; channelId: string }
+  | { kind: 'scheduleMessage'; channelId: string; content: string; sendAt?: string; files?: number; editing?: boolean; action: (content: string, sendAt: Date) => Promise<void> }
   | { kind: 'editCategory'; channelId: string }
   | { kind: 'createThread'; channelId: string; messageId?: string; suggested?: string }
   | { kind: 'newPost'; channelId: string }
@@ -1060,7 +1061,8 @@ export function myChannelPerms(s: PermState, channelId: string): number {
   if (!ctx || !s.user) return 0
   return channelPerms(ctx, s.user.id, c)
 }
-const ALL_PERMS = -1 >>> 1
+// Every bit, 31 (Schedule Messages) included.
+const ALL_PERMS = -1 >>> 0
 
 /** Does this message mention the current user, one of their roles, or everyone? */
 export function mentionsMe(s: Pick<State, 'user' | 'members' | 'notifSettings' | 'channels' | 'dms'>, m: Message): boolean {

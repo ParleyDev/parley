@@ -56,6 +56,8 @@ pub const MANAGE_ROLES: u64 = 1 << 28;
 pub const MODERATE_MEMBERS: u64 = 1 << 29;
 /// Manage emoji, stickers and soundboard sounds (Manage Server also can).
 pub const MANAGE_EXPRESSIONS: u64 = 1 << 30;
+/// Schedule messages to send later (with Send Messages). Deny it on a channel to keep scheduled messages out of it.
+pub const SCHEDULE_MESSAGES: u64 = 1 << 31;
 
 /// What a timed-out member loses in every channel: they can still read.
 pub const TIMEOUT_STRIP: u64 = SEND_MESSAGES | ADD_REACTIONS | ATTACH_FILES | CONNECT | SPEAK | STREAM | CREATE_INVITE | CHANGE_NICKNAME | MENTION_EVERYONE;
@@ -90,11 +92,12 @@ pub const ALL: u64 = CREATE_INVITE
     | USE_EXTERNAL_EMOJIS
     | MANAGE_THREADS
     | MANAGE_EVENTS
-    | MANAGE_EXPRESSIONS;
+    | MANAGE_EXPRESSIONS
+    | SCHEDULE_MESSAGES;
 
 /// What a fresh @everyone role gets (must match migration 0002).
 pub const DEFAULT_EVERYONE: u64 =
-    CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | SEND_TTS_MESSAGES | EMBED_LINKS | READ_MESSAGE_HISTORY | USE_EXTERNAL_EMOJIS | ATTACH_FILES | MENTION_EVERYONE | CONNECT | SPEAK | CHANGE_NICKNAME;
+    CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | SEND_TTS_MESSAGES | EMBED_LINKS | READ_MESSAGE_HISTORY | USE_EXTERNAL_EMOJIS | ATTACH_FILES | MENTION_EVERYONE | CONNECT | SPEAK | CHANGE_NICKNAME | SCHEDULE_MESSAGES;
 
 /// Allowed when holding any one of `bits` (e.g. Manage Server or the narrower permission).
 pub fn check_any(perms: u64, bits: u64) -> AppResult<()> {
@@ -465,6 +468,7 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
         ("MANAGE_THREADS", MANAGE_THREADS),
         ("MANAGE_EVENTS", MANAGE_EVENTS),
         ("MANAGE_EXPRESSIONS", MANAGE_EXPRESSIONS),
+        ("SCHEDULE_MESSAGES", SCHEDULE_MESSAGES),
         ("MANAGE_MESSAGES", MANAGE_MESSAGES),
         ("ATTACH_FILES", ATTACH_FILES),
         ("MENTION_EVERYONE", MENTION_EVERYONE),
@@ -488,7 +492,7 @@ mod tests {
     #[test]
     fn default_matches_migration() {
         // 70258241 from migration 0002, plus ATTACH_FILES (32768) from 0003 and MENTION_EVERYONE (131072) from 0018.
-        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768 + 131072 + 4096 + 16384 + 65536 + 262144);
+        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768 + 131072 + 4096 + 16384 + 65536 + 262144 + 2147483648);
     }
 
     #[test]
@@ -570,7 +574,7 @@ mod tests {
             raid_protection: true,
             raid_threshold: 10,
             safety_alerts_channel_id: None,
-            onboarding: serde_json::json!({}), applications: serde_json::json!({}), tag: None, tag_badge: None, tag_color: None, partnered: false, explicit_filter: String::new(), summaries_enabled: true,
+            onboarding: serde_json::json!({}), applications: serde_json::json!({}), tag: None, tag_badge: None, tag_color: None, partnered: false, explicit_filter: String::new(), summaries_enabled: true, scheduled_off: false,
             widget_enabled: false,
             widget_invite: String::new(),
             invite_splash_url: None,

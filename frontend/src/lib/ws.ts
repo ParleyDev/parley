@@ -22,6 +22,7 @@ import { receive as receiveSettings } from './settingsSync'
 import { builtinUrl } from './builtinSounds'
 import { desktopNotify, notifyMessage } from './desktopNotify'
 import { emitCallReaction } from './callReactions'
+import { useScheduled, type Scheduled } from './scheduled'
 import { t } from './i18n'
 
 type Ev = { s?: number; i?: string } & (
@@ -34,6 +35,8 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'MESSAGE_DELETE_BULK'; d: { ids: string[]; channel_id: string } }
   | { t: 'REACTION_ADD' | 'REACTION_REMOVE'; d: { message_id: string; channel_id: string; user_id: string; emoji: string; burst?: boolean } }
   | { t: 'BOOKMARK_REMINDER'; d: { message: Message; guild_id: string | null; channel_name: string } }
+  | { t: 'SCHEDULED_MESSAGE_CREATE' | 'SCHEDULED_MESSAGE_UPDATE'; d: Scheduled }
+  | { t: 'SCHEDULED_MESSAGE_DELETE'; d: { id: string; message_id?: string; channel_id?: string } }
   | { t: 'POLL_UPDATE'; d: { channel_id: string; message_id: string; poll: Poll } }
   | { t: 'THREAD_UPDATE'; d: ThreadInfo }
   | { t: 'TYPING_START'; d: { channel_id: string; user_id: string; indicator?: TypingIndicator } }
@@ -212,7 +215,7 @@ export function sendTyping(channelId: string) {
 function handle(ev: Ev) {
   const s = useStore.getState()
   switch (ev.t) {
-    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void loadThemes(); void loadCosmetics(); void s.loadNotes(); void s.loadMyThreads(); void s.loadLiveEvents(); receiveSettings(ev.d.user.client_settings); void registerPush(); void refreshPush(); voice.onReconnect(); break
+    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void loadThemes(); void loadCosmetics(); void s.loadNotes(); void s.loadMyThreads(); void s.loadLiveEvents(); void useScheduled.getState().load(); receiveSettings(ev.d.user.client_settings); void registerPush(); void refreshPush(); voice.onReconnect(); break
     // The server replayed everything we missed; state is already current, no need to rebuild it.
     case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); break
     case 'RESYNC': lastSeq = 0; instanceId = null; socket?.close(); break
@@ -253,6 +256,15 @@ function handle(ev: Ev) {
       if (document.visibilityState !== 'visible') desktopNotify(t('Reminder from {where}', { where }), body, { icon: m.author.avatar_url, tag: `reminder:${m.id}`, path: `/channels/${ev.d.guild_id ?? '@me'}/${m.channel_id}?message=${m.id}` })
       break
     }
+    case 'SCHEDULED_MESSAGE_CREATE': useScheduled.getState().upsert(ev.d); break
+    case 'SCHEDULED_MESSAGE_UPDATE': {
+      // A scheduled message that couldn't be sent when due stays in the list with the reason; say so once.
+      const was = useScheduled.getState().list?.find((x) => x.id === ev.d.id)
+      useScheduled.getState().upsert(ev.d)
+      if (ev.d.status === 'failed' && was?.status !== 'failed') s.pushToast(t("A scheduled message couldn't be sent: {reason}", { reason: ev.d.error ?? '' }), 'error')
+      break
+    }
+    case 'SCHEDULED_MESSAGE_DELETE': useScheduled.getState().drop(ev.d.id); break
     case 'POLL_UPDATE': s.applyPollUpdate(ev.d.channel_id, ev.d.message_id, ev.d.poll); break
     case 'THREAD_UPDATE': s.upsertThread(ev.d); break
     case 'TYPING_START': if (ev.d.user_id !== s.user?.id) s.setTyping(ev.d.channel_id, ev.d.user_id, ev.d.indicator); break

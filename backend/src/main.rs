@@ -133,6 +133,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(audit::prune_loop(state_for_reminders.clone()));
     tokio::spawn(routes::integrations::sync_loop(state_for_reminders.clone()));
     tokio::spawn(routes::spotify::poll_loop(state_for_reminders.clone()));
+    tokio::spawn(routes::scheduled::send_loop(state_for_reminders.clone()));
     tokio::spawn(routes::channels::bookmark_reminders(state_for_reminders));
     let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
     tracing::info!("listening on {}", config.bind_addr);

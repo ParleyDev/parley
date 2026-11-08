@@ -1,6 +1,7 @@
 pub mod account;
 pub mod themes;
 pub mod cosmetics;
+pub mod scheduled;
 pub mod asset_admin;
 pub mod admin;
 pub mod applications;
@@ -79,6 +80,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(auth::router())
         .merge(themes::router())
         .merge(cosmetics::router())
+        .merge(scheduled::router())
         .merge(asset_admin::router())
         .merge(users::router())
         .merge(web_push::router())

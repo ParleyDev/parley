@@ -33,6 +33,8 @@ export const P = {
   MANAGE_THREADS: 1 << 19,
   MANAGE_EVENTS: 1 << 25,
   MANAGE_EXPRESSIONS: 1 << 30,
+  // Bit 31: JS bit operations make it negative, which the server masks back (perms::ALL).
+  SCHEDULE_MESSAGES: 1 << 31,
 } as const
 
 export type PermKey = keyof typeof P
@@ -61,6 +63,7 @@ export const PERMS: PermInfo[] = [
   { key: 'USE_EXTERNAL_EMOJIS', label: 'Use External Emoji', desc: 'Allows members to use custom emoji from other servers.', group: 'Text', channel: 'both' },
   { key: 'MANAGE_THREADS', label: 'Manage Threads', desc: 'Allows members to lock, archive, rename and pin threads and forum posts, and to see private threads.', group: 'Text', channel: 'both' },
   { key: 'SEND_TTS_MESSAGES', label: 'Send Text-to-Speech Messages', desc: 'Allows members to send /tts messages, read aloud to everyone viewing the channel.', group: 'Text', channel: 'both' },
+  { key: 'SCHEDULE_MESSAGES', label: 'Schedule Messages', desc: 'Allows members to schedule messages to send later. Turn it off on a channel to keep scheduled messages out of it.', group: 'Text', channel: 'both' },
   { key: 'ATTACH_FILES', label: 'Attach Files', desc: 'Allows members to upload images and files.', group: 'Text', channel: 'both' },
   { key: 'ADD_REACTIONS', label: 'Add Reactions', desc: 'Allows members to add emoji reactions to messages.', group: 'Text', channel: 'both' },
   { key: 'MANAGE_MESSAGES', label: 'Manage Messages', desc: 'Allows members to delete messages by other members.', group: 'Text', channel: 'both' },

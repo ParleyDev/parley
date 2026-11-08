@@ -355,7 +355,8 @@ pub async fn sweep_orphans(state: AppState) {
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(600)).await;
         let stale: Vec<(Uuid,)> = sqlx::query_as(
-            "DELETE FROM attachments WHERE message_id IS NULL AND created_at < now() - make_interval(secs => $1) RETURNING id",
+            "DELETE FROM attachments WHERE message_id IS NULL AND created_at < now() - make_interval(secs => $1)
+               AND NOT EXISTS (SELECT 1 FROM scheduled_messages s WHERE attachments.id = ANY(s.attachment_ids)) RETURNING id",
         )
         .bind(ORPHAN_TTL_SECS as f64)
         .fetch_all(&state.db)

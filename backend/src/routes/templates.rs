@@ -227,6 +227,8 @@ fn discord_perms(v: &Value) -> i64 {
     if d & (1 << 33) != 0 { p |= perms::MANAGE_EVENTS }
     if d & (1 << 34) != 0 { p |= perms::MANAGE_THREADS }
     if d & (1 << 40) != 0 { p |= perms::MODERATE_MEMBERS }
+    // Discord has no such bit: whoever may send may schedule.
+    if d & perms::SEND_MESSAGES != 0 { p |= perms::SCHEDULE_MESSAGES }
     (p & perms::ALL) as i64
 }
 
@@ -340,9 +342,9 @@ mod tests {
     #[test]
     fn discord_permissions_map_to_parley() {
         // Same positions stay; threads (34), events (33) and timeouts (40) move; insights (19), VAD (25),
-        // webhooks (29) and app commands (31) are dropped.
+        // webhooks (29) and app commands (31) are dropped. Send Messages brings Schedule Messages (Parley's bit 31).
         let d = |bits: &[u32]| json!(bits.iter().fold(0u64, |a, b| a | 1 << b).to_string());
-        assert_eq!(discord_perms(&d(&[0, 1, 10, 11])), (perms::CREATE_INVITE | perms::KICK_MEMBERS | perms::VIEW_CHANNEL | perms::SEND_MESSAGES) as i64);
+        assert_eq!(discord_perms(&d(&[0, 1, 10, 11])), (perms::CREATE_INVITE | perms::KICK_MEMBERS | perms::VIEW_CHANNEL | perms::SEND_MESSAGES | perms::SCHEDULE_MESSAGES) as i64);
         assert_eq!(discord_perms(&d(&[34])), perms::MANAGE_THREADS as i64);
         assert_eq!(discord_perms(&d(&[33])), perms::MANAGE_EVENTS as i64);
         assert_eq!(discord_perms(&d(&[40])), perms::MODERATE_MEMBERS as i64);
