@@ -43,7 +43,7 @@ console.log('-- a phone browser: the visual viewport shrinks')
 const q = await mk(true)
 await q.click('textarea'); await q.evaluate(() => window.__keyboard(340)); await q.waitForTimeout(600)
 r = await newestShown(q); ok('opening the keyboard keeps the newest message in view', r.ok, JSON.stringify(r))
-await q.screenshot({ path: 'e2e/out/phonekeyboard.png' })
+await q.screenshot({ path: 'phonekeyboard.png' })
 
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await browser.close(); await finish()

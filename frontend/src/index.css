@@ -292,6 +292,13 @@ body {
 @keyframes sheet-rise { from { transform: translateY(100%) } to { transform: none } }
 .sheet-rise { animation: sheet-rise .32s cubic-bezier(.2, .8, .2, 1) backwards; }
 .sheet-rise[data-closing] { animation: none; transform: translateY(100%); transition: transform .22s ease-in; }
+/* Phone menu sheets: cards of rows on the sheet (lighter than it in the dark themes, white on grey in the light one),
+   and the quick reactions as a row of big round buttons across the top, like Discord mobile. */
+.sheet-card { background: var(--color-bg-3); }
+:root[data-theme="light"] .sheet-card { background: var(--color-bg-2); }
+[data-menu-sheet] [data-quick-row] { justify-content: space-between; gap: 8px; padding: 0 4px; }
+[data-menu-sheet] [data-quick-row] > button { width: 52px; height: 52px; border-radius: 9999px; background: var(--color-bg-3); }
+:root[data-theme="light"] [data-menu-sheet] [data-quick-row] > button { background: var(--color-bg-2); }
 @keyframes sheet-up { from { transform: translateY(24px); opacity: 0 } to { transform: none; opacity: 1 } }
 .sheet-up { animation: sheet-up .18s ease-out backwards; }
 /* Phones: holding a message opens its sheet, so no iOS callout or text selection on the way. */
