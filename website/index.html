@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Parley</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Parley is an open-source chat app for communities: text, voice, video, stages and a recording studio. Start free on app.runparley.com, or run it on your own server.">
+<meta name="description" content="Parley is an open-source Discord alternative with no paywall: text, voice, video, stages and a recording studio, with every feature free for everyone. Start on app.runparley.com, or run it on your own server.">
 <meta name="theme-color" content="#07070c">
 <link rel="canonical" href="https://runparley.com/">
 <meta property="og:type" content="website">
@@ -168,6 +168,35 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 .strip .v { font: 700 clamp(1.4rem, 3vw, 2.1rem)/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .strip .k { color: var(--muted); font-size: var(--step--1); }
 @media (max-width: 760px) { .strip .wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip div.cell:nth-child(2) { border-right: 0; } .strip div.cell:nth-child(3) { padding-left: 0; } .strip div.cell:nth-child(n+3) { border-top: 1px solid var(--rule); } }
+
+/* ---- why Parley: a side-by-side against Discord's free tier, then the reasons ---- */
+.vs { border: 1px solid var(--rule); border-radius: 22px; overflow: hidden; background: var(--panel); }
+.vs .row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.15fr); border-top: 1px solid var(--rule); }
+.vs .row:first-child { border-top: 0; }
+.vs .row > * { padding: .95rem 1.25rem; min-width: 0; }
+.vs .th { font: 500 .6875rem/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); background: var(--panel-2); }
+.vs .th.us { color: var(--violet); }
+.vs .what { font-weight: 600; }
+.vs .them { color: var(--muted); }
+.vs .us { color: var(--text); background: color-mix(in srgb, var(--violet) 9%, transparent); }
+.vs .us::before { content: "✓ "; color: var(--signal); font-weight: 700; }
+.vs .th.us::before { content: none; }
+.vs .them small, .vs .us small { display: block; color: var(--faint); font-size: var(--step--1); margin-top: .15rem; }
+@media (max-width: 680px) {
+  .vs .row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .vs .row .what { grid-column: 1 / -1; padding-bottom: 0; }
+  .vs .row.head-row .what { display: none; }
+  .vs .row > * { padding: .7rem 1rem; }
+}
+.vs-note { margin-top: .8rem; color: var(--faint); font-size: var(--step--1); }
+.reasons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.25rem; margin-top: 2.5rem; }
+@media (max-width: 980px) { .reasons { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .reasons { grid-template-columns: minmax(0, 1fr); } }
+.reasons article { border: 1px solid var(--rule); border-radius: 18px; padding: 1.4rem; background: var(--panel); display: grid; gap: .55rem; align-content: start; min-width: 0; }
+.reasons .k { font: 500 var(--step--1)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--violet); }
+.reasons h3 { margin: 0; font-size: var(--step-1); }
+.reasons p { margin: 0; color: var(--muted); font-size: .9375rem; }
+.why-cta { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
 
 /* ---- two ways ---- */
 .ways { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1.25rem; }
@@ -426,6 +455,7 @@ footer a:hover { color: var(--text); }
   <div class="wrap">
     <a class="brand" href="#top" aria-label="Parley home"><span class="mark" aria-hidden="true"><svg viewBox="123 110 820 820" fill="currentColor"><path d="M151.117 803.03 C151.227 654.363 151.556 505.696 151.775 357.03 L151.869 293.828 C151.89 279.09 151.138 264.07 152.757 249.395 C156.589 214.649 174.048 181.703 199.572 158.102 C220.046 139.17 247.219 126.343 275.067 123.23 C294.408 121.069 314.408 122.408 333.849 122.408 L449.088 122.408 L577.285 122.408 C606.639 122.408 636.516 120.817 665.781 123.208 C705.245 126.433 744.522 138.754 778.606 158.872 C800.606 171.858 823.593 190.019 840.476 209.332 C845.995 215.646 851.791 222.121 856.761 228.889 C858.91 231.816 860.501 235.321 862.89 238.056 C866.527 242.219 868.979 247.05 871.911 251.689 C884.817 272.104 894.233 293.944 901.862 316.83 C913.33 351.233 915.333 386.555 915.069 422.497 C914.909 444.32 910.279 466.744 904.598 487.705 C875.148 596.358 782.571 682.167 668.33 691.039 C646.48 692.735 624.478 692.6 602.574 692.718 L520.034 693.162 C479.384 693.381 446.982 691.823 410.433 713.073 C385.778 727.408 366.596 748.27 345.954 767.668 C325.976 786.443 306.274 805.99 286.87 825.16 C273.658 838.213 259.236 850.413 246.077 863.572 C233.944 875.705 221.442 887.296 209.041 899.025 C202.696 905.026 196.836 912.591 188.789 916.36 C183.842 918.678 178.332 918.517 172.975 918.243 C162.05 917.686 153.045 905.602 151.965 895.528 C150.992 886.461 151.609 876.945 151.46 867.824 C151.106 846.225 151.101 824.632 151.117 803.03 Z M313.836 359.652 C312.332 380.816 313.796 402.623 313.796 423.846 L313.796 554.833 L313.796 600.489 C313.796 604.432 312.097 613.859 317.986 614.398 C324.326 614.977 341.025 594.046 346.54 589.309 C363.918 574.382 379.903 557.852 397.423 543.115 C407.996 534.222 419.246 525.068 432.144 519.612 C462.048 506.963 482.719 507.552 514.288 507.379 L590.646 506.959 C607.318 506.868 624.271 507.675 640.8 505.104 C686.937 497.927 722.978 458.171 726.816 411.787 C731.162 359.269 701.662 309.035 649.615 294.593 C625.439 287.885 598.861 290.67 574.021 290.67 L444.231 290.67 L405.553 290.67 C373.845 290.67 352.772 293.328 330.928 318.553 C321.269 329.707 314.891 344.811 313.836 359.652 Z"/></svg></span>Parley</a>
     <nav aria-label="Sections">
+      <a href="#why">Why Parley</a>
       <a href="#features">Features</a>
       <a href="#profiles">Profiles</a>
       <a href="#studio">Studio</a>
@@ -533,10 +563,61 @@ footer a:hover { color: var(--text); }
     </div>
   </section>
 
+  <section id="why" aria-labelledby="why-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Channel 01 · Why Parley</span>
+        <h2 id="why-title">No Nitro. No catch.</h2>
+        <p class="lede">Discord puts its best features behind a $9.99 monthly subscription and sells your profile back to you in a shop. On Parley everyone gets the top tier, the code is open for anyone to read, and your community can move to a server you own whenever you like.</p>
+      </div>
+
+      <div class="vs" role="table" aria-label="Discord's free plan compared with Parley">
+        <div class="row head-row" role="row"><span class="th what" role="columnheader">What you get</span><span class="th them" role="columnheader">Discord, free</span><span class="th us" role="columnheader">Parley, everyone</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Screen share</span><span class="them" role="cell">720p at 30 fps<small>1080p 60 fps needs Nitro</small></span><span class="us" role="cell">Up to source resolution at 60 fps</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Voice quality</span><span class="them" role="cell">Up to 96 kbps<small>More only with server boosts</small></span><span class="us" role="cell">Up to 510 kbps stereo in hi-fi channels</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Custom emoji from other servers</span><span class="them" role="cell">Nitro only</span><span class="us" role="cell">Everyone<small>Each server decides for itself</small></span></div>
+        <div class="row" role="row"><span class="what" role="cell">Banners, effects, decorations, nameplates</span><span class="them" role="cell">Nitro or the Shop</span><span class="us" role="cell">Free, and server admins can add their own</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Scheduled messages</span><span class="them" role="cell">A few at a time<small>30 with Nitro</small></span><span class="us" role="cell">30 queued, for everyone</span></div>
+        <div class="row" role="row"><span class="what" role="cell">File uploads</span><span class="them" role="cell">Small cap<small>Bigger files need Nitro</small></span><span class="us" role="cell">25 MB here<small>Up to 4 GB a file on your own server</small></span></div>
+        <div class="row" role="row"><span class="what" role="cell">Ads</span><span class="them" role="cell">Sponsored Quests and promotions</span><span class="us" role="cell">None</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Where your messages live</span><span class="them" role="cell">Discord's servers</span><span class="us" role="cell">Ours, or hardware you own</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Source code</span><span class="them" role="cell">Closed</span><span class="us" role="cell">Open, Apache-2.0</span></div>
+      </div>
+      <p class="vs-note">Discord's limits as publicly listed in November 2026. Discord changes its plans often.</p>
+
+      <div class="reasons">
+        <article>
+          <span class="k">No paywall</span>
+          <h3>Every feature, for everyone</h3>
+          <p>No Nitro, no boosts, no shop. Hi-fi voice, 60 fps streams, profile flair and the bigger limits come with a free account. Parley isn't holding anything back to sell you later.</p>
+        </article>
+        <article>
+          <span class="k">Yours to keep</span>
+          <h3>Take your community home</h3>
+          <p>Start on app.runparley.com, then move to your own PC, NAS or VPS with one Docker command. There, nobody else can delete your community, change the rules on you or shut the app down.</p>
+        </article>
+        <article>
+          <span class="k">Private by design</span>
+          <h3>No ID photos, no ads</h3>
+          <p>Age checks use a birth date, not a scan of your passport. In 2025 ID photos people had sent for Discord's age checks leaked from one of its support vendors. Parley never asks for them, and there are no ad trackers or sponsored posts.</p>
+        </article>
+        <article>
+          <span class="k">Open</span>
+          <h3>Read every line</h3>
+          <p>The whole app is open source: audit it, fork it, change it. End-to-end encrypted calls, an MCP connector for your AI assistant and a recording studio are built in, not bolted on.</p>
+        </article>
+      </div>
+      <div class="why-cta">
+        <a class="btn btn-primary" href="https://app.runparley.com/register">Make a free account</a>
+        <a class="btn btn-ghost" href="#features">Moving a Discord server? Import its template</a>
+      </div>
+    </div>
+  </section>
+
   <section id="features" aria-labelledby="features-title">
     <div class="wrap">
       <div class="head">
-        <span class="callsign">Channel 01 · Everything in one place</span>
+        <span class="callsign">Channel 02 · Everything in one place</span>
         <h2 id="features-title">The whole hangout, not just the chat.</h2>
         <p class="lede">Text when you want to read, voice when you want to talk, a stage when you want an audience. All of it lives on one server you control.</p>
       </div>
@@ -545,7 +626,7 @@ footer a:hover { color: var(--text); }
         <article class="f w3">
           <span class="tag">Text</span>
           <h3>Conversations that stay organized</h3>
-          <p>Threads, forum channels, polls, pins, bookmarks, replies and full markdown. Mentions badge the server they happened in, unread DMs line up under Home, and coming back to a channel tells you how many messages are new and marks where you left off.</p>
+          <p>Threads, forum channels, polls, pins, bookmarks, replies and full markdown. Write a message now and schedule it for later: it goes out on time even with your device off, and you can send it early, edit or cancel it from your Inbox. Mentions badge the server they happened in, "Seen" shows when your DM was read, and coming back to a channel tells you how many messages are new and marks where you left off.</p>
           <div class="mini">
             <div class="msg"><span class="av c2">T</span><div><b>Theo</b><small>9:41 PM</small><div class="body"><span class="mention">@Mara</span> the bridge on take 3 is the one. Bouncing stems now.</div><div class="reacts"><span class="me">🔥 4</span><span>🎛️ 2</span><span>+</span></div></div></div>
           </div>
@@ -603,7 +684,7 @@ footer a:hover { color: var(--text); }
         <article class="f w3">
           <span class="tag">Music &amp; clips</span>
           <h3>Drop a track, hit play</h3>
-          <p>Audio files get a proper player with a live visualiser (bars, a wave or a pulsing orb, in your theme's colour), seeking, speed and volume. Playback follows you around: switch channels and a now-playing bar keeps the controls, even on a locked phone. Videos open full screen instead of in a tiny box, and on phones you can save or share any file in a tap.</p>
+          <p>Audio files get a proper player with a live visualiser (bars, a wave or a pulsing orb, in your theme's colour), seeking, speed and volume. Playback follows you around: switch channels and a now-playing bar keeps the controls, even on a locked phone. Tracks count their listens the way streaming services do, videos open full screen instead of in a tiny box, and on phones you can save or share any file in a tap.</p>
           <div class="mini">
             <div class="player" aria-hidden="true">
               <div class="top"><span class="play">❚❚</span><span class="t">Bridge, take 3<small>WAV · 38 MB · 3:42</small></span></div>
@@ -636,7 +717,7 @@ footer a:hover { color: var(--text); }
         <article class="f w3">
           <span class="tag">Make it yours</span>
           <h3>Profiles with some personality</h3>
-          <p>Profile frames, animated effects, nameplates, avatar decorations, styled names, server tags, banners and profile panels, all from one editor with a live preview. Hosting your own? Drop your own decorations, nameplates, effects and frames into a folder and everyone on your server can pick them, no restart needed.</p>
+          <p>Profile frames, animated effects, nameplates, avatar decorations, styled names, server tags, banners and profile panels, all from one editor with a live preview. Hosting your own? Make decorations, nameplates, effects and frames in the admin console from a picture, two colours or an emoji, or drop them into a folder, and everyone on your server can pick them straight away.</p>
           <div class="mini decor" aria-hidden="true">
             <span class="av c1 d1">M</span><span class="av c3 d2">T</span><span class="av c5 d3">R</span>
             <span class="styled">Mara</span><span class="tag-chip">STU</span>
@@ -670,7 +751,7 @@ footer a:hover { color: var(--text); }
   <section id="profiles" class="you" aria-labelledby="you-title">
     <div class="wrap">
       <div class="head">
-        <span class="callsign">Channel 02 · You</span>
+        <span class="callsign">Channel 03 · You</span>
         <h2 id="you-title">Show up as you.</h2>
         <p class="lede">Frames that hang off your card, effects that play when someone opens your profile, nameplates behind your name, and one editor with a live preview for all of it.</p>
       </div>
@@ -704,7 +785,7 @@ footer a:hover { color: var(--text); }
   <section id="studio" class="studio" aria-labelledby="studio-title">
     <div class="wrap">
       <div class="head">
-        <span class="callsign">Channel 03 · Recording Studio</span>
+        <span class="callsign">Channel 04 · Recording Studio</span>
         <h2 id="studio-title">Jam live. Leave with the multitrack.</h2>
         <p class="lede">A studio is a voice channel built for music, with a console for the engineer. Everyone in the band records their own track in full quality, so a bad connection never ruins a take.</p>
       </div>
@@ -733,7 +814,7 @@ footer a:hover { color: var(--text); }
   <section id="self-host" aria-labelledby="host-title">
     <div class="wrap host">
       <div>
-        <span class="callsign">Channel 04 · Self-host</span>
+        <span class="callsign">Channel 05 · Self-host</span>
         <h2 id="host-title" style="margin-top:1.25rem">Your server. Five minutes.</h2>
         <p class="lede">Parley ships as two Docker images and a Postgres database. If your machine runs Docker, it runs Parley: a spare PC, a Raspberry Pi, a NAS or a VPS.</p>
         <div class="plats">
@@ -780,7 +861,7 @@ footer a:hover { color: var(--text); }
   <section id="download" aria-labelledby="dl-title">
     <div class="wrap">
       <div class="head">
-        <span class="callsign">Channel 05 · Apps</span>
+        <span class="callsign">Channel 06 · Apps</span>
         <h2 id="dl-title">Bring Parley with you.</h2>
         <p class="lede">The apps work with app.runparley.com or any Parley server. Type the address once and you're in, and the desktop app keeps itself up to date from then on.</p>
       </div>
