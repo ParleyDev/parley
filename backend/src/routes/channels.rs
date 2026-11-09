@@ -800,10 +800,11 @@ async fn delete_message(
 }
 
 /// Server verification level: members without a role must have a verified email (1), an account older than five
-/// minutes (2) and have been in the server ten minutes (3) before they can talk. The owner is exempt.
+/// minutes (2) and have been in the server ten minutes (3) before they can talk. The owner is exempt; guests (who have
+/// no email to verify) pass the email step, since the server was chosen to take them.
 pub async fn check_verification(db: &PgPool, guild_id: Uuid, uid: Uuid) -> AppResult<()> {
     let row: Option<(i16, bool, bool, f64, f64, bool)> = sqlx::query_as(
-        "SELECT g.verification_level, g.owner_id = u.id, u.email_verified_at IS NOT NULL,
+        "SELECT g.verification_level, g.owner_id = u.id, u.email_verified_at IS NOT NULL OR u.guest,
                 EXTRACT(EPOCH FROM now() - u.created_at)::float8, EXTRACT(EPOCH FROM now() - m.joined_at)::float8,
                 EXISTS (SELECT 1 FROM member_roles r WHERE r.guild_id = g.id AND r.user_id = u.id)
          FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $2 JOIN users u ON u.id = $2 WHERE g.id = $1")
