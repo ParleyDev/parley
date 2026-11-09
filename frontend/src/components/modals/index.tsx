@@ -39,6 +39,7 @@ import ModViewModal from './ModView'
 import Modal from '../Modal'
 import LeaveGroupsModal from './LeaveGroups'
 import ClaimGuestModal from './ClaimGuest'
+import CropHost from '../CropHost'
 import SafetyCenterModal from './SafetyCenter'
 import GuildNotificationsModal from './GuildNotifications'
 import AltTextModal from './AltText'
@@ -59,11 +60,14 @@ export default function Modals() {
   const modal = useStore((s) => s.modal)
   const close = useStore((s) => s.closeModal)
   const pushToast = useStore((s) => s.pushToast)
-  if (!modal) return null
+  if (!modal) return <CropHost />
   return (
-    <ErrorBoundary key={modal.kind} onError={(e) => { pushToast(t("Couldn't open that: {message}", { message: e.message }), 'error'); close() }} fallback={() => null}>
-      {render()}
-    </ErrorBoundary>
+    <>
+      <ErrorBoundary key={modal.kind} onError={(e) => { pushToast(t("Couldn't open that: {message}", { message: e.message }), 'error'); close() }} fallback={() => null}>
+        {render()}
+      </ErrorBoundary>
+      <CropHost />
+    </>
   )
   function render() {
   switch (modal!.kind) {

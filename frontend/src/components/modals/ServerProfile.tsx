@@ -1,9 +1,12 @@
 import { ImagePlus, X } from 'lucide-react'
+import { CropLayer } from '../CropImg'
+import { bgUrl } from '../../lib/crop'
 import { useState } from 'react'
 import { api } from '../../lib/api'
 import { has, P } from '../../lib/perms'
 import type { Member } from '../../lib/types'
-import { uploadImage } from '../../lib/upload'
+import { prepareImage, uploadImage } from '../../lib/upload'
+import { frameImage, withCrop } from '../../lib/crop'
 import { myGuildPerms, useStore } from '../../store'
 import Avatar from '../Avatar'
 import Modal from '../Modal'
@@ -26,7 +29,10 @@ export default function ServerProfileModal({ onClose, guildId }: { onClose: () =
   if (!guild || !me) return null
   const upload = async (kind: 'avatar' | 'banner', f: File | undefined, set: (u: string) => void) => {
     if (!f) return
-    try { set((await uploadImage(kind, f)).url) } catch (e) { pushToast((e as Error).message, 'error') }
+    try {
+      const crop = await frameImage(f, kind === 'avatar' ? 'avatar' : 'profileBanner')
+      if (crop) set(withCrop((await uploadImage(kind, await prepareImage(f, 2048, 2048))).url, crop))
+    } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const save = async () => {
     setBusy(true)
@@ -43,7 +49,7 @@ export default function ServerProfileModal({ onClose, guildId }: { onClose: () =
       footer={<><button type="button" className="btn-ghost" onClick={onClose}>{t('Cancel')}</button><button type="button" className="btn-primary" disabled={busy} onClick={save} data-sp-save>{t('Save')}</button></>}>
       <div className="space-y-4" data-server-profile>
         <div className="overflow-hidden rounded-xl border border-line bg-bg-1">
-          <div className="h-20 bg-cover bg-center" style={{ background: banner ? `center/cover url(${banner})` : (me.banner_url ? `center/cover url(${me.banner_url})` : 'var(--color-accent, #5865f2)') }} data-sp-banner-preview={banner ?? ''} />
+          <div className="relative isolate h-20 bg-cover bg-center" style={{ background: bgUrl(banner ?? me.banner_url) ? `center/cover ${bgUrl(banner ?? me.banner_url)}` : 'var(--color-accent, #5865f2)' }} data-sp-banner-preview={banner ?? ''}><CropLayer url={banner ?? me.banner_url} /></div>
           <div className="-mt-8 flex items-end gap-3 px-4 pb-3">
             <span className="rounded-full border-4 border-bg-1"><Avatar user={{ ...me, avatar_url: avatar ?? me.avatar_url }} size={64} /></span>
             <div className="pb-1"><div className="font-bold">{nickname.trim() || me.display_name}</div><div className="text-xs text-text-2">{pronouns || me.pronouns}</div></div>

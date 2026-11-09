@@ -1,4 +1,5 @@
 import { APP_NAME } from '../lib/brand'
+import CropImg from '../components/CropImg'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -44,7 +45,7 @@ export default function InvitePage() {
         {group ? (
           <div data-group-invite-page>
             <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full text-2xl font-bold text-white" style={{ background: group.icon_url ? undefined : colorFor(group.channel_id) }}>
-              {group.icon_url ? <img src={group.icon_url} className="h-full w-full object-cover" alt="" /> : initials(group.name || group.members.map((m) => m.display_name).join(', '))}
+              {group.icon_url ? <CropImg src={group.icon_url} className="h-full w-full object-cover" alt="" /> : initials(group.name || group.members.map((m) => m.display_name).join(', '))}
             </div>
             <p className="text-text-2 text-sm">{t("You've been invited to join a group")}</p>
             <h1 className="text-2xl font-bold mb-1" data-group-invite-name>{group.name || group.members.map((m) => m.display_name).join(', ')}</h1>
@@ -65,7 +66,7 @@ export default function InvitePage() {
         ) : (
           <>
             <div className="mx-auto mb-4 h-20 w-20 rounded-3xl overflow-hidden flex items-center justify-center text-2xl font-bold text-white" style={{ background: p.guild.icon_url ? undefined : colorFor(p.guild.id) }}>
-              {p.guild.icon_url ? <img src={p.guild.icon_url} className="h-full w-full object-cover" alt="" /> : initials(p.guild.name)}
+              {p.guild.icon_url ? <CropImg src={p.guild.icon_url} className="h-full w-full object-cover" alt="" /> : initials(p.guild.name)}
             </div>
             <p className="text-text-2 text-sm">{t("You've been invited to join")}</p>
             <h1 className="text-2xl font-bold mb-1">{p.guild.name}</h1>

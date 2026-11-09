@@ -1,4 +1,5 @@
 import { AlertTriangle, CalendarClock, Check, ExternalLink, Server, Trash2 } from 'lucide-react'
+import CropImg from './CropImg'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../lib/api'
 import { locale, useT } from '../lib/i18n'
@@ -56,7 +57,7 @@ export default function DeleteAccountFlow({ onCancel, onDone, onManage }: { onCa
                   <p className="text-sm mb-1">{t('Transfer ownership of these servers, or delete them:')}</p>
                   <ul className="space-y-1">{b!.guilds.map((g) => (
                     <li key={g.id} className="flex items-center gap-2 text-sm" data-delete-blocker-guild={g.id}>
-                      <span className="h-6 w-6 rounded-md overflow-hidden shrink-0 flex items-center justify-center text-[10px] font-bold text-white" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>{g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name)}</span>
+                      <span className="h-6 w-6 rounded-md overflow-hidden shrink-0 flex items-center justify-center text-[10px] font-bold text-white" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>{g.icon_url ? <CropImg src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name)}</span>
                       <span className="flex-1 truncate">{g.name}</span>
                       {onManage && <button type="button" onClick={() => onManage({ guildId: g.id })} className="text-accent hover:underline text-xs flex items-center gap-1"><Server size={12} />{t('Server Settings')}</button>}
                     </li>

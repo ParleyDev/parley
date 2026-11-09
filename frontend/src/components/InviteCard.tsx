@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import CropImg from './CropImg'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import type { Channel, Guild, Role } from '../lib/types'
@@ -57,7 +58,7 @@ export default function InviteCard({ code }: { code: string }) {
   return (
     <div className="mt-1 flex max-w-[440px] items-center gap-3 rounded-lg border border-line bg-bg-1 p-3" data-invite-card={code} data-invite-state={state}>
       <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl flex items-center justify-center text-white font-semibold" style={{ background: pv.guild.icon_url ? undefined : colorFor(pv.guild.id) }}>
-        {pv.guild.icon_url ? <img src={pv.guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(pv.guild.name)}
+        {pv.guild.icon_url ? <CropImg src={pv.guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(pv.guild.name)}
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[11px] font-bold uppercase tracking-wider text-text-2">{member ? t('You are a member of') : t('You have been invited to join')}</div>

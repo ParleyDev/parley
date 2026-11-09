@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import CropImg from '../components/CropImg'
 import { useParams } from 'react-router-dom'
 import { APP_NAME } from '../lib/brand'
 import { colorFor, initials } from '../lib/format'
@@ -18,7 +19,7 @@ export default function WidgetPage() {
       {w === 'off' ? <p className="m-auto p-6 text-center text-sm text-text-2">{t("This server's widget is turned off.")}</p> : !w ? <p className="m-auto text-sm text-text-2">{t('Loading…')}</p> : (
         <>
           <div className="flex items-center gap-3 bg-accent px-4 py-3 text-white">
-            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl flex items-center justify-center font-bold" style={{ background: w.icon_url ? undefined : colorFor(w.id) }}>{w.icon_url ? <img src={w.icon_url} alt="" className="h-full w-full object-cover" /> : initials(w.name)}</div>
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded-xl flex items-center justify-center font-bold" style={{ background: w.icon_url ? undefined : colorFor(w.id) }}>{w.icon_url ? <CropImg src={w.icon_url} alt="" className="h-full w-full object-cover" /> : initials(w.name)}</div>
             <div className="min-w-0"><div className="truncate font-bold" data-widget-name>{w.name}</div><div className="text-xs opacity-90" data-widget-online>{t('{n} Members Online', { n: w.presence_count })}</div></div>
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-2">
@@ -26,7 +27,7 @@ export default function WidgetPage() {
             {w.members.map((m) => (
               <div key={m.id} className="flex items-center gap-2 rounded-md px-1 py-1" data-widget-member={m.id}>
                 <span className="relative h-7 w-7 shrink-0">
-                  {m.avatar_url ? <img src={m.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" /> : <span className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ background: colorFor(m.id) }}>{initials(m.username)}</span>}
+                  {m.avatar_url ? <CropImg src={m.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" /> : <span className="h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-bold text-white" style={{ background: colorFor(m.id) }}>{initials(m.username)}</span>}
                   <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-bg-1 ${DOT[m.status] ?? 'bg-success'}`} />
                 </span>
                 <span className="truncate text-sm">{m.username}</span>

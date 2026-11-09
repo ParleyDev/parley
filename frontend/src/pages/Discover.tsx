@@ -1,4 +1,6 @@
 import { BadgeCheck, Check, Handshake, ChevronDown, Compass, Radio, Search, Server, ShieldCheck, X } from 'lucide-react'
+import { bgUrl } from '../lib/crop'
+import CropImg, { CropLayer } from '../components/CropImg'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useMatch, useNavigate } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
@@ -199,10 +201,11 @@ function ServerCard({ l }: { l: Listing }) {
   }
   return (
     <div role="button" tabIndex={0} onClick={open} onKeyDown={(e) => { if (e.key === 'Enter') open() }} data-server-card={l.guild_id} className="group text-left rounded-xl bg-bg-1 border border-line hover:border-text-2 hover:-translate-y-0.5 transition overflow-visible flex flex-col cursor-pointer">
-      <div className="relative h-[140px] rounded-t-xl bg-cover bg-center" style={{ backgroundImage: `${l.banner_url ? `url("${l.banner_url}"), ` : ''}linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }}>
+      <div className="relative isolate h-[140px] rounded-t-xl bg-cover bg-center" style={{ backgroundImage: `${bgUrl(l.banner_url) ? `${bgUrl(l.banner_url)}, ` : ''}linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }}>
+        <CropLayer url={l.banner_url} />
         {l.featured_order !== null && <span className="absolute right-3 top-3 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow" data-featured>{t('Featured')}</span>}
         <span className="absolute left-3 -bottom-6 h-12 w-12 rounded-2xl ring-4 ring-bg-1 overflow-hidden flex items-center justify-center text-white font-bold" style={{ background: l.icon_url ? undefined : colorFor(l.guild_id) }}>
-          {l.icon_url ? <img src={l.icon_url} alt="" className="h-full w-full object-cover" /> : initials(l.name)}
+          {l.icon_url ? <CropImg src={l.icon_url} alt="" className="h-full w-full object-cover" /> : initials(l.name)}
         </span>
       </div>
       <div className="px-3 pt-8 pb-3 flex-1 flex flex-col">
@@ -247,7 +250,7 @@ function ReviewQueue({ onChange }: { onChange: (pending: number) => void }) {
         {list?.length === 0 && <p className="text-sm text-text-2 py-6">{t('Nothing {status} right now.', { status: t(status) })}</p>}
         {list?.map((l) => (
           <div key={l.guild_id} className="rounded-xl border border-line bg-bg-1 p-4 flex gap-4 phone:flex-col" data-review-item={l.guild_id}>
-            <div className="h-20 w-32 shrink-0 rounded-lg bg-cover bg-center" style={{ backgroundImage: `${l.banner_url ? `url("${l.banner_url}"), ` : ''}linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }} />
+            <div className="relative isolate h-20 w-32 shrink-0 rounded-lg bg-cover bg-center" style={{ backgroundImage: `${bgUrl(l.banner_url) ? `${bgUrl(l.banner_url)}, ` : ''}linear-gradient(135deg, ${colorFor(l.guild_id)}, #1a1b23)` }}><CropLayer url={l.banner_url} /></div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 font-bold">{l.name}<span className="rounded bg-bg-3 px-1.5 py-0.5 text-[10px] font-bold uppercase text-text-1">{t(categoryLabel(l.category))}</span><span className="text-xs font-normal text-text-2">{t('{n} members', { n: l.member_count })}</span></div>
               <p className="text-sm text-text-1 mt-1">{l.description}</p>
@@ -310,13 +313,13 @@ function LiveStages() {
         {list?.map((st) => (
           <div key={st.channel.id} className="rounded-xl border border-line bg-bg-1 p-4 flex flex-col gap-3" data-live-stage={st.channel.id}>
             <div className="flex items-center gap-2 text-xs text-text-2">
-              {st.guild.icon_url ? <img src={st.guild.icon_url} alt="" className="h-5 w-5 rounded-md object-cover" /> : <span className="h-5 w-5 rounded-md text-[9px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(st.guild.id) }}>{initials(st.guild.name)}</span>}
+              {st.guild.icon_url ? <CropImg src={st.guild.icon_url} alt="" className="h-5 w-5 rounded-md object-cover" /> : <span className="h-5 w-5 rounded-md text-[9px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(st.guild.id) }}>{initials(st.guild.name)}</span>}
               <span className="truncate">{st.guild.name}</span>
               <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 font-semibold text-success"><Radio size={12} /> {t('LIVE')}</span>
             </div>
             <div><div className="font-bold text-lg leading-snug">{st.channel.topic || st.channel.name}</div>{st.channel.topic && <div className="text-xs text-text-2">{st.channel.name}</div>}</div>
             <div className="flex items-center gap-2">
-              <div className="flex -space-x-2">{st.speakers.map((p) => p.avatar_url ? <img key={p.id} src={p.avatar_url} alt="" title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 object-cover" /> : <span key={p.id} title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 text-[10px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(p.id) }}>{initials(p.display_name)}</span>)}</div>
+              <div className="flex -space-x-2">{st.speakers.map((p) => p.avatar_url ? <CropImg key={p.id} src={p.avatar_url} alt="" title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 object-cover" /> : <span key={p.id} title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 text-[10px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(p.id) }}>{initials(p.display_name)}</span>)}</div>
               <span className="text-xs text-text-2" data-live-stage-counts>{t('{n} speaking', { n: st.speaker_count })} · {st.listeners} {st.listeners === 1 ? t('person') : t('people')}</span>
             </div>
             <button type="button" className="btn-primary mt-auto" disabled={busy === st.channel.id} onClick={() => void open(st)} data-live-stage-open={st.channel.id}>{st.member ? t('Listen') : busy === st.channel.id ? t('Joining…') : t('Join Server & Listen')}</button>

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import CropImg from '../CropImg'
 import { matchPath, useLocation, useNavigate } from 'react-router-dom'
 import Modal from '../Modal'
 import { withServerProfile } from '../../lib/serverProfile'
@@ -162,7 +163,7 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
             {mutual.map((g) => (
               <li key={g.id}>
                 <button onClick={() => { onClose(); navigate(`/channels/${g.id}`) }} className={row}>
-                  {g.icon_url ? <img src={g.icon_url} alt="" className="h-10 w-10 rounded-xl object-cover" /> : <span className="h-10 w-10 rounded-xl text-white text-xs font-bold flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>}
+                  {g.icon_url ? <CropImg src={g.icon_url} alt="" className="h-10 w-10 rounded-xl object-cover" /> : <span className="h-10 w-10 rounded-xl text-white text-xs font-bold flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>}
                   <span className="truncate font-semibold">{g.name}</span>
                 </button>
               </li>

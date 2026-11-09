@@ -30,11 +30,11 @@ await p.click('[data-inline-edit="custom_status"]'); await p.fill('[data-inline-
 ok('custom status set inline', (await p.locator('[data-inline-edit="custom_status"]').innerText()).includes('🎧 mixing'))
 
 console.log('-- images')
-await p.locator('[data-inline-avatar-input]').setInputFiles(pngFile)
+await p.locator('[data-inline-avatar-input]').setInputFiles(pngFile); await p.click('[data-crop-apply]')
 await p.waitForFunction(() => !!document.querySelector('[data-profile-card] img[src*="/"]'), null, { timeout: 8000 }).catch(() => {})
 await p.waitForTimeout(800)
 ok('avatar uploaded from the card', await p.locator('[data-inline-avatar-remove]').count() === 1)
-await p.locator('[data-inline-banner-input]').setInputFiles(pngFile); await p.waitForTimeout(1200)
+await p.locator('[data-inline-banner-input]').setInputFiles(pngFile); await p.click('[data-crop-apply]'); await p.waitForTimeout(1200)
 const bannerStyle = await card.locator('.group\\/banner').getAttribute('style')
 ok('banner uploaded from the card', /url\(/.test(bannerStyle ?? ''), bannerStyle)
 await card.locator('.group\\/banner').hover()

@@ -26,4 +26,8 @@ export function useHoverMotion() {
 }
 
 /** Our uploaded profile images have a still first frame at `<url>/static` (the original when it isn't animated). */
-export const stillImageUrl = (url: string) => (/^\/api\/images\/[0-9a-f-]{36}$/i.test(url) ? `${url}/static` : url)
+export const stillImageUrl = (url: string) => {
+  // A #crop= framing stays on the end so the still is framed the same way.
+  const [base, frag] = url.split('#')
+  return /^\/api\/images\/[0-9a-f-]{36}$/i.test(base) ? `${base}/static${frag ? `#${frag}` : ''}` : url
+}

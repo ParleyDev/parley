@@ -1,4 +1,5 @@
 import { Hash, MessageSquareText, Radio, Volume2, Disc3, Users } from 'lucide-react'
+import CropImg from '../CropImg'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
@@ -75,7 +76,7 @@ export default function QuickSwitcher({ onClose }: { onClose: () => void }) {
     }
     for (const g of Object.values(guilds)) {
       out.push({ key: `guild:${g.id}`, kind: 'guild', label: g.name, sub: t('Server'), go: go(`/channels/${g.id}`), unread: false, mentions: 0,
-        icon: g.icon_url ? <img src={g.icon_url} alt="" className="h-[22px] w-[22px] rounded-md object-cover" /> : <span className="h-[22px] w-[22px] rounded-md text-[10px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span> })
+        icon: g.icon_url ? <CropImg src={g.icon_url} alt="" className="h-[22px] w-[22px] rounded-md object-cover" /> : <span className="h-[22px] w-[22px] rounded-md text-[10px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(g.id) }}>{initials(g.name)}</span> })
     }
     return out
   }, [channels, dms, guilds, users, notes, relationships, mentionCounts, readStates, lastMessageId, navigate, onClose, upsertChannel, pushToast, lang]) // eslint-disable-line react-hooks/exhaustive-deps

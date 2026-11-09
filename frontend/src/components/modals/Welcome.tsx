@@ -1,4 +1,5 @@
 import { BookOpenCheck, ChevronRight, Hash, MessageSquareText, Volume2 } from 'lucide-react'
+import CropImg from '../CropImg'
 import { useNavigate } from 'react-router-dom'
 import { colorFor, initials } from '../../lib/format'
 import { useStore } from '../../store'
@@ -21,7 +22,7 @@ export default function WelcomeModal({ onClose, guildId, draft }: { onClose: () 
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }} role="dialog" aria-modal aria-label={t('Welcome to {name}', { name: guild.name })} data-welcome-screen={guildId}>
       <div className="pop w-full max-w-md rounded-2xl border border-line bg-bg-1 p-6 shadow-2xl text-center">
         <div className="mx-auto h-20 w-20 overflow-hidden rounded-3xl flex items-center justify-center text-2xl font-bold text-white" style={{ background: guild.icon_url ? undefined : colorFor(guild.id) }}>
-          {guild.icon_url ? <img src={guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(guild.name)}
+          {guild.icon_url ? <CropImg src={guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(guild.name)}
         </div>
         <h2 className="mt-4 text-2xl font-bold">{tn('Welcome to {name}!', { name: <span className="break-words">{guild.name}</span> })}</h2>
         {(w.description || guild.description) && <p className="mt-2 text-sm text-text-1 break-words" data-welcome-description>{w.description || guild.description}</p>}

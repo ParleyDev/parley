@@ -1,4 +1,5 @@
 import { ArrowDownToLine, ArrowLeft, ArrowRight, Compass, Copy, Inbox, Minus, ShieldCheck, Square, Users, X } from 'lucide-react'
+import CropImg from './CropImg'
 import { useEffect, useState, type ReactNode, type MouseEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
@@ -76,7 +77,7 @@ function Bar() {
 
   let icon: ReactNode = <Users size={16} />, title = t('Friends')
   if (guild) {
-    icon = <span className="h-5 w-5 shrink-0 overflow-hidden rounded-md flex items-center justify-center text-[9px] font-bold text-white" style={{ background: guild.icon_url ? undefined : colorFor(guild.id) }}>{guild.icon_url ? <img src={guild.icon_url} alt="" className="h-full w-full object-cover" draggable={false} /> : initials(guild.name)}</span>
+    icon = <span className="h-5 w-5 shrink-0 overflow-hidden rounded-md flex items-center justify-center text-[9px] font-bold text-white" style={{ background: guild.icon_url ? undefined : colorFor(guild.id) }}>{guild.icon_url ? <CropImg src={guild.icon_url} alt="" className="h-full w-full object-cover" draggable={false} /> : initials(guild.name)}</span>
     title = guild.name
   } else if (dm) {
     const other = !isGroup(dm) && dm.recipients[0] ? { ...dm.recipients[0], ...users[dm.recipients[0].id] } : undefined

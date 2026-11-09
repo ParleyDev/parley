@@ -1,4 +1,5 @@
 import { AlarmClock, AppWindow, Languages, Check, Megaphone, Sparkles, ShieldAlert, ArrowLeftFromLine, ArrowRight, ChevronDown, Bookmark, BookmarkMinus, Copy, Flag, Forward, Hash, ImageIcon, Link2, Lock, MailOpen, MessagesSquare, MoreHorizontal, Pencil, Phone, PhoneMissed, Pin, PinOff, Reply, RotateCw, SmilePlus, Trash2, UserMinus, UserPlus, Volume2, Captions, EyeOff, X } from 'lucide-react'
+import CropImg from './CropImg'
 import { previewText } from '../lib/desktopNotify'
 import { isImage } from '../lib/upload'
 import RoleIcon from './RoleIcon'
@@ -672,7 +673,7 @@ function RibbitNotice({ m }: { m: Message }) {
   return (
     <div className="group relative mt-[17px] py-2 pl-[14px] pr-4 phone:pl-[10px] phone:pr-3 border-l-2 border-accent bg-accent/10" data-msg-id={m.id} data-ribbit data-local="notice">
       <div className="flex gap-4 phone:gap-3">
-        <img src={m.author.avatar_url ?? ''} alt="" className="h-10 w-10 phone:h-8 phone:w-8 shrink-0 rounded-full" draggable={false} data-msg-avatar />
+        <CropImg src={m.author.avatar_url ?? ''} alt="" className="h-10 w-10 phone:h-8 phone:w-8 shrink-0 rounded-full" draggable={false} data-msg-avatar />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 leading-[1.375rem] h-[1.375rem]" data-msg-header>
             <span className="font-medium text-text-0">{m.author.display_name}</span>

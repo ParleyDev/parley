@@ -1,4 +1,6 @@
 import { Award, ChevronRight, IdCard, Pencil, Plus, ShieldCheck, UserCircle } from 'lucide-react'
+import { CropLayer } from './CropImg'
+import { bgUrl } from '../lib/crop'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
@@ -124,7 +126,7 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
     <FrameRoom value={user.profile_frame} className="pop absolute bottom-full left-0 mb-2 z-40">
     <div className={`dark-scope relative w-[300px] max-w-[calc(100vw-16px)] rounded-xl border shadow-2xl text-[#dbdee1] ${frameClass(user.profile_frame)}`} style={profileCardStyle(user)} data-user-menu data-solid data-profile-frame={user.profile_frame || undefined}>
       <ProfileEffect id={user.profile_effect} />
-      <div className="relative h-[100px] rounded-t-xl bg-cover bg-center" style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }} />
+      <div className="relative isolate h-[100px] rounded-t-xl bg-cover bg-center" style={user.banner_url ? { backgroundImage: bgUrl(user.banner_url) } : { background: gradient }}><CropLayer url={user.banner_url} /></div>
       <div className="relative px-4 -mt-10 flex items-end gap-2">
         <div className="inline-block rounded-full" style={{ boxShadow: '0 0 0 5px #232428' }}><Avatar user={user} size={80} presence animate /></div>
         <button type="button" onClick={() => { onClose(); openModal({ kind: 'customStatus' }) }} className="mb-6 min-w-0 flex-1 truncate rounded-2xl bg-[#111214]/90 px-3 py-2 text-left text-sm text-[#b5bac1] hover:text-[#dbdee1] shadow-lg" data-set-status title={t('Set a custom status')}>

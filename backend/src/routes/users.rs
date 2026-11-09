@@ -553,9 +553,11 @@ async fn update_me(
     .await?;
     // Avatar history: the one you replaced goes to the front (up to 6 kept); only avatars that fall off are deleted.
     let mut u = u;
-    if u.avatar_url != before.0 {
-        let mut hist: Vec<String> = before.0.iter().cloned().chain(u.avatar_history.iter().cloned()).filter(|a| Some(a) != u.avatar_url.as_ref()).collect();
-        hist.dedup();
+    // Re-framing the same picture (only its #crop changed) isn't a new avatar.
+    let same = |a: &str, b: &str| crate::routes::images::without_crop(a) == crate::routes::images::without_crop(b);
+    if u.avatar_url.as_deref().map(crate::routes::images::without_crop) != before.0.as_deref().map(crate::routes::images::without_crop) {
+        let mut hist: Vec<String> = before.0.iter().cloned().chain(u.avatar_history.iter().cloned()).filter(|a| !u.avatar_url.as_deref().is_some_and(|cur| same(a, cur))).collect();
+        hist.dedup_by(|a, b| same(a, b));
         let dropped: Vec<String> = hist.split_off(hist.len().min(6));
         sqlx::query("UPDATE users SET avatar_history = $2 WHERE id = $1").bind(uid).bind(&hist).execute(&state.db).await?;
         for old in &dropped { crate::routes::images::release_replaced(&state, Some(old), u.avatar_url.as_deref()).await; }

@@ -1,4 +1,5 @@
 import { Handshake, Plus, Search, Trash2, Users } from 'lucide-react'
+import CropImg from './CropImg'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -48,7 +49,7 @@ export default function DirectoryView({ channel }: { channel: Channel }) {
           {list.map((e) => (
             <div key={e.guild_id} className="flex flex-col gap-2 rounded-xl border border-line bg-bg-1 p-4" data-directory-entry={e.guild_id}>
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-lg font-bold text-white" style={{ background: e.icon_url ? undefined : colorFor(e.guild_id) }}>{e.icon_url ? <img src={e.icon_url} alt="" className="h-full w-full object-cover" /> : initials(e.name)}</div>
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-lg font-bold text-white" style={{ background: e.icon_url ? undefined : colorFor(e.guild_id) }}>{e.icon_url ? <CropImg src={e.icon_url} alt="" className="h-full w-full object-cover" /> : initials(e.name)}</div>
                 <div className="min-w-0"><div className="flex items-center gap-1 truncate font-bold">{e.name}{e.partnered && <Handshake size={14} className="shrink-0 text-accent" />}</div><div className="flex items-center gap-1 text-xs text-text-2"><Users size={12} />{e.member_count} · <span className="capitalize">{categoryLabel(e.category)}</span></div></div>
               </div>
               {e.description && <p className="line-clamp-3 text-sm text-text-1">{e.description}</p>}

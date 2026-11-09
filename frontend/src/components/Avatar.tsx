@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState } from 'react'
+import CropImg from './CropImg'
 import { colorFor, initials } from '../lib/format'
 import { assetDecorationId, decorationUrl } from '../lib/decorations'
 import { AvatarMotion, mayAnimate, stillImageUrl } from '../lib/motion'
@@ -74,7 +75,7 @@ export default function Avatar({ user, size = 32, presence = false, typingIn, cl
     <div ref={ref} className={`relative shrink-0 ${className}`} style={{ width: size, height: size }} data-avatar-motion={moving ? 'on' : 'off'}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {user.avatar_url ? (
-        <img src={moving ? user.avatar_url : stillImageUrl(user.avatar_url)} alt="" className="h-full w-full rounded-full object-cover" draggable={false} data-avatar-img />
+        <CropImg src={moving ? user.avatar_url : stillImageUrl(user.avatar_url)} alt="" className="h-full w-full rounded-full object-cover" draggable={false} data-avatar-img />
       ) : (
         <div className="h-full w-full rounded-full flex items-center justify-center text-white font-bold select-none"
           style={{ background: colorFor(user.id), fontSize: size * 0.38 }}>

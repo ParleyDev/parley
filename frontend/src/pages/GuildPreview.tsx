@@ -1,4 +1,7 @@
 import { ChevronLeft, Compass, Hash, Users } from 'lucide-react'
+import { CropLayer } from '../components/CropImg'
+import CropImg from '../components/CropImg'
+import { bgUrl } from '../lib/crop'
 import { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import MessageItem from '../components/MessageItem'
@@ -44,7 +47,8 @@ export default function GuildPreviewPage() {
             {pv ? (
               <>
                 {pv.guild.banner_url ? (
-                  <div className="relative h-[135px] bg-cover bg-center" style={{ backgroundImage: `url(${pv.guild.banner_url})` }}>
+                  <div className="relative isolate h-[135px] bg-cover bg-center" style={{ backgroundImage: bgUrl(pv.guild.banner_url) }}>
+                    <CropLayer url={pv.guild.banner_url} />
                     <div className="absolute inset-x-0 top-0 h-12 px-4 flex items-center font-bold text-white bg-gradient-to-b from-black/60 to-transparent drop-shadow truncate">{pv.guild.name}</div>
                   </div>
                 ) : <div className="h-12 px-4 flex items-center font-bold border-b border-line truncate">{pv.guild.name}</div>}
@@ -78,7 +82,7 @@ export default function GuildPreviewPage() {
         )}
         {pv && channel ? <PreviewMessages guildId={guildId} channel={channel} guild={pv.guild} /> : <div className="flex-1" />}
         <div className="shrink-0 m-4 mt-0 rounded-xl bg-bg-1 border border-line px-4 py-3 flex items-center gap-4 phone:flex-col phone:items-stretch" data-preview-bar>
-          <span className="h-10 w-10 rounded-xl overflow-hidden flex items-center justify-center text-white font-bold shrink-0" style={{ background: pv?.guild.icon_url ? undefined : colorFor(guildId) }}>{pv?.guild.icon_url ? <img src={pv.guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(pv?.guild.name ?? '?')}</span>
+          <span className="h-10 w-10 rounded-xl overflow-hidden flex items-center justify-center text-white font-bold shrink-0" style={{ background: pv?.guild.icon_url ? undefined : colorFor(guildId) }}>{pv?.guild.icon_url ? <CropImg src={pv.guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(pv?.guild.name ?? '?')}</span>
           <div className="min-w-0 flex-1">
             <div className="font-bold">{t('You are currently in preview mode.')}</div>
             <div className="text-sm text-text-2">{t('Join this server to start chatting')}{pv?.listing?.description ? ` — ${pv.listing.description}` : '.'}{pv?.guild.rules_required ? ` ${t('You will be asked to accept its rules first.')}` : ''}</div>

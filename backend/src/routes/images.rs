@@ -54,10 +54,14 @@ pub fn image_url(id: Uuid) -> String {
     format!("/api/images/{id}")
 }
 
-/// The image id behind one of our own `/api/images/<id>` URLs, if that's what it is.
+/// The image id behind one of our own `/api/images/<id>` URLs, if that's what it is. A `#crop=…` fragment (how the
+/// client frames a picture: zoom and focus point, applied when drawing it) doesn't change which image it is.
 pub fn image_id(url: &str) -> Option<Uuid> {
-    url.strip_prefix("/api/images/").and_then(|rest| rest.split(['?', '/']).next()).and_then(|s| Uuid::parse_str(s).ok())
+    url.strip_prefix("/api/images/").and_then(|rest| rest.split(['?', '/', '#']).next()).and_then(|s| Uuid::parse_str(s).ok())
 }
+
+/// The URL without its `#crop=…` framing (or any query): the same picture whatever its zoom and position.
+pub fn without_crop(url: &str) -> &str { url.split(['#', '?']).next().unwrap_or(url) }
 
 /// Does a GIF/PNG/WebP file carry more than one frame?
 fn is_animated(content_type: &str, bytes: &[u8]) -> bool {
@@ -261,7 +265,7 @@ pub async fn release_replaced(state: &AppState, old: Option<&str>, new: Option<&
     }
 }
 
-/// Images nothing points at any more: not a user's avatar/banner, a server's icon/banner, a Discover
+/// Images nothing points at any more (a `#crop=…` on the reference still counts as pointing at it): not a user's avatar/banner, a server's icon/banner, a Discover
 /// listing's banner, an emoji or a sticker. `min_age_secs` keeps uploads that are still being attached.
 pub async fn orphan_image_ids(db: &sqlx::PgPool, min_age_secs: f64) -> Vec<Uuid> {
     orphan_query(db, min_age_secs, None).await
@@ -270,11 +274,11 @@ pub async fn orphan_image_ids(db: &sqlx::PgPool, min_age_secs: f64) -> Vec<Uuid>
 async fn orphan_query(db: &sqlx::PgPool, min_age_secs: f64, only: Option<Uuid>) -> Vec<Uuid> {
     sqlx::query_as::<_, (Uuid,)>(
         "SELECT i.id FROM images i WHERE i.created_at <= now() - make_interval(secs => $1) AND ($2::uuid IS NULL OR i.id = $2)
-           AND NOT EXISTS (SELECT 1 FROM users u WHERE u.avatar_url = '/api/images/' || i.id::text OR u.banner_url = '/api/images/' || i.id::text OR '/api/images/' || i.id::text = ANY(u.avatar_history))
-           AND NOT EXISTS (SELECT 1 FROM guilds g WHERE g.icon_url = '/api/images/' || i.id::text OR g.banner_url = '/api/images/' || i.id::text OR g.invite_splash_url = '/api/images/' || i.id::text)
-           AND NOT EXISTS (SELECT 1 FROM guild_discovery d WHERE d.banner_url = '/api/images/' || i.id::text)
-           AND NOT EXISTS (SELECT 1 FROM guild_members gm WHERE gm.guild_avatar = '/api/images/' || i.id::text OR gm.guild_banner = '/api/images/' || i.id::text)
-           AND NOT EXISTS (SELECT 1 FROM guild_events ev WHERE ev.cover_url = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM users u WHERE split_part(u.avatar_url, '#', 1) = '/api/images/' || i.id::text OR split_part(u.banner_url, '#', 1) = '/api/images/' || i.id::text OR EXISTS (SELECT 1 FROM unnest(u.avatar_history) h WHERE split_part(h, '#', 1) = '/api/images/' || i.id::text))
+           AND NOT EXISTS (SELECT 1 FROM guilds g WHERE split_part(g.icon_url, '#', 1) = '/api/images/' || i.id::text OR split_part(g.banner_url, '#', 1) = '/api/images/' || i.id::text OR split_part(g.invite_splash_url, '#', 1) = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM guild_discovery d WHERE split_part(d.banner_url, '#', 1) = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM guild_members gm WHERE split_part(gm.guild_avatar, '#', 1) = '/api/images/' || i.id::text OR split_part(gm.guild_banner, '#', 1) = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM guild_events ev WHERE split_part(ev.cover_url, '#', 1) = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM roles r WHERE r.icon = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM emojis e WHERE e.id = i.id)
            AND NOT EXISTS (SELECT 1 FROM stickers s WHERE s.id = i.id)",

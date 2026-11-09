@@ -1,4 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { bgUrl } from '../lib/crop'
+import CropImg, { CropLayer } from './CropImg'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -56,10 +58,10 @@ export default function ServerTagCard({ guildId, anchor, onClose }: { guildId: s
         {card === 'gone' && <div className="p-4 text-sm text-text-2" data-server-tag-card-gone>{t('This server is not available.')}</div>}
         {c && (
           <>
-            <div className="h-[72px] bg-cover bg-center" style={c.banner_url ? { backgroundImage: `url(${c.banner_url})` } : { background: `linear-gradient(135deg, ${colorFor(c.id)}, #1e1f22)` }} />
+            <div className="relative isolate h-[72px] bg-cover bg-center" style={c.banner_url ? { backgroundImage: bgUrl(c.banner_url) } : { background: `linear-gradient(135deg, ${colorFor(c.id)}, #1e1f22)` }}><CropLayer url={c.banner_url} /></div>
             <div className="px-4 -mt-7">
               <div className="h-14 w-14 rounded-2xl overflow-hidden ring-[5px] ring-[#232428] flex items-center justify-center text-white font-bold" style={{ background: c.icon_url ? undefined : colorFor(c.id) }}>
-                {c.icon_url ? <img src={c.icon_url} alt="" className="h-full w-full object-cover" /> : initials(c.name)}
+                {c.icon_url ? <CropImg src={c.icon_url} alt="" className="h-full w-full object-cover" /> : initials(c.name)}
               </div>
             </div>
             <div className="px-4 pt-2 pb-4 space-y-2">

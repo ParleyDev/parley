@@ -1,4 +1,6 @@
 import { statuses, StatusDot } from './UserMenu'
+import { bgUrl } from '../lib/crop'
+import CropImg, { CropLayer } from './CropImg'
 import { Camera, ChevronDown, Pencil, Trash2 } from 'lucide-react'
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { locale, useT } from '../lib/i18n'
@@ -141,7 +143,8 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
     <FrameRoom value={user.profile_frame} className="flex flex-col max-h-full min-h-0" innerClassName="flex flex-col min-h-0 max-h-full">
     <div className={`relative overflow-hidden rounded-2xl flex flex-col min-h-0 flex-1 ${frameClass(user.profile_frame)}`} style={{ background: theme, color: text }} data-profile-card data-profile-frame={user.profile_frame || undefined}>
       <ProfileEffect id={user.profile_effect} />
-      <div className={`group/banner relative ${compact ? 'h-20' : 'h-[105px]'} w-full shrink-0 bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: 'rgba(0,0,0,0.18)' }}>
+      <div className={`group/banner relative isolate ${compact ? 'h-20' : 'h-[105px]'} w-full shrink-0 bg-cover bg-center`} style={user.banner_url ? { backgroundImage: bgUrl(user.banner_url) } : { background: 'rgba(0,0,0,0.18)' }}>
+        <CropLayer url={user.banner_url} />
         {edit && (
           <>
             <button type="button" onClick={() => bannerRef.current?.click()} disabled={edit.busy === 'banner'} className={`absolute inset-0 flex items-center justify-center gap-2 bg-black/45 text-sm font-semibold text-white transition-opacity ${edit.busy === 'banner' ? 'opacity-100' : 'opacity-0 group-hover/banner:opacity-100 focus-visible:opacity-100'}`} data-inline-banner>
@@ -232,7 +235,7 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
                   <span className="h-1 w-1 rounded-full" style={{ background: dim }} aria-hidden />
                   <span className="flex items-center gap-1.5" title={server.name} data-server-joined>
                     {server.icon_url
-                      ? <img src={server.icon_url} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
+                      ? <CropImg src={server.icon_url} alt="" className="h-4 w-4 rounded-full object-cover shrink-0" />
                       : <span className="h-4 w-4 rounded-full text-white text-[9px] font-bold flex items-center justify-center shrink-0" style={{ background: colorFor(server.id) }} aria-hidden>{initials(server.name)}</span>}
                     <span>{fmtDate(server.joined_at)}</span>
                   </span>

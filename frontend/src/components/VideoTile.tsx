@@ -1,4 +1,5 @@
 import { fetchPreview } from '../lib/streamPreview'
+import CropImg from './CropImg'
 import { Expand, Eye, EyeOff, Shrink } from 'lucide-react'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { STORAGE_PREFIX } from '../lib/brand'
@@ -67,7 +68,7 @@ export function StreamGate({ user, big, canWatch, onWatch, channelId }: { user: 
   return (
     <div className="relative h-full w-full flex flex-col items-center justify-center gap-3 overflow-hidden bg-bg-1 p-3 text-center" data-stream-gate data-stream-preview={preview ? '1' : '0'}>
       {preview ? <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" aria-hidden />
-        : user?.avatar_url && <img src={user.avatar_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25 blur-2xl scale-110" aria-hidden />}
+        : user?.avatar_url && <CropImg src={user.avatar_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25 blur-2xl scale-110" aria-hidden />}
       <div className="relative flex flex-col items-center gap-2">
         {user && <Avatar user={user} size={big ? 72 : 40} />}
         <span className={`font-semibold text-text-0 ${big ? 'text-base' : 'text-xs'}`}>{t('{name} is streaming', { name: user?.display_name ?? t('Someone') })}</span>

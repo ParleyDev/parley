@@ -1,4 +1,5 @@
 import { Clock, Flag, Gamepad2, Leaf, Lightbulb, LoaderCircle, Pizza, Plane, Search, Shapes, Smile, Star, Upload, User, X } from 'lucide-react'
+import CropImg from './CropImg'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
@@ -203,7 +204,7 @@ function RailBtn({ children, title, onClick }: { children: ReactNode; title: str
 
 function GuildIcon({ g, size = 24 }: { g: Pick<Guild, 'id' | 'name' | 'icon_url'>; size?: number }) {
   return g.icon_url
-    ? <img src={g.icon_url} alt="" className="rounded-full object-cover" style={{ width: size, height: size }} />
+    ? <CropImg src={g.icon_url} alt="" className="rounded-full object-cover" style={{ width: size, height: size }} />
     : <span className="rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ width: size, height: size, background: colorFor(g.id) }}>{initials(g.name)}</span>
 }
 

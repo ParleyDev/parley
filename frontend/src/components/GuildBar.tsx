@@ -1,4 +1,5 @@
 import { LogoMark } from './Logo'
+import CropImg from './CropImg'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Compass, Copy, Folder, FolderInput, FolderMinus, FolderPlus, LogOut, MailCheck, Plus, Settings, Trash2, UserPlus } from 'lucide-react'
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -123,7 +124,7 @@ export default function GuildBar() {
           <GuildPill guild={g} active={active} unread={unreadOf(g.id)} mentions={mentionsOf(g.id)}>
             <div className={`${inFolder ? 'h-10 w-10 text-sm rounded-xl' : 'h-12 w-12 rounded-2xl'} overflow-hidden flex items-center justify-center text-white font-semibold transition-all duration-200 ${active ? '' : 'group-hover:rounded-xl'} ${!active && !unreadOf(g.id) ? 'opacity-80 group-hover:opacity-100' : ''} ${mutedOf(g.id) ? 'opacity-50' : ''} ${ind === 'mid' && !inFolder ? 'ring-2 ring-success' : ''}`}
               style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>
-              {g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" draggable={false} /> : initials(g.name)}
+              {g.icon_url ? <CropImg src={g.icon_url} alt="" className="h-full w-full object-cover" draggable={false} /> : initials(g.name)}
             </div>
             {mentionsOf(g.id) > 0 && <Badge n={mentionsOf(g.id)} data-guild-mentions={String(mentionsOf(g.id))} />}
           </GuildPill>
@@ -153,7 +154,7 @@ export default function GuildBar() {
                   <div className="grid grid-cols-2 gap-1 p-1.5">
                     {members.slice(0, 4).map((g) => (
                       <span key={g.id} className="h-4 w-4 rounded-full overflow-hidden flex items-center justify-center text-[8px] font-bold text-white" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>
-                        {g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name).slice(0, 1)}
+                        {g.icon_url ? <CropImg src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name).slice(0, 1)}
                       </span>
                     ))}
                   </div>

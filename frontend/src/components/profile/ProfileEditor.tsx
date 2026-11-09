@@ -8,6 +8,7 @@ import { colorFor } from '../../lib/format'
 import { useT } from '../../lib/i18n'
 import { colorsOf, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../lib/nameStyle'
 import { prepareImage, uploadImage } from '../../lib/upload'
+import { frameImage, withCrop } from '../../lib/crop'
 import { DECORATIONS, type ManualActivity, type PanelItem, type PrivateUser } from '../../lib/types'
 import { useStore } from '../../store'
 import Avatar from '../Avatar'
@@ -63,7 +64,9 @@ function useProfileDraft(user: PrivateUser) {
   const upload = async (kind: 'avatar' | 'banner', f: File) => {
     setUploading(kind)
     try {
-      const url = (await uploadImage(kind, await prepareImage(f, kind === 'avatar' ? 512 : 1200, kind === 'avatar' ? 512 : 480))).url
+      const crop = await frameImage(f, kind === 'avatar' ? 'avatar' : 'profileBanner')
+      if (!crop) return
+      const url = withCrop((await uploadImage(kind, await prepareImage(f, 2048, 2048))).url, crop)
       setD((x) => ({ ...x, [kind]: url }))
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setUploading(null) }
   }

@@ -202,7 +202,7 @@ pub async fn finalize_now(state: &AppState, uid: Uuid) -> AppResult<bool> {
 struct Scrubbed { files: Vec<PathBuf>, guilds: Vec<Uuid> }
 
 /// `/api/images/<uuid>` (or a bare uuid) → the image id.
-fn image_id(url: &str) -> Option<Uuid> { url.trim_end_matches('/').rsplit('/').next().and_then(|s| Uuid::parse_str(s).ok()) }
+fn image_id(url: &str) -> Option<Uuid> { crate::routes::images::without_crop(url).trim_end_matches('/').rsplit('/').next().and_then(|s| Uuid::parse_str(s).ok()) }
 
 /// Scrub one account inside `tx` (which holds its row lock). See the field list in docs/account-deletion.md.
 async fn scrub(state: &AppState, tx: &mut Transaction<'_, Postgres>, uid: Uuid) -> AppResult<Scrubbed> {
@@ -324,5 +324,7 @@ mod tests {
         let id = Uuid::now_v7();
         assert_eq!(image_id(&format!("/api/images/{id}")), Some(id));
         assert_eq!(image_id("https://example.com/a.png"), None);
+        assert_eq!(image_id(&format!("/api/images/{id}#crop=1.5,20,80")), Some(id));
+        assert_eq!(crate::routes::images::without_crop(&format!("/api/images/{id}#crop=2,50,50")), format!("/api/images/{id}"));
     }
 }

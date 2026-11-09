@@ -1,4 +1,5 @@
 import { CalendarDays, MonitorUp, Volume2 } from 'lucide-react'
+import CropImg from './CropImg'
 import { useT } from '../lib/i18n'
 import { has, P } from '../lib/perms'
 import { colorFor, initials } from '../lib/format'
@@ -61,7 +62,7 @@ export function GuildActivityCard({ guild, a }: { guild: Guild; a: GuildActivity
     <div className="min-w-[200px] max-w-[280px] space-y-2" data-guild-activity-card>
       <div className="flex items-center gap-2 font-bold text-[15px]">
         <span className="h-5 w-5 rounded-md overflow-hidden shrink-0 flex items-center justify-center text-[9px] text-white" style={{ background: guild.icon_url ? undefined : colorFor(guild.id) }}>
-          {guild.icon_url ? <img src={guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(guild.name)}
+          {guild.icon_url ? <CropImg src={guild.icon_url} alt="" className="h-full w-full object-cover" /> : initials(guild.name)}
         </span>
         <span className="truncate">{guild.name}</span>
       </div>

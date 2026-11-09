@@ -1,4 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
+import { CropLayer } from './CropImg'
+import { bgUrl } from '../lib/crop'
 import { anchorOf } from '../lib/anchor'
 import { useLongPress } from '../lib/longPress'
 import { CalendarDays, Flame, Handshake, LayoutGrid, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, Disc3, FolderPlus, Hash, Image as ImageIcon, Megaphone, MessageSquareText, HeadphoneOff, Link2, LogOut, MailCheck, MicOff, Pencil, Plus, Radio, Settings, Trash2, UserPlus, Video, Volume2, ShieldCheck, Lock } from 'lucide-react'
@@ -244,7 +246,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     <aside aria-label={t('Channels')} className="w-[var(--sidebar-w)] tab:w-[224px] phone:w-auto phone:flex-1 min-w-0 shrink-0 bg-bg-1 flex flex-col">
       <div className="relative">
         {guild.banner_url ? (
-          <div className="relative h-[135px] bg-cover bg-center" style={{ backgroundImage: `url(${guild.banner_url})` }} data-guild-banner>
+          <div className="relative isolate h-[135px] bg-cover bg-center" style={{ backgroundImage: bgUrl(guild.banner_url) }} data-guild-banner>
+            <CropLayer url={guild.banner_url} />
             <button onClick={() => setMenu((m) => !m)} className="absolute inset-x-0 top-0 h-12 px-4 flex items-center justify-between font-bold text-white text-left bg-gradient-to-b from-black/60 to-transparent hover:from-black/70 drop-shadow">
               <span className="truncate">{guild.name}{guild.partnered && <span title={t('Partnered server')} className="ml-1 inline-flex align-[-2px]" data-partnered><Handshake size={15} className="text-accent" /></span>}</span>
               <ChevronDown size={18} className={`transition ${menu ? 'rotate-180' : ''}`} />

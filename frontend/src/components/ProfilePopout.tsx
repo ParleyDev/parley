@@ -1,4 +1,6 @@
 import { usePrefs } from '../lib/prefs'
+import { bgUrl } from '../lib/crop'
+import CropImg, { CropLayer } from './CropImg'
 import { Check, Clock, MessageSquare, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX, User as UserIcon } from 'lucide-react'
 import { nameLook } from '../lib/nameStyle'
 import { roleLook } from './StyledName'
@@ -217,7 +219,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const contents = (
     <>
       {/* Banner with overlaid buttons */}
-      <div className={`relative ${full ? 'h-[140px] shrink-0 rounded-t-xl' : 'h-[105px] rounded-t-lg'} bg-cover bg-center`} style={user.banner_url ? { backgroundImage: `url(${user.banner_url})` } : { background: gradient }}>
+      <div className={`relative isolate ${full ? 'h-[140px] shrink-0 rounded-t-xl' : 'h-[105px] rounded-t-lg'} bg-cover bg-center`} style={user.banner_url ? { backgroundImage: bgUrl(user.banner_url) } : { background: gradient }}>
+        <CropLayer url={user.banner_url} />
         {!full && <div className="absolute right-3 top-3 flex gap-2">
           {full && !isMe && rel !== 'blocked' && (
             <button onClick={() => act(async () => { const c = await openDm(); onClose(); navigate(`/channels/@me/${c.id}`) })} className="h-8 rounded-full bg-accent hover:brightness-110 px-3.5 text-sm font-semibold text-white flex items-center gap-1.5" data-full-message><MessageSquare size={16} />{t('Message')}</button>
@@ -432,7 +435,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
 function GuildDot({ g, ring }: { g: Pick<Guild, 'id' | 'name' | 'icon_url'>; ring?: boolean }) {
   const cls = `h-4 w-4 rounded-full shrink-0 ${ring ? 'ring-2 ring-[#232428]' : ''}`
   return g.icon_url
-    ? <img src={g.icon_url} alt="" title={g.name} className={`${cls} object-cover`} />
+    ? <CropImg src={g.icon_url} alt="" title={g.name} className={`${cls} object-cover`} />
     : <span title={g.name} className={`${cls} text-white text-[8px] font-bold flex items-center justify-center`} style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>
 }
 

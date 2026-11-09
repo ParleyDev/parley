@@ -1,4 +1,5 @@
 import ThemesPane from './AdminThemes'
+import CropImg from '../components/CropImg'
 import BlockedLinksPane from './AdminBlockedLinks'
 import AppsPane from './AdminApps'
 import CosmeticsPane from './AdminCosmetics'
@@ -399,7 +400,7 @@ function ServersPane() {
         {list?.map((g) => (
           <div key={g.id} className="grid grid-cols-[1fr_160px_100px_110px_120px_60px] phone:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40" data-admin-guild={g.name}>
             <div className="min-w-0 flex items-center gap-2">
-              <span className="h-8 w-8 rounded-xl overflow-hidden flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>{g.icon_url ? <img src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name)}</span>
+              <span className="h-8 w-8 rounded-xl overflow-hidden flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>{g.icon_url ? <CropImg src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name)}</span>
               <span className="min-w-0"><span className="block truncate font-semibold">{g.name}</span><span className="block truncate text-xs text-text-2">{new Date(g.created_at).toLocaleDateString()}</span></span>
               {g.state === 'pending_deletion' && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="pending-deletion">{t('DELETING {date}', { date: g.deletion_scheduled_for ? new Date(g.deletion_scheduled_for).toLocaleDateString() : '' })}</span>}
               {g.state === 'taken_down' && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="taken-down">{t('TAKEN DOWN')}</span>}

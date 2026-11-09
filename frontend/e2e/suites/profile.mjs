@@ -23,7 +23,7 @@ const pb=await open(b.token,'B',`${WEB}/channels/${g.id}/${tc}`)
 await pa.waitForSelector('textarea'); await pb.waitForSelector('textarea')
 // Alice edits in Profiles tab: upload banner, toggle gradient, set bio
 await openProfileEditor(pa)
-await pa.setInputFiles('[data-banner-input]', `${FIX}/pic.png`)
+await pa.setInputFiles('[data-banner-input]', `${FIX}/pic.png`); await pa.click('[data-crop-apply]')
 await pa.waitForSelector('[role=dialog] img[src^="/api/images/"]'); ok('banner preview appears (uploaded)', true)
 const bannerUrl = await pa.evaluate(()=>document.querySelector('[role=dialog] img[src^="/api/images/"]').getAttribute('src')); const bl=Number((await fetch(`${WEB}`+bannerUrl)).headers.get('content-length')); ok('banner resized under 900KB ('+Math.round(bl/1024)+'KB)', bl>0 && bl < 900*1024)
 await pa.click('[data-inline-edit="pronouns"]'); await pa.fill('[data-inline-input="pronouns"]','they/them'); await pa.keyboard.press('Enter')
