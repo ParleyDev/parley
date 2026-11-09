@@ -93,6 +93,8 @@ const M = [
   ['DELETE', '/admin/users/:id/messages', `/admin/users/${X}/messages`, null, 'content_action'],
   ['POST', '/admin/users/:id/purge', `/admin/users/${X}/purge`, null, 'content_action'],
   ['POST', '/admin/users/:id/reveal', `/admin/users/${X}/reveal`, { justification: why }, 'account_pii_reveal'],
+  ['GET', '/admin/users/:id/overview', `/admin/users/${X}/overview`, null, 'account_metadata_read'],
+  ['POST', '/admin/users/:id/signals', `/admin/users/${X}/signals`, { justification: why }, 'account_pii_reveal'],
   ['PUT', '/admin/users/:id/roles', `/admin/users/${X}/roles`, { roles: [] }, 'admin_roles_manage'],
   ['GET', '/admin/users/:id/sessions', `/admin/users/${X}/sessions`, null, 'account_metadata_read'],
   ['DELETE', '/admin/users/:id/sessions', `/admin/users/${X}/sessions`, null, 'content_action'],

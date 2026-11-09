@@ -235,7 +235,7 @@ async fn scrub(state: &AppState, tx: &mut Transaction<'_, Postgres>, uid: Uuid) 
     for (table, col) in [
         ("sessions", "user_id"), ("oauth_tokens", "user_id"), ("oauth_codes", "user_id"), ("mcp_grants", "user_id"), ("mcp_codes", "user_id"),
         ("qr_logins", "user_id"), ("passkeys", "user_id"), ("webauthn_challenges", "user_id"), ("mfa_backup_codes", "user_id"), ("email_tokens", "user_id"),
-        ("push_tokens", "user_id"), ("web_push_subs", "user_id"), ("connections", "user_id"), ("user_role_connections", "user_id"), ("user_app_installs", "user_id"),
+        ("push_tokens", "user_id"), ("web_push_subs", "user_id"), ("user_network_log", "user_id"), ("connections", "user_id"), ("user_role_connections", "user_id"), ("user_app_installs", "user_id"),
         ("notification_settings", "user_id"), ("read_states", "user_id"), ("bookmarks", "user_id"), ("user_notes", "user_id"), ("user_notes", "target_id"),
         ("relationships", "user_id"), ("relationships", "target_id"), ("user_reviews", "author_id"), ("user_reviews", "target_id"),
         ("activities", "user_id"), ("presence", "user_id"), ("listen_along", "host_id"), ("listen_along", "listener_id"), ("stream_previews", "user_id"),

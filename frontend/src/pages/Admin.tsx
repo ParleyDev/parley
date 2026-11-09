@@ -2,13 +2,14 @@ import ThemesPane from './AdminThemes'
 import CropImg from '../components/CropImg'
 import BlockedLinksPane from './AdminBlockedLinks'
 import AppsPane from './AdminApps'
+import UserDetailPane from './AdminUser'
 import CosmeticsPane from './AdminCosmetics'
 import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
 import { MetaRow, type MetaHit, type OpenedMsg } from './AdminCases'
 import CasesPane, { CasePane } from './AdminCases'
-import { NavLink, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import SplitLayout, { useShowContent } from '../components/SplitLayout'
 import { MobileBack } from '../components/HeaderBits'
 import { api } from '../lib/api'
@@ -26,9 +27,11 @@ export default function AdminPage() {
   const a = access
   const item = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2.5 text-[15px] font-medium ${active ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`
   const showContent = useShowContent()
+  // A link to one user, case or other page opens it on a phone; /admin itself starts on the menu.
+  const deep = /^\/admin\/[^/]+\/./.test(useLocation().pathname)
   return (
     <AccessCtx.Provider value={access}>
-    <SplitLayout defaultPane="nav" testid={{ 'data-admin': '' }} sidebar={
+    <SplitLayout defaultPane={deep ? 'content' : 'nav'} testid={{ 'data-admin': '' }} sidebar={
           <aside className="w-[var(--sidebar-w)] tab:w-[224px] phone:flex-1 shrink-0 bg-bg-1 flex flex-col">
             <div className="h-12 px-4 flex items-center gap-2 font-bold text-lg border-b border-line"><ShieldCheck size={20} className="text-success" /> {t('Admin Console')}</div>
             <nav className="p-2 space-y-0.5">
@@ -66,7 +69,8 @@ export default function AdminPage() {
           <Route path="blocked-links" element={<BlockedLinksPane />} />
           <Route path="apps" element={<AppsPane />} />
           <Route path="messages" element={<MessagesPane />} />
-          <Route path="users/:id" element={<UserContentPane />} />
+          <Route path="users/:id" element={<UserDetailPane />} />
+          <Route path="users/:id/content" element={<UserContentPane />} />
         </Routes>
       </div>
     </SplitLayout>
@@ -105,10 +109,10 @@ function Overview() {
   )
 }
 
-interface AdminUser { id: string; username: string; display_name: string; email: string | null; created_at: string; is_admin: boolean; bot?: boolean; account_state?: 'active' | 'pending_deletion' | 'deleted'; deletion_scheduled_for?: string | null; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; upload_quota_bytes?: number | null; max_upload_bytes?: number | null; last_seen_at?: string | null; guild_count: number; online: boolean }
+interface AdminUser { id: string; username: string; display_name: string; email: string | null; created_at: string; is_admin: boolean; bot?: boolean; account_state?: 'active' | 'pending_deletion' | 'deleted'; deletion_scheduled_for?: string | null; suspended_at: string | null; email_verified_at?: string | null; mfa_enabled?: boolean; upload_quota_bytes?: number | null; max_upload_bytes?: number | null; last_seen_at?: string | null; guild_count: number; online: boolean; guest?: boolean }
 type Tri = '' | 'true' | 'false'
-interface UserFilters { admin: Tri; suspended: Tri; verified: Tri; mfa: Tri; online: Tri; joined_before: string; joined_after: string; inactive_days: string; ip: string }
-const EMPTY_FILTERS: UserFilters = { admin: '', suspended: '', verified: '', mfa: '', online: '', joined_before: '', joined_after: '', inactive_days: '', ip: '' }
+interface UserFilters { admin: Tri; guest: Tri; suspended: Tri; verified: Tri; mfa: Tri; online: Tri; joined_before: string; joined_after: string; inactive_days: string; ip: string }
+const EMPTY_FILTERS: UserFilters = { admin: '', guest: '', suspended: '', verified: '', mfa: '', online: '', joined_before: '', joined_after: '', inactive_days: '', ip: '' }
 const PAGE = 100
 
 function UsersPane() {
@@ -208,6 +212,7 @@ function UsersPane() {
         </div>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search by username, display name or email')} data-admin-user-search className="input max-w-md" />
         {tri('admin', t('Role'), t('Admins'), t('Not admins'))}
+        {tri('guest', t('Account'), t('Guests'), t('Registered'))}
         {tri('suspended', t('Status'), t('Suspended'), t('Active'))}
         {tri('verified', t('Email'), t('Verified'), t('Unverified'))}
         {tri('mfa', t('2FA'), t('Enabled'), t('Not enabled'))}
@@ -262,18 +267,20 @@ function UsersPane() {
         {list === null && <p className="p-4 text-sm text-text-2">{t('Loading…')}</p>}
         {list?.length === 0 && <p className="p-4 text-sm text-text-2">{t('No users match.')}</p>}
         {list?.map((u) => (
-          <div key={u.id} className={`grid grid-cols-[28px_1fr_1fr_90px_110px_200px] phone:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40 ${selected.has(u.id) ? 'bg-accent/5' : ''}`} data-admin-user={u.username} data-selected={selected.has(u.id) ? '1' : '0'}>
+          <div key={u.id} className={`grid grid-cols-[28px_1fr_1fr_90px_110px_200px] phone:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40 cursor-pointer ${selected.has(u.id) ? 'bg-accent/5' : ''}`} data-admin-user={u.username} data-selected={selected.has(u.id) ? '1' : '0'}
+            onClick={(e) => { if (!(e.target as HTMLElement).closest('button, input, a, label, select')) navigate(`/admin/users/${u.id}`) }}>
             <input type="checkbox" className="h-4 w-4 accent-accent" checked={selected.has(u.id)} disabled={u.id === me?.id || u.account_state === 'deleted'} onChange={() => toggle(u.id)} aria-label={t('Select @{username}', { username: u.username })} data-admin-select />
             <div className="min-w-0 flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full shrink-0 ${u.online ? 'bg-success' : 'bg-text-2'}`} />
               <span className="min-w-0"><span className="block truncate font-semibold">{u.display_name}</span><span className="block truncate text-xs text-text-2">@{u.username}{u.last_seen_at ? ` · ${t('seen {date}', { date: new Date(u.last_seen_at).toLocaleDateString() })}` : ''}</span></span>
               {u.bot && <span className="rounded bg-accent/20 text-accent px-1.5 py-0.5 text-[10px] font-bold" data-badge="bot">{t('BOT')}</span>}
+              {u.guest && <span className="rounded bg-text-2/20 text-text-1 px-1.5 py-0.5 text-[10px] font-bold" data-badge="guest">{t('GUEST')}</span>}
               {u.account_state === 'deleted' && <span className="rounded bg-text-2/20 text-text-2 px-1.5 py-0.5 text-[10px] font-bold" data-badge="deleted">{t('DELETED')}</span>}
               {u.account_state === 'pending_deletion' && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" title={u.deletion_scheduled_for ? new Date(u.deletion_scheduled_for).toLocaleString() : undefined} data-badge="pending-deletion">{t('DELETING {date}', { date: u.deletion_scheduled_for ? new Date(u.deletion_scheduled_for).toLocaleDateString() : '' })}</span>}
               {u.is_admin && <span className="rounded bg-success/20 text-success px-1.5 py-0.5 text-[10px] font-bold" data-badge="admin">{t('ADMIN')}</span>}
               {u.suspended_at && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="suspended">{t('SUSPENDED')}</span>}
               {u.mfa_enabled && <span className="rounded bg-sky-500/20 text-sky-300 px-1.5 py-0.5 text-[10px] font-bold" data-badge="mfa">{t('2FA')}</span>}
-              {!u.email_verified_at && !u.bot && u.account_state !== 'deleted' && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="unverified">{t('UNVERIFIED')}</span>}
+              {!u.email_verified_at && !u.bot && !u.guest && u.account_state !== 'deleted' && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="unverified">{t('UNVERIFIED')}</span>}
             </div>
             <div className="text-sm text-text-1 truncate"><span className="wide:hidden text-text-2">{t('Email:')} </span>{u.email ?? '—'}{u.email?.includes('***') && can(a, 'account_pii_reveal') && <button type="button" className="ml-1.5 inline-flex align-middle text-text-2 hover:text-text-0" title={t('Reveal email and devices')} aria-label={t('Reveal email and devices')} onClick={() => setRevealFor(u)} data-admin-reveal><Eye size={14} /></button>}</div>
             <div className="text-sm text-text-1"><span className="wide:hidden text-text-2">{t('Servers:')} </span>{u.guild_count}</div>
@@ -285,7 +292,7 @@ function UsersPane() {
                   {manage && <Tool label={u.is_admin ? t('Remove admin') : t('Make admin')} onClick={() => patch(u, { is_admin: !u.is_admin }, u.is_admin ? t('@{username} is no longer an admin', { username: u.username }) : t('@{username} is now an admin', { username: u.username }))} testid="toggle-admin">{u.is_admin ? <ShieldOff size={16} /> : <ShieldCheck size={16} />}</Tool>}
                   {manage && <Tool label={t('Admin roles')} onClick={() => setRolesFor(u)} testid="roles"><UserCog size={16} /></Tool>}
                   {act && <Tool label={u.suspended_at ? t('Unsuspend') : t('Suspend')} onClick={() => patch(u, { suspended: !u.suspended_at }, u.suspended_at ? t('@{username} unsuspended', { username: u.username }) : t('@{username} suspended', { username: u.username }))} testid="toggle-suspend" danger={!u.suspended_at}>{u.suspended_at ? <UserCheck size={16} /> : <UserX size={16} />}</Tool>}
-                  {can(a, 'account_metadata_read') && <Tool label={t('Storage and devices')} onClick={() => navigate(`/admin/users/${u.id}`)} testid="content"><FolderOpen size={16} /></Tool>}
+                  {can(a, 'account_metadata_read') && <Tool label={t('Storage and devices')} onClick={() => navigate(`/admin/users/${u.id}/content`)} testid="content"><FolderOpen size={16} /></Tool>}
                   {act && <Tool label={t('Log out of all devices')} onClick={() => logoutAll(u)} testid="logout-all"><LogOut size={16} /></Tool>}
                   {inst && <Tool label={t('Storage quota')} onClick={() => setQuotaFor(u)} testid="quota"><HardDrive size={16} /></Tool>}
                   {inst && <Tool label={t('Upload size limit')} onClick={() => { setLimitFor(u); setLimitMb(u.max_upload_bytes ? String(Math.round(u.max_upload_bytes / 1048576)) : '') }} testid="upload-limit"><Upload size={16} /></Tool>}
@@ -920,7 +927,7 @@ function UserContentPane() {
     action: async () => { try { const r = await api.delete<{ attachments: number; images: number }>(`/admin/users/${user.id}/uploads`); pushToast(t('{attachments} attachments and {images} images removed', { attachments: r.attachments, images: r.images })); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
   return (
     <div data-admin-user-content={user.id}>
-      <NavLink to="/admin/users" className="text-xs text-sky-400 hover:underline">{t('← Users')}</NavLink>
+      <NavLink to={`/admin/users/${user.id}`} className="text-xs text-sky-400 hover:underline">{t('← {name}', { name: user.display_name })}</NavLink>
       <h1 className="text-2xl font-bold mt-1">{user.display_name} <span className="text-base font-normal text-text-2">@{user.username}</span></h1>
       <p className="text-sm text-text-2 mt-1" data-admin-content-totals>{t('{messages} messages · {attachments} attachments ({attachmentSize}) · {images} profile/expression images ({imageSize})', { messages: totals.messages.toLocaleString(), attachments: totals.attachments, attachmentSize: formatBytes(totals.attachment_bytes), images: totals.images, imageSize: formatBytes(totals.image_bytes) })}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" data-admin-quota-row>

@@ -409,6 +409,8 @@ struct ListQuery {
     ip: Option<String>,
     /// 'people' (the default), 'bots' or 'all'.
     kind: Option<String>,
+    /// Guest ("Try Parley") accounts only (true) or none of them (false).
+    guest: Option<bool>,
     /// Also list deleted (anonymized) accounts; they're left out by default.
     #[serde(default)]
     include_deleted: bool,
@@ -432,6 +434,8 @@ struct AdminUser {
     deletion_scheduled_for: Option<DateTime<Utc>>,
     suspended_at: Option<DateTime<Utc>>,
     mfa_enabled: bool,
+    #[sqlx(default)]
+    guest: bool,
     #[sqlx(default)]
     email_verified_at: Option<DateTime<Utc>>,
     #[sqlx(default)]
@@ -479,21 +483,22 @@ async fn list_users(State(state): State<AppState>, AuthUser(uid): AuthUser, head
          AND ($10::bigint IS NULL OR COALESCE((SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id), u.created_at) < now() - make_interval(days => $10::int))
          AND ($13::text IS NULL OR EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = u.id AND s.ip = $13 AND s.created_at > now() - interval '30 days'))
          AND ($14 = 'all' OR u.bot = ($14 = 'bots'))
-         AND ($15 OR u.account_state <> 'deleted')";
+         AND ($15 OR u.account_state <> 'deleted')
+         AND ($17::bool IS NULL OR u.guest = $17)";
     let kind = match q.kind.as_deref() { Some("bots") => "bots", Some("all") => "all", _ => "people" };
     let ip = q.ip.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
     let (total,): (i64,) = sqlx::query_as(&format!("SELECT COUNT(*) FROM users u WHERE {where_sql}"))
-        .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days).bind(0i64).bind(0i64).bind(&ip).bind(kind).bind(q.include_deleted).bind(by_email || pii)
+        .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days).bind(0i64).bind(0i64).bind(&ip).bind(kind).bind(q.include_deleted).bind(by_email || pii).bind(q.guest)
         .fetch_one(&state.db)
         .await?;
     let mut rows = sqlx::query_as::<_, AdminUser>(&format!(
-        "SELECT u.id, u.username, u.display_name, u.email, u.created_at, u.is_admin, u.bot, u.account_state, u.deletion_scheduled_for, u.suspended_at, (u.totp_secret IS NOT NULL) AS mfa_enabled,
+        "SELECT u.id, u.username, u.display_name, u.email, u.created_at, u.is_admin, u.bot, u.account_state, u.deletion_scheduled_for, u.suspended_at, (u.totp_secret IS NOT NULL) AS mfa_enabled, u.guest,
                 u.email_verified_at, u.upload_quota_bytes, u.max_upload_bytes, (SELECT MAX(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id) AS last_seen_at,
                 (SELECT COUNT(*) FROM guild_members m WHERE m.user_id = u.id) AS guild_count
          FROM users u WHERE {where_sql}
          ORDER BY u.created_at DESC LIMIT $11 OFFSET $12"))
     .bind(pattern(&q.q)).bind(q.admin).bind(q.suspended).bind(q.verified).bind(q.mfa).bind(q.online).bind(&online).bind(before).bind(after).bind(q.inactive_days)
-    .bind(limit).bind(q.offset.max(0)).bind(&ip).bind(kind).bind(q.include_deleted).bind(by_email || pii)
+    .bind(limit).bind(q.offset.max(0)).bind(&ip).bind(kind).bind(q.include_deleted).bind(by_email || pii).bind(q.guest)
     .fetch_all(&state.db)
     .await?;
     for r in &mut rows {

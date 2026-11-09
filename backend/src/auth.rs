@@ -71,6 +71,7 @@ pub async fn start_session(state: &AppState, user_id: Uuid, headers: &HeaderMap)
         .bind(ua)
         .execute(&state.db)
         .await?;
+    crate::routes::admin_user::seen(state, user_id, headers, "").await;
     Ok(issue_token(&state.config.jwt_secret, user_id, sid)?)
 }
 

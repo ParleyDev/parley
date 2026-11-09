@@ -43,6 +43,7 @@ pub struct WsQuery {
 pub async fn ws_upgrade(
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     Query(q): Query<WsQuery>,
 ) -> Response {
     // Bots connect with their bot token and choose intents; people with a session token.
@@ -67,6 +68,8 @@ pub async fn ws_upgrade(
         (None, _) => None,
     };
     let platform = q.platform.as_deref().filter(|p| crate::ws::bus::PLATFORMS.contains(p)).unwrap_or("web").to_string();
+    // Where people connect from, for the admin user page (bots are skipped inside).
+    if intents.is_none() { crate::routes::admin_user::seen(&state, uid, &headers, &platform).await }
     let idle = q.idle.unwrap_or(0) != 0;
     let timed = q.away_after.is_some();
     let away_after = std::time::Duration::from_secs(q.away_after.unwrap_or(300).clamp(2, 3600));
