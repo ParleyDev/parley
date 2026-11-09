@@ -14,6 +14,7 @@ import { locale, useT } from '../lib/i18n'
 type Pending = { pending_deletion: true; scheduled_for: string; restore_ticket: string }
 type SignIn = { token: string; user: PrivateUser; reenabled?: boolean } | Pending
 import { savedAccounts } from '../lib/accounts'
+import { startGuest } from '../lib/guest'
 import AccountSwitcher from '../components/AccountSwitcher'
 
 export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
@@ -36,6 +37,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [mfaKeys, setMfaKeys] = useState(false)
   const [code, setCode] = useState('')
   const registrationOpen = useStore((s) => s.instance.registration_enabled)
+  const guests = useStore((s) => !!s.instance.guests)
   const mailEnabled = useStore((s) => s.instance.mail_enabled !== false)
   const setInstance = useStore((s) => s.setInstance)
   useEffect(() => { api.get<{ registration_enabled: boolean; announcement: string }>('/instance').then(setInstance).catch(() => {}) }, [setInstance])
@@ -87,6 +89,11 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  const tryAsGuest = async () => {
+    setErr(null); setBusy(true)
+    try { navigate(`/channels/${await startGuest()}`, { replace: true }) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
   // A security key (any passkey on the account) instead of the code.
@@ -220,6 +227,13 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             <><Link to="/login" className="text-sky-400 hover:underline">{t('Already have an account?')}</Link></>
           )}
         </p>
+        {guests && (
+          <div className="mt-5 rounded-xl border border-line bg-bg-2/60 p-3 text-sm" data-try-guest>
+            <div className="font-semibold">{t('Just looking?')}</div>
+            <div className="text-text-2">{t('Try Parley in our demo server with no account. Keep it later if you like it.')}</div>
+            <button type="button" className="btn-ghost mt-2 w-full border border-line py-2" disabled={busy} onClick={tryAsGuest} data-try-guest-button>{t('Try it without an account')}</button>
+          </div>
+        )}
       </form>
       {mode === 'login' && <div className="pop hidden w-64 shrink-0 items-center justify-center rounded-2xl border border-line bg-bg-1/90 p-6 shadow-2xl backdrop-blur wide:flex"><QrLogin onSession={qrSession} /></div>}
       </div>

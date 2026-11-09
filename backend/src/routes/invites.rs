@@ -216,6 +216,7 @@ async fn accept(
     AuthUser(uid): AuthUser,
     Path(code): Path<String>,
 ) -> AppResult<Json<Value>> {
+    crate::routes::guests::deny(&state, uid, "Guests stay in the demo server. Claim your account to join or create others.").await?;
     let mut tx = state.db.begin().await?;
     let row: Option<AcceptRow> = sqlx::query_as(&format!(
         "SELECT i.guild_id, i.uses, i.max_uses, i.expires_at, i.code, i.creator_id, i.temporary FROM invites i WHERE {MATCH} ORDER BY i.vanity LIMIT 1 FOR UPDATE"

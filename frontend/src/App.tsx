@@ -17,6 +17,7 @@ import DiscoverPage from './pages/Discover'
 import AdminPage from './pages/Admin'
 import GuildPreviewPage from './pages/GuildPreview'
 import VerifyPage from './pages/Verify'
+import TryPage from './pages/Try'
 import OAuthPage from './pages/OAuth'
 import McpAuthorizePage from './pages/McpAuthorize'
 import OverlayPage from './pages/Overlay'
@@ -51,6 +52,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={token ? <Navigate to="/channels/@me" replace /> : <AuthPage mode="login" />} />
         <Route path="/register" element={token ? <Navigate to="/channels/@me" replace /> : <AuthPage mode="register" />} />
+        <Route path="/try" element={<TryPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/confirm-email" element={<VerifyPage mode="change" />} />
         <Route path="/forgot" element={token ? <Navigate to="/channels/@me" replace /> : <ForgotPage />} />

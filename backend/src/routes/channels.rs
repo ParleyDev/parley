@@ -522,6 +522,7 @@ pub(crate) async fn create_message(
     perms::check(p, perms::SEND_MESSAGES)?;
     crate::signup_guard::require_can_post(&state, uid).await?;
     check_age(&state.db, &c, uid).await?;
+    crate::routes::guests::check_post(&state, uid, c.guild_id).await?;
     if let Some(gid) = c.guild_id {
         crate::routes::guilds::check_rules(&state.db, gid, uid).await?;
     }

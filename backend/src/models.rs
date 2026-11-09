@@ -139,6 +139,10 @@ impl From<&PrivateUser> for User {
 #[derive(Debug, Clone, Serialize, FromRow)]
 pub struct PrivateUser {
     pub id: Uuid,
+    /// A "Try Parley" guest: no email or password yet, removed an hour after it was last active unless claimed.
+    #[sqlx(default)]
+    #[serde(default)]
+    pub guest: bool,
     pub username: String,
     pub display_name: String,
     pub email: String,

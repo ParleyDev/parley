@@ -120,7 +120,7 @@ pub async fn require_can_post(state: &AppState, uid: Uuid) -> AppResult<()> {
         return Ok(());
     }
     let ok: Option<(bool,)> = sqlx::query_as(
-        "SELECT email_verified_at IS NOT NULL OR bot OR system OR is_admin OR EXISTS (SELECT 1 FROM admin_roles r WHERE r.user_id = users.id) FROM users WHERE id = $1",
+        "SELECT email_verified_at IS NOT NULL OR guest OR bot OR system OR is_admin OR EXISTS (SELECT 1 FROM admin_roles r WHERE r.user_id = users.id) FROM users WHERE id = $1",
     )
     .bind(uid)
     .fetch_optional(&state.db)
@@ -139,7 +139,7 @@ pub async fn purge_unverified(state: &AppState) -> AppResult<usize> {
         return Ok(0);
     }
     let due: Vec<(Uuid,)> = sqlx::query_as(
-        "SELECT id FROM users WHERE email_verified_at IS NULL AND account_state = 'active' AND NOT bot AND NOT system AND NOT is_admin
+        "SELECT id FROM users WHERE email_verified_at IS NULL AND account_state = 'active' AND NOT guest AND NOT bot AND NOT system AND NOT is_admin
            AND NOT EXISTS (SELECT 1 FROM admin_roles r WHERE r.user_id = users.id)
            AND created_at < now() - make_interval(days => $1) ORDER BY created_at LIMIT 200",
     )

@@ -94,6 +94,7 @@ fn clean_uris(list: &[String]) -> AppResult<Vec<String>> {
 
 /// Create an app; the client secret is returned once, here.
 async fn create_app(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<AppReq>) -> AppResult<(StatusCode, Json<Value>)> {
+    crate::routes::guests::deny(&state, uid, "Guests can't create apps. Claim your account first.").await?;
     let name = req.name.unwrap_or_default().trim().to_string();
     if name.is_empty() || name.chars().count() > 50 { return Err(AppError::BadRequest("Name must be 1–50 characters".into())) }
     let (count,): (i64,) = sqlx::query_as("SELECT count(*) FROM applications WHERE owner_id = $1").bind(uid).fetch_one(&state.db).await?;
@@ -244,6 +245,7 @@ fn perm_value(v: Option<&serde_json::Value>) -> u64 { v.and_then(|v| v.as_u64().
 
 /// The user approved: mint a one-minute code and (with the bot scope) add the bot to the chosen server.
 async fn authorize(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<AuthorizeReq>) -> AppResult<Json<Value>> {
+    crate::routes::guests::deny(&state, uid, "Guests can't authorize apps. Claim your account first.").await?;
     let app = by_client(&state, &req.client_id).await?;
     let scopes = parse_scopes(req.scope.as_deref().unwrap_or("identify"))?;
     let redirect = if bot_only(&scopes) { pick_redirect(&app, req.redirect_uri.as_deref()).ok() } else { Some(pick_redirect(&app, req.redirect_uri.as_deref())?) };

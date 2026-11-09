@@ -71,6 +71,7 @@ struct ApplyIn { answers: Vec<Answer> }
 
 /// `POST /guilds/:id/application`: submit (or resubmit while pending) your answers.
 async fn apply(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>, Json(req): Json<ApplyIn>) -> AppResult<Json<Application>> {
+    crate::routes::guests::deny(&state, uid, "Guests stay in the demo server. Claim your account to join or create others.").await?;
     perms::guild_perms(&state.db, gid, uid).await?;
     let (form, accepted): (Value, bool) = sqlx::query_as("SELECT g.applications, m.rules_accepted_at IS NOT NULL FROM guilds g JOIN guild_members m ON m.guild_id = g.id AND m.user_id = $2 WHERE g.id = $1")
         .bind(gid).bind(uid).fetch_one(&state.db).await?;

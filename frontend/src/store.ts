@@ -70,6 +70,7 @@ export type ModalKind =
   | { kind: 'editHistory'; channelId: string; messageId: string }
   | { kind: 'report'; messageId?: string; userId: string; name: string; guildId?: string | null; server?: boolean }
   | { kind: 'createPoll'; channelId: string }
+  | { kind: 'claimGuest' }
   | { kind: 'scheduleMessage'; channelId: string; content: string; sendAt?: string; files?: number; editing?: boolean; action: (content: string, sendAt: Date) => Promise<void> }
   | { kind: 'editCategory'; channelId: string }
   | { kind: 'createThread'; channelId: string; messageId?: string; suggested?: string }
@@ -245,7 +246,7 @@ interface State {
   /** Phones: the message whose action bar a tap opened (only one at a time). */
   tappedMessage: string | null
   /** Instance-wide settings from GET /instance (registration, announcement banner). */
-  instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; unverified_read_only?: boolean; captcha_provider?: string; captcha_site_key?: string; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; translation?: boolean; summaries?: boolean; app_url?: string; oauth_available?: string[]; max_upload_bytes?: number; version?: string }
+  instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; unverified_read_only?: boolean; captcha_provider?: string; captcha_site_key?: string; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; translation?: boolean; summaries?: boolean; app_url?: string; oauth_available?: string[]; max_upload_bytes?: number; version?: string; guests?: boolean }
   toast: { id: number; text: string; kind: 'info' | 'error' }[]
 
   // auth

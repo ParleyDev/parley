@@ -90,6 +90,12 @@ pub struct InstanceSettings {
     /// Remove accounts that haven't confirmed their email after this many days (0 = keep them; needs mail).
     #[serde(default)]
     pub unverified_delete_days: i64,
+    /// The server guests land in ("Try Parley" without an account). Empty = guests off.
+    #[serde(default)]
+    pub demo_guild_id: String,
+    /// Derived: guests can be made (a demo server is set and still exists).
+    #[serde(default)]
+    pub guests: bool,
     /// Voice transport: "mesh" (peer to peer, default) or "sfu" when a LiveKit server is configured.
     #[serde(default)]
     pub voice_mode: String,
@@ -222,7 +228,7 @@ impl InstanceSettings {
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, translate_url: String::new(), translate_api_key: String::new(), translation: false, llm_url: String::new(), llm_api_key: String::new(), llm_model: String::new(), summaries: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), apns_key: String::new(), apns_key_id: String::new(), apns_team_id: String::new(), apns_topic: String::new(), apns_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string(), unverified_read_only: false, block_disposable_emails: false, blocked_email_domains: String::new(), check_email_domain: false, captcha_provider: String::new(), captcha_site_key: String::new(), captcha_secret: String::new(), captcha_verify_url: String::new(), unverified_delete_days: 0 };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, translate_url: String::new(), translate_api_key: String::new(), translation: false, llm_url: String::new(), llm_api_key: String::new(), llm_model: String::new(), summaries: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), apns_key: String::new(), apns_key_id: String::new(), apns_team_id: String::new(), apns_topic: String::new(), apns_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string(), unverified_read_only: false, block_disposable_emails: false, blocked_email_domains: String::new(), check_email_domain: false, captcha_provider: String::new(), captcha_site_key: String::new(), captcha_secret: String::new(), captcha_verify_url: String::new(), unverified_delete_days: 0, demo_guild_id: String::new(), guests: false };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -260,11 +266,15 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "captcha_secret" => s.captcha_secret = v.as_str().unwrap_or("").to_string(),
             "captcha_verify_url" => s.captcha_verify_url = v.as_str().unwrap_or("").to_string(),
             "unverified_delete_days" => s.unverified_delete_days = v.as_i64().unwrap_or(0),
+            "demo_guild_id" => s.demo_guild_id = v.as_str().unwrap_or("").to_string(),
             "rate_limits" => s.rate_limits = v.as_object().map(|o| o.iter().filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string()))).collect()).unwrap_or_default(),
             _ => {}
         }
     }
     s.rate_limit_defaults = crate::ratelimit::LIMITER.env_defaults();
+    if let Ok(gid) = s.demo_guild_id.trim().parse::<Uuid>() {
+        s.guests = sqlx::query_as::<_, (bool,)>("SELECT true FROM guilds WHERE id = $1 AND state = 'active'").bind(gid).fetch_optional(db).await?.is_some();
+    }
     s.voice_mode = if s.sfu_configured() { "sfu".into() } else { "mesh".into() };
     s.transcription = s.stt_configured();
     s.translation = !s.translate_url.trim().is_empty();
@@ -855,6 +865,13 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     let captcha_verify_url = req.captcha_verify_url.trim().to_string();
     if !captcha_verify_url.is_empty() && !(captcha_verify_url.starts_with("http://") || captcha_verify_url.starts_with("https://")) { return Err(AppError::BadRequest("CAPTCHA verify URL must be an http(s) URL".into())); }
     let blocked_domains = crate::signup_guard::parse_domains(&req.blocked_email_domains).join("\n");
+    let demo_guild_id = req.demo_guild_id.trim().to_string();
+    if !demo_guild_id.is_empty() {
+        let gid = demo_guild_id.parse::<Uuid>().map_err(|_| AppError::BadRequest("Demo server must be a server ID".into()))?;
+        let found: Option<(bool,)> = sqlx::query_as("SELECT true FROM guilds WHERE id = $1 AND state = 'active'").bind(gid).fetch_optional(&state.db).await?;
+        if found.is_none() { return Err(AppError::BadRequest("No server with that ID".into())) }
+    }
+    if before.demo_guild_id != demo_guild_id { changed.insert("demo_guild_id".into(), json!(demo_guild_id)); }
     if !(0..=365).contains(&req.unverified_delete_days) { return Err(AppError::BadRequest("Days before removing unverified accounts must be between 0 (never) and 365".into())); }
     for (k, b, a) in [("unverified_read_only", before.unverified_read_only, req.unverified_read_only), ("block_disposable_emails", before.block_disposable_emails, req.block_disposable_emails), ("check_email_domain", before.check_email_domain, req.check_email_domain)] {
         if b != a { changed.insert(k.into(), json!(a)); }
@@ -869,7 +886,7 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if !changed.is_empty() {
         audit::record(&state, uid, "settings.update", "settings", None, "", Value::Object(changed)).await;
     }
-    for (k, v) in [("unverified_read_only", json!(req.unverified_read_only)), ("block_disposable_emails", json!(req.block_disposable_emails)), ("blocked_email_domains", json!(blocked_domains)), ("check_email_domain", json!(req.check_email_domain)), ("captcha_provider", json!(captcha_provider)), ("captcha_site_key", json!(captcha_site_key)), ("captcha_secret", json!(captcha_secret)), ("captcha_verify_url", json!(captcha_verify_url)), ("unverified_delete_days", json!(req.unverified_delete_days))] {
+    for (k, v) in [("unverified_read_only", json!(req.unverified_read_only)), ("block_disposable_emails", json!(req.block_disposable_emails)), ("blocked_email_domains", json!(blocked_domains)), ("check_email_domain", json!(req.check_email_domain)), ("captcha_provider", json!(captcha_provider)), ("captcha_site_key", json!(captcha_site_key)), ("captcha_secret", json!(captcha_secret)), ("captcha_verify_url", json!(captcha_verify_url)), ("unverified_delete_days", json!(req.unverified_delete_days)), ("demo_guild_id", json!(demo_guild_id))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("translate_url", json!(tr_url)), ("translate_api_key", json!(tr_key)), ("llm_url", json!(llm_url)), ("llm_api_key", json!(llm_key)), ("llm_model", json!(llm_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("apns_key", json!(apns_key)), ("apns_key_id", json!(apns_key_id)), ("apns_team_id", json!(apns_team_id)), ("apns_topic", json!(apns_topic)), ("apns_endpoint", json!(apns_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override)), ("max_upload_bytes", json!(req.max_upload_bytes))] {

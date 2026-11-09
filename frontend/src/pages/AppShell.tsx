@@ -24,6 +24,7 @@ import MiniCall from '../components/MiniCall'
 import UserPanel from '../components/UserPanel'
 import { NavColumn } from '../components/SplitLayout'
 import VerifyBanner from '../components/VerifyBanner'
+import GuestBanner from '../components/GuestBanner'
 import { lastChannel, rememberChannel } from '../lib/dm'
 import { usePhone } from '../lib/swipe'
 import { usePaneDrag } from '../lib/paneDrag'
@@ -100,6 +101,7 @@ export default function AppShell() {
       <Shortcuts />
       <TitleBar />
       <ThemePreviewBar />
+      <GuestBanner />
       <VerifyBanner />
       <StreamerBanner />
       <UpdateBanner />

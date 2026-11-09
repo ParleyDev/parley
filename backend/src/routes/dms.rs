@@ -263,6 +263,7 @@ pub async fn require_group_member(db: &PgPool, channel_id: Uuid, uid: Uuid) -> A
 /// Add a friend to a group (any member may; up to 10 members).
 async fn add_recipient(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, target)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
     require_group_member(&state.db, id, uid).await?;
+    crate::routes::guests::deny_dm(&state, uid, &[target]).await?;
     if !are_friends(&state.db, uid, target).await? {
         return Err(AppError::BadRequest("You can only add your friends to a group".into()));
     }
@@ -368,6 +369,7 @@ async fn open_dm(
     let mut ids: Vec<Uuid> = req.recipient_ids.into_iter().filter(|r| *r != uid).collect();
     ids.sort();
     ids.dedup();
+    crate::routes::guests::deny_dm(&state, uid, &ids.iter().copied().chain(req.recipient_id).collect::<Vec<_>>()).await?;
     if ids.len() >= 2 {
         return create_group(&state, uid, ids, req.name).await;
     }

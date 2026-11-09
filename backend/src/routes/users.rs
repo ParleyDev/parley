@@ -197,7 +197,7 @@ pub const NAMEPLATES: &[&str] = &["dusk", "ocean", "forest", "candy", "aurora", 
 pub const PROFILE_EFFECTS: &[&str] = &["sparkles", "snow", "hearts", "confetti", "bubbles"];
 
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, verified_bot, name_style, avatar_decoration, clan_tag, clan_tag_guild, panels, profile_privacy, profile_frame, nameplate, profile_effect, account_state, system";
-pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, typing_indicator, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, clan_tag_guild, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect, entrance_sound, client_settings, birthdate, custom_activity, share_activity, house, CASE WHEN birthdate IS NULL THEN 'unknown' WHEN birthdate > (now() - interval '18 years')::date THEN 'teen' ELSE 'adult' END AS age_group";
+pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, typing_indicator, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, clan_tag_guild, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect, entrance_sound, client_settings, birthdate, custom_activity, share_activity, house, CASE WHEN birthdate IS NULL THEN 'unknown' WHEN birthdate > (now() - interval '18 years')::date THEN 'teen' ELSE 'adult' END AS age_group, guest";
 
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
@@ -816,21 +816,22 @@ async fn put_note(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(i
 /// Profile badges, computed: admin (instance admin), founder (one of the first ten accounts), veteran (over a year),
 /// host (owns a server), verified (email confirmed), secure (2FA on), and the house the user picked (house_*).
 pub async fn badges_for(db: &sqlx::PgPool, id: Uuid) -> AppResult<Vec<&'static str>> {
-    let row: Option<(bool, bool, bool, bool, bool, bool, String)> = sqlx::query_as(
+    let row: Option<(bool, bool, bool, bool, bool, bool, String, bool)> = sqlx::query_as(
         "SELECT u.is_admin,
                 (SELECT COUNT(*) FROM users o WHERE o.created_at < u.created_at) < 10,
                 u.created_at < now() - interval '1 year',
                 EXISTS (SELECT 1 FROM guilds g WHERE g.owner_id = u.id),
                 u.email_verified_at IS NOT NULL,
                 u.totp_secret IS NOT NULL,
-                u.house
+                u.house, u.guest
          FROM users u WHERE u.id = $1",
     )
     .bind(id)
     .fetch_optional(db)
     .await?;
-    let Some((admin, founder, veteran, host, verified, secure, house)) = row else { return Ok(vec![]) };
+    let Some((admin, founder, veteran, host, verified, secure, house, guest)) = row else { return Ok(vec![]) };
     let mut out = Vec::new();
+    if guest { out.push("guest"); }
     if admin { out.push("admin"); }
     if founder { out.push("founder"); }
     if veteran { out.push("veteran"); }

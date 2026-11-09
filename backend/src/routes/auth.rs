@@ -252,7 +252,9 @@ pub(crate) async fn session(state: &AppState, id: Uuid, headers: &HeaderMap) -> 
 }
 
 /// End the calling session; the token stops working at once.
-async fn logout(State(state): State<AppState>, AuthSession(uid, sid): AuthSession) -> AppResult<axum::http::StatusCode> {
+async fn logout(State(state): State<AppState>, session: AuthSession) -> AppResult<axum::http::StatusCode> {
+    if crate::routes::guests::on_logout(&state, &session).await? { return Ok(axum::http::StatusCode::NO_CONTENT) }
+    let AuthSession(uid, sid) = session;
     revoke_sessions(&state, uid, Some(sid), None, "You logged out.").await?;
     Ok(axum::http::StatusCode::NO_CONTENT)
 }

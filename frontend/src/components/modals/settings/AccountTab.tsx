@@ -38,6 +38,13 @@ export default function AccountTab({ onDevices }: { onDevices: () => void }) {
   const titles = Object.fromEntries(accountSections().map((s) => [s.id, t(s.label)]))
   return (
     <div data-account-page>
+      {user.guest && (
+        <div className="mb-4 rounded-xl border border-accent/40 bg-accent/10 p-4 text-sm" data-account-guest>
+          <div className="font-semibold text-text-0">{t('This is a guest account')}</div>
+          <div className="mt-1 text-text-2">{t("It has no email or password, and it's removed an hour after you leave. Sign up to keep it, with everything you've done so far.")}</div>
+          <button type="button" className="btn-primary mt-3" onClick={() => useStore.getState().openModal({ kind: 'claimGuest' })}>{t('Sign up to keep it')}</button>
+        </div>
+      )}
       <WindowSection id="account-info" title={titles['account-info']}>
         <DisplayNameRow user={user} />
         <AccountChanges only={['username', 'email']} />

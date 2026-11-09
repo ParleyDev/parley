@@ -129,6 +129,7 @@ async fn create_guild(
     AuthUser(uid): AuthUser,
     Json(req): Json<CreateGuild>,
 ) -> AppResult<(StatusCode, Json<serde_json::Value>)> {
+    crate::routes::guests::deny(&state, uid, "Guests stay in the demo server. Claim your account to join or create others.").await?;
     let name = req.name.trim().to_string();
     if name.is_empty() || name.len() > 100 {
         return Err(AppError::BadRequest("Server name must be 1-100 characters".into()));

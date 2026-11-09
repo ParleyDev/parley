@@ -165,6 +165,7 @@ async fn live_stages(State(state): State<AppState>, AuthUser(uid): AuthUser) -> 
 
 /// Join an approved server from Discover (no invite needed).
 async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Json<Value>> {
+    crate::routes::guests::deny(&state, uid, "Guests stay in the demo server. Claim your account to join or create others.").await?;
     let approved: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_discovery WHERE guild_id = $1 AND status = 'approved'").bind(gid).fetch_optional(&state.db).await?;
     if approved.is_none() {
         return Err(AppError::NotFound("Server not found in Discover".into()));

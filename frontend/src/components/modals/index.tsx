@@ -38,6 +38,7 @@ import WelcomeModal from './Welcome'
 import ModViewModal from './ModView'
 import Modal from '../Modal'
 import LeaveGroupsModal from './LeaveGroups'
+import ClaimGuestModal from './ClaimGuest'
 import SafetyCenterModal from './SafetyCenter'
 import GuildNotificationsModal from './GuildNotifications'
 import AltTextModal from './AltText'
@@ -122,6 +123,7 @@ export default function Modals() {
     case 'followChannel': return <FollowChannelModal onClose={close} channelId={modal!.channelId} />
     case 'reactions': return <ReactionsModal onClose={close} channelId={modal!.channelId} messageId={modal!.messageId} />
     case 'altText': return <AltTextModal onClose={close} message={modal!.message} />
+    case 'claimGuest': return <ClaimGuestModal onClose={close} />
     case 'scheduleMessage': return <ScheduleMessageModal onClose={close} {...modal!} />
   }
   }

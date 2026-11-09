@@ -19,6 +19,9 @@ pub enum AppError {
     /// AutoMod stopped it (403, code "automod", with the server's message).
     #[error("{0}")]
     Blocked(String),
+    /// Something a guest account can't do until it is claimed (403, code "guest").
+    #[error("{0}")]
+    Guest(&'static str),
     /// 18+ channel: no birth date on file yet (403, code "age_required") or under 18 (403, code "age_restricted").
     #[error("age gate")]
     AgeGate(bool),
@@ -53,6 +56,9 @@ impl IntoResponse for AppError {
             }
             AppError::Undeliverable => {
                 return (StatusCode::FORBIDDEN, Json(json!({ "error": "Your message could not be delivered.", "code": "undeliverable" }))).into_response();
+            }
+            AppError::Guest(m) => {
+                return (StatusCode::FORBIDDEN, Json(json!({ "error": m, "code": "guest" }))).into_response();
             }
             AppError::Blocked(m) => {
                 return (StatusCode::FORBIDDEN, Json(json!({ "error": m, "code": "automod" }))).into_response();

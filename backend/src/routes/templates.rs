@@ -150,6 +150,7 @@ struct UseIn { name: String, #[serde(default)] icon_url: Option<String> }
 
 /// `POST /templates/:code`: create a new server you own from the template.
 async fn use_template(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(code): Path<String>, Json(req): Json<UseIn>) -> AppResult<(StatusCode, Json<Value>)> {
+    crate::routes::guests::deny(&state, uid, "Guests stay in the demo server. Claim your account to join or create others.").await?;
     let name = req.name.trim().to_string();
     if name.is_empty() || name.len() > 100 { return Err(AppError::BadRequest("Server name must be 1-100 characters".into())) }
     crate::routes::users::validate_image(&req.icon_url)?;
@@ -326,6 +327,7 @@ async fn discord_preview(State(_): State<AppState>, AuthUser(_): AuthUser, Json(
 
 /// `POST /templates/discord/import`: create a server you own from a Discord template.
 async fn discord_import(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<DiscordIn>) -> AppResult<(StatusCode, Json<Value>)> {
+    crate::routes::guests::deny(&state, uid, "Guests stay in the demo server. Claim your account to join or create others.").await?;
     crate::routes::users::validate_image(&req.icon_url)?;
     crate::routes::users::require_verified(&state, uid).await?;
     let (tname, _, snap, _) = from_discord(&discord_source(&req.source).await?)?;

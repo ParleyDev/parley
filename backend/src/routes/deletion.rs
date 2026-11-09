@@ -48,8 +48,8 @@ pub fn placeholder_username() -> String {
     format!("{DELETED_PREFIX}{tail}")
 }
 
-/// Whether a chosen username would look like a deleted account's placeholder.
-pub fn reserved_username(u: &str) -> bool { u.to_ascii_lowercase().starts_with(DELETED_PREFIX) }
+/// Whether a chosen username would look like a deleted account's placeholder or a guest's.
+pub fn reserved_username(u: &str) -> bool { let u = u.to_ascii_lowercase(); u.starts_with(DELETED_PREFIX) || u.starts_with(crate::routes::guests::PREFIX) }
 
 /// Keyed hash of an email for the ban-evasion block (never stored next to the account).
 fn email_block_hash(secret: &str, email: &str) -> String {

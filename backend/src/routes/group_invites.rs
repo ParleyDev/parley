@@ -52,6 +52,7 @@ async fn preview(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(co
 }
 
 async fn join(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(code): Path<String>) -> AppResult<Json<Value>> {
+    crate::routes::guests::deny(&state, uid, "Guests can't join group DMs. Claim your account first.").await?;
     let cid = find(&state, &code).await?;
     let members: Vec<(Uuid,)> = sqlx::query_as("SELECT user_id FROM channel_members WHERE channel_id = $1").bind(cid).fetch_all(&state.db).await?;
     if !members.iter().any(|m| m.0 == uid) {

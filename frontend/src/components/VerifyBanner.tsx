@@ -12,7 +12,7 @@ export default function VerifyBanner() {
   const required = useStore((s) => s.instance.require_email_verification)
   const pushToast = useStore((s) => s.pushToast)
   const [sent, setSent] = useState(false)
-  if (!user || user.email_verified_at || !mailEnabled) return null
+  if (!user || user.guest || user.email_verified_at || !mailEnabled) return null
   const resend = async () => { try { await api.post('/auth/resend-verification', {}); setSent(true); pushToast(t('Verification email sent')) } catch (e) { pushToast((e as Error).message, 'error') } }
   return (
     <div className="shrink-0 bg-warn/15 border-b border-warn/40 text-xs px-3 py-1.5 flex items-center justify-center gap-3 text-text-0" data-verify-banner>

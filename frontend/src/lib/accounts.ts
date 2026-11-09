@@ -18,8 +18,9 @@ export function savedAccounts(): SavedAccount[] {
 const write = (list: SavedAccount[]) => { try { localStorage.setItem(KEY, JSON.stringify(list)) } catch { /* ignore */ } }
 
 /** Upsert the signed-in account (on login and on every READY, so names and avatars stay fresh). Most recent first. */
-export function rememberAccount(user: { id: string; username: string; display_name: string; avatar_url: string | null }, token: string | null) {
-  if (!token) return
+export function rememberAccount(user: { id: string; username: string; display_name: string; avatar_url: string | null; guest?: boolean }, token: string | null) {
+  // A guest can't sign back in, so it never joins the account switcher.
+  if (!token || user.guest) return
   const entry: SavedAccount = { id: user.id, username: user.username, display_name: user.display_name, avatar_url: user.avatar_url, token }
   // A token belongs to one account, so any other entry holding it is stale (older builds could save one account under
   // another tab's token, which showed both as current and made switching do nothing); dropping it repairs the list.

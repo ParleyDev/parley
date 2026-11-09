@@ -43,6 +43,7 @@ export default function GuildBar() {
   const dms = useStore((s) => s.dms)
   const notifSettings = useStore((s) => s.notifSettings)
   const openModal = useStore((s) => s.openModal)
+  const guest = useStore((s) => !!s.user?.guest)
   const guildId = useMatch('/channels/:guildId/*')?.params.guildId
   // Home badges what waits outside DMs (friend and message requests); each unread DM gets its own icon below it.
   const pending = useStore((s) => pendingCount(s) + messageRequests(s).length)
@@ -201,11 +202,11 @@ export default function GuildBar() {
         return renderGuild(g, g.id, (zone) => (zone === 'top' ? { type: 'before', id: g.id } : zone === 'bottom' ? { type: 'after', id: g.id } : { type: 'combine', guildId: g.id }))
       })}
 
-      <button onClick={() => openModal({ kind: 'createGuild' })} className="group relative" aria-label={t('Add a Server')} data-add-server>
+      {!guest && <button onClick={() => openModal({ kind: 'createGuild' })} className="group relative" aria-label={t('Add a Server')} data-add-server>
         <Pill tip={t('Add a Server')}>
           <div className="h-12 w-12 rounded-2xl bg-bg-3 text-success flex items-center justify-center transition-all duration-200 group-hover:bg-success group-hover:text-white"><Plus size={24} /></div>
         </Pill>
-      </button>
+      </button>}
       <NavLink to="/discover" className="group relative" data-discover-link>
         {({ isActive }) => (
           <Pill active={isActive} tip={t('Discover')}>

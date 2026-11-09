@@ -134,6 +134,10 @@ async fn send_request(
     if target.id == uid {
         return Err(AppError::BadRequest("You can't add yourself as a friend".into()));
     }
+    crate::routes::guests::deny(&state, uid, "Guests can't add friends. Claim your account first.").await?;
+    if crate::routes::guests::is_guest(&state, target.id).await? {
+        return Err(AppError::BadRequest("That's a guest account: guests can't add friends until they sign up.".into()));
+    }
     let mine = kind_between(&state.db, uid, target.id).await?;
     let theirs = kind_between(&state.db, target.id, uid).await?;
     match mine.as_deref() {
@@ -177,6 +181,7 @@ async fn send_request(
 }
 
 async fn accept(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(target): Path<Uuid>) -> AppResult<Json<Relationship>> {
+    crate::routes::guests::deny(&state, uid, "Guests can't add friends. Claim your account first.").await?;
     if kind_between(&state.db, uid, target).await?.as_deref() != Some("incoming") {
         return Err(AppError::NotFound("No pending request from that user".into()));
     }

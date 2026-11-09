@@ -1,4 +1,4 @@
-import { Award, BadgeCheck, Flame, Server, ShieldCheck, Sparkles, Sprout, Waves, Zap } from 'lucide-react'
+import { Award, BadgeCheck, Flame, Server, ShieldCheck, Sparkles, Sprout, UserRound, Waves, Zap } from 'lucide-react'
 import { useState, type HTMLAttributes, type ReactNode } from 'react'
 import ServerTagCard from './ServerTagCard'
 import { useStore } from '../store'
@@ -37,6 +37,7 @@ export function ClanTag({ userId, tag, tagGuild, className = '' }: { userId: str
 }
 
 const BADGES: Record<string, { label: string; icon: ReactNode; color: string }> = {
+  guest: { label: 'Guest: trying Parley without an account', icon: <UserRound size={14} />, color: '#94a3b8' },
   admin: { label: 'Instance admin', icon: <ShieldCheck size={14} />, color: '#f0506e' },
   founder: { label: 'Founder: one of the first ten accounts', icon: <Sparkles size={14} />, color: '#f6b53d' },
   veteran: { label: 'Veteran: here for over a year', icon: <Award size={14} />, color: '#a78bfa' },
