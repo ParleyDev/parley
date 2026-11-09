@@ -106,6 +106,17 @@ pub struct InstanceSettings {
     pub livekit_api_key: String,
     #[serde(default)]
     pub livekit_api_secret: String,
+    /// Cloudflare TURN (relayed voice for strict networks): the TURN key's ID and API token (secret). Empty = off.
+    #[serde(default)]
+    pub cf_turn_key_id: String,
+    #[serde(default)]
+    pub cf_turn_api_token: String,
+    /// Test hook: base URL replacing Cloudflare's Realtime API.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub cf_turn_endpoint: String,
+    /// Derived: a TURN relay is configured (Cloudflare key, or a turn: URL in ICE_SERVERS).
+    #[serde(default)]
+    pub turn: bool,
     /// Speech-to-text for voice messages: base URL of an OpenAI-compatible `/v1/audio/transcriptions` server. Empty = off.
     #[serde(default)]
     pub stt_url: String,
@@ -191,6 +202,7 @@ pub struct InstanceSettings {
 
 impl InstanceSettings {
     pub fn stt_configured(&self) -> bool { !self.stt_url.trim().is_empty() }
+    pub fn turn_configured(&self) -> bool { !self.cf_turn_key_id.trim().is_empty() && !self.cf_turn_api_token.trim().is_empty() }
     pub fn sfu_configured(&self) -> bool {
         !self.livekit_url.trim().is_empty() && !self.livekit_api_key.trim().is_empty() && !self.livekit_api_secret.trim().is_empty()
     }
@@ -198,6 +210,9 @@ impl InstanceSettings {
     pub fn public(mut self) -> Self {
         self.livekit_api_key = String::new();
         self.livekit_api_secret = String::new();
+        self.cf_turn_key_id = String::new();
+        self.cf_turn_api_token = String::new();
+        self.cf_turn_endpoint = String::new();
         self.stt_url = String::new();
         self.stt_api_key = String::new();
         self.translate_url = String::new();
@@ -228,7 +243,7 @@ impl InstanceSettings {
 
 pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
     let rows: Vec<(String, Value)> = sqlx::query_as("SELECT key, value FROM instance_settings").fetch_all(db).await?;
-    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, translate_url: String::new(), translate_api_key: String::new(), translation: false, llm_url: String::new(), llm_api_key: String::new(), llm_model: String::new(), summaries: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), apns_key: String::new(), apns_key_id: String::new(), apns_team_id: String::new(), apns_topic: String::new(), apns_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string(), unverified_read_only: false, block_disposable_emails: false, blocked_email_domains: String::new(), check_email_domain: false, captcha_provider: String::new(), captcha_site_key: String::new(), captcha_secret: String::new(), captcha_verify_url: String::new(), unverified_delete_days: 0, demo_guild_id: String::new(), guests: false };
+    let mut s = InstanceSettings { registration_enabled: true, announcement: String::new(), require_email_verification: false, mail_enabled: false, voice_mode: "mesh".into(), livekit_url: String::new(), livekit_api_key: String::new(), livekit_api_secret: String::new(), stt_url: String::new(), stt_api_key: String::new(), stt_model: String::new(), transcription: false, translate_url: String::new(), translate_api_key: String::new(), translation: false, llm_url: String::new(), llm_api_key: String::new(), llm_model: String::new(), summaries: false, rate_limits: Default::default(), rate_limit_defaults: Default::default(), av_addr: String::new(), av_fail_closed: false, fcm_service_account: String::new(), fcm_endpoint: String::new(), apns_key: String::new(), apns_key_id: String::new(), apns_team_id: String::new(), apns_topic: String::new(), apns_endpoint: String::new(), push: false, app_url: String::new(), oauth_providers: Value::Null, oauth_endpoint_override: String::new(), oauth_available: Vec::new(), max_upload_bytes: 0, version: crate::VERSION.to_string(), unverified_read_only: false, block_disposable_emails: false, blocked_email_domains: String::new(), check_email_domain: false, captcha_provider: String::new(), captcha_site_key: String::new(), captcha_secret: String::new(), captcha_verify_url: String::new(), unverified_delete_days: 0, demo_guild_id: String::new(), guests: false, cf_turn_key_id: std::env::var("CF_TURN_KEY_ID").unwrap_or_default(), cf_turn_api_token: std::env::var("CF_TURN_API_TOKEN").unwrap_or_default(), cf_turn_endpoint: String::new(), turn: false };
     for (k, v) in rows {
         match k.as_str() {
             "registration_enabled" => s.registration_enabled = v.as_bool().unwrap_or(true),
@@ -237,6 +252,10 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
             "livekit_url" => s.livekit_url = v.as_str().unwrap_or("").to_string(),
             "livekit_api_key" => s.livekit_api_key = v.as_str().unwrap_or("").to_string(),
             "livekit_api_secret" => s.livekit_api_secret = v.as_str().unwrap_or("").to_string(),
+            // Set in the console, these win over CF_TURN_KEY_ID / CF_TURN_API_TOKEN from the environment.
+            "cf_turn_key_id" if v.as_str().is_some_and(|x| !x.is_empty()) => s.cf_turn_key_id = v.as_str().unwrap_or("").to_string(),
+            "cf_turn_api_token" if v.as_str().is_some_and(|x| !x.is_empty()) => s.cf_turn_api_token = v.as_str().unwrap_or("").to_string(),
+            "cf_turn_endpoint" => s.cf_turn_endpoint = v.as_str().unwrap_or("").to_string(),
             "stt_url" => s.stt_url = v.as_str().unwrap_or("").to_string(),
             "stt_api_key" => s.stt_api_key = v.as_str().unwrap_or("").to_string(),
             "stt_model" => s.stt_model = v.as_str().unwrap_or("").to_string(),
@@ -276,6 +295,7 @@ pub async fn load_settings(db: &PgPool) -> AppResult<InstanceSettings> {
         s.guests = sqlx::query_as::<_, (bool,)>("SELECT true FROM guilds WHERE id = $1 AND state = 'active'").bind(gid).fetch_optional(db).await?.is_some();
     }
     s.voice_mode = if s.sfu_configured() { "sfu".into() } else { "mesh".into() };
+    s.turn = s.turn_configured();
     s.transcription = s.stt_configured();
     s.translation = !s.translate_url.trim().is_empty();
     s.summaries = !s.llm_url.trim().is_empty() && !s.llm_model.trim().is_empty();
@@ -768,6 +788,16 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     if before.livekit_url != lk_url { changed.insert("livekit_url".into(), json!(lk_url)); }
     if before.livekit_api_key != lk_key { changed.insert("livekit_api_key".into(), json!(lk_key)); }
     if before.livekit_api_secret != lk_secret { changed.insert("livekit_api_secret".into(), json!(if lk_secret.is_empty() { "cleared" } else { "set" })); }
+    let cf_key = req.cf_turn_key_id.trim().to_string();
+    let cf_token = req.cf_turn_api_token.trim().to_string();
+    let cf_endpoint = req.cf_turn_endpoint.trim().to_string();
+    if cf_key.is_empty() != cf_token.is_empty() { return Err(AppError::BadRequest("Cloudflare TURN needs both the key ID and the API token".into())) }
+    // A new or changed key is tried straight away, so a typo shows here instead of as calls that never connect.
+    if !cf_key.is_empty() && (before.cf_turn_key_id != cf_key || before.cf_turn_api_token != cf_token || before.cf_turn_endpoint != cf_endpoint) {
+        crate::routes::turn::relays(&cf_key, &cf_token, &cf_endpoint, true).await.map_err(AppError::BadRequest)?;
+    }
+    if before.cf_turn_key_id != cf_key { changed.insert("cf_turn_key_id".into(), json!(cf_key)); }
+    if before.cf_turn_api_token != cf_token { changed.insert("cf_turn_api_token".into(), json!(if cf_token.is_empty() { "cleared" } else { "set" })); }
     let stt_url = req.stt_url.trim().trim_end_matches('/').to_string();
     if !stt_url.is_empty() && !(stt_url.starts_with("http://") || stt_url.starts_with("https://")) {
         return Err(AppError::BadRequest("Transcription URL must start with http:// or https://".into()));
@@ -889,7 +919,7 @@ async fn put_settings(State(state): State<AppState>, AuthUser(uid): AuthUser, Js
     for (k, v) in [("unverified_read_only", json!(req.unverified_read_only)), ("block_disposable_emails", json!(req.block_disposable_emails)), ("blocked_email_domains", json!(blocked_domains)), ("check_email_domain", json!(req.check_email_domain)), ("captcha_provider", json!(captcha_provider)), ("captcha_site_key", json!(captcha_site_key)), ("captcha_secret", json!(captcha_secret)), ("captcha_verify_url", json!(captcha_verify_url)), ("unverified_delete_days", json!(req.unverified_delete_days)), ("demo_guild_id", json!(demo_guild_id))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
-    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("translate_url", json!(tr_url)), ("translate_api_key", json!(tr_key)), ("llm_url", json!(llm_url)), ("llm_api_key", json!(llm_key)), ("llm_model", json!(llm_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("apns_key", json!(apns_key)), ("apns_key_id", json!(apns_key_id)), ("apns_team_id", json!(apns_team_id)), ("apns_topic", json!(apns_topic)), ("apns_endpoint", json!(apns_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override)), ("max_upload_bytes", json!(req.max_upload_bytes))] {
+    for (k, v) in [("registration_enabled", json!(req.registration_enabled)), ("announcement", json!(announcement)), ("require_email_verification", json!(req.require_email_verification)), ("livekit_url", json!(lk_url)), ("livekit_api_key", json!(lk_key)), ("livekit_api_secret", json!(lk_secret)), ("cf_turn_key_id", json!(cf_key)), ("cf_turn_api_token", json!(cf_token)), ("cf_turn_endpoint", json!(cf_endpoint)), ("stt_url", json!(stt_url)), ("stt_api_key", json!(stt_key)), ("stt_model", json!(stt_model)), ("translate_url", json!(tr_url)), ("translate_api_key", json!(tr_key)), ("llm_url", json!(llm_url)), ("llm_api_key", json!(llm_key)), ("llm_model", json!(llm_model)), ("rate_limits", json!(rate_limits)), ("av_addr", json!(av_addr)), ("av_fail_closed", json!(req.av_fail_closed)), ("fcm_service_account", json!(fcm_sa)), ("fcm_endpoint", json!(fcm_endpoint)), ("apns_key", json!(apns_key)), ("apns_key_id", json!(apns_key_id)), ("apns_team_id", json!(apns_team_id)), ("apns_topic", json!(apns_topic)), ("apns_endpoint", json!(apns_endpoint)), ("oauth_providers", oauth.clone()), ("oauth_endpoint_override", json!(oauth_override)), ("max_upload_bytes", json!(req.max_upload_bytes))] {
         sqlx::query("INSERT INTO instance_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value").bind(k).bind(v).execute(&state.db).await?;
     }
     // Turning on (or changing) the removal of unverified accounts applies straight away, not at the next run.

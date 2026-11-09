@@ -256,7 +256,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             "read_states": read_states.iter().map(|(c, m)| json!({"channel_id": c, "last_read_msg": m})).collect::<Vec<_>>(),
             "last_message_ids": last_ids.iter().map(|(c, m)| json!({"channel_id": c, "message_id": m})).collect::<Vec<_>>(),
             "voice_states": voice_states,
-            "ice_servers": state.config.ice_servers,
+            "ice_servers": crate::routes::turn::ice_servers(&state).await,
         }
     });
     if tx.send(Message::Text(ready.to_string())).await.is_err() {

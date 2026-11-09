@@ -59,6 +59,13 @@ const GATE_INTERVAL_MS = 50
 
 type MicHolder = 'call' | 'test'
 
+/** Fresh STUN/TURN servers before each call: relay logins (Cloudflare TURN) expire, and READY may be days old. Gives up
+ *  after a few seconds and keeps the ones from READY, so a slow answer never holds up joining. */
+async function refreshIceServers() {
+  const fresh = await Promise.race([api.get<RTCIceServer[]>('/voice/ice-servers').catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 3000))])
+  if (Array.isArray(fresh) && fresh.length) useStore.setState({ iceServers: fresh })
+}
+
 class VoiceManager {
   // mic pipeline
   private raw: MediaStream | null = null       // device stream
@@ -233,6 +240,7 @@ class VoiceManager {
         return
       }
       if (!(await this.acquireMic('call'))) return
+      await refreshIceServers()
       // Moving channels: tear down old peers; camera/screen stay on and re-attach to new peers.
       if (this.channelId) { this.closeAllPeers(); await this.disconnectSfu() }
       this.endCrypto()
