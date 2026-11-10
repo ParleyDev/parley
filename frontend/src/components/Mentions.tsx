@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import Avatar from './Avatar'
 import { useStore } from '../store'
@@ -10,7 +10,12 @@ import { useT } from '../lib/i18n'
 /** `<@id>`: the user's server nickname or display name as a pill; click opens the profile. */
 export function UserMention({ id }: { id: string }) {
   const openModal = useStore((s) => s.openModal)
-  const name = useStore((s) => { const g = Object.values(s.members).find((m) => m[id])?.[id]; return g?.nickname || s.users[id]?.display_name || g?.display_name })
+  // The nickname is per server: only the one in the server being viewed counts.
+  const { guildId } = useParams()
+  const name = useStore((s) => {
+    const here = guildId ? s.members[guildId]?.[id] : undefined
+    return here?.nickname || here?.display_name || s.users[id]?.display_name || Object.values(s.members).find((m) => m[id])?.[id]?.display_name
+  })
   const me = useStore((s) => s.user?.id === id)
   return (
     <button type="button" onClick={(e) => { e.stopPropagation(); openModal({ kind: 'profile', userId: id, anchor: { x: e.clientX, y: e.clientY, w: 0, h: 0 } }) }}
