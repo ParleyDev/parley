@@ -37,7 +37,7 @@ ok('no update arrow when the app is up to date', await p.locator('[data-desktop-
 const info = await p.locator('[data-build-info]').innerText()
 ok('a build line above the user panel: channel, web build and app version', /^Stable \S+.* \| Desktop 0\.21\.0$/.test(info), info)
 const ib = await p.locator('[data-build-info]').boundingBox(), pb = await p.locator('[data-user-panel]').boundingBox()
-ok('it sits just above the user panel', ib && pb && ib.y + ib.height <= pb.y + 1 && pb.y - (ib.y + ib.height) < 12, JSON.stringify({ ib, pb }))
+ok('it is a tab tucked under the top of the user panel, its text above it', ib && pb && ib.y < pb.y && ib.y + ib.height > pb.y && ib.y + ib.height - pb.y <= 10, JSON.stringify({ ib, pb }))
 await p.context().grantPermissions(['clipboard-read', 'clipboard-write'])
 await p.click('[data-build-info]'); await p.waitForTimeout(200)
 ok('clicking it copies the build info', (await p.evaluate(() => navigator.clipboard.readText())) === info)

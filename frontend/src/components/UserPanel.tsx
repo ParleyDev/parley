@@ -1,4 +1,4 @@
-import { ChevronDown, Headphones, HeadphoneOff, Info, Mic, MicOff, Settings } from 'lucide-react'
+import { ChevronDown, Headphones, HeadphoneOff, Mic, MicOff, Settings, Wrench } from 'lucide-react'
 import { voice } from '../lib/voice'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useStore } from '../store'
@@ -97,8 +97,9 @@ function BuildInfo() {
   const text = `${app.channel === 'dev' ? t('Development') : t('Stable')} ${web}${sha ? ` (${sha})` : ''} | ${t('Desktop {version}', { version: app.version })}`
   const copy = () => { void navigator.clipboard?.writeText(text).then(() => pushToast(t('Copied build info'))).catch(() => {}) }
   return (
-    <button type="button" onClick={copy} title={t('Copy build info')} className="mb-1 flex max-w-full items-center gap-1 px-1 text-[11px] leading-4 text-text-2 hover:text-text-1 phone:hidden" data-build-info>
-      <Info size={11} className="shrink-0" /><span className="truncate">{text}</span>
+    // A tab tucked under the panel's top edge, as Discord draws it.
+    <button type="button" onClick={copy} title={t('Copy build info')} className="-mb-2 flex w-full min-w-0 items-center gap-1.5 rounded-t-lg bg-bg-2 px-2.5 pb-3 pt-1 text-left text-[12px] font-semibold leading-4 text-text-2 hover:text-text-1 phone:hidden" data-build-info>
+      <Wrench size={12} className="shrink-0" /><span className="truncate">{text}</span>
     </button>
   )
 }
