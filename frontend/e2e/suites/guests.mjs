@@ -1,6 +1,7 @@
 // Try Parley without an account: an admin picks a demo server, and anyone can join it as a guest from /try or the
 // login page. Guests stay in that server (no other servers, DMs or friends), post at a tighter rate, can claim the
-// account with an email and password, and are removed an hour after they were last active.
+// account with an email and password, and are removed an hour after they were last active. They read everywhere but
+// talk, react and join voice only where a channel's @everyone overwrite allows it.
 import { execSync } from 'node:child_process'
 import { chromium } from 'playwright'
 import { WEB, B, S, H, reg, call, callS, raw, ok, finish, adminToken, testContainer } from '../lib.mjs'
@@ -9,12 +10,19 @@ const sql = (q) => execSync(`docker exec ${testContainer('db')} psql -U parley -
 const admin = await adminToken()
 const a = await reg('alice'), b = await reg('bob')
 const demo = await call(a.token, 'POST', '/guilds', { name: `Demo ${S}` }); const general = demo.channels.find((x) => x.kind === 'text')
+const offTopic = await call(a.token, 'POST', `/guilds/${demo.id}/channels`, { name: 'off-topic', kind: 'text' })
+const vcOpen = await call(a.token, 'POST', `/guilds/${demo.id}/channels`, { name: 'General', kind: 'voice' })
+const vcShut = await call(a.token, 'POST', `/guilds/${demo.id}/channels`, { name: 'Lounge', kind: 'voice' })
+const [SEND, REACT, ATTACH, CONNECT, SPEAK, STREAM] = [1 << 11, 1 << 6, 1 << 15, 1 << 20, 1 << 21, 1 << 9]
+await callS(a.token, 'PUT', `/channels/${general.id}/permissions/${demo.id}`, { kind: 'role', allow: SEND | REACT | ATTACH, deny: 0 })
+await callS(a.token, 'PUT', `/channels/${vcOpen.id}/permissions/${demo.id}`, { kind: 'role', allow: CONNECT | SPEAK | STREAM, deny: 0 })
 const other = await call(a.token, 'POST', '/guilds', { name: `Other ${S}` })
 const inv = await call(a.token, 'POST', `/guilds/${other.id}/invites`, {})
 const settings = await call(admin.token, 'GET', '/admin/settings')
 const setDemo = (id) => callS(admin.token, 'PUT', '/admin/settings', { ...settings, demo_guild_id: id })
 const guest = async (ip, body = {}) => { const r = await fetch(`${B}/auth/guest`, { method: 'POST', headers: { ...H, 'X-Forwarded-For': ip }, body: JSON.stringify(body) }); return { status: r.status, body: await r.json().catch(() => null) } }
 const ipOf = (n) => `10.77.${S % 250}.${n}`
+const WS = B.replace(/^http/, 'ws').replace(/\/api$/, '/ws')
 
 console.log('-- off by default')
 await setDemo('')
@@ -38,7 +46,16 @@ const g1 = r.body
 ok('with the name they chose and a guest_ username', g1.user.display_name === 'Curious Cat' && g1.user.username.startsWith('guest_'))
 ok('already in the demo server', (await call(g1.token, 'GET', '/guilds')).some((x) => x.id === demo.id))
 r = await callS(g1.token, 'POST', `/channels/${general.id}/messages`, { content: 'hi from a guest' })
-ok('they can chat there', r.status === 201 || r.status === 200, JSON.stringify(r))
+ok('they can chat in a channel that allows @everyone to', r.status === 201 || r.status === 200, JSON.stringify(r))
+r = await callS(g1.token, 'POST', `/channels/${offTopic.id}/messages`, { content: 'hi elsewhere' })
+ok('but not in other channels', r.status === 403, JSON.stringify(r))
+ok('  which they can still read', (await callS(g1.token, 'GET', `/channels/${offTopic.id}/messages`)).status === 200)
+const offMsg = await call(a.token, 'POST', `/channels/${offTopic.id}/messages`, { content: 'react to me' })
+ok('  or react in', (await callS(g1.token, 'PUT', `/channels/${offTopic.id}/messages/${offMsg.id}/reactions/${encodeURIComponent('👍')}`)).status === 403)
+r = await callS(b.token, 'POST', `/channels/${offTopic.id}/messages`, { content: 'members are unaffected' })
+const join = (token, channel) => new Promise((res) => { const w = new WebSocket(`${WS}?token=${token}`); const ev = []; w.onmessage = (m) => ev.push(JSON.parse(m.data)); w.onopen = () => setTimeout(() => { w.send(JSON.stringify({ op: 'voice_join', channel_id: channel, e2ee: true })); setTimeout(() => { w.close(); res(ev.some((e) => e.t === 'VOICE_STATE_UPDATE' && e.d?.channel_id === channel) && !ev.some((e) => e.t === 'VOICE_ERROR')) }, 700) }, 300) })
+ok('they can join the voice channel that allows them', await join(g1.token, vcOpen.id))
+ok('but not other voice channels', !(await join(g1.token, vcShut.id)))
 ok('members see a Guest badge on them', (await call(a.token, 'GET', `/users/${g1.user.id}`)).badges?.includes('guest'))
 r = await guest(ipOf(3))
 ok('without a name they get "Guest XXXX"', /^Guest [A-Z0-9]{4}$/.test(r.body?.user?.display_name ?? ''), r.body?.user?.display_name)
@@ -127,7 +144,14 @@ await p.waitForSelector('[data-guest-banner]', { timeout: 15000 })
 ok('one click lands in the app with a guest banner', true)
 ok('  inside the demo server', p.url().includes(`/channels/${demo.id}`), p.url())
 ok('no Add a Server button for guests', (await p.locator('[data-add-server]').count()) === 0)
-ok('the message box is open to them (no verify-your-email block)', (await p.locator('[data-verification-gate]').count()) === 0 && (await p.locator('[data-composer-box]').count()) === 1)
+await p.goto(`${WEB}/channels/${demo.id}/${general.id}`); await p.waitForTimeout(1200)
+ok('the message box is open to them in #general (no verify-your-email block)', (await p.locator('[data-verification-gate]').count()) === 0 && (await p.locator('[data-composer-box]').count()) === 1)
+await p.goto(`${WEB}/channels/${demo.id}/${offTopic.id}`); await p.waitForTimeout(1200)
+ok('elsewhere they read, with "sign up to talk everywhere" instead of a message box', (await p.locator('[data-guest-readonly]').count()) === 1 && (await p.locator('[data-composer-box]').count()) === 0)
+await p.goto(`${WEB}/channels/${demo.id}/${vcShut.id}`); await p.waitForTimeout(1200)
+ok("a voice channel that doesn't allow them can't be joined", await p.getByRole('button', { name: 'No permission to connect' }).isDisabled().catch(() => false))
+await p.goto(`${WEB}/channels/${demo.id}/${vcOpen.id}`); await p.waitForTimeout(1200)
+ok('the one that does can', await p.getByRole('button', { name: 'Join Voice' }).isEnabled().catch(() => false))
 await p.screenshot({ path: 'guests-app.png' })
 await p.click('[data-guest-claim]')
 await p.fill('[data-claim-email]', `dog${S}@x.io`); await p.fill('[data-claim-username]', `dog${S}`); await p.fill('[data-claim-password]', 'password1')

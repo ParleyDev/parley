@@ -62,6 +62,10 @@ pub const SCHEDULE_MESSAGES: u64 = 1 << 31;
 /// What a timed-out member loses in every channel: they can still read.
 pub const TIMEOUT_STRIP: u64 = SEND_MESSAGES | ADD_REACTIONS | ATTACH_FILES | CONNECT | SPEAK | STREAM | CREATE_INVITE | CHANGE_NICKNAME | MENTION_EVERYONE;
 
+/// What a guest ("Try Parley") doesn't get from the server's roles: they can read everywhere, but only talk, react or
+/// join voice in channels whose overwrites allow it (an @everyone allow on #general, say).
+pub const GUEST_STRIP: u64 = SEND_MESSAGES | SEND_TTS_MESSAGES | ADD_REACTIONS | ATTACH_FILES | MENTION_EVERYONE | SCHEDULE_MESSAGES | CONNECT | SPEAK | STREAM;
+
 pub const ALL: u64 = CREATE_INVITE
     | KICK_MEMBERS
     | BAN_MEMBERS
@@ -135,6 +139,8 @@ pub struct GuildCtx {
     pub timed_out: HashSet<Uuid>,
     /// When the server requires 2FA for moderation: members without it, who lose moderator powers.
     pub mfa_missing: HashSet<Uuid>,
+    /// Guest accounts among the members (they get GUEST_STRIP'd base permissions).
+    pub guests: HashSet<Uuid>,
 }
 
 /// Powers that need two-factor authentication when a server requires it (Discord's list, as far as Parley has them).
@@ -152,13 +158,12 @@ impl GuildCtx {
             None => return Err(crate::routes::server_deletion::unavailable(db, guild_id).await),
         };
         let roles = list_roles(db, guild_id).await?.into_iter().map(|r| (r.id, r)).collect();
-        let members: HashSet<Uuid> = sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM guild_members WHERE guild_id = $1")
+        let rows: Vec<(Uuid, bool)> = sqlx::query_as("SELECT m.user_id, u.guest FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1")
             .bind(guild_id)
             .fetch_all(db)
-            .await?
-            .into_iter()
-            .map(|r| r.0)
-            .collect();
+            .await?;
+        let members: HashSet<Uuid> = rows.iter().map(|r| r.0).collect();
+        let guests: HashSet<Uuid> = rows.iter().filter(|r| r.1).map(|r| r.0).collect();
         let mut member_roles: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
         let rows: Vec<(Uuid, Uuid)> = sqlx::query_as("SELECT user_id, role_id FROM member_roles WHERE guild_id = $1")
             .bind(guild_id)
@@ -178,7 +183,7 @@ impl GuildCtx {
             sqlx::query_as::<_, (Uuid,)>("SELECT m.user_id FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND u.totp_secret IS NULL")
                 .bind(guild_id).fetch_all(db).await?.into_iter().map(|r| r.0).collect()
         } else { HashSet::new() };
-        Ok(Self { guild, roles, member_roles, members, timed_out, mfa_missing })
+        Ok(Self { guild, roles, member_roles, members, timed_out, mfa_missing, guests })
     }
 
     pub fn is_member(&self, user: Uuid) -> bool {
@@ -209,6 +214,7 @@ impl GuildCtx {
             }
         }
         if self.mfa_missing.contains(&user) { p &= !MFA_GATED }
+        if self.guests.contains(&user) { p &= !GUEST_STRIP }
         if has(p, ADMINISTRATOR) { Some(ALL) } else { Some(p) }
     }
 
@@ -587,7 +593,7 @@ mod tests {
         let admin_role = role(gid, 3, ADMINISTRATOR);
         let (m, v, a) = (mod_role.id, vip_role.id, admin_role.id);
         let roles = [everyone, mod_role, vip_role, admin_role].into_iter().map(|r| (r.id, r)).collect();
-        let ctx = GuildCtx { guild, roles, member_roles: HashMap::new(), members: HashSet::from([owner]), timed_out: HashSet::new(), mfa_missing: HashSet::new() };
+        let ctx = GuildCtx { guild, roles, member_roles: HashMap::new(), members: HashSet::from([owner]), timed_out: HashSet::new(), mfa_missing: HashSet::new(), guests: HashSet::new() };
         Fx { ctx, owner, mod_role: m, vip_role: v, admin_role: a }
     }
 
@@ -839,6 +845,25 @@ mod tests {
         let p = fx.ctx.in_channel(u, DEFAULT_EVERYONE, &ows);
         assert_eq!(p, DEFAULT_EVERYONE | ADMINISTRATOR);
         assert!(!has(p, MANAGE_ROLES));
+    }
+
+    #[test]
+    fn guests_talk_only_where_a_channel_allows_it() {
+        let mut fx = fixture();
+        let g = fx.member(&[]);
+        let plain = fx.member(&[]);
+        fx.ctx.guests.insert(g);
+        let base = fx.ctx.base(g).unwrap();
+        assert!(has(base, VIEW_CHANNEL) && has(base, READ_MESSAGE_HISTORY), "guests still read");
+        assert!(!has(base, SEND_MESSAGES) && !has(base, CONNECT) && !has(base, ADD_REACTIONS));
+        assert!(has(fx.ctx.in_channel(plain, fx.ctx.base(plain).unwrap(), &[]), SEND_MESSAGES), "members are unaffected");
+        let gid = fx.ctx.guild.id;
+        let general = [ow(Uuid::now_v7(), "role", gid, SEND_MESSAGES | ADD_REACTIONS, 0)];
+        let p = fx.ctx.in_channel(g, base, &general);
+        assert!(has(p, SEND_MESSAGES) && has(p, ADD_REACTIONS) && !has(p, CONNECT));
+        let voice = [ow(Uuid::now_v7(), "role", gid, CONNECT | SPEAK, 0)];
+        let p = fx.ctx.in_channel(g, base, &voice);
+        assert!(has(p, CONNECT) && has(p, SPEAK) && !has(p, SEND_MESSAGES));
     }
 }
 

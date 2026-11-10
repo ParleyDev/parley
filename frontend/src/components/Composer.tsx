@@ -561,6 +561,8 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
           ? myMember?.quarantined
             ? <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-quarantined>{t('A moderator has limited your account in this server. You can read, but not send messages, react or join voice until they lift it.')}</div>
             : <div className="rounded-xl bg-danger/10 border border-danger/40 px-4 py-3 text-[15px] text-text-1" data-timed-out>{tn('You are timed out in this server until {time}.', { time: <b>{new Date(myMember!.timeout_until!).toLocaleString()}</b> })} {t('You can read, but not send messages, react or join voice.')}</div>
+          : me?.guest
+          ? <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2 flex items-center gap-3" data-guest-readonly><span className="flex-1">{t('Guests can read here but chat only in some channels. Sign up to talk everywhere.')}</span><button type="button" className="btn-primary py-1.5" onClick={() => openModal({ kind: 'claimGuest' })}>{t('Sign up')}</button></div>
           : <div className="rounded-xl bg-bg-3/60 border border-line px-4 py-3 text-[15px] text-text-2">{t('You do not have permission to send messages in this channel.')}</div>}
         <div className="h-5" />
       </div>
