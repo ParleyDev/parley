@@ -19,6 +19,10 @@ struct Tool { name: &'static str, title: &'static str, scope: &'static str, desc
 const ID: &str = "string";
 fn obj(props: Value, required: &[&str]) -> Value { json!({ "type": "object", "properties": props, "required": required, "additionalProperties": false }) }
 fn id(desc: &str) -> Value { json!({ "type": ID, "format": "uuid", "description": desc }) }
+/// A list of permission names (SEND_MESSAGES, CONNECT, ...).
+fn perm_list(desc: &str) -> Value {
+    json!({ "type": "array", "items": { "type": "string", "enum": crate::perms::catalogue().into_iter().map(|(n, _)| n).collect::<Vec<_>>() }, "description": desc })
+}
 
 const TOOLS: &[Tool] = &[
     // ---- read ----
@@ -58,6 +62,13 @@ const TOOLS: &[Tool] = &[
         description: "A user's public profile: names, pronouns, bio, whether it is a bot.", schema: || obj(json!({ "user_id": id("User id") }), &["user_id"]) },
     Tool { name: "list_pins", title: "List pinned messages", scope: "mcp.read", read_only: true, destructive: false,
         description: "The pinned messages of a channel.", schema: || obj(json!({ "channel_id": id("Channel id") }), &["channel_id"]) },
+    Tool { name: "list_roles", title: "List roles", scope: "mcp.read", read_only: true, destructive: false,
+        description: "A server's roles, highest first, with their permissions by name. The @everyone role's id is the server id.",
+        schema: || obj(json!({ "server_id": id("Server id") }), &["server_id"]) },
+    Tool { name: "get_channel_permissions", title: "Channel permissions", scope: "mcp.read", read_only: true, destructive: false,
+        description: "A channel's permission overrides: for each role or member, which permissions are allowed or denied there on top of their roles. \
+Says whether the channel follows its category's overrides (synced).",
+        schema: || obj(json!({ "channel_id": id("Channel id") }), &["channel_id"]) },
     Tool { name: "list_threads", title: "List threads", scope: "mcp.read", read_only: true, destructive: false,
         description: "Threads (or forum posts) in a channel. Read one with read_messages using the thread's id as channel_id.",
         schema: || obj(json!({ "channel_id": id("Channel id") }), &["channel_id"]) },
@@ -95,8 +106,54 @@ const TOOLS: &[Tool] = &[
         description: "Create a channel in a server (needs the Manage Channels permission).",
         schema: || obj(json!({ "server_id": id("Server id"), "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "kind": { "type": "string", "enum": ["text", "voice", "announcement", "forum", "stage", "category"], "description": "Default text" }, "topic": { "type": "string" }, "category_id": id("Create it under this category") }), &["server_id", "name"]) },
     Tool { name: "update_channel", title: "Edit a channel", scope: "mcp.manage", read_only: false, destructive: false,
-        description: "Rename a channel or change its topic.",
-        schema: || obj(json!({ "channel_id": id("Channel id"), "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "topic": { "type": "string" } }), &["channel_id"]) },
+        description: "Change a channel's name, topic, category, position, age restriction, slowmode or voice user limit. Only the fields given change.",
+        schema: || obj(json!({ "channel_id": id("Channel id"), "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "topic": { "type": "string" },
+            "category_id": { "type": ["string", "null"], "description": "Move under this category; null takes it out of its category" },
+            "position": { "type": "integer", "minimum": 0 }, "nsfw": { "type": "boolean", "description": "Age-restricted (18+)" },
+            "slowmode_seconds": { "type": "integer", "minimum": 0, "maximum": 21600 }, "user_limit": { "type": "integer", "minimum": 0, "maximum": 99, "description": "Voice channels: 0 = no limit" } }), &["channel_id"]) },
+    Tool { name: "delete_channel", title: "Delete a channel", scope: "mcp.manage", read_only: false, destructive: true,
+        description: "Delete a channel and all its messages. Cannot be undone.", schema: || obj(json!({ "channel_id": id("Channel id") }), &["channel_id"]) },
+    Tool { name: "set_channel_permissions", title: "Set channel permissions", scope: "mcp.manage", read_only: false, destructive: false,
+        description: "Allow or deny permissions in one channel for a role (the server id means @everyone) or a member, on top of their roles (needs Manage Roles). \
+Names not given keep their current setting; list a name in reset to go back to the role default. On a channel that follows its category, the category's overrides are copied first.",
+        schema: || obj(json!({ "channel_id": id("Channel id"), "target_id": id("Role id (the server id for @everyone) or user id"),
+            "target_kind": { "type": "string", "enum": ["role", "member"], "description": "Default role" },
+            "allow": perm_list("Permissions to allow"), "deny": perm_list("Permissions to deny"), "reset": perm_list("Permissions to clear (inherit again)") }), &["channel_id", "target_id"]) },
+    Tool { name: "remove_channel_permissions", title: "Remove a channel override", scope: "mcp.manage", read_only: false, destructive: false,
+        description: "Remove a role's or member's override from a channel, so their roles decide again.",
+        schema: || obj(json!({ "channel_id": id("Channel id"), "target_id": id("Role id (the server id for @everyone) or user id") }), &["channel_id", "target_id"]) },
+    Tool { name: "sync_channel_permissions", title: "Sync with category", scope: "mcp.manage", read_only: false, destructive: false,
+        description: "Drop a channel's own overrides so it follows its category's again.", schema: || obj(json!({ "channel_id": id("Channel id") }), &["channel_id"]) },
+    Tool { name: "create_role", title: "Create a role", scope: "mcp.manage", read_only: false, destructive: false,
+        description: "Create a role in a server (needs Manage Roles; you can only grant permissions you have).",
+        schema: || obj(json!({ "server_id": id("Server id"), "name": { "type": "string", "minLength": 1, "maxLength": 100 }, "color": { "type": "string", "description": "#rrggbb" },
+            "permissions": perm_list("Its permissions (default: none)"), "hoist": { "type": "boolean", "description": "Show its members separately in the member list" },
+            "mentionable": { "type": "boolean" } }), &["server_id", "name"]) },
+    Tool { name: "update_role", title: "Edit a role", scope: "mcp.manage", read_only: false, destructive: false,
+        description: "Change a role (the server id means @everyone). permissions replaces the whole set; add_permissions / remove_permissions change only those.",
+        schema: || obj(json!({ "server_id": id("Server id"), "role_id": id("Role id"), "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+            "color": { "type": ["string", "null"], "description": "#rrggbb, null for none" }, "permissions": perm_list("The full new set"),
+            "add_permissions": perm_list("Permissions to add"), "remove_permissions": perm_list("Permissions to take away"),
+            "hoist": { "type": "boolean" }, "mentionable": { "type": "boolean" }, "position": { "type": "integer", "minimum": 1 } }), &["server_id", "role_id"]) },
+    Tool { name: "delete_role", title: "Delete a role", scope: "mcp.manage", read_only: false, destructive: true,
+        description: "Delete a role; members lose it. Cannot be undone.", schema: || obj(json!({ "server_id": id("Server id"), "role_id": id("Role id") }), &["server_id", "role_id"]) },
+    Tool { name: "update_member", title: "Edit a member", scope: "mcp.manage", read_only: false, destructive: false,
+        description: "Change a member's server nickname, give or take roles, server mute/deafen them, or move them to another voice channel (or out of voice).",
+        schema: || obj(json!({ "server_id": id("Server id"), "user_id": id("Member's user id"),
+            "nickname": { "type": ["string", "null"], "maxLength": 32, "description": "null clears it" },
+            "add_roles": { "type": "array", "items": id("Role id") }, "remove_roles": { "type": "array", "items": id("Role id") },
+            "mute": { "type": "boolean" }, "deaf": { "type": "boolean" },
+            "voice_channel_id": { "type": ["string", "null"], "description": "Move to this voice channel; null disconnects them" } }), &["server_id", "user_id"]) },
+    Tool { name: "update_server", title: "Edit server settings", scope: "mcp.manage", read_only: false, destructive: false,
+        description: "Change server settings (needs Manage Server). Only the fields given change. Channel fields take null to turn them off.",
+        schema: || obj(json!({ "server_id": id("Server id"), "name": { "type": "string", "minLength": 2, "maxLength": 100 }, "description": { "type": "string" },
+            "verification_level": { "type": "integer", "minimum": 0, "maximum": 4, "description": "0 none, 1 verified email, 2 account 5+ minutes old, 3 member 10+ minutes, 4 verified phone" },
+            "default_notifications": { "type": "string", "enum": ["all", "mentions"] },
+            "explicit_filter": { "type": "string", "enum": ["off", "no_roles", "all"] },
+            "system_channel_id": { "type": ["string", "null"], "description": "Where join notices go" },
+            "rules_channel_id": { "type": ["string", "null"] }, "afk_channel_id": { "type": ["string", "null"] },
+            "afk_timeout": { "type": "integer", "enum": [60, 300, 900, 1800, 3600], "description": "Seconds idle in voice before the move to the AFK channel" },
+            "invites_paused": { "type": "boolean" } }), &["server_id"]) },
     Tool { name: "pin_message", title: "Pin a message", scope: "mcp.manage", read_only: false, destructive: false,
         description: "Pin a message in its channel.", schema: || obj(json!({ "channel_id": id("Channel id"), "message_id": id("Message id") }), &["channel_id", "message_id"]) },
     Tool { name: "unpin_message", title: "Unpin a message", scope: "mcp.manage", read_only: false, destructive: false,
@@ -176,6 +233,20 @@ fn message(base: &str, m: &Value) -> Value {
     if let Some(p) = m.get("poll").filter(|p| !p.is_null()) { out["poll"] = pick(p, &["question", "answers", "expires_at"]); }
     out
 }
+fn perm_names(bits: u64) -> Vec<&'static str> { crate::perms::catalogue().into_iter().filter(|(_, b)| bits & b == *b).map(|(n, _)| n).collect() }
+fn perm_bits(a: &Value, k: &str) -> Result<u64, String> {
+    let Some(list) = a.get(k).filter(|v| !v.is_null()) else { return Ok(0) };
+    let all = crate::perms::catalogue();
+    list.as_array().ok_or(format!("{k} must be a list of permission names"))?.iter().try_fold(0u64, |acc, v| {
+        let n = v.as_str().unwrap_or_default().trim().to_ascii_uppercase();
+        all.iter().find(|(name, _)| *name == n).map(|(_, b)| acc | b).ok_or(format!("Unknown permission {v}"))
+    })
+}
+fn role(r: &Value) -> Value {
+    let mut o = pick(r, &["id", "name", "color", "position", "hoist", "mentionable"]);
+    o["permissions"] = json!(perm_names(r["permissions"].as_i64().unwrap_or(0) as u64));
+    o
+}
 fn messages(base: &str, v: &Value) -> Vec<Value> {
     let mut list: Vec<Value> = v.as_array().cloned().unwrap_or_default();
     list.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str())); // v7 ids sort by time
@@ -240,6 +311,19 @@ async fn run(c: &Caller, name: &str, a: &Value) -> Result<Value, String> {
         }
         "get_user" => pick(&api(c, Method::GET, &format!("/users/{}", uuid(a, "user_id")?), None).await?, &["id", "username", "display_name", "pronouns", "bio", "bot", "created_at"]),
         "list_pins" => json!({ "pins": messages(base, &api(c, Method::GET, &format!("/channels/{}/pins", uuid(a, "channel_id")?), None).await?) }),
+        "list_roles" => {
+            let v = api(c, Method::GET, &format!("/guilds/{}/roles", uuid(a, "server_id")?), None).await?;
+            json!({ "roles": v.as_array().cloned().unwrap_or_default().iter().map(role).collect::<Vec<_>>() })
+        }
+        "get_channel_permissions" => {
+            let ch = api(c, Method::GET, &format!("/channels/{}", uuid(a, "channel_id")?), None).await?;
+            json!({ "channel": pick(&ch, &["id", "name", "kind", "parent_id"]), "synced_with_category": ch["permissions_synced"],
+                "overrides": ch["overwrites"].as_array().cloned().unwrap_or_default().iter().map(|o| json!({
+                    "target_id": o["id"], "target_kind": o["kind"],
+                    "everyone": o["kind"] == "role" && o["id"] == ch["guild_id"],
+                    "allow": perm_names(o["allow"].as_i64().unwrap_or(0) as u64), "deny": perm_names(o["deny"].as_i64().unwrap_or(0) as u64),
+                })).collect::<Vec<_>>() })
+        }
         "list_threads" => {
             let v = api(c, Method::GET, &format!("/channels/{}/threads", uuid(a, "channel_id")?), None).await?;
             let list = v.as_array().cloned().or_else(|| v["threads"].as_array().cloned()).unwrap_or_default();
@@ -284,8 +368,92 @@ async fn run(c: &Caller, name: &str, a: &Value) -> Result<Value, String> {
             let mut body = Map::new();
             if let Some(n) = opt_text(a, "name") { body.insert("name".into(), json!(n)); }
             if let Some(t) = opt_text(a, "topic") { body.insert("topic".into(), json!(t)); }
-            if body.is_empty() { return Err("Give a new name or topic".into()); }
-            pick(&api(c, Method::PATCH, &format!("/channels/{}", uuid(a, "channel_id")?), Some(Value::Object(body))).await?, &["id", "name", "kind", "topic"])
+            if a.get("category_id").is_some() { body.insert("parent_id".into(), json!(opt_uuid(a, "category_id")?)); }
+            for (from, to) in [("position", "position"), ("nsfw", "nsfw"), ("slowmode_seconds", "rate_limit_per_user"), ("user_limit", "user_limit")] {
+                if let Some(v) = a.get(from).filter(|v| !v.is_null()) { body.insert(to.into(), v.clone()); }
+            }
+            if body.is_empty() { return Err("Give something to change".into()); }
+            pick(&api(c, Method::PATCH, &format!("/channels/{}", uuid(a, "channel_id")?), Some(Value::Object(body))).await?, &["id", "name", "kind", "topic", "parent_id", "position", "nsfw", "rate_limit_per_user", "user_limit"])
+        }
+        "delete_channel" => { api(c, Method::DELETE, &format!("/channels/{}", uuid(a, "channel_id")?), None).await?; json!("Deleted.") }
+        "set_channel_permissions" => {
+            let ch_id = uuid(a, "channel_id")?;
+            let target = uuid(a, "target_id")?;
+            let kind = opt_text(a, "target_kind").unwrap_or_else(|| "role".into());
+            let (allow, deny, reset) = (perm_bits(a, "allow")?, perm_bits(a, "deny")?, perm_bits(a, "reset")?);
+            if allow & deny != 0 { return Err("A permission can't be both allowed and denied".into()); }
+            if allow | deny | reset == 0 { return Err("Give permissions to allow, deny or reset".into()); }
+            let ch = api(c, Method::GET, &format!("/channels/{ch_id}"), None).await?;
+            let current = ch["overwrites"].as_array().cloned().unwrap_or_default();
+            // A channel following its category shows the category's overrides as its own: keep them once it has its own.
+            if ch["permissions_synced"] == true {
+                for o in current.iter().filter(|o| o["id"].as_str() != Some(target.as_str())) {
+                    api(c, Method::PUT, &format!("/channels/{ch_id}/permissions/{}", o["id"].as_str().unwrap_or_default()), Some(json!({ "kind": o["kind"], "allow": o["allow"], "deny": o["deny"] }))).await?;
+                }
+            }
+            let mine = current.iter().find(|o| o["id"].as_str() == Some(target.as_str()));
+            let (old_allow, old_deny) = mine.map(|o| (o["allow"].as_i64().unwrap_or(0) as u64, o["deny"].as_i64().unwrap_or(0) as u64)).unwrap_or((0, 0));
+            let new_allow = (old_allow & !deny & !reset) | allow;
+            let new_deny = (old_deny & !allow & !reset) | deny;
+            api(c, Method::PUT, &format!("/channels/{ch_id}/permissions/{target}"), Some(json!({ "kind": kind, "allow": new_allow as i64, "deny": new_deny as i64 }))).await?;
+            json!({ "channel_id": ch_id, "target_id": target, "allow": perm_names(new_allow), "deny": perm_names(new_deny) })
+        }
+        "remove_channel_permissions" => { api(c, Method::DELETE, &format!("/channels/{}/permissions/{}", uuid(a, "channel_id")?, uuid(a, "target_id")?), None).await?; json!("Override removed.") }
+        "sync_channel_permissions" => { api(c, Method::POST, &format!("/channels/{}/permissions-sync", uuid(a, "channel_id")?), None).await?; json!("Synced with its category.") }
+        "create_role" => {
+            let mut body = json!({ "name": text(a, "name")?, "permissions": perm_bits(a, "permissions")? as i64 });
+            for k in ["color", "hoist"] { if let Some(v) = a.get(k).filter(|v| !v.is_null()) { body[k] = v.clone(); } }
+            let gid = uuid(a, "server_id")?;
+            let r = api(c, Method::POST, &format!("/guilds/{gid}/roles"), Some(body)).await?;
+            let r = match a.get("mentionable").and_then(Value::as_bool) {
+                Some(m) => api(c, Method::PATCH, &format!("/guilds/{gid}/roles/{}", r["id"].as_str().unwrap_or_default()), Some(json!({ "mentionable": m }))).await?,
+                None => r,
+            };
+            role(&r)
+        }
+        "update_role" => {
+            let (gid, rid) = (uuid(a, "server_id")?, uuid(a, "role_id")?);
+            let mut body = Map::new();
+            for k in ["name", "color", "hoist", "mentionable", "position"] { if let Some(v) = a.get(k) { body.insert(k.into(), v.clone()); } }
+            let (add, remove) = (perm_bits(a, "add_permissions")?, perm_bits(a, "remove_permissions")?);
+            if a.get("permissions").is_some() || add | remove != 0 {
+                let base = if a.get("permissions").is_some() { perm_bits(a, "permissions")? } else {
+                    let roles = api(c, Method::GET, &format!("/guilds/{gid}/roles"), None).await?;
+                    let r = roles.as_array().and_then(|l| l.iter().find(|r| r["id"].as_str() == Some(rid.as_str())).cloned()).ok_or("Role not found")?;
+                    r["permissions"].as_i64().unwrap_or(0) as u64
+                };
+                body.insert("permissions".into(), json!(((base | add) & !remove) as i64));
+            }
+            if body.is_empty() { return Err("Give something to change".into()); }
+            role(&api(c, Method::PATCH, &format!("/guilds/{gid}/roles/{rid}"), Some(Value::Object(body))).await?)
+        }
+        "delete_role" => { api(c, Method::DELETE, &format!("/guilds/{}/roles/{}", uuid(a, "server_id")?, uuid(a, "role_id")?), None).await?; json!("Deleted.") }
+        "update_member" => {
+            let (gid, member) = (uuid(a, "server_id")?, uuid(a, "user_id")?);
+            let mut body = Map::new();
+            if let Some(n) = a.get("nickname") { body.insert("nickname".into(), n.clone()); }
+            for k in ["mute", "deaf"] { if let Some(v) = a.get(k).filter(|v| !v.is_null()) { body.insert(k.into(), v.clone()); } }
+            if a.get("voice_channel_id").is_some() { body.insert("channel_id".into(), json!(opt_uuid(a, "voice_channel_id")?)); }
+            let ids = |k: &str| -> Result<Vec<String>, String> { a.get(k).and_then(Value::as_array).map(|l| l.iter().map(|v| uuid(&json!({ "id": v }), "id")).collect()).unwrap_or(Ok(vec![])) };
+            let (add, remove) = (ids("add_roles")?, ids("remove_roles")?);
+            if !add.is_empty() || !remove.is_empty() {
+                let all = api(c, Method::GET, &format!("/guilds/{gid}/members"), None).await?;
+                let m = all.as_array().and_then(|l| l.iter().find(|m| m["user_id"].as_str() == Some(member.as_str())).cloned()).ok_or("Not a member of that server")?;
+                let mut roles: Vec<String> = m["roles"].as_array().cloned().unwrap_or_default().iter().filter_map(|r| r.as_str().map(str::to_string)).filter(|r| !remove.contains(r)).collect();
+                for r in add { if !roles.contains(&r) { roles.push(r); } }
+                body.insert("roles".into(), json!(roles));
+            }
+            if body.is_empty() { return Err("Give something to change".into()); }
+            pick(&api(c, Method::PATCH, &format!("/guilds/{gid}/members/{member}"), Some(Value::Object(body))).await?, &["user_id", "nickname", "roles", "mute", "deaf"])
+        }
+        "update_server" => {
+            let mut body = Map::new();
+            for k in ["name", "description", "verification_level", "default_notifications", "explicit_filter", "afk_timeout", "invites_paused"] {
+                if let Some(v) = a.get(k).filter(|v| !v.is_null()) { body.insert(k.into(), v.clone()); }
+            }
+            for k in ["system_channel_id", "rules_channel_id", "afk_channel_id"] { if a.get(k).is_some() { body.insert(k.into(), json!(opt_uuid(a, k)?)); } }
+            if body.is_empty() { return Err("Give something to change".into()); }
+            pick(&api(c, Method::PATCH, &format!("/guilds/{}", uuid(a, "server_id")?), Some(Value::Object(body))).await?, &["id", "name", "description", "verification_level", "default_notifications", "explicit_filter", "system_channel_id", "rules_channel_id", "afk_channel_id", "afk_timeout", "invites_paused"])
         }
         "pin_message" | "unpin_message" => {
             let m = if name == "pin_message" { Method::PUT } else { Method::DELETE };
@@ -344,5 +512,10 @@ mod tests {
         assert_eq!(enc("party blob:0190"), "party%20blob%3A0190");
         assert_eq!(qs(&[("q", Some("a b&c".into())), ("x", None)]), "?q=a+b%26c");
         assert!(uuid(&json!({ "id": "nope" }), "id").is_err());
+        let bits = perm_bits(&json!({ "p": ["send_messages", "CONNECT"] }), "p").unwrap();
+        assert_eq!(bits, crate::perms::SEND_MESSAGES | crate::perms::CONNECT);
+        assert_eq!(perm_names(bits), vec!["SEND_MESSAGES", "CONNECT"]);
+        assert!(perm_bits(&json!({ "p": ["FLY"] }), "p").is_err());
+        assert_eq!(perm_bits(&json!({}), "p").unwrap(), 0);
     }
 }

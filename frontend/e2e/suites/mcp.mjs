@@ -3,7 +3,7 @@
 // tools per scope, REST scope enforcement for MCP tokens, unreads, and disconnecting from Settings.
 import { chromium } from 'playwright'
 import crypto from 'node:crypto'
-import { API_ORIGIN, WEB, reg, call, ok, finish, openDms } from '../lib.mjs'
+import { API_ORIGIN, WEB, reg, call, callS, ok, finish, openDms } from '../lib.mjs'
 
 const a = await reg('mcpuser'), b = await reg('mcpbuddy')
 await openDms(a, b)
@@ -140,6 +140,45 @@ x = await tool('get_unreads'); ok('…and the channel is no longer unread', !x.j
 x = await tool('create_channel', { server_id: g.id, name: `bot-made-${S}`, topic: 'made over MCP' }); ok('create_channel', x.json?.name === `bot-made-${S}`, x.text)
 x = await tool('pin_message', { channel_id: tc, message_id: sent }); ok('pin_message', !x.error, x.text)
 x = await tool('list_pins', { channel_id: tc }); ok('list_pins shows it', x.json?.pins.some((m) => m.id === sent), x.text.slice(0, 200))
+console.log('-- server admin')
+const vc = (await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'Hangout', kind: 'voice' })).id
+const cat = (await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'Zone', kind: 'category' })).id
+await call(a.token, 'PUT', `/channels/${cat}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1 << 6 })
+const inCat = (await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'zoned', kind: 'text', parent_id: cat })).id
+x = await tool('set_channel_permissions', { channel_id: tc, target_id: g.id, allow: ['SEND_MESSAGES', 'add_reactions'], deny: ['MENTION_EVERYONE'] })
+ok('set_channel_permissions takes names', !x.error && x.json?.allow.includes('SEND_MESSAGES') && x.json?.deny.includes('MENTION_EVERYONE'), x.text)
+x = await tool('set_channel_permissions', { channel_id: tc, target_id: g.id, allow: ['ATTACH_FILES'], reset: ['MENTION_EVERYONE'] })
+ok('  and merges with what is there', x.json?.allow.includes('SEND_MESSAGES') && x.json?.allow.includes('ATTACH_FILES') && x.json?.deny.length === 0, x.text)
+let ch = await call(a.token, 'GET', `/channels/${tc}`)
+ok('  (the app sees it)', ch.overwrites.some((o) => o.id === g.id && (o.allow & (1 << 11)) && (o.allow & (1 << 15))))
+x = await tool('get_channel_permissions', { channel_id: tc }); ok('get_channel_permissions reads it back by name', x.json?.overrides.some((o) => o.everyone && o.allow.includes('ATTACH_FILES')), x.text)
+x = await tool('set_channel_permissions', { channel_id: vc, target_id: g.id, allow: ['CONNECT', 'SPEAK'] }); ok('voice permissions too', !x.error, x.text)
+x = await tool('set_channel_permissions', { channel_id: tc, target_id: g.id, allow: ['FLY'] }); ok('an unknown permission is refused', x.error && x.text.includes('FLY'), x.text)
+x = await tool('set_channel_permissions', { channel_id: inCat, target_id: b.user.id, target_kind: 'member', allow: ['SEND_MESSAGES'] })
+ch = await call(a.token, 'GET', `/channels/${inCat}`)
+ok("on a synced channel the category's overrides are kept", !x.error && ch.overwrites.some((o) => o.id === g.id && (o.deny & (1 << 6))) && ch.overwrites.some((o) => o.id === b.user.id), JSON.stringify(ch.overwrites))
+x = await tool('sync_channel_permissions', { channel_id: inCat }); ok('sync_channel_permissions', !x.error && (await call(a.token, 'GET', `/channels/${inCat}`)).permissions_synced === true, x.text)
+x = await tool('remove_channel_permissions', { channel_id: vc, target_id: g.id }); ok('remove_channel_permissions', !x.error && !(await call(a.token, 'GET', `/channels/${vc}`)).overwrites.some((o) => o.id === g.id), x.text)
+x = await tool('create_role', { server_id: g.id, name: 'Helpers', color: '#33aa55', permissions: ['MANAGE_MESSAGES'], hoist: true, mentionable: true })
+const helpers = x.json?.id
+ok('create_role', !!helpers && x.json.permissions.includes('MANAGE_MESSAGES') && x.json.mentionable === true, x.text)
+x = await tool('update_role', { server_id: g.id, role_id: helpers, name: 'Helpers+', add_permissions: ['KICK_MEMBERS'], remove_permissions: ['MANAGE_MESSAGES'] })
+ok('update_role adds and removes permissions', x.json?.name === 'Helpers+' && x.json.permissions.includes('KICK_MEMBERS') && !x.json.permissions.includes('MANAGE_MESSAGES'), x.text)
+x = await tool('list_roles', { server_id: g.id }); ok('list_roles shows it, with @everyone', x.json?.roles.some((r) => r.id === helpers) && x.json.roles.some((r) => r.id === g.id), x.text.slice(0, 200))
+x = await tool('update_member', { server_id: g.id, user_id: b.user.id, nickname: 'Bobby', add_roles: [helpers] })
+let mb = (await call(a.token, 'GET', `/guilds/${g.id}/members`)).find((m) => m.user_id === b.user.id)
+ok('update_member sets a nickname and gives a role', !x.error && mb.nickname === 'Bobby' && mb.roles.includes(helpers), x.text)
+x = await tool('update_member', { server_id: g.id, user_id: b.user.id, nickname: null, remove_roles: [helpers] })
+mb = (await call(a.token, 'GET', `/guilds/${g.id}/members`)).find((m) => m.user_id === b.user.id)
+ok('  and takes them away', !x.error && !mb.nickname && !mb.roles.includes(helpers), x.text)
+x = await tool('delete_role', { server_id: g.id, role_id: helpers }); ok('delete_role', !x.error && !(await call(a.token, 'GET', `/guilds/${g.id}/roles`)).some((r) => r.id === helpers), x.text)
+x = await tool('update_channel', { channel_id: inCat, category_id: null, slowmode_seconds: 30, nsfw: true })
+ok('update_channel moves, slows and age-gates', x.json?.parent_id == null && x.json.rate_limit_per_user === 30 && x.json.nsfw === true, x.text)
+x = await tool('update_server', { server_id: g.id, description: 'Run by a bot', system_channel_id: tc, verification_level: 1 })
+ok('update_server', x.json?.description === 'Run by a bot' && x.json.system_channel_id === tc && x.json.verification_level === 1, x.text)
+await call(a.token, 'PATCH', `/guilds/${g.id}`, { verification_level: 0 })
+x = await tool('delete_channel', { channel_id: inCat }); ok('delete_channel', !x.error && (await callS(a.token, 'GET', `/channels/${inCat}`)).status === 404, x.text)
+ok('deleting the server or giving it away is not reachable with an MCP token', [await rest('DELETE', `/guilds/${g.id}`), await rest('POST', `/guilds/${g.id}/owner`, { user_id: b.user.id })].every(refused))
 x = await tool('timeout_member', { server_id: g.id, user_id: b.user.id, minutes: 5 }); ok('timeout_member', !x.error, x.text)
 x = await tool('create_invite', { server_id: g.id }); ok('create_invite returns a link', x.json?.url?.includes('/invite/'), x.text)
 x = await tool('kick_member', { server_id: g.id, user_id: b.user.id }); ok('kick_member', !x.error && !(await call(a.token, 'GET', `/guilds/${g.id}/members`)).some((m) => m.user_id === b.user.id), x.text)

@@ -62,6 +62,7 @@ const REST_ALLOW: &[(&str, &str, &str)] = &[
     ("GET", "/guilds/*", "mcp.read"),
     ("GET", "/guilds/*/channels", "mcp.read"),
     ("GET", "/guilds/*/members", "mcp.read"),
+    ("GET", "/guilds/*/roles", "mcp.read"),
     ("GET", "/channels/*", "mcp.read"),
     ("GET", "/channels/*/messages", "mcp.read"),
     ("GET", "/channels/*/pins", "mcp.read"),
@@ -90,6 +91,16 @@ const REST_ALLOW: &[(&str, &str, &str)] = &[
     ("PUT", "/guilds/*/bans/*", "mcp.manage"),
     ("DELETE", "/guilds/*/bans/*", "mcp.manage"),
     ("POST", "/guilds/*/invites", "mcp.manage"),
+    ("DELETE", "/channels/*", "mcp.manage"),
+    ("PUT", "/channels/*/permissions/*", "mcp.manage"),
+    ("DELETE", "/channels/*/permissions/*", "mcp.manage"),
+    ("POST", "/channels/*/permissions-sync", "mcp.manage"),
+    ("POST", "/guilds/*/roles", "mcp.manage"),
+    ("PATCH", "/guilds/*/roles/*", "mcp.manage"),
+    ("DELETE", "/guilds/*/roles/*", "mcp.manage"),
+    ("PATCH", "/guilds/*/members/*", "mcp.manage"),
+    // Server settings; deleting the server or handing it to someone else stays in the app.
+    ("PATCH", "/guilds/*", "mcp.manage"),
     ("POST", "/admin/announce", "mcp.admin"),
 ];
 
@@ -266,10 +277,12 @@ mod tests {
         let all = s(&["mcp.read", "mcp.notifications", "mcp.send", "mcp.manage"]);
         assert!(rest_allows(&all, &Method::PUT, &format!("/channels/{id}/messages/{id}/reactions/%F0%9F%91%8D")));
         assert!(rest_allows(&all, &Method::DELETE, &format!("/guilds/{id}/members/{id}")));
+        assert!(rest_allows(&all, &Method::PUT, &format!("/channels/{id}/permissions/{id}")) && rest_allows(&all, &Method::PATCH, &format!("/guilds/{id}/roles/{id}")));
         // Never, whatever the scopes: account, sessions, admin, OAuth, MCP consent and grants.
         for (m, p) in [(Method::PATCH, "/users/@me"), (Method::DELETE, "/users/@me"), (Method::POST, "/users/@me/password"), (Method::GET, "/users/@me/sessions"),
                        (Method::GET, "/admin/users"), (Method::POST, "/applications"), (Method::POST, "/mcp/consent"), (Method::GET, "/users/@me/mcp-grants"),
-                       (Method::DELETE, &format!("/users/@me/mcp-grants/{id}")), (Method::DELETE, "/guilds/@me/members/@me"), (Method::DELETE, &format!("/guilds/{id}"))] {
+                       (Method::DELETE, &format!("/users/@me/mcp-grants/{id}")), (Method::DELETE, "/guilds/@me/members/@me"), (Method::DELETE, &format!("/guilds/{id}")),
+                       (Method::POST, &format!("/guilds/{id}/owner"))] {
             assert!(!rest_allows(&all, &m, p), "{m} {p}");
         }
         // The admin scope reaches the announcement endpoint and nothing else of the admin API.
