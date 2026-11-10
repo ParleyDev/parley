@@ -1,9 +1,10 @@
 import type { DmChannel, User, UserNote } from './types'
+import { globalName } from './names'
 
 export const isGroup = (d: Pick<DmChannel, 'kind'>) => d.kind === 'group'
 
 /** A user's name as you see it: your friend nickname for them if you set one. */
-export const nameOf = (u: Pick<User, 'id' | 'display_name'>, notes?: Record<string, UserNote>) => notes?.[u.id]?.nickname || u.display_name
+export const nameOf = (u: Pick<User, 'id' | 'display_name'> & Partial<Pick<User, 'username'>>, notes?: Record<string, UserNote>) => notes?.[u.id]?.nickname || globalName(u)
 
 /** Display name for a DM row/header: the other person, or the group's name (custom or the members' names). Friend nicknames apply. */
 export function dmName(d: DmChannel, users: Record<string, User>, notes?: Record<string, UserNote>): string {

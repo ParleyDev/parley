@@ -164,7 +164,7 @@ async fn read_options(state: &AppState, c: &Channel, cmd: &Command, given_all: &
             _ => {
                 let id: Uuid = v.as_str().and_then(|s| s.trim().parse().ok()).ok_or_else(|| AppError::BadRequest(format!("{name} must be an id")))?;
                 let found: Option<(String,)> = match kind {
-                    6 => sqlx::query_as("SELECT display_name FROM users WHERE id = $1").bind(id).fetch_optional(&state.db).await?,
+                    6 => sqlx::query_as(&format!("SELECT {} FROM users u LEFT JOIN guild_members m ON m.user_id = u.id AND m.guild_id = $2 WHERE u.id = $1", crate::routes::users::SHOWN_NAME_SQL)).bind(id).bind(c.guild_id).fetch_optional(&state.db).await?,
                     7 => sqlx::query_as("SELECT name FROM channels WHERE id = $1 AND guild_id IS NOT DISTINCT FROM $2").bind(id).bind(c.guild_id).fetch_optional(&state.db).await?,
                     _ => sqlx::query_as("SELECT name FROM roles WHERE id = $1 AND guild_id IS NOT DISTINCT FROM $2").bind(id).bind(c.guild_id).fetch_optional(&state.db).await?,
                 };

@@ -3,6 +3,7 @@ import { getPrefs, subscribePrefs } from './prefs'
 import { voice } from './voice'
 import { useStore } from '../store'
 import { t } from './i18n'
+import { nameIn } from './names'
 
 /**
  * Clips: while Clips are on and you're in a call, a few overlapping recorders keep the last stretch ready; saving
@@ -107,7 +108,7 @@ export async function saveClip(): Promise<Clip | null> {
   })
   if (rings.length === 0) startOne()
   const v = videoSource()
-  const who = v ? (st.users[v.who]?.display_name ?? '') : ''
+  const who = v ? nameIn(st, v.who, st.myVoiceChannelId ? st.channels[st.myVoiceChannelId]?.guild_id : undefined) : ''
   const channel = st.myVoiceChannelId ? st.channels[st.myVoiceChannelId]?.name ?? '' : ''
   const clip: Clip = { id: crypto.randomUUID(), at: now, seconds: Math.round((now - pick.startedAt) / 1000), mime: blob.type, blob, title: who ? t('{name} in {channel}', { name: who, channel }) : channel }
   await db.put(clip)

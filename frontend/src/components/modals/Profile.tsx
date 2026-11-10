@@ -17,6 +17,8 @@ import SelfDock from '../SelfDock'
 import { usePhone } from '../../lib/swipe'
 import { useSwipeDismiss } from '../../lib/sheetDrag'
 import { useT } from '../../lib/i18n'
+import { globalName, shownName, useNameIn } from '../../lib/names'
+import { nameOf } from '../../lib/dm'
 
 const GAP = 8
 const PAD = 8
@@ -98,6 +100,8 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
   const isMe = me?.id === userId
   const mutual = user.mutual_guilds ?? []
   const friends = user.mutual_friends ?? []
+  const label = useNameIn(userId, inGuild) || globalName(user)
+  const notes = useStore((s) => s.notes)
   const wishlist = user.panels?.wishlist ?? []
   const games = user.panels?.games ?? []
   // On a phone it is a sheet that slides up to near the top (Discord mobile) and back down when closed or swiped down
@@ -154,7 +158,7 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
         {tab === 'friends' && (friends.length === 0 ? empty(t('No mutual friends')) : (
           <ul className="space-y-0.5" data-mutual-friends>
             {friends.map((f) => (
-              <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className={row}><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={40} /><span className="truncate font-semibold">{f.display_name}</span></button></li>
+              <li key={f.id}><button onClick={() => { onClose(); openModal({ kind: 'profile', userId: f.id }) }} className={row}><Avatar user={{ id: f.id, display_name: f.display_name, avatar_url: f.avatar_url }} size={40} /><span className="truncate font-semibold">{nameOf(f, notes)}</span></button></li>
             ))}
           </ul>
         ))}
@@ -186,7 +190,7 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
     const framed = !!user.profile_frame
     return (
       <div className={`fixed inset-0 z-50 flex flex-col justify-end transition-colors duration-200 ${framed ? 'pt-[calc(env(safe-area-inset-top)+48px)]' : 'pt-[calc(env(safe-area-inset-top)+8px)]'} ${closing ? 'bg-black/0' : 'bg-black/60'}`} onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
-        <div ref={sheetRef} {...swipe} className="sheet-rise relative w-full flex-1 min-h-0 [clip-path:inset(-200px_0_0_0)]" role="dialog" aria-modal aria-label={user.display_name} data-full-profile data-profile-sheet data-closing={closing || undefined}>
+        <div ref={sheetRef} {...swipe} className="sheet-rise relative w-full flex-1 min-h-0 [clip-path:inset(-200px_0_0_0)]" role="dialog" aria-modal aria-label={label} data-full-profile data-profile-sheet data-closing={closing || undefined}>
           <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" sheet after={tabBlock} focusNote={focusNote} />
           {close}
           {isMe && <SelfDock onClose={onClose} />}
@@ -197,7 +201,7 @@ function FullProfile({ user, inGuild, onClose, initialTab, focusNote }: { user: 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad" onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
       <div className="flex-1 min-w-0 h-full flex items-center justify-center wide:px-10 wide:py-14" onMouseDown={(e) => { if (e.target === e.currentTarget) dismiss() }}>
-        <div className="pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1]" role="dialog" aria-modal aria-label={user.display_name} data-full-profile>
+        <div className="pop relative w-full max-w-[1000px] h-[min(820px,100%)] rounded-2xl border border-line bg-bg-1 shadow-2xl flex gap-8 p-10 text-[#dbdee1]" role="dialog" aria-modal aria-label={label} data-full-profile>
           {close}
           <div className="w-[400px] shrink-0 h-full" data-full-profile-card>
             <ProfilePopout user={user} guildId={inGuild} onClose={onClose} variant="full" focusNote={focusNote} />
@@ -219,6 +223,7 @@ function ActivityEmpty({ userId }: { userId: string }) {
 
 /** "User Reviews": short notes other users leave on a profile. One per author; only the author can remove theirs. On your own profile you read them but cannot post. */
 function Reviews({ userId, light, isMe }: { userId: string; light: boolean; isMe: boolean }) {
+  const notes = useStore((s) => s.notes)
   const t = useT()
   const me = useStore((s) => s.user)
   const pushToast = useStore((s) => s.pushToast)
@@ -256,7 +261,7 @@ function Reviews({ userId, light, isMe }: { userId: string; light: boolean; isMe
           <li key={r.id} className="flex gap-2" data-review>
             <Avatar user={{ id: r.author_id, display_name: r.author_display_name, avatar_url: r.author_avatar_url }} size={24} />
             <div className="min-w-0 flex-1">
-              <div className="flex items-baseline gap-2"><span className="font-semibold truncate">{r.author_display_name}</span><span className="text-[11px] opacity-70 shrink-0">{formatTime(r.created_at)}</span>
+              <div className="flex items-baseline gap-2"><span className="font-semibold truncate">{shownName({ display_name: r.author_display_name, username: r.author_username }, null, notes[r.author_id]?.nickname)}</span><span className="text-[11px] opacity-70 shrink-0">{formatTime(r.created_at)}</span>
                 {r.author_id === me?.id && <button onClick={() => remove(r)} className="ml-auto text-[11px] opacity-70 hover:opacity-100 hover:underline" title={t('Delete review')}>{t('Delete')}</button>}
               </div>
               <div className="msg-content whitespace-pre-wrap break-words leading-snug">{renderMarkdown(r.content, { blocks: false })}</div>

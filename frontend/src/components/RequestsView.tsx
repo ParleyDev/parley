@@ -7,6 +7,7 @@ import type { DmChannel } from '../lib/types'
 import Avatar from './Avatar'
 import { MobileBack } from './HeaderBits'
 import { useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 /** Inbox for DMs from people you are not friends with: accept, ignore, or block. */
 export default function RequestsView() {
@@ -14,12 +15,13 @@ export default function RequestsView() {
   const list = useStore(useShallow(messageRequests))
   const spam = useStore(useShallow(spamRequests))
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const navigate = useNavigate()
   const Row = ({ d, isSpam }: { d: DmChannel; isSpam?: boolean }) => { const u = d.recipients[0] ? { ...d.recipients[0], ...users[d.recipients[0].id] } : undefined; return (
     <div className="flex items-center gap-3 rounded-xl border border-line bg-bg-1 px-3 py-2.5" data-request={d.id} data-request-spam={isSpam ? '1' : undefined}>
       {u && <Avatar user={u} size={40} />}
       <button type="button" onClick={() => navigate(`/channels/@me/${d.id}`)} className="min-w-0 flex-1 text-left">
-        <div className="font-semibold truncate">{u?.display_name ?? t('Unknown')}</div>
+        <div className="font-semibold truncate">{(u && shownName(u, null, notes[u.id]?.nickname)) || t('Unknown')}</div>
         <div className="text-xs text-text-2 truncate" data-spam-reasons={isSpam ? (d.spam_reasons ?? []).join('|') : undefined}>{isSpam ? t('Looks like spam: {reason}', { reason: (d.spam_reasons?.length ? d.spam_reasons.join('; ') : t('a suspicious link')).toLowerCase() }) : t('@{user} wants to send you a message', { user: String(u?.username) })} · {t('click to read it')}</div>
       </button>
       <RequestActions dm={d} compact />
@@ -47,10 +49,11 @@ function RequestActions({ dm, compact }: { dm: DmChannel; compact?: boolean }) {
   const t = useT()
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
+  const notes = useStore((s) => s.notes)
   const navigate = useNavigate()
   const other = dm.recipients[0]
   const act = async (fn: () => Promise<unknown>, after?: () => void) => { try { await fn(); after?.() } catch (e) { pushToast((e as Error).message, 'error') } }
-  const block = () => other && openModal({ kind: 'confirm', title: t('Block {name}', { name: other.display_name }), body: t('They will not be able to message you or send you friend requests.'), danger: true, confirmLabel: t('Block'),
+  const block = () => other && openModal({ kind: 'confirm', title: t('Block {name}', { name: shownName(other, null, notes[other.id]?.nickname) }), body: t('They will not be able to message you or send you friend requests.'), danger: true, confirmLabel: t('Block'),
     action: () => act(() => api.put(`/users/@me/relationships/${other.id}/block`).then(() => api.post(`/channels/${dm.id}/request`, { action: 'ignore' })), () => navigate('/channels/@me')) })
   const cls = compact ? 'h-8 w-8 rounded-full flex items-center justify-center' : 'btn-ghost py-1.5'
   return (
@@ -65,13 +68,14 @@ function RequestActions({ dm, compact }: { dm: DmChannel; compact?: boolean }) {
 /** Shown in place of the composer while a DM is still a message request. */
 export function RequestBanner({ dm }: { dm: DmChannel }) {
   const t = useT()
+  const notes = useStore((s) => s.notes)
   const other = dm.recipients[0]
   return (
     <div className="shrink-0 m-4 mt-0 rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 flex items-center gap-3 flex-wrap" data-request-banner>
       {/* A real basis, so on a phone the buttons wrap under the text instead of squeezing it to a word per line. */}
       <div className="min-w-0 flex-1 basis-60">
         <div className="font-semibold">{dm.request_state === 'spam' ? t('Filtered as spam') : t('Message request')}</div>
-        <div className="text-sm text-text-2">{dm.request_state === 'spam' ? t('This looked like spam (a link from a new or unknown account). Be careful with links. Accept only if you know them.') : t('{name} is not on your friends list. Accept to reply and move this chat to your DMs, or ignore it.', { name: other?.display_name ?? t('This person') })}</div>
+        <div className="text-sm text-text-2">{dm.request_state === 'spam' ? t('This looked like spam (a link from a new or unknown account). Be careful with links. Accept only if you know them.') : t('{name} is not on your friends list. Accept to reply and move this chat to your DMs, or ignore it.', { name: (other && shownName(other, null, notes[other.id]?.nickname)) || t('This person') })}</div>
       </div>
       <RequestActions dm={dm} />
     </div>

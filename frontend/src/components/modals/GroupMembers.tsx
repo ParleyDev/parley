@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../../lib/api'
-import { isGroup } from '../../lib/dm'
+import { isGroup, nameOf } from '../../lib/dm'
 import type { DmChannel } from '../../lib/types'
 import { useStore } from '../../store'
 import Avatar from '../Avatar'
@@ -22,6 +22,7 @@ export default function GroupMembersModal({ onClose, channelId, userIds }: { onC
   const dm = useStore((s) => (channelId ? s.dms[channelId] : undefined))
   const upsertChannel = useStore((s) => s.upsertChannel)
   const pushToast = useStore((s) => s.pushToast)
+  const notes = useStore((s) => s.notes)
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const [picked, setPicked] = useState<string[]>(userIds ?? [])
@@ -67,7 +68,7 @@ export default function GroupMembersModal({ onClose, channelId, userIds }: { onC
             const on = picked.includes(u.id)
             return (
               <button key={u.id} type="button" onClick={() => toggle(u.id)} aria-pressed={on} data-friend-option={u.username} className="w-full flex items-center gap-3 rounded-md px-2 py-2 hover:bg-bg-3 text-left">
-                <Avatar user={u} size={32} presence /><span className="font-semibold truncate">{u.display_name}</span><span className="text-sm text-text-2 truncate">@{u.username}</span>
+                <Avatar user={u} size={32} presence /><span className="font-semibold truncate">{nameOf(u, notes)}</span><span className="text-sm text-text-2 truncate">@{u.username}</span>
                 <span className={`ml-auto h-5 w-5 shrink-0 rounded border flex items-center justify-center ${on ? 'bg-accent border-accent text-white' : 'border-text-2'}`}>{on && <Check size={14} />}</span>
               </button>
             )

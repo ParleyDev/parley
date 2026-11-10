@@ -11,6 +11,7 @@ import { myGuildPerms, useStore } from '../../store'
 import Avatar from '../Avatar'
 import Modal from '../Modal'
 import { useT } from '../../lib/i18n'
+import { globalName } from '../../lib/names'
 
 /** Edit Server Profile: a nickname, avatar, banner, pronouns and bio that only show in this server. */
 export default function ServerProfileModal({ onClose, guildId }: { onClose: () => void; guildId: string }) {
@@ -52,10 +53,10 @@ export default function ServerProfileModal({ onClose, guildId }: { onClose: () =
           <div className="relative isolate h-20 bg-cover bg-center" style={{ background: bgUrl(banner ?? me.banner_url) ? `center/cover ${bgUrl(banner ?? me.banner_url)}` : 'var(--color-accent, #5865f2)' }} data-sp-banner-preview={banner ?? ''}><CropLayer url={banner ?? me.banner_url} /></div>
           <div className="-mt-8 flex items-end gap-3 px-4 pb-3">
             <span className="rounded-full border-4 border-bg-1"><Avatar user={{ ...me, avatar_url: avatar ?? me.avatar_url }} size={64} /></span>
-            <div className="pb-1"><div className="font-bold">{nickname.trim() || me.display_name}</div><div className="text-xs text-text-2">{pronouns || me.pronouns}</div></div>
+            <div className="pb-1"><div className="font-bold">{nickname.trim() || globalName(me)}</div><div className="text-xs text-text-2">{pronouns || me.pronouns}</div></div>
           </div>
         </div>
-        {canNick && <div><label className="label" htmlFor="sp-nick">{t('Server nickname')}</label><input id="sp-nick" className="input" value={nickname} maxLength={32} onChange={(e) => setNickname(e.target.value)} placeholder={me.display_name} data-sp-nick /></div>}
+        {canNick && <div><label className="label" htmlFor="sp-nick">{t('Server nickname')}</label><input id="sp-nick" className="input" value={nickname} maxLength={32} onChange={(e) => setNickname(e.target.value)} placeholder={globalName(me)} data-sp-nick /></div>}
         <div className="flex items-center gap-2"><span className="label mb-0 flex-1">{t('Server avatar')}</span>{pick('avatar', setAvatar, 'avatar')}{avatar && <button type="button" className="text-text-2 hover:text-danger" title={t('Use main avatar')} onClick={() => setAvatar(null)} data-sp-clear="avatar"><X size={16} /></button>}</div>
         <div className="flex items-center gap-2"><span className="label mb-0 flex-1">{t('Server banner')}</span>{pick('banner', setBanner, 'banner')}{banner && <button type="button" className="text-text-2 hover:text-danger" title={t('Use main banner')} onClick={() => setBanner(null)} data-sp-clear="banner"><X size={16} /></button>}</div>
         <div><label className="label" htmlFor="sp-pronouns">{t('Pronouns')}</label><input id="sp-pronouns" className="input" value={pronouns} maxLength={40} onChange={(e) => setPronouns(e.target.value)} placeholder={me.pronouns || t('Add your pronouns')} data-sp-pronouns /></div>

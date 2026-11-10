@@ -4,20 +4,21 @@ import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import type { Member } from '../../lib/types'
 import { useT, tn } from '../../lib/i18n'
+import { useNameIn } from '../../lib/names'
 
 export const TIMEOUT_OPTIONS: [string, number][] = [['60 seconds', 1], ['5 minutes', 5], ['10 minutes', 10], ['1 hour', 60], ['1 day', 24 * 60], ['1 week', 7 * 24 * 60]]
 
 /** Pick how long a member is timed out for (read-only in this server until it lapses). */
 export default function TimeoutMemberModal({ onClose, guildId, userId }: { onClose: () => void; guildId: string; userId: string }) {
   const guild = useStore((s) => s.guilds[guildId])
-  const member = useStore((s) => s.members[guildId]?.[userId])
   const upsertMember = useStore((s) => s.upsertMember)
   const pushToast = useStore((s) => s.pushToast)
+  const named = useNameIn(userId, guildId)
   const [minutes, setMinutes] = useState(10)
   const [busy, setBusy] = useState(false)
   const t = useT()
   if (!guild) return null
-  const name = member?.nickname || member?.display_name || t('this member')
+  const name = named || t('this member')
 
   const apply = async () => {
     setBusy(true)

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useStore } from '../store'
 import { useT, tn } from '../lib/i18n'
+import { globalName } from '../lib/names'
 
 /** /login/qr/:id: someone scanned a login QR code while signed in here. Approve only if it's you. */
 export default function QrApprovePage() {
@@ -25,7 +26,7 @@ export default function QrApprovePage() {
           : !info ? <p className="mt-3 text-sm text-text-2">{t('Loading…')}</p> : (
             <>
               <h1 className="mt-3 text-lg font-bold">{t('Log in on another device?')}</h1>
-              <p className="mt-1 text-sm text-text-2">{tn('It will be signed in as {name}.', { name: <b>{me?.display_name}</b> })}</p>
+              <p className="mt-1 text-sm text-text-2">{tn('It will be signed in as {name}.', { name: <b>{globalName(me)}</b> })}</p>
               <div className="mt-3 rounded-lg bg-bg-0/60 p-2 text-left text-xs text-text-1"><div className="truncate" title={info.device}>{info.device || t('Unknown browser')}</div><div className="text-text-2">{info.ip} · {new Date(info.created_at).toLocaleTimeString()}</div></div>
               <div className="mt-3 flex items-start gap-2 rounded-lg border border-warn/40 bg-warn/10 p-2 text-left text-xs"><ShieldAlert size={14} className="mt-0.5 shrink-0 text-warn" />{t("Only approve if you're signing in yourself, right now. Never scan a code someone sent you: they would get into your account.")}</div>
               <div className="mt-4 flex gap-2"><button type="button" className="btn-ghost flex-1" onClick={() => act(false)} data-qr-deny>{t("No, that's not me")}</button><button type="button" className="btn-primary flex-1" onClick={() => act(true)} data-qr-yes>{t('Yes, log in')}</button></div>

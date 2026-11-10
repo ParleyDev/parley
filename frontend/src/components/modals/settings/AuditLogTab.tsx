@@ -5,6 +5,7 @@ import { useStore } from '../../../store'
 import { relativeTime } from '../../../lib/ua'
 import { t, useT } from '../../../lib/i18n'
 import Dropdown from '../../Dropdown'
+import { shownName } from '../../../lib/names'
 
 interface Row { id: string; actor_id: string | null; actor_name: string; action: string; target_kind: string; target_id: string | null; target_name: string; details: Record<string, unknown>; created_at: string }
 
@@ -55,7 +56,9 @@ export default function AuditLogTab({ guildId }: { guildId: string }) {
   const [actor, setActor] = useState('')
   const [action, setAction] = useState('')
   const members = useStore((s) => s.members[guildId])
-  const actors = Object.values(members ?? {}).sort((a, b) => (a.nickname || a.display_name).localeCompare(b.nickname || b.display_name))
+  const notes = useStore((s) => s.notes)
+  const name = (m: NonNullable<typeof members>[string]) => shownName(m, m, notes[m.user_id]?.nickname)
+  const actors = Object.values(members ?? {}).sort((a, b) => name(a).localeCompare(name(b)))
   const [rows, setRows] = useState<Row[] | null>(null)
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -79,7 +82,7 @@ export default function AuditLogTab({ guildId }: { guildId: string }) {
         </div>
         <Dropdown className="input w-auto" value={actor} onChange={(e) => setActor(e.target.value)} aria-label={t('Filter by user')} data-audit-filter-user>
           <option value="">{t('All users')}</option>
-          {actors.map((m) => <option key={m.user_id} value={m.user_id}>{m.nickname || m.display_name}</option>)}
+          {actors.map((m) => <option key={m.user_id} value={m.user_id}>{name(m)}</option>)}
         </Dropdown>
         <Dropdown className="input w-auto" value={action} onChange={(e) => setAction(e.target.value)} aria-label={t('Filter by action')} data-audit-filter-action>
           {ACTION_FILTERS.map(([v, label]) => <option key={v} value={v}>{t(label)}</option>)}

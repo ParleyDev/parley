@@ -9,11 +9,13 @@ import type { DmChannel, Invite } from '../../lib/types'
 import Avatar from '../Avatar'
 import { useT } from '../../lib/i18n'
 import Dropdown from '../Dropdown'
+import { nameOf } from '../../lib/dm'
 
 export default function InviteModal({ onClose, guildId }: { onClose: () => void; guildId: string }) {
   const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
   const relationships = useStore((s) => s.relationships)
+  const notes = useStore((s) => s.notes)
   const members = useStore((s) => s.members[guildId])
   const sendMessage = useStore((s) => s.sendMessage)
   const upsertChannel = useStore((s) => s.upsertChannel)
@@ -21,7 +23,7 @@ export default function InviteModal({ onClose, guildId }: { onClose: () => void;
   const [q, setQ] = useState('')
   const [sent, setSent] = useState<Record<string, boolean>>({})
   const [sending, setSending] = useState<string | null>(null)
-  const friends = Object.values(relationships).filter((r) => r.kind === 'friend').map((r) => r.user).filter((u) => !q || u.display_name.toLowerCase().includes(q.toLowerCase()) || u.username.toLowerCase().includes(q.toLowerCase())).sort((a, b) => a.display_name.localeCompare(b.display_name))
+  const friends = Object.values(relationships).filter((r) => r.kind === 'friend').map((r) => r.user).filter((u) => !q || u.display_name.toLowerCase().includes(q.toLowerCase()) || u.username.toLowerCase().includes(q.toLowerCase())).sort((a, b) => nameOf(a, notes).localeCompare(nameOf(b, notes)))
   const [invite, setInvite] = useState<Invite | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -90,7 +92,7 @@ export default function InviteModal({ onClose, guildId }: { onClose: () => void;
             return (
               <div key={u.id} className="flex items-center gap-3 px-3 py-2" data-invite-friend={u.id}>
                 <Avatar user={u} size={32} />
-                <div className="min-w-0 flex-1"><div className="truncate font-medium">{u.display_name}</div><div className="truncate text-xs text-text-2">@{u.username}</div></div>
+                <div className="min-w-0 flex-1"><div className="truncate font-medium">{nameOf(u, notes)}</div><div className="truncate text-xs text-text-2">@{u.username}</div></div>
                 {already ? <span className="text-xs text-text-2">{t('Already a member')}</span>
                   : sent[u.id] ? <span className="flex items-center gap-1 text-xs text-success"><Check size={14} /> {t('Sent')}</span>
                   : <button type="button" className="btn-primary py-1 text-xs" disabled={!link || sending === u.id} onClick={() => sendTo(u.id)} data-invite-send><Send size={13} /> {t('Invite')}</button>}

@@ -171,7 +171,7 @@ pub async fn readable(state: &AppState, content: &str, guild_id: Option<Uuid>) -
     let (users, roles, chans) = (ids(1), ids(2), ids(3));
     let mut names: HashMap<Uuid, String> = HashMap::new();
     if !users.is_empty() {
-        let rows: Vec<(Uuid, String)> = sqlx::query_as("SELECT u.id, COALESCE(NULLIF(m.nickname, ''), u.display_name) FROM users u LEFT JOIN guild_members m ON m.user_id = u.id AND m.guild_id = $2 WHERE u.id = ANY($1)")
+        let rows: Vec<(Uuid, String)> = sqlx::query_as(&format!("SELECT u.id, {} FROM users u LEFT JOIN guild_members m ON m.user_id = u.id AND m.guild_id = $2 WHERE u.id = ANY($1)", crate::routes::users::SHOWN_NAME_SQL))
             .bind(&users).bind(guild_id).fetch_all(&state.db).await.unwrap_or_default();
         names.extend(rows);
     }
@@ -266,6 +266,19 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
                 if wants.map(|x| x.0).unwrap_or(false) { mail_to.push(u); }
             }
         }
+        // The author as each recipient sees them: server nickname, else that recipient's friend nickname, else display name
+        // (webhook posts keep the name they were sent with). One lookup for the author, one for everyone's friend nicknames.
+        let (base, server_nick) = if msg.webhook_id.is_some() { (msg.author.display_name.clone(), true) } else {
+            let r: Option<(Option<String>, String)> = sqlx::query_as("SELECT NULLIF(m.nickname, ''), COALESCE(NULLIF(u.display_name, ''), u.username) FROM users u LEFT JOIN guild_members m ON m.user_id = u.id AND m.guild_id = $2 WHERE u.id = $1")
+                .bind(msg.author.id).bind(channel.guild_id).fetch_optional(&state.db).await.unwrap_or(None);
+            match r { Some((Some(n), _)) => (n, true), Some((None, d)) => (d, false), None => (msg.author.display_name.clone(), false) }
+        };
+        let friend: HashMap<Uuid, String> = if server_nick { HashMap::new() } else {
+            let all: Vec<Uuid> = targets.iter().chain(&mail_to).copied().collect();
+            sqlx::query_as("SELECT user_id, nickname FROM user_notes WHERE target_id = $1 AND user_id = ANY($2) AND nickname <> ''")
+                .bind(msg.author.id).bind(&all).fetch_all(&state.db).await.unwrap_or_default().into_iter().collect()
+        };
+        let author_for = |u: Uuid| friend.get(&u).cloned().unwrap_or_else(|| base.clone());
         if !mail_to.is_empty() {
             let where_ = if let Some(gid) = channel.guild_id {
                 let g: Option<(String,)> = sqlx::query_as("SELECT name FROM guilds WHERE id = $1").bind(gid).fetch_optional(&state.db).await.unwrap_or(None);
@@ -274,8 +287,9 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
             let snippet: String = if msg.content.is_empty() { "(an attachment)".into() } else { readable(&state, &msg.content, channel.guild_id).await.chars().take(200).collect() };
             for u in &mail_to {
                 if let Ok((email,)) = sqlx::query_as::<_, (String,)>("UPDATE users SET notify_mailed_at = now() WHERE id = $1 RETURNING email").bind(u).fetch_one(&state.db).await {
-                    let body = format!("{} sent you a message in {}:\n\n{}\n\nOpen Parley: {}\n\nYou get at most one of these an hour while you are away. Turn them off in Settings → Notifications.", msg.author.display_name, where_, snippet, state.config.app_url);
-                    let _ = crate::mail::send(&state, &email, &format!("New message from {}", msg.author.display_name), &body).await;
+                    let author = author_for(*u);
+                    let body = format!("{} sent you a message in {}:\n\n{}\n\nOpen Parley: {}\n\nYou get at most one of these an hour while you are away. Turn them off in Settings → Notifications.", author, where_, snippet, state.config.app_url);
+                    let _ = crate::mail::send(&state, &email, &format!("New message from {author}"), &body).await;
                 }
             }
         }
@@ -284,8 +298,13 @@ pub fn after_message(state: AppState, msg: crate::models::Message, channel: crat
             let g: Option<(String,)> = sqlx::query_as("SELECT name FROM guilds WHERE id = $1").bind(gid).fetch_optional(&state.db).await.unwrap_or(None);
             format!("#{} · {}", channel.name, g.map(|x| x.0).unwrap_or_default())
         } else { "Direct message".to_string() };
-        let title = format!("{} ({})", msg.author.display_name, where_);
         let body = if msg.content.is_empty() { if msg.attachments.is_empty() { "Sent a message".to_string() } else { "Sent an attachment".to_string() } } else { readable(&state, &msg.content, channel.guild_id).await.chars().take(160).collect() };
-        notify(&state, &targets, &title, &body, json!({ "channel_id": channel.id, "guild_id": channel.guild_id, "message_id": msg.id })).await;
+        let data = json!({ "channel_id": channel.id, "guild_id": channel.guild_id, "message_id": msg.id });
+        // One push batch per distinct author name (most recipients share the base one).
+        let mut by_name: HashMap<String, Vec<Uuid>> = HashMap::new();
+        for u in &targets { by_name.entry(author_for(*u)).or_default().push(*u); }
+        for (name, users) in by_name {
+            notify(&state, &users, &format!("{name} ({where_})"), &body, data.clone()).await;
+        }
     });
 }

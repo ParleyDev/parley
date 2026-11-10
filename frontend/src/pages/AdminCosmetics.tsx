@@ -12,6 +12,7 @@ import { NameplateVideo, nameplateSrc } from '../components/Nameplate'
 import { FrameRoom, type FrameDraft } from '../components/ProfileFrame'
 import { decorationUrl } from '../lib/decorations'
 import type { EffectItem, FrameItem } from '../lib/assetCatalog'
+import { globalName } from '../lib/names'
 
 type Source = 'builtin' | 'folder' | 'custom'
 interface EffectLayer { file: string; start_ms: number; duration_ms: number; loop: boolean; loop_delay_ms: number; z_index: number; random_variants?: string[] }
@@ -226,7 +227,7 @@ function LivePreview({ avatar, plate, card, frame, effect, replay }: {
       <div className="h-20 bg-gradient-to-br from-accent/70 to-accent/20" />
       <div className="px-4 pb-4">
         <div className="-mt-10 mb-2 w-fit rounded-full bg-bg-2 p-1">{av(72)}</div>
-        <div className="truncate text-lg font-bold">{me?.display_name}</div>
+        <div className="truncate text-lg font-bold">{globalName(me)}</div>
         <div className="truncate text-xs text-text-2">@{me?.username}</div>
         <div className="mt-3 space-y-1.5 rounded-lg bg-bg-3/60 p-3"><div className="h-2 w-3/4 rounded bg-text-2/30" /><div className="h-2 w-1/2 rounded bg-text-2/30" /></div>
       </div>
@@ -241,7 +242,7 @@ function LivePreview({ avatar, plate, card, frame, effect, replay }: {
         <div className={`relative isolate flex h-12 items-center gap-2.5 overflow-hidden rounded-lg bg-bg-2 px-2.5 ${plate?.className ?? ''}`} style={{ width: CARD_WIDTH, ...plate?.style }} data-cosmetic-preview-row>
           {plate?.media}
           {av(32)}
-          <span className="relative truncate text-sm font-semibold" style={plate ? { textShadow: '0 1px 2px rgba(0,0,0,.8)' } : undefined}>{plate?.label ?? me?.display_name}</span>
+          <span className="relative truncate text-sm font-semibold" style={plate ? { textShadow: '0 1px 2px rgba(0,0,0,.8)' } : undefined}>{plate?.label ?? globalName(me)}</span>
         </div>
       )}
     </div>

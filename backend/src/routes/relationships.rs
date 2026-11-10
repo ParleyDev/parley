@@ -200,7 +200,7 @@ async fn push_friend_request(state: &AppState, from: Uuid, target: Uuid) {
     if crate::ws::bus::online_users(&state.db).await.contains(&target) { return }
     let ignored: Option<(bool,)> = sqlx::query_as("SELECT true FROM users WHERE id = $1 AND $2 = ANY(ignored_users)").bind(target).bind(from).fetch_optional(&state.db).await.ok().flatten();
     if ignored.is_some() { return }
-    let name: String = sqlx::query_as::<_, (String,)>("SELECT display_name FROM users WHERE id = $1").bind(from).fetch_optional(&state.db).await.ok().flatten().map(|r| r.0).unwrap_or_default();
+    let name = crate::routes::users::shown_name(&state.db, from, None, Some(target)).await;
     crate::push::notify(state, &[target], "Friend request", &format!("{name} sent you a friend request"), json!({ "kind": "friend_request", "user_id": from })).await;
 }
 
@@ -211,7 +211,7 @@ async fn mail_friend_request(state: &AppState, from: Uuid, target: Uuid) {
     let row: Option<(String, bool)> = sqlx::query_as("SELECT email, COALESCE((notif_prefs->>'email_friend_requests')::bool, true) FROM users WHERE id = $1").bind(target).fetch_optional(&state.db).await.unwrap_or(None);
     let Some((email, wants)) = row else { return };
     if !wants { return }
-    let name = crate::audit::username(state, from).await;
+    let name = crate::routes::users::shown_name(&state.db, from, None, Some(target)).await;
     let _ = crate::mail::send(&state, &email, &format!("{name} sent you a friend request"), &format!("{name} wants to be your friend on Parley. Accept or ignore it from the Friends page: {}/channels/@me\n\nTurn these mails off in Settings → Notifications.", state.config.app_url)).await;
 }
 

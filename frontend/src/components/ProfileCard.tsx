@@ -15,6 +15,7 @@ import { useStore } from '../store'
 import { frameClass } from '../lib/cosmetics'
 import ProfileEffect from './ProfileEffect'
 import { FrameRoom } from './ProfileFrame'
+import { globalName } from '../lib/names'
 
 export interface ProfileLike extends Pick<User, 'id' | 'username' | 'display_name' | 'avatar_url' | 'bio' | 'created_at'> {
   banner_url?: string | null
@@ -207,10 +208,10 @@ export default function ProfileCard({ user, actions, children, nameOverride, com
         </div>
       ) : (
       <div className="px-4 pt-2 shrink-0">
-        <h2 className="text-xl font-bold leading-tight truncate flex items-center gap-1.5"><span className={look.className} style={nameCssFinal} data-profile-name>{nameOverride ?? user.display_name}</span><ClanTag userId={user.id} tag={user.clan_tag} /><Badges badges={user.badges} className="ml-1" /></h2>
+        <h2 className="text-xl font-bold leading-tight truncate flex items-center gap-1.5"><span className={look.className} style={nameCssFinal} data-profile-name>{nameOverride || globalName(user)}</span><ClanTag userId={user.id} tag={user.clan_tag} /><Badges badges={user.badges} className="ml-1" /></h2>
         {user.custom_status && <p className="text-sm truncate mb-0.5" data-custom-status>{user.custom_status}</p>}
         <p className="text-sm truncate" style={{ color: dim }}>
-          {nameOverride && nameOverride !== user.display_name ? <span className="text-[15px]" style={{ color: text }}>{user.display_name} · </span> : null}
+          {nameOverride && nameOverride !== globalName(user) ? <span className="text-[15px]" style={{ color: text }}>{globalName(user)} · </span> : null}
           <span>{user.username}</span>{user.pronouns ? <span> · {user.pronouns}</span> : null}
         </p>
       </div>

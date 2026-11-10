@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 /**
  * While you're in a call but looking at something else, the call's video floats in a corner (like Discord's popout):
@@ -14,6 +15,8 @@ export default function MiniCall() {
   const remote = useStore((s) => s.remoteMedia)
   const watching = useStore((s) => s.watching)
   const users = useStore((s) => s.users)
+  const members = useStore((s) => { const g = s.myVoiceChannelId ? s.channels[s.myVoiceChannelId]?.guild_id : undefined; return g ? s.members[g] : undefined })
+  const notes = useStore((s) => s.notes)
   const voiceStates = useStore((s) => s.voiceStates)
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -33,7 +36,7 @@ export default function MiniCall() {
     <div className="pop fixed bottom-24 right-4 z-40 w-72 phone:w-56 overflow-hidden rounded-xl border border-line bg-bg-0 shadow-2xl" data-mini-call={pick?.[0]}>
       <button type="button" onClick={back} className="group relative block aspect-video w-full" title={t('Back to the call')}>
         <video ref={ref} autoPlay playsInline muted className="h-full w-full object-contain bg-black" />
-        <span className="absolute left-2 bottom-2 rounded-md bg-bg-0/80 px-1.5 py-0.5 text-xs font-semibold">{users[pick![0]]?.display_name ?? t('Call')} · {channel.name || t('Call')}</span>
+        <span className="absolute left-2 bottom-2 rounded-md bg-bg-0/80 px-1.5 py-0.5 text-xs font-semibold">{shownName(users[pick![0]] ?? members?.[pick![0]], members?.[pick![0]], notes[pick![0]]?.nickname) || t('Call')} · {channel.name || t('Call')}</span>
       </button>
       <div className="absolute right-1.5 top-1.5 flex gap-1">
         {'pictureInPictureEnabled' in document && <button type="button" onClick={pip} className="rounded-md bg-bg-0/80 p-1 text-text-1 hover:text-text-0" title={t('Pop out (picture-in-picture)')} aria-label={t('Picture-in-picture')} data-mini-pip><PictureInPicture2 size={14} /></button>}

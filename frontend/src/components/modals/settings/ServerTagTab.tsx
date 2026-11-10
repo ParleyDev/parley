@@ -6,6 +6,7 @@ import type { Guild } from '../../../lib/types'
 import { useStore } from '../../../store'
 import Avatar from '../../Avatar'
 import { TagPill } from '../../Flair'
+import { nameIn } from '../../../lib/names'
 
 /** Badges to pick from (the first row shows until "Show all badges"). */
 const BADGES = ['🌿', '⚔️', '💖', '🔥', '💧', '💀', '🌙', '⚡', '💎', '🍄', '⭐', '👑', '🎮', '🎵', '🎨', '🐸', '🐱', '🦊', '🐉', '🌸', '🍀', '☕', '🚀', '🛡️', '🏆', '🎯', '🧪', '📚', '🌈', '❄️']
@@ -19,6 +20,7 @@ export default function ServerTagTab({ guildId, onTab }: { guildId: string; onTa
   const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
   const me = useStore((s) => s.user)
+  const myName = useStore((s) => (s.user ? nameIn(s, s.user.id, guildId) : ''))
   const upsertGuild = useStore((s) => s.upsertGuild)
   const pushToast = useStore((s) => s.pushToast)
   const [tag, setTag] = useState(guild?.tag ?? '')
@@ -115,7 +117,7 @@ export default function ServerTagTab({ guildId, onTab }: { guildId: string; onTa
               {m.me ? <Avatar user={me} size={40} /> : <span className="h-10 w-10 shrink-0 rounded-full" style={{ background: m.hue }} />}
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5 text-[15px] font-semibold" style={m.me ? undefined : { color: m.hue }}>
-                  <span className="truncate">{m.me ? me.display_name : m.name}</span>
+                  <span className="truncate">{m.me ? myName : m.name}</span>
                   {m.me && tag.length >= 2 && <TagPill tag={tag} badge={badge} color={color || null} />}
                 </div>
                 <div className="text-sm text-text-1">{m.text}</div>

@@ -22,6 +22,7 @@ import ImagePicker from '../modals/ImagePicker'
 import NameStyleModal from '../modals/NameStyle'
 import DecorationGallery from '../modals/settings/DecorationGallery'
 import Dropdown from '../Dropdown'
+import { globalName } from '../../lib/names'
 
 const MAX_BIO = 400
 
@@ -238,7 +239,7 @@ export default function ProfileEditor() {
         <div>
           <Heading>{t('Display Name Style')}</Heading>
           <button type="button" onClick={() => setStyleOpen(true)} className="w-full h-14 rounded-xl bg-black/25 border-2 border-transparent hover:border-white/40 px-3 text-left text-xl font-bold truncate" data-name-style-open data-name-style-card>
-            <span className={look.className} style={look.style} data-name-preview>{d.display || user.display_name}</span>
+            <span className={look.className} style={look.style} data-name-preview>{d.display || globalName(user)}</span>
           </button>
         </div>
         <div>
@@ -320,7 +321,7 @@ export default function ProfileEditor() {
         </div>
       )}
       <input ref={bannerRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/apng" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload('banner', f); e.target.value = '' }} data-banner-input />
-      {styleOpen && <NameStyleModal onClose={() => setStyleOpen(false)} name={d.display || user.display_name} value={d.nameStyle} onApply={(v) => { set('nameStyle')(v); setStyleOpen(false) }} />}
+      {styleOpen && <NameStyleModal onClose={() => setStyleOpen(false)} name={d.display || globalName(user)} value={d.nameStyle} onApply={(v) => { set('nameStyle')(v); setStyleOpen(false) }} />}
     </div>
   )
 }

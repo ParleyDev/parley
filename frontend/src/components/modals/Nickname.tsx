@@ -4,19 +4,20 @@ import { api } from '../../lib/api'
 import type { Member } from '../../lib/types'
 import { useStore } from '../../store'
 import { useT } from '../../lib/i18n'
+import { useNameIn } from '../../lib/names'
 
 /** Change Nickname: yours (Change Nickname) or a member's (Manage Nicknames), only in this server. Empty resets it. */
 export default function NicknameModal({ onClose, guildId, userId }: { onClose: () => void; guildId: string; userId: string }) {
   const t = useT()
   const me = useStore((s) => s.user)
   const member = useStore((s) => s.members[guildId]?.[userId])
-  const user = useStore((s) => s.users[userId])
+  const named = useNameIn(userId)
   const upsertMember = useStore((s) => s.upsertMember)
   const pushToast = useStore((s) => s.pushToast)
   const [nick, setNick] = useState(member?.nickname ?? '')
   const [busy, setBusy] = useState(false)
   const self = me?.id === userId
-  const name = user?.display_name ?? member?.display_name ?? t('this member')
+  const name = named || t('this member')
   const save = async (value: string) => {
     setBusy(true)
     try {

@@ -278,7 +278,7 @@ async fn add_recipient(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     if added > 0 {
         state.hub.emit_users(vec![target], "CHANNEL_CREATE", json!(dm_view(&state.db, id, target).await?));
         broadcast_group(&state, id).await?;
-        let name = crate::audit::username(&state, target).await;
+        let name = crate::routes::users::shown_name(&state.db, target, None, None).await;
         system_message(&state, id, uid, "recipient_add", &format!("added {name} to the group."), vec![target]).await?;
     }
     Ok(StatusCode::NO_CONTENT)
@@ -308,7 +308,7 @@ async fn remove_recipient(State(state): State<AppState>, AuthUser(uid): AuthUser
     if target == uid {
         system_message(&state, id, uid, "recipient_leave", "left the group.", vec![]).await?;
     } else {
-        let name = crate::audit::username(&state, target).await;
+        let name = crate::routes::users::shown_name(&state.db, target, None, None).await;
         system_message(&state, id, uid, "recipient_remove", &format!("removed {name} from the group."), vec![target]).await?;
     }
     Ok(StatusCode::NO_CONTENT)

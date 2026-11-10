@@ -7,8 +7,9 @@ import type { Message } from '../../lib/types'
 import { myChannelPerms, useStore } from '../../store'
 import Avatar from '../Avatar'
 import Modal from '../Modal'
-import { dmName, isGroup } from '../../lib/dm'
+import { dmName, isGroup, nameOf } from '../../lib/dm'
 import { useT } from '../../lib/i18n'
+import { globalName, useNameIn } from '../../lib/names'
 
 interface Target { id: string; label: string; sub: string; kind: 'channel' | 'dm'; avatar?: { id: string; display_name: string; avatar_url: string | null } }
 
@@ -19,12 +20,14 @@ export default function ForwardModal({ onClose, message: m }: { onClose: () => v
   const [picked, setPicked] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const pushToast = useStore((s) => s.pushToast)
+  const author = useNameIn(m.author.id, useStore((s) => s.channels[m.channel_id]?.guild_id))
   // Select stable slices, then derive the list in useMemo (a selector returning fresh objects would re-render forever).
   const guildOrder = useStore((s) => s.guildOrder)
   const guilds = useStore((s) => s.guilds)
   const channels = useStore((s) => s.channels)
   const dms = useStore((s) => s.dms)
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const targets = useMemo((): Target[] => {
     const s = useStore.getState()
     const out: Target[] = []
@@ -34,13 +37,13 @@ export default function ForwardModal({ onClose, message: m }: { onClose: () => v
         .forEach((c) => out.push({ id: c.id, label: c.name, sub: g.name, kind: 'channel' }))
     }
     for (const d of Object.values(dms)) {
-      if (isGroup(d)) { out.push({ id: d.id, label: dmName(d, users), sub: t('{n} members', { n: d.recipients.length + 1 }), kind: 'channel' }); continue }
+      if (isGroup(d)) { out.push({ id: d.id, label: dmName(d, users, notes), sub: t('{n} members', { n: d.recipients.length + 1 }), kind: 'channel' }); continue }
       const r = d.recipients[0]; if (!r) continue
       const u = users[r.id] ?? r
-      out.push({ id: d.id, label: u.display_name, sub: `@${u.username}`, kind: 'dm', avatar: { id: u.id, display_name: u.display_name, avatar_url: u.avatar_url } })
+      out.push({ id: d.id, label: nameOf(u, notes), sub: `@${u.username}`, kind: 'dm', avatar: { id: u.id, display_name: u.display_name, avatar_url: u.avatar_url } })
     }
     return out
-  }, [guildOrder, guilds, channels, dms, users, t])
+  }, [guildOrder, guilds, channels, dms, users, notes, t])
   const needle = q.trim().toLowerCase()
   const list = useMemo(() => targets.filter((tg) => tg.id !== m.channel_id && (!needle || tg.label.toLowerCase().includes(needle) || tg.sub.toLowerCase().includes(needle))), [targets, needle, m.channel_id])
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
@@ -75,7 +78,7 @@ export default function ForwardModal({ onClose, message: m }: { onClose: () => v
         </div>
         <div className="mt-3 rounded-lg border border-line bg-bg-0/60 p-3" data-forward-preview>
           <div className="flex items-center gap-1.5 text-xs text-text-2 mb-1"><Forward size={14} /> {t('Forwarded')}</div>
-          <div className="flex items-center gap-2 mb-1"><Avatar user={m.author} size={20} /><span className="text-sm font-semibold">{m.author.display_name}</span></div>
+          <div className="flex items-center gap-2 mb-1"><Avatar user={m.author} size={20} /><span className="text-sm font-semibold">{author || globalName(m.author)}</span></div>
           {m.content && <div className="msg-content text-sm whitespace-pre-wrap break-words line-clamp-4">{renderMarkdown(m.content)}</div>}
           {m.sticker && <img src={m.sticker.url} alt={m.sticker.name} className="h-20 w-20 object-contain mt-1" />}
           {m.attachments?.length > 0 && <div className="mt-1 text-xs text-text-2">📎 {m.attachments.map((a) => a.filename.replace(/^SPOILER_/, '')).join(', ')}</div>}

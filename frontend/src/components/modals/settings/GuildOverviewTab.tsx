@@ -6,6 +6,7 @@ import { useStore } from '../../../store'
 import type { Guild } from '../../../lib/types'
 import { useT } from '../../../lib/i18n'
 import Dropdown from '../../Dropdown'
+import { nameIn } from '../../../lib/names'
 
 export default function GuildOverviewTab({ guildId }: { guildId: string }) {
   const guild = useStore((s) => s.guilds[guildId])
@@ -13,6 +14,7 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
   const me = useStore((s) => s.user)
   const openModal = useStore((s) => s.openModal)
   const ownerMember = useStore((s) => (guild ? s.members[guildId]?.[guild.owner_id] : undefined))
+  const ownerName = useStore((s) => (guild ? nameIn(s, guild.owner_id, guildId) : ''))
   const pushToast = useStore((s) => s.pushToast)
   const [name, setName] = useState(guild?.name ?? '')
   const [icon, setIcon] = useState<string | null>(guild?.icon_url ?? null)
@@ -70,7 +72,7 @@ export default function GuildOverviewTab({ guildId }: { guildId: string }) {
       <div className="rounded-xl bg-bg-0/50 border border-line p-4">
         <div className="flex items-center gap-2 font-semibold"><Crown size={16} className="text-warn" /> {t('Server owner')}</div>
         <p className="text-sm text-text-2 mt-1">
-          {guild.owner_id === me?.id ? t('You own this server. Transferring ownership hands over full control, including deleting the server.') : t('This server is owned by {name}.', { name: ownerMember ? (ownerMember.nickname || ownerMember.display_name) : t('another member') })}
+          {guild.owner_id === me?.id ? t('You own this server. Transferring ownership hands over full control, including deleting the server.') : t('This server is owned by {name}.', { name: ownerMember ? ownerName : t('another member') })}
         </p>
         {guild.owner_id === me?.id && <button type="button" className="btn-ghost mt-3" onClick={() => openModal({ kind: 'transferOwnership', guildId })}><Crown size={16} /> {t('Transfer Ownership')}</button>}
       </div>

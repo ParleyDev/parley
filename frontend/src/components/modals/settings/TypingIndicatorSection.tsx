@@ -7,6 +7,7 @@ import { useStore } from '../../../store'
 import Emoji from '../../Emoji'
 import ExpressionPicker from '../../ExpressionPicker'
 import { surprise, TYPING_ANIMATIONS, TypingGlyphs } from '../../TypingIndicator'
+import { globalName } from '../../../lib/names'
 
 type Draft = { emojis: string[]; animation: TypingAnimation; text: string }
 /** The saved typing indicator as three emoji slots, an animation and text. */
@@ -43,7 +44,7 @@ export default function TypingIndicatorSection() {
         <p className="text-sm text-text-2">{t('When you are typing, others see this instead of the default typing indicator.')}</p>
       </div>
       <div className="flex h-20 items-center justify-center gap-2 rounded-xl border border-line bg-bg-0/40 text-sm text-text-1" data-typing-preview>
-        <TypingGlyphs style={d} size={18} /><span className="truncate"><b>{user.display_name}</b> {text}</span>
+        <TypingGlyphs style={d} size={18} /><span className="truncate"><b>{globalName(user)}</b> {text}</span>
       </div>
       <div>
         <div className="label">{t('Emojis')}</div>

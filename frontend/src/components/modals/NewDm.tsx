@@ -7,12 +7,14 @@ import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import type { DmChannel, User } from '../../lib/types'
 import { useT } from '../../lib/i18n'
+import { nameOf } from '../../lib/dm'
 
 export default function NewDmModal({ onClose }: { onClose: () => void }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState<User[]>([])
   const upsertChannel = useStore((s) => s.upsertChannel)
   const pushToast = useStore((s) => s.pushToast)
+  const notes = useStore((s) => s.notes)
   const openModal = useStore((s) => s.openModal)
   const navigate = useNavigate()
   const t = useT()
@@ -37,7 +39,7 @@ export default function NewDmModal({ onClose }: { onClose: () => void }) {
       <div className="mt-3 max-h-72 overflow-y-auto -mx-2">
         {results.map((u) => (
           <button key={u.id} onClick={() => open(u)} className="w-full flex items-center gap-3 rounded-md px-2 py-2 hover:bg-bg-3 text-left">
-            <Avatar user={u} size={32} presence /><span className="font-semibold">{u.display_name}</span><span className="text-sm text-text-2">@{u.username}</span>
+            <Avatar user={u} size={32} presence /><span className="font-semibold">{nameOf(u, notes)}</span><span className="text-sm text-text-2">@{u.username}</span>
           </button>
         ))}
         {q.trim() && results.length === 0 && <p className="px-2 py-4 text-sm text-text-2">{t('No users found.')}</p>}

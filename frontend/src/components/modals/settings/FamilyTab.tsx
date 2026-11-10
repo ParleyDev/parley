@@ -6,6 +6,7 @@ import type { User } from '../../../lib/types'
 import { useStore } from '../../../store'
 import Avatar from '../../Avatar'
 import { publicOrigin } from '../../InviteCard'
+import { nameOf } from '../../../lib/dm'
 
 interface Overview { role: 'teen' | 'adult' | 'unknown'; parents: User[]; teens: User[] }
 interface Summary {
@@ -44,7 +45,8 @@ export default function FamilyTab() {
 }
 
 function Person({ u, children }: { u: User; children?: React.ReactNode }) {
-  return <div className="flex items-center gap-2 min-w-0"><Avatar user={u} size={28} /><span className="truncate text-sm font-medium">{u.display_name}</span><span className="ms-auto flex items-center gap-2">{children}</span></div>
+  const notes = useStore((s) => s.notes)
+  return <div className="flex items-center gap-2 min-w-0"><Avatar user={u} size={28} /><span className="truncate text-sm font-medium">{nameOf(u, notes)}</span><span className="ms-auto flex items-center gap-2">{children}</span></div>
 }
 
 function TeenSide({ o, onUnlink }: { o: Overview; onUnlink: (u: User) => void }) {

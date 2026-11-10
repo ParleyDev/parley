@@ -15,6 +15,7 @@ import { useT } from '../lib/i18n'
 import { isPhone } from '../lib/swipe'
 import { APP_VERSION } from '../lib/brand'
 import { desktop, desktopBridge } from '../lib/desktop'
+import { globalName } from '../lib/names'
 
 /**
  * The self card at the bottom of the sidebar, Discord-style: a floating rounded panel tinted
@@ -48,7 +49,7 @@ export default function UserPanel() {
         <button onClick={() => (isPhone() ? openModal({ kind: 'profile', userId: user.id }) : setOpen((o) => !o))} className="relative z-[1] flex items-center gap-2 min-w-0 flex-1 rounded-lg pl-1 pr-1 py-1 hover:bg-white/10 text-left" data-panel-self data-motion-row>
           <span className="rounded-full ring-2 ring-black/20"><Avatar user={user} size={40} presence /></span>
           <div className="min-w-0 flex-1">
-            <div className="text-[16px] font-bold truncate leading-5"><StyledName userId={user.id}>{user.display_name}</StyledName></div>
+            <div className="text-[16px] font-bold truncate leading-5"><StyledName userId={user.id}>{globalName(user)}</StyledName></div>
             <div className="text-[13px] text-text-1 truncate leading-4" data-panel-status>{user.custom_status || statusLabel}</div>
           </div>
         </button>

@@ -15,6 +15,7 @@ import type { DmChannel } from '../lib/types'
 import Avatar from './Avatar'
 import StyledName from './StyledName'
 import { useT } from '../lib/i18n'
+import { globalName } from '../lib/names'
 
 export default function DmSidebar() {
   const t = useT()
@@ -118,7 +119,7 @@ export default function DmSidebar() {
           </span>
         ) : other ? (
           <span className="min-w-0 flex-1 leading-tight">
-            <StyledName userId={other.id} className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{other.display_name}</StyledName>
+            <StyledName userId={other.id} className={`block truncate text-[15px] ${unread ? 'font-semibold' : ''}`}>{globalName(other)}</StyledName>
             {other.custom_status && <span className="block truncate text-xs text-text-2" data-dm-status>{other.custom_status}</span>}
           </span>
         ) : <span className="truncate text-[15px]">{t('Unknown')}</span>}

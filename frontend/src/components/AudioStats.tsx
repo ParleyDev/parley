@@ -3,6 +3,7 @@ import { voice } from '../lib/voice'
 import { useStore } from '../store'
 import type { AudioStat } from '../lib/audioProfile'
 import { useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 const fmt = (v: number | null, unit: string) => (v == null ? '—' : `${v}${unit}`)
 
@@ -10,6 +11,9 @@ const fmt = (v: number | null, unit: string) => (v == null ? '—' : `${v}${unit
 /** `inline`: inside another panel (the voice details' Debug section) instead of its own popover. */
 export default function AudioStats({ onClose, inline }: { onClose?: () => void; inline?: boolean }) {
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
+  // The call's server, if any: people show under their nickname there.
+  const members = useStore((s) => { const g = s.myVoiceChannelId ? s.channels[s.myVoiceChannelId]?.guild_id : undefined; return g ? s.members[g] : undefined })
   const [rows, setRows] = useState<AudioStat[] | null>(null)
   const t = useT()
   const p = voice.audioProfile
@@ -33,7 +37,7 @@ export default function AudioStats({ onClose, inline }: { onClose?: () => void; 
         <div className="space-y-2">
           {rows?.map((r) => (
             <div key={r.userId} className="rounded-lg bg-bg-1 px-2 py-1.5" data-audio-stat={r.userId}>
-              <div className="flex items-center justify-between font-semibold"><span className="truncate">{users[r.userId]?.display_name ?? t('Participant')}</span><span className="text-text-2 font-normal" data-audio-stat-codec>{r.codec}</span></div>
+              <div className="flex items-center justify-between font-semibold"><span className="truncate">{shownName(users[r.userId] ?? members?.[r.userId], members?.[r.userId], notes[r.userId]?.nickname) || t('Participant')}</span><span className="text-text-2 font-normal" data-audio-stat-codec>{r.codec}</span></div>
               <div className="mt-1 grid grid-cols-3 gap-x-2 gap-y-0.5 tabular-nums text-text-1">
                 <span title={t('Received audio bitrate')}>in {fmt(r.inKbps == null ? null : Math.round(r.inKbps), ' kbps')}</span>
                 <span title={t('Sent audio bitrate')}>out {fmt(r.outKbps == null ? null : Math.round(r.outKbps), ' kbps')}</span>

@@ -2,6 +2,7 @@ import { Lock, LockOpen } from 'lucide-react'
 import { useState } from 'react'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 /**
  * The lock on an end-to-end encrypted call. While you're in it, clicking shows the safety code: everyone in the call
@@ -13,6 +14,8 @@ export default function CallLock({ channelId, compact }: { channelId: string; co
   const e2ee = useStore((s) => s.callE2ee)
   const voiceStates = useStore((s) => s.voiceStates)
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
+  const members = useStore((s) => { const g = s.channels[channelId]?.guild_id; return g ? s.members[g] : undefined })
   const me = useStore((s) => s.user?.id)
   const [open, setOpen] = useState(false)
   const t = useT()
@@ -36,7 +39,7 @@ export default function CallLock({ channelId, compact }: { channelId: string; co
                 <div className="mt-3 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Safety code')}</div>
                 <div className="mt-1 whitespace-nowrap font-mono text-[15px] tracking-wide text-text-0" data-safety-code>{e2ee.code}</div>
                 <p className="mt-1 text-xs text-text-2">{t('Everyone in the call should see the same code. If yours differs from someone else\'s, the call may be intercepted. It changes when people join or leave.')}</p>
-                {waiting.length > 0 && <p className="mt-2 flex items-center gap-1.5 text-xs text-warn" data-call-lock-waiting><LockOpen size={12} /> {t('Exchanging keys with {names}…', { names: waiting.map((id) => users[id]?.display_name ?? t('someone')).join(', ') })}</p>}
+                {waiting.length > 0 && <p className="mt-2 flex items-center gap-1.5 text-xs text-warn" data-call-lock-waiting><LockOpen size={12} /> {t('Exchanging keys with {names}…', { names: waiting.map((id) => shownName(users[id] ?? members?.[id], members?.[id], notes[id]?.nickname) || t('someone')).join(', ') })}</p>}
               </>
             ) : <p className="mt-2 text-xs text-text-2">{t('Join the call to see its safety code.')}</p>}
           </div>

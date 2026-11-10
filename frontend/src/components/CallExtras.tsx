@@ -12,6 +12,7 @@ import { useStore } from '../store'
 import { useT } from '../lib/i18n'
 import { ControlButton } from './CallControls'
 import Emoji from './Emoji'
+import { shownName } from '../lib/names'
 
 /* ---- floating emoji reactions in calls ---- */
 
@@ -66,7 +67,9 @@ export function useStreamViewers(streamerId: string, channelId: string | null) {
   const t = useT()
   const ids = useStore(useShallow((s) => Object.values(s.voiceStates).filter((v) => v.channel_id === channelId && v.user_id !== streamerId && v.watching?.includes(streamerId)).map((v) => v.user_id)))
   const users = useStore((s) => s.users)
-  return useMemo(() => ids.map((id) => users[id]?.display_name ?? t('Someone')), [ids, users, t])
+  const members = useStore((s) => { const g = channelId ? s.channels[channelId]?.guild_id : undefined; return g ? s.members[g] : undefined })
+  const notes = useStore((s) => s.notes)
+  return useMemo(() => ids.map((id) => shownName(users[id] ?? members?.[id], members?.[id], notes[id]?.nickname) || t('Someone')), [ids, users, members, notes, t])
 }
 
 /** Eye + count on a screen-share tile; hover lists the viewers. */
@@ -110,6 +113,7 @@ export function InviteToVoice({ channelId, guildId }: { channelId: string; guild
   const [sent, setSent] = useState<Record<string, true>>({})
   const me = useStore((s) => s.user?.id)
   const members = useStore((s) => s.members[guildId])
+  const notes = useStore((s) => s.notes)
   const online = useStore((s) => s.online)
   const relationships = useStore((s) => s.relationships)
   const voiceStates = useStore((s) => s.voiceStates)
@@ -117,8 +121,8 @@ export function InviteToVoice({ channelId, guildId }: { channelId: string; guild
   useEffect(() => { if (open && !members) void useStore.getState().loadMembers(guildId) }, [open, members, guildId])
   const picks = useMemo(() => Object.values(members ?? {})
     .filter((m) => m.user_id !== me && online[m.user_id] && voiceStates[m.user_id]?.channel_id !== channelId)
-    .sort((a, b) => Number(relationships[b.user_id]?.kind === 'friend') - Number(relationships[a.user_id]?.kind === 'friend') || (a.nickname || a.display_name).localeCompare(b.nickname || b.display_name))
-    .slice(0, 12), [members, me, online, voiceStates, channelId, relationships])
+    .sort((a, b) => Number(relationships[b.user_id]?.kind === 'friend') - Number(relationships[a.user_id]?.kind === 'friend') || shownName(a, a, notes[a.user_id]?.nickname).localeCompare(shownName(b, b, notes[b.user_id]?.nickname)))
+    .slice(0, 12), [members, me, online, voiceStates, channelId, relationships, notes])
   const invite = async (uid: string) => {
     try { await api.post(`/channels/${channelId}/voice-invite`, { user_id: uid }); setSent((x) => ({ ...x, [uid]: true })) } catch (e) { pushToast((e as Error).message, 'error') }
   }
@@ -133,7 +137,7 @@ export function InviteToVoice({ channelId, guildId }: { channelId: string; guild
             {!members ? <p className="px-2 py-3 text-sm text-text-2">{t('Loading…')}</p> : picks.length === 0 ? <p className="px-2 py-3 text-sm text-text-2">{t('Nobody else is online right now.')}</p> : picks.map((m) => (
               <div key={m.user_id} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-bg-3" data-voice-invite-row={m.user_id}>
                 <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={24} />
-                <span className="min-w-0 flex-1 truncate text-sm">{m.nickname || m.display_name}{relationships[m.user_id]?.kind === 'friend' && <span className="ml-1 text-[10px] text-text-2">{t('friend')}</span>}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{shownName(m, m, notes[m.user_id]?.nickname)}{relationships[m.user_id]?.kind === 'friend' && <span className="ml-1 text-[10px] text-text-2">{t('friend')}</span>}</span>
                 <button type="button" disabled={!!sent[m.user_id]} onClick={() => invite(m.user_id)} className="rounded-md bg-success px-2 py-0.5 text-xs font-semibold text-black hover:bg-success/80 disabled:bg-bg-4 disabled:text-text-2" data-voice-invite-send={m.user_id}>{sent[m.user_id] ? t('Invited') : t('Invite')}</button>
               </div>
             ))}
@@ -150,6 +154,8 @@ export function VoiceInviteBanner() {
   const inv = useStore((s) => s.voiceInvite)
   const setInv = useStore((s) => s.setVoiceInvite)
   const myChannel = useStore((s) => s.myVoiceChannelId)
+  const inviterMember = useStore((s) => (s.voiceInvite ? s.members[s.voiceInvite.guild_id]?.[s.voiceInvite.from.id] : undefined))
+  const inviterNote = useStore((s) => (s.voiceInvite ? s.notes[s.voiceInvite.from.id]?.nickname : undefined))
   const navigate = useNavigate()
   useEffect(() => { if (!inv) return; const h = setTimeout(() => setInv(null), 60_000); return () => clearTimeout(h) }, [inv, setInv])
   if (!inv || myChannel === inv.channel_id) return null
@@ -158,7 +164,7 @@ export function VoiceInviteBanner() {
     <div className="pop fixed safe-corner z-40 w-72 rounded-xl bg-bg-1 border border-line shadow-2xl p-4" role="alert" data-voice-invite-banner={inv.channel_id}>
       <div className="flex items-center gap-3">
         <Avatar user={inv.from} size={40} />
-        <div className="min-w-0"><div className="font-bold truncate">{inv.from.display_name}</div><div className="text-xs text-text-2 truncate">{t('invited you to 🔊 {name}', { name: inv.channel_name })}</div></div>
+        <div className="min-w-0"><div className="font-bold truncate">{shownName(inv.from, inviterMember, inviterNote)}</div><div className="text-xs text-text-2 truncate">{t('invited you to 🔊 {name}', { name: inv.channel_name })}</div></div>
       </div>
       <div className="mt-3 flex gap-2">
         <button onClick={join} className="flex-1 btn-primary bg-success hover:bg-success/80 text-black py-1.5" data-voice-invite-join><Volume2 size={16} /> {t('Join')}</button>

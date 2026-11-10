@@ -5,6 +5,7 @@ import Avatar from '../components/Avatar'
 import { OVERLAY_CHANNEL, type OverlayMsg } from '../lib/overlay'
 import { useT } from '../lib/i18n'
 import { useStore } from '../store'
+import { shownName } from '../lib/names'
 
 /**
  * The desktop app's in-game overlay window: who's in your call, who's talking (from the main window), and who's
@@ -17,6 +18,8 @@ export default function OverlayPage() {
   const channel = useStore((s) => (myChannel ? s.channels[myChannel] ?? s.dms[myChannel] : undefined))
   const people = useStore(useShallow((s) => Object.values(s.voiceStates).filter((v) => v.channel_id === myChannel)))
   const users = useStore((s) => s.users)
+  const members = useStore((s) => (myChannel ? s.members[s.channels[myChannel]?.guild_id ?? ''] : undefined))
+  const notes = useStore((s) => s.notes)
   const [speaking, setSpeaking] = useState<Record<string, boolean>>({})
   useEffect(() => {
     for (const el of [document.documentElement, document.body]) el.style.background = 'transparent'
@@ -37,7 +40,7 @@ export default function OverlayPage() {
             return (
               <li key={v.user_id} className="flex items-center gap-2 rounded-lg px-1.5 py-1" data-overlay-person={v.user_id} data-speaking={talking ? '1' : '0'}>
                 <span className={`rounded-full ring-2 ${talking ? 'ring-success' : 'ring-transparent'}`}><Avatar user={{ id: v.user_id, display_name: u?.display_name ?? '', avatar_url: u?.avatar_url ?? null }} size={24} /></span>
-                <span className={`truncate text-sm font-semibold ${talking ? 'text-white' : 'text-white/80'}`} style={{ textShadow: '0 1px 2px rgba(0,0,0,.8)' }}>{u?.display_name ?? ''}</span>
+                <span className={`truncate text-sm font-semibold ${talking ? 'text-white' : 'text-white/80'}`} style={{ textShadow: '0 1px 2px rgba(0,0,0,.8)' }}>{shownName(u, members?.[v.user_id], notes[v.user_id]?.nickname)}</span>
                 <span className="ms-auto flex items-center gap-1 text-danger">{(v.self_deaf || v.deaf) && <Headphones size={14} />}{(v.self_mute || v.mute) && <MicOff size={14} />}</span>
               </li>
             )

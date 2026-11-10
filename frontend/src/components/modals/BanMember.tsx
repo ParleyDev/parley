@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import { t, useT, tn } from '../../lib/i18n'
 import Dropdown from '../Dropdown'
+import { useNameIn } from '../../lib/names'
 
 /** How much of a banned member's recent history to delete with them (Discord's choices). */
 const historyOptions = (): { label: string; seconds: number }[] => [
@@ -16,15 +17,14 @@ const historyOptions = (): { label: string; seconds: number }[] => [
 export default function BanMemberModal({ onClose, guildId, userId, kick }: { onClose: () => void; guildId: string; userId: string; kick?: boolean }) {
   const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
-  const member = useStore((s) => s.members[guildId]?.[userId])
-  const user = useStore((s) => s.users[userId])
   const removeMember = useStore((s) => s.removeMember)
   const pushToast = useStore((s) => s.pushToast)
+  const named = useNameIn(userId, guildId)
   const [reason, setReason] = useState('')
   const [history, setHistory] = useState(0)
   const [busy, setBusy] = useState(false)
   if (!guild) return null
-  const name = member?.nickname || member?.display_name || user?.display_name || t('this user')
+  const name = named || t('this user')
 
   const go = async () => {
     setBusy(true)

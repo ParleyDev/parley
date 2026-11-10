@@ -11,6 +11,7 @@ import type { DmChannel, Invite, Member } from '../lib/types'
 import { myChannelPerms, myGuildPerms, useStore } from '../store'
 import type { MenuEntry } from './ContextMenu'
 import { t, useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 export interface MenuUser { id: string; display_name: string; nickname?: string | null; bot?: boolean }
 
@@ -41,6 +42,7 @@ export function useUserMenu(guildId?: string | null) {
   const guild = useStore((s) => (guildId ? s.guilds[guildId] : undefined))
   const roles = useStore((s) => (guildId ? s.roles[guildId] ?? EMPTY_ROLES : EMPTY_ROLES))
   const members = useStore((s) => (guildId ? s.members[guildId] : undefined))
+  const notes = useStore((s) => s.notes)
   const myPerms = useStore((s) => (guildId ? myGuildPerms(s, guildId) : 0))
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
@@ -54,7 +56,7 @@ export function useUserMenu(guildId?: string | null) {
   const act = async (fn: () => Promise<unknown>) => { try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } }
 
   return (u: MenuUser, anchor?: DOMRect | null): MenuEntry[] => {
-    const name = u.nickname || u.display_name
+    const name = shownName(u, { nickname: u.nickname || members?.[u.id]?.nickname }, notes[u.id]?.nickname)
     const isMe = me?.id === u.id
     const rel = relationships[u.id]?.kind
     const ignored = !!me?.ignored_users?.includes(u.id), alerts = !!me?.online_alerts?.includes(u.id)

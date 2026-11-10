@@ -29,6 +29,7 @@ import { ActivityCard } from './SpotifyActivity'
 import ContextMenu, { type MenuEntry, type MenuState } from './ContextMenu'
 import ImageLightbox from './modals/ImageLightbox'
 import { createPortal } from 'react-dom'
+import { globalName, shownName } from '../lib/names'
 
 export const POPOUT_W = 300
 
@@ -129,7 +130,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   })
   const kick = () => { onClose(); openModal({ kind: 'kick', guildId: guildId!, userId: user.id }) }
   const ban = () => { onClose(); openModal({ kind: 'ban', guildId: guildId!, userId: user.id }) }
-  const block = () => { onClose(); openModal({ kind: 'confirm', title: t('Block {name}', { name: user.display_name }), body: t('{name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.', { name: user.display_name }), danger: true, confirmLabel: t('Block'), action: () => act(() => api.put(`/users/@me/relationships/${user.id}/block`)) }) }
+  const block = () => { onClose(); openModal({ kind: 'confirm', title: t('Block {name}', { name: shownName(user, member, friendNote?.nickname) }), body: t('{name} will not be able to message you or send you friend requests. Any friendship or pending request is removed.', { name: shownName(user, member, friendNote?.nickname) }), danger: true, confirmLabel: t('Block'), action: () => act(() => api.put(`/users/@me/relationships/${user.id}/block`)) }) }
 
   const friendBtn = !isMe && (
     rel === 'friend' ? { title: t('Friend'), icon: <UserCheck size={18} />, fn: (e: React.MouseEvent) => { const r = e.currentTarget.getBoundingClientRect(); setFriendMenu((m) => m ? null : { x: r.left, y: r.bottom + 4, items: [{ label: t('Remove Friend'), danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] }) } }
@@ -200,8 +201,8 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
       ...(rel === 'friend' ? [{ label: t('Remove Friend'), danger: true, onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) }] : []),
       rel === 'blocked' ? { label: t('Unblock'), onClick: () => act(() => api.delete(`/users/@me/relationships/${user.id}`)) } : { label: t('Block'), danger: true, onClick: block },
       ...(canKick || canBan ? ['sep' as const] : []),
-      ...(canKick ? [{ label: t('Kick {name}', { name: nickname || user.display_name }), danger: true, icon: <UserMinus size={16} />, onClick: kick }] : []),
-      ...(canBan ? [{ label: t('Ban {name}', { name: nickname || user.display_name }), danger: true, icon: <Gavel size={16} />, onClick: ban }] : []),
+      ...(canKick ? [{ label: t('Kick {name}', { name: shownName(user, member, friendNote?.nickname) }), danger: true, icon: <UserMinus size={16} />, onClick: kick }] : []),
+      ...(canBan ? [{ label: t('Ban {name}', { name: shownName(user, member, friendNote?.nickname) }), danger: true, icon: <Gavel size={16} />, onClick: ban }] : []),
       'sep',
       copyMenu(),
     ]
@@ -250,17 +251,17 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
             ? <button type="button" onClick={() => setViewAvatar(true)} className="block rounded-full cursor-zoom-in" title={t('View Avatar')} aria-label={t('View Avatar')} data-view-avatar><Avatar user={user} size={full ? 120 : 80} presence typingIn={typingIn} animate /></button>
             : <Avatar user={user} size={full ? 120 : 80} presence typingIn={typingIn} animate />}
         </div>
-        {viewAvatar && user.avatar_url && createPortal(<div className="relative z-[160]"><ImageLightbox url={user.avatar_url} name={user.display_name} onClose={() => setViewAvatar(false)} /></div>, document.body)}
+        {viewAvatar && user.avatar_url && createPortal(<div className="relative z-[160]"><ImageLightbox url={user.avatar_url} name={shownName(user, member, friendNote?.nickname)} onClose={() => setViewAvatar(false)} /></div>, document.body)}
       </div>
       <div className={full ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 pt-3 pb-5' : 'px-4 pt-3 pb-4'} data-profile-body>
       <div className={full ? 'space-y-4' : 'space-y-3'} data-profile-main>
         <div>
           <h2 className={`${full ? 'text-[24px] leading-7' : 'text-[20px] leading-6'} font-bold truncate flex items-center gap-1.5`}>
             {nickEdit !== null ? (
-              <input autoFocus value={nickEdit} maxLength={32} onChange={(e) => setNickEdit(e.target.value)} onBlur={saveNick} onKeyDown={(e) => { if (e.key === 'Enter') saveNick(); if (e.key === 'Escape') setNickEdit(null) }} placeholder={user.display_name}
+              <input autoFocus value={nickEdit} maxLength={32} onChange={(e) => setNickEdit(e.target.value)} onBlur={saveNick} onKeyDown={(e) => { if (e.key === 'Enter') saveNick(); if (e.key === 'Escape') setNickEdit(null) }} placeholder={globalName(user)}
                 className="h-7 w-48 rounded-md bg-black/30 border border-white/20 px-2 text-sm font-bold outline-none" data-friend-nick-input />
             ) : (
-              <span className={look.className} style={nameStyle} data-profile-name>{nickname || user.display_name || user.username}</span>
+              <span className={look.className} style={nameStyle} data-profile-name>{shownName(user, member, friendNote?.nickname)}</span>
             )}
             <ClanTag userId={user.id} tag={user.clan_tag} />
             <Badges badges={user.badges} />
@@ -269,7 +270,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           </h2>
           {/* Like Discord: "username • pronouns" wraps so long pronouns drop to their own line. */}
           <p className="text-sm leading-[18px] flex flex-wrap gap-x-1 break-words">
-            {nickname && nickname !== user.display_name ? <><span>{user.display_name}</span><span className="opacity-60">•</span></> : null}
+            {nickname && nickname !== globalName(user) ? <><span>{globalName(user)}</span><span className="opacity-60">•</span></> : null}
             <span className="break-all">{user.username}</span>
             {user.pronouns ? <><span className="opacity-60">•</span><span>{user.pronouns}</span></> : null}
           </p>
@@ -382,7 +383,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
         {!panel && !full && !isMe && rel !== 'blocked' && (
           <div className="relative">
             <input ref={inputRef} value={quick} onChange={(e) => setQuick(e.target.value)} onKeyDown={onQuickKey} disabled={sending} maxLength={2000}
-              placeholder={t('Message @{name}', { name: nickname || user.display_name })} aria-label={t('Message @{name}', { name: user.username })} data-quick-message
+              placeholder={t('Message @{name}', { name: shownName(user, member, friendNote?.nickname) })} aria-label={t('Message @{name}', { name: user.username })} data-quick-message
               className="w-full h-11 rounded-lg pl-3 pr-10 text-sm text-[#dbdee1] placeholder:text-[#87898c] outline-none border border-transparent focus:border-white/15"
               style={{ background: themed ? 'rgba(0,0,0,0.4)' : '#1e1f22' }} />
             <button type="button" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setEmoji((cur) => (cur ? null : r)) }} title={t('Emoji')} className="absolute right-2 top-1/2 -translate-y-1/2 text-[#b5bac1] hover:text-[#dbdee1]"><Smile size={20} /></button>

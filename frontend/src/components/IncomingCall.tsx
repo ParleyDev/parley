@@ -8,6 +8,7 @@ import { useNotifPrefs } from '../lib/notifPrefs'
 import { usePrefs } from '../lib/prefs'
 import Avatar from './Avatar'
 import { useT } from '../lib/i18n'
+import { nameOf } from '../lib/dm'
 
 const RING_MS = 45_000
 
@@ -18,6 +19,7 @@ export default function IncomingCall() {
   const dms = useStore((s) => s.dms)
   const voiceStates = useStore((s) => s.voiceStates)
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const myChannel = useStore((s) => s.myVoiceChannelId)
   const navigate = useNavigate()
   const ignored = useStore((s) => s.callIgnored)
@@ -53,7 +55,7 @@ export default function IncomingCall() {
     <div className="pop fixed safe-corner z-40 w-72 rounded-xl bg-bg-1 border border-line shadow-2xl p-4" role="alert" data-incoming-call>
       <div className="flex items-center gap-3">
         {caller && <Avatar user={caller} size={40} />}
-        <div className="min-w-0"><div className="font-bold truncate">{caller?.display_name ?? t('Someone')}</div><div className="text-xs text-text-2">{t('Incoming call…')}</div></div>
+        <div className="min-w-0"><div className="font-bold truncate">{(caller ? nameOf(caller, notes) : '') || t('Someone')}</div><div className="text-xs text-text-2">{t('Incoming call…')}</div></div>
       </div>
       <div className="mt-3 flex gap-2">
         <button onClick={join} className="flex-1 btn-primary bg-success hover:bg-success/80 text-black py-1.5" data-call-join><Phone size={16} /> {t('Join')}</button>

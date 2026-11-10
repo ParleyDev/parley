@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import type { PrivateUser } from '../lib/types'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 /** Enter your birth date (once). Under 18 turns on teen safety defaults; 18+ opens age-restricted channels. */
 export function BirthdateForm({ onDone }: { onDone?: (u: PrivateUser) => void }) {
@@ -79,20 +80,21 @@ interface Appeal { user: { id: string; username: string; display_name: string; a
 export function BanAppeals({ guildId, onAccepted }: { guildId: string; onAccepted: (userId: string) => void }) {
   const t = useT()
   const pushToast = useStore((s) => s.pushToast)
+  const notes = useStore((s) => s.notes)
   const [list, setList] = useState<Appeal[]>([])
   useEffect(() => { api.get<Appeal[]>(`/guilds/${guildId}/appeals`).then(setList).catch(() => setList([])) }, [guildId])
   if (!list.length) return null
   const decide = async (a: Appeal, ok: boolean) => {
-    const reason = ok ? '' : prompt(t("Why are you denying {name}'s appeal? (optional)", { name: a.user.display_name }))
+    const reason = ok ? '' : prompt(t("Why are you denying {name}'s appeal? (optional)", { name: shownName(a.user, null, notes[a.user.id]?.nickname) }))
     if (reason === null) return
-    try { await api.post(`/guilds/${guildId}/appeals/${a.user.id}/${ok ? 'accept' : 'deny'}`, ok ? {} : { reason }); setList(list.filter((x) => x.user.id !== a.user.id)); if (ok) onAccepted(a.user.id); pushToast(ok ? t('{name} was unbanned', { name: a.user.display_name }) : t('Appeal denied')) } catch (e) { pushToast((e as Error).message, 'error') }
+    try { await api.post(`/guilds/${guildId}/appeals/${a.user.id}/${ok ? 'accept' : 'deny'}`, ok ? {} : { reason }); setList(list.filter((x) => x.user.id !== a.user.id)); if (ok) onAccepted(a.user.id); pushToast(ok ? t('{name} was unbanned', { name: shownName(a.user, null, notes[a.user.id]?.nickname) }) : t('Appeal denied')) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   return (
     <section className="mt-4 space-y-2" data-ban-appeals>
       <h2 className="label">{t('Appeals ({n})', { n: list.length })}</h2>
       {list.map((a) => (
         <div key={a.user.id} className="rounded-xl border border-line bg-bg-1 p-3 text-sm" data-ban-appeal={a.user.id}>
-          <div className="flex items-center gap-2"><span className="flex-1 font-semibold">{a.user.display_name} <span className="font-normal text-text-2">@{a.user.username}</span></span>
+          <div className="flex items-center gap-2"><span className="flex-1 font-semibold">{shownName(a.user, null, notes[a.user.id]?.nickname)} <span className="font-normal text-text-2">@{a.user.username}</span></span>
             <button type="button" className="btn-primary py-1" onClick={() => decide(a, true)} data-appeal-accept={a.user.id}>{t('Unban')}</button>
             <button type="button" className="btn-ghost py-1" onClick={() => decide(a, false)} data-appeal-deny={a.user.id}>{t('Deny')}</button></div>
           {a.ban_reason && <p className="mt-1 text-xs text-text-2">{t('Banned for: {reason}', { reason: a.ban_reason })}</p>}

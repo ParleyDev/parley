@@ -6,6 +6,7 @@ import { useStore } from '../store'
 import { seek as seekTrack, setSpeed as setPlayerSpeed, toggle as toggleTrack, usePlaying, type Track } from '../lib/player'
 import Tooltip from './Tooltip'
 import { useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 const fmt = (ms: number) => { const s = Math.max(0, Math.round(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 const SPEEDS = [1, 1.5, 2]
@@ -16,6 +17,8 @@ const SPEEDS = [1, 1.5, 2]
 export default function VoiceMessage({ a, mine, track }: { a: Attachment; mine?: boolean; track: Track }) {
   const me = useStore((s) => s.user?.id)
   const users = useStore((s) => s.users)
+  const members = useStore((s) => (track.where?.guildId ? s.members[track.where.guildId] : undefined))
+  const notes = useStore((s) => s.notes)
   const transcription = useStore((s) => s.instance.transcription)
   const pushToast = useStore((s) => s.pushToast)
   const p = usePlaying(a.id)
@@ -33,7 +36,7 @@ export default function VoiceMessage({ a, mine, track }: { a: Attachment; mine?:
   const seek = (frac: number) => { if (total) seekTrack(tr, (frac * total) / 1000) }
   const cycleSpeed = () => { const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setSpeed(next); if (p) setPlayerSpeed(next) }
   const progress = total ? Math.min(1, pos / total) : 0
-  const names = listeners.map((u) => users[u]?.display_name ?? t('Someone'))
+  const names = listeners.map((u) => shownName(users[u] ?? members?.[u], members?.[u], notes[u]?.nickname) || t('Someone'))
   const tip = names.length === 0 ? '' : names.length <= 3 ? t('Listened by {names}', { names: names.join(', ') }) : t('Listened by {names} and {n} others', { names: names.slice(0, 2).join(', '), n: names.length - 2 })
   const status = a.transcript_status
   const hasText = status === 'done' && !!a.transcript

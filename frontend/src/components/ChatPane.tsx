@@ -18,6 +18,7 @@ import Avatar from './Avatar'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup } from '../lib/dm'
 import { t as tr, useT, tn } from '../lib/i18n'
+import { globalName, nameIn, shownName } from '../lib/names'
 
 /** Longer histories than this render only the rows near the viewport. */
 const VIRTUALIZE_AT = 120
@@ -66,7 +67,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   const seen = useRef<string | null>(null)
   useEffect(() => {
     if (!lastMsg) return
-    if (seen.current !== null && lastMsg.id !== seen.current && lastMsg.author.id !== myId && (!lastMsg.kind || lastMsg.kind === 'default')) setAnnounce(`${lastMsg.author.display_name}: ${(lastMsg.content && previewText(lastMsg.content, lastMsg.channel_id)) || t('sent an attachment')}`)
+    if (seen.current !== null && lastMsg.id !== seen.current && lastMsg.author.id !== myId && (!lastMsg.kind || lastMsg.kind === 'default')) setAnnounce(`${nameIn(useStore.getState(), lastMsg.author.id, channel.guild_id) || globalName(lastMsg.author)}: ${(lastMsg.content && previewText(lastMsg.content, lastMsg.channel_id)) || t('sent an attachment')}`)
     seen.current = lastMsg.id
   }, [lastMsg, myId])
   const hasMore = useStore((s) => s.hasMore[channel.id])
@@ -82,6 +83,8 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   const user = useStore((s) => s.user)
   const receipts = useStore((s) => s.receipts[channel.id])
   const users = useStore((s) => s.users)
+  const members = useStore((s) => (channel.guild_id ? s.members[channel.guild_id] : undefined))
+  const notes = useStore((s) => s.notes)
   const setReceipts = useStore((s) => s.setReceipts)
   const pushToast = useStore((s) => s.pushToast)
   const [reply, setReply] = useState<Message | null>(null)
@@ -480,7 +483,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
                   {/* Seen: only under your own message, at the end of a run. Out of the flow, hanging into the space before
                       the next group, so it never changes the spacing of the chat; above a date or NEW divider, which it
                       would cover, it takes its own line instead. */}
-                  {(() => { const r = m.author.id === user?.id && endsRun ? readersOf(m.id) : []; if (!r.length) return null; const names = r.map((id) => users[id]?.display_name ?? t('Someone')); return (
+                  {(() => { const r = m.author.id === user?.id && endsRun ? readersOf(m.id) : []; if (!r.length) return null; const names = r.map((id) => shownName(users[id] ?? members?.[id], members?.[id], notes[id]?.nickname) || t('Someone')); return (
                     <div className={dividerNext ? 'flex items-center justify-end gap-1 px-4 pt-0.5 phone:px-3' : 'absolute right-4 top-full z-10 -mt-1 flex items-center gap-1 phone:right-3'} data-read-by={r.join(',')}>
                       <Tooltip tip={t('Seen by {names}', { names: names.join(', ') })}><span className="flex items-center gap-1 text-[11px] text-text-2">{isDm ? t('Seen') : null}<span className="flex -space-x-1">{r.slice(0, 4).map((id) => { const u = users[id]; return u ? <Avatar key={id} user={u} size={14} /> : null })}</span>{r.length > 4 ? <span>+{r.length - 4}</span> : null}</span></Tooltip>
                     </div>) })()}
@@ -535,9 +538,9 @@ function ChannelIntro({ channel }: { channel: Channel | DmChannel }) {
       ) : other ? (
         <>
           <Avatar user={other} size={80} />
-          <h1 className="mt-3 text-3xl font-extrabold">{other.display_name}</h1>
+          <h1 className="mt-3 text-3xl font-extrabold">{shownName(other, null, notes[other.id]?.nickname)}</h1>
           <p className="text-text-1">@{other.username}</p>
-          <p className="mt-2 text-text-2 text-sm">{tn('This is the beginning of your direct message history with {name}.', { name: <b>{other.display_name}</b> })}</p>
+          <p className="mt-2 text-text-2 text-sm">{tn('This is the beginning of your direct message history with {name}.', { name: <b>{shownName(other, null, notes[other.id]?.nickname)}</b> })}</p>
         </>
       ) : isVoice ? (
         <>

@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { renderMarkdown } from '../lib/markdown'
 import { useStore } from '../store'
+import { nameOf } from '../lib/dm'
 import type { Channel, DmChannel, Guild } from '../lib/types'
 import { colorFor, initials } from '../lib/format'
 import { markJoined } from '../lib/welcome'
@@ -18,6 +19,7 @@ export default function InvitePage() {
   const { code = '' } = useParams()
   const navigate = useNavigate()
   const upsertGuild = useStore((s) => s.upsertGuild)
+  const notes = useStore((s) => s.notes)
   const [p, setP] = useState<Preview | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [group, setGroup] = useState<GroupPreview | null>(null)
@@ -45,10 +47,10 @@ export default function InvitePage() {
         {group ? (
           <div data-group-invite-page>
             <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full text-2xl font-bold text-white" style={{ background: group.icon_url ? undefined : colorFor(group.channel_id) }}>
-              {group.icon_url ? <CropImg src={group.icon_url} className="h-full w-full object-cover" alt="" /> : initials(group.name || group.members.map((m) => m.display_name).join(', '))}
+              {group.icon_url ? <CropImg src={group.icon_url} className="h-full w-full object-cover" alt="" /> : initials(group.name || group.members.map((m) => nameOf(m, notes)).join(', '))}
             </div>
             <p className="text-text-2 text-sm">{t("You've been invited to join a group")}</p>
-            <h1 className="text-2xl font-bold mb-1" data-group-invite-name>{group.name || group.members.map((m) => m.display_name).join(', ')}</h1>
+            <h1 className="text-2xl font-bold mb-1" data-group-invite-name>{group.name || group.members.map((m) => nameOf(m, notes)).join(', ')}</h1>
             <p className="text-text-2 text-sm mb-6">{group.members.length === 1 ? t('1 member') : t('{n} members', { n: group.members.length })}</p>
             {err && <p className="mb-3 text-sm text-danger">{err}</p>}
             {group.already_member ? <button className="btn-primary w-full" onClick={() => navigate(`/channels/@me/${group.channel_id}`)}>{t('Open group')}</button>

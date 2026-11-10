@@ -4,6 +4,7 @@ import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import Avatar from '../../Avatar'
 import { useT } from '../../../lib/i18n'
+import { shownName } from '../../../lib/names'
 
 interface Integrations {
   bots: { id: string; display_name: string; avatar_url: string | null; joined_at: string; application: string | null }[]
@@ -18,6 +19,8 @@ const CREATORS = [{ id: 'twitch', label: 'Twitch', role: 'Twitch Subscriber', wh
 export default function IntegrationsTab({ guildId }: { guildId: string }) {
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
+  const members = useStore((s) => s.members[guildId])
+  const notes = useStore((s) => s.notes)
   const [data, setData] = useState<Integrations | null>(null)
   const t = useT()
   const load = () => api.get<Integrations>(`/guilds/${guildId}/integrations`).then(setData).catch((e) => pushToast((e as Error).message, 'error'))
@@ -70,8 +73,8 @@ export default function IntegrationsTab({ guildId }: { guildId: string }) {
         {head(<Bot size={16} />, t('Bots'), data.bots.length)}
         {data.bots.length === 0 ? <p className="text-sm text-text-2">{t('No bots. Add one from its app\'s invite link.')}</p> : data.bots.map((b) => (
           <div key={b.id} className="mb-1.5 flex items-center gap-2 rounded-lg border border-line bg-bg-1 px-3 py-2 text-sm" data-integration-bot={b.id}>
-            <Avatar user={b} size={28} /><span className="flex-1"><span className="font-semibold">{b.display_name}</span>{b.application && <span className="text-text-2"> · {b.application}</span>}<span className="block text-xs text-text-2">{t('Added {date}', { date: new Date(b.joined_at).toLocaleDateString() })}</span></span>
-            <button type="button" className="text-xs font-semibold text-danger hover:underline" onClick={() => kick(b.id, b.display_name)} data-integration-kick={b.id}>{t('Remove')}</button>
+            <Avatar user={b} size={28} /><span className="flex-1"><span className="font-semibold">{shownName(b, members?.[b.id], notes[b.id]?.nickname)}</span>{b.application && <span className="text-text-2"> · {b.application}</span>}<span className="block text-xs text-text-2">{t('Added {date}', { date: new Date(b.joined_at).toLocaleDateString() })}</span></span>
+            <button type="button" className="text-xs font-semibold text-danger hover:underline" onClick={() => kick(b.id, shownName(b, members?.[b.id], notes[b.id]?.nickname))} data-integration-kick={b.id}>{t('Remove')}</button>
           </div>
         ))}
       </section>

@@ -4,7 +4,7 @@ import Modal from '../Modal'
 import { useStore } from '../../store'
 import { useT } from '../../lib/i18n'
 import { schedulePresets, whenLabel } from '../../lib/scheduled'
-import { dmName, isGroup } from '../../lib/dm'
+import { dmName, isGroup, nameOf } from '../../lib/dm'
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const dateValue = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
@@ -39,7 +39,7 @@ export default function ScheduleMessageModal({ onClose, channelId, content: init
   const [busy, setBusy] = useState(false)
   const at = pick === 'custom' ? new Date(`${day}T${time}`) : presets.find((p) => p.id === pick)?.at ?? null
   const valid = !!at && !Number.isNaN(at.getTime()) && at.getTime() > Date.now() + 30_000
-  const where = channel ? <><Hash size={14} />{channel.name}</> : dm ? <><MessageSquare size={14} />{isGroup(dm) ? dmName(dm, users, notes) : `@${dm.recipients[0]?.display_name ?? ''}`}</> : null
+  const where = channel ? <><Hash size={14} />{channel.name}</> : dm ? <><MessageSquare size={14} />{isGroup(dm) ? dmName(dm, users, notes) : `@${dm.recipients[0] ? nameOf(users[dm.recipients[0].id] ?? dm.recipients[0], notes) : ''}`}</> : null
   const ok = valid && (content.trim().length > 0 || files > 0) && content.length <= 2000
   const submit = async () => {
     if (!ok || !at) return

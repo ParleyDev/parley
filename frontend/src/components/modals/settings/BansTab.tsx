@@ -5,6 +5,7 @@ import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import { BanAppeals } from '../../AgeSafety'
 import Avatar from '../../Avatar'
+import { shownName } from '../../../lib/names'
 
 export default function BansTab({ guildId }: { guildId: string }) {
   const t = useT()
@@ -15,6 +16,7 @@ export default function BansTab({ guildId }: { guildId: string }) {
   const removeBan = useStore((s) => s.removeBan)
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
+  const notes = useStore((s) => s.notes)
   const [q, setQ] = useState('')
   useEffect(() => { if (!loaded) loadBans(guildId) }, [guildId, loaded, loadBans])
   if (!guild) return null
@@ -44,14 +46,14 @@ export default function BansTab({ guildId }: { guildId: string }) {
           <div key={b.user_id} className="py-3 flex items-center gap-3" data-ban={b.user_id}>
             <Avatar user={{ id: b.user_id, display_name: b.display_name, avatar_url: b.avatar_url }} size={36} />
             <div className="min-w-0 flex-1">
-              <div className="font-semibold truncate">{b.display_name} <span className="text-xs font-normal text-text-2">@{b.username}</span></div>
+              <div className="font-semibold truncate">{shownName(b, null, notes[b.user_id]?.nickname)} <span className="text-xs font-normal text-text-2">@{b.username}</span></div>
               <div className="text-xs text-text-2 truncate">
                 {new Date(b.created_at).toLocaleDateString(locale(), { month: 'short', day: 'numeric', year: 'numeric' })}
                 {b.moderator_name ? ` · ${t('by {name}', { name: b.moderator_name })}` : ''}
                 {b.reason ? ` · ${b.reason}` : ` · ${t('No reason given')}`}
               </div>
             </div>
-            <button onClick={() => unban(b.user_id, b.display_name)} className="btn-ghost py-1.5 shrink-0" title={t('Revoke ban')}><ShieldOff size={16} /><span className="phone:hidden">{t('Revoke Ban')}</span></button>
+            <button onClick={() => unban(b.user_id, shownName(b, null, notes[b.user_id]?.nickname))} className="btn-ghost py-1.5 shrink-0" title={t('Revoke ban')}><ShieldOff size={16} /><span className="phone:hidden">{t('Revoke Ban')}</span></button>
           </div>
         ))}
       </div>

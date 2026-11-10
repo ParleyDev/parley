@@ -17,13 +17,14 @@ import ExpressionPicker, { type PickerTab } from './ExpressionPicker'
 import { TypingGlyphs } from './TypingIndicator'
 import ShortcodeSuggest, { shortcodeAt, useShortcodeSuggestions, type Suggestion } from './ShortcodeSuggest'
 import MentionSuggest, { applyMentions, mentionAt, useMentionItems, type MentionItem } from './MentionSuggest'
-import { dmName, isGroup } from '../lib/dm'
+import { dmName, isGroup, nameOf } from '../lib/dm'
 import { useT, tn } from '../lib/i18n'
 import { api } from '../lib/api'
 import { optionHint, commandMatches, runCommand, type SlashCommand } from '../lib/commands'
 import { getDraft, saveDraft } from '../lib/drafts'
 import { shortDuration } from '../lib/slowmode'
 import { scheduleMessage, useScheduled, whenLabel } from '../lib/scheduled'
+import { shownName } from '../lib/names'
 
 /** When each channel's slowmode lets you send again (ms), kept across channel switches. */
 const cooldowns = new Map<string, number>()
@@ -60,6 +61,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
   const typing = useStore((s) => s.typing[channel.id])
   const users = useStore((s) => s.users)
   const notes = useStore((s) => s.notes)
+  const members = useStore((s) => (channel.guild_id ? s.members[channel.guild_id] : undefined))
   const perms = useStore((s) => myChannelPerms(s, channel.id))
   const myMember = useStore((s) => (channel.guild_id && s.user ? s.members[channel.guild_id]?.[s.user.id] : undefined))
   const [, bump] = useState(0)
@@ -229,7 +231,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
   }, [])
   const lastTyping = useRef(0)
   const isDm = channel.guild_id === null
-  const name = isDm ? (isGroup(channel as DmChannel) ? dmName(channel as DmChannel, users, notes) : `@${(channel as DmChannel).recipients[0]?.display_name ?? ''}`) : (channel as Channel).kind === 'voice' ? channel.name : `#${channel.name}`
+  const name = isDm ? (isGroup(channel as DmChannel) ? dmName(channel as DmChannel, users, notes) : `@${(channel as DmChannel).recipients[0] ? nameOf((channel as DmChannel).recipients[0], notes) : ''}`) : (channel as Channel).kind === 'voice' ? channel.name : `#${channel.name}`
 
   // Opening a channel focuses the box on devices with a mouse or trackpad only; on a phone that would pop the
   // keyboard over the chat. Choosing Reply is a deliberate "I want to type", so it focuses everywhere.
@@ -490,7 +492,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
   }
 
   const typerIds = Object.keys(typing ?? {})
-  const typers = typerIds.map((id) => users[id]?.display_name ?? t('Someone'))
+  const typers = typerIds.map((id) => shownName(users[id] ?? members?.[id], members?.[id], notes[id]?.nickname) || t('Someone'))
   // One typist shows their own indicator (emoji, animation, text); several share the default.
   const typingStyle = useStore((s) => (typerIds.length === 1 ? s.typingStyles[typerIds[0]] : undefined))
 
@@ -639,7 +641,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
       <div ref={boxRef} className="rounded-lg bg-bg-3 border border-line shadow-lg shadow-black/25 focus-within:border-accent/50 transition" data-composer-box data-composer-narrow={narrow ? '1' : undefined}>
         {reply && (
           <div className="flex items-center justify-between px-4 py-1.5 text-xs text-text-1 border-b border-line bg-bg-4/40 rounded-t-lg" data-reply-banner>
-            <span>{tn('Replying to {name}', { name: <b className="text-text-0">{reply.author.display_name}</b> })}</span>
+            <span>{tn('Replying to {name}', { name: <b className="text-text-0">{shownName(reply.author, members?.[reply.author.id], notes[reply.author.id]?.nickname)}</b> })}</span>
             <button onClick={onCancelReply} className="text-text-2 hover:text-text-0"><X size={14} /></button>
           </div>
         )}

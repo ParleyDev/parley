@@ -7,6 +7,7 @@ import { useStore } from '../store'
 import Avatar from './Avatar'
 import { jumpToMessageAsync } from './ChatView'
 import { useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 interface Topic { title: string; summary: string; message_ids: string[]; people: string[] }
 
@@ -19,6 +20,7 @@ export default function SummariesButton({ channel }: { channel: Channel }) {
   const [error, setError] = useState<string | null>(null)
   const users = useStore((s) => s.users)
   const members = useStore((s) => (channel.guild_id ? s.members[channel.guild_id] : undefined))
+  const notes = useStore((s) => s.notes)
   const btn = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     if (!open) return
@@ -28,7 +30,7 @@ export default function SummariesButton({ channel }: { channel: Channel }) {
   if (!on) return null
   const r = btn.current?.getBoundingClientRect()
   const jump = (tp: Topic) => { setOpen(false); void jumpToMessageAsync(channel.id, tp.message_ids[0]) }
-  const name = (id: string) => members?.[id]?.nickname || users[id]?.display_name || members?.[id]?.display_name || t('Someone')
+  const name = (id: string) => shownName(users[id] ?? members?.[id], members?.[id], notes[id]?.nickname) || t('Someone')
   return (
     <>
       <button ref={btn} type="button" title={t('Summaries')} onClick={() => setOpen((o) => !o)} className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${open ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-summaries-toggle><Sparkles size={20} /></button>

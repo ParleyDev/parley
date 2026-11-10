@@ -199,6 +199,21 @@ pub const PROFILE_EFFECTS: &[&str] = &["sparkles", "snow", "hearts", "confetti",
 pub const USER_COLS: &str = "id, username, display_name, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, verified_bot, name_style, avatar_decoration, clan_tag, clan_tag_guild, panels, profile_privacy, profile_frame, nameplate, profile_effect, account_state, system";
 pub const PRIVATE_USER_COLS: &str = "id, username, display_name, email, avatar_url, bio, status, created_at, banner_url, theme_primary, theme_accent, pronouns, name_primary, name_accent, custom_status, bot, name_style, max_upload_bytes, dm_privacy, message_requests, friend_request_from, group_dm_privacy, searchable, guild_dms_default, show_read_receipts, show_typing, typing_indicator, sensitive_media, spam_filter, notif_prefs, avatar_decoration, clan_tag, clan_tag_guild, panels, is_admin, email_verified_at, (totp_secret IS NOT NULL) AS mfa_enabled, status_expires_at, custom_status_expires_at, pinned_channels, ignored_users, online_alerts, avatar_history, profile_privacy, profile_frame, nameplate, profile_effect, entrance_sound, client_settings, birthdate, custom_activity, share_activity, house, CASE WHEN birthdate IS NULL THEN 'unknown' WHEN birthdate > (now() - interval '18 years')::date THEN 'teen' ELSE 'adult' END AS age_group, guest";
 
+/// SQL for the name people read for a user (`u` = users, `m` = their guild_members row, LEFT JOINed): the server
+/// nickname when set, else the display name, else the username. Without a member row it is display name, then username.
+pub const SHOWN_NAME_SQL: &str = "COALESCE(NULLIF(m.nickname, ''), NULLIF(u.display_name, ''), u.username)";
+
+/// The name to write into text the server composes (push, email, system notices, bot-facing labels): in a server, the
+/// member's nickname, else display name, else username; outside one (`guild` None), display name, else username.
+/// `viewer` is the one person the text is for (a push or email to them): their private friend nickname for this user
+/// then comes right after the server nickname. Shared text (channel notices) passes None. Empty when the user doesn't exist.
+pub async fn shown_name(db: &sqlx::PgPool, id: Uuid, guild: Option<Uuid>, viewer: Option<Uuid>) -> String {
+    sqlx::query_as::<_, (String,)>(
+        "SELECT COALESCE(NULLIF(m.nickname, ''), NULLIF(n.nickname, ''), NULLIF(u.display_name, ''), u.username) FROM users u
+         LEFT JOIN guild_members m ON m.user_id = u.id AND m.guild_id = $2 LEFT JOIN user_notes n ON n.user_id = $3 AND n.target_id = u.id WHERE u.id = $1",
+    ).bind(id).bind(guild).bind(viewer).fetch_optional(db).await.ok().flatten().map(|r| r.0).unwrap_or_default()
+}
+
 /// Refuse (403, `email_unverified`) when the instance requires verified emails and this user's isn't.
 pub async fn require_verified(state: &AppState, uid: Uuid) -> AppResult<()> {
     if !crate::routes::admin::load_settings(&state.db).await?.require_email_verification {

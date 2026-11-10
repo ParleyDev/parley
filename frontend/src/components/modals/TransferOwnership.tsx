@@ -6,6 +6,7 @@ import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import type { Guild } from '../../lib/types'
 import { useT, tn } from '../../lib/i18n'
+import { shownName } from '../../lib/names'
 
 /** Owner-only: hand the server to another member. Irreversible from the old owner's side. */
 export default function TransferOwnershipModal({ onClose, guildId, userId }: { onClose: () => void; guildId: string; userId?: string }) {
@@ -13,6 +14,7 @@ export default function TransferOwnershipModal({ onClose, guildId, userId }: { o
   const guild = useStore((s) => s.guilds[guildId])
   const me = useStore((s) => s.user)
   const members = useStore((s) => s.members[guildId])
+  const notes = useStore((s) => s.notes)
   const loaded = useStore((s) => !!s.membersLoaded[guildId])
   const loadMembers = useStore((s) => s.loadMembers)
   const upsertGuild = useStore((s) => s.upsertGuild)
@@ -27,7 +29,7 @@ export default function TransferOwnershipModal({ onClose, guildId, userId }: { o
   const list = Object.values(members ?? {})
     .filter((m) => m.user_id !== me.id)
     .filter((m) => !q || m.display_name.toLowerCase().includes(q.toLowerCase()) || m.username.toLowerCase().includes(q.toLowerCase()) || (m.nickname ?? '').toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => (a.nickname || a.display_name).localeCompare(b.nickname || b.display_name))
+    .sort((a, b) => shownName(a, a, notes[a.user_id]?.nickname).localeCompare(shownName(b, b, notes[b.user_id]?.nickname)))
   const target = selected ? members?.[selected] : undefined
 
   const transfer = async () => {
@@ -36,7 +38,7 @@ export default function TransferOwnershipModal({ onClose, guildId, userId }: { o
     try {
       const g = await api.post<Guild>(`/guilds/${guildId}/owner`, { user_id: selected })
       upsertGuild(g)
-      pushToast(target ? t('{name} now owns {guild}', { name: target.nickname || target.display_name, guild: guild.name }) : t('They now own {guild}', { guild: guild.name }))
+      pushToast(target ? t('{name} now owns {guild}', { name: shownName(target, target, notes[target.user_id]?.nickname), guild: guild.name }) : t('They now own {guild}', { guild: guild.name }))
       onClose()
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
@@ -54,14 +56,14 @@ export default function TransferOwnershipModal({ onClose, guildId, userId }: { o
         {list.map((m) => (
           <button key={m.user_id} type="button" onClick={() => setSelected(m.user_id)} className={`w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left ${selected === m.user_id ? 'bg-accent/20 text-text-0' : 'hover:bg-bg-3 text-text-1'}`}>
             <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={28} />
-            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{m.nickname || m.display_name}</span><span className="block truncate text-xs text-text-2">@{m.username}</span></span>
+            <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{shownName(m, m, notes[m.user_id]?.nickname)}</span><span className="block truncate text-xs text-text-2">@{m.username}</span></span>
             {selected === m.user_id && <Check size={16} className="text-accent shrink-0" />}
           </button>
         ))}
       </div>
       <label className="mt-4 flex items-start gap-2 text-sm text-text-1 cursor-pointer">
         <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5 accent-accent" />
-        <span>{tn('I understand that transferring ownership gives {name} full control of this server, including the ability to delete it, and that only they can give it back.', { name: <b className="text-text-0">{target ? (target.nickname || target.display_name) : t('the new owner')}</b> })}</span>
+        <span>{tn('I understand that transferring ownership gives {name} full control of this server, including the ability to delete it, and that only they can give it back.', { name: <b className="text-text-0">{target ? shownName(target, target, notes[target.user_id]?.nickname) : t('the new owner')}</b> })}</span>
       </label>
     </Modal>
   )

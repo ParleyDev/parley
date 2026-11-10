@@ -5,6 +5,7 @@ import Avatar from '../Avatar'
 import { api } from '../../lib/api'
 import { useStore } from '../../store'
 import { useT } from '../../lib/i18n'
+import { useNameIn } from '../../lib/names'
 
 interface Warning { id: string; reason: string; created_at: string; moderator_name: string | null }
 interface ModInfo {
@@ -25,13 +26,14 @@ export default function ModViewModal({ onClose, guildId, userId }: { onClose: ()
   const member = useStore((s) => s.members[guildId]?.[userId])
   const user = useStore((s) => s.users[userId])
   const pushToast = useStore((s) => s.pushToast)
+  const named = useNameIn(userId, guildId)
   const [info, setInfo] = useState<ModInfo | null>(null)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const t = useT()
   const load = useCallback(() => api.get<ModInfo>(`/guilds/${guildId}/members/${userId}/mod-info`).then(setInfo).catch((e: Error) => { pushToast(e.message, 'error'); onClose() }), [guildId, userId, pushToast, onClose])
   useEffect(() => { void load() }, [load])
-  const name = member?.nickname || member?.display_name || user?.display_name || t('Member')
+  const name = named || t('Member')
   const warn = async () => {
     setBusy(true)
     try { await api.post(`/guilds/${guildId}/members/${userId}/warnings`, { reason }); setReason(''); pushToast(t('{name} was warned', { name })); await load() } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }

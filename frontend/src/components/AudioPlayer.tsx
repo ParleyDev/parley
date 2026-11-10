@@ -11,6 +11,7 @@ import ContextMenu, { useContextMenu } from './ContextMenu'
 import AudioVisualizer from './AudioVisualizer'
 import Avatar from './Avatar'
 import { useStore } from '../store'
+import { shownName } from '../lib/names'
 
 export const fmtTime = (sec: number) => { const s = Math.max(0, Math.floor(sec)); const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); return `${h ? `${h}:${String(m).padStart(2, '0')}` : m}:${String(s % 60).padStart(2, '0')}` }
 const SPEEDS = [1, 1.25, 1.5, 2, 0.75]
@@ -100,9 +101,10 @@ function WaveBars({ peaks, frac }: { peaks: Uint8Array; frac: number }) {
 export default function AudioPlayer({ a, track: base }: { a: Attachment; track: Track }) {
   const t = useT()
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   // In a server, listeners show under their server name and avatar (like the member list).
   const members = useStore((s) => (base.where?.guildId ? s.members[base.where.guildId] : undefined))
-  const nameOf = (u: string) => members?.[u]?.nickname || users[u]?.display_name || t('Someone')
+  const nameOf = (u: string) => shownName(users[u] ?? members?.[u], members?.[u], notes[u]?.nickname) || t('Someone')
   const avatarOf = (u: string) => (members?.[u]?.guild_avatar ? { ...users[u], avatar_url: members[u].guild_avatar! } : users[u])
   const openModal = useStore((s) => s.openModal)
   // The server's length (from its analysis, which stops at two hours), so the card needn't fetch the file to show it.

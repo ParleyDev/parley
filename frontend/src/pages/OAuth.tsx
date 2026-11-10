@@ -10,6 +10,7 @@ import Avatar from '../components/Avatar'
 import type { User } from '../lib/types'
 import { useT, tn } from '../lib/i18n'
 import Dropdown from '../components/Dropdown'
+import { globalName } from '../lib/names'
 
 interface Info { app: { id: string; name: string; description: string; client_id: string; has_bot: boolean; owner: User | null; icon_url?: string | null; verified?: boolean }; scopes: { id: string; description: string }[]; redirect_uri: string | null; state: string | null; permissions?: number; guilds: { id: string; name: string; icon_url: string | null; my_permissions?: number }[] }
 
@@ -49,8 +50,8 @@ export default function OAuthPage() {
         {info && (
           <>
             <h1 className="mt-5 flex items-center justify-center gap-1 text-lg font-bold" data-oauth-app>{info.app.name}{info.app.verified && <BadgeCheck size={18} className="text-accent" aria-label={t('Verified')} data-oauth-verified />}</h1>
-            <p className="text-center text-sm text-text-2">{t('wants to access your {app} account', { app: APP_NAME })}{info.app.owner ? <> · {t('by {name}', { name: info.app.owner.display_name })}</> : null}</p>
-            {me && <div className="mt-4 flex items-center justify-center gap-2 text-sm"><Avatar user={me} size={24} /><span>{tn('Signed in as {name}', { name: <b>{me.display_name}</b> })}</span></div>}
+            <p className="text-center text-sm text-text-2">{t('wants to access your {app} account', { app: APP_NAME })}{info.app.owner ? <> · {t('by {name}', { name: globalName(info.app.owner) })}</> : null}</p>
+            {me && <div className="mt-4 flex items-center justify-center gap-2 text-sm"><Avatar user={me} size={24} /><span>{tn('Signed in as {name}', { name: <b>{globalName(me)}</b> })}</span></div>}
             <div className="mt-5 rounded-xl border border-line bg-bg-0/60 p-3">
               <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-2">{t('This will allow {name} to', { name: info.app.name })}</div>
               <ul className="space-y-1.5 text-sm">{info.scopes.map((s) => <li key={s.id} className="flex items-start gap-2" data-oauth-scope={s.id}><span className="mt-0.5 text-success">✓</span><span>{s.description}</span></li>)}</ul>

@@ -7,6 +7,7 @@ import { api } from '../lib/api'
 import { useStore } from '../store'
 import { useT, tn } from '../lib/i18n'
 import Avatar from '../components/Avatar'
+import { globalName } from '../lib/names'
 
 interface Info { client: { name: string; client_uri: string | null }; redirect_uri: string; redirect_host: string; scopes: { id: string; description: string; requested: boolean }[] }
 
@@ -46,7 +47,7 @@ export default function McpAuthorizePage() {
           <>
             <h1 className="mt-5 text-center text-lg font-bold" data-mcp-client>{info.client.name}</h1>
             <p className="text-center text-sm text-text-2">{t('wants to connect to your {app} account as an AI assistant', { app: APP_NAME })}</p>
-            {me && <div className="mt-4 flex items-center justify-center gap-2 text-sm"><Avatar user={me} size={24} /><span>{tn('Signed in as {name}', { name: <b>{me.display_name}</b> })}</span></div>}
+            {me && <div className="mt-4 flex items-center justify-center gap-2 text-sm"><Avatar user={me} size={24} /><span>{tn('Signed in as {name}', { name: <b>{globalName(me)}</b> })}</span></div>}
             <div className="mt-5 rounded-xl border border-line bg-bg-0/60 p-3">
               <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-2">{t('Allow it to')}</div>
               <ul className="space-y-2 text-sm">

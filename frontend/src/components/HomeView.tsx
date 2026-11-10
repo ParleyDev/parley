@@ -15,6 +15,7 @@ import StatusText from './StatusText'
 import { MobileBack } from './HeaderBits'
 import StyledName from './StyledName'
 import { useT } from '../lib/i18n'
+import { nameOf } from '../lib/dm'
 
 type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add'
 
@@ -31,16 +32,17 @@ export default function HomeView() {
   const relationships = useStore((s) => s.relationships)
   const online = useStore((s) => s.online)
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const pending = useStore(pendingCount)
   const [tab, setTab] = useState<Tab>('online')
   const [q, setQ] = useState('')
   const all = Object.values(relationships)
   const friends = all.filter((r) => r.kind === 'friend')
   const isOnline = (u: User) => !!online[u.id] && (users[u.id]?.status ?? u.status) !== 'invisible'
-  const match = (r: Relationship) => !q || r.user.display_name.toLowerCase().includes(q.toLowerCase()) || r.user.username.toLowerCase().includes(q.toLowerCase())
+  const match = (r: Relationship) => !q || [notes[r.user.id]?.nickname ?? '', r.user.display_name, r.user.username].some((n) => n.toLowerCase().includes(q.toLowerCase()))
   const list = (tab === 'online' ? friends.filter((r) => isOnline(r.user)) : tab === 'all' ? friends : tab === 'pending' ? all.filter((r) => r.kind === 'incoming' || r.kind === 'outgoing') : all.filter((r) => r.kind === 'blocked'))
     .filter(match)
-    .sort((a, b) => (a.kind === 'incoming' ? -1 : 0) - (b.kind === 'incoming' ? -1 : 0) || a.user.display_name.localeCompare(b.user.display_name))
+    .sort((a, b) => (a.kind === 'incoming' ? -1 : 0) - (b.kind === 'incoming' ? -1 : 0) || nameOf(a.user, notes).localeCompare(nameOf(b.user, notes)))
 
   const TabBtn = ({ id, label, badge }: { id: Tab; label: string; badge?: number }) => (
     <button onClick={() => setTab(id)} className={`relative text-sm rounded-md px-2 py-0.5 whitespace-nowrap ${tab === id ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>
@@ -91,6 +93,7 @@ export default function HomeView() {
 /** Friends "Active Now": who is in a voice channel or streaming right now (in servers you share). */
 function ActiveNow() {
   const t = useT()
+  const notes = useStore((s) => s.notes)
   const relationships = useStore((s) => s.relationships)
   const voiceStates = useStore((s) => s.voiceStates)
   const channels = useStore((s) => s.channels)
@@ -100,7 +103,7 @@ function ActiveNow() {
   const active = Object.values(relationships)
     .filter((r) => r.kind === 'friend' && voiceStates[r.user.id]?.guild_id && channels[voiceStates[r.user.id].channel_id ?? ''])
     .map((r) => ({ r, v: voiceStates[r.user.id] }))
-    .sort((a, b) => Number(b.v.self_stream) - Number(a.v.self_stream) || a.r.user.display_name.localeCompare(b.r.user.display_name))
+    .sort((a, b) => Number(b.v.self_stream) - Number(a.v.self_stream) || nameOf(a.r.user, notes).localeCompare(nameOf(b.r.user, notes)))
   return (
     <aside className="w-[340px] shrink-0 border-l border-line p-4 overflow-y-auto max-xl:hidden" data-active-now>
       <h2 className="mb-4 text-xl font-bold">{t('Active Now')}</h2>
@@ -119,7 +122,7 @@ function ActiveNow() {
                 <div className="flex items-center gap-2.5">
                   <Avatar user={u} size={32} presence />
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold">{u.display_name}</div>
+                    <div className="truncate font-semibold">{nameOf(u, notes)}</div>
                     <div className="truncate text-xs text-text-2">{v.self_stream ? t('Streaming in {server}', { server: g?.name ?? t('a server') }) : t('In {server}', { server: g?.name ?? t('a server') })}</div>
                   </div>
                   {v.self_stream && <span className="rounded bg-danger px-1.5 text-[10px] font-extrabold text-white" data-active-live>{t('LIVE')}</span>}
@@ -150,6 +153,7 @@ function Empty({ tab }: { tab: Tab }) {
 
 function Row({ r, online }: { r: Relationship; online: boolean }) {
   const t = useT()
+  const notes = useStore((s) => s.notes)
   const openModal = useStore((s) => s.openModal)
   const pushToast = useStore((s) => s.pushToast)
   const upsertChannel = useStore((s) => s.upsertChannel)
@@ -163,7 +167,7 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
   const accept = () => act(() => api.put(`/users/@me/relationships/${u.id}`))
   // New friends (the last day) get a one-tap wave: a 👋 in your DM with them.
   const [waved, setWaved] = useState(false)
-  const wave = () => act(async () => { setWaved(true); const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); await api.post(`/channels/${c.id}/messages`, { content: '👋' }); pushToast(t('You waved at {name}', { name: u.display_name })) })
+  const wave = () => act(async () => { setWaved(true); const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: u.id }); upsertChannel(c); await api.post(`/channels/${c.id}/messages`, { content: '👋' }); pushToast(t('You waved at {name}', { name: nameOf(u, notes) })) })
   const remove = () => act(() => api.delete(`/users/@me/relationships/${u.id}`))
   const block = () => act(() => api.put(`/users/@me/relationships/${u.id}/block`))
   const sub = r.kind === 'incoming' ? t('Incoming Friend Request') : r.kind === 'outgoing' ? t('Outgoing Friend Request') : r.kind === 'blocked' ? t('Blocked') : <StatusText userId={u.id} fallback={u.custom_status} online={online} />
@@ -174,12 +178,12 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
     <div className="group flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-bg-3" data-motion-row>
       <button onClick={(e) => openModal({ kind: 'profile', userId: u.id, anchor: anchorOf(e) })}><Avatar user={u} size={36} presence={r.kind === 'friend'} /></button>
       <div className="min-w-0 flex-1">
-        <div className="font-semibold truncate"><StyledName userId={u.id}>{u.display_name}</StyledName> <span className="text-text-2 font-normal text-sm opacity-0 group-hover:opacity-100 phone:opacity-100">@{u.username}</span></div>
+        <div className="font-semibold truncate"><StyledName userId={u.id}>{nameOf(u, notes)}</StyledName> <span className="text-text-2 font-normal text-sm opacity-0 group-hover:opacity-100 phone:opacity-100">@{u.username}</span></div>
         <div className="text-xs text-text-2 min-w-0" data-friend-sub>{sub}</div>
         {r.note && (r.kind === 'incoming' || r.kind === 'outgoing') && <div className="mt-0.5 truncate text-sm text-text-1" title={r.note} data-request-note>“{r.note}”</div>}
       </div>
       <div className="flex items-center gap-2 relative">
-        {r.kind === 'friend' && isNewFriend(r) && !waved && <button type="button" onClick={wave} className="rounded-full bg-bg-1 px-3 py-1.5 text-sm text-text-1 hover:text-text-0" title={t('Say hi to {name}', { name: u.display_name })} data-wave-friend={u.id}>👋 {t('Wave')}</button>}
+        {r.kind === 'friend' && isNewFriend(r) && !waved && <button type="button" onClick={wave} className="rounded-full bg-bg-1 px-3 py-1.5 text-sm text-text-1 hover:text-text-0" title={t('Say hi to {name}', { name: nameOf(u, notes) })} data-wave-friend={u.id}>👋 {t('Wave')}</button>}
         {r.kind === 'friend' && <Btn title={t('Message')} onClick={dm}><MessageSquare size={18} /></Btn>}
         {r.kind === 'incoming' && <Btn title={t('Accept')} onClick={accept}><Check size={18} className="text-success" /></Btn>}
         {r.kind === 'incoming' && <Btn title={t('Ignore')} onClick={remove} danger><X size={18} /></Btn>}
@@ -192,8 +196,8 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
                 <div className="pop absolute right-0 top-full mt-1 z-40 w-44 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5 text-sm">
-                  <button onClick={() => { setMenu(false); void toggleOnlineAlert(u.id, u.display_name) }} className="w-full text-left rounded-md px-2.5 py-2 hover:bg-bg-3" data-friend-alert={u.id}>{alerts ? t('Stop Online Alerts') : t('Notify When Online')}</button>
-                  <button onClick={() => { setMenu(false); void toggleIgnored(u.id, u.display_name) }} className="w-full text-left rounded-md px-2.5 py-2 hover:bg-bg-3">{ignored ? t('Unignore') : t('Ignore')}</button>
+                  <button onClick={() => { setMenu(false); void toggleOnlineAlert(u.id, nameOf(u, notes)) }} className="w-full text-left rounded-md px-2.5 py-2 hover:bg-bg-3" data-friend-alert={u.id}>{alerts ? t('Stop Online Alerts') : t('Notify When Online')}</button>
+                  <button onClick={() => { setMenu(false); void toggleIgnored(u.id, nameOf(u, notes)) }} className="w-full text-left rounded-md px-2.5 py-2 hover:bg-bg-3">{ignored ? t('Unignore') : t('Ignore')}</button>
                   <button onClick={remove} className="w-full text-left rounded-md px-2.5 py-2 text-danger hover:bg-danger hover:text-white">{t('Remove Friend')}</button>
                   <button onClick={block} className="w-full text-left rounded-md px-2.5 py-2 text-danger hover:bg-danger hover:text-white">{t('Block')}</button>
                 </div>
@@ -208,6 +212,7 @@ function Row({ r, online }: { r: Relationship; online: boolean }) {
 
 function AddFriend() {
   const t = useT()
+  const notes = useStore((s) => s.notes)
   const relationships = useStore((s) => s.relationships)
   const me = useStore((s) => s.user)
   const [name, setName] = useState('')
@@ -253,12 +258,12 @@ function AddFriend() {
                 return (
                   <div key={u.id} className="flex items-center gap-3 py-2.5 px-2" data-motion-row>
                     <Avatar user={u} size={36} />
-                    <div className="min-w-0 flex-1"><div className="font-semibold truncate">{u.display_name}</div><div className="text-xs text-text-2">@{u.username}</div></div>
+                    <div className="min-w-0 flex-1"><div className="font-semibold truncate">{nameOf(u, notes)}</div><div className="text-xs text-text-2">@{u.username}</div></div>
                     {rel === 'friend' ? <span className="text-xs text-text-2">{t('Friends')}</span>
                       : rel === 'outgoing' ? <span className="text-xs text-text-2">{t('Request sent')}</span>
-                      : rel === 'incoming' ? <button onClick={() => send({ user_id: u.id }, u.display_name)} className="btn-primary bg-success hover:bg-success/80 text-black py-1.5">{t('Accept')}</button>
+                      : rel === 'incoming' ? <button onClick={() => send({ user_id: u.id }, nameOf(u, notes))} className="btn-primary bg-success hover:bg-success/80 text-black py-1.5">{t('Accept')}</button>
                       : rel === 'blocked' ? <span className="text-xs text-text-2">{t('Blocked')}</span>
-                      : <button onClick={() => send({ user_id: u.id }, u.display_name)} disabled={busy} className="btn-primary py-1.5"><UserPlus size={16} /> {t('Add')}</button>}
+                      : <button onClick={() => send({ user_id: u.id }, nameOf(u, notes))} disabled={busy} className="btn-primary py-1.5"><UserPlus size={16} /> {t('Add')}</button>}
                   </div>
                 )
               })}

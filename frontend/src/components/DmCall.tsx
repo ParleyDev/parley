@@ -21,6 +21,7 @@ import Avatar from './Avatar'
 import CallLock from './CallLock'
 import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './VideoTile'
 import { useT } from '../lib/i18n'
+import { nameOf } from '../lib/dm'
 
 type Tile = { key: string; userId: string; kind: 'camera' | 'screen'; user: User | undefined; state: VoiceState; stream: MediaStream | null; isMe: boolean }
 
@@ -34,6 +35,7 @@ const DEFAULT_HEIGHT = 360
 export default function DmCall({ channel }: { channel: DmChannel }) {
   const participants = useStore(useShallow((s) => voiceParticipants(s, channel.id)))
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const me = useStore((s) => s.user)
   const myChannel = useStore((s) => s.myVoiceChannelId)
   const connecting = useStore((s) => s.voiceConnecting)
@@ -106,7 +108,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
 
   const renderTile = (tile: Tile, big: boolean, cell = false) => {
     const talking = tile.kind === 'camera' && !!speaking[tile.userId]
-    const name = tile.user?.display_name ?? t('User')
+    const name = (tile.user ? nameOf(tile.user, notes) : '') || t('User')
     return (
       <div key={tile.key} onClick={() => { if (phone) { if (!phoneStage) setPhoneStage(tile.key) } else setFocused(focused === tile.key ? null : tile.key) }} onDoubleClick={(e) => { e.stopPropagation(); if (!phone) toggleFullscreen(e.currentTarget) }}
         onContextMenu={(e) => { if (!tile.isMe || tile.kind === 'camera') tileMenu.open(e, userMenu({ id: tile.userId, display_name: name }, e.currentTarget.getBoundingClientRect())) }}
@@ -177,9 +179,9 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         <div className="mt-2 shrink-0 flex flex-wrap items-center justify-center gap-1.5 text-xs text-text-2" data-ring-row>
           <span>{t('Not here yet:')}</span>
           {notInCall.map((r) => (
-            <button key={r.id} type="button" onClick={() => api.post(`/channels/${channel.id}/call/ring`, { user_ids: [r.id] }).then(() => useStore.getState().pushToast(t('Ringing {name}', { name: r.display_name }))).catch((e: Error) => useStore.getState().pushToast(e.message, 'error'))}
-              className="flex items-center gap-1.5 rounded-full border border-line bg-bg-1 py-0.5 pl-0.5 pr-2 text-text-1 hover:bg-bg-3" data-ring={r.id} title={t('Ring {name}', { name: r.display_name })}>
-              <Avatar user={users[r.id] ?? r} size={18} /><span className="max-w-[120px] truncate">{r.display_name}</span><Phone size={12} className="text-success" />
+            <button key={r.id} type="button" onClick={() => api.post(`/channels/${channel.id}/call/ring`, { user_ids: [r.id] }).then(() => useStore.getState().pushToast(t('Ringing {name}', { name: nameOf(r, notes) }))).catch((e: Error) => useStore.getState().pushToast(e.message, 'error'))}
+              className="flex items-center gap-1.5 rounded-full border border-line bg-bg-1 py-0.5 pl-0.5 pr-2 text-text-1 hover:bg-bg-3" data-ring={r.id} title={t('Ring {name}', { name: nameOf(r, notes) })}>
+              <Avatar user={users[r.id] ?? r} size={18} /><span className="max-w-[120px] truncate">{nameOf(r, notes)}</span><Phone size={12} className="text-success" />
             </button>
           ))}
         </div>
@@ -229,7 +231,7 @@ export default function DmCall({ channel }: { channel: DmChannel }) {
         const tile = phoneStage === 'activity' ? null : tiles.find((x) => x.key === phoneStage)
         if (phoneStage === 'activity' ? !activity : !tile) { queueMicrotask(() => setPhoneStage(null)); return null }
         return (
-          <PhoneStage title={tile?.user?.display_name ?? t('Call')} onClose={() => setPhoneStage(null)}>
+          <PhoneStage title={(tile?.user ? nameOf(tile.user, notes) : '') || t('Call')} onClose={() => setPhoneStage(null)}>
             {tile ? renderTile(tile, true) : <ActivityFrame session={activity!} />}
           </PhoneStage>
         )

@@ -8,6 +8,7 @@ import { useStore } from '../store'
 import Avatar from './Avatar'
 import { jumpToMessageAsync } from './ChatView'
 import { publicOrigin } from './InviteCard'
+import { shownName } from '../lib/names'
 
 export interface MessageLink { guildId: string | null; channelId: string; messageId: string; url: string }
 
@@ -43,6 +44,8 @@ export default function MessageLinkPreview({ link, fallback }: { link: MessageLi
   const channel = useStore((s) => s.channels[link.channelId] ?? s.dms[link.channelId])
   const guild = useStore((s) => (link.guildId ? s.guilds[link.guildId] : undefined))
   const navigate = useNavigate()
+  const members = useStore((s) => { const g = s.channels[link.channelId]?.guild_id ?? link.guildId; return g ? s.members[g] : undefined })
+  const notes = useStore((s) => s.notes)
   useEffect(() => {
     let live = true
     let p = cache.get(link.messageId)
@@ -66,7 +69,7 @@ export default function MessageLinkPreview({ link, fallback }: { link: MessageLi
         <span className="flex items-center gap-1 text-[11px] text-text-2">{channel?.guild_id ? <Hash size={11} /> : <MessageSquare size={11} />}<span className="truncate">{where}</span></span>
         <span className="mt-1 flex items-center gap-2">
           <Avatar user={m.author} size={20} />
-          <span className="font-semibold text-sm truncate" data-message-link-author>{m.author.display_name}</span>
+          <span className="font-semibold text-sm truncate" data-message-link-author>{shownName(m.author, members?.[m.author.id], notes[m.author.id]?.nickname)}</span>
           <span className="text-[11px] text-text-2 shrink-0">{new Date(m.created_at).toLocaleDateString()}</span>
         </span>
         {text && <span className="mt-1 block text-sm text-text-1 line-clamp-3 break-words whitespace-pre-wrap" data-message-link-text>{text}</span>}

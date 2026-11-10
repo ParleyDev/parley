@@ -52,11 +52,14 @@ async fn ring(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): 
     let members = dm_members(&state, id).await?;
     let targets: Vec<Uuid> = req.user_ids.into_iter().filter(|t| *t != uid && members.contains(t) && state.hub.voice_state(*t).map(|v| v.channel_id != id).unwrap_or(true)).collect();
     if targets.is_empty() { return Err(AppError::BadRequest("Nobody to ring".into())) }
-    let (name,): (String,) = sqlx::query_as("SELECT display_name FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
     state.hub.emit_users(targets.clone(), "CALL_RING", json!({ "channel_id": id, "user_id": uid }));
     let online = crate::ws::bus::online_users(&state.db).await;
     let offline: Vec<Uuid> = targets.into_iter().filter(|t| !online.contains(t)).collect();
-    if !offline.is_empty() { crate::push::notify(&state, &offline, "Incoming call", &format!("{name} is calling you"), json!({ "kind": "call", "channel_id": id })).await; }
+    for t in offline {
+        // Each recipient reads the caller under their own friend nickname for them, if they set one.
+        let name = crate::routes::users::shown_name(&state.db, uid, None, Some(t)).await;
+        crate::push::notify(&state, &[t], "Incoming call", &format!("{name} is calling you"), json!({ "kind": "call", "channel_id": id })).await;
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 

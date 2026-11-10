@@ -42,6 +42,7 @@ import { api } from '../lib/api'
 import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
 import { useParams } from 'react-router-dom'
+import { globalName, shownName } from '../lib/names'
 
 interface Props { message: Message; grouped: boolean; isOwn: boolean; onReply: () => void; replyTarget: ReplyRef | null
   /** Reply header click: scroll to (and if needed load) the original message. */
@@ -65,9 +66,9 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   // Server profile avatar for the author, in this server.
   const serverAvatar = useStore((s) => (guildId ? s.members[guildId]?.[m.author.id]?.guild_avatar : undefined))
   // In a server, people show under their server nickname (like the member list).
-  const serverNick = useStore((s) => (guildId ? s.members[guildId]?.[m.author.id]?.nickname : undefined))
-  const authorName = serverNick || m.author.display_name
-  const replyNick = useStore((s) => (guildId && replyTarget ? s.members[guildId]?.[replyTarget.author.id]?.nickname : undefined))
+  const authorName = useStore((s) => shownName(m.author, guildId ? s.members[guildId]?.[m.author.id] : undefined, s.notes[m.author.id]?.nickname))
+  const replyName = useStore((s) => (replyTarget ? shownName(replyTarget.author, guildId ? s.members[guildId]?.[replyTarget.author.id] : undefined, s.notes[replyTarget.author.id]?.nickname) : ''))
+  const interactionName = useStore((s) => (m.interaction ? shownName(m.interaction.user, guildId ? s.members[guildId]?.[m.interaction.user.id] : undefined, s.notes[m.interaction.user.id]?.nickname) : ''))
   const authorShown = serverAvatar ? { ...m.author, avatar_url: serverAvatar } : m.author
   const ctx = useContextMenu()
   const userMenu = useUserMenu(guildId ?? null)
@@ -420,12 +421,12 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
       <span className="pointer-events-none absolute top-1/2 z-10 -translate-y-1/2 h-8 w-8 items-center justify-center rounded-full bg-bg-4 text-text-0 shadow" style={{ right: 'calc(10px + var(--swipe-x, 0px))', opacity: 'var(--swipe-o, 0)' }} aria-hidden data-swipe-reply><Reply size={16} /></span>
       {m.interaction && (
         <div className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" data-interaction-header={m.interaction.name}>
-          {tn('{user} used {command}', { user: <span className="font-semibold text-text-1">{m.interaction.user.display_name}</span>, command: <span className="font-semibold text-sky-400">/{m.interaction.name}</span> })}
+          {tn('{user} used {command}', { user: <span className="font-semibold text-text-1">{interactionName}</span>, command: <span className="font-semibold text-sky-400">/{m.interaction.name}</span> })}
         </div>
       )}
       {m.reply_to && (
         <div role="button" onClick={(e) => { if (onJumpToReply) { e.stopPropagation(); onJumpToReply() } }} data-reply-link={m.reply_to} className="ml-14 mb-0.5 flex items-center gap-1.5 text-xs text-text-2 cursor-pointer hover:text-text-0 before:content-[''] before:absolute before:left-9 before:top-2 before:h-3 before:w-6 before:rounded-tl-md before:border-l-2 before:border-t-2 before:border-bg-4" title={t('Jump to the original message')}>
-          {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyNick || replyTarget.author.display_name}</span><span className="truncate max-w-md" data-reply-preview>{(replyTarget.content && previewText(replyTarget.content, m.channel_id)) || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 ' + t('Attachment') : '')}</span></>) : <i data-reply-preview="deleted">{t('Original message was deleted')}</i>}
+          {replyTarget ? (<><Avatar user={replyTarget.author} size={16} /><span className="font-semibold text-text-1">{replyName}</span><span className="truncate max-w-md" data-reply-preview>{(replyTarget.content && previewText(replyTarget.content, m.channel_id)) || ((replyTarget.attachments?.length ?? replyTarget.attachment_count ?? 0) > 0 ? '📎 ' + t('Attachment') : '')}</span></>) : <i data-reply-preview="deleted">{t('Original message was deleted')}</i>}
         </div>
       )}
       <div className={`flex ${compact ? 'gap-2' : 'gap-4 phone:gap-3'}`}>
@@ -504,7 +505,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
                   ? <FrozenGif src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" mode={prefs.stickerAnimation === 'never' ? 'never' : 'hover'} data-msg-sticker={m.sticker.name} />
                   : <img src={m.sticker.url} alt={m.sticker.name} title={m.sticker.name} className="mt-1 h-40 w-40 object-contain" draggable={false} loading="lazy" data-msg-sticker={m.sticker.name} />
               )}
-              <Attachments items={blockMedia ? (m.attachments ?? []).filter((a) => !/^(image|video)\//.test(a.content_type)) : spoilerChannel ? (m.attachments ?? []).map((a) => (/^(image|video)\//.test(a.content_type) && !a.filename.startsWith('SPOILER_') ? { ...a, filename: `SPOILER_${a.filename}` } : a)) : m.attachments ?? []} mine={isOwn} sensitive={mediaLevel === 'filter' ? 'filter' : sensitive} enforced={enforcedFilter} context={{ artist: serverNick || m.author.display_name, where: { guildId: guildId ?? null, channelId: m.channel_id, messageId: m.id } }} />
+              <Attachments items={blockMedia ? (m.attachments ?? []).filter((a) => !/^(image|video)\//.test(a.content_type)) : spoilerChannel ? (m.attachments ?? []).map((a) => (/^(image|video)\//.test(a.content_type) && !a.filename.startsWith('SPOILER_') ? { ...a, filename: `SPOILER_${a.filename}` } : a)) : m.attachments ?? []} mine={isOwn} sensitive={mediaLevel === 'filter' ? 'filter' : sensitive} enforced={enforcedFilter} context={{ artist: authorName, where: { guildId: guildId ?? null, channelId: m.channel_id, messageId: m.id } }} />
             </>
           )}
           {m.reactions.length > 0 && prefs.showReactions && (
@@ -604,8 +605,10 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
     if (r.burst && r.count > lastCount.current) { setBursting((n) => n + 1); const timer = setTimeout(() => setBursting(0), 900); lastCount.current = r.count; return () => clearTimeout(timer) }
     lastCount.current = r.count
   }, [r.burst, r.count])
-  const [who, setWho] = useState<{ id: string; display_name: string }[] | null>(null)
+  const [who, setWho] = useState<{ id: string; display_name: string; username?: string }[] | null>(null)
   const me = useStore((s) => s.user)
+  const members = useStore((s) => { const g = s.channels[m.channel_id]?.guild_id; return g ? s.members[g] : undefined })
+  const notes = useStore((s) => s.notes)
   useEffect(() => {
     if (!rect) return
     let live = true
@@ -615,7 +618,7 @@ function ReactionChip({ r, message: m, canReact, onToggle }: { r: { emoji: strin
   const c = parseCustom(r.emoji)
   const name = c ? `:${c.name}:` : emojiLabel(r.emoji)
   // The chip's own `me` flag is authoritative; the fetched list can lag a toggle by a round trip.
-  const others = (who ?? []).filter((u) => u.id !== me?.id).map((u) => u.display_name)
+  const others = (who ?? []).filter((u) => u.id !== me?.id).map((u) => shownName(u, members?.[u.id], notes[u.id]?.nickname))
   const names = r.me ? [...others, t('You')] : others
   const text = names.length === 0 ? '' : names.length === 1 ? names[0] : names.length === 2 ? t('{a} and {b}', { a: names[0], b: names[1] }) : names.length === 3 ? t('{a}, {b}, and {c}', { a: names[0], b: names[1], c: names[2] }) : t('{a}, {b}, and {n} others', { a: names[0], b: names[1], n: names.length - 2 })
   return (
@@ -676,7 +679,7 @@ function RibbitNotice({ m }: { m: Message }) {
         <CropImg src={m.author.avatar_url ?? ''} alt="" className="h-10 w-10 phone:h-8 phone:w-8 shrink-0 rounded-full" draggable={false} data-msg-avatar />
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2 leading-[1.375rem] h-[1.375rem]" data-msg-header>
-            <span className="font-medium text-text-0">{m.author.display_name}</span>
+            <span className="font-medium text-text-0">{globalName(m.author)}</span>
             <span className="rounded bg-accent px-1 py-px text-[10px] font-bold uppercase leading-4 text-white" data-app-badge>{t('App')}</span>
             <span className="text-[11px] text-text-2">{formatTime(m.created_at)}</span>
           </div>

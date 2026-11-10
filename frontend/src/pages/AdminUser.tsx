@@ -8,6 +8,7 @@ import { useT } from '../lib/i18n'
 import { formatBytes } from '../lib/upload'
 import { useStore } from '../store'
 import { can, useAccess } from './adminAccess'
+import { globalName } from '../lib/names'
 
 const MIN_WHY = 10
 
@@ -95,10 +96,10 @@ export default function UserDetailPane() {
       <NavLink to="/admin/users" className="text-xs text-sky-400 hover:underline">{t('← Users')}</NavLink>
       <div className="flex flex-wrap items-center gap-4">
         <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full flex items-center justify-center text-xl font-bold text-white" style={{ background: u.avatar_url ? undefined : colorFor(u.id) }}>
-          {u.avatar_url ? <CropImg src={u.avatar_url} alt="" className="h-full w-full object-cover" /> : initials(u.display_name)}
+          {u.avatar_url ? <CropImg src={u.avatar_url} alt="" className="h-full w-full object-cover" /> : initials(globalName(u))}
         </span>
         <div className="min-w-0 flex-1">
-          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold">{u.display_name} <span className="text-base font-normal text-text-2">@{u.username}</span></h1>
+          <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold">{globalName(u)} <span className="text-base font-normal text-text-2">@{u.username}</span></h1>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-text-2">
             <span className={`h-2 w-2 rounded-full ${u.online ? 'bg-success' : 'bg-text-2'}`} />
             <span data-admin-detail-presence>{u.online ? t('Online now on {platforms}', { platforms: u.platforms.join(', ') || 'web' }) : t('Last seen {when}', { when: ago(u.last_seen_at) })}</span>
@@ -221,7 +222,7 @@ export default function UserDetailPane() {
             <div>
               <h3 className="mb-1 font-semibold">{t('Other accounts on the same addresses ({n})', { n: sig.shared.length })}</h3>
               {sig.shared.length === 0 ? <p className="text-xs text-text-2">{t('None.')}</p> : (
-                <ul className="divide-y divide-line rounded-lg border border-line" data-admin-signal-shared>{sig.shared.map((s) => <li key={s.id} className="flex flex-wrap items-center gap-2 px-2 py-1.5"><button type="button" className="font-semibold text-sky-400 hover:underline" onClick={() => navigate(`/admin/users/${s.id}`)} data-admin-shared-user={s.username}>{s.display_name} <span className="font-normal text-text-2">@{s.username}</span></button>{s.guest && <span className="text-[10px] font-bold text-text-2">{t('GUEST')}</span>}{s.suspended_at && <span className="text-[10px] font-bold text-danger">{t('SUSPENDED')}</span>}{s.account_state !== 'active' && <span className="text-[10px] font-bold text-danger">{s.account_state.toUpperCase()}</span>}<span className="ml-auto font-mono text-[11px] text-text-2">{s.ips.join(', ')}</span></li>)}</ul>
+                <ul className="divide-y divide-line rounded-lg border border-line" data-admin-signal-shared>{sig.shared.map((s) => <li key={s.id} className="flex flex-wrap items-center gap-2 px-2 py-1.5"><button type="button" className="font-semibold text-sky-400 hover:underline" onClick={() => navigate(`/admin/users/${s.id}`)} data-admin-shared-user={s.username}>{globalName(s)} <span className="font-normal text-text-2">@{s.username}</span></button>{s.guest && <span className="text-[10px] font-bold text-text-2">{t('GUEST')}</span>}{s.suspended_at && <span className="text-[10px] font-bold text-danger">{t('SUSPENDED')}</span>}{s.account_state !== 'active' && <span className="text-[10px] font-bold text-danger">{s.account_state.toUpperCase()}</span>}<span className="ml-auto font-mono text-[11px] text-text-2">{s.ips.join(', ')}</span></li>)}</ul>
               )}
             </div>
             <div className="grid gap-4 md:grid-cols-3">

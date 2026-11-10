@@ -5,6 +5,7 @@ import { has, P } from '../../../lib/perms'
 import { useStore } from '../../../store'
 import { useT } from '../../../lib/i18n'
 import Dropdown from '../../Dropdown'
+import { shownName } from '../../../lib/names'
 
 const MOD = P.MUTE_MEMBERS | P.MOVE_MEMBERS
 
@@ -18,12 +19,13 @@ export default function StageModeratorsTab({ channelId }: { channelId: string })
   const guildId = channel?.guild_id ?? ''
   const roles = useStore((s) => s.roles[guildId])
   const members = useStore((s) => s.members[guildId])
+  const notes = useStore((s) => s.notes)
   const pushToast = useStore((s) => s.pushToast)
   const [pick, setPick] = useState('')
   if (!channel) return null
   const ows = channel.overwrites ?? []
   const mods = ows.filter((o) => has(o.allow, P.MUTE_MEMBERS) && has(o.allow, P.MOVE_MEMBERS))
-  const nameOf = (id: string, kind: 'role' | 'member') => kind === 'role' ? (id === guildId ? '@everyone' : `@${roles?.[id]?.name ?? t('role')}`) : (members?.[id]?.nickname || members?.[id]?.display_name || t('member'))
+  const nameOf = (id: string, kind: 'role' | 'member') => kind === 'role' ? (id === guildId ? '@everyone' : `@${roles?.[id]?.name ?? t('role')}`) : (shownName(members?.[id], members?.[id], notes[id]?.nickname) || t('member'))
   const add = async () => {
     const [kind, id] = pick.split(':') as ['role' | 'member', string]
     if (!id) return
@@ -56,7 +58,7 @@ export default function StageModeratorsTab({ channelId }: { channelId: string })
         <Dropdown className="input flex-1" value={pick} onChange={(e) => setPick(e.target.value)} data-stage-mod-pick>
           <option value="">{t('Add a role or member…')}</option>
           <optgroup label={t('Roles')}>{Object.values(roles ?? {}).filter((r) => r.id !== guildId && !taken.has(r.id)).sort((a, b) => b.position - a.position).map((r) => <option key={r.id} value={`role:${r.id}`}>@{r.name}</option>)}</optgroup>
-          <optgroup label={t('Members')}>{Object.values(members ?? {}).filter((m) => !taken.has(m.user_id)).slice(0, 200).map((m) => <option key={m.user_id} value={`member:${m.user_id}`}>{m.nickname || m.display_name}</option>)}</optgroup>
+          <optgroup label={t('Members')}>{Object.values(members ?? {}).filter((m) => !taken.has(m.user_id)).slice(0, 200).map((m) => <option key={m.user_id} value={`member:${m.user_id}`}>{shownName(m, m, notes[m.user_id]?.nickname)}</option>)}</optgroup>
         </Dropdown>
         <button type="button" className="btn-primary" disabled={!pick} onClick={() => void add()} data-stage-mod-add>{t('Add')}</button>
       </div>

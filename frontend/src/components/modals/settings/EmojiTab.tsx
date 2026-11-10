@@ -7,6 +7,7 @@ import { useStore } from '../../../store'
 import Modal from '../../Modal'
 import ImageCrop from '../../ImageCrop'
 import { useT } from '../../../lib/i18n'
+import { shownName } from '../../../lib/names'
 
 const MAX = 100
 const MAX_BYTES = 512 * 1024
@@ -22,6 +23,7 @@ export default function EmojiTab({ guildId }: { guildId: string }) {
   const t = useT()
   const emojis = useStore((s) => s.emojis[guildId] ?? EMPTY)
   const members = useStore((s) => s.members[guildId])
+  const notes = useStore((s) => s.notes)
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -99,7 +101,7 @@ export default function EmojiTab({ guildId }: { guildId: string }) {
                     <span className="font-mono text-sm truncate">:{e.name}:</span><Pencil size={13} className="text-text-2 opacity-0 group-hover:opacity-100 shrink-0" />
                   </button>
                 )}
-                <span className="text-sm text-text-1 truncate">{(e.creator_id && members?.[e.creator_id]?.display_name) || (e.creator_id ? t('A member') : t('Unknown'))}</span>
+                <span className="text-sm text-text-1 truncate">{(e.creator_id && members?.[e.creator_id] && shownName(members[e.creator_id], members[e.creator_id], notes[e.creator_id]?.nickname)) || (e.creator_id ? t('A member') : t('Unknown'))}</span>
                 <button type="button" onClick={() => del(e)} className="justify-self-end h-8 w-8 rounded-md flex items-center justify-center text-text-2 hover:text-danger hover:bg-bg-3" title={t('Delete')} data-delete-emoji><Trash2 size={16} /></button>
               </div>
             ))}

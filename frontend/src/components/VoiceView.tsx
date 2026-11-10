@@ -28,6 +28,7 @@ import VideoTile, { FitToggle, StopWatching, StreamGate, useVideoFit } from './V
 import ChatPane from './ChatPane'
 import { MembersToggle, MobileBack } from './HeaderBits'
 import { t, useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 type Tile = { key: string; userId: string; kind: 'camera' | 'screen'; user: User | undefined; state: VoiceState; stream: MediaStream | null; isMe: boolean }
 
@@ -37,6 +38,8 @@ const CONSOLE_KEY = `${STORAGE_PREFIX}studioConsole`
 const loadView = (): { self: boolean; nonVideo: boolean } => { try { return { self: true, nonVideo: true, ...JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}') } } catch { return { self: true, nonVideo: true } } }
 
 export default function VoiceView({ channel }: { channel: Channel }) {
+  const members = useStore((s) => (channel.guild_id ? s.members[channel.guild_id] : undefined))
+  const notes = useStore((s) => s.notes)
   const t = useT()
   const participants = useStore(useShallow((s) => voiceParticipants(s, channel.id)))
   const users = useStore((s) => s.users)
@@ -179,7 +182,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const renderTile = (tile: Tile, big: boolean, fill = false) => {
     const talking = tile.kind === 'camera' && !!speaking[tile.userId]
     const status = tile.kind !== 'camera' ? null : tile.isMe ? (connecting ? 'connecting' : 'connected') : inThis ? peerStatus[tile.userId] ?? 'connecting' : null
-    const name = tile.user?.display_name ?? t('Unknown')
+    const name = shownName(tile.user ?? members?.[tile.userId], members?.[tile.userId], notes[tile.userId]?.nickname) || t('Unknown')
     return (
       <div key={tile.key} onClick={() => { if (phone) { if (!stage) setStage(tile.key) } else setFocused(focused === tile.key ? null : tile.key) }} onDoubleClick={(e) => { e.stopPropagation(); if (!phone) toggleFullscreen(e.currentTarget) }}
         onContextMenu={(e) => { if (!tile.isMe || tile.kind === 'camera') tileMenu.open(e, userMenu({ id: tile.userId, display_name: name }, e.currentTarget.getBoundingClientRect())) }}
@@ -310,7 +313,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                         {p.request_to_speak && <span className="absolute -right-1 -top-1 rounded-full bg-warn p-0.5 text-black"><Hand size={12} /></span>}
                         {(p.self_deaf || p.self_mute) && <span className="absolute -right-1 -bottom-1 rounded-full bg-bg-0 p-0.5 text-danger">{p.self_deaf ? <HeadphoneOff size={12} /> : <MicOff size={12} />}</span>}
                       </div>
-                      <span className="w-full truncate text-xs text-text-1" data-audience-name>{u?.display_name ?? t('Unknown')}</span>
+                      <span className="w-full truncate text-xs text-text-1" data-audience-name>{shownName(u ?? members?.[p.user_id], members?.[p.user_id], notes[p.user_id]?.nickname) || t('Unknown')}</span>
                       {!isStudio && isMod && inThis && <button type="button" onClick={() => inviteToSpeak(p.user_id)} className="whitespace-nowrap rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-white hover:bg-accent-hover" title={t('Invite to speak')} data-invite-speak>{t('Invite to speak')}</button>}
                       {isStudio && isMod && inThis && <span className="absolute right-0.5 top-0.5 opacity-0 group-hover:opacity-100" onClick={(e) => e.stopPropagation()}><RoleMenu uid={p.user_id} /></span>}
                     </div>
@@ -385,7 +388,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           const tile = stage === 'activity' ? null : shown.find((x) => x.key === stage)
           if (stage === 'activity' ? !activity : !tile) { queueMicrotask(() => setStage(null)); return null }
           return (
-            <PhoneStage title={tile ? (tile.user?.display_name ?? channel.name) : channel.name} onClose={() => setStage(null)}>
+            <PhoneStage title={tile ? (shownName(tile.user ?? members?.[tile.userId], members?.[tile.userId], notes[tile.userId]?.nickname) || channel.name) : channel.name} onClose={() => setStage(null)}>
               {tile ? renderTile(tile, true) : <ActivityFrame session={activity!} />}
             </PhoneStage>
           )
@@ -431,11 +434,13 @@ function peopleList(names: string[], count: number) {
  */
 function PreJoin({ channel, participants, users, canConnect, connecting, switching, recording }: { channel: Channel; participants: VoiceState[]; users: Record<string, User>; canConnect: boolean; connecting: boolean; switching: boolean; recording?: string }) {
   const t = useT()
+  const members = useStore((s) => (channel.guild_id ? s.members[channel.guild_id] : undefined))
+  const notes = useStore((s) => s.notes)
   const isStudio = channel.kind === 'studio', isStage = channel.kind === 'stage' || isStudio
   const onStage = isStage ? participants.filter((p) => !p.suppress) : participants
   const listening = participants.length - onStage.length
   const people = onStage.map((p) => users[p.user_id]).filter((u): u is User => !!u)
-  const names = people.map((u) => u.display_name)
+  const names = people.map((u) => shownName(u, members?.[u.id], notes[u.id]?.nickname))
   const plist = peopleList(names, onStage.length), one = onStage.length === 1
   const lead = onStage.length === 0 ? (isStudio ? t('No one is in the studio') : isStage ? t('No one is on stage') : t('No one is currently in voice'))
     : isStudio ? (one ? t('{people} is in the studio', { people: plist }) : t('{people} are in the studio', { people: plist }))
@@ -448,7 +453,7 @@ function PreJoin({ channel, participants, users, canConnect, connecting, switchi
       {people.length > 0 && (
         <div className="flex max-w-[520px] flex-wrap justify-center gap-2" data-prejoin-people>
           {people.slice(0, 6).map((u) => (
-            <div key={u.id} title={u.display_name} className="flex h-[88px] w-[156px] phone:h-16 phone:w-28 items-center justify-center rounded-lg bg-bg-3" style={u.theme_accent ? { backgroundColor: u.theme_accent } : undefined}>
+            <div key={u.id} title={shownName(u, members?.[u.id], notes[u.id]?.nickname)} className="flex h-[88px] w-[156px] phone:h-16 phone:w-28 items-center justify-center rounded-lg bg-bg-3" style={u.theme_accent ? { backgroundColor: u.theme_accent } : undefined}>
               <Avatar user={u} size={44} />
             </div>
           ))}

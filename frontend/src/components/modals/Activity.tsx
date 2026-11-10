@@ -9,6 +9,7 @@ import { useStore } from '../../store'
 import Avatar from '../Avatar'
 import Modal from '../Modal'
 import { useT } from '../../lib/i18n'
+import { shownName } from '../../lib/names'
 
 interface Feed {
   top_messages: { id: string; channel_id: string; content: string; author: { id: string; display_name: string; avatar_url: string | null }; created_at: string; reactions: number }[]
@@ -22,6 +23,8 @@ export default function ActivityModal({ onClose, guildId }: { onClose: () => voi
   const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
   const channels = useStore((s) => s.channels)
+  const members = useStore((s) => s.members[guildId])
+  const notes = useStore((s) => s.notes)
   const openModal = useStore((s) => s.openModal)
   const setOpenThread = useStore((s) => s.setOpenThread)
   const navigate = useNavigate()
@@ -38,7 +41,7 @@ export default function ActivityModal({ onClose, guildId }: { onClose: () => voi
             {feed.top_messages.length === 0 ? <p className="text-sm text-text-2">{t('No reactions this week yet.')}</p> : feed.top_messages.map((m) => (
               <button key={m.id} type="button" onClick={() => go(m.channel_id, m.id)} className="mb-1.5 flex w-full items-start gap-2 rounded-lg border border-line bg-bg-1 p-2 text-left hover:bg-bg-3" data-activity-message={m.id}>
                 <Avatar user={m.author} size={28} />
-                <span className="min-w-0 flex-1"><span className="text-sm font-semibold">{m.author.display_name}</span> <span className="text-xs text-text-2">{t('in #{channel} · {when}', { channel: channels[m.channel_id]?.name ?? t('channel'), when: relativeTime(m.created_at) })}</span><span className="line-clamp-2 block text-sm text-text-1">{(m.content && notificationText(m.content, guildId)) || <i>{t('Attachment')}</i>}</span></span>
+                <span className="min-w-0 flex-1"><span className="text-sm font-semibold">{shownName(m.author, members?.[m.author.id], notes[m.author.id]?.nickname)}</span> <span className="text-xs text-text-2">{t('in #{channel} · {when}', { channel: channels[m.channel_id]?.name ?? t('channel'), when: relativeTime(m.created_at) })}</span><span className="line-clamp-2 block text-sm text-text-1">{(m.content && notificationText(m.content, guildId)) || <i>{t('Attachment')}</i>}</span></span>
                 <span className="shrink-0 rounded-full bg-bg-3 px-2 py-0.5 text-xs" title={t('Reactions')}>{m.reactions} ❤</span>
               </button>
             ))}
@@ -57,7 +60,7 @@ export default function ActivityModal({ onClose, guildId }: { onClose: () => voi
           )}
           <section data-activity-members>
             {head(<UserPlus size={13} />, t('New members'))}
-            <div className="flex flex-wrap gap-2">{feed.new_members.map((u) => <button key={u.id} type="button" onClick={(ev) => openModal({ kind: 'profile', userId: u.id, anchor: { x: ev.currentTarget.getBoundingClientRect().left, y: ev.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} className="flex items-center gap-1.5 rounded-full bg-bg-3 py-0.5 pl-0.5 pr-2 text-xs hover:bg-bg-4" title={t('Joined {when}', { when: relativeTime(u.joined_at) })}><Avatar user={u} size={20} />{u.display_name}</button>)}</div>
+            <div className="flex flex-wrap gap-2">{feed.new_members.map((u) => <button key={u.id} type="button" onClick={(ev) => openModal({ kind: 'profile', userId: u.id, anchor: { x: ev.currentTarget.getBoundingClientRect().left, y: ev.currentTarget.getBoundingClientRect().top, w: 0, h: 0 } })} className="flex items-center gap-1.5 rounded-full bg-bg-3 py-0.5 pl-0.5 pr-2 text-xs hover:bg-bg-4" title={t('Joined {when}', { when: relativeTime(u.joined_at) })}><Avatar user={u} size={20} />{shownName(u, members?.[u.id], notes[u.id]?.nickname)}</button>)}</div>
           </section>
         </div>
       )}

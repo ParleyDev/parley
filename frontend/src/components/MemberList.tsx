@@ -17,6 +17,7 @@ import { useT } from '../lib/i18n'
 import { nameplateClass } from '../lib/cosmetics'
 import { ActivityLine } from './SpotifyActivity'
 import { isAssetNameplate, NameplateVideo } from './Nameplate'
+import { shownName } from '../lib/names'
 
 export default function MemberList({ guildId }: { guildId: string }) {
   const t = useT()
@@ -35,12 +36,13 @@ export default function MemberList({ guildId }: { guildId: string }) {
   // A thread shows the members of the channel it lives in.
   const channel = useStore((s) => { const c = channelId ? s.channels[channelId] : undefined; return c?.kind === 'thread' && c.parent_id ? s.channels[c.parent_id] ?? c : c })
   const voiceStates = useStore((s) => s.voiceStates)
+  const notes = useStore((s) => s.notes)
   const all = Object.values(members ?? {})
   const visible = (id: string) => online[id] && (users[id]?.status ?? '') !== 'invisible'
   // Header totals: who can read the current channel and is online, everyone, and who is in voice here.
   const canView = (m: Member) => !guild || !channel || channel.guild_id !== guildId || has(channelPerms({ guild, roles, member: m }, m.user_id, channel), P.VIEW_CHANNEL)
   // Like Discord, only members who can see this channel are listed.
-  const list = all.filter(canView).sort((a, b) => (a.nickname || a.display_name).localeCompare(b.nickname || b.display_name))
+  const list = all.filter(canView).sort((a, b) => shownName(a, a, notes[a.user_id]?.nickname).localeCompare(shownName(b, b, notes[b.user_id]?.nickname)))
   const onlineHere = list.filter((m) => visible(m.user_id)).length
   const inVoice = Object.values(voiceStates).filter((v) => v.guild_id === guildId && v.channel_id).length
 
@@ -66,7 +68,7 @@ export default function MemberList({ guildId }: { guildId: string }) {
         {!dim && <NameplateVideo value={m.nameplate ?? users[m.user_id]?.nameplate} />}
         <Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.guild_avatar ?? m.avatar_url }} size={32} presence />
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId} className="truncate text-[15px] font-medium text-text-1">{m.nickname || m.display_name}</StyledName><RoleIcon guildId={guildId} userId={m.user_id} size={14} /><ClanTag userId={m.user_id} tag={m.clan_tag} />{guild?.owner_id === m.user_id && <Crown size={14} className="text-warn shrink-0" />}{voiceStates[m.user_id]?.self_stream && <span className="shrink-0 rounded bg-danger px-1 text-[9px] font-extrabold text-white" title={t('Streaming')} data-member-live>{t('LIVE')}</span>}{isTimedOut(m) && <span title={m.quarantined ? t('Quarantined') : t('Timed out until {when}', { when: new Date(m.timeout_until!).toLocaleString() })} className="shrink-0 text-danger" data-member-timeout><TimerReset size={14} /></span>}{m.flags?.includes('raid') && <span title={t('Joined during a raid')} className="shrink-0 rounded bg-warn/20 px-1 text-[9px] font-bold text-warn" data-member-flag="raid">{t('RAID')}</span>}</span>
+          <span className="flex items-center gap-1"><StyledName userId={m.user_id} guildId={guildId} className="truncate text-[15px] font-medium text-text-1">{shownName(m, m)}</StyledName><RoleIcon guildId={guildId} userId={m.user_id} size={14} /><ClanTag userId={m.user_id} tag={m.clan_tag} />{guild?.owner_id === m.user_id && <Crown size={14} className="text-warn shrink-0" />}{voiceStates[m.user_id]?.self_stream && <span className="shrink-0 rounded bg-danger px-1 text-[9px] font-extrabold text-white" title={t('Streaming')} data-member-live>{t('LIVE')}</span>}{isTimedOut(m) && <span title={m.quarantined ? t('Quarantined') : t('Timed out until {when}', { when: new Date(m.timeout_until!).toLocaleString() })} className="shrink-0 text-danger" data-member-timeout><TimerReset size={14} /></span>}{m.flags?.includes('raid') && <span title={t('Joined during a raid')} className="shrink-0 rounded bg-warn/20 px-1 text-[9px] font-bold text-warn" data-member-flag="raid">{t('RAID')}</span>}</span>
           {status && !dim ? <span className="block truncate text-xs text-text-2" title={status} data-member-status><StatusEmojiText text={status} /></span> : activity && <ActivityLine activity={activity} />}
         </span>
       </button>

@@ -8,6 +8,7 @@ import { formatTime, renderMarkdown } from '../lib/format'
 import Avatar from './Avatar'
 import ChatPane from './ChatPane'
 import { useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 /** Side panel showing one thread: root message, its messages and composer, archive controls. */
 export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: () => void }) {
@@ -23,6 +24,7 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
   const joined = useStore((s) => !!s.myThreads[threadId])
   const setMyThread = useStore((s) => s.setMyThread)
   const guildMembers = useStore((s) => (thread?.guild_id ? s.members[thread.guild_id] : undefined))
+  const notes = useStore((s) => s.notes)
   const [people, setPeople] = useState<{ id: string; display_name: string; avatar_url: string | null }[] | null>(null)
   const [addQ, setAddQ] = useState('')
   const loadPeople = () => api.get<{ id: string; display_name: string; avatar_url: string | null }[]>(`/threads/${threadId}/members`).then(setPeople).catch(() => setPeople([]))
@@ -57,12 +59,12 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
             {people && (
               <div className="pop absolute right-0 top-full z-40 mt-1 w-64 rounded-xl border border-line bg-bg-0 p-2 shadow-2xl" data-thread-members>
                 <div className="px-1 pb-1 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Members')} — {people.length}</div>
-                <div className="max-h-48 overflow-y-auto">{people.map((u) => <div key={u.id} className="flex items-center gap-2 px-1 py-1 text-sm" data-thread-member={u.id}><Avatar user={u} size={20} /><span className="truncate">{u.display_name}</span></div>)}</div>
+                <div className="max-h-48 overflow-y-auto">{people.map((u) => <div key={u.id} className="flex items-center gap-2 px-1 py-1 text-sm" data-thread-member={u.id}><Avatar user={u} size={20} /><span className="truncate">{shownName(u, guildMembers?.[u.id], notes[u.id]?.nickname)}</span></div>)}</div>
                 {(joined || isMod) && (
                   <div className="mt-2 border-t border-line pt-2">
                     <div className="flex items-center gap-1"><UserPlus size={14} className="text-text-2" /><input className="input py-1 text-xs" placeholder={t('Add someone')} value={addQ} onChange={(e) => setAddQ(e.target.value)} data-thread-add-search /></div>
-                    {addQ && Object.values(guildMembers ?? {}).filter((m) => !people.some((p) => p.id === m.user_id) && (m.nickname || m.display_name).toLowerCase().includes(addQ.toLowerCase())).slice(0, 6).map((m) => (
-                      <button key={m.user_id} type="button" onClick={() => addPerson(m.user_id)} className="mt-1 flex w-full items-center gap-2 rounded px-1 py-1 text-left text-sm hover:bg-bg-3" data-thread-add={m.user_id}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={18} /><span className="truncate">{m.nickname || m.display_name}</span></button>
+                    {addQ && Object.values(guildMembers ?? {}).filter((m) => !people.some((p) => p.id === m.user_id) && [shownName(m, m, notes[m.user_id]?.nickname), m.display_name, m.username].some((n) => n.toLowerCase().includes(addQ.toLowerCase()))).slice(0, 6).map((m) => (
+                      <button key={m.user_id} type="button" onClick={() => addPerson(m.user_id)} className="mt-1 flex w-full items-center gap-2 rounded px-1 py-1 text-left text-sm hover:bg-bg-3" data-thread-add={m.user_id}><Avatar user={{ id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url }} size={18} /><span className="truncate">{shownName(m, m, notes[m.user_id]?.nickname)}</span></button>
                     ))}
                   </div>
                 )}
@@ -77,7 +79,7 @@ export function ThreadPanel({ threadId, onClose }: { threadId: string; onClose: 
       </div>
       {root && (
         <div className="shrink-0 border-b border-line bg-bg-2/60 px-4 py-3" data-thread-root>
-          <div className="flex items-center gap-2 mb-1"><Avatar user={root.author} size={20} /><span className="font-semibold text-sm">{root.author.display_name}</span><span className="text-[11px] text-text-2">{formatTime(root.created_at)}</span></div>
+          <div className="flex items-center gap-2 mb-1"><Avatar user={root.author} size={20} /><span className="font-semibold text-sm">{shownName(root.author, guildMembers?.[root.author.id], notes[root.author.id]?.nickname)}</span><span className="text-[11px] text-text-2">{formatTime(root.created_at)}</span></div>
           <div className="msg-content text-sm whitespace-pre-wrap break-words line-clamp-6">{renderMarkdown(root.content)}</div>
         </div>
       )}

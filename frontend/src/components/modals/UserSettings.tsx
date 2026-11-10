@@ -26,6 +26,7 @@ import { useT } from '../../lib/i18n'
 import { desktopVersion, isDesktop, isNative, switchServer, unregisterPush } from '../../lib/native'
 import { APP_NAME, APP_VERSION } from '../../lib/brand'
 import { promptInstall, useInstallable } from '../../lib/webpush'
+import { globalName } from '../../lib/names'
 
 type Tab = 'account' | 'profile' | 'social' | 'privacy' | 'devices' | 'connections' | 'apps' | 'applications' | 'voice' | 'appearance' | 'accessibility' | 'chat' | 'keybinds' | 'notifications' | 'streamer' | 'advanced' | 'language' | 'clips' | 'family'
 
@@ -70,7 +71,7 @@ export default function UserSettingsModal({ onClose, tab: requested }: { onClose
     <div className="flex items-center gap-3 px-1.5 py-1.5" data-settings-me>
       <Avatar user={user} size={40} />
       <div className="min-w-0">
-        <div className="truncate font-semibold text-text-0">{user.display_name}</div>
+        <div className="truncate font-semibold text-text-0">{globalName(user)}</div>
         <button type="button" onClick={() => { onClose(); openModal({ kind: 'editProfile' }) }} className="flex items-center gap-1 text-[13px] text-text-2 hover:text-text-0" data-settings-edit-profiles>{t('Edit Profiles')}<Pencil size={12} /></button>
       </div>
     </div>

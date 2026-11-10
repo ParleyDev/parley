@@ -24,6 +24,7 @@ import { desktopNotify, notifyMessage } from './desktopNotify'
 import { emitCallReaction } from './callReactions'
 import { useScheduled, type Scheduled } from './scheduled'
 import { t } from './i18n'
+import { globalName, nameIn, shownName } from './names'
 
 type Ev = { s?: number; i?: string } & (
   | { t: 'READY'; d: ReadyPayload }
@@ -250,7 +251,7 @@ function handle(ev: Ev) {
       // A "Remind me" bookmark came due: toast, sound, and a desktop notification when Parley is in the background.
       const m = ev.d.message
       const where = ev.d.guild_id ? `#${ev.d.channel_name}` : t('a DM')
-      const body = `${m.author.display_name}: ${m.content || t('a message')}`.slice(0, 140)
+      const body = `${nameIn(s, m.author.id, ev.d.guild_id) || globalName(m.author)}: ${m.content || t('a message')}`.slice(0, 140)
       s.pushToast(t('Reminder ({where}) — {body}', { where, body }))
       playSfx('mention')
       if (document.visibilityState !== 'visible') desktopNotify(t('Reminder from {where}', { where }), body, { icon: m.author.avatar_url, tag: `reminder:${m.id}`, path: `/channels/${ev.d.guild_id ?? '@me'}/${m.channel_id}?message=${m.id}` })
@@ -273,7 +274,7 @@ function handle(ev: Ev) {
       const cameOnline = ev.d.online && !s.online[ev.d.user_id]
       s.setPresence(ev.d.user_id, ev.d.online, ev.d.platforms ?? [], ev.d.idle)
       if (cameOnline && s.user?.online_alerts?.includes(ev.d.user_id) && s.relationships[ev.d.user_id]?.kind === 'friend') {
-        const name = s.notes[ev.d.user_id]?.nickname || s.users[ev.d.user_id]?.display_name || s.relationships[ev.d.user_id].user.display_name
+        const name = shownName(s.users[ev.d.user_id] ?? s.relationships[ev.d.user_id].user, null, s.notes[ev.d.user_id]?.nickname)
         s.pushToast(t('{name} is now online', { name }))
         if (document.visibilityState !== 'visible') desktopNotify(t('{name} is now online', { name }), '', { icon: s.users[ev.d.user_id]?.avatar_url, tag: `online:${ev.d.user_id}`, path: '/channels/@me' })
       }
@@ -311,10 +312,10 @@ function handle(ev: Ev) {
       const prev = s.relationships[ev.d.user.id]?.kind
       s.upsertRelationship(ev.d)
       if (ev.d.kind === 'incoming' && prev !== 'incoming' && !s.user?.ignored_users?.includes(ev.d.user.id)) {
-        s.pushToast(t('{name} sent you a friend request', { name: ev.d.user.display_name }))
+        s.pushToast(t('{name} sent you a friend request', { name: shownName(ev.d.user, null, s.notes[ev.d.user.id]?.nickname) }))
         playSfx('message')
         // A desktop notification when Parley isn't in front, like messages.
-        if (document.visibilityState !== 'visible') desktopNotify(t('{name} sent you a friend request', { name: ev.d.user.display_name }), ev.d.note ?? t('Open Friends to accept it.'), { icon: ev.d.user.avatar_url, tag: `friend:${ev.d.user.id}`, path: '/channels/@me' })
+        if (document.visibilityState !== 'visible') desktopNotify(t('{name} sent you a friend request', { name: shownName(ev.d.user, null, s.notes[ev.d.user.id]?.nickname) }), ev.d.note ?? t('Open Friends to accept it.'), { icon: ev.d.user.avatar_url, tag: `friend:${ev.d.user.id}`, path: '/channels/@me' })
       }
       break
     }
@@ -366,7 +367,7 @@ function handle(ev: Ev) {
     case 'CALL_DECLINE': {
       // You declined on another device: stop ringing here too. Someone else declined a call you're in: say so.
       if (ev.d.user_id === s.user?.id) s.setCallIgnored(ev.d.channel_id, true)
-      else if (s.myVoiceChannelId === ev.d.channel_id) s.pushToast(t('{name} declined the call', { name: s.users[ev.d.user_id]?.display_name ?? t('They') }))
+      else if (s.myVoiceChannelId === ev.d.channel_id) s.pushToast(t('{name} declined the call', { name: nameIn(s, ev.d.user_id, s.channels[ev.d.channel_id]?.guild_id) || t('They') }))
       break
     }
     case 'GUILD_CUSTOMIZE_UPDATE': s.setHidden(ev.d.guild_id, ev.d.hidden_channels); break
@@ -406,7 +407,7 @@ function voiceSfx(s: ReturnType<typeof useStore.getState>, v: VoiceState) {
 function speakTts(m: Message) {
   const s = useStore.getState()
   if (!getPrefs().ttsPlayback || s.selfDeaf || s.activeChannelId !== m.channel_id || document.visibilityState !== 'visible' || s.user?.ignored_users?.includes(m.author.id)) return
-  const text = `${m.author.display_name} says ${m.content.slice(0, 300)}`
+  const text = `${nameIn(s, m.author.id, s.channels[m.channel_id]?.guild_id) || globalName(m.author)} says ${m.content.slice(0, 300)}`
   ;(window.__parleyTts ??= []).push(text)
   try { if (!isOverlay() && 'speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = getPrefs().ttsRate; speechSynthesis.speak(u) } } catch { /* ignore */ }
 }
@@ -414,7 +415,8 @@ function speakTts(m: Message) {
 function speak(m: Message, current: boolean) {
   const mode = getNotifPrefs().tts
   if (mode === 'never' || (mode === 'current' && !current) || useStore.getState().selfDeaf) return
-  const text = `${m.author.display_name} said ${m.content ? m.content.slice(0, 200) : 'sent an attachment'}`
+  const s = useStore.getState()
+  const text = `${nameIn(s, m.author.id, s.channels[m.channel_id]?.guild_id) || globalName(m.author)} said ${m.content ? m.content.slice(0, 200) : 'sent an attachment'}`
   ;(window.__parleyTts ??= []).push(text)
   try { if (!isOverlay() && 'speechSynthesis' in window) { const u = new SpeechSynthesisUtterance(text); u.rate = getPrefs().ttsRate; speechSynthesis.speak(u) } } catch { /* ignore */ }
 }

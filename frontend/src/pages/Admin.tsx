@@ -18,6 +18,7 @@ import { colorFor, initials } from '../lib/format'
 import { useStore } from '../store'
 import { useT, t as tr, tn } from '../lib/i18n'
 import Dropdown from '../components/Dropdown'
+import { globalName } from '../lib/names'
 
 /** Root console for Parley admins: stats, users, servers, instance settings. */
 export default function AdminPage() {
@@ -173,7 +174,7 @@ function UsersPane() {
     if (mode === 'set' && (!Number.isFinite(body as number) || (body as number) <= 0)) { pushToast(t('Enter a size in MB'), 'error'); return }
     try { await api.patch(`/admin/users/${quotaFor.id}`, { upload_quota_bytes: body }); pushToast(mode === 'default' ? t('@{username} uses the instance default quota', { username: quotaFor.username }) : mode === 'unlimited' ? t('@{username} has unlimited storage', { username: quotaFor.username }) : t('@{username} may store {mb} MB', { username: quotaFor.username, mb: quotaMb })); setQuotaFor(null); setQuotaMb('') } catch (e) { pushToast((e as Error).message, 'error') }
   }
-  const del = (u: AdminUser) => openModal({ kind: 'confirm', title: t('Delete @{username}', { username: u.username }), body: t("This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.", { name: u.display_name }), danger: true, confirmLabel: t('Delete Account'),
+  const del = (u: AdminUser) => openModal({ kind: 'confirm', title: t('Delete @{username}', { username: u.username }), body: t("This deletes {name}'s account now: the servers and apps they own are deleted, and their account is anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.", { name: globalName(u) }), danger: true, confirmLabel: t('Delete Account'),
     action: async () => { try { await api.delete(`/admin/users/${u.id}`); pushToast(t('Account deleted')); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
   // Purge: the account and everything it made, messages included (for spam); deleted accounts can be purged too.
   const purge = (u: AdminUser) => openModal({ kind: 'confirm', title: t('Purge @{username}', { username: u.username }), body: t('This removes the account and everything it made, messages and uploads included, as if it never existed. Use it for spam and abuse. This cannot be undone.'), danger: true, confirmLabel: t('Purge'),
@@ -272,7 +273,7 @@ function UsersPane() {
             <input type="checkbox" className="h-4 w-4 accent-accent" checked={selected.has(u.id)} disabled={u.id === me?.id || u.account_state === 'deleted'} onChange={() => toggle(u.id)} aria-label={t('Select @{username}', { username: u.username })} data-admin-select />
             <div className="min-w-0 flex items-center gap-2">
               <span className={`h-2 w-2 rounded-full shrink-0 ${u.online ? 'bg-success' : 'bg-text-2'}`} />
-              <span className="min-w-0"><span className="block truncate font-semibold">{u.display_name}</span><span className="block truncate text-xs text-text-2">@{u.username}{u.last_seen_at ? ` · ${t('seen {date}', { date: new Date(u.last_seen_at).toLocaleDateString() })}` : ''}</span></span>
+              <span className="min-w-0"><span className="block truncate font-semibold">{globalName(u)}</span><span className="block truncate text-xs text-text-2">@{u.username}{u.last_seen_at ? ` · ${t('seen {date}', { date: new Date(u.last_seen_at).toLocaleDateString() })}` : ''}</span></span>
               {u.bot && <span className="rounded bg-accent/20 text-accent px-1.5 py-0.5 text-[10px] font-bold" data-badge="bot">{t('BOT')}</span>}
               {u.guest && <span className="rounded bg-text-2/20 text-text-1 px-1.5 py-0.5 text-[10px] font-bold" data-badge="guest">{t('GUEST')}</span>}
               {u.account_state === 'deleted' && <span className="rounded bg-text-2/20 text-text-2 px-1.5 py-0.5 text-[10px] font-bold" data-badge="deleted">{t('DELETED')}</span>}
@@ -921,14 +922,14 @@ function UserContentPane() {
     if (v !== null && (!Number.isFinite(v) || v < 0)) { pushToast(t('Enter a size in MB (0 = unlimited)'), 'error'); return }
     try { await api.patch(`/admin/users/${user.id}`, { upload_quota_bytes: v }); pushToast(v === null ? t('Quota reset to the default') : v === 0 ? t('Quota removed') : t('Quota set to {size}', { size: formatBytes(v) })); load() } catch (e) { pushToast((e as Error).message, 'error') }
   }
-  const purgeMessages = () => openModal({ kind: 'confirm', title: t('Delete all messages by @{username}', { username: user.username }), body: t('This deletes all {n} messages {name} has ever sent, everywhere. This cannot be undone.', { n: totals.messages.toLocaleString(), name: user.display_name }), danger: true, confirmLabel: t('Delete All Messages'),
+  const purgeMessages = () => openModal({ kind: 'confirm', title: t('Delete all messages by @{username}', { username: user.username }), body: t('This deletes all {n} messages {name} has ever sent, everywhere. This cannot be undone.', { n: totals.messages.toLocaleString(), name: globalName(user) }), danger: true, confirmLabel: t('Delete All Messages'),
     action: async () => { try { const r = await api.delete<{ deleted: number }>(`/admin/users/${user.id}/messages`); pushToast(t('{n} messages deleted', { n: r.deleted })); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
   const purgeUploads = () => openModal({ kind: 'confirm', title: t('Purge uploads by @{username}', { username: user.username }), body: t('Removes all {n} attachments ({size}) and their profile images. Their messages stay, without the files. This cannot be undone.', { n: totals.attachments, size: formatBytes(totals.attachment_bytes) }), danger: true, confirmLabel: t('Purge Uploads'),
     action: async () => { try { const r = await api.delete<{ attachments: number; images: number }>(`/admin/users/${user.id}/uploads`); pushToast(t('{attachments} attachments and {images} images removed', { attachments: r.attachments, images: r.images })); load() } catch (e) { pushToast((e as Error).message, 'error') } } })
   return (
     <div data-admin-user-content={user.id}>
-      <NavLink to={`/admin/users/${user.id}`} className="text-xs text-sky-400 hover:underline">{t('← {name}', { name: user.display_name })}</NavLink>
-      <h1 className="text-2xl font-bold mt-1">{user.display_name} <span className="text-base font-normal text-text-2">@{user.username}</span></h1>
+      <NavLink to={`/admin/users/${user.id}`} className="text-xs text-sky-400 hover:underline">{t('← {name}', { name: globalName(user) })}</NavLink>
+      <h1 className="text-2xl font-bold mt-1">{globalName(user)} <span className="text-base font-normal text-text-2">@{user.username}</span></h1>
       <p className="text-sm text-text-2 mt-1" data-admin-content-totals>{t('{messages} messages · {attachments} attachments ({attachmentSize}) · {images} profile/expression images ({imageSize})', { messages: totals.messages.toLocaleString(), attachments: totals.attachments, attachmentSize: formatBytes(totals.attachment_bytes), images: totals.images, imageSize: formatBytes(totals.image_bytes) })}</p>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-sm" data-admin-quota-row>
         <span className="text-text-2">{tn('Storage: {used} of {total}', { used: <b className="text-text-0" data-admin-quota-used>{formatBytes(used)}</b>, total: <b className="text-text-0" data-admin-quota-value>{data.quota === null ? t('unlimited') : formatBytes(data.quota)}</b> })}{data.quota_override !== null && <span className="ml-1 rounded bg-warn/20 text-warn px-1 text-[10px] font-bold">{t('CUSTOM')}</span>}</span>

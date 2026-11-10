@@ -6,6 +6,7 @@ import type { ApplicationQuestion } from '../../../lib/types'
 import { myGuildPerms, useStore } from '../../../store'
 import Avatar from '../../Avatar'
 import { useT } from '../../../lib/i18n'
+import { nameOf } from '../../../lib/dm'
 
 interface Pending { user_id: string; answers: { question: string; answer: string }[]; created_at: string; user: { id: string; username: string; display_name: string; avatar_url: string | null; created_at: string } }
 
@@ -15,6 +16,7 @@ export default function MemberApplicationsTab({ guildId }: { guildId: string }) 
   const canForm = useStore((s) => has(myGuildPerms(s, guildId), P.MANAGE_GUILD))
   const upsertGuild = useStore((s) => s.upsertGuild)
   const pushToast = useStore((s) => s.pushToast)
+  const notes = useStore((s) => s.notes)
   const [enabled, setEnabled] = useState(!!guild?.applications?.enabled)
   const [qs, setQs] = useState<ApplicationQuestion[]>(guild?.applications?.questions ?? [])
   const [queue, setQueue] = useState<Pending[]>([])
@@ -28,9 +30,9 @@ export default function MemberApplicationsTab({ guildId }: { guildId: string }) 
     try { const v = await api.put<{ enabled: boolean; questions: ApplicationQuestion[] }>(`/guilds/${guildId}/application-form`, { enabled, questions: qs }); upsertGuild({ ...guild, applications: v }); setQs(v.questions); pushToast(t('Applications saved')) } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   const decide = async (p: Pending, ok: boolean) => {
-    const reason = ok ? '' : (prompt(t('Reason for rejecting {name} (optional)', { name: p.user.display_name })) ?? null)
+    const reason = ok ? '' : (prompt(t('Reason for rejecting {name} (optional)', { name: nameOf(p.user, notes) })) ?? null)
     if (reason === null) return
-    try { await api.post(`/guilds/${guildId}/applications/${p.user_id}/${ok ? 'approve' : 'reject'}`, ok ? {} : { reason }); setQueue(queue.filter((x) => x.user_id !== p.user_id)); pushToast(ok ? t('{name} approved', { name: p.user.display_name }) : t('{name} rejected', { name: p.user.display_name })) } catch (e) { pushToast((e as Error).message, 'error') }
+    try { await api.post(`/guilds/${guildId}/applications/${p.user_id}/${ok ? 'approve' : 'reject'}`, ok ? {} : { reason }); setQueue(queue.filter((x) => x.user_id !== p.user_id)); pushToast(ok ? t('{name} approved', { name: nameOf(p.user, notes) }) : t('{name} rejected', { name: nameOf(p.user, notes) })) } catch (e) { pushToast((e as Error).message, 'error') }
   }
   return (
     <div className="space-y-6" data-applications-tab>
@@ -45,7 +47,7 @@ export default function MemberApplicationsTab({ guildId }: { guildId: string }) 
             {queue.map((p) => (
               <div key={p.user_id} className="rounded-xl border border-line bg-bg-1 p-3" data-application={p.user_id}>
                 <div className="flex items-center gap-2">
-                  <Avatar user={p.user} size={32} /><div className="flex-1"><div className="font-semibold">{p.user.display_name}</div><div className="text-xs text-text-2">@{p.user.username} · {t('account made {date}', { date: new Date(p.user.created_at).toLocaleDateString() })}</div></div>
+                  <Avatar user={p.user} size={32} /><div className="flex-1"><div className="font-semibold">{nameOf(p.user, notes)}</div><div className="text-xs text-text-2">@{p.user.username} · {t('account made {date}', { date: new Date(p.user.created_at).toLocaleDateString() })}</div></div>
                   <button type="button" className="btn-primary flex items-center gap-1 py-1" onClick={() => decide(p, true)} data-application-approve={p.user_id}><Check size={14} />{t('Approve')}</button>
                   <button type="button" className="btn-danger flex items-center gap-1 py-1" onClick={() => decide(p, false)} data-application-reject={p.user_id}><X size={14} />{t('Reject')}</button>
                 </div>

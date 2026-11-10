@@ -11,6 +11,7 @@ import { voice } from '../lib/voice'
 import { useStore, voiceParticipants } from '../store'
 import Avatar from './Avatar'
 import Dropdown from './Dropdown'
+import { shownName } from '../lib/names'
 
 const VIEW_KEY = `${STORAGE_PREFIX}studioConsoleView`
 type View = 'arrange' | 'mixer'
@@ -37,6 +38,8 @@ export default function StudioConsole({ channel, onClose }: { channel: Channel; 
   const t = useT()
   const me = useStore((s) => s.user)
   const users = useStore((s) => s.users)
+  const members = useStore((s) => (channel.guild_id ? s.members[channel.guild_id] : undefined))
+  const notes = useStore((s) => s.notes)
   const pushToast = useStore((s) => s.pushToast)
   const participants = useStore(useShallow((s) => voiceParticipants(s, channel.id)))
   const sessions = useStore((s) => s.studio[channel.id])
@@ -81,7 +84,7 @@ export default function StudioConsole({ channel, onClose }: { channel: Channel; 
   const lanes: Lane[] = [...new Set([...band.map((p) => p.user_id), ...(take?.tracks ?? []).map(laneKey)])].map((key) => {
     const clips = (take?.tracks ?? []).filter((x) => laneKey(x) === key)
     const user = users[key] ?? (me?.id === key ? me : undefined)
-    return { key, user, vs: participants.find((p) => p.user_id === key), clips, name: user?.display_name ?? clips[0]?.display_name ?? t('Unknown') }
+    return { key, user, vs: participants.find((p) => p.user_id === key), clips, name: shownName(user ?? members?.[key], members?.[key], notes[key]?.nickname) || clips[0]?.display_name || t('Unknown') }
   })
   const armed = (key: string) => !cfg.disarmed.includes(key)
   const armedCount = band.filter((p) => armed(p.user_id)).length

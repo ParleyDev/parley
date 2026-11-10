@@ -3,6 +3,7 @@ import { captionsAvailable, useCaptionLines } from '../lib/captions'
 import { voice } from '../lib/voice'
 import { useStore } from '../store'
 import { ControlButton } from './CallControls'
+import { shownName } from '../lib/names'
 
 /** CC in the call controls: live captions for yourself (not in end-to-end encrypted calls). */
 export function CaptionsButton({ channelId }: { channelId: string }) {
@@ -20,7 +21,8 @@ export function CaptionsOverlay({ guildId }: { guildId: string | null }) {
   const members = useStore((s) => (guildId ? s.members[guildId] : undefined))
   const users = useStore((s) => s.users)
   const me = useStore((s) => s.user)
-  const name = (id: string) => members?.[id]?.nickname || users[id]?.display_name || (me?.id === id ? me.display_name : 'Someone')
+  const notes = useStore((s) => s.notes)
+  const name = (id: string) => shownName(users[id] ?? members?.[id] ?? (me?.id === id ? me : undefined), members?.[id], notes[id]?.nickname) || 'Someone'
   if (!lines.length) return null
   return (
     <div className="shrink-0 mx-auto w-full max-w-[720px] rounded-lg bg-black/75 px-4 py-2 text-[15px] leading-6 text-white" aria-live="polite" data-captions>

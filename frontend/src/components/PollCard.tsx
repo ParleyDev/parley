@@ -7,6 +7,7 @@ import type { Message, Poll } from '../lib/types'
 import { myChannelPerms, useStore } from '../store'
 import { has, P } from '../lib/perms'
 import { t, useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 const remaining = (iso: string) => {
   const ms = new Date(iso).getTime() - Date.now()
@@ -25,6 +26,8 @@ export default function PollCard({ m, poll }: { m: Message; poll: Poll }) {
   const perms = useStore((s) => myChannelPerms(s, m.channel_id))
   const channel = useStore((s) => s.channels[m.channel_id] ?? s.dms[m.channel_id])
   const applyPollUpdate = useStore((s) => s.applyPollUpdate)
+  const members = useStore((s) => { const g = s.channels[m.channel_id]?.guild_id; return g ? s.members[g] : undefined })
+  const notes = useStore((s) => s.notes)
   const [busy, setBusy] = useState(false)
   // "View votes": who picked each answer, one answer at a time.
   const [votersFor, setVotersFor] = useState<string | null>(null)
@@ -99,7 +102,7 @@ export default function PollCard({ m, poll }: { m: Message; poll: Poll }) {
           </div>
           <div className="min-w-0 flex-1 max-h-48 overflow-y-auto">
             {!voters ? <p className="px-2 py-1 text-text-2">{t('Loading…')}</p> : voters.length === 0 ? <p className="px-2 py-1 text-text-2">{t('No votes for this answer.')}</p>
-              : voters.map((u) => <div key={u.id} className="flex items-center gap-2 px-2 py-1" data-poll-voter={u.display_name}><Avatar user={u} size={20} /><span className="truncate">{u.display_name}</span></div>)}
+              : voters.map((u) => <div key={u.id} className="flex items-center gap-2 px-2 py-1" data-poll-voter={u.display_name}><Avatar user={u} size={20} /><span className="truncate">{shownName(u, members?.[u.id], notes[u.id]?.nickname)}</span></div>)}
           </div>
         </div>
       )}

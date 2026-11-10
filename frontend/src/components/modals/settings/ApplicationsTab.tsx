@@ -7,6 +7,7 @@ import { useStore } from '../../../store'
 import type { Application } from '../../../lib/types'
 import { publicOrigin } from '../../InviteCard'
 import { useT } from '../../../lib/i18n'
+import { globalName } from '../../../lib/names'
 
 const SCOPES: [string, string][] = [['identify', 'identify'], ['email', 'email'], ['guilds', 'guilds'], ['messages.read', 'messages.read'], ['messages.write', 'messages.write'], ['bot', 'bot']]
 
@@ -78,7 +79,7 @@ export default function ApplicationsTab() {
           <div className="rounded-lg border border-line bg-bg-1 p-3 space-y-2" data-app-bot>
             <div className="font-semibold">{t('Bot')}</div>
             {open.bot ? (
-              <div className="flex items-center gap-3 text-sm"><span className="rounded bg-accent px-1 py-px text-[10px] font-bold uppercase text-white">{t('Bot')}</span><span className="font-semibold">{open.bot.display_name}</span><span className="text-text-2">@{open.bot.username}</span><button type="button" className="btn-ghost text-xs ml-auto" onClick={resetBot} data-app-reset-bot>{t('Reset token')}</button></div>
+              <div className="flex items-center gap-3 text-sm"><span className="rounded bg-accent px-1 py-px text-[10px] font-bold uppercase text-white">{t('Bot')}</span><span className="font-semibold">{globalName(open.bot)}</span><span className="text-text-2">@{open.bot.username}</span><button type="button" className="btn-ghost text-xs ml-auto" onClick={resetBot} data-app-reset-bot>{t('Reset token')}</button></div>
             ) : null}
             {open.bot ? (
               <div className="space-y-1 border-t border-line pt-2" data-app-intents>

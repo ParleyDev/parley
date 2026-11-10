@@ -5,12 +5,15 @@ import type { StudioSession } from '../lib/types'
 import { laneKey, laneMix, useMultitrack, type LaneMix } from '../lib/multitrack'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
+import { shownName } from '../lib/names'
 
 const fmt = (ms: number | null | undefined) => { const s = Math.max(0, Math.round((ms ?? 0) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` }
 
 /** Sessions recorded in this studio, each with its per-artist tracks and a multitrack player/mixer. */
 export default function StudioPanel({ channelId, canManage, onClose, width, handle }: { channelId: string; canManage: boolean; onClose: () => void; width?: number; handle?: React.ReactNode }) {
   const sessions = useStore((s) => s.studio[channelId])
+  const members = useStore((s) => { const g = s.channels[channelId]?.guild_id; return g ? s.members[g] : undefined })
+  const notes = useStore((s) => s.notes)
   const loadStudio = useStore((s) => s.loadStudio)
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
@@ -36,7 +39,7 @@ export default function StudioPanel({ channelId, canManage, onClose, width, hand
               <div className="border-t border-line p-3 space-y-2">
                 {s.tracks.map((trk) => (
                   <div key={trk.id} className="flex items-center gap-2 text-sm" data-studio-track={trk.id} data-track-done={trk.done ? '1' : '0'}>
-                    <span className="truncate flex-1">{trk.display_name}</span>
+                    <span className="truncate flex-1">{trk.user_id ? shownName(trk, members?.[trk.user_id], notes[trk.user_id]?.nickname) : trk.display_name}</span>
                     <span className="text-xs text-text-2 tabular-nums">{trk.done ? fmt(trk.duration_ms) : t('recording…')} · {Math.round(trk.size / 1024)} KB{trk.offset_ms ? ` · +${trk.offset_ms} ms` : ''}</span>
                     <a href={trk.url} download={`${s.name} - ${trk.display_name}.webm`} title={t('Download track')} className="text-text-2 hover:text-text-0" data-track-download><Download size={14} /></a>
                   </div>
@@ -55,6 +58,8 @@ export default function StudioPanel({ channelId, canManage, onClose, width, hand
 /** Multitrack player: plays every finished clip aligned by offset with per-member gain / mute / solo, and renders a
  *  WAV mixdown offline for download. */
 function Mixer({ session }: { session: StudioSession }) {
+  const members = useStore((s) => s.members[session.guild_id])
+  const notes = useStore((s) => s.notes)
   const pushToast = useStore((s) => s.pushToast)
   const t = useT()
   const [mix, setMix] = useState<Record<string, LaneMix>>({})
@@ -70,7 +75,7 @@ function Mixer({ session }: { session: StudioSession }) {
         <span className="text-xs tabular-nums text-text-2">{fmt(mt.pos * 1000)} / {fmt(mt.length * 1000)}</span>
         <button type="button" onClick={mt.exportWav} className="btn-ghost py-1 text-xs" title={t('Render all audible tracks to one WAV')} data-mix-export><Download size={14} /> {t('Export mix')}</button>
       </div>
-      {mt.keys.map((key) => { const m = laneMix(mix, key); const name = mt.tracks!.find((x) => laneKey(x.track) === key)?.track.display_name ?? key; return (
+      {mt.keys.map((key) => { const m = laneMix(mix, key); const trk = mt.tracks!.find((x) => laneKey(x.track) === key)?.track; const name = (trk && (trk.user_id ? shownName(trk, members?.[trk.user_id], notes[trk.user_id]?.nickname) : trk.display_name)) || key; return (
         <div key={key} className="flex items-center gap-2 text-xs" data-mix-track={key}>
           <span className="w-24 truncate" title={name}>{name}</span>
           <button type="button" onClick={() => set(key, { mute: !m.mute })} className={`rounded px-1.5 py-0.5 font-bold ${m.mute ? 'bg-danger text-white' : 'bg-bg-3 text-text-2'}`} data-mix-mute aria-pressed={m.mute}>M</button>

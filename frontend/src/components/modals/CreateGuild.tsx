@@ -8,6 +8,7 @@ import { TEMPLATES } from '../../lib/discover'
 import { useStore } from '../../store'
 import type { Channel, Guild } from '../../lib/types'
 import { useT } from '../../lib/i18n'
+import { globalName } from '../../lib/names'
 
 /**
  * Discord's two-step "Create Your Server": pick Create My Own or a template, then name it.
@@ -19,7 +20,7 @@ export default function CreateGuildModal({ onClose }: { onClose: () => void }) {
   const openModal = useStore((s) => s.openModal)
   const [template, setTemplate] = useState<string | null>(null)
   const [step, setStep] = useState<'start' | 'customize' | 'discord'>('start')
-  const [name, setName] = useState(user ? `${user.display_name}'s server` : '')
+  const [name, setName] = useState(user ? `${globalName(user)}'s server` : '')
   const [icon, setIcon] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)

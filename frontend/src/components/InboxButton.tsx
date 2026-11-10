@@ -14,6 +14,8 @@ import { renderMarkdown } from '../lib/markdown'
 import { remindLabel, setReminder } from '../lib/reminders'
 import { useTitleBarShown } from '../lib/titleBar'
 import { deleteScheduled, MAX_SCHEDULED, sendScheduledNow, updateScheduled, useScheduled, whenLabel, type Scheduled } from '../lib/scheduled'
+import { shownName } from '../lib/names'
+import { nameOf } from '../lib/dm'
 
 const HIDDEN_KEY = `${STORAGE_PREFIX}inboxHidden`
 const TAB_KEY = `${STORAGE_PREFIX}inboxTab`
@@ -54,6 +56,8 @@ function InboxMenu() {
   const markRead = useStore((s) => s.markRead)
   const channels = useStore((s) => s.channels)
   const dms = useStore((s) => s.dms)
+  const members = useStore((s) => s.members)
+  const notes = useStore((s) => s.notes)
   const guilds = useStore((s) => s.guilds)
   const setBookmark = useStore((s) => s.setBookmark)
   const count = useStore(() => badgeCount())
@@ -105,11 +109,12 @@ function InboxMenu() {
     return () => { window.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize) }
   }, [open])
   const guildOf = (m: Placed) => channels[m.channel_id]?.guild_id ?? m.guild_id ?? null
+  const authorOf = (m: Placed) => { const g = guildOf(m); return shownName(m.author, g ? members[g]?.[m.author.id] : undefined, notes[m.author.id]?.nickname) }
   const whereOf = (channelId: string, fallback?: Placed) => {
     const ch = channels[channelId]
     if (ch) return { icon: <Hash size={14} />, name: ch.name, sub: ch.guild_id ? guilds[ch.guild_id]?.name : undefined }
     const dm = dms[channelId]
-    if (dm) return { icon: <MessageSquare size={14} />, name: dm.name || dm.recipients.map((r) => r.display_name).join(', '), sub: dm.recipients.length > 1 ? t('Group') : t('Direct message') }
+    if (dm) return { icon: <MessageSquare size={14} />, name: dm.name || dm.recipients.map((r) => nameOf(r, notes)).join(', '), sub: dm.recipients.length > 1 ? t('Group') : t('Direct message') }
     return { icon: <Hash size={14} />, name: fallback?.channel_name ?? t('Unknown channel'), sub: fallback?.guild_name }
   }
   const openChannel = (id: string) => { setOpen(false); navigate(`/channels/${channels[id]?.guild_id ?? '@me'}/${id}`) }
@@ -139,7 +144,7 @@ function InboxMenu() {
       <div className="flex gap-3">
         <Avatar user={m.author} size={36} />
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2"><span className="font-semibold truncate">{m.author.display_name}</span><span className="text-[11px] text-text-2 shrink-0">{new Date(m.created_at).toLocaleString(locale(), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
+          <div className="flex items-baseline gap-2"><span className="font-semibold truncate">{authorOf(m)}</span><span className="text-[11px] text-text-2 shrink-0">{new Date(m.created_at).toLocaleString(locale(), { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
           <div className="msg-content text-sm text-text-1 break-words max-h-[9.5rem] overflow-hidden" data-inbox-text>{m.content ? renderMarkdown(m.content) : (m.attachments?.length ?? 0) > 0 ? `📎 ${t('Attachment')}` : ''}</div>
           {extra}
         </div>

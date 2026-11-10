@@ -4,6 +4,7 @@ import { Hash, AtSign } from 'lucide-react'
 import { useStore } from '../store'
 import { sortedRoles, EMPTY_ROLES } from '../lib/perms'
 import Avatar from './Avatar'
+import { shownName } from '../lib/names'
 
 export interface MentionItem { kind: 'user' | 'role' | 'channel' | 'everyone' | 'here'; id: string; label: string; sub?: string; color?: string | null; avatar?: { id: string; display_name: string; avatar_url: string | null } }
 
@@ -22,6 +23,7 @@ export function useMentionItems(trigger: '@' | '#' | null, query: string, channe
   const dm = useStore((s) => s.dms[channelId])
   const me = useStore((s) => s.user)
   const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
   const roles = useStore((s) => (guildId ? s.roles[guildId] ?? EMPTY_ROLES : EMPTY_ROLES))
   const channels = useStore(useShallow((s) => (guildId ? Object.values(s.channels).filter((c) => c.guild_id === guildId && c.kind === 'text') : [])))
   return useMemo(() => {
@@ -34,16 +36,16 @@ export function useMentionItems(trigger: '@' | '#' | null, query: string, channe
       return out.slice(0, 10)
     }
     if (guildId) {
-      for (const m of members) { const name = m.nickname || m.display_name; if (hit(name) || hit(m.username)) out.push({ kind: 'user', id: m.user_id, label: name, sub: `@${m.username}`, avatar: { id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url } }) }
+      for (const m of members) { const name = shownName(m, m, notes[m.user_id]?.nickname); if (hit(name) || hit(m.nickname ?? '') || hit(m.display_name) || hit(m.username)) out.push({ kind: 'user', id: m.user_id, label: name, sub: `@${m.username}`, avatar: { id: m.user_id, display_name: m.display_name, avatar_url: m.avatar_url } }) }
       for (const r of sortedRoles(roles)) if (r.id !== guildId && hit(r.name)) out.push({ kind: 'role', id: r.id, label: r.name, color: r.color })
       if (hit('everyone')) out.push({ kind: 'everyone', id: 'everyone', label: 'everyone', sub: 'Notify everyone in this channel' })
       if (hit('here')) out.push({ kind: 'here', id: 'here', label: 'here', sub: 'Notify everyone online in this channel' })
     } else if (dm) {
       const people = [...dm.recipients.map((r) => users[r.id] ?? r), ...(me ? [me] : [])]
-      for (const u of people) if (hit(u.display_name) || hit(u.username)) out.push({ kind: 'user', id: u.id, label: u.display_name, sub: `@${u.username}`, avatar: { id: u.id, display_name: u.display_name, avatar_url: u.avatar_url } })
+      for (const u of people) { const name = shownName(u, null, notes[u.id]?.nickname); if (hit(name) || hit(u.display_name) || hit(u.username)) out.push({ kind: 'user', id: u.id, label: name, sub: `@${u.username}`, avatar: { id: u.id, display_name: u.display_name, avatar_url: u.avatar_url } }) }
     }
     return out.slice(0, 10)
-  }, [trigger, query, members, dm, me, users, roles, channels, guildId])
+  }, [trigger, query, members, dm, me, users, notes, roles, channels, guildId])
 }
 
 /** Popup listing mention candidates above the composer. */

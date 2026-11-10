@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import type { PrivateUser } from '../lib/types'
 import { publicOrigin } from './InviteCard'
 import { useT } from '../lib/i18n'
+import { globalName } from '../lib/names'
 
 /** The login page's QR code: scan it on a device where you're signed in and approve, and this screen signs in. */
 export default function QrLogin({ onSession }: { onSession: (token: string, user: PrivateUser) => void }) {
@@ -26,7 +27,7 @@ export default function QrLogin({ onSession }: { onSession: (token: string, user
       try {
         const r = await api.get<{ status: string; token?: string; user?: PrivateUser | { display_name: string } }>(`/auth/qr/${code.id}?secret=${encodeURIComponent(code.secret)}`)
         if (r.status === 'approved' && r.token && r.user) { clearInterval(timer); onSession(r.token, r.user as PrivateUser); return }
-        if (r.status === 'scanned') { setStatus('scanned'); setWho(r.user?.display_name ?? null) }
+        if (r.status === 'scanned') { setStatus('scanned'); setWho(globalName(r.user) || null) }
         if (r.status === 'expired' || r.status === 'used') setStatus('expired')
         if (r.status === 'denied') setStatus('denied')
       } catch { /* keep trying */ }

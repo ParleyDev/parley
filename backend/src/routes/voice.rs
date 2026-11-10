@@ -81,7 +81,7 @@ async fn token(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req)
         }
         (has(p, perms::SPEAK), has(p, perms::STREAM))
     };
-    let (name,): (String,) = sqlx::query_as("SELECT display_name FROM users WHERE id = $1").bind(uid).fetch_one(&state.db).await?;
+    let name = crate::routes::users::shown_name(&state.db, uid, c.guild_id, None).await;
     let token = livekit_token(&settings.livekit_api_key, &settings.livekit_api_secret, &uid.to_string(), &name, &c.id.to_string(), can_publish, can_video)?;
     Ok(Json(json!({ "url": settings.livekit_url.trim(), "token": token, "room": c.id, "can_publish": can_publish, "can_video": can_video })))
 }

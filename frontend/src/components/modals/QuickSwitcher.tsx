@@ -10,6 +10,7 @@ import { isUnread, useStore } from '../../store'
 import Avatar from '../Avatar'
 import GroupIcon from '../GroupIcon'
 import { useLanguage, useT, tn } from '../../lib/i18n'
+import { globalName } from '../../lib/names'
 
 /** One place to jump to: a server channel, a DM or group, a friend without a DM yet, or a server. */
 interface Hit { key: string; kind: 'channel' | 'voice' | 'dm' | 'friend' | 'guild'; label: string; sub?: string; go: () => void; icon: React.ReactNode; unread: boolean; mentions: number }
@@ -71,7 +72,7 @@ export default function QuickSwitcher({ onClose }: { onClose: () => void }) {
     }
     for (const r of Object.values(relationships)) {
       if (r.kind !== 'friend' || withDm.has(r.user.id)) continue
-      out.push({ key: `friend:${r.user.id}`, kind: 'friend', label: notes[r.user.id]?.nickname || r.user.display_name, sub: `@${r.user.username}`, icon: <Avatar user={r.user} size={22} />, unread: false, mentions: 0,
+      out.push({ key: `friend:${r.user.id}`, kind: 'friend', label: notes[r.user.id]?.nickname || globalName(r.user), sub: `@${r.user.username}`, icon: <Avatar user={r.user} size={22} />, unread: false, mentions: 0,
         go: async () => { onClose(); try { const c = await api.post<DmChannel>('/users/@me/channels', { recipient_id: r.user.id }); upsertChannel(c); navigate(`/channels/@me/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
     }
     for (const g of Object.values(guilds)) {

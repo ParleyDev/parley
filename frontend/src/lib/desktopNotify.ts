@@ -1,17 +1,12 @@
 import { useStore } from '../store'
+import { nameIn } from './names'
 import { getNotifPrefs } from './notifPrefs'
 import { appNavigate } from './native'
 import { desktop, isOverlay } from './desktop'
 import type { DmChannel, Message } from './types'
 
-/** A mentioned user's name: their nickname in this server, else their display name from wherever the client knows them. */
-function userName(id: string, guildId: string | null): string {
-  const s = useStore.getState()
-  const member = guildId ? s.members[guildId]?.[id] : undefined
-  if (member?.nickname) return member.nickname
-  const known = member ?? s.users[id] ?? (s.user?.id === id ? s.user : undefined) ?? Object.values(s.members).map((g) => g[id]).find(Boolean)
-  return known?.display_name || known?.username || 'someone'
-}
+/** A mentioned user's name as it reads where the message is: nickname in this server, else their global name. */
+const userName = (id: string, guildId: string | null) => nameIn(useStore.getState(), id, guildId) || 'someone'
 
 /** Message text as it reads in the app: mentions, channels, roles and custom emoji by name; markdown marks dropped. */
 /** `notificationText` for a message in `channelId` (its server looked up): previews, reply headers, labels. */

@@ -11,6 +11,7 @@ import { CATEGORIES, categoryLabel, type Listing } from '../lib/discover'
 import { colorFor, initials } from '../lib/format'
 import type { Channel, Guild } from '../lib/types'
 import { useStore } from '../store'
+import { shownName } from '../lib/names'
 import { useLanguage, useT } from '../lib/i18n'
 
 /** Discord's Discover: browse approved servers by category, search, and join with one click. Admins also get a review queue. */
@@ -282,6 +283,8 @@ interface LiveStage { guild: { id: string; name: string; icon_url: string | null
 /** Discover › Stages: stages live right now in your servers and in Discover servers, most listeners first. */
 function LiveStages() {
   const t = useT()
+  const members = useStore((s) => s.members)
+  const notes = useStore((s) => s.notes)
   const [list, setList] = useState<LiveStage[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const navigate = useNavigate()
@@ -319,7 +322,7 @@ function LiveStages() {
             </div>
             <div><div className="font-bold text-lg leading-snug">{st.channel.topic || st.channel.name}</div>{st.channel.topic && <div className="text-xs text-text-2">{st.channel.name}</div>}</div>
             <div className="flex items-center gap-2">
-              <div className="flex -space-x-2">{st.speakers.map((p) => p.avatar_url ? <CropImg key={p.id} src={p.avatar_url} alt="" title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 object-cover" /> : <span key={p.id} title={p.display_name} className="h-7 w-7 rounded-full ring-2 ring-bg-1 text-[10px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(p.id) }}>{initials(p.display_name)}</span>)}</div>
+              <div className="flex -space-x-2">{st.speakers.map((p) => p.avatar_url ? <CropImg key={p.id} src={p.avatar_url} alt="" title={shownName(p, members[st.guild.id]?.[p.id], notes[p.id]?.nickname)} className="h-7 w-7 rounded-full ring-2 ring-bg-1 object-cover" /> : <span key={p.id} title={shownName(p, members[st.guild.id]?.[p.id], notes[p.id]?.nickname)} className="h-7 w-7 rounded-full ring-2 ring-bg-1 text-[10px] font-bold text-white flex items-center justify-center" style={{ background: colorFor(p.id) }}>{initials(p.display_name)}</span>)}</div>
               <span className="text-xs text-text-2" data-live-stage-counts>{t('{n} speaking', { n: st.speaker_count })} · {st.listeners} {st.listeners === 1 ? t('person') : t('people')}</span>
             </div>
             <button type="button" className="btn-primary mt-auto" disabled={busy === st.channel.id} onClick={() => void open(st)} data-live-stage-open={st.channel.id}>{st.member ? t('Listen') : busy === st.channel.id ? t('Joining…') : t('Join Server & Listen')}</button>

@@ -7,6 +7,7 @@ import type { ManualActivity, PrivateUser } from '../../lib/types'
 import { QUICK_EMOJI } from '../../lib/emoji'
 import { useT } from '../../lib/i18n'
 import Dropdown from '../Dropdown'
+import { globalName } from '../../lib/names'
 
 /** Set the free-text status shown under your name in DMs, member lists and your profile card. */
 export default function CustomStatusModal({ onClose }: { onClose: () => void }) {
@@ -46,7 +47,7 @@ export default function CustomStatusModal({ onClose }: { onClose: () => void }) 
   return (
     <Modal title={t('Set a custom status')} onClose={onClose} width="max-w-sm"
       footer={<>{user?.custom_status && <button className="btn-ghost mr-auto" onClick={() => save('')} disabled={busy}>{t('Clear Status')}</button>}<button className="btn-ghost" onClick={onClose}>{t('Cancel')}</button><button className="btn-primary" onClick={() => save(text)} disabled={busy}>{t('Save')}</button></>}>
-      <label className="label">{t("What's cookin', {name}?", { name: user?.display_name ?? '' })}</label>
+      <label className="label">{t("What's cookin', {name}?", { name: globalName(user) })}</label>
       <div className="relative">
         <input className="input pr-10" value={text} onChange={(e) => setText(e.target.value)} maxLength={128} placeholder={t('Support has arrived!')} autoFocus data-custom-status-input
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(text) } }} />

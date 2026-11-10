@@ -9,6 +9,7 @@ import { useT } from '../../../lib/i18n'
 import Avatar from '../../Avatar'
 import { publicOrigin } from '../../InviteCard'
 import Dropdown from '../../Dropdown'
+import { shownName } from '../../../lib/names'
 
 /**
  * Server Settings › Invites: every live invite with who made it, uses and expiry, to revoke; a quick form to make one
@@ -17,6 +18,8 @@ import Dropdown from '../../Dropdown'
 export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId: string; onDiscovery: () => void; onBadge: () => void }) {
   const t = useT()
   const guild = useStore((s) => s.guilds[guildId])
+  const members = useStore((s) => s.members[guildId])
+  const notes = useStore((s) => s.notes)
   const pushToast = useStore((s) => s.pushToast)
   const [list, setList] = useState<InviteListing[] | null>(null)
   const [approved, setApproved] = useState<boolean | null>(null)
@@ -137,7 +140,7 @@ export default function InvitesTab({ guildId, onDiscovery, onBadge }: { guildId:
               <div key={i.code} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_5rem_6.5rem_4.5rem] max-sm:grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-3 py-2 text-sm" data-invite-row={i.code}>
                 <div className="flex min-w-0 items-center gap-2">
                   <Avatar user={{ id: i.creator_id, display_name: i.creator_display_name, avatar_url: i.creator_avatar_url }} size={24} />
-                  <span className="truncate">{i.creator_display_name}</span>
+                  <span className="truncate">{shownName({ display_name: i.creator_display_name, username: i.creator_username }, members?.[i.creator_id], notes[i.creator_id]?.nickname)}</span>
                 </div>
                 <span className="truncate font-mono text-text-1 max-sm:hidden">{i.code}</span>
                 <span className="text-text-1 max-sm:hidden" data-invite-uses-cell>{i.uses}{i.max_uses ? ` / ${i.max_uses}` : ''}</span>

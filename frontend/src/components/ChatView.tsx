@@ -32,6 +32,7 @@ import { applySuggestion, useSearchSuggestions } from './SearchSuggest'
 import DirectoryView from './DirectoryView'
 import { confirmSkipped } from './modals/Confirm'
 import Dropdown from './Dropdown'
+import { globalName, nameIn } from '../lib/names'
 
 /** Scroll a loaded message into view and flash it. Returns false when it is not in the DOM. */
 export function jumpToMessage(id: string): boolean {
@@ -265,7 +266,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
   const content = (
     <>
         {isDm && <DmCall channel={channel as DmChannel} />}
-        {isDm && !group && other && myAge === 'teen' && relKind !== 'friend' && <TeenDmNotice name={other.display_name} onBlock={() => { void api.put(`/users/@me/relationships/${other.id}/block`).then(() => pushToast(t('{name} blocked', { name: other.display_name }))).catch((e: Error) => pushToast(e.message, 'error')) }} />}
+        {isDm && !group && other && myAge === 'teen' && relKind !== 'friend' && <TeenDmNotice name={nameOf(other, notes)} onBlock={() => { void api.put(`/users/@me/relationships/${other.id}/block`).then(() => pushToast(t('{name} blocked', { name: nameOf(other, notes) }))).catch((e: Error) => pushToast(e.message, 'error')) }} />}
         {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : channel.kind === 'directory' ? <DirectoryView channel={channel as Channel} /> : <ChatPane channel={channel} />}
     </>
   )
@@ -357,17 +358,19 @@ function AgeGate({ channel, onOk }: { channel: Channel; onOk: () => void }) {
 
 /** A neighbouring message shown faintly around a search result. */
 function ContextLine({ m }: { m: Message }) {
-  return <div className="truncate px-3 py-0.5 text-xs text-text-2" data-search-context-line={m.id}><span className="font-semibold">{m.author.display_name}</span> {(m.content && previewText(m.content, m.channel_id)) || (m.attachments?.length ? '📎' : '')}</div>
+  const author = useStore((s) => nameIn(s, m.author.id, s.channels[m.channel_id]?.guild_id)) || globalName(m.author)
+  return <div className="truncate px-3 py-0.5 text-xs text-text-2" data-search-context-line={m.id}><span className="font-semibold">{author}</span> {(m.content && previewText(m.content, m.channel_id)) || (m.attachments?.length ? '📎' : '')}</div>
 }
 
 /** A compact rendering of a message for the pins and search lists, with Jump. */
 function MessageCard({ m, onJump, action }: { m: Message; onJump: () => void; action?: React.ReactNode }) {
   const t = useT()
+  const author = useStore((s) => nameIn(s, m.author.id, s.channels[m.channel_id]?.guild_id)) || globalName(m.author)
   return (
     <div className="rounded-lg border border-line bg-bg-2 p-3" data-msg-card={m.id}>
       <div className="flex items-center gap-2 mb-1">
         <Avatar user={m.author} size={20} />
-        <span className="font-semibold text-sm truncate">{m.author.display_name}</span>
+        <span className="font-semibold text-sm truncate">{author}</span>
         <span className="text-[11px] text-text-2 shrink-0">{formatTime(m.created_at)}</span>
         <span className="ml-auto flex items-center gap-1">
           {action}
@@ -393,7 +396,7 @@ function GroupMembersPanel({ dm }: { dm: DmChannel }) {
   // Like the server member list: nameplates behind members who show as online, not those who appear offline.
   const plateOf = (u: { id: string; nameplate?: string | null; status?: string }) => (online[u.id] && u.status !== 'invisible' ? u.nameplate ?? null : null)
   const members = [...(me ? [me as unknown as typeof dm.recipients[number]] : []), ...dm.recipients].map((u) => users[u.id] ?? u)
-  const remove = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: t('Remove {name}', { name: u.display_name }), body: t('Remove {name} from the group? They can be added back later.', { name: u.display_name }), danger: true, confirmLabel: t('Remove'),
+  const remove = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: t('Remove {name}', { name: nameOf(u, notes) }), body: t('Remove {name} from the group? They can be added back later.', { name: nameOf(u, notes) }), danger: true, confirmLabel: t('Remove'),
     action: async () => { try { await api.delete(`/channels/${dm.id}/recipients/${u.id}`) } catch (e) { pushToast((e as Error).message, 'error') } } })
   const transfer = (u: { id: string; display_name: string }) => openModal({ kind: 'confirm', title: t('Transfer ownership to {name}', { name: nameOf(u, notes) }), body: t('{name} will be able to rename the group, change its icon and remove members. You stay in the group as a member.', { name: nameOf(u, notes) }), confirmLabel: t('Transfer'),
     action: async () => { try { await api.patch(`/channels/${dm.id}`, { owner_id: u.id }) } catch (e) { pushToast((e as Error).message, 'error') } } })

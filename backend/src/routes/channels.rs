@@ -205,7 +205,7 @@ async fn update_channel(
             }
             sqlx::query("UPDATE channels SET owner_id = $2 WHERE id = $1").bind(id).bind(new_owner).execute(&state.db).await?;
             crate::routes::dms::broadcast_group(&state, id).await?;
-            let name = crate::audit::username(&state, new_owner).await;
+            let name = crate::routes::users::shown_name(&state.db, new_owner, None, None).await;
             crate::routes::dms::system_message(&state, id, uid, "channel_owner_change", &format!("made {name} the group owner."), vec![new_owner]).await?;
         }
         return Ok(Json(sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(id).fetch_one(&state.db).await?));
@@ -856,7 +856,8 @@ async fn voice_invite(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     let from: crate::models::User = sqlx::query_as::<_, crate::models::User>(&format!("SELECT {} FROM users WHERE id = $1", crate::routes::users::USER_COLS)).bind(uid).fetch_one(&state.db).await?;
     state.hub.emit_users(vec![req.user_id], "VOICE_INVITE", json!({ "channel_id": id, "guild_id": c.guild_id, "channel_name": c.name, "from": from }));
     if !crate::ws::bus::online_users(&state.db).await.contains(&req.user_id) {
-        crate::push::notify(&state, &[req.user_id], "Join voice?", &format!("{} invited you to 🔊 {}", from.display_name, c.name), json!({ "kind": "voice_invite", "channel_id": id, "guild_id": c.guild_id })).await;
+        let name = crate::routes::users::shown_name(&state.db, uid, c.guild_id, Some(req.user_id)).await;
+        crate::push::notify(&state, &[req.user_id], "Join voice?", &format!("{name} invited you to 🔊 {}", c.name), json!({ "kind": "voice_invite", "channel_id": id, "guild_id": c.guild_id })).await;
     }
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1515,7 +1516,8 @@ pub async fn bookmark_reminders(state: AppState) {
             let Ok(c) = require_channel(&state.db, m.channel_id, uid).await else { continue };
             state.hub.emit_users(vec![uid], "BOOKMARK_REMINDER", json!({ "message": m, "guild_id": c.guild_id, "channel_name": c.name }));
             if !crate::ws::bus::online_users(&state.db).await.contains(&uid) {
-                let body: String = format!("{}: {}", m.author.display_name, m.content).chars().take(140).collect();
+                let author = if m.webhook_id.is_some() { m.author.display_name.clone() } else { crate::routes::users::shown_name(&state.db, m.author.id, c.guild_id, Some(uid)).await };
+                let body: String = format!("{author}: {}", crate::push::readable(&state, &m.content, c.guild_id).await).chars().take(140).collect();
                 crate::push::notify(&state, &[uid], "Reminder", &body, json!({ "kind": "reminder", "channel_id": m.channel_id, "message_id": mid })).await;
             }
         }
