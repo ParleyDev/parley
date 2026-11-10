@@ -26,8 +26,16 @@ const VIRTUALIZE_AT = 120
 const OVERSCAN = 1200
 /** Measured row heights by message id (ids are unique everywhere), kept across channel switches. */
 const rowHeights = new Map<string, number>()
-/** Where the reader left each channel when scrolled up: the topmost visible row and its offset from the top. */
-const savedPos = new Map<string, { id: string; offset: number }>()
+/** Where the reader left each channel when reading back through history (half a screen or more up): the topmost visible row,
+ *  its offset from the top, and when. Coming back soon after returns there, unless something new arrived meanwhile
+ *  (then the NEW line wins); otherwise the channel opens at the newest message, as on Discord. */
+const savedPos = new Map<string, { id: string; offset: number; at: number }>()
+const SAVED_FOR_MS = 10 * 60_000
+const savedSpot = (ch: string) => {
+  const p = savedPos.get(ch)
+  if (p && Date.now() - p.at > SAVED_FOR_MS) { savedPos.delete(ch); return undefined }
+  return p
+}
 
 /** Touch screens. */
 const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
@@ -107,8 +115,9 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     if (!messages) loadMessages(channel.id)
     // A window kept from earlier that stops short of the newest messages (opened at an old message before): start
     // from the newest again, unless this visit follows a link to a particular message.
-    // A spot remembered from the last visit wins: the reader comes back to what they were reading.
-    else if (useStore.getState().hasNewer[channel.id] && !new URLSearchParams(location.search).has('message') && !messages.some((m) => m.id === savedPos.get(channel.id)?.id)) {
+    // That old window's spot is dropped too: as on Discord, coming back after a jump returns to the present.
+    else if (useStore.getState().hasNewer[channel.id] && !new URLSearchParams(location.search).has('message')) {
+      savedPos.delete(channel.id)
       relanding.current = true
       void loadLatest(channel.id).finally(() => { relanding.current = false })
     }
@@ -137,13 +146,13 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages])
 
-  // First message the reader has not seen (from someone else), if any is loaded.
+  // First message the reader has not seen (from someone else), if any is loaded: after their read pointer and after
+  // their own latest message (writing in a chat means having read it). No read pointer at all (never opened): no line.
   const firstUnreadId = (() => {
-    if (readAtOpen === undefined || !messages?.length) return null
-    const m = messages.find((x) => (readAtOpen === null || x.id > readAtOpen) && (x.author.id !== user?.id || !!x.webhook_id) && !x.local)
-    // With no read state at all (never opened), everything is "new"; only mark when there is history before it.
-    if (!m || (readAtOpen === null && messages[0].id === m.id)) return null
-    return m.id
+    if (!readAtOpen || !messages?.length) return null
+    const mine = messages.findLast((x) => x.author.id === user?.id && !x.webhook_id && !x.local)?.id
+    const floor = mine && mine > readAtOpen ? mine : readAtOpen
+    return messages.find((x) => x.id > floor && (x.author.id !== user?.id || !!x.webhook_id) && !x.local)?.id ?? null
   })()
 
   // "N new messages since …" over the top of the chat while there is a New divider, until dismissed.
@@ -181,7 +190,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       last = e >= first ? e : rows.length - 1
     } else {
       // Before the first measurement: around where the channel opens (a remembered spot, the NEW line, or the end).
-      const at = Math.max(indexOf(savedPos.get(channel.id)?.id), indexOf(firstUnreadId ?? undefined))
+      const at = Math.max(indexOf(firstUnreadId ?? undefined), indexOf(savedSpot(channel.id)?.id))
       first = Math.max(0, (at >= 0 ? at : rows.length) - 30)
       last = at >= 0 ? Math.min(rows.length - 1, at + 30) : rows.length - 1
     }
@@ -237,7 +246,8 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       const covered = (atStart || top <= view.top - OVERSCAN / 2) && (atEnd || bottom >= view.bottom + OVERSCAN / 2)
       if (covered && bottom - top <= view.height + OVERSCAN * 4 && (atEnd || !stickBottom.current)) return
     }
-    const viewTop = el.scrollTop - lst.offsetTop - OVERSCAN, viewBottom = el.scrollTop - lst.offsetTop + el.clientHeight + OVERSCAN
+    const lstTop = lst.getBoundingClientRect().top - view.top + el.scrollTop // the list's offset inside the scroller
+    const viewTop = el.scrollTop - lstTop - OVERSCAN, viewBottom = el.scrollTop - lstTop + el.clientHeight + OVERSCAN
     let y = 0, s = -1, e = rs.length - 1
     for (let i = 0; i < rs.length; i++) {
       const h = rowHeights.get(rs[i].m.id) ?? (rs[i].grouped ? 26 : 62) + (rs[i].newDay ? 40 : 0)
@@ -266,14 +276,18 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       // wait for the channel effect (where the reader had read up to), or for the newest page
     } else if (!initialScrollDone.current && messages) {
       initialScrollDone.current = true
-      const saved = savedPos.get(channel.id)
-      const savedNode = saved ? el.querySelector<HTMLElement>(`[data-row-id="${saved.id}"]`) : null
+      // A spot the reader was reading back at (unless new messages above it arrived since: the NEW line), the NEW line,
+      // or the end.
       const divider = firstUnreadId ? el.querySelector<HTMLElement>('[data-unread-divider]') : null
+      const spot = savedSpot(channel.id)
+      const saved = spot && (!firstUnreadId || spot.id > firstUnreadId) ? spot : undefined
+      const savedNode = saved ? el.querySelector<HTMLElement>(`[data-row-id="${saved.id}"]`) : null
       if (savedNode && saved) {
         el.scrollTop += savedNode.getBoundingClientRect().top - el.getBoundingClientRect().top - saved.offset
         stickBottom.current = false
       } else if (divider) {
-        el.scrollTop = Math.max(0, divider.offsetTop - el.offsetTop - 24)
+        // Measured on screen: offsetTop is relative to the nearest positioned wrapper, not to the scrolling list.
+        el.scrollTop += divider.getBoundingClientRect().top - el.getBoundingClientRect().top - 24
         stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
       } else {
         el.scrollTop = el.scrollHeight
@@ -365,8 +379,11 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     stickBottom.current = !hasNewer && fromBottom < 40
     recordAnchor()
     // Remember where the reader is in this conversation for when they come back to it.
-    if (stickBottom.current || !anchor.current) savedPos.delete(channel.id)
-    else savedPos.set(channel.id, { id: anchor.current.id, offset: anchor.current.top - el.getBoundingClientRect().top })
+    // Only reading back counts, not a nudge or the keyboard shifting the list. Not before landing either: the scroll
+    // events of a channel being put on screen would wipe the spot it is about to land on.
+    if (!initialScrollDone.current) { /* landing */ }
+    else if (!anchor.current || fromBottom < Math.max(300, el.clientHeight / 2)) savedPos.delete(channel.id)
+    else savedPos.set(channel.id, { id: anchor.current.id, offset: anchor.current.top - el.getBoundingClientRect().top, at: Date.now() })
     if (stickBottom.current && messages?.length) setSeenAtBottom(messages[messages.length - 1].id)
     if (stickBottom.current) markIfSeen()
     setAway(fromBottom > Math.max(600, el.clientHeight * 1.5))

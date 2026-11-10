@@ -658,8 +658,17 @@ export const useStore = create<State>((set, get) => ({
   }),
   removeMessage: (channelId, id) => set((s) => {
     const list = s.messages[channelId]
-    if (!list) return {}
-    return { messages: { ...s.messages, [channelId]: list.filter((x) => x.id !== id) } }
+    // The newest message went: the channel's newest is now the one before it (or unknown when that isn't loaded), or
+    // the pointer would sit on a message that no longer exists and nothing could ever be marked read past it.
+    let lastMessageId = s.lastMessageId
+    if (s.lastMessageId[channelId] === id) {
+      lastMessageId = { ...s.lastMessageId }
+      const prev = list && !s.hasNewer[channelId] ? list.filter((x) => x.id !== id && !x.local).at(-1) : undefined
+      // Not loaded: keep it (older messages may still be unread) until the newest page comes in and says what's newest.
+      if (prev) lastMessageId[channelId] = prev.id; else goneLast.add(id)
+    }
+    if (!list) return { lastMessageId }
+    return { messages: { ...s.messages, [channelId]: list.filter((x) => x.id !== id) }, lastMessageId }
   }),
   prependMessages: (channelId, ms, hasMore) => set((s) => {
     const existing = s.messages[channelId] ?? []
@@ -924,6 +933,7 @@ export const useStore = create<State>((set, get) => ({
       const ms = await api.get<Message[]>(`/channels/${channelId}/messages?limit=50`)
       const local = (get().messages[channelId] ?? []).filter((m) => m.local)
       set((st) => ({ messages: { ...st.messages, [channelId]: [...ms, ...local] }, hasMore: { ...st.hasMore, [channelId]: ms.length === 50 }, hasNewer: { ...st.hasNewer, [channelId]: false } }))
+      fixGoneLast(channelId, ms)
     } catch (e) {
       get().pushToast((e as Error).message, 'error')
     } finally {
@@ -939,6 +949,7 @@ export const useStore = create<State>((set, get) => ({
       const q = before ? `?before=${before}&limit=50` : '?limit=50'
       const ms = await api.get<Message[]>(`/channels/${channelId}/messages${q}`)
       get().prependMessages(channelId, ms, ms.length === 50)
+      if (!before) fixGoneLast(channelId, ms)
     } catch (e) {
       get().pushToast((e as Error).message, 'error')
     } finally {
@@ -971,6 +982,19 @@ export const useStore = create<State>((set, get) => ({
     try { await api.put(`/channels/${channelId}/read`, { message_id: last }) } catch { /* ignore */ }
   },
 }))
+
+/** Newest messages deleted while their channel wasn't loaded: the channel's newest is unknown until its newest page loads. */
+const goneLast = new Set<string>()
+/** The newest page of a channel arrived: if its "newest message" was deleted meanwhile, the page's newest is the real one. */
+function fixGoneLast(channelId: string, page: Message[]) {
+  const s = useStore.getState(), last = s.lastMessageId[channelId]
+  if (!last || !goneLast.has(last)) return
+  goneLast.delete(last)
+  const newest = page.filter((m) => !m.local).reduce<string | undefined>((a, m) => (!a || m.id > a ? m.id : a), undefined)
+  const lastMessageId = { ...s.lastMessageId }
+  if (newest) lastMessageId[channelId] = newest; else delete lastMessageId[channelId]
+  useStore.setState({ lastMessageId })
+}
 
 // ---- Selectors / helpers ----
 export function isUnread(s: Pick<State, 'readStates' | 'lastMessageId'>, channelId: string): boolean {

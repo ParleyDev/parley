@@ -38,8 +38,10 @@ await p.click(`a[href="/channels/${g.id}/${ann.id}"]`); await p.waitForTimeout(6
 await p.click(`a[href="/channels/${g.id}/${other.id}"]`)
 w = await where(); const metrics = await p.evaluate(() => { const sc = document.querySelector('[data-msg-id]').closest('.overflow-y-auto'); const ids = [...document.querySelectorAll('[data-msg-id]')].map((e) => e.textContent.slice(0, 20)); return { sh: sc.scrollHeight, st: Math.round(sc.scrollTop), ch: sc.clientHeight, n: ids.length, first: ids[0], last: ids.at(-1), bar: !!document.querySelector('[data-older-bar]') } })
 console.log(JSON.stringify(metrics))
-const has69 = await p.evaluate(() => [...document.querySelectorAll('[data-msg-id] .msg-content')].some((e) => e.textContent.trim() === 'filler 69'))
-ok('coming back to it shows the newest messages', w.bottom && has69, JSON.stringify({ ...w, has69 }))
+// The newest that exists (a burst of 70 can run into the message rate limit, so it isn't always "filler 69").
+const newest = (await call(a.token, 'GET', `/channels/${other.id}/messages?limit=1`))[0]
+const hasNewest = await p.evaluate((id) => !!document.querySelector(`[data-msg-id="${id}"]`), newest.id)
+ok('coming back to it shows the newest messages', w.bottom && hasNewest, JSON.stringify({ ...w, hasNewest, newest: newest.content }))
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()
