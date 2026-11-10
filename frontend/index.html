@@ -16,10 +16,24 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <!-- Not render-blocking: on a phone waking up with a slow or half-up network, a stalled font request would otherwise
+         keep the whole page blank until it times out. The system font shows until Inter arrives. -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <!-- Dark from the first paint (the app's styles load with the bundle), so nothing flashes or sits white. -->
+    <style>html, body { background: #0b0c10; color: #dbdee1; margin: 0; } #boot-stuck { display: none; } html.boot-stuck #boot-stuck { display: flex; }</style>
+    <!-- Start-up watchdog (first in the page, before the bundle's script, so it hears that script failing): the app
+         replaces #boot-stuck when it renders. If it hasn't after a while (start-up threw before the first render), or
+         the bundle failed to load, offer a reload instead of a blank screen. -->
+    <script>
+      (function () {
+        var show = function () { document.documentElement.classList.add('boot-stuck') }
+        setTimeout(show, 10000)
+        addEventListener('error', function (e) { var t = e.target; if (t && t.tagName === 'SCRIPT' && t.type === 'module') show() }, true)
+      })()
+    </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="boot-stuck" style="height:100vh;align-items:center;justify-content:center;text-align:center;font:15px system-ui,-apple-system,sans-serif;padding:24px"><div><div style="font-size:17px;font-weight:600;margin-bottom:6px">Parley didn't start</div><div style="opacity:.7;margin-bottom:16px">The connection may have dropped while it was loading.</div><button onclick="location.reload()" style="font:inherit;font-weight:600;background:#5865f2;color:#fff;border:0;border-radius:8px;padding:10px 22px">Reload</button></div></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

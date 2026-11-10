@@ -62,6 +62,8 @@
         localStorage.setItem('parley.lastServer', origin)
         location.href = origin + '/?native=1'
       } catch (e) {
+        // Reopening the last server on launch while offline: the waiting page, which goes in once it answers.
+        if (!remember && !location.hash.includes('switch')) { location.replace('error.html'); return }
         err.textContent = e.message || 'Could not reach that server'
         btn.disabled = false; btn.innerHTML = label
       }

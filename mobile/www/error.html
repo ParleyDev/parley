@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Parley</title>
+  <!-- Shown by the native shell (capacitor.config server.errorPath) when the server's page fails to load: the phone was
+       offline, or iOS reloaded the app in the background before the network was back. Without it the web view stays
+       blank. It keeps trying and goes back in as soon as the server answers. -->
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #0b0c10; color: #f2f3f7; font-family: -apple-system, system-ui, Inter, sans-serif; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); text-align: center; }
+    main { width: min(420px, 90vw); }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    p { color: #b8bcc8; margin: 0 0 20px; font-size: 15px; }
+    button { width: 100%; margin-top: 14px; padding: 13px; border: 0; border-radius: 10px; background: #6d5dfc; color: #fff; font-size: 16px; font-weight: 700; }
+    button:disabled { opacity: .6; }
+    .link { width: auto; padding: 0; background: none; color: #9a98ff; font-size: 14px; font-weight: 600; }
+    .logo { width: 56px; height: 56px; border-radius: 16px; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="logo" src="logo.png" alt="Parley" width="56" height="56">
+    <h1>Can't reach Parley</h1>
+    <p id="msg">Waiting for a connection…</p>
+    <button id="retry" type="button">Try again</button>
+    <button class="link" id="switch" type="button">Use a different server</button>
+  </main>
+  <script>
+    const last = localStorage.getItem('parley.lastServer')
+    if (!last) location.replace('index.html')
+    const btn = document.getElementById('retry'), msg = document.getElementById('msg')
+    let busy = false
+    const attempt = async () => {
+      if (busy || !last) return
+      busy = true; btn.disabled = true; btn.textContent = 'Connecting…'
+      try {
+        const r = await fetch(last + '/api/instance', { cache: 'no-store' })
+        if (!r.ok) throw new Error(String(r.status))
+        location.replace(last + '/?native=1')
+        return
+      } catch {
+        msg.textContent = navigator.onLine === false ? 'You appear to be offline. Parley reconnects when you are back online.' : 'The server isn’t answering. Trying again…'
+      }
+      busy = false; btn.disabled = false; btn.textContent = 'Try again'
+    }
+    btn.onclick = attempt
+    document.getElementById('switch').onclick = () => location.replace('index.html#switch')
+    addEventListener('online', attempt)
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') attempt() })
+    setInterval(() => { if (document.visibilityState === 'visible') attempt() }, 5000)
+    attempt()
+  </script>
+</body>
+</html>
