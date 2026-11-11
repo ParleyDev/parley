@@ -50,5 +50,10 @@ export const desktop = {
   checkUpdate: (): Promise<UpdateStatus | null> => invoke()?.<UpdateStatus>('check_update').catch(() => null) ?? Promise.resolve(null),
   /** Installs the downloaded update and restarts the app into it. */
   installUpdate: (): Promise<void> => invoke()?.<void>('install_update') ?? Promise.reject(new Error('Not in the desktop app')),
+  /** The system Save dialog for a download about to start (shells from 0.24 on): the chosen path, null when
+   *  cancelled, undefined when the shell can't ask (then the download just starts). */
+  chooseDownload: (url: string, name: string): Promise<string | null | undefined> => invoke()?.<string | null>('choose_download', { url, name }).catch(() => undefined) ?? Promise.resolve(undefined),
+  /** Show a file the app downloaded in its folder. */
+  revealDownload: (path: string) => { invoke()?.('reveal_download', { path }).catch(() => {}) },
   setSettings: (s: { autostart?: boolean; startMinimized?: boolean; hardwareAcceleration?: boolean; closeToTray?: boolean; minimizeToTray?: boolean; updateChannel?: 'stable' | 'dev' }) => invoke()?.<DesktopSettings>('set_desktop_settings', s) ?? Promise.reject(new Error('Not in the desktop app')),
 }

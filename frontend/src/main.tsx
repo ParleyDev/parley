@@ -22,6 +22,7 @@ import { initAppIcon } from './lib/appIcon'
 import { initOverlayHost } from './lib/overlay'
 import { installKeepInView } from './lib/keepInView'
 import { installTouchHold } from './lib/touchHold'
+import { watchDownloads } from './lib/fileActions'
 
 initAppearance()
 initPrefs()
@@ -29,6 +30,7 @@ initLog()
 const languageReady = initLanguage()
 void initNative()
 initPwa()
+watchDownloads()
 initViewport()
 installSettingsSync()
 installArrowNav()

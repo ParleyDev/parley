@@ -21,15 +21,23 @@
 //! shell then reads that key's state (it never grabs the key, so it still types in other apps) and, while the
 //! window is in the background, tells the page through `window.__parleyPtt(down)`. In the foreground the page
 //! sees the key itself.
+//!
+//! Downloads: the page's Download asks for a place first (`choose_download`, the system Save dialog), and any other
+//! download goes to the Downloads folder under a name that doesn't overwrite anything. When one finishes the page is
+//! told through a `parley-download` event (where it went, or that it failed), so it can say so and offer to show it
+//! in its folder (`reveal_download`, only for files this app downloaded).
 
 use serde::{Deserialize, Serialize};
 use device_query::{DeviceQuery, DeviceState, Keycode};
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tauri::webview::PageLoadEvent;
+use tauri::webview::{DownloadEvent, PageLoadEvent};
 use tauri::{AppHandle, Manager, UserAttentionType, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::{Update, UpdaterExt};
 
@@ -526,6 +534,75 @@ fn open_deep(app: &AppHandle, u: &url::Url) {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// Downloads: the place chosen for a URL about to download, where each running one is going (macOS doesn't say when
+/// it finishes), and the files downloaded this session (the only ones `reveal_download` will show).
+#[derive(Default)]
+struct Downloads { chosen: Mutex<HashMap<String, PathBuf>>, running: Mutex<HashMap<String, PathBuf>>, saved: Mutex<HashSet<PathBuf>> }
+
+/// A file name without path parts or characters the file system refuses.
+fn safe_name(name: &str) -> String {
+    let n: String = name.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control() { '_' } else { c }).collect();
+    let n = n.trim().trim_start_matches('.').to_string();
+    if n.is_empty() { "download".into() } else { n }
+}
+
+/// `path`, or `name (1).ext`, `name (2).ext`... when it is taken.
+fn unused_path(path: &Path) -> PathBuf {
+    if !path.exists() { return path.to_path_buf(); }
+    let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let ext = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    (1..).map(|i| path.with_file_name(format!("{stem} ({i}){ext}"))).find(|p| !p.exists()).unwrap()
+}
+
+/// The system Save dialog for a download the page is about to start, in the Downloads folder with the file's name.
+/// The chosen path, or None when cancelled; the download of `url` then goes there.
+#[tauri::command]
+async fn choose_download(app: AppHandle, window: WebviewWindow, url: String, name: String) -> Result<Option<String>, String> {
+    let mut d = app.dialog().file().set_parent(&window).set_file_name(safe_name(&name));
+    if let Ok(dir) = app.path().download_dir() { d = d.set_directory(dir); }
+    let Some(picked) = d.blocking_save_file() else { return Ok(None) };
+    let path = picked.into_path().map_err(|e| e.to_string())?;
+    app.state::<Downloads>().chosen.lock().map_err(|e| e.to_string())?.insert(url, path.clone());
+    Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// Show a file this app downloaded in its folder (Explorer, Finder, the file manager).
+#[tauri::command]
+fn reveal_download(app: AppHandle, path: String) -> Result<(), String> {
+    let p = PathBuf::from(path);
+    if !app.state::<Downloads>().saved.lock().map_err(|e| e.to_string())?.contains(&p) { return Err("not a download".into()); }
+    app.opener().reveal_item_in_dir(&p).map_err(|e| e.to_string())
+}
+
+/// Where a download goes, and telling the page when it is done.
+fn on_download(w: &tauri::Webview, event: DownloadEvent<'_>) -> bool {
+    let app = w.app_handle();
+    let st = app.state::<Downloads>();
+    match event {
+        DownloadEvent::Requested { url, destination } => {
+            let chosen = st.chosen.lock().ok().and_then(|mut c| c.remove(url.as_str()));
+            let to = chosen.or_else(|| {
+                let name = destination.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                app.path().download_dir().ok().map(|d| unused_path(&d.join(safe_name(&name))))
+            });
+            if let Some(to) = to {
+                *destination = to.clone();
+                if let Ok(mut r) = st.running.lock() { r.insert(url.to_string(), to); }
+            }
+            true
+        }
+        DownloadEvent::Finished { url, path, success } => {
+            let went = st.running.lock().ok().and_then(|mut r| r.remove(url.as_str()));
+            let path = path.or(went);
+            if let (true, Some(p)) = (success, &path) { if let Ok(mut s) = st.saved.lock() { s.insert(p.clone()); } }
+            let detail = serde_json::json!({ "url": url.as_str(), "path": path.map(|p| p.to_string_lossy().into_owned()), "ok": success });
+            let _ = w.eval(&format!("window.dispatchEvent(new CustomEvent('parley-download', {{ detail: {detail} }}))"));
+            true
+        }
+        _ => true,
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -541,12 +618,14 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Pending(Mutex::new(None)))
         .manage(Ptt::default())
         .manage(InputSeen::default())
         .manage(Updates::default())
+        .manage(Downloads::default())
         .manage(Tray(std::sync::atomic::AtomicBool::new(false)))
-        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, set_theme, desktop_settings, set_desktop_settings, set_ptt_key, input_idle, streaming_apps, set_app_icon, overlay, window_control, update_status, check_update, install_update])
+        .invoke_handler(tauri::generate_handler![set_badge, flash, set_zoom, set_theme, desktop_settings, set_desktop_settings, set_ptt_key, input_idle, streaming_apps, set_app_icon, overlay, window_control, update_status, check_update, install_update, choose_download, reveal_download])
         .setup(|app| {
             let handle = app.handle().clone();
             // AppImages and dev builds aren't registered for parley:// by an installer.
@@ -578,6 +657,7 @@ pub fn run() {
                 // Tauri's native file-drop handler swallows HTML drag and drop on Windows (WebView2): reordering
                 // channels and servers, and dropping files onto the composer, never reach the page while it is on.
                 .disable_drag_drop_handler()
+                .on_download(|w, e| on_download(&w, e))
                 .on_new_window({
                     let handle = handle.clone();
                     move |url, _features| {
@@ -656,7 +736,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{app_version, deep_path, is_streaming_app, keycode};
+    use super::{app_version, deep_path, is_streaming_app, keycode, safe_name, unused_path};
     #[test]
     fn feed_versions() {
         let v = |s: &str| semver::Version::parse(s).unwrap();
@@ -689,6 +769,20 @@ mod tests {
         assert_eq!(keycode("KeyAB"), None);
     }
     fn p(s: &str) -> Option<String> { deep_path(&url::Url::parse(s).unwrap()) }
+    #[test]
+    fn download_names() {
+        assert_eq!(safe_name("../etc/passwd"), "_etc_passwd");
+        assert_eq!(safe_name("a:b?.mp4"), "a_b_.mp4");
+        assert_eq!(safe_name("  "), "download");
+        let dir = std::env::temp_dir().join(format!("parley-dl-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("clip.webm");
+        assert_eq!(unused_path(&f), f);
+        std::fs::write(&f, b"x").unwrap();
+        assert_eq!(unused_path(&f), dir.join("clip (1).webm"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn deep_links() {
         assert_eq!(p("parley://invite/abc123").as_deref(), Some("/invite/abc123"));

@@ -1,4 +1,5 @@
 import { Copy, Download, ExternalLink, Image as ImageIcon, Link2 } from 'lucide-react'
+import { download } from './fileActions'
 import type { MenuEntry } from '../components/ContextMenu'
 import { publicOrigin } from '../components/InviteCard'
 import { openExternal } from './native'
@@ -20,8 +21,7 @@ async function pngBlob(url: string): Promise<Blob> {
 async function save(url: string, name: string) {
   const blob = await (await fetch(url)).blob()
   const href = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = href; a.download = name || 'image'
-  document.body.append(a); a.click(); a.remove()
+  await download(href, name || 'image')
   setTimeout(() => URL.revokeObjectURL(href), 10_000)
 }
 

@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Download, ExternalLink, X, ZoomIn, ZoomOut } from 'lucide-react'
+import { download as saveAs } from '../../lib/fileActions'
 import { useEffect, useState } from 'react'
 import ContextMenu, { useContextMenu } from '../ContextMenu'
 import { absoluteUrl, imageMenu } from '../../lib/imageMenu'
@@ -28,8 +29,7 @@ export default function ImageLightbox({ onClose, url, name, items, index = 0 }: 
   const download = async () => {
     const blob = await (await fetch(cur.url)).blob()
     const href = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = href; a.download = cur.name || 'image'
-    document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(href), 10_000)
+    await saveAs(href, cur.name || 'image'); setTimeout(() => URL.revokeObjectURL(href), 10_000)
   }
   const btn = 'h-10 w-10 rounded-full bg-bg-0/70 flex items-center justify-center text-text-1 hover:text-text-0'
   return (

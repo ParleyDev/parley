@@ -246,7 +246,7 @@ interface State {
   tappedMessage: string | null
   /** Instance-wide settings from GET /instance (registration, announcement banner). */
   instance: { registration_enabled: boolean; announcement: string; require_email_verification?: boolean; mail_enabled?: boolean; unverified_read_only?: boolean; captcha_provider?: string; captcha_site_key?: string; voice_mode?: 'mesh' | 'sfu'; livekit_url?: string; transcription?: boolean; translation?: boolean; summaries?: boolean; app_url?: string; oauth_available?: string[]; max_upload_bytes?: number; version?: string; guests?: boolean; turn?: boolean }
-  toast: { id: number; text: string; kind: 'info' | 'error' }[]
+  toast: { id: number; text: string; kind: 'info' | 'error'; action?: ToastAction }[]
 
   // auth
   setAuth: (token: string, user: PrivateUser) => void
@@ -336,7 +336,7 @@ interface State {
   upsertThread: (t: ThreadInfo) => void
   closeModal: () => void
   setTappedMessage: (id: string | null) => void
-  pushToast: (text: string, kind?: 'info' | 'error') => void
+  pushToast: (text: string, kind?: 'info' | 'error', action?: ToastAction) => void
   dismissToast: (id: number) => void
 
   // async actions
@@ -348,6 +348,8 @@ interface State {
 }
 
 let toastSeq = 1
+/** A button on a toast ("Show in folder"); the toast closes when it is pressed. */
+export interface ToastAction { label: string; run: () => void }
 
 /** On first load, land on the content pane only if the URL already points at a channel. */
 function initialPane(): 'nav' | 'content' {
@@ -827,10 +829,10 @@ export const useStore = create<State>((set, get) => ({
   openModal: (modal) => set({ modal }),
   closeModal: () => set({ modal: null }),
   setTappedMessage: (tappedMessage) => set({ tappedMessage }),
-  pushToast: (text, kind = 'info') => {
+  pushToast: (text, kind = 'info', action) => {
     const id = toastSeq++
-    set((s) => ({ toast: [...s.toast, { id, text, kind }] }))
-    setTimeout(() => get().dismissToast(id), 4000)
+    set((s) => ({ toast: [...s.toast, { id, text, kind, action }] }))
+    setTimeout(() => get().dismissToast(id), action ? 8000 : 4000)
   },
   dismissToast: (id) => set((s) => ({ toast: s.toast.filter((t) => t.id !== id) })),
 

@@ -4,13 +4,14 @@ import type { MenuEntry } from '../components/ContextMenu'
 import { absoluteUrl } from './imageMenu'
 import { isNative, nativePlatform, openExternal } from './native'
 import { t } from './i18n'
+import { desktop, desktopBridge } from './desktop'
 import { useStore } from '../store'
 
 /** The attachment URL that asks the server for a download (Content-Disposition: attachment). */
 export const downloadUrl = (url: string) => { const u = new URL(url, location.href); u.searchParams.set('download', '1'); return u.href }
 
 /**
- * Save a file to the device. Browsers and the desktop app download it; the Android app's web view hands the
+ * Save a file to the device. Browsers download it; the desktop app asks where with the system Save dialog first; the Android app's web view hands the
  * `?download=1` response to the system download manager; the iOS app has no downloads, so it offers the share sheet
  * (Save to Files) or opens the file in Safari.
  */
@@ -19,7 +20,13 @@ export async function saveFile(url: string, name: string) {
     if (await shareFile(url, name, true)) return
     openExternal(absoluteUrl(url)); return
   }
-  const a = document.createElement('a'); a.href = downloadUrl(url); a.download = name || 'file'; a.rel = 'noopener'
+  await download(downloadUrl(url), name || 'file')
+}
+
+/** Start a download of `href` (a URL or blob: URL) as `name`; the desktop app first asks where (cancel stops it). */
+export async function download(href: string, name: string) {
+  if (desktopBridge() && await desktop.chooseDownload(href, name) === null) return
+  const a = document.createElement('a'); a.href = href; a.download = name; a.rel = 'noopener'
   document.body.append(a); a.click(); a.remove()
 }
 
@@ -50,4 +57,19 @@ export function fileMenu(url: string, name: string): MenuEntry[] {
     { label: t('Open in Browser'), icon: icon(ExternalLink), onClick: () => openExternal(absoluteUrl(url)) },
     ...(name ? [{ label: t('Copy File Name'), icon: icon(Copy), onClick: run(() => navigator.clipboard.writeText(name), t('File name copied')) }] : []),
   ]
+}
+
+/**
+ * The desktop app tells the page when a download has finished (or failed): say so, with Show in folder, instead of
+ * the file landing somewhere without a word.
+ */
+export function watchDownloads() {
+  window.addEventListener('parley-download', (e) => {
+    const d = (e as CustomEvent<{ url: string; path: string | null; ok: boolean }>).detail
+    const toast = useStore.getState().pushToast
+    const file = d.path?.split(/[\\/]/).pop() || (() => { try { return decodeURIComponent(new URL(d.url).pathname.split('/').pop() ?? '') } catch { return '' } })() || t('File')
+    if (!d.ok) { toast(t('Couldn’t download {name}', { name: file }), 'error'); return }
+    const path = d.path
+    toast(t('Downloaded {name}', { name: file }), 'info', path ? { label: t('Show in folder'), run: () => desktop.revealDownload(path) } : undefined)
+  })
 }
