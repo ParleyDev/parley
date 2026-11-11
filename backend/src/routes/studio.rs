@@ -40,7 +40,8 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, Serialize, FromRow)]
 pub struct Track {
     pub id: Uuid,
-    pub session_id: Uuid,
+    /// None for an imported file.
+    pub session_id: Option<Uuid>,
     pub user_id: Option<Uuid>,
     pub content_type: String,
     pub size: i64,
@@ -48,6 +49,11 @@ pub struct Track {
     pub offset_ms: i32,
     pub done: bool,
     pub created_at: DateTime<Utc>,
+    /// take (recorded in a session) or import (a file brought into the studio).
+    pub kind: String,
+    /// An import's file name.
+    pub name: Option<String>,
+    pub latency_ms: i32,
     #[sqlx(default)]
     pub display_name: String,
     #[sqlx(skip)]
@@ -71,18 +77,21 @@ pub struct Session {
     pub beats: i32,
     pub click: bool,
     pub count_in_ms: i32,
+    /// Recorded into this project, its downbeat at `position_ms` on the project's timeline.
+    pub project_id: Option<Uuid>,
+    pub position_ms: i32,
     #[sqlx(skip)]
     #[serde(default)]
     pub tracks: Vec<Track>,
 }
 
-const TRACK_SELECT: &str = "SELECT t.id, t.session_id, t.user_id, t.content_type, t.size, t.duration_ms, t.offset_ms, t.done, t.created_at, COALESCE(u.display_name, 'Unknown') AS display_name
+pub const TRACK_SELECT: &str = "SELECT t.id, t.session_id, t.user_id, t.content_type, t.size, t.duration_ms, t.offset_ms, t.done, t.created_at, t.kind, t.name, t.latency_ms, COALESCE(u.display_name, 'Unknown') AS display_name
     FROM studio_tracks t LEFT JOIN users u ON u.id = t.user_id";
-const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_at, ended_at, armed, bpm, beats, click, count_in_ms";
+const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_at, ended_at, armed, bpm, beats, click, count_in_ms, project_id, position_ms";
 
-fn track_path(state: &AppState, tid: Uuid) -> std::path::PathBuf { state.config.upload_dir.join(format!("studio-{tid}.webm")) }
+pub fn track_path(state: &AppState, tid: Uuid) -> std::path::PathBuf { state.config.upload_dir.join(format!("studio-{tid}.webm")) }
 
-async fn studio_channel(db: &PgPool, id: Uuid, uid: Uuid) -> AppResult<(crate::models::Channel, u64)> {
+pub async fn studio_channel(db: &PgPool, id: Uuid, uid: Uuid) -> AppResult<(crate::models::Channel, u64)> {
     let (c, p) = require_channel_perms(db, id, uid).await?;
     if c.kind != "studio" { return Err(AppError::BadRequest("Not a studio channel".into())); }
     Ok((c, p))
@@ -95,24 +104,24 @@ async fn sessions_for(db: &PgPool, channel_id: Uuid) -> AppResult<Vec<Session>> 
     let tracks = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.session_id = ANY($1) ORDER BY t.created_at")).bind(&ids).fetch_all(db).await?;
     for mut t in tracks {
         t.url = format!("/api/studio/tracks/{}", t.id);
-        if let Some(s) = sessions.iter_mut().find(|s| s.id == t.session_id) { s.tracks.push(t); }
+        if let Some(s) = sessions.iter_mut().find(|s| Some(s.id) == t.session_id) { s.tracks.push(t); }
     }
     Ok(sessions)
 }
 
-async fn broadcast(state: &AppState, c: &crate::models::Channel, event: &str, payload: serde_json::Value) -> AppResult<()> {
+pub async fn broadcast(state: &AppState, c: &crate::models::Channel, event: &str, payload: serde_json::Value) -> AppResult<()> {
     let target = perms::channel_audience(&state.db, c).await?;
     state.hub.emit(target, event, payload);
     Ok(())
 }
 
-async fn channel_json(state: &AppState, id: Uuid) -> AppResult<crate::models::Channel> {
+pub async fn channel_json(state: &AppState, id: Uuid) -> AppResult<crate::models::Channel> {
     let mut c = sqlx::query_as::<_, crate::models::Channel>(&format!("SELECT {} FROM channels WHERE id = $1", crate::routes::guilds::CHANNEL_COLS)).bind(id).fetch_one(&state.db).await?;
     perms::attach_overwrites(&state.db, std::slice::from_mut(&mut c)).await?;
     Ok(c)
 }
 
-async fn is_crew(state: &AppState, id: Uuid, uid: Uuid, p: u64) -> AppResult<bool> {
+pub async fn is_crew(state: &AppState, id: Uuid, uid: Uuid, p: u64) -> AppResult<bool> {
     Ok(perms::has(p, perms::MANAGE_CHANNELS) || perms::is_engineer(&state.db, id, uid).await?)
 }
 
@@ -154,8 +163,8 @@ async fn apply_role(state: &AppState, c: &crate::models::Channel, target: Uuid, 
     Ok(())
 }
 
-async fn config_of(db: &PgPool, id: Uuid) -> AppResult<crate::models::StudioConfig> {
-    Ok(sqlx::query_as::<_, crate::models::StudioConfig>("SELECT bpm, beats, click, count_in, disarmed FROM studio_config WHERE channel_id = $1").bind(id).fetch_optional(db).await?.unwrap_or_default())
+pub async fn config_of(db: &PgPool, id: Uuid) -> AppResult<crate::models::StudioConfig> {
+    Ok(sqlx::query_as::<_, crate::models::StudioConfig>("SELECT bpm, beats, click, count_in, disarmed, project_id FROM studio_config WHERE channel_id = $1").bind(id).fetch_optional(db).await?.unwrap_or_default())
 }
 
 #[derive(Deserialize)]
@@ -173,6 +182,8 @@ async fn set_config(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     if let Some(v) = req.click { cfg.click = v; }
     sqlx::query("INSERT INTO studio_config (channel_id, bpm, beats, click, count_in) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (channel_id) DO UPDATE SET bpm = $2, beats = $3, click = $4, count_in = $5")
         .bind(id).bind(cfg.bpm).bind(cfg.beats).bind(cfg.click).bind(cfg.count_in).execute(&state.db).await?;
+    // The open project keeps the tempo it is made at.
+    if let Some(pid) = cfg.project_id { crate::routes::studio_daw::set_tempo(&state, pid, uid, cfg.bpm, cfg.beats).await?; }
     let updated = channel_json(&state, id).await?;
     state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(updated));
     Ok(Json(updated))
@@ -208,7 +219,7 @@ async fn list_sessions(State(state): State<AppState>, AuthUser(uid): AuthUser, P
 }
 
 #[derive(Deserialize)]
-struct StartReq { #[serde(default)] name: String, armed: Option<Vec<Uuid>> }
+struct StartReq { #[serde(default)] name: String, armed: Option<Vec<Uuid>>, #[serde(default)] position_ms: i32 }
 
 /// The engineer starts a recording session: everyone in the channel learns the session id and server start time;
 /// band members' clients begin recording their own mic and upload it as a track. The armed members are the band
@@ -227,9 +238,11 @@ async fn start_session(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     let count_in_ms = if cfg.count_in > 0 { cfg.count_in * cfg.beats * 60_000 / cfg.bpm } else { 0 };
     let started_at = Utc::now() + chrono::Duration::milliseconds(count_in_ms as i64);
     let sid = Uuid::now_v7();
-    let s = sqlx::query_as::<_, Session>(&format!("INSERT INTO studio_sessions (id, channel_id, guild_id, name, started_by, armed, started_at, bpm, beats, click, count_in_ms) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING {SESSION_COLS}"))
-        .bind(sid).bind(id).bind(c.guild_id).bind(&name).bind(uid).bind(&armed).bind(started_at).bind(cfg.bpm).bind(cfg.beats).bind(cfg.click).bind(count_in_ms).fetch_one(&state.db).await?;
-    broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": id, "action": "start", "session_id": sid, "name": name, "started_at": s.started_at, "armed": armed, "bpm": s.bpm, "beats": s.beats, "click": s.click, "count_in_ms": count_in_ms })).await?;
+    // With a project open the take records into it, from the playhead: everyone hears the project from there.
+    let position_ms = if cfg.project_id.is_some() { req.position_ms.clamp(0, 4 * 3600 * 1000) } else { 0 };
+    let s = sqlx::query_as::<_, Session>(&format!("INSERT INTO studio_sessions (id, channel_id, guild_id, name, started_by, armed, started_at, bpm, beats, click, count_in_ms, project_id, position_ms) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING {SESSION_COLS}"))
+        .bind(sid).bind(id).bind(c.guild_id).bind(&name).bind(uid).bind(&armed).bind(started_at).bind(cfg.bpm).bind(cfg.beats).bind(cfg.click).bind(count_in_ms).bind(cfg.project_id).bind(position_ms).fetch_one(&state.db).await?;
+    broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": id, "action": "start", "session_id": sid, "name": name, "started_at": s.started_at, "armed": armed, "bpm": s.bpm, "beats": s.beats, "click": s.click, "count_in_ms": count_in_ms, "project_id": cfg.project_id, "position_ms": position_ms })).await?;
     crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.record", "channel", Some(id), &c.name, json!({ "session": sid })).await;
     Ok((StatusCode::CREATED, Json(s)))
 }
@@ -247,6 +260,8 @@ async fn stop_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 async fn delete_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
     let (c, p) = studio_channel(&state.db, id, uid).await?;
     if !is_crew(&state, id, uid, p).await? { return Err(AppError::Forbidden); }
+    // Takes used in a project stay (as audio of the studio's); the rest go with the session.
+    sqlx::query("UPDATE studio_tracks SET session_id = NULL WHERE session_id = $1 AND EXISTS (SELECT 1 FROM studio_clips c WHERE c.audio_id = studio_tracks.id)").bind(sid).execute(&state.db).await?;
     let tracks: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_tracks WHERE session_id = $1").bind(sid).fetch_all(&state.db).await?;
     let res = sqlx::query("DELETE FROM studio_sessions WHERE id = $1 AND channel_id = $2").bind(sid).bind(id).execute(&state.db).await?;
     if res.rows_affected() == 0 { return Err(AppError::NotFound("Session not found".into())); }
@@ -256,7 +271,7 @@ async fn delete_session(State(state): State<AppState>, AuthUser(uid): AuthUser, 
 }
 
 #[derive(Deserialize)]
-struct NewTrack { #[serde(default)] offset_ms: i32, content_type: Option<String> }
+struct NewTrack { #[serde(default)] offset_ms: i32, content_type: Option<String>, #[serde(default)] latency_ms: i32 }
 
 /// A band member registers a track (clip) for the open session while armed.
 async fn create_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(sid): Path<Uuid>, Json(req): Json<NewTrack>) -> AppResult<(StatusCode, Json<Track>)> {
@@ -272,7 +287,10 @@ async fn create_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     if open.is_some() { return Err(AppError::Conflict("You are already recording in this session".into())); }
     let ct = req.content_type.filter(|t| t.starts_with("audio/")).unwrap_or_else(|| "audio/webm".into());
     let tid = Uuid::now_v7();
-    sqlx::query("INSERT INTO studio_tracks (id, session_id, user_id, content_type, offset_ms) VALUES ($1, $2, $3, $4, $5)").bind(tid).bind(sid).bind(uid).bind(&ct).bind(req.offset_ms.clamp(-120_000, 600_000)).execute(&state.db).await?;
+    // What the recording client measured from hearing the music to its mic capturing what was played back: the take is
+    // that much late, so it is placed that much earlier.
+    let latency = req.latency_ms.clamp(0, 1000);
+    sqlx::query("INSERT INTO studio_tracks (id, session_id, user_id, content_type, offset_ms, channel_id, latency_ms) VALUES ($1, $2, $3, $4, $5, $6, $7)").bind(tid).bind(sid).bind(uid).bind(&ct).bind(req.offset_ms.clamp(-120_000, 600_000) - latency).bind(channel_id).bind(latency).execute(&state.db).await?;
     tokio::fs::create_dir_all(&state.config.upload_dir).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     tokio::fs::write(track_path(&state, tid), b"").await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     let mut t = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.id = $1")).bind(tid).fetch_one(&state.db).await?;
@@ -312,13 +330,17 @@ async fn finish_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     let mut t = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.id = $1")).bind(tid).fetch_one(&state.db).await?;
     t.url = format!("/api/studio/tracks/{tid}");
     let channel_id: (Uuid,) = sqlx::query_as("SELECT channel_id FROM studio_sessions WHERE id = $1").bind(sid).fetch_one(&state.db).await?;
-    if let Ok(c) = channel_json(&state, channel_id.0).await { broadcast(&state, &c, "STUDIO_UPDATE", json!({ "channel_id": channel_id.0 })).await?; }
+    if let Ok(c) = channel_json(&state, channel_id.0).await {
+        broadcast(&state, &c, "STUDIO_UPDATE", json!({ "channel_id": channel_id.0 })).await?;
+        // The take is in either way; placing it in the project is a bonus that must not fail the upload.
+        if let Err(e) = crate::routes::studio_daw::place_take(&state, &c, sid, &t).await { tracing::warn!(error = ?e, track = %tid, "could not place take in project"); }
+    }
     Ok(Json(t))
 }
 
 /// Tracks are served to anyone who can see the channel.
 async fn serve_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tid): Path<Uuid>) -> AppResult<Response> {
-    let row: Option<(Uuid, String, i64)> = sqlx::query_as("SELECT s.channel_id, t.content_type, t.size FROM studio_tracks t JOIN studio_sessions s ON s.id = t.session_id WHERE t.id = $1").bind(tid).fetch_optional(&state.db).await?;
+    let row: Option<(Uuid, String, i64)> = sqlx::query_as("SELECT COALESCE(t.channel_id, s.channel_id), t.content_type, t.size FROM studio_tracks t LEFT JOIN studio_sessions s ON s.id = t.session_id WHERE t.id = $1").bind(tid).fetch_optional(&state.db).await?;
     let Some((channel_id, ct, size)) = row else { return Err(AppError::NotFound("Track not found".into())) };
     studio_channel(&state.db, channel_id, uid).await?;
     let file = tokio::fs::File::open(track_path(&state, tid)).await.map_err(|_| AppError::NotFound("Track file missing".into()))?;
@@ -326,7 +348,7 @@ async fn serve_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
     let h = resp.headers_mut();
     h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&ct).unwrap_or(HeaderValue::from_static("audio/webm")));
     h.insert(header::CONTENT_LENGTH, HeaderValue::from(size as u64));
-    h.insert(header::CONTENT_DISPOSITION, HeaderValue::from_str(&format!("inline; filename=\"track-{tid}.webm\"")).unwrap());
+    h.insert(header::CONTENT_DISPOSITION, HeaderValue::from_str(&format!("inline; filename=\"track-{tid}\"")).unwrap());
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=0"));
     Ok(resp.into_response())

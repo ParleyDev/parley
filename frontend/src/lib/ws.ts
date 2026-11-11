@@ -15,6 +15,7 @@ import { getNotifPrefs } from './notifPrefs'
 import { getPrefs, streamerHides } from './prefs'
 import { log } from './log'
 import { studio } from './studio'
+import { onRemote as onDawEdit } from './daw'
 import { isNative, registerPush } from './native'
 import { clearChannelNotifications, refreshPush } from './webpush'
 import { markJoined } from './welcome'
@@ -82,6 +83,8 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'STUDIO_UPDATE'; d: { channel_id: string } }
   | { t: 'STUDIO_SESSION'; d: { channel_id: string; action: 'start' | 'stop'; session_id: string; name?: string; started_at?: string; armed?: string[] | null; bpm?: number; beats?: number; click?: boolean; count_in_ms?: number } }
   | { t: 'STUDIO_TRACK'; d: { channel_id: string; session_id: string; track_id: string; user_id: string; size: number } }
+  | { t: 'STUDIO_PROJECT'; d: Parameters<typeof onDawEdit>[0] & { channel_id: string } }
+  | { t: 'STUDIO_PROJECTS'; d: { channel_id: string } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
   | { t: 'VOICE_ERROR'; d: { message: string } }
@@ -361,6 +364,8 @@ function handle(ev: Ev) {
     case 'STUDIO_UPDATE': void s.loadStudio(ev.d.channel_id); break
     case 'STUDIO_SESSION': studio.onSession(ev.d); void s.loadStudio(ev.d.channel_id); break
     case 'STUDIO_TRACK': s.studioTrackSize(ev.d.channel_id, ev.d.track_id, ev.d.size); break
+    case 'STUDIO_PROJECT': onDawEdit(ev.d); break
+    case 'STUDIO_PROJECTS': window.dispatchEvent(new CustomEvent('parley-studio-projects', { detail: ev.d.channel_id })); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break
     case 'VOICE_MOVE': if (s.myVoiceChannelId) { s.pushToast(t('A moderator moved you to another voice channel')); voice.join(ev.d.channel_id) } break

@@ -298,9 +298,9 @@ pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResu
     if !studios.is_empty() {
         let rows: Vec<(Uuid, Uuid)> = sqlx::query_as("SELECT channel_id, user_id FROM studio_engineers WHERE channel_id = ANY($1) ORDER BY added_at").bind(&studios).fetch_all(db).await?;
         for c in channels.iter_mut() { c.engineer_ids = rows.iter().filter(|(ch, _)| *ch == c.id).map(|(_, u)| *u).collect(); }
-        let configs: Vec<(Uuid, i32, i32, bool, i32, Vec<Uuid>)> = sqlx::query_as("SELECT channel_id, bpm, beats, click, count_in, disarmed FROM studio_config WHERE channel_id = ANY($1)").bind(&studios).fetch_all(db).await?;
+        let configs: Vec<(Uuid, i32, i32, bool, i32, Vec<Uuid>, Option<Uuid>)> = sqlx::query_as("SELECT channel_id, bpm, beats, click, count_in, disarmed, project_id FROM studio_config WHERE channel_id = ANY($1)").bind(&studios).fetch_all(db).await?;
         for c in channels.iter_mut().filter(|c| c.kind == "studio") {
-            c.studio = Some(configs.iter().find(|r| r.0 == c.id).map(|r| crate::models::StudioConfig { bpm: r.1, beats: r.2, click: r.3, count_in: r.4, disarmed: r.5.clone() }).unwrap_or_default());
+            c.studio = Some(configs.iter().find(|r| r.0 == c.id).map(|r| crate::models::StudioConfig { bpm: r.1, beats: r.2, click: r.3, count_in: r.4, disarmed: r.5.clone(), project_id: r.6 }).unwrap_or_default());
         }
     }
     // Channels without their own overwrites inherit their category's, so load parents too.

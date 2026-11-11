@@ -1,5 +1,6 @@
 import { api, getToken } from './api'
 import { clickAt } from './multitrack'
+import { engine } from './daw'
 import { useStore } from '../store'
 import type { StudioConfig, StudioSession } from './types'
 import { voice } from './voice'
@@ -87,7 +88,8 @@ class StudioRecorder {
       if (!stream || !stream.getAudioTracks().length) { this.failed = sessionId; useStore.getState().pushToast(t('Recording started, but your microphone is not available'), 'error'); return }
       const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) ?? ''
       const offset = Date.now() - serverStart
-      const track = await api.post<{ id: string }>(`/studio/sessions/${sessionId}/tracks`, { offset_ms: offset, content_type: mime.split(';')[0] || 'audio/webm' })
+      // Recording over the project: placed earlier by the time from hearing it to the mic capturing what is played.
+      const track = await api.post<{ id: string }>(`/studio/sessions/${sessionId}/tracks`, { offset_ms: offset, content_type: mime.split(';')[0] || 'audio/webm', latency_ms: engine.latencyMs(stream) })
       this.sessionId = sessionId; this.trackId = track.id; this.stream = stream
       const rec = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 128_000 } : undefined)
       rec.ondataavailable = (e) => { if (e.data.size) this.enqueue(e.data) }
@@ -195,6 +197,6 @@ export const setArm = (channelId: string, userId: string, armed: boolean) => api
 export const setStudioConfig = (channelId: string, patch: Partial<Omit<StudioConfig, 'disarmed'>>) => api.patch(`/channels/${channelId}/studio/config`, patch)
 
 /** Start a take with the armed band members (the engineer's console and the Record button share this). */
-export async function startTake(channelId: string, name = '') {
-  return api.post(`/channels/${channelId}/studio/sessions`, { name })
+export async function startTake(channelId: string, name = '', positionMs = 0) {
+  return api.post(`/channels/${channelId}/studio/sessions`, { name, position_ms: Math.round(positionMs) })
 }

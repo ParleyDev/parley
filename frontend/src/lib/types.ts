@@ -235,10 +235,20 @@ export interface Channel {
 }
 
 /** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */
-export interface StudioTrack { id: string; session_id: string; user_id: string | null; content_type: string; size: number; duration_ms: number | null; offset_ms: number; done: boolean; created_at: string; display_name: string; url: string }
-export interface StudioSession { id: string; channel_id: string; guild_id: string; name: string; started_by: string | null; started_at: string; ended_at: string | null; armed: string[] | null; bpm: number; beats: number; click: boolean; count_in_ms: number; tracks: StudioTrack[] }
-/** A studio's console settings, shared by its engineers: tempo, beats per bar, metronome, count-in bars, disarmed members. */
-export interface StudioConfig { bpm: number; beats: number; click: boolean; count_in: number; disarmed: string[] }
+export interface StudioTrack { id: string; session_id: string | null; user_id: string | null; content_type: string; size: number; duration_ms: number | null; offset_ms: number; done: boolean; created_at: string; display_name: string; url: string
+  /** take (recorded in a session) or import (a file brought into the studio, named `name`). */
+  kind?: 'take' | 'import'; name?: string | null; latency_ms?: number }
+export interface StudioSession { id: string; channel_id: string; guild_id: string; name: string; started_by: string | null; started_at: string; ended_at: string | null; armed: string[] | null; bpm: number; beats: number; click: boolean; count_in_ms: number; tracks: StudioTrack[]
+  /** Recorded into this project, its downbeat at `position_ms` on the timeline. */
+  project_id?: string | null; position_ms?: number }
+/** A studio's console settings, shared by its engineers: tempo, beats per bar, metronome, count-in bars, disarmed members, and the project open in it. */
+export interface StudioConfig { bpm: number; beats: number; click: boolean; count_in: number; disarmed: string[]; project_id?: string | null }
+
+/** The studio's DAW: a project (song), its lanes (mixer tracks) and clips (windows onto audio files on the timeline). */
+export interface StudioProject { id: string; channel_id: string; name: string; bpm: number; beats: number; master_gain: number; created_by: string | null; created_at: string; updated_at: string; version: number }
+export interface StudioLane { id: string; project_id: string; name: string; color: string | null; position: number; gain: number; pan: number; mute: boolean; solo: boolean; user_id: string | null }
+export interface StudioClip { id: string; project_id: string; lane_id: string; audio_id: string; start_ms: number; in_ms: number; length_ms: number; gain: number; fade_in_ms: number; fade_out_ms: number; muted: boolean; created_by: string | null }
+export interface StudioProjectFull { project: StudioProject; lanes: StudioLane[]; clips: StudioClip[]; audio: StudioTrack[] }
 
 export interface Overwrite { id: string; kind: 'role' | 'member'; allow: number; deny: number }
 

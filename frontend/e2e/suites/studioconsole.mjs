@@ -12,7 +12,7 @@ const sessions = async () => call(a.token, 'GET', `/channels/${st.id}/studio/ses
 const chan = async () => call(a.token, 'GET', `/channels/${st.id}`)
 
 console.log('-- config API')
-ok('a fresh studio has default console settings', JSON.stringify((await chan()).studio) === JSON.stringify({ bpm: 120, beats: 4, click: false, count_in: 0, disarmed: [] }))
+ok('a fresh studio has default console settings', JSON.stringify((await chan()).studio) === JSON.stringify({ bpm: 120, beats: 4, click: false, count_in: 0, disarmed: [], project_id: null }))
 let r = await raw(b.token, 'PATCH', `/channels/${st.id}/studio/config`, { bpm: 90 }); ok('only the crew sets the tempo', r.status === 403)
 r = await raw(a.token, 'PATCH', `/channels/${st.id}/studio/config`, { bpm: 20 }); ok('tempo is bounded', r.status === 400)
 r = await raw(b.token, 'PUT', `/channels/${st.id}/studio/arm/${b.user.id}`, { armed: false }); ok('only the crew arms', r.status === 403)

@@ -1097,8 +1097,10 @@ pub struct StudioConfig {
     pub click: bool,
     pub count_in: i32,
     pub disarmed: Vec<Uuid>,
+    /// The project open in the studio (its DAW), shared by everyone in it.
+    pub project_id: Option<Uuid>,
 }
 
 impl Default for StudioConfig {
-    fn default() -> Self { Self { bpm: 120, beats: 4, click: false, count_in: 0, disarmed: vec![] } }
+    fn default() -> Self { Self { bpm: 120, beats: 4, click: false, count_in: 0, disarmed: vec![], project_id: None } }
 }

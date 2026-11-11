@@ -68,6 +68,7 @@ pub mod sessions;
 pub mod sounds;
 pub mod stage;
 pub mod studio;
+pub mod studio_daw;
 pub mod events;
 pub mod storage;
 pub mod threads;
@@ -113,6 +114,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(sounds::router())
         .merge(stage::router())
         .merge(studio::router())
+        .merge(studio_daw::router())
         .merge(events::router())
         .merge(guilds::router())
         .merge(modtools::router())

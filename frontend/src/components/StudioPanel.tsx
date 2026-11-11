@@ -1,4 +1,5 @@
-import { Download, Play, Square, Trash2, X } from 'lucide-react'
+import { Download, ListPlus, Play, Square, Trash2, X } from 'lucide-react'
+import { addTake, useDaw } from '../lib/daw'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { StudioSession } from '../lib/types'
@@ -18,6 +19,7 @@ export default function StudioPanel({ channelId, canManage, onClose, width, hand
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
   const [open, setOpen] = useState<string | null>(null)
+  const project = useDaw((s) => s.project)
   const t = useT()
   useEffect(() => { loadStudio(channelId) }, [channelId, loadStudio])
   const del = (s: StudioSession) => openModal({ kind: 'confirm', title: t('Delete {name}', { name: s.name }), body: s.tracks.length === 1 ? t('Removes the session and its {n} track. This cannot be undone.', { n: s.tracks.length }) : t('Removes the session and its {n} tracks. This cannot be undone.', { n: s.tracks.length }), danger: true, confirmLabel: t('Delete'),
@@ -41,6 +43,7 @@ export default function StudioPanel({ channelId, canManage, onClose, width, hand
                   <div key={trk.id} className="flex items-center gap-2 text-sm" data-studio-track={trk.id} data-track-done={trk.done ? '1' : '0'}>
                     <span className="truncate flex-1">{trk.user_id ? shownName(trk, members?.[trk.user_id], notes[trk.user_id]?.nickname) : trk.display_name}</span>
                     <span className="text-xs text-text-2 tabular-nums">{trk.done ? fmt(trk.duration_ms) : t('recording…')} · {Math.round(trk.size / 1024)} KB{trk.offset_ms ? ` · +${trk.offset_ms} ms` : ''}</span>
+                    {project && trk.done && !!trk.duration_ms && <button type="button" onClick={() => { addTake(trk, 0); pushToast(t('Added to {name}', { name: project.name })) }} title={t('Add to the project (at the start, on its member’s track)')} className="text-text-2 hover:text-text-0" data-track-add><ListPlus size={14} /></button>}
                     <a href={trk.url} download={`${s.name} - ${trk.display_name}.webm`} title={t('Download track')} className="text-text-2 hover:text-text-0" data-track-download><Download size={14} /></a>
                   </div>
                 ))}

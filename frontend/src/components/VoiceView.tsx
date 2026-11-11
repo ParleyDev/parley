@@ -77,6 +77,9 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const isStage = channel.kind === 'stage' || isStudio
   const engineers = channel.engineer_ids ?? []
   const isEngineer = isStudio && !!me && engineers.includes(me.id)
+  // The console: engineers, and with a project open everyone in the band (they edit it together).
+  const inBand = isStudio && !!me && participants.some((p) => p.user_id === me.id && !p.suppress)
+  const hasConsole = isEngineer || (inBand && !!channel.studio?.project_id)
   // Stage moderators: Manage Channels, or Mute + Move Members on this stage (backend perms::stage_mod).
   const isMod = has(perms, P.MANAGE_CHANNELS) || (has(perms, P.MUTE_MEMBERS) && has(perms, P.MOVE_MEMBERS)) || isEngineer
   const [sessionsOpen, setSessionsOpen] = useState(false)
@@ -249,7 +252,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {inThis && !suppressed && myVs?.deaf && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-deafened>{t('Deafened by a moderator')}</span>}
         {inThis && !suppressed && !myVs?.deaf && myVs?.mute && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-muted>{t('Muted by a moderator')}</span>}
         <span className="ml-auto flex items-center gap-1">
-          {isEngineer && inThis && <button onClick={toggleConsole} title={consoleOpen ? t('Hide console') : t('Show console')} className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${consoleOpen ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} aria-pressed={consoleOpen} data-studio-console-toggle><SlidersHorizontal size={20} /></button>}
+          {hasConsole && inThis && <button onClick={toggleConsole} title={consoleOpen ? t('Hide console') : t('Show console')} className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${consoleOpen ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} aria-pressed={consoleOpen} data-studio-console-toggle><SlidersHorizontal size={20} /></button>}
           {isStudio && <button onClick={() => setSessionsOpen((o) => !o)} title={t('Sessions')} className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${sessionsOpen ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-studio-toggle><ListMusic size={20} /></button>}
           {chatToggle}<MembersToggle /></span>
       </header>
@@ -266,7 +269,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                 <h2 className="text-2xl font-bold">{channel.name}</h2>
                 <p className="text-text-2 mt-2 max-w-sm">{t('No one is here yet. Join to start a call, or say something in chat.')}</p>
               </div>
-            ) : isEngineer && consoleOpen ? (
+            ) : hasConsole && consoleOpen ? (
               <>
                 <StudioConsole channel={channel} onClose={toggleConsole} />
                 {shown.length > 0 && <div className="shrink-0 flex gap-3 overflow-x-auto pb-1" data-console-tiles>

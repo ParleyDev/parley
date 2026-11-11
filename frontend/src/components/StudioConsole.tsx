@@ -1,4 +1,4 @@
-import { Download, Metronome, MicOff, Play, Rows3, SkipBack, SlidersVertical, Square, X } from 'lucide-react'
+import { Download, FolderPlus, Metronome, MicOff, Play, Rows3, SkipBack, SlidersVertical, Square, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
@@ -11,6 +11,7 @@ import { voice } from '../lib/voice'
 import { useStore, voiceParticipants } from '../store'
 import Avatar from './Avatar'
 import Dropdown from './Dropdown'
+import Daw from './Daw'
 import { shownName } from '../lib/names'
 
 const VIEW_KEY = `${STORAGE_PREFIX}studioConsoleView`
@@ -35,6 +36,11 @@ type Engine = ReturnType<typeof useMultitrack>
  * the studio's tempo, metronome and count-in (shared by its engineers) and the transport.
  */
 export default function StudioConsole({ channel, onClose }: { channel: Channel; onClose: () => void }) {
+  return channel.studio?.project_id ? <Daw channel={channel} onClose={onClose} /> : <TakesConsole channel={channel} onClose={onClose} />
+}
+
+/** No project open: the console of takes, and a way into a project. */
+function TakesConsole({ channel, onClose }: { channel: Channel; onClose: () => void }) {
   const t = useT()
   const me = useStore((s) => s.user)
   const users = useStore((s) => s.users)
@@ -156,6 +162,7 @@ export default function StudioConsole({ channel, onClose }: { channel: Channel; 
             </Dropdown>
           )}
           {mt.tracks && <button type="button" onClick={mt.exportWav} className="btn-ghost h-8 py-1 text-xs whitespace-nowrap" title={t('Render all audible tracks to one WAV')} data-console-export><Download size={14} /> {t('Export mix')}</button>}
+          {!live && <ProjectsButton channelId={channel.id} />}
         </span>
       </div>
 
@@ -297,7 +304,7 @@ function Mixer({ master, setMaster, ...p }: StripProps & { master: number; setMa
 }
 
 /** Vertical fader (silence to +3.5 dB; double-click for 0 dB) beside its meter, with the gain in dB underneath. */
-function Fader({ value, onChange, get, id, label }: { value: number; onChange: (v: number) => void; get: () => number; id: string; label: string }) {
+export function Fader({ value, onChange, get, id, label }: { value: number; onChange: (v: number) => void; get: () => number; id: string; label: string }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center gap-1">
       <div className="flex min-h-0 flex-1 justify-center gap-1.5">
@@ -318,7 +325,7 @@ const segments = (dir: string, px: number) => `repeating-linear-gradient(to ${di
  * A level meter redrawn every frame without re-rendering: a dark track, the lit part in fixed colour zones (so the
  * colour tells you how hot it is, not the background), and a peak-hold tick that falls back after a moment.
  */
-function Meter({ get, id, vertical }: { get: () => number; id: string; vertical?: boolean }) {
+export function Meter({ get, id, vertical }: { get: () => number; id: string; vertical?: boolean }) {
   const lit = useRef<HTMLDivElement>(null)
   const peak = useRef<HTMLDivElement>(null)
   const getRef = useRef(get)
@@ -389,4 +396,24 @@ function Wave({ peaks }: { peaks: Float32Array }) {
     return () => ro.disconnect()
   }, [peaks])
   return <canvas ref={ref} className="absolute inset-0 h-full w-full" data-console-wave />
+}
+
+/** Into the DAW: open one of the studio's projects, or start a new one (for everyone in the studio). */
+function ProjectsButton({ channelId }: { channelId: string }) {
+  const t = useT()
+  const pushToast = useStore((s) => s.pushToast)
+  const [list, setList] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => { api.get<{ id: string; name: string }[]>(`/channels/${channelId}/studio/projects`).then(setList).catch(() => {}) }, [channelId])
+  const fail = (e: unknown) => pushToast((e as Error).message, 'error')
+  return (
+    <>
+      {list.length > 0 && (
+        <Dropdown value="" onChange={(e) => { if (e.target.value) api.put(`/channels/${channelId}/studio/project`, { project_id: e.target.value }).catch(fail) }} className="input h-8 w-36 text-sm" title={t('Open a project')} aria-label={t('Open a project')} data-console-open-project>
+          <option value="">{t('Open project…')}</option>
+          {list.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </Dropdown>
+      )}
+      <button type="button" onClick={() => api.post(`/channels/${channelId}/studio/projects`, { name: '' }).catch(fail)} className="btn-primary h-8 py-1 text-xs whitespace-nowrap" title={t('Start a song: a timeline everyone in the band edits together, with imports and takes recorded over it')} data-console-new-project><FolderPlus size={14} /> {t('New project')}</button>
+    </>
+  )
 }

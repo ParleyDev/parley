@@ -26,7 +26,7 @@ export function clickAt(ctx: BaseAudioContext, dest: AudioNode, when: number, ac
 }
 
 /** Max |sample| of every 20 ms window across all channels. */
-function peaksOf(buf: AudioBuffer): Float32Array {
+export function peaksOf(buf: AudioBuffer): Float32Array {
   const size = Math.max(1, Math.floor(buf.sampleRate / PEAKS_PER_SECOND))
   const out = new Float32Array(Math.ceil(buf.length / size))
   for (let c = 0; c < buf.numberOfChannels; c++) {
