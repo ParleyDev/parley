@@ -1,3 +1,4 @@
+import VideoPlayer from './VideoPlayer'
 import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import { publicOrigin } from './InviteCard'
@@ -98,7 +99,7 @@ export default function LinkEmbed({ url }: { url: string }) {
           {embed.title && <a href={embed.url} target="_blank" rel="noopener noreferrer" className="block font-semibold text-sky-400 hover:underline break-words" data-embed-title>{embed.title}</a>}
           {embed.description && <span className="mt-0.5 block text-sm text-text-1 line-clamp-3 break-words" data-embed-desc>{embed.description}</span>}
         </div>
-        {embed.video ? <video src={embed.video} poster={embed.image} controls preload="none" className="block w-full bg-black" data-embed-video /> : embed.image && <img src={embed.image} alt="" loading="lazy" className="block max-h-[300px] w-full object-cover" data-embed-image onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />}
+        {embed.video ? <div className="[&>div]:rounded-none [&>div]:border-0" data-embed-video><VideoPlayer src={embed.video} poster={embed.image ?? undefined} name={embed.title ?? ''} actions={false} /></div> : embed.image && <img src={embed.image} alt="" loading="lazy" className="block max-h-[300px] w-full object-cover" data-embed-image onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />}
       </div>
     )
   }

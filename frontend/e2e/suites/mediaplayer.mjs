@@ -1,7 +1,7 @@
 // Audio and video in chat: audio files get a player card with a live visualiser (bars / wave / orb / off), a seek
 // bar and Download (a Save / Share sheet on phones); audio and voice messages play through one app-wide player that
-// keeps going when you leave the chat, with a now-playing bar that links back; videos open a full-screen viewer
-// instead of playing in a small box.
+// keeps going when you leave the chat, with a now-playing bar that links back; videos play where they are in the chat
+// with their own controls (seek, time, volume, speed, full screen with the same controls), like Discord's.
 import { chromium } from 'playwright'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -123,13 +123,36 @@ const iv = p.locator(`[data-inline-video="${clip.att.id}"]`); await iv.waitFor()
 await p.waitForSelector(`[data-inline-video="${clip.att.id}"] [data-inline-video-duration]`, { timeout: 5000 }).catch(() => {})
 const ib = await iv.boundingBox()
 ok('the inline video is a big poster with a play button and its length', ib && ib.width >= 480 && (await iv.locator('[data-inline-video-duration]').innerText().catch(() => '')) === '0:03', JSON.stringify(ib))
-await iv.click(); await p.waitForSelector('[data-video-viewer]'); await p.waitForTimeout(1200)
-const vv = await p.locator('[data-video-viewer-video]').evaluate((v) => ({ t: v.currentTime, w: v.getBoundingClientRect().width, paused: v.paused }))
-ok('playing opens the full-screen viewer, already playing', vv.t > 0.2 && !vv.paused, JSON.stringify(vv))
-ok('the video is large, not a thumbnail', vv.w >= 640, JSON.stringify(vv))
-await p.screenshot({ path: 'video-viewer.png' })
-await p.keyboard.press('Escape'); await p.waitForTimeout(200)
-ok('Escape closes it', await p.locator('[data-video-viewer]').count() === 0)
+const vstate = () => iv.locator('video').evaluate((v) => ({ t: v.currentTime, paused: v.paused, muted: v.muted, rate: v.playbackRate }))
+await iv.locator('[data-video-play]').click(); await p.waitForTimeout(1000)
+let vs = await vstate()
+ok('play starts it right there in the chat, no viewer opens', vs.t > 0.2 && !vs.paused && await p.locator('[role="dialog"] video').count() === 0 && (await iv.getAttribute('data-video-player')) === 'playing', JSON.stringify(vs))
+ok('with its own controls instead of the browser\'s', await iv.locator('video').getAttribute('controls') === null && await iv.locator('[data-video-controls]').isVisible() && /^0:0\d \/ 0:03$/.test(await iv.locator('[data-video-time]').innerText()), await iv.locator('[data-video-time]').innerText())
+await p.screenshot({ path: 'video-inline.png', clip: { ...(await iv.boundingBox()), x: (await iv.boundingBox()).x - 8, width: (await iv.boundingBox()).width + 16 } })
+await iv.locator('[data-video-surface]').click(); await p.waitForTimeout(150)
+ok('clicking the video pauses it', (await vstate()).paused && (await iv.getAttribute('data-video-player')) === 'paused')
+{ const sb = await iv.locator('[data-video-seek]').boundingBox(); await p.mouse.click(sb.x + sb.width / 2, sb.y + sb.height / 2); await p.waitForTimeout(200) }
+vs = await vstate(); ok('clicking the middle of the seek bar goes to the middle', Math.abs(vs.t - 1.5) < 0.35, JSON.stringify(vs))
+await iv.locator('[data-video-mute]').click(); await p.waitForTimeout(100)
+ok('mute mutes it, and is remembered for other videos', (await vstate()).muted && /"muted":true/.test(await p.evaluate(() => Object.entries(localStorage).find(([k]) => k.endsWith('videoVolume'))?.[1] ?? '')))
+await iv.locator('[data-video-mute]').click()
+await iv.locator('[data-video-speed]').click(); await iv.locator('[data-video-speeds] button', { hasText: '1.5x' }).click()
+ok('speed: 1.5x from the speed menu', (await vstate()).rate === 1.5 && (await iv.locator('[data-video-speed]').innerText()) === '1.5x')
+await iv.focus(); await p.keyboard.press('k'); await p.waitForTimeout(300)
+ok('K (or Space) plays and pauses while it has focus', !(await vstate()).paused)
+await p.mouse.move(5, 5); await p.waitForTimeout(400)
+ok('the controls fade away when the pointer leaves while it plays', await iv.locator('[data-video-controls]').evaluate((e) => getComputedStyle(e).opacity === '0'))
+await iv.hover(); await p.waitForTimeout(250)
+ok('and come back on hover', await iv.locator('[data-video-controls]').evaluate((e) => getComputedStyle(e).opacity === '1'))
+await iv.locator('[data-video-fullscreen]').click(); await p.waitForTimeout(500)
+ok('full screen puts the player itself full screen, controls and all', await p.evaluate(() => !!document.fullscreenElement?.matches('[data-inline-video]') && !!document.fullscreenElement.querySelector('[data-video-controls]') && document.fullscreenElement.getAttribute('data-fullscreen') === '1'))
+await p.screenshot({ path: 'video-fullscreen.png' })
+await p.mouse.move(700, 450); await p.locator('[data-fullscreen] [data-video-fullscreen]').click(); await p.waitForTimeout(400)
+ok('and the same button leaves it, back in the chat', await p.evaluate(() => !document.fullscreenElement) && (await iv.boundingBox()).width < 1000)
+if ((await vstate()).paused) { await iv.hover(); await iv.locator('[data-video-toggle]').click() }
+await p.locator(`[data-audio-player="${song.att.id}"] [data-audio-play]`).click(); await p.waitForTimeout(300)
+ok('playing audio pauses the video', (await vstate()).paused)
+await p.click('[data-now-playing-stop]').catch(() => {})
 await p.context().close()
 
 console.log('-- phone')
@@ -143,12 +166,19 @@ ok('phone: Download opens a sheet: Save to Device, Copy Link, Open in Browser', 
 await ph.screenshot({ path: 'audio-phone-sheet.png' })
 const [pdl] = await Promise.all([ph.waitForEvent('download', { timeout: 5000 }).catch(() => null), ph.locator('[data-menu-sheet] [data-menu-item="Save to Device"]').tap()])
 ok('phone: Save to Device downloads it', pdl?.suggestedFilename() === 'Night_Drive.wav', pdl?.suggestedFilename())
-await ph.locator(`[data-inline-video="${clip.att.id}"]`).tap(); await ph.waitForSelector('[data-video-viewer]')
-await ph.waitForTimeout(800)
-const pv = await ph.locator('[data-video-viewer-video]').boundingBox()
-ok('phone: a video fills the screen', pv && pv.width >= 385, JSON.stringify(pv))
+const pvid = ph.locator(`[data-inline-video="${clip.att.id}"]`); await pvid.scrollIntoViewIfNeeded()
+const pvb = await pvid.boundingBox()
+ok('phone: the video fits the chat', pvb && pvb.x >= 0 && pvb.x + pvb.width <= 390, JSON.stringify(pvb))
+await pvid.locator('[data-video-play]').tap(); await ph.waitForTimeout(900)
+ok('phone: a tap plays it in the chat', await pvid.locator('video').evaluate((v) => !v.paused && v.currentTime > 0.2))
+await pvid.locator('video').evaluate((v) => { v.currentTime = 0 })
+await pvid.locator('[data-video-surface]').tap({ position: { x: 30, y: 30 } }); await ph.waitForTimeout(250)
+const hid = await pvid.locator('[data-video-controls]').evaluate((e) => getComputedStyle(e).opacity === '0')
+await pvid.locator('[data-video-surface]').tap({ position: { x: 30, y: 30 } }); await ph.waitForTimeout(250)
+ok('phone: a tap on the video hides the controls, the next shows them with a big pause button', hid && await pvid.locator('[data-video-center]').isVisible() && await pvid.locator('[data-video-fullscreen]').isVisible())
 await ph.screenshot({ path: 'video-phone.png' })
-await ph.locator('[data-video-viewer-close]').tap()
+await pvid.locator('[data-video-center]').tap(); await ph.waitForTimeout(150)
+ok('phone: which pauses it', await pvid.locator('video').evaluate((v) => v.paused))
 
 console.log('-- iPhone')
 const ip = await open(b.token, { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148' })

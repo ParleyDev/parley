@@ -1,9 +1,10 @@
 import { isPdf, isTextFile, PdfCard, TextPreview } from './FilePreview'
-import { Download, FileText, Maximize2, Play } from 'lucide-react'
+import { Download, FileText } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useStore } from '../store'
 import VoiceMessage from './VoiceMessage'
-import AudioPlayer, { fmtTime } from './AudioPlayer'
+import AudioPlayer from './AudioPlayer'
+import VideoPlayer from './VideoPlayer'
 import type { Track } from '../lib/player'
 import type { Attachment } from '../lib/types'
 import { formatBytes, isAudio, isImage, isVideo } from '../lib/upload'
@@ -157,7 +158,7 @@ function One({ a, mine, gallery = [], context }: { a: Attachment; mine?: boolean
           )
         }
         if (isVideo(a.content_type) && inline) {
-          return <InlineVideo key={a.id} a={a} maxW={MAX_W} maxH={MAX_H} />
+          return <VideoPlayer key={a.id} id={a.id} src={a.url} poster={a.thumb_url ?? undefined} name={a.filename} w={a.width} h={a.height} maxW={Math.round(MAX_W * 1.25)} maxH={Math.round(MAX_H * 1.25)} />
         }
         const track: Track = { id: a.id, url: a.url, title: a.filename, artist: context?.artist, where: context?.where }
         if (isAudio(a.content_type) && a.duration_ms) {
@@ -180,35 +181,5 @@ function One({ a, mine, gallery = [], context }: { a: Attachment; mine?: boolean
         )
       })}
     </>
-  )
-}
-
-/**
- * A video in chat: a large poster (its first frame) with a play button and its length; playing opens the full-screen
- * viewer rather than a small box. Sized to the media-size preference, a size up from pictures.
- */
-function InlineVideo({ a, maxW, maxH }: { a: Attachment; maxW: number; maxH: number }) {
-  const t = useT()
-  const openModal = useStore((s) => s.openModal)
-  const [dims, setDims] = useState<{ w: number; h: number; d: number } | null>(null)
-  const W = Math.round(maxW * 1.25), H = Math.round(maxH * 1.25)
-  // The server's poster frame gives the shape before anything loads.
-  const w = dims?.w || a.width || 16, h = dims?.h || a.height || 9
-  const scale = Math.min(W / w, H / h)
-  const open = () => openModal({ kind: 'video', url: a.url, name: a.filename })
-  return (
-    <button type="button" onClick={open} className="group relative block max-w-full overflow-hidden rounded-lg border border-line bg-black hover:border-text-2"
-      style={{ width: Math.round(w * scale), aspectRatio: `${w} / ${h}` }} title={a.filename} aria-label={t('Play {name}', { name: a.filename })} data-inline-video={a.id}>
-      {/* The server's poster frame: the phone apps' web views don't paint a frame until the video plays. Without one,
-          #t has Safari show the first frame instead of black. */}
-      <video src={a.thumb_url ? a.url : `${a.url}#t=0.1`} poster={a.thumb_url} preload="metadata" muted playsInline tabIndex={-1} className="pointer-events-none h-full w-full object-contain" data-inline-video-poster={a.thumb_url ? 'server' : 'frame'}
-        onLoadedMetadata={(e) => { const v = e.currentTarget; setDims({ w: v.videoWidth, h: v.videoHeight, d: v.duration }) }} />
-      <span className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" aria-hidden />
-      <span className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-transform group-hover:scale-110 group-hover:bg-accent" aria-hidden>
-        <Play size={28} fill="currentColor" className="ml-1" />
-      </span>
-      {dims && Number.isFinite(dims.d) && dims.d > 0 && <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-white" data-inline-video-duration>{fmtTime(dims.d)}</span>}
-      <span className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100" aria-hidden><Maximize2 size={15} /></span>
-    </button>
   )
 }

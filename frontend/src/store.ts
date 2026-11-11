@@ -60,7 +60,6 @@ export type ModalKind =
   | { kind: 'newDm' }
   | { kind: 'profile'; userId: string; anchor?: Anchor; tab?: 'activity' | 'roles' | 'friends' | 'servers' | 'wishlist' | 'games' | 'reviews'; /** Full profile with the cursor in your note. */ note?: boolean }
   | { kind: 'image'; url: string; name: string; items?: GalleryItem[]; index?: number }
-  | { kind: 'video'; url: string; name: string; /** Seconds to start from (where the inline preview was). */ at?: number }
   | { kind: 'confirm'; title: string; body: string; action: () => Promise<void> | void; danger?: boolean; confirmLabel?: string; /** Offer "Don't ask again", saved under this key. */ dontAskKey?: string }
   | { kind: 'ban'; guildId: string; userId: string }
   | { kind: 'kick'; guildId: string; userId: string }

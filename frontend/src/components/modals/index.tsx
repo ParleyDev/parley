@@ -14,7 +14,6 @@ import ProfileModal from './Profile'
 import ConfirmModal from './Confirm'
 import DeleteServerModal from './DeleteServer'
 import ImageLightbox from './ImageLightbox'
-import VideoViewer from './VideoViewer'
 import BanMemberModal from './BanMember'
 import TimeoutMemberModal from './TimeoutMember'
 import EditHistoryModal from './EditHistory'
@@ -83,7 +82,6 @@ export default function Modals() {
     case 'confirm': return <ConfirmModal onClose={close} {...modal} />
     case 'deleteServer': return <DeleteServerModal onClose={close} guildId={modal!.guildId} />
     case 'image': return <ImageLightbox onClose={close} url={modal!.url} name={modal!.name} items={modal!.items} index={modal!.index} />
-    case 'video': return <VideoViewer onClose={close} url={modal!.url} name={modal!.name} at={modal!.at} />
     case 'ban': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
     case 'kick': return <BanMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} kick />
     case 'timeout': return <TimeoutMemberModal onClose={close} guildId={modal!.guildId} userId={modal!.userId} />
