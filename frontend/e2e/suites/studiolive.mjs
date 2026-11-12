@@ -108,6 +108,14 @@ await pa.waitForFunction((id) => (window.__parleyMonitor ?? []).includes(id), L1
 ok('monitoring In plays my live input through the track, here', await pa.evaluate((id) => (window.__parleyMonitor ?? []).includes(id), L1))
 await pa.click(`[data-daw-monitor="${L1}"] [data-daw-monitor-pick="off"]`)
 await pa.waitForFunction((id) => !(window.__parleyMonitor ?? []).includes(id), L1, { timeout: 8000 }).catch(() => {})
+const owner2 = (await full()).lanes.find((l) => l.id === L2).user_id
+await pa.selectOption(`[data-daw-input-user="${L2}"]`, '')
+await pa.waitForTimeout(900)
+f = await full()
+const n2 = f.lanes.find((l) => l.id === L2)
+ok('Audio From can be set back to No input on a track someone had', !!owner2 && n2.user_id === null && !n2.armed && !n2.input, JSON.stringify([owner2, n2.user_id, n2.armed, n2.input]))
+ok('and the strip shows it', (await pa.locator(`[data-daw-input-user="${L2}"]`).inputValue()) === '')
+await ops([{ op: 'lane.put', lane: { id: L2, user_id: owner2, input: n2.input ?? { device: '', channel: '2' } } }])
 ok('and Off stops it', await pa.evaluate((id) => !(window.__parleyMonitor ?? []).includes(id), L1))
 // Two armed tracks, two channels of one input: two takes, each on its track
 await ops([{ op: 'project', clear_loop: true }])

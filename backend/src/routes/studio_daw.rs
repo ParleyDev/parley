@@ -286,7 +286,9 @@ async fn delete_project(State(state): State<AppState>, AuthUser(uid): AuthUser, 
 }
 
 #[derive(Deserialize)]
-struct LanePatch { id: Uuid, name: Option<String>, color: Option<String>, position: Option<f32>, gain: Option<f32>, pan: Option<f32>, mute: Option<bool>, solo: Option<bool>, user_id: Option<Uuid>,
+struct LanePatch { id: Uuid, name: Option<String>, color: Option<String>, position: Option<f32>, gain: Option<f32>, pan: Option<f32>, mute: Option<bool>, solo: Option<bool>,
+    /// Whose input the track records: a user, or null for no one ("No input").
+    #[serde(default, deserialize_with = "present_opt")] user_id: Option<Option<Uuid>>,
     #[serde(default)] kind: Option<String>, #[serde(default)] effects: Option<Value>, #[serde(default)] sends: Option<Value>, #[serde(default)] automation: Option<Value>,
     /// A bus lane's id, or "" / null for the master.
     #[serde(default, deserialize_with = "present")] output_id: Option<Value>, #[serde(default)] nudge_ms: Option<i32>, #[serde(default, deserialize_with = "present")] instrument: Option<Value>,
@@ -368,6 +370,8 @@ fn sends(v: Value) -> AppResult<Value> {
 /// Automation: {param: [[ms, value], ...]}, at most 32 parameters of 4000 points, sorted by time.
 /// A field that may be sent as null to clear it: Some(Null) then, None only when it is left out.
 fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Value>, D::Error> { Ok(Some(Value::deserialize(d)?)) }
+/// The same for a typed field: absent = None, null = Some(None), a value = Some(Some(v)).
+fn present_opt<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> { Ok(Some(Option::<T>::deserialize(d)?)) }
 
 /// A track's input: {device: an input's name (empty: the default), channel: mono | 1 | 2 | 1/2}.
 fn track_input(v: Value) -> AppResult<Value> {
@@ -534,7 +538,12 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
             if let Some(x) = l.mute { v.mute = x; }
             if let Some(x) = l.solo { v.solo = x; }
             // Making a lane someone's makes it where their takes land from now on.
-            if let Some(x) = l.user_id { v.user_id = Some(x); v.claimed_at = Some(Utc::now()); v.armed = true; }
+            if let Some(x) = l.user_id {
+                if x.is_some() { v.claimed_at = Some(Utc::now()); v.armed = true; }
+                // No one's input any more: nothing to arm, and the device was the previous person's.
+                if x.is_none() { v.claimed_at = None; v.armed = false; v.input = None; }
+                v.user_id = x;
+            }
             if let Some(x) = l.input { v.input = if x.is_null() { None } else { Some(SqlJson(track_input(x)?)) }; }
             if let Some(x) = l.monitor { if !["in", "auto", "off"].contains(&x.as_str()) { return Err(AppError::BadRequest("Monitor is in, auto or off".into())); } v.monitor = x; }
             if let Some(x) = l.armed { v.armed = x; }
@@ -659,7 +668,7 @@ pub async fn place_take(state: &AppState, c: &crate::models::Channel, sid: Uuid,
         None => {
             let (next,): (Option<f32>,) = sqlx::query_as("SELECT (MAX(position) + 1)::real FROM studio_lanes WHERE project_id = $1").bind(pid).fetch_one(&state.db).await?;
             let id = Uuid::now_v7();
-            ops.push(Op::LanePut { lane: LanePatch { id, name: Some(t.display_name.clone()), color: None, position: Some(next.unwrap_or(0.0)), gain: None, pan: None, mute: None, solo: None, user_id: Some(uid), kind: None, effects: None, sends: None, automation: None, output_id: None, nudge_ms: None, instrument: None, input: None, monitor: None, armed: Some(true), sends_only: None } });
+            ops.push(Op::LanePut { lane: LanePatch { id, name: Some(t.display_name.clone()), color: None, position: Some(next.unwrap_or(0.0)), gain: None, pan: None, mute: None, solo: None, user_id: Some(Some(uid)), kind: None, effects: None, sends: None, automation: None, output_id: None, nudge_ms: None, instrument: None, input: None, monitor: None, armed: Some(true), sends_only: None } });
             id
         }
     };
