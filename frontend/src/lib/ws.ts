@@ -15,7 +15,7 @@ import { getNotifPrefs } from './notifPrefs'
 import { getPrefs, streamerHides } from './prefs'
 import { log } from './log'
 import { studio } from './studio'
-import { onRemote as onDawEdit } from './daw'
+import { onComments as onDawComments, onPresence as onDawPresence, onRemote as onDawEdit } from './daw'
 import { isNative, registerPush } from './native'
 import { clearChannelNotifications, refreshPush } from './webpush'
 import { markJoined } from './welcome'
@@ -85,6 +85,9 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'STUDIO_TRACK'; d: { channel_id: string; session_id: string; track_id: string; user_id: string; size: number } }
   | { t: 'STUDIO_PROJECT'; d: Parameters<typeof onDawEdit>[0] & { channel_id: string } }
   | { t: 'STUDIO_PROJECTS'; d: { channel_id: string } }
+  | { t: 'STUDIO_PRESENCE'; d: Parameters<typeof onDawPresence>[0] & { channel_id: string } }
+  | { t: 'STUDIO_COMMENTS'; d: { channel_id: string; project_id: string } }
+  | { t: 'STUDIO_VERSIONS'; d: { channel_id: string; project_id: string } }
   | { t: 'VOICE_STATE_UPDATE'; d: VoiceState }
   | { t: 'VOICE_SIGNAL'; d: { from: string; channel_id: string; data: SignalData } }
   | { t: 'VOICE_ERROR'; d: { message: string } }
@@ -365,6 +368,9 @@ function handle(ev: Ev) {
     case 'STUDIO_SESSION': studio.onSession(ev.d); void s.loadStudio(ev.d.channel_id); break
     case 'STUDIO_TRACK': s.studioTrackSize(ev.d.channel_id, ev.d.track_id, ev.d.size); break
     case 'STUDIO_PROJECT': onDawEdit(ev.d); break
+    case 'STUDIO_PRESENCE': onDawPresence(ev.d); break
+    case 'STUDIO_COMMENTS': onDawComments(ev.d); break
+    case 'STUDIO_VERSIONS': window.dispatchEvent(new CustomEvent('parley-studio-versions', { detail: ev.d.project_id })); break
     case 'STUDIO_PROJECTS': window.dispatchEvent(new CustomEvent('parley-studio-projects', { detail: ev.d.channel_id })); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break

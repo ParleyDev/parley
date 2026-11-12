@@ -2,3 +2,9 @@ Parley
 Copyright 2026 ParleyDev
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party components with notices of their own:
+
+- lamejs (@breezystack/lamejs), MP3 encoding in the studio's export, is licensed under the GNU Lesser General Public
+  License v3.0. It is loaded as a separate module only when an MP3 is exported, and can be replaced by any build of
+  it; its source is at https://github.com/breezystack/lamejs.

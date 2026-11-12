@@ -130,7 +130,7 @@ await pa.waitForFunction((id) => !!document.querySelector(`[data-daw-lane-head="
 ok('the new lanes and clips show up', await pa.locator(`[data-daw-lane-head="${bLane.id}"]`).count() === 1)
 
 console.log('-- export, sessions, close')
-await pa.click('[data-daw-export]')
+await pa.click('[data-daw-export-open]'); await pa.click('[data-daw-export-mix]')
 await pa.waitForFunction(() => (window.__parleyDawExport ?? 0) > 44, null, { timeout: 30000 }).catch(() => {})
 ok('export renders the project to a WAV', await pa.evaluate(() => (window.__parleyDawExport ?? 0) > 1000))
 const sess = (await call(a.token, 'GET', `/channels/${st.id}/studio/sessions`))[0]

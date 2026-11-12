@@ -80,6 +80,12 @@ pub struct Session {
     /// Recorded into this project, its downbeat at `position_ms` on the project's timeline.
     pub project_id: Option<Uuid>,
     pub position_ms: i32,
+    /// A loop or punch range the take was recorded with.
+    pub loop_start_ms: Option<i32>,
+    pub loop_end_ms: Option<i32>,
+    pub punch: bool,
+    /// Recorded alone: only its starter records and hears the backing.
+    pub solo: bool,
     #[sqlx(skip)]
     #[serde(default)]
     pub tracks: Vec<Track>,
@@ -87,7 +93,7 @@ pub struct Session {
 
 pub const TRACK_SELECT: &str = "SELECT t.id, t.session_id, t.user_id, t.content_type, t.size, t.duration_ms, t.offset_ms, t.done, t.created_at, t.kind, t.name, t.latency_ms, COALESCE(u.display_name, 'Unknown') AS display_name
     FROM studio_tracks t LEFT JOIN users u ON u.id = t.user_id";
-const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_at, ended_at, armed, bpm, beats, click, count_in_ms, project_id, position_ms";
+const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_at, ended_at, armed, bpm, beats, click, count_in_ms, project_id, position_ms, loop_start_ms, loop_end_ms, punch, solo";
 
 pub fn track_path(state: &AppState, tid: Uuid) -> std::path::PathBuf { state.config.upload_dir.join(format!("studio-{tid}.webm")) }
 
@@ -219,7 +225,7 @@ async fn list_sessions(State(state): State<AppState>, AuthUser(uid): AuthUser, P
 }
 
 #[derive(Deserialize)]
-struct StartReq { #[serde(default)] name: String, armed: Option<Vec<Uuid>>, #[serde(default)] position_ms: i32 }
+struct StartReq { #[serde(default)] name: String, armed: Option<Vec<Uuid>>, #[serde(default)] position_ms: i32, #[serde(default)] solo: bool }
 
 /// The engineer starts a recording session: everyone in the channel learns the session id and server start time;
 /// band members' clients begin recording their own mic and upload it as a track. The armed members are the band
@@ -227,29 +233,43 @@ struct StartReq { #[serde(default)] name: String, armed: Option<Vec<Uuid>>, #[se
 /// band hears the click from count-in and recording starts right away, so takes carry a little pre-roll.
 async fn start_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<StartReq>) -> AppResult<(StatusCode, Json<Session>)> {
     let (c, _) = studio_channel(&state.db, id, uid).await?;
-    if !perms::is_engineer(&state.db, id, uid).await? { return Err(AppError::Forbidden); }
+    // Anyone in the band may record a take alone; a take for the band is the engineers'.
+    let in_band = state.hub.voice_state(uid).is_some_and(|v| v.channel_id == id && !v.suppress);
+    if req.solo { if !in_band { return Err(AppError::BadRequest("Join the band to record".into())); } }
+    else if !perms::is_engineer(&state.db, id, uid).await? { return Err(AppError::Forbidden); }
     let open: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_sessions WHERE channel_id = $1 AND ended_at IS NULL").bind(id).fetch_optional(&state.db).await?;
     if open.is_some() { return Err(AppError::Conflict("A session is already recording".into())); }
     let name: String = { let n: String = req.name.trim().chars().take(80).collect(); if n.is_empty() { format!("Session {}", Utc::now().format("%Y-%m-%d %H:%M")) } else { n } };
     let cfg = config_of(&state.db, id).await?;
-    let mut armed = req.armed.unwrap_or_else(|| state.hub.voice_states_for_channels(&[id]).into_iter().filter(|v| !v.suppress && !cfg.disarmed.contains(&v.user_id)).map(|v| v.user_id).collect());
+    let mut armed = if req.solo { vec![uid] } else { req.armed.clone().unwrap_or_else(|| state.hub.voice_states_for_channels(&[id]).into_iter().filter(|v| !v.suppress && !cfg.disarmed.contains(&v.user_id)).map(|v| v.user_id).collect()) };
     armed.sort(); armed.dedup(); armed.truncate(64);
     if armed.is_empty() { return Err(AppError::BadRequest("Arm at least one track".into())); }
     let count_in_ms = if cfg.count_in > 0 { cfg.count_in * cfg.beats * 60_000 / cfg.bpm } else { 0 };
     let started_at = Utc::now() + chrono::Duration::milliseconds(count_in_ms as i64);
     let sid = Uuid::now_v7();
     // With a project open the take records into it, from the playhead: everyone hears the project from there.
-    let position_ms = if cfg.project_id.is_some() { req.position_ms.clamp(0, 4 * 3600 * 1000) } else { 0 };
-    let s = sqlx::query_as::<_, Session>(&format!("INSERT INTO studio_sessions (id, channel_id, guild_id, name, started_by, armed, started_at, bpm, beats, click, count_in_ms, project_id, position_ms) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING {SESSION_COLS}"))
-        .bind(sid).bind(id).bind(c.guild_id).bind(&name).bind(uid).bind(&armed).bind(started_at).bind(cfg.bpm).bind(cfg.beats).bind(cfg.click).bind(count_in_ms).bind(cfg.project_id).bind(position_ms).fetch_one(&state.db).await?;
-    broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": id, "action": "start", "session_id": sid, "name": name, "started_at": s.started_at, "armed": armed, "bpm": s.bpm, "beats": s.beats, "click": s.click, "count_in_ms": count_in_ms, "project_id": cfg.project_id, "position_ms": position_ms })).await?;
+    let mut position_ms = if cfg.project_id.is_some() { req.position_ms.clamp(0, 4 * 3600 * 1000) } else { 0 };
+    // The project's loop: loop recording (takes per pass, from the loop's start) or punch recording (only the range).
+    let (mut la, mut lb, mut punch) = (None, None, false);
+    if let Some(pid) = cfg.project_id {
+        let r: Option<(bool, bool, Option<i32>, Option<i32>)> = sqlx::query_as("SELECT loop_on, punch_on, loop_start_ms, loop_end_ms FROM studio_projects WHERE id = $1").bind(pid).fetch_optional(&state.db).await?;
+        if let Some((loop_on, punch_on, Some(a), Some(b))) = r { if (loop_on || punch_on) && b > a {
+            la = Some(a); lb = Some(b); punch = punch_on;
+            if !punch && (position_ms < a || position_ms >= b) { position_ms = a; }
+        } }
+    }
+    let s = sqlx::query_as::<_, Session>(&format!("INSERT INTO studio_sessions (id, channel_id, guild_id, name, started_by, armed, started_at, bpm, beats, click, count_in_ms, project_id, position_ms, loop_start_ms, loop_end_ms, punch, solo) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING {SESSION_COLS}"))
+        .bind(sid).bind(id).bind(c.guild_id).bind(&name).bind(uid).bind(&armed).bind(started_at).bind(cfg.bpm).bind(cfg.beats).bind(cfg.click).bind(count_in_ms).bind(cfg.project_id).bind(position_ms)
+        .bind(la).bind(lb).bind(punch).bind(req.solo).fetch_one(&state.db).await?;
+    broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": id, "action": "start", "session_id": sid, "name": name, "started_at": s.started_at, "armed": armed, "bpm": s.bpm, "beats": s.beats, "click": s.click, "count_in_ms": count_in_ms, "project_id": cfg.project_id, "position_ms": position_ms, "loop_start_ms": la, "loop_end_ms": lb, "punch": punch, "solo": req.solo, "started_by": uid })).await?;
     crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.record", "channel", Some(id), &c.name, json!({ "session": sid })).await;
     Ok((StatusCode::CREATED, Json(s)))
 }
 
 async fn stop_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Session>> {
     let (c, p) = studio_channel(&state.db, id, uid).await?;
-    if !is_crew(&state, id, uid, p).await? { return Err(AppError::Forbidden); }
+    let own: Option<(bool,)> = sqlx::query_as("SELECT solo FROM studio_sessions WHERE id = $1 AND started_by = $2").bind(sid).bind(uid).fetch_optional(&state.db).await?;
+    if !own.is_some_and(|o| o.0) && !is_crew(&state, id, uid, p).await? { return Err(AppError::Forbidden); }
     let res = sqlx::query("UPDATE studio_sessions SET ended_at = now() WHERE id = $1 AND channel_id = $2 AND ended_at IS NULL").bind(sid).bind(id).execute(&state.db).await?;
     if res.rows_affected() == 0 { return Err(AppError::NotFound("No recording session with that id".into())); }
     broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": id, "action": "stop", "session_id": sid })).await?;
@@ -282,6 +302,8 @@ async fn create_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     let vs = state.hub.voice_state(uid).filter(|v| v.channel_id == channel_id).ok_or_else(|| AppError::BadRequest("Join the studio first".into()))?;
     if vs.suppress { return Err(AppError::Forbidden); }
     if config_of(&state.db, channel_id).await?.disarmed.contains(&uid) { return Err(AppError::BadRequest("Your track is not armed".into())); }
+    let solo: Option<(bool, Option<Uuid>)> = sqlx::query_as("SELECT solo, started_by FROM studio_sessions WHERE id = $1").bind(sid).fetch_optional(&state.db).await?;
+    if solo.is_some_and(|(solo, by)| solo && by != Some(uid)) { return Err(AppError::BadRequest("Someone is recording alone".into())); }
     // Punching out and back in gives a member several clips in one take, one open at a time.
     let open: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_tracks WHERE session_id = $1 AND user_id = $2 AND NOT done").bind(sid).bind(uid).fetch_optional(&state.db).await?;
     if open.is_some() { return Err(AppError::Conflict("You are already recording in this session".into())); }

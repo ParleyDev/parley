@@ -240,14 +240,36 @@ export interface StudioTrack { id: string; session_id: string | null; user_id: s
   kind?: 'take' | 'import'; name?: string | null; latency_ms?: number }
 export interface StudioSession { id: string; channel_id: string; guild_id: string; name: string; started_by: string | null; started_at: string; ended_at: string | null; armed: string[] | null; bpm: number; beats: number; click: boolean; count_in_ms: number; tracks: StudioTrack[]
   /** Recorded into this project, its downbeat at `position_ms` on the timeline. */
-  project_id?: string | null; position_ms?: number }
+  project_id?: string | null; position_ms?: number
+  /** Loop or punch range it was recorded with; recorded alone (only its starter records and hears the backing). */
+  loop_start_ms?: number | null; loop_end_ms?: number | null; punch?: boolean; solo?: boolean }
 /** A studio's console settings, shared by its engineers: tempo, beats per bar, metronome, count-in bars, disarmed members, and the project open in it. */
 export interface StudioConfig { bpm: number; beats: number; click: boolean; count_in: number; disarmed: string[]; project_id?: string | null }
 
 /** The studio's DAW: a project (song), its lanes (mixer tracks) and clips (windows onto audio files on the timeline). */
-export interface StudioProject { id: string; channel_id: string; name: string; bpm: number; beats: number; master_gain: number; created_by: string | null; created_at: string; updated_at: string; version: number }
-export interface StudioLane { id: string; project_id: string; name: string; color: string | null; position: number; gain: number; pan: number; mute: boolean; solo: boolean; user_id: string | null }
-export interface StudioClip { id: string; project_id: string; lane_id: string; audio_id: string; start_ms: number; in_ms: number; length_ms: number; gain: number; fade_in_ms: number; fade_out_ms: number; muted: boolean; created_by: string | null }
+export interface StudioProject { id: string; channel_id: string; name: string; bpm: number; beats: number; master_gain: number; created_by: string | null; created_at: string; updated_at: string; version: number
+  master_effects: import('./fx').Effect[]
+  /** Tempo and time signature changes from a bar on. */
+  tempo_map?: import('./tempo').TempoChange[] | null
+  loop_on?: boolean; loop_start_ms?: number | null; loop_end_ms?: number | null
+  /** Recording keeps only what falls in the loop range. */
+  punch_on?: boolean
+  markers?: { id: string; ms: number; name: string }[] }
+export interface StudioLane { id: string; project_id: string; name: string; color: string | null; position: number; gain: number; pan: number; mute: boolean; solo: boolean; user_id: string | null
+  /** audio (clips of audio), midi (note clips played by `instrument`) or bus (a return the others send to). */
+  kind: 'audio' | 'midi' | 'bus'
+  effects: import('./fx').Effect[]
+  sends: Record<string, number>
+  automation: Record<string, [number, number][]>
+  output_id: string | null
+  /** Shifts the lane's clips in time (latency fixes), ms. */
+  nudge_ms?: number
+  instrument?: import('./instruments').Instrument | null }
+export interface StudioClip { id: string; project_id: string; lane_id: string; audio_id: string | null; start_ms: number; in_ms: number; length_ms: number; gain: number; fade_in_ms: number; fade_out_ms: number; muted: boolean; created_by: string | null
+  /** A MIDI clip's notes (pitch, start and length in ms from the clip's start, velocity). */
+  notes?: import('./instruments').Note[] | null
+  /** Takes of one loop recording share a group; one plays, the others are muted alternatives. */
+  group_id?: string | null }
 export interface StudioProjectFull { project: StudioProject; lanes: StudioLane[]; clips: StudioClip[]; audio: StudioTrack[] }
 
 export interface Overwrite { id: string; kind: 'role' | 'member'; allow: number; deny: number }

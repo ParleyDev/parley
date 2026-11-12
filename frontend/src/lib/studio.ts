@@ -50,12 +50,15 @@ class StudioRecorder {
     })
   }
 
-  onSession(d: { channel_id: string; action: 'start' | 'stop'; session_id: string; started_at?: string; bpm?: number; beats?: number; click?: boolean; count_in_ms?: number }) {
+  onSession(d: { channel_id: string; action: 'start' | 'stop'; session_id: string; started_at?: string; bpm?: number; beats?: number; click?: boolean; count_in_ms?: number; solo?: boolean; started_by?: string; project_id?: string | null }) {
     if (d.action === 'stop') { if (this.known?.session === d.session_id) this.known = null; if (this.sessionId === d.session_id) void this.stop(); metronome.stop(d.session_id); return }
     this.known = { channel: d.channel_id, session: d.session_id }
     // The sessions list is still loading: act on the event itself.
     const start = d.started_at ? Date.parse(d.started_at) : Date.now()
-    if (useStore.getState().myVoiceChannelId === d.channel_id && this.inBand(d.channel_id)) metronome.run(d.session_id, start, d.bpm ?? 120, d.beats ?? 4, !!d.click, d.count_in_ms ?? 0)
+    // A take recorded alone is only its starter's.
+    if (d.solo && d.started_by !== useStore.getState().user?.id) return
+    // Over a project the project's grid clicks along with the backing (lib/daw); this plays the count-in.
+    if (useStore.getState().myVoiceChannelId === d.channel_id && this.inBand(d.channel_id)) metronome.run(d.session_id, start, d.bpm ?? 120, d.beats ?? 4, !!d.click && !d.project_id, d.count_in_ms ?? 0)
     if (armedHere(d.channel_id)) void this.start(d.session_id, start)
   }
 
@@ -70,10 +73,11 @@ class StudioRecorder {
     const s = useStore.getState()
     const ch = s.myVoiceChannelId
     const list = ch ? s.studio[ch] : undefined
-    const live: StudioSession | undefined = list?.find((x) => !x.ended_at)
+    const found: StudioSession | undefined = list?.find((x) => !x.ended_at)
+    const live = found && (!found.solo || found.started_by === s.user?.id) ? found : undefined
     if (this.known && (this.known.channel !== ch || list?.some((x) => x.id === this.known!.session && x.ended_at))) this.known = null
     const liveId = live?.id ?? this.known?.session ?? null
-    if (live && ch && this.inBand(ch)) metronome.run(live.id, Date.parse(live.started_at), live.bpm, live.beats, live.click, live.count_in_ms)
+    if (live && ch && this.inBand(ch)) metronome.run(live.id, Date.parse(live.started_at), live.bpm, live.beats, live.click && !live.project_id, live.count_in_ms)
     else if (!liveId || !ch || !this.inBand(ch)) metronome.stop()
     if (this.rec && (!liveId || liveId !== this.sessionId || !armedHere(ch!))) { void this.stop(); return }
     if (live && ch && !this.rec && !this.starting && this.failed !== live.id && armedHere(ch)) void this.start(live.id, Date.parse(live.started_at))
@@ -197,6 +201,6 @@ export const setArm = (channelId: string, userId: string, armed: boolean) => api
 export const setStudioConfig = (channelId: string, patch: Partial<Omit<StudioConfig, 'disarmed'>>) => api.patch(`/channels/${channelId}/studio/config`, patch)
 
 /** Start a take with the armed band members (the engineer's console and the Record button share this). */
-export async function startTake(channelId: string, name = '', positionMs = 0) {
-  return api.post(`/channels/${channelId}/studio/sessions`, { name, position_ms: Math.round(positionMs) })
+export async function startTake(channelId: string, name = '', positionMs = 0, solo = false) {
+  return api.post(`/channels/${channelId}/studio/sessions`, { name, position_ms: Math.round(positionMs), solo })
 }

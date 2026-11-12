@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { api, getToken } from './api'
 import { clickAt, encodeWav, peaksOf } from './multitrack'
+import { buildChain, chainKey, integratedLufs, type FxNode, type Target } from './fx'
+import { beatsAt, isDownbeat, secAtBeat } from './tempo'
+import { scheduleNotes } from './instruments'
 import { useStore } from '../store'
 import { t } from './i18n'
 import type { StudioClip, StudioLane, StudioProject, StudioProjectFull, StudioSession, StudioTrack } from './types'
@@ -20,14 +23,14 @@ import type { StudioClip, StudioLane, StudioProject, StudioProjectFull, StudioSe
  */
 
 export type Op =
-  | { op: 'project'; name?: string; bpm?: number; beats?: number; master_gain?: number }
+  | ({ op: 'project' } & Partial<Pick<StudioProject, 'name' | 'bpm' | 'beats' | 'master_gain' | 'master_effects' | 'tempo_map' | 'loop_on' | 'loop_start_ms' | 'loop_end_ms' | 'punch_on' | 'markers'>>)
   | { op: 'lane.put'; lane: Partial<StudioLane> & { id: string } }
   | { op: 'lane.del'; id: string }
   | { op: 'clip.put'; clip: Partial<StudioClip> & { id: string } }
   | { op: 'clip.del'; id: string }
 /** What the server broadcasts: puts carry the whole entity. */
 type Applied =
-  | { op: 'project'; project: Pick<StudioProject, 'name' | 'bpm' | 'beats' | 'master_gain'> }
+  | { op: 'project'; project: Partial<StudioProject> }
   | { op: 'lane.put'; lane: StudioLane }
   | { op: 'lane.del'; id: string }
   | { op: 'clip.put'; clip: StudioClip }
@@ -43,9 +46,14 @@ export interface DawState {
   /** Edits of mine: inverse ops to undo, ops to redo. */
   undo: { do: Op[]; undo: Op[] }[]
   redo: { do: Op[]; undo: Op[] }[]
+  /** Comments pinned to the timeline. */
+  comments: StudioComment[]
+  /** Where the others editing are: playhead, playing, selection (by user, with when it was heard). */
+  peers: Record<string, { pos_ms: number; playing: boolean; sel: string[]; at: number }>
 }
+export interface StudioComment { id: string; project_id: string; user_id: string | null; ms: number; lane_id: string | null; body: string; resolved: boolean; created_at: string }
 
-const empty = (): Pick<DawState, 'project' | 'lanes' | 'clips' | 'audio' | 'undo' | 'redo'> => ({ project: null, lanes: {}, clips: {}, audio: {}, undo: [], redo: [] })
+const empty = (): Pick<DawState, 'project' | 'lanes' | 'clips' | 'audio' | 'undo' | 'redo' | 'comments' | 'peers'> => ({ project: null, lanes: {}, clips: {}, audio: {}, undo: [], redo: [], comments: [], peers: {} })
 export const useDaw = create<DawState>(() => ({ ...empty(), loading: false, error: null }))
 const get = useDaw.getState, set = useDaw.setState
 
@@ -67,6 +75,7 @@ export async function loadProject(id: string | null) {
     const keep = get().project?.id === id
     set({ project: full.project, lanes: byId(full.lanes), clips: byId(full.clips), audio: byId(full.audio), loading: false, error: null, ...(keep ? {} : { undo: [], redo: [] }) })
     engine.preload()
+    void loadComments()
   } catch (e) { if (loadingId === id) set({ loading: false, error: (e as Error).message }) }
 }
 const byId = <T extends { id: string }>(xs: T[]) => Object.fromEntries(xs.map((x) => [x.id, x]))
@@ -162,16 +171,44 @@ export function redo() {
 }
 
 /** STUDIO_PROJECT: someone's edit (ours included) as the server applied it. */
-export function onRemote(d: { project_id: string; version: number; ops: Applied[] }) {
+export function onRemote(d: { project_id: string; version: number; ops: Applied[]; reload?: boolean }) {
   const p = get().project
   if (!p || p.id !== d.project_id) return
+  // A version restored: start from the project as it now is (our undo history no longer applies).
+  if (d.reload) { set({ undo: [], redo: [] }); void loadProject(p.id); return }
   if (d.version > p.version + 1) { void loadProject(p.id); return }
   if (d.version <= p.version) return
   applyLocal(d.ops)
   set({ project: { ...get().project!, version: d.version } })
   // Clips on audio we haven't got yet (a take that just landed, someone's import).
-  const missing = d.ops.filter((o): o is Extract<Applied, { op: 'clip.put' }> => o.op === 'clip.put').some((o) => !get().audio[o.clip.audio_id])
+  const missing = d.ops.filter((o): o is Extract<Applied, { op: 'clip.put' }> => o.op === 'clip.put').some((o) => !!o.clip.audio_id && !get().audio[o.clip.audio_id])
   if (missing) void loadProject(p.id)
+}
+
+export async function loadComments() {
+  const p = get().project
+  if (!p) return
+  try { const list = await api.get<StudioComment[]>(`/studio/projects/${p.id}/comments`); if (get().project?.id === p.id) set({ comments: list }) } catch { /* ignore */ }
+}
+/** STUDIO_COMMENTS: someone commented, resolved or deleted. */
+export function onComments(d: { project_id: string }) { if (get().project?.id === d.project_id) void loadComments() }
+
+/** STUDIO_PRESENCE: where another editor is. */
+export function onPresence(d: { project_id: string; user_id: string; pos_ms: number; playing: boolean; sel: string[] }) {
+  if (get().project?.id !== d.project_id || d.user_id === useStore.getState().user?.id) return
+  set({ peers: { ...get().peers, [d.user_id]: { pos_ms: d.pos_ms, playing: d.playing, sel: d.sel, at: Date.now() } } })
+}
+let lastPresence = '', presenceAt = 0, presenceTimer: ReturnType<typeof setTimeout> | null = null
+/** Tell the others where I am (at most four times a second, and only when it changed). */
+export function sharePresence(posMs: number, playing: boolean, sel: string[]) {
+  const p = get().project
+  if (!p) return
+  const key = `${Math.round(posMs / 100)}|${playing}|${sel.join()}`
+  if (key === lastPresence) return
+  const go = () => { presenceTimer = null; lastPresence = key; presenceAt = Date.now(); api.post(`/studio/projects/${p.id}/presence`, { pos_ms: Math.round(posMs), playing, sel: sel.slice(0, 50) }).catch(() => {}) }
+  if (presenceTimer) clearTimeout(presenceTimer)
+  const wait = 250 - (Date.now() - presenceAt)
+  if (wait <= 0) go(); else presenceTimer = setTimeout(go, wait)
 }
 
 /** Import audio files into the studio: each becomes a clip on a new lane (or `lane`), placed at `at` ms. */
@@ -211,15 +248,16 @@ export function addTake(track: StudioTrack, at: number) {
   void engine.preload()
 }
 
-/** Audible lanes: not muted, and soloed when anything is. */
+/** Audible lanes: not muted, and soloed when anything is. Buses stay audible under solo (they carry the solo). */
 export function audible(lanes: Record<string, StudioLane>, id: string) {
   const l = lanes[id]
   if (!l || l.mute) return false
-  return !Object.values(lanes).some((x) => x.solo) || l.solo
+  if (l.kind === 'bus') return true
+  return !Object.values(lanes).some((x) => x.solo && x.kind !== 'bus') || l.solo
 }
 
-type Bus = { gain: GainNode; pan: StereoPannerNode; analyser: AnalyserNode }
 type Decoded = { buffer: AudioBuffer; peaks: Float32Array; top: number }
+type Point = [number, number]
 
 /** A clip's gain envelope (clip gain, fades) on `param`, for playback starting `from` ms into the clip at `when`. */
 function envelope(param: AudioParam, c: StudioClip, when: number, from: number) {
@@ -231,16 +269,122 @@ function envelope(param: AudioParam, c: StudioClip, when: number, from: number) 
   if (fo > 0) { const s = Math.max(from, len - fo); if (s > from) param.setValueAtTime(level(s), at(s)); param.linearRampToValueAtTime(0, at(len)) }
 }
 
+/** An automation lane's value at `ms` (held before the first point and after the last). */
+export function valueAt(pts: Point[], ms: number) {
+  if (!pts.length) return 0
+  if (ms <= pts[0][0]) return pts[0][1]
+  for (let i = 1; i < pts.length; i++) {
+    const [t1, v1] = pts[i]
+    if (ms <= t1) { const [t0, v0] = pts[i - 1]; return t1 === t0 ? v1 : v0 + ((v1 - v0) * (ms - t0)) / (t1 - t0) }
+  }
+  return pts[pts.length - 1][1]
+}
+/** Ramp `param` along `pts` for playback from `from` ms on the timeline, at context time `when`. */
+function automate(param: AudioParam, pts: Point[], from: number, when: number, to: (v: number) => number = (v) => v) {
+  param.cancelScheduledValues(when)
+  param.setValueAtTime(to(valueAt(pts, from)), when)
+  for (const [t, v] of pts) if (t > from) param.linearRampToValueAtTime(to(v), when + (t - from) / 1000)
+}
+
+type LaneNodes = { input: GainNode; fx: Map<string, FxNode>; vol: GainNode; pan: StereoPannerNode; on: GainNode; analyser: AnalyserNode; sends: Map<string, GainNode> }
+type Graph = { lanes: Map<string, LaneNodes>; master: { input: GainNode; fx: Map<string, FxNode>; gain: GainNode; analyser: AnalyserNode; loud: AnalyserNode | null }; key: string; stop: () => void }
+
+/** The graph's shape: lanes, routing, effect chains and what is automated. A change means rebuilding it. */
+export function graphKey(lanes: Record<string, StudioLane>, project: StudioProject | null) {
+  return [chainKey(project?.master_effects ?? []), ...sortedLanes(lanes).map((l) => [l.id, l.kind, l.output_id ?? '', Object.keys(l.sends ?? {}).sort().join('+'), chainKey(l.effects ?? []), Object.keys(l.automation ?? {}).sort().join('+'), l.instrument ? JSON.stringify(l.instrument) : ''].join('|'))].join('\n')
+}
+
+/**
+ * The mixer as Web Audio nodes: per lane input → insert effects → volume → pan → mute/solo → meter → its output (a
+ * bus or the master), with post-fader sends to buses; the master: input → master effects → level → meter → speakers
+ * (and a K-weighted tap for the loudness meter when live).
+ */
+function buildGraph(ctx: BaseAudioContext, lanes: Record<string, StudioLane>, project: StudioProject, live: boolean): Graph {
+  const minput = ctx.createGain(), mgain = ctx.createGain(), manalyser = ctx.createAnalyser()
+  manalyser.fftSize = 1024
+  const mfx = buildChain(ctx, project.master_effects ?? [], minput, mgain)
+  mgain.connect(manalyser).connect(ctx.destination)
+  let loud: AnalyserNode | null = null
+  if (live) {
+    const shelf = ctx.createBiquadFilter(); shelf.type = 'highshelf'; shelf.frequency.value = 1681; shelf.gain.value = 4
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 38; hp.Q.value = 0.5
+    loud = ctx.createAnalyser(); loud.fftSize = 16384
+    mgain.connect(shelf).connect(hp).connect(loud)
+  }
+  const nodes = new Map<string, LaneNodes>()
+  const make = (l: StudioLane, out: AudioNode) => {
+    const input = ctx.createGain(), vol = ctx.createGain(), pan = ctx.createStereoPanner(), on = ctx.createGain(), analyser = ctx.createAnalyser()
+    analyser.fftSize = 1024
+    const fx = buildChain(ctx, l.effects ?? [], input, vol)
+    vol.connect(pan).connect(on).connect(analyser).connect(out)
+    const n: LaneNodes = { input, fx, vol, pan, on, analyser, sends: new Map() }
+    nodes.set(l.id, n)
+    return n
+  }
+  const all = sortedLanes(lanes)
+  for (const l of all) if (l.kind === 'bus') make(l, minput)
+  for (const l of all) {
+    if (l.kind === 'bus') continue
+    const n = make(l, (l.output_id && nodes.get(l.output_id)?.input) || minput)
+    for (const bus of Object.keys(l.sends ?? {})) {
+      const target = nodes.get(bus)
+      if (!target) continue
+      const g = ctx.createGain(); n.on.connect(g).connect(target.input); n.sends.set(bus, g)
+    }
+  }
+  const g: Graph = { lanes: nodes, master: { input: minput, fx: mfx, gain: mgain, analyser: manalyser, loud }, key: graphKey(lanes, project),
+    stop: () => { mfx.forEach((f) => f.stop()); nodes.forEach((n) => { n.fx.forEach((f) => f.stop()); n.analyser.disconnect(); n.on.disconnect() }); manalyser.disconnect(); mgain.disconnect() } }
+  applyMix(g, lanes, project)
+  return g
+}
+
+/** Levels, pans, mutes, sends and effect settings onto the graph (what automation doesn't drive). */
+function applyMix(g: Graph, lanes: Record<string, StudioLane>, project: StudioProject) {
+  for (const [id, n] of g.lanes) {
+    const l = lanes[id]
+    if (!l) continue
+    const auto = l.automation ?? {}
+    if (!auto.gain) n.vol.gain.value = l.gain
+    if (!auto.pan) n.pan.pan.value = l.pan
+    n.on.gain.value = audible(lanes, id) ? 1 : 0
+    for (const [bus, s] of n.sends) if (!auto[`send:${bus}`]) s.gain.value = l.sends?.[bus] ?? 0
+    for (const e of l.effects ?? []) n.fx.get(e.id)?.set(e)
+  }
+  g.master.gain.gain.value = project.master_gain
+  for (const e of project.master_effects ?? []) g.master.fx.get(e.id)?.set(e)
+}
+
+/** Where an automation key lands in the graph. */
+function target(g: Graph, laneId: string, key: string): Target | null {
+  const n = g.lanes.get(laneId)
+  if (!n) return null
+  if (key === 'gain') return { param: n.vol.gain }
+  if (key === 'pan') return { param: n.pan.pan }
+  if (key.startsWith('send:')) { const s = n.sends.get(key.slice(5)); return s ? { param: s.gain } : null }
+  if (key.startsWith('fx:')) { const [, id, p] = key.split(':'); return n.fx.get(id)?.targets[p] ?? null }
+  return null
+}
+
+/** Start every lane's automation for playback from `from` ms at `when`. */
+function scheduleAutomation(g: Graph, lanes: Record<string, StudioLane>, from: number, when: number) {
+  for (const l of Object.values(lanes)) {
+    for (const [key, pts] of Object.entries(l.automation ?? {})) {
+      const tg = target(g, l.id, key)
+      if (tg && pts.length) automate(tg.param, pts as Point[], from, when, tg.to)
+    }
+  }
+}
+
 /** The engine: decodes, plays the project, meters, renders. One per app; it follows the open project. */
 class Engine {
   ctx: AudioContext | null = null
   private decoded = new Map<string, Promise<Decoded>>()
   private ready = new Map<string, Decoded>()
-  private sources: AudioBufferSourceNode[] = []
-  private buses = new Map<string, Bus>()
-  private master: { gain: GainNode; analyser: AnalyserNode } | null = null
+  private sources: AudioScheduledSourceNode[] = []
+  private graph: Graph | null = null
   private clickTimer: ReturnType<typeof setInterval> | null = null
   private meterBuf = new Float32Array(1024)
+  private loudBuf = new Float32Array(16384)
   /** Playing: the context time of timeline 0 (so position = currentTime - t0), and whether it is the take's backing. */
   private t0 = 0
   playing: false | 'local' | 'backing' = false
@@ -253,7 +397,11 @@ class Engine {
   private emit() { this.listeners.forEach((f) => f()); this.expose() }
 
   /** Seconds on the timeline now (0 when stopped). */
-  position() { return this.playing && this.ctx ? Math.max(0, this.ctx.currentTime - this.t0) : 0 }
+  position() {
+    if (!this.playing || !this.ctx) return 0
+    const ms = Math.max(0, this.ctx.currentTime - this.t0) * 1000, l = this.loopAt
+    return (l && ms >= l.b ? l.a + ((ms - l.a) % (l.b - l.a)) : ms) / 1000
+  }
 
   /** Decoded audio of a file, once it has loaded (for waveforms). */
   peek(id: string) { return this.ready.get(id) }
@@ -282,91 +430,134 @@ class Engine {
   /** Decode everything the project's clips use. */
   async preload() {
     const { clips, audio } = get()
-    const ids = [...new Set(Object.values(clips).map((c) => c.audio_id))]
+    const ids = [...new Set(Object.values(clips).map((c) => c.audio_id).filter((x): x is string => !!x))]
     await Promise.all(ids.map((id) => (audio[id] ? this.load(audio[id]).catch(() => null) : null)))
   }
 
-  /** Play from `fromSec` on the timeline, starting at context time `when` (default: now). */
-  play(fromSec: number, opts: { when?: number; backing?: boolean; click?: boolean } = {}) {
+  /** Schedule the clips that sound in [from, to) ms on the timeline, timeline 0 being context time `t0`. */
+  private schedule(ctx: BaseAudioContext, g: Graph, clips: Record<string, StudioClip>, lanes: Record<string, StudioLane>, from: number, to: number, t0: number, out: AudioScheduledSourceNode[]) {
+    for (const c of Object.values(clips)) {
+      const lane = lanes[c.lane_id]
+      if (c.muted || !lane) continue
+      const nudge = lane.nudge_ms ?? 0
+      const start = c.start_ms + nudge, end = start + c.length_ms
+      if (end <= from || start >= to) continue
+      const bus = g.lanes.get(c.lane_id)
+      if (!bus) continue
+      if (c.notes) { const sid = (lane.instrument as { audio_id?: string | null } | null)?.audio_id; scheduleNotes(ctx, bus.input, lane, c, start, from, to, t0, out, sid ? this.ready.get(sid)?.buffer : undefined); continue }
+      const d = c.audio_id ? this.ready.get(c.audio_id) : undefined
+      if (!d) continue
+      const into = Math.max(0, from - start)
+      const at = t0 + Math.max(from, start) / 1000
+      const dur = (Math.min(end, to) - Math.max(from, start)) / 1000
+      const src = ctx.createBufferSource(); src.buffer = d.buffer
+      const env = ctx.createGain()
+      envelope(env.gain, c, at, into)
+      src.connect(env).connect(bus.input)
+      src.start(at, (c.in_ms + into) / 1000, dur)
+      out.push(src)
+    }
+  }
+
+  /** Play from `fromSec` on the timeline, starting at context time `when` (default: now). With the loop on, it loops. */
+  play(fromSec: number, opts: { when?: number; backing?: boolean; click?: boolean; loop?: { a: number; b: number } | null } = {}) {
     const ctx = this.audio()
     ctx.resume().catch(() => {})
     this.stop(true)
     const { lanes, clips, project } = get()
     if (!project) return
     const when = Math.max(ctx.currentTime + 0.03, opts.when ?? ctx.currentTime + 0.05)
-    this.t0 = when - fromSec
     this.click = !!opts.click
-    const mg = ctx.createGain(); mg.gain.value = project.master_gain
-    const ma = ctx.createAnalyser(); ma.fftSize = 1024
-    mg.connect(ma).connect(ctx.destination)
-    this.master = { gain: mg, analyser: ma }
-    for (const l of Object.values(lanes)) {
-      const gain = ctx.createGain(), pan = ctx.createStereoPanner(), analyser = ctx.createAnalyser()
-      analyser.fftSize = 1024
-      gain.connect(pan).connect(analyser).connect(mg)
-      this.buses.set(l.id, { gain, pan, analyser })
+    const g = this.graph = buildGraph(ctx, lanes, project, true)
+    const loop = opts.loop !== undefined ? opts.loop : !opts.backing && project.loop_on && (project.loop_end_ms ?? 0) > (project.loop_start_ms ?? 0) + 50 ? { a: project.loop_start_ms!, b: project.loop_end_ms! } : null
+    let from = fromSec * 1000
+    if (loop && (from >= loop.b || from < loop.a)) from = loop.a
+    this.t0 = when - from / 1000
+    this.loopAt = loop
+    // One pass now; with a loop, the next passes are queued a little before each ends.
+    const pass = (a: number, b: number, t0: number) => {
+      this.schedule(ctx, g, clips, lanes, a, b, t0, this.sources)
+      scheduleAutomation(g, lanes, a, t0 + a / 1000)
+      if (opts.click && loop) for (let n = Math.ceil(beatsAt(project, a / 1000) - 1e-6); secAtBeat(project, n) * 1000 < b; n++) clickAt(ctx, ctx.destination, t0 + secAtBeat(project, n), isDownbeat(project, n))
     }
-    this.mix()
-    const fromMs = fromSec * 1000
-    for (const c of Object.values(clips)) {
-      if (c.muted || clipEnd(c) <= fromMs) continue
-      const d = this.ready.get(c.audio_id), bus = this.buses.get(c.lane_id)
-      if (!d || !bus) continue
-      const into = Math.max(0, fromMs - c.start_ms)
-      const at = when + Math.max(0, c.start_ms - fromMs) / 1000
-      const src = ctx.createBufferSource(); src.buffer = d.buffer
-      const env = ctx.createGain()
-      envelope(env.gain, c, at, into)
-      src.connect(env).connect(bus.gain)
-      src.start(at, (c.in_ms + into) / 1000, (c.length_ms - into) / 1000)
-      this.sources.push(src)
-    }
-    if (opts.click) {
-      const beat = 60 / project.bpm, beats = project.beats || 4
-      let n = Math.ceil(fromSec / beat - 1e-6)
+    pass(from, loop ? loop.b : Infinity, this.t0)
+    if (loop) {
+      let end = this.t0 + loop.b / 1000
+      this.loopTimer = setInterval(() => {
+        if (ctx.currentTime < end - 0.3) return
+        const next = end - loop.a / 1000
+        pass(loop.a, loop.b, next)
+        end = next + loop.b / 1000
+      }, 50)
+    } else if (opts.click) {
+      let n = Math.ceil(beatsAt(project, from / 1000) - 1e-6)
       const tick = () => {
         const now = ctx.currentTime - this.t0
-        while (n * beat < now + 0.12) { if (n * beat >= now - 0.01) clickAt(ctx, ctx.destination, this.t0 + n * beat, n % beats === 0); n++ }
+        for (;;) {
+          const at = secAtBeat(project, n)
+          if (at >= now + 0.12) break
+          if (at >= now - 0.01) clickAt(ctx, ctx.destination, this.t0 + at, isDownbeat(project, n))
+          n++
+        }
       }
       tick(); this.clickTimer = setInterval(tick, 25)
     }
     this.playing = opts.backing ? 'backing' : 'local'
     this.emit()
   }
+  private loopAt: { a: number; b: number } | null = null
+  private loopTimer: ReturnType<typeof setInterval> | null = null
 
   stop(quiet = false) {
     this.sources.forEach((n) => { try { n.stop() } catch { /* not started */ } })
     this.sources = []
-    this.buses.forEach((b) => { b.gain.disconnect(); b.pan.disconnect(); b.analyser.disconnect() }); this.buses.clear()
-    this.master?.gain.disconnect(); this.master?.analyser.disconnect(); this.master = null
+    this.graph?.stop(); this.graph = null
     if (this.clickTimer) clearInterval(this.clickTimer); this.clickTimer = null
+    if (this.loopTimer) clearInterval(this.loopTimer); this.loopTimer = null
+    this.loopAt = null
     if (this.playing) { this.playing = false; if (!quiet) this.emit() }
   }
 
-  /** Lane levels, pans, mutes and solos, and the master, onto what is playing. */
+  /** Levels, pans, mutes, sends and effect settings onto what is playing. */
   mix() {
     const { lanes, project } = get()
-    this.buses.forEach((b, id) => { const l = lanes[id]; b.gain.gain.value = l && audible(lanes, id) ? l.gain : 0; b.pan.pan.value = l?.pan ?? 0 })
-    if (this.master && project) this.master.gain.gain.value = project.master_gain
+    if (this.graph && project) applyMix(this.graph, lanes, project)
   }
 
-  /** The project changed while playing: pick up from where we are (clips moved, lanes added). */
+  /** The project changed while playing: pick up from where we are (clips moved, the routing or effects changed). */
   refresh() {
     this.mix()
     if (!this.playing) return
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
-    this.refreshTimer = setTimeout(() => { if (this.playing && this.ctx) { const mode = this.playing; this.play(this.position(), { backing: mode === 'backing', click: this.click }) } }, 60)
+    this.refreshTimer = setTimeout(() => { if (this.playing && this.ctx) { const mode = this.playing; this.play(this.position(), { backing: mode === 'backing', click: this.click, ...(mode === 'backing' ? { loop: this.loopAt } : {}) }) } }, 60)
+  }
+  /** Rebuild if the graph's shape no longer matches the project. */
+  reshape() {
+    const { lanes, project } = get()
+    if (this.graph && this.graph.key !== graphKey(lanes, project)) this.refresh()
+    else this.mix()
   }
 
   /** Level 0..1 of a lane or 'master' while playing. */
   level(id: string) {
-    const a = id === 'master' ? this.master?.analyser : this.buses.get(id)?.analyser
+    const a = id === 'master' ? this.graph?.master.analyser : this.graph?.lanes.get(id)?.analyser
     if (!a) return 0
     const buf = this.meterBuf
     a.getFloatTimeDomainData(buf)
     let sum = 0
     for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
     return Math.min(1, Math.sqrt(Math.sqrt(sum / buf.length)) * 1.6)
+  }
+  /** The master's momentary loudness (LUFS, about the last 0.35 s), null when stopped or silent. */
+  loudness(): number | null {
+    const a = this.graph?.master.loud
+    if (!a) return null
+    a.getFloatTimeDomainData(this.loudBuf)
+    let sum = 0
+    for (let i = 0; i < this.loudBuf.length; i++) sum += this.loudBuf[i] * this.loudBuf[i]
+    const ms = sum / this.loudBuf.length
+    // The analyser hears the channels averaged; for a stereo mix that reads about 3 dB under their sum.
+    return ms > 1e-10 ? -0.691 + 10 * Math.log10(ms) + 3.01 : null
   }
 
   /** From hearing the project to the mic capturing what is played along (output plus input latency), in ms. */
@@ -377,48 +568,54 @@ class Engine {
     return Math.round((out + input) * 1000)
   }
 
-  /** The project mixed down offline (the audible lanes, clip gains and fades, the master) as a WAV. */
-  async render(): Promise<ArrayBuffer | null> {
+  /**
+   * The project rendered offline (effects, buses, automation, clip gains and fades, the master): the whole mix, or
+   * only `only` lane(s) for stems.
+   */
+  async renderBuffer(only?: string[]): Promise<AudioBuffer | null> {
     const { lanes, clips, project } = get()
     if (!project) return null
     await this.preload()
     const end = projectEnd(clips) / 1000
     if (end <= 0) return null
     const rate = 48000
-    const off = new OfflineAudioContext(2, Math.ceil(end * rate) + rate / 10, rate)
-    const mg = off.createGain(); mg.gain.value = project.master_gain; mg.connect(off.destination)
-    for (const l of Object.values(lanes)) {
-      if (!audible(lanes, l.id)) continue
-      const g = off.createGain(); g.gain.value = l.gain
-      const p = off.createStereoPanner(); p.pan.value = l.pan
-      g.connect(p).connect(mg)
-      for (const c of Object.values(clips).filter((x) => x.lane_id === l.id && !x.muted)) {
-        const d = this.ready.get(c.audio_id)
-        if (!d) continue
-        const src = off.createBufferSource(); src.buffer = d.buffer
-        const env = off.createGain(); envelope(env.gain, c, c.start_ms / 1000, 0)
-        src.connect(env).connect(g)
-        src.start(c.start_ms / 1000, c.in_ms / 1000, c.length_ms / 1000)
-      }
+    // A tail for reverbs and delays to ring out.
+    const tail = Object.values(lanes).some((l) => (l.effects ?? []).some((e) => e.on && (e.type === 'reverb' || e.type === 'delay'))) || (project.master_effects ?? []).some((e) => e.on && (e.type === 'reverb' || e.type === 'delay')) ? 3 : 0.1
+    const off = new OfflineAudioContext(2, Math.ceil((end + tail) * rate), rate)
+    let ls = lanes
+    if (only) {
+      // A stem: the lane(s) and the buses they reach, everything else silent.
+      const keep = new Set(only)
+      for (const id of only) { const l = lanes[id]; if (l?.output_id) keep.add(l.output_id); for (const b of Object.keys(l?.sends ?? {})) keep.add(b) }
+      ls = Object.fromEntries(Object.entries(lanes).map(([id, l]) => [id, keep.has(id) ? { ...l, mute: false, solo: false } : { ...l, mute: true }]))
     }
-    return encodeWav(await off.startRendering())
+    const g = buildGraph(off, ls, project, false)
+    const out: AudioScheduledSourceNode[] = []
+    this.schedule(off, g, clips, ls, 0, Infinity, 0, out)
+    scheduleAutomation(g, ls, 0, 0)
+    return off.startRendering()
   }
+  async render(): Promise<ArrayBuffer | null> { const b = await this.renderBuffer(); return b ? encodeWav(b) : null }
 
-  private expose() { (window as unknown as { __parleyDaw?: unknown }).__parleyDaw = { playing: this.playing, decoded: this.ready.size, sources: this.sources.length, position: this.position() } }
+  private expose() { (window as unknown as { __parleyDaw?: unknown }).__parleyDaw = { playing: this.playing, decoded: this.ready.size, sources: this.sources.length, position: this.position(), graph: this.graph ? this.graph.lanes.size : 0, loop: this.loopAt } }
 }
 
 export const engine = new Engine()
 
-/** Export the project's mix as a WAV download. */
+/** Export the project's mix as a WAV download, and say how loud it is. */
 export async function exportMix() {
   const p = get().project
-  const wav = await engine.render()
-  if (!p || !wav) return
-  ;(window as unknown as { __parleyDawExport?: number }).__parleyDawExport = wav.byteLength
+  const buf = await engine.renderBuffer()
+  if (!p || !buf) return
+  const wav = encodeWav(buf)
+  const lufs = await integratedLufs(buf)
+  ;(window as unknown as { __parleyDawExport?: number; __parleyDawLufs?: number | null }).__parleyDawExport = wav.byteLength
+  ;(window as unknown as { __parleyDawLufs?: number | null }).__parleyDawLufs = lufs
   const url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }))
   const { download } = await import('./fileActions')
   await download(url, `${p.name} - mix.wav`)
   setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  if (lufs !== null) useStore.getState().pushToast(t('Mix exported · {lufs} LUFS integrated', { lufs: lufs.toFixed(1) }))
 }
 
 /**
@@ -434,15 +631,19 @@ function follow() {
     const pid = ch?.kind === 'studio' ? ch.studio?.project_id ?? null : null
     if (pid && get().project?.id !== pid && loadingId !== pid) void loadProject(pid)
     const live: StudioSession | undefined = ch ? s.studio[ch.id]?.find((x) => !x.ended_at) : undefined
-    const take = live && live.project_id && live.project_id === get().project?.id ? live : undefined
+    // A take recorded alone is backed only for whoever records it.
+    const take = live && live.project_id && live.project_id === get().project?.id && (!live.solo || live.started_by === s.user?.id) ? live : undefined
     if (take && backingFor !== take.id) {
       backingFor = take.id
       void engine.preload().then(() => {
         if (backingFor !== take.id) return
         const ctx = engine.audio()
         const downbeat = Date.parse(take.started_at)
-        const late = Math.max(0, (Date.now() - downbeat) / 1000)
-        engine.play((take.position_ms ?? 0) / 1000 + late, { when: ctx.currentTime + Math.max(0, downbeat - Date.now()) / 1000, backing: true })
+        // Loop recording loops the backing too; a punch plays straight through.
+        const loop = take.loop_start_ms != null && take.loop_end_ms != null && !take.punch ? { a: take.loop_start_ms, b: take.loop_end_ms } : null
+        let at = (take.position_ms ?? 0) + Math.max(0, Date.now() - downbeat)
+        if (loop && at >= loop.b) at = loop.a + ((at - loop.a) % (loop.b - loop.a))
+        engine.play(at / 1000, { when: ctx.currentTime + Math.max(0, downbeat - Date.now()) / 1000, backing: true, loop, click: take.click })
       })
     } else if (!take && backingFor) { backingFor = null; if (engine.playing === 'backing') engine.stop() }
   }
@@ -450,9 +651,8 @@ function follow() {
   useDaw.subscribe((s, prev) => {
     if (s.project?.id !== prev.project?.id) sync()
     // Moved, trimmed or new clips (and new lanes) reschedule what is playing; level changes just apply.
-    const laneSet = (x: DawState) => Object.keys(x.lanes).sort().join()
-    if (s.clips !== prev.clips || (s.lanes !== prev.lanes && laneSet(s) !== laneSet(prev))) engine.refresh()
-    else if (s.lanes !== prev.lanes || s.project?.master_gain !== prev.project?.master_gain) engine.mix()
+    if (s.clips !== prev.clips) engine.refresh()
+    else if (s.lanes !== prev.lanes || s.project !== prev.project) engine.reshape()
   })
 }
 if (typeof window !== 'undefined') follow()

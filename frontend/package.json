@@ -14,6 +14,7 @@
     "emoji:update": "node scripts/gen-emoji.mjs"
   },
   "dependencies": {
+    "@breezystack/lamejs": "1.2.7",
     "@capacitor-community/keep-awake": "^8.0.1",
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.3",
