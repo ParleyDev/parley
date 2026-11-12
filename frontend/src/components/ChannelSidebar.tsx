@@ -124,6 +124,12 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const catIds = new Set(categories.map((c) => c.id))
   const uncategorized = list.filter((c) => !c.parent_id || !catIds.has(c.parent_id))
   const childrenOf = (id: string) => list.filter((c) => c.parent_id === id)
+  // Unread and mentions, as the server icon counts them: a row says so for itself, a studio for its projects too
+  // (their chats count, and a project only shows under its studio when it matters, or is unread).
+  const unreadOf = (id: string) => showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, id)
+  const mentionsOf = (id: string) => showsMentions({ channels, dms, notifSettings }, id) ? mentionCounts[id] ?? 0 : 0
+  const projectsOf = (id: string) => all.filter((x) => x.kind === 'project' && x.parent_id === id)
+  const rowUnread = (c: Channel) => unreadOf(c.id) || (c.kind === 'studio' && projectsOf(c.id).some((x) => unreadOf(x.id) || mentionsOf(x.id) > 0))
   const persistOrder = async (ordered: { id: string; parent_id: string | null }[]) => {
     const items = ordered.map((c, i) => ({ id: c.id, position: i, parent_id: c.parent_id }))
     try { await api.patch(`/guilds/${guildId}/channels/positions`, { items }) } catch (e) { pushToast((e as Error).message, 'error') }
@@ -203,23 +209,25 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const isMutedRow = (c: Channel) => mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))
   const row = (c: Channel) => hideMuted && c.id !== channelId && isMutedRow(c) ? null : (
     <div key={c.id} data-channel-item={c.id} data-channel-parent={c.parent_id && catIds.has(c.parent_id) ? c.parent_id : ''} className={drag === c.id ? 'opacity-40' : ''} {...dragProps(c)}>
-      <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={chanIcon(c, guild?.rules_channel_id)} name={c.name} locked={!!c.e2ee} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
-        unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)} onClick={() => setMobilePane('content')}
+      <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={chanIcon(c, guild?.rules_channel_id)} name={c.name} locked={!!c.e2ee} mentions={mentionsOf(c.id)} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+        unread={channelId !== c.id && rowUnread(c)} onClick={() => setMobilePane('content')}
         count={c.user_limit ? `${Object.values(voiceStates).filter((v) => v.channel_id === c.id).length}/${c.user_limit}` : undefined}
         extra={c.kind === 'voice' || c.kind === 'stage' || c.kind === 'project' ? <VoiceTimer channelId={c.id} /> : undefined}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
       {c.voice_status && <div className="ml-8 mr-2 -mt-0.5 mb-0.5 truncate text-xs text-text-2" title={c.voice_status} data-voice-status={c.id}>{c.voice_status}</div>}
-      {c.kind === 'text' && Object.keys(myThreads).filter((tid) => channels[tid]?.parent_id === c.id && !threadInfo[tid]?.archived_at).map((tid) => (
+      {/* Threads I'm in, and any that mention me (else a thread mention badges the server with nowhere to find it). */}
+      {(c.kind === 'text' || c.kind === 'forum') && all.filter((x) => x.kind === 'thread' && x.parent_id === c.id && ((myThreads[x.id] && c.kind === 'text' && !threadInfo[x.id]?.archived_at) || mentionsOf(x.id) > 0)).map(({ id: tid }) => (
         <button key={tid} type="button" onClick={() => { navigate(`/channels/${guildId}/${c.id}`); useStore.getState().setOpenThread(tid); setMobilePane('content') }}
-          className="ml-6 mr-1 flex w-[calc(100%-1.75rem)] items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-sm text-text-2 hover:bg-bg-3 hover:text-text-0" data-sidebar-thread={tid}>
-          <span className="text-text-2/70">↳</span><span className="truncate">{channels[tid]?.name}</span>
+          className={`ml-6 mr-1 flex w-[calc(100%-1.75rem)] items-center gap-1.5 rounded-md px-2 py-0.5 text-left text-sm hover:bg-bg-3 hover:text-text-0 ${mentionsOf(tid) > 0 ? 'font-semibold text-text-0' : 'text-text-2'}`} data-sidebar-thread={tid}>
+          <span className="text-text-2/70">↳</span><span className="min-w-0 flex-1 truncate">{channels[tid]?.name}</span>
+          {mentionsOf(tid) > 0 && <span className="rounded-full bg-danger px-1.5 text-[11px] font-bold leading-4 text-white" data-sidebar-thread-mentions={mentionsOf(tid)}>{mentionsOf(tid)}</span>}
         </button>
       ))}
       {(c.kind === 'voice' || c.kind === 'stage') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
       {/* A studio's projects that matter now: the open one, ones with a session on, and ones I'm in the band of. */}
-      {c.kind === 'studio' && all.filter((x) => x.kind === 'project' && x.parent_id === c.id && (x.id === channelId || Object.values(voiceStates).some((v) => v.channel_id === x.id) || (!!user && (x.engineer_ids?.includes(user.id) || x.artist_ids?.includes(user.id))))).map((x) => (
+      {c.kind === 'studio' && projectsOf(c.id).filter((x) => (x.id === channelId || unreadOf(x.id) || mentionsOf(x.id) > 0 || Object.values(voiceStates).some((v) => v.channel_id === x.id) || (!!user && (x.engineer_ids?.includes(user.id) || x.artist_ids?.includes(user.id))))).map((x) => (
         <div key={x.id} className="ml-4" data-sidebar-project={x.id}>
-          <ChannelRow to={`/channels/${guildId}/${x.id}`} icon={<AudioLines size={16} />} name={x.name} unread={channelId !== x.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, x.id)} onClick={() => setMobilePane('content')} extra={<VoiceTimer channelId={x.id} />} />
+          <ChannelRow to={`/channels/${guildId}/${x.id}`} icon={<AudioLines size={16} />} name={x.name} unread={channelId !== x.id && unreadOf(x.id)} mentions={mentionsOf(x.id)} onClick={() => setMobilePane('content')} extra={<VoiceTimer channelId={x.id} />} />
           <VoiceParticipants channelId={x.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />
         </div>
       ))}
@@ -312,8 +320,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             {pinnedHere.map((c) => (
               <div key={c.id} data-pinned-channel={c.id}>
                 <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={chanIcon(c, guild?.rules_channel_id)} name={c.name}
-                  unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)} onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
-                  mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} />
+                  unread={channelId !== c.id && rowUnread(c)} onClick={() => setMobilePane('content')} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
+                  mentions={mentionsOf(c.id)} />
               </div>
             ))}
           </div>
@@ -324,7 +332,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
         {categories.map((cat) => (
           <Category key={cat.id} label={cat.name} open={!collapsed[cat.id]} onToggle={() => toggleCollapsed(cat.id)} highlight={target?.kind === 'channel' && target.into === cat.id} dragging={drag === cat.id} dragProps={catDragProps(cat.id)} testid={cat.id}
             onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId, parentId: cat.id }) : undefined} onContextMenu={(e) => ctx.open(e, categoryMenu(cat))}>
-            {childrenOf(cat.id).filter((c) => !collapsed[cat.id] || c.id === channelId || showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)).map(row)}
+            {childrenOf(cat.id).filter((c) => !collapsed[cat.id] || c.id === channelId || rowUnread(c) || mentionsOf(c.id) > 0).map(row)}
           </Category>
         ))}
         {canCreate && <div><button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title={t('Create Channel')} className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> {t('Create channel or category')}</button></div>}

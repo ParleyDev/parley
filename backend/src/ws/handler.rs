@@ -207,6 +207,14 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             .await
             .unwrap_or_default();
 
+    // Channels hidden from my list (Channels & Roles), per server: they don't mark the server unread.
+    let hidden: Vec<(Uuid, Vec<Uuid>)> =
+        sqlx::query_as("SELECT guild_id, hidden_channels FROM guild_members WHERE user_id = $1 AND cardinality(hidden_channels) > 0")
+            .bind(user_id)
+            .fetch_all(&state.db)
+            .await
+            .unwrap_or_default();
+
     let mut all_channel_ids: Vec<Uuid> = channels.iter().map(|c| c.id).collect();
     all_channel_ids.extend(dms.iter().map(|d| d.channel.id));
     // Unread messages that mention me (directly, via one of my roles, or @everyone) per channel. In accepted DMs every
@@ -257,6 +265,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             "idle": idle_users,
             "activities": activities,
             "read_states": read_states.iter().map(|(c, m)| json!({"channel_id": c, "last_read_msg": m})).collect::<Vec<_>>(),
+            "hidden_channels": hidden.iter().map(|(g, ids)| json!({"guild_id": g, "channel_ids": ids})).collect::<Vec<_>>(),
             "last_message_ids": last_ids.iter().map(|(c, m)| json!({"channel_id": c, "message_id": m})).collect::<Vec<_>>(),
             "voice_states": voice_states,
             "ice_servers": crate::routes::turn::ice_servers(&state).await,

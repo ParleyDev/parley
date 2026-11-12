@@ -108,6 +108,7 @@ export interface ReadyPayload {
   activities?: Record<string, Activity>
   read_states: ReadState[]
   last_message_ids: { channel_id: string; message_id: string }[]
+  hidden_channels?: { guild_id: string; channel_ids: string[] }[]
   voice_states: VoiceState[]
   ice_servers: RTCIceServer[]
 }
@@ -167,6 +168,8 @@ interface State {
   myThreads: Record<string, true>
   /** Per server: channels you hid from your list (Browse Channels) and whether you've done onboarding. */
   customize: Record<string, { hidden: string[]; onboarded: boolean }>
+  /** Channels hidden from my list, per server, known from the start (customize only once a server is opened). */
+  hiddenChannels: Record<string, string[]>
   /** App commands usable in a channel (from the bots there); cleared when an app changes its commands. */
   appCommands: Record<string, AppCommand[]>
   /** Bumped when a directory channel's list changes (DIRECTORY_UPDATE), to refetch it. */
@@ -385,13 +388,14 @@ export const useStore = create<State>((set, get) => ({
   viewAs: null,
   myThreads: {},
   customize: {},
+  hiddenChannels: {},
   appCommands: {},
   directoryVersion: {},
   bumpDirectory: (channelId) => set((s) => ({ directoryVersion: { ...s.directoryVersion, [channelId]: (s.directoryVersion[channelId] ?? 0) + 1 } })),
   loadAppCommands: async (channelId) => { try { const list = await api.get<AppCommand[]>(`/channels/${channelId}/commands`); set((s) => ({ appCommands: { ...s.appCommands, [channelId]: list } })) } catch { /* ignore */ } },
   clearAppCommands: () => set({ appCommands: {} }),
-  loadCustomize: async (guildId) => { try { const r = await api.get<{ hidden_channels: string[]; onboarded: boolean }>(`/guilds/${guildId}/me/customize`); set((s) => ({ customize: { ...s.customize, [guildId]: { hidden: r.hidden_channels, onboarded: r.onboarded } } })) } catch { /* ignore */ } },
-  setHidden: (guildId, hidden) => set((s) => ({ customize: { ...s.customize, [guildId]: { onboarded: s.customize[guildId]?.onboarded ?? true, hidden } } })),
+  loadCustomize: async (guildId) => { try { const r = await api.get<{ hidden_channels: string[]; onboarded: boolean }>(`/guilds/${guildId}/me/customize`); set((s) => ({ customize: { ...s.customize, [guildId]: { hidden: r.hidden_channels, onboarded: r.onboarded } }, hiddenChannels: { ...s.hiddenChannels, [guildId]: r.hidden_channels } })) } catch { /* ignore */ } },
+  setHidden: (guildId, hidden) => set((s) => ({ customize: { ...s.customize, [guildId]: { onboarded: s.customize[guildId]?.onboarded ?? true, hidden } }, hiddenChannels: { ...s.hiddenChannels, [guildId]: hidden } })),
   setMyThread: (id, on) => set((s) => { const myThreads = { ...s.myThreads }; if (on) myThreads[id] = true; else delete myThreads[id]; return { myThreads } }),
   loadMyThreads: async () => { try { const ids = await api.get<string[]>('/users/@me/threads'); set({ myThreads: Object.fromEntries(ids.map((i) => [i, true as const])) }) } catch { /* ignore */ } },
   setViewAs: (viewAs) => set({ viewAs }),
@@ -481,6 +485,7 @@ export const useStore = create<State>((set, get) => ({
     r.read_states.forEach((rs) => (readStates[rs.channel_id] = rs.last_read_msg))
     const lastMessageId: Record<string, string> = {}
     r.last_message_ids.forEach((l) => (lastMessageId[l.channel_id] = l.message_id))
+    const hiddenChannels = Object.fromEntries((r.hidden_channels ?? []).map((h) => [h.guild_id, h.channel_ids]))
     const voiceStates: Record<string, VoiceState> = {}
     r.voice_states.forEach((v) => (voiceStates[v.user_id] = v))
     const roles: Record<string, Record<string, Role>> = {}
@@ -504,7 +509,7 @@ export const useStore = create<State>((set, get) => ({
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
       // READY is a snapshot taken when the socket connected; a verification that landed in between must not be undone.
-      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, platforms, idle, activities: r.activities ?? {}, users, readStates, lastMessageId, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
+      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, platforms, idle, activities: r.activities ?? {}, users, readStates, lastMessageId, hiddenChannels, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events. The channel on screen keeps its
       // rows so nothing goes blank; ChatPane refreshes it when readyCount changes.
@@ -1017,10 +1022,12 @@ export function showsMentions(s: Pick<State, 'channels' | 'dms' | 'notifSettings
   return effective(s.notifSettings, s.channels[channelId] ?? s.dms[channelId]).level !== 'nothing'
 }
 
-export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'>, guildId: string): boolean {
+export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'> & Partial<Pick<State, 'hiddenChannels'>>, guildId: string): boolean {
   if (mutedTarget(s.notifSettings, guildId)) return false
-  // Threads only badge the server when they mention you (see guildMentions), not for every reply.
-  return Object.values(s.channels).some((c) => c.guild_id === guildId && c.kind !== 'thread' && showsUnread(s, c.id))
+  // Threads only badge the server when they mention you (see guildMentions), not for every reply; channels hidden
+  // from my list (Channels & Roles) don't either, since there is nowhere to see them.
+  const hidden = s.hiddenChannels?.[guildId]
+  return Object.values(s.channels).some((c) => c.guild_id === guildId && c.kind !== 'thread' && !hidden?.includes(c.id) && showsUnread(s, c.id))
 }
 
 export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'dms' | 'channels' | 'notifSettings'>): number {
