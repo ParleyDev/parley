@@ -303,12 +303,20 @@ pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResu
             c.studio = Some(configs.iter().find(|r| r.0 == c.id).map(|r| crate::models::StudioConfig { bpm: r.1, beats: r.2, click: r.3, count_in: r.4, disarmed: r.5.clone(), project_id: r.6 }).unwrap_or_default());
         }
     }
-    // Channels without their own overwrites inherit their category's, so load parents too.
-    for pid in channels.iter().filter_map(|c| c.parent_id) {
-        if !ids.contains(&pid) {
-            ids.push(pid);
+    // Channels without their own overwrites inherit from the nearest ancestor that has some (a thread from its
+    // forum, which may itself be synced to its category), so load the whole parent chain.
+    let mut parent: HashMap<Uuid, Option<Uuid>> = channels.iter().map(|c| (c.id, c.parent_id)).collect();
+    for _ in 0..8 {
+        let missing: Vec<Uuid> = parent.values().flatten().filter(|p| !parent.contains_key(*p)).copied().collect::<HashSet<_>>().into_iter().collect();
+        if missing.is_empty() {
+            break;
+        }
+        let rows: Vec<(Uuid, Option<Uuid>)> = sqlx::query_as("SELECT id, parent_id FROM channels WHERE id = ANY($1)").bind(&missing).fetch_all(db).await?;
+        for id in &missing {
+            parent.insert(*id, rows.iter().find(|r| r.0 == *id).and_then(|r| r.1));
         }
     }
+    ids = parent.keys().copied().collect();
     let rows = sqlx::query_as::<_, Overwrite>(
         "SELECT channel_id, target_id, target_kind, allow, deny FROM channel_overwrites WHERE channel_id = ANY($1)",
     )
@@ -323,7 +331,14 @@ pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResu
         let own = by_channel.get(&c.id).cloned().unwrap_or_default();
         c.permissions_synced = c.parent_id.map(|_| own.is_empty());
         c.overwrites = if own.is_empty() {
-            match c.parent_id.and_then(|p| by_channel.get(&p)) {
+            let mut up = c.parent_id;
+            let mut found = None;
+            for _ in 0..8 {
+                let Some(p) = up else { break };
+                if let Some(o) = by_channel.get(&p) { found = Some(o); break }
+                up = parent.get(&p).copied().flatten();
+            }
+            match found {
                 // Re-key so the client treats them as this channel's effective overwrites.
                 Some(inherited) => inherited.iter().map(|o| Overwrite { channel_id: c.id, ..o.clone() }).collect(),
                 None => own,

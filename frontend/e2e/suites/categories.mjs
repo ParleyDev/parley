@@ -25,6 +25,12 @@ ok('the channel reports the inherited overwrites', (await call(a.token, 'GET', `
 await callS(a.token, 'PUT', `/channels/${chat.id}/permissions/${g.id}`, { kind: 'role', allow: 1024, deny: 0 })
 names = await vis(b.token); ok('a channel with its own overwrites stops inheriting', names.includes('staff-chat') && !names.includes('Staff Voice'))
 await callS(a.token, 'DELETE', `/channels/${chat.id}/permissions/${g.id}`)
+// a forum synced to the private category, and a post in it: the post inherits through the forum from the category
+const forum = (await mk({ name: 'staff-forum', kind: 'forum', parent_id: cat.id })).body
+const post = (await callS(a.token, 'POST', `/channels/${forum.id}/threads`, { name: 'secret plans', content: 'top secret' })).body
+names = await vis(b.token); ok('a post in a forum synced to a private category stays hidden', !!post?.id && !names.includes('staff-forum') && !names.includes('secret plans'))
+r = await callS(b.token, 'GET', `/channels/${post.id}/messages`); ok('…and its messages cannot be read', r.status === 403 || r.status === 404)
+ok('the post reports the overwrites inherited from the category', (await call(a.token, 'GET', `/guilds/${g.id}/channels`)).find((c) => c.id === post.id)?.overwrites.some((o) => o.id === g.id && o.deny === 1024))
 // move out via PATCH
 r = await callS(a.token, 'PATCH', `/channels/${vc.id}`, { parent_id: null }); ok('PATCH parent_id null moves a channel to the top level', r.status === 200 && r.body.parent_id === null)
 ok('…and bob can see it again', (await vis(b.token)).includes('Staff Voice'))
