@@ -269,7 +269,11 @@ async fn start_session(State(state): State<AppState>, AuthUser(uid): AuthUser, P
     let cfg = config_of(&state.db, id).await?;
     let mut armed = if req.solo { vec![uid] } else { req.armed.clone().unwrap_or_else(|| state.hub.voice_states_for_channels(&[id]).into_iter().filter(|v| !v.suppress && !cfg.disarmed.contains(&v.user_id)).map(|v| v.user_id).collect()) };
     armed.sort(); armed.dedup(); armed.truncate(64);
-    if armed.is_empty() { return Err(AppError::BadRequest("Arm at least one track".into())); }
+    if armed.is_empty() {
+        // Takes are recorded on the devices of the people in the session: with no one in it there is no one to record.
+        let present = state.hub.voice_states_for_channels(&[id]).iter().any(|v| !v.suppress);
+        return Err(AppError::BadRequest(if present { "Arm at least one track" } else { "Join the session to record: takes are recorded by the people in it" }.into()));
+    }
     let count_in_ms = if cfg.count_in > 0 { cfg.count_in * cfg.beats * 60_000 / cfg.bpm } else { 0 };
     let started_at = Utc::now() + chrono::Duration::milliseconds(count_in_ms as i64);
     let sid = Uuid::now_v7();

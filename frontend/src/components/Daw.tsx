@@ -125,7 +125,15 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
     setBusy(true)
     try {
       if (live) await api.post(`/channels/${channel.id}/studio/sessions/${live.id}/stop`)
-      else { engine.stop(); await startTake(channel.id, '', stopped * 1000, solo) }
+      else {
+        // Takes are recorded by the people in the session: clicking Record from outside it joins it first.
+        const inRoom = () => { const st = useStore.getState(), v = st.user ? st.voiceStates[st.user.id] : undefined; return v?.channel_id === channel.id }
+        if (!inRoom()) {
+          await voice.join(channel.id)
+          await new Promise<void>((ok, no) => { if (inRoom()) return ok(); const t0 = setTimeout(() => { un(); no(new Error(t('Could not join the session'))) }, 15000); const un = useStore.subscribe(() => { if (inRoom()) { clearTimeout(t0); un(); ok() } }) })
+        }
+        engine.stop(); await startTake(channel.id, '', stopped * 1000, solo)
+      }
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   // When a take ends the playhead stays where recording stopped.

@@ -143,6 +143,16 @@ await pb.click('[data-daw-project]')
 await pb.click('[data-daw-tag="mixing"]')
 await pb.waitForTimeout(500)
 ok('the project menu sets its stage', (await call(b.token, 'GET', `/studio/projects/${P.id}`)).project.tag === 'mixing')
+r = await callS(b.token, 'POST', `/channels/${P.channel_id}/studio/sessions`, {})
+ok('recording with no one in the session says to join it (not "arm a track")', r.status === 400 && /Join the session/.test(r.body?.error ?? ''), JSON.stringify(r.body))
+await pb.click('[data-daw-record]')
+await pb.waitForSelector('[data-voice-leave]', { timeout: 15000 }).catch(() => {})
+let rec
+for (let i = 0; i < 20 && !rec; i++) { rec = (await call(b.token, 'GET', `/channels/${P.channel_id}/studio/sessions`)).find((x) => !x.ended_at); if (!rec) await pb.waitForTimeout(500) }
+ok('clicking Record from outside the session joins it and starts the take', await pb.locator('[data-voice-leave]').count() === 1 && !!rec)
+await pb.waitForTimeout(1200); await pb.click('[data-daw-record]')
+for (let i = 0; i < 20; i++) { if (!(await call(b.token, 'GET', `/channels/${P.channel_id}/studio/sessions`)).some((x) => !x.ended_at)) break; await pb.waitForTimeout(500) }
+await pb.click('[data-voice-leave]'); await pb.waitForSelector('[data-project-join]', { timeout: 10000 }).catch(() => {})
 await pb.click('[data-project-join]')
 await pb.waitForSelector('[data-voice-leave]', { timeout: 15000 }).catch(() => {})
 ok('Join session puts the band member in the voice room, heard', await pb.locator('[data-voice-leave]').count() === 1 && await pb.locator('text=Muted by server').count() === 0)
