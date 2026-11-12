@@ -431,7 +431,13 @@ const clearLoop = () => edit([{ op: 'project', clear_loop: true }])
 function Arrangement(p: ArrProps) {
   const t = useT()
   const { project, ordered, lanes, clips, pps, head, sel, setSel, snapMs, phone, autoOpen } = p
-  const [drag, setDrag] = useState<Drag | null>(null)
+  const [drag, setDragState] = useState<Drag | null>(null)
+  // The drag as of the latest pointer event (state lags a render behind), and whether one just ended (its click is no select).
+  const dragRef = useRef<Drag | null>(null)
+  const justDragged = useRef(false)
+  // Shift-pressing an unselected clip adds it at once (so it can be dragged with the rest); its click must not toggle it off.
+  const shiftAdded = useRef<string | null>(null)
+  const setDrag = (d: Drag | null) => { dragRef.current = d; setDragState(d) }
   const [dropLane, setDropLane] = useState<string | 'new' | null>(null)
   const [loopDrag, setLoopDrag] = useState<{ a: number; b: number; x0: number } | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -455,7 +461,7 @@ function Arrangement(p: ArrProps) {
   }, [Math.floor(head * pps / 200)]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** What a drag would make of a clip. */
-  const dragged = (c: StudioClip): StudioClip => {
+  const dragged = (c: StudioClip, drag = dragRef.current): StudioClip => {
     if (!drag || !drag.ids.includes(c.id)) return c
     const d = drag.dms
     if (drag.mode === 'move') { const to = drag.ids.length === 1 && drag.lane ? drag.lane : c.lane_id; return { ...c, start_ms: Math.max(0, Math.round(c.start_ms + d)), lane_id: lanes[to]?.kind === (lanes[c.lane_id]?.kind ?? 'audio') ? to : c.lane_id } }
@@ -466,32 +472,64 @@ function Arrangement(p: ArrProps) {
     return { ...c, fade_out_ms: Math.round(Math.max(0, Math.min(c.length_ms - c.fade_in_ms, c.fade_out_ms - d))) }
   }
 
+  // A drag is followed on the window, not the clip: a clip dragged to another track is drawn in that track's row
+  // (a new element, which would lose a pointer capture and with it the rest of the drag). x0 is in timeline content
+  // coordinates, so scrolling during a drag (by wheel, or at the edges) keeps the clip under the pointer.
   const begin = (e: RPointerEvent, c: StudioClip, mode: Drag['mode']) => {
     if (phone || e.button !== 0) return
     e.stopPropagation(); e.preventDefault()
     const ids = mode === 'move' ? (sel.includes(c.id) ? sel : e.shiftKey ? [...sel, c.id] : [c.id]) : [c.id]
+    shiftAdded.current = e.shiftKey && !sel.includes(c.id) ? c.id : null
     if (!sel.includes(c.id) || mode !== 'move') setSel(e.shiftKey && mode === 'move' ? ids : ids.length > 1 ? ids : [c.id])
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    setDrag({ ids, mode, x0: e.clientX, lane0: c.lane_id, dms: 0, lane: null, copy: e.altKey && mode === 'move' })
+    setDrag({ ids, mode, x0: e.clientX + (scroller.current?.scrollLeft ?? 0), lane0: c.lane_id, dms: 0, lane: null, copy: e.altKey && mode === 'move' })
   }
-  const moveDrag = (e: RPointerEvent) => {
-    if (!drag) return
-    const raw = ((e.clientX - drag.x0) / pps) * 1000
+  const last = useRef<{ x: number; y: number; alt: boolean } | null>(null)
+  const moveDrag = (e: { clientX: number; clientY: number; altKey: boolean }) => {
+    const drag = dragRef.current, sc = scroller.current
+    if (!drag || !sc) return
+    last.current = { x: e.clientX, y: e.clientY, alt: e.altKey }
+    const raw = ((e.clientX + sc.scrollLeft - drag.x0) / pps) * 1000
     const first = clips[drag.ids[0]]
+    if (!first) { setDrag(null); return }
     // Snap the clip's edge to the grid, not the distance moved.
     const edge = drag.mode === 'trimR' ? clipEnd(first) : drag.mode === 'fadeIn' || drag.mode === 'fadeOut' ? 0 : first.start_ms
     const dms = drag.mode === 'fadeIn' || drag.mode === 'fadeOut' ? raw : snapMs(edge + raw, e.altKey) - edge
-    setDrag({ ...drag, dms, lane: drag.mode === 'move' ? laneAt(e.clientY) : null })
+    setDrag({ ...drag, dms, lane: drag.mode === 'move' ? laneAt(e.clientY) ?? drag.lane : null })
   }
-  const endDrag = () => {
-    if (!drag) return
-    const d = drag
-    setDrag(null)
-    if (Math.abs(d.dms) < 1 && (!d.lane || d.lane === d.lane0)) return
-    const out = d.ids.map((id) => clips[id]).filter(Boolean).map((c) => dragged(c))
+  const endDrag = (cancel = false) => {
+    const d = dragRef.current
+    if (!d) return
+    setDrag(null); last.current = null
+    if (cancel || (Math.abs(d.dms) < 1 && (!d.lane || d.lane === d.lane0))) return
+    justDragged.current = true; setTimeout(() => { justDragged.current = false }, 0)
+    const out = d.ids.map((id) => clips[id]).filter(Boolean).map((c) => dragged(c, d))
     if (d.copy) { const made = out.map((c) => ({ ...c, id: newId() })); edit(made.map((c): Op => ({ op: 'clip.put', clip: { ...c, group_id: '' as unknown as null } }))); setSel(made.map((c) => c.id)); return }
     edit(out.map((c): Op => ({ op: 'clip.put', clip: { id: c.id, lane_id: c.lane_id, start_ms: c.start_ms, in_ms: c.in_ms, length_ms: c.length_ms, fade_in_ms: c.fade_in_ms, fade_out_ms: c.fade_out_ms, ...(c.notes && d.mode === 'trimL' ? { notes: c.notes } : {}) } })))
   }
+  const handlers = useRef({ moveDrag, endDrag })
+  handlers.current = { moveDrag, endDrag }
+  const dragging = !!drag
+  useEffect(() => {
+    if (!dragging) return
+    const mv = (e: PointerEvent) => handlers.current.moveDrag(e)
+    const up = () => handlers.current.endDrag()
+    const cancel = () => handlers.current.endDrag(true)
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); cancel() } }
+    // Near the timeline's left or right edge, scroll it along (and the clip with it).
+    let raf = 0
+    const tick = () => {
+      const sc = scroller.current, l = last.current
+      if (sc && l) {
+        const r = sc.getBoundingClientRect(), zone = 40
+        const v = l.x > r.right - zone ? Math.min(zone, l.x - (r.right - zone)) : l.x < r.left + zone ? -Math.min(zone, r.left + zone - l.x) : 0
+        if (v) { const before = sc.scrollLeft; sc.scrollLeft = Math.max(0, before + v / 2); if (sc.scrollLeft !== before) handlers.current.moveDrag({ clientX: l.x, clientY: l.y, altKey: l.alt }) }
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', cancel); window.addEventListener('keydown', key, true); window.addEventListener('blur', cancel)
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', key, true); window.removeEventListener('blur', cancel) }
+  }, [dragging])
 
   const onDrop = (e: React.DragEvent, lane: string | null) => {
     const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('audio/') || /\.(wav|mp3|flac|ogg|m4a|aac|webm|opus)$/i.test(f.name))
@@ -555,7 +593,7 @@ function Arrangement(p: ArrProps) {
                 <div key={l.id} style={{ height: rowH(l) }} className="border-b border-line/60">
                   <div className={`relative ${dropLane === l.id ? 'bg-accent/10' : ''} ${l.kind === 'bus' ? 'bg-bg-0/30' : ''}`} style={{ height: LANE_H }} data-daw-lane={l.id} data-lane-kind={l.kind}
                     onDoubleClick={(e) => { if (l.kind === 'midi' && (e.target as HTMLElement).dataset.dawLane && !phone) p.newMidiClip(l.id, msAt(e.clientX)) }}>
-                    {Object.values(clips).filter((c) => dragged(c).lane_id === l.id && (!c.group_id || !c.muted)).map((c) => <Region key={c.id} c={dragged(c)} lane={l} color={laneColor(l, i)} pps={pps} selected={sel.includes(c.id)} peer={peerSel.get(c.id)} takes={c.group_id ? Object.values(clips).filter((x) => x.group_id === c.group_id).length : 0} dim={!audible(lanes, l.id) || c.muted} name={c.audio_id ? p.audio[c.audio_id]?.name ?? p.audio[c.audio_id]?.display_name ?? '' : l.name} begin={begin} move={moveDrag} end={endDrag} phone={phone} openRoll={() => p.setRoll(c.id)} onSelect={(e) => { if (phone) setSel([c.id]); else if (!drag) setSel(e.shiftKey ? (sel.includes(c.id) ? sel.filter((x) => x !== c.id) : [...sel, c.id]) : [c.id]) }} />)}
+                    {Object.values(clips).filter((c) => dragged(c).lane_id === l.id && (!c.group_id || !c.muted)).map((c) => <Region key={c.id} c={dragged(c)} lane={l} color={laneColor(l, i)} pps={pps} selected={sel.includes(c.id)} peer={peerSel.get(c.id)} takes={c.group_id ? Object.values(clips).filter((x) => x.group_id === c.group_id).length : 0} dim={!audible(lanes, l.id) || c.muted} name={c.audio_id ? p.audio[c.audio_id]?.name ?? p.audio[c.audio_id]?.display_name ?? '' : l.name} begin={begin} phone={phone} openRoll={() => p.setRoll(c.id)} onSelect={(e) => { if (phone) setSel([c.id]); else if (!drag && !justDragged.current && !(e.shiftKey && shiftAdded.current === c.id)) setSel(e.shiftKey ? (sel.includes(c.id) ? sel.filter((x) => x !== c.id) : [...sel, c.id]) : [c.id]) }} />)}
                     {p.live && l.user_id && p.band.includes(l.user_id) && (!p.liveSolo || p.liveSolo === l.user_id) && l.kind === 'audio' && head > p.liveSince && <div className="pointer-events-none absolute inset-y-2 rounded-md border border-danger bg-danger/20" style={{ left: p.liveSince * pps, width: (head - p.liveSince) * pps }} data-daw-recording={l.id} />}
                   </div>
                   {autoOpen[l.id] && (() => { const prm = paramOf(l, lanes, autoOpen[l.id]); return prm ? <AutoRow lane={l} param={prm} pps={pps} width={width} height={AUTO_H} snapMs={snapMs} /> : null })()}
@@ -637,7 +675,7 @@ function LaneHead({ l, i, lanes, clips, band, channel, users, phone, autoOpen, s
 }
 
 /** A clip: its waveform or notes, fades, takes, and handles to trim and fade. */
-function Region({ c, lane, color, pps, selected, peer, takes, dim, name, begin, move, end, onSelect, phone, openRoll }: { c: StudioClip; lane: StudioLane; color: string; pps: number; selected: boolean; peer?: string; takes: number; dim: boolean; name: string; begin: (e: RPointerEvent, c: StudioClip, mode: Drag['mode']) => void; move: (e: RPointerEvent) => void; end: () => void; onSelect: (e: React.MouseEvent) => void; phone: boolean; openRoll: () => void }) {
+function Region({ c, lane, color, pps, selected, peer, takes, dim, name, begin, onSelect, phone, openRoll }: { c: StudioClip; lane: StudioLane; color: string; pps: number; selected: boolean; peer?: string; takes: number; dim: boolean; name: string; begin: (e: RPointerEvent, c: StudioClip, mode: Drag['mode']) => void; onSelect: (e: React.MouseEvent) => void; phone: boolean; openRoll: () => void }) {
   const t = useT()
   const w = Math.max(2, (c.length_ms / 1000) * pps)
   const fi = (c.fade_in_ms / 1000) * pps, fo = (c.fade_out_ms / 1000) * pps
@@ -646,7 +684,7 @@ function Region({ c, lane, color, pps, selected, peer, takes, dim, name, begin, 
   return (
     <div className={`absolute top-1.5 overflow-hidden rounded-md border ${selected ? 'ring-2 ring-white/80' : ''} ${dim ? 'opacity-45' : ''} ${phone ? '' : 'cursor-grab active:cursor-grabbing'}`}
       style={{ left: ((c.start_ms + (lane.nudge_ms ?? 0)) / 1000) * pps, width: w, height: h, borderColor: color, background: `${color}33`, color, boxShadow: peer ? `0 0 0 2px ${peer}` : undefined }}
-      onPointerDown={(e) => begin(e, c, 'move')} onPointerMove={move} onPointerUp={end} onClick={onSelect} onDoubleClick={() => { if (midi && !phone) openRoll() }} data-daw-clip={c.id} data-clip-kind={midi ? 'midi' : 'audio'} data-selected={selected ? '1' : undefined}>
+      onPointerDown={(e) => begin(e, c, 'move')} onClick={onSelect} onDoubleClick={() => { if (midi && !phone) openRoll() }} data-daw-clip={c.id} data-clip-kind={midi ? 'midi' : 'audio'} data-selected={selected ? '1' : undefined}>
       {midi ? <ClipNotes c={c} /> : <ClipWave c={c} />}
       <span className="pointer-events-none absolute left-1.5 top-0.5 max-w-[calc(100%-12px)] truncate text-[10px] font-semibold text-text-0/90">{name}{c.gain !== 1 ? ` · ${dB(c.gain)} dB` : ''}{takes > 1 ? ` · ${t('{n} takes', { n: takes })}` : ''}</span>
       {!midi && <svg className="pointer-events-none absolute inset-0" width={w} height={h} aria-hidden>
@@ -654,11 +692,11 @@ function Region({ c, lane, color, pps, selected, peer, takes, dim, name, begin, 
         {fo > 0 && <path d={`M${w} ${h} L${w - fo} 0 L${w} 0 Z`} fill="rgba(0,0,0,.35)" />}
       </svg>}
       {!phone && <>
-        <span className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize hover:bg-white/30" onPointerDown={(e) => begin(e, c, 'trimL')} onPointerMove={move} onPointerUp={end} data-daw-trim-left />
-        <span className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize hover:bg-white/30" onPointerDown={(e) => begin(e, c, 'trimR')} onPointerMove={move} onPointerUp={end} data-daw-trim-right />
+        <span className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize hover:bg-white/30" onPointerDown={(e) => begin(e, c, 'trimL')} data-daw-trim-left />
+        <span className="absolute inset-y-0 right-0 w-1.5 cursor-ew-resize hover:bg-white/30" onPointerDown={(e) => begin(e, c, 'trimR')} data-daw-trim-right />
         {!midi && <>
-          <span className="absolute top-0 h-2.5 w-2.5 -translate-x-1/2 cursor-pointer rounded-full border border-white bg-black/60" style={{ left: Math.max(5, fi) }} onPointerDown={(e) => begin(e, c, 'fadeIn')} onPointerMove={move} onPointerUp={end} title={t('Fade in')} data-daw-fade-in-handle />
-          <span className="absolute top-0 h-2.5 w-2.5 translate-x-1/2 cursor-pointer rounded-full border border-white bg-black/60" style={{ right: Math.max(5, fo) }} onPointerDown={(e) => begin(e, c, 'fadeOut')} onPointerMove={move} onPointerUp={end} title={t('Fade out')} data-daw-fade-out-handle />
+          <span className="absolute top-0 h-2.5 w-2.5 -translate-x-1/2 cursor-pointer rounded-full border border-white bg-black/60" style={{ left: Math.max(5, fi) }} onPointerDown={(e) => begin(e, c, 'fadeIn')} title={t('Fade in')} data-daw-fade-in-handle />
+          <span className="absolute top-0 h-2.5 w-2.5 translate-x-1/2 cursor-pointer rounded-full border border-white bg-black/60" style={{ right: Math.max(5, fo) }} onPointerDown={(e) => begin(e, c, 'fadeOut')} title={t('Fade out')} data-daw-fade-out-handle />
         </>}
       </>}
     </div>

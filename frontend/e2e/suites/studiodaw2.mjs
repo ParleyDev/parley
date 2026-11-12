@@ -168,12 +168,13 @@ let takes = []
 for (let i = 0; i < 40; i++) { f = await full(); const bl = f.lanes.find((l) => l.user_id === b.user.id); takes = bl ? f.clips.filter((c) => c.lane_id === bl.id && c.group_id) : []; if (takes.length >= 2) break; await pa.waitForTimeout(500) }
 ok('a take over the loop becomes a group of takes, one per pass, one playing', takes.length >= 2 && takes.filter((c) => !c.muted).length === 1 && takes.every((c) => c.start_ms === 0 && c.length_ms <= 1500), JSON.stringify(takes.map((c) => [c.start_ms, c.in_ms, c.length_ms, c.muted])))
 await pa.waitForTimeout(500)
-const tclip = await pa.locator('[data-daw-clip]').filter({ hasText: 'takes' }).first()
+const tclip = pa.locator(`[data-daw-clip="${takes.find((c) => !c.muted).id}"]`) // this group's playing take (another member's group may come first)
 await tclip.click({ position: { x: 20, y: 40 } })
-await pa.waitForSelector('[data-daw-takes]', { timeout: 3000 }).catch(() => {})
-await pa.locator('[data-daw-take="1"]').click(); await pa.waitForTimeout(600)
-f = await full()
-const g1 = f.clips.filter((c) => c.group_id === takes[0].group_id).sort((x, y) => x.id.localeCompare(y.id))
+await pa.waitForSelector('[data-daw-takes]', { timeout: 10000 }).catch(() => {})
+await pa.locator('[data-daw-take="1"]').click()
+// The pick is saved through the server: under load that can take a moment.
+let g1
+for (let i = 0; i < 20; i++) { f = await full(); g1 = f.clips.filter((c) => c.group_id === takes[0].group_id).sort((x, y) => x.id.localeCompare(y.id)); if (!g1[0].muted) break; await pa.waitForTimeout(300) }
 ok('picking a take plays it and mutes the others (comping)', !g1[0].muted && g1.slice(1).every((c) => c.muted), JSON.stringify(g1.map((c) => c.muted)))
 await ops(a.token, [{ op: 'project', loop_on: false, punch_on: true, loop_start_ms: 1000, loop_end_ms: 2000 }])
 const before = new Set(f.clips.map((c) => c.id))
