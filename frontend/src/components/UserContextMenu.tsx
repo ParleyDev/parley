@@ -90,7 +90,7 @@ export function useUserMenu(guildId?: string | null) {
     const inVoiceHere = !!vs?.channel_id && vs.guild_id === guildId
     const setVoice = (body: Record<string, unknown>, done: string) => act(async () => { upsertMember(await api.patch<Member>(`/guilds/${guildId}/members/${u.id}`, body)); pushToast(done) })
     const moveTargets = inVoiceHere && has(myPerms, P.MOVE_MEMBERS)
-      ? Object.values(st.channels).filter((c) => c.guild_id === guildId && c.id !== vs!.channel_id && (c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio') && has(myChannelPerms(st, c.id), P.CONNECT)).sort((a, b) => a.position - b.position)
+      ? Object.values(st.channels).filter((c) => c.guild_id === guildId && c.id !== vs!.channel_id && (c.kind === 'voice' || c.kind === 'stage' || c.kind === 'project') && has(myChannelPerms(st, c.id), P.CONNECT)).sort((a, b) => a.position - b.position)
       : []
     const modVoice: MenuEntry[] = inVoiceHere && !isMe ? [
       ...(has(myPerms, P.MUTE_MEMBERS) ? [{ label: `${vs!.mute ? '✓ ' : ''}${t('Server Mute')}`, icon: <MicOff size={16} />, danger: !vs!.mute, onClick: () => setVoice({ mute: !vs!.mute }, vs!.mute ? t('{name} can speak again', { name }) : t('{name} is server muted', { name })) }] : []),

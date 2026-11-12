@@ -1,7 +1,8 @@
-//! Recording Studio: a studio channel has one engineer (assigned by Manage Channels), a band (artists the engineer
-//! adds; they are heard and recorded) and an audience. Recording is multitrack and client-side: when the engineer
-//! starts a session every band member's client records its own mic and streams chunks up as its own track, so each
-//! artist ends up as a clean separate file. Tracks are served back for the in-browser multitrack player.
+//! Recording Studio: a studio channel holds projects, each a channel of kind 'project' under it with its own voice
+//! room, chat, console and band: engineers (run recordings, manage the band) and artists (edit and record); everyone
+//! else in its voice room is the audience. Recording is multitrack and client-side: when a take starts every armed
+//! band member's client records its own mic and streams chunks up as its own track, so each artist ends up as a clean
+//! separate file, placed in the project (studio_daw).
 
 use crate::{auth::AuthUser, error::{AppError, AppResult}, perms, routes::channels::require_channel_perms, state::AppState};
 use axum::{
@@ -35,6 +36,8 @@ pub fn router() -> Router<AppState> {
         .route("/studio/sessions/:sid/tracks/:tid/chunks", post(append_chunk).layer(DefaultBodyLimit::max(8 * 1024 * 1024)))
         .route("/studio/sessions/:sid/tracks/:tid/finish", post(finish_track))
         .route("/studio/tracks/:tid", get(serve_track))
+        .route("/channels/:id/studio/gatherings", get(list_gatherings).post(start_gathering))
+        .route("/channels/:id/studio/gatherings/:gid/end", post(end_gathering))
 }
 
 #[derive(Debug, Serialize, FromRow)]
@@ -97,7 +100,25 @@ const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_
 
 pub fn track_path(state: &AppState, tid: Uuid) -> std::path::PathBuf { state.config.upload_dir.join(format!("studio-{tid}.webm")) }
 
+/// Studio audio stored for these channels (takes and imports), to remove from disk once their rows are gone.
+pub async fn files_of(db: &PgPool, channels: &[Uuid]) -> AppResult<Vec<Uuid>> {
+    let rows: Vec<(Uuid,)> = sqlx::query_as("SELECT t.id FROM studio_tracks t LEFT JOIN studio_sessions s ON s.id = t.session_id WHERE t.channel_id = ANY($1) OR s.channel_id = ANY($1)").bind(channels).fetch_all(db).await?;
+    Ok(rows.into_iter().map(|(t,)| t).collect())
+}
+
+pub async fn remove_files(state: &AppState, tracks: Vec<Uuid>) {
+    for tid in tracks { let _ = tokio::fs::remove_file(track_path(state, tid)).await; }
+}
+
+/// A project's channel (its voice room, console and band), as seen by `uid`.
 pub async fn studio_channel(db: &PgPool, id: Uuid, uid: Uuid) -> AppResult<(crate::models::Channel, u64)> {
+    let (c, p) = require_channel_perms(db, id, uid).await?;
+    if c.kind != "project" { return Err(AppError::BadRequest("Not a studio project".into())); }
+    Ok((c, p))
+}
+
+/// A studio channel (the list of projects), as seen by `uid`.
+pub async fn studio_container(db: &PgPool, id: Uuid, uid: Uuid) -> AppResult<(crate::models::Channel, u64)> {
     let (c, p) = require_channel_perms(db, id, uid).await?;
     if c.kind != "studio" { return Err(AppError::BadRequest("Not a studio channel".into())); }
     Ok((c, p))
@@ -127,22 +148,25 @@ pub async fn channel_json(state: &AppState, id: Uuid) -> AppResult<crate::models
     Ok(c)
 }
 
+/// Runs the project: its engineers, and Manage Projects.
 pub async fn is_crew(state: &AppState, id: Uuid, uid: Uuid, p: u64) -> AppResult<bool> {
-    Ok(perms::has(p, perms::MANAGE_CHANNELS) || perms::is_engineer(&state.db, id, uid).await?)
+    Ok(perms::has(p, perms::MANAGE_PROJECTS) || perms::is_engineer(&state.db, id, uid).await?)
 }
 
 #[derive(Deserialize)]
 struct RoleReq { role: String }
 
-/// `PUT /channels/:id/studio/role/:uid {role: engineer|artist|audience}`. Engineers and Manage Channels set anyone's
-/// role (engineers included: a studio may have several); anyone may step down themselves (engineer → artist,
-/// artist → audience). Engineers and artists are unsuppressed; the audience is suppressed.
+/// `PUT /channels/:id/studio/role/:uid {role: engineer|artist|audience}`: a project's band. Engineers and Manage
+/// Projects set anyone's role (a project may have several engineers); anyone may step down themselves (engineer →
+/// artist, artist → audience, which leaves the band). The band is heard in the voice room; the audience is not.
 async fn set_role(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, target)): Path<(Uuid, Uuid)>, Json(req): Json<RoleReq>) -> AppResult<Json<crate::models::Channel>> {
     let (c, p) = studio_channel(&state.db, id, uid).await?;
     let role = req.role.as_str();
     if !["engineer", "artist", "audience"].contains(&role) { return Err(AppError::BadRequest("Role must be engineer, artist or audience".into())); }
     let crew = is_crew(&state, id, uid, p).await?;
-    if !crew && !(uid == target && role != "engineer") { return Err(AppError::Forbidden); }
+    // Without running the project you may only step down: engineer → artist, or out of the band.
+    let stepping_down = uid == target && (role == "audience" || (role == "artist" && perms::is_engineer(&state.db, id, uid).await?));
+    if !crew && !stepping_down { return Err(AppError::Forbidden); }
     apply_role(&state, &c, target, role).await?;
     let updated = channel_json(&state, id).await?;
     state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(updated));
@@ -153,8 +177,8 @@ async fn set_role(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((
 async fn apply_role(state: &AppState, c: &crate::models::Channel, target: Uuid, role: &str) -> AppResult<()> {
     let member: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2").bind(c.guild_id).bind(target).fetch_optional(&state.db).await?;
     if member.is_none() { return Err(AppError::BadRequest("That user is not in the server".into())); }
-    if role == "engineer" {
-        sqlx::query("INSERT INTO studio_engineers (channel_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(c.id).bind(target).execute(&state.db).await?;
+    if role != "audience" {
+        sqlx::query("INSERT INTO studio_engineers (channel_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (channel_id, user_id) DO UPDATE SET role = $3").bind(c.id).bind(target).bind(role).execute(&state.db).await?;
     } else {
         sqlx::query("DELETE FROM studio_engineers WHERE channel_id = $1 AND user_id = $2").bind(c.id).bind(target).execute(&state.db).await?;
     }
@@ -177,7 +201,7 @@ pub async fn config_of(db: &PgPool, id: Uuid) -> AppResult<crate::models::Studio
 struct ConfigReq { bpm: Option<i32>, beats: Option<i32>, click: Option<bool>, count_in: Option<i32> }
 
 /// `PATCH /channels/:id/studio/config`: the console's tempo, beats per bar, metronome and count-in bars (engineers and
-/// Manage Channels). Everyone in the studio gets the channel back via CHANNEL_UPDATE.
+/// Manage Projects). Everyone in the studio gets the channel back via CHANNEL_UPDATE.
 async fn set_config(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<ConfigReq>) -> AppResult<Json<crate::models::Channel>> {
     let (c, p) = studio_channel(&state.db, id, uid).await?;
     if !is_crew(&state, id, uid, p).await? { return Err(AppError::Forbidden); }
@@ -198,7 +222,7 @@ async fn set_config(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
 #[derive(Deserialize)]
 struct ArmReq { armed: bool }
 
-/// `PUT /channels/:id/studio/arm/:uid {armed}`: record-arm a band member (engineers and Manage Channels). Shared by
+/// `PUT /channels/:id/studio/arm/:uid {armed}`: record-arm a band member (engineers and Manage Projects). Shared by
 /// every engineer; changing it during a take punches that member in or out.
 async fn set_arm(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, target)): Path<(Uuid, Uuid)>, Json(req): Json<ArmReq>) -> AppResult<Json<crate::models::Channel>> {
     let (c, p) = studio_channel(&state.db, id, uid).await?;
@@ -374,4 +398,81 @@ async fn serve_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
     h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=0"));
     Ok(resp.into_response())
+}
+
+/// A project's session: a live gathering in its voice room, from when an engineer starts it to when one ends it.
+#[derive(Debug, Serialize, FromRow)]
+pub struct Gathering {
+    pub id: Uuid,
+    pub channel_id: Uuid,
+    pub title: String,
+    pub started_by: Option<Uuid>,
+    pub started_at: DateTime<Utc>,
+    pub ended_at: Option<DateTime<Utc>>,
+    /// Everyone who was in the room while it ran.
+    pub people: Vec<Uuid>,
+    /// Takes recorded during it.
+    #[sqlx(default)]
+    pub takes: i64,
+}
+const GATHERING_SELECT: &str = "SELECT g.id, g.channel_id, g.title, g.started_by, g.started_at, g.ended_at, g.people,
+    (SELECT COUNT(*) FROM studio_tracks t JOIN studio_sessions s ON s.id = t.session_id WHERE s.channel_id = g.channel_id AND t.done AND s.started_at >= g.started_at AND s.started_at <= COALESCE(g.ended_at, now())) AS takes
+    FROM studio_gatherings g";
+
+/// `GET /channels/:id/studio/gatherings`: the project's sessions, the one running (if any) first.
+async fn list_gatherings(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<Gathering>>> {
+    studio_channel(&state.db, id, uid).await?;
+    Ok(Json(sqlx::query_as::<_, Gathering>(&format!("{GATHERING_SELECT} WHERE g.channel_id = $1 ORDER BY g.ended_at IS NULL DESC, g.started_at DESC LIMIT 50")).bind(id).fetch_all(&state.db).await?))
+}
+
+#[derive(Deserialize)]
+struct GatheringReq { #[serde(default)] title: String }
+
+/// `POST /channels/:id/studio/gatherings {title}`: an engineer (or Manage Projects) starts a session. Those already in
+/// the room are noted, and everyone who joins later.
+async fn start_gathering(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<GatheringReq>) -> AppResult<(StatusCode, Json<Gathering>)> {
+    let (c, p) = studio_channel(&state.db, id, uid).await?;
+    if !is_crew(&state, id, uid, p).await? { return Err(AppError::Forbidden); }
+    let title: String = { let n: String = req.title.trim().chars().filter(|c| !c.is_control()).take(100).collect(); if n.is_empty() { format!("Session {}", Utc::now().format("%Y-%m-%d")) } else { n } };
+    let mut people: Vec<Uuid> = state.hub.voice_states_for_channels(&[id]).into_iter().map(|v| v.user_id).collect();
+    people.push(uid); people.sort(); people.dedup();
+    let gid = Uuid::now_v7();
+    let res = sqlx::query("INSERT INTO studio_gatherings (id, channel_id, title, started_by, people) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING").bind(gid).bind(id).bind(&title).bind(uid).bind(&people).execute(&state.db).await?;
+    if res.rows_affected() == 0 { return Err(AppError::Conflict("A session is already running".into())); }
+    let g = sqlx::query_as::<_, Gathering>(&format!("{GATHERING_SELECT} WHERE g.id = $1")).bind(gid).fetch_one(&state.db).await?;
+    broadcast(&state, &c, "STUDIO_GATHERING", json!({ "channel_id": id, "gathering": g })).await?;
+    gathering_changed(&state, &c).await;
+    crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.session_start", "channel", Some(id), &title, json!({ "session": gid })).await;
+    Ok((StatusCode::CREATED, Json(g)))
+}
+
+/// `POST /channels/:id/studio/gatherings/:gid/end`: its starter, an engineer or Manage Projects ends it.
+async fn end_gathering(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, gid)): Path<(Uuid, Uuid)>) -> AppResult<Json<Gathering>> {
+    let (c, p) = studio_channel(&state.db, id, uid).await?;
+    let starter: Option<(Option<Uuid>,)> = sqlx::query_as("SELECT started_by FROM studio_gatherings WHERE id = $1 AND channel_id = $2").bind(gid).bind(id).fetch_optional(&state.db).await?;
+    let Some((by,)) = starter else { return Err(AppError::NotFound("Session not found".into())) };
+    if by != Some(uid) && !is_crew(&state, id, uid, p).await? { return Err(AppError::Forbidden); }
+    sqlx::query("UPDATE studio_gatherings SET ended_at = COALESCE(ended_at, now()) WHERE id = $1").bind(gid).execute(&state.db).await?;
+    let g = sqlx::query_as::<_, Gathering>(&format!("{GATHERING_SELECT} WHERE g.id = $1")).bind(gid).fetch_one(&state.db).await?;
+    broadcast(&state, &c, "STUDIO_GATHERING", json!({ "channel_id": id, "gathering": g })).await?;
+    gathering_changed(&state, &c).await;
+    Ok(Json(g))
+}
+
+/// The studio's list shows which projects have a session on.
+async fn gathering_changed(state: &AppState, c: &crate::models::Channel) {
+    if let Some(sid) = c.parent_id { if let Ok(studio) = channel_json(state, sid).await { let _ = broadcast(state, &studio, "STUDIO_PROJECTS", json!({ "channel_id": sid })).await; } }
+}
+
+/// Someone joined a project's voice room: note them in its running session.
+pub async fn note_in_gathering(db: &PgPool, channel_id: Uuid, user: Uuid) {
+    let _ = sqlx::query("UPDATE studio_gatherings SET people = array_append(people, $2) WHERE channel_id = $1 AND ended_at IS NULL AND NOT ($2 = ANY(people))").bind(channel_id).bind(user).execute(db).await;
+}
+
+/// Sessions nobody ended run at most a day.
+pub async fn end_stale_gatherings(state: AppState) {
+    loop {
+        let _ = sqlx::query("UPDATE studio_gatherings SET ended_at = started_at + interval '24 hours' WHERE ended_at IS NULL AND started_at < now() - interval '24 hours'").execute(&state.db).await;
+        tokio::time::sleep(std::time::Duration::from_secs(600)).await;
+    }
 }

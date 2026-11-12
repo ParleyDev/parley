@@ -1,4 +1,4 @@
-import { Hash, MessageSquareText, Radio, Volume2, Disc3, Users } from 'lucide-react'
+import { Hash, MessageSquareText, Radio, Volume2, Disc3, AudioLines, Users } from 'lucide-react'
 import CropImg from '../CropImg'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -57,8 +57,8 @@ export default function QuickSwitcher({ onClose }: { onClose: () => void }) {
     const unread = (id: string) => isUnread({ readStates, lastMessageId }, id)
     for (const c of Object.values(channels)) {
       if (!c.guild_id || c.kind === 'category' || c.kind === 'thread') continue
-      const voice = c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio'
-      const icon = c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />
+      const voice = c.kind === 'voice' || c.kind === 'stage' || c.kind === 'project'
+      const icon = c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'project' ? <AudioLines size={18} /> : c.kind === 'forum' ? <MessageSquareText size={18} /> : <Hash size={18} />
       out.push({ key: c.id, kind: voice ? 'voice' : 'channel', label: c.name, sub: guilds[c.guild_id]?.name, go: go(`/channels/${c.guild_id}/${c.id}`), icon, unread: unread(c.id), mentions: mentionCounts[c.id] ?? 0 })
     }
     const withDm = new Set<string>()

@@ -212,15 +212,17 @@ export async function exportProjectFile() {
   await saveBlob(blob, `${safe(project.name)}.parley-project`)
 }
 
-/** Import a .parley-project file into a studio as a new project (opened for everyone). */
-export async function importProjectFile(channelId: string, file: File): Promise<StudioProject> {
+/** Import a .parley-project file into the studio `studioId` as a new project. */
+export async function importProjectFile(studioId: string, file: File): Promise<StudioProject> {
   const entries = await unzip(await file.arrayBuffer())
   const raw = entries.get('project.json')
   if (!raw) throw new Error('Not a Parley project file')
   const doc = JSON.parse(new TextDecoder().decode(raw)) as ProjectFile
   if (doc.format !== 'parley-project') throw new Error('Not a Parley project file')
   const token = getToken()
-  // The audio first: each file imported anew into this studio.
+  // A new project in the studio, then the audio imported anew into it.
+  const project = await api.post<StudioProject>(`/channels/${studioId}/studio/projects`, { name: doc.project.name ?? file.name.replace(/\.parley-project$/, ''), bpm: doc.project.bpm, beats: doc.project.beats })
+  const channelId = project.channel_id
   const audioMap = new Map<string, string>()
   for (const a of doc.audio) {
     const data = entries.get(a.file)
@@ -230,7 +232,6 @@ export async function importProjectFile(channelId: string, file: File): Promise<
     if (!r.ok || !t) throw new Error((t as unknown as { error?: string } | null)?.error ?? `Could not import ${a.name}`)
     audioMap.set(a.id, t.id)
   }
-  const project = await api.post<StudioProject>(`/channels/${channelId}/studio/projects`, { name: doc.project.name ?? file.name.replace(/\.parley-project$/, ''), open: false })
   const laneMap = new Map(doc.lanes.map((l) => [l.id, newId()]))
   const mapAuto = (a: StudioLane['automation']) => Object.fromEntries(Object.entries(a ?? {}).map(([k, v]) => [k.startsWith('send:') ? `send:${laneMap.get(k.slice(5)) ?? k.slice(5)}` : k, v]))
   const lane = (l: StudioLane): Op => {

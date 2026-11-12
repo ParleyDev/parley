@@ -33,14 +33,28 @@ export const P = {
   MANAGE_THREADS: 1 << 19,
   MANAGE_EVENTS: 1 << 25,
   MANAGE_EXPRESSIONS: 1 << 30,
-  // Bit 31: JS bit operations make it negative, which the server masks back (perms::ALL).
-  SCHEDULE_MESSAGES: 1 << 31,
+  // Bits from 31 up are past what JS bit operators handle: use bor / band / bclear / has below, never | & ~.
+  SCHEDULE_MESSAGES: 2 ** 31,
+  CREATE_PROJECTS: 2 ** 32,
+  MANAGE_PROJECTS: 2 ** 33,
+  DELETE_PROJECTS: 2 ** 34,
 } as const
 
-export type PermKey = keyof typeof P
-export const ALL = Object.values(P).reduce((a, b) => a | b, 0)
+// Permission sets are numbers up to 2^35, past JS's 32-bit bit operators, so they split into two 32-bit halves.
+const HI = 2 ** 32
+const halves = (x: number) => { const v = x < 0 ? x + HI : x; return [Math.floor(v / HI), v % HI] }
+const join = (hi: number, lo: number) => (hi >>> 0) * HI + (lo >>> 0)
+/** a | b | … */
+export const bor = (...xs: number[]) => xs.reduce((a, b) => { const [ah, al] = halves(a), [bh, bl] = halves(b); return join(ah | bh, al | bl) }, 0)
+/** a & b */
+export const band = (a: number, b: number) => { const [ah, al] = halves(a), [bh, bl] = halves(b); return join(ah & bh, al & bl) }
+/** a & ~b: `a` without the bits of `b` */
+export const bclear = (a: number, b: number) => { const [ah, al] = halves(a), [bh, bl] = halves(b); return join(ah & ~bh, al & ~bl) }
 
-export interface PermInfo { key: PermKey; label: string; desc: string; group: 'General' | 'Membership' | 'Text' | 'Voice'; channel?: 'text' | 'voice' | 'both' }
+export type PermKey = keyof typeof P
+export const ALL = bor(...Object.values(P))
+
+export interface PermInfo { key: PermKey; label: string; desc: string; group: 'General' | 'Membership' | 'Text' | 'Voice' | 'Studio'; channel?: 'text' | 'voice' | 'studio' | 'both' }
 
 /** Display catalogue, in Discord's order. `channel` marks which channel kinds the bit is meaningful for in overwrites. */
 export const PERMS: PermInfo[] = [
@@ -74,37 +88,46 @@ export const PERMS: PermInfo[] = [
   { key: 'MUTE_MEMBERS', label: 'Mute Members', desc: 'Allows members to mute other members in voice channels for everyone (a server mute).', group: 'Voice', channel: 'voice' },
   { key: 'DEAFEN_MEMBERS', label: 'Deafen Members', desc: 'Allows members to deafen other members in voice channels, so they can neither hear nor speak.', group: 'Voice', channel: 'voice' },
   { key: 'MOVE_MEMBERS', label: 'Move Members', desc: 'Allows members to move or disconnect other members between voice channels they can connect to, and to join full channels.', group: 'Voice', channel: 'voice' },
+  { key: 'CREATE_PROJECTS', label: 'Create Projects', desc: 'Allows members to start new projects in studio channels. They join the band of a project they start.', group: 'Studio', channel: 'studio' },
+  { key: 'MANAGE_PROJECTS', label: 'Manage Projects', desc: "Allows members to rename, tag and archive any project, edit it, and choose who's in its band.", group: 'Studio', channel: 'studio' },
+  { key: 'DELETE_PROJECTS', label: 'Delete Projects', desc: 'Allows members to delete projects, with everything in them: takes, audio, chat and versions. This cannot be undone.', group: 'Studio', channel: 'studio' },
   { key: 'ADMINISTRATOR', label: 'Administrator', desc: 'Members with this permission have every permission and bypass all channel restrictions. This is a dangerous permission to grant.', group: 'General' },
 ]
 
 /** Stable empty map so zustand selectors never return a fresh object (which re-renders forever). */
 export const EMPTY_ROLES: Record<string, Role> = {}
 
-export const has = (perms: number, bit: number) => (perms & bit) === bit
+export const has = (perms: number, bit: number) => band(perms, bit) === bit
+
+/** Which permissions an overwrite on this kind of channel can set (a category's apply to all its channels). */
+export function permsFor(kind: Channel['kind']): PermInfo[] {
+  const text = ['text', 'forum', 'thread', 'directory'].includes(kind), voice = ['voice', 'stage', 'studio', 'project'].includes(kind), studio = kind === 'studio' || kind === 'project' || kind === 'category'
+  return PERMS.filter((p) => p.channel === 'both' || (p.channel === 'text' && (text || kind === 'category')) || (p.channel === 'voice' && (voice || kind === 'category')) || (p.channel === 'studio' && studio))
+}
 
 /** `mfa`: whether this member has two-factor authentication (known for yourself; undefined skips the 2FA rule).
  *  `guest`: a "Try Parley" guest (known for yourself), who talks only where a channel allows it. */
 interface Ctx { guild: Guild; roles: Record<string, Role>; member: Member | undefined; mfa?: boolean; guest?: boolean }
 
 /** Powers that need 2FA when the server requires it (mirrors perms::MFA_GATED). */
-export const MFA_GATED = P.ADMINISTRATOR | P.KICK_MEMBERS | P.BAN_MEMBERS | P.MANAGE_CHANNELS | P.MANAGE_GUILD | P.MANAGE_MESSAGES | P.MANAGE_ROLES | P.MODERATE_MEMBERS
+export const MFA_GATED = bor(P.ADMINISTRATOR, P.KICK_MEMBERS, P.BAN_MEMBERS, P.MANAGE_CHANNELS, P.MANAGE_GUILD, P.MANAGE_MESSAGES, P.MANAGE_ROLES, P.MODERATE_MEMBERS)
 
 /** What guests don't get from the server's roles, only from channel overwrites (mirrors perms::GUEST_STRIP). */
-export const GUEST_STRIP = P.SEND_MESSAGES | P.SEND_TTS_MESSAGES | P.ADD_REACTIONS | P.ATTACH_FILES | P.MENTION_EVERYONE | P.SCHEDULE_MESSAGES | P.CONNECT | P.SPEAK | P.STREAM
+export const GUEST_STRIP = bor(P.SEND_MESSAGES, P.SEND_TTS_MESSAGES, P.ADD_REACTIONS, P.ATTACH_FILES, P.MENTION_EVERYONE, P.SCHEDULE_MESSAGES, P.CONNECT, P.SPEAK, P.STREAM)
 
 /** Guild-wide permissions for a member (0 if not a member). */
 export function guildPerms({ guild, roles, member, mfa, guest }: Ctx, userId: string): number {
   if (guild.owner_id === userId) return ALL
   if (!member) return 0
   let p = roles[guild.id]?.permissions ?? 0
-  for (const rid of member.roles) p |= roles[rid]?.permissions ?? 0
-  if (guild.mfa_level === 1 && mfa === false) p &= ~MFA_GATED
-  if (guest) p &= ~GUEST_STRIP
+  for (const rid of member.roles) p = bor(p, roles[rid]?.permissions ?? 0)
+  if (guild.mfa_level === 1 && mfa === false) p = bclear(p, MFA_GATED)
+  if (guest) p = bclear(p, GUEST_STRIP)
   return has(p, P.ADMINISTRATOR) ? ALL : p
 }
 
 /** Bits a timed-out member loses everywhere (mirrors perms::TIMEOUT_STRIP). */
-export const TIMEOUT_STRIP = P.SEND_MESSAGES | P.ADD_REACTIONS | P.ATTACH_FILES | P.CONNECT | P.SPEAK | P.STREAM | P.CREATE_INVITE | P.CHANGE_NICKNAME | P.MENTION_EVERYONE
+export const TIMEOUT_STRIP = bor(P.SEND_MESSAGES, P.ADD_REACTIONS, P.ATTACH_FILES, P.CONNECT, P.SPEAK, P.STREAM, P.CREATE_INVITE, P.CHANGE_NICKNAME, P.MENTION_EVERYONE)
 
 export const isTimedOut = (m: Member | undefined, now = Date.now()) => !!m?.quarantined || (!!m?.timeout_until && new Date(m.timeout_until).getTime() > now)
 
@@ -115,16 +138,16 @@ export function channelPerms(ctx: Ctx, userId: string, channel: Channel): number
   let p = base
   const ows = channel.overwrites ?? []
   const everyone = ows.find((o) => o.id === ctx.guild.id)
-  if (everyone) p = (p & ~everyone.deny) | everyone.allow
+  if (everyone) p = bor(bclear(p, everyone.deny), everyone.allow)
   let allow = 0, deny = 0
   for (const o of ows) {
-    if (o.kind === 'role' && o.id !== ctx.guild.id && ctx.member?.roles.includes(o.id)) { allow |= o.allow; deny |= o.deny }
+    if (o.kind === 'role' && o.id !== ctx.guild.id && ctx.member?.roles.includes(o.id)) { allow = bor(allow, o.allow); deny = bor(deny, o.deny) }
   }
-  p = (p & ~deny) | allow
+  p = bor(bclear(p, deny), allow)
   const mine = ows.find((o) => o.kind === 'member' && o.id === userId)
-  if (mine) p = (p & ~mine.deny) | mine.allow
+  if (mine) p = bor(bclear(p, mine.deny), mine.allow)
   if (!has(p, P.VIEW_CHANNEL)) return 0
-  return isTimedOut(ctx.member) ? p & ~TIMEOUT_STRIP : p
+  return isTimedOut(ctx.member) ? bclear(p, TIMEOUT_STRIP) : p
 }
 
 /** Highest role position a member holds (0 = only @everyone). Owner outranks all. */

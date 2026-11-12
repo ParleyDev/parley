@@ -11,9 +11,10 @@ const a = await reg('alice'); const b = await reg('bob'); const d = await reg('d
 const g = await call(a.token, 'POST', '/guilds', { name: `DAW2 ${S}` })
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); for (const u of [b, d]) await call(u.token, 'POST', `/invites/${inv.code}`)
 const text = g.channels.find((x) => x.kind === 'text')
-const st = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'daw2', kind: 'studio' })).body
-await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${a.user.id}`, { role: 'engineer' })
-const P = (await callS(a.token, 'POST', `/channels/${st.id}/studio/projects`, { name: 'Phase Two' })).body
+const studio = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'daw2', kind: 'studio' })).body
+const P = (await callS(a.token, 'POST', `/channels/${studio.id}/studio/projects`, { name: 'Phase Two' })).body
+// The project's own channel: its voice room, console and band (alice, who started it, is its engineer).
+const st = await call(a.token, 'GET', `/channels/${P.channel_id}`)
 const full = () => call(a.token, 'GET', `/studio/projects/${P.id}`)
 const ops = (tok, list) => callS(tok, 'POST', `/studio/projects/${P.id}/ops`, { ops: list })
 const id = () => crypto.randomUUID()
@@ -70,7 +71,7 @@ ok('and the state before the restore is kept as a version', (await call(a.token,
 
 console.log('-- the DAW in the browser')
 const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
-const mk = async (tok, viewport = { width: 1500, height: 950 }, mobile = false) => { const ctx = await browser.newContext({ viewport, permissions: ['microphone'], acceptDownloads: true, isMobile: mobile, hasTouch: mobile }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); await p.waitForSelector('text=Join Voice'); await p.click('text=Join Voice'); await p.waitForSelector('[data-voice-leave]'); return p }
+const mk = async (tok, viewport = { width: 1500, height: 950 }, mobile = false) => { const ctx = await browser.newContext({ viewport, permissions: ['microphone'], acceptDownloads: true, isMobile: mobile, hasTouch: mobile }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); const join = p.locator('[data-project-join]').or(p.getByText('Join Voice', { exact: true })).first(); await join.waitFor(); await join.click(); await p.waitForSelector('[data-voice-leave]'); return p }
 const pa = await mk(a.token); const pb = await mk(b.token)
 await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${b.user.id}`, { role: 'artist' })
 await pa.waitForSelector('[data-daw]'); await pb.waitForSelector('[data-daw]', { timeout: 10000 })
@@ -219,15 +220,13 @@ file = await dl('[data-daw-export-project]')
 ok('the project file saves', file.name.endsWith('.parley-project') && /project\.json/.test(execFileSync('unzip', ['-l', file.path]).toString()))
 await pa.locator('[data-daw-import-project-file]').setInputFiles({ name: 'copy.parley-project', mimeType: 'application/zip', buffer: readFileSync(file.path) })
 let opened
-for (let i = 0; i < 60; i++) { opened = (await call(a.token, 'GET', `/channels/${st.id}`)).studio.project_id; if (opened && opened !== P.id) break; await pa.waitForTimeout(500) }
+for (let i = 0; i < 60; i++) { opened = (await call(a.token, 'GET', `/channels/${studio.id}/studio/projects`)).find((x) => x.id !== P.id)?.id; if (opened) break; await pa.waitForTimeout(500) }
 const copy = opened && opened !== P.id ? await call(a.token, 'GET', `/studio/projects/${opened}`) : null
 f = await full()
-ok('importing it makes a new project with the same tracks, clips and routing, and opens it', !!copy && copy.lanes.length === f.lanes.length && copy.clips.length === f.clips.length && copy.lanes.some((l) => l.kind === 'bus') && copy.lanes.some((l) => Object.keys(l.sends).length === 1) && copy.audio.length >= 1, JSON.stringify({ lanes: copy?.lanes.length, clips: copy?.clips.length }))
+ok('importing it makes a new project in the studio with the same tracks, clips and routing', !!copy && copy.lanes.length === f.lanes.length && copy.clips.length === f.clips.length && copy.lanes.some((l) => l.kind === 'bus') && copy.lanes.some((l) => Object.keys(l.sends).length === 1) && copy.audio.length >= 1, JSON.stringify({ lanes: copy?.lanes.length, clips: copy?.clips.length }))
 
 console.log('-- phones')
 const ph = await mk(b.token, { width: 390, height: 844 }, true)
-// Joining from another device starts in the audience again.
-await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${b.user.id}`, { role: 'artist' })
 await ph.waitForSelector('[data-daw]', { timeout: 10000 }).catch(() => {})
 ok('phones get the lite DAW: the mixer, play, comments, export; no detailed editing', await ph.locator('[data-daw-mixer]').count() === 1 && await ph.locator('[data-daw-comments-open]').count() === 1 && await ph.locator('[data-daw-versions-open]').count() === 0 && await ph.locator('[data-daw-add-midi]').count() === 0)
 await ph.screenshot({ path: 'daw2-phone.png' })

@@ -5,7 +5,7 @@ import { api } from '../../../lib/api'
 import { prepareImage, uploadImage } from '../../../lib/upload'
 import { myGuildPerms, useStore } from '../../../store'
 import type { Role } from '../../../lib/types'
-import { canManageRole, has, P, PERMS, sortedRoles, EMPTY_ROLES } from '../../../lib/perms'
+import { canManageRole, has, P, PERMS, sortedRoles, EMPTY_ROLES, bor, bclear } from '../../../lib/perms'
 import { Toggle } from '../SettingsShell'
 import { roleLook } from '../../StyledName'
 import { colorsOf, EFFECTS, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../../lib/nameStyle'
@@ -173,9 +173,9 @@ export default function RolesTab({ guildId }: { guildId: string }) {
             )}
 
             <h3 className="label">{t('Permissions')}</h3>
-            {(['General', 'Membership', 'Text', 'Voice'] as const).map((group) => (
+            {(['General', 'Membership', 'Text', 'Voice', 'Studio'] as const).map((group) => (
               <div key={group} className="mb-5">
-                <div className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2 mt-4">{t('{group} permissions', { group: ({ General: t('General'), Membership: t('Membership'), Text: t('Text'), Voice: t('Voice') })[group] })}</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2 mt-4">{t('{group} permissions', { group: ({ General: t('General'), Membership: t('Membership'), Text: t('Text'), Voice: t('Voice'), Studio: t('Studio') })[group] })}</div>
                 <div className="divide-y divide-line">
                   {PERMS.filter((p) => p.group === group).map((p) => {
                     const bit = P[p.key]
@@ -185,7 +185,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
                     return (
                       <div key={p.key} className="py-3 flex items-start justify-between gap-4">
                         <div className="min-w-0"><div className="text-[15px] font-medium">{t(p.label)}</div><div className="text-sm text-text-2">{t(p.desc)}</div></div>
-                        <Toggle checked={on} disabled={!grantable} onChange={(v) => setDraft({ ...draft, permissions: v ? draft.permissions | bit : draft.permissions & ~bit })} />
+                        <Toggle checked={on} disabled={!grantable} onChange={(v) => setDraft({ ...draft, permissions: v ? bor(draft.permissions, bit) : bclear(draft.permissions, bit) })} />
                       </div>
                     )
                   })}

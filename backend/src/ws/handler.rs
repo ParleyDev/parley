@@ -449,7 +449,7 @@ async fn handle_client_op(
         ClientOp::VoiceJoin { channel_id, e2ee } => {
             // Guild voice channels need CONNECT; a DM channel is a 1:1/group call for its members.
             let (channel, p) = match crate::routes::channels::require_channel_perms(&state.db, channel_id, user_id).await {
-                Ok((c, p)) if c.guild_id.is_none() || ((c.kind == "voice" || c.kind == "stage" || c.kind == "studio") && has(p, perms::CONNECT)) => (c, p),
+                Ok((c, p)) if c.guild_id.is_none() || ((c.kind == "voice" || c.kind == "stage" || c.kind == "project") && has(p, perms::CONNECT)) => (c, p),
                 _ => {
                     let _ = tx.send(Message::Text(json!({"t":"VOICE_ERROR","d":{"message":"You don't have permission to join this voice channel"}}).to_string())).await;
                     return;
@@ -479,9 +479,11 @@ async fn handle_client_op(
             let (self_mute, self_deaf) = state.hub.voice_state(user_id).map(|v| (v.self_mute, v.self_deaf)).unwrap_or((false, false));
             // Video/screen always start off in a new channel: the client re-attaches tracks after joining.
             // Stage: everyone but moderators joins as audience. Studio: the engineer and moderators are in the band from the start.
-            let crew = perms::stage_mod(p) || (channel.kind == "studio" && perms::is_engineer(&state.db, channel_id, user_id).await.unwrap_or(false));
+            // In a project the band is heard; everyone else joins as the audience.
+            let crew = perms::stage_mod(p) || (channel.kind == "project" && perms::band_role(&state.db, channel_id, user_id).await.ok().flatten().is_some());
+            if channel.kind == "project" { crate::routes::studio::note_in_gathering(&state.db, channel_id, user_id).await; }
             // The server's inactive (AFK) channel is listen-only.
-            let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "studio") && !crew) || is_afk_channel(&state.db, &channel).await);
+            let suppress = guild_id.is_some() && (!has(p, perms::SPEAK) || ((channel.kind == "stage" || channel.kind == "project") && !crew) || is_afk_channel(&state.db, &channel).await);
             // The "active for" timer keeps counting across reconnects to the same channel.
             let joined_at = state.hub.voice_state(user_id).filter(|v| v.channel_id == channel_id).map(|v| v.joined_at).unwrap_or_else(chrono::Utc::now);
             let vs = VoiceState { guild_id, channel_id, user_id, self_mute, self_deaf, self_video: false, self_stream: false, suppress, mute, deaf, request_to_speak: false, e2ee, session, peers, watching: Vec::new(), joined_at, priority: false, captions: false };
@@ -534,7 +536,7 @@ async fn handle_client_op(
                 v.self_mute = self_mute; v.self_deaf = self_deaf;
                 v.self_video = self_video && can_stream; v.self_stream = self_stream && can_stream;
                 // Stage audience stays suppressed across mute/deaf toggles; only a moderator lifts it.
-                v.suppress = suppress || ((channel.kind == "stage" || channel.kind == "studio") && v.suppress);
+                v.suppress = suppress || ((channel.kind == "stage" || channel.kind == "project") && v.suppress);
                 v.priority = priority && channel.guild_id.is_some() && has(p, perms::PRIORITY_SPEAKER);
             }) {
                 if channel.guild_id.is_some() {

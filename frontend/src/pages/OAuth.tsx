@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { BadgeCheck } from 'lucide-react'
-import { has, P, PERMS } from '../lib/perms'
+import { has, P, PERMS, band, bor, bclear } from '../lib/perms'
 import { APP_NAME } from '../lib/brand'
 import { LogoNeon } from '../components/Logo'
 import { api } from '../lib/api'
@@ -31,7 +31,7 @@ export default function OAuthPage() {
   useEffect(() => { api.get<Info>(`/oauth2/authorize?${params.toString()}`).then((i) => { setInfo(i); setGuild(i.guilds[0]?.id ?? ''); setPerms(i.permissions ?? 0) }).catch((e: Error) => setErr(e.message)) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const approve = async () => {
     setBusy(true); setErr(null)
-    try { const r = await api.post<{ redirect: string | null }>('/oauth2/authorize', { client_id: q.client_id, redirect_uri: q.redirect_uri, scope: q.scope, state: q.state, guild_id: guild || undefined, permissions: String(perms & mine) }); if (r.redirect) window.location.href = r.redirect; else if (wantsBot) { setAdded(guild); setBusy(false) } else { setInstalled(true); setBusy(false) } } catch (e) { setErr((e as Error).message); setBusy(false) }
+    try { const r = await api.post<{ redirect: string | null }>('/oauth2/authorize', { client_id: q.client_id, redirect_uri: q.redirect_uri, scope: q.scope, state: q.state, guild_id: guild || undefined, permissions: String(band(perms, mine)) }); if (r.redirect) window.location.href = r.redirect; else if (wantsBot) { setAdded(guild); setBusy(false) } else { setInstalled(true); setBusy(false) } } catch (e) { setErr((e as Error).message); setBusy(false) }
   }
   const cancel = () => { if (info?.redirect_uri) { try { const u = new URL(info.redirect_uri); u.searchParams.set('error', 'access_denied'); if (info.state) u.searchParams.set('state', info.state); window.location.href = u.toString(); return } catch { /* fall through */ } } history.back() }
   const wantsBot = info?.scopes.some((s) => s.id === 'bot')
@@ -70,7 +70,7 @@ export default function OAuthPage() {
                 <div className="max-h-48 space-y-1 overflow-y-auto">
                   {asked.map((p) => {
                     const bit = P[p.key], can = has(mine, bit)
-                    return <label key={p.key} className={`flex items-center gap-2 text-sm ${can ? '' : 'opacity-50'}`} title={can ? p.desc : t("You don't have this permission there")}><input type="checkbox" className="accent-accent" disabled={!can} checked={can && has(perms, bit)} onChange={(e) => setPerms(e.target.checked ? perms | bit : perms & ~bit)} data-oauth-perm={p.key} />{p.label}</label>
+                    return <label key={p.key} className={`flex items-center gap-2 text-sm ${can ? '' : 'opacity-50'}`} title={can ? p.desc : t("You don't have this permission there")}><input type="checkbox" className="accent-accent" disabled={!can} checked={can && has(perms, bit)} onChange={(e) => setPerms(e.target.checked ? bor(perms, bit) : bclear(perms, bit))} data-oauth-perm={p.key} />{p.label}</label>
                   })}
                 </div>
                 <p className="mt-2 text-[11px] text-text-2">{t('The bot gets a role of its own with these. You can change it later in Server Settings › Roles.')}</p>

@@ -1,128 +1,106 @@
-// Studio console: the engineer's DAW — shared record-arm, punch in / out, late joiners, tempo / metronome / count-in,
-// the Arrangement (timeline, clips, waveforms, seek) and the Mixer (strips, pan, faders, meters, master), and export.
+// A project's console (the DAW) for its band: there before joining voice, shared record-arm on the lanes, punch in /
+// out during a take, late joiners, tempo / metronome / count-in, band vs audience, and hiding / showing it.
 import { chromium } from 'playwright'
 import { WEB, S, reg, call, callS, raw, ok, finish } from '../lib.mjs'
 
 const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol'); const d = await reg('dave')
 const g = await call(a.token, 'POST', '/guilds', { name: `Console ${S}` })
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); for (const u of [b, c, d]) await call(u.token, 'POST', `/invites/${inv.code}`)
-const st = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'console', kind: 'studio' })).body
-await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${a.user.id}`, { role: 'engineer' })
+const studio = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'console', kind: 'studio' })).body
+const P = (await callS(a.token, 'POST', `/channels/${studio.id}/studio/projects`, { name: 'Console Song' })).body
+const st = await call(a.token, 'GET', `/channels/${P.channel_id}`)
 const sessions = async () => call(a.token, 'GET', `/channels/${st.id}/studio/sessions`)
 const chan = async () => call(a.token, 'GET', `/channels/${st.id}`)
 
 console.log('-- config API')
-ok('a fresh studio has default console settings', JSON.stringify((await chan()).studio) === JSON.stringify({ bpm: 120, beats: 4, click: false, count_in: 0, disarmed: [], project_id: null }))
+let cfg0 = (await chan()).studio
+ok('a new project has its own console settings', cfg0.bpm === 120 && cfg0.beats === 4 && cfg0.disarmed.length === 0 && cfg0.project_id === P.id, JSON.stringify(cfg0))
 let r = await raw(b.token, 'PATCH', `/channels/${st.id}/studio/config`, { bpm: 90 }); ok('only the crew sets the tempo', r.status === 403)
 r = await raw(a.token, 'PATCH', `/channels/${st.id}/studio/config`, { bpm: 20 }); ok('tempo is bounded', r.status === 400)
 r = await raw(b.token, 'PUT', `/channels/${st.id}/studio/arm/${b.user.id}`, { armed: false }); ok('only the crew arms', r.status === 403)
+for (const u of [b, c]) await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${u.user.id}`, { role: 'artist' })
+// A lane per band member, so the arm buttons are there before the first take.
+const lane = {}
+for (const u of [a, b, c]) lane[u.user.id] = crypto.randomUUID()
+r = await callS(a.token, 'POST', `/studio/projects/${P.id}/ops`, { ops: [a, b, c].map((u, i) => ({ op: 'lane.put', lane: { id: lane[u.user.id], name: u.user.username, position: i, user_id: u.user.id } })) })
+ok('the band gets a lane each', r.status === 200, JSON.stringify(r.body))
 
 const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
-const mk = async (tok) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); await p.waitForSelector('text=Join Voice'); await p.click('text=Join Voice'); await p.waitForSelector('[data-voice-leave]'); return p }
-const pa = await mk(a.token); const pb = await mk(b.token); const pc = await mk(c.token)
-for (const u of [b, c]) await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${u.user.id}`, { role: 'artist' })
+const open = async (tok) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); return p }
+const join = async (p) => { await p.click('[data-project-join]'); await p.waitForSelector('[data-voice-leave]') }
 const recording = (p) => p.evaluate(() => window.__parleyStudio?.recording === true)
 const waitRec = (p, on) => p.waitForFunction((on) => (window.__parleyStudio?.recording === true) === on, on, { timeout: 15000 })
 
-console.log('-- arrangement')
-await pa.waitForSelector('[data-studio-console]')
-ok('the engineer gets the console, open by default; artists do not', await pa.locator('[data-studio-console]').count() === 1 && await pb.locator('[data-studio-console]').count() === 0)
-await pa.waitForSelector(`[data-console-lane-head="${c.user.id}"]`)
-ok('one lane per band member', await pa.locator('[data-console-lane-head]').count() === 3)
-await pa.waitForFunction((id) => Number(document.querySelector(`[data-console-meter="${id}"]`)?.dataset.level ?? 0) > 0.05, b.user.id, { timeout: 15000 }).catch(() => {})
-ok('live meters move with the artists\' mics', await pa.evaluate((id) => Number(document.querySelector(`[data-console-meter="${id}"]`)?.dataset.level ?? 0) > 0.05, b.user.id))
-await pa.click(`[data-console-arm="${c.user.id}"]`)
-await pa.waitForFunction((id) => document.querySelector(`[data-console-arm="${id}"]`)?.getAttribute('aria-pressed') === 'false', c.user.id)
-ok('disarming carol is shared studio state', (await chan()).studio.disarmed.includes(c.user.id) && (await pa.locator('[data-console-armed]').textContent()) === '2 of 3 armed')
+console.log('-- band and audience')
+const pa = await open(a.token); await pa.waitForSelector('[data-daw]')
+ok('the band has the console before joining voice, with Join session in the header', await pa.locator('[data-project-join]').count() === 1 && await pa.locator('[data-voice-leave]').count() === 0)
+const pd = await open(d.token); await pd.waitForSelector('text=Join Voice')
+ok('someone outside the band gets the pre-join screen, no console', await pd.locator('[data-daw]').count() === 0)
+await join(pa)
+const pb = await open(b.token); await pb.waitForSelector('[data-daw]'); await join(pb)
+const pc = await open(c.token); await pc.waitForSelector('[data-daw]'); await join(pc)
+await pd.click('text=Join Voice'); await pd.waitForSelector('[data-voice-leave]')
+await pa.waitForSelector(`[data-voice-tile="${b.user.id}"]`); await pa.waitForSelector(`[data-audience="${d.user.id}"]`)
+ok('the band joins heard (engineer and artist badges), others join as the audience', await pa.locator(`[data-voice-tile="${a.user.id}"] [data-engineer-badge]`).count() === 1 && await pa.locator(`[data-voice-tile="${b.user.id}"] [data-artist-badge]`).count() === 1 && await pa.locator(`[data-voice-tile="${d.user.id}"]`).count() === 0)
+
+console.log('-- record-arm')
+await pa.waitForSelector(`[data-daw-arm="${lane[c.user.id]}"]`)
+ok('every band member\'s lane has an arm button, armed by default', await pa.locator('[data-daw-arm][aria-pressed="true"]').count() === 3)
+ok('only the crew can press it', await pb.locator(`[data-daw-arm="${lane[b.user.id]}"]`).isDisabled())
+await pa.click(`[data-daw-arm="${lane[c.user.id]}"]`)
+await pb.waitForFunction((id) => document.querySelector(`[data-daw-arm="${id}"]`)?.getAttribute('aria-pressed') === 'false', lane[c.user.id])
+ok('disarming carol is shared studio state', (await chan()).studio.disarmed.includes(c.user.id))
 
 console.log('-- tempo, metronome, count-in')
-await pa.fill('[data-console-bpm]', '150'); await pa.press('[data-console-bpm]', 'Enter')
-await pa.selectOption('[data-console-countin]', '1')
-await pa.click('[data-console-click]')
-await pa.waitForFunction(() => document.querySelector('[data-console-click]')?.getAttribute('aria-pressed') === 'true')
+await pa.fill('[data-daw-bpm]', '150'); await pa.press('[data-daw-bpm]', 'Enter')
+await pa.selectOption('[data-daw-countin]', '1')
+await pa.click('[data-daw-click]')
+await pa.waitForFunction(() => document.querySelector('[data-daw-click]')?.getAttribute('aria-pressed') === 'true')
 let cfg = (await chan()).studio
-ok('tempo, metronome and count-in are saved for the studio', cfg.bpm === 150 && cfg.click === true && cfg.count_in === 1, JSON.stringify(cfg))
+ok('tempo, metronome and count-in are saved for the project', cfg.bpm === 150 && cfg.click === true && cfg.count_in === 1, JSON.stringify(cfg))
+ok('the project keeps the tempo', (await call(a.token, 'GET', `/studio/projects/${P.id}`)).project.bpm === 150)
 
-await pa.fill('[data-console-take-name]', 'Take one')
-await pa.click('[data-console-record]')
-await pa.waitForSelector('[data-studio-console][data-console-state="count-in"]', { timeout: 5000 })
-const ci = await pa.evaluate(() => [document.querySelector('[data-console-time]').textContent, document.querySelector('[data-console-beat]').textContent])
-ok('record counts in first (a bar at 150 BPM)', ci[0].startsWith('-') && /^-1\.[1-4]$/.test(ci[1]), JSON.stringify(ci))
+await pa.click('[data-daw-rtz]'); await pa.click('[data-daw-record]')
+await pa.waitForSelector('[data-daw][data-daw-state="count-in"]', { timeout: 5000 })
 await pb.waitForFunction(() => (window.__parleyClick?.ticks ?? 0) > 0, null, { timeout: 5000 })
-ok('the band hears the click', await pb.evaluate(() => window.__parleyClick.running === true))
-await pa.waitForSelector('[data-studio-console][data-console-state="recording"]', { timeout: 5000 })
+ok('record counts in and the band hears the click', await pb.evaluate(() => window.__parleyClick.running === true))
+await pa.waitForSelector('[data-daw][data-daw-state="recording"]', { timeout: 5000 })
 await waitRec(pb, true)
 ok('armed members record, the disarmed one does not', await recording(pa) && !(await recording(pc)))
 let live = (await sessions())[0]
-ok('the take keeps its tempo and count-in; clips start in the pre-roll', live.bpm === 150 && live.click && live.count_in_ms === 1600 && live.tracks.length === 2 && live.tracks.every((t) => t.offset_ms < 0), JSON.stringify(live.tracks.map((t) => t.offset_ms)))
+ok('the take keeps its tempo and count-in', live.bpm === 150 && live.click && live.count_in_ms === 1600 && live.tracks.length === 2 && live.project_id === P.id, JSON.stringify(live))
 r = await raw(c.token, 'POST', `/studio/sessions/${live.id}/tracks`, {}); ok('an unarmed artist cannot add a track', r.status === 400)
-await pa.waitForFunction((id) => /Recording · [1-9]\d* KB/.test(document.querySelector(`[data-console-status="${id}"]`)?.textContent ?? ''), b.user.id, { timeout: 12000 })
-ok('chunk uploads show up live in the lane', true)
-const w1 = (await pa.locator(`[data-console-lane="${b.user.id}"] [data-region-live="1"]`).boundingBox()).width; await pa.waitForTimeout(800); const w2 = (await pa.locator(`[data-console-lane="${b.user.id}"] [data-region-live="1"]`).boundingBox()).width
-ok('the clip grows while it records', w2 > w1, `${w1} -> ${w2}`)
+r = await raw(d.token, 'POST', `/studio/sessions/${live.id}/tracks`, {}); ok('the audience cannot add a track', r.status === 403)
 
 console.log('-- punch in / out, late joiner')
-await pa.click(`[data-console-arm="${c.user.id}"]`)
+await pa.click(`[data-daw-arm="${lane[c.user.id]}"]`)
 await waitRec(pc, true)
 ok('arming carol mid-take punches her in', true)
-await pa.click(`[data-console-arm="${b.user.id}"]`)
+await pa.click(`[data-daw-arm="${lane[b.user.id]}"]`)
 await waitRec(pb, false)
 ok('disarming bob punches him out', true)
 await pa.waitForTimeout(500)
-await pa.click(`[data-console-arm="${b.user.id}"]`)
+await pa.click(`[data-daw-arm="${lane[b.user.id]}"]`)
 await waitRec(pb, true)
-const pd = await mk(d.token)
 await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${d.user.id}`, { role: 'artist' })
 await waitRec(pd, true)
-ok('someone who joins the band mid-take is punched in', true)
+ok('someone who joins the band mid-take is punched in', (await chan()).artist_ids.includes(d.user.id))
 await pa.waitForTimeout(5600)   // > one chunk for the late clips
 await pa.screenshot({ path: '219-console-punch.png' })
-await pa.click('[data-console-record]')
-await pa.waitForFunction(() => !['recording', 'count-in'].includes(document.querySelector('[data-studio-console]')?.getAttribute('data-console-state')))
+await pa.click('[data-daw-record]')
+await pa.waitForFunction(() => !['recording', 'count-in'].includes(document.querySelector('[data-daw]')?.getAttribute('data-daw-state')))
 let done
 for (let i = 0; i < 40; i++) { done = (await sessions())[0]; if (done.ended_at && done.tracks.every((t) => t.done)) break; await pa.waitForTimeout(500) }
 const per = (u) => done.tracks.filter((t) => t.user_id === u.user.id).length
 ok('bob has two clips, carol and dave one each', per(b) === 2 && per(c) === 1 && per(d) === 1 && per(a) === 1, JSON.stringify(done.tracks.map((t) => [t.display_name, t.offset_ms, t.duration_ms])))
-
-console.log('-- playback in the arrangement')
-await pa.waitForFunction((n) => document.querySelectorAll('[data-console-wave]').length === n, done.tracks.filter((t) => t.size > 0).length, { timeout: 40000 })
-ok('every clip comes up as a waveform, bob\'s two in one lane', await pa.locator(`[data-console-lane="${b.user.id}"] [data-console-wave]`).count() === 2)
-ok('the ruler counts bars with the metronome on', (await pa.locator('[data-console-timeline] .leading-6').first().textContent()).match(/^-?\d+$/) !== null)
-const tl = await pa.locator('[data-console-timeline]').boundingBox()
-await pa.mouse.click(tl.x + tl.width * 0.3, tl.y + 40)
-ok('clicking the timeline moves the playhead', !['00:00.0'].includes(await pa.locator('[data-console-time]').textContent()))
-await pa.click('[data-console-rtz]')
-ok('return to zero goes to the start of the pre-roll', (await pa.locator('[data-console-time]').textContent()).startsWith('-'))
-
-console.log('-- mixer')
-await pa.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {}); await pa.evaluate(() => document.activeElement?.blur())
-await pa.keyboard.press('Tab')
-await pa.waitForSelector('[data-console-mixer]')
-ok('Tab switches to the mixer', (await pa.getAttribute('[data-studio-console]', 'data-console-view')) === 'mixer')
-ok('a strip per member plus the master', await pa.locator('[data-console-strip]').count() === 5 && await pa.locator('[data-console-strip="master"]').count() === 1)
-await pa.locator(`[data-console-pan="${b.user.id}"]`).fill('-60')
-ok('pan', (await pa.locator(`[data-console-pan-label="${b.user.id}"]`).textContent()) === 'L30')
-await pa.locator(`[data-console-fader="${c.user.id}"]`).fill('50')
-ok('fader reads in dB', (await pa.locator(`[data-console-db="${c.user.id}"]`).textContent()) === '-6.0 dB')
-await pa.click('[data-console-play]')
-await pa.waitForFunction(() => Number(document.querySelector('[data-console-meter="master"]')?.dataset.level ?? 0) > 0.02, null, { timeout: 8000 }).catch(() => {})
-ok('meters show playback, the master too', await pa.evaluate(() => Number(document.querySelector('[data-console-meter="master"]')?.dataset.level ?? 0) > 0.02))
-await pa.click(`[data-console-solo="${a.user.id}"]`)
-ok('solo dims the other strips', (await pa.locator(`[data-console-strip="${b.user.id}"]`).getAttribute('class')).includes('opacity-60'))
-await pa.screenshot({ path: '220-console-mixer.png' })
-await pa.click(`[data-console-solo="${a.user.id}"]`)
-await pa.click('[data-console-play]')
-await pa.click('[data-console-export]')
-await pa.waitForFunction(() => (window.__parleyMix?.exportedBytes ?? 0) > 44, null, { timeout: 30000 })
-ok('export renders a WAV', true)
-await pa.click('[data-console-view-arrange]'); await pa.waitForSelector('[data-console-arrangement]')
-await pa.reload(); await pa.waitForSelector('text=Join Voice'); await pa.click('text=Join Voice'); await pa.waitForSelector('[data-studio-console]')
-ok('the view sticks across reloads', (await pa.getAttribute('[data-studio-console]', 'data-console-view')) === 'arrange')
+let proj
+for (let i = 0; i < 20; i++) { proj = await call(a.token, 'GET', `/studio/projects/${P.id}`); if (proj.clips.length >= done.tracks.filter((t) => (t.duration_ms ?? 0) > 0).length) break; await pa.waitForTimeout(500) }
+ok('the takes land on the band\'s lanes, dave on a new one', proj.clips.filter((x) => x.lane_id === lane[b.user.id]).length === 2 && proj.lanes.some((l) => l.user_id === d.user.id), JSON.stringify(proj.lanes.map((l) => [l.name, proj.clips.filter((x) => x.lane_id === l.id).length])))
 
 console.log('-- toggle')
-await pa.click('[data-console-close]'); await pa.waitForFunction(() => !document.querySelector('[data-studio-console]'))
+await pa.click('[data-console-close]'); await pa.waitForFunction(() => !document.querySelector('[data-daw]'))
 ok('closing returns to the band view', await pa.locator(`[data-voice-tile="${b.user.id}"]`).count() === 1)
-await pa.click('[data-studio-console-toggle]'); await pa.waitForSelector('[data-studio-console]')
+await pa.click('[data-studio-console-toggle]'); await pa.waitForSelector('[data-daw]')
 ok('the header button opens it again', true)
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

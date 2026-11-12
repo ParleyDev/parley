@@ -1,5 +1,5 @@
 import { Copy, ImagePlus, Plus, Trash2 } from 'lucide-react'
-import { has, P, PERMS } from '../../../lib/perms'
+import { has, P, PERMS, bor, bclear } from '../../../lib/perms'
 import { uploadImage } from '../../../lib/upload'
 import { useEffect, useState, type FormEvent } from 'react'
 import { api } from '../../../lib/api'
@@ -26,7 +26,7 @@ export default function ApplicationsTab() {
   const [scopes, setScopes] = useState<string[]>(['identify'])
   // Bot invite link: scopes and the permissions the bot asks for.
   const [botScopes, setBotScopes] = useState<string[]>(['bot', 'applications.commands'])
-  const [botPerms, setBotPerms] = useState(P.VIEW_CHANNEL | P.SEND_MESSAGES | P.EMBED_LINKS | P.READ_MESSAGE_HISTORY | P.ADD_REACTIONS)
+  const [botPerms, setBotPerms] = useState(bor(P.VIEW_CHANNEL, P.SEND_MESSAGES, P.EMBED_LINKS, P.READ_MESSAGE_HISTORY, P.ADD_REACTIONS))
   const load = () => api.get<Application[]>('/applications').then(setList).catch(() => setList([]))
   useEffect(() => { void load() }, [])
   const copy = async (label: string, v: string) => { try { await navigator.clipboard.writeText(v); pushToast(t('{label} copied', { label })) } catch { pushToast(t('Clipboard unavailable'), 'error') } }
@@ -112,7 +112,7 @@ export default function ApplicationsTab() {
               <div className="flex flex-wrap gap-3">{['bot', 'applications.commands'].map((s) => <label key={s} className="flex items-center gap-1.5 text-sm"><input type="checkbox" className="accent-accent" checked={botScopes.includes(s)} onChange={(e) => setBotScopes(e.target.checked ? [...botScopes, s] : botScopes.filter((x) => x !== s))} />{s}</label>)}</div>
               <div className="text-xs font-semibold text-text-1">{t('Permissions')} <span className="font-normal text-text-2">· {botPerms}</span></div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 max-sm:grid-cols-1" data-perm-calculator>
-                {PERMS.map((p) => <label key={p.key} className="flex items-center gap-1.5 text-xs" title={t(p.desc)}><input type="checkbox" className="accent-accent" checked={has(botPerms, P[p.key])} onChange={(e) => setBotPerms(e.target.checked ? botPerms | P[p.key] : botPerms & ~P[p.key])} data-perm-pick={p.key} />{t(p.label)}</label>)}
+                {PERMS.map((p) => <label key={p.key} className="flex items-center gap-1.5 text-xs" title={t(p.desc)}><input type="checkbox" className="accent-accent" checked={has(botPerms, P[p.key])} onChange={(e) => setBotPerms(e.target.checked ? bor(botPerms, P[p.key]) : bclear(botPerms, P[p.key]))} data-perm-pick={p.key} />{t(p.label)}</label>)}
               </div>
               <code className="block break-all rounded bg-bg-0 px-2 py-1 text-xs" data-app-invite-url>{inviteUrl}</code>
               <div className="flex gap-2"><button type="button" className="btn-ghost text-xs" onClick={() => copy(t('Invite link'), inviteUrl)}><Copy size={12} /> {t('Copy link')}</button>

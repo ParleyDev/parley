@@ -76,7 +76,7 @@ async fn token(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req)
     let (can_publish, can_video) = if c.guild_id.is_none() {
         (true, true)
     } else {
-        if c.kind != "voice" || !has(p, perms::CONNECT) {
+        if !matches!(c.kind.as_str(), "voice" | "stage" | "project") || !has(p, perms::CONNECT) {
             return Err(AppError::Forbidden);
         }
         (has(p, perms::SPEAK), has(p, perms::STREAM))

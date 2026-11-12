@@ -227,7 +227,7 @@ async fn update_channel(
     if let Some(s) = req.rate_limit_per_user {
         if !(0..=21600).contains(&s) { return Err(AppError::BadRequest("Slowmode must be 0 to 21600 seconds (6 hours)".into())) }
     }
-    if req.e2ee == Some(true) && !matches!(c.kind.as_str(), "voice" | "stage" | "studio") {
+    if req.e2ee == Some(true) && !matches!(c.kind.as_str(), "voice" | "stage" | "project") {
         return Err(AppError::BadRequest("Only voice, stage and studio channels have calls to encrypt".into()));
     }
     let name = match req.name {
@@ -309,6 +309,22 @@ async fn update_channel(
     Ok(Json(updated))
 }
 
+/// Delete a channel with its threads or studio projects (a category only lets its channels go) and their studio
+/// audio on disk, and tell the server.
+pub async fn remove_channel(state: &AppState, gid: Uuid, id: Uuid) -> AppResult<()> {
+    let children: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM channels WHERE parent_id = $1 AND kind IN ('thread', 'project')").bind(id).fetch_all(&state.db).await?;
+    let mut gone: Vec<Uuid> = children.into_iter().map(|(c,)| c).collect();
+    gone.push(id);
+    let files = crate::routes::studio::files_of(&state.db, &gone).await?;
+    sqlx::query("DELETE FROM channels WHERE id = ANY($1)").bind(&gone).execute(&state.db).await?;
+    crate::routes::studio::remove_files(state, files).await;
+    state.hub.voice_evict(|v| gone.contains(&v.channel_id));
+    for cid in &gone {
+        state.hub.emit_guild(gid, "CHANNEL_DELETE", json!({ "id": cid, "guild_id": gid }));
+    }
+    Ok(())
+}
+
 async fn delete_channel(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
@@ -324,9 +340,7 @@ async fn delete_channel(
     if c.kind == "text" && count <= 1 {
         return Err(AppError::BadRequest("A server must keep at least one text channel".into()));
     }
-    sqlx::query("DELETE FROM channels WHERE id = $1").bind(id).execute(&state.db).await?;
-    state.hub.voice_evict(|v| v.channel_id == id);
-    state.hub.emit_guild(gid, "CHANNEL_DELETE", json!({ "id": id, "guild_id": gid }));
+    remove_channel(&state, gid, id).await?;
     crate::audit::guild(&state, gid, uid, "channel.delete", "channel", Some(id), &c.name, json!({ "kind": c.kind })).await;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -534,6 +548,9 @@ pub(crate) async fn create_message(
     }
     if c.kind == "directory" {
         return Err(AppError::BadRequest("Directory channels list servers; they don't hold messages".into()));
+    }
+    if c.kind == "studio" {
+        return Err(AppError::BadRequest("Studios hold projects: talk in a project instead".into()));
     }
     if c.kind == "thread" { crate::routes::threads::check_locked(&state.db, c.id, p).await?; }
     if let Some(gid) = c.guild_id { check_verification(&state.db, gid, uid).await?; }

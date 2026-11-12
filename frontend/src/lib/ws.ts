@@ -85,6 +85,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'STUDIO_TRACK'; d: { channel_id: string; session_id: string; track_id: string; user_id: string; size: number } }
   | { t: 'STUDIO_PROJECT'; d: Parameters<typeof onDawEdit>[0] & { channel_id: string } }
   | { t: 'STUDIO_PROJECTS'; d: { channel_id: string } }
+  | { t: 'STUDIO_GATHERING'; d: { channel_id: string } }
   | { t: 'STUDIO_PRESENCE'; d: Parameters<typeof onDawPresence>[0] & { channel_id: string } }
   | { t: 'STUDIO_COMMENTS'; d: { channel_id: string; project_id: string } }
   | { t: 'STUDIO_VERSIONS'; d: { channel_id: string; project_id: string } }
@@ -364,13 +365,14 @@ function handle(ev: Ev) {
       void s.loadEvents(ev.d.guild_id)
       break
     }
-    case 'STUDIO_UPDATE': void s.loadStudio(ev.d.channel_id); break
+    case 'STUDIO_UPDATE': void s.loadStudio(ev.d.channel_id); window.dispatchEvent(new CustomEvent('parley-studio-takes', { detail: ev.d.channel_id })); break
     case 'STUDIO_SESSION': studio.onSession(ev.d); void s.loadStudio(ev.d.channel_id); break
     case 'STUDIO_TRACK': s.studioTrackSize(ev.d.channel_id, ev.d.track_id, ev.d.size); break
     case 'STUDIO_PROJECT': onDawEdit(ev.d); break
     case 'STUDIO_PRESENCE': onDawPresence(ev.d); break
     case 'STUDIO_COMMENTS': onDawComments(ev.d); break
     case 'STUDIO_VERSIONS': window.dispatchEvent(new CustomEvent('parley-studio-versions', { detail: ev.d.project_id })); break
+    case 'STUDIO_GATHERING': window.dispatchEvent(new CustomEvent('parley-studio-gathering', { detail: ev.d.channel_id })); break
     case 'STUDIO_PROJECTS': window.dispatchEvent(new CustomEvent('parley-studio-projects', { detail: ev.d.channel_id })); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break
     case 'VOICE_ERROR': s.pushToast(ev.d.message, 'error'); voice.leave(true); break

@@ -694,7 +694,10 @@ pub async fn delete_account(state: &AppState, id: Uuid) -> AppResult<()> {
     let owned: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM guilds WHERE owner_id = $1").bind(id).fetch_all(&state.db).await?;
     for (gid,) in &owned {
         state.hub.voice_evict(|v| v.guild_id == Some(*gid));
+        let chans: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM channels WHERE guild_id = $1").bind(gid).fetch_all(&state.db).await?;
+        let studio_files = crate::routes::studio::files_of(&state.db, &chans.into_iter().map(|(c,)| c).collect::<Vec<_>>()).await?;
         sqlx::query("DELETE FROM guilds WHERE id = $1").bind(gid).execute(&state.db).await?;
+        crate::routes::studio::remove_files(state, studio_files).await;
         state.hub.emit_guild(*gid, "GUILD_DELETE", json!({ "id": gid }));
     }
     let bots: Vec<(Option<Uuid>,)> = sqlx::query_as("DELETE FROM applications WHERE owner_id = $1 RETURNING bot_user_id").bind(id).fetch_all(&state.db).await?;

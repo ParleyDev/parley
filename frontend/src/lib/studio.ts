@@ -15,7 +15,7 @@ function armedHere(channelId: string): boolean {
   const me = s.user?.id
   const mine = me ? s.voiceStates[me] : undefined
   const ch = s.channels[channelId]
-  return !!me && s.myVoiceChannelId === channelId && !!mine && !mine.suppress && ch?.kind === 'studio' && !(ch.studio?.disarmed ?? []).includes(me)
+  return !!me && s.myVoiceChannelId === channelId && !!mine && !mine.suppress && ch?.kind === 'project' && !(ch.studio?.disarmed ?? []).includes(me)
 }
 
 /**

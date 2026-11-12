@@ -203,7 +203,7 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
   return (
     <>
       {/* Text channels take the member list beside the chat under their header (Discord); voice views keep it beside them. */}
-      {channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'studio'
+      {channel.kind === 'voice' || channel.kind === 'stage' || channel.kind === 'project'
         ? <><VoiceView channel={channel} /><MemberList guildId={guildId} /></>
         : <ChatView channel={channel} members={<MemberList guildId={guildId} />} />}
     </>

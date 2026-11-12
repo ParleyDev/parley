@@ -17,8 +17,10 @@ const wav = join(process.cwd(), `stereo-${S}.wav`)
 const a = await reg('alice'); const b = await reg('bob')
 const g = await call(a.token, 'POST', '/guilds', { name: `Stereo ${S}` })
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await call(b.token, 'POST', `/invites/${inv.code}`)
-const studio = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'studio-a', kind: 'studio' })).body
-await callS(a.token, 'PUT', `/channels/${studio.id}/studio/engineer/${a.user.id}`)
+const container = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'studio-a', kind: 'studio' })).body
+// The project's channel is where the band meets and records; alice started it, so she is its engineer.
+const project = (await callS(a.token, 'POST', `/channels/${container.id}/studio/projects`, { name: 'Stereo test' })).body
+const studio = await call(a.token, 'GET', `/channels/${project.channel_id}`)
 
 const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${wav}`, '--autoplay-policy=no-user-gesture-required'] }); const errors = []
 // Keep the streams the app gets so the test can measure them: the raw mic, and every remote stream.
@@ -43,7 +45,7 @@ const mk = async (tok) => {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'] }); await ctx.addInitScript(spy)
   const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
   await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok)
-  await p.goto(`${WEB}/channels/${g.id}/${studio.id}`); await p.click('text=Join Voice'); await p.waitForSelector('[data-voice-leave]')
+  await p.goto(`${WEB}/channels/${g.id}/${studio.id}`); const join = p.locator('[data-project-join]').or(p.getByText('Join Voice', { exact: true })).first(); await join.waitFor(); await join.click(); await p.waitForSelector('[data-voice-leave]')
   return p
 }
 const stereo = ([l, r]) => r > 0.02 && l < r * 0.1   // tone on the right, (near) silence on the left

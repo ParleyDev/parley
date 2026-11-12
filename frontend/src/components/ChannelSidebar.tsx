@@ -14,7 +14,7 @@ import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import { takeWelcome } from '../lib/welcome'
 import { VoiceTimer } from './CallExtras'
-import { Bell, BellOff, BookOpenCheck, ListChecks, Tags, DoorOpen, Flag, EyeOff, Pin, PinOff, Check } from 'lucide-react'
+import { AudioLines, Bell, BellOff, BookOpenCheck, ListChecks, Tags, DoorOpen, Flag, EyeOff, Pin, PinOff, Check } from 'lucide-react'
 import { togglePinned } from '../lib/pins'
 
 const NO_PINS: string[] = []
@@ -31,7 +31,7 @@ import { shownName } from '../lib/names'
 /** Channel-list icon by kind; the server's rules channel gets a rulebook. */
 function chanIcon(c: Channel, rulesId?: string | null) {
   if (c.id === rulesId) return <BookOpenCheck size={18} data-rules-icon />
-  return c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'forum' ? (c.media ? <ImageIcon size={18} /> : <MessageSquareText size={18} />) : c.kind === 'directory' ? <LayoutGrid size={18} /> : c.news ? <Megaphone size={18} /> : <Hash size={18} />
+  return c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'project' ? <AudioLines size={18} /> : c.kind === 'forum' ? (c.media ? <ImageIcon size={18} /> : <MessageSquareText size={18} />) : c.kind === 'directory' ? <LayoutGrid size={18} /> : c.news ? <Megaphone size={18} /> : <Hash size={18} />
 }
 export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const t = useT()
@@ -120,7 +120,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const viewHidden = (c: Channel) => (!!viewAs && c.kind !== 'category' && !has(myChannelPerms(useStore.getState(), c.id), P.VIEW_CHANNEL)) || (c.id !== channelId && !!hiddenIds?.includes(c.id))
   const all = Object.values(channels).filter((c) => c.guild_id === guildId && !viewHidden(c)).sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
   const categories = all.filter((c) => c.kind === 'category')
-  const list = all.filter((c) => c.kind !== 'category' && c.kind !== 'thread')
+  const list = all.filter((c) => c.kind !== 'category' && c.kind !== 'thread' && c.kind !== 'project')
   const catIds = new Set(categories.map((c) => c.id))
   const uncategorized = list.filter((c) => !c.parent_id || !catIds.has(c.parent_id))
   const childrenOf = (id: string) => list.filter((c) => c.parent_id === id)
@@ -206,7 +206,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={chanIcon(c, guild?.rules_channel_id)} name={c.name} locked={!!c.e2ee} mentions={c.kind === 'text' && showsMentions({ channels, dms, notifSettings }, c.id) ? mentionCounts[c.id] ?? 0 : 0} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
         unread={channelId !== c.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, c.id)} onClick={() => setMobilePane('content')}
         count={c.user_limit ? `${Object.values(voiceStates).filter((v) => v.channel_id === c.id).length}/${c.user_limit}` : undefined}
-        extra={c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio' ? <VoiceTimer channelId={c.id} /> : undefined}
+        extra={c.kind === 'voice' || c.kind === 'stage' || c.kind === 'project' ? <VoiceTimer channelId={c.id} /> : undefined}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
       {c.voice_status && <div className="ml-8 mr-2 -mt-0.5 mb-0.5 truncate text-xs text-text-2" title={c.voice_status} data-voice-status={c.id}>{c.voice_status}</div>}
       {c.kind === 'text' && Object.keys(myThreads).filter((tid) => channels[tid]?.parent_id === c.id && !threadInfo[tid]?.archived_at).map((tid) => (
@@ -215,7 +215,14 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
           <span className="text-text-2/70">↳</span><span className="truncate">{channels[tid]?.name}</span>
         </button>
       ))}
-      {(c.kind === 'voice' || c.kind === 'stage' || c.kind === 'studio') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
+      {(c.kind === 'voice' || c.kind === 'stage') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
+      {/* A studio's projects that matter now: the open one, ones with a session on, and ones I'm in the band of. */}
+      {c.kind === 'studio' && all.filter((x) => x.kind === 'project' && x.parent_id === c.id && (x.id === channelId || Object.values(voiceStates).some((v) => v.channel_id === x.id) || (!!user && (x.engineer_ids?.includes(user.id) || x.artist_ids?.includes(user.id))))).map((x) => (
+        <div key={x.id} className="ml-4" data-sidebar-project={x.id}>
+          <ChannelRow to={`/channels/${guildId}/${x.id}`} icon={<AudioLines size={16} />} name={x.name} unread={channelId !== x.id && showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, x.id)} onClick={() => setMobilePane('content')} extra={<VoiceTimer channelId={x.id} />} />
+          <VoiceParticipants channelId={x.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />
+        </div>
+      ))}
     </div>
   )
   const copyText = async (label: string, text: string) => { try { await navigator.clipboard.writeText(text); pushToast(t('{label} copied', { label })) } catch { pushToast(t('Clipboard unavailable'), 'error') } }

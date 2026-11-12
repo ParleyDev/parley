@@ -442,7 +442,7 @@ async fn update_member(
         if let Some(cid) = dest {
             let mut ch = sqlx::query_as::<_, crate::models::Channel>(&format!("SELECT {} FROM channels WHERE id = $1 AND guild_id = $2", crate::routes::guilds::CHANNEL_COLS))
                 .bind(cid).bind(id).fetch_optional(&state.db).await?.ok_or_else(|| AppError::BadRequest("Unknown voice channel".into()))?;
-            if !matches!(ch.kind.as_str(), "voice" | "stage" | "studio") { return Err(AppError::BadRequest("That isn't a voice channel".into())) }
+            if !matches!(ch.kind.as_str(), "voice" | "stage" | "project") { return Err(AppError::BadRequest("That isn't a voice channel".into())) }
             perms::attach_overwrites(&state.db, std::slice::from_mut(&mut ch)).await?;
             if !perms::has(ctx.in_channel(uid, p, &ch.overwrites), perms::CONNECT) { return Err(AppError::Forbidden) }
         }

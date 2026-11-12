@@ -58,6 +58,12 @@ pub const MODERATE_MEMBERS: u64 = 1 << 29;
 pub const MANAGE_EXPRESSIONS: u64 = 1 << 30;
 /// Schedule messages to send later (with Send Messages). Deny it on a channel to keep scheduled messages out of it.
 pub const SCHEDULE_MESSAGES: u64 = 1 << 31;
+/// Studio projects: start a new project in a studio (the creator joins its band as an engineer).
+pub const CREATE_PROJECTS: u64 = 1 << 32;
+/// Studio projects: rename, tag, archive and edit any project, and choose its band.
+pub const MANAGE_PROJECTS: u64 = 1 << 33;
+/// Studio projects: delete a project and everything in it (takes, audio, chat, versions).
+pub const DELETE_PROJECTS: u64 = 1 << 34;
 
 /// What a timed-out member loses in every channel: they can still read.
 pub const TIMEOUT_STRIP: u64 = SEND_MESSAGES | ADD_REACTIONS | ATTACH_FILES | CONNECT | SPEAK | STREAM | CREATE_INVITE | CHANGE_NICKNAME | MENTION_EVERYONE;
@@ -97,11 +103,14 @@ pub const ALL: u64 = CREATE_INVITE
     | MANAGE_THREADS
     | MANAGE_EVENTS
     | MANAGE_EXPRESSIONS
-    | SCHEDULE_MESSAGES;
+    | SCHEDULE_MESSAGES
+    | CREATE_PROJECTS
+    | MANAGE_PROJECTS
+    | DELETE_PROJECTS;
 
-/// What a fresh @everyone role gets (must match migration 0002).
+/// What a fresh @everyone role gets (must match migration 0002, plus later grants such as 0153's).
 pub const DEFAULT_EVERYONE: u64 =
-    CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | SEND_TTS_MESSAGES | EMBED_LINKS | READ_MESSAGE_HISTORY | USE_EXTERNAL_EMOJIS | ATTACH_FILES | MENTION_EVERYONE | CONNECT | SPEAK | CHANGE_NICKNAME | SCHEDULE_MESSAGES;
+    CREATE_PROJECTS | CREATE_INVITE | ADD_REACTIONS | STREAM | VIEW_CHANNEL | SEND_MESSAGES | SEND_TTS_MESSAGES | EMBED_LINKS | READ_MESSAGE_HISTORY | USE_EXTERNAL_EMOJIS | ATTACH_FILES | MENTION_EVERYONE | CONNECT | SPEAK | CHANGE_NICKNAME | SCHEDULE_MESSAGES;
 
 /// Allowed when holding any one of `bits` (e.g. Manage Server or the narrower permission).
 pub fn check_any(perms: u64, bits: u64) -> AppResult<()> {
@@ -112,7 +121,7 @@ pub fn check_any(perms: u64, bits: u64) -> AppResult<()> {
 pub fn moderates_threads(p: u64) -> bool { has(p, MANAGE_MESSAGES) || has(p, MANAGE_THREADS) }
 
 /// Powers a member must never be able to give themselves (self-assignable roles, onboarding answers).
-pub const SELF_GRANT_FORBIDDEN: u64 = ADMINISTRATOR | MANAGE_GUILD | MANAGE_ROLES | MANAGE_CHANNELS | KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS | MANAGE_MESSAGES | MANAGE_NICKNAMES | MANAGE_THREADS | MANAGE_EVENTS | MANAGE_EXPRESSIONS | VIEW_AUDIT_LOG | MENTION_EVERYONE | MUTE_MEMBERS | DEAFEN_MEMBERS | MOVE_MEMBERS;
+pub const SELF_GRANT_FORBIDDEN: u64 = ADMINISTRATOR | MANAGE_GUILD | MANAGE_ROLES | MANAGE_CHANNELS | KICK_MEMBERS | BAN_MEMBERS | MODERATE_MEMBERS | MANAGE_MESSAGES | MANAGE_NICKNAMES | MANAGE_THREADS | MANAGE_EVENTS | MANAGE_EXPRESSIONS | VIEW_AUDIT_LOG | MENTION_EVERYONE | MUTE_MEMBERS | DEAFEN_MEMBERS | MOVE_MEMBERS | MANAGE_PROJECTS | DELETE_PROJECTS;
 
 /// Stage moderator in a channel: Manage Channels, or both Mute Members and Move Members there (Discord's Stage
 /// Moderator, granted per stage with a permission overwrite).
@@ -293,13 +302,16 @@ pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResu
     if ids.is_empty() {
         return Ok(());
     }
-    // Studio engineers ride along with the channel payload.
-    let studios: Vec<Uuid> = channels.iter().filter(|c| c.kind == "studio").map(|c| c.id).collect();
+    // A project's band and console ride along with the channel payload.
+    let studios: Vec<Uuid> = channels.iter().filter(|c| c.kind == "project").map(|c| c.id).collect();
     if !studios.is_empty() {
-        let rows: Vec<(Uuid, Uuid)> = sqlx::query_as("SELECT channel_id, user_id FROM studio_engineers WHERE channel_id = ANY($1) ORDER BY added_at").bind(&studios).fetch_all(db).await?;
-        for c in channels.iter_mut() { c.engineer_ids = rows.iter().filter(|(ch, _)| *ch == c.id).map(|(_, u)| *u).collect(); }
+        let rows: Vec<(Uuid, Uuid, String)> = sqlx::query_as("SELECT channel_id, user_id, role FROM studio_engineers WHERE channel_id = ANY($1) ORDER BY added_at").bind(&studios).fetch_all(db).await?;
+        for c in channels.iter_mut() {
+            c.engineer_ids = rows.iter().filter(|r| r.0 == c.id && r.2 == "engineer").map(|r| r.1).collect();
+            c.artist_ids = rows.iter().filter(|r| r.0 == c.id && r.2 == "artist").map(|r| r.1).collect();
+        }
         let configs: Vec<(Uuid, i32, i32, bool, i32, Vec<Uuid>, Option<Uuid>)> = sqlx::query_as("SELECT channel_id, bpm, beats, click, count_in, disarmed, project_id FROM studio_config WHERE channel_id = ANY($1)").bind(&studios).fetch_all(db).await?;
-        for c in channels.iter_mut().filter(|c| c.kind == "studio") {
+        for c in channels.iter_mut().filter(|c| c.kind == "project") {
             c.studio = Some(configs.iter().find(|r| r.0 == c.id).map(|r| crate::models::StudioConfig { bpm: r.1, beats: r.2, click: r.3, count_in: r.4, disarmed: r.5.clone(), project_id: r.6 }).unwrap_or_default());
         }
     }
@@ -451,7 +463,7 @@ async fn refresh_voice(state: &AppState, guild_id: Uuid, vis: &Visibility) -> Ap
             continue;
         }
         // Stage and studio audiences, and the AFK channel, stay suppressed until a moderator (or leaving) lifts it.
-        let sticky = matches!(channel.kind.as_str(), "stage" | "studio") || ctx.guild.afk_channel_id == Some(channel.id);
+        let sticky = matches!(channel.kind.as_str(), "stage" | "project") || ctx.guild.afk_channel_id == Some(channel.id);
         let suppress = !has(p, SPEAK) || (sticky && vs.suppress);
         let can_stream = has(p, STREAM);
         let changed = vs.suppress != suppress || (!can_stream && (vs.self_video || vs.self_stream));
@@ -502,6 +514,9 @@ pub fn catalogue() -> Vec<(&'static str, u64)> {
         ("MANAGE_NICKNAMES", MANAGE_NICKNAMES),
         ("MANAGE_ROLES", MANAGE_ROLES),
         ("MODERATE_MEMBERS", MODERATE_MEMBERS),
+        ("CREATE_PROJECTS", CREATE_PROJECTS),
+        ("MANAGE_PROJECTS", MANAGE_PROJECTS),
+        ("DELETE_PROJECTS", DELETE_PROJECTS),
     ]
 }
 
@@ -513,7 +528,7 @@ mod tests {
     #[test]
     fn default_matches_migration() {
         // 70258241 from migration 0002, plus ATTACH_FILES (32768) from 0003 and MENTION_EVERYONE (131072) from 0018.
-        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768 + 131072 + 4096 + 16384 + 65536 + 262144 + 2147483648);
+        assert_eq!(DEFAULT_EVERYONE, 70258241 + 32768 + 131072 + 4096 + 16384 + 65536 + 262144 + 2147483648 + 4294967296);
     }
 
     #[test]
@@ -884,6 +899,11 @@ mod tests {
 
 /// Is this user an engineer of the studio channel?
 pub async fn is_engineer(db: &PgPool, channel_id: Uuid, user: Uuid) -> AppResult<bool> {
-    let row: Option<(bool,)> = sqlx::query_as("SELECT true FROM studio_engineers WHERE channel_id = $1 AND user_id = $2").bind(channel_id).bind(user).fetch_optional(db).await?;
-    Ok(row.is_some())
+    Ok(band_role(db, channel_id, user).await?.as_deref() == Some("engineer"))
+}
+
+/// Someone's place in a project's band: engineer or artist (None: not in the band).
+pub async fn band_role(db: &PgPool, channel_id: Uuid, user: Uuid) -> AppResult<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT role FROM studio_engineers WHERE channel_id = $1 AND user_id = $2").bind(channel_id).bind(user).fetch_optional(db).await?;
+    Ok(row.map(|r| r.0))
 }

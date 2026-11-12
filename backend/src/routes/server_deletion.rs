@@ -183,6 +183,7 @@ pub async fn finalize(state: &AppState, gid: Uuid, kind: &str) -> AppResult<bool
                  WHERE forwarded_from IN (SELECT id FROM messages WHERE channel_id = ANY($1)) AND NOT (channel_id = ANY($1))")
         .bind(&channels).execute(&mut *tx).await?;
     let files: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM attachments WHERE channel_id = ANY($1)").bind(&channels).fetch_all(&mut *tx).await?;
+    let studio_files = crate::routes::studio::files_of(&state.db, &channels).await?;
     // Server tags people wore lose their text along with the server.
     sqlx::query("UPDATE users SET clan_tag = '', clan_tag_guild = NULL WHERE clan_tag_guild = $1").bind(gid).execute(&mut *tx).await?;
     sqlx::query("INSERT INTO guild_tombstones (id, deletion_type) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING").bind(gid).bind(&kind).execute(&mut *tx).await?;
@@ -190,6 +191,7 @@ pub async fn finalize(state: &AppState, gid: Uuid, kind: &str) -> AppResult<bool
     // stickers, sounds, invites, webhooks, memberships, bans, events, ...).
     sqlx::query("DELETE FROM guilds WHERE id = $1").bind(gid).execute(&mut *tx).await?;
     tx.commit().await?;
+    crate::routes::studio::remove_files(state, studio_files).await;
     for (fid,) in files {
         let _ = tokio::fs::remove_file(state.config.upload_dir.join(fid.to_string())).await;
         let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.thumb"))).await; let _ = tokio::fs::remove_file(state.config.upload_dir.join(format!("{fid}.viz"))).await;

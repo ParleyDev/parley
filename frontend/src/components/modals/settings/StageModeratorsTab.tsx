@@ -1,13 +1,13 @@
 import { Shield, X } from 'lucide-react'
 import { useState } from 'react'
 import { api } from '../../../lib/api'
-import { has, P } from '../../../lib/perms'
+import { has, P, bor, bclear } from '../../../lib/perms'
 import { useStore } from '../../../store'
 import { useT } from '../../../lib/i18n'
 import Dropdown from '../../Dropdown'
 import { shownName } from '../../../lib/names'
 
-const MOD = P.MUTE_MEMBERS | P.MOVE_MEMBERS
+const MOD = bor(P.MUTE_MEMBERS, P.MOVE_MEMBERS)
 
 /**
  * Channel Settings › Stage Moderators (stage channels): roles and members who can run this stage without Manage
@@ -30,12 +30,12 @@ export default function StageModeratorsTab({ channelId }: { channelId: string })
     const [kind, id] = pick.split(':') as ['role' | 'member', string]
     if (!id) return
     const cur = ows.find((o) => o.id === id)
-    try { await api.put(`/channels/${channelId}/permissions/${id}`, { kind, allow: (cur?.allow ?? 0) | MOD, deny: (cur?.deny ?? 0) & ~MOD }); setPick('') } catch (e) { pushToast((e as Error).message, 'error') }
+    try { await api.put(`/channels/${channelId}/permissions/${id}`, { kind, allow: bor(cur?.allow ?? 0, MOD), deny: bclear(cur?.deny ?? 0, MOD) }); setPick('') } catch (e) { pushToast((e as Error).message, 'error') }
   }
   const remove = async (id: string) => {
     const cur = ows.find((o) => o.id === id)
     if (!cur) return
-    const allow = cur.allow & ~MOD
+    const allow = bclear(cur.allow, MOD)
     try {
       if (allow === 0 && cur.deny === 0) await api.delete(`/channels/${channelId}/permissions/${id}`)
       else await api.put(`/channels/${channelId}/permissions/${id}`, { kind: cur.kind, allow, deny: cur.deny })

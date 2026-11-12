@@ -17,14 +17,14 @@ use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
     perms,
-    routes::studio::{broadcast, channel_json, config_of, is_crew, studio_channel, track_path, Track, TRACK_SELECT},
+    routes::studio::{broadcast, channel_json, config_of, is_crew, studio_channel, studio_container, track_path, Track, TRACK_SELECT},
     state::AppState,
 };
 use axum::{
     body::Body,
     extract::{DefaultBodyLimit, Path, Query, State},
     http::{HeaderMap, StatusCode},
-    routing::{get, post, put},
+    routing::{get, post},
     Json, Router,
 };
 use chrono::{DateTime, Utc};
@@ -45,9 +45,8 @@ const MAX_OPS: usize = 500;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/channels/:id/studio/projects", get(list_projects).post(create_project))
-        .route("/channels/:id/studio/project", put(open_project))
         .route("/channels/:id/studio/audio", get(list_audio).post(import_audio).layer(DefaultBodyLimit::max(MAX_IMPORT_BYTES + 1024)))
-        .route("/studio/projects/:pid", get(get_project).delete(delete_project))
+        .route("/studio/projects/:pid", get(get_project).patch(update_project).delete(delete_project))
         .route("/studio/projects/:pid/ops", post(apply_ops))
         .route("/studio/projects/:pid/presence", post(presence))
         .route("/studio/projects/:pid/comments", get(list_comments).post(add_comment))
@@ -80,6 +79,9 @@ pub struct Project {
     pub punch_on: bool,
     /// [{id, ms, name}]
     pub markers: SqlJson<Value>,
+    /// Where it stands in its studio's list: writing, tracking, mixing, done (or empty).
+    pub tag: String,
+    pub archived_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, FromRow, Clone)]
@@ -108,6 +110,8 @@ pub struct Lane {
     pub nudge_ms: i32,
     /// A MIDI track's instrument: {type: synth | drums | sampler, params, audio_id?, root?}.
     pub instrument: Option<SqlJson<Value>>,
+    /// When someone last made it theirs: their takes land on their most recently claimed lane.
+    pub claimed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Serialize, FromRow, Clone)]
@@ -131,14 +135,14 @@ pub struct Clip {
     pub group_id: Option<Uuid>,
 }
 
-const PROJECT_COLS: &str = "id, channel_id, name, bpm, beats, master_gain, created_by, created_at, updated_at, version, master_effects, tempo_map, loop_on, loop_start_ms, loop_end_ms, punch_on, markers";
-const LANE_COLS: &str = "id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument";
+const PROJECT_COLS: &str = "id, channel_id, name, bpm, beats, master_gain, created_by, created_at, updated_at, version, master_effects, tempo_map, loop_on, loop_start_ms, loop_end_ms, punch_on, markers, tag, archived_at";
+const LANE_COLS: &str = "id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument, claimed_at";
 const CLIP_COLS: &str = "id, project_id, lane_id, audio_id, start_ms, in_ms, length_ms, gain, fade_in_ms, fade_out_ms, muted, created_by, notes, group_id";
 
-/// The engineers, Manage Channels, and the band (in the studio's voice, not in its audience).
+/// The project's band (engineers and artists, in its voice room or not), and Manage Projects.
 async fn can_edit(state: &AppState, channel_id: Uuid, uid: Uuid, p: u64) -> AppResult<bool> {
     if is_crew(state, channel_id, uid, p).await? { return Ok(true); }
-    Ok(state.hub.voice_state(uid).is_some_and(|v| v.channel_id == channel_id && !v.suppress))
+    Ok(perms::band_role(&state.db, channel_id, uid).await?.is_some())
 }
 
 async fn editor(state: &AppState, channel_id: Uuid, uid: Uuid) -> AppResult<crate::models::Channel> {
@@ -157,57 +161,86 @@ fn clean_name(s: &str, fallback: &str) -> String {
     if n.is_empty() { fallback.into() } else { n }
 }
 
-async fn list_projects(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<Project>>> {
-    studio_channel(&state.db, id, uid).await?;
-    Ok(Json(sqlx::query_as::<_, Project>(&format!("SELECT {PROJECT_COLS} FROM studio_projects WHERE channel_id = $1 ORDER BY updated_at DESC LIMIT 100")).bind(id).fetch_all(&state.db).await?))
+/// A project in its studio's list: the project, its band, and how much has been recorded in it.
+#[derive(Serialize)]
+pub struct ProjectCard { #[serde(flatten)] project: Project, band: Vec<Uuid>, takes: i64, live: i64, session: Option<String> }
+
+/// `GET /channels/:id/studio/projects?archived=`: a studio's projects, newest activity first.
+async fn list_projects(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Query(q): Query<ListQuery>) -> AppResult<Json<Vec<ProjectCard>>> {
+    let (c, _) = studio_container(&state.db, id, uid).await?;
+    // Only the projects this member can see (a project may have overwrites of its own).
+    let visible: Vec<Uuid> = perms::visible_channels(&state.db, c.guild_id.unwrap(), uid).await?.into_iter().filter(|x| x.parent_id == Some(id) && x.kind == "project").map(|x| x.id).collect();
+    let projects = sqlx::query_as::<_, Project>(&format!("SELECT {PROJECT_COLS} FROM studio_projects WHERE channel_id = ANY($1) AND (archived_at IS NOT NULL) = $2 ORDER BY updated_at DESC LIMIT 200"))
+        .bind(&visible).bind(q.archived).fetch_all(&state.db).await?;
+    let rooms: Vec<Uuid> = projects.iter().map(|p| p.channel_id).collect();
+    let band: Vec<(Uuid, Uuid)> = sqlx::query_as("SELECT channel_id, user_id FROM studio_engineers WHERE channel_id = ANY($1) ORDER BY role DESC, added_at").bind(&rooms).fetch_all(&state.db).await?;
+    let takes: Vec<(Uuid, i64)> = sqlx::query_as("SELECT channel_id, COUNT(*) FROM studio_tracks WHERE channel_id = ANY($1) AND done GROUP BY channel_id").bind(&rooms).fetch_all(&state.db).await?;
+    let voice = state.hub.voice_states_for_channels(&rooms);
+    let open: Vec<(Uuid, String)> = sqlx::query_as("SELECT channel_id, title FROM studio_gatherings WHERE channel_id = ANY($1) AND ended_at IS NULL").bind(&rooms).fetch_all(&state.db).await?;
+    Ok(Json(projects.into_iter().map(|p| {
+        let room = p.channel_id;
+        ProjectCard { band: band.iter().filter(|b| b.0 == room).map(|b| b.1).collect(), takes: takes.iter().find(|t| t.0 == room).map_or(0, |t| t.1), live: voice.iter().filter(|v| v.channel_id == room).count() as i64, session: open.iter().find(|o| o.0 == room).map(|o| o.1.clone()), project: p }
+    }).collect()))
 }
 
 #[derive(Deserialize)]
-struct NewProject { #[serde(default)] name: String, #[serde(default = "yes")] open: bool }
-fn yes() -> bool { true }
+struct ListQuery { #[serde(default)] archived: bool }
 
-/// `POST /channels/:id/studio/projects {name, open}`: a new empty project at the studio's tempo, opened for everyone
-/// unless `open` is false.
+#[derive(Deserialize)]
+struct NewProject { #[serde(default)] name: String, #[serde(default)] tag: String, #[serde(default = "default_bpm")] bpm: i32, #[serde(default = "default_beats")] beats: i32 }
+fn default_bpm() -> i32 { 120 }
+fn default_beats() -> i32 { 4 }
+
+const TAGS: [&str; 5] = ["", "writing", "tracking", "mixing", "done"];
+
+/// `POST /channels/:id/studio/projects {name, tag, bpm, beats}` on a studio (Create Projects): a new empty project,
+/// its own channel under the studio, with its creator as its engineer.
 async fn create_project(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<NewProject>) -> AppResult<(StatusCode, Json<Project>)> {
-    let c = editor(&state, id, uid).await?;
-    let cfg = config_of(&state.db, id).await?;
-    let pid = Uuid::now_v7();
+    let (studio, p) = studio_container(&state.db, id, uid).await?;
+    perms::check(p, perms::CREATE_PROJECTS)?;
+    let gid = studio.guild_id.unwrap();
+    if !TAGS.contains(&req.tag.as_str()) { return Err(AppError::BadRequest("Unknown tag".into())); }
+    if !(40..=300).contains(&req.bpm) || !(1..=12).contains(&req.beats) { return Err(AppError::BadRequest("Tempo must be 40 to 300 BPM and 1 to 12 beats per bar".into())); }
+    let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM channels WHERE parent_id = $1").bind(id).fetch_one(&state.db).await?;
+    if count >= 500 { return Err(AppError::BadRequest("This studio has too many projects; archive or delete some".into())); }
     let name = clean_name(&req.name, &format!("Song {}", Utc::now().format("%Y-%m-%d %H:%M")));
-    let p = sqlx::query_as::<_, Project>(&format!("INSERT INTO studio_projects (id, channel_id, name, bpm, beats, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING {PROJECT_COLS}"))
-        .bind(pid).bind(id).bind(&name).bind(cfg.bpm).bind(cfg.beats).bind(uid).fetch_one(&state.db).await?;
-    if req.open { set_open(&state, &c, Some(&p)).await?; }
-    broadcast(&state, &c, "STUDIO_PROJECTS", json!({ "channel_id": id })).await?;
-    crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.project_create", "channel", Some(id), &c.name, json!({ "project": pid, "name": name })).await;
-    Ok((StatusCode::CREATED, Json(p)))
-}
-
-/// Make `p` the studio's open project (or none), its tempo the studio's.
-async fn set_open(state: &AppState, c: &crate::models::Channel, p: Option<&Project>) -> AppResult<()> {
-    sqlx::query("INSERT INTO studio_config (channel_id) VALUES ($1) ON CONFLICT DO NOTHING").bind(c.id).execute(&state.db).await?;
-    match p {
-        Some(p) => sqlx::query("UPDATE studio_config SET project_id = $2, bpm = $3, beats = $4 WHERE channel_id = $1").bind(c.id).bind(p.id).bind(p.bpm).bind(p.beats).execute(&state.db).await?,
-        None => sqlx::query("UPDATE studio_config SET project_id = NULL WHERE channel_id = $1").bind(c.id).execute(&state.db).await?,
-    };
-    let updated = channel_json(state, c.id).await?;
-    state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(updated));
-    Ok(())
+    let (room, pid) = (Uuid::now_v7(), Uuid::now_v7());
+    let mut tx = state.db.begin().await?;
+    sqlx::query("INSERT INTO channels (id, guild_id, name, kind, topic, position, parent_id, audio_mode, audio_low_latency) VALUES ($1, $2, $3, 'project', '', $4, $5, 'music', true)")
+        .bind(room).bind(gid).bind(&name).bind(count as i32).bind(id).execute(&mut *tx).await?;
+    let project = sqlx::query_as::<_, Project>(&format!("INSERT INTO studio_projects (id, channel_id, name, bpm, beats, created_by, tag) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING {PROJECT_COLS}"))
+        .bind(pid).bind(room).bind(&name).bind(req.bpm).bind(req.beats).bind(uid).bind(&req.tag).fetch_one(&mut *tx).await?;
+    sqlx::query("INSERT INTO studio_config (channel_id, bpm, beats, project_id) VALUES ($1, $2, $3, $4)").bind(room).bind(req.bpm).bind(req.beats).bind(pid).execute(&mut *tx).await?;
+    sqlx::query("INSERT INTO studio_engineers (channel_id, user_id, role) VALUES ($1, $2, 'engineer')").bind(room).bind(uid).execute(&mut *tx).await?;
+    tx.commit().await?;
+    let c = channel_json(&state, room).await?;
+    let target = perms::channel_audience(&state.db, &c).await?;
+    state.hub.emit(target, "CHANNEL_CREATE", json!(c));
+    broadcast(&state, &studio, "STUDIO_PROJECTS", json!({ "channel_id": id })).await?;
+    crate::audit::guild(&state, gid, uid, "studio.project_create", "channel", Some(room), &name, json!({ "project": pid, "studio": id })).await;
+    Ok((StatusCode::CREATED, Json(project)))
 }
 
 #[derive(Deserialize)]
-struct OpenReq { project_id: Option<Uuid> }
+struct ProjectPatch { name: Option<String>, tag: Option<String>, archived: Option<bool> }
 
-/// `PUT /channels/:id/studio/project {project_id}`: open a project for everyone in the studio (null closes it). Not
-/// while a take is recording.
-async fn open_project(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<OpenReq>) -> AppResult<Json<crate::models::Channel>> {
-    let c = editor(&state, id, uid).await?;
-    let recording: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_sessions WHERE channel_id = $1 AND ended_at IS NULL").bind(id).fetch_optional(&state.db).await?;
-    if recording.is_some() { return Err(AppError::Conflict("Stop recording first".into())); }
-    let p = match req.project_id {
-        Some(pid) => { let p = project_row(&state.db, pid).await?; if p.channel_id != id { return Err(AppError::NotFound("Project not found".into())); } Some(p) }
-        None => None,
-    };
-    set_open(&state, &c, p.as_ref()).await?;
-    Ok(Json(channel_json(&state, id).await?))
+/// `PATCH /studio/projects/:pid {name, tag, archived}`: the project's engineers and Manage Projects.
+async fn update_project(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(pid): Path<Uuid>, Json(req): Json<ProjectPatch>) -> AppResult<Json<Project>> {
+    let project = project_row(&state.db, pid).await?;
+    let (c, p) = studio_channel(&state.db, project.channel_id, uid).await?;
+    if !is_crew(&state, c.id, uid, p).await? { return Err(AppError::Forbidden); }
+    if let Some(t) = &req.tag { if !TAGS.contains(&t.as_str()) { return Err(AppError::BadRequest("Unknown tag".into())); } }
+    let name = req.name.as_deref().map(|n| clean_name(n, &project.name));
+    let updated = sqlx::query_as::<_, Project>(&format!("UPDATE studio_projects SET name = COALESCE($2, name), tag = COALESCE($3, tag),
+        archived_at = CASE WHEN $4::bool IS NULL THEN archived_at WHEN $4 THEN COALESCE(archived_at, now()) ELSE NULL END WHERE id = $1 RETURNING {PROJECT_COLS}"))
+        .bind(pid).bind(&name).bind(&req.tag).bind(req.archived).fetch_one(&state.db).await?;
+    if let Some(n) = &name { sqlx::query("UPDATE channels SET name = $2 WHERE id = $1").bind(c.id).bind(n.chars().take(100).collect::<String>()).execute(&state.db).await?; }
+    let room = channel_json(&state, c.id).await?;
+    state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(room));
+    if let Some(sid) = c.parent_id { if let Ok(studio) = channel_json(&state, sid).await { broadcast(&state, &studio, "STUDIO_PROJECTS", json!({ "channel_id": sid })).await?; } }
+    broadcast(&state, &c, "STUDIO_PROJECT", json!({ "project_id": pid, "version": updated.version, "ops": [], "reload": true })).await?;
+    crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.project_update", "channel", Some(c.id), &updated.name, json!({ "project": pid, "tag": req.tag, "archived": req.archived })).await;
+    Ok(Json(updated))
 }
 
 #[derive(Serialize)]
@@ -225,15 +258,16 @@ async fn get_project(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
     Ok(Json(ProjectFull { project, lanes, clips, audio }))
 }
 
+/// `DELETE /studio/projects/:pid` (Delete Projects): the project with everything in it — its channel and chat, takes
+/// and imported audio (files too), comments and versions.
 async fn delete_project(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(pid): Path<Uuid>) -> AppResult<StatusCode> {
     let project = project_row(&state.db, pid).await?;
     let (c, p) = studio_channel(&state.db, project.channel_id, uid).await?;
-    if !is_crew(&state, c.id, uid, p).await? && project.created_by != Some(uid) { return Err(AppError::Forbidden); }
-    let was_open = config_of(&state.db, c.id).await?.project_id == Some(pid);
-    sqlx::query("DELETE FROM studio_projects WHERE id = $1").bind(pid).execute(&state.db).await?;
-    if was_open { set_open(&state, &c, None).await?; }
-    broadcast(&state, &c, "STUDIO_PROJECTS", json!({ "channel_id": c.id })).await?;
-    crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.project_delete", "channel", Some(c.id), &c.name, json!({ "project": pid, "name": project.name })).await;
+    perms::check(p, perms::DELETE_PROJECTS)?;
+    let gid = c.guild_id.unwrap();
+    crate::routes::channels::remove_channel(&state, gid, c.id).await?;
+    if let Some(sid) = c.parent_id { if let Ok(studio) = channel_json(&state, sid).await { broadcast(&state, &studio, "STUDIO_PROJECTS", json!({ "channel_id": sid })).await?; } }
+    crate::audit::guild(&state, gid, uid, "studio.project_delete", "channel", Some(c.id), &project.name, json!({ "project": pid })).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -444,7 +478,7 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
             if cur.as_ref().is_some_and(|c| c.project_id != pid) { return Err(AppError::BadRequest("That lane is in another project".into())); }
             let new = cur.is_none();
             let mut v = cur.unwrap_or(Lane { id: l.id, project_id: pid, name: "Track".into(), color: None, position: 0.0, gain: 1.0, pan: 0.0, mute: false, solo: false, user_id: None,
-                kind: "audio".into(), effects: SqlJson(json!([])), sends: SqlJson(json!({})), automation: SqlJson(json!({})), output_id: None, nudge_ms: 0, instrument: None });
+                kind: "audio".into(), effects: SqlJson(json!([])), sends: SqlJson(json!({})), automation: SqlJson(json!({})), output_id: None, nudge_ms: 0, instrument: None, claimed_at: None });
             // What a lane is stays what it was made as.
             if let Some(k) = l.kind { if new { if !LANE_KINDS.contains(&k.as_str()) { return Err(AppError::BadRequest("Unknown track kind".into())); } v.kind = k; } }
             if let Some(x) = l.effects { v.effects = SqlJson(effects(x)?); }
@@ -469,11 +503,12 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
             if let Some(x) = l.pan { v.pan = finite(x, -1.0, 1.0, "Pan")?; }
             if let Some(x) = l.mute { v.mute = x; }
             if let Some(x) = l.solo { v.solo = x; }
-            if let Some(x) = l.user_id { v.user_id = Some(x); }
-            sqlx::query("INSERT INTO studio_lanes (id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-                ON CONFLICT (id) DO UPDATE SET name = $3, color = $4, position = $5, gain = $6, pan = $7, mute = $8, solo = $9, user_id = $10, effects = $12, sends = $13, automation = $14, output_id = $15, nudge_ms = $16, instrument = $17")
+            // Making a lane someone's makes it where their takes land from now on.
+            if let Some(x) = l.user_id { v.user_id = Some(x); v.claimed_at = Some(Utc::now()); }
+            sqlx::query("INSERT INTO studio_lanes (id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument, claimed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                ON CONFLICT (id) DO UPDATE SET name = $3, color = $4, position = $5, gain = $6, pan = $7, mute = $8, solo = $9, user_id = $10, effects = $12, sends = $13, automation = $14, output_id = $15, nudge_ms = $16, instrument = $17, claimed_at = $18")
                 .bind(v.id).bind(pid).bind(&v.name).bind(&v.color).bind(v.position).bind(v.gain).bind(v.pan).bind(v.mute).bind(v.solo).bind(v.user_id)
-                .bind(&v.kind).bind(&v.effects).bind(&v.sends).bind(&v.automation).bind(v.output_id).bind(v.nudge_ms).bind(&v.instrument).execute(&mut **tx).await?;
+                .bind(&v.kind).bind(&v.effects).bind(&v.sends).bind(&v.automation).bind(v.output_id).bind(v.nudge_ms).bind(&v.instrument).bind(v.claimed_at).execute(&mut **tx).await?;
             Ok(json!({ "op": "lane.put", "lane": v }))
         }
         Op::LaneDel { id } => {
@@ -582,7 +617,7 @@ pub async fn place_take(state: &AppState, c: &crate::models::Channel, sid: Uuid,
     let Some((Some(pid), position, la, lb, punch)) = sqlx::query_as::<_, (Option<Uuid>, i32, Option<i32>, Option<i32>, bool)>("SELECT project_id, position_ms, loop_start_ms, loop_end_ms, punch FROM studio_sessions WHERE id = $1").bind(sid).fetch_optional(&state.db).await? else { return Ok(()) };
     let (Some(uid), Some(dur)) = (t.user_id, t.duration_ms.filter(|d| *d > 0)) else { return Ok(()) };
     let mut ops = Vec::new();
-    let lane: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_lanes WHERE project_id = $1 AND user_id = $2 AND kind = 'audio' ORDER BY position, created_at LIMIT 1").bind(pid).bind(uid).fetch_optional(&state.db).await?;
+    let lane: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_lanes WHERE project_id = $1 AND user_id = $2 AND kind = 'audio' ORDER BY claimed_at DESC NULLS LAST, position, created_at LIMIT 1").bind(pid).bind(uid).fetch_optional(&state.db).await?;
     let lane_id = match lane {
         Some((id,)) => id,
         None => {
@@ -633,10 +668,10 @@ pub async fn place_take(state: &AppState, c: &crate::models::Channel, sid: Uuid,
     Ok(())
 }
 
-/// `GET /channels/:id/studio/audio`: the studio's imported files (its library), newest first.
+/// `GET /channels/:id/studio/audio`: everything recorded or imported into the project, newest first.
 async fn list_audio(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<Track>>> {
     studio_channel(&state.db, id, uid).await?;
-    let mut list = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.channel_id = $1 AND t.kind = 'import' ORDER BY t.created_at DESC LIMIT 200")).bind(id).fetch_all(&state.db).await?;
+    let mut list = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.channel_id = $1 AND t.done ORDER BY t.created_at DESC LIMIT 500")).bind(id).fetch_all(&state.db).await?;
     for a in &mut list { a.url = format!("/api/studio/tracks/{}", a.id); }
     Ok(Json(list))
 }
@@ -842,9 +877,9 @@ async fn restore_version(State(state): State<AppState>, AuthUser(uid): AuthUser,
         .execute(&mut *tx).await?;
     sqlx::query("DELETE FROM studio_lanes WHERE project_id = $1").bind(pid).execute(&mut *tx).await?;
     for l in data["lanes"].as_array().cloned().unwrap_or_default() {
-        sqlx::query("INSERT INTO studio_lanes (id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument)
-            SELECT x.id, $1, x.name, x.color, x.position, x.gain, x.pan, x.mute, x.solo, x.user_id, x.kind, x.effects, x.sends, x.automation, x.output_id, x.nudge_ms, x.instrument
-            FROM jsonb_to_record($2) AS x(id uuid, name text, color text, position real, gain real, pan real, mute bool, solo bool, user_id uuid, kind text, effects jsonb, sends jsonb, automation jsonb, output_id uuid, nudge_ms int, instrument jsonb)
+        sqlx::query("INSERT INTO studio_lanes (id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument, claimed_at)
+            SELECT x.id, $1, x.name, x.color, x.position, x.gain, x.pan, x.mute, x.solo, x.user_id, x.kind, x.effects, x.sends, x.automation, x.output_id, x.nudge_ms, x.instrument, x.claimed_at
+            FROM jsonb_to_record($2) AS x(id uuid, name text, color text, position real, gain real, pan real, mute bool, solo bool, user_id uuid, kind text, effects jsonb, sends jsonb, automation jsonb, output_id uuid, nudge_ms int, instrument jsonb, claimed_at timestamptz)
             WHERE x.user_id IS NULL OR EXISTS (SELECT 1 FROM users WHERE id = x.user_id)")
             .bind(pid).bind(&l).execute(&mut *tx).await?;
     }

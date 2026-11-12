@@ -235,11 +235,15 @@ export async function importFiles(channelId: string, files: File[], at: number, 
 }
 
 /** Put a recorded take (from the Sessions panel) into the project: on its member's lane, or a new one, at `at`. */
+/** Where someone's takes land: the audio track they most recently made theirs (as the server places them). */
+export const takeLane = (lanes: Record<string, StudioLane>, uid: string | null | undefined) =>
+  uid ? sortedLanes(lanes).filter((l) => l.kind === 'audio' && l.user_id === uid).sort((a, b) => (b.claimed_at ?? '').localeCompare(a.claimed_at ?? ''))[0] : undefined
+
 export function addTake(track: StudioTrack, at: number) {
   const s = get()
   if (!s.project || !track.duration_ms) return
   set({ audio: { ...s.audio, [track.id]: track } })
-  const lane = sortedLanes(s.lanes).find((l) => track.user_id && l.user_id === track.user_id)
+  const lane = takeLane(s.lanes, track.user_id)
   const laneId = lane?.id ?? newId()
   const ops: Op[] = []
   if (!lane) ops.push({ op: 'lane.put', lane: { id: laneId, name: track.display_name, position: (sortedLanes(s.lanes).pop()?.position ?? -1) + 1, ...(track.user_id ? { user_id: track.user_id } : {}) } })
@@ -628,7 +632,7 @@ function follow() {
   const sync = () => {
     const s = useStore.getState()
     const ch = s.myVoiceChannelId ? s.channels[s.myVoiceChannelId] : undefined
-    const pid = ch?.kind === 'studio' ? ch.studio?.project_id ?? null : null
+    const pid = ch?.kind === 'project' ? ch.studio?.project_id ?? null : null
     if (pid && get().project?.id !== pid && loadingId !== pid) void loadProject(pid)
     const live: StudioSession | undefined = ch ? s.studio[ch.id]?.find((x) => !x.ended_at) : undefined
     // A take recorded alone is backed only for whoever records it.

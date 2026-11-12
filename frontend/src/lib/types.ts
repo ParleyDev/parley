@@ -193,7 +193,7 @@ export interface Channel {
   id: string
   guild_id: string | null
   name: string
-  kind: 'text' | 'voice' | 'stage' | 'studio' | 'dm' | 'group' | 'category' | 'thread' | 'forum' | 'directory'
+  kind: 'text' | 'voice' | 'stage' | 'studio' | 'project' | 'dm' | 'group' | 'category' | 'thread' | 'forum' | 'directory'
   topic: string
   position: number
   created_at: string
@@ -213,9 +213,11 @@ export interface Channel {
   user_limit?: number
   /** Voice channels: what's going on, set by people in it; cleared when it empties. */
   voice_status?: string
-  /** Studio channels: the engineers (several allowed). */
+  /** Projects: the band's engineers (several allowed). */
   engineer_ids?: string[]
-  /** Studio channels: the console's shared settings. */
+  /** Projects: the band's artists. */
+  artist_ids?: string[]
+  /** Projects: the console's shared settings. */
   studio?: StudioConfig
   overwrites?: Overwrite[]
   /** Spoiler channel: a warning before you first see it; media stays blurred until clicked. */
@@ -254,8 +256,10 @@ export interface StudioProject { id: string; channel_id: string; name: string; b
   loop_on?: boolean; loop_start_ms?: number | null; loop_end_ms?: number | null
   /** Recording keeps only what falls in the loop range. */
   punch_on?: boolean
+  /** Where it stands in its studio's list. */
+  tag?: ProjectTag; archived_at?: string | null
   markers?: { id: string; ms: number; name: string }[] }
-export interface StudioLane { id: string; project_id: string; name: string; color: string | null; position: number; gain: number; pan: number; mute: boolean; solo: boolean; user_id: string | null
+export interface StudioLane { id: string; project_id: string; name: string; color: string | null; position: number; gain: number; pan: number; mute: boolean; solo: boolean; user_id: string | null; claimed_at?: string | null
   /** audio (clips of audio), midi (note clips played by `instrument`) or bus (a return the others send to). */
   kind: 'audio' | 'midi' | 'bus'
   effects: import('./fx').Effect[]
@@ -270,6 +274,11 @@ export interface StudioClip { id: string; project_id: string; lane_id: string; a
   notes?: import('./instruments').Note[] | null
   /** Takes of one loop recording share a group; one plays, the others are muted alternatives. */
   group_id?: string | null }
+export type ProjectTag = '' | 'writing' | 'tracking' | 'mixing' | 'done'
+/** A project in its studio's list: who's in its band, how many takes it has, how many are in its voice room now. */
+export interface ProjectCard extends StudioProject { band: string[]; takes: number; live: number; session: string | null }
+/** A project's session: a live gathering in its voice room, with who was there and how many takes it got. */
+export interface Gathering { id: string; channel_id: string; title: string; started_by: string | null; started_at: string; ended_at: string | null; people: string[]; takes: number }
 export interface StudioProjectFull { project: StudioProject; lanes: StudioLane[]; clips: StudioClip[]; audio: StudioTrack[] }
 
 export interface Overwrite { id: string; kind: 'role' | 'member'; allow: number; deny: number }

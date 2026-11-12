@@ -2,7 +2,7 @@ import { Check, Minus, Plus, Shield, Trash2, User as UserIcon, X } from 'lucide-
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { myChannelPerms, useStore } from '../../../store'
-import { canManageRole, has, P, PERMS, sortedRoles, EMPTY_ROLES } from '../../../lib/perms'
+import { canManageRole, has, P, sortedRoles, EMPTY_ROLES, bor, bclear, permsFor } from '../../../lib/perms'
 import Avatar from '../../Avatar'
 import { Toggle } from '../SettingsShell'
 import { useT, tn } from '../../../lib/i18n'
@@ -44,14 +44,14 @@ export default function ChannelPermissionsTab({ channelId }: { channelId: string
   const setPrivate = async (v: boolean) => {
     const cur = everyone ?? { allow: 0, deny: 0 }
     if (v) {
-      await put(guildId, 'role', cur.allow & ~P.VIEW_CHANNEL, cur.deny | P.VIEW_CHANNEL)
+      await put(guildId, 'role', bclear(cur.allow, P.VIEW_CHANNEL), bor(cur.deny, P.VIEW_CHANNEL))
       // Keep yourself in, unless you'd still see it anyway.
       if (guild.owner_id !== me.id && !isAdmin) {
         const mine = ows.find((o) => o.id === me.id)
-        await put(me.id, 'member', (mine?.allow ?? 0) | P.VIEW_CHANNEL, (mine?.deny ?? 0) & ~P.VIEW_CHANNEL)
+        await put(me.id, 'member', bor(mine?.allow ?? 0, P.VIEW_CHANNEL), bclear(mine?.deny ?? 0, P.VIEW_CHANNEL))
       }
     } else {
-      await put(guildId, 'role', cur.allow, cur.deny & ~P.VIEW_CHANNEL)
+      await put(guildId, 'role', cur.allow, bclear(cur.deny, P.VIEW_CHANNEL))
     }
   }
 
@@ -66,11 +66,11 @@ export default function ChannelPermissionsTab({ channelId }: { channelId: string
   const selMember = members?.[selected]
   const selName = selRole ? selRole.name : selMember ? shownName(selMember, selMember, notes[selMember.user_id]?.nickname) : t('Unknown')
   const selEditable = selRole ? canManageRole(ctx, me.id, selRole) : true
-  const relevant = PERMS.filter((p) => p.channel && (p.channel === 'both' || p.channel === channel.kind))
+  const relevant = permsFor(channel.kind)
 
   const setTri = (bit: number, v: Tri) => {
-    const allow = v === 'allow' ? sel.allow | bit : sel.allow & ~bit
-    const deny = v === 'deny' ? sel.deny | bit : sel.deny & ~bit
+    const allow = v === 'allow' ? bor(sel.allow, bit) : bclear(sel.allow, bit)
+    const deny = v === 'deny' ? bor(sel.deny, bit) : bclear(sel.deny, bit)
     put(selected, sel.kind, allow, deny)
   }
 

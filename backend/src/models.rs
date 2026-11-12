@@ -484,11 +484,15 @@ pub struct Channel {
     #[sqlx(default)]
     #[serde(default)]
     pub voice_status: String,
-    /// Studio channels: the engineers (run recordings, manage the band); filled by `perms::attach_overwrites`.
+    /// Projects: the band's engineers (run recordings, manage the band); filled by `perms::attach_overwrites`.
     #[sqlx(skip)]
     #[serde(default)]
     pub engineer_ids: Vec<Uuid>,
-    /// Studio channels: the console's shared settings; filled by `perms::attach_overwrites`.
+    /// Projects: the band's artists (edit, record, are heard in its voice room).
+    #[sqlx(skip)]
+    #[serde(default)]
+    pub artist_ids: Vec<Uuid>,
+    /// Projects: the console's shared settings; filled by `perms::attach_overwrites`.
     #[sqlx(skip)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub studio: Option<StudioConfig>,

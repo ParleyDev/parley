@@ -8,8 +8,8 @@ import { WEB, B, S, IP, reg, call, callS, raw, ok, finish } from '../lib.mjs'
 const a = await reg('alice'); const b = await reg('bob'); const d = await reg('dave')
 const g = await call(a.token, 'POST', '/guilds', { name: `DAW ${S}` })
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); for (const u of [b, d]) await call(u.token, 'POST', `/invites/${inv.code}`)
-const st = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'daw', kind: 'studio' })).body
-await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${a.user.id}`, { role: 'engineer' })
+const studio = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'daw', kind: 'studio' })).body
+let st = null
 const chan = () => call(a.token, 'GET', `/channels/${st.id}`)
 const full = (pid) => call(a.token, 'GET', `/studio/projects/${pid}`)
 const ops = (tok, pid, list) => callS(tok, 'POST', `/studio/projects/${pid}/ops`, { ops: list })
@@ -24,13 +24,15 @@ const wav = (sec) => {
 const importAudio = (tok, name, body, dur, type = 'audio/wav') => fetch(`${B}/channels/${st.id}/studio/audio?name=${encodeURIComponent(name)}&duration_ms=${dur}`, { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': type, 'X-Forwarded-For': IP }, body })
 
 console.log('-- projects')
-let r = await callS(d.token, 'POST', `/channels/${st.id}/studio/projects`, { name: 'Nope' })
-ok('someone outside the band cannot start a project', r.status === 403)
-await call(a.token, 'PATCH', `/channels/${st.id}/studio/config`, { bpm: 100 })
-r = await callS(a.token, 'POST', `/channels/${st.id}/studio/projects`, { name: 'First Song' })
+// Starting a project needs Create Projects on the studio (bit 32): take it from @everyone here.
+await callS(a.token, 'PUT', `/channels/${studio.id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 2 ** 32 })
+let r = await callS(d.token, 'POST', `/channels/${studio.id}/studio/projects`, { name: 'Nope' })
+ok('without Create Projects nobody starts a project', r.status === 403)
+r = await callS(a.token, 'POST', `/channels/${studio.id}/studio/projects`, { name: 'First Song', bpm: 100 })
 const P = r.body
-ok('the engineer starts a project at the studio\'s tempo, opened for everyone', r.status === 201 && P.bpm === 100 && (await chan()).studio.project_id === P.id, JSON.stringify(r.body))
-ok('the studio lists it', (await call(d.token, 'GET', `/channels/${st.id}/studio/projects`)).some((x) => x.id === P.id))
+st = r.status === 201 ? await call(a.token, 'GET', `/channels/${P.channel_id}`) : null
+ok('the owner starts a project: its own channel under the studio, at its tempo, with her as its engineer', r.status === 201 && P.bpm === 100 && st?.kind === 'project' && st.parent_id === studio.id && st.studio.project_id === P.id && st.engineer_ids.includes(a.user.id), JSON.stringify(r.body))
+ok('the studio lists it', (await call(d.token, 'GET', `/channels/${studio.id}/studio/projects`)).some((x) => x.id === P.id))
 
 console.log('-- import and ops')
 r = await importAudio(a.token, 'notes.txt', Buffer.from('hello'), 0, 'text/plain')
@@ -58,12 +60,12 @@ ok('and the console\'s tempo is the project\'s', (await full(P.id)).project.bpm 
 
 console.log('-- live co-editing')
 const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
-const mk = async (tok) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'], acceptDownloads: true }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); await p.waitForSelector('text=Join Voice'); await p.click('text=Join Voice'); await p.waitForSelector('[data-voice-leave]'); return p }
+const mk = async (tok) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'], acceptDownloads: true }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); const join = p.locator('[data-project-join]').or(p.getByText('Join Voice', { exact: true })).first(); await join.waitFor(); await join.click(); await p.waitForSelector('[data-voice-leave]'); return p }
 const pa = await mk(a.token); const pb = await mk(b.token)
 await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${b.user.id}`, { role: 'artist' })
 await pa.waitForSelector('[data-daw]')
 await pb.waitForSelector('[data-daw]', { timeout: 10000 }).catch(() => {})
-ok('with a project open the band gets the DAW, not just the engineer', await pa.locator(`[data-daw-project="${P.id}"]`).count() === 1 && await pb.locator('[data-daw]').count() === 1)
+ok('with a project open the band gets the DAW, not just the engineer', (await pa.locator('[data-daw-project-name]').textContent()) === 'First Song' && await pb.locator('[data-daw]').count() === 1)
 await pa.waitForSelector(`[data-daw-clip="${C1}"] [data-daw-wave="1"]`, { timeout: 15000 }).catch(() => {})
 ok('the clip shows its waveform', await pa.locator(`[data-daw-clip="${C1}"] [data-daw-wave="1"]`).count() === 1)
 await pa.locator('[data-daw-zoom-in]').click()
@@ -129,22 +131,35 @@ ok('the backing stops with the take', await pb.evaluate(() => window.__parleyDaw
 await pa.waitForFunction((id) => !!document.querySelector(`[data-daw-lane-head="${id}"]`), bLane.id, { timeout: 8000 }).catch(() => {})
 ok('the new lanes and clips show up', await pa.locator(`[data-daw-lane-head="${bLane.id}"]`).count() === 1)
 
+console.log('-- recording onto a chosen track')
+const L2 = crypto.randomUUID()
+await ops(a.token, P.id, [{ op: 'lane.put', lane: { id: L2, name: 'Overdub', position: 50 } }])
+await pb.waitForSelector(`[data-daw-rec-here="${L2}"]`, { timeout: 8000 }).catch(() => {})
+ok('your own track shows as where your takes land', await pb.locator(`[data-daw-rec-here="${bLane.id}"][aria-pressed="true"]`).count() === 1)
+await pb.click(`[data-daw-rec-here="${L2}"]`)
+await pb.waitForSelector(`[data-daw-rec-here="${L2}"][aria-pressed="true"]`, { timeout: 5000 }).catch(() => {})
+ok('a band member picks another track to record on', await pb.locator(`[data-daw-rec-here="${L2}"][aria-pressed="true"]`).count() === 1 && (await full(P.id)).lanes.find((l) => l.id === L2)?.user_id === b.user.id)
+await pa.click('[data-daw-rtz]')
+await pa.click('[data-daw-record]')
+await pb.waitForFunction(() => window.__parleyStudio?.recording === true, null, { timeout: 10000 }).catch(() => {})
+await pa.waitForTimeout(2500)
+await pa.click('[data-daw-record]')
+let f3
+for (let i = 0; i < 40; i++) { f3 = await full(P.id); if (f3.clips.some((c) => c.lane_id === L2)) break; await pa.waitForTimeout(500) }
+ok('the next take lands on the chosen track, not on the first one', f3.clips.some((c) => c.lane_id === L2) && f3.clips.filter((c) => c.lane_id === bLane.id).length === f2.clips.filter((c) => c.lane_id === bLane.id).length, JSON.stringify(f3.clips.map((c) => c.lane_id)))
+
 console.log('-- export, sessions, close')
 await pa.click('[data-daw-export-open]'); await pa.click('[data-daw-export-mix]')
 await pa.waitForFunction(() => (window.__parleyDawExport ?? 0) > 44, null, { timeout: 30000 }).catch(() => {})
 ok('export renders the project to a WAV', await pa.evaluate(() => (window.__parleyDawExport ?? 0) > 1000))
-const sess = (await call(a.token, 'GET', `/channels/${st.id}/studio/sessions`))[0]
+const sess = (await call(a.token, 'GET', `/channels/${st.id}/studio/sessions`)).find((x) => x.tracks.some((t) => t.id === bTake.id))
 ok('the take is also in Sessions, recorded into the project', sess.project_id === P.id && sess.position_ms === 0)
 r = await raw(a.token, 'DELETE', `/channels/${st.id}/studio/sessions/${sess.id}`)
-ok('deleting the session keeps the takes the project uses', r.status === 204 && (await raw(a.token, 'GET', `/studio/tracks/${bTake.id}`)).status === 200 && (await full(P.id)).clips.length === f2.clips.length)
-await pa.click(`[data-daw-project="${P.id}"]`); await pa.click('[data-daw-close-project]')
-await pa.waitForSelector('[data-studio-console]', { timeout: 5000 }).catch(() => {})
-ok('closing the project goes back to the takes console (for the engineer)', (await chan()).studio.project_id === null && await pa.locator('[data-console-new-project]').count() === 1)
-ok('and the artist loses the console', await pb.locator('[data-daw], [data-studio-console]').count() === 0)
+ok('deleting the session keeps the takes the project uses', r.status === 204 && (await raw(a.token, 'GET', `/studio/tracks/${bTake.id}`)).status === 200 && (await full(P.id)).clips.length === f3.clips.length)
 r = await raw(b.token, 'DELETE', `/studio/projects/${P.id}`)
-ok('an artist cannot delete someone else\'s project', r.status === 403)
+ok('deleting a project needs Delete Projects (an artist has not)', r.status === 403)
 r = await raw(a.token, 'DELETE', `/studio/projects/${P.id}`)
-ok('the engineer can', r.status === 204 && (await call(a.token, 'GET', `/channels/${st.id}/studio/projects`)).length === 0)
+ok('the owner can: the project, its channel and its audio go', r.status === 204 && (await call(a.token, 'GET', `/channels/${studio.id}/studio/projects`)).length === 0 && (await raw(a.token, 'GET', `/channels/${st.id}`)).status === 404 && (await raw(a.token, 'GET', `/studio/tracks/${beat.id}`)).status === 404)
 
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

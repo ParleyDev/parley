@@ -1,7 +1,7 @@
 import { CaptionsButton, CaptionsOverlay } from './Captions'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useShallow } from 'zustand/react/shallow'
-import { Disc3, Hand, SlidersHorizontal, Megaphone, HeadphoneOff, ListMusic, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
+import { Disc3, Hand, SlidersHorizontal, Megaphone, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
 import ContextMenu, { useContextMenu } from './ContextMenu'
@@ -13,7 +13,8 @@ import { useLandscape, usePhone } from '../lib/swipe'
 import type { Channel, User, VoiceState } from '../lib/types'
 import { screenShareSupported, voice } from '../lib/voice'
 import Avatar from './Avatar'
-import StudioPanel from './StudioPanel'
+import { projectRights } from '../lib/projects'
+import ProjectSession from './ProjectSession'
 import StudioConsole from './StudioConsole'
 import { ActivitiesButton, ActivityChips, ActivityFrame, ClipButton } from './Activities'
 import { loadActivities, useActivities, useCallActivities } from '../lib/activities'
@@ -73,21 +74,21 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const canSpeak = has(perms, P.SPEAK)
   const [board, setBoard] = useState(false)
   // Stage channels: speakers are the unsuppressed participants; everyone else is the audience (can raise a hand).
-  const isStudio = channel.kind === 'studio'
+  // A studio project: its band (engineers and artists) is heard, everyone else in its voice room is the audience.
+  const isStudio = channel.kind === 'project'
   const isStage = channel.kind === 'stage' || isStudio
   const engineers = channel.engineer_ids ?? []
-  const isEngineer = isStudio && !!me && engineers.includes(me.id)
-  // The console: engineers, and with a project open everyone in the band (they edit it together).
-  const inBand = isStudio && !!me && participants.some((p) => p.user_id === me.id && !p.suppress)
-  const hasConsole = isEngineer || (inBand && !!channel.studio?.project_id)
+  const artists = channel.artist_ids ?? []
+  const rights = isStudio ? projectRights(channel) : null
+  const isEngineer = !!rights?.engineer
+  // The console: the band and project managers, in the voice room or not (they edit the project any time).
+  const hasConsole = !!rights?.edit
   // Stage moderators: Manage Channels, or Mute + Move Members on this stage (backend perms::stage_mod).
-  const isMod = has(perms, P.MANAGE_CHANNELS) || (has(perms, P.MUTE_MEMBERS) && has(perms, P.MOVE_MEMBERS)) || isEngineer
-  const [sessionsOpen, setSessionsOpen] = useState(false)
+  const isMod = has(perms, P.MANAGE_CHANNELS) || (has(perms, P.MUTE_MEMBERS) && has(perms, P.MOVE_MEMBERS)) || !!rights?.manage
   // The engineer's console (StudioConsole) takes the stage, with the band's tiles in a strip; open by default.
   const [consoleOpen, setConsoleOpen] = useState(() => { try { return localStorage.getItem(CONSOLE_KEY) !== '0' } catch { return true } })
   const toggleConsole = () => setConsoleOpen((o) => { try { localStorage.setItem(CONSOLE_KEY, o ? '0' : '1') } catch { /* ignore */ } return !o })
   const chatPanel = useResizablePanel('voiceChat', 400)
-  const sessionsPanel = useResizablePanel('studioSessions', 420)
   const liveSession = useStore((s) => (isStudio ? s.studio[channel.id]?.find((x) => !x.ended_at) : undefined))
   const [recBusy, setRecBusy] = useState(false)
   const record = async () => {
@@ -96,7 +97,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   }
   const setRole = async (uid: string, role: 'engineer' | 'artist' | 'audience') => { try { await api.put(`/channels/${channel.id}/studio/role/${uid}`, { role }); setRoleMenu(null) } catch (e) { pushToast((e as Error).message, 'error') } }
   const [roleMenu, setRoleMenu] = useState<string | null>(null)
-  const roleOf = (uid: string, suppress: boolean | undefined) => (engineers.includes(uid) ? 'engineer' : suppress ? 'audience' : 'artist')
+  const roleOf = (uid: string, _suppress?: boolean) => (engineers.includes(uid) ? 'engineer' : artists.includes(uid) ? 'artist' : 'audience')
   /** Promote / demote between engineer, artist and audience; moderators and engineers for anyone, members can step down. */
   const RoleMenu = ({ uid }: { uid: string }) => {
     const st = participants.find((x) => x.user_id === uid)
@@ -243,6 +244,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
       <header className="h-12 shrink-0 px-4 phone:px-2 flex items-center gap-2 border-b border-line">
         <MobileBack />
         {isStudio ? <Disc3 size={22} className="text-text-2 shrink-0" /> : isStage ? <Radio size={22} className="text-text-2 shrink-0" /> : <Volume2 size={22} className="text-text-2 shrink-0" />}<span className="font-bold truncate">{channel.name}</span>
+        {isStudio && <ProjectSession channel={channel} />}
         {isStudio && liveSession && <span className="flex items-center gap-1.5 rounded-full bg-danger/20 px-2 py-0.5 text-[11px] font-bold uppercase text-danger" data-studio-rec><span className="h-2 w-2 rounded-full bg-danger animate-pulse" />{t('REC · {name}', { name: liveSession.name })}</span>}
         {/* Phones: the name and the people count; encryption and channel status are a desktop header's details. */}
         <span className="phone:hidden flex"><CallLock channelId={channel.id} /></span>
@@ -252,30 +254,30 @@ export default function VoiceView({ channel }: { channel: Channel }) {
         {inThis && !suppressed && myVs?.deaf && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-deafened>{t('Deafened by a moderator')}</span>}
         {inThis && !suppressed && !myVs?.deaf && myVs?.mute && <span className="rounded-md bg-danger/20 text-danger px-2 py-0.5 text-[11px] font-bold uppercase" data-server-muted>{t('Muted by a moderator')}</span>}
         <span className="ml-auto flex items-center gap-1">
-          {hasConsole && inThis && <button onClick={toggleConsole} title={consoleOpen ? t('Hide console') : t('Show console')} className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${consoleOpen ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} aria-pressed={consoleOpen} data-studio-console-toggle><SlidersHorizontal size={20} /></button>}
-          {isStudio && <button onClick={() => setSessionsOpen((o) => !o)} title={t('Sessions')} className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${sessionsOpen ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} data-studio-toggle><ListMusic size={20} /></button>}
+          {isStudio && !inThis && <button onClick={() => voice.join(channel.id)} disabled={!canConnect || connecting} className="btn-primary h-8 shrink-0 py-0 text-xs" data-project-join><Mic size={14} /> {t('Join session')}</button>}
+          {hasConsole && <button onClick={toggleConsole} title={consoleOpen ? t('Hide console') : t('Show console')} className={`h-9 w-9 shrink-0 rounded-md flex items-center justify-center hover:bg-bg-3 ${consoleOpen ? 'text-text-0' : 'text-text-2 hover:text-text-0'}`} aria-pressed={consoleOpen} data-studio-console-toggle><SlidersHorizontal size={20} /></button>}
           {chatToggle}<MembersToggle /></span>
       </header>
 
-      <div className="flex-1 min-h-0 flex" ref={(el) => { chatPanel.setContainer(el); sessionsPanel.setContainer(el) }}>
+      <div className="flex-1 min-h-0 flex" ref={(el) => chatPanel.setContainer(el)}>
         {/* Stage */}
         <div className="flex-1 min-w-0 flex flex-col">
-          {preJoin ? <PreJoin channel={channel} participants={participants} users={users} canConnect={canConnect} connecting={connecting} switching={!!myChannel} recording={liveSession?.name} /> : (
+          {preJoin && !(hasConsole && consoleOpen) ? <PreJoin channel={channel} participants={participants} users={users} canConnect={canConnect} connecting={connecting} switching={!!myChannel} recording={liveSession?.name} /> : (
           <div className="flex-1 min-h-0 overflow-hidden p-4 phone:p-2 flex flex-col gap-3">
             {!isStage && <ActivityChips channelId={channel.id} inCall={inThis} />}
-            {count === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center">
-                <div className="h-20 w-20 rounded-full bg-bg-3 flex items-center justify-center mb-4"><Volume2 size={36} className="text-text-1" /></div>
-                <h2 className="text-2xl font-bold">{channel.name}</h2>
-                <p className="text-text-2 mt-2 max-w-sm">{t('No one is here yet. Join to start a call, or say something in chat.')}</p>
-              </div>
-            ) : hasConsole && consoleOpen ? (
+            {hasConsole && consoleOpen ? (
               <>
                 <StudioConsole channel={channel} onClose={toggleConsole} />
                 {shown.length > 0 && <div className="shrink-0 flex gap-3 overflow-x-auto pb-1" data-console-tiles>
                   {shown.map((x) => <div key={x.key} className="w-48 phone:w-28 shrink-0">{renderTile(x, false)}</div>)}
                 </div>}
               </>
+            ) : count === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center">
+                <div className="h-20 w-20 rounded-full bg-bg-3 flex items-center justify-center mb-4"><Volume2 size={36} className="text-text-1" /></div>
+                <h2 className="text-2xl font-bold">{channel.name}</h2>
+                <p className="text-text-2 mt-2 max-w-sm">{t('No one is here yet. Join to start a call, or say something in chat.')}</p>
+              </div>
             ) : activity ? (
               <>
                 <div className="relative flex-1 min-h-0"><ActivityFrame session={activity} />{phone && <ExpandButton onClick={() => setStage('activity')} />}</div>
@@ -346,7 +348,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                     <ControlButton label={liveSession ? t('Stop recording') : t('Record')} on={!!liveSession} tone="danger" onClick={record} disabled={recBusy} data-studio-record="">{liveSession ? <span className="h-3.5 w-3.5 rounded-sm bg-danger" /> : <span className="h-3.5 w-3.5 rounded-full bg-danger" />}</ControlButton>
                   )}
                   {isStage && suppressed && <ControlButton label={handUp ? t('Lower Hand') : t('Raise Hand')} on={handUp} onClick={toggleHand}><Hand size={20} /></ControlButton>}
-                  {isStage && !suppressed && !isMod && <ControlButton label={t('Leave the stage')} onClick={() => toAudience(me!.id)}><Hand size={20} /></ControlButton>}
+                  {isStage && !isStudio && !suppressed && !isMod && <ControlButton label={t('Leave the stage')} onClick={() => toAudience(me!.id)}><Hand size={20} /></ControlButton>}
                   <ReactButton />
                   {inThis && <CaptionsButton channelId={channel.id} />}
                   {channel.guild_id && channel.kind === 'voice' && has(perms, P.PRIORITY_SPEAKER) && <ControlButton label={priorityOn ? t('Priority Speaker: on') : t('Priority Speaker')} on={priorityOn} onClick={() => { voice.setPriority(!priorityOn); setPriorityOn(!priorityOn) }} data-priority-toggle=""><Megaphone size={20} /></ControlButton>}
@@ -386,7 +388,6 @@ export default function VoiceView({ channel }: { channel: Channel }) {
           </div>}
         </div>
 
-        {isStudio && sessionsOpen && <StudioPanel channelId={channel.id} canManage={isMod} onClose={() => setSessionsOpen(false)} width={sessionsPanel.width} handle={<div {...sessionsPanel.handleProps} />} />}
         {phone && stage && (() => {
           const tile = stage === 'activity' ? null : shown.find((x) => x.key === stage)
           if (stage === 'activity' ? !activity : !tile) { queueMicrotask(() => setStage(null)); return null }
@@ -439,7 +440,7 @@ function PreJoin({ channel, participants, users, canConnect, connecting, switchi
   const t = useT()
   const members = useStore((s) => (channel.guild_id ? s.members[channel.guild_id] : undefined))
   const notes = useStore((s) => s.notes)
-  const isStudio = channel.kind === 'studio', isStage = channel.kind === 'stage' || isStudio
+  const isStudio = channel.kind === 'project', isStage = channel.kind === 'stage' || isStudio
   const onStage = isStage ? participants.filter((p) => !p.suppress) : participants
   const listening = participants.length - onStage.length
   const people = onStage.map((p) => users[p.user_id]).filter((u): u is User => !!u)

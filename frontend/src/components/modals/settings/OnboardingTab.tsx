@@ -1,14 +1,14 @@
 import { Plus, Trash2, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { api } from '../../../lib/api'
-import { EMPTY_ROLES, P, sortedRoles } from '../../../lib/perms'
+import { EMPTY_ROLES, P, sortedRoles, bor, band } from '../../../lib/perms'
 import type { Onboarding, OnboardingQuestion } from '../../../lib/types'
 import { useStore } from '../../../store'
 import { useT } from '../../../lib/i18n'
 import Dropdown from '../../Dropdown'
 
 /** Roles an answer may never grant (mirrors perms::SELF_GRANT_FORBIDDEN). */
-const FORBIDDEN = P.ADMINISTRATOR | P.KICK_MEMBERS | P.BAN_MEMBERS | P.MANAGE_CHANNELS | P.MANAGE_GUILD | P.MANAGE_MESSAGES | P.MANAGE_ROLES | P.MODERATE_MEMBERS | P.MANAGE_NICKNAMES | P.MUTE_MEMBERS | P.DEAFEN_MEMBERS | P.MOVE_MEMBERS | P.MANAGE_THREADS | P.MANAGE_EVENTS | P.MANAGE_EXPRESSIONS | P.VIEW_AUDIT_LOG | P.MENTION_EVERYONE
+const FORBIDDEN = bor(P.ADMINISTRATOR, P.KICK_MEMBERS, P.BAN_MEMBERS, P.MANAGE_CHANNELS, P.MANAGE_GUILD, P.MANAGE_MESSAGES, P.MANAGE_ROLES, P.MODERATE_MEMBERS, P.MANAGE_NICKNAMES, P.MUTE_MEMBERS, P.DEAFEN_MEMBERS, P.MOVE_MEMBERS, P.MANAGE_THREADS, P.MANAGE_EVENTS, P.MANAGE_EXPRESSIONS, P.VIEW_AUDIT_LOG, P.MENTION_EVERYONE, P.MANAGE_PROJECTS, P.DELETE_PROJECTS)
 
 /** Server Settings › Onboarding: questions new members answer; answers give roles and show channels. */
 export default function OnboardingTab({ guildId }: { guildId: string }) {
@@ -18,7 +18,7 @@ export default function OnboardingTab({ guildId }: { guildId: string }) {
   const upsertGuild = useStore((s) => s.upsertGuild)
   const pushToast = useStore((s) => s.pushToast)
   const chans = useMemo(() => Object.values(channels).filter((c) => c.guild_id === guildId && c.kind !== 'category' && c.kind !== 'thread').sort((a, b) => a.position - b.position), [channels, guildId])
-  const grantable = sortedRoles(roles).filter((r) => r.id !== guildId && (r.permissions & FORBIDDEN) === 0)
+  const grantable = sortedRoles(roles).filter((r) => r.id !== guildId && band(r.permissions, FORBIDDEN) === 0)
   const [enabled, setEnabled] = useState(!!guild?.onboarding?.enabled)
   const [qs, setQs] = useState<OnboardingQuestion[]>(guild?.onboarding?.questions ?? [])
   const [busy, setBusy] = useState(false)

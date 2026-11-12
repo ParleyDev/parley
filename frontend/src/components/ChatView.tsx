@@ -2,7 +2,7 @@ import { nameplateClass } from '../lib/cosmetics'
 import { previewText } from '../lib/desktopNotify'
 import { isAssetNameplate, NameplateVideo } from './Nameplate'
 import SummariesButton from './Summaries'
-import { AlarmClock, Megaphone, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, MoreVertical, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { AlarmClock, Disc3, Megaphone, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, MoreVertical, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup, nameOf } from '../lib/dm'
@@ -30,6 +30,7 @@ import { useT } from '../lib/i18n'
 import { remindLabel, setReminder } from '../lib/reminders'
 import { applySuggestion, useSearchSuggestions } from './SearchSuggest'
 import DirectoryView from './DirectoryView'
+import StudioView from './StudioView'
 import { confirmSkipped } from './modals/Confirm'
 import Dropdown from './Dropdown'
 import { globalName, nameIn } from '../lib/names'
@@ -189,7 +190,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
             </>
           ) : (
             <>
-              {channel.kind === 'forum' ? <MessageSquareText size={22} className="text-text-2 shrink-0" /> : <Hash size={22} className="text-text-2 shrink-0" />}
+              {channel.kind === 'forum' ? <MessageSquareText size={22} className="text-text-2 shrink-0" /> : channel.kind === 'studio' ? <Disc3 size={22} className="text-text-2 shrink-0" /> : <Hash size={22} className="text-text-2 shrink-0" />}
               <span className="font-bold truncate">{channel.name}</span>
               {channel.nsfw && <span className="ml-1 rounded bg-danger/20 px-1.5 py-0.5 text-[10px] font-bold text-danger" title={t('Age-restricted channel')} data-nsfw-badge>18+</span>}
               {channel.topic && <><span className="mx-2 h-6 w-px bg-line phone:hidden" /><span className="text-sm text-text-2 truncate phone:hidden">{channel.topic}</span></>}
@@ -267,7 +268,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
     <>
         {isDm && <DmCall channel={channel as DmChannel} />}
         {isDm && !group && other && myAge === 'teen' && relKind !== 'friend' && <TeenDmNotice name={nameOf(other, notes)} onBlock={() => { void api.put(`/users/@me/relationships/${other.id}/block`).then(() => pushToast(t('{name} blocked', { name: nameOf(other, notes) }))).catch((e: Error) => pushToast(e.message, 'error')) }} />}
-        {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : channel.kind === 'directory' ? <DirectoryView channel={channel as Channel} /> : <ChatPane channel={channel} />}
+        {channel.nsfw && !ageOk ? <AgeGate channel={channel as Channel} onOk={() => setAgeOk(true)} /> : (channel as Channel).spoiler && !spoilerOk ? <SpoilerGate channel={channel as Channel} onOk={() => setSpoilerOk(true)} /> : channel.kind === 'forum' ? <ForumView channel={channel as Channel} /> : channel.kind === 'directory' ? <DirectoryView channel={channel as Channel} /> : channel.kind === 'studio' ? <StudioView channel={channel as Channel} /> : <ChatPane channel={channel} />}
     </>
   )
   const side = search !== null ? (

@@ -105,8 +105,8 @@ fn clean_name(n: &str) -> AppResult<String> {
 
 async fn check_place(db: &PgPool, guild_id: Uuid, channel_id: Option<Uuid>, location: &str) -> AppResult<()> {
     if let Some(cid) = channel_id {
-        let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind IN ('voice', 'stage')").bind(cid).bind(guild_id).fetch_optional(db).await?;
-        if ok.is_none() { return Err(AppError::BadRequest("Events can only be held in a voice or stage channel of this server".into())); }
+        let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind IN ('voice', 'stage', 'project')").bind(cid).bind(guild_id).fetch_optional(db).await?;
+        if ok.is_none() { return Err(AppError::BadRequest("Events can only be held in a voice or stage channel or a studio project of this server".into())); }
     } else if location.trim().is_empty() {
         return Err(AppError::BadRequest("Pick a voice channel or enter a location".into()));
     }
