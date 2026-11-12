@@ -237,7 +237,7 @@ export interface Channel {
 }
 
 /** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */
-export interface StudioTrack { id: string; session_id: string | null; user_id: string | null; content_type: string; size: number; duration_ms: number | null; offset_ms: number; done: boolean; created_at: string; display_name: string; url: string
+export interface StudioTrack { id: string; session_id: string | null; lane_id?: string | null; user_id: string | null; content_type: string; size: number; duration_ms: number | null; offset_ms: number; done: boolean; created_at: string; display_name: string; url: string
   /** take (recorded in a session) or import (a file brought into the studio, named `name`). */
   kind?: 'take' | 'import'; name?: string | null; latency_ms?: number }
 export interface StudioSession { id: string; channel_id: string; guild_id: string; name: string; started_by: string | null; started_at: string; ended_at: string | null; armed: string[] | null; bpm: number; beats: number; click: boolean; count_in_ms: number; tracks: StudioTrack[]
@@ -258,8 +258,12 @@ export interface StudioProject { id: string; channel_id: string; name: string; b
   punch_on?: boolean
   /** Where it stands in its studio's list. */
   tag?: ProjectTag; archived_at?: string | null
+  /** Shared playback: playing from `play_from_ms` since `play_at` (server time; null: stopped there). */
+  play_from_ms?: number; play_at?: string | null; play_by?: string | null
   markers?: { id: string; ms: number; name: string }[] }
 export interface StudioLane { id: string; project_id: string; name: string; color: string | null; position: number; gain: number; pan: number; mute: boolean; solo: boolean; user_id: string | null; claimed_at?: string | null
+  /** Where it records from (its owner's input by name, a channel of it), monitoring, armed, heard only through sends. */
+  input?: TrackInput | null; monitor?: 'in' | 'auto' | 'off'; armed?: boolean; sends_only?: boolean
   /** audio (clips of audio), midi (note clips played by `instrument`) or bus (a return the others send to). */
   kind: 'audio' | 'midi' | 'bus'
   effects: import('./fx').Effect[]
@@ -274,6 +278,7 @@ export interface StudioClip { id: string; project_id: string; lane_id: string; a
   notes?: import('./instruments').Note[] | null
   /** Takes of one loop recording share a group; one plays, the others are muted alternatives. */
   group_id?: string | null }
+export type TrackInput = { device: string; channel: 'mono' | '1' | '2' | '1/2' }
 export type ProjectTag = '' | 'writing' | 'tracking' | 'mixing' | 'done'
 /** A project in its studio's list: who's in its band, how many takes it has, how many are in its voice room now. */
 export interface ProjectCard extends StudioProject { band: string[]; takes: number; live: number; session: string | null }

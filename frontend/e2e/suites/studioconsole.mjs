@@ -46,10 +46,10 @@ ok('the band joins heard (engineer and artist badges), others join as the audien
 console.log('-- record-arm')
 await pa.waitForSelector(`[data-daw-arm="${lane[c.user.id]}"]`)
 ok('every band member\'s lane has an arm button, armed by default', await pa.locator('[data-daw-arm][aria-pressed="true"]').count() === 3)
-ok('only the crew can press it', await pb.locator(`[data-daw-arm="${lane[b.user.id]}"]`).isDisabled())
+ok('anyone in the band can press it (arming is per track, like a DAW\'s)', !(await pb.locator(`[data-daw-arm="${lane[b.user.id]}"]`).isDisabled()))
 await pa.click(`[data-daw-arm="${lane[c.user.id]}"]`)
 await pb.waitForFunction((id) => document.querySelector(`[data-daw-arm="${id}"]`)?.getAttribute('aria-pressed') === 'false', lane[c.user.id])
-ok('disarming carol is shared studio state', (await chan()).studio.disarmed.includes(c.user.id))
+ok('disarming carol\'s track is shared project state', (await call(a.token, 'GET', `/studio/projects/${P.id}`)).lanes.find((l) => l.id === lane[c.user.id])?.armed === false)
 
 console.log('-- tempo, metronome, count-in')
 await pa.fill('[data-daw-bpm]', '150'); await pa.press('[data-daw-bpm]', 'Enter')

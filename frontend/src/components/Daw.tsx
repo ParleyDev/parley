@@ -1,15 +1,16 @@
-import { Activity, Archive, CalendarClock, Mic, Disc3, Users, ArrowLeft, ChevronDown, Pencil, Copy, Download, Flag, FolderOpen, History, Keyboard, Layers, Magnet, MessageSquare, Metronome, Music, Piano, Plus, Redo2, Repeat, Rows3, Scissors, SkipBack, SlidersVertical, Square, Play, Trash2, Undo2, Upload, X, ZoomIn, ZoomOut, Gauge, Cable } from 'lucide-react'
+import { Activity, Archive, Link2, CalendarClock, Mic, Disc3, Users, ArrowLeft, ChevronDown, Pencil, Copy, Download, Flag, FolderOpen, History, Keyboard, Layers, Magnet, MessageSquare, Metronome, Music, Piano, Plus, Redo2, Repeat, Rows3, Scissors, SkipBack, SlidersVertical, Square, Play, Trash2, Undo2, Upload, X, ZoomIn, ZoomOut, Gauge, Cable } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as RPointerEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
 import { STORAGE_PREFIX } from '../lib/brand'
+import '../lib/monitor'
 import { deleteProject, projectRights, TAGS, tagOf, updateProject } from '../lib/projects'
 import { useNavigate } from 'react-router-dom'
-import { audible, takeLane, clipEnd, edit, editLive, engine, importFiles, loadProject, newId, projectEnd, redo, sharePresence, sortedLanes, undo, useDaw, type Op } from '../lib/daw'
+import { audible, armLane, takeLane, setFollow, sharedTransport, clipEnd, edit, editLive, engine, importFiles, loadProject, newId, projectEnd, redo, sharePresence, sortedLanes, undo, useDaw, type Op } from '../lib/daw'
 import { defaultInstrument, type Note } from '../lib/instruments'
 import { armMidi, connectMidi, useMidi } from '../lib/midi'
 import { useT } from '../lib/i18n'
-import { setArm, setStudioConfig, startTake, DEFAULT_STUDIO } from '../lib/studio'
+import { setStudioConfig, startTake, DEFAULT_STUDIO } from '../lib/studio'
 import { usePhone } from '../lib/swipe'
 import { barBeat, bars as barList, secAtBar, snapTo, type Snap, type TempoChange } from '../lib/tempo'
 import type { Channel, StudioClip, StudioLane, StudioProject, StudioTrack, User } from '../lib/types'
@@ -22,6 +23,7 @@ import DawMixer, { laneColor } from './DawMixer'
 import { AutoRow, autoParams, paramOf } from './DawAutomation'
 import PianoRoll from './DawPianoRoll'
 import { BandPanel, CommentsPanel, ExportPanel, SessionsPanel, TakesPanel, VersionsPanel } from './DawPanels'
+import FloatWindow from './FloatWindow'
 
 const VIEW_KEY = `${STORAGE_PREFIX}dawView`
 const ZOOM_KEY = `${STORAGE_PREFIX}dawZoom`
@@ -105,11 +107,19 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   const [, tick] = useState(0)
   useEffect(() => { const id = setInterval(() => tick((n) => n + 1), 3000); return () => clearInterval(id) }, [])
 
+  // Play and stop are everyone's in the project (shared playback) for its band, unless following is off here.
+  const follow = useDaw((s) => s.follow)
+  const canShare = follow && projectRights(channel).edit
+  const fail = (e: unknown) => pushToast((e as Error).message, 'error')
   const play = () => {
-    if (playing) { setStopped(engine.position()); engine.stop(); return }
-    void engine.preload().then(() => engine.play(stopped, { click: cfg.click }))
+    if (playing) { const pos = engine.position(); setStopped(pos); if (playing === 'shared' && canShare) void sharedTransport(false, pos * 1000).catch(fail); else engine.stop(); return }
+    if (canShare) void sharedTransport(true, stopped * 1000).catch(fail)
+    else void engine.preload().then(() => engine.play(stopped, { click: cfg.click }))
   }
-  const seek = (sec: number) => { const s = Math.max(0, sec); setStopped(s); if (playing === 'local') engine.play(s, { click: cfg.click }) }
+  const seek = (sec: number) => { const s = Math.max(0, sec); setStopped(s); if (playing === 'local') engine.play(s, { click: cfg.click }); else if (playing === 'shared' && canShare) void sharedTransport(true, s * 1000).catch(fail) }
+  // Someone else stopped the shared playback: the playhead stays where it stopped.
+  const sharedStop = project?.play_at ? null : project?.play_from_ms
+  useEffect(() => { if (sharedStop != null && follow) setStopped(sharedStop / 1000) }, [sharedStop]) // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState(false)
   const record = async (solo: boolean) => {
     setBusy(true)
@@ -228,11 +238,13 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button type="button" onClick={() => seek(0)} disabled={!!live} title={t('Return to zero (Home)')} className={tb} data-daw-rtz><SkipBack size={18} /></button>
-          <button type="button" onClick={play} disabled={!!live} title={playing ? t('Stop (Space)') : t('Play (Space)')} className={`${tb} h-9 w-9 ${playing === 'local' ? 'text-success' : ''}`} aria-pressed={!!playing} data-daw-play>{playing === 'local' ? <Square size={16} /> : <Play size={18} />}</button>
+          <button type="button" onClick={play} disabled={!!live} title={playing ? t('Stop (Space)') : t('Play (Space)')} className={`${tb} h-9 w-9 ${playing === 'local' || playing === 'shared' ? 'text-success' : ''}`} aria-pressed={!!playing} data-daw-play>{playing === 'local' || playing === 'shared' ? <Square size={16} /> : <Play size={18} />}</button>
           {crew && <button type="button" onClick={() => void record(false)} disabled={busy || (!!live && live.solo && live.started_by !== me?.id)} title={live ? t('Stop recording') : t('Record the band from the playhead')} className={`h-9 w-9 rounded-md flex items-center justify-center disabled:opacity-40 ${live && !live.solo ? 'bg-danger text-white animate-pulse' : 'text-danger hover:bg-bg-3'}`} aria-pressed={!!live && !live.solo} data-daw-record>{live && !live.solo ? <Square size={14} fill="currentColor" /> : <span className="h-4 w-4 rounded-full bg-danger" />}</button>}
           {inBand && (!live || (live.solo && live.started_by === me?.id)) && <button type="button" onClick={() => void record(true)} disabled={busy} title={live ? t('Stop recording') : t('Record alone (only you record and hear it)')} className={`h-9 rounded-md px-2 text-[11px] font-bold disabled:opacity-40 ${live?.solo ? 'bg-danger text-white animate-pulse' : 'text-danger hover:bg-bg-3'}`} aria-pressed={!!live?.solo} data-daw-record-solo>{live?.solo ? t('Stop') : t('Solo ●')}</button>}
           <button type="button" onClick={() => edit([{ op: 'project', loop_on: !project.loop_on }])} disabled={!hasLoop} title={hasLoop ? t('Loop (L)') : t('Drag on the ruler to set a loop range')} aria-pressed={!!project.loop_on} className={`${tb} ${on(!!project.loop_on)}`} data-daw-loop><Repeat size={16} /></button>
           <button type="button" onClick={() => edit([{ op: 'project', punch_on: !project.punch_on }])} disabled={!hasLoop} title={t('Punch: recording keeps only the loop range')} aria-pressed={!!project.punch_on} className={`${tb} text-[10px] font-black ${on(!!project.punch_on)}`} data-daw-punch>P</button>
+          <button type="button" onClick={() => setFollow(!follow)} title={follow ? t('Shared playback: you hear what anyone plays, and they hear what you play') : t('Playing on your own: turn on to follow the shared playback')} aria-pressed={follow} className={`${tb} ${on(follow)}`} data-daw-follow><Link2 size={15} /></button>
+          {hasLoop && <button type="button" onClick={clearLoop} title={t('Clear the loop range')} className={`${tb} hover:text-danger`} data-daw-loop-clear><X size={14} /></button>}
         </div>
         <span className={`shrink-0 rounded-md bg-bg-0 px-2.5 py-1 font-mono text-lg tabular-nums ${live ? 'text-danger' : 'text-text-0'}`} data-daw-time>{timecode(head)}</span>
         <span className="shrink-0 rounded-md bg-bg-0 px-2 py-1.5 font-mono text-sm tabular-nums text-text-1" title={t('Bar.beat ({bpm} BPM)', { bpm: bb.bpm })} data-daw-beat>{bb.bar}.{bb.beat}</span>
@@ -291,7 +303,7 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
 
       {view === 'arrange'
         ? <Arrangement {...{ channel, project, ordered, lanes, clips, audio, pps, head, live: !!live, liveSince: live ? (live.position_ms ?? 0) / 1000 : 0, liveSolo: live?.solo ? live.started_by : null, sel, setSel, seek, snapMs, band: band.map((b) => b.user_id), crew, users, phone, autoOpen, setAutoOpen, newMidiClip, setRoll, midiLane: midi.lane, peers: peerList, peerColor, comments, openComments: () => setPanel('comments') }} />
-        : <DawMixer ordered={ordered} lanes={lanes} project={project} band={band.map((b) => b.user_id)} disarmed={cfg.disarmed} crew={crew} channelId={channel.id} users={users} />}
+        : <DawMixer ordered={ordered} lanes={lanes} project={project} channelId={channel.id} users={users} />}
       {rollClip && lanes[rollClip.lane_id] && <PianoRoll clip={rollClip} lane={lanes[rollClip.lane_id]} project={project} close={() => setRoll(null)} />}
       {ordered.length === 0 && <p className="shrink-0 px-3 py-2 text-xs text-text-2" data-daw-empty>{recordable ? t('Record a take, import a backing track to record over, or add a MIDI track to write parts.') : t('Import a backing track, or ask an engineer to record a take.')}</p>}
       {panel === 'comments' && <CommentsPanel head={head} seek={seek} close={() => setPanel(null)} />}
@@ -313,8 +325,7 @@ function TempoPanel({ project, head, close }: { project: StudioProject; head: nu
   const here = barBeat(project, head)
   const num = 'input h-7 w-16 px-1 text-center font-mono text-xs'
   return (
-    <div className="absolute right-2 top-24 z-40 w-72 rounded-lg border border-line bg-bg-1 p-3 shadow-2xl" data-daw-panel="tempo">
-      <div className="mb-2 flex items-center gap-2 font-bold"><Gauge size={16} /> {t('Tempo changes')}<button type="button" onClick={close} className="ml-auto text-text-2 hover:text-text-0"><X size={16} /></button></div>
+    <FloatWindow id="panel-tempo" title={t('Tempo changes')} icon={<Gauge size={16} />} width={288} onClose={close} data-daw-panel="tempo">
       <p className="mb-2 text-xs text-text-2">{t('Bar 1: {bpm} BPM, {beats}/4 (the project tempo)', { bpm: project.bpm, beats: project.beats })}</p>
       {list.map((c, i) => (
         <div key={i} className="mb-1 flex items-center gap-1 text-xs" data-daw-tempo-change={c.bar + 1}>
@@ -325,7 +336,7 @@ function TempoPanel({ project, head, close }: { project: StudioProject; head: nu
         </div>
       ))}
       <button type="button" onClick={() => { const bar = Math.max(1, here.bar - 1 + (here.beat > 1 ? 1 : 0)); save([...list.filter((c) => c.bar !== bar), { bar: Math.max(1, bar), bpm: here.bpm, beats: here.beats }]) }} className="btn-ghost mt-1 h-8 w-full justify-center py-0 text-xs" data-daw-tempo-add><Plus size={13} /> {t('Change at bar {n}', { n: Math.max(2, here.bar + (here.beat > 1 ? 1 : 0)) })}</button>
-    </div>
+    </FloatWindow>
   )
 }
 
@@ -357,7 +368,7 @@ function ProjectMenu({ channel, project }: { channel: Channel; project: StudioPr
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-9 z-50 w-60 rounded-lg border border-line bg-bg-1 p-1 shadow-xl" role="menu" data-daw-projects>
+          <div className="pop absolute left-0 top-9 z-50 w-60 rounded-lg border border-line bg-bg-1 p-1 shadow-xl" role="menu" data-daw-projects>
             {channel.parent_id && <button type="button" onClick={() => { setOpen(false); studio() }} className={item} data-daw-back-studio><ArrowLeft size={14} /> {t('All projects')}</button>}
             {rights.manage && <>
               <button type="button" onClick={() => { setOpen(false); setRenaming(project.name) }} className={item} data-daw-rename><Pencil size={14} /> {t('Rename…')}</button>
@@ -405,6 +416,9 @@ type ArrProps = {
   peers: [string, { pos_ms: number; playing: boolean; sel: string[] }][]; peerColor: (uid: string) => string
   comments: import('../lib/daw').StudioComment[]; openComments: () => void
 }
+
+/** No loop range any more: loop and punch off. */
+const clearLoop = () => edit([{ op: 'project', clear_loop: true }])
 
 function Arrangement(p: ArrProps) {
   const t = useT()
@@ -516,7 +530,7 @@ function Arrangement(p: ArrProps) {
         </div>
         <div ref={scroller} className="relative flex-1 min-w-0 overflow-x-auto" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDropLane(laneAt(e.clientY) ?? 'new') } }} onDragLeave={() => setDropLane(null)} onDrop={(e) => onDrop(e, laneAt(e.clientY))} data-daw-timeline>
           <div className="relative" style={{ width }}>
-            <div className="sticky top-0 z-10 h-7 cursor-pointer border-b border-line bg-bg-2 text-[10px] text-text-2 select-none" onPointerDown={rulerDown} onPointerMove={rulerMove} onPointerUp={rulerUp} data-daw-ruler>
+            <div className="sticky top-0 z-10 h-7 cursor-pointer border-b border-line bg-bg-2 text-[10px] text-text-2 select-none" onPointerDown={rulerDown} onPointerMove={rulerMove} onPointerUp={rulerUp} onDoubleClick={(e) => { const ms = msAt(e.clientX); if (showLoop && ms >= loopA && ms <= loopB) clearLoop() }} title={t('Drag to set a loop range · double-click it to clear')} data-daw-ruler>
               {showLoop && <div className={`pointer-events-none absolute inset-y-0 border-x ${project.loop_on || loopDrag ? 'border-accent bg-accent/25' : 'border-text-2/50 bg-text-2/10'}`} style={{ left: (loopA / 1000) * pps, width: ((loopB - loopA) / 1000) * pps }} data-daw-loop-range={project.loop_on ? 'on' : 'off'} />}
               {barsAll.filter((b) => b.bar % every === 0).map((b) => <span key={b.bar} className="absolute top-0 h-full border-l border-line pl-1 leading-7" style={{ left: b.sec * pps }}>{b.bar + 1}</span>)}
               {(project.tempo_map ?? []).map((c) => <span key={`t${c.bar}`} className="absolute bottom-0 rounded-t bg-bg-4 px-1 text-[9px] font-bold text-text-1" style={{ left: secAtBar(project, c.bar) * pps + 2 }} title={t('{bpm} BPM, {beats}/4 from bar {bar}', { bpm: c.bpm, beats: c.beats, bar: c.bar + 1 })}>{c.bpm}{c.beats !== project.beats ? ` ${c.beats}/4` : ''}</span>)}
@@ -555,14 +569,13 @@ function Arrangement(p: ArrProps) {
   )
 }
 
-function LaneHead({ l, i, lanes, clips, band, crew, channel, users, phone, autoOpen, setAutoOpen, midiLane }: ArrProps & { l: StudioLane; i: number }) {
+function LaneHead({ l, i, lanes, clips, band, channel, users, phone, autoOpen, setAutoOpen, midiLane }: ArrProps & { l: StudioLane; i: number }) {
   const t = useT()
-  const pushToast = useStore((s) => s.pushToast)
   const [naming, setNaming] = useState<string | null>(null)
   const [menu, setMenu] = useState(false)
   const owner = l.user_id ? users[l.user_id] : undefined
   const inBand = !!l.user_id && band.includes(l.user_id)
-  const armed = inBand && !(channel.studio?.disarmed ?? []).includes(l.user_id!)
+  const armed = !!l.armed
   const has = Object.values(clips).some((c) => c.lane_id === l.id)
   const params = autoParams(l, lanes)
   // Band members choose which track their takes land on.
@@ -585,8 +598,8 @@ function LaneHead({ l, i, lanes, clips, band, crew, channel, users, phone, autoO
         <div className="flex items-center gap-0.5">
           <button type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, mute: !l.mute } }])} title={t('Mute')} aria-pressed={l.mute} className={btn(l.mute, 'bg-danger text-white')} data-daw-mute={l.id}>M</button>
           {l.kind !== 'bus' && <button type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, solo: !l.solo } }])} title={t('Solo')} aria-pressed={l.solo} className={btn(l.solo, 'bg-warn text-black')} data-daw-solo={l.id}>S</button>}
-          {inBand && l.kind === 'audio' && <button type="button" disabled={!crew} onClick={() => setArm(channel.id, l.user_id!, !armed).catch((e) => pushToast((e as Error).message, 'error'))} title={armed ? t('Armed: records the next take') : t('Not armed')} aria-pressed={armed} className={btn(armed, 'bg-danger text-white')} data-daw-arm={l.id}>R</button>}
-          {mine && l.kind === 'audio' && <button type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, user_id: me!.id } }])} title={myLane ? t('Your takes land on this track') : t('Record your takes on this track')} aria-pressed={myLane} className={btn(myLane, 'bg-accent text-white')} data-daw-rec-here={l.id}><Mic size={11} className="mx-auto" /></button>}
+          {l.kind === 'audio' && <button type="button" disabled={!rights.edit} onClick={(e) => armLane(l.id, !armed, e.ctrlKey || e.metaKey)} title={armed ? t('Armed: records the next take') : t('Arm (Ctrl-click to arm several)')} aria-pressed={armed} className={btn(armed, 'bg-danger text-white')} data-daw-arm={l.id}>R</button>}
+          {mine && l.kind === 'audio' && <button type="button" onClick={(e) => armLane(l.id, true, e.ctrlKey || e.metaKey, me!.id)} title={myLane ? t('Your takes land on this track') : t('Record your takes on this track')} aria-pressed={myLane} className={btn(myLane, 'bg-accent text-white')} data-daw-rec-here={l.id}><Mic size={11} className="mx-auto" /></button>}
           {l.kind === 'midi' && !phone && <button type="button" onClick={() => armMidi(midiLane === l.id ? null : l.id)} title={midiLane === l.id ? t('Playing and recording MIDI here (on this device)') : t('Play and record MIDI on this track')} aria-pressed={midiLane === l.id} className={btn(midiLane === l.id, 'bg-danger text-white')} data-daw-midi-arm={l.id}>●</button>}
           {!phone && <button type="button" onClick={() => setAutoOpen((m) => { const n = { ...m }; if (n[l.id]) delete n[l.id]; else n[l.id] = Object.keys(l.automation ?? {})[0] ?? 'gain'; return n })} title={t('Automation')} aria-pressed={!!autoOpen[l.id]} className={btn(!!autoOpen[l.id] || Object.keys(l.automation ?? {}).length > 0, 'bg-warn/80 text-black')} data-daw-auto-toggle={l.id}><Activity size={11} className="mx-auto" /></button>}
           <input type="range" min={0} max={150} value={Math.round(l.gain * 100)} onChange={(e) => editLive(`gain:${l.id}`, [{ op: 'lane.put', lane: { id: l.id, gain: Number(e.target.value) / 100 } }])} onDoubleClick={() => edit([{ op: 'lane.put', lane: { id: l.id, gain: 1 } }])} title={t('Volume {db} dB', { db: dB(l.gain) })} aria-label={t('Volume')} className="ml-1 h-3 min-w-0 flex-1 accent-accent" data-daw-lane-gain={l.id} />
@@ -595,7 +608,7 @@ function LaneHead({ l, i, lanes, clips, band, crew, channel, users, phone, autoO
         {menu && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
-            <div className="absolute left-full top-0 z-40 ml-1 w-56 rounded-lg border border-line bg-bg-1 p-2 text-xs shadow-xl" data-daw-lane-settings={l.id}>
+            <div className="pop absolute left-full top-0 z-40 ml-1 w-56 rounded-lg border border-line bg-bg-1 p-2 text-xs shadow-xl" data-daw-lane-settings={l.id}>
               <div className="mb-2 flex flex-wrap gap-1">{['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#00b0f4', '#9b59b6', '#1abc9c'].map((c) => <button key={c} type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, color: c } }])} className={`h-5 w-5 rounded-full ${l.color === c ? 'ring-2 ring-white' : ''}`} style={{ background: c }} aria-label={c} />)}</div>
               {l.kind !== 'bus' && <label className="mb-2 flex items-center gap-2" title={t('Shift the whole track earlier (−) or later (+) to fix timing')}>{t('Nudge')}<input type="number" min={-1000} max={1000} step={5} value={l.nudge_ms ?? 0} onChange={(e) => editLive(`nudge:${l.id}`, [{ op: 'lane.put', lane: { id: l.id, nudge_ms: Math.max(-1000, Math.min(1000, Math.round(Number(e.target.value) || 0))) } }])} className="input h-7 w-20 px-1 text-center font-mono text-xs" data-daw-nudge={l.id} />ms</label>}
               <button type="button" onClick={() => { setMenu(false); edit([{ op: 'lane.del', id: l.id }]) }} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-danger hover:bg-danger/10" data-daw-lane-delete><Trash2 size={13} /> {has ? t('Delete track and its clips') : t('Delete track')}</button>

@@ -11,13 +11,11 @@ import { useStore } from '../store'
 import Avatar from './Avatar'
 import Dropdown from './Dropdown'
 import { shownName } from '../lib/names'
+import FloatWindow from './FloatWindow'
 
 const clock = (ms: number) => { const s = ms / 1000; return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}` }
 const Panel = ({ title, icon, close, children, data }: { title: string; icon: React.ReactNode; close: () => void; children: React.ReactNode; data: string }) => (
-  <div className="absolute right-2 top-24 z-40 flex max-h-[calc(100%-6.5rem)] w-80 flex-col rounded-lg border border-line bg-bg-1 shadow-2xl" data-daw-panel={data}>
-    <div className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2 font-bold">{icon}{title}<button type="button" onClick={close} className="ml-auto text-text-2 hover:text-text-0"><X size={16} /></button></div>
-    <div className="min-h-0 flex-1 overflow-y-auto p-3">{children}</div>
-  </div>
+  <FloatWindow id={`panel-${data}`} title={title} icon={icon} width={320} onClose={close} className="max-h-[70vh]" data-daw-panel={data}>{children}</FloatWindow>
 )
 
 /** Saved versions of the project: save one, restore one (the project as it is gets saved first), delete. */

@@ -1,15 +1,15 @@
 import { ArrowDown, ArrowUp, Power, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { edit, editLive, engine, audible } from '../lib/daw'
+import { armLane, edit, editLive, engine, audible } from '../lib/daw'
 import { FX, newEffect, type Effect, type FxType } from '../lib/fx'
 import { useT } from '../lib/i18n'
-import { setArm } from '../lib/studio'
 import type { StudioLane, StudioProject, User } from '../lib/types'
 import { useStore } from '../store'
 import Avatar from './Avatar'
 import Dropdown from './Dropdown'
 import { Fader } from './StudioConsole'
 import InstrumentPanel from './DawInstrument'
+import FloatWindow from './FloatWindow'
 
 const COLORS = ['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#00b0f4', '#9b59b6', '#1abc9c']
 export const laneColor = (l: StudioLane, i: number) => l.color ?? (l.kind === 'bus' ? '#8e9297' : COLORS[i % COLORS.length])
@@ -52,14 +52,12 @@ export function FxRack({ owner, list, picked, pick }: { owner: Owner; list: Effe
 
 /** The picked effect's controls. */
 export function FxEditor({ owner, list, id, close, title }: { owner: Owner; list: Effect[]; id: string; close: () => void; title: string }) {
-  const t = useT()
   const e = list.find((x) => x.id === id)
   if (!e) return null
   const def = FX[e.type]
   const set = (key: string, v: number) => setChain(owner, list.map((x) => (x.id === id ? { ...x, params: { ...x.params, [key]: v } } : x)), `fx:${owner}:${id}:${key}`)
   return (
-    <div className="absolute right-2 top-2 z-30 w-72 rounded-lg border border-line bg-bg-1 p-3 shadow-2xl" data-daw-fx-editor={e.type}>
-      <div className="mb-2 flex items-center gap-2"><span className="font-bold">{def.name}</span><span className="truncate text-xs text-text-2">{title}</span><button type="button" onClick={close} className="ml-auto text-text-2 hover:text-text-0" title={t('Close')}><X size={16} /></button></div>
+    <FloatWindow id={`fx-${e.type}`} title={<>{def.name} <span className="font-normal text-text-2">· {title}</span></>} width={288} onClose={close} data-daw-fx-editor={e.type}>
       {def.params.map((p) => {
         const v = e.params[p.key] ?? p.def
         // Frequencies move on a log scale, like real knobs.
@@ -73,7 +71,7 @@ export function FxEditor({ owner, list, id, close, title }: { owner: Owner; list
           </label>
         )
       })}
-    </div>
+    </FloatWindow>
   )
 }
 
@@ -84,59 +82,150 @@ function Loudness() {
   return <span className="font-mono text-[10px] tabular-nums text-text-1" title="LUFS (momentary)" data-daw-lufs={v === null ? '' : v.toFixed(1)}>{v === null ? '— LUFS' : `${v.toFixed(1)} LUFS`}</span>
 }
 
-/** A strip per lane (inserts, sends, output, pan, mute / solo / arm, fader with meter), then the master. */
-export default function DawMixer({ ordered, lanes, project, band, disarmed, crew, channelId, users }: { ordered: StudioLane[]; lanes: Record<string, StudioLane>; project: StudioProject; band: string[]; disarmed: string[]; crew: boolean; channelId: string; users: Record<string, User> }) {
+/** The input devices on this device, by name (names show once the microphone has been allowed). */
+function useInputs() {
+  const [list, setList] = useState<string[]>([])
+  useEffect(() => {
+    const load = () => void navigator.mediaDevices?.enumerateDevices().then((d) => setList([...new Set(d.filter((x) => x.kind === 'audioinput' && x.label && x.deviceId !== 'default').map((x) => x.label))])).catch(() => {})
+    load()
+    navigator.mediaDevices?.addEventListener('devicechange', load)
+    return () => navigator.mediaDevices?.removeEventListener('devicechange', load)
+  }, [])
+  return list
+}
+
+/** A rotary knob like a hardware console's: drag up / down (Shift for fine), wheel, arrow keys; double-click resets. */
+export function Knob({ value, min, max, def, onChange, label, show, size = 30, color = 'var(--color-accent)', bipolar, ...rest }: { value: number; min: number; max: number; def: number; onChange: (v: number) => void; label: string; show?: string; size?: number; color?: string; bipolar?: boolean } & Record<`data-${string}`, string>) {
+  const f = (value - min) / (max - min)
+  const a0 = -135, a = a0 + f * 270, mid = bipolar ? 0 : a0
+  const r = size / 2 - 3, c = size / 2
+  const pt = (deg: number) => [c + r * Math.sin((deg * Math.PI) / 180), c - r * Math.cos((deg * Math.PI) / 180)]
+  const arc = (from: number, to: number) => { const [x0, y0] = pt(from), [x1, y1] = pt(to); return `M ${x0} ${y0} A ${r} ${r} 0 ${Math.abs(to - from) > 180 ? 1 : 0} ${to > from ? 1 : 0} ${x1} ${y1}` }
+  const set = (v: number) => onChange(Math.min(max, Math.max(min, v)))
+  const drag = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return
+    const y0 = e.clientY, v0 = value
+    const el = e.currentTarget; el.setPointerCapture(e.pointerId)
+    const move = (ev: PointerEvent) => set(v0 + ((y0 - ev.clientY) / (ev.shiftKey ? 600 : 150)) * (max - min))
+    const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up) }
+    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up)
+  }
+  return (
+    <svg width={size} height={size} role="slider" tabIndex={0} aria-label={label} aria-valuemin={min} aria-valuemax={max} aria-valuenow={Number(value.toFixed(3))} aria-valuetext={show} className="shrink-0 cursor-ns-resize touch-none outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-full" onPointerDown={drag} onDoubleClick={() => set(def)}
+      onWheel={(e) => set(value - Math.sign(e.deltaY) * (max - min) / 50)} onKeyDown={(e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); set(value + (max - min) / 50) } if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); set(value - (max - min) / 50) } }} {...rest}>
+      <title>{`${label}${show ? `: ${show}` : ''}`}</title>
+      <path d={arc(a0, 135)} fill="none" stroke="currentColor" strokeWidth={3} className="text-bg-4" strokeLinecap="round" />
+      {Math.abs(a - mid) > 0.5 && <path d={arc(Math.min(mid, a), Math.max(mid, a))} fill="none" stroke={color} strokeWidth={3} strokeLinecap="round" />}
+      <line x1={c} y1={c} x2={pt(a)[0]} y2={pt(a)[1]} stroke="currentColor" strokeWidth={2} className="text-text-0" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+const dbOf = (g: number) => (g <= 0.0001 ? '-∞' : (20 * Math.log10(g)).toFixed(1))
+const sec = 'text-[10px] font-bold text-text-1'
+
+/** One track's channel strip, laid out like Ableton Live's mixer. */
+function Strip({ l, i, lanes, buses, channelId, users, open, setOpen, instFor, setInstFor }: { l: StudioLane; i: number; lanes: Record<string, StudioLane>; buses: StudioLane[]; channelId: string; users: Record<string, User>; open: { owner: Owner; id: string } | null; setOpen: (o: { owner: Owner; id: string } | null) => void; instFor: string | null; setInstFor: (id: string | null) => void }) {
   const t = useT()
-  const pushToast = useStore((s) => s.pushToast)
+  const me = useStore((s) => s.user)
+  const room = useStore((s) => s.channels[channelId])
+  const inputs = useInputs()
+  const band = [...(room?.engineer_ids ?? []), ...(room?.artist_ids ?? [])]
+  const put = (lane: Partial<StudioLane>, live?: string) => { const op = { op: 'lane.put' as const, lane: { id: l.id, ...lane } }; if (live) editLive(live, [op]); else edit([op]) }
+  const color = laneColor(l, i)
+  const seg = (on: boolean) => `h-5 flex-1 rounded-sm text-[10px] font-bold ${on ? 'bg-warn text-black' : 'bg-bg-3 text-text-2 hover:text-text-0'}`
+  const input = l.input ?? { device: '', channel: 'mono' as const }
+  const mine = !!me && l.user_id === me.id
+  const deviceList = mine ? inputs : input.device ? [input.device] : []
+  return (
+    <div className={`flex w-36 shrink-0 flex-col gap-1.5 rounded-md border border-line bg-bg-2 text-xs ${audible(lanes, l.id) ? '' : 'opacity-70'}`} data-daw-strip={l.id} data-strip-kind={l.kind}>
+      <div className="flex min-w-0 items-center gap-1 rounded-t-md px-1.5 py-1" style={{ background: `color-mix(in srgb, ${color} 35%, transparent)` }}>
+        {l.user_id && users[l.user_id] && <Avatar user={users[l.user_id]} size={16} />}
+        <span className="truncate font-semibold" title={l.name}>{l.name}</span>
+        {l.kind !== 'audio' && <span className="ml-auto shrink-0 rounded bg-bg-4 px-1 text-[9px] font-bold uppercase text-text-1">{l.kind === 'bus' ? t('Bus') : t('MIDI')}</span>}
+      </div>
+      <div className="flex flex-col gap-1 px-1.5" data-daw-io={l.id}>
+        {l.kind === 'audio' && <>
+          <span className={sec}>{t('Audio From')}</span>
+          <Dropdown value={l.user_id ?? ''} onChange={(e) => put({ user_id: e.target.value || null })} className="input h-6 px-1 text-[10px]" aria-label={t('Audio From')} data-daw-input-user={l.id}>
+            <option value="">{t('No input')}</option>
+            {[...new Set([...band, ...(l.user_id ? [l.user_id] : [])])].map((uid) => <option key={uid} value={uid}>{users[uid]?.display_name ?? users[uid]?.username ?? uid.slice(0, 6)}</option>)}
+          </Dropdown>
+          <div className="flex gap-1">
+            <Dropdown value={input.device} onChange={(e) => put({ input: { ...input, device: e.target.value } })} disabled={!l.user_id} className="input h-6 min-w-0 flex-1 px-1 text-[10px]" title={mine ? t('Input device') : t('Only {name} can pick their input', { name: l.user_id ? users[l.user_id]?.display_name ?? '' : '' })} aria-label={t('Input device')} data-daw-input-device={l.id}>
+              <option value="">{t('Default input')}</option>
+              {deviceList.map((d) => <option key={d} value={d}>{d}</option>)}
+            </Dropdown>
+            <Dropdown value={input.channel} onChange={(e) => put({ input: { ...input, channel: e.target.value as typeof input.channel } })} disabled={!l.user_id} className="input h-6 w-14 px-1 text-[10px]" aria-label={t('Input channel')} data-daw-input-channel={l.id}>
+              <option value="mono">{t('Mono')}</option><option value="1">1</option><option value="2">2</option><option value="1/2">1/2</option>
+            </Dropdown>
+          </div>
+          <span className={sec}>{t('Monitor')}</span>
+          <div className="flex gap-0.5" role="radiogroup" aria-label={t('Monitor')} data-daw-monitor={l.id}>
+            {(['in', 'auto', 'off'] as const).map((m) => <button key={m} type="button" role="radio" aria-checked={(l.monitor ?? 'off') === m} onClick={() => put({ monitor: m })} className={seg((l.monitor ?? 'off') === m)} title={m === 'in' ? t('Always hear the input (headphones!)') : m === 'auto' ? t('Hear the input while armed') : t('Never hear the input')} data-daw-monitor-pick={m}>{m === 'in' ? t('In') : m === 'auto' ? t('Auto') : t('Off')}</button>)}
+          </div>
+        </>}
+        {l.kind === 'midi' && <button type="button" onClick={() => setInstFor(instFor === l.id ? null : l.id)} className="h-6 rounded bg-bg-3 text-[10px] font-semibold hover:bg-bg-4" data-daw-instrument-open={l.id}>{t('Instrument: {name}', { name: l.instrument?.type ?? 'synth' })}</button>}
+        {l.kind !== 'bus' && <>
+          <span className={sec}>{t('Audio To')}</span>
+          <Dropdown value={l.sends_only ? 'sends' : l.output_id ?? ''} onChange={(e) => put(e.target.value === 'sends' ? { sends_only: true } : { sends_only: false, output_id: e.target.value || null })} className="input h-6 px-1 text-[10px]" aria-label={t('Audio To')} data-daw-output={l.id}>
+            <option value="">{t('Master')}</option>
+            {buses.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            <option value="sends">{t('Sends Only')}</option>
+          </Dropdown>
+        </>}
+      </div>
+      <div className="px-1.5"><FxRack owner={l.id} list={l.effects ?? []} picked={open?.owner === l.id ? open.id : null} pick={(id) => setOpen(id ? { owner: l.id, id } : null)} /></div>
+      {l.kind !== 'bus' && buses.length > 0 && (
+        <div className="border-y border-line/60 px-1.5 py-1" data-daw-sends={l.id}>
+          <span className={sec}>{t('Sends')}</span>
+          <div className="mt-0.5 flex flex-wrap gap-1.5">
+            {buses.map((b, bi) => { const v = l.sends?.[b.id] ?? 0; return (
+              <span key={b.id} className="flex flex-col items-center" title={t('Send to {name}', { name: b.name })}>
+                <Knob value={v} min={0} max={1.5} def={0} onChange={(x) => put({ sends: { ...l.sends, [b.id]: x } }, `send:${l.id}:${b.id}`)} label={t('Send to {name}', { name: b.name })} show={`${dbOf(v)} dB`} size={26} color={laneColor(b, i)} data-daw-send={b.id} />
+                <span className="text-[9px] font-bold text-text-2">{String.fromCharCode(65 + bi)}</span>
+              </span>
+            ) })}
+          </div>
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 gap-1.5 px-1.5">
+        <div className="flex flex-col items-center gap-1">
+          <span className="w-12 rounded bg-bg-0 py-0.5 text-center font-mono text-[10px] tabular-nums" data-console-db={l.id}>{dbOf(l.gain)}</span>
+          <Knob value={l.pan} min={-1} max={1} def={0} bipolar onChange={(x) => put({ pan: x }, `pan:${l.id}`)} label={t('Pan')} show={panLabel(l.pan)} data-daw-pan={l.id} />
+          <span className="text-[9px] text-text-2 tabular-nums">{panLabel(l.pan)}</span>
+          <button type="button" onClick={() => put({ mute: !l.mute })} aria-pressed={!l.mute} title={l.mute ? t('Track off (click to turn on)') : t('Track on (click to mute)')} className="mt-1 h-7 w-7 rounded text-xs font-bold text-black" style={{ background: l.mute ? 'var(--color-bg-4)' : color }} data-daw-activator={l.id}>{i + 1}</button>
+          {l.kind !== 'bus' && <button type="button" onClick={() => put({ solo: !l.solo })} aria-pressed={l.solo} title={t('Solo')} className={`h-6 w-7 rounded text-[11px] font-bold ${l.solo ? 'bg-accent text-white' : 'bg-bg-3 text-text-1'}`} data-daw-strip-solo={l.id}>S</button>}
+          {l.kind === 'audio' && <button type="button" onClick={(e) => armLane(l.id, !l.armed, e.ctrlKey || e.metaKey)} aria-pressed={!!l.armed} title={l.armed ? t('Armed: records the next take') : t('Arm for recording')} className={`flex h-6 w-7 items-center justify-center rounded ${l.armed ? 'bg-danger' : 'bg-bg-3'}`} data-daw-strip-arm={l.id}><span className={`h-2.5 w-2.5 rounded-full ${l.armed ? 'bg-black' : 'bg-text-2'}`} /></button>}
+        </div>
+        <div className="flex min-h-0 flex-1 gap-1">
+          <Fader value={l.gain} onChange={(gain) => put({ gain }, `gain:${l.id}`)} get={() => engine.level(l.id)} id={l.id} label={l.name} />
+          <div className="flex flex-col justify-between py-0.5 font-mono text-[8px] text-text-2" aria-hidden>{['+3', '0', '-6', '-12', '-24', '-48'].map((d) => <span key={d}>{d}</span>)}</div>
+        </div>
+      </div>
+      {l.kind !== 'bus' && (
+        <label className="flex items-center gap-1 px-1.5" title={t('Track delay: moves this track earlier (negative) or later, to fix latency')}>
+          <span className={sec}>{t('Delay')}</span>
+          <input type="number" min={-1000} max={1000} value={l.nudge_ms ?? 0} onChange={(e) => put({ nudge_ms: Math.max(-1000, Math.min(1000, Math.round(Number(e.target.value) || 0))) }, `nudge:${l.id}`)} className="input h-6 min-w-0 flex-1 px-1 text-right font-mono text-[10px]" aria-label={t('Track delay (ms)')} data-daw-track-delay={l.id} />
+          <span className="text-[10px] text-text-2">ms</span>
+        </label>
+      )}
+      <div className="h-1.5 rounded-b-md" style={{ background: color }} />
+    </div>
+  )
+}
+
+/** A strip per track, laid out like Ableton Live's mixer, then the master. */
+export default function DawMixer({ ordered, lanes, project, channelId, users }: { ordered: StudioLane[]; lanes: Record<string, StudioLane>; project: StudioProject; channelId: string; users: Record<string, User> }) {
+  const t = useT()
   const [open, setOpen] = useState<{ owner: Owner; id: string } | null>(null)
   const [instFor, setInstFor] = useState<string | null>(null)
   const buses = ordered.filter((l) => l.kind === 'bus')
   const chainOf = (o: Owner) => (o === 'master' ? project.master_effects ?? [] : lanes[o]?.effects ?? [])
   return (
-    <div className="relative flex-1 min-h-0 overflow-x-auto overflow-y-hidden" data-daw-mixer>
-      <div className="flex h-full min-h-[24rem] gap-1.5 p-2">
-        {ordered.map((l, i) => {
-          const inBand = !!l.user_id && band.includes(l.user_id)
-          const armed = inBand && !disarmed.includes(l.user_id!)
-          const btn = (on: boolean, cls: string) => `h-6 w-full rounded text-[11px] font-bold disabled:opacity-30 ${on ? cls : 'bg-bg-3 text-text-2 hover:text-text-0'}`
-          return (
-            <div key={l.id} className={`flex w-28 shrink-0 flex-col items-stretch gap-1.5 rounded-lg border border-line bg-bg-2 p-1.5 ${audible(lanes, l.id) ? '' : 'opacity-60'}`} style={{ borderTopColor: laneColor(l, i), borderTopWidth: 3 }} data-daw-strip={l.id} data-strip-kind={l.kind}>
-              <div className="flex min-w-0 items-center gap-1">
-                {l.user_id && users[l.user_id] && <Avatar user={users[l.user_id]} size={16} />}
-                <span className="truncate text-xs font-semibold" title={l.name}>{l.name}</span>
-                {l.kind !== 'audio' && <span className="ml-auto shrink-0 rounded bg-bg-4 px-1 text-[9px] font-bold uppercase text-text-1">{l.kind === 'bus' ? t('Bus') : t('MIDI')}</span>}
-              </div>
-              {l.kind === 'midi' && <button type="button" onClick={() => setInstFor(instFor === l.id ? null : l.id)} className="h-6 rounded bg-bg-3 text-[10px] font-semibold hover:bg-bg-4" data-daw-instrument-open={l.id}>{t('Instrument: {name}', { name: l.instrument?.type ?? 'synth' })}</button>}
-              <FxRack owner={l.id} list={l.effects ?? []} picked={open?.owner === l.id ? open.id : null} pick={(id) => setOpen(id ? { owner: l.id, id } : null)} />
-              {l.kind !== 'bus' && buses.length > 0 && (
-                <div className="flex flex-col gap-0.5" data-daw-sends={l.id}>
-                  {buses.map((b) => (
-                    <label key={b.id} className="flex items-center gap-1 text-[9px] text-text-2" title={t('Send to {name}', { name: b.name })}>
-                      <span className="w-8 truncate">{b.name}</span>
-                      <input type="range" min={0} max={150} value={Math.round((l.sends?.[b.id] ?? 0) * 100)} onChange={(e) => editLive(`send:${l.id}:${b.id}`, [{ op: 'lane.put', lane: { id: l.id, sends: { ...l.sends, [b.id]: Number(e.target.value) / 100 } } }])} className="h-2.5 min-w-0 flex-1 accent-accent" data-daw-send={b.id} />
-                    </label>
-                  ))}
-                </div>
-              )}
-              {l.kind !== 'bus' && buses.length > 0 && (
-                <Dropdown value={l.output_id ?? ''} onChange={(e) => edit([{ op: 'lane.put', lane: { id: l.id, output_id: e.target.value || null } }])} className="input h-6 px-1 text-[10px]" title={t('Output')} aria-label={t('Output')} data-daw-output={l.id}>
-                  <option value="">{t('→ Master')}</option>
-                  {buses.map((b) => <option key={b.id} value={b.id}>→ {b.name}</option>)}
-                </Dropdown>
-              )}
-              <label className="flex flex-col items-center text-[10px] text-text-2" title={t('Pan')}>
-                <input type="range" min={-100} max={100} value={Math.round(l.pan * 100)} onChange={(e) => editLive(`pan:${l.id}`, [{ op: 'lane.put', lane: { id: l.id, pan: Number(e.target.value) / 100 } }])} onDoubleClick={() => edit([{ op: 'lane.put', lane: { id: l.id, pan: 0 } }])} className="h-3 w-full accent-accent" aria-label={t('Pan')} data-daw-pan={l.id} />
-                <span className="tabular-nums">{panLabel(l.pan)}</span>
-              </label>
-              <div className="grid grid-cols-3 gap-0.5">
-                <button type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, mute: !l.mute } }])} aria-pressed={l.mute} title={t('Mute')} className={btn(l.mute, 'bg-danger text-white')}>M</button>
-                <button type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, solo: !l.solo } }])} aria-pressed={l.solo} title={t('Solo')} className={btn(l.solo, 'bg-warn text-black')}>S</button>
-                <button type="button" disabled={!inBand || !crew} onClick={() => setArm(channelId, l.user_id!, !armed).catch((e) => pushToast((e as Error).message, 'error'))} aria-pressed={armed} title={t('Arm')} className={btn(armed, 'bg-danger text-white')}>R</button>
-              </div>
-              <Fader value={l.gain} onChange={(gain) => editLive(`gain:${l.id}`, [{ op: 'lane.put', lane: { id: l.id, gain } }])} get={() => engine.level(l.id)} id={l.id} label={l.name} />
-            </div>
-          )
-        })}
+    <div className="relative flex-1 min-h-0 overflow-x-auto overflow-y-auto" data-daw-mixer>
+      <div className="flex h-full min-h-[34rem] gap-1.5 p-2">
+        {ordered.map((l, i) => <Strip key={l.id} {...{ l, i, lanes, buses, channelId, users, open, setOpen, instFor, setInstFor }} />)}
         <div className="ml-auto flex w-28 shrink-0 flex-col items-stretch gap-1.5 rounded-lg border border-accent/50 bg-bg-2 p-1.5" data-daw-strip="master">
           <span className="text-xs font-bold uppercase tracking-wide text-text-1">{t('Master')}</span>
           <FxRack owner="master" list={project.master_effects ?? []} picked={open?.owner === 'master' ? open.id : null} pick={(id) => setOpen(id ? { owner: 'master', id } : null)} />

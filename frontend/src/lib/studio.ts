@@ -1,6 +1,7 @@
 import { api, getToken } from './api'
 import { clickAt } from './multitrack'
-import { engine } from './daw'
+import { engine, useDaw } from './daw'
+import { serverNow, syncClock, toLocal } from './clock'
 import { useStore } from '../store'
 import type { StudioConfig, StudioSession } from './types'
 import { voice } from './voice'
@@ -9,36 +10,30 @@ import { t } from '../lib/i18n'
 /** Console defaults for a studio that has never been configured (the server's defaults). */
 export const DEFAULT_STUDIO: StudioConfig = { bpm: 120, beats: 4, click: false, count_in: 0, disarmed: [] }
 
-/** Am I a band member of this studio, armed by the console? (Engineers are in the band too; the audience is not.) */
-function armedHere(channelId: string): boolean {
-  const s = useStore.getState()
-  const me = s.user?.id
-  const mine = me ? s.voiceStates[me] : undefined
-  const ch = s.channels[channelId]
-  return !!me && s.myVoiceChannelId === channelId && !!mine && !mine.suppress && ch?.kind === 'project' && !(ch.studio?.disarmed ?? []).includes(me)
-}
 
 /**
- * Recording Studio client: while the engineer runs a take, every armed band member records its own mic with
- * MediaRecorder and streams 5-second chunks to its track on the server. The offset between the take's downbeat and
- * the moment recording really began is stored with the track so the mixer can line everything up (negative during a
- * count-in: pre-roll). It follows the studio's state rather than single events, so arming during a take, or joining
- * the band late, punches in a new clip, and disarming punches out.
+ * Recording Studio client: while a take runs, every band member records their armed tracks, each from the input it is
+ * set to (their default microphone, or an input device by name and one or both of its channels: a two-input
+ * interface makes two separate takes), with MediaRecorder, streaming 5-second chunks to a take of its own on the
+ * server. A member with no track of their own yet records their microphone as one take, which makes them one. The
+ * offset between the take's downbeat and the moment recording really began is stored with each take so it lines up
+ * (negative during a count-in: pre-roll). It follows the studio's state rather than single events, so arming a track
+ * during a take, or joining the band late, punches in a new clip, and disarming punches out.
  */
+type Rec = { rec: MediaRecorder; trackId: string; sessionId: string; startedAt: number; queue: Promise<void>; release: () => void }
+
 class StudioRecorder {
-  private rec: MediaRecorder | null = null
-  private sessionId: string | null = null
-  private trackId: string | null = null
-  private startedAt = 0
-  private queue: Promise<void> = Promise.resolve()
-  private stream: MediaStream | null = null
-  private starting = false
-  /** A take we could not record (no mic, refused): not retried on every store change. */
-  private failed: string | null = null
+  /** What is recording, by track ('' for a member's take with no track of their own yet). */
+  private recs = new Map<string, Rec>()
+  private starting = new Set<string>()
+  /** Tracks we could not record in a take (no mic, refused, no such input): not retried on every store change. */
+  private failed = new Set<string>()
   /** The take announced by STUDIO_SESSION, live until its stop, even before the sessions list has caught up. */
   private known: { channel: string; session: string } | null = null
+  /** Shared inputs while recording: the default microphone, and input devices by name. */
+  private inputs = new Map<string, { stream: Promise<MediaStream | null>; users: number }>()
 
-  get recording() { return !!this.rec }
+  get recording() { return this.recs.size > 0 }
 
   constructor() {
     if (typeof window === 'undefined') return
@@ -48,18 +43,20 @@ class StudioRecorder {
       prev = s
       this.sync()
     })
+    // Arming, disarming or re-pointing a track during a take punches in or out.
+    useDaw.subscribe((s, p) => { if (s.lanes !== p.lanes || s.project?.id !== p.project?.id) this.sync() })
   }
 
   onSession(d: { channel_id: string; action: 'start' | 'stop'; session_id: string; started_at?: string; bpm?: number; beats?: number; click?: boolean; count_in_ms?: number; solo?: boolean; started_by?: string; project_id?: string | null }) {
-    if (d.action === 'stop') { if (this.known?.session === d.session_id) this.known = null; if (this.sessionId === d.session_id) void this.stop(); metronome.stop(d.session_id); return }
+    if (d.action === 'stop') { if (this.known?.session === d.session_id) this.known = null; void this.stopAll(d.session_id); metronome.stop(d.session_id); return }
     this.known = { channel: d.channel_id, session: d.session_id }
     // The sessions list is still loading: act on the event itself.
     const start = d.started_at ? Date.parse(d.started_at) : Date.now()
     // A take recorded alone is only its starter's.
     if (d.solo && d.started_by !== useStore.getState().user?.id) return
     // Over a project the project's grid clicks along with the backing (lib/daw); this plays the count-in.
-    if (useStore.getState().myVoiceChannelId === d.channel_id && this.inBand(d.channel_id)) metronome.run(d.session_id, start, d.bpm ?? 120, d.beats ?? 4, !!d.click && !d.project_id, d.count_in_ms ?? 0)
-    if (armedHere(d.channel_id)) void this.start(d.session_id, start)
+    if (useStore.getState().myVoiceChannelId === d.channel_id && this.inBand(d.channel_id)) metronome.run(d.session_id, toLocal(start), d.bpm ?? 120, d.beats ?? 4, !!d.click && !d.project_id, d.count_in_ms ?? 0)
+    for (const key of this.wanted(d.channel_id)) void this.start(key, d.session_id, start)
   }
 
   private inBand(channelId: string) {
@@ -68,7 +65,19 @@ class StudioRecorder {
     return !!mine && mine.channel_id === channelId && !mine.suppress
   }
 
-  /** Bring recording and the click in line with the studio: the take running, my role, my arm. */
+  /** What I record in this project's voice room now: my armed tracks, or one take of mine if I have no track yet. */
+  private wanted(channelId: string): string[] {
+    const s = useStore.getState()
+    const me = s.user?.id
+    const ch = s.channels[channelId]
+    if (!me || s.myVoiceChannelId !== channelId || !this.inBand(channelId) || ch?.kind !== 'project') return []
+    const { project, lanes } = useDaw.getState()
+    const mine = project && project.id === ch.studio?.project_id ? Object.values(lanes).filter((l) => l.kind === 'audio' && l.user_id === me) : []
+    if (mine.length) return mine.filter((l) => l.armed).map((l) => l.id)
+    return (ch.studio?.disarmed ?? []).includes(me) ? [] : ['']
+  }
+
+  /** Bring recording and the click in line with the studio: the take running, my role, my armed tracks. */
   private sync() {
     const s = useStore.getState()
     const ch = s.myVoiceChannelId
@@ -77,69 +86,107 @@ class StudioRecorder {
     const live = found && (!found.solo || found.started_by === s.user?.id) ? found : undefined
     if (this.known && (this.known.channel !== ch || list?.some((x) => x.id === this.known!.session && x.ended_at))) this.known = null
     const liveId = live?.id ?? this.known?.session ?? null
-    if (live && ch && this.inBand(ch)) metronome.run(live.id, Date.parse(live.started_at), live.bpm, live.beats, live.click && !live.project_id, live.count_in_ms)
+    if (live && ch && this.inBand(ch)) metronome.run(live.id, toLocal(Date.parse(live.started_at)), live.bpm, live.beats, live.click && !live.project_id, live.count_in_ms)
     else if (!liveId || !ch || !this.inBand(ch)) metronome.stop()
-    if (this.rec && (!liveId || liveId !== this.sessionId || !armedHere(ch!))) { void this.stop(); return }
-    if (live && ch && !this.rec && !this.starting && this.failed !== live.id && armedHere(ch)) void this.start(live.id, Date.parse(live.started_at))
+    const want = new Set(liveId && ch ? this.wanted(ch) : [])
+    for (const [key, r] of this.recs) if (!want.has(key) || r.sessionId !== liveId) void this.stop(key)
+    if (live) for (const key of want) if (!this.recs.has(key) && !this.failed.has(`${live.id}:${key}`)) void this.start(key, live.id, Date.parse(live.started_at))
   }
 
-  private async start(sessionId: string, serverStart: number) {
-    if (this.rec || this.starting) return
-    this.starting = true
+  /** The audio for a track: its input device (shared while recording) and channel, or the microphone as the call has it. */
+  private async source(key: string): Promise<{ stream: MediaStream; release: () => void } | null> {
+    const input = key ? useDaw.getState().lanes[key]?.input : null
+    const device = input?.device ?? '', channel = input?.channel ?? 'mono'
+    // Tracks on the same input share one capture of it (opened once, even when they start together).
+    const take = (id: string, open: () => Promise<MediaStream | null>) => {
+      const have = this.inputs.get(id)
+      if (have) { have.users++; return have.stream }
+      const stream = open().catch((e) => { this.inputs.delete(id); throw e })
+      this.inputs.set(id, { stream, users: 1 })
+      return stream
+    }
+    const drop = (id: string, stop: (st: MediaStream) => void) => { const h = this.inputs.get(id); if (h && --h.users <= 0) { this.inputs.delete(id); void h.stream.then((st) => { if (st) stop(st) }) } }
+    if (!device && channel === 'mono') {
+      const stream = await take('', async () => voice.getRecordingStream())
+      if (!stream || !stream.getAudioTracks().length) return null
+      return { stream, release: () => drop('', () => voice.releaseRecordingStream()) }
+    }
+    const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[])
+    const id = devices.find((d) => d.kind === 'audioinput' && d.label === device)?.deviceId
+    if (device && !id) throw new Error(t('The input "{name}" is not on this device', { name: device }))
+    const raw = await take(`dev:${device}`, () => navigator.mediaDevices.getUserMedia({ audio: { ...(id ? { deviceId: { exact: id } } : {}), channelCount: { ideal: 2 }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } }))
+    if (!raw) return null
+    // One channel of it, both as stereo, or both mixed to mono.
+    // The engine's context: already running (a context made here may be left suspended outside a click).
+    const ctx = engine.audio()
+    ctx.resume().catch(() => {})
+    const src = ctx.createMediaStreamSource(raw), dest = ctx.createMediaStreamDestination()
+    if (channel === '1' || channel === '2') { const split = ctx.createChannelSplitter(2); src.connect(split); split.connect(dest, channel === '1' ? 0 : 1); dest.channelCount = 1 }
+    else if (channel === '1/2') { dest.channelCount = 2; src.connect(dest) }
+    else { dest.channelCount = 1; dest.channelCountMode = 'explicit'; src.connect(dest) }
+    return { stream: dest.stream, release: () => { src.disconnect(); drop(`dev:${device}`, (st) => st.getTracks().forEach((tr) => tr.stop())) } }
+  }
+
+  private async start(key: string, sessionId: string, serverStart: number) {
+    if (this.recs.has(key) || this.starting.has(key)) return
+    this.starting.add(key)
+    let release: (() => void) | null = null
     try {
-      await this.queue   // a clip that is still finishing (punch out, then straight back in)
-      const stream = voice.getRecordingStream()
-      if (!stream || !stream.getAudioTracks().length) { this.failed = sessionId; useStore.getState().pushToast(t('Recording started, but your microphone is not available'), 'error'); return }
+      const src = await this.source(key)
+      if (!src) { this.failed.add(`${sessionId}:${key}`); useStore.getState().pushToast(t('Recording started, but your microphone is not available'), 'error'); return }
+      release = src.release
       const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'].find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) ?? ''
-      const offset = Date.now() - serverStart
+      await syncClock()
+      const offset = Math.round(serverNow() - serverStart)
       // Recording over the project: placed earlier by the time from hearing it to the mic capturing what is played.
-      const track = await api.post<{ id: string }>(`/studio/sessions/${sessionId}/tracks`, { offset_ms: offset, content_type: mime.split(';')[0] || 'audio/webm', latency_ms: engine.latencyMs(stream) })
-      this.sessionId = sessionId; this.trackId = track.id; this.stream = stream
-      const rec = new MediaRecorder(stream, mime ? { mimeType: mime, audioBitsPerSecond: 128_000 } : undefined)
-      rec.ondataavailable = (e) => { if (e.data.size) this.enqueue(e.data) }
-      rec.onstop = () => { this.queue = this.queue.then(() => this.finish()) }
+      const track = await api.post<{ id: string }>(`/studio/sessions/${sessionId}/tracks`, { offset_ms: offset, content_type: mime.split(';')[0] || 'audio/webm', latency_ms: engine.latencyMs(src.stream), ...(key ? { lane_id: key } : {}) })
+      const rec = new MediaRecorder(src.stream, mime ? { mimeType: mime, audioBitsPerSecond: 128_000 } : undefined)
+      const r: Rec = { rec, trackId: track.id, sessionId, startedAt: Date.now(), queue: Promise.resolve(), release: src.release }
+      release = null
+      rec.ondataavailable = (e) => { if (e.data.size) this.enqueue(r, e.data) }
+      rec.onstop = () => { r.queue = r.queue.then(() => this.finish(key, r)) }
       rec.start(5000)
-      this.rec = rec; this.startedAt = Date.now()
+      this.recs.set(key, r)
       this.expose()
-      useStore.getState().pushToast(t('Recording: your track is being captured'))
+      if (this.recs.size === 1) useStore.getState().pushToast(t('Recording: your track is being captured'))
     } catch (e) {
-      this.failed = sessionId
-      voice.releaseRecordingStream()
+      this.failed.add(`${sessionId}:${key}`)
+      release?.()
       useStore.getState().pushToast((e as Error).message, 'error')
     } finally {
-      this.starting = false
+      this.starting.delete(key)
       // Things may have moved on while we were starting (disarmed, take stopped).
       queueMicrotask(() => this.sync())
     }
   }
 
-  private enqueue(blob: Blob) {
-    const sid = this.sessionId, tid = this.trackId
-    if (!sid || !tid) return
-    this.queue = this.queue.then(async () => {
+  private enqueue(r: Rec, blob: Blob) {
+    r.queue = r.queue.then(async () => {
       const token = getToken()
-      const r = await fetch(`/api/studio/sessions/${sid}/tracks/${tid}/chunks`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: blob })
-      if (!r.ok) throw new Error(`chunk upload failed (${r.status})`)
+      const res = await fetch(`/api/studio/sessions/${r.sessionId}/tracks/${r.trackId}/chunks`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: blob })
+      if (!res.ok) throw new Error(`chunk upload failed (${res.status})`)
     }).catch((e) => { useStore.getState().pushToast(t('Recording upload: {message}', { message: (e as Error).message }), 'error') })
   }
 
-  private async finish() {
-    const sid = this.sessionId, tid = this.trackId, dur = Date.now() - this.startedAt
-    this.sessionId = null; this.trackId = null; this.rec = null
-    this.stream?.getTracks().forEach((tr) => tr.stop()); this.stream = null
-    voice.releaseRecordingStream()
+  private async finish(key: string, r: Rec) {
+    if (this.recs.get(key) === r) this.recs.delete(key)
+    r.release()
     this.expose()
-    if (sid && tid) { try { await api.post(`/studio/sessions/${sid}/tracks/${tid}/finish`, { duration_ms: dur }) } catch { /* server keeps what it has */ } }
+    try { await api.post(`/studio/sessions/${r.sessionId}/tracks/${r.trackId}/finish`, { duration_ms: Date.now() - r.startedAt }) } catch { /* server keeps what it has */ }
   }
 
-  async stop() {
-    const rec = this.rec
-    if (!rec) return
-    if (rec.state !== 'inactive') rec.stop()   // onstop → finish after the last chunk is queued
-    else await this.finish()
+  private async stop(key: string) {
+    const r = this.recs.get(key)
+    if (!r) return
+    this.recs.delete(key)
+    if (r.rec.state !== 'inactive') r.rec.stop()   // onstop → finish after the last chunk is queued
+    else await this.finish(key, r)
+    this.expose()
   }
 
-  private expose() { (window as unknown as { __parleyStudio?: unknown }).__parleyStudio = { recording: !!this.rec, trackId: this.trackId, sessionId: this.sessionId } }
+  async stopAll(sessionId?: string) { for (const [key, r] of Array.from(this.recs)) if (!sessionId || r.sessionId === sessionId) await this.stop(key) }
+
+  private expose() { (window as unknown as { __parleyStudio?: unknown }).__parleyStudio = { recording: this.recs.size > 0, tracks: [...this.recs.keys()], trackId: [...this.recs.values()][0]?.trackId ?? null } }
 }
 
 /**

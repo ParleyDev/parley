@@ -102,7 +102,7 @@ await pa.click('[data-daw-view-mixer]'); await pa.waitForSelector('[data-daw-mix
 await pa.locator(`[data-console-fader="${L1}"]`).fill('50'); await pa.waitForTimeout(800)
 ok('a fader move is shared (sent when it settles)', Math.abs((await full(P.id)).lanes[0].gain - 0.5) < 0.01)
 await pa.click('[data-daw-rtz]'); await pa.click('[data-daw-play]')
-await pa.waitForFunction(() => window.__parleyDaw?.playing === 'local' && window.__parleyDaw.sources > 0, null, { timeout: 8000 }).catch(() => {})
+await pa.waitForFunction(() => ['local', 'shared'].includes(window.__parleyDaw?.playing) && window.__parleyDaw.sources > 0, null, { timeout: 8000 }).catch(() => {})
 await pa.waitForFunction(() => Number(document.querySelector('[data-console-meter="master"]')?.dataset.level ?? 0) > 0.02, null, { timeout: 8000 }).catch(() => {})
 ok('play schedules every clip and the master meter moves', await pa.evaluate(() => window.__parleyDaw.sources === 2 && Number(document.querySelector('[data-console-meter="master"]')?.dataset.level ?? 0) > 0.02), JSON.stringify(await pa.evaluate(() => window.__parleyDaw)))
 await pa.screenshot({ path: 'daw-mixer.png' })

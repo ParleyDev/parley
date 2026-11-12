@@ -57,6 +57,8 @@ pub struct Track {
     /// An import's file name.
     pub name: Option<String>,
     pub latency_ms: i32,
+    /// The project track a take was recorded for (a member records each of their armed tracks as its own take).
+    pub lane_id: Option<Uuid>,
     #[sqlx(default)]
     pub display_name: String,
     #[sqlx(skip)]
@@ -94,7 +96,7 @@ pub struct Session {
     pub tracks: Vec<Track>,
 }
 
-pub const TRACK_SELECT: &str = "SELECT t.id, t.session_id, t.user_id, t.content_type, t.size, t.duration_ms, t.offset_ms, t.done, t.created_at, t.kind, t.name, t.latency_ms, COALESCE(u.display_name, 'Unknown') AS display_name
+pub const TRACK_SELECT: &str = "SELECT t.id, t.session_id, t.user_id, t.content_type, t.size, t.duration_ms, t.offset_ms, t.done, t.created_at, t.kind, t.name, t.latency_ms, t.lane_id, COALESCE(u.display_name, 'Unknown') AS display_name
     FROM studio_tracks t LEFT JOIN users u ON u.id = t.user_id";
 const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_at, ended_at, armed, bpm, beats, click, count_in_ms, project_id, position_ms, loop_start_ms, loop_end_ms, punch, solo";
 
@@ -315,7 +317,7 @@ async fn delete_session(State(state): State<AppState>, AuthUser(uid): AuthUser, 
 }
 
 #[derive(Deserialize)]
-struct NewTrack { #[serde(default)] offset_ms: i32, content_type: Option<String>, #[serde(default)] latency_ms: i32 }
+struct NewTrack { #[serde(default)] offset_ms: i32, content_type: Option<String>, #[serde(default)] latency_ms: i32, lane_id: Option<Uuid> }
 
 /// A band member registers a track (clip) for the open session while armed.
 async fn create_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(sid): Path<Uuid>, Json(req): Json<NewTrack>) -> AppResult<(StatusCode, Json<Track>)> {
@@ -325,18 +327,31 @@ async fn create_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     let (c, _) = studio_channel(&state.db, channel_id, uid).await?;
     let vs = state.hub.voice_state(uid).filter(|v| v.channel_id == channel_id).ok_or_else(|| AppError::BadRequest("Join the studio first".into()))?;
     if vs.suppress { return Err(AppError::Forbidden); }
-    if config_of(&state.db, channel_id).await?.disarmed.contains(&uid) { return Err(AppError::BadRequest("Your track is not armed".into())); }
+    // A take for a track needs the track armed; a member's take without one, the member not disarmed.
+    if req.lane_id.is_none() {
+        if config_of(&state.db, channel_id).await?.disarmed.contains(&uid) { return Err(AppError::BadRequest("Your track is not armed".into())); }
+        // A member with tracks of their own records onto those (each armed one), not as a take of their own.
+        let has: Option<(bool,)> = sqlx::query_as("SELECT true FROM studio_lanes l JOIN studio_projects p ON p.id = l.project_id WHERE p.channel_id = $1 AND l.user_id = $2 AND l.kind = 'audio' LIMIT 1").bind(channel_id).bind(uid).fetch_optional(&state.db).await?;
+        if has.is_some() { return Err(AppError::BadRequest("Your track is not armed".into())); }
+    }
     let solo: Option<(bool, Option<Uuid>)> = sqlx::query_as("SELECT solo, started_by FROM studio_sessions WHERE id = $1").bind(sid).fetch_optional(&state.db).await?;
     if solo.is_some_and(|(solo, by)| solo && by != Some(uid)) { return Err(AppError::BadRequest("Someone is recording alone".into())); }
-    // Punching out and back in gives a member several clips in one take, one open at a time.
-    let open: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_tracks WHERE session_id = $1 AND user_id = $2 AND NOT done").bind(sid).bind(uid).fetch_optional(&state.db).await?;
+    // A take for one of the project's tracks: it must be one of its audio tracks.
+    if let Some(lane) = req.lane_id {
+        let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM studio_lanes l JOIN studio_projects p ON p.id = l.project_id WHERE l.id = $1 AND p.channel_id = $2 AND l.kind = 'audio'").bind(lane).bind(channel_id).fetch_optional(&state.db).await?;
+        if ok.is_none() { return Err(AppError::BadRequest("Record onto an audio track of this project".into())); }
+        let armed: Option<(bool,)> = sqlx::query_as("SELECT armed FROM studio_lanes WHERE id = $1").bind(lane).fetch_optional(&state.db).await?;
+        if !armed.is_some_and(|a| a.0) { return Err(AppError::BadRequest("That track is not armed".into())); }
+    }
+    // Punching out and back in gives a member several clips in one take, one open at a time per track.
+    let open: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_tracks WHERE session_id = $1 AND user_id = $2 AND NOT done AND lane_id IS NOT DISTINCT FROM $3").bind(sid).bind(uid).bind(req.lane_id).fetch_optional(&state.db).await?;
     if open.is_some() { return Err(AppError::Conflict("You are already recording in this session".into())); }
     let ct = req.content_type.filter(|t| t.starts_with("audio/")).unwrap_or_else(|| "audio/webm".into());
     let tid = Uuid::now_v7();
     // What the recording client measured from hearing the music to its mic capturing what was played back: the take is
     // that much late, so it is placed that much earlier.
     let latency = req.latency_ms.clamp(0, 1000);
-    sqlx::query("INSERT INTO studio_tracks (id, session_id, user_id, content_type, offset_ms, channel_id, latency_ms) VALUES ($1, $2, $3, $4, $5, $6, $7)").bind(tid).bind(sid).bind(uid).bind(&ct).bind(req.offset_ms.clamp(-120_000, 600_000) - latency).bind(channel_id).bind(latency).execute(&state.db).await?;
+    sqlx::query("INSERT INTO studio_tracks (id, session_id, user_id, content_type, offset_ms, channel_id, latency_ms, lane_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)").bind(tid).bind(sid).bind(uid).bind(&ct).bind(req.offset_ms.clamp(-120_000, 600_000) - latency).bind(channel_id).bind(latency).bind(req.lane_id).execute(&state.db).await?;
     tokio::fs::create_dir_all(&state.config.upload_dir).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     tokio::fs::write(track_path(&state, tid), b"").await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     let mut t = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.id = $1")).bind(tid).fetch_one(&state.db).await?;

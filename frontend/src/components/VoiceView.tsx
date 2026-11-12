@@ -383,7 +383,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
                   )
                   return phone ? <PhoneMore>{extras}</PhoneMore> : <ControlGroup>{extras}</ControlGroup>
                 })()}
-                <HangUpButton label={t('Disconnect')} onClick={() => { void studioRec.stop(); voice.leave() }} data-voice-leave="" />
+                <HangUpButton label={t('Disconnect')} onClick={() => { void studioRec.stopAll(); voice.leave() }} data-voice-leave="" />
               </ControlBar>
           </div>}
         </div>

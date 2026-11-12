@@ -26,7 +26,7 @@ export function noteOn(p: number, v = 100) {
   sounding.get(p)?.()
   sounding.set(p, audition(lane, p, v, null))
   set({ held: [...get().held.filter((x) => x !== p), p] })
-  if (engine.playing === 'local') {
+  if (engine.playing === 'local' || engine.playing === 'shared') {
     take ??= { notes: [], open: new Map() }
     const n: Note = { p, t: Math.round(engine.position() * 1000), d: 1, v }
     take.notes.push(n); take.open.set(p, n)

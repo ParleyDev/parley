@@ -5,6 +5,8 @@ import { buildChain, chainKey, integratedLufs, type FxNode, type Target } from '
 import { beatsAt, isDownbeat, secAtBeat } from './tempo'
 import { scheduleNotes } from './instruments'
 import { useStore } from '../store'
+import { STORAGE_PREFIX } from './brand'
+import { serverNow, syncClock, toLocal } from './clock'
 import { t } from './i18n'
 import type { StudioClip, StudioLane, StudioProject, StudioProjectFull, StudioSession, StudioTrack } from './types'
 
@@ -23,7 +25,7 @@ import type { StudioClip, StudioLane, StudioProject, StudioProjectFull, StudioSe
  */
 
 export type Op =
-  | ({ op: 'project' } & Partial<Pick<StudioProject, 'name' | 'bpm' | 'beats' | 'master_gain' | 'master_effects' | 'tempo_map' | 'loop_on' | 'loop_start_ms' | 'loop_end_ms' | 'punch_on' | 'markers'>>)
+  | ({ op: 'project'; /** Drop the loop range (and loop / punch with it). */ clear_loop?: boolean } & Partial<Pick<StudioProject, 'name' | 'bpm' | 'beats' | 'master_gain' | 'master_effects' | 'tempo_map' | 'loop_on' | 'loop_start_ms' | 'loop_end_ms' | 'punch_on' | 'markers'>>)
   | { op: 'lane.put'; lane: Partial<StudioLane> & { id: string } }
   | { op: 'lane.del'; id: string }
   | { op: 'clip.put'; clip: Partial<StudioClip> & { id: string } }
@@ -50,11 +52,14 @@ export interface DawState {
   comments: StudioComment[]
   /** Where the others editing are: playhead, playing, selection (by user, with when it was heard). */
   peers: Record<string, { pos_ms: number; playing: boolean; sel: string[]; at: number }>
+  /** Follow the project's shared playback (on unless turned off here, remembered on this device). */
+  follow: boolean
 }
 export interface StudioComment { id: string; project_id: string; user_id: string | null; ms: number; lane_id: string | null; body: string; resolved: boolean; created_at: string }
 
 const empty = (): Pick<DawState, 'project' | 'lanes' | 'clips' | 'audio' | 'undo' | 'redo' | 'comments' | 'peers'> => ({ project: null, lanes: {}, clips: {}, audio: {}, undo: [], redo: [], comments: [], peers: {} })
-export const useDaw = create<DawState>(() => ({ ...empty(), loading: false, error: null }))
+const FOLLOW_KEY = `${STORAGE_PREFIX}dawFollow`
+export const useDaw = create<DawState>(() => ({ ...empty(), loading: false, error: null, follow: (() => { try { return localStorage.getItem(FOLLOW_KEY) !== '0' } catch { return true } })() }))
 const get = useDaw.getState, set = useDaw.setState
 
 export const newId = () => crypto.randomUUID()
@@ -86,7 +91,7 @@ function applyLocal(ops: (Op | Applied)[]) {
   if (!s.project) return
   const project = { ...s.project }, lanes = { ...s.lanes }, clips = { ...s.clips }
   for (const o of ops) {
-    if (o.op === 'project') Object.assign(project, 'project' in o ? o.project : { ...o, op: undefined })
+    if (o.op === 'project') { if ('clear_loop' in o && o.clear_loop) Object.assign(project, { loop_on: false, punch_on: false, loop_start_ms: null, loop_end_ms: null }); else Object.assign(project, 'project' in o ? o.project : { ...o, op: undefined }) }
     else if (o.op === 'lane.put') lanes[o.lane.id] = { ...(lanes[o.lane.id] ?? { project_id: project.id, name: t('Track'), color: null, position: 0, gain: 1, pan: 0, mute: false, solo: false, user_id: null }), ...o.lane } as StudioLane
     else if (o.op === 'lane.del') { delete lanes[o.id]; for (const c of Object.values(clips)) if (c.lane_id === o.id) delete clips[c.id] }
     else if (o.op === 'clip.put') clips[o.clip.id] = { ...(clips[o.clip.id] ?? { project_id: project.id, start_ms: 0, in_ms: 0, gain: 1, fade_in_ms: 0, fade_out_ms: 0, muted: false, created_by: null }), ...o.clip } as StudioClip
@@ -102,7 +107,7 @@ function inverse(ops: Op[]): Op[] {
   const out: Op[] = []
   const pick = <T extends object>(from: T, keys: string[]) => Object.fromEntries(keys.map((k) => [k, (from as Record<string, unknown>)[k]]))
   for (const o of ops) {
-    if (o.op === 'project' && project) out.unshift({ op: 'project', ...pick(project, Object.keys(o).filter((k) => k !== 'op')) })
+    if (o.op === 'project' && project) out.unshift({ op: 'project', ...pick(project, o.clear_loop ? ['loop_start_ms', 'loop_end_ms', 'loop_on', 'punch_on'] : Object.keys(o).filter((k) => k !== 'op')) })
     else if (o.op === 'lane.put') out.unshift(lanes[o.lane.id] ? { op: 'lane.put', lane: { id: o.lane.id, ...pick(lanes[o.lane.id], Object.keys(o.lane)) } } : { op: 'lane.del', id: o.lane.id })
     else if (o.op === 'lane.del' && lanes[o.id]) out.unshift({ op: 'lane.put', lane: { ...lanes[o.id] } }, ...Object.values(clips).filter((c) => c.lane_id === o.id).map((c): Op => ({ op: 'clip.put', clip: { ...c } })))
     else if (o.op === 'clip.put') out.unshift(clips[o.clip.id] ? { op: 'clip.put', clip: { id: o.clip.id, ...pick(clips[o.clip.id], Object.keys(o.clip)) } } : { op: 'clip.del', id: o.clip.id })
@@ -194,6 +199,29 @@ export async function loadComments() {
 export function onComments(d: { project_id: string }) { if (get().project?.id === d.project_id) void loadComments() }
 
 /** STUDIO_PRESENCE: where another editor is. */
+/** Turn following the shared playback on or off on this device. */
+export function setFollow(on: boolean) {
+  try { localStorage.setItem(FOLLOW_KEY, on ? '1' : '0') } catch { /* ignore */ }
+  set({ follow: on })
+  if (!on && engine.playing === 'shared') engine.stop()
+}
+
+/** Play (from `fromMs`) or stop the project for everyone in it. */
+export async function sharedTransport(playing: boolean, fromMs: number) {
+  const p = get().project
+  if (!p) return
+  await syncClock()
+  const r = await api.post<{ play_from_ms: number; play_at: string | null; play_by: string }>(`/studio/projects/${p.id}/transport`, { playing, position_ms: Math.round(fromMs) })
+  onTransport({ project_id: p.id, ...r })
+}
+
+/** STUDIO_TRANSPORT: the shared playback changed. */
+export function onTransport(d: { project_id: string; play_from_ms: number; play_at: string | null; play_by: string | null }) {
+  const p = get().project
+  if (!p || p.id !== d.project_id) return
+  set({ project: { ...p, play_from_ms: d.play_from_ms, play_at: d.play_at, play_by: d.play_by } })
+}
+
 export function onPresence(d: { project_id: string; user_id: string; pos_ms: number; playing: boolean; sel: string[] }) {
   if (get().project?.id !== d.project_id || d.user_id === useStore.getState().user?.id) return
   set({ peers: { ...get().peers, [d.user_id]: { pos_ms: d.pos_ms, playing: d.playing, sel: d.sel, at: Date.now() } } })
@@ -235,6 +263,20 @@ export async function importFiles(channelId: string, files: File[], at: number, 
 }
 
 /** Put a recorded take (from the Sessions panel) into the project: on its member's lane, or a new one, at `at`. */
+/**
+ * Arm a track (or disarm it), like a desktop DAW's exclusive arm: arming one of a member's tracks disarms their others,
+ * unless `keep` (Ctrl / Cmd-click: several inputs at once). `claim` also makes it the member's.
+ */
+export function armLane(id: string, on: boolean, keep = false, claim?: string) {
+  const { lanes } = get()
+  const l = lanes[id]
+  if (!l) return
+  const owner = claim ?? l.user_id
+  const ops: Op[] = [{ op: 'lane.put', lane: { id, armed: on, ...(claim ? { user_id: claim } : {}) } }]
+  if (on && !keep && owner) for (const o of Object.values(lanes)) if (o.id !== id && o.kind === 'audio' && o.user_id === owner && o.armed) ops.push({ op: 'lane.put', lane: { id: o.id, armed: false } })
+  edit(ops)
+}
+
 /** Where someone's takes land: the audio track they most recently made theirs (as the server places them). */
 export const takeLane = (lanes: Record<string, StudioLane>, uid: string | null | undefined) =>
   uid ? sortedLanes(lanes).filter((l) => l.kind === 'audio' && l.user_id === uid).sort((a, b) => (b.claimed_at ?? '').localeCompare(a.claimed_at ?? ''))[0] : undefined
@@ -295,7 +337,7 @@ type Graph = { lanes: Map<string, LaneNodes>; master: { input: GainNode; fx: Map
 
 /** The graph's shape: lanes, routing, effect chains and what is automated. A change means rebuilding it. */
 export function graphKey(lanes: Record<string, StudioLane>, project: StudioProject | null) {
-  return [chainKey(project?.master_effects ?? []), ...sortedLanes(lanes).map((l) => [l.id, l.kind, l.output_id ?? '', Object.keys(l.sends ?? {}).sort().join('+'), chainKey(l.effects ?? []), Object.keys(l.automation ?? {}).sort().join('+'), l.instrument ? JSON.stringify(l.instrument) : ''].join('|'))].join('\n')
+  return [chainKey(project?.master_effects ?? []), ...sortedLanes(lanes).map((l) => [l.id, l.kind, l.output_id ?? '', l.sends_only ? 'sends' : '', Object.keys(l.sends ?? {}).sort().join('+'), chainKey(l.effects ?? []), Object.keys(l.automation ?? {}).sort().join('+'), l.instrument ? JSON.stringify(l.instrument) : ''].join('|'))].join('\n')
 }
 
 /**
@@ -316,11 +358,12 @@ function buildGraph(ctx: BaseAudioContext, lanes: Record<string, StudioLane>, pr
     mgain.connect(shelf).connect(hp).connect(loud)
   }
   const nodes = new Map<string, LaneNodes>()
-  const make = (l: StudioLane, out: AudioNode) => {
+  const make = (l: StudioLane, out: AudioNode | null) => {
     const input = ctx.createGain(), vol = ctx.createGain(), pan = ctx.createStereoPanner(), on = ctx.createGain(), analyser = ctx.createAnalyser()
     analyser.fftSize = 1024
     const fx = buildChain(ctx, l.effects ?? [], input, vol)
-    vol.connect(pan).connect(on).connect(analyser).connect(out)
+    const tail = vol.connect(pan).connect(on).connect(analyser)
+    if (out) tail.connect(out)
     const n: LaneNodes = { input, fx, vol, pan, on, analyser, sends: new Map() }
     nodes.set(l.id, n)
     return n
@@ -329,7 +372,8 @@ function buildGraph(ctx: BaseAudioContext, lanes: Record<string, StudioLane>, pr
   for (const l of all) if (l.kind === 'bus') make(l, minput)
   for (const l of all) {
     if (l.kind === 'bus') continue
-    const n = make(l, (l.output_id && nodes.get(l.output_id)?.input) || minput)
+    // "Sends only": heard through its sends, not its output.
+    const n = make(l, l.sends_only ? null : (l.output_id && nodes.get(l.output_id)?.input) || minput)
     for (const bus of Object.keys(l.sends ?? {})) {
       const target = nodes.get(bus)
       if (!target) continue
@@ -391,7 +435,7 @@ class Engine {
   private loudBuf = new Float32Array(16384)
   /** Playing: the context time of timeline 0 (so position = currentTime - t0), and whether it is the take's backing. */
   private t0 = 0
-  playing: false | 'local' | 'backing' = false
+  playing: false | 'local' | 'backing' | 'shared' = false
   private listeners = new Set<() => void>()
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private click = false
@@ -464,7 +508,7 @@ class Engine {
   }
 
   /** Play from `fromSec` on the timeline, starting at context time `when` (default: now). With the loop on, it loops. */
-  play(fromSec: number, opts: { when?: number; backing?: boolean; click?: boolean; loop?: { a: number; b: number } | null } = {}) {
+  play(fromSec: number, opts: { when?: number; backing?: boolean; shared?: boolean; click?: boolean; loop?: { a: number; b: number } | null } = {}) {
     const ctx = this.audio()
     ctx.resume().catch(() => {})
     this.stop(true)
@@ -506,7 +550,7 @@ class Engine {
       }
       tick(); this.clickTimer = setInterval(tick, 25)
     }
-    this.playing = opts.backing ? 'backing' : 'local'
+    this.playing = opts.backing ? 'backing' : opts.shared ? 'shared' : 'local'
     this.emit()
   }
   private loopAt: { a: number; b: number } | null = null
@@ -533,7 +577,7 @@ class Engine {
     this.mix()
     if (!this.playing) return
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
-    this.refreshTimer = setTimeout(() => { if (this.playing && this.ctx) { const mode = this.playing; this.play(this.position(), { backing: mode === 'backing', click: this.click, ...(mode === 'backing' ? { loop: this.loopAt } : {}) }) } }, 60)
+    this.refreshTimer = setTimeout(() => { if (this.playing && this.ctx) { const mode = this.playing; this.play(this.position(), { backing: mode === 'backing', shared: mode === 'shared', click: this.click, ...(mode === 'backing' ? { loop: this.loopAt } : {}) }) } }, 60)
   }
   /** Rebuild if the graph's shape no longer matches the project. */
   reshape() {
@@ -635,14 +679,15 @@ function follow() {
     const pid = ch?.kind === 'project' ? ch.studio?.project_id ?? null : null
     if (pid && get().project?.id !== pid && loadingId !== pid) void loadProject(pid)
     const live: StudioSession | undefined = ch ? s.studio[ch.id]?.find((x) => !x.ended_at) : undefined
-    // A take recorded alone is backed only for whoever records it.
-    const take = live && live.project_id && live.project_id === get().project?.id && (!live.solo || live.started_by === s.user?.id) ? live : undefined
+    // Everyone in the project hears the backing of a take, a take recorded alone included.
+    const take = live && live.project_id && live.project_id === get().project?.id ? live : undefined
     if (take && backingFor !== take.id) {
       backingFor = take.id
-      void engine.preload().then(() => {
+      void Promise.all([engine.preload(), syncClock()]).then(() => {
         if (backingFor !== take.id) return
         const ctx = engine.audio()
-        const downbeat = Date.parse(take.started_at)
+        // In this device's clock: the take's times are the server's.
+        const downbeat = toLocal(Date.parse(take.started_at))
         // Loop recording loops the backing too; a punch plays straight through.
         const loop = take.loop_start_ms != null && take.loop_end_ms != null && !take.punch ? { a: take.loop_start_ms, b: take.loop_end_ms } : null
         let at = (take.position_ms ?? 0) + Math.max(0, Date.now() - downbeat)
@@ -650,10 +695,28 @@ function follow() {
         engine.play(at / 1000, { when: ctx.currentTime + Math.max(0, downbeat - Date.now()) / 1000, backing: true, loop, click: take.click })
       })
     } else if (!take && backingFor) { backingFor = null; if (engine.playing === 'backing') engine.stop() }
+    if (!take) shared()
+  }
+  // The project's shared playback, for everyone who has it open or is in its voice room (unless they opted out).
+  let sharedAt: string | null = null
+  const shared = () => {
+    const { project, follow: on } = get()
+    if (engine.playing === 'backing') return
+    const at = on && project?.play_at ? project.play_at : null
+    if (!at) { sharedAt = null; if (engine.playing === 'shared') engine.stop(); return }
+    if (sharedAt === at && engine.playing === 'shared') return
+    sharedAt = at
+    void Promise.all([engine.preload(), syncClock()]).then(() => {
+      const p = get().project
+      if (sharedAt !== at || !p || p.play_at !== at) return
+      const start = Date.parse(at), now = serverNow()
+      engine.play(((p.play_from_ms ?? 0) + Math.max(0, now - start)) / 1000, { when: engine.audio().currentTime + Math.max(0, start - now) / 1000, shared: true })
+    })
   }
   useStore.subscribe((s, prev) => { if (s.studio !== prev.studio || s.myVoiceChannelId !== prev.myVoiceChannelId || s.channels !== prev.channels) sync() })
   useDaw.subscribe((s, prev) => {
     if (s.project?.id !== prev.project?.id) sync()
+    else if (s.project?.play_at !== prev.project?.play_at || s.follow !== prev.follow) shared()
     // Moved, trimmed or new clips (and new lanes) reschedule what is playing; level changes just apply.
     if (s.clips !== prev.clips) engine.refresh()
     else if (s.lanes !== prev.lanes || s.project !== prev.project) engine.reshape()

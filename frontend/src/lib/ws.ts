@@ -15,7 +15,7 @@ import { getNotifPrefs } from './notifPrefs'
 import { getPrefs, streamerHides } from './prefs'
 import { log } from './log'
 import { studio } from './studio'
-import { onComments as onDawComments, onPresence as onDawPresence, onRemote as onDawEdit } from './daw'
+import { onComments as onDawComments, onPresence as onDawPresence, onRemote as onDawEdit, onTransport as onDawTransport } from './daw'
 import { isNative, registerPush } from './native'
 import { clearChannelNotifications, refreshPush } from './webpush'
 import { markJoined } from './welcome'
@@ -86,6 +86,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'STUDIO_PROJECT'; d: Parameters<typeof onDawEdit>[0] & { channel_id: string } }
   | { t: 'STUDIO_PROJECTS'; d: { channel_id: string } }
   | { t: 'STUDIO_GATHERING'; d: { channel_id: string } }
+  | { t: 'STUDIO_TRANSPORT'; d: { project_id: string; play_from_ms: number; play_at: string | null; play_by: string | null } }
   | { t: 'STUDIO_PRESENCE'; d: Parameters<typeof onDawPresence>[0] & { channel_id: string } }
   | { t: 'STUDIO_COMMENTS'; d: { channel_id: string; project_id: string } }
   | { t: 'STUDIO_VERSIONS'; d: { channel_id: string; project_id: string } }
@@ -372,6 +373,7 @@ function handle(ev: Ev) {
     case 'STUDIO_PRESENCE': onDawPresence(ev.d); break
     case 'STUDIO_COMMENTS': onDawComments(ev.d); break
     case 'STUDIO_VERSIONS': window.dispatchEvent(new CustomEvent('parley-studio-versions', { detail: ev.d.project_id })); break
+    case 'STUDIO_TRANSPORT': onDawTransport(ev.d); break
     case 'STUDIO_GATHERING': window.dispatchEvent(new CustomEvent('parley-studio-gathering', { detail: ev.d.channel_id })); break
     case 'STUDIO_PROJECTS': window.dispatchEvent(new CustomEvent('parley-studio-projects', { detail: ev.d.channel_id })); break
     case 'VOICE_SIGNAL': voice.onSignal(ev.d.from, ev.d.channel_id, ev.d.data); break

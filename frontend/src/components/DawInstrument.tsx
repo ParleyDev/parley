@@ -1,9 +1,9 @@
-import { X } from 'lucide-react'
 import { edit, editLive, engine, useDaw } from '../lib/daw'
 import { DRUMS, SYNTH_DEFAULT, SYNTH_PARAMS, defaultInstrument, playNote, type Instrument } from '../lib/instruments'
 import { useT } from '../lib/i18n'
 import type { StudioLane } from '../lib/types'
 import Dropdown from './Dropdown'
+import FloatWindow from './FloatWindow'
 
 const NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B']
 export const noteName = (p: number) => `${NAMES[p % 12]}${Math.floor(p / 12) - 1}`
@@ -26,13 +26,11 @@ export default function InstrumentPanel({ lane, close }: { lane: StudioLane; clo
   const put = (i: Instrument, live?: string) => { const op = { op: 'lane.put' as const, lane: { id: lane.id, instrument: i } }; if (live) editLive(live, [op]); else edit([op]) }
   const samples = Object.values(audio)
   return (
-    <div className="absolute right-2 top-2 z-30 w-80 rounded-lg border border-line bg-bg-1 p-3 shadow-2xl" data-daw-instrument={inst.type}>
+    <FloatWindow id="instrument" title={t('Instrument')} width={320} onClose={close} data-daw-instrument={inst.type}>
       <div className="mb-2 flex items-center gap-2">
-        <span className="font-bold">{t('Instrument')}</span>
         <Dropdown value={inst.type} onChange={(e) => put(defaultInstrument(e.target.value as Instrument['type']))} className="input h-7 w-28 px-1 text-xs" aria-label={t('Instrument')} data-daw-instrument-type>
           <option value="synth">{t('Synth')}</option><option value="drums">{t('Drum kit')}</option><option value="sampler">{t('Sampler')}</option>
         </Dropdown>
-        <button type="button" onClick={close} className="ml-auto text-text-2 hover:text-text-0" title={t('Close')}><X size={16} /></button>
       </div>
       {inst.type === 'synth' && SYNTH_PARAMS.map((p) => {
         const v = inst.params[p.key] ?? SYNTH_DEFAULT[p.key]
@@ -72,6 +70,6 @@ export default function InstrumentPanel({ lane, close }: { lane: StudioLane; clo
           })}
         </div>
       )}
-    </div>
+    </FloatWindow>
   )
 }
