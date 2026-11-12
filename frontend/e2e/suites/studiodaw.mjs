@@ -148,6 +148,22 @@ let f3
 for (let i = 0; i < 40; i++) { f3 = await full(P.id); if (f3.clips.some((c) => c.lane_id === L2)) break; await pa.waitForTimeout(500) }
 ok('the next take lands on the chosen track, not on the first one', f3.clips.some((c) => c.lane_id === L2) && f3.clips.filter((c) => c.lane_id === bLane.id).length === f2.clips.filter((c) => c.lane_id === bLane.id).length, JSON.stringify(f3.clips.map((c) => c.lane_id)))
 
+console.log('-- zoomed in all the way')
+const LZ = crypto.randomUUID(), CZ = crypto.randomUUID(), song = await (await importAudio(a.token, 'Song.wav', wav(180), 180000)).json()
+await ops(a.token, P.id, [{ op: 'lane.put', lane: { id: LZ, name: 'Long', position: 9 } }, { op: 'clip.put', clip: { id: CZ, lane_id: LZ, audio_id: song.id, start_ms: 0, length_ms: 180000 } }])
+await pa.waitForSelector(`[data-daw-clip="${CZ}"] [data-daw-wave="1"]`, { timeout: 15000 }).catch(() => {})
+for (let i = 0; i < 12; i++) await pa.locator('[data-daw-zoom-in]').click()
+await pa.waitForTimeout(400)
+const wave = () => pa.locator(`[data-daw-clip="${CZ}"] canvas`).evaluate((cv) => { const g = cv.getContext('2d'), d = g.getImageData(0, 0, cv.width, cv.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return { clip: cv.parentElement.clientWidth, w: cv.width, painted: n } })
+let wz = await wave()
+ok('a three-minute clip at full zoom draws its waveform in a canvas browsers allow (only the part in view)', wz.clip > 50000 && wz.w > 0 && wz.w <= 16384 && wz.painted > 0, JSON.stringify(wz))
+await pa.locator('[data-daw-timeline]').evaluate((e) => { e.scrollLeft = 30000 })
+await pa.waitForTimeout(400)
+const off = await pa.locator(`[data-daw-clip="${CZ}"] canvas`).evaluate((cv) => parseFloat(cv.style.left))
+wz = await wave()
+ok('scrolling along draws the part that comes into view', off > 20000 && wz.painted > 0, JSON.stringify({ off, ...wz }))
+await ops(a.token, P.id, [{ op: 'clip.del', id: CZ }, { op: 'lane.del', id: LZ }])
+
 console.log('-- export, sessions, close')
 await pa.click('[data-daw-export-open]'); await pa.click('[data-daw-export-mix]')
 await pa.waitForFunction(() => (window.__parleyDawExport ?? 0) > 44, null, { timeout: 30000 }).catch(() => {})

@@ -670,24 +670,34 @@ function ClipNotes({ c }: { c: StudioClip }) {
   )
 }
 
-/** The waveform of the part of the audio a clip plays (scaled by its gain), drawn once it has decoded. */
+/**
+ * The waveform of the part of the audio a clip plays (scaled by its gain), drawn once it has decoded. Only the part
+ * in view (plus a margin) is drawn: zoomed in, a whole clip is far wider than browsers allow a canvas (Safari ~16k px).
+ */
 function ClipWave({ c }: { c: StudioClip }) {
+  const box = useRef<HTMLDivElement>(null)
   const ref = useRef<HTMLCanvasElement>(null)
   const d = useSyncExternalStore((f) => engine.subscribe(f), () => (c.audio_id ? engine.peek(c.audio_id) : undefined))
   useEffect(() => {
-    const cv = ref.current
-    if (!cv || !d) return
+    const el = box.current, cv = ref.current
+    if (!el || !cv || !d) return
+    const view = el.closest<HTMLElement>('[data-daw-timeline]')
     const draw = () => {
-      const w = cv.clientWidth, h = cv.clientHeight, dpr = window.devicePixelRatio || 1
+      const w = el.clientWidth, h = el.clientHeight, dpr = window.devicePixelRatio || 1
       if (!w || !h) return
-      cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr)
+      const r = el.getBoundingClientRect(), v = view?.getBoundingClientRect() ?? { left: 0, right: window.innerWidth }
+      const margin = Math.max(256, v.right - v.left)
+      const x0 = Math.max(0, Math.floor(v.left - r.left - margin)), x1 = Math.min(w, Math.ceil(v.right - r.left + margin))
+      if (x1 <= x0) { cv.style.display = 'none'; return }
+      cv.style.display = ''; cv.style.left = `${x0}px`; cv.style.width = `${x1 - x0}px`
+      cv.width = Math.round((x1 - x0) * dpr); cv.height = Math.round(h * dpr)
       const g = cv.getContext('2d')
       if (!g) return
-      g.setTransform(dpr, 0, 0, dpr, 0, 0)
+      g.setTransform(dpr, 0, 0, dpr, -x0 * dpr, 0)
       g.fillStyle = getComputedStyle(cv).color
       const per = 20, a0 = c.in_ms / per, n = c.length_ms / per
       const scale = d.top > 0 ? (0.9 / d.top) * Math.min(2, c.gain) : 0
-      for (let x = 0; x < w; x++) {
+      for (let x = x0; x < x1; x++) {
         const a = Math.floor(a0 + (x / w) * n), b = Math.max(a + 1, Math.floor(a0 + ((x + 1) / w) * n))
         let m = 0
         for (let i = a; i < b && i < d.peaks.length; i++) if (d.peaks[i] > m) m = d.peaks[i]
@@ -695,9 +705,16 @@ function ClipWave({ c }: { c: StudioClip }) {
         g.fillRect(x, 12 + (h - 12 - bh) / 2, 1, bh)
       }
     }
+    let raf = 0
+    const later = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; draw() }) }
     draw()
-    const ro = new ResizeObserver(draw); ro.observe(cv)
-    return () => ro.disconnect()
-  }, [d, c.in_ms, c.length_ms, c.gain])
-  return <canvas ref={ref} className="pointer-events-none absolute inset-0 h-full w-full" data-daw-wave={d ? '1' : '0'} />
+    const ro = new ResizeObserver(later); ro.observe(el); if (view) ro.observe(view)
+    view?.addEventListener('scroll', later, { passive: true })
+    return () => { ro.disconnect(); view?.removeEventListener('scroll', later); cancelAnimationFrame(raf) }
+  }, [d, c.in_ms, c.length_ms, c.gain, c.start_ms])
+  return (
+    <div ref={box} className="pointer-events-none absolute inset-0" data-daw-wave={d ? '1' : '0'}>
+      <canvas ref={ref} className="absolute inset-y-0 h-full" />
+    </div>
+  )
 }
