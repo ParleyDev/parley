@@ -1,10 +1,10 @@
 import { CaptionsButton, CaptionsOverlay } from './Captions'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useShallow } from 'zustand/react/shallow'
-import { Disc3, Hand, SlidersHorizontal, Megaphone, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
+import { Check, Disc3, Hand, SlidersHorizontal, Megaphone, HeadphoneOff, Maximize2, MessageSquare, Mic, MicOff, Minimize2, Monitor, MonitorOff, MonitorUp, MoreHorizontal, Music2, PhoneOff, Radio, Video, VideoOff, Volume2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { isUnread, myChannelPerms, useStore, voiceParticipants } from '../store'
-import ContextMenu, { useContextMenu } from './ContextMenu'
+import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import { useUserAudioMap } from '../lib/userAudio'
 import { has, P } from '../lib/perms'
@@ -95,28 +95,22 @@ export default function VoiceView({ channel }: { channel: Channel }) {
     setRecBusy(true)
     try { if (liveSession) await api.post(`/channels/${channel.id}/studio/sessions/${liveSession.id}/stop`); else await startTake(channel.id) } catch (e) { pushToast((e as Error).message, 'error') } finally { setRecBusy(false) }
   }
-  const setRole = async (uid: string, role: 'engineer' | 'artist' | 'audience') => { try { await api.put(`/channels/${channel.id}/studio/role/${uid}`, { role }); setRoleMenu(null) } catch (e) { pushToast((e as Error).message, 'error') } }
-  const [roleMenu, setRoleMenu] = useState<string | null>(null)
-  const roleOf = (uid: string, _suppress?: boolean) => (engineers.includes(uid) ? 'engineer' : artists.includes(uid) ? 'artist' : 'audience')
+  const tileMenu = useContextMenu()
+  const setRole = async (uid: string, role: 'engineer' | 'artist' | 'audience') => { try { await api.put(`/channels/${channel.id}/studio/role/${uid}`, { role }) } catch (e) { pushToast((e as Error).message, 'error') } }
+  const roleOf = (uid: string) => (engineers.includes(uid) ? 'engineer' : artists.includes(uid) ? 'artist' : 'audience')
   /** Promote / demote between engineer, artist and audience; moderators and engineers for anyone, members can step down. */
+  const roleOptions = (uid: string): ('engineer' | 'artist' | 'audience')[] => {
+    const cur = roleOf(uid)
+    return isMod ? ['engineer', 'artist', 'audience'] : uid !== me?.id ? [] : cur === 'engineer' ? ['artist', 'audience'] : cur === 'artist' ? ['audience'] : []
+  }
+  const roleEntries = (uid: string): MenuEntry[] => roleOptions(uid).map((r) => ({ label: r === 'engineer' ? t('Engineer') : r === 'artist' ? t('Artist (band)') : t('Audience'), icon: roleOf(uid) === r ? <Check size={16} /> : undefined, disabled: roleOf(uid) === r, onClick: () => { void setRole(uid, r) } }))
+  // The role button opens the shared menu (portalled, so a tile's rounded edge can't clip it), under the button.
   const RoleMenu = ({ uid }: { uid: string }) => {
-    const st = participants.find((x) => x.user_id === uid)
-    const cur = roleOf(uid, st?.suppress)
-    const self = uid === me?.id
-    const open = roleMenu === uid
-    const options: ('engineer' | 'artist' | 'audience')[] = isMod ? ['engineer', 'artist', 'audience'] : cur === 'engineer' ? ['artist', 'audience'] : cur === 'artist' ? ['audience'] : []
-    if (!options.length) return null
+    const cur = roleOf(uid)
+    if (!roleOptions(uid).length) return null
     return (
       <span className="relative inline-flex" data-role-menu={uid} data-role={cur}>
-        <button type="button" onClick={() => setRoleMenu(open ? null : uid)} className={`rounded-md px-2 py-0.5 text-[11px] font-bold capitalize ${cur === 'engineer' ? 'bg-warn text-black' : cur === 'artist' ? 'bg-accent text-white' : 'bg-bg-4 text-text-1'} hover:brightness-110`} aria-haspopup="menu" aria-expanded={open} data-role-button>{self && !isMod ? t('Step down') : cur === 'engineer' ? t('Engineer') : cur === 'artist' ? t('Artist') : t('Audience')} ▾</button>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-30" onClick={() => setRoleMenu(null)} />
-            <div className="pop absolute right-0 top-full mt-1 z-40 w-40 rounded-xl bg-bg-0 border border-line shadow-2xl p-1.5" role="menu">
-              {options.map((r) => <button key={r} type="button" role="menuitemradio" aria-checked={cur === r} onClick={() => setRole(uid, r)} className={`w-full rounded-md px-2 py-1.5 text-left text-sm capitalize hover:bg-accent hover:text-white ${cur === r ? 'text-text-0 font-semibold' : 'text-text-1'}`} data-role-option={r}>{r === 'engineer' ? t('Engineer') : r === 'artist' ? t('Artist (band)') : t('Audience')}{cur === r ? ' ✓' : ''}</button>)}
-            </div>
-          </>
-        )}
+        <button type="button" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); tileMenu.open({ clientX: r.left, clientY: r.bottom + 4, preventDefault: () => e.preventDefault(), stopPropagation: () => e.stopPropagation() }, roleEntries(uid)) }} className={`rounded-md px-2 py-0.5 text-[11px] font-bold capitalize ${cur === 'engineer' ? 'bg-warn text-black' : cur === 'artist' ? 'bg-accent text-white' : 'bg-bg-4 text-text-1'} hover:brightness-110`} aria-haspopup="menu" data-role-button>{uid === me?.id && !isMod ? t('Step down') : cur === 'engineer' ? t('Engineer') : cur === 'artist' ? t('Artist') : t('Audience')} ▾</button>
       </span>
     )
   }
@@ -181,7 +175,6 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const videoFit = useVideoFit()
   // Right-click a tile: the person's menu, with their volume and local mute while you're in the call.
   const userMenu = useUserMenu(channel.guild_id)
-  const tileMenu = useContextMenu()
   const toggleFullscreen = (el: HTMLElement) => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); else el.requestFullscreen?.().catch(() => {}) }
   const renderTile = (tile: Tile, big: boolean, fill = false) => {
     const talking = tile.kind === 'camera' && !!speaking[tile.userId]
@@ -189,7 +182,7 @@ export default function VoiceView({ channel }: { channel: Channel }) {
     const name = shownName(tile.user ?? members?.[tile.userId], members?.[tile.userId], notes[tile.userId]?.nickname) || t('Unknown')
     return (
       <div key={tile.key} onClick={() => { if (phone) { if (!stage) setStage(tile.key) } else setFocused(focused === tile.key ? null : tile.key) }} onDoubleClick={(e) => { e.stopPropagation(); if (!phone) toggleFullscreen(e.currentTarget) }}
-        onContextMenu={(e) => { if (!tile.isMe || tile.kind === 'camera') tileMenu.open(e, userMenu({ id: tile.userId, display_name: name }, e.currentTarget.getBoundingClientRect())) }}
+        onContextMenu={(e) => { if (!tile.isMe || tile.kind === 'camera') tileMenu.open(e, [...(isStudio && tile.kind === 'camera' && roleEntries(tile.userId).length ? [{ node: <div className="px-2 pt-1 pb-0.5 text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Project role')}</div> }, ...roleEntries(tile.userId), 'sep' as const] : []), ...userMenu({ id: tile.userId, display_name: name }, e.currentTarget.getBoundingClientRect())]) }}
         className={`group relative overflow-hidden rounded-2xl bg-bg-2 border-2 transition-colors cursor-pointer ${talking ? 'border-success' : 'border-line'} ${big || fill ? 'h-full w-full' : 'aspect-video'}`} data-voice-tile={tile.userId} data-tile-big={big ? '1' : '0'} title={big ? t('Click to return to the grid · double-click for fullscreen') : t('Click to focus · double-click for fullscreen')}>
         {isStage && isMod && inThis && !tile.isMe && tile.kind === 'camera' && <button type="button" onClick={(e) => { e.stopPropagation(); toAudience(tile.userId) }} className="absolute right-2 top-2 z-10 rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 group-hover:opacity-100" data-to-audience>{t('Move to audience')}</button>}
         {isStudio && tile.kind === 'camera' && engineers.includes(tile.userId) && <span className="absolute left-2 top-2 z-10 rounded-md bg-warn px-1.5 py-0.5 text-[10px] font-bold uppercase text-black" data-engineer-badge>{t('Engineer')}</span>}
