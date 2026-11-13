@@ -16,6 +16,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        // The share extension opening the app: the web client picks up what was shared (ParleySharePlugin).
+        if URLContexts.contains(where: { $0.url.scheme == "parley" && $0.url.host == "share" }) {
+            NotificationCenter.default.post(name: ParleySharePlugin.didShare, object: nil)
+        }
         SceneDelegateProxy.shared.scene(scene, openURLContexts: URLContexts)
     }
 
@@ -34,6 +38,7 @@ class ParleyBridgeViewController: CAPBridgeViewController {
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
+        bridge?.registerPluginInstance(ParleySharePlugin())
         if let webView = webView, let original = webView.navigationDelegate {
             // navigationDelegate is weak: the proxy is kept here.
             let proxy = NavigationRecovery(forwardingTo: original) { [weak self] in self?.showOffline() }

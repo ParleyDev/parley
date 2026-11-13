@@ -1,5 +1,6 @@
 import { STORAGE_PREFIX } from './lib/brand'
 import type { AppCommand } from './lib/commands'
+import type { Incoming } from './lib/shareIn'
 import { getNotifPrefs } from './lib/notifPrefs'
 import { create } from 'zustand'
 import { api, getToken, setToken } from './lib/api'
@@ -82,6 +83,7 @@ export type ModalKind =
   | { kind: 'whatsNew' }
   | { kind: 'editProfile' }
   | { kind: 'forward'; message: Message }
+  | { kind: 'shareTo'; share: Incoming }
   | { kind: 'groupMembers'; channelId?: string; userIds?: string[] }
   | { kind: 'folderSettings'; folderId: string }
   | { kind: 'guildPrivacy'; guildId: string }

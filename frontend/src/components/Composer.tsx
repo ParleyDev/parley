@@ -22,6 +22,7 @@ import { useT, tn } from '../lib/i18n'
 import { api } from '../lib/api'
 import { optionHint, commandMatches, runCommand, type SlashCommand } from '../lib/commands'
 import { getDraft, saveDraft } from '../lib/drafts'
+import { takeHandoff } from '../lib/shareIn'
 import { shortDuration } from '../lib/slowmode'
 import { scheduleMessage, useScheduled, whenLabel } from '../lib/scheduled'
 import { shownName } from '../lib/names'
@@ -251,6 +252,20 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
     if (onResize) onResize(apply); else apply()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value])
+  // Shared from another app into this chat (ShareTo): its text after any draft, its files attached.
+  useEffect(() => {
+    const take = () => {
+      const s = takeHandoff(channel.id)
+      if (!s) return
+      if (s.text) setValue((v) => (v.trim() ? `${v.replace(/\s+$/, '')}\n${s.text}` : s.text))
+      if (s.files.length) addFiles(s.files)
+    }
+    // After the draft is restored (the effect above), so the shared text isn't replaced by it.
+    const id = requestAnimationFrame(take)
+    window.addEventListener('parley:share-handoff', take)
+    return () => { cancelAnimationFrame(id); window.removeEventListener('parley:share-handoff', take) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel.id])
   // Switching channels drops the draft attachments (and cancels in-flight uploads).
   useEffect(() => () => { setPending((ps) => { ps.forEach((p) => { p.handle?.abort(); if (p.preview) URL.revokeObjectURL(p.preview) }); return [] }) }, [channel.id])
 

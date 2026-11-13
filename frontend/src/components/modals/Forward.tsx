@@ -11,7 +11,7 @@ import { dmName, isGroup, nameOf } from '../../lib/dm'
 import { useT } from '../../lib/i18n'
 import { globalName, useNameIn } from '../../lib/names'
 
-interface Target { id: string; label: string; sub: string; kind: 'channel' | 'dm'; avatar?: { id: string; display_name: string; avatar_url: string | null } }
+export interface Target { id: string; label: string; sub: string; kind: 'channel' | 'dm'; guildId?: string; avatar?: { id: string; display_name: string; avatar_url: string | null } }
 
 /** Discord's Forward dialog: pick one or more channels/DMs, see a preview, Send. */
 export default function ForwardModal({ onClose, message: m }: { onClose: () => void; message: Message }) {
@@ -21,29 +21,7 @@ export default function ForwardModal({ onClose, message: m }: { onClose: () => v
   const [busy, setBusy] = useState(false)
   const pushToast = useStore((s) => s.pushToast)
   const author = useNameIn(m.author.id, useStore((s) => s.channels[m.channel_id]?.guild_id))
-  // Select stable slices, then derive the list in useMemo (a selector returning fresh objects would re-render forever).
-  const guildOrder = useStore((s) => s.guildOrder)
-  const guilds = useStore((s) => s.guilds)
-  const channels = useStore((s) => s.channels)
-  const dms = useStore((s) => s.dms)
-  const users = useStore((s) => s.users)
-  const notes = useStore((s) => s.notes)
-  const targets = useMemo((): Target[] => {
-    const s = useStore.getState()
-    const out: Target[] = []
-    for (const gid of guildOrder) {
-      const g = guilds[gid]; if (!g) continue
-      Object.values(channels).filter((c) => c.guild_id === gid && c.kind === 'text' && has(myChannelPerms(s, c.id), P.SEND_MESSAGES)).sort((a, b) => a.position - b.position)
-        .forEach((c) => out.push({ id: c.id, label: c.name, sub: g.name, kind: 'channel' }))
-    }
-    for (const d of Object.values(dms)) {
-      if (isGroup(d)) { out.push({ id: d.id, label: dmName(d, users, notes), sub: t('{n} members', { n: d.recipients.length + 1 }), kind: 'channel' }); continue }
-      const r = d.recipients[0]; if (!r) continue
-      const u = users[r.id] ?? r
-      out.push({ id: d.id, label: nameOf(u, notes), sub: `@${u.username}`, kind: 'dm', avatar: { id: u.id, display_name: u.display_name, avatar_url: u.avatar_url } })
-    }
-    return out
-  }, [guildOrder, guilds, channels, dms, users, notes, t])
+  const targets = useSendTargets()
   const needle = q.trim().toLowerCase()
   const list = useMemo(() => targets.filter((tg) => tg.id !== m.channel_id && (!needle || tg.label.toLowerCase().includes(needle) || tg.sub.toLowerCase().includes(needle))), [targets, needle, m.channel_id])
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
@@ -90,4 +68,32 @@ export default function ForwardModal({ onClose, message: m }: { onClose: () => v
       </div>
     </Modal>
   )
+}
+
+/** Everywhere I can post: the text channels I may send in (server by server, in order), then my DMs and groups. */
+export function useSendTargets(): Target[] {
+  const t = useT()
+  // Select stable slices, then derive the list in useMemo (a selector returning fresh objects would re-render forever).
+  const guildOrder = useStore((s) => s.guildOrder)
+  const guilds = useStore((s) => s.guilds)
+  const channels = useStore((s) => s.channels)
+  const dms = useStore((s) => s.dms)
+  const users = useStore((s) => s.users)
+  const notes = useStore((s) => s.notes)
+  return useMemo((): Target[] => {
+    const s = useStore.getState()
+    const out: Target[] = []
+    for (const gid of guildOrder) {
+      const g = guilds[gid]; if (!g) continue
+      Object.values(channels).filter((c) => c.guild_id === gid && c.kind === 'text' && has(myChannelPerms(s, c.id), P.SEND_MESSAGES)).sort((a, b) => a.position - b.position)
+        .forEach((c) => out.push({ id: c.id, label: c.name, sub: g.name, kind: 'channel', guildId: gid }))
+    }
+    for (const d of Object.values(dms)) {
+      if (isGroup(d)) { out.push({ id: d.id, label: dmName(d, users, notes), sub: t('{n} members', { n: d.recipients.length + 1 }), kind: 'channel' }); continue }
+      const r = d.recipients[0]; if (!r) continue
+      const u = users[r.id] ?? r
+      out.push({ id: d.id, label: nameOf(u, notes), sub: `@${u.username}`, kind: 'dm', avatar: { id: u.id, display_name: u.display_name, avatar_url: u.avatar_url } })
+    }
+    return out
+  }, [guildOrder, guilds, channels, dms, users, notes, t])
 }

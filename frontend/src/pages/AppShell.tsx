@@ -39,6 +39,7 @@ import UpdateBanner from '../components/UpdateBanner'
 import { useMemo } from 'react'
 import { t, useT } from '../lib/i18n'
 import TitleBar from '../components/TitleBar'
+import { initShareIn } from '../lib/shareIn'
 
 /**
  * Two route trees share the URL: one picks the sidebar, one picks the main content.
@@ -48,6 +49,8 @@ import TitleBar from '../components/TitleBar'
 export default function AppShell() {
   useT() // re-render when the language changes
   useEffect(() => { initBadge() }, [])
+  // Shared from another app (the phone's share sheet): pick a chat for it.
+  useEffect(() => initShareIn(), [])
   useEffect(() => installLinkGuard(), [])
   // A parent scanned their teen's Family Center QR code: open Family Center with the code filled in.
   useEffect(() => {

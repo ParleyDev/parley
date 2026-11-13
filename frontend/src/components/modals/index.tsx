@@ -25,6 +25,7 @@ import NewPostModal from './NewPost'
 import TransferOwnershipModal from './TransferOwnership'
 import CustomStatusModal from './CustomStatus'
 import ForwardModal from './Forward'
+import ShareToModal from './ShareTo'
 import GroupMembersModal from './GroupMembers'
 import FolderSettingsModal from './FolderSettings'
 import GuildPrivacyModal from './GuildPrivacy'
@@ -98,6 +99,7 @@ export default function Modals() {
     case 'whatsNew': return <WhatsNewModal onClose={close} />
     case 'editProfile': return <EditProfileModal onClose={close} />
     case 'forward': return <ForwardModal onClose={close} message={modal!.message} />
+    case 'shareTo': return <ShareToModal onClose={close} share={modal!.share} />
     case 'groupMembers': return <GroupMembersModal onClose={close} channelId={modal!.channelId} userIds={modal!.userIds} />
     case 'folderSettings': return <FolderSettingsModal onClose={close} folderId={modal!.folderId} />
     case 'guildPrivacy': return <GuildPrivacyModal onClose={close} guildId={modal!.guildId} />

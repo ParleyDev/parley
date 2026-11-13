@@ -1,0 +1,67 @@
+// Sharing into Parley from another app (the phone's share sheet → the native shell → the web client): a "Share to…"
+// picker lists the chats I can post in, and the one picked opens with the shared text and files in its message box.
+import { chromium } from 'playwright'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { WEB, S, FIX, reg, call, ok, finish, openDms } from '../lib.mjs'
+
+const a = await reg('alice'), b = await reg('bob')
+const g = await call(a.token, 'POST', '/guilds', { name: `Share in ${S}` })
+const ch = g.channels.find((x) => x.kind === 'text')
+const other = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'photos', kind: 'text' })
+await openDms(a, b)
+const dm = await call(a.token, 'POST', '/users/@me/channels', { recipient_id: b.user.id })
+await call(b.token, 'POST', `/channels/${dm.id}/messages`, { content: 'hi' })
+
+const browser = await chromium.launch()
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+await ctx.addInitScript((tok) => { try { localStorage.setItem('parley.token', tok) } catch { /* ignore */ } }, a.token)
+const p = await ctx.newPage()
+const errors = []; p.on('pageerror', (e) => errors.push(e.message))
+await p.goto(`${WEB}/channels/${g.id}/${ch.id}`)
+await p.waitForFunction(() => typeof window.__parleyShareIn === 'function', null, { timeout: 20000 })
+await p.waitForTimeout(800)
+const pic = readFileSync(join(FIX, 'pic.png')).toString('base64')
+
+console.log('-- a link shared from a browser')
+await p.evaluate(() => window.__parleyShareIn({ title: 'A page', text: 'Look at this', url: 'https://example.com/story' }))
+await p.waitForSelector('[data-share-to]')
+ok('the "Share to…" picker opens', true)
+ok('it shows what is being shared', (await p.textContent('[data-share-text]')).includes('https://example.com/story'))
+ok('it lists the server\'s channels', await p.locator(`[data-share-target="photos"]`).count() === 1)
+ok('and my DMs', await p.locator(`[data-share-target]`).filter({ hasText: '@bob' }).count() === 1)
+await p.fill('[data-share-search]', 'phot')
+ok('search narrows the list', await p.locator('[data-share-target]').count() === 1)
+await p.click('[data-share-target="photos"]')
+await p.waitForURL(`**/channels/${g.id}/${other.id}`)
+await p.waitForTimeout(600)
+const box = p.locator('main textarea').first()
+ok('the picked channel opens', true)
+ok('with the text and the link in its message box', (await box.inputValue()) === 'Look at this\nhttps://example.com/story', JSON.stringify(await box.inputValue()))
+await box.press('Enter'); await p.waitForTimeout(800)
+const msgs = await call(a.token, 'GET', `/channels/${other.id}/messages?limit=5`)
+ok('Send posts it there', msgs.some((m) => m.content === 'Look at this\nhttps://example.com/story'))
+
+console.log('-- photos shared from the gallery, into a DM')
+await p.evaluate((data) => window.__parleyShareIn({ files: [{ name: 'beach.png', type: 'image/png', data }, { name: 'notes.txt', type: 'text/plain', data: btoa('hello') }] }), pic)
+await p.waitForSelector('[data-share-to]')
+ok('the files are previewed', await p.locator('[data-share-file]').count() === 2)
+await p.locator('[data-share-target]').filter({ hasText: '@bob' }).click()
+await p.waitForURL(`**/channels/@me/${dm.id}`)
+await p.waitForTimeout(1500)
+ok('the DM opens with both files attached', await p.locator('main').getByText('beach.png').count() > 0 && await p.locator('main').getByText('notes.txt').count() > 0)
+await p.locator('main textarea').first().fill('from my phone')
+await p.locator('main textarea').first().press('Enter'); await p.waitForTimeout(1500)
+const dmMsgs = await call(a.token, 'GET', `/channels/${dm.id}/messages?limit=5`)
+const sent = dmMsgs.find((m) => m.content === 'from my phone')
+ok('and they are sent with my words', sent && sent.attachments.map((x) => x.filename).sort().join(',') === 'beach.png,notes.txt', JSON.stringify(sent?.attachments?.map((x) => x.filename)))
+
+console.log('-- shared into the chat that is already open')
+await p.evaluate(() => window.__parleyShareIn({ text: 'same place' }))
+await p.waitForSelector('[data-share-to]')
+await p.locator('[data-share-target]').filter({ hasText: '@bob' }).click(); await p.waitForTimeout(600)
+ok('the text lands in the open message box', (await p.locator('main textarea').first().inputValue()) === 'same place')
+
+ok('no page errors', errors.length === 0, errors.join(' | '))
+await browser.close()
+await finish()

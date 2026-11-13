@@ -10,5 +10,10 @@
 	<array>
 		<string>webcredentials:app.runparley.com</string>
 	</array>
+	<!-- Shared with the share extension, which leaves what was shared here for the app (ParleySharePlugin). -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.runparley.app</string>
+	</array>
 </dict>
 </plist>
