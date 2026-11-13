@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Download, ExternalLink, X, ZoomIn, ZoomOut } from 'lucide-react'
-import { download as saveAs } from '../../lib/fileActions'
+import { appleTouch, download as saveAs, prepareFile, saveFile } from '../../lib/fileActions'
 import { useEffect, useState } from 'react'
 import ContextMenu, { useContextMenu } from '../ContextMenu'
 import { absoluteUrl, imageMenu } from '../../lib/imageMenu'
@@ -26,7 +26,10 @@ export default function ImageLightbox({ onClose, url, name, items, index = 0 }: 
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onClose, list.length])
+  // iPhones save through the share sheet, which needs the picture in hand when Download is tapped.
+  useEffect(() => { if (appleTouch() && cur) void prepareFile(cur.url, cur.name || 'image') }, [cur])
   const download = async () => {
+    if (appleTouch()) return saveFile(cur.url, cur.name || 'image')
     const blob = await (await fetch(cur.url)).blob()
     const href = URL.createObjectURL(blob)
     await saveAs(href, cur.name || 'image'); setTimeout(() => URL.revokeObjectURL(href), 10_000)

@@ -15,7 +15,7 @@ import { imageMenu } from '../lib/imageMenu'
 import { isExplicit } from '../lib/explicit'
 import { useT } from '../lib/i18n'
 import { desktopBridge } from '../lib/desktop'
-import { saveFile } from '../lib/fileActions'
+import { appleTouch, saveFile } from '../lib/fileActions'
 
 
 export const isSpoiler = (a: Pick<Attachment, 'filename'>) => a.filename.startsWith('SPOILER_')
@@ -172,7 +172,7 @@ function One({ a, mine, gallery = [], context }: { a: Attachment; mine?: boolean
         if (inline && isTextFile(a)) return <TextPreview key={a.id} a={a} />
         if (isPdf(a)) return <PdfCard key={a.id} a={a} />
         return (
-          <a key={a.id} href={a.url} download={a.filename} onClick={(e) => { if (desktopBridge()) { e.preventDefault(); void saveFile(a.url, a.filename) } }} className="flex items-center gap-3 rounded-lg border border-line bg-bg-3 px-3 py-2.5 w-full max-w-[400px] hover:bg-bg-4 group" data-attachment-card>
+          <a key={a.id} href={a.url} download={a.filename} onClick={(e) => { if (desktopBridge() || appleTouch()) { e.preventDefault(); void saveFile(a.url, a.filename) } }} className="flex items-center gap-3 rounded-lg border border-line bg-bg-3 px-3 py-2.5 w-full max-w-[400px] hover:bg-bg-4 group" data-attachment-card>
             <FileText size={28} className="text-text-2 shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium text-sky-400 truncate group-hover:underline">{a.filename}</div>

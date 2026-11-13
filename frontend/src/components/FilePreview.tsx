@@ -1,8 +1,12 @@
+import { appleTouch, saveFile } from '../lib/fileActions'
 import { ChevronDown, ChevronUp, Download, FileText } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { formatBytes } from '../lib/upload'
 import { ensureLanguage, highlightHtml } from '../lib/markdown'
 import type { Attachment } from '../lib/types'
+
+// iPhones and iPads ignore download links (the home-screen app most of all): save through the share sheet there.
+const iosSave = (a: { url: string; filename: string }) => (e: { preventDefault: () => void }) => { if (appleTouch()) { e.preventDefault(); void saveFile(a.url, a.filename) } }
 import { useT } from '../lib/i18n'
 
 /** Extensions shown as text, mapped to a highlight.js language ('' = plain text). */
@@ -48,7 +52,7 @@ export function TextPreview({ a }: { a: Attachment }) {
         <FileText size={14} className="shrink-0 text-text-2" />
         <span className="min-w-0 flex-1 truncate font-medium text-text-0">{a.filename}</span>
         <span className="shrink-0 text-text-2">{formatBytes(a.size)}</span>
-        <a href={a.url} download={a.filename} className="shrink-0 text-text-2 hover:text-text-0" title={t('Download')}><Download size={14} /></a>
+        <a href={a.url} download={a.filename} className="shrink-0 text-text-2 hover:text-text-0" title={t('Download')} onClick={iosSave(a)} data-file-preview-download><Download size={14} /></a>
       </div>
       {text === null ? <div className="px-3 py-2 text-xs text-text-2">{t('Loading…')}</div> : (
         <pre className={`overflow-x-auto px-3 py-2 text-[12.5px] leading-[1.45] ${open ? 'max-h-[480px] overflow-y-auto' : ''}`}>{html !== null ? <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /> : <code>{code}</code>}</pre>
@@ -70,7 +74,7 @@ export function PdfCard({ a }: { a: Attachment }) {
       <span className="flex h-9 w-8 shrink-0 items-center justify-center rounded bg-danger text-[9px] font-extrabold text-white">PDF</span>
       <div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{a.filename}</div><div className="text-xs text-text-2">{formatBytes(a.size)}</div></div>
       <a href={a.url} target="_blank" rel="noopener noreferrer" className="btn-ghost bg-bg-4 py-1 text-xs" data-pdf-open>{t('Open')}</a>
-      <a href={a.url} download={a.filename} className="text-text-2 hover:text-text-0" title={t('Download')}><Download size={16} /></a>
+      <a href={a.url} download={a.filename} className="text-text-2 hover:text-text-0" title={t('Download')} onClick={iosSave(a)} data-pdf-download><Download size={16} /></a>
     </div>
   )
 }

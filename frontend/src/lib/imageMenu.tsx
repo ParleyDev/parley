@@ -1,5 +1,5 @@
 import { Copy, Download, ExternalLink, Image as ImageIcon, Link2 } from 'lucide-react'
-import { download } from './fileActions'
+import { appleTouch, download, prepareFile, saveFile } from './fileActions'
 import type { MenuEntry } from '../components/ContextMenu'
 import { publicOrigin } from '../components/InviteCard'
 import { openExternal } from './native'
@@ -19,6 +19,7 @@ async function pngBlob(url: string): Promise<Blob> {
 }
 
 async function save(url: string, name: string) {
+  if (appleTouch()) return saveFile(url, name || 'image')
   const blob = await (await fetch(url)).blob()
   const href = URL.createObjectURL(blob)
   await download(href, name || 'image')
@@ -30,6 +31,7 @@ export function imageMenu(url: string, name: string): MenuEntry[] {
   const toast = useStore.getState().pushToast
   const run = (fn: () => Promise<void>, done?: string) => () => { fn().then(() => { if (done) toast(done) }).catch((e: Error) => toast(e.message || 'That didn’t work', 'error')) }
   const canCopyImage = typeof ClipboardItem !== 'undefined' && !!navigator.clipboard?.write
+  if (appleTouch()) void prepareFile(url, name || 'image')
   return [
     ...(canCopyImage ? [{ label: 'Copy Image', icon: <ImageIcon size={16} />, onClick: run(async () => { await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob(url) })]) }, 'Image copied') }] : []),
     { label: 'Save Image', icon: <Download size={16} />, onClick: run(() => save(url, name)) },

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent as RKeyboa
 import ContextMenu, { useContextMenu } from './ContextMenu'
 import { fmtTime } from './AudioPlayer'
 import { absoluteUrl } from '../lib/imageMenu'
-import { fileMenu, saveFile } from '../lib/fileActions'
+import { appleTouch, fileMenu, prepareFile, saveFile } from '../lib/fileActions'
 import { pause as pauseAudio, usePlayer } from '../lib/player'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { usePhone } from '../lib/swipe'
@@ -203,7 +203,7 @@ export default function VideoPlayer({ src, poster, name, w: knownW, h: knownH, m
       {/* Download and open, top right, on hover (always shown on phones before playing). */}
       {actions && (
         <div className={`absolute right-2 top-2 flex gap-1 transition-opacity ${started ? (visible ? 'opacity-100' : 'pointer-events-none opacity-0') : phone ? 'opacity-100' : 'opacity-0 group-hover/vp:opacity-100 group-focus-within/vp:opacity-100'}`}>
-          <button ref={dl} type="button" onClick={(e) => { e.stopPropagation(); const r = dl.current?.getBoundingClientRect(); if (phone && r) menu.open({ clientX: r.left, clientY: r.bottom }, items); else void saveFile(src, name) }}
+          <button ref={dl} type="button" onClick={(e) => { e.stopPropagation(); if (appleTouch()) void prepareFile(src, name); const r = dl.current?.getBoundingClientRect(); if (phone && r) menu.open({ clientX: r.left, clientY: r.bottom }, items); else void saveFile(src, name) }}
             className="flex h-8 w-8 items-center justify-center rounded-md bg-black/60 text-white/90 hover:bg-black/80 hover:text-white" title={t('Download')} aria-label={t('Download')} data-video-download><Download size={16} /></button>
           {!phone && <a href={absoluteUrl(src)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="flex h-8 w-8 items-center justify-center rounded-md bg-black/60 text-white/90 hover:bg-black/80 hover:text-white" title={t('Open original')} aria-label={t('Open original')}><ExternalLink size={15} /></a>}
         </div>

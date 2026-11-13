@@ -4,7 +4,7 @@ import type { Attachment } from '../lib/types'
 import { formatBytes } from '../lib/upload'
 import { loadViz, seek, setSpeed, setVolume, toggle, usePlayer, type Track } from '../lib/player'
 import { setPrefs, usePrefs } from '../lib/prefs'
-import { fileMenu, saveFile } from '../lib/fileActions'
+import { appleTouch, fileMenu, prepareFile, saveFile } from '../lib/fileActions'
 import { usePhone } from '../lib/swipe'
 import { useT } from '../lib/i18n'
 import ContextMenu, { useContextMenu } from './ContextMenu'
@@ -131,7 +131,7 @@ export default function AudioPlayer({ a, track: base }: { a: Attachment; track: 
   const cycleSpeed = () => { const next = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length]; setLocalSpeed(next); if (cur) setSpeed(next) }
   const shownSpeed = cur ? p.speed : speed
   const items = fileMenu(a.url, a.filename)
-  const openMenu = () => { const r = dl.current?.getBoundingClientRect(); if (r) menu.open({ clientX: r.left, clientY: r.top }, items, { above: true }) }
+  const openMenu = () => { if (appleTouch()) void prepareFile(a.url, a.filename); const r = dl.current?.getBoundingClientRect(); if (r) menu.open({ clientX: r.left, clientY: r.top }, items, { above: true }) }
   const iconBtn = 'h-8 w-8 shrink-0 rounded-full flex items-center justify-center text-text-2 hover:bg-white/10 hover:text-text-0'
   const plays = a.plays ?? 0
   const listeners = a.listened_by ?? []
