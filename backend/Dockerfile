@@ -30,11 +30,12 @@ FROM rust:1-bookworm AS builder
 WORKDIR /app
 # Cache dependencies
 COPY Cargo.toml Cargo.lock* ./
-RUN mkdir src && echo 'fn main(){}' > src/main.rs && cargo build --release && rm -rf src target/release/deps/parley_backend*
+RUN mkdir src && echo 'fn main(){}' > src/main.rs && cargo build --release && rm -rf src target/release/deps/parley_backend* target/release/.fingerprint/parley-backend-* target/release/parley-backend*
 ARG PARLEY_VERSION=dev
 ENV PARLEY_VERSION=$PARLEY_VERSION
 COPY . .
-RUN cargo build --release
+# The copied sources can be older than the placeholder main built above: make sure the real crate is built.
+RUN touch src/main.rs && cargo build --release && test "$(stat -c %s target/release/parley-backend)" -gt 5000000
 
 # ---- runtime stage ----
 FROM debian:bookworm-slim
