@@ -1,22 +1,38 @@
 /* Parley service worker: an offline app shell, and browser push (notifications with Mark as Read / Reply).
- * Pages are network-first (a deploy shows up on the next load); hashed /assets/ files are cache-first. */
+ * Pages are network-first (a deploy shows up on the next load); hashed /assets/ files are cache-first (whatever their Vary says: a hashed file never changes). */
 const SHELL = 'parley-shell-v1'
 const ASSETS = 'parley-assets-v1'
 const MAX_ASSETS = 400
 const SKIP = /^\/(api|ws|mcp|oauth|\.well-known)(\/|$)|^\/version\.json$/
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])).catch(() => {}).then(() => self.skipWaiting()))
+  e.waitUntil(caches.open(SHELL).then((c) => c.addAll(['/manifest.webmanifest', '/icons/icon-192.png'])).then(() => fetch('/')).then((r) => r.ok && keepShell(r)).catch(() => {}).then(() => self.skipWaiting()))
 })
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== SHELL && k !== ASSETS).map((k) => caches.delete(k)))).then(() => self.clients.claim()))
 })
 
+// The /assets/ files a page's HTML loads up front (its stylesheet and entry script).
+const shellAssets = (html) => Array.from(new Set(html.match(/\/assets\/[^"'\s>]+/g) || []))
+
+// Oldest first, but never the cached shell's own files: a phone waking with no network yet boots that shell, and the
+// server has dropped a previous build's files, so without them it starts unstyled or not at all.
 async function trim() {
   const c = await caches.open(ASSETS)
   const keys = await c.keys()
-  for (const k of keys.slice(0, Math.max(0, keys.length - MAX_ASSETS))) await c.delete(k)
+  let keep = []
+  try { const shell = await caches.match('/', { cacheName: SHELL }); if (shell) keep = shellAssets(await shell.text()) } catch { /* none */ }
+  const drop = keys.filter((k) => !keep.includes(new URL(k.url).pathname))
+  for (const k of drop.slice(0, Math.max(0, keys.length - MAX_ASSETS))) await c.delete(k)
+}
+
+// A new shell: cache it with its files before it replaces the old one, so the cached shell can always start.
+async function keepShell(r) {
+  const html = await r.clone().text()
+  const c = await caches.open(ASSETS)
+  for (const a of shellAssets(html)) if (!(await c.match(a, { ignoreVary: true }))) { const x = await fetch(a); if (!x.ok) return; await c.put(a, x) }
+  await (await caches.open(SHELL)).put('/', r)
 }
 
 self.addEventListener('fetch', (e) => {
@@ -26,11 +42,11 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin || SKIP.test(url.pathname)) return
   if (req.mode === 'navigate') {
     // Network first; offline, the cached shell boots and shows the client's own "reconnecting" state.
-    e.respondWith(fetch(req).then((r) => { if (r.ok) { const copy = r.clone(); caches.open(SHELL).then((c) => c.put('/', copy)) } return r }).catch(() => caches.match('/', { cacheName: SHELL }).then((r) => r || Response.error())))
+    e.respondWith(fetch(req).then((r) => { if (r.ok) { const copy = r.clone(); keepShell(copy).catch(() => {}) } return r }).catch(() => caches.match('/', { cacheName: SHELL }).then((r) => r || Response.error())))
     return
   }
   if (url.pathname.startsWith('/assets/')) {
-    e.respondWith(caches.open(ASSETS).then((c) => c.match(req).then((hit) => hit || fetch(req).then((r) => { if (r.ok) { c.put(req, r.clone()); trim() } return r }))))
+    e.respondWith(caches.open(ASSETS).then((c) => c.match(req, { ignoreVary: true }).then((hit) => hit || fetch(req).then((r) => { if (r.ok) { c.put(req, r.clone()).then(trim).catch(() => {}) } return r }))))
     return
   }
   if (/^\/(icons|brand|sounds|fonts)\//.test(url.pathname) || url.pathname === '/favicon.svg' || url.pathname === '/manifest.webmanifest') {

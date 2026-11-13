@@ -21,14 +21,26 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
     <!-- Dark from the first paint (the app's styles load with the bundle), so nothing flashes or sits white. -->
     <style>html, body { background: #0b0c10; color: #dbdee1; margin: 0; } #boot-stuck { display: none; } html.boot-stuck #boot-stuck { display: flex; }</style>
-    <!-- Start-up watchdog (first in the page, before the bundle's script, so it hears that script failing): the app
-         replaces #boot-stuck when it renders. If it hasn't after a while (start-up threw before the first render), or
-         the bundle failed to load, offer a reload instead of a blank screen. -->
+    <!-- Start-up watchdog (first in the page, before the bundle's script and stylesheet, so it hears them failing): the
+         app replaces #boot-stuck when it renders. If it hasn't after a while (start-up threw before the first render),
+         offer a reload instead of a blank screen. If the bundle or its stylesheet failed to load (a phone waking up
+         with a page from before a deploy, whose files the server no longer has), load the current build: once a
+         minute at most, then offer the reload. Without this the app starts unstyled. -->
     <script>
       (function () {
         var show = function () { document.documentElement.classList.add('boot-stuck') }
         setTimeout(show, 10000)
-        addEventListener('error', function (e) { var t = e.target; if (t && t.tagName === 'SCRIPT' && t.type === 'module') show() }, true)
+        var failed = function () {
+          try {
+            if (Date.now() - Number(sessionStorage.getItem('parley.bootReload') || 0) < 60000) return show()
+            sessionStorage.setItem('parley.bootReload', String(Date.now()))
+          } catch (_) { return show() }
+          location.reload()
+        }
+        addEventListener('error', function (e) {
+          var t = e.target
+          if (t && ((t.tagName === 'SCRIPT' && t.type === 'module') || (t.tagName === 'LINK' && t.rel === 'stylesheet' && /\/assets\//.test(t.href)))) failed()
+        }, true)
       })()
     </script>
   </head>
