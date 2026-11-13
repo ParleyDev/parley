@@ -5,11 +5,13 @@ import { B, WEB, S, reg, call, raw, ok, finish, adminToken } from '../lib.mjs'
 const HOST = process.env.PARLEY_EMBED_HOST ?? '172.30.0.1'
 const admin = await adminToken(); const a = await reg('alice'); const b = await reg('bob')
 // A stub for both providers: authorize bounces straight back with a code, token/profile answer canned JSON.
+let denyProfile = false // answer the profile like Spotify does for a user a development-mode app doesn't know
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x'); const path = u.pathname
   if (path === '/login/oauth/authorize' || path === '/oauth2/authorize') { res.writeHead(302, { Location: `${u.searchParams.get('redirect_uri')}?code=c0de&state=${encodeURIComponent(u.searchParams.get('state'))}` }); res.end(); return }
   if (path === '/login/oauth/access_token' || path === '/oauth2/token') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ access_token: 'tok' })); return }
   if (path === '/user') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ id: 4242, login: `octo${S}`, html_url: `https://github.com/octo${S}` })); return }
+  if (path === '/helix/users' && denyProfile) { res.writeHead(403, { 'Content-Type': 'text/plain' }); res.end('Check settings on developer.spotify.com/dashboard, the user may not be registered.'); return }
   if (path === '/helix/users') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ data: [{ id: '77', login: `streamer${S}`, display_name: `Streamer ${S}` }] })); return }
   res.writeHead(404); res.end()
 })
@@ -33,6 +35,12 @@ let mine = await call(a.token, 'GET', '/users/@me/connections')
 ok('the connection is listed with the provider name and URL', mine.length === 1 && mine[0].provider === 'github' && mine[0].name === `octo${S}` && mine[0].url === `https://github.com/octo${S}` && mine[0].visible === true)
 const bad = await fetch(back.replace(/^https?:\/\/[^/]+\/api/, B).replace(/state=[^&]+/, 'state=nope'), { redirect: 'manual' })
 ok('a forged state is refused (connect_error)', /connect_error=/.test(bad.headers.get('location') ?? ''))
+// A provider that refuses the profile in plain text: its words reach the person, not a JSON decoding error.
+denyProfile = true
+{ const ds = await call(a.token, 'GET', '/connections/twitch/start'); const dh = await fetch(ds.url, { redirect: 'manual' }); const dr = await fetch(dh.headers.get('location').replace(/^https?:\/\/[^/]+\/api/, B), { redirect: 'manual' })
+  const msg = decodeURIComponent((dr.headers.get('location') ?? '').split('connect_error=')[1] ?? '').replace(/\+/g, ' ')
+  ok('a provider refusing the profile shows its status and its own message', /403/.test(msg) && /user may not be registered/.test(msg), msg) }
+denyProfile = false
 // twitch too
 const ts = await call(a.token, 'GET', '/connections/twitch/start'); const th = await fetch(ts.url, { redirect: 'manual' }); await fetch(th.headers.get('location').replace(/^https?:\/\/[^/]+\/api/, B), { redirect: 'manual' })
 mine = await call(a.token, 'GET', '/users/@me/connections'); ok('twitch links with its display name', mine.some((c) => c.provider === 'twitch' && c.name === `Streamer ${S}` && c.url === `https://twitch.tv/streamer${S}`))

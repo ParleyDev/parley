@@ -134,18 +134,29 @@ async fn callback(State(state): State<AppState>, Path(name): Path<String>, Query
     }
 }
 
+/// A provider's JSON answer, or what it actually said: an error status or a body that isn't JSON comes back as the
+/// provider's own words (Spotify, for one, answers a user missing from a development-mode app with plain text).
+async fn json_of(r: reqwest::Response, what: &str) -> AppResult<Value> {
+    let status = r.status();
+    let body = r.text().await.map_err(|e| AppError::BadRequest(format!("{what} unreadable: {e}")))?;
+    let said = || { let b: String = body.trim().chars().filter(|c| !c.is_control()).take(300).collect(); if b.is_empty() { status.to_string() } else { format!("{status}: {b}") } };
+    if !status.is_success() { return Err(AppError::BadRequest(format!("{what} refused by the provider ({})", said()))); }
+    serde_json::from_str(&body).map_err(|_| AppError::BadRequest(format!("{what} unreadable ({})", said())))
+}
+
 async fn link(state: &AppState, p: &Provider, name: &str, uid: Uuid, code: &str, creator: bool) -> AppResult<()> {
     let c = creds(state, name).await?;
     let client = reqwest::Client::builder().user_agent("parley").timeout(std::time::Duration::from_secs(15)).build().map_err(|e| AppError::Other(e.into()))?;
     let mut tokreq = client.post(with_override(p.token, &c.over)).header("Accept", "application/json");
     if p.basic { tokreq = tokreq.basic_auth(&c.client_id, Some(&c.client_secret)); }
-    let tok: Value = tokreq
+    let tok = tokreq
         .form(&[("client_id", c.client_id.as_str()), ("client_secret", c.client_secret.as_str()), ("code", code), ("grant_type", "authorization_code"), ("redirect_uri", &redirect_uri(state, name))])
-        .send().await.map_err(|e| AppError::BadRequest(format!("token exchange failed: {e}")))?.json().await.map_err(|e| AppError::BadRequest(format!("token response unreadable: {e}")))?;
+        .send().await.map_err(|e| AppError::BadRequest(format!("token exchange failed: {e}")))?;
+    let tok = json_of(tok, "token exchange").await?;
     let access = tok.get("access_token").and_then(|v| v.as_str()).ok_or_else(|| AppError::BadRequest("the provider returned no access token".into()))?.to_string();
     let mut req = client.get(with_override(p.profile, &c.over)).bearer_auth(&access);
     if name == "twitch" { req = req.header("Client-Id", &c.client_id); }
-    let prof: Value = req.send().await.map_err(|e| AppError::BadRequest(format!("profile fetch failed: {e}")))?.json().await.map_err(|e| AppError::BadRequest(format!("profile unreadable: {e}")))?;
+    let prof = json_of(req.send().await.map_err(|e| AppError::BadRequest(format!("profile fetch failed: {e}")))?, "profile").await?;
     let (external_id, display, url) = match name {
         "github" => (prof.get("id").map(|v| v.to_string().trim_matches('"').to_string()).unwrap_or_default(), prof.get("login").and_then(|v| v.as_str()).unwrap_or("").to_string(), prof.get("html_url").and_then(|v| v.as_str()).unwrap_or("").to_string()),
         "gitlab" => (prof.get("id").map(|v| v.to_string().trim_matches('"').to_string()).unwrap_or_default(), prof.get("username").and_then(|v| v.as_str()).unwrap_or("").to_string(), prof.get("web_url").and_then(|v| v.as_str()).unwrap_or("").to_string()),
