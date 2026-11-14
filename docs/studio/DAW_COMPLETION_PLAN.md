@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Approved 2026-11-14 (decisions D1–D9 accepted as recommended). Phase 1 done, awaiting review: see [BASELINE.md](BASELINE.md). |
+| Status | Approved 2026-11-14 (decisions D1–D9 accepted as recommended). Phase 1 done: see [BASELINE.md](BASELINE.md). Phase 2 done, awaiting review and the manual pass: see [PHASE2_RECORDING.md](PHASE2_RECORDING.md). |
 | Date | 2026-11-14 |
 | Code basis | `main` at `639a50a` |
 | Tracker | `parley-pods` |
@@ -789,7 +789,7 @@ Recommended: Phases 1 → 2 → 3 → 4, then 5 and 6 in either order. Phase 3 c
 
 | Where | Statement | Finding |
 |---|---|---|
-| `README.md:406` | Takes are "capped at 30 MB (about an hour)" | About 33 minutes at 128 kbps (S:24) |
+| `README.md:406` | Takes are "capped at 30 MB (about an hour)" | About 33 minutes at 128 kbps (S:24)  Corrected in Phase 2. |
 | `website/index.html:817` | "records their own track in full quality, so a bad connection never ruins a take" | Lossy capture; a failed chunk is dropped (`studio.ts:163-169`) |
 | `README.md:412` | Effects "render the same in export" | True by construction (shared graph builder) but untested, and not true of sample rate on 44.1 kHz devices |
 | D:10 | Module comment says editing needs Manage Channels and presence in the studio | Editing needs a band role or Manage Projects, and no presence (D:157-166) |
