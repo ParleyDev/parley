@@ -1,7 +1,8 @@
 // Recording Studio: a project's band (engineers and artists, kept), its audience, multitrack client-side recording
 // into the project, and its takes.
-import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, raw, ok, finish } from '../lib.mjs'
+import { WEB, S, reg, call, callS, raw, ok, finish, launchBrowser, chromiumOnly } from '../lib.mjs'
+
+await chromiumOnly('needs a voice room and a microphone')
 
 const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol')
 const g = await call(a.token, 'POST', '/guilds', { name: `Studio ${S}` })
@@ -24,11 +25,11 @@ r = await raw(a.token, 'POST', `/studio/sessions/${st.id}/tracks`, {}); ok('unkn
 r = await raw(a.token, 'POST', `/channels/${studio.id}/messages`, { content: 'hi' }); ok('the studio itself holds no messages', r.status === 400)
 
 console.log('-- in the studio')
-const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] }); const errors = []
+const browser = await launchBrowser({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] }); const errors = []
 // The band sees the console before joining and joins from the header; everyone else joins from the pre-join screen.
-const mk = async (tok, band) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); if (band) { await p.waitForSelector('[data-daw]'); await p.click('[data-project-join]') } else { await p.waitForSelector('text=Join Voice'); await p.click('text=Join Voice') } await p.waitForSelector('[data-voice-leave]'); return p }
+const mk = async (tok, band) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); if (band) { await p.waitForSelector('[data-daw]'); p.early = (await p.locator('[data-voice-leave]').count()) === 0; await p.click('[data-project-join]') } else { await p.waitForSelector('text=Join Voice'); await p.click('text=Join Voice') } await p.waitForSelector('[data-voice-leave]'); return p }
 const pa = await mk(a.token, true)
-ok('the engineer had the DAW before joining voice', true)
+ok('the engineer had the DAW before joining voice', pa.early === true)
 const pb = await mk(b.token); const pc = await mk(c.token)
 await pa.waitForSelector(`[data-audience="${b.user.id}"]`); await pa.waitForSelector(`[data-audience="${c.user.id}"]`)
 ok('engineer is on a tile with the badge; others join as audience', await pa.locator(`[data-voice-tile="${a.user.id}"] [data-engineer-badge]`).count() === 1 && await pa.locator('[data-stage-audience] [data-audience]').count() === 2)

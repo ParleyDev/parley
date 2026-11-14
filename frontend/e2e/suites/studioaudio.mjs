@@ -2,10 +2,11 @@
 // muting silences your recorded track as well as the call.
 // The fake microphone plays a WAV with a tone in the RIGHT channel and silence in the left. Web Audio upmixes mono
 // into the left channel only, so a fold to mono anywhere shows up as the tone moving left.
-import { chromium } from 'playwright'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { WEB, S, reg, call, callS, ok, finish } from '../lib.mjs'
+import { WEB, S, reg, call, callS, ok, finish, launchBrowser, chromiumOnly } from '../lib.mjs'
+
+await chromiumOnly('needs a voice room and a microphone')
 
 const wav = join(process.cwd(), `stereo-${S}.wav`)
 { const rate = 48000, secs = 30, n = rate * secs, buf = Buffer.alloc(44 + n * 4)
@@ -22,7 +23,7 @@ const container = (await callS(a.token, 'POST', `/guilds/${g.id}/channels`, { na
 const project = (await callS(a.token, 'POST', `/channels/${container.id}/studio/projects`, { name: 'Stereo test' })).body
 const studio = await call(a.token, 'GET', `/channels/${project.channel_id}`)
 
-const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${wav}`, '--autoplay-policy=no-user-gesture-required'] }); const errors = []
+const browser = await launchBrowser({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${wav}`, '--autoplay-policy=no-user-gesture-required'] }); const errors = []
 // Keep the streams the app gets so the test can measure them: the raw mic, and every remote stream.
 const spy = () => {
   window.__gum = []; window.__remote = []

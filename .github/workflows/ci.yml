@@ -39,6 +39,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit -p tsconfig.app.json
       - run: npx oxlint src
+      - run: npm test
       - run: npm run build
 
   backend-check:

@@ -2,10 +2,13 @@
 // markers, the loop range, loop recording into takes, punch recording, recording alone, nudging, presence and
 // comments; MIDI tracks with instruments, the piano roll and the computer keyboard; versions; and exports (WAV / FLAC /
 // MP3, stems, posting to a channel, project files in and out), plus the lite DAW on phones.
-import { chromium } from 'playwright'
-import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { WEB, B, S, IP, reg, call, callS, raw, ok, finish } from '../lib.mjs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { WEB, B, S, IP, reg, call, callS, raw, ok, finish, launchBrowser, chromiumOnly } from '../lib.mjs'
+
+await chromiumOnly('needs a voice room and a microphone')
 
 const a = await reg('alice'); const b = await reg('bob'); const d = await reg('dave')
 const g = await call(a.token, 'POST', '/guilds', { name: `DAW2 ${S}` })
@@ -70,7 +73,7 @@ ok('restoring brings it back (the deleted track, the old level)', r.status === 2
 ok('and the state before the restore is kept as a version', (await call(a.token, 'GET', `/studio/projects/${P.id}/versions`)).some((v) => v.name.startsWith('Before restoring')))
 
 console.log('-- the DAW in the browser')
-const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
+const browser = await launchBrowser({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
 const mk = async (tok, viewport = { width: 1500, height: 950 }, mobile = false) => { const ctx = await browser.newContext({ viewport, permissions: ['microphone'], acceptDownloads: true, isMobile: mobile, hasTouch: mobile }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); const join = p.locator('[data-project-join]').or(p.getByText('Join Voice', { exact: true })).first(); await join.waitFor(); await join.click(); await p.waitForSelector('[data-voice-leave]'); return p }
 const pa = await mk(a.token); const pb = await mk(b.token)
 await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${b.user.id}`, { role: 'artist' })
@@ -192,19 +195,19 @@ ok('recording alone: only its starter records, and everyone hears the backing', 
 r = await raw(a.token, 'POST', `/channels/${st.id}/studio/sessions`, {})
 ok('and nobody else can start a take meanwhile', r.status === 409)
 await pa.waitForTimeout(1500); await pb.click('[data-daw-record-solo]')
-await pb.waitForFunction(() => window.__parleyStudio?.recording !== true, null, { timeout: 10000 })
-ok('the soloist stops their own take', true)
+ok('the soloist stops their own take', await pb.waitForFunction(() => window.__parleyStudio?.recording !== true, null, { timeout: 10000 }).then(() => true, () => false))
 
 console.log('-- exports')
 await pa.click('[data-daw-export-open]')
-const dl = async (sel) => { const [x] = await Promise.all([pa.waitForEvent('download', { timeout: 60000 }), pa.click(sel)]); const path = `/tmp/claude-1002/daw2-${Date.now()}-${x.suggestedFilename().replace(/[^\w.-]/g, '_')}`; await x.saveAs(path); return { name: x.suggestedFilename(), path } }
+const downloads = mkdtempSync(join(tmpdir(), 'daw2-'))
+const dl = async (sel) => { const [x] = await Promise.all([pa.waitForEvent('download', { timeout: 60000 }), pa.click(sel)]); const path = join(downloads, `${Date.now()}-${x.suggestedFilename().replace(/[^\w.-]/g, '_')}`); await x.saveAs(path); return { name: x.suggestedFilename(), path } }
 await pa.locator('[data-daw-export-format]').selectOption('flac')
 let file = await dl('[data-daw-export-mix]')
 const probe = (p) => JSON.parse(execFileSync('ffprobe', ['-v', 'quiet', '-print_format', 'json', '-show_streams', '-show_format', p]).toString())
 let pr = probe(file.path)
 ok('FLAC export decodes (ffprobe), stereo 48 kHz', file.name.endsWith('.flac') && pr.streams[0].codec_name === 'flac' && pr.streams[0].channels === 2 && Number(pr.format.duration) > 3, JSON.stringify(pr.streams[0]))
-execFileSync('ffmpeg', ['-v', 'error', '-i', file.path, '-f', 'null', '-'])
-ok('and decodes without errors from start to end', true)
+const dec = spawnSync('ffmpeg', ['-v', 'error', '-i', file.path, '-f', 'null', '-'])
+ok('and decodes without errors from start to end', dec.status === 0 && dec.stderr.toString().trim() === '', dec.stderr?.toString())
 await pa.locator('[data-daw-export-format]').selectOption('mp3')
 file = await dl('[data-daw-export-mix]')
 pr = probe(file.path)

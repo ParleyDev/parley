@@ -2,8 +2,9 @@
 // device and channel, monitoring, output incl. sends only), per-track and exclusive arm, a member recording two
 // armed tracks at once as two takes, input monitoring, the Ableton-style mixer strip, movable windows, clearing the
 // loop, and solid menus in see-through themes.
-import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, ok, finish } from '../lib.mjs'
+import { WEB, S, reg, call, callS, ok, finish, launchBrowser, chromiumOnly } from '../lib.mjs'
+
+await chromiumOnly('needs a voice room and a microphone')
 
 const a = await reg('alice'); const b = await reg('bob')
 const g = await call(a.token, 'POST', '/guilds', { name: `Live ${S}` })
@@ -47,7 +48,7 @@ const clock = await call(a.token, 'GET', '/studio/clock')
 ok('the server clock is there to line clients up', Math.abs(clock.now - Date.now()) < 5000)
 
 console.log('-- UI')
-const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
+const browser = await launchBrowser({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
 const mk = async (tok, w = 1500) => { const ctx = await browser.newContext({ viewport: { width: w, height: 950 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${room}`); await p.waitForSelector('[data-daw-play]', { timeout: 15000 }); return p }
 const pa = await mk(a.token); const pb = await mk(b.token)
 // Shared playback in the browser

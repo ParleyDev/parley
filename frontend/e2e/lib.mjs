@@ -98,6 +98,9 @@ export const BROWSER = process.env.E2E_BROWSER ?? 'chromium'
 export const browserType = () => (BROWSER === 'webkit' ? _webkit : BROWSER === 'firefox' ? _firefox : _chromium)
 /** Launch the configured engine; Chromium-only flags (fake media devices) are dropped elsewhere. */
 export const launchBrowser = (opts = {}) => { const { args, ...rest } = opts; return browserType().launch(BROWSER === 'chromium' ? { args, ...rest } : rest) }
+/** For suites that need what only the Chromium runs have (a fake microphone and camera, a voice room): under another
+ * engine the suite says why it did not run and ends, passing nothing and failing nothing. */
+export const chromiumOnly = async (why) => { if (BROWSER !== 'chromium') { console.log(`  (skipped under ${BROWSER}: ${why})`); await finish() } }
 /** A phone context descriptor: real iOS-like WebKit under E2E_BROWSER=webkit, emulated otherwise. */
 export const phone = () => ({ ..._devices['iPhone 13'], ...(BROWSER === 'chromium' ? {} : { defaultBrowserType: BROWSER }) })
 

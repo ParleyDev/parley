@@ -1,11 +1,10 @@
 // DAWproject: a project exported as a .dawproject (validated against the format's XSD: tracks, buses, sends,
 // routing, audio as WAV, MIDI notes, automation, markers, built-in devices) and imported back as a new project.
-import { chromium } from 'playwright'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { WEB, B, S, IP, FIX, reg, call, callS, ok, finish } from '../lib.mjs'
+import { WEB, B, S, IP, FIX, reg, call, callS, ok, finish, launchBrowser } from '../lib.mjs'
 
 const a = await reg('alice')
 const g = await call(a.token, 'POST', '/guilds', { name: `DAWproject ${S}` })
@@ -30,10 +29,10 @@ let r = await callS(a.token, 'POST', `/studio/projects/${P.id}/ops`, { ops: [
 ] })
 ok('a project with a bus, send, effects, audio, MIDI, automation and a marker', r.status === 200, JSON.stringify(r.body))
 
-const browser = await chromium.launch(); const errors = []
+const browser = await launchBrowser(); const errors = []
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true })
 const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
-await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+await p.goto(`${WEB}/login`, { waitUntil: 'networkidle' }); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await p.goto(`${WEB}/channels/${g.id}/${room}`)
 await p.waitForSelector('[data-daw]', { timeout: 15000 })
 await p.click('[data-daw-export-open]')
@@ -41,7 +40,8 @@ const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), 
 const dir = mkdtempSync(join(tmpdir(), 'dawproject-'))
 const file = join(dir, dl.suggestedFilename())
 await dl.saveAs(file)
-ok('it downloads as a .dawproject', dl.suggestedFilename() === 'Round Trip.dawproject')
+// WebKit saves a name with spaces under underscores.
+ok('it downloads as a .dawproject', dl.suggestedFilename().replace(/_/g, ' ') === 'Round Trip.dawproject', dl.suggestedFilename())
 execFileSync('unzip', ['-q', '-o', file, '-d', join(dir, 'x')])
 const xml = readFileSync(join(dir, 'x', 'project.xml'), 'utf8')
 const lint = (xsd, f) => { try { execFileSync('xmllint', ['--noout', '--schema', join(FIX, 'dawproject', xsd), f], { stdio: 'pipe' }); return '' } catch (e) { return String(e.stderr) } }

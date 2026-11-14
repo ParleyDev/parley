@@ -1,7 +1,6 @@
 // Dragging clips in the DAW's timeline: onto another track (the drag survives the clip being redrawn there), a
 // multi-selection moving together and staying selected, Esc cancelling, and the timeline scrolling at its edge.
-import { chromium } from 'playwright'
-import { WEB, B, S, IP, reg, call, callS, ok, finish } from '../lib.mjs'
+import { WEB, B, S, IP, reg, call, callS, ok, finish, launchBrowser } from '../lib.mjs'
 
 const a = await reg('alice')
 const g = await call(a.token, 'POST', '/guilds', { name: `Drag ${S}` })
@@ -20,9 +19,9 @@ const LA = crypto.randomUUID(), LB = crypto.randomUUID(), CA = crypto.randomUUID
 await ops([{ op: 'lane.put', lane: { id: LA, name: 'One', position: 0 } }, { op: 'lane.put', lane: { id: LB, name: 'Two', position: 1 } },
   { op: 'clip.put', clip: { id: CA, lane_id: LA, audio_id: beat.id, start_ms: 0, length_ms: 2000 } }, { op: 'clip.put', clip: { id: CB, lane_id: LA, audio_id: beat.id, start_ms: 4000, length_ms: 2000 } }])
 
-const browser = await chromium.launch(); const errors = []
+const browser = await launchBrowser(); const errors = []
 const p = await browser.newPage({ viewport: { width: 1440, height: 900 } }); p.on('pageerror', (e) => errors.push(e.message))
-await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+await p.goto(`${WEB}/login`, { waitUntil: 'networkidle' }); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await p.goto(`${WEB}/channels/${g.id}/${P.channel_id}`); await p.waitForSelector(`[data-daw-clip="${CA}"]`, { timeout: 15000 })
 const clip = (id) => full().then((f) => f.clips.find((c) => c.id === id))
 const center = async (sel) => { const b = await p.locator(sel).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } }

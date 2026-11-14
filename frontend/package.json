@@ -9,8 +9,10 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "test": "vitest run",
     "e2e": "node e2e/run.mjs",
-    "e2e:webkit": "E2E_BROWSER=webkit node e2e/run.mjs mobile mobilepages appearance",
+    "e2e:webkit": "E2E_BROWSER=webkit node e2e/run.mjs mobile mobilepages appearance studiorender dawdrag dawproject",
+    "perf:studio": "node e2e/studioperf.mjs",
     "emoji:update": "node scripts/gen-emoji.mjs"
   },
   "dependencies": {
@@ -45,6 +47,7 @@
     "oxlint": "^1.81.0",
     "playwright": "^1.58.0",
     "typescript": "~6.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.0",
+    "vitest": "^5.1.0"
   }
 }

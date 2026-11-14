@@ -1,8 +1,9 @@
 // Studio projects: a studio channel lists projects; each is its own channel (kind 'project') with a band, chat, voice
 // room and everything recorded into it. Create / Manage / Delete Projects permissions, the band editing without being
 // in voice, the audience, archiving and tags, deleting a project with its audio, and the studio's project grid.
-import { chromium } from 'playwright'
-import { WEB, B, S, IP, reg, call, callS, raw, ok, finish } from '../lib.mjs'
+import { WEB, B, S, IP, reg, call, callS, raw, ok, finish, launchBrowser, chromiumOnly } from '../lib.mjs'
+
+await chromiumOnly('needs a voice room and a microphone')
 
 const CREATE = 2 ** 32, MANAGE = 2 ** 33, DELETE = 2 ** 34
 const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol'); const d = await reg('dave')
@@ -118,7 +119,7 @@ r = await callS(a.token, 'POST', `/guilds/${g.id}/events`, { name: 'Drum day', s
 ok('a session can be scheduled as a server event in the project', r.status === 201, JSON.stringify(r.body))
 
 console.log('-- UI')
-const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
+const browser = await launchBrowser({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
 const mk = async (tok, path) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}${path}`); return p }
 const pb = await mk(b.token, `/channels/${g.id}/${studio.id}`)
 await pb.waitForSelector(`[data-studio-project="${P.id}"]`, { timeout: 15000 }).catch(() => {})

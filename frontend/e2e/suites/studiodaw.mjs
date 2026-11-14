@@ -2,8 +2,9 @@
 // (ops applied by the server and broadcast), audio imports, the timeline (drag, split, undo), the mixer, recording a
 // take over the project (everyone hears the project as the backing; each member's take lands on their lane,
 // latency compensated) and export.
-import { chromium } from 'playwright'
-import { WEB, B, S, IP, reg, call, callS, raw, ok, finish } from '../lib.mjs'
+import { WEB, B, S, IP, reg, call, callS, raw, ok, finish, launchBrowser, chromiumOnly } from '../lib.mjs'
+
+await chromiumOnly('needs a voice room and a microphone')
 
 const a = await reg('alice'); const b = await reg('bob'); const d = await reg('dave')
 const g = await call(a.token, 'POST', '/guilds', { name: `DAW ${S}` })
@@ -59,7 +60,7 @@ await call(a.token, 'PATCH', `/channels/${st.id}/studio/config`, { bpm: 120 })
 ok('and the console\'s tempo is the project\'s', (await full(P.id)).project.bpm === 120)
 
 console.log('-- live co-editing')
-const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
+const browser = await launchBrowser({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
 const mk = async (tok) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'], acceptDownloads: true }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); const join = p.locator('[data-project-join]').or(p.getByText('Join Voice', { exact: true })).first(); await join.waitFor(); await join.click(); await p.waitForSelector('[data-voice-leave]'); return p }
 const pa = await mk(a.token); const pb = await mk(b.token)
 await call(a.token, 'PUT', `/channels/${st.id}/studio/role/${b.user.id}`, { role: 'artist' })
@@ -114,8 +115,7 @@ await pa.click('[data-daw-rtz]')
 await pa.click('[data-daw-record]')
 await pb.waitForFunction(() => window.__parleyDaw?.playing === 'backing', null, { timeout: 8000 }).catch(() => {})
 ok('when a take starts, the band hears the project (the backing)', await pb.evaluate(() => window.__parleyDaw?.playing === 'backing'))
-await pb.waitForFunction(() => window.__parleyStudio?.recording === true, null, { timeout: 10000 })
-ok('and records over it', true)
+ok('and records over it', await pb.waitForFunction(() => window.__parleyStudio?.recording === true, null, { timeout: 10000 }).then(() => true, () => false))
 await pa.waitForTimeout(3500)
 await pa.screenshot({ path: 'daw-recording.png' })
 await pa.click('[data-daw-record]')

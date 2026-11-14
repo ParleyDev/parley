@@ -1,7 +1,8 @@
 // A project's console (the DAW) for its band: there before joining voice, shared record-arm on the lanes, punch in /
 // out during a take, late joiners, tempo / metronome / count-in, band vs audience, and hiding / showing it.
-import { chromium } from 'playwright'
-import { WEB, S, reg, call, callS, raw, ok, finish } from '../lib.mjs'
+import { WEB, S, reg, call, callS, raw, ok, finish, launchBrowser, chromiumOnly } from '../lib.mjs'
+
+await chromiumOnly('needs a voice room and a microphone')
 
 const a = await reg('alice'); const b = await reg('bob'); const c = await reg('carol'); const d = await reg('dave')
 const g = await call(a.token, 'POST', '/guilds', { name: `Console ${S}` })
@@ -25,7 +26,7 @@ for (const u of [a, b, c]) lane[u.user.id] = crypto.randomUUID()
 r = await callS(a.token, 'POST', `/studio/projects/${P.id}/ops`, { ops: [a, b, c].map((u, i) => ({ op: 'lane.put', lane: { id: lane[u.user.id], name: u.user.username, position: i, user_id: u.user.id } })) })
 ok('the band gets a lane each', r.status === 200, JSON.stringify(r.body))
 
-const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
+const browser = await launchBrowser({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
 const open = async (tok) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}/channels/${g.id}/${st.id}`); return p }
 const join = async (p) => { await p.click('[data-project-join]'); await p.waitForSelector('[data-voice-leave]') }
 const recording = (p) => p.evaluate(() => window.__parleyStudio?.recording === true)
@@ -74,11 +75,9 @@ r = await raw(d.token, 'POST', `/studio/sessions/${live.id}/tracks`, {}); ok('th
 
 console.log('-- punch in / out, late joiner')
 await pa.click(`[data-daw-arm="${lane[c.user.id]}"]`)
-await waitRec(pc, true)
-ok('arming carol mid-take punches her in', true)
+ok('arming carol mid-take punches her in', await waitRec(pc, true).then(() => true, () => false))
 await pa.click(`[data-daw-arm="${lane[b.user.id]}"]`)
-await waitRec(pb, false)
-ok('disarming bob punches him out', true)
+ok('disarming bob punches him out', await waitRec(pb, false).then(() => true, () => false))
 await pa.waitForTimeout(500)
 await pa.click(`[data-daw-arm="${lane[b.user.id]}"]`)
 await waitRec(pb, true)
@@ -101,6 +100,6 @@ console.log('-- toggle')
 await pa.click('[data-console-close]'); await pa.waitForFunction(() => !document.querySelector('[data-daw]'))
 ok('closing returns to the band view', await pa.locator(`[data-voice-tile="${b.user.id}"]`).count() === 1)
 await pa.click('[data-studio-console-toggle]'); await pa.waitForSelector('[data-daw]')
-ok('the header button opens it again', true)
+ok('the header button opens it again', await pa.locator('[data-daw]').count() === 1)
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()
