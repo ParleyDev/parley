@@ -164,8 +164,10 @@ if (RESTART) {
   await page.close({ runBeforeUnload: true }); await closed; const secs = (Date.now() - t0) / 1000
   cut = false
   const before = (await pr.full()).clips.filter((c) => c.audio_id && !pr.seen.has(c.audio_id)).length
-  // Back later, not in the room, touching nothing.
+  // Back later, not in the room, touching nothing. The take it left has been ended by then (one still running would
+  // go on recording into the armed track as soon as the project is open again).
   await wait(12000)
+  for (const x of await pr.sessions()) if (!x.ended_at) await callS(a.token, 'POST', `/channels/${pr.st.id}/studio/sessions/${x.id}/stop`, {})
   page = await open(ctx, pr, false); await other.close()
   const t = await landed(pr, 60000), w = whole(t, secs, 1.5)
   ok('nothing of it was in the project while the page was away', before === 0)

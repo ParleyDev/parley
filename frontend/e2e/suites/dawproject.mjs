@@ -1,10 +1,13 @@
 // DAWproject: a project exported as a .dawproject (validated against the format's XSD: tracks, buses, sends,
 // routing, audio as WAV, MIDI notes, automation, markers, built-in devices) and imported back as a new project.
+// A clip's level, which the format has no place for, is in the audio written for it (or said to be left out, where
+// that would clip); nobody's solo is in the file; the EQ, compressor and limiter come back as the effects they were.
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WEB, B, S, IP, FIX, reg, call, callS, ok, finish, launchBrowser } from '../lib.mjs'
+import { parseWav, peak } from '../audio.mjs'
 
 const a = await reg('alice')
 const g = await call(a.token, 'POST', '/guilds', { name: `DAWproject ${S}` })
@@ -18,13 +21,16 @@ const wav = (sec) => {
   return buf
 }
 const beat = await (await fetch(`${B}/channels/${room}/studio/audio?name=Beat.wav&duration_ms=4000`, { method: 'POST', headers: { Authorization: `Bearer ${a.token}`, 'Content-Type': 'audio/wav', 'X-Forwarded-For': IP }, body: wav(4) })).json()
-const BUS = crypto.randomUUID(), AUD = crypto.randomUUID(), MID = crypto.randomUUID()
+const BUS = crypto.randomUUID(), AUD = crypto.randomUUID(), MID = crypto.randomUUID(), QUIET = crypto.randomUUID(), LOUD = crypto.randomUUID()
 let r = await callS(a.token, 'POST', `/studio/projects/${P.id}/ops`, { ops: [
   { op: 'project', markers: [{ id: 'm1', ms: 2000, name: 'Verse' }], tempo_map: [{ bar: 4, bpm: 140, beats: 3 }], master_effects: [{ id: 'l1', type: 'limiter', on: true, params: { ceiling: -1 } }] },
   { op: 'lane.put', lane: { id: BUS, name: 'Reverb Bus', kind: 'bus', position: 0, effects: [{ id: 'r1', type: 'reverb', on: true, params: { size: 3 } }] } },
   { op: 'lane.put', lane: { id: AUD, name: 'Drums', kind: 'audio', position: 1, gain: 0.8, pan: -0.5, effects: [{ id: 'e1', type: 'eq', on: true, params: { low: 3 } }, { id: 'c1', type: 'compressor', on: true, params: { threshold: -20 } }], sends: { [BUS]: 0.4 }, automation: { gain: [[0, 0.5], [2000, 1]] } } },
   { op: 'lane.put', lane: { id: MID, name: 'Keys', kind: 'midi', position: 2, mute: true } },
   { op: 'clip.put', clip: { id: crypto.randomUUID(), lane_id: AUD, audio_id: beat.id, start_ms: 500, in_ms: 250, length_ms: 3000, fade_in_ms: 100 } },
+  { op: 'lane.put', lane: { id: QUIET, name: 'Quiet', kind: 'audio', position: 3 } }, { op: 'lane.put', lane: { id: LOUD, name: 'Loud', kind: 'audio', position: 4 } },
+  { op: 'clip.put', clip: { id: crypto.randomUUID(), lane_id: QUIET, audio_id: beat.id, start_ms: 0, length_ms: 1000, gain: 0.5 } },
+  { op: 'clip.put', clip: { id: crypto.randomUUID(), lane_id: LOUD, audio_id: beat.id, start_ms: 1000, length_ms: 1000, gain: 2 } },
   { op: 'clip.put', clip: { id: crypto.randomUUID(), lane_id: MID, start_ms: 1000, length_ms: 2000, notes: [{ p: 60, t: 0, d: 500, v: 100 }, { p: 64, t: 500, d: 500, v: 90 }] } },
 ] })
 ok('a project with a bus, send, effects, audio, MIDI, automation and a marker', r.status === 200, JSON.stringify(r.body))
@@ -34,7 +40,8 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, a
 const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message))
 await p.goto(`${WEB}/login`, { waitUntil: 'networkidle' }); await p.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
 await p.goto(`${WEB}/channels/${g.id}/${room}`)
-await p.waitForSelector('[data-daw]', { timeout: 15000 })
+await p.waitForSelector(`[data-daw-solo="${AUD}"]`, { timeout: 15000 })
+await p.click(`[data-daw-solo="${AUD}"]`)
 await p.click('[data-daw-export-open]')
 const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('[data-daw-export-dawproject]')])
 const dir = mkdtempSync(join(tmpdir(), 'dawproject-'))
@@ -57,6 +64,13 @@ ok('the WAV is real audio', readFileSync(join(dir, 'x', xml.match(/<File path="(
 ok('MIDI notes', (xml.match(/<Note /g) ?? []).length === 2 && /key="64"/.test(xml))
 ok('tempo changes and the master limiter', /<TempoAutomation [^>]*><Target parameter="id\d+"\/><RealPoint time="0" value="110"/.test(xml) && /value="140"/.test(xml) && /<TimeSignaturePoint [^>]*numerator="3"/.test(xml) && /<Limiter /.test(xml))
 ok('volume automation and the marker', /<Points [^>]*><Target parameter="id\d+"\/><RealPoint time="0" value="0.5"/.test(xml) && /<Marker time="2" name="Verse"\/>/.test(xml))
+ok('nobody’s solo is in it', await p.getAttribute(`[data-daw-solo="${AUD}"]`, 'aria-pressed') === 'true' && !/solo="true"/.test(xml) && /solo="false"/.test(xml))
+{
+  const paths = [...xml.matchAll(/<File path="([^"]+)"/g)].map((m) => m[1]), half = paths.find((x) => /-x0\.5\.wav$/.test(x)), plain = paths.find((x) => /Beat-[0-9a-f]{8}\.wav$/.test(x))
+  const pk = (f) => { const w = parseWav(readFileSync(join(dir, 'x', f))); return peak(w.samples[0], w.rate) }
+  ok('a clip at half level has its audio written at half level', !!half && !!plain && existsSync(join(dir, 'x', half)) && Math.abs(pk(half) / pk(plain) - 0.5) < 0.01, JSON.stringify(paths))
+  ok('a level that would clip is left out, and the track says so', !paths.some((x) => /-x2\.wav$/.test(x)) && /name="Loud"[^>]*comment="[^"]*Clip gain not carried over: [^"]*6(\.0\d*)? dB at 1 s/.test(xml) || /comment="[^"]*Clip gain not carried over: [^"]*6(\.0\d*)? dB at 1 s[^"]*"[^>]*name="Loud"/.test(xml), (xml.match(/[^<]*Clip gain not carried over[^>]*/) ?? ['none'])[0].slice(0, 300))
+}
 
 // And back in: the studio's Import takes the file as a new project.
 await p.goto(`${WEB}/channels/${g.id}/${studio.id}`)
@@ -72,6 +86,12 @@ ok('its tracks come back with their kinds and levels', L('Drums')?.kind === 'aud
 ok('the send to the bus', Math.abs((L('Drums').sends ?? {})[L('Reverb Bus').id] - 0.4) < 0.01)
 const ac = full.clips.find((c) => c.lane_id === L('Drums').id), mc = full.clips.find((c) => c.lane_id === L('Keys').id)
 ok('the audio clip, re-imported, in place', !!ac?.audio_id && ac.start_ms === 500 && ac.in_ms === 250 && ac.length_ms === 3000 && ac.fade_in_ms === 100, JSON.stringify(ac))
+const fxOf = (list, type) => (list ?? []).find((e) => e.type === type)
+ok('the EQ and the compressor come back as effects of the track, set as they were', Math.abs((fxOf(L('Drums').effects, 'eq')?.params.low ?? 0) - 3) < 0.01 && Math.abs((fxOf(L('Drums').effects, 'compressor')?.params.threshold ?? 0) + 20) < 0.01 && fxOf(L('Drums').effects, 'eq').on === true, JSON.stringify(L('Drums').effects))
+ok('the master limiter too', Math.abs((fxOf(full.project.master_effects, 'limiter')?.params.ceiling ?? 0) + 1) < 0.01, JSON.stringify(full.project.master_effects))
+ok('nothing comes in soloed', full.lanes.every((l) => l.solo === false))
+const qc = full.clips.find((c) => c.lane_id === L('Quiet')?.id), lc = full.clips.find((c) => c.lane_id === L('Loud')?.id)
+ok('the clip whose level is in its audio comes in at unity; the other is there', qc?.gain === 1 && !!qc.audio_id && qc.audio_id !== ac.audio_id && !!lc?.audio_id, JSON.stringify([qc, lc]))
 ok('the MIDI notes', mc?.notes?.length === 2 && mc.notes[1].p === 64 && mc.start_ms === 1000)
 ok('the automation and the marker', JSON.stringify(L('Drums').automation?.gain) === JSON.stringify([[0, 0.5], [2000, 1]]) && full.project.markers?.[0]?.name === 'Verse' && full.project.markers[0].ms === 2000)
 // A file as Bitwig writes them: time in beats, a clip wrapping a clip, audio inside warps, volume in decibels.

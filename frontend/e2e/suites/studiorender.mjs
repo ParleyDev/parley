@@ -54,7 +54,7 @@ async function scene(spec, proj = {}) {
   let last = null
   const puts = [], clips = []
   spec.forEach((l, i) => {
-    const { key, clips: cs = [], out, sends, automation, ...rest } = l
+    const { key, clips: cs = [], out, sends, automation, solo, ...rest } = l
     const fix = (m) => m && Object.fromEntries(Object.entries(m).map(([k, v]) => [k.replace(/^(send:)?(\w+)$/, (s, p, n) => (ids[n] ? (p ?? '') + ids[n] : s)), v]))
     puts.push({ op: 'lane.put', lane: { id: ids[key], name: key, position: i, ...rest, ...(out ? { output_id: ids[out] } : {}), ...(sends ? { sends: fix(sends) } : {}), ...(automation ? { automation: fix(automation) } : {}) } })
     for (const c of cs) { last = id(); clips.push({ op: 'clip.put', clip: { id: last, lane_id: ids[key], start_ms: 0, length_ms: 2000, ...c, audio_id: c.audio.id, audio: undefined } }) }
@@ -67,6 +67,8 @@ async function scene(spec, proj = {}) {
   // The clip with its waveform: the page has the change and has decoded the audio (audio it had not seen is fetched
   // after the change arrives, and a render before that would leave it out).
   await page.waitForSelector(`[data-daw-clip="${last}"] [data-daw-wave="1"]`, { timeout: 10000 })
+  // A solo is its listener's: it is set in the page, not in the project the server has.
+  for (const l of spec) if (l.solo) await page.evaluate((lid) => window.__parleyDawTest.edit([{ op: 'lane.put', lane: { id: lid, solo: true } }]), ids[l.key])
   return ids
 }
 const one = (clip = {}, lane = {}) => [{ key: 'a', kind: 'audio', ...lane, clips: [{ audio: DC, ...clip }] }]
