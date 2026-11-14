@@ -19,7 +19,10 @@ let snapshot = null, adminTok = null
 try { adminTok = (await adminToken()).token; const r = await fetch(`${B}/admin/settings`, { headers: { ...H, Authorization: 'Bearer ' + adminTok } }); if (r.ok) snapshot = await r.json() } catch { /* no admin: nothing to restore */ }
 const restore = async () => {
   if (!snapshot || !adminTok) return
-  try { const r = await fetch(`${B}/admin/settings`, { method: 'PUT', headers: { ...H, Authorization: 'Bearer ' + adminTok }, body: JSON.stringify(snapshot) }); console.log(`\n(instance settings restored: ${r.status})`) } catch (e) { console.log('\n(could not restore instance settings)', e?.message) }
+  // Twice: a suite may have restarted the server, and the first try then goes down a connection that is gone.
+  for (let n = 0; n < 2; n++) {
+    try { const r = await fetch(`${B}/admin/settings`, { method: 'PUT', headers: { ...H, Authorization: 'Bearer ' + adminTok }, body: JSON.stringify(snapshot) }); console.log(`\n(instance settings restored: ${r.status})`); return } catch (e) { if (n) console.log('\n(could not restore instance settings)', e?.message) }
+  }
 }
 process.on('SIGINT', () => { restore().finally(() => process.exit(130)) })
 const results = []

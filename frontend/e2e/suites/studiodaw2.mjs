@@ -167,9 +167,10 @@ await pb.waitForFunction(() => !!window.__parleyDaw?.loop && window.__parleyDaw.
 ok('loop recording loops the backing', await pb.evaluate(() => !!window.__parleyDaw?.loop))
 await pa.waitForTimeout(4200)
 await pa.click('[data-daw-record]')
+// Each pass lies where its audio does: from the loop's start, but for the first when the take began a moment after it.
 let takes = []
 for (let i = 0; i < 40; i++) { f = await full(); const bl = f.lanes.find((l) => l.user_id === b.user.id); takes = bl ? f.clips.filter((c) => c.lane_id === bl.id && c.group_id) : []; if (takes.length >= 2) break; await pa.waitForTimeout(500) }
-ok('a take over the loop becomes a group of takes, one per pass, one playing', takes.length >= 2 && takes.filter((c) => !c.muted).length === 1 && takes.every((c) => c.start_ms === 0 && c.length_ms <= 1500), JSON.stringify(takes.map((c) => [c.start_ms, c.in_ms, c.length_ms, c.muted])))
+ok('a take over the loop becomes a group of takes, one per pass, one playing', takes.length >= 2 && takes.filter((c) => !c.muted).length === 1 && takes.every((c) => c.start_ms < 100 && c.start_ms + c.length_ms <= 1500) && takes.filter((c) => c.start_ms === 0).length >= takes.length - 1, JSON.stringify(takes.map((c) => [c.start_ms, c.in_ms, c.length_ms, c.muted])))
 await pa.waitForTimeout(500)
 const tclip = pa.locator(`[data-daw-clip="${takes.find((c) => !c.muted).id}"]`) // this group's playing take (another member's group may come first)
 await tclip.click({ position: { x: 20, y: 40 } })

@@ -29,7 +29,7 @@ export function wavFile({ seconds, rate = 48000, signal = silence }) {
   return buf
 }
 
-/** Read a PCM WAV (16-bit) back: its header and its channels as floats. */
+/** Read a PCM WAV (16- or 24-bit) back: its header and its channels as floats. */
 export function parseWav(bytes) {
   const b = Buffer.from(bytes)
   const tag = (o) => b.toString('latin1', o, o + 4)
@@ -37,6 +37,8 @@ export function parseWav(bytes) {
   const frames = Math.floor(head.dataSize / head.blockAlign)
   const channels = Array.from({ length: head.channels }, () => new Float32Array(frames))
   if (head.bits === 16) for (let i = 0; i < frames; i++) for (let c = 0; c < head.channels; c++) channels[c][i] = b.readInt16LE(44 + (i * head.channels + c) * 2) / 32768
+  // 24 bits fit a float exactly: what is read is what was stored.
+  if (head.bits === 24) for (let i = 0; i < frames; i++) for (let c = 0; c < head.channels; c++) channels[c][i] = b.readIntLE(44 + (i * head.channels + c) * 3, 3) / 8388608
   return { ...head, frames, samples: channels }
 }
 
@@ -96,6 +98,60 @@ export function lag(a, b, maxLag) {
 export function maxDiff(a, b, rate, fromMs = 0, toMs) { const [s, e] = span(a.length < b.length ? a : b, rate, fromMs, toMs); let m = 0; for (let i = s; i < e; i++) { const v = Math.abs(a[i] - b[i]); if (v > m) m = v } return m }
 /** Equal-power pan: what a mono signal's left and right are multiplied by at `pan` (-1 … 1). */
 export const panLaw = (pan) => { const x = ((pan + 1) / 2) * (Math.PI / 2); return [Math.cos(x), Math.sin(x)] }
+
+// ---- an input the test knows to the sample ------------------------------------------------------------------
+
+/** Noise that is the same wherever it is made: `n` floats in [-0.5, 0.5) from `seed`. */
+export function noise(n, seed = 1) {
+  const out = new Float32Array(n)
+  let s = seed >>> 0
+  for (let i = 0; i < n; i++) { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; out[i] = s / 4294967296 - 0.5 }
+  return out
+}
+/** What a float becomes stored at 24 bits and read back. */
+export const as24 = (v) => Math.max(-8388608, Math.min(8388607, Math.round(v * 8388608))) / 8388608
+
+/**
+ * For `context.addInitScript(studioInput, mode)`: gives the studio recorder a node of the DAW's own audio graph as its
+ * microphone (`window.__parleyStudioInput`, read by src/lib/studio.ts), so what a take should hold is known exactly.
+ * 'loop': what the DAW plays (after the master, without the click), 100 ms late: a player who is exactly 100 ms behind.
+ * 'noise': silence until `window.__studioIn.play(frames, seed)` plays that much of `noise` once.
+ * 'hum': `HUM` frames of `noise` (seed 7) round and round, from before any take starts (see `humCheck`).
+ */
+export function studioInput(mode) {
+  const st = (window.__studioIn = { mode, node: null })
+  window.__parleyStudioInput = (ctx) => {
+    if (st.node) return st.node
+    if (mode === 'loop') { st.node = ctx.createDelay(1); st.node.delayTime.value = 0.1; window.__parleyDawTest.bus().connect(st.node) }
+    else st.node = ctx.createGain()
+    if (mode === 'hum') st.play(44101, 7, true)
+    return st.node
+  }
+  st.play = (frames, seed, loop = false) => {
+    const ctx = window.__parleyDawTest.context()
+    const buf = ctx.createBuffer(1, frames, ctx.sampleRate), d = buf.getChannelData(0)
+    let s = seed >>> 0
+    for (let i = 0; i < frames; i++) { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; d[i] = s / 4294967296 - 0.5 }
+    const src = ctx.createBufferSource(); src.buffer = buf; src.loop = loop; src.connect(st.node); src.start()
+  }
+}
+
+/** How long the 'hum' input is before it comes round: not a round number of anything a take is cut into. */
+export const HUM = 44101
+/**
+ * A take of the 'hum' input, checked sample by sample: each must be the one that was playing at that moment. Where
+ * in the round the take is, is read at its end; from there every sample has one right value. A piece of the take
+ * lost, repeated or out of place puts what follows it somewhere else in the round, and it is `wrong`. `silent`: zeros
+ * where the hum should be (what the browser did not hand to the recorder), and when the last of them is.
+ */
+export function humCheck(x, rate = 48000) {
+  const want = noise(HUM, 7).map(as24), tail = x.length - 4000
+  let phase = -1
+  if (tail > 0) for (let p = 0; p < HUM && phase < 0; p++) { let same = true; for (let i = 0; i < 64 && same; i++) same = x[tail + i] === want[(p + i) % HUM]; if (same) phase = (((p - tail) % HUM) + HUM) % HUM }
+  let wrong = 0, silent = 0, last = -1
+  if (phase >= 0) for (let i = 0; i < x.length; i++) { if (x[i] === want[(phase + i) % HUM]) continue; if (x[i] === 0) { silent++; last = i } else wrong++ }
+  return { frames: x.length, phase, wrong, silent, last_silent_ms: Math.round((last * 100000) / rate) / 100 }
+}
 
 // ---- a microphone the test plays into ------------------------------------------------------------------------
 

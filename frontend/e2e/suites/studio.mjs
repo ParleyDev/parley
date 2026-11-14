@@ -63,7 +63,8 @@ await pa.click('[data-studio-record]')
 await pa.waitForSelector('[data-studio-rec]'); await pb.waitForSelector('[data-studio-rec]')
 await pb.waitForFunction(() => window.__parleyStudio?.recording === true, null, { timeout: 10000 })
 ok('the engineer and the artist are recording their own tracks; the audience is not', await pa.evaluate(() => window.__parleyStudio?.recording === true) && await pc.evaluate(() => !window.__parleyStudio?.recording))
-const live = (await call(c.token, 'GET', `/channels/${st.id}/studio/sessions`))[0]
+let live
+for (let i = 0; i < 40; i++) { live = (await call(c.token, 'GET', `/channels/${st.id}/studio/sessions`))[0]; if (live?.tracks.length === 2) break; await pa.waitForTimeout(100) }
 ok('session is open with two tracks registered', live && live.ended_at === null && live.tracks.length === 2 && live.tracks.every((t) => !t.done))
 r = await raw(c.token, 'POST', `/studio/sessions/${live.id}/tracks`, {}); ok('audience cannot add a track', r.status === 403)
 r = await raw(c.token, 'POST', `/studio/sessions/${live.id}/tracks/${live.tracks[0].id}/chunks`); ok('nobody can write to someone else\'s track', r.status === 403)
