@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Approved 2026-11-14 (decisions D1–D9 accepted as recommended). Phase 1 done: see [BASELINE.md](BASELINE.md). Phase 2 done, awaiting review and the manual pass: see [PHASE2_RECORDING.md](PHASE2_RECORDING.md). |
+| Status | Approved 2026-11-14 (decisions D1–D9 accepted as recommended). Phase 1 done: see [BASELINE.md](BASELINE.md). Phase 2 done, awaiting review and the manual pass: see [PHASE2_RECORDING.md](PHASE2_RECORDING.md). Phase 3 done: see [PHASE3_SYNC.md](PHASE3_SYNC.md). Phase 4 done: see [PHASE4_MIX_EXPORT.md](PHASE4_MIX_EXPORT.md). Neither has had a manual pass. |
 | Date | 2026-11-14 |
 | Code basis | `main` at `639a50a` |
 | Tracker | `parley-pods` |
