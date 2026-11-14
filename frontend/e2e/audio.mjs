@@ -203,3 +203,36 @@ export function syntheticMic() {
     return dest.stream.clone()
   }
 }
+
+// ---- what is playing -----------------------------------------------------------------------------------------
+
+/**
+ * Start capturing what the DAW plays (its master, as `tap()` hears it) sample for sample, by a processor on the audio
+ * thread. `stopCapture` gives the samples back, with the blocks the browser never ran (`skipped`, in frames).
+ */
+export const startCapture = (page) => page.evaluate(async () => {
+  const t = window.__parleyDawTest, ctx = t.context()
+  if (!window.__cap) {
+    const src = `registerProcessor('test-capture', class extends AudioWorkletProcessor { process(i) { const c = i[0]; this.port.postMessage([currentFrame, c[0] ? c[0].slice() : null, c[1] ? c[1].slice() : null]); return true } })`
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })))
+    const node = new AudioWorkletNode(ctx, 'test-capture', { numberOfInputs: 1, numberOfOutputs: 0, channelCount: 2, channelCountMode: 'explicit' })
+    t.bus().connect(node)
+    window.__cap = { node, blocks: null }
+    node.port.onmessage = (e) => window.__cap.blocks?.push(e.data)
+  }
+  await ctx.resume()
+  window.__cap.blocks = []
+})
+export const stopCapture = async (page) => {
+  const r = await page.evaluate(() => {
+    const blocks = window.__cap.blocks; window.__cap.blocks = null
+    if (!blocks.length) return null
+    const first = blocks[0][0], n = blocks[blocks.length - 1][0] + 128 - first
+    const ch = [new Float32Array(n), new Float32Array(n)]
+    let skipped = 0, next = first
+    for (const [at, l, r] of blocks) { skipped += at - next; next = at + 128; if (l) ch[0].set(l, at - first); if (r ?? l) ch[1].set(r ?? l, at - first) }
+    const b64 = (f) => { const u = new Uint8Array(f.buffer); let s = ''; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s) }
+    return { rate: window.__parleyDawTest.context().sampleRate, frames: n, channels: ch.map(b64), skipped }
+  })
+  return r && { ...unpack(r), skipped: r.skipped }
+}

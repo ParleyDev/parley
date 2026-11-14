@@ -112,6 +112,26 @@ const report = { browser: BROWSER }
   ok('the take showed its state while it was sent', status)
   const mix = await pullRender(page)
   ok('nor is the click in the mix', !!mix && peak(mix.samples[0], mix.rate, 0, 950) < 1e-6 && peak(mix.samples[0], mix.rate, 1000, 1100) > 0.1, mix ? `${peak(mix.samples[0], mix.rate, 0, 950)}` : 'no render')
+  // Measured instead of reported: the loop is 100 ms round, and after measuring it a take lands where it was played.
+  await page.click('[data-daw-audio-open]')
+  const shown = () => page.locator('[data-daw-latency]').evaluate((e) => [e.dataset.dawLatency, Number(e.dataset.ms)])
+  const was = await shown()
+  ok('before measuring, the latency shown is what the browser reports', was[0] === 'reported' && was[1] < 50, JSON.stringify(was))
+  await page.click('[data-daw-calibrate]')
+  const got = await page.waitForSelector('[data-daw-latency="measured"]', { timeout: 15000 }).then(shown, () => null)
+  ok(`measuring the round trip finds the loop's 100 ms (${got?.[1]} ms)`, !!got && Math.abs(got[1] - LOOP_MS) <= 0.1, JSON.stringify(got))
+  let wave = 0
+  const cal = await take(pr, page, 5600, async () => { await page.waitForTimeout(2500); wave = await page.locator('[data-daw-recording] [data-daw-live-wave]').first().evaluate((e) => Number(e.dataset.peaks ?? 0) * (e.width > 0 && e.style.display !== 'none' ? 1 : 0)).catch(() => 0) })
+  ok('the take draws its waveform while it is recorded', wave > 20, String(wave))
+  const calFile = cal && await stored(cal.audio.id)
+  const calErrs = calFile?.wav ? landed(calFile.wav.samples[0], calFile.wav.rate, cal.clip, 0).errs : []
+  ok('a take after measuring is placed by the measured latency', cal?.audio.latency_ms === LOOP_MS, JSON.stringify(cal?.audio))
+  ok(`and every burst of it is within 1 ms of where the backing has it (worst ${calErrs.length ? r2(Math.max(...calErrs.map(Math.abs))) : '-'} ms)`, calErrs.length === AT.length && calErrs.every((e) => Math.abs(e) <= 1), JSON.stringify(calErrs))
+  if (cal) await callS(a.token, 'POST', `/studio/projects/${pr.P.id}/ops`, { ops: [{ op: 'clip.del', id: cal.clip.id }] })
+  await page.reload(); await page.waitForSelector(`[data-daw-clip="${pr.CB}"]`, { timeout: 20000 })
+  const kept = await page.evaluate(() => Object.values(JSON.parse(localStorage.getItem('parley.dawLatency') || '{}')))
+  ok('the measurement is kept on this device, for this pair of input and output', kept.length === 1 && Math.abs(kept[0] - LOOP_MS) <= 0.1, JSON.stringify(kept))
+  report.calibrated = { measured_ms: got?.[1], errs: calErrs.map((e) => Math.round(e * 1000) / 1000) }
   Object.assign(report, { takes: good.length, alignment_ms: stat(good.flatMap((t) => t.errs)), drift_within_take_ms: stat(good.map((t) => Math.max(...t.errs) - Math.min(...t.errs))), latency_reported_ms: stat(good.map((t) => t.latency_ms ?? 0)), duration_error_ms: stat(good.map((t) => t.said_ms - (t.frames * 1000) / t.rate)), detail: takes })
   await ctx.close()
 }
