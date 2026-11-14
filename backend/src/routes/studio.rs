@@ -176,6 +176,12 @@ pub const TRACK_SELECT: &str = "SELECT t.id, t.session_id, t.user_id, t.content_
     FROM studio_tracks t LEFT JOIN users u ON u.id = t.user_id";
 const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_at, ended_at, armed, bpm, beats, click, count_in_ms, project_id, position_ms, loop_start_ms, loop_end_ms, punch, solo";
 
+/// Is this `studio_tracks` row's audio referred to: by a clip, by a sampler, or by a saved version holding either?
+pub const AUDIO_IN_USE: &str = "(EXISTS (SELECT 1 FROM studio_clips c WHERE c.audio_id = studio_tracks.id)
+    OR EXISTS (SELECT 1 FROM studio_lanes l WHERE l.instrument->>'audio_id' = studio_tracks.id::text)
+    OR EXISTS (SELECT 1 FROM studio_versions v, jsonb_array_elements(CASE WHEN jsonb_typeof(v.data->'clips') = 'array' THEN v.data->'clips' ELSE '[]'::jsonb END) x WHERE x->>'audio_id' = studio_tracks.id::text)
+    OR EXISTS (SELECT 1 FROM studio_versions v, jsonb_array_elements(CASE WHEN jsonb_typeof(v.data->'lanes') = 'array' THEN v.data->'lanes' ELSE '[]'::jsonb END) x WHERE x->'instrument'->>'audio_id' = studio_tracks.id::text))";
+
 pub fn track_path(state: &AppState, tid: Uuid) -> std::path::PathBuf { state.config.upload_dir.join(format!("studio-{tid}.webm")) }
 
 /// Studio audio stored for these channels (takes and imports), to remove from disk once their rows are gone.
@@ -247,7 +253,7 @@ async fn set_role(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((
     if !crew && !stepping_down { return Err(AppError::Forbidden); }
     apply_role(&state, &c, target, role).await?;
     let updated = channel_json(&state, id).await?;
-    state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(updated));
+    broadcast(&state, &c, "CHANNEL_UPDATE", json!(updated)).await?;
     crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.role", "channel", Some(id), &c.name, json!({ "user": target, "role": role })).await;
     Ok(Json(updated))
 }
@@ -256,13 +262,11 @@ async fn apply_role(state: &AppState, c: &crate::models::Channel, target: Uuid, 
     let member: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2").bind(c.guild_id).bind(target).fetch_optional(&state.db).await?;
     if member.is_none() { return Err(AppError::BadRequest("That user is not in the server".into())); }
     if role != "audience" {
+        // Being heard still needs Speak in the channel: checked before anything is stored.
+        if let Ok((_, tp)) = require_channel_perms(&state.db, c.id, target).await { if !perms::has(tp, perms::SPEAK) { return Err(AppError::BadRequest("That member cannot speak in this channel".into())); } }
         sqlx::query("INSERT INTO studio_engineers (channel_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (channel_id, user_id) DO UPDATE SET role = $3").bind(c.id).bind(target).bind(role).execute(&state.db).await?;
     } else {
         sqlx::query("DELETE FROM studio_engineers WHERE channel_id = $1 AND user_id = $2").bind(c.id).bind(target).execute(&state.db).await?;
-    }
-    if role != "audience" {
-        // Being heard still needs Speak in the channel.
-        if let Ok((_, tp)) = require_channel_perms(&state.db, c.id, target).await { if !perms::has(tp, perms::SPEAK) { return Err(AppError::BadRequest("That member cannot speak in this channel".into())); } }
     }
     let suppress = role == "audience";
     if let Some(vs) = state.hub.voice_update(target, |v| { if v.channel_id == c.id { v.suppress = suppress; v.request_to_speak = false; } }) {
@@ -271,8 +275,11 @@ async fn apply_role(state: &AppState, c: &crate::models::Channel, target: Uuid, 
     Ok(())
 }
 
+/// The console's settings. Tempo and beats per bar are the project's (it owns them); the console keeps the metronome,
+/// the count-in bars and who is disarmed.
 pub async fn config_of(db: &PgPool, id: Uuid) -> AppResult<crate::models::StudioConfig> {
-    Ok(sqlx::query_as::<_, crate::models::StudioConfig>("SELECT bpm, beats, click, count_in, disarmed, project_id FROM studio_config WHERE channel_id = $1").bind(id).fetch_optional(db).await?.unwrap_or_default())
+    Ok(sqlx::query_as::<_, crate::models::StudioConfig>("SELECT COALESCE(p.bpm, c.bpm) AS bpm, COALESCE(p.beats, c.beats) AS beats, c.click, c.count_in, c.disarmed, c.project_id
+        FROM studio_config c LEFT JOIN studio_projects p ON p.id = c.project_id WHERE c.channel_id = $1").bind(id).fetch_optional(db).await?.unwrap_or_default())
 }
 
 #[derive(Deserialize)]
@@ -290,10 +297,10 @@ async fn set_config(State(state): State<AppState>, AuthUser(uid): AuthUser, Path
     if let Some(v) = req.click { cfg.click = v; }
     sqlx::query("INSERT INTO studio_config (channel_id, bpm, beats, click, count_in) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (channel_id) DO UPDATE SET bpm = $2, beats = $3, click = $4, count_in = $5")
         .bind(id).bind(cfg.bpm).bind(cfg.beats).bind(cfg.click).bind(cfg.count_in).execute(&state.db).await?;
-    // The open project keeps the tempo it is made at.
+    // The tempo is the project's: set there (which tells everyone), and read from there.
     if let Some(pid) = cfg.project_id { crate::routes::studio_daw::set_tempo(&state, pid, uid, cfg.bpm, cfg.beats).await?; }
     let updated = channel_json(&state, id).await?;
-    state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(updated));
+    broadcast(&state, &c, "CHANNEL_UPDATE", json!(updated)).await?;
     Ok(Json(updated))
 }
 
@@ -309,7 +316,7 @@ async fn set_arm(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((i
     let q = if req.armed { "UPDATE studio_config SET disarmed = array_remove(disarmed, $2) WHERE channel_id = $1" } else { "UPDATE studio_config SET disarmed = array_append(array_remove(disarmed, $2), $2) WHERE channel_id = $1" };
     sqlx::query(q).bind(id).bind(target).execute(&state.db).await?;
     let updated = channel_json(&state, id).await?;
-    state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(updated));
+    broadcast(&state, &c, "CHANNEL_UPDATE", json!(updated)).await?;
     Ok(Json(updated))
 }
 
@@ -350,23 +357,30 @@ async fn start_session(State(state): State<AppState>, AuthUser(uid): AuthUser, P
         let present = state.hub.voice_states_for_channels(&[id]).iter().any(|v| !v.suppress);
         return Err(AppError::BadRequest(if present { "Arm at least one track" } else { "Join the session to record: takes are recorded by the people in it" }.into()));
     }
-    let count_in_ms = if cfg.count_in > 0 { cfg.count_in * cfg.beats * 60_000 / cfg.bpm } else { 0 };
-    let started_at = Utc::now() + chrono::Duration::milliseconds(count_in_ms as i64);
     let sid = Uuid::now_v7();
     // With a project open the take records into it, from the playhead: everyone hears the project from there.
     let mut position_ms = if cfg.project_id.is_some() { req.position_ms.clamp(0, 4 * 3600 * 1000) } else { 0 };
     // The project's loop: loop recording (takes per pass, from the loop's start) or punch recording (only the range).
     let (mut la, mut lb, mut punch) = (None, None, false);
+    // The take's tempo is the project's where the take starts (its tempo map may have changed it by then).
+    let (mut bpm, mut beats) = (cfg.bpm, cfg.beats);
     if let Some(pid) = cfg.project_id {
-        let r: Option<(bool, bool, Option<i32>, Option<i32>)> = sqlx::query_as("SELECT loop_on, punch_on, loop_start_ms, loop_end_ms FROM studio_projects WHERE id = $1").bind(pid).fetch_optional(&state.db).await?;
-        if let Some((loop_on, punch_on, Some(a), Some(b))) = r { if (loop_on || punch_on) && b > a {
-            la = Some(a); lb = Some(b); punch = punch_on;
-            if !punch && (position_ms < a || position_ms >= b) { position_ms = a; }
-        } }
+        let r: Option<(bool, bool, Option<i32>, Option<i32>, i32, i32, sqlx::types::Json<serde_json::Value>)> = sqlx::query_as("SELECT loop_on, punch_on, loop_start_ms, loop_end_ms, bpm, beats, tempo_map FROM studio_projects WHERE id = $1").bind(pid).fetch_optional(&state.db).await?;
+        if let Some((loop_on, punch_on, a, b, pb, pn, map)) = r {
+            if let (Some(a), Some(b)) = (a, b) { if (loop_on || punch_on) && b > a {
+                la = Some(a); lb = Some(b); punch = punch_on;
+                if !punch && (position_ms < a || position_ms >= b) { position_ms = a; }
+            } }
+            (bpm, beats) = crate::routes::studio_daw::tempo_at(pb, pn, &map.0, position_ms);
+        }
     }
+    let count_in_ms = if cfg.count_in > 0 { cfg.count_in * beats * 60_000 / bpm } else { 0 };
+    let started_at = Utc::now() + chrono::Duration::milliseconds(count_in_ms as i64);
     let s = sqlx::query_as::<_, Session>(&format!("INSERT INTO studio_sessions (id, channel_id, guild_id, name, started_by, armed, started_at, bpm, beats, click, count_in_ms, project_id, position_ms, loop_start_ms, loop_end_ms, punch, solo) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING {SESSION_COLS}"))
-        .bind(sid).bind(id).bind(c.guild_id).bind(&name).bind(uid).bind(&armed).bind(started_at).bind(cfg.bpm).bind(cfg.beats).bind(cfg.click).bind(count_in_ms).bind(cfg.project_id).bind(position_ms)
-        .bind(la).bind(lb).bind(punch).bind(req.solo).fetch_one(&state.db).await?;
+        .bind(sid).bind(id).bind(c.guild_id).bind(&name).bind(uid).bind(&armed).bind(started_at).bind(bpm).bind(beats).bind(cfg.click).bind(count_in_ms).bind(cfg.project_id).bind(position_ms)
+        .bind(la).bind(lb).bind(punch).bind(req.solo).fetch_one(&state.db).await
+        // One take at a time in a project: the index decides when two start at once.
+        .map_err(|e| match e { sqlx::Error::Database(d) if d.is_unique_violation() => AppError::Conflict("A session is already recording".into()), e => e.into() })?;
     broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": id, "action": "start", "session_id": sid, "name": name, "started_at": s.started_at, "armed": armed, "bpm": s.bpm, "beats": s.beats, "click": s.click, "count_in_ms": count_in_ms, "project_id": cfg.project_id, "position_ms": position_ms, "loop_start_ms": la, "loop_end_ms": lb, "punch": punch, "solo": req.solo, "started_by": uid })).await?;
     crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.record", "channel", Some(id), &c.name, json!({ "session": sid })).await;
     Ok((StatusCode::CREATED, Json(s)))
@@ -392,8 +406,9 @@ async fn delete_session(State(state): State<AppState>, AuthUser(uid): AuthUser, 
         Some((true,)) => return Err(AppError::Conflict("Stop the take before deleting it".into())),
         Some((false,)) => {}
     }
-    // Takes used in a project stay (as audio of the studio's); the rest go with the session.
-    sqlx::query("UPDATE studio_tracks SET session_id = NULL WHERE session_id = $1 AND EXISTS (SELECT 1 FROM studio_clips c WHERE c.audio_id = studio_tracks.id)").bind(sid).execute(&state.db).await?;
+    // Takes still referred to stay (as audio of the project's): by a clip, by a sampler, or by a saved version that
+    // would restore either. The rest go with the session.
+    sqlx::query(&format!("UPDATE studio_tracks SET session_id = NULL WHERE session_id = $1 AND {AUDIO_IN_USE}")).bind(sid).execute(&state.db).await?;
     let tracks: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_tracks WHERE session_id = $1").bind(sid).fetch_all(&state.db).await?;
     let res = sqlx::query("DELETE FROM studio_sessions WHERE id = $1 AND channel_id = $2").bind(sid).bind(id).execute(&state.db).await?;
     if res.rows_affected() == 0 { return Err(AppError::NotFound("Session not found".into())); }

@@ -250,7 +250,7 @@ async fn update_project(State(state): State<AppState>, AuthUser(uid): AuthUser, 
         .bind(pid).bind(&name).bind(&req.tag).bind(req.archived).fetch_one(&state.db).await?;
     if let Some(n) = &name { sqlx::query("UPDATE channels SET name = $2 WHERE id = $1").bind(c.id).bind(n.chars().take(100).collect::<String>()).execute(&state.db).await?; }
     let room = channel_json(&state, c.id).await?;
-    state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(room));
+    broadcast(&state, &c, "CHANNEL_UPDATE", json!(room)).await?;
     if let Some(sid) = c.parent_id { if let Ok(studio) = channel_json(&state, sid).await { broadcast(&state, &studio, "STUDIO_PROJECTS", json!({ "channel_id": sid })).await?; } }
     broadcast(&state, &c, "STUDIO_PROJECT", json!({ "project_id": pid, "version": updated.version, "ops": [], "reload": true })).await?;
     crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.project_update", "channel", Some(c.id), &updated.name, json!({ "project": pid, "tag": req.tag, "archived": req.archived })).await;
@@ -483,13 +483,17 @@ async fn is_bus(tx: &mut Transaction<'_, Postgres>, pid: Uuid, id: &str, me: Uui
 }
 
 /// Apply one op inside the transaction; the entity it leaves (as broadcast), or what it removed.
-async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: Uuid, op: Op) -> AppResult<serde_json::Value> {
+async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: Uuid, crew: bool, op: Op) -> AppResult<serde_json::Value> {
     let pid = project.id;
     match op {
         Op::Project { name, bpm, beats, master_gain, master_effects, tempo_map: tm, loop_on, loop_start_ms, loop_end_ms, punch_on, markers: mk, clear_loop } => {
             if clear_loop == Some(true) { project.loop_start_ms = None; project.loop_end_ms = None; project.loop_on = false; project.punch_on = false; }
             if let Some(v) = master_effects { project.master_effects = SqlJson(effects(v)?); }
-            if let Some(v) = tm { project.tempo_map = SqlJson(tempo_map(v)?); }
+            // The name and the tempo are the crew's to change (as on the console and in the project's menu): an
+            // artist's op may carry them only as they already are (an undo does).
+            let tm = match tm { Some(v) => { let v = tempo_map(v)?; if !crew && v != project.tempo_map.0 { return Err(AppError::Forbidden); } Some(v) } None => None };
+            if !crew && (name.as_ref().is_some_and(|n| clean_name(n, &project.name) != project.name) || bpm.is_some_and(|v| v != project.bpm) || beats.is_some_and(|v| v != project.beats)) { return Err(AppError::Forbidden); }
+            if let Some(v) = tm { project.tempo_map = SqlJson(v); }
             if let Some(v) = mk { project.markers = SqlJson(markers(v)?); }
             if let Some(v) = loop_start_ms { project.loop_start_ms = Some(range(v, 0, MAX_MS, "Loop start")?); }
             if let Some(v) = loop_end_ms { project.loop_end_ms = Some(range(v, 0, MAX_MS, "Loop end")?); }
@@ -497,7 +501,12 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
             if let Some(v) = loop_on { project.loop_on = v; }
             if let Some(v) = punch_on { project.punch_on = v; }
             if (project.loop_on || project.punch_on) && project.loop_end_ms.is_none() { return Err(AppError::BadRequest("Set a loop range first".into())); }
-            if let Some(n) = name { project.name = clean_name(&n, &project.name); }
+            if let Some(n) = name {
+                let n = clean_name(&n, &project.name);
+                // The project's channel carries its name.
+                if n != project.name { sqlx::query("UPDATE channels SET name = $2 WHERE id = $1").bind(project.channel_id).bind(n.chars().take(100).collect::<String>()).execute(&mut **tx).await?; }
+                project.name = n;
+            }
             if let Some(v) = bpm { project.bpm = range(v, 40, 300, "Tempo")?; }
             if let Some(v) = beats { project.beats = range(v, 1, 12, "Beats per bar")?; }
             if let Some(v) = master_gain { project.master_gain = finite(v, 0.0, 2.0, "Master level")?; }
@@ -614,23 +623,51 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
     }
 }
 
-/// Apply ops to a project as one change, and tell the studio. The new version and what the ops left.
-async fn commit(state: &AppState, c: &crate::models::Channel, pid: Uuid, uid: Uuid, ops: Vec<Op>) -> AppResult<(i64, Vec<serde_json::Value>)> {
+/// One at a time per project on this instance, from the change to its broadcast: the events leave in the order of
+/// their versions. (Another instance's may still cross them on the way; clients put a late one back in order.)
+fn project_lock(pid: Uuid) -> std::sync::Arc<tokio::sync::Mutex<()>> {
+    static LOCKS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<Uuid, std::sync::Arc<tokio::sync::Mutex<()>>>>> = std::sync::OnceLock::new();
+    let mut map = LOCKS.get_or_init(Default::default).lock().unwrap();
+    // Locks nobody holds or waits for go, so the map stays the size of what is being edited.
+    if map.len() > 256 { map.retain(|_, l| std::sync::Arc::strong_count(l) > 1); }
+    map.entry(pid).or_default().clone()
+}
+
+/// The tempo in force at `ms` on a project's timeline: its own, as changed by its tempo map ({bar, bpm, beats} from
+/// that bar on, bar 0 being the first).
+pub fn tempo_at(bpm: i32, beats: i32, map: &Value, ms: i32) -> (i32, i32) {
+    let mut changes: Vec<(i64, i64, i64)> = map.as_array().into_iter().flatten()
+        .filter_map(|c| Some((c.get("bar")?.as_i64()?, c.get("bpm")?.as_i64()?, c.get("beats")?.as_i64()?))).filter(|c| c.0 > 0 && c.1 > 0 && c.2 > 0).collect();
+    changes.sort();
+    let (mut bar, mut sec, mut cur) = (0i64, 0f64, (bpm as i64, beats as i64));
+    for (b, t, n) in changes {
+        let at = sec + ((b - bar) * cur.1) as f64 * 60.0 / cur.0 as f64;
+        if at > ms as f64 / 1000.0 + 1e-9 { break; }
+        (bar, sec, cur) = (b, at, (t, n));
+    }
+    (cur.0 as i32, cur.1 as i32)
+}
+
+/// Apply ops to a project as one change, and tell the studio. The new version and what the ops left. `crew`: may
+/// the one making it rename the project and change its tempo?
+async fn commit(state: &AppState, c: &crate::models::Channel, pid: Uuid, uid: Uuid, crew: bool, ops: Vec<Op>) -> AppResult<(i64, Vec<serde_json::Value>)> {
+    let lock = project_lock(pid);
+    let _held = lock.lock().await;
     let mut tx = state.db.begin().await?;
     let mut project = sqlx::query_as::<_, Project>(&format!("SELECT {PROJECT_COLS} FROM studio_projects WHERE id = $1 FOR UPDATE")).bind(pid).fetch_optional(&mut *tx).await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
-    let tempo = (project.bpm, project.beats);
+    let (tempo, name) = ((project.bpm, project.beats), project.name.clone());
     let mut out = Vec::with_capacity(ops.len());
-    for op in ops { out.push(apply(&mut tx, &mut project, uid, op).await?); }
+    for op in ops { out.push(apply(&mut tx, &mut project, uid, crew, op).await?); }
     let (version,): (i64,) = sqlx::query_as("UPDATE studio_projects SET version = version + 1, updated_at = now() WHERE id = $1 RETURNING version").bind(pid).fetch_one(&mut *tx).await?;
     tx.commit().await?;
-    // The open project's tempo is the studio's metronome.
-    if (project.bpm, project.beats) != tempo && config_of(&state.db, c.id).await?.project_id == Some(pid) {
-        sqlx::query("UPDATE studio_config SET bpm = $2, beats = $3 WHERE channel_id = $1").bind(c.id).bind(project.bpm).bind(project.beats).execute(&state.db).await?;
-        let updated = channel_json(state, c.id).await?;
-        state.hub.emit_guild(c.guild_id.unwrap(), "CHANNEL_UPDATE", json!(updated));
-    }
     broadcast(state, c, "STUDIO_PROJECT", json!({ "channel_id": c.id, "project_id": pid, "version": version, "by": uid, "ops": out })).await?;
+    // The channel shows the project's name, and its console the project's tempo.
+    if (project.bpm, project.beats) != tempo || project.name != name {
+        let updated = channel_json(state, c.id).await?;
+        broadcast(state, &updated, "CHANNEL_UPDATE", json!(updated)).await?;
+    }
+    if project.name != name { if let Some(sid) = c.parent_id { if let Ok(studio) = channel_json(state, sid).await { broadcast(state, &studio, "STUDIO_PROJECTS", json!({ "channel_id": sid })).await?; } } }
     Ok((version, out))
 }
 
@@ -638,8 +675,10 @@ async fn commit(state: &AppState, c: &crate::models::Channel, pid: Uuid, uid: Uu
 async fn apply_ops(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(pid): Path<Uuid>, Json(req): Json<OpsReq>) -> AppResult<Json<serde_json::Value>> {
     if req.ops.is_empty() || req.ops.len() > MAX_OPS { return Err(AppError::BadRequest(format!("Send 1 to {MAX_OPS} ops"))); }
     let project = project_row(&state.db, pid).await?;
-    let c = editor(&state, project.channel_id, uid).await?;
-    let (version, ops) = commit(&state, &c, pid, uid, req.ops).await?;
+    let (c, p) = studio_channel(&state.db, project.channel_id, uid).await?;
+    if !can_edit(&state, c.id, uid, p).await? { return Err(AppError::Forbidden); }
+    let crew = is_crew(&state, c.id, uid, p).await?;
+    let (version, ops) = commit(&state, &c, pid, uid, crew, req.ops).await?;
     Ok(Json(json!({ "version": version, "ops": ops })))
 }
 
@@ -648,7 +687,7 @@ pub async fn set_tempo(state: &AppState, pid: Uuid, uid: Uuid, bpm: i32, beats: 
     let project = project_row(&state.db, pid).await?;
     if (project.bpm, project.beats) == (bpm, beats) { return Ok(()); }
     let c = channel_json(state, project.channel_id).await?;
-    commit(state, &c, pid, uid, vec![Op::Project { name: None, bpm: Some(bpm), beats: Some(beats), master_gain: None, master_effects: None, tempo_map: None, loop_on: None, loop_start_ms: None, loop_end_ms: None, clear_loop: None, punch_on: None, markers: None }]).await?;
+    commit(state, &c, pid, uid, true, vec![Op::Project { name: None, bpm: Some(bpm), beats: Some(beats), master_gain: None, master_effects: None, tempo_map: None, loop_on: None, loop_start_ms: None, loop_end_ms: None, clear_loop: None, punch_on: None, markers: None }]).await?;
     Ok(())
 }
 
@@ -722,7 +761,7 @@ pub async fn place_take(state: &AppState, c: &crate::models::Channel, sid: Uuid,
     for x in &takes {
         ops.push(Op::ClipPut { clip: ClipPatch { id: Uuid::now_v7(), lane_id: Some(lane_id), audio_id: Some(t.id), start_ms: Some(x.start_ms), in_ms: Some(x.in_ms), length_ms: Some(x.length_ms), gain: None, fade_in_ms: None, fade_out_ms: None, muted: Some(x.muted), notes: None, group_id: group.filter(|_| x.grouped).map(|g| json!(g.to_string())) } });
     }
-    commit(state, c, pid, uid, ops).await?;
+    commit(state, c, pid, uid, true, ops).await?;
     Ok(())
 }
 
@@ -737,7 +776,7 @@ pub async fn extend_take(state: &AppState, c: &crate::models::Channel, sid: Uuid
     let clips: Vec<(Uuid, i32)> = sqlx::query_as("SELECT id, in_ms FROM studio_clips WHERE audio_id = $1 AND project_id = $2 AND in_ms + length_ms = $3").bind(t.id).bind(pid).bind(was_ms).fetch_all(&state.db).await?;
     if clips.is_empty() { return Ok(()); }
     let ops = clips.into_iter().map(|(id, in_ms)| Op::ClipPut { clip: ClipPatch { id, lane_id: None, audio_id: None, start_ms: None, in_ms: None, length_ms: Some(dur - in_ms), gain: None, fade_in_ms: None, fade_out_ms: None, muted: None, notes: None, group_id: None } }).collect();
-    commit(state, c, pid, uid, ops).await?;
+    commit(state, c, pid, uid, true, ops).await?;
     Ok(())
 }
 
@@ -787,11 +826,29 @@ async fn import_audio(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 
 #[cfg(test)]
 mod tests {
-    use super::{automation, effects, markers, notes, sends, take_clips, tempo_map, TakeClip};
+    use super::{automation, effects, markers, notes, sends, take_clips, tempo_at, tempo_map, TakeClip};
     use serde_json::json;
 
     fn one(start_ms: i32, in_ms: i32, length_ms: i32) -> TakeClip { TakeClip { start_ms, in_ms, length_ms, grouped: false, muted: false } }
     fn pass(start_ms: i32, in_ms: i32, length_ms: i32, muted: bool) -> TakeClip { TakeClip { start_ms, in_ms, length_ms, grouped: true, muted } }
+
+    #[test]
+    fn the_tempo_at_a_moment_follows_the_tempo_map() {
+        // No map: the project's own, anywhere.
+        assert_eq!(tempo_at(120, 4, &json!([]), 0), (120, 4));
+        assert_eq!(tempo_at(120, 4, &json!(null), 90_000), (120, 4));
+        // 60 from the third bar (bar 2): two bars of 4 at 120 are 4 s, so the change is in force from 4000 ms.
+        let map = json!([{ "bar": 2, "bpm": 60, "beats": 3 }]);
+        assert_eq!(tempo_at(120, 4, &map, 3999), (120, 4));
+        assert_eq!(tempo_at(120, 4, &map, 4000), (60, 3));
+        // Later changes are placed by the tempo before them, in bar order whatever order they are stored in: bar 4
+        // is two bars of 3 at 60 (6 s) after bar 2, at 10 s.
+        let map = json!([{ "bar": 4, "bpm": 180, "beats": 4 }, { "bar": 2, "bpm": 60, "beats": 3 }]);
+        assert_eq!(tempo_at(120, 4, &map, 9999), (60, 3));
+        assert_eq!(tempo_at(120, 4, &map, 10_000), (180, 4));
+        // A change at the first bar, or one that is no tempo, is not a change.
+        assert_eq!(tempo_at(120, 4, &json!([{ "bar": 0, "bpm": 60, "beats": 4 }, { "bar": 1, "bpm": 0, "beats": 4 }, { "bar": 1 }]), 60_000), (120, 4));
+    }
 
     #[test]
     fn a_take_lands_where_it_was_played() {
@@ -990,6 +1047,8 @@ async fn restore_version(State(state): State<AppState>, AuthUser(uid): AuthUser,
     let project = project_row(&state.db, pid).await?;
     let c = editor(&state, project.channel_id, uid).await?;
     store_version(&state.db, pid, uid, &clean_name(&format!("Before restoring {name}"), "Before restoring")).await?;
+    let lock = project_lock(pid);
+    let _held = lock.lock().await;
     let mut tx = state.db.begin().await?;
     sqlx::query("SELECT 1 FROM studio_projects WHERE id = $1 FOR UPDATE").bind(pid).execute(&mut *tx).await?;
     let p = &data["project"];
@@ -1017,6 +1076,9 @@ async fn restore_version(State(state): State<AppState>, AuthUser(uid): AuthUser,
     tx.commit().await?;
     broadcast(&state, &c, "STUDIO_PROJECT", json!({ "channel_id": c.id, "project_id": pid, "version": version, "by": uid, "ops": [], "reload": true })).await?;
     broadcast(&state, &c, "STUDIO_VERSIONS", json!({ "channel_id": c.id, "project_id": pid })).await?;
+    // The console shows the project's tempo, which the version may have changed.
+    let updated = channel_json(&state, c.id).await?;
+    broadcast(&state, &updated, "CHANNEL_UPDATE", json!(updated)).await?;
     crate::audit::guild(&state, c.guild_id.unwrap(), uid, "studio.project_restore", "channel", Some(c.id), &c.name, json!({ "project": pid, "version": vid, "name": name })).await;
     Ok(Json(json!({ "version": version })))
 }

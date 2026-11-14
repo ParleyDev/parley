@@ -310,7 +310,8 @@ pub async fn attach_overwrites(db: &PgPool, channels: &mut [Channel]) -> AppResu
             c.engineer_ids = rows.iter().filter(|r| r.0 == c.id && r.2 == "engineer").map(|r| r.1).collect();
             c.artist_ids = rows.iter().filter(|r| r.0 == c.id && r.2 == "artist").map(|r| r.1).collect();
         }
-        let configs: Vec<(Uuid, i32, i32, bool, i32, Vec<Uuid>, Option<Uuid>)> = sqlx::query_as("SELECT channel_id, bpm, beats, click, count_in, disarmed, project_id FROM studio_config WHERE channel_id = ANY($1)").bind(&studios).fetch_all(db).await?;
+        let configs: Vec<(Uuid, i32, i32, bool, i32, Vec<Uuid>, Option<Uuid>)> = sqlx::query_as("SELECT c.channel_id, COALESCE(p.bpm, c.bpm), COALESCE(p.beats, c.beats), c.click, c.count_in, c.disarmed, c.project_id
+            FROM studio_config c LEFT JOIN studio_projects p ON p.id = c.project_id WHERE c.channel_id = ANY($1)").bind(&studios).fetch_all(db).await?;
         for c in channels.iter_mut().filter(|c| c.kind == "project") {
             c.studio = Some(configs.iter().find(|r| r.0 == c.id).map(|r| crate::models::StudioConfig { bpm: r.1, beats: r.2, click: r.3, count_in: r.4, disarmed: r.5.clone(), project_id: r.6 }).unwrap_or_default());
         }
