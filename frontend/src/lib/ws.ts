@@ -15,7 +15,7 @@ import { getNotifPrefs } from './notifPrefs'
 import { getPrefs, streamerHides } from './prefs'
 import { log } from './log'
 import { studio } from './studio'
-import { onComments as onDawComments, onPresence as onDawPresence, onRemote as onDawEdit, onTransport as onDawTransport } from './daw'
+import { onComments as onDawComments, onPresence as onDawPresence, onReconnect as onDawReconnect, onRemote as onDawEdit, onTransport as onDawTransport, retrySync as retryDawSync, useDaw } from './daw'
 import { isNative, registerPush } from './native'
 import { clearChannelNotifications, refreshPush } from './webpush'
 import { markJoined } from './welcome'
@@ -221,12 +221,25 @@ export function sendTyping(channelId: string) {
   sendOp({ op: 'typing', channel_id: channelId })
 }
 
+/**
+ * A fresh READY with a project open: whatever happened in it while we were away was not replayed, so the project
+ * (with its comments), its takes and its versions are taken from the server again.
+ */
+function studioReconnect() {
+  const p = useDaw.getState().project
+  onDawReconnect()
+  if (!p) return
+  void useStore.getState().loadStudio(p.channel_id)
+  window.dispatchEvent(new CustomEvent('parley-studio-takes', { detail: p.channel_id }))
+  window.dispatchEvent(new CustomEvent('parley-studio-versions', { detail: p.id }))
+}
+
 function handle(ev: Ev) {
   const s = useStore.getState()
   switch (ev.t) {
-    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void loadThemes(); void loadCosmetics(); void s.loadNotes(); void s.loadMyThreads(); void s.loadLiveEvents(); void useScheduled.getState().load(); receiveSettings(ev.d.user.client_settings); void registerPush(); void refreshPush(); voice.onReconnect(); break
+    case 'READY': wsStats.ready++; if (typeof ev.s === 'number') lastSeq = ev.s; s.applyReady(ev.d); void loadThemes(); void loadCosmetics(); void s.loadNotes(); void s.loadMyThreads(); void s.loadLiveEvents(); void useScheduled.getState().load(); receiveSettings(ev.d.user.client_settings); void registerPush(); void refreshPush(); voice.onReconnect(); studioReconnect(); break
     // The server replayed everything we missed; state is already current, no need to rebuild it.
-    case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); break
+    case 'RESUMED': wsStats.resumed++; wsStats.replayed += ev.d.replayed; s.setConnected(true); voice.onReconnect(); retryDawSync(); break
     case 'RESYNC': lastSeq = 0; instanceId = null; socket?.close(); break
     case 'PONG': break
     case 'MESSAGE_CREATE': {

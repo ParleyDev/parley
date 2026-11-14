@@ -2,6 +2,7 @@ import { api, getToken } from './api'
 import { engine, newId, sortedLanes, useDaw, type Op } from './daw'
 import { integratedLufs } from './fx'
 import { encodeWav } from './multitrack'
+import { peakOf, to16 } from './wav'
 import { uploadFile } from './upload'
 import { download } from './fileActions'
 import type { StudioClip, StudioLane, StudioProject, StudioTrack } from './types'
@@ -11,7 +12,8 @@ import type { StudioClip, StudioLane, StudioProject, StudioTrack } from './types
  * zipped), the mix posted to a channel, and whole projects as a .parley-project file (a zip of the project and its
  * audio) that another studio can import.
  */
-export type Format = 'wav' | 'flac' | 'mp3'
+/** `wav` is 24-bit, `wav16` 16-bit with dither. */
+export type Format = 'wav' | 'wav16' | 'flac' | 'mp3'
 
 // ---- zip (stored entries; reading also inflates) ----
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0 } return t })()
@@ -89,10 +91,10 @@ function subframe(w: Bits, x: Int32Array, bps: number) {
   w.put(0, 2); w.put(0, 4); w.put(k, 4)
   for (const r of bestR) { const u = r >= 0 ? r * 2 : -r * 2 - 1; w.unary(Math.floor(u / Math.pow(2, k))); if (k) w.put(u % Math.pow(2, k), k) }
 }
-/** 16-bit FLAC of a buffer. */
+/** 16-bit FLAC of a buffer (dithered, like a 16-bit WAV). */
 export function encodeFlac(buf: AudioBuffer): Uint8Array {
   const ch = Math.min(2, buf.numberOfChannels), rate = buf.sampleRate, total = buf.length, block = 4096, bps = 16
-  const data = Array.from({ length: ch }, (_, c) => { const f = buf.getChannelData(c), i = new Int32Array(f.length); for (let k = 0; k < f.length; k++) { const s = Math.max(-1, Math.min(1, f[k])); i[k] = Math.round(s < 0 ? s * 32768 : s * 32767) } return i })
+  const data = Array.from({ length: ch }, (_, c) => Int32Array.from(to16(buf.getChannelData(c), c)))
   const out: number[] = [0x66, 0x4c, 0x61, 0x43]
   const si = new Bits()
   si.put(1, 1); si.put(0, 7); si.put(34, 24)
@@ -122,7 +124,7 @@ export async function encodeMp3(buf: AudioBuffer, kbps = 192): Promise<Uint8Arra
   const { Mp3Encoder } = await import('@breezystack/lamejs')
   const ch = Math.min(2, buf.numberOfChannels)
   const enc = new Mp3Encoder(ch, buf.sampleRate, kbps)
-  const pcm = Array.from({ length: ch }, (_, c) => { const f = buf.getChannelData(c), i = new Int16Array(f.length); for (let k = 0; k < f.length; k++) { const s = Math.max(-1, Math.min(1, f[k])); i[k] = s < 0 ? s * 32768 : s * 32767 } return i })
+  const pcm = Array.from({ length: ch }, (_, c) => to16(buf.getChannelData(c), c))
   const chunks: Uint8Array[] = []
   for (let i = 0; i < buf.length; i += 1152) { const d = enc.encodeBuffer(pcm[0].subarray(i, i + 1152), ch > 1 ? pcm[1].subarray(i, i + 1152) : undefined); if (d.length) chunks.push(d) }
   const last = enc.flush(); if (last.length) chunks.push(last)
@@ -131,45 +133,55 @@ export async function encodeMp3(buf: AudioBuffer, kbps = 192): Promise<Uint8Arra
   return out
 }
 
-const TYPES: Record<Format, string> = { wav: 'audio/wav', flac: 'audio/flac', mp3: 'audio/mpeg' }
+const TYPES: Record<Format, string> = { wav: 'audio/wav', wav16: 'audio/wav', flac: 'audio/flac', mp3: 'audio/mpeg' }
+const EXT: Record<Format, string> = { wav: 'wav', wav16: 'wav', flac: 'flac', mp3: 'mp3' }
+/** How far a buffer goes over full scale, in dB (0 when it does not): a file made of it clips by that much. */
+export const overDb = (buf: AudioBuffer) => { const p = peakOf(buf); return p > 1 ? 20 * Math.log10(p) : 0 }
 export async function encode(buf: AudioBuffer, format: Format): Promise<Uint8Array> {
-  return format === 'wav' ? new Uint8Array(encodeWav(buf)) : format === 'flac' ? encodeFlac(buf) : encodeMp3(buf)
+  return format === 'wav' ? new Uint8Array(encodeWav(buf, 24)) : format === 'wav16' ? new Uint8Array(encodeWav(buf, 16)) : format === 'flac' ? encodeFlac(buf) : encodeMp3(buf)
 }
 const safe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, '_').trim() || 'project'
 const saveBlob = async (blob: Blob, name: string) => { const url = URL.createObjectURL(blob); await download(url, name); setTimeout(() => URL.revokeObjectURL(url), 30_000) }
 const expose = (k: string, v: unknown) => { (window as unknown as Record<string, unknown>)[k] = v }
 
-/** Export the mix in a format; its integrated loudness. */
-export async function exportMixAs(format: Format): Promise<number | null> {
+/** Export the mix in a format. Says its integrated loudness and how far it goes over full scale (nothing is held back for that). */
+export async function exportMixAs(format: Format): Promise<{ lufs: number | null; over: number }> {
   const p = useDaw.getState().project
   const buf = await engine.renderBuffer()
   if (!p || !buf) throw new Error('Nothing to export yet')
   const data = await encode(buf, format)
-  expose('__parleyDawExport', data.byteLength); expose('__parleyDawFormat', format)
+  const over = overDb(buf)
+  expose('__parleyDawExport', data.byteLength); expose('__parleyDawFormat', format); expose('__parleyDawOver', over)
   const lufs = await integratedLufs(buf)
   expose('__parleyDawLufs', lufs)
-  await saveBlob(new Blob([data as BlobPart], { type: TYPES[format] }), `${safe(p.name)} - mix.${format}`)
-  return lufs
+  await saveBlob(new Blob([data as BlobPart], { type: TYPES[format] }), `${safe(p.name)} - mix.${EXT[format]}`)
+  return { lufs, over }
 }
 
-/** Every track rendered on its own (with the buses it feeds), as WAVs in a zip. */
-export async function exportStems(): Promise<number> {
+/**
+ * Every track that is in the mix rendered on its own (with the buses it feeds), as WAVs in a zip: all as long as the
+ * mix and starting where it starts, so they line up in another program. Muted tracks are left out, as they are of
+ * the mix. `over` is how far the loudest stem goes over full scale.
+ */
+export async function exportStems(bits: 16 | 24 = 24): Promise<{ n: number; over: number }> {
   const { project, lanes } = useDaw.getState()
-  if (!project) return 0
+  if (!project) return { n: 0, over: 0 }
   const files: { name: string; data: Uint8Array }[] = []
   const used = new Set<string>()
-  for (const l of sortedLanes(lanes).filter((x) => x.kind !== 'bus')) {
+  let over = 0
+  for (const l of sortedLanes(lanes).filter((x) => x.kind !== 'bus' && !x.mute)) {
     const buf = await engine.renderBuffer([l.id])
     if (!buf) continue
     let name = safe(l.name), n = 2
     while (used.has(name)) name = `${safe(l.name)} ${n++}`
     used.add(name)
-    files.push({ name: `${name}.wav`, data: new Uint8Array(encodeWav(buf)) })
+    over = Math.max(over, overDb(buf))
+    files.push({ name: `${name}.wav`, data: new Uint8Array(encodeWav(buf, bits)) })
   }
   if (!files.length) throw new Error('Nothing to export yet')
-  expose('__parleyDawStems', files.map((f) => f.name))
+  expose('__parleyDawStems', files.map((f) => f.name)); expose('__parleyDawStemBytes', files.map((f) => f.data.byteLength))
   await saveBlob(zip(files), `${safe(project.name)} - stems.zip`)
-  return files.length
+  return { n: files.length, over }
 }
 
 /** Post the mix to a text channel, with a message. */
@@ -178,7 +190,7 @@ export async function postMix(channelId: string, format: Format, content: string
   const buf = await engine.renderBuffer()
   if (!p || !buf) throw new Error('Nothing to export yet')
   const data = await encode(buf, format)
-  const file = new File([data as BlobPart], `${safe(p.name)}.${format}`, { type: TYPES[format] })
+  const file = new File([data as BlobPart], `${safe(p.name)}.${EXT[format]}`, { type: TYPES[format] })
   const att = await uploadFile(channelId, file, () => {}).promise
   await api.post(`/channels/${channelId}/messages`, { content, attachment_ids: [att.id] })
 }

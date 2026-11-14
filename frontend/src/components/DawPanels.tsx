@@ -66,6 +66,8 @@ export function ExportPanel({ channel, close }: { channel: Channel; close: () =>
   const [busy, setBusy] = useState<string | null>(null)
   const [target, setTarget] = useState('')
   const [text, setText] = useState('')
+  // How far the last export went over full scale (dB): said, and left on show, but nothing is held back for it.
+  const [over, setOver] = useState(0)
   const file = useRef<HTMLInputElement>(null)
   const texts = Object.values(channels).filter((c) => c.guild_id === channel.guild_id && c.kind === 'text').sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
   const run = async (key: string, fn: () => Promise<unknown>) => { setBusy(key); try { await fn() } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(null) } }
@@ -74,12 +76,13 @@ export function ExportPanel({ channel, close }: { channel: Channel; close: () =>
     <Panel title={t('Export')} icon={<Download size={16} />} close={close} data="export">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-xs text-text-2">{t('Format')}</span>
-        <Dropdown value={format} onChange={(e) => setFormat(e.target.value as Format)} className="input h-8 w-36 px-2 text-sm" aria-label={t('Format')} data-daw-export-format>
-          <option value="wav">{t('WAV (16-bit)')}</option><option value="flac">{t('FLAC (lossless)')}</option><option value="mp3">{t('MP3 (192 kbps)')}</option>
+        <Dropdown value={format} onChange={(e) => setFormat(e.target.value as Format)} className="input h-8 w-44 px-2 text-sm" aria-label={t('Format')} data-daw-export-format>
+          <option value="wav">{t('WAV (24-bit)')}</option><option value="wav16">{t('WAV (16-bit, dithered)')}</option><option value="flac">{t('FLAC (16-bit)')}</option><option value="mp3">{t('MP3 (192 kbps)')}</option>
         </Dropdown>
       </div>
-      <button type="button" disabled={!!busy} onClick={() => void run('mix', async () => { const l = await exportMixAs(format); if (l !== null) pushToast(t('Mix exported · {lufs} LUFS integrated', { lufs: l.toFixed(1) })) })} className={row} data-daw-export-mix><Download size={15} /> {busy === 'mix' ? t('Rendering…') : t('Export mix')}</button>
-      <button type="button" disabled={!!busy} onClick={() => void run('stems', async () => { const n = await exportStems(); pushToast(t('{n} stems exported', { n })) })} className={row} data-daw-export-stems><Download size={15} /> {busy === 'stems' ? t('Rendering…') : t('Export stems (WAV, zipped)')}</button>
+      <button type="button" disabled={!!busy} onClick={() => void run('mix', async () => { const r = await exportMixAs(format); setOver(r.over); if (r.lufs !== null) pushToast(t('Mix exported · {lufs} LUFS integrated', { lufs: r.lufs.toFixed(1) })) })} className={row} data-daw-export-mix><Download size={15} /> {busy === 'mix' ? t('Rendering…') : t('Export mix')}</button>
+      <button type="button" disabled={!!busy} onClick={() => void run('stems', async () => { const r = await exportStems(format === 'wav16' ? 16 : 24); setOver(r.over); pushToast(t('{n} stems exported', { n: r.n })) })} className={row} data-daw-export-stems><Download size={15} /> {busy === 'stems' ? t('Rendering…') : t('Export stems (WAV, zipped)')}</button>
+      {over > 0 && <p className="rounded bg-warn/15 px-2 py-1.5 text-xs text-text-0" role="status" data-daw-export-over={over.toFixed(2)}>{t('The export goes over full scale by {db} dB and is clipped there. Lower the master (or the tracks) by that much and export again.', { db: over.toFixed(1) })}</p>}
       <div className="my-2 h-px bg-line" />
       <p className="mb-1 text-xs font-semibold text-text-2">{t('Post the mix to a channel')}</p>
       <Dropdown value={target} onChange={(e) => setTarget(e.target.value)} className="input mb-1 h-8 w-full px-2 text-sm" aria-label={t('Channel')} data-daw-post-channel>
@@ -87,7 +90,7 @@ export function ExportPanel({ channel, close }: { channel: Channel; close: () =>
         {texts.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}
       </Dropdown>
       <input value={text} onChange={(e) => setText(e.target.value)} maxLength={2000} placeholder={t('Say something about it (optional)')} className="input mb-1 h-8 w-full text-sm" data-daw-post-text />
-      <button type="button" disabled={!!busy || !target} onClick={() => void run('post', async () => { await postMix(target, format === 'wav' ? 'mp3' : format, text || `🎵 ${project?.name ?? ''}`); pushToast(t('Posted to #{name}', { name: channels[target]?.name ?? '' })); setText('') })} className="btn-primary h-8 w-full justify-center py-0 text-xs disabled:opacity-50" data-daw-post><Send size={14} /> {busy === 'post' ? t('Posting…') : t('Post')}</button>
+      <button type="button" disabled={!!busy || !target} onClick={() => void run('post', async () => { await postMix(target, format === 'wav' || format === 'wav16' ? 'mp3' : format, text || `🎵 ${project?.name ?? ''}`); pushToast(t('Posted to #{name}', { name: channels[target]?.name ?? '' })); setText('') })} className="btn-primary h-8 w-full justify-center py-0 text-xs disabled:opacity-50" data-daw-post><Send size={14} /> {busy === 'post' ? t('Posting…') : t('Post')}</button>
       <p className="mt-1 text-[10px] text-text-2">{t('WAV posts as MP3 to keep it small.')}</p>
       <div className="my-2 h-px bg-line" />
       <button type="button" disabled={!!busy} onClick={() => void run('dawproject', () => exportDawProject())} className={row} title={t('Opens in Bitwig Studio, Studio One, Cubase and other DAWs')} data-daw-export-dawproject><Download size={15} /> {busy === 'dawproject' ? t('Preparing…') : t('Export for other DAWs (.dawproject)')}</button>

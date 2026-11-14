@@ -7,7 +7,7 @@ import type { StudioConfig, StudioSession, StudioTrack } from './types'
 import { voice } from './voice'
 import { pcm24 } from './wav'
 import { noteTake, recoverTakes, sendTake, takeRoom, takeStore, useTakes, type TakeMeta } from './takestore'
-import captureUrl from './worklets/studio.js?url&no-inline'
+import { analyserReading, latchClip, studioModule, type Reading } from './meters'
 import { t } from '../lib/i18n'
 
 /** Console defaults for a studio that has never been configured (the server's defaults). */
@@ -18,13 +18,9 @@ const MAX_TAKE_SECS = 30 * 60
 /** Below this much room on the device a take is not started: it could not be kept safe. */
 const MIN_ROOM = 64 * 1024 * 1024
 
-const modules = new WeakMap<BaseAudioContext, Promise<void>>()
-/** The capture processor, loaded once into a context. */
-function captureModule(ctx: AudioContext) {
-  let p = modules.get(ctx)
-  if (!p) { p = ctx.audioWorklet.addModule(captureUrl); p.catch(() => modules.delete(ctx)); modules.set(ctx, p) }
-  return p
-}
+/** Where takes of this page are silent because the browser did not run the recorder (frames into the take). Tests read it. */
+const drops: { take: string; at: number; frames: number }[] = []
+if (typeof window !== 'undefined') (window as unknown as { __parleyStudioDrops?: unknown }).__parleyStudioDrops = drops
 /** Safari keeps one capture of a device: a second one with other settings would change the call's. */
 const oneCapture = typeof navigator !== 'undefined' && /AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Android/.test(navigator.userAgent)
 const clean = (id?: string): MediaStreamConstraints => ({ audio: { ...(id ? { deviceId: { exact: id } } : {}), channelCount: { ideal: 2 }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } })
@@ -62,7 +58,6 @@ class StudioRecorder {
   private meters = new Map<string, { sig: string; input: Input; an: AnalyserNode }>()
   private metering = false
   private meterAgain = false
-  private meterBuf = new Float32Array(1024)
 
   get recording() { return this.recs.size > 0 }
 
@@ -217,7 +212,7 @@ class StudioRecorder {
       const want = new Map<string, string>()
       if (ch && !s.voiceConnecting) for (const key of this.wanted(ch)) if (key && lanes[key]) want.set(key, [lanes[key].input?.device ?? '', lanes[key].input?.channel ?? 'mono', ch, voice.inputDeviceId, voice.micProcessed].join('|'))
       // The recorder's processor, loaded before the first take needs it.
-      if (want.size) captureModule(engine.audio()).catch(() => {})
+      if (want.size) studioModule(engine.audio()).catch(() => {})
       for (const [key, m] of this.meters) if (want.get(key) !== m.sig) { this.meters.delete(key); m.input.node.disconnect(m.an); m.input.release() }
       const inputs: Record<string, { name: string; processed: boolean; error?: string }> = {}
       for (const [key, sig] of want) {
@@ -240,15 +235,13 @@ class StudioRecorder {
     }
   }
 
-  /** Level 0..1 arriving at an armed track of mine (0 when its input is not open). */
-  level(key: string) {
+  /** The level arriving at an armed track of mine (null when its input is not open). An input at full scale has clipped. */
+  reading(key: string): Reading | null {
     const m = this.meters.get(key)
-    if (!m) return 0
-    const buf = this.meterBuf
-    m.an.getFloatTimeDomainData(buf)
-    let sum = 0
-    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
-    return Math.min(1, Math.sqrt(Math.sqrt(sum / buf.length)) * 1.6)
+    if (!m) return null
+    const r = analyserReading(m.an)
+    if (r.peak >= 0.999) latchClip(key)
+    return r
   }
 
   // ---- recording ----
@@ -287,7 +280,7 @@ class StudioRecorder {
   private async capture(key: string, sessionId: string, serverStart: number, input: Input): Promise<Rec> {
     const ctx = engine.audio()
     const user = useStore.getState().user?.id ?? ''
-    await captureModule(ctx)
+    await studioModule(ctx)
     const room = await takeRoom()
     if (room !== null && room < MIN_ROOM) throw Object.assign(new Error(t('Not enough storage left on this device to record a take')), { keep: true })
     const rate = ctx.sampleRate, ch = input.channels
@@ -299,7 +292,7 @@ class StudioRecorder {
     const down = engine.downbeat(sessionId, serverStart)
     const limit = MAX_TAKE_SECS * rate
     let meta: TakeMeta | null = null
-    let frames = 0, next = 0, written = 0, held = 0, full = false, broken = false
+    let frames = 0, next = 0, written = 0, held = 0, full = false, broken = false, lost = 0
     let pend: Uint8Array[] = []
     let queue: Promise<unknown> = Promise.resolve()
     let ended = () => {}
@@ -320,15 +313,16 @@ class StudioRecorder {
         void this.stop(key)
       })
     }
-    node.port.onmessage = (e: MessageEvent<{ end?: boolean; frame: number; samples: Float32Array }>) => {
+    node.port.onmessage = (e: MessageEvent<{ end?: boolean; frame: number; samples: Float32Array; frames: number }>) => {
       if (e.data.end) { ended(); return }
-      let s = e.data.samples
+      const whole = e.data.samples
+      let s = whole.subarray(0, e.data.frames * ch)
       // Every batch goes where its frame says. As a take starts the browser may not run the processor for a moment,
       // or run it twice for the same frames: the take is silent where nothing was handed over, and keeps its time.
       const gap = meta ? e.data.frame - next : 0
       next = e.data.frame + s.length / ch
       if (gap < 0) s = s.subarray(Math.min(s.length, -gap * ch))
-      else if (gap > 0) { const pad = new Float32Array(Math.min(gap, Math.max(0, limit - frames)) * ch + s.length); pad.set(s, pad.length - s.length); s = pad }
+      else if (gap > 0) { const pad = new Float32Array(Math.min(gap, Math.max(0, limit - frames)) * ch + s.length); pad.set(s, pad.length - s.length); s = pad; lost += gap; drops.push({ take: id, at: frames, frames: gap }) }
       if (!meta) {
         // From the downbeat to the first sample, on the audio clock; the take begins on a whole millisecond of it.
         const raw = e.data.frame / rate - down
@@ -342,6 +336,8 @@ class StudioRecorder {
       }
       if (frames + s.length / ch > limit) s = s.subarray(0, Math.max(0, limit - frames) * ch)
       if (s.length) { const b = pcm24(s); pend.push(b); held += b.length; frames += s.length / ch }
+      // Read: the buffer goes back to the processor for a later batch.
+      node.port.postMessage({ spare: whole }, [whole.buffer])
       if (held >= (rate >> 1) * ch * 3) flush()
       if (frames >= limit && !full) {
         full = true
@@ -356,6 +352,8 @@ class StudioRecorder {
       try { input.node.disconnect(node) } catch { /* already gone */ }
       node.disconnect(); sink.disconnect(); input.release()
       if (!meta) return
+      // Said, not hidden: the take is in time but has holes, and may be worth doing again.
+      if (lost) useStore.getState().pushToast(t('The browser dropped {ms} ms of audio during this take (this device was busy): listen before you keep it', { ms: Math.max(1, Math.round((lost * 1000) / rate)) }), 'error')
       flush()
       const m = meta = { ...meta, ended: true, at: Date.now() }
       queue = queue.then(() => takeStore.put(m)).then(() => { noteTake(id, { bytes: m.bytes, state: 'uploading' }); sendTake(id) }).catch(() => {})

@@ -1,8 +1,9 @@
 import { create } from 'zustand'
-import { api, getToken } from './api'
+import { api, ApiError, getToken } from './api'
 import { clickAt, clicksPlayed, peaksOf } from './multitrack'
 import { encodeWav } from './wav'
-import { buildChain, chainKey, integratedLufs, type FxNode, type Target } from './fx'
+import { analyserReading, isClipped, clearClip, latchClip, studioModule, type Reading } from './meters'
+import { buildChain, chainKey, type FxNode, type Target } from './fx'
 import { beatsAt, isDownbeat, secAtBeat } from './tempo'
 import { scheduleNotes } from './instruments'
 import { useStore } from '../store'
@@ -18,7 +19,8 @@ import type { StudioClip, StudioLane, StudioProject, StudioProjectFull, StudioSe
  * Edits are ops, applied here at once and sent to the server, which applies them for everyone and broadcasts them
  * (STUDIO_PROJECT): everyone editing sees the same project live. Each edit of your own keeps its inverse, so undo and
  * redo send ops too. Ops from others arrive with the entities they left and the project's version; a gap in versions
- * reloads the project.
+ * reloads the project. Edits wait in an outbox until the server has them: a connection that is down is retried and
+ * the edits stay as made (`sync` says so); an edit the server refuses is taken back, on its own.
  *
  * The engine decodes every clip's audio once, plays the project from any position through a bus per lane (gain, pan,
  * mute / solo, meter) into the master, and renders it offline for export. While a take records into the project,
@@ -44,12 +46,15 @@ export interface DawState {
   peers: Record<string, { pos_ms: number; playing: boolean; sel: string[]; at: number }>
   /** Follow the project's shared playback (on unless turned off here, remembered on this device). */
   follow: boolean
+  /** My edits and the server: all there, on their way, or waiting for the connection (`unsent` of them). */
+  sync: 'saved' | 'saving' | 'offline'
+  unsent: number
 }
 export interface StudioComment { id: string; project_id: string; user_id: string | null; ms: number; lane_id: string | null; body: string; resolved: boolean; created_at: string }
 
 const empty = (): Pick<DawState, 'project' | 'lanes' | 'clips' | 'audio' | 'undo' | 'redo' | 'comments' | 'peers'> => ({ project: null, lanes: {}, clips: {}, audio: {}, undo: [], redo: [], comments: [], peers: {} })
 const FOLLOW_KEY = `${STORAGE_PREFIX}dawFollow`
-export const useDaw = create<DawState>(() => ({ ...empty(), loading: false, error: null, follow: (() => { try { return localStorage.getItem(FOLLOW_KEY) !== '0' } catch { return true } })() }))
+export const useDaw = create<DawState>(() => ({ ...empty(), loading: false, error: null, sync: 'saved', unsent: 0, follow: (() => { try { return localStorage.getItem(FOLLOW_KEY) !== '0' } catch { return true } })() }))
 const get = useDaw.getState, set = useDaw.setState
 
 /** Every project runs at one rate: takes are captured at it and the mix is rendered at it. */
@@ -69,10 +74,20 @@ export async function loadProject(id: string | null) {
     if (loadingId !== id) return
     const keep = get().project?.id === id
     set({ project: full.project, lanes: byId(full.lanes), clips: byId(full.clips), audio: byId(full.audio), loading: false, error: null, ...(keep ? {} : { undo: [], redo: [] }) })
+    held.clear()
+    // Edits of mine the server has not got yet are still mine: on top of what it has.
+    rebase(id)
     engine.preload()
     void loadComments()
-  } catch (e) { if (loadingId === id) set({ loading: false, error: (e as Error).message }) }
+  } catch (e) {
+    if (loadingId !== id) return
+    // Taking an open project again (after a reconnect, a gap in its events): what is on screen stays, with the
+    // unsent edits, and it is asked for again until the server answers. Only a refusal ends that.
+    if (get().project?.id === id && !refused(e)) { if (!again) again = setTimeout(() => { again = null; if (get().project?.id === id) void loadProject(id) }, 2000); return }
+    set({ loading: false, error: (e as Error).message })
+  }
 }
+let again: ReturnType<typeof setTimeout> | null = null
 const byId = <T extends { id: string }>(xs: T[]) => Object.fromEntries(xs.map((x) => [x.id, x]))
 
 /** Apply ops to the local project. */
@@ -84,15 +99,81 @@ function applyLocal(ops: (Op | Applied)[]) {
 /** The ops that undo `ops`, from the project as it is before them. */
 const inverse = (ops: Op[]) => inverseOps(get(), ops)
 
-let queue: Promise<unknown> = Promise.resolve()
-/** Send ops to the server, in order. A refusal reloads the project (our optimistic copy is wrong). */
+/** Edits the server has not got yet, oldest first. They are sent one at a time, in the order they were made. */
+const outbox: { pid: string; ops: Op[] }[] = []
+/** The first of them is with the server now (its answer has not come back). */
+let inflight = false
+let pumping = false, tries = 0, wake: (() => void) | null = null
+const noteSync = (offline = false) => set({ unsent: outbox.length, sync: !outbox.length ? 'saved' : offline ? 'offline' : 'saving' })
+/** The server said no (as against not being reached, or being unwell: those are tried again). */
+const refused = (e: unknown) => e instanceof ApiError && e.status >= 400 && e.status < 500 && ![408, 425, 429].includes(e.status)
+
+/** Send ops to the server, in order. */
 function send(ops: Op[]) {
   const pid = get().project?.id
   if (!pid || !ops.length) return
-  queue = queue.then(() => api.post(`/studio/projects/${pid}/ops`, { ops })).catch((e: Error) => {
-    useStore.getState().pushToast(e.message, 'error')
-    void loadProject(pid)
-  })
+  outbox.push({ pid, ops })
+  noteSync(get().sync === 'offline')
+  void pump()
+}
+
+async function pump() {
+  if (pumping) return
+  pumping = true
+  while (outbox.length) {
+    const b = outbox[0]
+    try {
+      inflight = true
+      await api.post(`/studio/projects/${b.pid}/ops`, { ops: b.ops })
+      inflight = false
+      outbox.shift(); tries = 0; noteSync()
+    } catch (e) {
+      inflight = false
+      if (refused(e)) {
+        // That edit did not happen: it goes (from the undo history too), the ones after it stay. The project is
+        // taken from the server again with them on top, since what we showed was the project with it.
+        outbox.shift(); tries = 0
+        useStore.getState().pushToast((e as Error).message, 'error')
+        forget(b.ops)
+        if (get().project?.id === b.pid) await loadProject(b.pid)
+        noteSync()
+        continue
+      }
+      // Not reached: the edits stay as made and it is tried again, sooner when the connection is known to be back.
+      tries++
+      noteSync(true)
+      await new Promise<void>((r) => { const timer = setTimeout(r, Math.min(8000, 500 * 2 ** (tries - 1))); wake = () => { clearTimeout(timer); r() } })
+      wake = null
+    }
+  }
+  pumping = false
+}
+
+/** Drop a refused edit from the undo and redo history: there is nothing to undo, or to do again. */
+function forget(ops: Op[]) {
+  const has = (e: { do: Op[]; undo: Op[] }) => e.do === ops || e.undo === ops || ops.some((o) => e.do.includes(o) || e.undo.includes(o))
+  const st = get()
+  if (st.undo.some(has) || st.redo.some(has)) set({ undo: st.undo.filter((e) => !has(e)), redo: st.redo.filter((e) => !has(e)) })
+}
+
+/** Put my unsent edits back on top of the project (after it was loaded, or someone's edit was applied under them). */
+function rebase(pid: string) {
+  for (const b of outbox.slice(inflight ? 1 : 0)) if (b.pid === pid) applyLocal(b.ops)
+  for (const l of live.values()) applyLocal(l.ops)
+}
+
+/** The connection is back (or may be): send what is waiting now. */
+export function retrySync() { wake?.() }
+/** A fresh connection, with whatever happened meanwhile missed: the open project is taken from the server again. */
+export function onReconnect() {
+  retrySync()
+  const p = get().project
+  if (p) void loadProject(p.id)
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', retrySync)
+  // Leaving with edits the server has not got loses them: the browser asks first.
+  window.addEventListener('beforeunload', (e) => { if (outbox.length || live.size) e.preventDefault() })
 }
 
 /** Make an edit: applied here at once, sent to everyone, undoable. `merge` folds it into the previous edit (a drag). */
@@ -143,16 +224,29 @@ export function redo() {
   set({ redo: st.redo.slice(0, -1), undo: [...st.undo, next] })
 }
 
+type Remote = { project_id: string; version: number; ops: Applied[]; reload?: boolean }
+/** Edits that arrived ahead of the one before them (two servers' events can cross): kept a moment for it to come. */
+const held = new Map<number, Remote>()
+let heldTimer: ReturnType<typeof setTimeout> | null = null
+
 /** STUDIO_PROJECT: someone's edit (ours included) as the server applied it. */
-export function onRemote(d: { project_id: string; version: number; ops: Applied[]; reload?: boolean }) {
+export function onRemote(d: Remote) {
   const p = get().project
   if (!p || p.id !== d.project_id) return
   // A version restored: start from the project as it now is (our undo history no longer applies).
   if (d.reload) { set({ undo: [], redo: [] }); void loadProject(p.id); return }
-  if (d.version > p.version + 1) { void loadProject(p.id); return }
+  if (d.version > p.version + 1) {
+    // Ahead of what we have: the one in between is late, or was missed (then the project is loaded again).
+    held.set(d.version, d)
+    heldTimer ??= setTimeout(() => { heldTimer = null; const q = get().project; if (held.size && q) { held.clear(); void loadProject(q.id) } }, 400)
+    return
+  }
   if (d.version <= p.version) return
   applyLocal(d.ops)
   set({ project: { ...get().project!, version: d.version } })
+  rebase(p.id)
+  const next = held.get(d.version + 1)
+  if (next) { held.delete(d.version + 1); onRemote(next) }
   // Clips on audio we haven't got yet (a take that just landed, someone's import).
   const missing = d.ops.filter((o): o is Extract<Applied, { op: 'clip.put' }> => o.op === 'clip.put').some((o) => !!o.clip.audio_id && !get().audio[o.clip.audio_id])
   if (missing) void loadProject(p.id)
@@ -282,7 +376,7 @@ function automate(param: AudioParam, pts: Point[], from: number, when: number, t
 }
 
 type LaneNodes = { input: GainNode; fx: Map<string, FxNode>; vol: GainNode; pan: StereoPannerNode; on: GainNode; analyser: AnalyserNode; sends: Map<string, GainNode> }
-type Graph = { lanes: Map<string, LaneNodes>; master: { input: GainNode; fx: Map<string, FxNode>; gain: GainNode; analyser: AnalyserNode; loud: AnalyserNode | null }; key: string; stop: () => void }
+type Graph = { lanes: Map<string, LaneNodes>; master: { input: GainNode; fx: Map<string, FxNode>; gain: GainNode; analyser: AnalyserNode; loud: AnalyserNode | null }; key: string; stop: () => void; unwatch?: () => void }
 
 /** The graph's shape: lanes, routing, effect chains and what is automated. A change means rebuilding it. */
 export function graphKey(lanes: Record<string, StudioLane>, project: StudioProject | null) {
@@ -377,10 +471,13 @@ class Engine {
   ctx: AudioContext | null = null
   private decoded = new Map<string, Promise<Decoded>>()
   private ready = new Map<string, Decoded>()
+  /** Every file this page has loaded, by id: the project's list is replaced on a reload and may lack one for a moment. */
+  private tracks = new Map<string, StudioTrack>()
   private sources: AudioScheduledSourceNode[] = []
   private graph: Graph | null = null
   private clickTimer: ReturnType<typeof setInterval> | null = null
-  private meterBuf = new Float32Array(1024)
+  /** What the meter processor last said of each strip: the peak (falling back between reports) and the mean square. */
+  private readings = new Map<string, { peak: number; ms: number }>()
   private loudBuf = new Float32Array(16384)
   /** Playing: the context time of timeline 0 (so position = currentTime - t0), and whether it is the take's backing. */
   private t0 = 0
@@ -392,7 +489,9 @@ class Engine {
   /** The studio's one audio context, at the project's rate (a device that cannot run at it runs at its own). */
   audio() {
     if (!this.ctx) {
-      try { this.ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: PROJECT_RATE }) }
+      // Tests set a device rate to stand in for hardware that cannot run at the project's.
+      const device = (window as unknown as { __parleyDawDeviceRate?: number }).__parleyDawDeviceRate
+      try { this.ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: device ?? PROJECT_RATE }) }
       catch { this.ctx = new AudioContext({ latencyHint: 'interactive' }) }
       setInterval(() => this.heardLatency(), 500)
     }
@@ -439,6 +538,7 @@ class Engine {
   private prep(buffer: AudioBuffer): Decoded { const peaks = peaksOf(buffer); let top = 0; for (const p of peaks) if (p > top) top = p; return { buffer, peaks, top } }
 
   load(track: StudioTrack): Promise<Decoded> {
+    this.tracks.set(track.id, track)
     let p = this.decoded.get(track.id)
     if (!p) {
       p = (async () => {
@@ -463,7 +563,7 @@ class Engine {
   }
 
   /** Schedule the clips that sound in [from, to) ms on the timeline, timeline 0 being context time `t0`. */
-  private schedule(ctx: BaseAudioContext, g: Graph, clips: Record<string, StudioClip>, lanes: Record<string, StudioLane>, from: number, to: number, t0: number, out: AudioScheduledSourceNode[]) {
+  private schedule(ctx: BaseAudioContext, g: Graph, clips: Record<string, StudioClip>, lanes: Record<string, StudioLane>, from: number, to: number, t0: number, out: AudioScheduledSourceNode[], buf: (id: string) => AudioBuffer | undefined = (id) => this.ready.get(id)?.buffer) {
     for (const c of Object.values(clips)) {
       const lane = lanes[c.lane_id]
       if (c.muted || !lane) continue
@@ -472,13 +572,13 @@ class Engine {
       if (end <= from || start >= to) continue
       const bus = g.lanes.get(c.lane_id)
       if (!bus) continue
-      if (c.notes) { const sid = (lane.instrument as { audio_id?: string | null } | null)?.audio_id; scheduleNotes(ctx, bus.input, lane, c, start, from, to, t0, out, sid ? this.ready.get(sid)?.buffer : undefined); continue }
-      const d = c.audio_id ? this.ready.get(c.audio_id) : undefined
+      if (c.notes) { const sid = (lane.instrument as { audio_id?: string | null } | null)?.audio_id; scheduleNotes(ctx, bus.input, lane, c, start, from, to, t0, out, sid ? buf(sid) : undefined); continue }
+      const d = c.audio_id ? buf(c.audio_id) : undefined
       if (!d) continue
       const into = Math.max(0, from - start)
       const at = t0 + Math.max(from, start) / 1000
       const dur = (Math.min(end, to) - Math.max(from, start)) / 1000
-      const src = ctx.createBufferSource(); src.buffer = d.buffer
+      const src = ctx.createBufferSource(); src.buffer = d
       const env = ctx.createGain()
       envelope(env.gain, c, at, into)
       src.connect(env).connect(bus.input)
@@ -498,6 +598,7 @@ class Engine {
     this.click = !!opts.click
     const g = this.graph = buildGraph(ctx, lanes, project, true)
     if (this.tapBus) g.master.analyser.connect(this.tapBus)
+    this.watch(ctx, g)
     const loop = opts.loop !== undefined ? opts.loop : !opts.backing && project.loop_on && (project.loop_end_ms ?? 0) > (project.loop_start_ms ?? 0) + 50 ? { a: project.loop_start_ms!, b: project.loop_end_ms! } : null
     let from = fromSec * 1000
     // Asked to start at a moment that is already here: start as soon as possible, that much further in.
@@ -544,7 +645,8 @@ class Engine {
   stop(quiet = false) {
     this.sources.forEach((n) => { try { n.stop() } catch { /* not started */ } })
     this.sources = []
-    this.graph?.stop(); this.graph = null
+    this.graph?.unwatch?.(); this.graph?.stop(); this.graph = null
+    this.readings.clear()
     if (this.clickTimer) clearInterval(this.clickTimer); this.clickTimer = null
     if (this.loopTimer) clearInterval(this.loopTimer); this.loopTimer = null
     this.loopAt = null
@@ -571,15 +673,45 @@ class Engine {
     else this.mix()
   }
 
-  /** Level 0..1 of a lane or 'master' while playing. */
-  level(id: string) {
-    const a = id === 'master' ? this.graph?.master.analyser : this.graph?.lanes.get(id)?.analyser
-    if (!a) return 0
-    const buf = this.meterBuf
-    a.getFloatTimeDomainData(buf)
-    let sum = 0
-    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
-    return Math.min(1, Math.sqrt(Math.sqrt(sum / buf.length)) * 1.6)
+  /**
+   * The meter processor onto the graph that plays: an input per strip after its fader, pan and mute, the last for
+   * the master after its fader. Until it is loaded (and where there are no worklets) the analysers are read.
+   */
+  private watch(ctx: AudioContext, g: Graph) {
+    if (typeof AudioWorkletNode === 'undefined' || !ctx.audioWorklet) return
+    void studioModule(ctx).then(() => {
+      if (this.graph !== g) return
+      const ids = [...g.lanes.keys(), 'master']
+      const node = new AudioWorkletNode(ctx, 'parley-meter', { numberOfInputs: ids.length, numberOfOutputs: 1, outputChannelCount: [1] })
+      // Pulled by the output, silently.
+      const sink = ctx.createGain(); sink.gain.value = 0
+      node.connect(sink).connect(ctx.destination)
+      ids.forEach((id, i) => (id === 'master' ? g.master.gain : g.lanes.get(id)!.on).connect(node, 0, i))
+      node.port.onmessage = (e: MessageEvent<{ peak: Float32Array; ms: Float32Array; over: Uint8Array; frames: number }>) => {
+        if (this.graph !== g) return
+        const { peak, ms, over, frames } = e.data
+        // The mean square settles over about 0.3 s; the peak falls back about 40 dB a second between reports.
+        const k = 1 - Math.exp(-frames / ctx.sampleRate / 0.3), fall = Math.pow(10, (-40 * frames) / ctx.sampleRate / 20)
+        ids.forEach((id, i) => {
+          const r = this.readings.get(id)
+          this.readings.set(id, r ? { peak: Math.max(peak[i], r.peak * fall), ms: r.ms + (ms[i] - r.ms) * k } : { peak: peak[i], ms: ms[i] })
+          if (over[i]) latchClip(id)
+        })
+      }
+      g.unwatch = () => { node.port.onmessage = null; node.port.postMessage('stop'); node.disconnect(); sink.disconnect() }
+    }).catch(() => {})
+  }
+
+  /** The level of a lane or 'master' while playing (null when stopped): peak and RMS, 1 being full scale. */
+  meter(id: string): Reading | null {
+    if (!this.graph) return null
+    const r = this.readings.get(id)
+    if (r) return { peak: r.peak, rms: Math.sqrt(r.ms) }
+    const a = id === 'master' ? this.graph.master.analyser : this.graph.lanes.get(id)?.analyser
+    if (!a) return null
+    const seen = analyserReading(a)
+    if (seen.peak > 1) latchClip(id)
+    return seen
   }
   /** The master's momentary loudness (LUFS, about the last 0.35 s), null when stopped or silent. */
   loudness(): number | null {
@@ -604,33 +736,62 @@ class Engine {
   }
 
   /**
-   * The project rendered offline (effects, buses, automation, clip gains and fades, the master): the whole mix, or
-   * only `only` lane(s) for stems.
+   * The audio a render needs (every clip that sounds, every sampler's sample), decoded at the project's rate: all of
+   * it, or an error naming what is missing. A render never goes ahead without a part of the project.
    */
-  async renderBuffer(only?: string[]): Promise<AudioBuffer | null> {
+  private async material(lanes: Record<string, StudioLane>, clips: Record<string, StudioClip>): Promise<Map<string, AudioBuffer>> {
+    const { audio } = get()
+    const ids = new Set<string>()
+    for (const c of Object.values(clips)) if (c.audio_id && !c.muted && lanes[c.lane_id]) ids.add(c.audio_id)
+    for (const l of Object.values(lanes)) { const a = (l.instrument as { audio_id?: string | null } | null)?.audio_id; if (a) ids.add(a) }
+    // On a device that runs at another rate the page's copies were resampled to it: the render decodes its own.
+    const same = this.audio().sampleRate === PROJECT_RATE
+    const out = new Map<string, AudioBuffer>()
+    await Promise.all([...ids].map(async (id) => {
+      const track = audio[id] ?? this.tracks.get(id)
+      if (!track) throw new Error(t('Some of the project\'s audio has not loaded yet. Try again in a moment.'))
+      try { out.set(id, same ? (await this.load(track)).buffer : await this.decodeAt(track, PROJECT_RATE)) }
+      catch { throw new Error(t('Could not load "{name}", so nothing was rendered.', { name: track.name ?? track.display_name ?? id })) }
+    }))
+    return out
+  }
+  private async decodeAt(track: StudioTrack, rate: number): Promise<AudioBuffer> {
+    const token = getToken()
+    const r = await fetch(track.url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!r.ok) throw new Error(String(r.status))
+    return new OfflineAudioContext(1, 1, rate).decodeAudioData(await r.arrayBuffer())
+  }
+
+  /**
+   * The project rendered offline (effects, buses, automation, clip gains and fades, the master) at the project's
+   * rate, whatever the device runs at: the whole mix, or only `only` lane(s) for stems. Solo is for listening and is
+   * not part of a render (`heard` keeps it, to render what is heard); mute is. A stem is what its lane(s) put into
+   * the mix: with nothing on the master, the stems of all tracks add up to it.
+   */
+  async renderBuffer(only?: string[], heard = false): Promise<AudioBuffer | null> {
     const { lanes, clips, project } = get()
     if (!project) return null
-    await this.preload()
     const end = projectEnd(clips) / 1000
     if (end <= 0) return null
+    const bufs = await this.material(lanes, clips)
     const rate = PROJECT_RATE
     // A tail for reverbs and delays to ring out.
     const tail = Object.values(lanes).some((l) => (l.effects ?? []).some((e) => e.on && (e.type === 'reverb' || e.type === 'delay'))) || (project.master_effects ?? []).some((e) => e.on && (e.type === 'reverb' || e.type === 'delay')) ? 3 : 0.1
     const off = new OfflineAudioContext(2, Math.ceil((end + tail) * rate), rate)
-    let ls = lanes
+    let ls = heard ? lanes : Object.fromEntries(Object.entries(lanes).map(([id, l]) => [id, l.solo ? { ...l, solo: false } : l]))
     if (only) {
       // A stem: the lane(s) and the buses they reach, everything else silent.
       const keep = new Set(only)
       for (const id of only) { const l = lanes[id]; if (l?.output_id) keep.add(l.output_id); for (const b of Object.keys(l?.sends ?? {})) keep.add(b) }
-      ls = Object.fromEntries(Object.entries(lanes).map(([id, l]) => [id, keep.has(id) ? { ...l, mute: false, solo: false } : { ...l, mute: true }]))
+      ls = Object.fromEntries(Object.entries(ls).map(([id, l]) => [id, keep.has(id) ? l : { ...l, mute: true, solo: false }]))
     }
     const g = buildGraph(off, ls, project, false)
     const out: AudioScheduledSourceNode[] = []
-    this.schedule(off, g, clips, ls, 0, Infinity, 0, out)
+    this.schedule(off, g, clips, ls, 0, Infinity, 0, out, (id) => bufs.get(id))
     scheduleAutomation(g, ls, 0, 0)
     return off.startRendering()
   }
-  async render(): Promise<ArrayBuffer | null> { const b = await this.renderBuffer(); return b ? encodeWav(b) : null }
+  async render(bits: 16 | 24 = 24): Promise<ArrayBuffer | null> { const b = await this.renderBuffer(); return b ? encodeWav(b, bits) : null }
 
   private tapBus: GainNode | null = null
   private tapNode: MediaStreamAudioDestinationNode | null = null
@@ -650,23 +811,7 @@ class Engine {
 
 export const engine = new Engine()
 // For tests: the rendered project (or a stem) as samples and as the exported WAV, and what plays as a stream.
-if (typeof window !== 'undefined') (window as unknown as { __parleyDawTest?: unknown }).__parleyDawTest = { render: (only?: string[]) => engine.renderBuffer(only), wav: () => engine.render(), tap: () => engine.tap(), bus: () => engine.bus(), context: () => engine.audio(), clicks: clicksPlayed }
-
-/** Export the project's mix as a WAV download, and say how loud it is. */
-export async function exportMix() {
-  const p = get().project
-  const buf = await engine.renderBuffer()
-  if (!p || !buf) return
-  const wav = encodeWav(buf)
-  const lufs = await integratedLufs(buf)
-  ;(window as unknown as { __parleyDawExport?: number; __parleyDawLufs?: number | null }).__parleyDawExport = wav.byteLength
-  ;(window as unknown as { __parleyDawLufs?: number | null }).__parleyDawLufs = lufs
-  const url = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }))
-  const { download } = await import('./fileActions')
-  await download(url, `${p.name} - mix.wav`)
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
-  if (lufs !== null) useStore.getState().pushToast(t('Mix exported · {lufs} LUFS integrated', { lufs: lufs.toFixed(1) }))
-}
+if (typeof window !== 'undefined') (window as unknown as { __parleyDawTest?: unknown }).__parleyDawTest = { render: (only?: string[], heard?: boolean) => engine.renderBuffer(only, heard), wav: (bits?: 16 | 24) => engine.render(bits), meter: (id: string) => { const r = engine.meter(id); return r && { ...r, clip: isClipped(id) } }, clearClip, tap: () => engine.tap(), bus: () => engine.bus(), context: () => engine.audio(), clicks: clicksPlayed, edit, undo, remote: onRemote, state: () => get() }
 
 /**
  * Keep the open project of the studio we are in loaded, and play it as the backing while a take records into it:

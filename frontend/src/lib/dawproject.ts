@@ -34,7 +34,7 @@ function device(e: Effect, id: () => string): string | null {
   return null
 }
 
-/** Decode any audio the browser can play and write it as 16-bit WAV. */
+/** Decode any audio the browser can play and write it as 24-bit WAV. */
 async function toWav(data: ArrayBuffer): Promise<{ wav: ArrayBuffer; channels: number; rate: number; seconds: number }> {
   const ctx = new OfflineAudioContext(1, 1, 48000)
   const buf = await ctx.decodeAudioData(data)
