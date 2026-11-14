@@ -189,6 +189,23 @@ let punched = []
 for (let i = 0; i < 40; i++) { f = await full(); const bl = f.lanes.find((l) => l.user_id === b.user.id); punched = f.clips.filter((c) => !before.has(c.id) && c.lane_id === bl?.id); if (punched.length) break; await pa.waitForTimeout(500) }
 ok('punch recording keeps only the punch range', punched.length === 1 && punched[0].start_ms >= 1000 && punched[0].start_ms + punched[0].length_ms <= 2000, JSON.stringify(punched))
 await ops(a.token, [{ op: 'project', punch_on: false }])
+// A version keeps its audio: a take deleted after the version was saved comes back with it.
+{
+  const pc = punched[0], sessions = await call(a.token, 'GET', `/channels/${st.id}/studio/sessions`)
+  const sess = sessions.find((x) => x.tracks.some((t) => t.id === pc?.audio_id))
+  const mine = (await full()).clips.filter((c) => sess?.tracks.some((t) => t.id === c.audio_id))
+  const v2 = (await callS(a.token, 'POST', `/studio/projects/${P.id}/versions`, { name: 'With the punch' })).body
+  r = await ops(a.token, mine.map((c) => ({ op: 'clip.del', id: c.id })))
+  const gone = await raw(a.token, 'DELETE', `/channels/${st.id}/studio/sessions/${sess?.id}`)
+  ok('a take is deleted, clips and all, after a version with it was saved', !!sess && mine.length >= 1 && r.status === 200 && gone.status === 204 && !(await full()).clips.some((c) => mine.some((m) => m.id === c.id)), JSON.stringify([mine.length, r.status, gone.status]))
+  r = await raw(a.token, 'GET', `/studio/tracks/${pc?.audio_id}`)
+  ok('its audio stays, for the version that uses it', r.status === 200 && (await r.arrayBuffer()).byteLength > 1000, String(r.status))
+  r = await callS(a.token, 'POST', `/studio/versions/${v2.id}/restore`)
+  f = await full()
+  ok('restoring the version brings back every clip of it, with its audio', r.status === 200 && mine.every((m) => f.clips.some((c) => c.id === m.id && c.audio_id === m.audio_id && c.start_ms === m.start_ms && c.length_ms === m.length_ms)) && mine.every((m) => f.audio.some((x) => x.id === m.audio_id)), JSON.stringify(f.clips.filter((c) => mine.some((m) => m.id === c.id)).length))
+  await pa.waitForSelector(`[data-daw-clip="${pc?.id}"]`, { timeout: 10000 }).catch(() => {})
+  ok('and it is on the timeline again', await pa.locator(`[data-daw-clip="${pc?.id}"]`).count() === 1)
+}
 await pb.click('[data-daw-record-solo]')
 await pb.waitForFunction(() => window.__parleyStudio?.recording === true, null, { timeout: 10000 })
 await pa.waitForTimeout(800)

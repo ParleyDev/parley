@@ -48,10 +48,13 @@ const unpack = (r) => r && { rate: r.rate, frames: r.frames, samples: r.channels
 // Runs in the page: an AudioBuffer as base64 floats per channel.
 const pack = `(buf) => { if (!buf) return null; const out = []; for (let c = 0; c < buf.numberOfChannels; c++) { const u = new Uint8Array(buf.getChannelData(c).slice().buffer); let s = ''; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); out.push(btoa(s)) } return { rate: buf.sampleRate, frames: buf.length, channels: out } }`
 
-/** The open project rendered offline by the DAW, as samples: the whole mix, or only the lanes in `only` (a stem). */
-export const pullRender = async (page, only) => unpack(await page.evaluate(`(async () => (${pack})(await window.__parleyDawTest.render(${only ? JSON.stringify(only) : 'undefined'})))()`))
-/** The mix as the WAV file an export writes. */
-export const pullWav = async (page) => { const s = await page.evaluate(`(async () => { const w = await window.__parleyDawTest.wav(); if (!w) return null; const u = new Uint8Array(w); let s = ''; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s) })()`); return s ? parseWav(Buffer.from(s, 'base64')) : null }
+/**
+ * The open project rendered offline by the DAW, as samples: the whole mix, or only the lanes in `only` (a stem).
+ * `heard` keeps solo in it (what the member hears); an export does not.
+ */
+export const pullRender = async (page, only, heard = false) => unpack(await page.evaluate(`(async () => (${pack})(await window.__parleyDawTest.render(${only ? JSON.stringify(only) : 'undefined'}, ${heard})))()`))
+/** The mix as the WAV file an export writes: 24-bit, or 16-bit (dithered). */
+export const pullWav = async (page, bits = 24) => { const s = await page.evaluate(`(async () => { const w = await window.__parleyDawTest.wav(${bits}); if (!w) return null; const u = new Uint8Array(w); let s = ''; for (let i = 0; i < u.length; i += 32768) s += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); return btoa(s) })()`); return s ? parseWav(Buffer.from(s, 'base64')) : null }
 /** The sample rate the page's audio runs at (the DAW decodes files at this rate, and renders at 48 kHz). */
 export const liveRate = (page) => page.evaluate(() => window.__parleyDawTest.context().sampleRate)
 /** Stored audio (a take, an import) decoded by the page to mono samples at `rate`. */

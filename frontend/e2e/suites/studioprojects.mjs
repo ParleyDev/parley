@@ -118,6 +118,86 @@ ok('the studio list shows it live', (await list(d.token)).find((x) => x.id === P
 r = await callS(a.token, 'POST', `/guilds/${g.id}/events`, { name: 'Drum day', starts_at: new Date(Date.now() + 86400000).toISOString(), channel_id: P.channel_id })
 ok('a session can be scheduled as a server event in the project', r.status === 201, JSON.stringify(r.body))
 
+console.log('-- who may change what, and who hears of it')
+{
+  // A project of its own: bob runs it, carol plays in it, dave may not see it, erin is only a member.
+  const Q = (await callS(b.token, 'POST', `/channels/${studio.id}/studio/projects`, { name: 'Quiet Song', bpm: 120 })).body
+  await callS(b.token, 'PUT', `/channels/${Q.channel_id}/studio/role/${c.user.id}`, { role: 'artist' })
+  const qops = (tok, list) => callS(tok, 'POST', `/studio/projects/${Q.id}/ops`, { ops: list })
+  const q = async () => (await call(b.token, 'GET', `/studio/projects/${Q.id}`)).project
+  const QL = crypto.randomUUID()
+  r = await qops(c.token, [{ op: 'project', name: 'Carol renamed it' }]); ok('an artist cannot rename the project through an edit', r.status === 403)
+  r = await qops(c.token, [{ op: 'project', bpm: 90 }]); ok('nor change its tempo', r.status === 403)
+  r = await qops(c.token, [{ op: 'project', beats: 3 }]); ok('nor its time signature', r.status === 403)
+  r = await qops(c.token, [{ op: 'project', tempo_map: [{ bar: 2, bpm: 60, beats: 4 }] }]); ok('nor its tempo changes', r.status === 403)
+  r = await qops(c.token, [{ op: 'lane.put', lane: { id: QL, name: 'Keys', position: 0 } }, { op: 'project', name: 'Smuggled' }])
+  ok('nor inside a batch of allowed edits, none of which is kept', r.status === 403 && !(await call(b.token, 'GET', `/studio/projects/${Q.id}`)).lanes.length)
+  let pq = await q()
+  ok('nothing of it changed', pq.name === 'Quiet Song' && pq.bpm === 120 && pq.beats === 4 && pq.tempo_map.length === 0 && (await call(b.token, 'GET', `/channels/${Q.channel_id}`)).name === 'Quiet Song', JSON.stringify(pq))
+  r = await qops(c.token, [{ op: 'project', name: 'Quiet Song', bpm: 120, beats: 4, tempo_map: [], markers: [{ id: 'm1', ms: 1000, name: 'Intro' }] }])
+  ok('an edit that carries them unchanged is an artist\'s to make (their markers, their undo)', r.status === 200 && (await q()).markers.length === 1, JSON.stringify(r.body))
+  r = await qops(b.token, [{ op: 'project', name: 'Loud Song', tempo_map: [{ bar: 2, bpm: 60, beats: 4 }] }])
+  const qroom = await call(b.token, 'GET', `/channels/${Q.channel_id}`)
+  ok('an engineer\'s rename through an edit renames the channel too', r.status === 200 && (await q()).name === 'Loud Song' && qroom.name === 'Loud Song', qroom.name)
+  ok('and the studio lists it by the new name', (await list(b.token)).find((x) => x.id === Q.id)?.name === 'Loud Song')
+
+  // The tempo is the project's: the console reads it, a take counts in at the tempo where it starts.
+  r = await qops(b.token, [{ op: 'project', bpm: 100 }])
+  ok('the console\'s tempo is the project\'s', (await call(b.token, 'GET', `/channels/${Q.channel_id}`)).studio.bpm === 100)
+  r = await callS(b.token, 'PATCH', `/channels/${Q.channel_id}/studio/config`, { bpm: 120, count_in: 1 })
+  ok('set from the console it is set on the project', r.status === 200 && r.body.studio.bpm === 120 && (await q()).bpm === 120, JSON.stringify(r.body.studio))
+  const ver = (await callS(b.token, 'POST', `/studio/projects/${Q.id}/versions`, { name: 'At 120' })).body
+  await qops(b.token, [{ op: 'project', bpm: 77 }])
+  r = await callS(b.token, 'POST', `/studio/versions/${ver.id}/restore`)
+  ok('a restored version brings its tempo back to the console', r.status === 200 && (await call(b.token, 'GET', `/channels/${Q.channel_id}`)).studio.bpm === 120)
+  const stop = (sid) => callS(b.token, 'POST', `/channels/${Q.channel_id}/studio/sessions/${sid}/stop`)
+  r = await callS(b.token, 'POST', `/channels/${Q.channel_id}/studio/sessions`, { armed: [b.user.id], position_ms: 0 })
+  ok('a take from the start counts in one bar at 120', r.status === 201 && r.body.bpm === 120 && r.body.count_in_ms === 2000, JSON.stringify(r.body))
+  await stop(r.body.id)
+  // 60 from the third bar, which begins at 4 s.
+  r = await callS(b.token, 'POST', `/channels/${Q.channel_id}/studio/sessions`, { armed: [b.user.id], position_ms: 8000 })
+  ok('a take from after a tempo change counts in at the tempo there', r.status === 201 && r.body.bpm === 60 && r.body.count_in_ms === 4000, JSON.stringify(r.body))
+  await stop(r.body.id)
+
+  // Two engineers press Record at once: one take.
+  await callS(b.token, 'PUT', `/channels/${Q.channel_id}/studio/role/${a.user.id}`, { role: 'engineer' })
+  const both = await Promise.all([b, a, b, a].map((u) => callS(u.token, 'POST', `/channels/${Q.channel_id}/studio/sessions`, { armed: [u.user.id] })))
+  const made = both.filter((x) => x.status === 201)
+  ok('takes started at the same moment: one starts, the others are told one is recording', made.length === 1 && both.filter((x) => x.status === 409).length === 3, JSON.stringify(both.map((x) => x.status)))
+  ok('and one is open', (await call(b.token, 'GET', `/channels/${Q.channel_id}/studio/sessions`)).filter((x) => !x.ended_at).length === 1)
+  await stop(made[0]?.body.id)
+
+  // Dave may not see the project. Nothing that happens in it reaches him.
+  const nospeak = await callS(a.token, 'PUT', `/channels/${Q.channel_id}/permissions/${outsider.user.id}`, { kind: 'member', allow: 0, deny: 2 ** 21 })
+  r = await callS(b.token, 'PUT', `/channels/${Q.channel_id}/studio/role/${outsider.user.id}`, { role: 'artist' })
+  const band = await call(b.token, 'GET', `/channels/${Q.channel_id}`)
+  ok('someone who may not speak in the project is not put in its band', nospeak.status < 300 && r.status === 400 && !band.artist_ids.includes(outsider.user.id) && !band.engineer_ids.includes(outsider.user.id), JSON.stringify([nospeak.status, r.status, r.body]))
+  await callS(a.token, 'DELETE', `/channels/${Q.channel_id}/permissions/${outsider.user.id}`)
+  r = await callS(a.token, 'PUT', `/channels/${Q.channel_id}/permissions/${d.user.id}`, { kind: 'member', allow: 0, deny: 1024 })
+  ok('the project is hidden from one member', r.status < 300 && !(await call(d.token, 'GET', `/guilds/${g.id}/channels`)).some((x) => x.id === Q.channel_id), JSON.stringify(r.body))
+  const sock = (token) => new Promise((resolve) => { const ws = new WebSocket(`${B.replace(/^http/, 'ws').replace(/\/api$/, '')}/ws?token=${token}`); const events = []; ws.onmessage = (e) => events.push(e.data); ws.onopen = () => setTimeout(() => resolve({ ws, events }), 500); ws.onerror = () => resolve({ ws, events }) })
+  const hidden = await sock(d.token), shown = await sock(outsider.token)
+  ok('his READY does not name it', hidden.events.length > 0 && !hidden.events.some((e) => e.includes(Q.channel_id) || e.includes(Q.id)))
+  hidden.events.length = 0; shown.events.length = 0
+  await callS(b.token, 'PUT', `/channels/${Q.channel_id}/studio/role/${outsider.user.id}`, { role: 'artist' })
+  await callS(b.token, 'PUT', `/channels/${Q.channel_id}/studio/role/${outsider.user.id}`, { role: 'audience' })
+  await callS(b.token, 'PATCH', `/channels/${Q.channel_id}/studio/config`, { click: true })
+  await callS(b.token, 'PUT', `/channels/${Q.channel_id}/studio/arm/${c.user.id}`, { armed: false })
+  await callS(b.token, 'PATCH', `/studio/projects/${Q.id}`, { name: 'Secret Song', tag: 'mixing' })
+  await qops(b.token, [{ op: 'project', name: 'Secret Song Two', bpm: 111 }, { op: 'lane.put', lane: { id: QL, name: 'Hidden lane', position: 0 } }])
+  await callS(b.token, 'POST', `/studio/versions/${ver.id}/restore`)
+  await callS(c.token, 'POST', `/studio/projects/${Q.id}/comments`, { ms: 10, body: 'psst' })
+  r = await callS(b.token, 'POST', `/channels/${Q.channel_id}/studio/sessions`, { armed: [b.user.id] }); await stop(r.body.id)
+  await new Promise((res) => setTimeout(res, 1500))
+  const kinds = [...new Set(shown.events.filter((e) => e.includes(Q.channel_id) || e.includes(Q.id)).map((e) => JSON.parse(e).t))]
+  ok('a member who can see it hears of all of it', ['CHANNEL_UPDATE', 'STUDIO_PROJECT', 'STUDIO_SESSION'].every((t) => kinds.includes(t)), kinds.join(' '))
+  const leaked = hidden.events.filter((e) => e.includes(Q.channel_id) || e.includes(Q.id) || /Secret Song|Hidden lane|psst/.test(e))
+  ok('the member it is hidden from hears of none: band, console, arming, rename, edits, restore, comment, take', leaked.length === 0, leaked.map((e) => JSON.parse(e).t).join(' '))
+  hidden.ws.close(); shown.ws.close()
+  r = await callS(c.token, 'DELETE', `/studio/projects/${Q.id}`)
+  ok('(the project is put away)', r.status === 204)
+}
+
 console.log('-- UI')
 const browser = await launchBrowser({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] }); const errors = []
 const mk = async (tok, path) => { const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, permissions: ['microphone'] }); const p = await ctx.newPage(); p.on('pageerror', (e) => errors.push(e.message)); await p.goto(`${WEB}/login`); await p.evaluate((t) => localStorage.setItem('parley.token', t), tok); await p.goto(`${WEB}${path}`); return p }

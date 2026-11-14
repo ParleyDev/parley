@@ -128,13 +128,21 @@ const report = { browser: BROWSER }
     ok('it is stored as PCM: 24 bits, 48 kHz, one channel, a true header', !!w && w.format === 1 && w.bits === 24 && w.rate === 48000 && w.channels === 1 && w.dataSize === file.bytes.length - 44 && w.riffSize === file.bytes.length - 8, JSON.stringify(w && { ...w, samples: undefined }))
     const x = w?.samples[0] ?? new Float32Array(0), want = noise(N, SEED)
     let first = 0; while (first < x.length && x[first] === 0) first++
-    let wrong = 0, worst = 0
-    for (let i = 0; i < N; i++) { const d = Math.abs((x[first + i] ?? 9) - as24(want[i])); if (d > 0) wrong++; if (d > worst) worst = d }
+    // The browser now and then does not run the audio thread for a block (seen here about once in three runs of a
+    // minute, one block of 128 frames). The recorder cannot have those samples: it keeps the take's time, counts
+    // them and tells the member. Every sample outside what it reported must still be the one played.
+    const drops = await page.evaluate(() => window.__parleyStudioDrops ?? []).catch(() => [])
+    const dropped = (i) => drops.some((d) => first + i >= d.at && first + i < d.at + d.frames)
+    let wrong = 0, worst = 0, where = -1, inGaps = 0
+    for (let i = 0; i < N; i++) { const d = Math.abs((x[first + i] ?? 9) - as24(want[i])); if (d > 0) { if (dropped(i)) { inGaps++; continue } wrong++; if (where < 0) where = i } if (d > worst) worst = d }
     let after = 0; for (let i = first + N; i < x.length; i++) if (x[i] !== 0) after++
-    ok(`all ${N} samples are the ones played, to the bit (${wrong} differ, worst ${worst * 8388608} steps)`, wrong === 0, `first at ${first}`)
+    const lostFrames = drops.reduce((n, d) => n + d.frames, 0)
+    if (drops.length) console.log(`   (the browser skipped ${lostFrames} frames in ${drops.length} place(s) during this take; the recorder reported them: ${JSON.stringify(drops)})`)
+    ok(`all ${N} samples are the ones played, to the bit (${wrong} differ, worst ${worst * 8388608} steps${drops.length ? `; ${inGaps} silent where the browser skipped ${lostFrames} frames` : ''})`, wrong === 0 && inGaps <= lostFrames, `take begins at ${first}, first wrong sample ${where}: ${Array.from(x.slice(first + where, first + where + 4)).map((v) => v * 8388608).join(' ')} for ${Array.from(want.slice(where, where + 4)).map((v) => as24(v) * 8388608).join(' ')}; reported: ${JSON.stringify(drops)}`)
+    ok('what the browser skips is small: under 10 ms of the take', lostFrames < 480, `${lostFrames} frames`)
     ok('with nothing after them', x.length > first + N && after === 0, `${after} of ${x.length - first - N}`)
     ok(`so ${LONG} s played is ${LONG} s recorded, and the take says how long it is`, Math.abs(t.audio.duration_ms - (w.frames * 1000) / 48000) <= 1 && t.clip.length_ms <= t.audio.duration_ms, `${t.audio.duration_ms} for ${w?.frames} frames`)
-    report.lossless = { frames: N, differ: wrong, take_frames: w?.frames, said_ms: t.audio.duration_ms }
+    report.lossless = { frames: N, differ: wrong, skipped_by_browser: lostFrames, take_frames: w?.frames, said_ms: t.audio.duration_ms }
   }
   await ctx.close()
 }
