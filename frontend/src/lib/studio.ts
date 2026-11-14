@@ -1,6 +1,6 @@
 import { api, getToken } from './api'
 import { clickAt } from './multitrack'
-import { engine, newId, useDaw } from './daw'
+import { engine, newId, onRoom, room, settleOpen, studioRoom, useDaw } from './daw'
 import { serverNow, syncClock } from './clock'
 import { useStore } from '../store'
 import type { StudioConfig, StudioSession, StudioTrack } from './types'
@@ -32,6 +32,10 @@ const clean = (id?: string): MediaStreamConstraints => ({ audio: { ...(id ? { de
  * them one. It follows the studio's state rather than single events, so arming a track during a take, or joining the
  * band late, punches in a new clip, and disarming punches out.
  *
+ * The band records where it is (`room` in lib/daw): in the project's call, or with the project open and no call at
+ * all. Outside a call nothing is opened before a take (no microphone is on because a page is open), only my armed
+ * tracks record, and a take I start myself with no track yet records my microphone.
+ *
  * A take is the input's samples as they are: an AudioWorklet in the engine's context hands them over uncompressed,
  * they are kept on this device as 24-bit PCM (lib/takestore.ts) and sent to the server from there. The take is placed
  * by the audio clock: the context time of its first sample against the context time of the take's downbeat, the one
@@ -51,7 +55,7 @@ class StudioRecorder {
   /** Tracks we could not record in a take (no mic, refused, no such input): not retried on every store change. */
   private failed = new Set<string>()
   /** The take announced by STUDIO_SESSION, live until its stop, even before the sessions list has caught up. */
-  private known: { channel: string; session: string } | null = null
+  private known: { channel: string; session: string; by?: string } | null = null
   /** Inputs open now, shared by the tracks on them: the microphone (''), and input devices by name. */
   private inputs = new Map<string, { open: Promise<Opened>; users: number }>()
   /** My armed tracks' inputs, held open while I am in the studio: their level shows before the take. */
@@ -77,37 +81,39 @@ class StudioRecorder {
     })
     // Arming, disarming or re-pointing a track during a take punches in or out.
     useDaw.subscribe((s, p) => { if (s.lanes !== p.lanes || s.project?.id !== p.project?.id) this.sync() })
+    // The project on this page is where its band records outside a call; it stays that while a take of mine runs.
+    studioRoom.keep = () => this.recs.size > 0 || this.starting.size > 0
+    onRoom(() => this.sync())
     // The page is going: what has been captured goes to the device's store now, to be sent when the app is next open.
     window.addEventListener('pagehide', () => this.recs.forEach((r) => r.flush?.()))
   }
 
   onSession(d: { channel_id: string; action: 'start' | 'stop'; session_id: string; started_at?: string; bpm?: number; beats?: number; click?: boolean; count_in_ms?: number; solo?: boolean; started_by?: string; project_id?: string | null }) {
     if (d.action === 'stop') { if (this.known?.session === d.session_id) this.known = null; void this.stopAll(d.session_id); metronome.stop(d.session_id); return }
-    this.known = { channel: d.channel_id, session: d.session_id }
+    this.known = { channel: d.channel_id, session: d.session_id, by: d.started_by }
     // The sessions list is still loading: act on the event itself.
     const start = d.started_at ? Date.parse(d.started_at) : serverNow()
     // A take recorded alone is only its starter's.
     if (d.solo && d.started_by !== useStore.getState().user?.id) return
     // Over a project the project's grid clicks along with the backing (lib/daw); this plays the count-in.
-    if (useStore.getState().myVoiceChannelId === d.channel_id && this.inBand(d.channel_id)) metronome.run(d.session_id, start, d.bpm ?? 120, d.beats ?? 4, !!d.click && !d.project_id, d.count_in_ms ?? 0)
-    for (const key of this.wanted(d.channel_id)) void this.start(key, d.session_id, start)
+    if (room() === d.channel_id) metronome.run(d.session_id, start, d.bpm ?? 120, d.beats ?? 4, !!d.click && !d.project_id, d.count_in_ms ?? 0)
+    for (const key of this.wanted(d.channel_id, d.started_by)) void this.start(key, d.session_id, start)
   }
 
-  private inBand(channelId: string) {
-    const s = useStore.getState()
-    const mine = s.user ? s.voiceStates[s.user.id] : undefined
-    return !!mine && mine.channel_id === channelId && !mine.suppress
-  }
-
-  /** What I record in this project's voice room now: my armed tracks, or one take of mine if I have no track yet. */
-  private wanted(channelId: string): string[] {
+  /**
+   * What I record in this project now (a take started by `by`): my armed tracks, or one take of mine if I have no
+   * track yet. Outside its call that one take is only for a take I started: having a project open is not agreeing to
+   * be recorded.
+   */
+  private wanted(channelId: string, by?: string | null): string[] {
     const s = useStore.getState()
     const me = s.user?.id
     const ch = s.channels[channelId]
-    if (!me || s.myVoiceChannelId !== channelId || !this.inBand(channelId) || ch?.kind !== 'project') return []
+    if (!me || room() !== channelId || ch?.kind !== 'project') return []
     const { project, lanes } = useDaw.getState()
     const mine = project && project.id === ch.studio?.project_id ? Object.values(lanes).filter((l) => l.kind === 'audio' && l.user_id === me) : []
     if (mine.length) return mine.filter((l) => l.armed).map((l) => l.id)
+    if (s.myVoiceChannelId !== channelId && by !== me) return []
     return (ch.studio?.disarmed ?? []).includes(me) ? [] : ['']
   }
 
@@ -116,16 +122,16 @@ class StudioRecorder {
     const s = useStore.getState()
     // The call is reconnecting: what is recording keeps recording, and things are looked at again once it is back.
     if (s.voiceConnecting && this.recs.size) return
-    const ch = s.myVoiceChannelId
+    const ch = room()
     const list = ch ? s.studio[ch] : undefined
     const found: StudioSession | undefined = list?.find((x) => !x.ended_at)
     const live = found && (!found.solo || found.started_by === s.user?.id) ? found : undefined
     if (this.known && (this.known.channel !== ch || list?.some((x) => x.id === this.known!.session && x.ended_at))) this.known = null
     const liveId = live?.id ?? this.known?.session ?? null
-    if (live && ch && this.inBand(ch)) metronome.run(live.id, Date.parse(live.started_at), live.bpm, live.beats, live.click && !live.project_id, live.count_in_ms)
-    else if (!liveId || !ch || !this.inBand(ch)) metronome.stop()
-    const want = new Set(liveId && ch ? this.wanted(ch) : [])
-    for (const [key, r] of this.recs) if (!want.has(key) || r.sessionId !== liveId) void this.stop(key)
+    if (live && ch) metronome.run(live.id, Date.parse(live.started_at), live.bpm, live.beats, live.click && !live.project_id, live.count_in_ms)
+    else if (!liveId || !ch) metronome.stop()
+    const want = new Set(liveId && ch ? this.wanted(ch, live?.started_by ?? this.known?.by) : [])
+    for (const [key, r] of this.recs) if (!want.has(key) || r.sessionId !== liveId) void this.stop(key).then(settleOpen)
     if (live) for (const key of want) if (!this.recs.has(key) && !this.failed.has(`${live.id}:${key}`)) void this.start(key, live.id, Date.parse(live.started_at))
     void this.meter()
   }
@@ -159,6 +165,11 @@ class StudioRecorder {
       const stream = voice.getRecordingStream()
       if (!stream || !stream.getAudioTracks().length) throw new Error(t('Recording started, but your microphone is not available'))
       return { stream, processed: voice.micProcessed, name: t('Call microphone'), gated: false, close: () => voice.releaseRecordingStream() }
+    }
+    // Not in a call: the device itself, with nothing done to its sound.
+    if (!useStore.getState().myVoiceChannelId) {
+      const stream = await navigator.mediaDevices.getUserMedia(clean(voice.inputDeviceId))
+      return { stream, processed: false, name: stream.getAudioTracks()[0]?.label || t('Microphone'), gated: false, close: () => stream.getTracks().forEach((tr) => tr.stop()) }
     }
     if (!voice.micProcessed || oneCapture) return call()
     try {
@@ -204,13 +215,13 @@ class StudioRecorder {
     } catch (e) { this.letGo(id); throw e }
   }
 
-  /** Hold the inputs of my armed tracks open while I am in the studio, so their level shows before recording. */
+  /** Hold the inputs of my armed tracks open while I am in the studio's call, so their level shows before recording. */
   private async meter() {
     if (this.metering) { this.meterAgain = true; return }
     this.metering = true
     try {
       const s = useStore.getState()
-      const ch = s.myVoiceChannelId
+      const ch = s.myVoiceChannelId && room() === s.myVoiceChannelId ? s.myVoiceChannelId : null
       const lanes = useDaw.getState().lanes
       const want = new Map<string, string>()
       if (ch && !s.voiceConnecting) for (const key of this.wanted(ch)) if (key && lanes[key]) want.set(key, [lanes[key].input?.device ?? '', lanes[key].input?.channel ?? 'mono', ch, voice.inputDeviceId, voice.micProcessed].join('|'))

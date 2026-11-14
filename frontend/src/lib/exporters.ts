@@ -217,7 +217,7 @@ export async function exportProjectFile() {
     list.push({ id, name: a.name ?? a.display_name, content_type: a.content_type, duration_ms: a.duration_ms, file: name })
   }
   const { name, bpm, beats, master_gain, master_effects, tempo_map, loop_on, loop_start_ms, loop_end_ms, punch_on, markers } = project
-  const doc: ProjectFile = { format: 'parley-project', version: 1, project: { name, bpm, beats, master_gain, master_effects, tempo_map, loop_on, loop_start_ms, loop_end_ms, punch_on, markers }, lanes: Object.values(lanes), clips: Object.values(clips), audio: list }
+  const doc: ProjectFile = { format: 'parley-project', version: 1, project: { name, bpm, beats, master_gain, master_effects, tempo_map, loop_on, loop_start_ms, loop_end_ms, punch_on, markers }, lanes: Object.values(lanes).map((l) => (l.solo ? { ...l, solo: false } : l)), clips: Object.values(clips), audio: list }
   files.unshift({ name: 'project.json', data: new TextEncoder().encode(JSON.stringify(doc)) })
   const blob = zip(files)
   expose('__parleyDawProjectFile', blob.size)
@@ -248,7 +248,7 @@ export async function importProjectFile(studioId: string, file: File): Promise<S
   const mapAuto = (a: StudioLane['automation']) => Object.fromEntries(Object.entries(a ?? {}).map(([k, v]) => [k.startsWith('send:') ? `send:${laneMap.get(k.slice(5)) ?? k.slice(5)}` : k, v]))
   const lane = (l: StudioLane): Op => {
     const inst = l.instrument && 'audio_id' in l.instrument ? { ...l.instrument, audio_id: l.instrument.audio_id ? audioMap.get(l.instrument.audio_id) ?? null : null } : l.instrument
-    return { op: 'lane.put', lane: { id: laneMap.get(l.id)!, name: l.name, color: l.color ?? '', position: l.position, gain: l.gain, pan: l.pan, mute: l.mute, solo: l.solo, kind: l.kind, effects: l.effects, automation: mapAuto(l.automation), nudge_ms: l.nudge_ms ?? 0, ...(inst ? { instrument: inst } : {}) } as Partial<StudioLane> & { id: string } }
+    return { op: 'lane.put', lane: { id: laneMap.get(l.id)!, name: l.name, color: l.color ?? '', position: l.position, gain: l.gain, pan: l.pan, mute: l.mute, kind: l.kind, effects: l.effects, automation: mapAuto(l.automation), nudge_ms: l.nudge_ms ?? 0, ...(inst ? { instrument: inst } : {}) } as Partial<StudioLane> & { id: string } }
   }
   // Buses before the tracks that send to them; routing once both exist.
   const ops: Op[] = [

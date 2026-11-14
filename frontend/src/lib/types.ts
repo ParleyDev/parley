@@ -263,7 +263,9 @@ export interface StudioProject { id: string; channel_id: string; name: string; b
   /** Shared playback: playing from `play_from_ms` since `play_at` (server time; null: stopped there). */
   play_from_ms?: number; play_at?: string | null; play_by?: string | null
   markers?: { id: string; ms: number; name: string }[] }
-export interface StudioLane { id: string; project_id: string; name: string; color: string | null; position: number; gain: number; pan: number; mute: boolean; solo: boolean; user_id: string | null; claimed_at?: string | null
+export interface StudioLane { id: string; project_id: string; name: string; color: string | null; position: number; gain: number; pan: number; mute: boolean; solo: boolean; user_id: string | null;
+  /** Only its owner and the engineers change it, its clips and its notes. */
+  protected?: boolean; claimed_at?: string | null
   /** Where it records from (its owner's input by name, a channel of it), monitoring, armed, heard only through sends. */
   input?: TrackInput | null; monitor?: 'in' | 'auto' | 'off'; armed?: boolean; sends_only?: boolean
   /** audio (clips of audio), midi (note clips played by `instrument`) or bus (a return the others send to). */

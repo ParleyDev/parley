@@ -10,7 +10,8 @@ import { useStore } from '../store'
 import { STORAGE_PREFIX } from './brand'
 import { serverNow, syncClock, toLocal } from './clock'
 import { t } from './i18n'
-import { applyOps, audible, clipEnd, inverseOps, projectEnd, seams, sortedLanes, valueAt, type Applied, type Op, type Point } from './dawops'
+import { applyOps, audible, clipEnd, inverseOps, itemize, projectEnd, seams, settle, sortedLanes, storedAs, valueAt, type Applied, type Op, type Point } from './dawops'
+import { projectRights } from './projects'
 import type { StudioClip, StudioLane, StudioProject, StudioProjectFull, StudioSession, StudioTrack } from './types'
 
 /**
@@ -18,9 +19,14 @@ import type { StudioClip, StudioLane, StudioProject, StudioProjectFull, StudioSe
  *
  * Edits are ops, applied here at once and sent to the server, which applies them for everyone and broadcasts them
  * (STUDIO_PROJECT): everyone editing sees the same project live. Each edit of your own keeps its inverse, so undo and
- * redo send ops too. Ops from others arrive with the entities they left and the project's version; a gap in versions
- * reloads the project. Edits wait in an outbox until the server has them: a connection that is down is retried and
- * the edits stay as made (`sync` says so); an edit the server refuses is taken back, on its own.
+ * redo send ops too; an undo leaves what someone else changed since (`settle`). Ops from others arrive with the
+ * entities they left and the project's version; a gap in versions reloads the project. Edits wait in an outbox until
+ * the server has them: a connection that is down is retried and the edits stay as made (`sync` says so), each under
+ * an id so that one the server already has is not applied twice; an edit the server refuses is taken back, on its
+ * own. Lists inside a field (notes, automation points, effects, markers) are sent by item (`itemize`).
+ *
+ * Solo is each person's own: it is kept on this device, never sent, and not in what is exported. The audience reads
+ * the project and follows its playback, and edits nothing; a protected track is edited by its owner and the crew.
  *
  * The engine decodes every clip's audio once, plays the project from any position through a bus per lane (gain, pan,
  * mute / solo, meter) into the master, and renders it offline for export. While a take records into the project,
@@ -58,6 +64,30 @@ const LATENCY_KEY = `${STORAGE_PREFIX}dawLatency`
 export const useDaw = create<DawState>(() => ({ ...empty(), loading: false, error: null, sync: 'saved', unsent: 0, follow: (() => { try { return localStorage.getItem(FOLLOW_KEY) !== '0' } catch { return true } })() }))
 const get = useDaw.getState, set = useDaw.setState
 
+// The studio I am in, for recording and for a take's backing. In a project's call it is that project (as one of its
+// band: the audience of a call records nothing). Outside one it is the project open on this page, for its band: a
+// member records with the project open, in a call or not.
+let openHere: string | null = null, openNext: string | null = null
+const roomListeners = new Set<() => void>()
+/** lib/studio sets `keep`: a take of mine is recording, so the project it records into stays the room until it ends. */
+export const studioRoom = { keep: (): boolean => false }
+/** The project's editor is on this page (its channel), or no longer (null). */
+export function setOpen(channelId: string | null) { openNext = channelId; settleOpen() }
+export function settleOpen() {
+  if (openHere === openNext || (!openNext && studioRoom.keep())) return
+  openHere = openNext
+  roomListeners.forEach((f) => f())
+}
+export const onRoom = (f: () => void) => { roomListeners.add(f) }
+export function room(): string | null {
+  const s = useStore.getState(), me = s.user?.id
+  if (!me) return null
+  const v = s.myVoiceChannelId
+  if (v && s.channels[v]?.kind === 'project') { const mine = s.voiceStates[me]; return mine && mine.channel_id === v && !mine.suppress ? v : null }
+  const ch = openHere ? s.channels[openHere] : undefined
+  return ch?.kind === 'project' && (ch.engineer_ids?.includes(me) || ch.artist_ids?.includes(me)) ? ch.id : null
+}
+
 /** Every project runs at one rate: takes are captured at it and the mix is rendered at it. */
 export const PROJECT_RATE = 48000
 
@@ -74,7 +104,8 @@ export async function loadProject(id: string | null) {
     const full = await api.get<StudioProjectFull>(`/studio/projects/${id}`)
     if (loadingId !== id) return
     const keep = get().project?.id === id
-    set({ project: full.project, lanes: byId(full.lanes), clips: byId(full.clips), audio: byId(full.audio), loading: false, error: null, ...(keep ? {} : { undo: [], redo: [] }) })
+    if (!keep) soloed = readSolo(id)
+    set({ project: full.project, lanes: withSolo(byId(full.lanes)), clips: byId(full.clips), audio: byId(full.audio), loading: false, error: null, ...(keep ? {} : { undo: [], redo: [] }) })
     held.clear()
     // Edits of mine the server has not got yet are still mine: on top of what it has.
     rebase(id)
@@ -94,14 +125,74 @@ const byId = <T extends { id: string }>(xs: T[]) => Object.fromEntries(xs.map((x
 /** Apply ops to the local project. */
 function applyLocal(ops: (Op | Applied)[]) {
   const s = get()
-  if (s.project) set(applyOps({ project: s.project, lanes: s.lanes, clips: s.clips }, ops, t('Track')))
+  if (!s.project) return
+  const next = applyOps({ project: s.project, lanes: s.lanes, clips: s.clips }, ops, t('Track'))
+  set({ ...next, lanes: withSolo(next.lanes) })
 }
 
-/** The ops that undo `ops`, from the project as it is before them. */
-const inverse = (ops: Op[]) => inverseOps(get(), ops)
+/** The project as ops see it. */
+const docNow = () => { const s = get(); return { project: s.project!, lanes: s.lanes, clips: s.clips } }
+
+// Solo is mine: the tracks I soloed in each project, on this device. The project everyone shares has none.
+const SOLO_KEY = `${STORAGE_PREFIX}dawSolo:`
+let soloed = new Set<string>()
+const readSolo = (pid: string) => { try { const v: unknown = JSON.parse(localStorage.getItem(SOLO_KEY + pid) ?? '[]'); return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []) } catch { return new Set<string>() } }
+/** `lanes` with my solos on them (the same object where they already are). */
+function withSolo(lanes: Record<string, StudioLane>) {
+  let out = lanes
+  for (const l of Object.values(lanes)) if (l.solo !== soloed.has(l.id)) { if (out === lanes) out = { ...lanes }; out[l.id] = { ...l, solo: soloed.has(l.id) } }
+  return out
+}
+/** Take the solos out of an edit and keep them here; what is left is for everyone. */
+function takeSolo(ops: Op[]): Op[] {
+  if (!ops.some((o) => o.op === 'lane.put' && 'solo' in o.lane)) return ops
+  const pid = get().project!.id, rest: Op[] = []
+  for (const o of ops) {
+    if (o.op !== 'lane.put' || !('solo' in o.lane)) { rest.push(o); continue }
+    const { solo, ...lane } = o.lane
+    if (solo) soloed.add(lane.id); else soloed.delete(lane.id)
+    if (Object.keys(lane).length > 1) rest.push({ op: 'lane.put', lane })
+  }
+  for (const id of soloed) if (!get().lanes[id] && !rest.some((o) => o.op === 'lane.put' && o.lane.id === id)) soloed.delete(id)
+  try { if (soloed.size) localStorage.setItem(SOLO_KEY + pid, JSON.stringify([...soloed])); else localStorage.removeItem(SOLO_KEY + pid) } catch { /* private mode */ }
+  set({ lanes: withSolo(get().lanes) })
+  return rest
+}
+
+/** Why I may not make this edit (to say so), or null: the audience edits nothing, a protected track is its owner's. */
+function barred(ops: Op[]): string | null {
+  const st = get(), s = useStore.getState()
+  const rights = projectRights(st.project ? s.channels[st.project.channel_id] : undefined)
+  if (!rights.edit) return t('You are listening in: only the band edits the project')
+  if (rights.manage) return null
+  const me = s.user?.id
+  const locked = (id: string | null | undefined) => { const l = id ? st.lanes[id] : undefined; return !!l?.protected && l.user_id !== me }
+  const hit = ops.some((o) => {
+    if (o.op === 'lane.put') return locked(o.lane.id) || ('protected' in o.lane && !!st.lanes[o.lane.id] && st.lanes[o.lane.id].user_id !== me)
+    if (o.op === 'lane.del') return locked(o.id)
+    if (o.op === 'clip.put') return locked(st.clips[o.clip.id]?.lane_id) || locked(o.clip.lane_id)
+    if (o.op === 'clip.del') return locked(st.clips[o.id]?.lane_id)
+    if (o.op === 'notes') return locked(st.clips[o.clip]?.lane_id)
+    if (o.op === 'auto' || o.op === 'fx.put' || o.op === 'fx.del') return locked(o.lane)
+    return false
+  })
+  return hit ? t('That track is protected: only its owner and the engineers change it') : null
+}
+let saidAt = 0
+/** Whether the edit may be made; says why not (once in a while, not for every move of a drag). */
+function allowed(ops: Op[]) {
+  const why = barred(ops)
+  if (why && Date.now() - saidAt > 3000) { saidAt = Date.now(); useStore.getState().pushToast(why, 'error') }
+  return !why
+}
+/** Whether I may edit the open project at all (the audience may not). */
+export const readOnly = () => { const p = get().project; return !!p && !projectRights(useStore.getState().channels[p.channel_id]).edit }
 
 /** Edits the server has not got yet, oldest first. They are sent one at a time, in the order they were made. */
-const outbox: { pid: string; ops: Op[] }[] = []
+const outbox: { pid: string; id: string; ops: Op[] }[] = []
+/** My puts as the server stored them (a value it rounded or held within bounds): what an undo compares with. */
+const stored = new WeakMap<Op, Op>()
+const asStored = (o: Op) => stored.get(o) ?? o
 /** The first of them is with the server now (its answer has not come back). */
 let inflight = false
 let pumping = false, tries = 0, wake: (() => void) | null = null
@@ -113,7 +204,7 @@ const refused = (e: unknown) => e instanceof ApiError && e.status >= 400 && e.st
 function send(ops: Op[]) {
   const pid = get().project?.id
   if (!pid || !ops.length) return
-  outbox.push({ pid, ops })
+  outbox.push({ pid, id: newId(), ops })
   noteSync(get().sync === 'offline')
   void pump()
 }
@@ -125,8 +216,10 @@ async function pump() {
     const b = outbox[0]
     try {
       inflight = true
-      await api.post(`/studio/projects/${b.pid}/ops`, { ops: b.ops })
+      // Under its id: sent again after an answer that was lost, it is not applied a second time.
+      const r = await api.post<{ ops?: Applied[] } | undefined>(`/studio/projects/${b.pid}/ops`, { id: b.id, ops: b.ops })
       inflight = false
+      if (r?.ops?.length === b.ops.length) b.ops.forEach((o, i) => { const as = storedAs(o, r.ops![i]); if (as) stored.set(o, as) })
       outbox.shift(); tries = 0; noteSync()
     } catch (e) {
       inflight = false
@@ -180,7 +273,11 @@ if (typeof window !== 'undefined') {
 /** Make an edit: applied here at once, sent to everyone, undoable. `merge` folds it into the previous edit (a drag). */
 export function edit(ops: Op[], opts: { merge?: boolean; undoable?: boolean } = {}) {
   if (!ops.length || !get().project) return
-  const undo = inverse(ops)
+  ops = takeSolo(ops)
+  if (!ops.length || !allowed(ops)) return
+  ops = itemize(docNow(), ops)
+  if (!ops.length) return
+  const undo = inverseOps(docNow(), ops)
   applyLocal(ops)
   send(ops)
   if (opts.undoable === false) return
@@ -198,9 +295,13 @@ const live = new Map<string, { ops: Op[]; timer: ReturnType<typeof setTimeout> }
  */
 export function editLive(key: string, ops: Op[]) {
   if (!ops.length || !get().project) return
+  ops = takeSolo(ops)
+  if (!ops.length || !allowed(ops)) return
+  ops = itemize(docNow(), ops)
+  if (!ops.length) return
   const pending = live.get(key)
   if (!pending) {
-    const undo = inverse(ops)
+    const undo = inverseOps(docNow(), ops)
     const st = get()
     set({ undo: [...st.undo.slice(-199), { do: ops, undo, key } as { do: Op[]; undo: Op[] }], redo: [] })
   } else {
@@ -212,18 +313,28 @@ export function editLive(key: string, ops: Op[]) {
   live.set(key, { ops, timer: setTimeout(() => { live.delete(key); send(ops) }, 150) })
 }
 
-export function undo() {
-  const st = get(), last = st.undo[st.undo.length - 1]
-  if (!last) return
-  applyLocal(last.undo); send(last.undo)
-  set({ undo: st.undo.slice(0, -1), redo: [...st.redo, last] })
+/**
+ * Take back (or make again) an edit of mine, as far as it is still mine to take back: a field someone else has
+ * changed since keeps their value, and a clip or track they deleted stays deleted. Says so when that left something.
+ * What goes on the other stack is what was done here, so doing it again does not overwrite them either.
+ */
+function step(from: 'undo' | 'redo') {
+  const st = get(), e = st[from][st[from].length - 1]
+  if (!e || !st.project) return
+  // A fader still moving is part of the project this is compared with: it is sent first.
+  for (const [key, l] of live) { clearTimeout(l.timer); live.delete(key); send(l.ops) }
+  const [apply, was] = from === 'undo' ? [e.undo, e.do] : [e.do, e.undo]
+  const { ops, dropped } = settle(docNow(), apply, was, asStored)
+  if (ops.length && !allowed(ops)) return
+  const back = dropped ? inverseOps(docNow(), ops) : was
+  if (ops.length) { applyLocal(ops); send(ops) }
+  if (dropped) useStore.getState().pushToast(ops.length ? t('Someone changed part of that since: their change was kept') : t('Someone changed that since: their change was kept'), 'info')
+  const to = from === 'undo' ? 'redo' : 'undo'
+  const moved = from === 'undo' ? { do: back, undo: ops } : { do: ops, undo: back }
+  set({ [from]: st[from].slice(0, -1), [to]: ops.length ? [...st[to], moved] : st[to] } as Pick<DawState, 'undo' | 'redo'>)
 }
-export function redo() {
-  const st = get(), next = st.redo[st.redo.length - 1]
-  if (!next) return
-  applyLocal(next.do); send(next.do)
-  set({ redo: st.redo.slice(0, -1), undo: [...st.undo, next] })
-}
+export const undo = () => step('undo')
+export const redo = () => step('redo')
 
 type Remote = { project_id: string; version: number; ops: Applied[]; reload?: boolean }
 /** Edits that arrived ahead of the one before them (two servers' events can cross): kept a moment for it to come. */
@@ -1013,16 +1124,19 @@ if (typeof window !== 'undefined') (window as unknown as { __parleyDawTest?: unk
 
 /**
  * Keep the open project of the studio we are in loaded, and play it as the backing while a take records into it:
- * from the take's playhead, starting on its downbeat (count-in included), for everyone in the studio, band and
- * audience alike. It plays on this device, so it never reaches the recordings (the band wears headphones).
+ * from the take's playhead, starting on its downbeat (count-in included), for everyone in the studio's call, band
+ * and audience alike, and for a band member who has the project open outside a call. It plays on this device, so it
+ * never reaches the recordings (the band wears headphones).
  */
 function follow() {
   let backingFor: string | null = null
   const sync = () => {
     const s = useStore.getState()
-    const ch = s.myVoiceChannelId ? s.channels[s.myVoiceChannelId] : undefined
+    const called = s.myVoiceChannelId ? s.channels[s.myVoiceChannelId] : undefined
+    const at = called?.kind === 'project' ? called.id : room()
+    const ch = at ? s.channels[at] : undefined
     const pid = ch?.kind === 'project' ? ch.studio?.project_id ?? null : null
-    if (pid && get().project?.id !== pid && loadingId !== pid) void loadProject(pid)
+    if (pid && called && get().project?.id !== pid && loadingId !== pid) void loadProject(pid)
     const live: StudioSession | undefined = ch ? s.studio[ch.id]?.find((x) => !x.ended_at) : undefined
     // Everyone in the project hears the backing of a take, a take recorded alone included.
     const take = live && live.project_id && live.project_id === get().project?.id ? live : undefined
@@ -1059,6 +1173,7 @@ function follow() {
     })
   }
   useStore.subscribe((s, prev) => { if (s.studio !== prev.studio || s.myVoiceChannelId !== prev.myVoiceChannelId || s.channels !== prev.channels) sync() })
+  onRoom(sync)
   useDaw.subscribe((s, prev) => {
     if (s.project?.id !== prev.project?.id) sync()
     else if (s.project?.play_at !== prev.project?.play_at || s.follow !== prev.follow) shared()

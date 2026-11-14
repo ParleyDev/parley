@@ -2,12 +2,13 @@
 // and others read and write. A .dawproject file is a zip of project.xml (tracks, mixer, arrangement), metadata.xml
 // and the audio. We write time in seconds (every reader supports it), audio as WAV (takes are WebM/Opus, which desktop
 // DAWs don't read), the EQ, compressor and limiter as the format's built-in devices, and note the effects it has no
-// equivalent for in the track's comment. Reading takes seconds or beats, nested clips, audio, notes, levels, sends,
-// routing, markers and volume / pan automation.
+// equivalent for in the track's comment. A clip's gain has no place in the format: its audio is written at that
+// level. Solo is each listener's own and is not written. Reading takes seconds or beats, nested clips, audio, notes,
+// levels, sends, routing, markers, volume / pan automation, and those three built-in devices.
 import { api, getToken } from './api'
 import { newId, sortedLanes, useDaw, type Op } from './daw'
 import { unzip, zip } from './exporters'
-import { FX, type Effect } from './fx'
+import { FX, newEffect, type Effect } from './fx'
 import { encodeWav } from './multitrack'
 import { download } from './fileActions'
 import { secAtBar } from './tempo'
@@ -34,11 +35,14 @@ function device(e: Effect, id: () => string): string | null {
   return null
 }
 
-/** Decode any audio the browser can play and write it as 24-bit WAV. */
-async function toWav(data: ArrayBuffer): Promise<{ wav: ArrayBuffer; channels: number; rate: number; seconds: number }> {
-  const ctx = new OfflineAudioContext(1, 1, 48000)
-  const buf = await ctx.decodeAudioData(data)
-  return { wav: encodeWav(buf), channels: buf.numberOfChannels, rate: buf.sampleRate, seconds: buf.duration }
+/** `buf` at `gain`, or null where that would not fit in a file (a sample past full scale). */
+function scaled(buf: AudioBuffer, gain: number): AudioBuffer | null {
+  const out = new AudioBuffer({ numberOfChannels: buf.numberOfChannels, length: buf.length, sampleRate: buf.sampleRate })
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    const src = buf.getChannelData(ch), dst = out.getChannelData(ch)
+    for (let i = 0; i < src.length; i++) { const v = src[i] * gain; if (v > 1 || v < -1) return null; dst[i] = v }
+  }
+  return out
 }
 
 /** The open project as a .dawproject file, with its audio as WAV. */
@@ -48,20 +52,34 @@ export async function exportDawProject(onProgress?: (done: number, total: number
   let n = 0
   const id = () => `id${n++}`
   const token = getToken()
-  // Audio first: every file a clip uses, decoded and written as WAV.
-  const used = [...new Set(Object.values(clips).map((c) => c.audio_id).filter((x): x is string => !!x && !!audio[x]))]
+  // Audio first: every file a clip uses, decoded and written as 24-bit WAV. A clip with a gain gets its audio written
+  // at that level (a file per level), unless that would clip the file: then it is written as it is and the track's
+  // comment says what the gain was.
+  const levels = new Map<string, Set<number>>()
+  for (const c of Object.values(clips)) if (c.audio_id && audio[c.audio_id]) levels.set(c.audio_id, (levels.get(c.audio_id) ?? new Set<number>()).add(c.gain ?? 1))
+  const used = [...levels.keys()]
   const files: { name: string; data: Uint8Array }[] = []
-  const media = new Map<string, { path: string; channels: number; rate: number; seconds: number }>()
+  type Media = { path: string; channels: number; rate: number; seconds: number; level: number }
+  const media = new Map<string, Media>()
+  const mediaOf = (c: StudioClip) => (c.audio_id ? media.get(`${c.audio_id}@${c.gain ?? 1}`) : undefined)
   for (const [i, aid] of used.entries()) {
     onProgress?.(i, used.length)
     const a = audio[aid]
     const r = await fetch(a.url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
     if (!r.ok) continue
     try {
-      const w = await toWav(await r.arrayBuffer())
-      const path = `audio/${safe(a.name?.replace(/\.[a-z0-9]+$/i, '') ?? a.display_name)}-${aid.slice(0, 8)}.wav`
-      files.push({ name: path, data: new Uint8Array(w.wav) })
-      media.set(aid, { path, channels: w.channels, rate: w.rate, seconds: w.seconds })
+      const buf = await new OfflineAudioContext(1, 1, 48000).decodeAudioData(await r.arrayBuffer())
+      const base = `audio/${safe(a.name?.replace(/\.[a-z0-9]+$/i, '') ?? a.display_name)}-${aid.slice(0, 8)}`
+      const write = (b: AudioBuffer, level: number): Media => {
+        const m = { path: level === 1 ? `${base}.wav` : `${base}-x${num(level)}.wav`, channels: b.numberOfChannels, rate: b.sampleRate, seconds: b.duration, level }
+        files.push({ name: m.path, data: new Uint8Array(encodeWav(b)) })
+        return m
+      }
+      let plain: Media | undefined
+      for (const g of levels.get(aid)!) {
+        const at = g === 1 ? null : scaled(buf, g)
+        media.set(`${aid}@${g}`, at ? write(at, g) : (plain ??= write(buf, 1)))
+      }
     } catch { /* undecodable: left out */ }
   }
   onProgress?.(used.length, used.length)
@@ -76,10 +94,11 @@ export async function exportDawProject(onProgress?: (done: number, total: number
     const devices = (l.effects ?? []).map((e) => device(e, id)).filter(Boolean)
     const missing = (l.effects ?? []).filter((e) => !['eq', 'compressor', 'limiter'].includes(e.type)).map((e) => `${FX[e.type]?.name ?? e.type} ${Object.entries(e.params).map(([k, v]) => `${k}=${num(v)}`).join(' ')}`)
     const inst = l.kind === 'midi' && l.instrument ? `Parley ${l.instrument.type} instrument` : ''
-    const comment = [inst, missing.length ? `Effects not carried over: ${missing.join('; ')}` : ''].filter(Boolean).join('. ')
+    const loud = Object.values(clips).filter((c) => c.lane_id === l.id && (c.gain ?? 1) !== 1 && mediaOf(c)?.level === 1).map((c) => `${num(20 * Math.log10(c.gain))} dB at ${sec(c.start_ms)} s`)
+    const comment = [inst, missing.length ? `Effects not carried over: ${missing.join('; ')}` : '', loud.length ? `Clip gain not carried over: ${loud.join('; ')}` : ''].filter(Boolean).join('. ')
     const sends = Object.entries(l.sends ?? {}).filter(([bus]) => ids.has(bus)).map(([bus, level]) => { const sid = id(); x.sends[bus] = sid; return `<Send destination="${ids.get(bus)!.channel}" type="post" id="${id()}"><Volume id="${sid}" name="Send" unit="linear" value="${num(level)}" min="0" max="2"/></Send>` }).join('')
     return `<Track contentType="${l.kind === 'midi' ? 'notes' : 'audio'}" loaded="true" id="${x.track}" name="${esc(l.name)}"${l.color ? ` color="${esc(l.color)}"` : ''}${comment ? ` comment="${esc(comment)}"` : ''}>`
-      + `<Channel audioChannels="2" destination="${dest}" role="${role}" solo="${l.solo}" id="${x.channel}">`
+      + `<Channel audioChannels="2" destination="${dest}" role="${role}" solo="false" id="${x.channel}">`
       + (devices.length ? `<Devices>${devices.join('')}</Devices>` : '')
       + `<Mute id="${x.mute}" name="Mute" value="${l.mute}"/><Pan id="${x.pan}" name="Pan" unit="normalized" value="${num((l.pan + 1) / 2)}" min="0" max="1"/>`
       + (sends ? `<Sends>${sends}</Sends>` : '')
@@ -105,7 +124,7 @@ export async function exportDawProject(onProgress?: (done: number, total: number
         const notes = (c.notes as Note[]).map((nt) => `<Note time="${sec(nt.t)}" duration="${sec(nt.d)}" channel="0" key="${nt.p}" vel="${num(Math.min(1, nt.v / 127))}" rel="${num(Math.min(1, nt.v / 127))}"/>`).join('')
         return `<Clip time="${sec(at)}" duration="${sec(c.length_ms)}" playStart="0" contentTimeUnit="seconds"${enable}><Notes id="${id()}">${notes}</Notes></Clip>`
       }
-      const m = c.audio_id ? media.get(c.audio_id) : undefined
+      const m = mediaOf(c)
       if (!m) return ''
       return `<Clip time="${sec(at)}" duration="${sec(c.length_ms)}" playStart="${sec(c.in_ms)}" contentTimeUnit="seconds"${fades}${enable}><Audio id="${id()}" channels="${m.channels}" sampleRate="${m.rate}" duration="${num(m.seconds)}" algorithm="raw"><File path="${esc(m.path)}"/></Audio></Clip>`
     }
@@ -139,6 +158,43 @@ const kid = (el: Element, tag: string) => kids(el, tag)[0]
 const attr = (el: Element | undefined, k: string) => el?.getAttribute(k) ?? null
 const fnum = (el: Element | undefined, k: string, d = 0) => { const v = Number(attr(el, k)); return Number.isFinite(v) && attr(el, k) !== null ? v : d }
 const TYPES: Record<string, string> = { wav: 'audio/wav', wave: 'audio/wav', flac: 'audio/flac', mp3: 'audio/mpeg', ogg: 'audio/ogg', opus: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac', aif: 'audio/aiff', aiff: 'audio/aiff', webm: 'audio/webm' }
+
+/** A built-in device of the format as the effect of ours nearest to it (what `device` writes, read back), or null. */
+function effectOf(el: Element): { effect: Effect; partial: boolean } | null {
+  const type = el.tagName === 'Equalizer' ? 'eq' : el.tagName === 'Compressor' ? 'compressor' : el.tagName === 'Limiter' ? 'limiter' : null
+  if (!type) return null
+  const effect = newEffect(type)
+  effect.on = attr(kid(el, 'Enabled'), 'value') !== 'false'
+  const read = (p: Element, tag: string, as: 'db' | 'ms' | 'raw' = 'raw') => {
+    const x = kid(p, tag)
+    if (!x || attr(x, 'value') === null) return undefined
+    const v = fnum(x, 'value')
+    return as === 'db' && attr(x, 'unit') === 'linear' ? 20 * Math.log10(Math.max(1e-6, v)) : as === 'ms' ? v * 1000 : v
+  }
+  const put = (key: string, v: number | undefined) => {
+    const d = FX[type].params.find((p) => p.key === key)
+    if (d && v !== undefined && Number.isFinite(v)) effect.params[key] = Math.min(d.max, Math.max(d.min, v))
+  }
+  let partial = false
+  if (type === 'eq') {
+    // Ours has one band of each kind: the first of each is read, the rest are said to be left out.
+    const seen = new Set<string>()
+    for (const b of kids(el, 'Band')) {
+      const kind = attr(b, 'type') ?? ''
+      if (attr(kid(b, 'Enabled'), 'value') === 'false') continue
+      if (!['highPass', 'lowShelf', 'bell', 'highShelf'].includes(kind) || seen.has(kind)) { partial = true; continue }
+      seen.add(kind)
+      if (kind === 'highPass') put('lowcut', read(b, 'Freq'))
+      else if (kind === 'lowShelf') put('low', read(b, 'Gain', 'db'))
+      else if (kind === 'highShelf') put('high', read(b, 'Gain', 'db'))
+      else { put('midFreq', read(b, 'Freq')); put('mid', read(b, 'Gain', 'db')) }
+    }
+  } else if (type === 'compressor') {
+    put('attack', read(el, 'Attack', 'ms')); put('release', read(el, 'Release', 'ms')); put('ratio', read(el, 'Ratio'))
+    put('threshold', read(el, 'Threshold', 'db')); put('makeup', read(el, 'OutputGain', 'db'))
+  } else { put('release', read(el, 'Release', 'ms')); put('ceiling', read(el, 'Threshold', 'db')) }
+  return { effect, partial }
+}
 
 /** Read a .dawproject file into the studio `studioId` as a new project. Returns the project and what was left out. */
 export async function importDawProject(studioId: string, file: File): Promise<{ project: StudioProject; skipped: string[] }> {
@@ -197,6 +253,16 @@ export async function importDawProject(studioId: string, file: File): Promise<{ 
     return t
   }
 
+  const readDevices = (ch: Element | undefined, where: string): Effect[] => {
+    const out: Effect[] = []
+    for (const d of (ch ? kid(ch, 'Devices') : undefined)?.children ?? []) {
+      const e = effectOf(d)
+      if (!e || out.length >= 16) { skipped.push(`effect ${attr(d, 'deviceName') ?? d.tagName} on ${where}`); continue }
+      out.push(e.effect)
+      if (e.partial) skipped.push(`some EQ bands on ${where}`)
+    }
+    return out
+  }
   const ops: Op[] = []
   const routing: Op[] = []
   tracks.forEach((x, i) => {
@@ -206,9 +272,8 @@ export async function importDawProject(studioId: string, file: File): Promise<{ 
     const p = attr(pan, 'unit') === 'normalized' || fnum(pan, 'max', 1) === 1 && fnum(pan, 'min', 0) === 0 ? fnum(pan, 'value', 0.5) * 2 - 1 : fnum(pan, 'value', 0)
     if (vol) params.set(attr(vol, 'id') ?? '', { lane: x.lane, key: 'gain' })
     if (pan) params.set(attr(pan, 'id') ?? '', { lane: x.lane, key: 'pan' })
-    const devices = kid(ch!, 'Devices')
-    if (devices?.children.length) skipped.push(`${devices.children.length} effect(s) on ${attr(x.el, 'name') ?? 'a track'}`)
-    ops.push({ op: 'lane.put', lane: { id: x.lane, name: (attr(x.el, 'name') ?? `Track ${i + 1}`).slice(0, 80), color: /^#[0-9a-f]{6}$/i.test(attr(x.el, 'color') ?? '') ? attr(x.el, 'color')! : '', position: i, kind: x.kind, gain: Math.min(2, Math.max(0, gain)), pan: Math.min(1, Math.max(-1, p)), mute: attr(mute, 'value') === 'true', solo: attr(ch!, 'solo') === 'true' } } as Op)
+    const effects = readDevices(ch, attr(x.el, 'name') ?? 'a track')
+    ops.push({ op: 'lane.put', lane: { id: x.lane, name: (attr(x.el, 'name') ?? `Track ${i + 1}`).slice(0, 80), color: /^#[0-9a-f]{6}$/i.test(attr(x.el, 'color') ?? '') ? attr(x.el, 'color')! : '', position: i, kind: x.kind, gain: Math.min(2, Math.max(0, gain)), pan: Math.min(1, Math.max(-1, p)), mute: attr(mute, 'value') === 'true', ...(effects.length ? { effects } : {}) } } as Op)
     const dest = byChannel.get(attr(ch!, 'destination') ?? '')
     const sends: Record<string, number> = {}
     for (const s of kids(kid(ch!, 'Sends') ?? ch!, 'Send')) {
@@ -270,7 +335,12 @@ export async function importDawProject(studioId: string, file: File): Promise<{ 
   const markers = markersEl ? kids(markersEl, 'Marker').map((m, i) => ({ id: `m${i}`, ms: toMs(fnum(m, 'time'), attr(markersEl, 'timeUnit') ?? attr(top ?? root, 'timeUnit') ?? 'beats'), name: (attr(m, 'name') ?? `Marker ${i + 1}`).slice(0, 40) })).slice(0, 200) : []
   if (arrangement && kid(arrangement, 'TempoAutomation')) skipped.push('tempo changes (the first tempo is kept)')
   const autoOps: Op[] = [...automation.entries()].map(([lane, a]) => ({ op: 'lane.put', lane: { id: lane, automation: a } }) as Op)
-  const all: Op[] = [{ op: 'project', markers } as Op, ...ops.filter((o) => (o as { lane: StudioLane }).lane.kind === 'bus'), ...ops.filter((o) => (o as { lane: StudioLane }).lane.kind !== 'bus'), ...routing, ...clipOps, ...autoOps]
+  // The master: its level and its devices.
+  const masterCh = [...(kid(root, 'Structure') ?? root).querySelectorAll('Track > Channel')].find((c) => attr(c, 'role') === 'master')
+  const masterVol = masterCh ? kid(masterCh, 'Volume') : undefined
+  const masterFx = readDevices(masterCh, 'the master')
+  const master = { ...(masterVol ? { master_gain: Math.min(2, Math.max(0, attr(masterVol, 'unit') === 'decibel' ? dbToGain(fnum(masterVol, 'value', 0)) : fnum(masterVol, 'value', 1))) } : {}), ...(masterFx.length ? { master_effects: masterFx } : {}) }
+  const all: Op[] = [{ op: 'project', markers, ...master } as Op, ...ops.filter((o) => (o as { lane: StudioLane }).lane.kind === 'bus'), ...ops.filter((o) => (o as { lane: StudioLane }).lane.kind !== 'bus'), ...routing, ...clipOps, ...autoOps]
   for (let i = 0; i < all.length; i += 400) await api.post(`/studio/projects/${project.id}/ops`, { ops: all.slice(i, i + 400) })
   return { project, skipped }
 }

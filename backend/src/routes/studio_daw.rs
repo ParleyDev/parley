@@ -7,8 +7,12 @@
 //! to `POST /studio/projects/:pid/ops`, applied in one transaction and broadcast to the studio as `STUDIO_PROJECT`
 //! with the resulting entities and the project's new version, so every editor sees it at once. Puts are upserts by a
 //! client-chosen id carrying only the fields that change, which makes undo a matter of sending the inverse ops. Last
-//! write wins per field. The engineers, Manage Channels and everyone in the band (in the studio, not in the audience)
-//! may edit; anyone who can see the studio may read.
+//! write wins per field. The lists inside an item (a clip's notes, a lane's automation points, an effect chain, the
+//! markers) have ops of their own (`notes`, `auto`, `fx.put`, `fx.del`, `marker.put`, `marker.del`) that say what
+//! was added and taken away, so two members working in one list both keep what they did; they are answered and
+//! broadcast as the put of the item they changed. The engineers, Manage Channels and everyone in the band (in the
+//! studio, not in the audience) may edit; anyone who can see the studio may read. A protected track is its owner's
+//! and the engineers' alone. Solo is not stored: it is each listener's own.
 //!
 //! A take recorded while a project is open plays the project for everyone from the playhead (the backing) and lands
 //! as a clip on each recording member's lane when their track finishes uploading (`place_take`).
@@ -126,6 +130,8 @@ pub struct Lane {
     pub armed: bool,
     /// Plays only through its sends, not to its output.
     pub sends_only: bool,
+    /// Only its owner and the engineers edit it and what is on it.
+    pub protected: bool,
 }
 
 #[derive(Debug, Serialize, FromRow, Clone)]
@@ -150,7 +156,7 @@ pub struct Clip {
 }
 
 const PROJECT_COLS: &str = "id, channel_id, name, bpm, beats, master_gain, created_by, created_at, updated_at, version, master_effects, tempo_map, loop_on, loop_start_ms, loop_end_ms, punch_on, markers, tag, archived_at, play_from_ms, play_at, play_by";
-const LANE_COLS: &str = "id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument, claimed_at, input, monitor, armed, sends_only";
+const LANE_COLS: &str = "id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument, claimed_at, input, monitor, armed, sends_only, protected";
 const CLIP_COLS: &str = "id, project_id, lane_id, audio_id, start_ms, in_ms, length_ms, gain, fade_in_ms, fade_out_ms, muted, created_by, notes, group_id";
 
 /// The project's band (engineers and artists, in its voice room or not), and Manage Projects.
@@ -285,16 +291,16 @@ async fn delete_project(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct LanePatch { id: Uuid, name: Option<String>, color: Option<String>, position: Option<f32>, gain: Option<f32>, pan: Option<f32>, mute: Option<bool>, solo: Option<bool>,
     /// Whose input the track records: a user, or null for no one ("No input").
     #[serde(default, deserialize_with = "present_opt")] user_id: Option<Option<Uuid>>,
     #[serde(default)] kind: Option<String>, #[serde(default)] effects: Option<Value>, #[serde(default)] sends: Option<Value>, #[serde(default)] automation: Option<Value>,
     /// A bus lane's id, or "" / null for the master.
     #[serde(default, deserialize_with = "present")] output_id: Option<Value>, #[serde(default)] nudge_ms: Option<i32>, #[serde(default, deserialize_with = "present")] instrument: Option<Value>,
-    #[serde(default, deserialize_with = "present")] input: Option<Value>, #[serde(default)] monitor: Option<String>, #[serde(default)] armed: Option<bool>, #[serde(default)] sends_only: Option<bool> }
+    #[serde(default, deserialize_with = "present")] input: Option<Value>, #[serde(default)] monitor: Option<String>, #[serde(default)] armed: Option<bool>, #[serde(default)] sends_only: Option<bool>, #[serde(default)] protected: Option<bool> }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Default)]
 struct ClipPatch { id: Uuid, lane_id: Option<Uuid>, audio_id: Option<Uuid>, start_ms: Option<i32>, in_ms: Option<i32>, length_ms: Option<i32>, gain: Option<f32>, fade_in_ms: Option<i32>, fade_out_ms: Option<i32>, muted: Option<bool>,
     #[serde(default)] notes: Option<Value>,
     /// A group's id, or "" / null for none.
@@ -317,10 +323,110 @@ enum Op {
     ClipPut { clip: ClipPatch },
     #[serde(rename = "clip.del")]
     ClipDel { id: Uuid },
+    /// Notes put into a MIDI clip and taken out of it (each {p, t, d, v}).
+    #[serde(rename = "notes")]
+    Notes { clip: Uuid, #[serde(default)] add: Vec<Value>, #[serde(default)] del: Vec<Value> },
+    /// Automation points ([ms, value]) put on one parameter of a lane and taken off it.
+    #[serde(rename = "auto")]
+    Auto { lane: Uuid, param: String, #[serde(default)] add: Vec<Value>, #[serde(default)] del: Vec<Value> },
+    /// One effect of a lane's chain (no lane: the master's): what is given of {on, params} changes on the one with
+    /// that id, a new one (it has a `type`) goes in at `at` or the end, and `at` moves one that is there.
+    #[serde(rename = "fx.put")]
+    FxPut { #[serde(default)] lane: Option<Uuid>, effect: Value, #[serde(default)] at: Option<usize> },
+    #[serde(rename = "fx.del")]
+    FxDel { #[serde(default)] lane: Option<Uuid>, id: String },
+    /// One marker: {id, ms, name}, of which a marker that is there takes what is given.
+    #[serde(rename = "marker.put")]
+    MarkerPut { marker: Value },
+    #[serde(rename = "marker.del")]
+    MarkerDel { id: String },
 }
 
+/// `id`: the batch's own, chosen by its sender; a batch that comes again with the same id is not applied again.
 #[derive(Deserialize)]
-struct OpsReq { ops: Vec<Op> }
+struct OpsReq { #[serde(default)] id: Option<Uuid>, ops: Vec<Op> }
+
+/// A project op that changes only the lists the item ops work in.
+fn project_op(master_effects: Option<Value>, markers: Option<Value>) -> Op {
+    Op::Project { name: None, bpm: None, beats: None, master_gain: None, master_effects, tempo_map: None, loop_on: None, loop_start_ms: None, loop_end_ms: None, punch_on: None, markers, clear_loop: None }
+}
+
+/// A clip's notes with some taken out and some put in. A note taken out and the one put in at the same place in the
+/// two lists are one note changed: it keeps its place. A note to take out that is no longer there is nobody's loss.
+fn merge_notes(cur: Value, add: Vec<Value>, del: Vec<Value>) -> AppResult<Value> {
+    let list = |v: Value| -> AppResult<Vec<Value>> { Ok(notes(v)?.as_array().cloned().unwrap_or_default()) };
+    let (mut cur, mut add) = (list(cur)?, list(Value::Array(add))?.into_iter());
+    for d in list(Value::Array(del))? {
+        match (cur.iter().position(|n| *n == d), add.next()) {
+            (Some(i), Some(a)) => cur[i] = a,
+            (Some(i), None) => { cur.remove(i); }
+            (None, Some(a)) => cur.push(a),
+            (None, None) => {}
+        }
+    }
+    cur.extend(add);
+    notes(Value::Array(cur))
+}
+
+/// A lane's automation with points taken off one parameter and put on it (not yet in order: `automation` sorts).
+fn merge_points(cur: &Value, param: &str, add: Vec<Value>, del: &[Value]) -> Value {
+    let mut all = cur.as_object().cloned().unwrap_or_default();
+    let mut pts = all.get(param).and_then(Value::as_array).cloned().unwrap_or_default();
+    let same = |a: &Value, b: &Value| a.get(0).and_then(Value::as_i64) == b.get(0).and_then(Value::as_i64)
+        && matches!((a.get(1).and_then(Value::as_f64), b.get(1).and_then(Value::as_f64)), (Some(x), Some(y)) if (x - y).abs() < 1e-6);
+    for d in del { if let Some(i) = pts.iter().position(|p| same(p, d)) { pts.remove(i); } }
+    pts.extend(add);
+    all.insert(param.to_string(), Value::Array(pts));
+    Value::Object(all)
+}
+
+fn fx_id(e: &Value) -> Option<&str> { e.get("id").and_then(Value::as_str) }
+
+/// An effect chain with one effect changed, put in or moved.
+fn merge_fx(cur: &Value, effect: &Value, at: Option<usize>) -> Value {
+    let mut list = cur.as_array().cloned().unwrap_or_default();
+    match list.iter().position(|e| fx_id(e).is_some() && fx_id(e) == fx_id(effect)) {
+        Some(i) => {
+            if let Some(on) = effect.get("on").filter(|v| v.is_boolean()) { list[i]["on"] = on.clone(); }
+            if let Some(Value::Object(p)) = effect.get("params") {
+                if !list[i]["params"].is_object() { list[i]["params"] = json!({}); }
+                for (k, v) in p { list[i]["params"][k.as_str()] = v.clone(); }
+            }
+            if let Some(at) = at { let e = list.remove(i); list.insert(at.min(list.len()), e); }
+        }
+        // An effect that was deleted meanwhile stays deleted: only a whole one goes in.
+        None if effect.get("type").is_some() => { let at = at.unwrap_or(list.len()).min(list.len()); list.insert(at, effect.clone()); }
+        None => {}
+    }
+    Value::Array(list)
+}
+
+fn without_id(cur: &Value, id: &str) -> Value { Value::Array(cur.as_array().into_iter().flatten().filter(|e| fx_id(e) != Some(id)).cloned().collect()) }
+
+/// The markers with one changed or put in.
+fn merge_marker(cur: &Value, marker: &Value) -> Value {
+    let mut list = cur.as_array().cloned().unwrap_or_default();
+    match list.iter().position(|m| fx_id(m).is_some() && fx_id(m) == fx_id(marker)) {
+        Some(i) => for k in ["ms", "name"] { if let Some(v) = marker.get(k) { list[i][k] = v.clone(); } },
+        // One that was deleted meanwhile stays deleted: only a whole one goes in.
+        None if marker.get("ms").is_some() && marker.get("name").is_some() => list.push(marker.clone()),
+        None => {}
+    }
+    Value::Array(list)
+}
+
+async fn lane_effects(tx: &mut Transaction<'_, Postgres>, pid: Uuid, lane: Uuid) -> AppResult<Option<Value>> {
+    let row: Option<(SqlJson<Value>,)> = sqlx::query_as("SELECT effects FROM studio_lanes WHERE id = $1 AND project_id = $2").bind(lane).bind(pid).fetch_optional(&mut **tx).await?;
+    Ok(row.map(|r| r.0 .0))
+}
+
+/// A protected lane is its owner's and the crew's: anyone else is refused.
+async fn guard(tx: &mut Transaction<'_, Postgres>, lane: Uuid, uid: Uuid, crew: bool) -> AppResult<()> {
+    if crew { return Ok(()); }
+    let row: Option<(bool, Option<Uuid>)> = sqlx::query_as("SELECT protected, user_id FROM studio_lanes WHERE id = $1").bind(lane).fetch_optional(&mut **tx).await?;
+    if row.is_some_and(|(protected, owner)| protected && owner != Some(uid)) { return Err(AppError::Forbidden); }
+    Ok(())
+}
 
 fn range<T: PartialOrd + Copy>(v: T, lo: T, hi: T, what: &str) -> AppResult<T> {
     if v >= lo && v <= hi { Ok(v) } else { Err(AppError::BadRequest(format!("{what} is out of range"))) }
@@ -520,8 +626,12 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
             let cur = sqlx::query_as::<_, Lane>(&format!("SELECT {LANE_COLS} FROM studio_lanes WHERE id = $1")).bind(l.id).fetch_optional(&mut **tx).await?;
             if cur.as_ref().is_some_and(|c| c.project_id != pid) { return Err(AppError::BadRequest("That lane is in another project".into())); }
             let new = cur.is_none();
+            // A put of some fields for a lane that is not there was meant for one that has been deleted since.
+            if new && l.name.is_none() { return Err(AppError::BadRequest("That track was deleted".into())); }
+            let mine = crew || match &cur { Some(c) => c.user_id == Some(uid), None => l.user_id == Some(Some(uid)) };
+            if cur.as_ref().is_some_and(|c| c.protected) && !mine { return Err(AppError::Forbidden); }
             let mut v = cur.unwrap_or(Lane { id: l.id, project_id: pid, name: "Track".into(), color: None, position: 0.0, gain: 1.0, pan: 0.0, mute: false, solo: false, user_id: None,
-                kind: "audio".into(), effects: SqlJson(json!([])), sends: SqlJson(json!({})), automation: SqlJson(json!({})), output_id: None, nudge_ms: 0, instrument: None, claimed_at: None, input: None, monitor: "off".into(), armed: false, sends_only: false });
+                kind: "audio".into(), effects: SqlJson(json!([])), sends: SqlJson(json!({})), automation: SqlJson(json!({})), output_id: None, nudge_ms: 0, instrument: None, claimed_at: None, input: None, monitor: "off".into(), armed: false, sends_only: false, protected: false });
             // What a lane is stays what it was made as.
             if let Some(k) = l.kind { if new { if !LANE_KINDS.contains(&k.as_str()) { return Err(AppError::BadRequest("Unknown track kind".into())); } v.kind = k; } }
             if let Some(x) = l.effects { v.effects = SqlJson(effects(x)?); }
@@ -545,7 +655,9 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
             if let Some(x) = l.gain { v.gain = finite(x, 0.0, 2.0, "Volume")?; }
             if let Some(x) = l.pan { v.pan = finite(x, -1.0, 1.0, "Pan")?; }
             if let Some(x) = l.mute { v.mute = x; }
-            if let Some(x) = l.solo { v.solo = x; }
+            // Solo is each listener's own: none is stored.
+            let _ = l.solo;
+            v.solo = false;
             // Making a lane someone's makes it where their takes land from now on.
             if let Some(x) = l.user_id {
                 if x.is_some() { v.claimed_at = Some(Utc::now()); v.armed = true; }
@@ -557,13 +669,15 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
             if let Some(x) = l.monitor { if !["in", "auto", "off"].contains(&x.as_str()) { return Err(AppError::BadRequest("Monitor is in, auto or off".into())); } v.monitor = x; }
             if let Some(x) = l.armed { v.armed = x; }
             if let Some(x) = l.sends_only { v.sends_only = x; }
-            sqlx::query("INSERT INTO studio_lanes (id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument, claimed_at, input, monitor, armed, sends_only) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
-                ON CONFLICT (id) DO UPDATE SET name = $3, color = $4, position = $5, gain = $6, pan = $7, mute = $8, solo = $9, user_id = $10, effects = $12, sends = $13, automation = $14, output_id = $15, nudge_ms = $16, instrument = $17, claimed_at = $18, input = $19, monitor = $20, armed = $21, sends_only = $22")
+            if let Some(x) = l.protected { if x != v.protected && !mine { return Err(AppError::Forbidden); } v.protected = x; }
+            sqlx::query("INSERT INTO studio_lanes (id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument, claimed_at, input, monitor, armed, sends_only, protected) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+                ON CONFLICT (id) DO UPDATE SET name = $3, color = $4, position = $5, gain = $6, pan = $7, mute = $8, solo = $9, user_id = $10, effects = $12, sends = $13, automation = $14, output_id = $15, nudge_ms = $16, instrument = $17, claimed_at = $18, input = $19, monitor = $20, armed = $21, sends_only = $22, protected = $23")
                 .bind(v.id).bind(pid).bind(&v.name).bind(&v.color).bind(v.position).bind(v.gain).bind(v.pan).bind(v.mute).bind(v.solo).bind(v.user_id)
-                .bind(&v.kind).bind(&v.effects).bind(&v.sends).bind(&v.automation).bind(v.output_id).bind(v.nudge_ms).bind(&v.instrument).bind(v.claimed_at).bind(&v.input).bind(&v.monitor).bind(v.armed).bind(v.sends_only).execute(&mut **tx).await?;
+                .bind(&v.kind).bind(&v.effects).bind(&v.sends).bind(&v.automation).bind(v.output_id).bind(v.nudge_ms).bind(&v.instrument).bind(v.claimed_at).bind(&v.input).bind(&v.monitor).bind(v.armed).bind(v.sends_only).bind(v.protected).execute(&mut **tx).await?;
             Ok(json!({ "op": "lane.put", "lane": v }))
         }
         Op::LaneDel { id } => {
+            guard(tx, id, uid, crew).await?;
             sqlx::query("DELETE FROM studio_lanes WHERE id = $1 AND project_id = $2").bind(id).bind(pid).execute(&mut **tx).await?;
             // Tracks that went to a deleted bus go to the master; its sends go too (the clients drop them as well).
             sqlx::query("UPDATE studio_lanes SET output_id = NULL WHERE project_id = $1 AND output_id = $2").bind(pid).bind(id).execute(&mut **tx).await?;
@@ -574,13 +688,14 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
             let cur = sqlx::query_as::<_, Clip>(&format!("SELECT {CLIP_COLS} FROM studio_clips WHERE id = $1")).bind(c.id).fetch_optional(&mut **tx).await?;
             if cur.as_ref().is_some_and(|x| x.project_id != pid) { return Err(AppError::BadRequest("That clip is in another project".into())); }
             let mut v = match cur {
-                Some(x) => x,
+                Some(x) => { guard(tx, x.lane_id, uid, crew).await?; x }
                 None => {
-                    let (Some(lane_id), Some(length_ms)) = (c.lane_id, c.length_ms) else { return Err(AppError::BadRequest("A new clip needs a lane and a length".into())) };
+                    // A put of some fields for a clip that is not there was meant for one that has been deleted since.
+                    let (Some(lane_id), Some(length_ms)) = (c.lane_id, c.length_ms) else { return Err(AppError::BadRequest("That clip was deleted".into())) };
                     Clip { id: c.id, project_id: pid, lane_id, audio_id: None, start_ms: 0, in_ms: 0, length_ms, gain: 1.0, fade_in_ms: 0, fade_out_ms: 0, muted: false, created_by: Some(uid), notes: None, group_id: None }
                 }
             };
-            if let Some(x) = c.lane_id { v.lane_id = x; }
+            if let Some(x) = c.lane_id { guard(tx, x, uid, crew).await?; v.lane_id = x; }
             if let Some(x) = c.audio_id { v.audio_id = Some(x); }
             if let Some(x) = c.notes { v.notes = if x.is_null() { None } else { Some(SqlJson(notes(x)?)) }; }
             if let Some(x) = c.group_id { v.group_id = match x.as_str() { None | Some("") => None, Some(g) => Some(g.parse().map_err(|_| AppError::BadRequest("Bad take group".into()))?) }; }
@@ -617,9 +732,39 @@ async fn apply(tx: &mut Transaction<'_, Postgres>, project: &mut Project, uid: U
             Ok(json!({ "op": "clip.put", "clip": v }))
         }
         Op::ClipDel { id } => {
+            if !crew {
+                let lane: Option<(Uuid,)> = sqlx::query_as("SELECT lane_id FROM studio_clips WHERE id = $1 AND project_id = $2").bind(id).bind(pid).fetch_optional(&mut **tx).await?;
+                if let Some((lane,)) = lane { guard(tx, lane, uid, crew).await?; }
+            }
             sqlx::query("DELETE FROM studio_clips WHERE id = $1 AND project_id = $2").bind(id).bind(pid).execute(&mut **tx).await?;
             Ok(json!({ "op": "clip.del", "id": id }))
         }
+        // The ops on what is inside an item: read the list as it stands now, change it, and put the item with it
+        // (which checks it and who may). An item that has gone since is left gone, and said to be.
+        Op::Notes { clip, add, del } => {
+            let cur: Option<(Option<SqlJson<Value>>,)> = sqlx::query_as("SELECT notes FROM studio_clips WHERE id = $1 AND project_id = $2").bind(clip).bind(pid).fetch_optional(&mut **tx).await?;
+            let Some((cur,)) = cur else { return Ok(json!({ "op": "clip.del", "id": clip })) };
+            let merged = merge_notes(cur.map_or(json!([]), |n| n.0), add, del)?;
+            Box::pin(apply(tx, project, uid, crew, Op::ClipPut { clip: ClipPatch { id: clip, notes: Some(merged), ..Default::default() } })).await
+        }
+        Op::Auto { lane, param, add, del } => {
+            let cur: Option<(SqlJson<Value>,)> = sqlx::query_as("SELECT automation FROM studio_lanes WHERE id = $1 AND project_id = $2").bind(lane).bind(pid).fetch_optional(&mut **tx).await?;
+            let Some((cur,)) = cur else { return Ok(json!({ "op": "lane.del", "id": lane })) };
+            let merged = merge_points(&cur.0, &param, add, &del);
+            Box::pin(apply(tx, project, uid, crew, Op::LanePut { lane: LanePatch { id: lane, automation: Some(merged), ..Default::default() } })).await
+        }
+        Op::FxPut { lane: None, effect, at } => { let merged = merge_fx(&project.master_effects.0, &effect, at); Box::pin(apply(tx, project, uid, crew, project_op(Some(merged), None))).await }
+        Op::FxDel { lane: None, id } => { let merged = without_id(&project.master_effects.0, &id); Box::pin(apply(tx, project, uid, crew, project_op(Some(merged), None))).await }
+        Op::FxPut { lane: Some(lane), effect, at } => {
+            let Some(cur) = lane_effects(tx, pid, lane).await? else { return Ok(json!({ "op": "lane.del", "id": lane })) };
+            Box::pin(apply(tx, project, uid, crew, Op::LanePut { lane: LanePatch { id: lane, effects: Some(merge_fx(&cur, &effect, at)), ..Default::default() } })).await
+        }
+        Op::FxDel { lane: Some(lane), id } => {
+            let Some(cur) = lane_effects(tx, pid, lane).await? else { return Ok(json!({ "op": "lane.del", "id": lane })) };
+            Box::pin(apply(tx, project, uid, crew, Op::LanePut { lane: LanePatch { id: lane, effects: Some(without_id(&cur, &id)), ..Default::default() } })).await
+        }
+        Op::MarkerPut { marker } => { let merged = merge_marker(&project.markers.0, &marker); Box::pin(apply(tx, project, uid, crew, project_op(None, Some(merged)))).await }
+        Op::MarkerDel { id } => { let merged = without_id(&project.markers.0, &id); Box::pin(apply(tx, project, uid, crew, project_op(None, Some(merged)))).await }
     }
 }
 
@@ -650,16 +795,29 @@ pub fn tempo_at(bpm: i32, beats: i32, map: &Value, ms: i32) -> (i32, i32) {
 
 /// Apply ops to a project as one change, and tell the studio. The new version and what the ops left. `crew`: may
 /// the one making it rename the project and change its tempo?
-async fn commit(state: &AppState, c: &crate::models::Channel, pid: Uuid, uid: Uuid, crew: bool, ops: Vec<Op>) -> AppResult<(i64, Vec<serde_json::Value>)> {
+///
+/// `batch`: the id its sender gave the change. One that has been applied already is not applied again: the answer
+/// is the version it made, no ops, and `true`.
+async fn commit(state: &AppState, c: &crate::models::Channel, pid: Uuid, uid: Uuid, crew: bool, batch: Option<Uuid>, ops: Vec<Op>) -> AppResult<(i64, Vec<serde_json::Value>, bool)> {
     let lock = project_lock(pid);
     let _held = lock.lock().await;
+    // Before the change, and outside its transaction (a version refers to the project's row, which that locks).
+    autosave(state, c, pid, uid).await;
     let mut tx = state.db.begin().await?;
     let mut project = sqlx::query_as::<_, Project>(&format!("SELECT {PROJECT_COLS} FROM studio_projects WHERE id = $1 FOR UPDATE")).bind(pid).fetch_optional(&mut *tx).await?
         .ok_or_else(|| AppError::NotFound("Project not found".into()))?;
+    if let Some(b) = batch {
+        let done: Option<(i64,)> = sqlx::query_as("SELECT version FROM studio_op_batches WHERE id = $1 AND project_id = $2").bind(b).bind(pid).fetch_optional(&mut *tx).await?;
+        if let Some((version,)) = done { return Ok((version, Vec::new(), true)); }
+    }
     let (tempo, name) = ((project.bpm, project.beats), project.name.clone());
     let mut out = Vec::with_capacity(ops.len());
     for op in ops { out.push(apply(&mut tx, &mut project, uid, crew, op).await?); }
     let (version,): (i64,) = sqlx::query_as("UPDATE studio_projects SET version = version + 1, updated_at = now() WHERE id = $1 RETURNING version").bind(pid).fetch_one(&mut *tx).await?;
+    if let Some(b) = batch {
+        sqlx::query("INSERT INTO studio_op_batches (id, project_id, version) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING").bind(b).bind(pid).bind(version).execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM studio_op_batches WHERE project_id = $1 AND created_at < now() - interval '1 day'").bind(pid).execute(&mut *tx).await?;
+    }
     tx.commit().await?;
     broadcast(state, c, "STUDIO_PROJECT", json!({ "channel_id": c.id, "project_id": pid, "version": version, "by": uid, "ops": out })).await?;
     // The channel shows the project's name, and its console the project's tempo.
@@ -668,18 +826,18 @@ async fn commit(state: &AppState, c: &crate::models::Channel, pid: Uuid, uid: Uu
         broadcast(state, &updated, "CHANNEL_UPDATE", json!(updated)).await?;
     }
     if project.name != name { if let Some(sid) = c.parent_id { if let Ok(studio) = channel_json(state, sid).await { broadcast(state, &studio, "STUDIO_PROJECTS", json!({ "channel_id": sid })).await?; } } }
-    Ok((version, out))
+    Ok((version, out, false))
 }
 
-/// `POST /studio/projects/:pid/ops {ops}`: apply edits (all or none).
+/// `POST /studio/projects/:pid/ops {id, ops}`: apply edits (all or none). `repeat`: this batch had been applied.
 async fn apply_ops(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(pid): Path<Uuid>, Json(req): Json<OpsReq>) -> AppResult<Json<serde_json::Value>> {
     if req.ops.is_empty() || req.ops.len() > MAX_OPS { return Err(AppError::BadRequest(format!("Send 1 to {MAX_OPS} ops"))); }
     let project = project_row(&state.db, pid).await?;
     let (c, p) = studio_channel(&state.db, project.channel_id, uid).await?;
     if !can_edit(&state, c.id, uid, p).await? { return Err(AppError::Forbidden); }
     let crew = is_crew(&state, c.id, uid, p).await?;
-    let (version, ops) = commit(&state, &c, pid, uid, crew, req.ops).await?;
-    Ok(Json(json!({ "version": version, "ops": ops })))
+    let (version, ops, repeat) = commit(&state, &c, pid, uid, crew, req.id, req.ops).await?;
+    Ok(Json(json!({ "version": version, "ops": ops, "repeat": repeat })))
 }
 
 /// The studio's tempo changed on the console: the open project follows.
@@ -687,7 +845,7 @@ pub async fn set_tempo(state: &AppState, pid: Uuid, uid: Uuid, bpm: i32, beats: 
     let project = project_row(&state.db, pid).await?;
     if (project.bpm, project.beats) == (bpm, beats) { return Ok(()); }
     let c = channel_json(state, project.channel_id).await?;
-    commit(state, &c, pid, uid, true, vec![Op::Project { name: None, bpm: Some(bpm), beats: Some(beats), master_gain: None, master_effects: None, tempo_map: None, loop_on: None, loop_start_ms: None, loop_end_ms: None, clear_loop: None, punch_on: None, markers: None }]).await?;
+    commit(state, &c, pid, uid, true, None, vec![Op::Project { name: None, bpm: Some(bpm), beats: Some(beats), master_gain: None, master_effects: None, tempo_map: None, loop_on: None, loop_start_ms: None, loop_end_ms: None, clear_loop: None, punch_on: None, markers: None }]).await?;
     Ok(())
 }
 
@@ -751,7 +909,7 @@ pub async fn place_take(state: &AppState, c: &crate::models::Channel, sid: Uuid,
         None => {
             let (next,): (Option<f32>,) = sqlx::query_as("SELECT (MAX(position) + 1)::real FROM studio_lanes WHERE project_id = $1").bind(pid).fetch_one(&state.db).await?;
             let id = Uuid::now_v7();
-            ops.push(Op::LanePut { lane: LanePatch { id, name: Some(t.display_name.clone()), color: None, position: Some(next.unwrap_or(0.0)), gain: None, pan: None, mute: None, solo: None, user_id: Some(Some(uid)), kind: None, effects: None, sends: None, automation: None, output_id: None, nudge_ms: None, instrument: None, input: None, monitor: None, armed: Some(true), sends_only: None } });
+            ops.push(Op::LanePut { lane: LanePatch { id, name: Some(t.display_name.clone()), color: None, position: Some(next.unwrap_or(0.0)), gain: None, pan: None, mute: None, solo: None, user_id: Some(Some(uid)), kind: None, effects: None, sends: None, automation: None, output_id: None, nudge_ms: None, instrument: None, input: None, monitor: None, armed: Some(true), sends_only: None, protected: None } });
             id
         }
     };
@@ -761,7 +919,7 @@ pub async fn place_take(state: &AppState, c: &crate::models::Channel, sid: Uuid,
     for x in &takes {
         ops.push(Op::ClipPut { clip: ClipPatch { id: Uuid::now_v7(), lane_id: Some(lane_id), audio_id: Some(t.id), start_ms: Some(x.start_ms), in_ms: Some(x.in_ms), length_ms: Some(x.length_ms), gain: None, fade_in_ms: None, fade_out_ms: None, muted: Some(x.muted), notes: None, group_id: group.filter(|_| x.grouped).map(|g| json!(g.to_string())) } });
     }
-    commit(state, c, pid, uid, true, ops).await?;
+    commit(state, c, pid, uid, true, None, ops).await?;
     Ok(())
 }
 
@@ -776,7 +934,7 @@ pub async fn extend_take(state: &AppState, c: &crate::models::Channel, sid: Uuid
     let clips: Vec<(Uuid, i32)> = sqlx::query_as("SELECT id, in_ms FROM studio_clips WHERE audio_id = $1 AND project_id = $2 AND in_ms + length_ms = $3").bind(t.id).bind(pid).bind(was_ms).fetch_all(&state.db).await?;
     if clips.is_empty() { return Ok(()); }
     let ops = clips.into_iter().map(|(id, in_ms)| Op::ClipPut { clip: ClipPatch { id, lane_id: None, audio_id: None, start_ms: None, in_ms: None, length_ms: Some(dur - in_ms), gain: None, fade_in_ms: None, fade_out_ms: None, muted: None, notes: None, group_id: None } }).collect();
-    commit(state, c, pid, uid, true, ops).await?;
+    commit(state, c, pid, uid, true, None, ops).await?;
     Ok(())
 }
 
@@ -826,11 +984,94 @@ async fn import_audio(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 
 #[cfg(test)]
 mod tests {
-    use super::{automation, effects, markers, notes, sends, take_clips, tempo_at, tempo_map, TakeClip};
+    use super::{automation, autosave_due, effects, markers, merge_fx, merge_marker, merge_notes, merge_points, notes, sends, take_clips, tempo_at, tempo_map, without_id, TakeClip};
     use serde_json::json;
 
     fn one(start_ms: i32, in_ms: i32, length_ms: i32) -> TakeClip { TakeClip { start_ms, in_ms, length_ms, grouped: false, muted: false } }
     fn pass(start_ms: i32, in_ms: i32, length_ms: i32, muted: bool) -> TakeClip { TakeClip { start_ms, in_ms, length_ms, grouped: true, muted } }
+
+    fn note(p: i64, t: i64) -> serde_json::Value { json!({ "p": p, "t": t, "d": 100, "v": 100 }) }
+
+    #[test]
+    fn notes_two_members_put_into_one_clip_are_both_kept() {
+        let start = json!([note(60, 0)]);
+        // Each adds one, knowing only the clip as it was.
+        let after_a = merge_notes(start, vec![note(62, 100)], vec![]).unwrap();
+        let after_b = merge_notes(after_a, vec![note(64, 200)], vec![]).unwrap();
+        assert_eq!(after_b, json!([note(60, 0), note(62, 100), note(64, 200)]));
+    }
+
+    #[test]
+    fn a_note_changed_keeps_its_place_and_one_already_gone_is_left_gone() {
+        let start = json!([note(60, 0), note(62, 100), note(64, 200)]);
+        // Moved: taken out and put in at the same place in the two lists.
+        let moved = merge_notes(start.clone(), vec![note(62, 150)], vec![note(62, 100)]).unwrap();
+        assert_eq!(moved, json!([note(60, 0), note(62, 150), note(64, 200)]));
+        // Taken out twice (two members deleted it): once is all there is to take.
+        let once = merge_notes(start.clone(), vec![], vec![note(62, 100)]).unwrap();
+        assert_eq!(merge_notes(once.clone(), vec![], vec![note(62, 100)]).unwrap(), once);
+        // Of two equal notes one goes.
+        assert_eq!(merge_notes(json!([note(60, 0), note(60, 0)]), vec![], vec![note(60, 0)]).unwrap(), json!([note(60, 0)]));
+        // A velocity left out is the default, as in the clip.
+        assert_eq!(merge_notes(start, vec![], vec![json!({ "p": 60, "t": 0, "d": 100 })]).unwrap(), json!([note(62, 100), note(64, 200)]));
+        // What is put in is checked like any note.
+        assert!(merge_notes(json!([]), vec![json!({ "p": 200, "t": 0, "d": 1 })], vec![]).is_err());
+    }
+
+    #[test]
+    fn points_two_members_put_on_one_parameter_are_both_kept() {
+        let start = json!({ "gain": [[0, 1.0]], "pan": [[0, 0.0]] });
+        let a = merge_points(&start, "gain", vec![json!([2000, 0.5])], &[]);
+        let b = merge_points(&a, "gain", vec![json!([1000, 0.25])], &[]);
+        assert_eq!(automation(b.clone()).unwrap(), json!({ "gain": [[0, 1.0], [1000, 0.25], [2000, 0.5]], "pan": [[0, 0.0]] }));
+        // One moved by one member while the other's stays.
+        let c = merge_points(&b, "gain", vec![json!([2500, 0.5])], &[json!([2000, 0.5])]);
+        assert_eq!(automation(c.clone()).unwrap()["gain"], json!([[0, 1.0], [1000, 0.25], [2500, 0.5]]));
+        // The last point of a parameter taken off: the parameter goes.
+        let d = merge_points(&c, "pan", vec![], &[json!([0, 0.0])]);
+        assert!(automation(d).unwrap().get("pan").is_none());
+        // A parameter nobody had automated yet.
+        assert_eq!(automation(merge_points(&json!({}), "pan", vec![json!([10, -1.0])], &[])).unwrap(), json!({ "pan": [[10, -1.0]] }));
+    }
+
+    #[test]
+    fn an_effect_changed_by_one_member_keeps_what_another_changed() {
+        let chain = json!([{ "id": "a", "type": "eq", "on": true, "params": { "low": 0.0, "high": 0.0 } }, { "id": "b", "type": "delay", "on": true, "params": {} }]);
+        let one = merge_fx(&chain, &json!({ "id": "a", "params": { "low": 3.0 } }), None);
+        let two = merge_fx(&one, &json!({ "id": "a", "params": { "high": -2.0 } }), None);
+        assert_eq!(two[0]["params"], json!({ "low": 3.0, "high": -2.0 }));
+        // Switched off without touching its parameters.
+        assert_eq!(merge_fx(&two, &json!({ "id": "a", "on": false }), None)[0], json!({ "id": "a", "type": "eq", "on": false, "params": { "low": 3.0, "high": -2.0 } }));
+        // A new one goes where it is put, or at the end; one that is there moves.
+        let added = merge_fx(&two, &json!({ "id": "c", "type": "gate", "on": true, "params": {} }), Some(0));
+        assert_eq!(added.as_array().unwrap().iter().map(|e| e["id"].as_str().unwrap()).collect::<Vec<_>>(), ["c", "a", "b"]);
+        let moved = merge_fx(&added, &json!({ "id": "c" }), Some(9));
+        assert_eq!(moved.as_array().unwrap().iter().map(|e| e["id"].as_str().unwrap()).collect::<Vec<_>>(), ["a", "b", "c"]);
+        // A change to one that was deleted meanwhile does not bring it back.
+        let gone = without_id(&moved, "b");
+        assert_eq!(merge_fx(&gone, &json!({ "id": "b", "params": { "time": 1.0 } }), None), gone);
+        assert!(effects(merge_fx(&gone, &json!({ "id": "d", "type": "reverb" }), None)).is_ok());
+    }
+
+    #[test]
+    fn markers_are_changed_one_at_a_time() {
+        let list = json!([{ "id": "m1", "ms": 0, "name": "Intro" }]);
+        let two = merge_marker(&list, &json!({ "id": "m2", "ms": 8000, "name": "Verse" }));
+        let renamed = merge_marker(&two, &json!({ "id": "m1", "name": "Start" }));
+        assert_eq!(markers(renamed.clone()).unwrap(), json!([{ "id": "m1", "ms": 0, "name": "Start" }, { "id": "m2", "ms": 8000, "name": "Verse" }]));
+        // A rename of one that was deleted meanwhile does nothing.
+        assert_eq!(merge_marker(&without_id(&renamed, "m2"), &json!({ "id": "m2", "name": "Chorus" })), json!([{ "id": "m1", "ms": 0, "name": "Start" }]));
+    }
+
+    #[test]
+    fn a_version_is_due_when_none_was_saved_for_the_interval() {
+        let now = chrono::Utc::now();
+        let every = std::time::Duration::from_secs(600);
+        assert!(!autosave_due(0, None, now, every), "an untouched project has nothing to save");
+        assert!(autosave_due(3, None, now, every));
+        assert!(!autosave_due(3, Some(now - chrono::Duration::seconds(599)), now, every));
+        assert!(autosave_due(3, Some(now - chrono::Duration::seconds(600)), now, every));
+    }
 
     #[test]
     fn the_tempo_at_a_moment_follows_the_tempo_map() {
@@ -1001,13 +1242,52 @@ async fn delete_comment(State(state): State<AppState>, AuthUser(uid): AuthUser, 
 }
 
 #[derive(Debug, Serialize, FromRow)]
-pub struct Version { id: Uuid, project_id: Uuid, name: String, created_by: Option<Uuid>, created_at: DateTime<Utc> }
+pub struct Version { id: Uuid, project_id: Uuid, name: String, created_by: Option<Uuid>, created_at: DateTime<Utc>,
+    /// Saved by the server while the project was being edited, not by a member.
+    auto: bool }
 const MAX_VERSIONS: i64 = 100;
+/// The server's own versions are kept apart from the members', and fewer of them.
+const MAX_AUTO_VERSIONS: i64 = 20;
+const VERSION_COLS: &str = "id, project_id, name, created_by, created_at, auto";
+
+/// How long a project is edited before the server saves a version of it by itself (`STUDIO_AUTOSAVE_SECS`).
+fn autosave_every() -> std::time::Duration {
+    static EVERY: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    std::time::Duration::from_secs(*EVERY.get_or_init(|| std::env::var("STUDIO_AUTOSAVE_SECS").ok().and_then(|v| v.parse().ok()).filter(|s| *s > 0).unwrap_or(600)))
+}
+
+/// Is a version due? There is something to save, and nothing was saved (by anyone) for `every`.
+fn autosave_due(version: i64, last: Option<DateTime<Utc>>, now: DateTime<Utc>, every: std::time::Duration) -> bool {
+    version > 0 && last.is_none_or(|t| (now - t).num_milliseconds() >= every.as_millis() as i64)
+}
+
+/// A project about to be changed gets a version of how it is, if none was saved for a while: an edit that turns out
+/// wrong an hour later has something to go back to. Asked of the database at most once a minute per project on this
+/// instance. A failure is logged and the edit goes on.
+async fn autosave(state: &AppState, c: &crate::models::Channel, pid: Uuid, uid: Uuid) {
+    static CHECKED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<Uuid, std::time::Instant>>> = std::sync::OnceLock::new();
+    let every = autosave_every();
+    {
+        let mut map = CHECKED.get_or_init(Default::default).lock().unwrap();
+        if map.get(&pid).is_some_and(|t| t.elapsed() < every.min(std::time::Duration::from_secs(60))) { return; }
+        if map.len() > 4096 { map.retain(|_, t| t.elapsed() < every); }
+        map.insert(pid, std::time::Instant::now());
+    }
+    let run = async {
+        let row: Option<(i64, Option<DateTime<Utc>>)> = sqlx::query_as("SELECT p.version, (SELECT MAX(created_at) FROM studio_versions WHERE project_id = p.id) FROM studio_projects p WHERE p.id = $1").bind(pid).fetch_optional(&state.db).await?;
+        let Some((version, last)) = row else { return Ok(()) };
+        if !autosave_due(version, last, Utc::now(), every) { return Ok(()); }
+        store_version(&state.db, pid, uid, &format!("Autosave {}", Utc::now().format("%Y-%m-%d %H:%M")), true).await?;
+        broadcast(state, c, "STUDIO_VERSIONS", json!({ "channel_id": c.id, "project_id": pid })).await
+    };
+    let res: AppResult<()> = run.await;
+    if let Err(e) = res { tracing::warn!(error = ?e, project = %pid, "could not save a version of a studio project"); }
+}
 
 async fn list_versions(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(pid): Path<Uuid>) -> AppResult<Json<Vec<Version>>> {
     let project = project_row(&state.db, pid).await?;
     studio_channel(&state.db, project.channel_id, uid).await?;
-    Ok(Json(sqlx::query_as::<_, Version>("SELECT id, project_id, name, created_by, created_at FROM studio_versions WHERE project_id = $1 ORDER BY created_at DESC").bind(pid).fetch_all(&state.db).await?))
+    Ok(Json(sqlx::query_as::<_, Version>(&format!("SELECT {VERSION_COLS} FROM studio_versions WHERE project_id = $1 ORDER BY created_at DESC")).bind(pid).fetch_all(&state.db).await?))
 }
 
 /// The project as it is: its settings, lanes and clips.
@@ -1018,12 +1298,13 @@ async fn snapshot(db: &sqlx::PgPool, pid: Uuid) -> AppResult<Value> {
     Ok(json!({ "project": { "bpm": p.bpm, "beats": p.beats, "master_gain": p.master_gain, "master_effects": p.master_effects, "tempo_map": p.tempo_map, "loop_on": p.loop_on, "loop_start_ms": p.loop_start_ms, "loop_end_ms": p.loop_end_ms, "punch_on": p.punch_on, "markers": p.markers }, "lanes": lanes, "clips": clips }))
 }
 
-async fn store_version(db: &sqlx::PgPool, pid: Uuid, uid: Uuid, name: &str) -> AppResult<Version> {
+async fn store_version(db: &sqlx::PgPool, pid: Uuid, uid: Uuid, name: &str, auto: bool) -> AppResult<Version> {
     let data = snapshot(db, pid).await?;
-    let v = sqlx::query_as::<_, Version>("INSERT INTO studio_versions (id, project_id, name, created_by, data) VALUES ($1, $2, $3, $4, $5) RETURNING id, project_id, name, created_by, created_at")
-        .bind(Uuid::now_v7()).bind(pid).bind(name).bind(uid).bind(&data).fetch_one(db).await?;
-    // The oldest go once there are too many.
-    sqlx::query("DELETE FROM studio_versions WHERE project_id = $1 AND id NOT IN (SELECT id FROM studio_versions WHERE project_id = $1 ORDER BY created_at DESC LIMIT $2)").bind(pid).bind(MAX_VERSIONS).execute(db).await?;
+    let v = sqlx::query_as::<_, Version>(&format!("INSERT INTO studio_versions (id, project_id, name, created_by, data, auto) VALUES ($1, $2, $3, $4, $5, $6) RETURNING {VERSION_COLS}"))
+        .bind(Uuid::now_v7()).bind(pid).bind(name).bind(uid).bind(&data).bind(auto).fetch_one(db).await?;
+    // The oldest of its kind go once there are too many: the server's never push out a member's.
+    sqlx::query("DELETE FROM studio_versions WHERE project_id = $1 AND auto = $3 AND id NOT IN (SELECT id FROM studio_versions WHERE project_id = $1 AND auto = $3 ORDER BY created_at DESC LIMIT $2)")
+        .bind(pid).bind(if auto { MAX_AUTO_VERSIONS } else { MAX_VERSIONS }).bind(auto).execute(db).await?;
     Ok(v)
 }
 
@@ -1034,7 +1315,7 @@ struct NewVersion { #[serde(default)] name: String }
 async fn save_version(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(pid): Path<Uuid>, Json(req): Json<NewVersion>) -> AppResult<(StatusCode, Json<Version>)> {
     let project = project_row(&state.db, pid).await?;
     let c = editor(&state, project.channel_id, uid).await?;
-    let v = store_version(&state.db, pid, uid, &clean_name(&req.name, &format!("Version {}", Utc::now().format("%Y-%m-%d %H:%M")))).await?;
+    let v = store_version(&state.db, pid, uid, &clean_name(&req.name, &format!("Version {}", Utc::now().format("%Y-%m-%d %H:%M"))), false).await?;
     broadcast(&state, &c, "STUDIO_VERSIONS", json!({ "channel_id": c.id, "project_id": pid })).await?;
     Ok((StatusCode::CREATED, Json(v)))
 }
@@ -1046,7 +1327,7 @@ async fn restore_version(State(state): State<AppState>, AuthUser(uid): AuthUser,
     let Some((pid, name, data)) = row else { return Err(AppError::NotFound("Version not found".into())) };
     let project = project_row(&state.db, pid).await?;
     let c = editor(&state, project.channel_id, uid).await?;
-    store_version(&state.db, pid, uid, &clean_name(&format!("Before restoring {name}"), "Before restoring")).await?;
+    store_version(&state.db, pid, uid, &clean_name(&format!("Before restoring {name}"), "Before restoring"), false).await?;
     let lock = project_lock(pid);
     let _held = lock.lock().await;
     let mut tx = state.db.begin().await?;
@@ -1059,9 +1340,9 @@ async fn restore_version(State(state): State<AppState>, AuthUser(uid): AuthUser,
         .execute(&mut *tx).await?;
     sqlx::query("DELETE FROM studio_lanes WHERE project_id = $1").bind(pid).execute(&mut *tx).await?;
     for l in data["lanes"].as_array().cloned().unwrap_or_default() {
-        sqlx::query("INSERT INTO studio_lanes (id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument, claimed_at, input, monitor, armed, sends_only)
-            SELECT x.id, $1, x.name, x.color, x.position, x.gain, x.pan, x.mute, x.solo, x.user_id, x.kind, x.effects, x.sends, x.automation, x.output_id, x.nudge_ms, x.instrument, x.claimed_at, x.input, COALESCE(x.monitor, 'off'), COALESCE(x.armed, false), COALESCE(x.sends_only, false)
-            FROM jsonb_to_record($2) AS x(id uuid, name text, color text, position real, gain real, pan real, mute bool, solo bool, user_id uuid, kind text, effects jsonb, sends jsonb, automation jsonb, output_id uuid, nudge_ms int, instrument jsonb, claimed_at timestamptz, input jsonb, monitor text, armed bool, sends_only bool)
+        sqlx::query("INSERT INTO studio_lanes (id, project_id, name, color, position, gain, pan, mute, solo, user_id, kind, effects, sends, automation, output_id, nudge_ms, instrument, claimed_at, input, monitor, armed, sends_only, protected)
+            SELECT x.id, $1, x.name, x.color, x.position, x.gain, x.pan, x.mute, false, x.user_id, x.kind, x.effects, x.sends, x.automation, x.output_id, x.nudge_ms, x.instrument, x.claimed_at, x.input, COALESCE(x.monitor, 'off'), COALESCE(x.armed, false), COALESCE(x.sends_only, false), COALESCE(x.protected, false)
+            FROM jsonb_to_record($2) AS x(id uuid, name text, color text, position real, gain real, pan real, mute bool, solo bool, user_id uuid, kind text, effects jsonb, sends jsonb, automation jsonb, output_id uuid, nudge_ms int, instrument jsonb, claimed_at timestamptz, input jsonb, monitor text, armed bool, sends_only bool, protected bool)
             WHERE x.user_id IS NULL OR EXISTS (SELECT 1 FROM users WHERE id = x.user_id)")
             .bind(pid).bind(&l).execute(&mut *tx).await?;
     }

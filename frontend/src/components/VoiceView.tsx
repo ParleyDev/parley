@@ -81,8 +81,9 @@ export default function VoiceView({ channel }: { channel: Channel }) {
   const artists = channel.artist_ids ?? []
   const rights = isStudio ? projectRights(channel) : null
   const isEngineer = !!rights?.engineer
-  // The console: the band and project managers, in the voice room or not (they edit the project any time).
-  const hasConsole = !!rights?.edit
+  // The console: the band and project managers edit the project any time, in the voice room or not; everyone else
+  // who sees the project reads it there (the editor says so and refuses their edits, as the server does).
+  const hasConsole = !!rights
   // Stage moderators: Manage Channels, or Mute + Move Members on this stage (backend perms::stage_mod).
   const isMod = has(perms, P.MANAGE_CHANNELS) || (has(perms, P.MUTE_MEMBERS) && has(perms, P.MOVE_MEMBERS)) || !!rights?.manage
   // The engineer's console (StudioConsole) takes the stage, with the band's tiles in a strip; open by default.

@@ -37,12 +37,12 @@ export function VersionsPanel({ close }: { close: () => void }) {
   const project = useDaw((s) => s.project)
   const pushToast = useStore((s) => s.pushToast)
   const openModal = useStore((s) => s.openModal)
-  const [list, setList] = useState<{ id: string; name: string; created_at: string }[] | null>(null)
+  const [list, setList] = useState<{ id: string; name: string; created_at: string; auto?: boolean }[] | null>(null)
   const [name, setName] = useState('')
   const pid = project?.id
   useEffect(() => {
     if (!pid) return
-    const load = () => void api.get<{ id: string; name: string; created_at: string }[]>(`/studio/projects/${pid}/versions`).then(setList).catch(() => {})
+    const load = () => void api.get<{ id: string; name: string; created_at: string; auto?: boolean }[]>(`/studio/projects/${pid}/versions`).then(setList).catch(() => {})
     load()
     const on = (e: Event) => { if ((e as CustomEvent).detail === pid) load() }
     window.addEventListener('parley-studio-versions', on)
@@ -59,7 +59,7 @@ export function VersionsPanel({ close }: { close: () => void }) {
       {list?.length === 0 && <p className="text-xs text-text-2">{t('No versions yet. Save one before a big change to come back to it.')}</p>}
       {list?.map((v) => (
         <div key={v.id} className="group mb-1 flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-bg-3" data-daw-version={v.id}>
-          <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{v.name}</span><span className="text-[10px] text-text-2">{new Date(v.created_at).toLocaleString()}</span></span>
+          <span className="min-w-0 flex-1"><span className="block truncate font-semibold">{v.name}</span><span className="text-[10px] text-text-2">{new Date(v.created_at).toLocaleString()}{v.auto && <span data-daw-version-auto> · {t('Saved automatically')}</span>}</span></span>
           <button type="button" title={t('Restore')} onClick={() => openModal({ kind: 'confirm', title: t('Restore {name}?', { name: v.name }), body: t('The project goes back to how it was in this version, for everyone. How it is now is saved as a version first.'), confirmLabel: t('Restore'), action: async () => { try { await api.post(`/studio/versions/${v.id}/restore`) ; pushToast(t('Restored {name}', { name: v.name })) } catch (e) { fail(e) } } })} className="text-text-2 hover:text-text-0" data-daw-version-restore><RotateCcw size={14} /></button>
           <button type="button" title={t('Delete')} onClick={() => api.delete(`/studio/versions/${v.id}`).catch(fail)} className="hidden text-text-2 hover:text-danger group-hover:block"><Trash2 size={14} /></button>
         </div>

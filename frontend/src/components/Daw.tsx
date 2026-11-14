@@ -1,4 +1,4 @@
-import { Activity, Archive, Link2, CalendarClock, Mic, Disc3, Users, ArrowLeft, ChevronDown, Pencil, Copy, Download, Flag, FolderOpen, History, Keyboard, Layers, Magnet, MessageSquare, Metronome, Music, Piano, Plus, Redo2, Repeat, Rows3, Scissors, SkipBack, SlidersVertical, Square, Play, Trash2, Undo2, Upload, X, Cloud, CloudOff, CloudUpload, ZoomIn, ZoomOut, Gauge, Cable, Headphones, ArrowUp, ArrowDown, ListTree } from 'lucide-react'
+import { Activity, Archive, Link2, CalendarClock, Mic, Disc3, Users, ArrowLeft, ChevronDown, Pencil, Copy, Download, Flag, FolderOpen, History, Keyboard, Layers, Lock, Magnet, MessageSquare, Metronome, Music, Piano, Plus, Redo2, Repeat, Rows3, Scissors, SkipBack, SlidersVertical, Square, Play, Trash2, Undo2, Upload, X, Cloud, CloudOff, CloudUpload, ZoomIn, ZoomOut, Gauge, Cable, Headphones, ArrowUp, ArrowDown, ListTree } from 'lucide-react'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as RPointerEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
@@ -6,7 +6,7 @@ import { STORAGE_PREFIX } from '../lib/brand'
 import '../lib/monitor'
 import { deleteProject, projectRights, TAGS, tagOf, updateProject } from '../lib/projects'
 import { useNavigate } from 'react-router-dom'
-import { audible, armLane, takeLane, setFollow, sharedTransport, clipEnd, edit, editLive, engine, importFiles, loadProject, newId, projectEnd, redo, sharePresence, sortedLanes, undo, useDaw, type Op } from '../lib/daw'
+import { audible, armLane, takeLane, setFollow, sharedTransport, clipEnd, edit, editLive, engine, importFiles, loadProject, newId, projectEnd, redo, setOpen as setStudioOpen, sharePresence, sortedLanes, undo, useDaw, type Op } from '../lib/daw'
 import { defaultInstrument, type Note } from '../lib/instruments'
 import { armMidi, connectMidi, useMidi } from '../lib/midi'
 import { useT } from '../lib/i18n'
@@ -103,10 +103,14 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   at.current = stopped
   const now = useCallback(() => (engine.playing ? engine.position() : at.current), [])
   const ordered = useMemo(() => sortedLanes(lanes), [lanes])
-  const band = participants.filter((p) => !p.suppress)
-  const bandKey = band.map((b) => b.user_id).join()
+  // Who a take records: the band in the call, and whoever the take armed (a member records outside the call too).
+  const bandKey = [...new Set([...participants.filter((p) => !p.suppress).map((b) => b.user_id), ...(live?.armed ?? [])])].join()
   const bandIds = useMemo(() => (bandKey ? bandKey.split(',') : []), [bandKey])
-  const inBand = !!me && band.some((p) => p.user_id === me.id)
+  // Recording is the band's, in the call or not.
+  const rights = projectRights(channel)
+  const inBand = rights.engineer || rights.artist
+  // The project on this page is where I record when I am in no call (lib/daw `room`).
+  useEffect(() => { setStudioOpen(channel.id); return () => setStudioOpen(null) }, [channel.id])
 
   const [view, setView] = useState<'arrange' | 'mixer'>(() => { try { return localStorage.getItem(VIEW_KEY) === 'mixer' || (phone && localStorage.getItem(VIEW_KEY) !== 'arrange') ? 'mixer' : 'arrange' } catch { return 'arrange' } })
   const changeView = (v: 'arrange' | 'mixer') => { setView(v); try { localStorage.setItem(VIEW_KEY, v) } catch { /* ignore */ } }
@@ -159,15 +163,8 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
     setBusy(true)
     try {
       if (live) await api.post(`/channels/${channel.id}/studio/sessions/${live.id}/stop`)
-      else {
-        // Takes are recorded by the people in the session: clicking Record from outside it joins it first.
-        const inRoom = () => { const st = useStore.getState(), v = st.user ? st.voiceStates[st.user.id] : undefined; return v?.channel_id === channel.id }
-        if (!inRoom()) {
-          await voice.join(channel.id)
-          await new Promise<void>((ok, no) => { if (inRoom()) return ok(); const t0 = setTimeout(() => { un(); no(new Error(t('Could not join the session'))) }, 15000); const un = useStore.subscribe(() => { if (inRoom()) { clearTimeout(t0); un(); ok() } }) })
-        }
-        engine.stop(); await startTake(channel.id, '', stopped * 1000, solo)
-      }
+      // Takes are recorded by the band on their own devices, with the project open: no call is needed for one.
+      else { engine.stop(); await startTake(channel.id, '', stopped * 1000, solo) }
     } catch (e) { pushToast((e as Error).message, 'error') } finally { setBusy(false) }
   }
   // When a take ends the playhead stays where recording stopped.
@@ -401,6 +398,7 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
         ? <Arrangement {...{ channel, project, ordered, lanes, clips, audio, pps, zoom, now, stopped, running: !!playing, live: !!live, liveSince: live ? (live.position_ms ?? 0) / 1000 : 0, liveSolo: live?.solo ? live.started_by : null, sel, setSel, seek, snapMs, band: bandIds, crew, users, phone, autoOpen, setAutoOpen, newMidiClip, setRoll, midiLane: midi.lane, peers: peerList, peerColor, comments, openComments: () => setPanel('comments') }} />
         : <DawMixer ordered={ordered} lanes={lanes} project={project} channelId={channel.id} users={users} />}
       {rollClip && lanes[rollClip.lane_id] && <PianoRoll clip={rollClip} lane={lanes[rollClip.lane_id]} project={project} close={() => setRoll(null)} />}
+      {!rights.edit && <p className="shrink-0 border-t border-line bg-bg-2 px-3 py-1.5 text-xs text-text-2" data-daw-readonly>{t('You are listening in: you can play the project, follow the band and comment. Only the band edits it.')}</p>}
       {ordered.length === 0 && <p className="shrink-0 px-3 py-2 text-xs text-text-2" data-daw-empty>{recordable ? t('Record a take, import a backing track to record over, or add a MIDI track to write parts.') : t('Import a backing track, or ask an engineer to record a take.')}</p>}
       {panel === 'comments' && <CommentsPanel now={now} seek={seek} close={() => setPanel(null)} />}
       {panel === 'versions' && <VersionsPanel close={() => setPanel(null)} />}
@@ -930,6 +928,7 @@ const LaneHead = memo(function LaneHead({ l, i, h, extra, has, takes, takesOn, f
           {naming !== null
             ? <input autoFocus value={naming} maxLength={80} onChange={(e) => setNaming(e.target.value)} onBlur={() => { if (naming.trim() && naming !== l.name) edit([{ op: 'lane.put', lane: { id: l.id, name: naming.trim() } }]); setNaming(null) }} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setNaming(null) }} className="input h-6 min-w-0 flex-1 px-1 text-sm" aria-label={t('Track name')} data-daw-lane-name-input />
             : <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={t('{name} (double-click to rename)', { name: l.name })} onDoubleClick={() => setNaming(l.name)} data-daw-lane-name>{l.name}</span>}
+          {l.protected && <span className="shrink-0 text-text-2" title={t('Protected: only its owner and the engineers change it')} data-daw-protected={l.id}><Lock size={11} /></span>}
           {input && <span className={`max-w-[45%] shrink-0 truncate text-[9px] ${input.error ? 'text-danger' : input.processed ? 'text-warn' : 'text-text-2'}`} title={input.error ?? (input.processed ? t('{name}: through the call\'s voice processing (turn off echo cancellation, noise suppression and gain control for a clean take)', { name: input.name }) : t('Input: {name}', { name: input.name }))} data-daw-input={l.id} data-processed={input.processed ? '1' : undefined}>{input.error ? t('No input') : input.name}</span>}
           {!phone && <button type="button" onClick={() => setMenu(!menu)} title={t('Track settings')} className="h-5 w-5 shrink-0 rounded text-text-2 hover:bg-bg-3 hover:text-text-0" data-daw-lane-menu>⋯</button>}
         </div>
@@ -955,6 +954,7 @@ const LaneHead = memo(function LaneHead({ l, i, h, extra, has, takes, takesOn, f
             <div className="pop absolute left-full top-0 z-40 ml-1 w-56 rounded-lg border border-line bg-bg-1 p-2 text-xs shadow-xl" data-daw-lane-settings={l.id}>
               <div className="mb-2 flex flex-wrap gap-1">{['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#00b0f4', '#9b59b6', '#1abc9c'].map((c) => <button key={c} type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, color: c } }])} className={`h-5 w-5 rounded-full ${l.color === c ? 'ring-2 ring-white' : ''}`} style={{ background: c }} aria-label={c} />)}</div>
               {l.kind !== 'bus' && <label className="mb-2 flex items-center gap-2" title={t('Shift the whole track earlier (−) or later (+) to fix timing')}>{t('Nudge')}<input type="number" min={-1000} max={1000} step={5} value={l.nudge_ms ?? 0} onChange={(e) => editLive(`nudge:${l.id}`, [{ op: 'lane.put', lane: { id: l.id, nudge_ms: Math.max(-1000, Math.min(1000, Math.round(Number(e.target.value) || 0))) } }])} className="input h-7 w-20 px-1 text-center font-mono text-xs" data-daw-nudge={l.id} />ms</label>}
+              {(rights.manage || (!!me && l.user_id === me.id)) && <button type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, protected: !l.protected } }])} aria-pressed={!!l.protected} title={t('Protected: only its owner and the engineers change it')} className={item} data-daw-protect={l.id}><Lock size={13} /> {l.protected ? t('Protected (click to open it to the band)') : t('Protect this track')}</button>}
               <button type="button" disabled={first} onClick={() => moveLane(l.id, -1)} className={item} data-daw-lane-up><ArrowUp size={13} /> {t('Move up')}</button>
               <button type="button" disabled={last} onClick={() => moveLane(l.id, 1)} className={item} data-daw-lane-down><ArrowDown size={13} /> {t('Move down')}</button>
               <button type="button" onClick={() => { setMenu(false); edit([{ op: 'lane.del', id: l.id }]) }} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-danger hover:bg-danger/10" data-daw-lane-delete><Trash2 size={13} /> {has ? t('Delete track and its clips') : t('Delete track')}</button>

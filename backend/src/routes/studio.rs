@@ -342,21 +342,36 @@ struct StartReq { #[serde(default)] name: String, armed: Option<Vec<Uuid>>, #[se
 /// band hears the click from count-in and recording starts right away, so takes carry a little pre-roll.
 async fn start_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Json(req): Json<StartReq>) -> AppResult<(StatusCode, Json<Session>)> {
     let (c, _) = studio_channel(&state.db, id, uid).await?;
-    // Anyone in the band may record a take alone; a take for the band is the engineers'.
-    let in_band = state.hub.voice_state(uid).is_some_and(|v| v.channel_id == id && !v.suppress);
-    if req.solo { if !in_band { return Err(AppError::BadRequest("Join the band to record".into())); } }
+    // Anyone in the band may record a take alone; a take for the band is the engineers'. Being in the band is what
+    // counts, not being in its voice room: a member records with the project open, in a call or not, on whichever
+    // instance they are connected to.
+    if req.solo { if perms::band_role(&state.db, id, uid).await?.is_none() { return Err(AppError::BadRequest("Join the band to record".into())); } }
     else if !perms::is_engineer(&state.db, id, uid).await? { return Err(AppError::Forbidden); }
     let open: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_sessions WHERE channel_id = $1 AND ended_at IS NULL").bind(id).fetch_optional(&state.db).await?;
     if open.is_some() { return Err(AppError::Conflict("A session is already recording".into())); }
     let name: String = { let n: String = req.name.trim().chars().take(80).collect(); if n.is_empty() { format!("Session {}", Utc::now().format("%Y-%m-%d %H:%M")) } else { n } };
     let cfg = config_of(&state.db, id).await?;
-    let mut armed = if req.solo { vec![uid] } else { req.armed.clone().unwrap_or_else(|| state.hub.voice_states_for_channels(&[id]).into_iter().filter(|v| !v.suppress && !cfg.disarmed.contains(&v.user_id)).map(|v| v.user_id).collect()) };
+    let mut armed = match (req.solo, &req.armed) {
+        (true, _) => vec![uid],
+        (false, Some(list)) => list.clone(),
+        (false, None) => {
+            // Whoever has an armed track in the open project, and whoever is in the room (those this instance knows
+            // of): the band, minus the ones the console disarmed.
+            let mut who: Vec<Uuid> = state.hub.voice_states_for_channels(&[id]).into_iter().filter(|v| !v.suppress).map(|v| v.user_id).collect();
+            // Whoever starts it from outside the room is in it too, when they are of the band.
+            if perms::band_role(&state.db, id, uid).await?.is_some() { who.push(uid); }
+            if let Some(pid) = cfg.project_id {
+                let owners: Vec<(Uuid,)> = sqlx::query_as("SELECT DISTINCT l.user_id FROM studio_lanes l JOIN studio_engineers e ON e.channel_id = $2 AND e.user_id = l.user_id WHERE l.project_id = $1 AND l.kind = 'audio' AND l.armed")
+                    .bind(pid).bind(id).fetch_all(&state.db).await?;
+                who.extend(owners.into_iter().map(|o| o.0));
+            }
+            who.retain(|u| !cfg.disarmed.contains(u));
+            who
+        }
+    };
     armed.sort(); armed.dedup(); armed.truncate(64);
-    if armed.is_empty() {
-        // Takes are recorded on the devices of the people in the session: with no one in it there is no one to record.
-        let present = state.hub.voice_states_for_channels(&[id]).iter().any(|v| !v.suppress);
-        return Err(AppError::BadRequest(if present { "Arm at least one track" } else { "Join the session to record: takes are recorded by the people in it" }.into()));
-    }
+    // Takes are recorded on the devices of the band: with no track armed and no one in the room there is no one.
+    if armed.is_empty() { return Err(AppError::BadRequest("Arm at least one track".into())); }
     let sid = Uuid::now_v7();
     // With a project open the take records into it, from the playhead: everyone hears the project from there.
     let mut position_ms = if cfg.project_id.is_some() { req.position_ms.clamp(0, 4 * 3600 * 1000) } else { 0 };
@@ -440,8 +455,9 @@ async fn create_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     }
     if ended.is_some() { return Err(AppError::BadRequest("That session has ended".into())); }
     let (c, _) = studio_channel(&state.db, channel_id, uid).await?;
-    let vs = state.hub.voice_state(uid).filter(|v| v.channel_id == channel_id).ok_or_else(|| AppError::BadRequest("Join the studio first".into()))?;
-    if vs.suppress { return Err(AppError::Forbidden); }
+    // The band records; the audience does not. (Not the voice room: its members are known only to the instance they
+    // are connected to, and a member records without being in a call.)
+    if perms::band_role(&state.db, channel_id, uid).await?.is_none() { return Err(AppError::Forbidden); }
     // A take for a track needs the track armed; a member's take without one, the member not disarmed.
     if req.lane_id.is_none() {
         if config_of(&state.db, channel_id).await?.disarmed.contains(&uid) { return Err(AppError::BadRequest("Your track is not armed".into())); }
@@ -615,8 +631,15 @@ async fn finish_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 /// has run past the limit) is ended, so the next one can start; a track that has stopped receiving is finished with
 /// what arrived and put in the project. A recorder that comes back later still sends the rest (`append_chunk`).
 pub async fn sweep_takes(state: AppState) {
+    let mut round: u64 = 0;
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        // A minute after starting and every hour from then: files no track owns any more.
+        round += 1;
+        if round % 360 == 6 {
+            let n = sweep_orphans(&state).await;
+            if n > 0 { tracing::info!(files = n, "removed studio audio files that no track refers to"); }
+        }
         let ended: Vec<(Uuid, Uuid)> = sqlx::query_as("UPDATE studio_sessions s SET ended_at = now() WHERE s.ended_at IS NULL AND (s.started_at < now() - make_interval(secs => $1)
             OR (s.started_at < now() - make_interval(secs => $2) AND NOT EXISTS (SELECT 1 FROM studio_tracks t WHERE t.session_id = s.id AND NOT t.done AND COALESCE(t.chunk_at, t.created_at) > now() - make_interval(secs => $2))))
             RETURNING s.id, s.channel_id").bind((MAX_TAKE_SECS + 60) as f64).bind(ABANDONED_SECS).fetch_all(&state.db).await.unwrap_or_default();
@@ -632,19 +655,97 @@ pub async fn sweep_takes(state: AppState) {
     }
 }
 
-/// Tracks are served to anyone who can see the channel.
-async fn serve_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tid): Path<Uuid>) -> AppResult<Response> {
-    let row: Option<(Uuid, String, i64)> = sqlx::query_as("SELECT COALESCE(t.channel_id, s.channel_id), t.content_type, t.size FROM studio_tracks t LEFT JOIN studio_sessions s ON s.id = t.session_id WHERE t.id = $1").bind(tid).fetch_optional(&state.db).await?;
-    let Some((channel_id, ct, size)) = row else { return Err(AppError::NotFound("Track not found".into())) };
+/// Files in the upload directory that are takes' by their name but have no track (its row went with its session or
+/// project while the file could not be removed), a day old or more: removed. How many.
+async fn sweep_orphans(state: &AppState) -> usize {
+    let Ok(mut dir) = tokio::fs::read_dir(&state.config.upload_dir).await else { return 0 };
+    let mut old: Vec<Uuid> = Vec::new();
+    while let Ok(Some(e)) = dir.next_entry().await {
+        let Some(id) = e.file_name().to_str().and_then(take_file) else { continue };
+        let aged = e.metadata().await.ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok()).is_some_and(|d| d.as_secs() >= ORPHAN_SECS);
+        if aged { old.push(id); }
+    }
+    let mut removed = 0;
+    for ids in old.chunks(1000) {
+        let Ok(have) = sqlx::query_as::<_, (Uuid,)>("SELECT id FROM studio_tracks WHERE id = ANY($1)").bind(ids).fetch_all(&state.db).await else { return removed };
+        for id in ids.iter().filter(|id| !have.iter().any(|h| h.0 == **id)) {
+            if tokio::fs::remove_file(track_path(state, *id)).await.is_ok() { removed += 1; }
+        }
+    }
+    removed
+}
+const ORPHAN_SECS: u64 = 24 * 3600;
+
+/// The track a file in the upload directory is the audio of, by its name (`track_path`).
+fn take_file(name: &str) -> Option<Uuid> { name.strip_prefix("studio-")?.strip_suffix(".webm")?.parse().ok() }
+
+/// The part of a file of `size` bytes a `Range` header asks for, as (first, last). `None`: not a range this serves
+/// (several ranges, another unit, nonsense), so the whole file is sent. `Some(Err)`: a range outside the file.
+fn byte_range(h: &str, size: u64) -> Option<Result<(u64, u64), ()>> {
+    let spec = h.trim().strip_prefix("bytes=")?;
+    if spec.contains(',') { return None; }
+    let (a, b) = spec.split_once('-')?;
+    let (a, b) = (a.trim(), b.trim());
+    if a.is_empty() {
+        // The last n bytes.
+        let n: u64 = b.parse().ok()?;
+        if n == 0 || size == 0 { return Some(Err(())); }
+        return Some(Ok((size.saturating_sub(n), size - 1)));
+    }
+    let first: u64 = a.parse().ok()?;
+    let last: u64 = if b.is_empty() { u64::MAX } else { b.parse().ok()? };
+    if last < first { return None; }
+    if first >= size { return Some(Err(())); }
+    Some(Ok((first, last.min(size - 1))))
+}
+
+/// Tracks are served to anyone who can see the channel, whole or the bytes a `Range` asks for. A take that can no
+/// longer change (finished, and past the time its recorder may still send the rest) is cached for good by the
+/// browser that fetched it; one that can is checked again each time (`ETag`: its id and how much there is of it).
+async fn serve_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(tid): Path<Uuid>, headers: axum::http::HeaderMap) -> AppResult<Response> {
+    let row: Option<(Uuid, String, i64, bool)> = sqlx::query_as("SELECT COALESCE(t.channel_id, s.channel_id), t.content_type, t.size, t.done AND COALESCE(t.chunk_at, t.created_at) < now() - make_interval(hours => $2)
+        FROM studio_tracks t LEFT JOIN studio_sessions s ON s.id = t.session_id WHERE t.id = $1").bind(tid).bind(LATE_HOURS as i32).fetch_optional(&state.db).await?;
+    let Some((channel_id, ct, size, settled)) = row else { return Err(AppError::NotFound("Track not found".into())) };
     studio_channel(&state.db, channel_id, uid).await?;
-    let file = tokio::fs::File::open(track_path(&state, tid)).await.map_err(|_| AppError::NotFound("Track file missing".into()))?;
-    let mut resp = Response::new(Body::from_stream(tokio_util::io::ReaderStream::new(file.take(size.max(0) as u64))));
+    let size = size.max(0) as u64;
+    let etag = format!("\"{tid}-{size}\"");
+    let common = |h: &mut axum::http::HeaderMap| {
+        h.insert(header::ETAG, HeaderValue::from_str(&etag).unwrap());
+        h.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+        h.insert(header::CACHE_CONTROL, HeaderValue::from_static(if settled { "private, max-age=31536000, immutable" } else { "private, no-cache" }));
+    };
+    let header_str = |name: header::HeaderName| headers.get(name).and_then(|v| v.to_str().ok());
+    if header_str(header::IF_NONE_MATCH).is_some_and(|v| v.split(',').any(|t| t.trim() == etag)) {
+        let mut resp = StatusCode::NOT_MODIFIED.into_response();
+        common(resp.headers_mut());
+        return Ok(resp);
+    }
+    // A range for another state of the file (`If-Range`) gets the whole file.
+    let wanted = header_str(header::RANGE).filter(|_| header_str(header::IF_RANGE).is_none_or(|v| v.trim() == etag)).and_then(|r| byte_range(r, size));
+    let (first, last) = match wanted {
+        Some(Err(())) => {
+            let mut resp = StatusCode::RANGE_NOT_SATISFIABLE.into_response();
+            common(resp.headers_mut());
+            resp.headers_mut().insert(header::CONTENT_RANGE, HeaderValue::from_str(&format!("bytes */{size}")).unwrap());
+            return Ok(resp);
+        }
+        Some(Ok(r)) => r,
+        None => (0, size.saturating_sub(1)),
+    };
+    let len = if size == 0 { 0 } else { last - first + 1 };
+    let mut file = tokio::fs::File::open(track_path(&state, tid)).await.map_err(|_| AppError::NotFound("Track file missing".into()))?;
+    if first > 0 { file.seek(std::io::SeekFrom::Start(first)).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?; }
+    let mut resp = Response::new(Body::from_stream(tokio_util::io::ReaderStream::new(file.take(len))));
+    if wanted.is_some() {
+        *resp.status_mut() = StatusCode::PARTIAL_CONTENT;
+        resp.headers_mut().insert(header::CONTENT_RANGE, HeaderValue::from_str(&format!("bytes {first}-{last}/{size}")).unwrap());
+    }
     let h = resp.headers_mut();
+    common(h);
     h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&ct).unwrap_or(HeaderValue::from_static("audio/webm")));
-    h.insert(header::CONTENT_LENGTH, HeaderValue::from(size as u64));
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(len));
     h.insert(header::CONTENT_DISPOSITION, HeaderValue::from_str(&format!("inline; filename=\"track-{tid}\"")).unwrap());
     h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
-    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("private, max-age=0"));
     Ok(resp.into_response())
 }
 
@@ -728,6 +829,29 @@ pub async fn end_stale_gatherings(state: AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_range_is_the_bytes_asked_for_within_the_file() {
+        assert_eq!(byte_range("bytes=0-99", 1000), Some(Ok((0, 99))));
+        assert_eq!(byte_range("bytes=500-", 1000), Some(Ok((500, 999))));
+        assert_eq!(byte_range("bytes=-100", 1000), Some(Ok((900, 999))));
+        // Past the end: as much as there is; a suffix longer than the file: all of it.
+        assert_eq!(byte_range("bytes=900-5000", 1000), Some(Ok((900, 999))));
+        assert_eq!(byte_range("bytes=-5000", 1000), Some(Ok((0, 999))));
+        // Outside the file.
+        assert_eq!(byte_range("bytes=1000-", 1000), Some(Err(())));
+        assert_eq!(byte_range("bytes=-0", 1000), Some(Err(())));
+        assert_eq!(byte_range("bytes=0-", 0), Some(Err(())));
+        // Not served as a range: the whole file goes.
+        for h in ["bytes=0-1,5-6", "items=0-1", "bytes=9-3", "bytes=a-b", "bytes=", "0-99"] { assert_eq!(byte_range(h, 1000), None, "{h}"); }
+    }
+
+    #[test]
+    fn a_take_file_is_known_by_its_name() {
+        let id = Uuid::now_v7();
+        assert_eq!(take_file(&format!("studio-{id}.webm")), Some(id));
+        for name in [format!("{id}.webm"), format!("studio-{id}.wav"), "studio-.webm".to_string(), "studio-notanid.webm".to_string(), format!("avatar-{id}.webm")] { assert_eq!(take_file(&name), None, "{name}"); }
+    }
 
     const STEREO: Pcm = Pcm { rate: 48_000, channels: 2, bits: 24 };
     const MONO: Pcm = Pcm { rate: 48_000, channels: 1, bits: 24 };
