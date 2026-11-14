@@ -1,5 +1,5 @@
-import { Activity, Archive, Link2, CalendarClock, Mic, Disc3, Users, ArrowLeft, ChevronDown, Pencil, Copy, Download, Flag, FolderOpen, History, Keyboard, Layers, Magnet, MessageSquare, Metronome, Music, Piano, Plus, Redo2, Repeat, Rows3, Scissors, SkipBack, SlidersVertical, Square, Play, Trash2, Undo2, Upload, X, Cloud, CloudOff, CloudUpload, ZoomIn, ZoomOut, Gauge, Cable } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as RPointerEvent } from 'react'
+import { Activity, Archive, Link2, CalendarClock, Mic, Disc3, Users, ArrowLeft, ChevronDown, Pencil, Copy, Download, Flag, FolderOpen, History, Keyboard, Layers, Magnet, MessageSquare, Metronome, Music, Piano, Plus, Redo2, Repeat, Rows3, Scissors, SkipBack, SlidersVertical, Square, Play, Trash2, Undo2, Upload, X, Cloud, CloudOff, CloudUpload, ZoomIn, ZoomOut, Gauge, Cable, Headphones, ArrowUp, ArrowDown, ListTree } from 'lucide-react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as RPointerEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
 import { STORAGE_PREFIX } from '../lib/brand'
@@ -14,7 +14,7 @@ import { setStudioConfig, startTake, studio, takeTag, DEFAULT_STUDIO } from '../
 import { fromActivity } from '../lib/meters'
 import { useTakes } from '../lib/takestore'
 import { usePhone } from '../lib/swipe'
-import { barBeat, bars as barList, secAtBar, snapTo, type Snap, type TempoChange } from '../lib/tempo'
+import { barBeat, bars as barList, secAtBar, snapTo, tempoAt, type Snap, type TempoChange } from '../lib/tempo'
 import type { Channel, StudioClip, StudioLane, StudioProject, StudioTrack, User } from '../lib/types'
 import { voice } from '../lib/voice'
 import { useStore, voiceParticipants } from '../store'
@@ -24,38 +24,55 @@ import { Meter } from './StudioConsole'
 import DawMixer, { laneColor } from './DawMixer'
 import { AutoRow, autoParams, paramOf } from './DawAutomation'
 import PianoRoll from './DawPianoRoll'
-import { BandPanel, CommentsPanel, ExportPanel, SessionsPanel, TakesPanel, VersionsPanel } from './DawPanels'
+import { AudioPanel, BandPanel, CommentsPanel, ExportPanel, SessionsPanel, TakesPanel, useHead, VersionsPanel } from './DawPanels'
 import FloatWindow from './FloatWindow'
 
 const VIEW_KEY = `${STORAGE_PREFIX}dawView`
 const ZOOM_KEY = `${STORAGE_PREFIX}dawZoom`
 const SNAP_KEY = `${STORAGE_PREFIX}dawSnap`
+const HEIGHT_KEY = `${STORAGE_PREFIX}dawLaneHeights`
 const LANE_H = 76
+const LANE_MIN = 60, LANE_MAX = 240
 const AUTO_H = 56
+const TAKE_H = 24
 const PEER_COLORS = ['#f47fff', '#00d1b2', '#ffb02e', '#4fc3f7', '#ff6b6b', '#a3e635']
 
 /** 01:02.3 */
 const timecode = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${(sec % 60).toFixed(1).padStart(4, '0')}`
 const dB = (g: number) => (g <= 0.0001 ? '-∞' : (20 * Math.log10(g)).toFixed(1))
 
-/** Re-render when the engine starts or stops; read its position each frame while playing. */
+/** Re-render when the engine starts or stops. */
 function useEngine() {
   return useSyncExternalStore((f) => engine.subscribe(f), () => engine.playing)
 }
-function usePlayhead(playing: boolean, stopped: number) {
-  const [pos, setPos] = useState(stopped)
+/**
+ * What follows the playhead is drawn straight onto the page, not through React: `f` runs after every render, and on
+ * every frame while `on`. Playing re-renders nothing.
+ */
+function useFrame(f: () => void, on: boolean) {
+  const ref = useRef(f)
+  ref.current = f
+  useLayoutEffect(() => { ref.current() })
   useEffect(() => {
-    if (!playing) { setPos(stopped); return }
+    if (!on) return
     let raf = 0
-    const tick = () => { setPos(engine.position()); raf = requestAnimationFrame(tick) }
+    const tick = () => { ref.current(); raf = requestAnimationFrame(tick) }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [playing, stopped])
-  return pos
+  }, [on])
+}
+/** A function that stays the same from render to render and calls the latest one it was given. */
+function useLatest<A extends unknown[], R>(f: (...a: A) => R) {
+  const ref = useRef(f)
+  ref.current = f
+  return useCallback((...a: A) => ref.current(...a), [])
 }
 
+/** Clips copied or cut, for pasting at the playhead (in this window). */
+let clipboard: StudioClip[] = []
+
 type Drag = { ids: string[]; mode: 'move' | 'trimL' | 'trimR' | 'fadeIn' | 'fadeOut'; x0: number; lane0: string; dms: number; lane: string | null; copy: boolean }
-type Panel = 'comments' | 'versions' | 'export' | 'tempo' | 'takes' | 'band' | 'sessions' | null
+type Panel = 'comments' | 'versions' | 'export' | 'tempo' | 'takes' | 'band' | 'sessions' | 'audio' | null
 
 /**
  * The studio's DAW, shared live by everyone in the band: an Arrangement of audio, MIDI and bus tracks on a timeline
@@ -81,15 +98,20 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   const midi = useMidi()
   const playing = useEngine()
   const [stopped, setStopped] = useState(0)
-  const head = usePlayhead(!!playing, stopped)
+  // Where the playhead is now. React only knows where it stopped; while playing it is read from the engine.
+  const at = useRef(stopped)
+  at.current = stopped
+  const now = useCallback(() => (engine.playing ? engine.position() : at.current), [])
   const ordered = useMemo(() => sortedLanes(lanes), [lanes])
   const band = participants.filter((p) => !p.suppress)
+  const bandKey = band.map((b) => b.user_id).join()
+  const bandIds = useMemo(() => (bandKey ? bandKey.split(',') : []), [bandKey])
   const inBand = !!me && band.some((p) => p.user_id === me.id)
 
   const [view, setView] = useState<'arrange' | 'mixer'>(() => { try { return localStorage.getItem(VIEW_KEY) === 'mixer' || (phone && localStorage.getItem(VIEW_KEY) !== 'arrange') ? 'mixer' : 'arrange' } catch { return 'arrange' } })
   const changeView = (v: 'arrange' | 'mixer') => { setView(v); try { localStorage.setItem(VIEW_KEY, v) } catch { /* ignore */ } }
   const [pps, setPps] = useState(() => { try { return Number(localStorage.getItem(ZOOM_KEY)) || 40 } catch { return 40 } })
-  const zoom = (f: number) => setPps((z) => { const n = Math.min(400, Math.max(4, z * f)); try { localStorage.setItem(ZOOM_KEY, String(n)) } catch { /* ignore */ } return n })
+  const zoom = useLatest((f: number) => setPps((z) => { const n = Math.min(400, Math.max(4, z * f)); try { localStorage.setItem(ZOOM_KEY, String(n)) } catch { /* ignore */ } return n }))
   const [snap, setSnapState] = useState<Snap>(() => { try { return (localStorage.getItem(SNAP_KEY) as Snap) || 'beat' } catch { return 'beat' } })
   const setSnap = (s: Snap) => { setSnapState(s); try { localStorage.setItem(SNAP_KEY, s) } catch { /* ignore */ } }
   const [sel, setSel] = useState<string[]>([])
@@ -104,7 +126,14 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   // Keep the open project loaded (lib/daw also does while we are in the studio's voice).
   useEffect(() => { if (cfg.project_id && project?.id !== cfg.project_id) void loadProject(cfg.project_id) }, [cfg.project_id]) // eslint-disable-line react-hooks/exhaustive-deps
   // Others see where we are.
-  useEffect(() => { if (project && !phone) sharePresence(head * 1000, !!playing, sel) }, [Math.round(head * 4), !!playing, sel.join()]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!project || phone) return
+    const say = () => sharePresence(now() * 1000, !!engine.playing, sel)
+    say()
+    if (!playing) return
+    const id = setInterval(say, 250)
+    return () => clearInterval(id)
+  }, [stopped, !!playing, sel.join(), project?.id, phone]) // eslint-disable-line react-hooks/exhaustive-deps
   // Peers that went quiet fade out.
   const [, tick] = useState(0)
   useEffect(() => { const id = setInterval(() => tick((n) => n + 1), 3000); return () => clearInterval(id) }, [])
@@ -154,8 +183,33 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
     edit(copies.map((c): Op => ({ op: 'clip.put', clip: { ...c, group_id: '' as unknown as null } })))
     setSel(copies.map((c) => c.id))
   }
+  const copy = () => { clipboard = selected.map((c) => ({ ...c })) }
+  /** The copied clips at the playhead, on the tracks they came from, as far apart as they were. */
+  const paste = () => {
+    const src = clipboard.filter((c) => lanes[c.lane_id] && (lanes[c.lane_id].kind === 'midi') === !!c.notes)
+    if (!src.length) return false
+    const d = Math.round(now() * 1000) - Math.min(...src.map((c) => c.start_ms))
+    const made = src.map((c) => ({ ...c, id: newId(), start_ms: c.start_ms + d }))
+    edit(made.map((c): Op => ({ op: 'clip.put', clip: { ...c, group_id: '' as unknown as null } })))
+    setSel(made.map((c) => c.id))
+    return true
+  }
+  /** Move the selection a grid step (1 ms with Shift, 10 ms with snapping off): onto the grid first when it is off it. */
+  const nudge = (dir: 1 | -1, fine: boolean) => {
+    if (!selected.length || !project) return
+    const first = selected.reduce((a, c) => (c.start_ms < a.start_ms ? c : a))
+    let to = first.start_ms + dir * (fine ? 1 : 10)
+    if (!fine && snap !== 'off') {
+      const { bpm, beats: n } = tempoAt(project, first.start_ms / 1000)
+      const step = (60000 / bpm) * (snap === 'bar' ? n : snap === 'beat' ? 1 : snap === 'half' ? 0.5 : 0.25)
+      const near = snapTo(project, first.start_ms, snap)
+      to = dir * (near - first.start_ms) > 0.5 ? near : snapTo(project, near + dir * step, snap)
+    }
+    const d = Math.max(-first.start_ms, Math.round(to) - first.start_ms)
+    if (d) edit(selected.map((c): Op => ({ op: 'clip.put', clip: { id: c.id, start_ms: c.start_ms + d } })))
+  }
   const split = () => {
-    const at = head * 1000
+    const at = now() * 1000
     const ops: Op[] = []
     const made: string[] = []
     // Takes split together, so each part keeps its alternatives.
@@ -204,18 +258,41 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
       if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return }
       if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicate(); return }
       if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); setSel(Object.keys(clips)); return }
+      if (mod && e.key.toLowerCase() === 'c') { if (sel.length) { e.preventDefault(); copy() } return }
+      if (mod && e.key.toLowerCase() === 'x') { if (sel.length) { e.preventDefault(); copy(); del() } return }
+      if (mod && e.key.toLowerCase() === 'v') { if (paste()) e.preventDefault(); return }
       if (mod || e.altKey) return
       if (e.key === ' ') { e.preventDefault(); if (!live) play() }
       else if (e.key === 'Delete' || e.key === 'Backspace') { if (sel.length) { e.preventDefault(); del() } }
       else if (e.key.toLowerCase() === 's') { e.preventDefault(); split() }
       else if (e.key.toLowerCase() === 'l' && project?.loop_end_ms) { e.preventDefault(); edit([{ op: 'project', loop_on: !project.loop_on }]) }
       else if (e.key === 'Home') { e.preventDefault(); seek(0) }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { if (sel.length) { e.preventDefault(); nudge(e.key === 'ArrowLeft' ? -1 : 1, e.shiftKey) } }
       else if (e.key === 'Escape') { setSel([]); setRoll(null) }
       else if (e.key === 'Tab') { e.preventDefault(); changeView(view === 'arrange' ? 'mixer' : 'arrange') }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   })
+
+  // The time and the bar follow the playhead without a render.
+  const timeEl = useRef<HTMLSpanElement>(null), beatEl = useRef<HTMLSpanElement>(null)
+  useFrame(() => {
+    if (!project) return
+    const h = now()
+    const tc = timecode(h)
+    if (timeEl.current && timeEl.current.textContent !== tc) timeEl.current.textContent = tc
+    const b = barBeat(project, h), bt = `${b.bar}.${b.beat}`
+    if (beatEl.current && beatEl.current.textContent !== bt) { beatEl.current.textContent = bt; beatEl.current.title = t('Bar.beat ({bpm} BPM)', { bpm: b.bpm }) }
+  }, !!playing)
+  // The count-in ends without anything else changing.
+  useEffect(() => {
+    if (!live) return
+    const d = Date.parse(live.started_at) - Date.now()
+    if (d <= 0) return
+    const id = setTimeout(() => tick((n) => n + 1), d + 10)
+    return () => clearTimeout(id)
+  }, [live?.id, live?.started_at]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [bpmDraft, setBpmDraft] = useState<string | null>(null)
   const commitBpm = () => { const v = Math.round(Number(bpmDraft)); setBpmDraft(null); if (bpmDraft !== null && v >= 40 && v <= 300 && v !== bpm) void setStudioConfig(channel.id, { bpm: v }).catch((e) => pushToast((e as Error).message, 'error')) }
@@ -224,7 +301,7 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   if (!project) return <div className="flex-1 min-h-0 flex items-center justify-center rounded-xl border border-line bg-bg-1 text-sm text-text-2" data-daw data-daw-state="loading">{error ? t('Couldn’t open the project: {error}', { error }) : loading ? t('Opening the project…') : null}</div>
 
   const state = live ? (Date.now() < Date.parse(live.started_at) ? 'count-in' : 'recording') : playing ? 'playing' : 'stopped'
-  const bb = barBeat(project, head)
+  const bb = barBeat(project, stopped)
   const tb = 'h-8 w-8 shrink-0 rounded-md flex items-center justify-center text-text-1 hover:bg-bg-3 hover:text-text-0 disabled:opacity-40 disabled:hover:bg-transparent'
   const on = (x: boolean) => (x ? 'bg-accent/25 text-accent' : '')
   const hasLoop = !!project.loop_end_ms && project.loop_end_ms > (project.loop_start_ms ?? 0)
@@ -260,8 +337,8 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
           <button type="button" onClick={() => setFollow(!follow)} title={follow ? t('Shared playback: you hear what anyone plays, and they hear what you play') : t('Playing on your own: turn on to follow the shared playback')} aria-pressed={follow} className={`${tb} ${on(follow)}`} data-daw-follow><Link2 size={15} /></button>
           {hasLoop && <button type="button" onClick={clearLoop} title={t('Clear the loop range')} className={`${tb} hover:text-danger`} data-daw-loop-clear><X size={14} /></button>}
         </div>
-        <span className={`shrink-0 rounded-md bg-bg-0 px-2.5 py-1 font-mono text-lg tabular-nums ${live ? 'text-danger' : 'text-text-0'}`} data-daw-time>{timecode(head)}</span>
-        <span className="shrink-0 rounded-md bg-bg-0 px-2 py-1.5 font-mono text-sm tabular-nums text-text-1" title={t('Bar.beat ({bpm} BPM)', { bpm: bb.bpm })} data-daw-beat>{bb.bar}.{bb.beat}</span>
+        <span className={`shrink-0 rounded-md bg-bg-0 px-2.5 py-1 font-mono text-lg tabular-nums ${live ? 'text-danger' : 'text-text-0'}`} data-daw-time ref={timeEl}>{timecode(stopped)}</span>
+        <span className="shrink-0 rounded-md bg-bg-0 px-2 py-1.5 font-mono text-sm tabular-nums text-text-1" title={t('Bar.beat ({bpm} BPM)', { bpm: bb.bpm })} data-daw-beat ref={beatEl}>{`${bb.bar}.${bb.beat}`}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {peerList.length > 0 && <span className="flex -space-x-1.5" data-daw-peers>{peerList.slice(0, 5).map(([uid]) => users[uid] && <span key={uid} className="rounded-full ring-2" style={{ ['--tw-ring-color' as string]: peerColor(uid) }} title={users[uid].display_name ?? users[uid].username}><Avatar user={users[uid]} size={20} /></span>)}</span>}
           <span role="status" className={`flex h-8 shrink-0 items-center gap-1 px-1 text-xs ${sync === 'offline' ? 'font-semibold text-warn' : 'text-text-2'}`} data-daw-sync={sync} data-daw-unsent={unsent}
@@ -277,6 +354,7 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
           <button type="button" onClick={() => setPanel(panel === 'takes' ? null : 'takes')} title={t('Takes')} className={`${tb} ${on(panel === 'takes')}`} data-daw-takes-open><Disc3 size={16} /></button>
           <button type="button" onClick={() => setPanel(panel === 'comments' ? null : 'comments')} title={t('Comments')} className={`${tb} relative ${on(panel === 'comments')}`} data-daw-comments-open><MessageSquare size={16} />{comments.some((c) => !c.resolved) && <span className="absolute -right-0.5 -top-0.5 rounded-full bg-danger px-1 text-[9px] font-bold text-white">{comments.filter((c) => !c.resolved).length}</span>}</button>
           {!phone && <button type="button" onClick={() => setPanel(panel === 'versions' ? null : 'versions')} title={t('Versions')} className={`${tb} ${on(panel === 'versions')}`} data-daw-versions-open><History size={16} /></button>}
+          {!phone && <button type="button" onClick={() => setPanel(panel === 'audio' ? null : 'audio')} title={t('Audio: output, latency')} className={`${tb} ${on(panel === 'audio')}`} data-daw-audio-open><Headphones size={16} /></button>}
           <button type="button" onClick={() => setPanel(panel === 'export' ? null : 'export')} title={t('Export')} className={`${tb} ${on(panel === 'export')}`} data-daw-export-open><Download size={16} /></button>
           <span className="flex rounded-md bg-bg-0 p-0.5" role="tablist" aria-label={t('Console view')}>
             <button type="button" role="tab" aria-selected={view === 'arrange'} onClick={() => changeView('arrange')} title={t('Arrangement (Tab)')} className={`h-8 w-8 rounded flex items-center justify-center ${view === 'arrange' ? 'bg-bg-3 text-text-0' : 'text-text-2 hover:text-text-0'}`} data-daw-view-arrange><Rows3 size={16} /></button>
@@ -291,16 +369,16 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
         {!phone && <button type="button" onClick={() => addLane('midi')} className="btn-ghost h-8 py-1 text-xs" title={t('New MIDI track with an instrument')} data-daw-add-midi><Piano size={14} /> {t('MIDI')}</button>}
         {!phone && <button type="button" onClick={() => addLane('bus')} className="btn-ghost h-8 py-1 text-xs" title={t('New bus: tracks send to it, for shared reverb and the like')} data-daw-add-bus><Layers size={14} /> {t('Bus')}</button>}
         <button type="button" onClick={() => file.current?.click()} className="btn-ghost h-8 py-1 text-xs" title={t('Import audio files onto new tracks at the playhead')} data-daw-import><Upload size={14} /> {t('Import')}</button>
-        <input ref={file} type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aac,.webm,.opus" multiple hidden onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; void importFiles(channel.id, fs, head * 1000) }} data-daw-file />
+        <input ref={file} type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aac,.webm,.opus" multiple hidden onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; void importFiles(channel.id, fs, now() * 1000) }} data-daw-file />
         {!phone && view === 'arrange' && <>
           <span className="mx-1 h-5 w-px bg-line" />
           <Magnet size={14} className={snap === 'off' ? 'text-text-2' : 'text-accent'} aria-hidden />
-          <Dropdown value={snap} onChange={(e) => setSnap(e.target.value as Snap)} title={t('Snap to grid (hold Alt to move freely)')} aria-label={t('Snap')} className="input h-8 w-20 px-2 text-xs" data-daw-snap>
+          <Dropdown value={snap} onChange={(e) => setSnap(e.target.value as Snap)} title={t('Snap to grid (hold Alt to move freely, Ctrl to copy)')} aria-label={t('Snap')} className="input h-8 w-20 px-2 text-xs" data-daw-snap>
             <option value="bar">{t('Bar')}</option><option value="beat">{t('Beat')}</option><option value="half">{t('½ beat')}</option><option value="sixteenth">{t('1/16')}</option><option value="off">{t('Off')}</option>
           </Dropdown>
           <button type="button" onClick={() => zoom(1 / 1.5)} title={t('Zoom out')} className={tb} data-daw-zoom-out><ZoomOut size={16} /></button>
           <button type="button" onClick={() => zoom(1.5)} title={t('Zoom in')} className={tb} data-daw-zoom-in><ZoomIn size={16} /></button>
-          <button type="button" onClick={() => edit([{ op: 'project', markers: [...(project.markers ?? []), { id: newId().slice(0, 8), ms: Math.round(head * 1000), name: t('Marker {n}', { n: (project.markers?.length ?? 0) + 1 }) }] }])} title={t('Add a marker at the playhead')} className={tb} data-daw-add-marker><Flag size={15} /></button>
+          <button type="button" onClick={() => edit([{ op: 'project', markers: [...(project.markers ?? []), { id: newId().slice(0, 8), ms: Math.round(now() * 1000), name: t('Marker {n}', { n: (project.markers?.length ?? 0) + 1 }) }] }])} title={t('Add a marker at the playhead')} className={tb} data-daw-add-marker><Flag size={15} /></button>
           <button type="button" onClick={() => setPanel(panel === 'tempo' ? null : 'tempo')} title={t('Tempo changes')} className={`${tb} ${on(panel === 'tempo')}`} data-daw-tempo-open><Gauge size={15} /></button>
           <button type="button" onClick={() => useMidi.setState({ keys: !midi.keys })} title={midi.keys ? t('Computer keyboard plays the armed MIDI track (A–K, Z/X octave)') : t('Play the armed MIDI track from the computer keyboard')} aria-pressed={midi.keys} className={`${tb} ${on(midi.keys)}`} data-daw-keys><Keyboard size={15} /></button>
           <button type="button" onClick={() => void connectMidi().then((n) => pushToast(n.length ? t('MIDI: {names}', { names: n.join(', ') }) : t('No MIDI keyboard found'))).catch((e) => pushToast((e as Error).message, 'error'))} title={midi.devices.length ? midi.devices.join(', ') : t('Connect a MIDI keyboard')} className={`${tb} ${on(midi.devices.length > 0)}`} data-daw-midi-connect><Cable size={15} /></button>
@@ -320,24 +398,26 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
       </div>
 
       {view === 'arrange'
-        ? <Arrangement {...{ channel, project, ordered, lanes, clips, audio, pps, head, live: !!live, liveSince: live ? (live.position_ms ?? 0) / 1000 : 0, liveSolo: live?.solo ? live.started_by : null, sel, setSel, seek, snapMs, band: band.map((b) => b.user_id), crew, users, phone, autoOpen, setAutoOpen, newMidiClip, setRoll, midiLane: midi.lane, peers: peerList, peerColor, comments, openComments: () => setPanel('comments') }} />
+        ? <Arrangement {...{ channel, project, ordered, lanes, clips, audio, pps, zoom, now, stopped, running: !!playing, live: !!live, liveSince: live ? (live.position_ms ?? 0) / 1000 : 0, liveSolo: live?.solo ? live.started_by : null, sel, setSel, seek, snapMs, band: bandIds, crew, users, phone, autoOpen, setAutoOpen, newMidiClip, setRoll, midiLane: midi.lane, peers: peerList, peerColor, comments, openComments: () => setPanel('comments') }} />
         : <DawMixer ordered={ordered} lanes={lanes} project={project} channelId={channel.id} users={users} />}
       {rollClip && lanes[rollClip.lane_id] && <PianoRoll clip={rollClip} lane={lanes[rollClip.lane_id]} project={project} close={() => setRoll(null)} />}
       {ordered.length === 0 && <p className="shrink-0 px-3 py-2 text-xs text-text-2" data-daw-empty>{recordable ? t('Record a take, import a backing track to record over, or add a MIDI track to write parts.') : t('Import a backing track, or ask an engineer to record a take.')}</p>}
-      {panel === 'comments' && <CommentsPanel head={head} seek={seek} close={() => setPanel(null)} />}
+      {panel === 'comments' && <CommentsPanel now={now} seek={seek} close={() => setPanel(null)} />}
       {panel === 'versions' && <VersionsPanel close={() => setPanel(null)} />}
       {panel === 'export' && <ExportPanel channel={channel} close={() => setPanel(null)} />}
-      {panel === 'takes' && <TakesPanel channel={channel} head={head} close={() => setPanel(null)} />}
+      {panel === 'takes' && <TakesPanel channel={channel} now={now} close={() => setPanel(null)} />}
       {panel === 'band' && <BandPanel channel={channel} close={() => setPanel(null)} />}
       {panel === 'sessions' && <SessionsPanel channel={channel} close={() => setPanel(null)} />}
-      {panel === 'tempo' && <TempoPanel project={project} head={head} manage={manage} close={() => setPanel(null)} />}
+      {panel === 'tempo' && <TempoPanel project={project} now={now} manage={manage} close={() => setPanel(null)} />}
+      {panel === 'audio' && <AudioPanel close={() => setPanel(null)} />}
     </div>
   )
 }
 
 /** Tempo and time signature changes from a bar on. */
-function TempoPanel({ project, head, manage, close }: { project: StudioProject; head: number; manage: boolean; close: () => void }) {
+function TempoPanel({ project, now, manage, close }: { project: StudioProject; now: () => number; manage: boolean; close: () => void }) {
   const t = useT()
+  const head = useHead(now)
   const list = (project.tempo_map ?? []) as TempoChange[]
   const save = (next: TempoChange[]) => edit([{ op: 'project', tempo_map: next.filter((c) => c.bar >= 1).sort((a, b) => a.bar - b.bar) }])
   const here = barBeat(project, head)
@@ -428,7 +508,8 @@ function ClipInspector({ clip }: { clip: StudioClip }) {
 
 type ArrProps = {
   channel: Channel; project: StudioProject; ordered: StudioLane[]; lanes: Record<string, StudioLane>; clips: Record<string, StudioClip>; audio: Record<string, StudioTrack>
-  pps: number; head: number; live: boolean; liveSince: number; liveSolo: string | null; sel: string[]; setSel: (s: string[] | ((s: string[]) => string[])) => void
+  pps: number; zoom: (f: number) => void; now: () => number; stopped: number; running: boolean
+  live: boolean; liveSince: number; liveSolo: string | null; sel: string[]; setSel: (s: string[] | ((s: string[]) => string[])) => void
   seek: (sec: number) => void; snapMs: (ms: number, free?: boolean) => number; band: string[]; crew: boolean
   users: Record<string, User>; phone: boolean; autoOpen: Record<string, string>; setAutoOpen: (f: (m: Record<string, string>) => Record<string, string>) => void
   newMidiClip: (lane: string, ms: number) => void; setRoll: (id: string | null) => void; midiLane: string | null
@@ -439,9 +520,17 @@ type ArrProps = {
 /** No loop range any more: loop and punch off. */
 const clearLoop = () => edit([{ op: 'project', clear_loop: true }])
 
+/** The alternatives recorded over one another on a track: each group's takes in the same order (by recording), so a row is a take. */
+function takeGroups(clips: Record<string, StudioClip>, lane: string) {
+  const by = new Map<string, StudioClip[]>()
+  for (const c of Object.values(clips)) if (c.lane_id === lane && c.group_id) by.set(c.group_id, [...(by.get(c.group_id) ?? []), c])
+  const groups = [...by.values()].filter((g) => g.length > 1).map((g) => g.sort((a, b) => (a.audio_id ?? '').localeCompare(b.audio_id ?? '') || a.id.localeCompare(b.id)))
+  return { groups, rows: groups.reduce((n, g) => Math.max(n, g.length), 0) }
+}
+
 function Arrangement(p: ArrProps) {
   const t = useT()
-  const { project, ordered, lanes, clips, pps, head, sel, setSel, snapMs, phone, autoOpen } = p
+  const { project, ordered, lanes, clips, pps, now, sel, setSel, snapMs, phone, autoOpen } = p
   const [drag, setDragState] = useState<Drag | null>(null)
   // The drag as of the latest pointer event (state lags a render behind), and whether one just ended (its click is no select).
   const dragRef = useRef<Drag | null>(null)
@@ -450,9 +539,11 @@ function Arrangement(p: ArrProps) {
   const shiftAdded = useRef<string | null>(null)
   const setDrag = (d: Drag | null) => { dragRef.current = d; setDragState(d) }
   const [dropLane, setDropLane] = useState<string | 'new' | null>(null)
-  const [loopDrag, setLoopDrag] = useState<{ a: number; b: number; x0: number } | null>(null)
+  const [loopDrag, setLoopDrag] = useState<{ a: number; b: number; x0: number; edge?: boolean } | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
-  const total = Math.max(120, projectEnd(clips) / 1000 + 30, head + 30)
+  // The timeline reaches past the playhead; while playing it grows a minute at a time.
+  const [reach, setReach] = useState(0)
+  const total = Math.max(120, projectEnd(clips) / 1000 + 30, p.stopped + 30, reach)
   const width = Math.ceil(total * pps)
   const barsAll = barList(project, total)
   const minBar = barsAll.length > 1 ? Math.min(...barsAll.slice(1).map((b, i) => b.sec - barsAll[i].sec)) : 2
@@ -463,13 +554,77 @@ function Arrangement(p: ArrProps) {
   const peerSel = new Map<string, string>()
   for (const [uid, x] of p.peers) for (const id of x.sel) peerSel.set(id, p.peerColor(uid))
 
-  // Follow the playhead while playing.
+  // Track heights and open take lanes are how this device shows the project, not part of it.
+  const [heights, setHeights] = useState<Record<string, number>>(() => { try { return JSON.parse(localStorage.getItem(HEIGHT_KEY) || '{}') as Record<string, number> } catch { return {} } })
+  const resize = useLatest((id: string, h: number) => setHeights((m) => {
+    const n = { ...m, [id]: Math.round(Math.min(LANE_MAX, Math.max(LANE_MIN, h))) }
+    if (n[id] === LANE_H) delete n[id]
+    try { localStorage.setItem(HEIGHT_KEY, JSON.stringify(n)) } catch { /* ignore */ }
+    return n
+  }))
+  const laneH = (l: StudioLane) => heights[l.id] ?? LANE_H
+  const [takesOpen, setTakesOpen] = useState<Record<string, boolean>>({})
+  const toggleTakes = useLatest((id: string) => setTakesOpen((m) => ({ ...m, [id]: !m[id] })))
+  const takes = useMemo(() => new Map(ordered.map((l) => [l.id, takeGroups(clips, l.id)])), [ordered, clips])
+  const takeRows = (l: StudioLane) => (takesOpen[l.id] ? takes.get(l.id)?.rows ?? 0 : 0)
+  const rowH = (l: StudioLane) => laneH(l) + takeRows(l) * TAKE_H + (autoOpen[l.id] ? AUTO_H : 0)
+  const used = useMemo(() => new Set(Object.values(clips).map((c) => c.lane_id)), [clips])
+  /** A track one place up or down: the tracks are numbered again in their new order. */
+  const moveLane = useLatest((id: string, dir: -1 | 1) => {
+    const i = ordered.findIndex((l) => l.id === id), j = i + dir
+    if (i < 0 || j < 0 || j >= ordered.length) return
+    const next = [...ordered]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    const ops = next.flatMap((l, k): Op[] => (l.position === k ? [] : [{ op: 'lane.put', lane: { id: l.id, position: k } }]))
+    if (ops.length) edit(ops)
+  })
+
+  // The playhead, what is being recorded and the scroll position follow the engine on every frame, outside React.
+  const playhead = useRef<HTMLDivElement>(null)
+  const bucket = useRef(-1)
+  const reachRef = useRef(reach)
+  reachRef.current = reach
+  useFrame(() => {
+    const s = scroller.current
+    if (!s) return
+    const h = now(), x = h * pps
+    if (playhead.current) playhead.current.style.left = `${x}px`
+    // Follow the playhead: when it has moved on a stretch and left the view.
+    const b = Math.floor(x / 200)
+    if (b !== bucket.current) { bucket.current = b; if (x > s.scrollLeft + s.clientWidth - 40 || x < s.scrollLeft) s.scrollLeft = Math.max(0, x - 80) }
+    if (h + 30 > Math.max(120, reachRef.current)) { const need = Math.ceil((h + 30) / 60) * 60; if (need > reachRef.current) { reachRef.current = need; setReach(need) } }
+    if (!p.live) return
+    const w = (h - p.liveSince) * pps
+    s.querySelectorAll<HTMLElement>('[data-daw-rec]').forEach((el) => {
+      el.style.width = `${Math.max(0, w)}px`
+      el.style.display = w > 0 ? '' : 'none'
+      const cv = el.firstElementChild as HTMLCanvasElement | null
+      if (cv && w > 0) liveWave(cv, el, s, studio.wave(el.dataset.dawRec ?? ''), w, pps)
+    })
+  }, p.running || p.live)
+
+  // Ctrl+wheel (and a trackpad pinch, which browsers report the same way) zooms about the pointer.
+  const ppsRef = useRef(pps)
+  ppsRef.current = pps
+  const anchor = useRef<{ sec: number; off: number } | null>(null)
   useEffect(() => {
     const s = scroller.current
     if (!s) return
-    const x = head * pps
-    if (x > s.scrollLeft + s.clientWidth - 40 || x < s.scrollLeft) s.scrollLeft = Math.max(0, x - 80)
-  }, [Math.floor(head * pps / 200)]) // eslint-disable-line react-hooks/exhaustive-deps
+    const wheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const off = e.clientX - s.getBoundingClientRect().left
+      anchor.current = { sec: (off + s.scrollLeft) / ppsRef.current, off }
+      p.zoom(Math.min(2, Math.max(0.5, Math.exp(-e.deltaY * 0.002))))
+    }
+    s.addEventListener('wheel', wheel, { passive: false })
+    return () => s.removeEventListener('wheel', wheel)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const a = anchor.current, s = scroller.current
+    anchor.current = null
+    if (a && s) s.scrollLeft = Math.max(0, a.sec * pps - a.off)
+  }, [pps])
 
   /** What a drag would make of a clip. */
   const dragged = (c: StudioClip, drag = dragRef.current): StudioClip => {
@@ -486,14 +641,15 @@ function Arrangement(p: ArrProps) {
   // A drag is followed on the window, not the clip: a clip dragged to another track is drawn in that track's row
   // (a new element, which would lose a pointer capture and with it the rest of the drag). x0 is in timeline content
   // coordinates, so scrolling during a drag (by wheel, or at the edges) keeps the clip under the pointer.
-  const begin = (e: RPointerEvent, c: StudioClip, mode: Drag['mode']) => {
+  // Ctrl (or Cmd) held as the drag begins leaves the clips where they are and drops copies; Alt moves off the grid.
+  const begin = useLatest((e: RPointerEvent, c: StudioClip, mode: Drag['mode']) => {
     if (phone || e.button !== 0) return
     e.stopPropagation(); e.preventDefault()
     const ids = mode === 'move' ? (sel.includes(c.id) ? sel : e.shiftKey ? [...sel, c.id] : [c.id]) : [c.id]
     shiftAdded.current = e.shiftKey && !sel.includes(c.id) ? c.id : null
     if (!sel.includes(c.id) || mode !== 'move') setSel(e.shiftKey && mode === 'move' ? ids : ids.length > 1 ? ids : [c.id])
-    setDrag({ ids, mode, x0: e.clientX + (scroller.current?.scrollLeft ?? 0), lane0: c.lane_id, dms: 0, lane: null, copy: e.altKey && mode === 'move' })
-  }
+    setDrag({ ids, mode, x0: e.clientX + (scroller.current?.scrollLeft ?? 0), lane0: c.lane_id, dms: 0, lane: null, copy: (e.ctrlKey || e.metaKey) && mode === 'move' })
+  })
   const last = useRef<{ x: number; y: number; alt: boolean } | null>(null)
   const moveDrag = (e: { clientX: number; clientY: number; altKey: boolean }) => {
     const drag = dragRef.current, sc = scroller.current
@@ -542,6 +698,34 @@ function Arrangement(p: ArrProps) {
     return () => { cancelAnimationFrame(raf); window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', key, true); window.removeEventListener('blur', cancel) }
   }, [dragging])
 
+  // A press on an empty part of the tracks: released where it was, the selection is cleared and the playhead goes
+  // there; dragged, it draws a box and the clips it touches are selected (added to the selection with Shift).
+  const lanesEl = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  const shown = useRef<{ id: string; x0: number; x1: number; y0: number; y1: number }[]>([])
+  const press = (e: RPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !(e.target === e.currentTarget || (e.target as HTMLElement).dataset.dawLane)) return
+    const to = snapMs(msAt(e.clientX), e.altKey) / 1000
+    if (phone) { setSel([]); p.seek(to); return }
+    const el = lanesEl.current!
+    const pt = (ev: { clientX: number; clientY: number }) => { const r = el.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top } }
+    const a = pt(e), cx = e.clientX, cy = e.clientY, base = e.shiftKey ? sel : []
+    let moved = false
+    const mv = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - cx, ev.clientY - cy) < 5) return
+      moved = true
+      const b = pt(ev), r = { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) }
+      setBox(r)
+      setSel([...new Set([...base, ...shown.current.filter((c) => c.x0 < r.x1 && c.x1 > r.x0 && c.y0 < r.y1 && c.y1 > r.y0).map((c) => c.id)])])
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up)
+      setBox(null)
+      if (!moved) { setSel([]); p.seek(to) }
+    }
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
+  }
+
   const onDrop = (e: React.DragEvent, lane: string | null) => {
     const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('audio/') || /\.(wav|mp3|flac|ogg|m4a|aac|webm|opus)$/i.test(f.name))
     setDropLane(null)
@@ -550,32 +734,62 @@ function Arrangement(p: ArrProps) {
     void importFiles(p.channel.id, files, snapMs(msAt(e.clientX)), lane && lanes[lane]?.kind === 'audio' ? lane : undefined)
   }
 
-  // The ruler: click to move the playhead, drag to set the loop range.
+  // The ruler: click to move the playhead, drag to set the loop range, drag an end of the range to move that end.
   const rulerDown = (e: RPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    const end = (e.target as HTMLElement).dataset.dawLoopEdge
+    if (end) { const a = project.loop_start_ms ?? 0, b = project.loop_end_ms ?? 0; setLoopDrag(end === 'start' ? { a: b, b: a, x0: e.clientX, edge: true } : { a, b, x0: e.clientX, edge: true }); return }
     const ms = snapMs(msAt(e.clientX), e.altKey)
     setLoopDrag({ a: ms, b: ms, x0: e.clientX })
   }
-  const rulerMove = (e: RPointerEvent<HTMLDivElement>) => { if (loopDrag) setLoopDrag({ ...loopDrag, b: snapMs(msAt(e.clientX), e.altKey) }) }
+  const rulerMove = (e: RPointerEvent<HTMLDivElement>) => { if (loopDrag && (!loopDrag.edge || Math.abs(e.clientX - loopDrag.x0) >= 3)) setLoopDrag({ ...loopDrag, b: snapMs(msAt(e.clientX), e.altKey) }) }
   const rulerUp = (e: RPointerEvent<HTMLDivElement>) => {
     const l = loopDrag
     setLoopDrag(null)
     if (!l) return
-    if (Math.abs(e.clientX - l.x0) < 5 || Math.abs(l.b - l.a) < 50) { p.seek(l.a / 1000); return }
+    const short = Math.abs(l.b - l.a) < 50
+    if (l.edge) { if (!short && Math.abs(e.clientX - l.x0) >= 3) edit([{ op: 'project', loop_start_ms: Math.round(Math.min(l.a, l.b)), loop_end_ms: Math.round(Math.max(l.a, l.b)) }]); return }
+    if (Math.abs(e.clientX - l.x0) < 5 || short) { p.seek(l.a / 1000); return }
     edit([{ op: 'project', loop_start_ms: Math.round(Math.min(l.a, l.b)), loop_end_ms: Math.round(Math.max(l.a, l.b)), loop_on: true }])
   }
   const loopA = loopDrag ? Math.min(loopDrag.a, loopDrag.b) : project.loop_start_ms ?? 0
   const loopB = loopDrag ? Math.max(loopDrag.a, loopDrag.b) : project.loop_end_ms ?? 0
   const showLoop = loopB > loopA + 1
 
-  const rowH = (l: StudioLane) => LANE_H + (autoOpen[l.id] ? AUTO_H : 0)
+  // Markers are dragged along the ruler; a press that does not move is still a click.
+  const [markDrag, setMarkDrag] = useState<{ id: string; ms: number } | null>(null)
+  const markAt = useRef<{ id: string; x: number; off: number; moved: boolean } | null>(null)
+  const markDragged = useRef(false)
+
+  const select = useLatest((e: React.MouseEvent, id: string) => {
+    if (phone) setSel([id])
+    else if (!drag && !justDragged.current && !(e.shiftKey && shiftAdded.current === id)) setSel(e.shiftKey ? (sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]) : [id])
+  })
+  const openRoll = useLatest((id: string) => p.setRoll(id))
+  const me = useStore((s) => s.user)
+  const myLane = me ? takeLane(lanes, me.id)?.id : undefined
+
+  // Where each clip is drawn, for the selection box.
+  const boxes: typeof shown.current = []
+  let top = 0
+  const rows = ordered.map((l, i) => {
+    const y = top, h = laneH(l)
+    top += rowH(l)
+    const mine = Object.values(clips).filter((c) => dragged(c).lane_id === l.id && (!c.group_id || !c.muted)).map((c) => dragged(c))
+    for (const c of mine) { const x0 = ((c.start_ms + (l.nudge_ms ?? 0)) / 1000) * pps; boxes.push({ id: c.id, x0, x1: x0 + Math.max(2, (c.length_ms / 1000) * pps), y0: y, y1: y + h }) }
+    return { l, i, h, mine }
+  })
+  shown.current = boxes
+
   return (
     <div className="flex-1 min-h-0 overflow-y-auto" data-daw-arrangement>
       <div className="flex min-h-full">
         <div className="w-56 phone:w-32 shrink-0 border-r border-line bg-bg-2/60">
           <div className="sticky top-0 z-10 h-7 border-b border-line bg-bg-2" />
-          {ordered.map((l, i) => <LaneHead key={l.id} l={l} i={i} {...p} />)}
+          {ordered.map((l, i) => <LaneHead key={l.id} l={l} i={i} h={laneH(l)} extra={takeRows(l) * TAKE_H} has={used.has(l.id)} takes={takes.get(l.id)?.rows ?? 0} takesOn={!!takesOpen[l.id]} first={i === 0} last={i === ordered.length - 1}
+            lanes={lanes} channel={p.channel} owner={l.user_id ? p.users[l.user_id] : undefined} inBand={!!l.user_id && p.band.includes(l.user_id)} phone={phone} auto={autoOpen[l.id]} setAutoOpen={p.setAutoOpen} midiArmed={p.midiLane === l.id} myLane={myLane === l.id}
+            resize={resize} toggleTakes={toggleTakes} moveLane={moveLane} />)}
           {/* Recording members without a lane yet: theirs is made when the take lands. */}
           {p.live && p.band.filter((u) => !ordered.some((l) => l.user_id === u) && (!p.liveSolo || p.liveSolo === u)).map((u) => (
             <div key={u} className="flex items-center gap-1.5 border-b border-line/60 pl-3 pr-2 text-sm opacity-80" style={{ height: LANE_H }} data-daw-lane-pending={u}>
@@ -589,35 +803,65 @@ function Arrangement(p: ArrProps) {
           <div className="relative" style={{ width }}>
             <div className="sticky top-0 z-10 h-7 cursor-pointer border-b border-line bg-bg-2 text-[10px] text-text-2 select-none" onPointerDown={rulerDown} onPointerMove={rulerMove} onPointerUp={rulerUp} onDoubleClick={(e) => { const ms = msAt(e.clientX); if (showLoop && ms >= loopA && ms <= loopB) clearLoop() }} title={t('Drag to set a loop range · double-click it to clear')} data-daw-ruler>
               {showLoop && <div className={`pointer-events-none absolute inset-y-0 border-x ${project.loop_on || loopDrag ? 'border-accent bg-accent/25' : 'border-text-2/50 bg-text-2/10'}`} style={{ left: (loopA / 1000) * pps, width: ((loopB - loopA) / 1000) * pps }} data-daw-loop-range={project.loop_on ? 'on' : 'off'} />}
+              {showLoop && !phone && <>
+                <span className="absolute inset-y-0 z-10 w-2 -translate-x-1/2 cursor-ew-resize hover:bg-accent/60" style={{ left: (loopA / 1000) * pps }} title={t('Drag to move the start of the loop')} data-daw-loop-edge="start" />
+                <span className="absolute inset-y-0 z-10 w-2 -translate-x-1/2 cursor-ew-resize hover:bg-accent/60" style={{ left: (loopB / 1000) * pps }} title={t('Drag to move the end of the loop')} data-daw-loop-edge="end" />
+              </>}
               {barsAll.filter((b) => b.bar % every === 0).map((b) => <span key={b.bar} className="absolute top-0 h-full border-l border-line pl-1 leading-7" style={{ left: b.sec * pps }}>{b.bar + 1}</span>)}
               {(project.tempo_map ?? []).map((c) => <span key={`t${c.bar}`} className="absolute bottom-0 rounded-t bg-bg-4 px-1 text-[9px] font-bold text-text-1" style={{ left: secAtBar(project, c.bar) * pps + 2 }} title={t('{bpm} BPM, {beats}/4 from bar {bar}', { bpm: c.bpm, beats: c.beats, bar: c.bar + 1 })}>{c.bpm}{c.beats !== project.beats ? ` ${c.beats}/4` : ''}</span>)}
               {(project.markers ?? []).map((m) => (
-                <span key={m.id} className="absolute top-0 z-10 flex h-3.5 max-w-32 items-center gap-0.5 truncate rounded-br bg-warn px-1 text-[9px] font-bold text-black" style={{ left: (m.ms / 1000) * pps }} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { if (e.altKey) edit([{ op: 'project', markers: (project.markers ?? []).filter((x) => x.id !== m.id) }]); else p.seek(m.ms / 1000) }}
-                  onDoubleClick={() => { const name = window.prompt(t('Marker name'), m.name); if (name !== null) edit([{ op: 'project', markers: (project.markers ?? []).map((x) => (x.id === m.id ? { ...x, name } : x)) }]) }} title={t('{name} (click to go, double-click to rename, Alt-click to remove)', { name: m.name })} data-daw-marker={m.id}>{m.name}</span>
+                <span key={m.id} className="absolute top-0 z-10 flex h-3.5 max-w-32 items-center gap-0.5 truncate rounded-br bg-warn px-1 text-[9px] font-bold text-black" style={{ left: ((markDrag?.id === m.id ? markDrag.ms : m.ms) / 1000) * pps }}
+                  onPointerDown={(e) => { e.stopPropagation(); if (e.button !== 0 || phone) return; e.currentTarget.setPointerCapture(e.pointerId); markAt.current = { id: m.id, x: e.clientX, off: msAt(e.clientX) - m.ms, moved: false } }}
+                  onPointerMove={(e) => { const s = markAt.current; if (!s || s.id !== m.id || (!s.moved && Math.abs(e.clientX - s.x) < 4)) return; s.moved = true; setMarkDrag({ id: m.id, ms: snapMs(Math.max(0, msAt(e.clientX) - s.off), e.altKey) }) }}
+                  onPointerUp={(e) => {
+                    const s = markAt.current
+                    markAt.current = null; setMarkDrag(null)
+                    if (!s?.moved) return
+                    markDragged.current = true; setTimeout(() => { markDragged.current = false }, 0)
+                    const ms = Math.round(snapMs(Math.max(0, msAt(e.clientX) - s.off), e.altKey))
+                    if (ms !== m.ms) edit([{ op: 'project', markers: (project.markers ?? []).map((x) => (x.id === m.id ? { ...x, ms } : x)) }])
+                  }}
+                  onPointerCancel={() => { markAt.current = null; setMarkDrag(null) }}
+                  onClick={(e) => { if (markDragged.current) return; if (e.altKey) edit([{ op: 'project', markers: (project.markers ?? []).filter((x) => x.id !== m.id) }]); else p.seek(m.ms / 1000) }}
+                  onDoubleClick={() => { const name = window.prompt(t('Marker name'), m.name); if (name !== null) edit([{ op: 'project', markers: (project.markers ?? []).map((x) => (x.id === m.id ? { ...x, name } : x)) }]) }} title={t('{name} (click to go, drag to move, double-click to rename, Alt-click to remove)', { name: m.name })} data-daw-marker={m.id}>{m.name}</span>
               ))}
               {p.comments.filter((c) => !c.resolved).map((c) => <span key={c.id} className="absolute bottom-0 z-10 flex h-3 w-3 -translate-x-1/2 items-center justify-center rounded-full bg-accent text-[7px] text-white" style={{ left: (c.ms / 1000) * pps }} onPointerDown={(e) => e.stopPropagation()} onClick={() => { p.seek(c.ms / 1000); p.openComments() }} title={c.body} data-daw-comment-pin={c.id}>●</span>)}
             </div>
-            <div className="relative" onPointerDown={(e) => { if (e.target === e.currentTarget || (e.target as HTMLElement).dataset.dawLane) { setSel([]); p.seek(snapMs(msAt(e.clientX), e.altKey) / 1000) } }}>
+            <div ref={lanesEl} className="relative" onPointerDown={press}>
               {barsAll.map((b) => <div key={b.bar} className={`pointer-events-none absolute top-0 bottom-0 w-px ${b.bar % every === 0 ? 'bg-line/70' : 'bg-line/25'}`} style={{ left: b.sec * pps }} />)}
               {showLoop && project.loop_on && <div className="pointer-events-none absolute top-0 bottom-0 bg-accent/5" style={{ left: (loopA / 1000) * pps, width: ((loopB - loopA) / 1000) * pps }} />}
-              {ordered.map((l, i) => (
-                <div key={l.id} style={{ height: rowH(l) }} className="border-b border-line/60">
-                  <div className={`relative ${dropLane === l.id ? 'bg-accent/10' : ''} ${l.kind === 'bus' ? 'bg-bg-0/30' : ''}`} style={{ height: LANE_H }} data-daw-lane={l.id} data-lane-kind={l.kind}
-                    onDoubleClick={(e) => { if (l.kind === 'midi' && (e.target as HTMLElement).dataset.dawLane && !phone) p.newMidiClip(l.id, msAt(e.clientX)) }}>
-                    {Object.values(clips).filter((c) => dragged(c).lane_id === l.id && (!c.group_id || !c.muted)).map((c) => <Region key={c.id} c={dragged(c)} lane={l} color={laneColor(l, i)} pps={pps} selected={sel.includes(c.id)} peer={peerSel.get(c.id)} takes={c.group_id ? Object.values(clips).filter((x) => x.group_id === c.group_id).length : 0} dim={!audible(lanes, l.id) || c.muted} name={c.audio_id ? (p.audio[c.audio_id]?.name ?? p.audio[c.audio_id]?.display_name ?? '') + takeTag(p.audio[c.audio_id]) : l.name} begin={begin} phone={phone} openRoll={() => p.setRoll(c.id)} onSelect={(e) => { if (phone) setSel([c.id]); else if (!drag && !justDragged.current && !(e.shiftKey && shiftAdded.current === c.id)) setSel(e.shiftKey ? (sel.includes(c.id) ? sel.filter((x) => x !== c.id) : [...sel, c.id]) : [c.id]) }} />)}
-                    {p.live && l.user_id && p.band.includes(l.user_id) && (!p.liveSolo || p.liveSolo === l.user_id) && l.kind === 'audio' && head > p.liveSince && <div className="pointer-events-none absolute inset-y-2 rounded-md border border-danger bg-danger/20" style={{ left: p.liveSince * pps, width: (head - p.liveSince) * pps }} data-daw-recording={l.id} />}
+              {rows.map(({ l, i, h, mine }) => {
+                const color = laneColor(l, i), tk = takesOpen[l.id] ? takes.get(l.id) : undefined
+                return (
+                  <div key={l.id} style={{ height: rowH(l) }} className="border-b border-line/60">
+                    <div className={`relative ${dropLane === l.id ? 'bg-accent/10' : ''} ${l.kind === 'bus' ? 'bg-bg-0/30' : ''}`} style={{ height: h }} data-daw-lane={l.id} data-lane-kind={l.kind}
+                      onDoubleClick={(e) => { if (l.kind === 'midi' && (e.target as HTMLElement).dataset.dawLane && !phone) p.newMidiClip(l.id, msAt(e.clientX)) }}>
+                      {mine.map((c) => <Region key={c.id} c={c} lane={l} color={color} pps={pps} h={h - 12} selected={sel.includes(c.id)} peer={peerSel.get(c.id)} takes={c.group_id ? Object.values(clips).filter((x) => x.group_id === c.group_id).length : 0} dim={!audible(lanes, l.id) || c.muted} name={c.audio_id ? (p.audio[c.audio_id]?.name ?? p.audio[c.audio_id]?.display_name ?? '') + takeTag(p.audio[c.audio_id]) : l.name} begin={begin} phone={phone} openRoll={openRoll} onSelect={select} />)}
+                      {p.live && l.user_id && p.band.includes(l.user_id) && (!p.liveSolo || p.liveSolo === l.user_id) && l.kind === 'audio' && <div className="pointer-events-none absolute inset-y-2 overflow-hidden rounded-md border border-danger bg-danger/20 text-danger" style={{ left: p.liveSince * pps }} data-daw-rec={l.id} data-daw-recording={l.id}><canvas className="absolute inset-y-0 h-full" data-daw-live-wave /></div>}
+                    </div>
+                    {tk && Array.from({ length: tk.rows }, (_, k) => (
+                      <div key={k} className="relative border-t border-line/40 bg-bg-0/40" style={{ height: TAKE_H }} data-daw-take-lane={l.id} data-take-row={k + 1}>
+                        {tk.groups.map((g) => g[k] && (
+                          <button key={g[k].id} type="button" onClick={() => edit(g.map((x): Op => ({ op: 'clip.put', clip: { id: x.id, muted: x.id !== g[k].id } })))} aria-pressed={!g[k].muted}
+                            className={`absolute inset-y-0.5 truncate rounded border px-1 text-left text-[9px] font-semibold ${g[k].muted ? 'text-text-2 hover:text-text-0' : 'text-white'}`}
+                            style={{ left: ((g[k].start_ms + (l.nudge_ms ?? 0)) / 1000) * pps, width: Math.max(2, (g[k].length_ms / 1000) * pps), borderColor: color, background: g[k].muted ? `${color}22` : color }}
+                            title={g[k].muted ? t('Use take {n} here', { n: k + 1 }) : t('Take {n} plays here', { n: k + 1 })} data-daw-take-seg={g[k].id} data-active={g[k].muted ? undefined : '1'}>{k + 1}{g[k].audio_id ? ` · ${(p.audio[g[k].audio_id!]?.name ?? p.audio[g[k].audio_id!]?.display_name ?? '') + takeTag(p.audio[g[k].audio_id!])}` : ''}</button>
+                        ))}
+                      </div>
+                    ))}
+                    {autoOpen[l.id] && (() => { const prm = paramOf(l, lanes, autoOpen[l.id]); return prm ? <AutoRow lane={l} param={prm} pps={pps} width={width} height={AUTO_H} snapMs={snapMs} /> : null })()}
                   </div>
-                  {autoOpen[l.id] && (() => { const prm = paramOf(l, lanes, autoOpen[l.id]); return prm ? <AutoRow lane={l} param={prm} pps={pps} width={width} height={AUTO_H} snapMs={snapMs} /> : null })()}
-                </div>
-              ))}
+                )
+              })}
               {p.live && p.band.filter((u) => !ordered.some((l) => l.user_id === u) && (!p.liveSolo || p.liveSolo === u)).map((u) => (
                 <div key={u} className="relative border-b border-line/60 opacity-80" style={{ height: LANE_H }}>
-                  {head > p.liveSince && <div className="pointer-events-none absolute inset-y-2 rounded-md border border-danger bg-danger/20" style={{ left: p.liveSince * pps, width: (head - p.liveSince) * pps }} />}
+                  <div className="pointer-events-none absolute inset-y-2 rounded-md border border-danger bg-danger/20" style={{ left: p.liveSince * pps }} data-daw-rec="" />
                 </div>
               ))}
               <div className={`h-16 ${dropLane === 'new' ? 'bg-accent/10' : ''}`} data-daw-lane-new>{dropLane === 'new' && <span className="block pt-5 text-center text-xs text-accent">{t('Drop to import onto a new track')}</span>}</div>
+              {box && <div className="pointer-events-none absolute z-20 border border-accent bg-accent/15" style={{ left: box.x0, top: box.y0, width: box.x1 - box.x0, height: box.y1 - box.y0 }} data-daw-select-box />}
               {p.peers.map(([uid, x]) => <div key={uid} className="pointer-events-none absolute -top-7 bottom-0 z-10 w-px opacity-80" style={{ left: (x.pos_ms / 1000) * pps, background: p.peerColor(uid) }} data-daw-peer-head={uid}><span className="absolute -top-0 left-0.5 whitespace-nowrap rounded px-1 text-[9px] font-bold text-black" style={{ background: p.peerColor(uid) }}>{p.users[uid]?.display_name ?? p.users[uid]?.username ?? ''}</span></div>)}
-              <div className={`pointer-events-none absolute -top-7 bottom-0 z-20 w-px ${p.live ? 'bg-danger' : 'bg-text-0'}`} style={{ left: head * pps }} data-daw-playhead />
+              <div ref={playhead} className={`pointer-events-none absolute -top-7 bottom-0 z-20 w-px ${p.live ? 'bg-danger' : 'bg-text-0'}`} style={{ left: p.stopped * pps }} data-daw-playhead />
             </div>
           </div>
         </div>
@@ -626,26 +870,60 @@ function Arrangement(p: ArrProps) {
   )
 }
 
-function LaneHead({ l, i, lanes, clips, band, channel, users, phone, autoOpen, setAutoOpen, midiLane }: ArrProps & { l: StudioLane; i: number }) {
+/** The take being recorded as it arrives: the part of it in view, at full scale (a peak at the top is full scale). */
+function liveWave(cv: HTMLCanvasElement, el: HTMLElement, view: HTMLElement, wave: { from: number; peaks: number[] } | undefined, w: number, pps: number) {
+  if (!wave?.peaks.length) { cv.style.display = 'none'; return }
+  const r = el.getBoundingClientRect(), v = view.getBoundingClientRect(), h = el.clientHeight
+  const x0 = Math.max(0, Math.floor(v.left - r.left)), x1 = Math.min(Math.ceil(w), Math.ceil(v.right - r.left))
+  if (x1 <= x0 || !h) { cv.style.display = 'none'; return }
+  const key = `${x0}|${x1}|${wave.peaks.length}|${pps}|${h}`
+  if (cv.dataset.drawn === key) return
+  cv.dataset.drawn = key; cv.dataset.peaks = String(wave.peaks.length)
+  const dpr = window.devicePixelRatio || 1
+  cv.style.display = ''; cv.style.left = `${x0}px`; cv.style.width = `${x1 - x0}px`
+  cv.width = Math.round((x1 - x0) * dpr); cv.height = Math.round(h * dpr)
+  const g = cv.getContext('2d')
+  if (!g) return
+  g.setTransform(dpr, 0, 0, dpr, -x0 * dpr, 0)
+  g.fillStyle = getComputedStyle(cv).color
+  const per = 20
+  for (let x = x0; x < x1; x++) {
+    const a = Math.floor(((x / pps) * 1000 - wave.from) / per), b = Math.max(a + 1, Math.floor((((x + 1) / pps) * 1000 - wave.from) / per))
+    let m = 0
+    for (let i = Math.max(0, a); i < b && i < wave.peaks.length; i++) if (wave.peaks[i] > m) m = wave.peaks[i]
+    if (a >= wave.peaks.length) break
+    if (b <= 0) continue
+    const bh = Math.max(1, Math.min(1, m) * h)
+    g.fillRect(x, (h - bh) / 2, 1, bh)
+  }
+}
+
+type HeadProps = {
+  l: StudioLane; i: number; h: number; extra: number; has: boolean; takes: number; takesOn: boolean; first: boolean; last: boolean
+  lanes: Record<string, StudioLane>; channel: Channel; owner?: User; inBand: boolean; phone: boolean; auto?: string; setAutoOpen: ArrProps['setAutoOpen']; midiArmed: boolean; myLane: boolean
+  resize: (id: string, h: number) => void; toggleTakes: (id: string) => void; moveLane: (id: string, dir: -1 | 1) => void
+}
+
+/** A track's head: its name, mute, solo, arming, volume and meter, and its settings. Rendered again only when its own track changes. */
+const LaneHead = memo(function LaneHead({ l, i, h, extra, has, takes, takesOn, first, last, lanes, channel, owner, inBand, phone, auto, setAutoOpen, midiArmed, myLane: isMine, resize, toggleTakes, moveLane }: HeadProps) {
   const t = useT()
   const [naming, setNaming] = useState<string | null>(null)
   const [menu, setMenu] = useState(false)
-  const owner = l.user_id ? users[l.user_id] : undefined
-  const inBand = !!l.user_id && band.includes(l.user_id)
   const armed = !!l.armed
-  const has = Object.values(clips).some((c) => c.lane_id === l.id)
   const params = autoParams(l, lanes)
   // Band members choose which track their takes land on.
   const me = useStore((s) => s.user)
   const rights = projectRights(channel)
   const mine = !!me && (rights.engineer || rights.artist)
-  const myLane = mine && takeLane(lanes, me!.id)?.id === l.id
+  const myLane = mine && isMine
   // What this track of mine listens to while armed (its level is on the meter before and during the take).
   const input = useTakes((s) => s.inputs[l.id])
+  const sizing = useRef<{ y: number; h: number } | null>(null)
   const btn = (on: boolean, cls: string) => `h-5 w-5 shrink-0 rounded text-[10px] font-bold ${on ? cls : 'bg-bg-3 text-text-2 hover:text-text-0'}`
+  const item = 'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-bg-3 disabled:opacity-40 disabled:hover:bg-transparent'
   return (
-    <div style={{ height: LANE_H + (autoOpen[l.id] ? AUTO_H : 0) }} className="border-b border-line/60">
-      <div className={`group relative flex flex-col justify-center gap-1 pl-3 pr-2 ${audible(lanes, l.id) ? '' : 'opacity-60'}`} style={{ height: LANE_H }} data-daw-lane-head={l.id} data-lane-kind={l.kind}>
+    <div style={{ height: h + extra + (auto ? AUTO_H : 0) }} className="border-b border-line/60">
+      <div className={`group relative flex flex-col justify-center gap-1 pl-3 pr-2 ${audible(lanes, l.id) ? '' : 'opacity-60'}`} style={{ height: h }} data-daw-lane-head={l.id} data-lane-kind={l.kind}>
         <span className="absolute inset-y-0 left-0 w-1" style={{ background: laneColor(l, i) }} aria-hidden />
         <div className="flex min-w-0 items-center gap-1.5">
           {owner ? <Avatar user={owner} size={18} /> : l.kind === 'midi' ? <Piano size={14} className="shrink-0 text-text-2" /> : l.kind === 'bus' ? <Layers size={14} className="shrink-0 text-text-2" /> : null}
@@ -660,45 +938,55 @@ function LaneHead({ l, i, lanes, clips, band, channel, users, phone, autoOpen, s
           {l.kind !== 'bus' && <button type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, solo: !l.solo } }])} title={t('Solo')} aria-pressed={l.solo} className={btn(l.solo, 'bg-warn text-black')} data-daw-solo={l.id}>S</button>}
           {l.kind === 'audio' && <button type="button" disabled={!rights.edit} onClick={(e) => armLane(l.id, !armed, e.ctrlKey || e.metaKey)} title={armed ? t('Armed: records the next take') : t('Arm (Ctrl-click to arm several)')} aria-pressed={armed} className={btn(armed, 'bg-danger text-white')} data-daw-arm={l.id}>R</button>}
           {mine && l.kind === 'audio' && <button type="button" onClick={(e) => armLane(l.id, true, e.ctrlKey || e.metaKey, me!.id)} title={myLane ? t('Your takes land on this track') : t('Record your takes on this track')} aria-pressed={myLane} className={btn(myLane, 'bg-accent text-white')} data-daw-rec-here={l.id}><Mic size={11} className="mx-auto" /></button>}
-          {l.kind === 'midi' && !phone && <button type="button" onClick={() => armMidi(midiLane === l.id ? null : l.id)} title={midiLane === l.id ? t('Playing and recording MIDI here (on this device)') : t('Play and record MIDI on this track')} aria-pressed={midiLane === l.id} className={btn(midiLane === l.id, 'bg-danger text-white')} data-daw-midi-arm={l.id}>●</button>}
-          {!phone && <button type="button" onClick={() => setAutoOpen((m) => { const n = { ...m }; if (n[l.id]) delete n[l.id]; else n[l.id] = Object.keys(l.automation ?? {})[0] ?? 'gain'; return n })} title={t('Automation')} aria-pressed={!!autoOpen[l.id]} className={btn(!!autoOpen[l.id] || Object.keys(l.automation ?? {}).length > 0, 'bg-warn/80 text-black')} data-daw-auto-toggle={l.id}><Activity size={11} className="mx-auto" /></button>}
+          {l.kind === 'midi' && !phone && <button type="button" onClick={() => armMidi(midiArmed ? null : l.id)} title={midiArmed ? t('Playing and recording MIDI here (on this device)') : t('Play and record MIDI on this track')} aria-pressed={midiArmed} className={btn(midiArmed, 'bg-danger text-white')} data-daw-midi-arm={l.id}>●</button>}
+          {!phone && <button type="button" onClick={() => setAutoOpen((m) => { const n = { ...m }; if (n[l.id]) delete n[l.id]; else n[l.id] = Object.keys(l.automation ?? {})[0] ?? 'gain'; return n })} title={t('Automation')} aria-pressed={!!auto} className={btn(!!auto || Object.keys(l.automation ?? {}).length > 0, 'bg-warn/80 text-black')} data-daw-auto-toggle={l.id}><Activity size={11} className="mx-auto" /></button>}
+          {!phone && takes > 1 && <button type="button" onClick={() => toggleTakes(l.id)} title={takesOn ? t('Hide the takes') : t('Show the takes under the track: click a take to use it there')} aria-pressed={takesOn} className={btn(takesOn, 'bg-accent text-white')} data-daw-takes-toggle={l.id}><ListTree size={11} className="mx-auto" /></button>}
           <input type="range" min={0} max={150} value={Math.round(l.gain * 100)} onChange={(e) => editLive(`gain:${l.id}`, [{ op: 'lane.put', lane: { id: l.id, gain: Number(e.target.value) / 100 } }])} onDoubleClick={() => edit([{ op: 'lane.put', lane: { id: l.id, gain: 1 } }])} title={t('Volume {db} dB', { db: dB(l.gain) })} aria-label={t('Volume')} className="ml-1 h-3 min-w-0 flex-1 accent-accent" data-daw-lane-gain={l.id} />
         </div>
         <Meter get={() => engine.meter(l.id) ?? studio.reading(l.id) ?? (l.user_id && inBand ? fromActivity(voice.level(l.user_id)) : null)} id={l.id} />
+        {!phone && <span className="absolute inset-x-0 bottom-0 h-1 cursor-ns-resize hover:bg-accent/50"
+          onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); sizing.current = { y: e.clientY, h } }}
+          onPointerMove={(e) => { if (sizing.current) resize(l.id, sizing.current.h + e.clientY - sizing.current.y) }}
+          onPointerUp={() => { sizing.current = null }} onPointerCancel={() => { sizing.current = null }} onDoubleClick={() => resize(l.id, LANE_H)}
+          title={t('Drag to make the track taller or shorter (double-click for the usual height)')} data-daw-lane-resize={l.id} />}
         {menu && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
             <div className="pop absolute left-full top-0 z-40 ml-1 w-56 rounded-lg border border-line bg-bg-1 p-2 text-xs shadow-xl" data-daw-lane-settings={l.id}>
               <div className="mb-2 flex flex-wrap gap-1">{['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#00b0f4', '#9b59b6', '#1abc9c'].map((c) => <button key={c} type="button" onClick={() => edit([{ op: 'lane.put', lane: { id: l.id, color: c } }])} className={`h-5 w-5 rounded-full ${l.color === c ? 'ring-2 ring-white' : ''}`} style={{ background: c }} aria-label={c} />)}</div>
               {l.kind !== 'bus' && <label className="mb-2 flex items-center gap-2" title={t('Shift the whole track earlier (−) or later (+) to fix timing')}>{t('Nudge')}<input type="number" min={-1000} max={1000} step={5} value={l.nudge_ms ?? 0} onChange={(e) => editLive(`nudge:${l.id}`, [{ op: 'lane.put', lane: { id: l.id, nudge_ms: Math.max(-1000, Math.min(1000, Math.round(Number(e.target.value) || 0))) } }])} className="input h-7 w-20 px-1 text-center font-mono text-xs" data-daw-nudge={l.id} />ms</label>}
+              <button type="button" disabled={first} onClick={() => moveLane(l.id, -1)} className={item} data-daw-lane-up><ArrowUp size={13} /> {t('Move up')}</button>
+              <button type="button" disabled={last} onClick={() => moveLane(l.id, 1)} className={item} data-daw-lane-down><ArrowDown size={13} /> {t('Move down')}</button>
               <button type="button" onClick={() => { setMenu(false); edit([{ op: 'lane.del', id: l.id }]) }} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-danger hover:bg-danger/10" data-daw-lane-delete><Trash2 size={13} /> {has ? t('Delete track and its clips') : t('Delete track')}</button>
             </div>
           </>
         )}
       </div>
-      {autoOpen[l.id] && (
+      {extra > 0 && <div className="flex items-center bg-bg-0/40 px-3 text-[10px] text-text-2" style={{ height: extra }}>{t('{n} takes', { n: takes })}</div>}
+      {auto && (
         <div className="flex items-center gap-1 bg-bg-0/40 px-2" style={{ height: AUTO_H }}>
-          <Dropdown value={autoOpen[l.id]} onChange={(e) => setAutoOpen((m) => ({ ...m, [l.id]: e.target.value }))} className="input h-7 min-w-0 flex-1 px-1 text-[10px]" aria-label={t('Automated parameter')} data-daw-auto-param={l.id}>
+          <Dropdown value={auto} onChange={(e) => setAutoOpen((m) => ({ ...m, [l.id]: e.target.value }))} className="input h-7 min-w-0 flex-1 px-1 text-[10px]" aria-label={t('Automated parameter')} data-daw-auto-param={l.id}>
             {params.map((x) => <option key={x.key} value={x.key}>{l.automation?.[x.key] ? '● ' : ''}{x.label}</option>)}
           </Dropdown>
-          {l.automation?.[autoOpen[l.id]] && <button type="button" onClick={() => { const a = { ...l.automation }; delete a[autoOpen[l.id]]; edit([{ op: 'lane.put', lane: { id: l.id, automation: a } }]) }} title={t('Clear this automation')} className="text-text-2 hover:text-danger" data-daw-auto-clear><Trash2 size={12} /></button>}
+          {l.automation?.[auto] && <button type="button" onClick={() => { const a = { ...l.automation }; delete a[auto]; edit([{ op: 'lane.put', lane: { id: l.id, automation: a } }]) }} title={t('Clear this automation')} className="text-text-2 hover:text-danger" data-daw-auto-clear><Trash2 size={12} /></button>}
         </div>
       )}
     </div>
   )
-}
+})
 
-/** A clip: its waveform or notes, fades, takes, and handles to trim and fade. */
-function Region({ c, lane, color, pps, selected, peer, takes, dim, name, begin, onSelect, phone, openRoll }: { c: StudioClip; lane: StudioLane; color: string; pps: number; selected: boolean; peer?: string; takes: number; dim: boolean; name: string; begin: (e: RPointerEvent, c: StudioClip, mode: Drag['mode']) => void; onSelect: (e: React.MouseEvent) => void; phone: boolean; openRoll: () => void }) {
+type RegionProps = { c: StudioClip; lane: StudioLane; color: string; pps: number; h: number; selected: boolean; peer?: string; takes: number; dim: boolean; name: string; begin: (e: RPointerEvent, c: StudioClip, mode: Drag['mode']) => void; onSelect: (e: React.MouseEvent, id: string) => void; phone: boolean; openRoll: (id: string) => void }
+
+/** A clip: its waveform or notes, fades, takes, and handles to trim and fade. Rendered again only when it changes. */
+const Region = memo(function Region({ c, lane, color, pps, h, selected, peer, takes, dim, name, begin, onSelect, phone, openRoll }: RegionProps) {
   const t = useT()
   const w = Math.max(2, (c.length_ms / 1000) * pps)
   const fi = (c.fade_in_ms / 1000) * pps, fo = (c.fade_out_ms / 1000) * pps
-  const h = LANE_H - 12
   const midi = !!c.notes
   return (
     <div className={`absolute top-1.5 overflow-hidden rounded-md border ${selected ? 'ring-2 ring-white/80' : ''} ${dim ? 'opacity-45' : ''} ${phone ? '' : 'cursor-grab active:cursor-grabbing'}`}
       style={{ left: ((c.start_ms + (lane.nudge_ms ?? 0)) / 1000) * pps, width: w, height: h, borderColor: color, background: `${color}33`, color, boxShadow: peer ? `0 0 0 2px ${peer}` : undefined }}
-      onPointerDown={(e) => begin(e, c, 'move')} onClick={onSelect} onDoubleClick={() => { if (midi && !phone) openRoll() }} data-daw-clip={c.id} data-clip-kind={midi ? 'midi' : 'audio'} data-selected={selected ? '1' : undefined}>
+      onPointerDown={(e) => begin(e, c, 'move')} onClick={(e) => onSelect(e, c.id)} onDoubleClick={() => { if (midi && !phone) openRoll(c.id) }} data-daw-clip={c.id} data-clip-kind={midi ? 'midi' : 'audio'} data-selected={selected ? '1' : undefined}>
       {midi ? <ClipNotes c={c} /> : <ClipWave c={c} />}
       <span className="pointer-events-none absolute left-1.5 top-0.5 max-w-[calc(100%-12px)] truncate text-[10px] font-semibold text-text-0/90">{name}{c.gain !== 1 ? ` · ${dB(c.gain)} dB` : ''}{takes > 1 ? ` · ${t('{n} takes', { n: takes })}` : ''}</span>
       {!midi && <svg className="pointer-events-none absolute inset-0" width={w} height={h} aria-hidden>
@@ -715,7 +1003,7 @@ function Region({ c, lane, color, pps, selected, peer, takes, dim, name, begin, 
       </>}
     </div>
   )
-}
+})
 
 /** My takes that are not on the server in full yet: recorded on this device, and on their way. */
 function TakeStatus() {

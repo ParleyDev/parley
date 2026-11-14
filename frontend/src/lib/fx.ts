@@ -2,8 +2,10 @@
  * The DAW's effects, built from Web Audio nodes so they run the same live and in an offline render. Each type lists
  * its parameters (range, default, unit); `build` makes the nodes and returns an input, an output, a way to set
  * parameters, and the AudioParams that automation can drive (with the conversion from the parameter's unit).
+ * The limiter and the gate are processors of the studio's worklet module (lib/worklets/studio.js), which has to be
+ * loaded into the context before they are built.
  */
-export type FxType = 'eq' | 'compressor' | 'reverb' | 'delay' | 'drive' | 'filter' | 'limiter' | 'chorus'
+export type FxType = 'eq' | 'compressor' | 'reverb' | 'delay' | 'drive' | 'filter' | 'limiter' | 'chorus' | 'gate'
 export interface Effect { id: string; type: FxType; on: boolean; params: Record<string, number> }
 export interface ParamDef { key: string; label: string; min: number; max: number; def: number; step?: number; unit?: string; log?: boolean; /** Can be automated. */ auto?: boolean }
 export interface FxDef { type: FxType; name: string; params: ParamDef[] }
@@ -49,6 +51,13 @@ export const FX: Record<FxType, FxDef> = {
     { key: 'ceiling', label: 'Ceiling', min: -24, max: 0, def: -1, step: 0.1, unit: 'dB', auto: true },
     { key: 'release', label: 'Release', min: 10, max: 1000, def: 100, unit: 'ms' },
   ] },
+  gate: { type: 'gate', name: 'Gate', params: [
+    { key: 'threshold', label: 'Threshold', min: -80, max: 0, def: -45, step: 0.5, unit: 'dB', auto: true },
+    { key: 'attack', label: 'Attack', min: 0.1, max: 50, def: 1, step: 0.1, unit: 'ms' },
+    { key: 'hold', label: 'Hold', min: 0, max: 500, def: 50, unit: 'ms' },
+    { key: 'release', label: 'Release', min: 5, max: 2000, def: 150, unit: 'ms' },
+    { key: 'range', label: 'Range', min: -80, max: 0, def: -80, step: 1, unit: 'dB' },
+  ] },
   chorus: { type: 'chorus', name: 'Chorus', params: [
     { key: 'rate', label: 'Rate', min: 0.1, max: 8, def: 1.5, step: 0.1, unit: 'Hz', auto: true },
     { key: 'depth', label: 'Depth', min: 0, max: 10, def: 3, step: 0.1, unit: 'ms', auto: true },
@@ -63,7 +72,24 @@ export const dbToGain = (db: number) => Math.pow(10, db / 20)
 
 /** An automatable parameter: the AudioParam and how a value in the parameter's unit becomes its value. */
 export type Target = { param: AudioParam; to?: (v: number) => number }
-export interface FxNode { input: AudioNode; output: AudioNode; set: (e: Effect) => void; targets: Record<string, Target>; stop: () => void }
+export interface FxNode { input: AudioNode; output: AudioNode; set: (e: Effect) => void; targets: Record<string, Target>; stop: () => void; /** Its processor was not loaded: the signal passes unchanged. */ missing?: boolean }
+
+/** The effects that are processors of the worklet module, and the delay the limiter's look-ahead adds (frames). */
+export const WORKLET_FX: FxType[] = ['limiter', 'gate']
+export const LIMITER_LOOK = 96
+export const usesWorklet = (list: Effect[] | null | undefined) => (list ?? []).some((e) => e.on && WORKLET_FX.includes(e.type))
+
+function processor(ctx: BaseAudioContext, e: Effect): FxNode {
+  let node: AudioWorkletNode
+  try { node = new AudioWorkletNode(ctx, `parley-${e.type}`) }
+  catch { const g = ctx.createGain(); return { input: g, output: g, set: () => {}, targets: {}, stop: () => {}, missing: true } }
+  const defs = FX[e.type].params
+  const set = (x: Effect) => { for (const d of defs) { const p = node.parameters.get(d.key); if (p) p.value = val(x, d.key) } }
+  set(e)
+  const targets: Record<string, Target> = {}
+  for (const d of defs) { const p = node.parameters.get(d.key); if (p && d.auto) targets[d.key] = { param: p } }
+  return { input: node, output: node, set, targets, stop: () => { node.port.postMessage('stop') } }
+}
 
 /** A reverb's impulse: decaying stereo noise `size` seconds long. */
 function impulse(ctx: BaseAudioContext, size: number) {
@@ -142,13 +168,7 @@ export function buildEffect(ctx: BaseAudioContext, e: Effect): FxNode {
       set(e)
       return { input: f, output: f, set, targets: { freq: { param: f.frequency }, q: { param: f.Q } }, stop: () => {} }
     }
-    case 'limiter': {
-      const c = ctx.createDynamicsCompressor()
-      c.knee.value = 0; c.ratio.value = 20; c.attack.value = 0.001
-      const set = (x: Effect) => { c.threshold.value = val(x, 'ceiling'); c.release.value = ms(val(x, 'release')) }
-      set(e)
-      return { input: c, output: c, set, targets: { ceiling: { param: c.threshold } }, stop: () => {} }
-    }
+    case 'limiter': case 'gate': return processor(ctx, e)
     case 'chorus': {
       const dw = dryWet(ctx), d = ctx.createDelay(0.1), lfo = ctx.createOscillator(), depth = ctx.createGain()
       d.delayTime.value = 0.02

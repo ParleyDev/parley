@@ -81,7 +81,8 @@ export async function connectMidi(): Promise<string[]> {
 const KEYS = 'awsedftgyhujk'
 /** The computer keyboard as a piano while `keys` is on (not while typing in a field). */
 function keyboard() {
-  const down = new Set<string>()
+  // The note each held key started: the octave may change before it is let go.
+  const down = new Map<string, number>()
   const typing = () => { const a = document.activeElement; return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || (a as HTMLElement).isContentEditable) }
   window.addEventListener('keydown', (e) => {
     if (!get().keys || e.ctrlKey || e.metaKey || e.altKey || typing()) return
@@ -90,12 +91,16 @@ function keyboard() {
     const i = KEYS.indexOf(k)
     if (i < 0 || e.repeat || down.has(k)) { if (i >= 0) e.preventDefault(); return }
     e.preventDefault(); e.stopPropagation()
-    down.add(k); noteOn(12 * (get().octave + 1) + i, 100)
+    const p = 12 * (get().octave + 1) + i
+    down.set(k, p); noteOn(p, 100)
   }, true)
   window.addEventListener('keyup', (e) => {
     const k = e.key.toLowerCase(), i = KEYS.indexOf(k)
-    if (i < 0 || !down.has(k)) return
-    down.delete(k); noteOff(12 * (get().octave + 1) + i)
+    const p = down.get(k)
+    if (i < 0 || p === undefined) return
+    down.delete(k); noteOff(p)
   }, true)
+  // Keys let go while the window was elsewhere never say so.
+  window.addEventListener('blur', () => { for (const p of down.values()) noteOff(p); down.clear() })
 }
 if (typeof window !== 'undefined') keyboard()

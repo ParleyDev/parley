@@ -60,6 +60,9 @@ class StudioRecorder {
   private meterAgain = false
 
   get recording() { return this.recs.size > 0 }
+  /** The take being captured on a track of mine, as peaks every 20 ms from `from` ms after the take's start. */
+  private waves = new Map<string, { from: number; peaks: number[] }>()
+  wave(key: string) { return this.waves.get(key) }
 
   constructor() {
     if (typeof window === 'undefined') return
@@ -244,6 +247,67 @@ class StudioRecorder {
     return r
   }
 
+  // ---- latency ----
+
+  /**
+   * Measure, on this device, how long it is from the studio playing a sound to that sound arriving at a track's
+   * input (or at my microphone): five clicks are played and listened for. It needs the output to reach the input:
+   * a loopback cable, or headphones held to the microphone. The figure is kept for that input and output (see
+   * engine.latencyMs) and takes are placed by it from then on.
+   */
+  async calibrate(key = ''): Promise<number> {
+    const ctx = engine.audio()
+    await ctx.resume().catch(() => {})
+    await studioModule(ctx)
+    const input = await this.source(key)
+    const node = new AudioWorkletNode(ctx, 'parley-take-capture', { numberOfInputs: 1, numberOfOutputs: 1, channelCount: 1, channelCountMode: 'explicit', channelInterpretation: 'speakers', processorOptions: { channels: 1 } })
+    const sink = ctx.createGain(); sink.gain.value = 0
+    input.node.connect(node); node.connect(sink).connect(ctx.destination)
+    try {
+      const rate = ctx.sampleRate, clicks = 5, gap = 0.6, quiet = 0.3
+      const first = Math.round((ctx.currentTime + 0.2 + quiet) * rate)
+      const at = Array.from({ length: clicks }, (_, k) => first + Math.round(k * gap * rate))
+      const from = first - Math.round(quiet * rate), len = Math.round((quiet + clicks * gap) * rate)
+      const heard = new Float32Array(len)
+      const done = new Promise<void>((res) => {
+        const give = setTimeout(res, (0.2 + quiet + clicks * gap + 1.5) * 1000)
+        node.port.onmessage = (e: MessageEvent<{ end?: boolean; frame: number; samples: Float32Array; frames: number }>) => {
+          if (e.data.end) return
+          const o = e.data.frame - from
+          for (let i = Math.max(0, -o); i < e.data.frames && o + i < len; i++) heard[o + i] = e.data.samples[i]
+          if (o + e.data.frames >= len) { clearTimeout(give); res() }
+        }
+      })
+      for (const f of at) engine.ping(f / rate)
+      await done
+      // The room before the first click: a click counts when it stands well clear of that.
+      let floor = 0
+      const q = Math.round(quiet * rate)
+      for (let i = 0; i < q; i++) floor += heard[i] * heard[i]
+      floor = Math.sqrt(floor / q)
+      const found: number[] = []
+      for (const f of at) {
+        const a = f - from, b = Math.min(len, a + Math.round(0.5 * rate))
+        let peak = 0
+        for (let i = a; i < b; i++) { const v = Math.abs(heard[i]); if (v > peak) peak = v }
+        if (peak < 0.002 || peak < floor * 8) continue
+        // Where the click begins, not where the room is loudest.
+        for (let i = a; i < b; i++) if (Math.abs(heard[i]) >= peak / 2) { found.push(((i - a) * 1000) / rate); break }
+      }
+      found.sort((x, y) => x - y)
+      if (found.length < 3 || found[found.length - 1] - found[0] > 3) throw new Error(t('Could not hear the test clicks clearly. Connect the output to the input with a cable, or hold your headphones to the microphone, and try again.'))
+      const ms = found[found.length >> 1]
+      engine.setMeasured(input.stream, ms)
+      return ms
+    } finally {
+      node.port.postMessage('stop')
+      try { input.node.disconnect(node) } catch { /* already gone */ }
+      node.disconnect(); sink.disconnect(); input.release()
+    }
+  }
+  /** The input a track of mine records (or my microphone), for the latency figures; null when it is not open. */
+  inputStream(key: string) { return this.meters.get(key)?.input.stream ?? null }
+
   // ---- recording ----
 
   private async start(key: string, sessionId: string, serverStart: number) {
@@ -293,6 +357,9 @@ class StudioRecorder {
     const limit = MAX_TAKE_SECS * rate
     let meta: TakeMeta | null = null
     let frames = 0, next = 0, written = 0, held = 0, full = false, broken = false, lost = 0
+    let wave: { from: number; peaks: number[] } | null = null
+    let top = 0, seen = 0
+    const bin = Math.round(rate / 50) * ch
     let pend: Uint8Array[] = []
     let queue: Promise<unknown> = Promise.resolve()
     let ended = () => {}
@@ -331,11 +398,14 @@ class StudioRecorder {
         meta = { id, session: sessionId, user, lane: key, rate, channels: ch, offset_ms: ms, latency_ms: engine.latencyMs(input.stream), processed: input.processed, bytes: 0, ended: false, at: Date.now() }
         noteTake(id, { session: sessionId, lane: key, state: 'recording', processed: input.processed })
         // Its track appears on the server at once: the band sees who is recording.
+        this.waves.set(key, (wave = { from: ms, peaks: [] }))
         const m = meta
         queue = queue.then(() => takeStore.put(m)).then(() => sendTake(id)).catch(() => {})
       }
       if (frames + s.length / ch > limit) s = s.subarray(0, Math.max(0, limit - frames) * ch)
       if (s.length) { const b = pcm24(s); pend.push(b); held += b.length; frames += s.length / ch }
+      // What it looks like so far, for the timeline.
+      if (wave) for (let i = 0; i < s.length; i++) { const v = s[i] < 0 ? -s[i] : s[i]; if (v > top) top = v; if (++seen >= bin) { wave.peaks.push(top); top = 0; seen = 0 } }
       // Read: the buffer goes back to the processor for a later batch.
       node.port.postMessage({ spare: whole }, [whole.buffer])
       if (held >= (rate >> 1) * ch * 3) flush()
@@ -351,6 +421,7 @@ class StudioRecorder {
       await Promise.race([end, new Promise((res) => setTimeout(res, 500))])
       try { input.node.disconnect(node) } catch { /* already gone */ }
       node.disconnect(); sink.disconnect(); input.release()
+      if (this.waves.get(key) === wave) this.waves.delete(key)
       if (!meta) return
       // Said, not hidden: the take is in time but has holes, and may be worth doing again.
       if (lost) useStore.getState().pushToast(t('The browser dropped {ms} ms of audio during this take (this device was busy): listen before you keep it', { ms: Math.max(1, Math.round((lost * 1000) / rate)) }), 'error')

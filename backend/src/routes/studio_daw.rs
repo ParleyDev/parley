@@ -333,7 +333,7 @@ fn color(c: &str) -> AppResult<Option<String>> {
 
 const LANE_KINDS: [&str; 3] = ["audio", "midi", "bus"];
 /// The effects the clients implement.
-pub const EFFECTS: [&str; 8] = ["eq", "compressor", "reverb", "delay", "drive", "filter", "limiter", "chorus"];
+pub const EFFECTS: [&str; 9] = ["eq", "compressor", "reverb", "delay", "drive", "filter", "limiter", "chorus", "gate"];
 
 /// An effect chain: at most 16, each {id, type, on, params} with numeric params; anything else is dropped.
 fn effects(v: Value) -> AppResult<Value> {

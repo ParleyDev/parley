@@ -76,3 +76,44 @@ export function valueAt(pts: Point[], ms: number) {
   }
   return pts[pts.length - 1][1]
 }
+
+/** The longest crossfade made where clips on one track overlap (ms). */
+export const SEAM_MS = 10
+
+/**
+ * Where audio clips on one track overlap, the one that starts later is heard (of two starting together, the one
+ * with the later id) and the other is silent under it, with a short crossfade at each edge. For every clip that is
+ * affected: its level over time as points [timeline ms, 0..1], to multiply with its own gain and fades. Clips that
+ * overlap nothing are not in the map.
+ */
+export function seams(clips: Record<string, StudioClip>): Map<string, Point[]> {
+  const by = new Map<string, StudioClip[]>()
+  for (const c of Object.values(clips)) if (!c.muted && c.audio_id && !c.notes) { const l = by.get(c.lane_id); if (l) l.push(c); else by.set(c.lane_id, [c]) }
+  const out = new Map<string, Point[]>()
+  for (const list of by.values()) {
+    if (list.length < 2) continue
+    list.sort((a, b) => a.start_ms - b.start_ms || (a.id < b.id ? -1 : 1))
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i], end = c.start_ms + c.length_ms
+      const pts: Point[] = []
+      // An earlier clip still sounding where this one starts or ends: fade in over it, and out to it.
+      let before = 0, after = 0
+      for (let j = 0; j < i; j++) { const e = list[j].start_ms + list[j].length_ms; if (e > c.start_ms) { before = Math.max(before, Math.min(e, end) - c.start_ms); if (e > end) after = Math.max(after, end - c.start_ms) } }
+      if (before > 0) { const x = Math.min(SEAM_MS, before / 2); pts.push([c.start_ms, 0], [c.start_ms + x, 1]) }
+      // Later clips over this one, their ranges joined where they touch.
+      let s = -1, e = -1
+      const cover = (a: number, b: number) => { const x = Math.min(SEAM_MS, (b - a) / 2); pts.push([a, 1], [a + x, 0]); if (b < end) pts.push([b - x, 0], [b, 1]) }
+      for (let j = i + 1; j < list.length; j++) {
+        const d = list[j]
+        if (d.start_ms >= end) break
+        const de = Math.min(end, d.start_ms + d.length_ms)
+        if (s < 0) { s = d.start_ms; e = de } else if (d.start_ms <= e) e = Math.max(e, de)
+        else { cover(s, e); s = d.start_ms; e = de }
+      }
+      if (s >= 0) cover(s, e)
+      if (after > 0 && (s < 0 || e < end)) { const x = Math.min(SEAM_MS, after / 2); pts.push([end - x, 1], [end, 0]) }
+      if (pts.length) out.set(c.id, pts.sort((a, b) => a[0] - b[0]))
+    }
+  }
+  return out
+}

@@ -15,7 +15,8 @@ export function audition(lane: StudioLane, p: number, vel = 100, dur: number | n
   const inst = (lane.instrument as Instrument | null) ?? defaultInstrument('synth')
   const sid = inst.type === 'sampler' ? inst.audio_id : null
   const sample = sid ? engine.peek(sid)?.buffer : undefined
-  return playNote(ctx, ctx.destination, inst, p, vel, ctx.currentTime + 0.005, dur, [], sample)
+  // Through the track's own strip: its effects, fader, pan and mute, as it will sound in the project.
+  return playNote(ctx, engine.strip(lane.id), inst, p, vel, ctx.currentTime + 0.005, dur, [], sample)
 }
 
 /** A MIDI track's instrument: synth, drum kit or sampler, its settings, and a keyboard to try it. */

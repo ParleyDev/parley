@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyOps, audible, clipEnd, inverseOps, projectEnd, sortedLanes, valueAt, type Doc, type Op } from './dawops'
+import { applyOps, audible, clipEnd, inverseOps, projectEnd, seams, SEAM_MS, sortedLanes, valueAt, type Doc, type Op } from './dawops'
 import type { StudioClip, StudioLane, StudioProject } from './types'
 
 const project = { id: 'p', channel_id: 'c', name: 'Song', bpm: 120, beats: 4, master_gain: 1, created_by: null, created_at: '', updated_at: '', version: 1, master_effects: [], loop_on: true, loop_start_ms: 1000, loop_end_ms: 5000, punch_on: true } as StudioProject
@@ -101,5 +101,46 @@ describe('automation', () => {
     expect(valueAt(pts, 999)).toBeCloseTo(0.1998, 4)
     expect(valueAt(pts, 1000)).toBe(0.2)
     expect(valueAt(pts, 1001)).toBe(0.8)
+  })
+})
+
+describe('overlapping clips', () => {
+  const level = (m: Map<string, [number, number][]>, id: string, ms: number) => (m.has(id) ? valueAt(m.get(id)!, ms) : 1)
+  it('leave clips that overlap nothing alone', () => {
+    const m = seams({ a: clip('a', 'l1'), b: clip('b', 'l1', { start_ms: 1000 }), c: clip('c', 'l2', { start_ms: 500 }) })
+    expect(m.size).toBe(0)
+  })
+  it('the later clip is heard, with a short crossfade where it starts', () => {
+    const m = seams({ a: clip('a', 'l1', { length_ms: 2000 }), b: clip('b', 'l1', { start_ms: 1000, length_ms: 2000 }) })
+    expect(level(m, 'a', 500)).toBe(1)
+    expect(level(m, 'a', 1000)).toBe(1)
+    expect(level(m, 'a', 1000 + SEAM_MS)).toBe(0)
+    expect(level(m, 'a', 1900)).toBe(0)
+    expect(level(m, 'b', 1000)).toBe(0)
+    expect(level(m, 'b', 1000 + SEAM_MS)).toBe(1)
+    expect(level(m, 'b', 2500)).toBe(1)
+    // Through the seam the two add up to one.
+    for (let ms = 1000; ms <= 1000 + SEAM_MS; ms++) expect(level(m, 'a', ms) + level(m, 'b', ms)).toBeCloseTo(1, 9)
+  })
+  it('a clip inside another cuts a hole in it and gives way at its end', () => {
+    const m = seams({ a: clip('a', 'l1', { length_ms: 3000 }), b: clip('b', 'l1', { start_ms: 1000, length_ms: 1000 }) })
+    expect([500, 1500, 2500].map((ms) => level(m, 'a', ms))).toEqual([1, 0, 1])
+    expect([1000, 1500, 2000].map((ms) => level(m, 'b', ms))).toEqual([0, 1, 0])
+    for (let ms = 990; ms <= 2010; ms++) expect(level(m, 'a', ms) + level(m, 'b', ms)).toBeCloseTo(1, 9)
+  })
+  it('of two that start together the one with the later id is heard', () => {
+    const m = seams({ a: clip('a', 'l1'), b: clip('b', 'l1') })
+    expect(level(m, 'a', 500)).toBe(0)
+    expect(level(m, 'b', 500)).toBe(1)
+  })
+  it('muted clips, notes and other tracks do not count', () => {
+    const m = seams({ a: clip('a', 'l1', { length_ms: 2000 }), b: clip('b', 'l1', { start_ms: 500, muted: true }), c: clip('c', 'l2', { start_ms: 500 }), d: clip('d', 'l1', { start_ms: 500, audio_id: null, notes: [] }) })
+    expect(m.size).toBe(0)
+  })
+  it('a very short overlap is crossed in half its length each way', () => {
+    const m = seams({ a: clip('a', 'l1', { length_ms: 1004 }), b: clip('b', 'l1', { start_ms: 1000 }) })
+    expect(level(m, 'a', 1002)).toBe(0)
+    expect(level(m, 'b', 1002)).toBe(1)
+    expect(level(m, 'a', 1001) + level(m, 'b', 1001)).toBeCloseTo(1, 9)
   })
 })

@@ -1,8 +1,8 @@
-import { CalendarClock, Check, Disc3, Download, History, ListPlus, MessageSquare, Pause, Play, RotateCcw, Send, Trash2, Upload, UserPlus, Users, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { CalendarClock, Check, Headphones, Disc3, Download, History, ListPlus, MessageSquare, Pause, Play, RotateCcw, Send, Trash2, Upload, UserPlus, Users, X } from 'lucide-react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { api } from '../lib/api'
-import { addTake, useDaw, type StudioComment } from '../lib/daw'
-import { takeTag } from '../lib/studio'
+import { addTake, engine, useDaw, type StudioComment } from '../lib/daw'
+import { studio, takeTag } from '../lib/studio'
 import { projectRights, setBandRole, useGatherings } from '../lib/projects'
 import { exportMixAs, exportProjectFile, exportStems, importProjectFile, postMix, type Format } from '../lib/exporters'
 import { exportDawProject, importDawProject } from '../lib/dawproject'
@@ -18,6 +18,18 @@ const clock = (ms: number) => { const s = ms / 1000; return `${Math.floor(s / 60
 const Panel = ({ title, icon, close, children, data }: { title: string; icon: React.ReactNode; close: () => void; children: React.ReactNode; data: string }) => (
   <FloatWindow id={`panel-${data}`} title={title} icon={icon} width={320} onClose={close} className="max-h-[70vh]" data-daw-panel={data}>{children}</FloatWindow>
 )
+
+/** Where the playhead is, for a panel that shows it: read a few times a second while playing (the panel is not drawn every frame). */
+export function useHead(now: () => number) {
+  const playing = useSyncExternalStore((f) => engine.subscribe(f), () => !!engine.playing)
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (!playing) return
+    const id = setInterval(() => tick((n) => n + 1), 250)
+    return () => clearInterval(id)
+  }, [playing])
+  return now()
+}
 
 /** Saved versions of the project: save one, restore one (the project as it is gets saved first), delete. */
 export function VersionsPanel({ close }: { close: () => void }) {
@@ -102,8 +114,9 @@ export function ExportPanel({ channel, close }: { channel: Channel; close: () =>
 }
 
 /** Comments pinned to moments of the song: add one at the playhead, jump to one, resolve, delete. */
-export function CommentsPanel({ head, seek, close }: { head: number; seek: (sec: number) => void; close: () => void }) {
+export function CommentsPanel({ now, seek, close }: { now: () => number; seek: (sec: number) => void; close: () => void }) {
   const t = useT()
+  const head = useHead(now)
   const project = useDaw((s) => s.project)
   const comments = useDaw((s) => s.comments)
   const users = useStore((s) => s.users)
@@ -114,7 +127,7 @@ export function CommentsPanel({ head, seek, close }: { head: number; seek: (sec:
   if (!project) return null
   return (
     <Panel title={t('Comments')} icon={<MessageSquare size={16} />} close={close} data="comments">
-      <form className="mb-3" onSubmit={(e) => { e.preventDefault(); if (body.trim()) api.post(`/studio/projects/${project.id}/comments`, { ms: Math.round(head * 1000), body }).then(() => setBody('')).catch(fail) }}>
+      <form className="mb-3" onSubmit={(e) => { e.preventDefault(); if (body.trim()) api.post(`/studio/projects/${project.id}/comments`, { ms: Math.round(now() * 1000), body }).then(() => setBody('')).catch(fail) }}>
         <textarea value={body} onChange={(e) => setBody(e.target.value)} maxLength={2000} rows={2} placeholder={t('Comment at {time}…', { time: clock(head * 1000) })} className="input w-full resize-none text-sm" data-daw-comment-input />
         <button type="submit" disabled={!body.trim()} className="btn-primary mt-1 h-8 w-full justify-center py-0 text-xs disabled:opacity-50" data-daw-comment-send>{t('Comment')}</button>
       </form>
@@ -140,7 +153,7 @@ export function CommentsPanel({ head, seek, close }: { head: number; seek: (sec:
 }
 
 /** Everything recorded or imported into the project: listen, put a take back on the timeline, download. */
-export function TakesPanel({ channel, head, close }: { channel: Channel; head: number; close: () => void }) {
+export function TakesPanel({ channel, now, close }: { channel: Channel; now: () => number; close: () => void }) {
   const t = useT()
   const users = useStore((s) => s.users)
   const clips = useDaw((s) => s.clips)
@@ -173,7 +186,7 @@ export function TakesPanel({ channel, head, close }: { channel: Channel; head: n
               <span className="block truncate font-semibold">{a.name ?? (u?.display_name ?? u?.username ?? a.display_name)}</span>
               <span className="text-[10px] text-text-2">{a.kind === 'import' ? t('Imported') : t('Take')}{takeTag(a)} · {clock(a.duration_ms ?? 0)} · {new Date(a.created_at).toLocaleString()}{used.has(a.id) ? ` · ${t('in the arrangement')}` : ''}</span>
             </span>
-            {edit && !used.has(a.id) && <button type="button" onClick={() => addTake(a, head * 1000)} title={t('Put it on the timeline at the playhead')} className="text-text-2 hover:text-text-0" data-daw-take-add><ListPlus size={15} /></button>}
+            {edit && !used.has(a.id) && <button type="button" onClick={() => addTake(a, now() * 1000)} title={t('Put it on the timeline at the playhead')} className="text-text-2 hover:text-text-0" data-daw-take-add><ListPlus size={15} /></button>}
             <a href={a.url} download className="text-text-2 hover:text-text-0" title={t('Download')}><Download size={14} /></a>
           </div>
         )
@@ -255,4 +268,59 @@ export function SessionsPanel({ channel, close }: { channel: Channel; close: () 
 export async function importAny(studioId: string, f: File) {
   if (/\.dawproject$/i.test(f.name)) { const r = await importDawProject(studioId, f); if (r.skipped.length) useStore.getState().pushToast(`Left out: ${[...new Set(r.skipped)].slice(0, 4).join(', ')}${r.skipped.length > 4 ? '…' : ''}`); return r.project }
   return importProjectFile(studioId, f)
+}
+
+/**
+ * Where the studio plays on this device and how late a take arrives: the output, the latency takes are placed by
+ * (measured here, or as the browser reports it), and measuring it.
+ */
+export function AudioPanel({ close }: { close: () => void }) {
+  const t = useT()
+  const pushToast = useStore((s) => s.pushToast)
+  const output = useStore((s) => s.voiceSettings.outputDeviceId)
+  const update = useStore((s) => s.updateVoiceSettings)
+  const me = useStore((s) => s.user)
+  const lanes = useDaw((s) => s.lanes)
+  // My armed track's input when it has one, otherwise my microphone.
+  const mine = Object.values(lanes).find((l) => l.kind === 'audio' && l.armed && l.user_id === me?.id)?.id ?? ''
+  useSyncExternalStore((f) => engine.subscribe(f), () => engine.measuredMs(studio.inputStream(mine)))
+  const [outs, setOuts] = useState<MediaDeviceInfo[]>([])
+  const [busy, setBusy] = useState(false)
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const list = () => void navigator.mediaDevices?.enumerateDevices().then((d) => setOuts(d.filter((x) => x.kind === 'audiooutput' && x.deviceId)), () => {})
+    list()
+    navigator.mediaDevices?.addEventListener?.('devicechange', list)
+    const id = setInterval(() => tick((n) => n + 1), 1000)
+    return () => { navigator.mediaDevices?.removeEventListener?.('devicechange', list); clearInterval(id) }
+  }, [])
+  const stream = studio.inputStream(mine)
+  const measured = engine.measuredMs(stream), reported = engine.reportedMs(stream)
+  const measure = () => {
+    setBusy(true)
+    studio.calibrate(mine).then((ms) => pushToast(t('Measured: {ms} ms. Takes on this device are placed by it.', { ms: ms.toFixed(1) })), (e) => pushToast((e as Error).message, 'error')).finally(() => setBusy(false))
+  }
+  return (
+    <Panel title={t('Audio')} icon={<Headphones size={16} />} close={close} data="audio">
+      <label className="mb-1 block text-xs font-semibold text-text-1">{t('Output')}</label>
+      {engine.canSink
+        ? <Dropdown value={output} onChange={(e) => update({ outputDeviceId: e.target.value })} className="input mb-1 h-8 w-full px-2 text-sm" aria-label={t('Output')} data-daw-output>
+          <option value="">{t('System default')}</option>
+          {outs.filter((d) => d.deviceId !== 'default').map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || t('Output')}</option>)}
+        </Dropdown>
+        : <p className="mb-1 text-xs text-text-2" data-daw-output-unsupported>{t('This browser plays the studio through the system’s output: choose it in the system’s sound settings.')}</p>}
+      <p className="mb-3 text-xs text-text-2">{t('The same output as calls use.')}</p>
+      <label className="mb-1 block text-xs font-semibold text-text-1">{t('Recording latency')}</label>
+      <p className="mb-1 font-mono text-sm tabular-nums" data-daw-latency={measured === null ? 'reported' : 'measured'} data-ms={(measured ?? reported).toFixed(1)}>
+        {measured === null ? t('{ms} ms (as the browser reports it)', { ms: reported.toFixed(0) }) : t('{ms} ms (measured on this device)', { ms: measured.toFixed(1) })}
+      </p>
+      <p className="mb-2 text-xs text-text-2">{t('A take is moved earlier by this much, so it lines up with what you heard. Browsers often report less than the truth; measuring finds it. To measure, the output has to reach the input: connect them with a cable, or hold your headphones to the microphone. Five clicks are played.')}</p>
+      <div className="mb-3 flex gap-2">
+        <button type="button" disabled={busy} onClick={measure} className="btn-primary h-8 flex-1 justify-center py-0 text-xs" data-daw-calibrate>{busy ? t('Listening…') : t('Measure')}</button>
+        {measured !== null && <button type="button" disabled={busy} onClick={() => engine.setMeasured(stream, null)} className="btn-ghost h-8 py-0 text-xs" data-daw-calibrate-clear>{t('Forget')}</button>}
+      </div>
+      <label className="mb-1 block text-xs font-semibold text-text-1">{t('Monitoring')}</label>
+      <p className="text-xs text-text-2" data-daw-monitor-latency={reported.toFixed(0)}>{t('Hearing your own input through the studio is about {ms} ms late on this device (as the browser reports it). Wear headphones while recording: what the speakers play is recorded again by the microphone, and monitoring through speakers feeds back.', { ms: reported.toFixed(0) })}</p>
+    </Panel>
+  )
 }
