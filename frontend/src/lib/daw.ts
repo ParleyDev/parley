@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { api, getToken } from './api'
-import { clickAt, encodeWav, peaksOf } from './multitrack'
+import { clickAt, peaksOf } from './multitrack'
+import { encodeWav } from './wav'
 import { buildChain, chainKey, integratedLufs, type FxNode, type Target } from './fx'
 import { beatsAt, isDownbeat, secAtBeat } from './tempo'
 import { scheduleNotes } from './instruments'
@@ -8,6 +9,7 @@ import { useStore } from '../store'
 import { STORAGE_PREFIX } from './brand'
 import { serverNow, syncClock, toLocal } from './clock'
 import { t } from './i18n'
+import { applyOps, audible, clipEnd, inverseOps, projectEnd, sortedLanes, valueAt, type Applied, type Op, type Point } from './dawops'
 import type { StudioClip, StudioLane, StudioProject, StudioProjectFull, StudioSession, StudioTrack } from './types'
 
 /**
@@ -24,19 +26,7 @@ import type { StudioClip, StudioLane, StudioProject, StudioProjectFull, StudioSe
  * the backing the band plays over (see `follow`).
  */
 
-export type Op =
-  | ({ op: 'project'; /** Drop the loop range (and loop / punch with it). */ clear_loop?: boolean } & Partial<Pick<StudioProject, 'name' | 'bpm' | 'beats' | 'master_gain' | 'master_effects' | 'tempo_map' | 'loop_on' | 'loop_start_ms' | 'loop_end_ms' | 'punch_on' | 'markers'>>)
-  | { op: 'lane.put'; lane: Partial<StudioLane> & { id: string } }
-  | { op: 'lane.del'; id: string }
-  | { op: 'clip.put'; clip: Partial<StudioClip> & { id: string } }
-  | { op: 'clip.del'; id: string }
-/** What the server broadcasts: puts carry the whole entity. */
-type Applied =
-  | { op: 'project'; project: Partial<StudioProject> }
-  | { op: 'lane.put'; lane: StudioLane }
-  | { op: 'lane.del'; id: string }
-  | { op: 'clip.put'; clip: StudioClip }
-  | { op: 'clip.del'; id: string }
+export type { Op } from './dawops'
 
 export interface DawState {
   project: StudioProject | null
@@ -63,10 +53,7 @@ export const useDaw = create<DawState>(() => ({ ...empty(), loading: false, erro
 const get = useDaw.getState, set = useDaw.setState
 
 export const newId = () => crypto.randomUUID()
-export const sortedLanes = (lanes: Record<string, StudioLane>) => Object.values(lanes).sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))
-export const clipEnd = (c: StudioClip) => c.start_ms + c.length_ms
-/** The project's length: its last clip's end (ms). */
-export const projectEnd = (clips: Record<string, StudioClip>) => Object.values(clips).reduce((m, c) => Math.max(m, clipEnd(c)), 0)
+export { audible, clipEnd, projectEnd, sortedLanes, valueAt }
 
 let loadingId: string | null = null
 /** Load a project (or clear with null). */
@@ -88,33 +75,11 @@ const byId = <T extends { id: string }>(xs: T[]) => Object.fromEntries(xs.map((x
 /** Apply ops to the local project. */
 function applyLocal(ops: (Op | Applied)[]) {
   const s = get()
-  if (!s.project) return
-  const project = { ...s.project }, lanes = { ...s.lanes }, clips = { ...s.clips }
-  for (const o of ops) {
-    if (o.op === 'project') { if ('clear_loop' in o && o.clear_loop) Object.assign(project, { loop_on: false, punch_on: false, loop_start_ms: null, loop_end_ms: null }); else Object.assign(project, 'project' in o ? o.project : { ...o, op: undefined }) }
-    else if (o.op === 'lane.put') lanes[o.lane.id] = { ...(lanes[o.lane.id] ?? { project_id: project.id, name: t('Track'), color: null, position: 0, gain: 1, pan: 0, mute: false, solo: false, user_id: null }), ...o.lane } as StudioLane
-    else if (o.op === 'lane.del') { delete lanes[o.id]; for (const c of Object.values(clips)) if (c.lane_id === o.id) delete clips[c.id] }
-    else if (o.op === 'clip.put') clips[o.clip.id] = { ...(clips[o.clip.id] ?? { project_id: project.id, start_ms: 0, in_ms: 0, gain: 1, fade_in_ms: 0, fade_out_ms: 0, muted: false, created_by: null }), ...o.clip } as StudioClip
-    else if (o.op === 'clip.del') delete clips[o.id]
-  }
-  delete (project as Partial<StudioProject> & { op?: unknown }).op
-  set({ project, lanes, clips })
+  if (s.project) set(applyOps({ project: s.project, lanes: s.lanes, clips: s.clips }, ops, t('Track')))
 }
 
 /** The ops that undo `ops`, from the project as it is before them. */
-function inverse(ops: Op[]): Op[] {
-  const { project, lanes, clips } = get()
-  const out: Op[] = []
-  const pick = <T extends object>(from: T, keys: string[]) => Object.fromEntries(keys.map((k) => [k, (from as Record<string, unknown>)[k]]))
-  for (const o of ops) {
-    if (o.op === 'project' && project) out.unshift({ op: 'project', ...pick(project, o.clear_loop ? ['loop_start_ms', 'loop_end_ms', 'loop_on', 'punch_on'] : Object.keys(o).filter((k) => k !== 'op')) })
-    else if (o.op === 'lane.put') out.unshift(lanes[o.lane.id] ? { op: 'lane.put', lane: { id: o.lane.id, ...pick(lanes[o.lane.id], Object.keys(o.lane)) } } : { op: 'lane.del', id: o.lane.id })
-    else if (o.op === 'lane.del' && lanes[o.id]) out.unshift({ op: 'lane.put', lane: { ...lanes[o.id] } }, ...Object.values(clips).filter((c) => c.lane_id === o.id).map((c): Op => ({ op: 'clip.put', clip: { ...c } })))
-    else if (o.op === 'clip.put') out.unshift(clips[o.clip.id] ? { op: 'clip.put', clip: { id: o.clip.id, ...pick(clips[o.clip.id], Object.keys(o.clip)) } } : { op: 'clip.del', id: o.clip.id })
-    else if (o.op === 'clip.del' && clips[o.id]) out.unshift({ op: 'clip.put', clip: { ...clips[o.id] } })
-  }
-  return out
-}
+const inverse = (ops: Op[]) => inverseOps(get(), ops)
 
 let queue: Promise<unknown> = Promise.resolve()
 /** Send ops to the server, in order. A refusal reloads the project (our optimistic copy is wrong). */
@@ -294,16 +259,7 @@ export function addTake(track: StudioTrack, at: number) {
   void engine.preload()
 }
 
-/** Audible lanes: not muted, and soloed when anything is. Buses stay audible under solo (they carry the solo). */
-export function audible(lanes: Record<string, StudioLane>, id: string) {
-  const l = lanes[id]
-  if (!l || l.mute) return false
-  if (l.kind === 'bus') return true
-  return !Object.values(lanes).some((x) => x.solo && x.kind !== 'bus') || l.solo
-}
-
 type Decoded = { buffer: AudioBuffer; peaks: Float32Array; top: number }
-type Point = [number, number]
 
 /** A clip's gain envelope (clip gain, fades) on `param`, for playback starting `from` ms into the clip at `when`. */
 function envelope(param: AudioParam, c: StudioClip, when: number, from: number) {
@@ -315,16 +271,6 @@ function envelope(param: AudioParam, c: StudioClip, when: number, from: number) 
   if (fo > 0) { const s = Math.max(from, len - fo); if (s > from) param.setValueAtTime(level(s), at(s)); param.linearRampToValueAtTime(0, at(len)) }
 }
 
-/** An automation lane's value at `ms` (held before the first point and after the last). */
-export function valueAt(pts: Point[], ms: number) {
-  if (!pts.length) return 0
-  if (ms <= pts[0][0]) return pts[0][1]
-  for (let i = 1; i < pts.length; i++) {
-    const [t1, v1] = pts[i]
-    if (ms <= t1) { const [t0, v0] = pts[i - 1]; return t1 === t0 ? v1 : v0 + ((v1 - v0) * (ms - t0)) / (t1 - t0) }
-  }
-  return pts[pts.length - 1][1]
-}
 /** Ramp `param` along `pts` for playback from `from` ms on the timeline, at context time `when`. */
 function automate(param: AudioParam, pts: Point[], from: number, when: number, to: (v: number) => number = (v) => v) {
   param.cancelScheduledValues(when)
@@ -517,6 +463,7 @@ class Engine {
     const when = Math.max(ctx.currentTime + 0.03, opts.when ?? ctx.currentTime + 0.05)
     this.click = !!opts.click
     const g = this.graph = buildGraph(ctx, lanes, project, true)
+    if (this.tapNode) g.master.analyser.connect(this.tapNode)
     const loop = opts.loop !== undefined ? opts.loop : !opts.backing && project.loop_on && (project.loop_end_ms ?? 0) > (project.loop_start_ms ?? 0) + 50 ? { a: project.loop_start_ms!, b: project.loop_end_ms! } : null
     let from = fromSec * 1000
     if (loop && (from >= loop.b || from < loop.a)) from = loop.a
@@ -645,10 +592,19 @@ class Engine {
   }
   async render(): Promise<ArrayBuffer | null> { const b = await this.renderBuffer(); return b ? encodeWav(b) : null }
 
+  private tapNode: MediaStreamAudioDestinationNode | null = null
+  /** What plays, after the master, as a stream (the click is not in it). Tests record it to hear what was played. */
+  tap(): MediaStream {
+    if (!this.tapNode) { this.tapNode = this.audio().createMediaStreamDestination(); this.graph?.master.analyser.connect(this.tapNode) }
+    return this.tapNode.stream
+  }
+
   private expose() { (window as unknown as { __parleyDaw?: unknown }).__parleyDaw = { playing: this.playing, decoded: this.ready.size, sources: this.sources.length, position: this.position(), graph: this.graph ? this.graph.lanes.size : 0, loop: this.loopAt } }
 }
 
 export const engine = new Engine()
+// For tests: the rendered project (or a stem) as samples and as the exported WAV, and what plays as a stream.
+if (typeof window !== 'undefined') (window as unknown as { __parleyDawTest?: unknown }).__parleyDawTest = { render: (only?: string[]) => engine.renderBuffer(only), wav: () => engine.render(), tap: () => engine.tap(), context: () => engine.audio() }
 
 /** Export the project's mix as a WAV download, and say how loud it is. */
 export async function exportMix() {

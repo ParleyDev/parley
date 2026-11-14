@@ -652,6 +652,50 @@ pub async fn set_tempo(state: &AppState, pid: Uuid, uid: Uuid, bpm: i32, beats: 
     Ok(())
 }
 
+/// One clip a take becomes on the timeline (all in ms): where it starts, how far into the take's audio, how long;
+/// `grouped` clips are the passes of one loop recording, of which only the one not `muted` plays.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TakeClip { pub start_ms: i32, pub in_ms: i32, pub length_ms: i32, pub grouped: bool, pub muted: bool }
+
+/// Where a finished take goes. It was recorded from `position` on the timeline; its audio starts `offset` ms after
+/// that (negative: it began in the count-in, and that pre-roll is skipped) and runs `dur` ms. Over a loop `(a, b)`
+/// it becomes one clip per pass (passes under 200 ms are dropped), the last pass that fills at least half the loop
+/// playing; with `punch`, only what falls inside the range is kept (if at least 50 ms does).
+pub fn take_clips(position: i32, offset: i32, dur: i32, range: Option<(i32, i32)>, punch: bool) -> Vec<TakeClip> {
+    let mut start = position + offset;
+    let mut skip = 0;
+    if start < position { skip = position - start; start = position; }
+    if dur - skip <= 0 { return Vec::new(); }
+    let one = |start_ms, in_ms, length_ms| TakeClip { start_ms, in_ms, length_ms, grouped: false, muted: false };
+    match range {
+        Some((a, b)) if b > a && !punch => {
+            // Loop recording: the passes, each laid over the loop range.
+            let pass = b - a;
+            let first = start - a;
+            let mut takes: Vec<(i32, i32, i32)> = Vec::new();
+            let mut inn = skip;
+            let mut at = a + first.rem_euclid(pass);
+            while inn < dur {
+                let len = (b - at).min(dur - inn);
+                if len >= 200 { takes.push((at, inn, len)); }
+                inn += b - at;
+                at = a;
+            }
+            if takes.len() <= 1 { return takes.first().map(|(s0, i0, l0)| one(*s0, *i0, *l0)).into_iter().collect(); }
+            // The last pass that is mostly there plays.
+            let keep = takes.iter().rposition(|x| x.2 * 2 >= pass).unwrap_or(takes.len() - 1);
+            takes.iter().enumerate().map(|(i, (s0, i0, l0))| TakeClip { start_ms: *s0, in_ms: *i0, length_ms: *l0, grouped: true, muted: i != keep }).collect()
+        }
+        Some((a, b)) if b > a => {
+            // Punch: only what falls in the range.
+            let end = start + dur - skip;
+            let (s0, e0) = (start.max(a), end.min(b));
+            if e0 - s0 >= 50 { vec![one(s0, skip + (s0 - start), e0 - s0)] } else { Vec::new() }
+        }
+        _ => vec![one(start, skip, dur - skip)],
+    }
+}
+
 /// A take recorded into a project finished uploading: put it on its member's lane (made for them if they have none),
 /// where they played it. The count-in's pre-roll is trimmed off, so the clip starts at the playhead it was recorded
 /// from. A take recorded over a loop becomes one clip per pass, stacked as takes of one group with the last whole
@@ -672,43 +716,12 @@ pub async fn place_take(state: &AppState, c: &crate::models::Channel, sid: Uuid,
             id
         }
     };
-    let clip = |start: i32, inn: i32, len: i32, group: Option<Uuid>, muted: bool| Op::ClipPut { clip: ClipPatch { id: Uuid::now_v7(), lane_id: Some(lane_id), audio_id: Some(t.id), start_ms: Some(start), in_ms: Some(inn), length_ms: Some(len), gain: None, fade_in_ms: None, fade_out_ms: None, muted: Some(muted), notes: None, group_id: group.map(|g| json!(g.to_string())) } };
-    let mut start = position + t.offset_ms;
-    let mut skip = 0;
-    if start < position { skip = position - start; start = position; }
-    if dur - skip <= 0 { return Ok(()); }
-    match (la, lb) {
-        (Some(a), Some(b)) if b > a && !punch => {
-            // Loop recording: the passes, each laid over the loop range.
-            let pass = b - a;
-            let first = start - a;
-            let mut takes: Vec<(i32, i32, i32)> = Vec::new();
-            let mut inn = skip;
-            let mut at = a + first.rem_euclid(pass);
-            while inn < dur {
-                let len = (b - at).min(dur - inn);
-                if len >= 200 { takes.push((at, inn, len)); }
-                inn += b - at;
-                at = a;
-            }
-            if takes.len() <= 1 {
-                if let Some((s0, i0, l0)) = takes.first() { ops.push(clip(*s0, *i0, *l0, None, false)); }
-            } else {
-                let group = Uuid::now_v7();
-                // The last pass that is mostly there plays.
-                let keep = takes.iter().rposition(|x| x.2 * 2 >= pass).unwrap_or(takes.len() - 1);
-                for (i, (s0, i0, l0)) in takes.iter().enumerate() { ops.push(clip(*s0, *i0, *l0, Some(group), i != keep)); }
-            }
-        }
-        (Some(a), Some(b)) if b > a => {
-            // Punch: only what falls in the range.
-            let end = start + dur - skip;
-            let (s0, e0) = (start.max(a), end.min(b));
-            if e0 - s0 >= 50 { ops.push(clip(s0, skip + (s0 - start), e0 - s0, None, false)); }
-        }
-        _ => ops.push(clip(start, skip, dur - skip, None, false)),
+    let takes = take_clips(position, t.offset_ms, dur, la.zip(lb), punch);
+    if takes.is_empty() { return Ok(()); }
+    let group = takes.iter().any(|x| x.grouped).then(Uuid::now_v7);
+    for x in &takes {
+        ops.push(Op::ClipPut { clip: ClipPatch { id: Uuid::now_v7(), lane_id: Some(lane_id), audio_id: Some(t.id), start_ms: Some(x.start_ms), in_ms: Some(x.in_ms), length_ms: Some(x.length_ms), gain: None, fade_in_ms: None, fade_out_ms: None, muted: Some(x.muted), notes: None, group_id: group.filter(|_| x.grouped).map(|g| json!(g.to_string())) } });
     }
-    if ops.iter().all(|o| !matches!(o, Op::ClipPut { .. })) { return Ok(()); }
     commit(state, c, pid, uid, ops).await?;
     Ok(())
 }
@@ -759,8 +772,58 @@ async fn import_audio(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 
 #[cfg(test)]
 mod tests {
-    use super::{automation, effects, markers, notes, sends, tempo_map};
+    use super::{automation, effects, markers, notes, sends, take_clips, tempo_map, TakeClip};
     use serde_json::json;
+
+    fn one(start_ms: i32, in_ms: i32, length_ms: i32) -> TakeClip { TakeClip { start_ms, in_ms, length_ms, grouped: false, muted: false } }
+    fn pass(start_ms: i32, in_ms: i32, length_ms: i32, muted: bool) -> TakeClip { TakeClip { start_ms, in_ms, length_ms, grouped: true, muted } }
+
+    #[test]
+    fn a_take_lands_where_it_was_played() {
+        // Started late: it sits that much after the playhead, whole.
+        assert_eq!(take_clips(4000, 120, 3000, None, false), vec![one(4120, 0, 3000)]);
+        assert_eq!(take_clips(0, 0, 3000, None, false), vec![one(0, 0, 3000)]);
+        // Started in the count-in: the pre-roll is skipped and the clip starts at the playhead.
+        assert_eq!(take_clips(4000, -2000, 5000, None, false), vec![one(4000, 2000, 3000)]);
+        // Nothing but pre-roll, or nothing at all.
+        assert_eq!(take_clips(4000, -2000, 2000, None, false), vec![]);
+        assert_eq!(take_clips(4000, -2000, 1500, None, false), vec![]);
+        // Half a loop range, or an empty one, is no range.
+        assert_eq!(take_clips(1000, 0, 3000, Some((2000, 2000)), false), vec![one(1000, 0, 3000)]);
+        assert_eq!(take_clips(1000, 0, 3000, Some((5000, 2000)), true), vec![one(1000, 0, 3000)]);
+    }
+
+    #[test]
+    fn a_looped_take_becomes_its_passes() {
+        // Three whole passes of a 2 s loop: the last plays.
+        assert_eq!(take_clips(1000, 0, 6000, Some((1000, 3000)), false), vec![pass(1000, 0, 2000, true), pass(1000, 2000, 2000, true), pass(1000, 4000, 2000, false)]);
+        // A last pass under half the loop stays muted, the one before it plays.
+        assert_eq!(take_clips(1000, 0, 4900, Some((1000, 3000)), false), vec![pass(1000, 0, 2000, true), pass(1000, 2000, 2000, false), pass(1000, 4000, 900, true)]);
+        // A last pass under 200 ms is dropped.
+        assert_eq!(take_clips(1000, 0, 4100, Some((1000, 3000)), false), vec![pass(1000, 0, 2000, true), pass(1000, 2000, 2000, false)]);
+        // Under one pass: a plain clip, not a group.
+        assert_eq!(take_clips(1000, 0, 1500, Some((1000, 3000)), false), vec![one(1000, 0, 1500)]);
+        // Started mid-loop: the first pass runs to the loop's end, the rest from its start.
+        assert_eq!(take_clips(2500, 0, 2500, Some((1000, 3000)), false), vec![pass(2500, 0, 500, true), pass(1000, 500, 2000, false)]);
+        // With a count-in: the pre-roll is skipped, the audio offsets follow.
+        assert_eq!(take_clips(1000, -1000, 5000, Some((1000, 3000)), false), vec![pass(1000, 1000, 2000, true), pass(1000, 3000, 2000, false)]);
+        // No pass fills half the loop: the last one plays.
+        assert_eq!(take_clips(2700, 0, 1000, Some((1000, 3000)), false), vec![pass(2700, 0, 300, true), pass(1000, 300, 700, false)]);
+    }
+
+    #[test]
+    fn a_punched_take_keeps_what_is_in_range() {
+        // Rolling from before the punch-in to after the punch-out.
+        assert_eq!(take_clips(0, 0, 10_000, Some((4000, 6000)), true), vec![one(4000, 4000, 2000)]);
+        // With a count-in before it.
+        assert_eq!(take_clips(2000, -1000, 6000, Some((4000, 6000)), true), vec![one(4000, 3000, 2000)]);
+        // Stopped inside the range, started inside it.
+        assert_eq!(take_clips(0, 0, 5000, Some((4000, 6000)), true), vec![one(4000, 4000, 1000)]);
+        assert_eq!(take_clips(5000, 0, 3000, Some((4000, 6000)), true), vec![one(5000, 0, 1000)]);
+        // Never reached it, or barely.
+        assert_eq!(take_clips(0, 0, 3000, Some((4000, 6000)), true), vec![]);
+        assert_eq!(take_clips(0, 0, 4040, Some((4000, 6000)), true), vec![]);
+    }
 
     #[test]
     fn effect_chains_are_cleaned() {
