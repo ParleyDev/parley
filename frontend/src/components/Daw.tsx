@@ -10,7 +10,8 @@ import { audible, armLane, takeLane, setFollow, sharedTransport, clipEnd, edit, 
 import { defaultInstrument, type Note } from '../lib/instruments'
 import { armMidi, connectMidi, useMidi } from '../lib/midi'
 import { useT } from '../lib/i18n'
-import { setStudioConfig, startTake, DEFAULT_STUDIO } from '../lib/studio'
+import { setStudioConfig, startTake, studio, takeTag, DEFAULT_STUDIO } from '../lib/studio'
+import { useTakes } from '../lib/takestore'
 import { usePhone } from '../lib/swipe'
 import { barBeat, bars as barList, secAtBar, snapTo, type Snap, type TempoChange } from '../lib/tempo'
 import type { Channel, StudioClip, StudioLane, StudioProject, StudioTrack, User } from '../lib/types'
@@ -249,6 +250,7 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
           <button type="button" onClick={play} disabled={!!live} title={playing ? t('Stop (Space)') : t('Play (Space)')} className={`${tb} h-9 w-9 ${playing === 'local' || playing === 'shared' ? 'text-success' : ''}`} aria-pressed={!!playing} data-daw-play>{playing === 'local' || playing === 'shared' ? <Square size={16} /> : <Play size={18} />}</button>
           {crew && <button type="button" onClick={() => void record(false)} disabled={busy || (!!live && live.solo && live.started_by !== me?.id)} title={live ? t('Stop recording') : t('Record the band from the playhead')} className={`h-9 w-9 rounded-md flex items-center justify-center disabled:opacity-40 ${live && !live.solo ? 'bg-danger text-white animate-pulse' : 'text-danger hover:bg-bg-3'}`} aria-pressed={!!live && !live.solo} data-daw-record>{live && !live.solo ? <Square size={14} fill="currentColor" /> : <span className="h-4 w-4 rounded-full bg-danger" />}</button>}
           {inBand && (!live || (live.solo && live.started_by === me?.id)) && <button type="button" onClick={() => void record(true)} disabled={busy} title={live ? t('Stop recording') : t('Record alone (only you record and hear it)')} className={`h-9 rounded-md px-2 text-[11px] font-bold disabled:opacity-40 ${live?.solo ? 'bg-danger text-white animate-pulse' : 'text-danger hover:bg-bg-3'}`} aria-pressed={!!live?.solo} data-daw-record-solo>{live?.solo ? t('Stop') : t('Solo ●')}</button>}
+          <TakeStatus />
           <button type="button" onClick={() => edit([{ op: 'project', loop_on: !project.loop_on }])} disabled={!hasLoop} title={hasLoop ? t('Loop (L)') : t('Drag on the ruler to set a loop range')} aria-pressed={!!project.loop_on} className={`${tb} ${on(!!project.loop_on)}`} data-daw-loop><Repeat size={16} /></button>
           <button type="button" onClick={() => edit([{ op: 'project', punch_on: !project.punch_on }])} disabled={!hasLoop} title={t('Punch: recording keeps only the loop range')} aria-pressed={!!project.punch_on} className={`${tb} text-[10px] font-black ${on(!!project.punch_on)}`} data-daw-punch>P</button>
           <button type="button" onClick={() => setFollow(!follow)} title={follow ? t('Shared playback: you hear what anyone plays, and they hear what you play') : t('Playing on your own: turn on to follow the shared playback')} aria-pressed={follow} className={`${tb} ${on(follow)}`} data-daw-follow><Link2 size={15} /></button>
@@ -593,7 +595,7 @@ function Arrangement(p: ArrProps) {
                 <div key={l.id} style={{ height: rowH(l) }} className="border-b border-line/60">
                   <div className={`relative ${dropLane === l.id ? 'bg-accent/10' : ''} ${l.kind === 'bus' ? 'bg-bg-0/30' : ''}`} style={{ height: LANE_H }} data-daw-lane={l.id} data-lane-kind={l.kind}
                     onDoubleClick={(e) => { if (l.kind === 'midi' && (e.target as HTMLElement).dataset.dawLane && !phone) p.newMidiClip(l.id, msAt(e.clientX)) }}>
-                    {Object.values(clips).filter((c) => dragged(c).lane_id === l.id && (!c.group_id || !c.muted)).map((c) => <Region key={c.id} c={dragged(c)} lane={l} color={laneColor(l, i)} pps={pps} selected={sel.includes(c.id)} peer={peerSel.get(c.id)} takes={c.group_id ? Object.values(clips).filter((x) => x.group_id === c.group_id).length : 0} dim={!audible(lanes, l.id) || c.muted} name={c.audio_id ? p.audio[c.audio_id]?.name ?? p.audio[c.audio_id]?.display_name ?? '' : l.name} begin={begin} phone={phone} openRoll={() => p.setRoll(c.id)} onSelect={(e) => { if (phone) setSel([c.id]); else if (!drag && !justDragged.current && !(e.shiftKey && shiftAdded.current === c.id)) setSel(e.shiftKey ? (sel.includes(c.id) ? sel.filter((x) => x !== c.id) : [...sel, c.id]) : [c.id]) }} />)}
+                    {Object.values(clips).filter((c) => dragged(c).lane_id === l.id && (!c.group_id || !c.muted)).map((c) => <Region key={c.id} c={dragged(c)} lane={l} color={laneColor(l, i)} pps={pps} selected={sel.includes(c.id)} peer={peerSel.get(c.id)} takes={c.group_id ? Object.values(clips).filter((x) => x.group_id === c.group_id).length : 0} dim={!audible(lanes, l.id) || c.muted} name={c.audio_id ? (p.audio[c.audio_id]?.name ?? p.audio[c.audio_id]?.display_name ?? '') + takeTag(p.audio[c.audio_id]) : l.name} begin={begin} phone={phone} openRoll={() => p.setRoll(c.id)} onSelect={(e) => { if (phone) setSel([c.id]); else if (!drag && !justDragged.current && !(e.shiftKey && shiftAdded.current === c.id)) setSel(e.shiftKey ? (sel.includes(c.id) ? sel.filter((x) => x !== c.id) : [...sel, c.id]) : [c.id]) }} />)}
                     {p.live && l.user_id && p.band.includes(l.user_id) && (!p.liveSolo || p.liveSolo === l.user_id) && l.kind === 'audio' && head > p.liveSince && <div className="pointer-events-none absolute inset-y-2 rounded-md border border-danger bg-danger/20" style={{ left: p.liveSince * pps, width: (head - p.liveSince) * pps }} data-daw-recording={l.id} />}
                   </div>
                   {autoOpen[l.id] && (() => { const prm = paramOf(l, lanes, autoOpen[l.id]); return prm ? <AutoRow lane={l} param={prm} pps={pps} width={width} height={AUTO_H} snapMs={snapMs} /> : null })()}
@@ -629,6 +631,8 @@ function LaneHead({ l, i, lanes, clips, band, channel, users, phone, autoOpen, s
   const rights = projectRights(channel)
   const mine = !!me && (rights.engineer || rights.artist)
   const myLane = mine && takeLane(lanes, me!.id)?.id === l.id
+  // What this track of mine listens to while armed (its level is on the meter before and during the take).
+  const input = useTakes((s) => s.inputs[l.id])
   const btn = (on: boolean, cls: string) => `h-5 w-5 shrink-0 rounded text-[10px] font-bold ${on ? cls : 'bg-bg-3 text-text-2 hover:text-text-0'}`
   return (
     <div style={{ height: LANE_H + (autoOpen[l.id] ? AUTO_H : 0) }} className="border-b border-line/60">
@@ -639,6 +643,7 @@ function LaneHead({ l, i, lanes, clips, band, channel, users, phone, autoOpen, s
           {naming !== null
             ? <input autoFocus value={naming} maxLength={80} onChange={(e) => setNaming(e.target.value)} onBlur={() => { if (naming.trim() && naming !== l.name) edit([{ op: 'lane.put', lane: { id: l.id, name: naming.trim() } }]); setNaming(null) }} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setNaming(null) }} className="input h-6 min-w-0 flex-1 px-1 text-sm" aria-label={t('Track name')} data-daw-lane-name-input />
             : <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={t('{name} (double-click to rename)', { name: l.name })} onDoubleClick={() => setNaming(l.name)} data-daw-lane-name>{l.name}</span>}
+          {input && <span className={`max-w-[45%] shrink-0 truncate text-[9px] ${input.error ? 'text-danger' : input.processed ? 'text-warn' : 'text-text-2'}`} title={input.error ?? (input.processed ? t('{name}: through the call\'s voice processing (turn off echo cancellation, noise suppression and gain control for a clean take)', { name: input.name }) : t('Input: {name}', { name: input.name }))} data-daw-input={l.id} data-processed={input.processed ? '1' : undefined}>{input.error ? t('No input') : input.name}</span>}
           {!phone && <button type="button" onClick={() => setMenu(!menu)} title={t('Track settings')} className="h-5 w-5 shrink-0 rounded text-text-2 hover:bg-bg-3 hover:text-text-0" data-daw-lane-menu>⋯</button>}
         </div>
         <div className="flex items-center gap-0.5">
@@ -650,7 +655,7 @@ function LaneHead({ l, i, lanes, clips, band, channel, users, phone, autoOpen, s
           {!phone && <button type="button" onClick={() => setAutoOpen((m) => { const n = { ...m }; if (n[l.id]) delete n[l.id]; else n[l.id] = Object.keys(l.automation ?? {})[0] ?? 'gain'; return n })} title={t('Automation')} aria-pressed={!!autoOpen[l.id]} className={btn(!!autoOpen[l.id] || Object.keys(l.automation ?? {}).length > 0, 'bg-warn/80 text-black')} data-daw-auto-toggle={l.id}><Activity size={11} className="mx-auto" /></button>}
           <input type="range" min={0} max={150} value={Math.round(l.gain * 100)} onChange={(e) => editLive(`gain:${l.id}`, [{ op: 'lane.put', lane: { id: l.id, gain: Number(e.target.value) / 100 } }])} onDoubleClick={() => edit([{ op: 'lane.put', lane: { id: l.id, gain: 1 } }])} title={t('Volume {db} dB', { db: dB(l.gain) })} aria-label={t('Volume')} className="ml-1 h-3 min-w-0 flex-1 accent-accent" data-daw-lane-gain={l.id} />
         </div>
-        <Meter get={() => engine.level(l.id) || (l.user_id && inBand ? voice.level(l.user_id) : 0)} id={l.id} />
+        <Meter get={() => engine.level(l.id) || studio.level(l.id) || (l.user_id && inBand ? voice.level(l.user_id) : 0)} id={l.id} />
         {menu && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
@@ -701,6 +706,26 @@ function Region({ c, lane, color, pps, selected, peer, takes, dim, name, begin, 
       </>}
     </div>
   )
+}
+
+/** My takes that are not on the server in full yet: recorded on this device, and on their way. */
+function TakeStatus() {
+  const t = useT()
+  const takes = useTakes(useShallow((s) => Object.values(s.takes)))
+  if (!takes.length) return null
+  const sending = takes.filter((x) => x.state === 'uploading' || x.state === 'retrying')
+  const bytes = sending.reduce((n, x) => n + x.bytes, 0), acked = sending.reduce((n, x) => n + Math.min(x.acked, x.bytes), 0)
+  const state = takes.some((x) => x.state === 'failed') ? 'failed' : sending.some((x) => x.state === 'retrying') ? 'retrying' : sending.length ? 'uploading' : takes.some((x) => x.state === 'recording' && x.compressed) ? 'compressed' : takes.some((x) => x.state === 'done') ? 'done' : null
+  if (!state) return null
+  const text = state === 'failed' ? t('Part of a take could not be saved')
+    : state === 'retrying' ? t('Recorded here · waiting to upload')
+    : state === 'uploading' ? t('Recorded here · uploading {pct}%', { pct: bytes ? Math.floor((acked / bytes) * 100) : 0 })
+    : state === 'compressed' ? t('Recording compressed')
+    : t('Take saved')
+  const title = state === 'compressed' ? t('This browser cannot capture uncompressed audio here: the take is recorded compressed')
+    : state === 'failed' ? t('Some of the take was no longer on this device: what the server received is kept')
+    : state === 'done' ? text : t('The take is safe on this device and is being sent to the server. Keep this page open; if it closes, the rest is sent the next time you open the app.')
+  return <span className={`max-w-56 truncate rounded px-2 py-1 text-[11px] font-semibold ${state === 'failed' ? 'bg-danger/15 text-danger' : state === 'retrying' || state === 'compressed' ? 'bg-warn/15 text-warn' : 'bg-bg-3 text-text-1'}`} title={title} role="status" data-daw-take-status={state}>{text}</span>
 }
 
 /** A MIDI clip's notes in miniature. */

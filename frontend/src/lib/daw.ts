@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { api, getToken } from './api'
-import { clickAt, peaksOf } from './multitrack'
+import { clickAt, clicksPlayed, peaksOf } from './multitrack'
 import { encodeWav } from './wav'
 import { buildChain, chainKey, integratedLufs, type FxNode, type Target } from './fx'
 import { beatsAt, isDownbeat, secAtBeat } from './tempo'
@@ -51,6 +51,9 @@ const empty = (): Pick<DawState, 'project' | 'lanes' | 'clips' | 'audio' | 'undo
 const FOLLOW_KEY = `${STORAGE_PREFIX}dawFollow`
 export const useDaw = create<DawState>(() => ({ ...empty(), loading: false, error: null, follow: (() => { try { return localStorage.getItem(FOLLOW_KEY) !== '0' } catch { return true } })() }))
 const get = useDaw.getState, set = useDaw.setState
+
+/** Every project runs at one rate: takes are captured at it and the mix is rendered at it. */
+export const PROJECT_RATE = 48000
 
 export const newId = () => crypto.randomUUID()
 export { audible, clipEnd, projectEnd, sortedLanes, valueAt }
@@ -386,7 +389,38 @@ class Engine {
   private refreshTimer: ReturnType<typeof setTimeout> | null = null
   private click = false
 
-  audio() { return (this.ctx ??= new AudioContext({ latencyHint: 'interactive' })) }
+  /** The studio's one audio context, at the project's rate (a device that cannot run at it runs at its own). */
+  audio() {
+    if (!this.ctx) {
+      try { this.ctx = new AudioContext({ latencyHint: 'interactive', sampleRate: PROJECT_RATE }) }
+      catch { this.ctx = new AudioContext({ latencyHint: 'interactive' }) }
+      setInterval(() => this.heardLatency(), 500)
+    }
+    return this.ctx
+  }
+  /**
+   * The output latency the browser reports, as it has lately been: the figure wanders, and reads zero for a moment
+   * whenever the output restarts, so a take is placed by the middle of the last few readings.
+   */
+  private outLatency: number[] = []
+  private heardLatency() {
+    const v = (this.ctx as (AudioContext & { outputLatency?: number }) | null)?.outputLatency
+    if (this.ctx?.state === 'running' && v && v > 0) { this.outLatency.push(v); if (this.outLatency.length > 9) this.outLatency.shift() }
+  }
+  private beats = new Map<string, number>()
+  /**
+   * A take's downbeat (a server time) on this context's clock. The backing, the click and the recorder all time
+   * themselves from this one number, so a take lines up with what was heard to the sample, whatever the device's
+   * clock does meanwhile. Settled once per take, while the context runs (call after syncClock()).
+   */
+  downbeat(session: string, serverStart: number) {
+    const ctx = this.audio()
+    const have = this.beats.get(session)
+    if (have !== undefined) return have
+    const at = ctx.currentTime + (toLocal(serverStart) - Date.now()) / 1000
+    if (ctx.state === 'running') { this.beats.clear(); this.beats.set(session, at) }
+    return at
+  }
   subscribe(f: () => void) { this.listeners.add(f); return () => { this.listeners.delete(f) } }
   private emit() { this.listeners.forEach((f) => f()); this.expose() }
 
@@ -463,10 +497,14 @@ class Engine {
     const when = Math.max(ctx.currentTime + 0.03, opts.when ?? ctx.currentTime + 0.05)
     this.click = !!opts.click
     const g = this.graph = buildGraph(ctx, lanes, project, true)
-    if (this.tapNode) g.master.analyser.connect(this.tapNode)
+    if (this.tapBus) g.master.analyser.connect(this.tapBus)
     const loop = opts.loop !== undefined ? opts.loop : !opts.backing && project.loop_on && (project.loop_end_ms ?? 0) > (project.loop_start_ms ?? 0) + 50 ? { a: project.loop_start_ms!, b: project.loop_end_ms! } : null
     let from = fromSec * 1000
-    if (loop && (from >= loop.b || from < loop.a)) from = loop.a
+    // Asked to start at a moment that is already here: start as soon as possible, that much further in.
+    const late = opts.when !== undefined && when > opts.when
+    if (late) from += (when - opts.when!) * 1000
+    if (loop && late && from >= loop.b) from = loop.a + ((from - loop.a) % (loop.b - loop.a))
+    else if (loop && (from >= loop.b || from < loop.a)) from = loop.a
     this.t0 = when - from / 1000
     this.loopAt = loop
     // One pass now; with a loop, the next passes are queued a little before each ends.
@@ -524,7 +562,7 @@ class Engine {
     this.mix()
     if (!this.playing) return
     if (this.refreshTimer) clearTimeout(this.refreshTimer)
-    this.refreshTimer = setTimeout(() => { if (this.playing && this.ctx) { const mode = this.playing; this.play(this.position(), { backing: mode === 'backing', shared: mode === 'shared', click: this.click, ...(mode === 'backing' ? { loop: this.loopAt } : {}) }) } }, 60)
+    this.refreshTimer = setTimeout(() => { if (this.playing && this.ctx) { const mode = this.playing; this.play(this.position(), { when: this.ctx.currentTime, backing: mode === 'backing', shared: mode === 'shared', click: this.click, ...(mode === 'backing' ? { loop: this.loopAt } : {}) }) } }, 60)
   }
   /** Rebuild if the graph's shape no longer matches the project. */
   reshape() {
@@ -558,7 +596,9 @@ class Engine {
   /** From hearing the project to the mic capturing what is played along (output plus input latency), in ms. */
   latencyMs(stream?: MediaStream | null) {
     const ctx = this.audio()
-    const out = ((ctx as AudioContext & { outputLatency?: number }).outputLatency || 0) + (ctx.baseLatency || 0)
+    this.heardLatency()
+    const seen = [...this.outLatency].sort((x, y) => x - y)
+    const out = (seen.length ? seen[seen.length >> 1] : 0) + (ctx.baseLatency || 0)
     const input = (stream?.getAudioTracks()[0]?.getSettings() as MediaTrackSettings & { latency?: number } | undefined)?.latency || 0
     return Math.round((out + input) * 1000)
   }
@@ -573,7 +613,7 @@ class Engine {
     await this.preload()
     const end = projectEnd(clips) / 1000
     if (end <= 0) return null
-    const rate = 48000
+    const rate = PROJECT_RATE
     // A tail for reverbs and delays to ring out.
     const tail = Object.values(lanes).some((l) => (l.effects ?? []).some((e) => e.on && (e.type === 'reverb' || e.type === 'delay'))) || (project.master_effects ?? []).some((e) => e.on && (e.type === 'reverb' || e.type === 'delay')) ? 3 : 0.1
     const off = new OfflineAudioContext(2, Math.ceil((end + tail) * rate), rate)
@@ -592,10 +632,16 @@ class Engine {
   }
   async render(): Promise<ArrayBuffer | null> { const b = await this.renderBuffer(); return b ? encodeWav(b) : null }
 
+  private tapBus: GainNode | null = null
   private tapNode: MediaStreamAudioDestinationNode | null = null
-  /** What plays, after the master, as a stream (the click is not in it). Tests record it to hear what was played. */
+  /** What plays, after the master, as a node of the engine's context (the click is not in it). */
+  bus(): AudioNode {
+    if (!this.tapBus) { this.tapBus = this.audio().createGain(); this.graph?.master.analyser.connect(this.tapBus) }
+    return this.tapBus
+  }
+  /** The same as a stream. Tests record it to hear what was played. */
   tap(): MediaStream {
-    if (!this.tapNode) { this.tapNode = this.audio().createMediaStreamDestination(); this.graph?.master.analyser.connect(this.tapNode) }
+    if (!this.tapNode) { this.tapNode = this.audio().createMediaStreamDestination(); this.bus().connect(this.tapNode) }
     return this.tapNode.stream
   }
 
@@ -604,7 +650,7 @@ class Engine {
 
 export const engine = new Engine()
 // For tests: the rendered project (or a stem) as samples and as the exported WAV, and what plays as a stream.
-if (typeof window !== 'undefined') (window as unknown as { __parleyDawTest?: unknown }).__parleyDawTest = { render: (only?: string[]) => engine.renderBuffer(only), wav: () => engine.render(), tap: () => engine.tap(), context: () => engine.audio() }
+if (typeof window !== 'undefined') (window as unknown as { __parleyDawTest?: unknown }).__parleyDawTest = { render: (only?: string[]) => engine.renderBuffer(only), wav: () => engine.render(), tap: () => engine.tap(), bus: () => engine.bus(), context: () => engine.audio(), clicks: clicksPlayed }
 
 /** Export the project's mix as a WAV download, and say how loud it is. */
 export async function exportMix() {
@@ -642,13 +688,13 @@ function follow() {
       void Promise.all([engine.preload(), syncClock()]).then(() => {
         if (backingFor !== take.id) return
         const ctx = engine.audio()
-        // In this device's clock: the take's times are the server's.
-        const downbeat = toLocal(Date.parse(take.started_at))
+        // On the audio clock: the take's times are the server's.
+        const downbeat = engine.downbeat(take.id, Date.parse(take.started_at))
         // Loop recording loops the backing too; a punch plays straight through.
         const loop = take.loop_start_ms != null && take.loop_end_ms != null && !take.punch ? { a: take.loop_start_ms, b: take.loop_end_ms } : null
-        let at = (take.position_ms ?? 0) + Math.max(0, Date.now() - downbeat)
+        let at = (take.position_ms ?? 0) + Math.max(0, ctx.currentTime - downbeat) * 1000
         if (loop && at >= loop.b) at = loop.a + ((at - loop.a) % (loop.b - loop.a))
-        engine.play(at / 1000, { when: ctx.currentTime + Math.max(0, downbeat - Date.now()) / 1000, backing: true, loop, click: take.click })
+        engine.play(at / 1000, { when: Math.max(downbeat, ctx.currentTime), backing: true, loop, click: take.click })
       })
     } else if (!take && backingFor) { backingFor = null; if (engine.playing === 'backing') engine.stop() }
     if (!take) shared()

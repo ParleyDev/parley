@@ -2,6 +2,7 @@ import { CalendarClock, Check, Disc3, Download, History, ListPlus, MessageSquare
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { addTake, useDaw, type StudioComment } from '../lib/daw'
+import { takeTag } from '../lib/studio'
 import { projectRights, setBandRole, useGatherings } from '../lib/projects'
 import { exportMixAs, exportProjectFile, exportStems, importProjectFile, postMix, type Format } from '../lib/exporters'
 import { exportDawProject, importDawProject } from '../lib/dawproject'
@@ -167,7 +168,7 @@ export function TakesPanel({ channel, head, close }: { channel: Channel; head: n
             <button type="button" onClick={() => play(a)} title={playing === a.id ? t('Pause') : t('Play')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-3 hover:bg-accent hover:text-white" data-daw-take-play>{playing === a.id ? <Pause size={13} /> : <Play size={13} />}</button>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-semibold">{a.name ?? (u?.display_name ?? u?.username ?? a.display_name)}</span>
-              <span className="text-[10px] text-text-2">{a.kind === 'import' ? t('Imported') : t('Take')} · {clock(a.duration_ms ?? 0)} · {new Date(a.created_at).toLocaleString()}{used.has(a.id) ? ` · ${t('in the arrangement')}` : ''}</span>
+              <span className="text-[10px] text-text-2">{a.kind === 'import' ? t('Imported') : t('Take')}{takeTag(a)} · {clock(a.duration_ms ?? 0)} · {new Date(a.created_at).toLocaleString()}{used.has(a.id) ? ` · ${t('in the arrangement')}` : ''}</span>
             </span>
             {edit && !used.has(a.id) && <button type="button" onClick={() => addTake(a, head * 1000)} title={t('Put it on the timeline at the playhead')} className="text-text-2 hover:text-text-0" data-daw-take-add><ListPlus size={15} /></button>}
             <a href={a.url} download className="text-text-2 hover:text-text-0" title={t('Download')}><Download size={14} /></a>

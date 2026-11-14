@@ -726,6 +726,21 @@ pub async fn place_take(state: &AppState, c: &crate::models::Channel, sid: Uuid,
     Ok(())
 }
 
+/// More of a take arrived after the server had finished and placed it (its recorder was away): the clip that ran to
+/// the end of what there was then runs to the new end. Passes of a loop and punched ranges stay as they are (the
+/// audio is there to drag out); a take that was too short to place before is placed now.
+pub async fn extend_take(state: &AppState, c: &crate::models::Channel, sid: Uuid, t: &Track, was_ms: i32) -> AppResult<()> {
+    if was_ms <= 0 { return place_take(state, c, sid, t).await; }
+    let Some((Some(pid), la)) = sqlx::query_as::<_, (Option<Uuid>, Option<i32>)>("SELECT project_id, loop_start_ms FROM studio_sessions WHERE id = $1").bind(sid).fetch_optional(&state.db).await? else { return Ok(()) };
+    let (Some(uid), Some(dur)) = (t.user_id, t.duration_ms) else { return Ok(()) };
+    if la.is_some() || dur <= was_ms { return Ok(()); }
+    let clips: Vec<(Uuid, i32)> = sqlx::query_as("SELECT id, in_ms FROM studio_clips WHERE audio_id = $1 AND project_id = $2 AND in_ms + length_ms = $3").bind(t.id).bind(pid).bind(was_ms).fetch_all(&state.db).await?;
+    if clips.is_empty() { return Ok(()); }
+    let ops = clips.into_iter().map(|(id, in_ms)| Op::ClipPut { clip: ClipPatch { id, lane_id: None, audio_id: None, start_ms: None, in_ms: None, length_ms: Some(dur - in_ms), gain: None, fade_in_ms: None, fade_out_ms: None, muted: None, notes: None, group_id: None } }).collect();
+    commit(state, c, pid, uid, ops).await?;
+    Ok(())
+}
+
 /// `GET /channels/:id/studio/audio`: everything recorded or imported into the project, newest first.
 async fn list_audio(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Vec<Track>>> {
     studio_channel(&state.db, id, uid).await?;

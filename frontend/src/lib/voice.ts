@@ -738,7 +738,16 @@ class VoiceManager {
     return { remote, mine: this.mic }
   }
 
-  private recordingSilenced() {
+  /** Studio takes: whether the call's microphone path changes the sound (echo cancellation, noise suppression, gain control). */
+  get micProcessed() {
+    const st = this.settings
+    return this.profile.mode !== 'music' && !!(st.echoCancellation || st.noiseSuppression || st.autoGainControl)
+  }
+  /** The input device the call uses ('' for the system's default). */
+  get inputDeviceId() { return this.settings.inputDeviceId || '' }
+
+  /** Muted here or by the server: a take recorded from the microphone is silent meanwhile. */
+  recordingSilenced() {
     const s = useStore.getState()
     return s.selfMute || s.selfDeaf || this.serverSilenced()
   }

@@ -3,11 +3,15 @@
 //! else in its voice room is the audience. Recording is multitrack and client-side: when a take starts every armed
 //! band member's client records its own mic and streams chunks up as its own track, so each artist ends up as a clean
 //! separate file, placed in the project (studio_daw).
+//!
+//! A take is lossless where the browser can capture PCM: the client sends 24-bit samples by byte offset (so a piece
+//! sent twice, or out of turn, changes nothing), the server keeps the file a valid WAV after every piece and tells
+//! the take's length from its size. Takes whose recorders have gone are finished here (`sweep_takes`).
 
 use crate::{auth::AuthUser, error::{AppError, AppResult}, perms, routes::channels::require_channel_perms, state::AppState};
 use axum::{
     body::{Body, Bytes},
-    extract::{DefaultBodyLimit, Path, State},
+    extract::{DefaultBodyLimit, Path, Query, State},
     http::{header, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
@@ -17,11 +21,76 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{FromRow, PgPool};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use uuid::Uuid;
 
-/// Per-track cap (about an hour of Opus at 64 kbps).
+/// Per-track cap of a compressed take (about half an hour of Opus at 128 kbps).
 pub const MAX_TRACK_BYTES: i64 = 30 * 1024 * 1024;
+/// The longest take.
+pub const MAX_TAKE_SECS: i64 = 30 * 60;
+/// A PCM take's file starts with a WAV header of this many bytes; the client counts its offsets after it.
+const WAV_HEADER: i64 = 44;
+/// A take nobody has been recording for this long is ended: its starter may have gone without stopping it.
+const ABANDONED_SECS: f64 = 45.0;
+/// A track that has received nothing for this long is finished with what arrived.
+const IDLE_SECS: f64 = 90.0;
+/// How long after it began a finished PCM track still takes the rest of its audio from a recorder that was away.
+const LATE_HOURS: i64 = 24;
+
+/// What a PCM take holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pcm { pub rate: i32, pub channels: i16, pub bits: i16 }
+
+impl Pcm {
+    /// Bytes of one frame (a sample of every channel).
+    pub fn frame(self) -> i64 { self.channels as i64 * (self.bits as i64 / 8) }
+    /// The most audio bytes a take may hold.
+    pub fn max_bytes(self) -> i64 { MAX_TAKE_SECS * self.rate as i64 * self.frame() }
+    /// How long `data` bytes of audio play, in whole ms.
+    pub fn duration_ms(self, data: i64) -> i32 { ((data.max(0) / self.frame()) * 1000 / self.rate as i64).min(i32::MAX as i64) as i32 }
+}
+
+/// The 44-byte header of a PCM WAV file holding `data` bytes of audio.
+pub fn wav_header(f: Pcm, data: i64) -> [u8; 44] {
+    let data = data.clamp(0, u32::MAX as i64 - 36) as u32;
+    let align = f.frame() as u16;
+    let mut h = [0u8; 44];
+    h[0..4].copy_from_slice(b"RIFF");
+    h[4..8].copy_from_slice(&(36 + data).to_le_bytes());
+    h[8..16].copy_from_slice(b"WAVEfmt ");
+    h[16..20].copy_from_slice(&16u32.to_le_bytes());
+    h[20..22].copy_from_slice(&1u16.to_le_bytes());
+    h[22..24].copy_from_slice(&(f.channels as u16).to_le_bytes());
+    h[24..28].copy_from_slice(&(f.rate as u32).to_le_bytes());
+    h[28..32].copy_from_slice(&(f.rate as u32 * align as u32).to_le_bytes());
+    h[32..34].copy_from_slice(&align.to_le_bytes());
+    h[34..36].copy_from_slice(&(f.bits as u16).to_le_bytes());
+    h[36..40].copy_from_slice(b"data");
+    h[40..44].copy_from_slice(&data.to_le_bytes());
+    h
+}
+
+/// What to do with a piece of a PCM take.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Append {
+    /// It continues the take: write it.
+    Write,
+    /// It does not start where the take ends (sent twice, or after a piece that was lost): the take holds this many
+    /// bytes, and the client carries on from there.
+    At(i64),
+    /// It does not hold whole frames.
+    Ragged,
+    /// The take would run past the limit.
+    TooLong,
+}
+
+/// Whether `len` bytes offered at `offset` continue a take holding `stored` bytes of `f`.
+pub fn append_at(f: Pcm, stored: i64, offset: i64, len: i64) -> Append {
+    if offset != stored { return Append::At(stored); }
+    if len % f.frame() != 0 { return Append::Ragged; }
+    if stored + len > f.max_bytes() { return Append::TooLong; }
+    Append::Write
+}
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -33,6 +102,7 @@ pub fn router() -> Router<AppState> {
         .route("/channels/:id/studio/sessions/:sid/stop", post(stop_session))
         .route("/channels/:id/studio/sessions/:sid", delete(delete_session))
         .route("/studio/sessions/:sid/tracks", post(create_track))
+        .route("/studio/sessions/:sid/tracks/:tid", get(track_status))
         .route("/studio/sessions/:sid/tracks/:tid/chunks", post(append_chunk).layer(DefaultBodyLimit::max(8 * 1024 * 1024)))
         .route("/studio/sessions/:sid/tracks/:tid/finish", post(finish_track))
         .route("/studio/tracks/:tid", get(serve_track))
@@ -59,6 +129,12 @@ pub struct Track {
     pub latency_ms: i32,
     /// The project track a take was recorded for (a member records each of their armed tracks as its own take).
     pub lane_id: Option<Uuid>,
+    /// A lossless take's format (all `None` for a compressed one).
+    pub sample_rate: Option<i32>,
+    pub channels: Option<i16>,
+    pub bits: Option<i16>,
+    /// Captured from the call's microphone path with its processing on.
+    pub processed: bool,
     #[sqlx(default)]
     pub display_name: String,
     #[sqlx(skip)]
@@ -96,7 +172,7 @@ pub struct Session {
     pub tracks: Vec<Track>,
 }
 
-pub const TRACK_SELECT: &str = "SELECT t.id, t.session_id, t.user_id, t.content_type, t.size, t.duration_ms, t.offset_ms, t.done, t.created_at, t.kind, t.name, t.latency_ms, t.lane_id, COALESCE(u.display_name, 'Unknown') AS display_name
+pub const TRACK_SELECT: &str = "SELECT t.id, t.session_id, t.user_id, t.content_type, t.size, t.duration_ms, t.offset_ms, t.done, t.created_at, t.kind, t.name, t.latency_ms, t.lane_id, t.sample_rate, t.channels, t.bits, t.processed, COALESCE(u.display_name, 'Unknown') AS display_name
     FROM studio_tracks t LEFT JOIN users u ON u.id = t.user_id";
 const SESSION_COLS: &str = "id, channel_id, guild_id, name, started_by, started_at, ended_at, armed, bpm, beats, click, count_in_ms, project_id, position_ms, loop_start_ms, loop_end_ms, punch, solo";
 
@@ -310,6 +386,12 @@ async fn stop_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
 async fn delete_session(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((id, sid)): Path<(Uuid, Uuid)>) -> AppResult<StatusCode> {
     let (c, p) = studio_channel(&state.db, id, uid).await?;
     if !is_crew(&state, id, uid, p).await? { return Err(AppError::Forbidden); }
+    let open: Option<(bool,)> = sqlx::query_as("SELECT ended_at IS NULL FROM studio_sessions WHERE id = $1 AND channel_id = $2").bind(sid).bind(id).fetch_optional(&state.db).await?;
+    match open {
+        None => return Err(AppError::NotFound("Session not found".into())),
+        Some((true,)) => return Err(AppError::Conflict("Stop the take before deleting it".into())),
+        Some((false,)) => {}
+    }
     // Takes used in a project stay (as audio of the studio's); the rest go with the session.
     sqlx::query("UPDATE studio_tracks SET session_id = NULL WHERE session_id = $1 AND EXISTS (SELECT 1 FROM studio_clips c WHERE c.audio_id = studio_tracks.id)").bind(sid).execute(&state.db).await?;
     let tracks: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_tracks WHERE session_id = $1").bind(sid).fetch_all(&state.db).await?;
@@ -321,12 +403,26 @@ async fn delete_session(State(state): State<AppState>, AuthUser(uid): AuthUser, 
 }
 
 #[derive(Deserialize)]
-struct NewTrack { #[serde(default)] offset_ms: i32, content_type: Option<String>, #[serde(default)] latency_ms: i32, lane_id: Option<Uuid> }
+struct NewTrack {
+    /// Chosen by the recorder, so asking again after a lost answer gives the same track.
+    id: Option<Uuid>,
+    #[serde(default)] offset_ms: i32, content_type: Option<String>, #[serde(default)] latency_ms: i32, lane_id: Option<Uuid>,
+    /// A PCM take (`content_type` audio/wav) says what it sends: its sample rate, channels (1 or 2) and bits (24).
+    sample_rate: Option<i32>, channels: Option<i16>, bits: Option<i16>, #[serde(default)] processed: bool }
 
 /// A band member registers a track (clip) for the open session while armed.
 async fn create_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(sid): Path<Uuid>, Json(req): Json<NewTrack>) -> AppResult<(StatusCode, Json<Track>)> {
     let sess: Option<(Uuid, Option<DateTime<Utc>>)> = sqlx::query_as("SELECT channel_id, ended_at FROM studio_sessions WHERE id = $1").bind(sid).fetch_optional(&state.db).await?;
     let Some((channel_id, ended)) = sess else { return Err(AppError::NotFound("Session not found".into())) };
+    if let Some(id) = req.id {
+        let have: Option<(Option<Uuid>, Option<Uuid>)> = sqlx::query_as("SELECT user_id, session_id FROM studio_tracks WHERE id = $1").bind(id).fetch_optional(&state.db).await?;
+        if let Some((owner, session)) = have {
+            if owner != Some(uid) || session != Some(sid) { return Err(AppError::Conflict("That track exists".into())); }
+            let mut t = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.id = $1")).bind(id).fetch_one(&state.db).await?;
+            t.url = format!("/api/studio/tracks/{id}");
+            return Ok((StatusCode::OK, Json(t)));
+        }
+    }
     if ended.is_some() { return Err(AppError::BadRequest("That session has ended".into())); }
     let (c, _) = studio_channel(&state.db, channel_id, uid).await?;
     let vs = state.hub.voice_state(uid).filter(|v| v.channel_id == channel_id).ok_or_else(|| AppError::BadRequest("Join the studio first".into()))?;
@@ -340,67 +436,185 @@ async fn create_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pa
     }
     let solo: Option<(bool, Option<Uuid>)> = sqlx::query_as("SELECT solo, started_by FROM studio_sessions WHERE id = $1").bind(sid).fetch_optional(&state.db).await?;
     if solo.is_some_and(|(solo, by)| solo && by != Some(uid)) { return Err(AppError::BadRequest("Someone is recording alone".into())); }
-    // A take for one of the project's tracks: it must be one of its audio tracks.
+    // A take for one of the project's tracks: it must be one of its audio tracks, and the member's own.
     if let Some(lane) = req.lane_id {
-        let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM studio_lanes l JOIN studio_projects p ON p.id = l.project_id WHERE l.id = $1 AND p.channel_id = $2 AND l.kind = 'audio'").bind(lane).bind(channel_id).fetch_optional(&state.db).await?;
-        if ok.is_none() { return Err(AppError::BadRequest("Record onto an audio track of this project".into())); }
-        let armed: Option<(bool,)> = sqlx::query_as("SELECT armed FROM studio_lanes WHERE id = $1").bind(lane).fetch_optional(&state.db).await?;
-        if !armed.is_some_and(|a| a.0) { return Err(AppError::BadRequest("That track is not armed".into())); }
+        let row: Option<(Option<Uuid>, bool)> = sqlx::query_as("SELECT l.user_id, l.armed FROM studio_lanes l JOIN studio_projects p ON p.id = l.project_id WHERE l.id = $1 AND p.channel_id = $2 AND l.kind = 'audio'").bind(lane).bind(channel_id).fetch_optional(&state.db).await?;
+        let Some((owner, armed)) = row else { return Err(AppError::BadRequest("Record onto an audio track of this project".into())) };
+        if owner != Some(uid) { return Err(AppError::Forbidden); }
+        if !armed { return Err(AppError::BadRequest("That track is not armed".into())); }
     }
     // Punching out and back in gives a member several clips in one take, one open at a time per track.
     let open: Option<(Uuid,)> = sqlx::query_as("SELECT id FROM studio_tracks WHERE session_id = $1 AND user_id = $2 AND NOT done AND lane_id IS NOT DISTINCT FROM $3").bind(sid).bind(uid).bind(req.lane_id).fetch_optional(&state.db).await?;
     if open.is_some() { return Err(AppError::Conflict("You are already recording in this session".into())); }
     let ct = req.content_type.filter(|t| t.starts_with("audio/")).unwrap_or_else(|| "audio/webm".into());
-    let tid = Uuid::now_v7();
+    let pcm = if ct == "audio/wav" {
+        let f = Pcm { rate: req.sample_rate.unwrap_or(0), channels: req.channels.unwrap_or(0), bits: req.bits.unwrap_or(0) };
+        if !(8000..=192_000).contains(&f.rate) || !(1..=2).contains(&f.channels) || f.bits != 24 { return Err(AppError::BadRequest("A PCM take is 24-bit, mono or stereo".into())); }
+        Some(f)
+    } else { None };
+    let tid = req.id.unwrap_or_else(Uuid::now_v7);
     // What the recording client measured from hearing the music to its mic capturing what was played back: the take is
     // that much late, so it is placed that much earlier.
     let latency = req.latency_ms.clamp(0, 1000);
-    sqlx::query("INSERT INTO studio_tracks (id, session_id, user_id, content_type, offset_ms, channel_id, latency_ms, lane_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)").bind(tid).bind(sid).bind(uid).bind(&ct).bind(req.offset_ms.clamp(-120_000, 600_000) - latency).bind(channel_id).bind(latency).bind(req.lane_id).execute(&state.db).await?;
+    let head: Vec<u8> = pcm.map(|f| wav_header(f, 0).to_vec()).unwrap_or_default();
+    sqlx::query("INSERT INTO studio_tracks (id, session_id, user_id, content_type, offset_ms, channel_id, latency_ms, lane_id, size, sample_rate, channels, bits, processed) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)")
+        .bind(tid).bind(sid).bind(uid).bind(&ct).bind(req.offset_ms.clamp(-120_000, 600_000) - latency).bind(channel_id).bind(latency).bind(req.lane_id)
+        .bind(head.len() as i64).bind(pcm.map(|f| f.rate)).bind(pcm.map(|f| f.channels)).bind(pcm.map(|f| f.bits)).bind(req.processed).execute(&state.db).await?;
     tokio::fs::create_dir_all(&state.config.upload_dir).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
-    tokio::fs::write(track_path(&state, tid), b"").await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    tokio::fs::write(track_path(&state, tid), &head).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
     let mut t = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.id = $1")).bind(tid).fetch_one(&state.db).await?;
     t.url = format!("/api/studio/tracks/{tid}");
     broadcast(&state, &c, "STUDIO_UPDATE", json!({ "channel_id": channel_id })).await?;
     Ok((StatusCode::CREATED, Json(t)))
 }
 
-async fn own_open_track(db: &PgPool, sid: Uuid, tid: Uuid, uid: Uuid) -> AppResult<i64> {
-    let row: Option<(Option<Uuid>, bool, i64)> = sqlx::query_as("SELECT user_id, done, size FROM studio_tracks WHERE id = $1 AND session_id = $2").bind(tid).bind(sid).fetch_optional(db).await?;
-    let Some((owner, done, size)) = row else { return Err(AppError::NotFound("Track not found".into())) };
+/// The caller's own track in a session.
+struct OwnTrack { done: bool, size: i64, pcm: Option<Pcm>, created_at: DateTime<Utc>, duration_ms: Option<i32> }
+
+async fn own_track(db: &PgPool, sid: Uuid, tid: Uuid, uid: Uuid) -> AppResult<OwnTrack> {
+    let row: Option<(Option<Uuid>, bool, i64, Option<i32>, Option<i16>, Option<i16>, DateTime<Utc>, Option<i32>)> = sqlx::query_as("SELECT user_id, done, size, sample_rate, channels, bits, created_at, duration_ms FROM studio_tracks WHERE id = $1 AND session_id = $2").bind(tid).bind(sid).fetch_optional(db).await?;
+    let Some((owner, done, size, rate, channels, bits, created_at, duration_ms)) = row else { return Err(AppError::NotFound("Track not found".into())) };
     if owner != Some(uid) { return Err(AppError::Forbidden); }
-    if done { return Err(AppError::BadRequest("Track already finished".into())); }
-    Ok(size)
+    let pcm = match (rate, channels, bits) { (Some(rate), Some(channels), Some(bits)) => Some(Pcm { rate, channels, bits }), _ => None };
+    Ok(OwnTrack { done, size, pcm, created_at, duration_ms })
 }
 
-/// Append a MediaRecorder chunk (raw bytes) to the caller's track. The studio hears `STUDIO_TRACK` with the new size so
-/// the engineer's console can draw the take growing.
-async fn append_chunk(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((sid, tid)): Path<(Uuid, Uuid)>, body: Bytes) -> AppResult<Json<serde_json::Value>> {
-    let size = own_open_track(&state.db, sid, tid, uid).await?;
-    if size + body.len() as i64 > MAX_TRACK_BYTES { return Err(AppError::BadRequest("Track too large".into())); }
-    let mut f = tokio::fs::OpenOptions::new().append(true).create(true).open(track_path(&state, tid)).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
-    f.write_all(&body).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
-    f.flush().await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
-    let (new_size,): (i64,) = sqlx::query_as("UPDATE studio_tracks SET size = size + $3 WHERE id = $1 AND session_id = $2 RETURNING size").bind(tid).bind(sid).bind(body.len() as i64).fetch_one(&state.db).await?;
-    let (channel_id,): (Uuid,) = sqlx::query_as("SELECT channel_id FROM studio_sessions WHERE id = $1").bind(sid).fetch_one(&state.db).await?;
-    if let Ok(c) = channel_json(&state, channel_id).await { broadcast(&state, &c, "STUDIO_TRACK", json!({ "channel_id": channel_id, "session_id": sid, "track_id": tid, "user_id": uid, "size": new_size })).await?; }
-    Ok(Json(json!({ "size": new_size })))
+fn io(e: std::io::Error) -> AppError { AppError::Other(anyhow::anyhow!(e)) }
+
+/// 409 with how much of the take the server holds, for a piece that does not continue it.
+fn held(received: i64, done: bool) -> Response {
+    (StatusCode::CONFLICT, Json(json!({ "error": "That is not where the take continues", "received": received, "done": done }))).into_response()
+}
+
+/// `GET /studio/sessions/:sid/tracks/:tid`: how much of the caller's take has arrived (a recorder that was away asks
+/// before sending the rest).
+async fn track_status(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((sid, tid)): Path<(Uuid, Uuid)>) -> AppResult<Json<serde_json::Value>> {
+    let t = own_track(&state.db, sid, tid, uid).await?;
+    Ok(Json(json!({ "size": t.size, "received": if t.pcm.is_some() { t.size - WAV_HEADER } else { t.size }, "done": t.done })))
 }
 
 #[derive(Deserialize)]
-struct FinishReq { duration_ms: Option<i32> }
+struct ChunkQuery { offset: Option<i64> }
 
-async fn finish_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((sid, tid)): Path<(Uuid, Uuid)>, Json(req): Json<FinishReq>) -> AppResult<Json<Track>> {
-    own_open_track(&state.db, sid, tid, uid).await?;
-    sqlx::query("UPDATE studio_tracks SET done = true, duration_ms = $3 WHERE id = $1 AND session_id = $2").bind(tid).bind(sid).bind(req.duration_ms.map(|d| d.max(0))).execute(&state.db).await?;
+/// Append a piece (raw bytes) to the caller's track. A PCM take says where the piece goes (`?offset=`, in bytes of
+/// audio): it is written only where the take ends, and anything else is answered 409 with what the server holds, so
+/// a piece sent again after a lost answer does no harm. The studio hears `STUDIO_TRACK` with the new size so the
+/// engineer's console can draw the take growing.
+async fn append_chunk(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((sid, tid)): Path<(Uuid, Uuid)>, Query(q): Query<ChunkQuery>, body: Bytes) -> AppResult<Response> {
+    let t = own_track(&state.db, sid, tid, uid).await?;
+    let len = body.len() as i64;
+    let new_size = match t.pcm {
+        Some(f) => {
+            let Some(offset) = q.offset else { return Err(AppError::BadRequest("A PCM take is sent by offset".into())) };
+            let stored = t.size - WAV_HEADER;
+            // A finished take still takes the rest from a recorder that was away when the server finished it.
+            if t.done && Utc::now() - t.created_at > chrono::Duration::hours(LATE_HOURS) { return Ok(held(stored, true)); }
+            match append_at(f, stored, offset, len) {
+                Append::Write => {}
+                Append::At(n) => return Ok(held(n, t.done)),
+                Append::Ragged => return Err(AppError::BadRequest("A piece holds whole frames".into())),
+                Append::TooLong => return Err(AppError::BadRequest("Take too long".into())),
+            }
+            if len == 0 { return Ok(Json(json!({ "size": t.size, "received": stored })).into_response()); }
+            // Written at its place (not appended), then the header: two requests with the same piece write the same
+            // bytes, and the file is a whole WAV after every piece.
+            let mut file = tokio::fs::OpenOptions::new().write(true).create(true).truncate(false).open(track_path(&state, tid)).await.map_err(io)?;
+            file.seek(std::io::SeekFrom::Start((WAV_HEADER + offset) as u64)).await.map_err(io)?;
+            file.write_all(&body).await.map_err(io)?;
+            file.seek(std::io::SeekFrom::Start(0)).await.map_err(io)?;
+            file.write_all(&wav_header(f, stored + len)).await.map_err(io)?;
+            file.flush().await.map_err(io)?;
+            let dur = f.duration_ms(stored + len);
+            let moved: Option<(i64,)> = sqlx::query_as("UPDATE studio_tracks SET size = size + $3, chunk_at = now(), duration_ms = CASE WHEN done THEN $5 ELSE duration_ms END WHERE id = $1 AND session_id = $2 AND size = $4 RETURNING size")
+                .bind(tid).bind(sid).bind(len).bind(t.size).bind(dur).fetch_optional(&state.db).await?;
+            // Another request with this piece got there first.
+            let Some((size,)) = moved else {
+                let (size, done): (i64, bool) = sqlx::query_as("SELECT size, done FROM studio_tracks WHERE id = $1").bind(tid).fetch_one(&state.db).await?;
+                return Ok(held(size - WAV_HEADER, done));
+            };
+            if t.done {
+                let (channel_id,): (Uuid,) = sqlx::query_as("SELECT channel_id FROM studio_sessions WHERE id = $1").bind(sid).fetch_one(&state.db).await?;
+                if let Ok(c) = channel_json(&state, channel_id).await {
+                    let track = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.id = $1")).bind(tid).fetch_one(&state.db).await?;
+                    if let Err(e) = crate::routes::studio_daw::extend_take(&state, &c, sid, &track, t.duration_ms.unwrap_or(0)).await { tracing::warn!(error = ?e, track = %tid, "could not extend take in project"); }
+                    broadcast(&state, &c, "STUDIO_UPDATE", json!({ "channel_id": channel_id })).await?;
+                }
+            }
+            size
+        }
+        None => {
+            if t.done { return Err(AppError::BadRequest("Track already finished".into())); }
+            if t.size + len > MAX_TRACK_BYTES { return Err(AppError::BadRequest("Track too large".into())); }
+            let mut f = tokio::fs::OpenOptions::new().append(true).create(true).open(track_path(&state, tid)).await.map_err(io)?;
+            f.write_all(&body).await.map_err(io)?;
+            f.flush().await.map_err(io)?;
+            let (size,): (i64,) = sqlx::query_as("UPDATE studio_tracks SET size = size + $3, chunk_at = now() WHERE id = $1 AND session_id = $2 RETURNING size").bind(tid).bind(sid).bind(len).fetch_one(&state.db).await?;
+            size
+        }
+    };
+    let (channel_id,): (Uuid,) = sqlx::query_as("SELECT channel_id FROM studio_sessions WHERE id = $1").bind(sid).fetch_one(&state.db).await?;
+    if let Ok(c) = channel_json(&state, channel_id).await { broadcast(&state, &c, "STUDIO_TRACK", json!({ "channel_id": channel_id, "session_id": sid, "track_id": tid, "user_id": uid, "size": new_size })).await?; }
+    Ok(Json(json!({ "size": new_size, "received": if t.pcm.is_some() { new_size - WAV_HEADER } else { new_size } })).into_response())
+}
+
+/// Finish a track that is still open, and put it in the project: a PCM take's length is told from its size, a
+/// compressed one's is `duration_ms` (what its recorder measured). `None` when it was finished already.
+async fn finalize(state: &AppState, tid: Uuid, duration_ms: Option<i32>) -> AppResult<Option<Track>> {
+    let row: Option<(Option<Uuid>, i64, Option<i16>)> = sqlx::query_as("UPDATE studio_tracks SET done = true,
+        duration_ms = CASE WHEN bits IS NOT NULL THEN (((size - 44) / (channels * (bits / 8))) * 1000 / sample_rate)::int ELSE $2 END
+        WHERE id = $1 AND NOT done RETURNING session_id, size, bits").bind(tid).bind(duration_ms.map(|d| d.max(0))).fetch_optional(&state.db).await?;
+    let Some((sid, size, bits)) = row else { return Ok(None) };
+    // Anything past what was acknowledged is a piece whose write was cut short.
+    if bits.is_some() { if let Ok(f) = tokio::fs::OpenOptions::new().write(true).open(track_path(state, tid)).await { let _ = f.set_len(size as u64).await; } }
     let mut t = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.id = $1")).bind(tid).fetch_one(&state.db).await?;
     t.url = format!("/api/studio/tracks/{tid}");
+    let Some(sid) = sid else { return Ok(Some(t)) };
     let channel_id: (Uuid,) = sqlx::query_as("SELECT channel_id FROM studio_sessions WHERE id = $1").bind(sid).fetch_one(&state.db).await?;
-    if let Ok(c) = channel_json(&state, channel_id.0).await {
-        broadcast(&state, &c, "STUDIO_UPDATE", json!({ "channel_id": channel_id.0 })).await?;
+    if let Ok(c) = channel_json(state, channel_id.0).await {
         // The take is in either way; placing it in the project is a bonus that must not fail the upload.
-        if let Err(e) = crate::routes::studio_daw::place_take(&state, &c, sid, &t).await { tracing::warn!(error = ?e, track = %tid, "could not place take in project"); }
+        if let Err(e) = crate::routes::studio_daw::place_take(state, &c, sid, &t).await { tracing::warn!(error = ?e, track = %tid, "could not place take in project"); }
+        broadcast(state, &c, "STUDIO_UPDATE", json!({ "channel_id": channel_id.0 })).await?;
     }
-    Ok(Json(t))
+    Ok(Some(t))
+}
+
+#[derive(Deserialize)]
+struct FinishReq { duration_ms: Option<i32>, bytes: Option<i64> }
+
+/// The recorder has sent everything. A PCM take says how many bytes that was (`bytes`): if the server holds fewer
+/// it answers 409 with what it holds and the recorder sends the rest first. Finishing a PCM take twice is fine.
+async fn finish_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((sid, tid)): Path<(Uuid, Uuid)>, Json(req): Json<FinishReq>) -> AppResult<Response> {
+    let t = own_track(&state.db, sid, tid, uid).await?;
+    if t.pcm.is_some() {
+        let stored = t.size - WAV_HEADER;
+        if req.bytes.is_some_and(|b| b > stored) { return Ok(held(stored, t.done)); }
+    } else if t.done { return Err(AppError::BadRequest("Track already finished".into())); }
+    let track = match finalize(&state, tid, req.duration_ms).await? {
+        Some(x) => x,
+        None => { let mut x = sqlx::query_as::<_, Track>(&format!("{TRACK_SELECT} WHERE t.id = $1")).bind(tid).fetch_one(&state.db).await?; x.url = format!("/api/studio/tracks/{tid}"); x }
+    };
+    Ok(Json(track).into_response())
+}
+
+/// Takes whose people have gone: a take nobody is recording any more (its starter left without stopping it, or it
+/// has run past the limit) is ended, so the next one can start; a track that has stopped receiving is finished with
+/// what arrived and put in the project. A recorder that comes back later still sends the rest (`append_chunk`).
+pub async fn sweep_takes(state: AppState) {
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        let ended: Vec<(Uuid, Uuid)> = sqlx::query_as("UPDATE studio_sessions s SET ended_at = now() WHERE s.ended_at IS NULL AND (s.started_at < now() - make_interval(secs => $1)
+            OR (s.started_at < now() - make_interval(secs => $2) AND NOT EXISTS (SELECT 1 FROM studio_tracks t WHERE t.session_id = s.id AND NOT t.done AND COALESCE(t.chunk_at, t.created_at) > now() - make_interval(secs => $2))))
+            RETURNING s.id, s.channel_id").bind((MAX_TAKE_SECS + 60) as f64).bind(ABANDONED_SECS).fetch_all(&state.db).await.unwrap_or_default();
+        for (sid, channel_id) in ended {
+            if let Ok(c) = channel_json(&state, channel_id).await { let _ = broadcast(&state, &c, "STUDIO_SESSION", json!({ "channel_id": channel_id, "action": "stop", "session_id": sid })).await; }
+        }
+        // A compressed take's length, with its recorder gone, is how long its pieces kept coming.
+        let idle: Vec<(Uuid, i32)> = sqlx::query_as("SELECT id, (EXTRACT(EPOCH FROM (COALESCE(chunk_at, created_at) - created_at)) * 1000)::int FROM studio_tracks
+            WHERE NOT done AND kind = 'take' AND COALESCE(chunk_at, created_at) < now() - make_interval(secs => $1)").bind(IDLE_SECS).fetch_all(&state.db).await.unwrap_or_default();
+        for (tid, ms) in idle {
+            if let Err(e) = finalize(&state, tid, Some(ms)).await { tracing::warn!(error = ?e, track = %tid, "could not finish idle take"); }
+        }
+    }
 }
 
 /// Tracks are served to anyone who can see the channel.
@@ -409,7 +623,7 @@ async fn serve_track(State(state): State<AppState>, AuthUser(uid): AuthUser, Pat
     let Some((channel_id, ct, size)) = row else { return Err(AppError::NotFound("Track not found".into())) };
     studio_channel(&state.db, channel_id, uid).await?;
     let file = tokio::fs::File::open(track_path(&state, tid)).await.map_err(|_| AppError::NotFound("Track file missing".into()))?;
-    let mut resp = Response::new(Body::from_stream(tokio_util::io::ReaderStream::new(file)));
+    let mut resp = Response::new(Body::from_stream(tokio_util::io::ReaderStream::new(file.take(size.max(0) as u64))));
     let h = resp.headers_mut();
     h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&ct).unwrap_or(HeaderValue::from_static("audio/webm")));
     h.insert(header::CONTENT_LENGTH, HeaderValue::from(size as u64));
@@ -493,5 +707,63 @@ pub async fn end_stale_gatherings(state: AppState) {
     loop {
         let _ = sqlx::query("UPDATE studio_gatherings SET ended_at = started_at + interval '24 hours' WHERE ended_at IS NULL AND started_at < now() - interval '24 hours'").execute(&state.db).await;
         tokio::time::sleep(std::time::Duration::from_secs(600)).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const STEREO: Pcm = Pcm { rate: 48_000, channels: 2, bits: 24 };
+    const MONO: Pcm = Pcm { rate: 48_000, channels: 1, bits: 24 };
+
+    #[test]
+    fn a_piece_is_written_only_where_the_take_ends() {
+        assert_eq!(append_at(STEREO, 0, 0, 288_000), Append::Write);
+        assert_eq!(append_at(STEREO, 288_000, 288_000, 288_000), Append::Write);
+        // Sent again after its answer was lost: nothing is written, and the client learns where the take is.
+        assert_eq!(append_at(STEREO, 576_000, 288_000, 288_000), Append::At(576_000));
+        // Sent after a piece that never arrived.
+        assert_eq!(append_at(STEREO, 288_000, 576_000, 288_000), Append::At(288_000));
+        assert_eq!(append_at(STEREO, 288_000, -6, 288_000), Append::At(288_000));
+    }
+
+    #[test]
+    fn a_piece_holds_whole_frames_and_fits_the_limit() {
+        assert_eq!(append_at(STEREO, 0, 0, 5), Append::Ragged);
+        assert_eq!(append_at(MONO, 0, 0, 4), Append::Ragged);
+        assert_eq!(append_at(MONO, 0, 0, 3), Append::Write);
+        let max = STEREO.max_bytes();
+        assert_eq!(max, 30 * 60 * 48_000 * 6);
+        assert_eq!(append_at(STEREO, max - 6, max - 6, 6), Append::Write);
+        assert_eq!(append_at(STEREO, max, max, 6), Append::TooLong);
+    }
+
+    #[test]
+    fn length_is_told_from_size() {
+        assert_eq!(STEREO.duration_ms(0), 0);
+        assert_eq!(STEREO.duration_ms(48_000 * 6), 1000);
+        assert_eq!(MONO.duration_ms(48_000 * 3 * 60), 60_000);
+        // Whole frames only, whole milliseconds only.
+        assert_eq!(MONO.duration_ms(48 * 3 + 2), 1);
+        assert_eq!(MONO.duration_ms(47 * 3), 0);
+        assert_eq!(Pcm { rate: 44_100, channels: 2, bits: 24 }.duration_ms(44_100 * 6 * 3), 3000);
+    }
+
+    #[test]
+    fn the_header_describes_the_audio() {
+        let h = wav_header(STEREO, 288_000);
+        assert_eq!(&h[0..4], b"RIFF");
+        assert_eq!(u32::from_le_bytes(h[4..8].try_into().unwrap()), 36 + 288_000);
+        assert_eq!(&h[8..16], b"WAVEfmt ");
+        assert_eq!(u16::from_le_bytes(h[20..22].try_into().unwrap()), 1);
+        assert_eq!(u16::from_le_bytes(h[22..24].try_into().unwrap()), 2);
+        assert_eq!(u32::from_le_bytes(h[24..28].try_into().unwrap()), 48_000);
+        assert_eq!(u32::from_le_bytes(h[28..32].try_into().unwrap()), 288_000);
+        assert_eq!(u16::from_le_bytes(h[32..34].try_into().unwrap()), 6);
+        assert_eq!(u16::from_le_bytes(h[34..36].try_into().unwrap()), 24);
+        assert_eq!(&h[36..40], b"data");
+        assert_eq!(u32::from_le_bytes(h[40..44].try_into().unwrap()), 288_000);
+        assert_eq!(wav_header(MONO, 0)[40..44], [0, 0, 0, 0]);
     }
 }

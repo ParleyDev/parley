@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowUp, Power, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { armLane, edit, editLive, engine, audible } from '../lib/daw'
+import { studio } from '../lib/studio'
 import { FX, newEffect, type Effect, type FxType } from '../lib/fx'
 import { useT } from '../lib/i18n'
 import type { StudioLane, StudioProject, User } from '../lib/types'
@@ -199,7 +200,7 @@ function Strip({ l, i, lanes, buses, channelId, users, open, setOpen, instFor, s
           {l.kind === 'audio' && <button type="button" onClick={(e) => armLane(l.id, !l.armed, e.ctrlKey || e.metaKey)} aria-pressed={!!l.armed} title={l.armed ? t('Armed: records the next take') : t('Arm for recording')} className={`flex h-6 w-7 items-center justify-center rounded ${l.armed ? 'bg-danger' : 'bg-bg-3'}`} data-daw-strip-arm={l.id}><span className={`h-2.5 w-2.5 rounded-full ${l.armed ? 'bg-black' : 'bg-text-2'}`} /></button>}
         </div>
         <div className="flex min-h-0 flex-1 gap-1">
-          <Fader value={l.gain} onChange={(gain) => put({ gain }, `gain:${l.id}`)} get={() => engine.level(l.id)} id={l.id} label={l.name} />
+          <Fader value={l.gain} onChange={(gain) => put({ gain }, `gain:${l.id}`)} get={() => engine.level(l.id) || studio.level(l.id)} id={l.id} label={l.name} />
           <div className="flex flex-col justify-between py-0.5 font-mono text-[8px] text-text-2" aria-hidden>{['+3', '0', '-6', '-12', '-24', '-48'].map((d) => <span key={d}>{d}</span>)}</div>
         </div>
       </div>

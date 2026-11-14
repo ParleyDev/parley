@@ -12,3 +12,13 @@ export function encodeWav(buf: Pcm): ArrayBuffer {
   for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { const s = Math.max(-1, Math.min(1, chans[c][i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2 }
   return out
 }
+
+/** Samples (-1..1, interleaved) as 24-bit little-endian PCM: what a lossless take is sent and stored as. */
+export function pcm24(samples: Float32Array): Uint8Array {
+  const out = new Uint8Array(samples.length * 3)
+  for (let i = 0, o = 0; i < samples.length; i++) {
+    const v = Math.max(-8388608, Math.min(8388607, Math.round(samples[i] * 8388608)))
+    out[o++] = v & 0xff; out[o++] = (v >> 8) & 0xff; out[o++] = (v >> 16) & 0xff
+  }
+  return out
+}

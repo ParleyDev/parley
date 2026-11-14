@@ -239,7 +239,9 @@ export interface Channel {
 /** Recording Studio: a session and its per-artist tracks (GET /channels/:id/studio/sessions). */
 export interface StudioTrack { id: string; session_id: string | null; lane_id?: string | null; user_id: string | null; content_type: string; size: number; duration_ms: number | null; offset_ms: number; done: boolean; created_at: string; display_name: string; url: string
   /** take (recorded in a session) or import (a file brought into the studio, named `name`). */
-  kind?: 'take' | 'import'; name?: string | null; latency_ms?: number }
+  kind?: 'take' | 'import'; name?: string | null; latency_ms?: number
+  /** A take captured as PCM says its format; one without `bits` was recorded compressed. `processed`: through the call's voice processing. */
+  sample_rate?: number | null; channels?: number | null; bits?: number | null; processed?: boolean }
 export interface StudioSession { id: string; channel_id: string; guild_id: string; name: string; started_by: string | null; started_at: string; ended_at: string | null; armed: string[] | null; bpm: number; beats: number; click: boolean; count_in_ms: number; tracks: StudioTrack[]
   /** Recorded into this project, its downbeat at `position_ms` on the timeline. */
   project_id?: string | null; position_ms?: number
