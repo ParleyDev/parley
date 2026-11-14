@@ -827,7 +827,7 @@ function Arrangement(p: ArrProps) {
               ))}
               {p.comments.filter((c) => !c.resolved).map((c) => <span key={c.id} className="absolute bottom-0 z-10 flex h-3 w-3 -translate-x-1/2 items-center justify-center rounded-full bg-accent text-[7px] text-white" style={{ left: (c.ms / 1000) * pps }} onPointerDown={(e) => e.stopPropagation()} onClick={() => { p.seek(c.ms / 1000); p.openComments() }} title={c.body} data-daw-comment-pin={c.id}>●</span>)}
             </div>
-            <div ref={lanesEl} className="relative" onPointerDown={press}>
+            <div ref={lanesEl} className="relative select-none" onPointerDown={press} onDragStart={(e) => e.preventDefault()}>
               {barsAll.map((b) => <div key={b.bar} className={`pointer-events-none absolute top-0 bottom-0 w-px ${b.bar % every === 0 ? 'bg-line/70' : 'bg-line/25'}`} style={{ left: b.sec * pps }} />)}
               {showLoop && project.loop_on && <div className="pointer-events-none absolute top-0 bottom-0 bg-accent/5" style={{ left: (loopA / 1000) * pps, width: ((loopB - loopA) / 1000) * pps }} />}
               {rows.map(({ l, i, h, mine }) => {
