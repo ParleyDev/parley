@@ -271,7 +271,7 @@ interface State {
   applyReady: (r: ReadyPayload) => void
   setConnected: (c: boolean) => void
   // mutations
-  upsertGuild: (g: Guild & { channels?: Channel[]; roles?: Role[]; emojis?: Emoji[]; stickers?: Sticker[] }) => void
+  upsertGuild: (g: Guild & { channels?: Channel[]; roles?: Role[]; emojis?: Emoji[]; stickers?: Sticker[]; communities?: CommunitySlim[]; community_follows?: string[] }) => void
   setGuildEmojis: (guildId: string, emojis: Emoji[]) => void
   setGuildStickers: (guildId: string, stickers: Sticker[]) => void
   setBookmark: (messageId: string, on: boolean) => void
@@ -558,7 +558,7 @@ export const useStore = create<State>((set, get) => ({
   setConnected: (connected) => set({ connected }),
 
   upsertGuild: (g) => set((s) => {
-    const { channels: gchannels, roles: groles, emojis: gemojis, stickers: gstickers, ...guild } = g
+    const { channels: gchannels, roles: groles, emojis: gemojis, stickers: gstickers, communities: gcommunities, community_follows: gfollows, ...guild } = g
     const channels = { ...s.channels }
     gchannels?.forEach((c) => (channels[c.id] = c))
     const guildOrder = s.guildOrder.includes(guild.id) ? s.guildOrder : [...s.guildOrder, guild.id]
@@ -566,7 +566,10 @@ export const useStore = create<State>((set, get) => ({
     const emojis = gemojis || !s.emojis[guild.id] ? { ...s.emojis, [guild.id]: gemojis ?? [] } : s.emojis
     const stickers = gstickers || !s.stickers[guild.id] ? { ...s.stickers, [guild.id]: gstickers ?? [] } : s.stickers
     const guildLayout = reconcile(s.guildLayout, guildOrder)
-    return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder, roles, emojis, stickers, guildLayout }
+    // A server I just joined or was added to carries its communities and my follows; plain updates carry neither.
+    const communities = gcommunities ? { ...s.communities, [guild.id]: gcommunities } : s.communities
+    const communityFollows = gcommunities ? { ...s.communityFollows, [guild.id]: gfollows ?? [] } : s.communityFollows
+    return { guilds: { ...s.guilds, [guild.id]: { ...s.guilds[guild.id], ...guild } }, channels, guildOrder, roles, emojis, stickers, communities, communityFollows, guildLayout }
   }),
   setGuildEmojis: (guildId, emojis) => set((s) => ({ emojis: { ...s.emojis, [guildId]: emojis } })),
   sounds: {},
@@ -624,8 +627,10 @@ export const useStore = create<State>((set, get) => ({
     const membersLoaded = { ...s.membersLoaded }; delete membersLoaded[id]
     const voiceStates = { ...s.voiceStates }
     Object.values(voiceStates).forEach((v) => { if (v.guild_id === id) delete voiceStates[v.user_id] })
+    const communities = { ...s.communities }; delete communities[id]
+    const communityFollows = { ...s.communityFollows }; delete communityFollows[id]
     const guildOrder = s.guildOrder.filter((g) => g !== id)
-    return { guilds, channels, members, membersLoaded, voiceStates, roles, emojis, stickers, guildOrder, guildLayout: reconcile(s.guildLayout, guildOrder) }
+    return { guilds, channels, members, membersLoaded, voiceStates, roles, emojis, stickers, communities, communityFollows, guildOrder, guildLayout: reconcile(s.guildLayout, guildOrder) }
   }),
   upsertChannel: (c) => set((s) => {
     if (c.guild_id === null && 'recipients' in c) {

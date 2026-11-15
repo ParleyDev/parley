@@ -433,12 +433,17 @@ pub async fn resync_visibility(state: &AppState, guild_id: Uuid, before: &Visibi
         let gained: Vec<Uuid> = now.difference(&was).copied().collect();
         let lost: Vec<Uuid> = was.difference(now).copied().collect();
         let kept: Vec<Uuid> = now.intersection(&was).copied().collect();
+        // A category that backs a community is also a community: whoever gains view of it learns the community,
+        // whoever loses it drops it, so the sidebar and Browse stay right.
+        let community = if channel.kind == "category" && (!gained.is_empty() || !lost.is_empty()) { crate::routes::communities::slim_for_category(&state.db, *cid).await? } else { None };
         if !gained.is_empty() {
-            state.hub.emit_users(gained, "CHANNEL_CREATE", json!(channel));
+            state.hub.emit_users(gained.clone(), "CHANNEL_CREATE", json!(channel));
+            if let Some(c) = &community { state.hub.emit_users(gained, "COMMUNITY_CREATE", c.clone()); }
         }
         if !lost.is_empty() {
             state.hub.voice_evict(|v| v.channel_id == *cid && lost.contains(&v.user_id));
-            state.hub.emit_users(lost, "CHANNEL_DELETE", json!({ "id": cid, "guild_id": guild_id }));
+            state.hub.emit_users(lost.clone(), "CHANNEL_DELETE", json!({ "id": cid, "guild_id": guild_id }));
+            if let Some(c) = &community { state.hub.emit_users(lost, "COMMUNITY_DELETE", json!({ "id": c["id"], "guild_id": guild_id })); }
         }
         if !kept.is_empty() {
             state.hub.emit_users(kept, "CHANNEL_UPDATE", json!(channel));

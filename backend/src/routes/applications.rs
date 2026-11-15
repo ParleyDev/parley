@@ -415,7 +415,8 @@ async fn join_member(State(state): State<AppState>, AuthUser(bot): AuthUser, Pat
     let mut channels = crate::perms::visible_channels(&state.db, gid, uid).await?;
     crate::perms::attach_overwrites(&state.db, &mut channels).await?;
     let roles = crate::perms::list_roles(&state.db, gid).await?;
-    state.hub.emit_users(vec![uid], "GUILD_CREATE", crate::routes::guilds::guild_payload(&g, json!({ "channels": channels, "roles": roles })));
+    let extra = crate::routes::communities::with_communities(&state.db, uid, gid, &channels, json!({ "channels": channels, "roles": roles })).await;
+    state.hub.emit_users(vec![uid], "GUILD_CREATE", crate::routes::guilds::guild_payload(&g, extra));
     if let Ok(m) = crate::routes::guilds::fetch_member(&state.db, gid, uid).await { state.hub.emit_guild(gid, "GUILD_MEMBER_ADD", json!(m)); }
     Ok(StatusCode::CREATED)
 }

@@ -212,7 +212,7 @@ async fn build_guild(state: &AppState, uid: Uuid, name: &str, icon_url: Option<S
     let mut channels = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE guild_id = $1 ORDER BY position")).bind(gid).fetch_all(&state.db).await?;
     perms::attach_overwrites(&state.db, &mut channels).await?;
     let roles = perms::list_roles(&state.db, gid).await?;
-    let payload = super::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles }));
+    let payload = super::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles, "communities": [], "community_follows": [] }));
     state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
     Ok(payload)
 }

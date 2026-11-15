@@ -174,7 +174,7 @@ async fn create_guild(
     tx.commit().await?;
 
     let roles = perms::list_roles(&state.db, gid).await?;
-    let payload = crate::routes::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles }));
+    let payload = crate::routes::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles, "communities": [], "community_follows": [] }));
     state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
     Ok((StatusCode::CREATED, Json(payload)))
 }

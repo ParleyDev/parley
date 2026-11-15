@@ -108,7 +108,8 @@ async fn restore(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gi
     let members: Vec<(Uuid,)> = sqlx::query_as("SELECT user_id FROM guild_members WHERE guild_id = $1").bind(gid).fetch_all(&state.db).await?;
     for (m,) in members {
         let channels = crate::perms::visible_channels(&state.db, gid, m).await?;
-        state.hub.emit_users(vec![m], "GUILD_CREATE", crate::routes::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers })));
+        let extra = crate::routes::communities::with_communities(&state.db, m, gid, &channels, json!({ "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers })).await;
+        state.hub.emit_users(vec![m], "GUILD_CREATE", crate::routes::guilds::guild_payload(&guild, extra));
     }
     crate::audit::guild(&state, gid, uid, "guild.restored", "guild", Some(gid), "", json!({})).await;
     Ok(Json(json!({ "id": gid, "state": "active" })))

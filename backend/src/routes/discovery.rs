@@ -195,7 +195,8 @@ pub async fn join_guild(state: &AppState, gid: Uuid, uid: Uuid, via: &str) -> Ap
     let roles = perms::list_roles(&state.db, gid).await?;
     let emojis = crate::routes::expressions::emojis_for_guilds(&state.db, &[gid]).await?;
     let stickers = crate::routes::expressions::stickers_for_guilds(&state.db, &[gid]).await?;
-    let payload = crate::routes::guilds::guild_payload(&guild, json!({ "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers }));
+    let extra = crate::routes::communities::with_communities(&state.db, uid, gid, &channels, json!({ "channels": channels, "roles": roles, "emojis": emojis, "stickers": stickers })).await;
+    let payload = crate::routes::guilds::guild_payload(&guild, extra);
     if inserted > 0 {
         state.hub.emit_users(vec![uid], "GUILD_CREATE", payload.clone());
         if let Ok(member) = fetch_member(&state.db, gid, uid).await {

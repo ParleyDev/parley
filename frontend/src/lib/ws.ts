@@ -51,7 +51,7 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'CALL_ACTIVITY_MESSAGE'; d: { id: string; data: unknown; user_id: string } }
   | { t: 'USER_UPDATE'; d: User }
   | { t: 'USER_SETTINGS_UPDATE'; d: Partial<PrivateUser> }
-  | { t: 'GUILD_CREATE'; d: Guild & { channels: Channel[]; roles: Role[] } }
+  | { t: 'GUILD_CREATE'; d: Guild & { channels: Channel[]; roles: Role[]; communities?: CommunitySlim[]; community_follows?: string[] } }
   | { t: 'GUILD_MEMBER_UPDATE'; d: Member }
   | { t: 'ROLE_UPDATE'; d: { guild_id: string; role: Role } }
   | { t: 'ROLE_DELETE'; d: { guild_id: string; id: string } }
