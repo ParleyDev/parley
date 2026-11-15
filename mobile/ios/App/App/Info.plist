@@ -86,6 +86,8 @@
 	<string>Parley uses the microphone for voice channels, calls and studio recordings.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Parley uses the camera for video calls.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Parley saves the photos and videos you choose to save from chats.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

@@ -2,7 +2,8 @@ import { Copy, Download, ExternalLink, Link2, Share2 } from 'lucide-react'
 import { createElement } from 'react'
 import type { MenuEntry } from '../components/ContextMenu'
 import { absoluteUrl } from './imageMenu'
-import { openExternal } from './native'
+import { isNative, nativePlatform, openExternal } from './native'
+import { ParleyShare } from './shareIn'
 import { t } from './i18n'
 import { desktop, desktopBridge } from './desktop'
 import { useStore } from '../store'
@@ -42,11 +43,19 @@ const shareable = (f: File) => !!navigator.share && !!navigator.canShare?.({ fil
 
 /**
  * Save a file to the device. Browsers download it; the desktop app asks where with the system Save dialog first; the
- * Android app's web view hands the `?download=1` response to the system download manager. iPhones and iPads (the iOS
- * app, Safari and the home-screen app, which ignores downloads) get the share sheet with the file: Save Image, Save to
- * Files. A file still on its way offers a "Save" button when it arrives (a fresh tap); one too big to hold opens.
+ * Android app's web view hands the `?download=1` response to the system download manager. The iOS app saves it
+ * natively (`ParleyShare.save`: downloaded to the phone, then the share sheet), videos of any size included.
+ * iPhones and iPads elsewhere (Safari, the home-screen app, which ignores downloads, and iOS app builds from before
+ * that) get the share sheet with the file: Save Image, Save to Files. A file still on its way offers a "Save" button
+ * when it arrives (a fresh tap); one too big to hold opens.
  */
 export async function saveFile(url: string, name: string) {
+  if (isNative() && nativePlatform() === 'ios') {
+    try { await ParleyShare.save({ url: absoluteUrl(url), name: name || 'file' }); return } catch (e) {
+      // An app build from before `save`: as in Safari, below.
+      if ((e as { code?: string }).code !== 'UNIMPLEMENTED') throw e
+    }
+  }
   if (appleTouch()) {
     const f = inHand(url)
     if (f && shareable(f)) { await shareNow(f); return }

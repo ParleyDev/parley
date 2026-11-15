@@ -11,8 +11,10 @@ export interface Incoming { text: string; files: File[] }
 
 type NativeFile = { name: string; type: string; data: string }
 type NativePayload = { text?: string; url?: string; title?: string; files?: NativeFile[] }
-const ParleyShare = registerPlugin<{
+export const ParleyShare = registerPlugin<{
   take(): Promise<NativePayload>
+  /** iOS app: a file from a chat saved to the phone (downloaded natively, then the share sheet). Newer app builds only. */
+  save(o: { url: string; name: string }): Promise<{ done: boolean }>
   addListener(event: 'shared', fn: () => void): Promise<{ remove: () => Promise<void> }>
 }>('ParleyShare')
 
