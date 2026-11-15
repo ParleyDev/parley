@@ -3711,5 +3711,12 @@
 "New community": "新しいコミュニティ",
 "No communities yet.": "コミュニティはまだありません。",
 "{n} followers": "フォロワー {n} 人",
-"This community was deleted": "このコミュニティは削除されました"
+"This community was deleted": "このコミュニティは削除されました",
+"created community": "コミュニティを作成しました",
+"edited community": "コミュニティを編集しました",
+"deleted community": "コミュニティを削除しました",
+"1 channel removed": "チャンネル1件を削除",
+"{n} channels removed": "チャンネル{n}件を削除",
+"Opening…": "開いています…",
+"New communities were added": "新しいコミュニティが追加されました"
 }

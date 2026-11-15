@@ -3711,5 +3711,12 @@
 "New community": "Yeni topluluk",
 "No communities yet.": "Henüz topluluk yok.",
 "{n} followers": "{n} takipçi",
-"This community was deleted": "Bu topluluk silindi"
+"This community was deleted": "Bu topluluk silindi",
+"created community": "topluluğu oluşturdu",
+"edited community": "topluluğu düzenledi",
+"deleted community": "topluluğu sildi",
+"1 channel removed": "1 kanal kaldırıldı",
+"{n} channels removed": "{n} kanal kaldırıldı",
+"Opening…": "Açılıyor…",
+"New communities were added": "Yeni topluluklar eklendi"
 }

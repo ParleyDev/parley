@@ -77,6 +77,13 @@ async fn written(state: &AppState, c: Community, uid: Uuid) -> AppResult<Communi
     fill(state, c, uid, &visible).await
 }
 
+/// Manage Channels as computed in this channel (its overwrites apply), as `PATCH`/`DELETE /channels/:id` check it.
+/// A channel the caller cannot view is a 404, like there.
+async fn manage_in_category(state: &AppState, channel_id: Uuid, uid: Uuid) -> AppResult<()> {
+    let (_, p) = super::channels::require_channel_perms(&state.db, channel_id, uid).await?;
+    perms::check(p, perms::MANAGE_CHANNELS)
+}
+
 /// Who may see the community: the category's channel audience, as for ordinary channel events.
 async fn audience(state: &AppState, category: &mut Channel) -> AppResult<crate::ws::hub::Target> {
     perms::attach_overwrites(&state.db, std::slice::from_mut(category)).await?;
@@ -134,6 +141,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid
     state.hub.emit(target.clone(), "CHANNEL_CREATE", json!(category));
     for ch in &created { state.hub.emit(target.clone(), "CHANNEL_CREATE", json!(ch)); }
     state.hub.emit(target, "COMMUNITY_CREATE", slim(&c));
+    crate::audit::guild(&state, gid, uid, "community.create", "community", Some(c.id), &c.name, json!({ "slug": c.slug, "channels": created.len() })).await;
     Ok((StatusCode::CREATED, Json(out)))
 }
 
@@ -150,9 +158,8 @@ struct PatchIn { slug: Option<String>, name: Option<String>, description: Option
 /// `PATCH /guilds/:id/communities/:slug`: any of slug, name (renames the category too), description, icon_url,
 /// external_ref. Empty icon_url or external_ref clears it.
 async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>, Json(req): Json<PatchIn>) -> AppResult<Json<Community>> {
-    let (_, p) = perms::guild_perms(&state.db, gid, uid).await?;
-    perms::check(p, perms::MANAGE_CHANNELS)?;
     let cur = by_slug(&state, gid, &slug).await?;
+    manage_in_category(&state, cur.category_id, uid).await?;
     let new_slug = match req.slug { Some(s) if !valid_slug(&s) => return Err(AppError::BadRequest("Address must be lower-case letters, digits and dashes, starting with a letter or digit, up to 63 characters".into())), Some(s) => s, None => cur.slug.clone() };
     let name = match &req.name { Some(n) => clean_name(n)?, None => cur.name.clone() };
     let description = match &req.description { Some(d) => clean_description(d)?, None => cur.description.clone() };
@@ -168,21 +175,30 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gi
     let out = written(&state, c.clone(), uid).await?;
     if name != cur.name { state.hub.emit(target.clone(), "CHANNEL_UPDATE", json!(category)); }
     state.hub.emit(target, "COMMUNITY_UPDATE", slim(&c));
+    let mut details = json!({ "slug": c.slug });
+    if c.name != cur.name { details["old_name"] = json!(cur.name) }
+    if c.slug != cur.slug { details["old_slug"] = json!(cur.slug) }
+    crate::audit::guild(&state, gid, uid, "community.update", "community", Some(c.id), &c.name, details).await;
     Ok(Json(out))
 }
 
 /// `DELETE /guilds/:id/communities/:slug`: its channels go the way a single deleted channel does (threads, uploads,
 /// events), then the category, which takes the community row with it.
 async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>) -> AppResult<StatusCode> {
-    let (_, p) = perms::guild_perms(&state.db, gid, uid).await?;
-    perms::check(p, perms::MANAGE_CHANNELS)?;
     let c = by_slug(&state, gid, &slug).await?;
+    manage_in_category(&state, c.category_id, uid).await?;
     let mut category: Channel = sqlx::query_as(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(c.category_id).fetch_one(&state.db).await?;
     let target = audience(&state, &mut category).await?;
     let kids: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM channels WHERE parent_id = $1 ORDER BY position, created_at").bind(c.category_id).fetch_all(&state.db).await?;
-    for (id,) in kids { super::channels::remove_channel(&state, gid, id).await?; }
+    // Every channel that goes must be one the caller may manage, and the server keeps a text channel, as for DELETE /channels/:id.
+    for (id,) in &kids { manage_in_category(&state, *id, uid).await?; }
+    let (outside, inside): (i64, i64) = sqlx::query_as("SELECT COUNT(*) FILTER (WHERE parent_id IS DISTINCT FROM $2), COUNT(*) FILTER (WHERE parent_id = $2) FROM channels WHERE guild_id = $1 AND kind = 'text'")
+        .bind(gid).bind(c.category_id).fetch_one(&state.db).await?;
+    if outside == 0 && inside > 0 { return Err(AppError::BadRequest("A server must keep at least one text channel".into())) }
+    for (id,) in &kids { super::channels::remove_channel(&state, gid, *id).await?; }
     super::channels::remove_channel(&state, gid, c.category_id).await?;
     state.hub.emit(target, "COMMUNITY_DELETE", json!({ "id": c.id, "guild_id": gid }));
+    crate::audit::guild(&state, gid, uid, "community.delete", "community", Some(c.id), &c.name, json!({ "slug": c.slug, "channels": kids.len() })).await;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -195,6 +211,12 @@ pub async fn touch_activity(db: &sqlx::PgPool, channel_id: Uuid) {
            UNION SELECT p.parent_id FROM channels c JOIN channels p ON p.id = c.parent_id WHERE c.id = $1)")
         .bind(channel_id).execute(db).await;
     if let Err(e) = r { tracing::warn!(error = ?e, %channel_id, "community activity update failed") }
+}
+
+/// `touch_activity` off the request path: sending a message does not wait for it.
+pub fn touch_activity_bg(db: &sqlx::PgPool, channel_id: Uuid) {
+    let db = db.clone();
+    tokio::spawn(async move { touch_activity(&db, channel_id).await });
 }
 
 async fn set_follow(state: &AppState, gid: Uuid, uid: Uuid, slug: &str, on: bool) -> AppResult<StatusCode> {
@@ -302,4 +324,23 @@ pub async fn connect_payload(db: &sqlx::PgPool, uid: Uuid, guilds: &[Uuid], visi
          WHERE f.user_id = $1 AND c.guild_id = ANY($2) AND c.category_id = ANY($3) GROUP BY c.guild_id")
         .bind(uid).bind(guilds).bind(&cats).fetch_all(db).await?;
     Ok((rows.iter().map(slim).collect(), follows.into_iter().map(|(g, ids)| json!({ "guild_id": g, "community_ids": ids })).collect()))
+}
+
+/// The slim form of the community a category backs, if any (for visibility changes).
+pub async fn slim_for_category(db: &sqlx::PgPool, category_id: Uuid) -> AppResult<Option<Value>> {
+    let c: Option<Community> = sqlx::query_as(&format!("SELECT {COLS} FROM communities WHERE category_id = $1")).bind(category_id).fetch_optional(db).await?;
+    Ok(c.as_ref().map(slim))
+}
+
+/// A server payload (GUILD_CREATE, the join responses) plus the communities `uid` can see there and the ones they
+/// follow, so a member who joins mid-session hides unfollowed community categories from the first frame.
+/// `visible` is every channel they can view in the server. Failures only warn, as for the connect payload.
+pub async fn with_communities(db: &sqlx::PgPool, uid: Uuid, gid: Uuid, visible: &[Channel], mut extra: Value) -> Value {
+    let (communities, follows) = connect_payload(db, uid, &[gid], visible).await.unwrap_or_else(|e| { tracing::warn!(error = ?e, "communities payload failed"); Default::default() });
+    let follows = follows.first().map(|f| f["community_ids"].clone()).unwrap_or_else(|| json!([]));
+    if let Some(o) = extra.as_object_mut() {
+        o.insert("communities".into(), json!(communities));
+        o.insert("community_follows".into(), follows);
+    }
+    extra
 }

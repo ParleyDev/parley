@@ -3711,5 +3711,12 @@
 "New community": "Nieuwe community",
 "No communities yet.": "Nog geen community's.",
 "{n} followers": "{n} volgers",
-"This community was deleted": "Deze community is verwijderd"
+"This community was deleted": "Deze community is verwijderd",
+"created community": "heeft de community gemaakt",
+"edited community": "heeft de community bewerkt",
+"deleted community": "heeft de community verwijderd",
+"1 channel removed": "1 kanaal verwijderd",
+"{n} channels removed": "{n} kanalen verwijderd",
+"Opening…": "Openen…",
+"New communities were added": "Er zijn nieuwe communities toegevoegd"
 }

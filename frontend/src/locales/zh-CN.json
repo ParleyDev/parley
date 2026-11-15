@@ -3711,5 +3711,12 @@
 "New community": "新建社区",
 "No communities yet.": "还没有社区。",
 "{n} followers": "{n} 位关注者",
-"This community was deleted": "此社区已被删除"
+"This community was deleted": "此社区已被删除",
+"created community": "创建了社区",
+"edited community": "编辑了社区",
+"deleted community": "删除了社区",
+"1 channel removed": "已移除 1 个频道",
+"{n} channels removed": "已移除 {n} 个频道",
+"Opening…": "正在打开…",
+"New communities were added": "已添加新社区"
 }

@@ -3711,5 +3711,12 @@
 "New community": "Nouvelle communauté",
 "No communities yet.": "Aucune communauté pour l'instant.",
 "{n} followers": "{n} abonnés",
-"This community was deleted": "Cette communauté a été supprimée"
+"This community was deleted": "Cette communauté a été supprimée",
+"created community": "a créé la communauté",
+"edited community": "a modifié la communauté",
+"deleted community": "a supprimé la communauté",
+"1 channel removed": "1 salon supprimé",
+"{n} channels removed": "{n} salons supprimés",
+"Opening…": "Ouverture…",
+"New communities were added": "De nouvelles communautés ont été ajoutées"
 }

@@ -3711,5 +3711,12 @@
 "New community": "Новое сообщество",
 "No communities yet.": "Сообществ пока нет.",
 "{n} followers": "Подписчиков: {n}",
-"This community was deleted": "Это сообщество было удалено"
+"This community was deleted": "Это сообщество было удалено",
+"created community": "создал(а) сообщество",
+"edited community": "изменил(а) сообщество",
+"deleted community": "удалил(а) сообщество",
+"1 channel removed": "удалён 1 канал",
+"{n} channels removed": "удалено каналов: {n}",
+"Opening…": "Открывается…",
+"New communities were added": "Добавлены новые сообщества"
 }

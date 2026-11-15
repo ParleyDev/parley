@@ -3711,5 +3711,12 @@
 "New community": "Nowa społeczność",
 "No communities yet.": "Brak społeczności.",
 "{n} followers": "Obserwujących: {n}",
-"This community was deleted": "Ta społeczność została usunięta"
+"This community was deleted": "Ta społeczność została usunięta",
+"created community": "utworzył(a) społeczność",
+"edited community": "edytował(a) społeczność",
+"deleted community": "usunął(-ęła) społeczność",
+"1 channel removed": "usunięto 1 kanał",
+"{n} channels removed": "usunięto kanały: {n}",
+"Opening…": "Otwieranie…",
+"New communities were added": "Dodano nowe społeczności"
 }

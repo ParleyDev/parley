@@ -235,6 +235,10 @@ async fn update_channel(
         None => None,
     };
     let gid = c.guild_id.unwrap_or_default();
+    if c.kind == "category" && name.as_ref().is_some_and(|n| *n != c.name) {
+        let (backs,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM communities WHERE category_id = $1)").bind(id).fetch_one(&state.db).await?;
+        if backs { return Err(AppError::BadRequest("This category belongs to a community. Rename the community instead.".into())) }
+    }
     if req.video_quality.as_deref().map(|q| q != "auto" && q != "full").unwrap_or(false) {
         return Err(AppError::BadRequest("video_quality must be 'auto' or 'full'".into()));
     }
@@ -649,7 +653,7 @@ pub(crate) async fn create_message(
     tx.commit().await?;
     if !req.attachment_descriptions.is_empty() { set_descriptions(&state.db, mid, &req.attachment_descriptions).await?; }
     crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    crate::routes::communities::touch_activity(&state.db, id).await;
+    crate::routes::communities::touch_activity_bg(&state.db, id);
     // Author has implicitly read their own message.
     sqlx::query(
         "INSERT INTO read_states (user_id, channel_id, last_read_msg) VALUES ($1, $2, $3)

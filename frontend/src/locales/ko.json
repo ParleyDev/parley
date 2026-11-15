@@ -3711,5 +3711,12 @@
 "New community": "새 커뮤니티",
 "No communities yet.": "아직 커뮤니티가 없습니다.",
 "{n} followers": "팔로워 {n}명",
-"This community was deleted": "이 커뮤니티가 삭제되었습니다"
+"This community was deleted": "이 커뮤니티가 삭제되었습니다",
+"created community": "커뮤니티를 만들었습니다",
+"edited community": "커뮤니티를 수정했습니다",
+"deleted community": "커뮤니티를 삭제했습니다",
+"1 channel removed": "채널 1개 삭제됨",
+"{n} channels removed": "채널 {n}개 삭제됨",
+"Opening…": "여는 중…",
+"New communities were added": "새 커뮤니티가 추가되었습니다"
 }

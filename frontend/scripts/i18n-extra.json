@@ -46,4 +46,7 @@
 "Unbanned",
 "Warned",
 "Warning removed",
-"{name} was timed out for {duration}"]
+"{name} was timed out for {duration}",
+"created community",
+"edited community",
+"deleted community"]

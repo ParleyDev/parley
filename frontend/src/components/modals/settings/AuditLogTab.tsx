@@ -12,6 +12,7 @@ interface Row { id: string; actor_id: string | null; actor_name: string; action:
 const LABELS: Record<string, string> = {
   'guild.update': 'updated the server', 'guild.badge_update': 'changed the README badge of', 'guild.transfer': 'transferred ownership to',
   'channel.create': 'created channel', 'channel.update': 'edited channel', 'channel.delete': 'deleted channel', 'channel.overwrite': 'changed permissions in', 'channel.overwrite_delete': 'removed a permission overwrite in',
+  'community.create': 'created community', 'community.update': 'edited community', 'community.delete': 'deleted community',
   'role.create': 'created role', 'role.update': 'edited role', 'role.delete': 'deleted role',
   'member.kick': 'kicked', 'member.ban': 'banned', 'member.unban': 'unbanned', 'member.timeout': 'timed out', 'member.timeout_clear': 'removed the timeout of', 'member.update': 'updated member',
   'message.delete': 'deleted a message by', 'message.bulk_delete': 'bulk-deleted messages in', 'emoji.create': 'added emoji', 'emoji.update': 'renamed emoji', 'emoji.delete': 'deleted emoji',
@@ -36,13 +37,14 @@ const what = (action: string, d: Record<string, unknown>): string => {
     case 'message.delete': return t('in #{channel}', { channel: String(d.channel) })
     case 'guild.update': case 'guild.badge_update': case 'role.update': case 'channel.update': return Object.entries(d).filter(([k]) => k !== 'reason').map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`).join(' · ')
     case 'channel.overwrite': return t('{kind} overwrite · allow {allow} · deny {deny}', { kind: String(d.kind), allow: String(d.allow), deny: String(d.deny) })
+    case 'community.delete': return d.channels === 1 ? t('1 channel removed') : typeof d.channels === 'number' ? t('{n} channels removed', { n: String(d.channels) }) : ''
     case 'discovery.submit': return t('category: {category}', { category: String(d.category) })
     default: return ''
   }
 }
 
 const ACTION_FILTERS: [string, string][] = [
-  ['', 'All actions'], ['guild.', 'Server settings'], ['channel.', 'Channels'], ['role.', 'Roles'], ['member.', 'Members'],
+  ['', 'All actions'], ['guild.', 'Server settings'], ['channel.', 'Channels'], ['community.', 'Communities'], ['role.', 'Roles'], ['member.', 'Members'],
   ['member.ban', 'Bans'], ['member.kick', 'Kicks'], ['member.timeout', 'Timeouts'], ['message.', 'Messages'], ['invite.', 'Invites'],
   ['emoji.', 'Emoji'], ['sticker.', 'Stickers'],
 ]
