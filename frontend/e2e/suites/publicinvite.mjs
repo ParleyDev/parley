@@ -131,6 +131,23 @@ await logIn(p, frank.user.username)
 await p.waitForSelector('[data-group-invite-page]', { timeout: 15000 })
 ok('group invite link: log in from the not-found page ends on the group invite', p.url().includes(`/invite/${gdm.code}`))
 await p.context().close()
+// Server Settings: choosing the preview channel
+console.log('-- settings select')
+await raw(a.token, 'PATCH', `/guilds/${g.id}`, { invite_preview_channel_id: null })
+const previewId = async () => (await (await anon(`/invites/${inv.code}`)).json()).preview_channel?.id ?? null
+const settle = async (want) => { for (let i = 0; i < 30 && (await previewId()) !== want; i++) await new Promise((r) => setTimeout(r, 500)) }
+const own = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage(); own.on('pageerror', (e) => errors.push(e.message))
+await own.goto(`${WEB}/login`); await own.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+await own.goto(`${WEB}/channels/${g.id}/${general.id}`)
+await own.locator(`button:has-text("${g.name}")`).first().click(); await own.click('text=Server Settings'); await own.click('[data-settings-tab="widget"]')
+await own.waitForSelector('[data-invite-preview-select]', { timeout: 15000 })
+const optVals = await own.locator('[data-invite-preview-select] option').evaluateAll((os) => os.map((o) => o.value))
+ok('preview select offers Off and the readable channel, not the age-restricted one', optVals.includes('') && optVals.includes(general.id) && !optVals.includes(priv.id), optVals.join(','))
+await own.selectOption('[data-invite-preview-select]', general.id); await settle(general.id)
+ok('picking a channel in settings saves it', (await previewId()) === general.id)
+await own.selectOption('[data-invite-preview-select]', ''); await settle(null)
+ok('choosing Off clears it', (await previewId()) === null)
+await own.context().close()
 ok('no page errors on the landing', errors.length === 0, errors.join('|'))
 await browser.close()
 

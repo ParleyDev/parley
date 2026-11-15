@@ -3687,5 +3687,10 @@
 "{n} online": "{n} 人在线",
 "Too many requests. Try again in a minute.": "请求过多，请一分钟后再试。",
 "Have an invite to a group chat?": "有群聊邀请？",
-"Log in to open it.": "登录后打开。"
+"Log in to open it.": "登录后打开。",
+"Invite page preview": "邀请页面预览",
+"Invite page previews": "邀请页面预览",
+"Invite preview off": "邀请预览已关闭",
+"Invite preview on": "邀请预览已开启",
+"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "在公开邀请页面上显示一个频道的最新消息。任何拥有邀请链接的人都可以阅读。"
 }

@@ -3,7 +3,7 @@ import CropImg from '../components/CropImg'
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
-import InviteLanding, { AUTOJOIN_KEY, type AnonPreview } from '../components/InviteLanding'
+import InviteLanding, { AUTOJOIN_KEY, splashBackground, type AnonPreview } from '../components/InviteLanding'
 import { renderMarkdown } from '../lib/markdown'
 import { useStore } from '../store'
 import { nameOf } from '../lib/dm'
@@ -65,7 +65,7 @@ export default function InvitePage() {
 
   if (anon && !token) return <InviteLanding code={code} preview={anon} returnTo={returnTo} />
   return (
-    <div className="relative h-full overflow-y-auto flex items-center-safe justify-center bg-bg-0 bg-cover bg-center p-4" style={p?.guild.splash_url ? { backgroundImage: `linear-gradient(rgb(0 0 0 / .45), rgb(0 0 0 / .45)), url(${p.guild.splash_url})` } : undefined} data-invite-splash={p?.guild.splash_url ? '1' : '0'}>
+    <div className="relative h-full overflow-y-auto flex items-center-safe justify-center bg-bg-0 bg-cover bg-center p-4" style={p?.guild.splash_url ? { backgroundImage: splashBackground(p.guild.splash_url) } : undefined} data-invite-splash={p?.guild.splash_url ? '1' : '0'}>
       <div className="pop w-full max-w-sm rounded-2xl bg-bg-1 border border-line p-8 text-center shadow-2xl">
         {group ? (
           <div data-group-invite-page>
@@ -78,7 +78,7 @@ export default function InvitePage() {
             {err && <p className="mb-3 text-sm text-danger">{err}</p>}
             {group.already_member ? <button className="btn-primary w-full" onClick={() => navigate(`/channels/@me/${group.channel_id}`)}>{t('Open group')}</button>
               : group.full ? <p className="text-danger text-sm">{t('This group is full.')}</p>
-              : <button className="btn-primary w-full" disabled={busy} data-group-invite-join onClick={async () => { setBusy(true); try { const c = await api.post<DmChannel>(`/group-invites/${code}`); upsertChannel(c); navigate(`/channels/@me/${c.id}`, { replace: true }) } catch (e) { setErr((e as Error).message) } finally { setBusy(false) } }}>{busy ? t('Joining…') : t('Join Group')}</button>}
+              : <button className="btn-primary w-full" disabled={busy} data-group-invite-join onClick={async () => { setBusy(true); try { const c = await api.post<DmChannel>(`/group-invites/${code}`); upsertChannel(c); navigate(`/channels/@me/${c.id}`, { replace: true }) } catch (e) { setErr(say(e)) } finally { setBusy(false) } }}>{busy ? t('Joining…') : t('Join Group')}</button>}
           </div>
         ) : err ? (
           <>

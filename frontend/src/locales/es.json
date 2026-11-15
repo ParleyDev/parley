@@ -3687,5 +3687,10 @@
 "{n} online": "{n} en línea",
 "Too many requests. Try again in a minute.": "Demasiadas solicitudes. Inténtalo de nuevo en un minuto.",
 "Have an invite to a group chat?": "¿Tienes una invitación a un chat de grupo?",
-"Log in to open it.": "Inicia sesión para abrirlo."
+"Log in to open it.": "Inicia sesión para abrirlo.",
+"Invite page preview": "Vista previa de la página de invitación",
+"Invite page previews": "Vistas previas de la página de invitación",
+"Invite preview off": "Vista previa de invitación desactivada",
+"Invite preview on": "Vista previa de invitación activada",
+"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Muestra los últimos mensajes de un canal en tu página de invitación pública. Cualquiera con un enlace de invitación puede leerlos."
 }

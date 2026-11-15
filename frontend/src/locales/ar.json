@@ -3687,5 +3687,10 @@
 "{n} online": "{n} متصل",
 "Too many requests. Try again in a minute.": "طلبات كثيرة جدًا. حاول مرة أخرى بعد دقيقة.",
 "Have an invite to a group chat?": "لديك دعوة إلى محادثة جماعية؟",
-"Log in to open it.": "سجّل الدخول لفتحها."
+"Log in to open it.": "سجّل الدخول لفتحها.",
+"Invite page preview": "معاينة صفحة الدعوة",
+"Invite page previews": "معاينات صفحة الدعوة",
+"Invite preview off": "تم إيقاف معاينة الدعوة",
+"Invite preview on": "تم تفعيل معاينة الدعوة",
+"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "اعرض أحدث الرسائل من قناة واحدة على صفحة الدعوة العامة. يمكن لأي شخص لديه رابط الدعوة قراءتها."
 }

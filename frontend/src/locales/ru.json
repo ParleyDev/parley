@@ -3687,5 +3687,10 @@
 "{n} online": "{n} в сети",
 "Too many requests. Try again in a minute.": "Слишком много запросов. Повторите через минуту.",
 "Have an invite to a group chat?": "Есть приглашение в групповой чат?",
-"Log in to open it.": "Войдите, чтобы открыть."
+"Log in to open it.": "Войдите, чтобы открыть.",
+"Invite page preview": "Предпросмотр на странице приглашения",
+"Invite page previews": "Предпросмотры страницы приглашения",
+"Invite preview off": "Предпросмотр приглашения выключен",
+"Invite preview on": "Предпросмотр приглашения включён",
+"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Показывайте последние сообщения одного канала на публичной странице приглашения. Их может прочитать любой, у кого есть ссылка-приглашение."
 }

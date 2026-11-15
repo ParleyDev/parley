@@ -3687,5 +3687,10 @@
 "{n} online": "{n} 人オンライン",
 "Too many requests. Try again in a minute.": "リクエストが多すぎます。1分後にもう一度お試しください。",
 "Have an invite to a group chat?": "グループチャットへの招待をお持ちですか？",
-"Log in to open it.": "ログインして開く。"
+"Log in to open it.": "ログインして開く。",
+"Invite page preview": "招待ページのプレビュー",
+"Invite page previews": "招待ページのプレビュー",
+"Invite preview off": "招待プレビューをオフにしました",
+"Invite preview on": "招待プレビューをオンにしました",
+"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "公開の招待ページに、1つのチャンネルの最新メッセージを表示します。招待リンクを持つ人なら誰でも読めます。"
 }

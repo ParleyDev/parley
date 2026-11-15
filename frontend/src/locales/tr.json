@@ -3687,5 +3687,10 @@
 "{n} online": "{n} çevrimiçi",
 "Too many requests. Try again in a minute.": "Çok fazla istek. Bir dakika sonra tekrar dene.",
 "Have an invite to a group chat?": "Bir grup sohbeti davetin mi var?",
-"Log in to open it.": "Açmak için giriş yap."
+"Log in to open it.": "Açmak için giriş yap.",
+"Invite page preview": "Davet sayfası önizlemesi",
+"Invite page previews": "Davet sayfası önizlemeleri",
+"Invite preview off": "Davet önizlemesi kapalı",
+"Invite preview on": "Davet önizlemesi açık",
+"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Herkese açık davet sayfanızda bir kanalın en son mesajlarını gösterin. Davet bağlantısı olan herkes bunları okuyabilir."
 }

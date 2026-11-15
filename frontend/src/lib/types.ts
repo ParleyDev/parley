@@ -166,6 +166,8 @@ export interface Guild {
   widget_enabled?: boolean
   widget_invite?: string
   invite_splash_url?: string | null
+  /** Channel whose latest messages the public invite page shows (null = off). */
+  invite_preview_channel_id?: string | null
   raid_protection?: boolean
   raid_threshold?: number
   safety_alerts_channel_id?: string | null

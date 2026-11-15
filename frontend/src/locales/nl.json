@@ -3687,5 +3687,10 @@
 "{n} online": "{n} online",
 "Too many requests. Try again in a minute.": "Te veel verzoeken. Probeer het over een minuut opnieuw.",
 "Have an invite to a group chat?": "Heb je een uitnodiging voor een groepschat?",
-"Log in to open it.": "Log in om hem te openen."
+"Log in to open it.": "Log in om hem te openen.",
+"Invite page preview": "Voorbeeld op de uitnodigingspagina",
+"Invite page previews": "Voorbeelden van de uitnodigingspagina",
+"Invite preview off": "Uitnodigingsvoorbeeld uit",
+"Invite preview on": "Uitnodigingsvoorbeeld aan",
+"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Toon de nieuwste berichten van één kanaal op je openbare uitnodigingspagina. Iedereen met een uitnodigingslink kan ze lezen."
 }
