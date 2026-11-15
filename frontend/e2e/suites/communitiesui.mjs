@@ -177,5 +177,41 @@ await p.locator(`button:has-text("Comm UI ${S}")`).first().click(); await p.clic
 await p.waitForSelector('[data-settings-tab="members"]')
 ok('bob does not see it', (await p.locator('[data-communities-tab], [data-settings-tab="communities"]').count()) === 0)
 
+console.log('-- invite links that name a community')
+{
+  const chans = await call(a.token, 'GET', `/guilds/${g.id}/channels`)
+  const firstText = (ids) => ids.find((id) => chans.find((x) => x.id === id)?.kind === 'text')
+  const metalChat = firstText(metal.channel_ids), paveChat = firstText(pave.channel_ids)
+  const open = async (user, query) => {
+    const pg = await browser.newPage({ viewport: { width: 1440, height: 900 } }); pg.on('pageerror', (e) => errors.push(e.message))
+    await pg.goto(`${WEB}/login`); await pg.evaluate((t) => localStorage.setItem('parley.token', t), user.token)
+    await pg.goto(`${WEB}/invite/${inv.code}${query}`)
+    return pg
+  }
+  const carol2 = await reg('carolto'), dave = await reg('daveto'), eve = await reg('eveto')
+  const pcx = await open(carol2, '?to=metallica&utm_source=t')
+  await pcx.click('text=Accept Invite'); await pcx.waitForURL(new RegExp(`/channels/${g.id}/${metalChat}$`))
+  await pcx.waitForSelector('[data-community="metallica"]')
+  ok('a join with ?to lands in the community chat and follows it', pcx.url().endsWith(`/channels/${g.id}/${metalChat}`) && (await pcx.locator('[data-community="metallica"]').count()) === 1)
+  const pdx = await open(dave, '?to=does-not-exist')
+  await pdx.click('text=Accept Invite'); await pdx.waitForURL(new RegExp(`/channels/${g.id}/[0-9a-f-]+$`))
+  ok('an unknown community falls back to the server\'s first text channel', /\/channels\/[0-9a-f-]+\/[0-9a-f-]+$/.test(pdx.url()) && !pdx.url().endsWith(metalChat) && !pdx.url().endsWith(paveChat), pdx.url())
+  ok('and follows nothing', (await pdx.locator('[data-community]').count()) === 0)
+  await pdx.close()
+  const pbx = await open(b, '?to=pavement')
+  await pbx.click('text=Open server'); await pbx.waitForURL(new RegExp(`/channels/${g.id}/${paveChat}$`))
+  await pbx.waitForSelector('[data-community="pavement"]')
+  ok('a member opening the link lands in the community and now follows it', (await pbx.locator('[data-community="pavement"]').count()) === 1 && (await call(b.token, 'GET', `${base}/pavement`)).following === true)
+  await pbx.close(); await pcx.close()
+  // A logged-out visitor's ?to rides through the login round trip and the automatic join.
+  const pex = await (await browser.newContext()).newPage(); pex.on('pageerror', (e) => errors.push(e.message))
+  await pex.goto(`${WEB}/invite/${inv.code}?to=pavement`); await pex.waitForSelector('[data-invite-login]')
+  await pex.click('[data-invite-login]'); await pex.waitForURL(/\/login/)
+  await pex.fill('[data-login-input]', eve.user.username); await pex.fill('input[type=password]', 'password1'); await pex.click('form button.btn-primary')
+  await pex.waitForURL(new RegExp(`/channels/${g.id}/${paveChat}$`), { timeout: 15000 })
+  ok('a logged-out visitor lands in the community after logging in', pex.url().endsWith(`/channels/${g.id}/${paveChat}`))
+  await pex.close()
+}
+
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

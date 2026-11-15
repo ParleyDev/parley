@@ -12,6 +12,7 @@ import { colorFor, initials } from '../lib/format'
 import { markJoined } from '../lib/welcome'
 import { splashBackground } from '../lib/splash'
 import { useT } from '../lib/i18n'
+import { inviteTarget, resolveInviteLanding } from '../lib/invites'
 
 interface GroupPreview { code: string; channel_id: string; name: string; icon_url: string | null; already_member: boolean; full: boolean; members: { id: string; display_name: string; avatar_url: string | null }[] }
 interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; rules?: string; rules_required?: boolean; splash_url?: string | null; description?: string }; expired: boolean; already_member: boolean; banned: boolean; paused?: boolean }
@@ -35,13 +36,18 @@ export default function InvitePage() {
 
   const say = (e: unknown) => e instanceof ApiError && e.status === 429 ? t('Too many requests. Try again in a minute.') : (e as Error).message
 
+  // An already-member's way in: the community the link names, else the server as the app last had it.
+  const landIn = async (guildId: string, replace = false) => {
+    const to = inviteTarget(location.search)
+    navigate(to ? await resolveInviteLanding(guildId, to, null) : `/channels/${guildId}`, { replace })
+  }
+
   const join = async () => {
     setBusy(true)
     try {
       const g = await api.post<Guild & { channels: Channel[] }>(`/invites/${code}`)
       upsertGuild(g); markJoined(g.id)
-      const first = g.channels.find((c) => c.kind === 'text')
-      navigate(first ? `/channels/${g.id}/${first.id}` : `/channels/${g.id}`, { replace: true })
+      navigate(await resolveInviteLanding(g.id, inviteTarget(location.search), g.channels.find((c) => c.kind === 'text')?.id ?? null), { replace: true })
     } catch (e) { setErr(say(e)) } finally { setBusy(false) }
   }
 
@@ -58,7 +64,7 @@ export default function InvitePage() {
       // Coming back from the landing's sign-up or sign-in: join without another click, unless something needs the visitor first.
       let want = false
       try { want = sessionStorage.getItem(AUTOJOIN_KEY) === code; sessionStorage.removeItem(AUTOJOIN_KEY) } catch { /* private mode */ }
-      if (want && pv.already_member) { navigate(`/channels/${pv.guild.id}`, { replace: true }); return }
+      if (want && pv.already_member) { void landIn(pv.guild.id, true); return }
       if (want && !pv.already_member && !pv.banned && !pv.paused && !pv.expired && !pv.guild.rules_required) void join()
     }).catch(fail)
     // Runs once per code and session: say/join are recreated every render and must not re-trigger the fetch (or a second autojoin).
@@ -106,7 +112,7 @@ export default function InvitePage() {
               </div>
             )}
             {p.already_member ? (
-              <button className="btn-primary w-full" onClick={() => navigate(`/channels/${p.guild.id}`)}>{t('Open server')}</button>
+              <button className="btn-primary w-full" onClick={() => void landIn(p.guild.id)}>{t('Open server')}</button>
             ) : p.banned ? (
               <p className="text-danger text-sm">{t('You are banned from this server.')}</p>
             ) : p.expired ? (

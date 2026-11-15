@@ -1,6 +1,8 @@
 import { publicOrigin } from '../components/InviteCard'
 import { locale, t } from './i18n'
-import type { Invite } from './types'
+import { api } from './api'
+import { useStore } from '../store'
+import type { Community, Invite } from './types'
 
 /** Invite lifetimes the server accepts, in seconds; 0 never expires. */
 export const EXPIRY: { s: number; label: string }[] = [
@@ -65,4 +67,33 @@ export function badgeMarkdown(code: string, style: BadgeStyle | undefined, guild
 export function badgeHtml(code: string, style: BadgeStyle | undefined, guild: string): string {
   const alt = `Join ${guild} on Parley`.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
   return `<a href="${inviteUrl(code)}"><img src="${badgeUrl(code, style)}" alt="${alt}"></a>`
+}
+
+const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,62}$/
+/** The community an invite link names (`?to=<slug>`), or null when absent or not a valid slug. */
+export function inviteTarget(search: string): string | null {
+  const to = new URLSearchParams(search).get('to')
+  return to && SLUG_RE.test(to) ? to : null
+}
+
+/** Where to go after landing in a community: its first text channel (the first channel when kinds are unknown), else the server. */
+export function landingPath(guildId: string, channelIds: string[], kindOf: (id: string) => string | undefined, firstTextChannelId: string | null): string {
+  const id = channelIds.find((c) => kindOf(c) === 'text') ?? channelIds[0]
+  if (id) return `/channels/${guildId}/${id}`
+  return firstTextChannelId ? `/channels/${guildId}/${firstTextChannelId}` : `/channels/${guildId}`
+}
+
+/** Where an invite visitor ends up once in the server. With a valid `to`, follows that community and goes to its chat;
+ * a missing community, a failed request or no channels fall back to the server's first text channel. */
+export async function resolveInviteLanding(guildId: string, to: string | null, firstTextChannelId: string | null): Promise<string> {
+  const fallback = landingPath(guildId, [], () => undefined, firstTextChannelId)
+  if (!to) return fallback
+  try {
+    const c = await api.get<Community>(`/guilds/${guildId}/communities/${to}`)
+    if (!c.channel_ids.length) return fallback
+    const st = useStore.getState()
+    st.upsertCommunity({ id: c.id, guild_id: c.guild_id, slug: c.slug, name: c.name, icon_url: c.icon_url, description: c.description, category_id: c.category_id })
+    void st.followCommunity(guildId, c.slug, true)
+    return landingPath(guildId, c.channel_ids, (id) => useStore.getState().channels[id]?.kind, firstTextChannelId)
+  } catch { return fallback }
 }
