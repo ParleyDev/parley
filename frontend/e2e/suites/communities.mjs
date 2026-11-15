@@ -150,7 +150,109 @@ const priv = await (await raw(mgr.token, 'POST', base, { slug: 'priv', name: 'Pr
 await call(a.token, 'PUT', `/channels/${priv.category_id}/permissions/${role.id}`, { kind: 'role', allow: 0, deny: 1024 })
 await call(a.token, 'PUT', `/channels/${priv.category_id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
 r = await raw(mgr.token, 'PATCH', `${base}/priv`, { description: 'still mine' })
-ok('a manager who cannot view the category still gets their PATCH back', r.status === 200 && (await r.json()).description === 'still mine')
+ok('a manager who can no longer view the category cannot edit its community (as for the channel itself)', r.status === 404, String(r.status))
+ok('nor delete it', (await raw(mgr.token, 'DELETE', `${base}/priv`)).status === 404 && (await call(a.token, 'GET', `${base}/priv`))?.slug === 'priv')
+
+console.log('-- Manage Channels is checked in the category')
+{
+  const MANAGE_CH = 1 << 4
+  const cm = await reg('chmgr'); await call(cm.token, 'POST', `/invites/${inv.code}`)
+  const mrole = await call(a.token, 'POST', `/guilds/${g.id}/roles`, { name: 'Channel boss', permissions: (1 << 4) | (1 << 10) })
+  await call(a.token, 'PATCH', `/guilds/${g.id}/members/${cm.user.id}`, { roles: [mrole.id] })
+  const guarded = await (await raw(a.token, 'POST', base, { slug: 'guarded', name: 'Guarded' })).json()
+  ok('a Manage Channels member can edit it at first', (await raw(cm.token, 'PATCH', `${base}/guarded`, { description: 'one' })).status === 200)
+  await call(a.token, 'PUT', `/channels/${guarded.category_id}/permissions/${mrole.id}`, { kind: 'role', allow: 0, deny: MANAGE_CH })
+  r = await raw(cm.token, 'PATCH', `${base}/guarded`, { description: 'two' })
+  ok('denied Manage Channels by an overwrite on the category: PATCH is 403', r.status === 403, String(r.status))
+  r = await raw(cm.token, 'DELETE', `${base}/guarded`)
+  ok('and DELETE is 403, nothing removed', r.status === 403 && (await call(a.token, 'GET', `${base}/guarded`))?.channel_ids?.length === 1)
+  await call(a.token, 'DELETE', `/channels/${guarded.category_id}/permissions/${mrole.id}`)
+  const kid = guarded.channel_ids[0]
+  await call(a.token, 'PUT', `/channels/${kid}/permissions/${mrole.id}`, { kind: 'role', allow: 0, deny: MANAGE_CH })
+  r = await raw(cm.token, 'DELETE', `${base}/guarded`)
+  ok('denied in one child channel: DELETE is 403 before anything is deleted', r.status === 403 && (await call(a.token, 'GET', `${base}/guarded`))?.channel_ids?.length === 1, String(r.status))
+  await call(a.token, 'DELETE', `/channels/${kid}/permissions/${mrole.id}`)
+  ok('with the overwrites gone the member can delete it', (await raw(cm.token, 'DELETE', `${base}/guarded`)).status === 204)
+}
+
+console.log('-- renaming the backing category')
+{
+  const ren = await (await raw(a.token, 'POST', base, { slug: 'ren', name: 'Ren' })).json()
+  r = await raw(a.token, 'PATCH', `/channels/${ren.category_id}`, { name: 'Elsewhere' })
+  ok('renaming a category that backs a community is refused', r.status === 400 && JSON.stringify(await r.json()).includes('This category belongs to a community. Rename the community instead.'), String(r.status))
+  ok('and the name did not change', (await call(a.token, 'GET', `${base}/ren`)).name === 'Ren' && (await call(a.token, 'GET', `/guilds/${g.id}/channels`)).find((c) => c.id === ren.category_id).name === 'Ren')
+  ok('other edits to it are still allowed', (await raw(a.token, 'PATCH', `/channels/${ren.category_id}`, { position: 7 })).status === 200 && (await raw(a.token, 'PATCH', `/channels/${ren.category_id}`, { name: 'Ren' })).status === 200)
+  ok('an ordinary category still renames', await (async () => { const c = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'Plain', kind: 'category' }); return (await raw(a.token, 'PATCH', `/channels/${c.id}`, { name: 'Plainer' })).status === 200 })())
+  await raw(a.token, 'DELETE', `${base}/ren`)
+}
+
+console.log('-- the last text channel')
+{
+  const g3 = await call(a.token, 'POST', '/guilds', { name: `Solo ${S}` })
+  const b3 = `/guilds/${g3.id}/communities`
+  const solo = await (await raw(a.token, 'POST', b3, { slug: 'solo', name: 'Solo' })).json()
+  const general = g3.channels.find((c) => c.kind === 'text')
+  ok('with a community chat in place the default text channel can go', (await raw(a.token, 'DELETE', `/channels/${general.id}`)).status === 204)
+  r = await raw(a.token, 'DELETE', `${b3}/solo`)
+  ok('deleting the community that holds the last text channel is 400 with the channel rule\'s message', r.status === 400 && JSON.stringify(await r.json()).includes('A server must keep at least one text channel'), String(r.status))
+  ok('and nothing was removed', (await call(a.token, 'GET', `${b3}/solo`))?.channel_ids?.length === 1)
+  await call(a.token, 'POST', `/guilds/${g3.id}/channels`, { name: 'lobby', kind: 'text' })
+  ok('once another text channel exists it can be deleted', (await raw(a.token, 'DELETE', `${b3}/solo`)).status === 204)
+  ok('a community with only voice channels never blocks', await (async () => { const v = await (await raw(a.token, 'POST', b3, { slug: 'voice', name: 'Voice', channels: [{ name: 'Lounge', kind: 'voice' }] })).json(); return v.channel_ids.length === 1 && (await raw(a.token, 'DELETE', `${b3}/voice`)).status === 204 })())
+}
+
+console.log('-- audit log')
+{
+  const au = await (await raw(a.token, 'POST', base, { slug: 'audited', name: 'Audited', channels: [{ name: 'one', kind: 'text' }, { name: 'two', kind: 'text' }] })).json()
+  await raw(a.token, 'PATCH', `${base}/audited`, { name: 'Audited Two' })
+  await raw(a.token, 'DELETE', `${base}/audited`)
+  const log = await call(a.token, 'GET', `/guilds/${g.id}/audit?action=community.`)
+  const rows = (Array.isArray(log) ? log : log.items ?? []).filter((e) => e.target_id === au.id)
+  const by = (act) => rows.find((e) => e.action === act)
+  ok('create, update and delete are logged for the community', !!by('community.create') && !!by('community.update') && !!by('community.delete'), rows.map((e) => e.action).join())
+  ok('with actor, target and name', by('community.create')?.actor_id === a.user.id && by('community.create')?.target_kind === 'community' && by('community.create')?.target_name === 'Audited' && by('community.update')?.target_name === 'Audited Two')
+  ok('delete records how many channels went', by('community.delete')?.details?.channels === 2, JSON.stringify(by('community.delete')?.details))
+}
+
+console.log('-- visibility changes send community events')
+{
+  const vis = await (await raw(a.token, 'POST', base, { slug: 'vis', name: 'Vis' })).json()
+  const evs = []
+  const sock = await new Promise((resolve) => { const w = new WebSocket(`${WS}?token=${b.token}`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'READY') resolve(w); else evs.push(m) } })
+  const mine = () => evs.filter((m) => m.t.startsWith('COMMUNITY_') && (m.d?.id === vis.id))
+  await call(a.token, 'PUT', `/channels/${vis.category_id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
+  await new Promise((r2) => setTimeout(r2, 1200))
+  ok('losing view of the category sends COMMUNITY_DELETE', mine().map((m) => m.t).join() === 'COMMUNITY_DELETE' && mine()[0].d.guild_id === g.id, JSON.stringify(mine()))
+  await call(a.token, 'PUT', `/channels/${vis.category_id}/permissions/${g.id}`, { kind: 'role', allow: 1024, deny: 0 })
+  await new Promise((r2) => setTimeout(r2, 1200))
+  const got = mine().map((m) => m.t).join()
+  ok('regaining it sends COMMUNITY_CREATE (slim form)', got === 'COMMUNITY_DELETE,COMMUNITY_CREATE' && mine()[1].d.slug === 'vis' && mine()[1].d.category_id === vis.category_id && !('follower_count' in mine()[1].d), got)
+  sock.close()
+  await raw(a.token, 'DELETE', `${base}/vis`)
+}
+
+console.log('-- joining carries communities')
+{
+  const j = await reg('joiner')
+  const gj = await call(a.token, 'POST', '/guilds', { name: `Join ${S}` })
+  await raw(a.token, 'POST', `/guilds/${gj.id}/communities`, { slug: 'one', name: 'One' })
+  await raw(a.token, 'POST', `/guilds/${gj.id}/communities`, { slug: 'two', name: 'Two' })
+  const hid2 = await (await raw(a.token, 'POST', `/guilds/${gj.id}/communities`, { slug: 'secret', name: 'Secret' })).json()
+  await call(a.token, 'PUT', `/channels/${hid2.category_id}/permissions/${gj.id}`, { kind: 'role', allow: 0, deny: 1024 })
+  const ji = await call(a.token, 'POST', `/guilds/${gj.id}/invites`, {})
+  const evs = []
+  const sock = await new Promise((resolve) => { const w = new WebSocket(`${WS}?token=${j.token}`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'READY') resolve(w); else evs.push(m) } })
+  const resp = await call(j.token, 'POST', `/invites/${ji.code}`)
+  await new Promise((r2) => setTimeout(r2, 800))
+  const gc = evs.find((m) => m.t === 'GUILD_CREATE')?.d
+  const slugs = (x) => (x?.communities ?? []).map((c) => c.slug).sort().join()
+  ok('GUILD_CREATE carries the communities the member can view', slugs(gc) === 'one,two', slugs(gc))
+  ok('and their follows (none for a fresh join)', Array.isArray(gc?.community_follows) && gc.community_follows.length === 0)
+  ok('the join response carries them too', slugs(resp) === 'one,two' && Array.isArray(resp.community_follows))
+  const sl = gc?.communities?.[0]
+  ok('slim form', !!sl?.category_id && !('follower_count' in sl) && sl.guild_id === gj.id)
+  sock.close()
+}
 
 console.log('-- bots')
 const botPost = (tok, body) => fetch(B + base, { method: 'POST', headers: { ...H, Authorization: 'Bot ' + tok }, body: JSON.stringify(body) })

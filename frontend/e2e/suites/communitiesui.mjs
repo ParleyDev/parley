@@ -213,5 +213,63 @@ console.log('-- invite links that name a community')
   await pex.close()
 }
 
+console.log('-- a member who joins during the session (no reload)')
+{
+  const gj = await call(a.token, 'POST', '/guilds', { name: `Join Live ${S}` })
+  const bj = `/guilds/${gj.id}/communities`
+  const one = await call(a.token, 'POST', bj, { slug: 'one', name: 'One' }), two = await call(a.token, 'POST', bj, { slug: 'two', name: 'Two' })
+  const ij = await call(a.token, 'POST', `/guilds/${gj.id}/invites`, {})
+  const cats = (pg) => pg.evaluate((ids) => ids.map((id) => document.querySelectorAll(`[data-category="${id}"]`).length), [one.category_id, two.category_id])
+  /** Move inside the running app (no reload), as a link click would. */
+  const go = (pg, path) => pg.evaluate((to) => { history.pushState({}, '', to); window.dispatchEvent(new PopStateEvent('popstate')) }, path)
+  const joinLive = async (user, query) => {
+    const pg = await browser.newPage({ viewport: { width: 1440, height: 900 } }); pg.on('pageerror', (e) => errors.push(e.message))
+    await pg.goto(`${WEB}/login`); await pg.evaluate((t) => localStorage.setItem('parley.token', t), user.token)
+    await pg.goto(`${WEB}/channels/@me`); await pg.waitForSelector('[data-guild-icon], [data-guild-bar]', { timeout: 15000 }).catch(() => {})
+    await pg.waitForTimeout(1000)
+    await go(pg, `/invite/${ij.code}${query}`)
+    await pg.click('text=Accept Invite')
+    await pg.waitForURL(new RegExp(`/channels/${gj.id}/`))
+    return pg
+  }
+  const j1 = await reg('livejoin')
+  const pj = await joinLive(j1, '')
+  await pj.waitForSelector('[data-browse-communities]', { timeout: 8000 }).catch(() => {})
+  ok('no category block for either community', (await cats(pj)).join() === '0,0', (await cats(pj)).join())
+  ok('the browse entry is there with the count', (await pj.locator('[data-browse-communities]').first().textContent({ timeout: 2000 }).catch(() => '')).includes('2'))
+  await go(pj, '/channels/@me'); await pj.waitForTimeout(800)
+  await call(a.token, 'POST', `/channels/${one.channel_ids[0]}/messages`, { content: 'quiet please' }); await pj.waitForTimeout(1000)
+  ok('a community message does not mark the server unread', (await pj.locator(`[data-guild-icon="${gj.id}"] [data-pill]`).getAttribute('data-pill')) === 'none')
+  await pj.close()
+  const j2 = await reg('livejointo')
+  const pt = await joinLive(j2, '?to=two')
+  await pt.waitForSelector('[data-community="two"]', { timeout: 8000 }).catch(() => {})
+  ok('with ?to only the target community has a block', (await cats(pt)).join() === '0,1' && (await pt.locator('[data-community]').count()) === 1, (await cats(pt)).join())
+  await pt.close()
+}
+
+console.log('-- dragging a channel sends only the channels that move')
+{
+  const mkc = (name, extra = {}) => call(a.token, 'POST', `/guilds/${g.id}/channels`, { name, kind: 'text', ...extra })
+  const zone = await mkc('Zone', { kind: 'category' })
+  const xr = await mkc('xray', { parent_id: zone.id }), ya = await mkc('yankee', { parent_id: zone.id })
+  const pd = await browser.newPage({ viewport: { width: 1440, height: 900 } }); pd.on('pageerror', (e) => errors.push(e.message))
+  await pd.goto(`${WEB}/login`); await pd.evaluate((t) => localStorage.setItem('parley.token', t), a.token)
+  await pd.goto(`${WEB}/channels/${g.id}/${xr.id}`); await pd.waitForSelector(`[data-channel-item="${ya.id}"]`)
+  const bodies = []; let failNext = false
+  await pd.route('**/channels/positions', (route) => { bodies.push(route.request().postDataJSON()); if (failNext) route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"boom"}' }); else route.continue() })
+  const order = () => pd.evaluate((cid) => [...document.querySelector(`[data-category="${cid}"]`).querySelectorAll('[data-channel-item]')].map((e) => e.getAttribute('data-channel-item')), zone.id)
+  const dragTo = async (from, to) => { const box = await pd.locator(`[data-channel-item="${to}"]`).first().boundingBox(); await pd.locator(`[data-channel-item="${from}"]`).dragTo(pd.locator(`[data-channel-item="${to}"]`).first(), { targetPosition: { x: 40, y: 4 } }); void box; await pd.waitForTimeout(700) }
+  await dragTo(ya.id, xr.id)
+  ok('the channel moved', (await order()).join() === [ya.id, xr.id].join())
+  const sent = bodies[0]?.items?.map((i) => i.id) ?? []
+  ok('one request with only the Zone channels', bodies.length === 1 && sent.length > 0 && sent.every((id) => id === xr.id || id === ya.id), JSON.stringify(sent))
+  failNext = true
+  await dragTo(xr.id, ya.id)
+  ok('a failed save puts the order back', (await order()).join() === [ya.id, xr.id].join(), (await order()).join())
+  ok('and shows the error', (await pd.locator('text=boom').count()) > 0)
+  await pd.close()
+}
+
 ok('no page errors', errors.length === 0, errors.join('\n'))
 await browser.close(); await finish()

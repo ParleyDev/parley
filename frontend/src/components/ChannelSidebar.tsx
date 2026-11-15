@@ -21,6 +21,7 @@ const NO_PINS: string[] = []
 import { EMPTY_ROLES, has, P } from '../lib/perms'
 import StyledName from './StyledName'
 import { api } from '../lib/api'
+import { changedPositions } from '../lib/channelOrder'
 import { getPrefs } from '../lib/prefs'
 import type { Channel } from '../lib/types'
 import { STORAGE_PREFIX } from '../lib/brand'
@@ -144,13 +145,17 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const mentionsOf = (id: string) => showsMentions({ channels, dms, notifSettings }, id) ? mentionCounts[id] ?? 0 : 0
   const projectsOf = (id: string) => all.filter((x) => x.kind === 'project' && x.parent_id === id)
   const rowUnread = (c: Channel) => unreadOf(c.id) || (c.kind === 'studio' && projectsOf(c.id).some((x) => unreadOf(x.id) || mentionsOf(x.id) > 0))
-  const persistOrder = async (ordered: { id: string; parent_id: string | null }[]) => {
-    const items = ordered.map((c, i) => ({ id: c.id, position: i, parent_id: c.parent_id }))
-    try { await api.patch(`/guilds/${guildId}/channels/positions`, { items }) } catch (e) { pushToast((e as Error).message, 'error') }
-  }
-  const persistCategoryOrder = async (orderedIds: string[]) => {
-    useStore.setState((s) => ({ channels: { ...s.channels, ...Object.fromEntries(orderedIds.map((id, i) => [id, { ...s.channels[id], position: i }])) } }))
-    try { await api.patch(`/guilds/${guildId}/channels/positions`, { items: orderedIds.map((id, i) => ({ id, position: i })) }) } catch (e) { pushToast((e as Error).message, 'error') }
+  /** Apply the new places locally and save only the channels that moved; if saving fails, the old places come back. */
+  const saveOrder = async (groups: { parent_id: string | null; ids: string[] }[], withParent = true) => {
+    const stored = useStore.getState().channels
+    const items = changedPositions(stored, groups, withParent)
+    if (!items.length) return
+    const before = Object.fromEntries(items.map((i) => [i.id, stored[i.id]]))
+    useStore.setState((s) => ({ channels: { ...s.channels, ...Object.fromEntries(items.map((i) => [i.id, { ...s.channels[i.id], position: i.position, ...(withParent ? { parent_id: i.parent_id ?? null } : {}) }])) } }))
+    try { await api.patch(`/guilds/${guildId}/channels/positions`, { items }) } catch (e) {
+      useStore.setState((s) => ({ channels: { ...s.channels, ...before } }))
+      pushToast((e as Error).message, 'error')
+    }
   }
   /** A dragged category lands before `beforeCat` (null = last). Unchanged orders are not saved. */
   const dropCategory = (beforeCat: string | null) => {
@@ -159,25 +164,22 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     const ids = current.filter((id) => id !== drag)
     const i = beforeCat ? ids.indexOf(beforeCat) : -1
     ids.splice(i < 0 ? ids.length : i, 0, drag)
-    if (ids.join() !== current.join()) persistCategoryOrder(ids)
+    if (ids.join() !== current.join()) void saveOrder([{ parent_id: null, ids }], false)
   }
   /** A dragged channel lands in group `parent` (null = uncategorized) before channel `before` (null = last). */
   const dropChannel = (parent: string | null, before: string | null) => {
     if (!drag || drag === before) return
-    if (!list.some((c) => c.id === drag)) return
+    const dragged = list.find((c) => c.id === drag)
+    if (!dragged) return
     const groupOf = (c: Channel) => (c.parent_id && catIds.has(c.parent_id) ? c.parent_id : null)
-    const rest = list.filter((c) => c.id !== drag)
-    const ordered: { id: string; parent_id: string | null }[] = []
-    for (const g of [null, ...categories.map((c) => c.id)]) {
-      const placed = rest.filter((c) => groupOf(c) === g).map((c) => ({ id: c.id, parent_id: g }))
-      if (g === parent) { const i = before ? placed.findIndex((c) => c.id === before) : -1; placed.splice(i < 0 ? placed.length : i, 0, { id: drag, parent_id: g }) }
-      ordered.push(...placed)
-    }
-    const current = [null, ...categories.map((c) => c.id)].flatMap((g) => list.filter((c) => groupOf(c) === g).map((c) => `${c.id}:${g}`))
-    if (ordered.map((c) => `${c.id}:${c.parent_id}`).join() === current.join()) return
-    // Optimistic: apply positions locally, then persist.
-    useStore.setState((s) => ({ channels: { ...s.channels, ...Object.fromEntries(ordered.map((c, i) => [c.id, { ...s.channels[c.id], position: i, parent_id: c.parent_id }])) } }))
-    persistOrder(ordered)
+    const idsIn = (g: string | null) => list.filter((c) => groupOf(c) === g && c.id !== drag).map((c) => c.id)
+    const from = groupOf(dragged)
+    const target = idsIn(parent)
+    const i = before ? target.indexOf(before) : -1
+    target.splice(i < 0 ? target.length : i, 0, drag)
+    if (from === parent && target.join() === list.filter((c) => groupOf(c) === parent).map((c) => c.id).join()) return
+    // Only the group the channel left and the one it joined are renumbered: a server can hold a thousand categories.
+    void saveOrder(from === parent ? [{ parent_id: parent, ids: target }] : [{ parent_id: from, ids: idsIn(from) }, { parent_id: parent, ids: target }])
   }
   const endDrag = () => { setDrag(null); setTarget(null) }
   const startDrag = (id: string) => (e: DragEvent<HTMLElement>) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; setDrag(id) }

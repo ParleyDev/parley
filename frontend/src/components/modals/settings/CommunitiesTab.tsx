@@ -7,6 +7,8 @@ import { useStore } from '../../../store'
 import ImagePicker from '../ImagePicker'
 
 const PAGE = 50
+/** Up to this many unknown communities are fetched one by one; more than that marks the list stale instead. */
+const FETCH_EACH = 5
 interface Page { items: Community[]; next: string | null }
 type Editing = 'new' | Community | null
 
@@ -31,6 +33,8 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
   const [confirming, setConfirming] = useState(false)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
+  // Many communities appeared at once (a bot creating them, or the store filling after the tab opened): reloading the first page beats one request each.
+  const [stale, setStale] = useState(false)
   // A ref guards against a second submit before the first one's state update has rendered.
   const inFlight = useRef(false)
   const itemsRef = useRef(items)
@@ -45,7 +49,7 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
   const url = (after?: string | null) => `/guilds/${guildId}/communities?${new URLSearchParams({ sort: 'name', limit: String(PAGE), ...(after ? { after } : {}) })}`
   const load = () => {
     const id = ++seq.current
-    setBusy(true); setFailed(false)
+    setBusy(true); setFailed(false); setStale(false)
     api.get<Page>(url())
       .then((r) => { if (id === seq.current) { setItems(r.items); setNext(r.next); setLoaded(true) } })
       .catch(() => { if (id === seq.current) setFailed(true) })
@@ -78,8 +82,9 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
     }
     const byId = new Map(list.map((c) => [c.id, c]))
     setItems((cur) => cur.map((x) => { const n = byId.get(x.id); return n && (n.name !== x.name || n.slug !== x.slug || n.description !== x.description || n.icon_url !== x.icon_url) ? { ...x, name: n.name, slug: n.slug, description: n.description, icon_url: n.icon_url } : x }).sort(byName))
-    for (const c of list) {
-      if (prev.has(c.id) || itemsRef.current.some((x) => x.id === c.id)) continue
+    const fresh = list.filter((c) => !prev.has(c.id) && !itemsRef.current.some((x) => x.id === c.id))
+    if (fresh.length > FETCH_EACH) { setStale(true); return }
+    for (const c of fresh) {
       api.get<Community>(`/guilds/${guildId}/communities/${c.slug}`).then((full) => setItems((cur) => (cur.some((x) => x.id === full.id) ? cur : [...cur, full].sort(byName)))).catch(() => { /* the next full load shows it */ })
     }
   }, [stored]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -136,6 +141,12 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
         <button type="button" className="btn-primary shrink-0" onClick={() => open('new')} data-community-new>{t('New community')}</button>
       </div>
 
+      {stale && (
+        <p className="flex items-center gap-3 text-sm text-text-2" role="status" data-communities-stale>
+          {t('New communities were added')}
+          <button type="button" className="btn-ghost" onClick={load} data-communities-refresh>{t('Refresh')}</button>
+        </p>
+      )}
       {notice && <p className="text-sm text-text-2" role="status" data-community-notice>{notice}</p>}
       {editing && (
         <form className="space-y-4 rounded-xl border border-line bg-bg-1 p-4" onSubmit={(e) => { e.preventDefault(); void save() }} data-community-form>
