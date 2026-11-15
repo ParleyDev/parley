@@ -1111,3 +1111,27 @@ pub struct StudioConfig {
 impl Default for StudioConfig {
     fn default() -> Self { Self { bpm: 120, beats: 4, click: false, count_in: 0, disarmed: vec![], project_id: None } }
 }
+
+/// A named group of channels inside a server: identity data over one ordinary category (`category_id`).
+/// `channel_ids` are the category's child channels the caller can view, in position order.
+#[derive(Debug, Clone, Serialize, FromRow)]
+pub struct Community {
+    pub id: Uuid,
+    pub guild_id: Uuid,
+    pub slug: String,
+    pub name: String,
+    pub icon_url: Option<String>,
+    pub description: String,
+    pub external_ref: Option<String>,
+    pub category_id: Uuid,
+    pub last_activity_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    #[sqlx(skip)]
+    pub follower_count: i64,
+    #[sqlx(skip)]
+    pub online_count: i64,
+    #[sqlx(skip)]
+    pub following: bool,
+    #[sqlx(skip)]
+    pub channel_ids: Vec<Uuid>,
+}

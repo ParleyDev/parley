@@ -1,0 +1,163 @@
+//! Communities: a named group of channels inside one server. A community is identity data (slug, name, icon,
+//! description, an optional external reference) pointing at one ordinary category; the channels under that category
+//! are its channels and access is plain server permissions. Manage Channels creates, edits and deletes.
+
+use crate::{auth::AuthUser, error::{AppError, AppResult}, models::{Channel, Community}, perms, routes::guilds::{normalize_channel_name, require_member, CHANNEL_COLS}, state::AppState};
+use axum::{extract::{Path, State}, http::StatusCode, routing::get, Json, Router};
+use serde::Deserialize;
+use serde_json::{json, Value};
+use uuid::Uuid;
+
+pub fn router() -> Router<AppState> {
+    Router::new()
+        .route("/guilds/:id/communities", axum::routing::post(create))
+        .route("/guilds/:id/communities/:slug", get(get_one).patch(update).delete(remove))
+}
+
+const COLS: &str = "id, guild_id, slug, name, icon_url, description, external_ref, category_id, last_activity_at, created_at";
+const TAKEN: &str = "A community with that address already exists";
+
+fn valid_slug(s: &str) -> bool {
+    let b = s.as_bytes();
+    !b.is_empty() && b.len() <= 63 && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit()) && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+}
+
+fn clean_name(s: &str) -> AppResult<String> {
+    let n = s.trim();
+    if n.is_empty() || n.chars().count() > 100 { return Err(AppError::BadRequest("Name must be 1-100 characters".into())) }
+    Ok(n.to_string())
+}
+
+fn clean_description(s: &str) -> AppResult<String> {
+    let d = s.trim();
+    if d.chars().count() > 300 { return Err(AppError::BadRequest("Description must be at most 300 characters".into())) }
+    Ok(d.to_string())
+}
+
+/// Empty clears; otherwise at most `max` characters.
+fn clean_opt(s: Option<String>, max: usize, what: &str) -> AppResult<Option<String>> {
+    let Some(s) = s.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) else { return Ok(None) };
+    if s.chars().count() > max { return Err(AppError::BadRequest(format!("{what} must be at most {max} characters"))) }
+    Ok(Some(s))
+}
+
+fn taken(e: sqlx::Error) -> AppError {
+    match e { sqlx::Error::Database(d) if d.is_unique_violation() => AppError::Conflict(TAKEN.into()), e => e.into() }
+}
+
+fn slim(c: &Community) -> Value {
+    json!({ "id": c.id, "guild_id": c.guild_id, "slug": c.slug, "name": c.name, "icon_url": c.icon_url, "description": c.description, "category_id": c.category_id })
+}
+
+/// The community for the caller: counts, whether they follow it and the child channels they can view. `None` when the
+/// caller cannot view its category (the same decision channel listing makes).
+async fn hydrate(state: &AppState, mut c: Community, uid: Uuid) -> AppResult<Option<Community>> {
+    let visible = perms::visible_channels(&state.db, c.guild_id, uid).await?;
+    if !visible.iter().any(|v| v.id == c.category_id) { return Ok(None) }
+    let mut kids: Vec<&Channel> = visible.iter().filter(|v| v.parent_id == Some(c.category_id)).collect();
+    kids.sort_by_key(|k| (k.position, k.created_at));
+    c.channel_ids = kids.into_iter().map(|k| k.id).collect();
+    let online = crate::ws::bus::visible_online_users(&state.db).await;
+    let (followers, on, me): (i64, i64, bool) = sqlx::query_as(
+        "SELECT COUNT(*), COUNT(*) FILTER (WHERE user_id = ANY($2)), COALESCE(bool_or(user_id = $3), false) FROM community_follows WHERE community_id = $1")
+        .bind(c.id).bind(&online).bind(uid).fetch_one(&state.db).await?;
+    (c.follower_count, c.online_count, c.following) = (followers, on, me);
+    Ok(Some(c))
+}
+
+async fn by_slug(state: &AppState, gid: Uuid, slug: &str) -> AppResult<Community> {
+    sqlx::query_as::<_, Community>(&format!("SELECT {COLS} FROM communities WHERE guild_id = $1 AND slug = $2"))
+        .bind(gid).bind(slug).fetch_optional(&state.db).await?.ok_or_else(|| AppError::NotFound("Community not found".into()))
+}
+
+#[derive(Deserialize)]
+struct NewChannel { name: String, kind: String }
+
+#[derive(Deserialize)]
+struct CreateIn { slug: String, name: String, #[serde(default)] description: String, icon_url: Option<String>, external_ref: Option<String>, channels: Option<Vec<NewChannel>> }
+
+/// `POST /guilds/:id/communities`: a category named `name`, positioned last, with the listed channels (or one text
+/// channel `chat`) under it, in one transaction.
+async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>, Json(req): Json<CreateIn>) -> AppResult<(StatusCode, Json<Community>)> {
+    let (_, p) = perms::guild_perms(&state.db, gid, uid).await?;
+    perms::check(p, perms::MANAGE_CHANNELS)?;
+    if !valid_slug(&req.slug) { return Err(AppError::BadRequest("Address must be lower-case letters, digits and dashes, starting with a letter or digit, up to 63 characters".into())) }
+    let name = clean_name(&req.name)?;
+    let description = clean_description(&req.description)?;
+    let icon = clean_opt(req.icon_url, 2000, "Icon")?;
+    let ext = clean_opt(req.external_ref, 200, "External reference")?;
+    let chans = req.channels.unwrap_or_else(|| vec![NewChannel { name: "chat".into(), kind: "text".into() }]);
+    if chans.len() > 25 { return Err(AppError::BadRequest("At most 25 channels".into())) }
+    let mut planned = vec![];
+    for ch in &chans {
+        if !["text", "voice", "forum"].contains(&ch.kind.as_str()) { return Err(AppError::BadRequest("Channel kind must be text, voice or forum".into())) }
+        planned.push((normalize_channel_name(&ch.name, &ch.kind)?, ch.kind.clone()));
+    }
+    let mut tx = state.db.begin().await?;
+    let (pos,): (i32,) = sqlx::query_as("SELECT COALESCE(MAX(position), -1) + 1 FROM channels WHERE guild_id = $1").bind(gid).fetch_one(&mut *tx).await?;
+    let category: Channel = sqlx::query_as(&format!("INSERT INTO channels (id, guild_id, name, kind, position) VALUES ($1, $2, $3, 'category', $4) RETURNING {CHANNEL_COLS}"))
+        .bind(Uuid::now_v7()).bind(gid).bind(&name).bind(pos).fetch_one(&mut *tx).await?;
+    let mut created = vec![];
+    for (i, (cname, kind)) in planned.iter().enumerate() {
+        let ch: Channel = sqlx::query_as(&format!(
+            "INSERT INTO channels (id, guild_id, name, kind, position, parent_id, audio_mode) VALUES ($1, $2, $3, $4, $5, $6, 'voice') RETURNING {CHANNEL_COLS}"))
+            .bind(Uuid::now_v7()).bind(gid).bind(cname).bind(kind).bind(pos + 1 + i as i32).bind(category.id).fetch_one(&mut *tx).await?;
+        created.push(ch);
+    }
+    let c: Community = sqlx::query_as(&format!(
+        "INSERT INTO communities (id, guild_id, slug, name, icon_url, description, external_ref, category_id, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING {COLS}"))
+        .bind(Uuid::now_v7()).bind(gid).bind(&req.slug).bind(&name).bind(&icon).bind(&description).bind(&ext).bind(category.id).bind(uid)
+        .fetch_one(&mut *tx).await.map_err(taken)?;
+    tx.commit().await?;
+    state.hub.emit_guild(gid, "CHANNEL_CREATE", json!(category));
+    for ch in &created { state.hub.emit_guild(gid, "CHANNEL_CREATE", json!(ch)); }
+    state.hub.emit_guild(gid, "COMMUNITY_CREATE", slim(&c));
+    let c = hydrate(&state, c, uid).await?.ok_or_else(|| AppError::NotFound("Community not found".into()))?;
+    Ok((StatusCode::CREATED, Json(c)))
+}
+
+/// `GET /guilds/:id/communities/:slug`.
+async fn get_one(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>) -> AppResult<Json<Community>> {
+    require_member(&state.db, gid, uid).await?;
+    let c = by_slug(&state, gid, &slug).await?;
+    hydrate(&state, c, uid).await?.map(Json).ok_or_else(|| AppError::NotFound("Community not found".into()))
+}
+
+#[derive(Deserialize)]
+struct PatchIn { slug: Option<String>, name: Option<String>, description: Option<String>, icon_url: Option<String>, external_ref: Option<String> }
+
+/// `PATCH /guilds/:id/communities/:slug`: any of slug, name (renames the category too), description, icon_url,
+/// external_ref. Empty icon_url or external_ref clears it.
+async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>, Json(req): Json<PatchIn>) -> AppResult<Json<Community>> {
+    let (_, p) = perms::guild_perms(&state.db, gid, uid).await?;
+    perms::check(p, perms::MANAGE_CHANNELS)?;
+    let cur = by_slug(&state, gid, &slug).await?;
+    let new_slug = match req.slug { Some(s) if !valid_slug(&s) => return Err(AppError::BadRequest("Address must be lower-case letters, digits and dashes, starting with a letter or digit, up to 63 characters".into())), Some(s) => s, None => cur.slug.clone() };
+    let name = match &req.name { Some(n) => clean_name(n)?, None => cur.name.clone() };
+    let description = match &req.description { Some(d) => clean_description(d)?, None => cur.description.clone() };
+    let icon = match req.icon_url { Some(i) => clean_opt(Some(i), 2000, "Icon")?, None => cur.icon_url.clone() };
+    let ext = match req.external_ref { Some(e) => clean_opt(Some(e), 200, "External reference")?, None => cur.external_ref.clone() };
+    let mut tx = state.db.begin().await?;
+    let c: Community = sqlx::query_as(&format!("UPDATE communities SET slug = $2, name = $3, description = $4, icon_url = $5, external_ref = $6 WHERE id = $1 RETURNING {COLS}"))
+        .bind(cur.id).bind(&new_slug).bind(&name).bind(&description).bind(&icon).bind(&ext).fetch_one(&mut *tx).await.map_err(taken)?;
+    let mut category: Channel = sqlx::query_as(&format!("UPDATE channels SET name = $2 WHERE id = $1 RETURNING {CHANNEL_COLS}")).bind(cur.category_id).bind(&name).fetch_one(&mut *tx).await?;
+    tx.commit().await?;
+    perms::attach_overwrites(&state.db, std::slice::from_mut(&mut category)).await?;
+    if name != cur.name { state.hub.emit_guild(gid, "CHANNEL_UPDATE", json!(category)); }
+    state.hub.emit_guild(gid, "COMMUNITY_UPDATE", slim(&c));
+    let c = hydrate(&state, c, uid).await?.ok_or_else(|| AppError::NotFound("Community not found".into()))?;
+    Ok(Json(c))
+}
+
+/// `DELETE /guilds/:id/communities/:slug`: its channels go the way a single deleted channel does (threads, uploads,
+/// events), then the category, which takes the community row with it.
+async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>) -> AppResult<StatusCode> {
+    let (_, p) = perms::guild_perms(&state.db, gid, uid).await?;
+    perms::check(p, perms::MANAGE_CHANNELS)?;
+    let c = by_slug(&state, gid, &slug).await?;
+    let kids: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM channels WHERE parent_id = $1 ORDER BY position, created_at").bind(c.category_id).fetch_all(&state.db).await?;
+    for (id,) in kids { super::channels::remove_channel(&state, gid, id).await?; }
+    super::channels::remove_channel(&state, gid, c.category_id).await?;
+    state.hub.emit_guild(gid, "COMMUNITY_DELETE", json!({ "id": c.id, "guild_id": gid }));
+    Ok(StatusCode::NO_CONTENT)
+}

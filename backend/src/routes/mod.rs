@@ -36,6 +36,7 @@ pub mod apidoc;
 pub mod qr_login;
 pub mod server_tags;
 pub mod recap;
+pub mod communities;
 pub mod directory;
 pub mod integrations;
 pub mod web_push;
@@ -138,6 +139,7 @@ pub fn api_router() -> Router<AppState> {
         .merge(server_tags::router())
         .merge(recap::router())
         .merge(directory::router())
+        .merge(communities::router())
         .merge(invites::router())
         .merge(roles::router())
         .merge(relationships::router())

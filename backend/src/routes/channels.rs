@@ -333,6 +333,8 @@ async fn delete_channel(
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("Cannot delete DM channels".into()))?;
     perms::check(p, perms::MANAGE_CHANNELS)?;
+    let (backs,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM communities WHERE category_id = $1)").bind(id).fetch_one(&state.db).await?;
+    if backs { return Err(AppError::BadRequest("This category belongs to a community. Delete the community instead.".into())) }
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM channels WHERE guild_id = $1 AND kind = 'text'")
         .bind(gid)
         .fetch_one(&state.db)
