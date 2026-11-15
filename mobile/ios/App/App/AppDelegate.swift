@@ -42,6 +42,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return config
     }
 
+    // A file being saved to the phone finished downloading while the app was in the background (SaveDownloads): the
+    // session is made again to receive its events, and tells iOS when they are all delivered.
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
+        guard identifier == SaveDownloads.identifier else { completionHandler(); return }
+        SaveDownloads.shared.finishEvents = completionHandler
+        _ = SaveDownloads.shared.session
+    }
+
     // Push: hand the APNs device token (or the failure) to Capacitor's push plugin, which reports it to the web app.
     // Without these the plugin never hears back from iOS and the app never registers for notifications.
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

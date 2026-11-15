@@ -51,6 +51,8 @@ const shareable = (f: File) => !!navigator.share && !!navigator.canShare?.({ fil
  */
 export async function saveFile(url: string, name: string) {
   if (isNative() && nativePlatform() === 'ios') {
+    // The sheet opens once the whole file is on the phone, which for a video takes a while: say it has started.
+    useStore.getState().pushToast(t('Getting {name}…', { name: name || t('File') }))
     try { await ParleyShare.save({ url: absoluteUrl(url), name: name || 'file' }); return } catch (e) {
       // An app build from before `save`: as in Safari, below.
       if ((e as { code?: string }).code !== 'UNIMPLEMENTED') throw e
