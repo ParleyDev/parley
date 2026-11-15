@@ -12,12 +12,23 @@ export function maxUploadBytes(): number {
   return inst && inst > 0 ? inst : MAX_FILE_BYTES
 }
 export const MAX_PER_MESSAGE = 10
+/** Over this, an upload cut off on the way is likely a proxy's request limit (Cloudflare: 100 MB on its common plans). */
+const PROXY_HINT_BYTES = 100 * 1000 * 1000
 
 export interface UploadHandle { promise: Promise<Attachment>; abort: () => void }
 
-/** Upload one file to a channel with progress (XHR, since fetch has no upload progress). */
+/** Files over this go up in parts: each request stays under a proxy's limit, and a dropped connection resumes. */
+const PARTS_FROM = 48 * 1024 * 1024
+const CUT_OFF = 'The upload was cut off before it finished: check the connection and try again'
+const CUT_OFF_BIG = 'The upload was cut off before it finished: a proxy in front of the server may refuse files this large'
+
+/** Upload one file to a channel with progress (XHR, since fetch has no upload progress); a large one in parts. */
 export function uploadFile(channelId: string, file: File, onProgress: (fraction: number) => void): UploadHandle {
+  if (file.size > PARTS_FROM && file.size <= maxUploadBytes()) return uploadInParts(channelId, file, onProgress)
   const xhr = new XMLHttpRequest()
+  // Cancelled here (the file removed, or re-uploaded as a spoiler), or cut off on the way: the browser reports both as
+  // an abort. A proxy in front of the server (Cloudflare's plans stop at 100 MB a request) cuts off larger files.
+  let cancelled = false
   const promise = new Promise<Attachment>((resolve, reject) => {
     if (file.size > maxUploadBytes()) { reject(new Error(`File too large (max ${formatBytes(maxUploadBytes())})`)); return }
     const form = new FormData()
@@ -36,10 +47,65 @@ export function uploadFile(channelId: string, file: File, onProgress: (fraction:
       }
     }
     xhr.onerror = () => reject(new Error('Upload failed'))
-    xhr.onabort = () => reject(new Error('Upload cancelled'))
+    xhr.onabort = () => reject(new Error(cancelled ? 'Upload cancelled' : file.size > PROXY_HINT_BYTES ? CUT_OFF_BIG : CUT_OFF))
     xhr.send(form)
   })
-  return { promise, abort: () => xhr.abort() }
+  return { promise, abort: () => { cancelled = true; xhr.abort() } }
+}
+
+type PartsState = { id: string; size: number; received: number; part_bytes: number; attachment?: Attachment }
+/** A refusal from the server (as opposed to the connection dropping), with its status. */
+class Refused extends Error { status: number; constructor(msg: string, status: number) { super(msg); this.status = status } }
+
+/**
+ * A file uploaded in parts (`POST /channels/:id/attachments/uploads`, then a `PUT` per part at the offset the server
+ * has got to). A part the connection drops is sent again, from where the server says it got to, a few times over
+ * with a growing pause; the server's refusals end it. The last part's answer is the attachment.
+ */
+function uploadInParts(channelId: string, file: File, onProgress: (fraction: number) => void): UploadHandle {
+  let cancelled = false
+  let xhr: XMLHttpRequest | null = null
+  const auth = (): Record<string, string> => { const t = getToken(); return t ? { Authorization: `Bearer ${t}` } : {} }
+  const refused = async (r: Response) => { let msg = `Upload failed (${r.status})`; try { msg = (await r.json()).error ?? msg } catch { /* keep */ } return new Refused(msg, r.status) }
+  /** One part, with its progress; resolves with the server's answer, rejects when the connection drops it. */
+  const send = (id: string, at: number, part: Blob) => new Promise<{ status: number; body: PartsState | null; text: string }>((resolve, reject) => {
+    const x = xhr = new XMLHttpRequest()
+    x.open('PUT', `/api/attachments/uploads/${id}?offset=${at}`)
+    for (const [k, v] of Object.entries(auth())) x.setRequestHeader(k, v)
+    x.setRequestHeader('Content-Type', 'application/octet-stream')
+    x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.min(1, (at + e.loaded) / file.size)) }
+    x.onload = () => { let body: PartsState | null = null; try { body = JSON.parse(x.responseText) } catch { /* not JSON */ } resolve({ status: x.status, body, text: x.responseText }) }
+    x.onerror = () => reject(new Error(CUT_OFF))
+    x.onabort = () => reject(new Error(cancelled ? 'Upload cancelled' : CUT_OFF))
+    x.send(part)
+  })
+  const promise = (async (): Promise<Attachment> => {
+    const r = await fetch(`/api/channels/${channelId}/attachments/uploads`, { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: file.name, size: file.size, content_type: file.type }) })
+    if (!r.ok) throw await refused(r)
+    const start = await r.json() as PartsState
+    let received = start.received, tries = 0
+    for (;;) {
+      if (cancelled) throw new Error('Upload cancelled')
+      try {
+        const a = await send(start.id, received, file.slice(received, Math.min(file.size, received + start.part_bytes)))
+        if (a.status === 201 && a.body?.attachment) { onProgress(1); return a.body.attachment }
+        if ((a.status === 200 || a.status === 409) && a.body) { received = a.body.received; tries = 0; continue }
+        let msg = `Upload failed (${a.status})`; try { msg = JSON.parse(a.text).error ?? msg } catch { /* keep */ }
+        // A gateway that gave up or is restarting is tried again; anything else the server said ends it.
+        if (a.status >= 500) throw new Error(msg)
+        throw new Refused(msg, a.status)
+      } catch (e) {
+        if (cancelled || e instanceof Refused) throw e
+        if (++tries > 5) throw e
+        await new Promise((res) => setTimeout(res, Math.min(15000, 1000 * 2 ** tries)))
+        if (cancelled) throw new Error('Upload cancelled')
+        // Where the server got to: the part may have landed though its answer did not.
+        const s = await fetch(`/api/attachments/uploads/${start.id}`, { headers: auth() }).then((x) => (x.ok ? x.json() as Promise<PartsState> : null)).catch(() => null)
+        if (s) received = s.received
+      }
+    }
+  })()
+  return { promise, abort: () => { cancelled = true; xhr?.abort() } }
 }
 
 export function formatBytes(n: number): string {

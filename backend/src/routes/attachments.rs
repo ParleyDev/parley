@@ -2,6 +2,11 @@
 //! `attachment_ids` when the message is created. Files live on disk under `UPLOAD_DIR/<id>`;
 //! metadata in the `attachments` table. Served at `/api/attachments/:id/:filename` without
 //! auth, relying on the unguessable v4 id (Discord-CDN style) so `<img>` tags work.
+//!
+//! Large files can be uploaded in parts instead (`POST /channels/:id/attachments/uploads`, then
+//! `PUT /attachments/uploads/:id?offset=` for each part), each request well under a proxy's body limit
+//! (Cloudflare's plans stop at 100 MB a request). A part sent again after a lost answer, or from where the server
+//! says it got to, resumes the upload; the last part makes the attachment, as a single upload would.
 
 use crate::{
     auth::AuthUser,
@@ -14,10 +19,11 @@ use crate::{
 use crate::ratelimit::rl_uploads;
 use axum::{middleware::from_fn,
     body::Body,
+    body::Bytes,
     extract::{DefaultBodyLimit, Multipart, Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::Deserialize;
@@ -39,10 +45,17 @@ pub async fn max_upload_bytes(state: &AppState, uid: Uuid) -> AppResult<usize> {
 pub const MAX_PER_MESSAGE: usize = 10;
 /// Pending (unlinked) uploads older than this are swept.
 const ORPHAN_TTL_SECS: i64 = 60 * 60;
+/// The size of each part of an upload in parts (the last may be shorter), and the most a part request may carry.
+pub const PART_BYTES: usize = 32 * 1024 * 1024;
+const PART_CEILING: usize = PART_BYTES + 1024 * 1024;
+/// Uploads in parts not finished within this are swept with what they received.
+const PARTS_TTL_SECS: i64 = 24 * 60 * 60;
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/channels/:id/attachments", post(upload).route_layer(from_fn(rl_uploads)).layer(DefaultBodyLimit::max(BODY_CEILING)))
+        .route("/channels/:id/attachments/uploads", post(start_parts).route_layer(from_fn(rl_uploads)))
+        .route("/attachments/uploads/:id", put(put_part).get(parts_status).layer(DefaultBodyLimit::max(PART_CEILING)))
         .route("/attachments/:id/thumb", get(serve_thumb))
         .route("/attachments/:id/viz", get(serve_viz))
         .route("/attachments/:id/listened", post(mark_listened))
@@ -89,7 +102,7 @@ async fn upload(
             None => return Err(AppError::BadRequest("Missing 'file' field".into())),
         }
     };
-    let mut filename = sanitize_filename(field.file_name().unwrap_or("file"));
+    let filename = sanitize_filename(field.file_name().unwrap_or("file"));
     let declared = field.content_type().unwrap_or("application/octet-stream").to_string();
 
     // Stream to disk, enforcing the size cap as we go.
@@ -121,24 +134,35 @@ async fn upload(
         let _ = tokio::fs::remove_file(&path).await;
         return Err(AppError::BadRequest(format!("File too large (max {})", crate::routes::storage::human(limit as i64))));
     }
+    let att = finish_file(&state, uid, channel_id, id, filename, &declared, size, &head, duration_ms, waveform).await?;
+    Ok((StatusCode::CREATED, Json(att)))
+}
+
+/// A file received whole at `UPLOAD_DIR/<id>` (`size` bytes, `head` its first ones) made an attachment: the quota and
+/// the antivirus checked, its type sniffed, its picture size, thumbnail or poster frame made, and its row written.
+/// The file is removed when it is refused.
+#[allow(clippy::too_many_arguments)]
+async fn finish_file(state: &AppState, uid: Uuid, channel_id: Uuid, id: Uuid, mut filename: String, declared: &str, mut size: usize, head: &[u8], duration_ms: Option<i32>, waveform: Option<String>) -> AppResult<Attachment> {
+    let path = state.config.upload_dir.join(id.to_string());
+    let declared = declared.to_string();
     if size == 0 {
         let _ = tokio::fs::remove_file(&path).await;
         return Err(AppError::BadRequest("Empty file".into()));
     }
-    if let Err(e) = crate::routes::storage::check_quota(&state, uid, size as i64).await {
+    if let Err(e) = crate::routes::storage::check_quota(state, uid, size as i64).await {
         let _ = tokio::fs::remove_file(&path).await;
         return Err(e);
     }
     // Antivirus (when configured): the file is scanned before it is recorded, so it is never served unscanned.
     if let Ok(bytes) = tokio::fs::read(&path).await {
-        if let Err(e) = crate::av::check(&state, &bytes, "attachment").await {
+        if let Err(e) = crate::av::check(state, &bytes, "attachment").await {
             let _ = tokio::fs::remove_file(&path).await;
             return Err(e);
         }
     }
 
     // Trust magic bytes over the declared type for anything we'd render inline.
-    let sniffed = infer::get(&head).map(|t| t.mime_type().to_string());
+    let sniffed = infer::get(head).map(|t| t.mime_type().to_string());
     let mut content_type = match sniffed {
         // Audio-only WebM and MP4 (iPhone recordings) sniff as video; trust the declared audio type for recordings.
         Some(s) if (s.starts_with("video/webm") || s.starts_with("video/mp4") || s.starts_with("video/quicktime")) && declared.starts_with("audio/") => declared.clone(),
@@ -147,7 +171,7 @@ async fn upload(
         None => "application/octet-stream".to_string(),
     };
     let (width, height) = if content_type.starts_with("image/") {
-        match imagesize::blob_size(&head).or_else(|_| imagesize::size(&path)) {
+        match imagesize::blob_size(head).or_else(|_| imagesize::size(&path)) {
             Ok(d) => {
                 // Phone photos stored sideways (EXIF orientation 5-8) display with width and height swapped.
                 let p = path.clone();
@@ -196,7 +220,7 @@ async fn upload(
     if crate::audio_viz::is_audio(&att.content_type) {
         tokio::spawn(crate::audio_viz::ensure_recorded(state.db.clone(), state.config.upload_dir.clone(), id));
     }
-    Ok((StatusCode::CREATED, Json(att)))
+    Ok(att)
 }
 
 /// `Range: bytes=a-b` / `a-` / `-n` against a file of `len` bytes (single ranges only, as media players send).
@@ -350,6 +374,94 @@ pub async fn link(tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, message_id: Uu
     Ok(())
 }
 
+#[derive(Deserialize)]
+struct StartParts { filename: String, size: i64, #[serde(default)] content_type: String }
+
+#[derive(serde::Serialize)]
+struct PartsState { id: Uuid, size: i64, received: i64, part_bytes: usize, #[serde(skip_serializing_if = "Option::is_none")] attachment: Option<Attachment> }
+
+/// `POST /channels/:id/attachments/uploads {filename, size, content_type}`: start an upload in parts. Refused as a
+/// single upload would be (permissions, the size limit, the quota) before a byte is sent.
+async fn start_parts(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(channel_id): Path<Uuid>, Json(b): Json<StartParts>) -> AppResult<(StatusCode, Json<PartsState>)> {
+    let (c, p) = require_channel_perms(&state.db, channel_id, uid).await?;
+    perms::check(p, perms::SEND_MESSAGES)?;
+    if c.guild_id.is_some() { perms::check(p, perms::ATTACH_FILES)?; }
+    if b.size <= 0 { return Err(AppError::BadRequest("Empty file".into())); }
+    let limit = max_upload_bytes(&state, uid).await?;
+    if b.size as usize > limit { return Err(AppError::BadRequest(format!("File too large (max {})", crate::routes::storage::human(limit as i64)))); }
+    crate::routes::storage::check_quota(&state, uid, b.size).await?;
+    let id = Uuid::new_v4();
+    let dir = &state.config.upload_dir;
+    tokio::fs::create_dir_all(dir).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    tokio::fs::File::create(part_path(&state, id)).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    let ct: String = if b.content_type.is_empty() { "application/octet-stream".into() } else { b.content_type.chars().take(200).collect() };
+    sqlx::query("INSERT INTO attachment_uploads (id, uploader_id, channel_id, filename, content_type, size) VALUES ($1, $2, $3, $4, $5, $6)")
+        .bind(id).bind(uid).bind(channel_id).bind(sanitize_filename(&b.filename)).bind(&ct).bind(b.size).execute(&state.db).await?;
+    Ok((StatusCode::CREATED, Json(PartsState { id, size: b.size, received: 0, part_bytes: PART_BYTES, attachment: None })))
+}
+
+fn part_path(state: &AppState, id: Uuid) -> std::path::PathBuf { state.config.upload_dir.join(format!("{id}.part")) }
+
+type PartsRow = (Uuid, Uuid, String, String, i64, i64);
+async fn parts_row(db: &PgPool, id: Uuid, uid: Uuid) -> AppResult<PartsRow> {
+    let row: Option<(Uuid, Uuid, Uuid, String, String, i64, i64)> = sqlx::query_as("SELECT uploader_id, id, channel_id, filename, content_type, size, received FROM attachment_uploads WHERE id = $1").bind(id).fetch_optional(db).await?;
+    match row {
+        Some((owner, _, ch, f, ct, size, got)) if owner == uid => Ok((id, ch, f, ct, size, got)),
+        _ => Err(AppError::NotFound("Upload not found".into())),
+    }
+}
+
+/// `GET /attachments/uploads/:id`: how much of an upload in parts the server has, to go on from there.
+async fn parts_status(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<PartsState>> {
+    let (_, _, _, _, size, received) = parts_row(&state.db, id, uid).await?;
+    Ok(Json(PartsState { id, size, received, part_bytes: PART_BYTES, attachment: None }))
+}
+
+#[derive(Deserialize)]
+struct PartAt { offset: i64 }
+
+/// `PUT /attachments/uploads/:id?offset=N` with the next bytes of the file: appended when `offset` is where the
+/// upload has got to (409 with where that is otherwise, as for a part sent twice). The part that completes the file
+/// makes it an attachment, returned with the state.
+async fn put_part(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>, Query(at): Query<PartAt>, bytes: Bytes) -> AppResult<Response> {
+    let (_, channel_id, filename, content_type, size, received) = parts_row(&state.db, id, uid).await?;
+    if at.offset != received {
+        return Ok((StatusCode::CONFLICT, Json(PartsState { id, size, received, part_bytes: PART_BYTES, attachment: None })).into_response());
+    }
+    if bytes.is_empty() || received + bytes.len() as i64 > size { return Err(AppError::BadRequest("That part does not fit the file".into())); }
+    use tokio::io::{AsyncSeekExt, AsyncWriteExt};
+    let path = part_path(&state, id);
+    let mut file = tokio::fs::OpenOptions::new().write(true).open(&path).await.map_err(|_| AppError::NotFound("Upload not found".into()))?;
+    // Written where the upload has got to: a part cut off midway is written again over what it left.
+    file.set_len(received as u64).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    file.seek(std::io::SeekFrom::Start(received as u64)).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    file.write_all(&bytes).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    file.flush().await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    drop(file);
+    let now = received + bytes.len() as i64;
+    let moved = sqlx::query("UPDATE attachment_uploads SET received = $3 WHERE id = $1 AND received = $2").bind(id).bind(received).bind(now).execute(&state.db).await?;
+    if moved.rows_affected() == 0 {
+        // Another request for this upload got there first: say where it is now.
+        let (_, _, _, _, size, received) = parts_row(&state.db, id, uid).await?;
+        return Ok((StatusCode::CONFLICT, Json(PartsState { id, size, received, part_bytes: PART_BYTES, attachment: None })).into_response());
+    }
+    if now < size { return Ok(Json(PartsState { id, size, received: now, part_bytes: PART_BYTES, attachment: None }).into_response()); }
+    // Whole: the file takes the attachment's place and is made one, as a single upload is.
+    if sqlx::query("DELETE FROM attachment_uploads WHERE id = $1").bind(id).execute(&state.db).await?.rows_affected() == 0 {
+        return Err(AppError::NotFound("Upload not found".into()));
+    }
+    tokio::fs::rename(&path, state.config.upload_dir.join(id.to_string())).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+    let mut head = vec![0u8; 8192];
+    let n = {
+        use tokio::io::AsyncReadExt;
+        let mut f = tokio::fs::File::open(state.config.upload_dir.join(id.to_string())).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?;
+        f.read(&mut head).await.map_err(|e| AppError::Other(anyhow::anyhow!(e)))?
+    };
+    head.truncate(n);
+    let att = finish_file(&state, uid, channel_id, id, filename, &content_type, size as usize, &head, None, None).await?;
+    Ok((StatusCode::CREATED, Json(PartsState { id, size, received: now, part_bytes: PART_BYTES, attachment: Some(att) })).into_response())
+}
+
 /// Periodic sweep: uploads never attached to a message, and files whose rows are gone.
 pub async fn sweep_orphans(state: AppState) {
     loop {
@@ -365,6 +477,10 @@ pub async fn sweep_orphans(state: AppState) {
         for (id,) in stale {
             let _ = tokio::fs::remove_file(state.config.upload_dir.join(id.to_string())).await;
         }
+        // Uploads in parts left unfinished, with what they received.
+        let parts: Vec<(Uuid,)> = sqlx::query_as("DELETE FROM attachment_uploads WHERE created_at < now() - make_interval(secs => $1) RETURNING id")
+            .bind(PARTS_TTL_SECS as f64).fetch_all(&state.db).await.unwrap_or_default();
+        for (id,) in parts { let _ = tokio::fs::remove_file(part_path(&state, id)).await; }
     }
 }
 

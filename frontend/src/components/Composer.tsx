@@ -206,6 +206,10 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
     requestAnimationFrame(() => { el.focus(); const pos = mn.start + text.length + 1; el.setSelectionRange(pos, pos) })
   }
   const [pending, setPending] = useState<Pending[]>([])
+  // The attachments as of the last render, for the handlers that start and stop uploads: those are side effects, kept
+  // out of state updaters (which React may run more than once).
+  const pendingRef = useRef(pending)
+  pendingRef.current = pending
   const [altFor, setAltFor] = useState<number | null>(null)
   const [dragging, setDragging] = useState(false)
   const [sending, setSending] = useState(false)
@@ -267,7 +271,7 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel.id])
   // Switching channels drops the draft attachments (and cancels in-flight uploads).
-  useEffect(() => () => { setPending((ps) => { ps.forEach((p) => { p.handle?.abort(); if (p.preview) URL.revokeObjectURL(p.preview) }); return [] }) }, [channel.id])
+  useEffect(() => () => { pendingRef.current.forEach((p) => { p.handle?.abort(); if (p.preview) URL.revokeObjectURL(p.preview) }); setPending([]) }, [channel.id])
 
   // The server's explicit image filter covers my uploads: check pictures and videos here before sending.
   const filtered = useStore((s) => {
@@ -296,42 +300,42 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
     }
     addFilesNow(list)
   }
+  /**
+   * Upload a file for an attachment. What it reports lands only on the attachment it is still the upload of: one
+   * replaced (re-uploaded as a spoiler) or removed says nothing more, its "Upload cancelled" included.
+   */
+  const startUpload = (file: File): UploadHandle => {
+    const h: UploadHandle = uploadFile(channel.id, file, (f) => setPending((cur) => cur.map((x) => (x.handle === h ? { ...x, progress: f } : x))))
+    h.promise
+      .then((att) => setPending((cur) => cur.map((x) => (x.handle === h ? { ...x, done: att, progress: 1 } : x))))
+      .catch((e: Error) => setPending((cur) => cur.map((x) => (x.handle === h ? { ...x, error: e.message } : x))))
+    return h
+  }
   const addFilesNow = (list: File[]) => {
-    setPending((ps) => {
-      const room = MAX_PER_MESSAGE - ps.length
-      if (list.length > room) pushToast(t('You can attach up to {n} files per message', { n: MAX_PER_MESSAGE }), 'error')
-      const next = list.slice(0, Math.max(0, room)).map((file): Pending => {
-        const key = pendingSeq++
-        const preview = isImage(file.type) ? URL.createObjectURL(file) : null
-        const p: Pending = { key, file, preview, progress: 0, done: null, error: null, handle: null }
-        p.handle = uploadFile(channel.id, file, (f) => setPending((cur) => cur.map((x) => (x.key === key ? { ...x, progress: f } : x))))
-        p.handle.promise
-          .then((att) => setPending((cur) => cur.map((x) => (x.key === key ? { ...x, done: att, progress: 1 } : x))))
-          .catch((e: Error) => setPending((cur) => cur.map((x) => (x.key === key ? { ...x, error: e.message } : x))))
-        return p
-      })
-      return [...ps, ...next]
-    })
+    const room = MAX_PER_MESSAGE - pendingRef.current.length
+    if (list.length > room) pushToast(t('You can attach up to {n} files per message', { n: MAX_PER_MESSAGE }), 'error')
+    const next = list.slice(0, Math.max(0, room)).map((file): Pending => ({ key: pendingSeq++, file, preview: isImage(file.type) ? URL.createObjectURL(file) : null, progress: 0, done: null, error: null, handle: startUpload(file) }))
+    pendingRef.current = [...pendingRef.current, ...next]
+    setPending((ps) => [...ps, ...next])
     ref.current?.focus()
   }
   // Spoilers are a filename convention (SPOILER_…), so toggling re-uploads under the new name.
-  const toggleSpoiler = (key: number) => setPending((ps) => ps.map((p) => {
-    if (p.key !== key) return p
+  const toggleSpoiler = (key: number) => {
+    const p = pendingRef.current.find((x) => x.key === key)
+    if (!p) return
     p.handle?.abort()
     const spoiler = !p.file.name.startsWith('SPOILER_')
     const file = new File([p.file], spoiler ? `SPOILER_${p.file.name}` : p.file.name.replace(/^SPOILER_/, ''), { type: p.file.type })
-    const next: Pending = { ...p, file, progress: 0, done: null, error: null, handle: null }
-    next.handle = uploadFile(channel.id, file, (f) => setPending((cur) => cur.map((x) => (x.key === key ? { ...x, progress: f } : x))))
-    next.handle.promise
-      .then((att) => setPending((cur) => cur.map((x) => (x.key === key ? { ...x, done: att, progress: 1 } : x))))
-      .catch((e: Error) => setPending((cur) => cur.map((x) => (x.key === key ? { ...x, error: e.message } : x))))
-    return next
-  }))
-  const removePending = (key: number) => setPending((ps) => {
-    const p = ps.find((x) => x.key === key)
+    const next: Pending = { ...p, file, progress: 0, done: null, error: null, handle: startUpload(file) }
+    pendingRef.current = pendingRef.current.map((x) => (x.key === key ? next : x))
+    setPending((ps) => ps.map((x) => (x.key === key ? { ...next, alt: x.alt } : x)))
+  }
+  const removePending = (key: number) => {
+    const p = pendingRef.current.find((x) => x.key === key)
     if (p) { p.handle?.abort(); if (p.preview) URL.revokeObjectURL(p.preview) }
-    return ps.filter((x) => x.key !== key)
-  })
+    pendingRef.current = pendingRef.current.filter((x) => x.key !== key)
+    setPending((ps) => ps.filter((x) => x.key !== key))
+  }
 
   // Drag and drop anywhere on the page targets the open composer.
   useEffect(() => {
