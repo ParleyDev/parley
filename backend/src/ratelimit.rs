@@ -211,8 +211,10 @@ pub async fn rl_webhooks(req: Request<Body>, next: Next) -> Response {
     limited("webhooks", LIMITER.limit("webhooks"), key, req, next).await
 }
 
-/// Per-IP: invite previews (`GET /invites/:code`), which anyone may call without an account.
+/// Per-IP: invite previews (`GET /invites/:code`), which anyone may call without an account. Requests that carry an
+/// Authorization header (invite cards in chat, bots, many users behind one address) are not counted.
 pub async fn rl_invite_preview(req: Request<Body>, next: Next) -> Response {
+    if req.headers().contains_key(header::AUTHORIZATION) { return next.run(req).await }
     let key = client_ip(req.headers());
     limited("invite_preview", LIMITER.limit("invite_preview"), key, req, next).await
 }

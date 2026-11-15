@@ -13,6 +13,7 @@ ok('anonymous preview is cacheable', r.headers.get('cache-control') === 'public,
 ok('anonymous preview reports paused and preview_channel', j.paused === false && j.preview_channel === null)
 ok('unknown code is 404', (await anon('/invites/nope-nope')).status === 404)
 ok('invalid token is refused', (await fetch(B + `/invites/${inv.code}`, { headers: { ...H, Authorization: 'Bearer garbage' } })).status === 401)
+ok('invite preview limiter counts anonymous calls only', r.headers.get('x-ratelimit-bucket') === 'invite_preview' && (await fetch(B + `/invites/${inv.code}`, { headers: { ...H, Authorization: `Bearer ${b.token}` } })).headers.get('x-ratelimit-bucket') !== 'invite_preview')
 j = await call(b.token, 'GET', `/invites/${inv.code}`)
 ok('logged-in preview unchanged', j.already_member === false && j.banned === false && 'rules' in j.guild && j.preview_channel === null)
 const once = await call(a.token, 'POST', `/guilds/${g.id}/invites`, { max_uses: 1 })
@@ -94,6 +95,38 @@ await p.waitForURL(new RegExp(`/channels/${g.id}/`), { timeout: 15000 })
 ok('existing user joins after logging in from the landing', p.url().includes(`/channels/${g.id}/`))
 await p.context().close()
 
+// Switching between register and login on the auth page keeps the invite, so a visitor who already has an account is still joined
+const gina = await reg('gina')
+const g4 = await call(a.token, 'POST', '/guilds', { name: `Switch Invite ${S}` })
+const inv4 = await call(a.token, 'POST', `/guilds/${g4.id}/invites`, { max_age: 0, max_uses: 0 })
+p = await fresh()
+await p.goto(`${WEB}/invite/${inv4.code}`); await p.waitForSelector('[data-invite-join]')
+await p.click('[data-invite-join]'); await p.waitForURL(/\/register/)
+await p.getByText('Already have an account?').click(); await p.waitForURL(/\/login/)
+await logIn(p, gina.user.username)
+await p.waitForURL(new RegExp(`/channels/${g4.id}/`), { timeout: 15000 })
+ok('switching from register to login keeps the invite and joins', p.url().includes(`/channels/${g4.id}/`))
+ok('the switching visitor is a member', (await call(gina.token, 'GET', `/guilds/${g4.id}`))?.id === g4.id)
+await p.context().close()
+
+// A member who signs in from the landing goes straight to the server
+p = await fresh()
+await p.goto(`${WEB}/invite/${inv.code}`); await p.waitForSelector('[data-invite-login]')
+await p.click('[data-invite-login]'); await p.waitForURL(/\/login/)
+await logIn(p, dave.user.username)
+await p.waitForURL(new RegExp(`/channels/${g.id}$`), { timeout: 15000 })
+ok('an existing member returning from the landing goes straight to the server', p.url().endsWith(`/channels/${g.id}`))
+await p.context().close()
+
+// Registration closed on the instance: only the login button, as the primary action
+{
+  const ctx = await browser.newContext(); const cp = await ctx.newPage(); cp.on('pageerror', (e) => errors.push(e.message))
+  await cp.route('**/api/instance', async (route) => { const res = await route.fetch(); await route.fulfill({ response: res, json: { ...(await res.json()), registration_enabled: false } }) })
+  await cp.goto(`${WEB}/invite/${inv.code}`); await cp.waitForSelector('[data-invite-landing]')
+  ok('registration closed: no sign-up button, login is primary', (await cp.locator('[data-invite-join]').count()) === 0 && (await cp.locator('[data-invite-login].btn-primary').count()) === 1)
+  await ctx.close()
+}
+
 const g2 = await call(a.token, 'POST', '/guilds', { name: `Rules Invite ${S}` })
 await raw(a.token, 'PATCH', `/guilds/${g2.id}`, { rules: `1. Be kind ${S}`, rules_required: true })
 const inv2 = await call(a.token, 'POST', `/guilds/${g2.id}/invites`, { max_age: 0, max_uses: 0 })
@@ -152,6 +185,16 @@ await own.selectOption('[data-invite-preview-select]', general.id); await settle
 ok('picking a channel in settings saves it', (await previewId()) === general.id)
 await own.selectOption('[data-invite-preview-select]', ''); await settle(null)
 ok('choosing Off clears it', (await previewId()) === null)
+// A saved channel that stopped being public is shown as paused, not as Off
+await raw(a.token, 'PATCH', `/guilds/${g.id}`, { invite_preview_channel_id: general.id })
+await call(a.token, 'PATCH', `/channels/${general.id}`, { nsfw: true })
+await own.goto(`${WEB}/channels/${g.id}/${general.id}`)
+await own.locator(`button:has-text("${g.name}")`).first().click(); await own.click('text=Server Settings'); await own.click('[data-settings-tab="widget"]')
+await own.waitForSelector('[data-invite-preview-select]', { timeout: 15000 })
+const pausedLabel = await own.locator('[data-invite-preview-select] option:checked').textContent()
+ok('a saved channel that is no longer public shows as paused', pausedLabel === `#${general.name} (paused: not public)`, pausedLabel)
+await call(a.token, 'PATCH', `/channels/${general.id}`, { nsfw: false })
+await raw(a.token, 'PATCH', `/guilds/${g.id}`, { invite_preview_channel_id: null })
 await own.context().close()
 ok('no page errors on the landing', errors.length === 0, errors.join('|'))
 await browser.close()

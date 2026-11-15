@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import { colorFor, formatTime, initials } from '../lib/format'
 import { splashBackground } from '../lib/splash'
 import { useT } from '../lib/i18n'
+import { useStore } from '../store'
 
 export interface AnonPreview {
   code: string
@@ -20,6 +21,7 @@ export const AUTOJOIN_KEY = 'parley.invite.autojoin'
 /** What a logged-out visitor sees at /invite/<code>: the server, its counts, two ways in, and (if the owner allows) a read-only peek. */
 export default function InviteLanding({ code, preview: p, returnTo }: { code: string; preview: AnonPreview; returnTo: string }) {
   const t = useT()
+  const registrationOpen = useStore((s) => s.instance.registration_enabled)
   // A stale key (an abandoned sign-up) must not auto-join a later visit: only a click in this visit sets it.
   useEffect(() => { try { sessionStorage.removeItem(AUTOJOIN_KEY) } catch { /* private mode */ } }, [])
   const [peek, setPeek] = useState<PeekMessage[]>([])
@@ -52,8 +54,8 @@ export default function InviteLanding({ code, preview: p, returnTo }: { code: st
             : p.paused ? <p className="text-warn text-sm" data-invite-paused>{t('This server has paused new members for now. Try again later.')}</p>
             : (
               <div className="flex flex-wrap items-center gap-2.5 pt-1">
-                <Link to="/register" state={state} onClick={remember} className="btn-primary" data-invite-join>{t('Join the conversation')}</Link>
-                <Link to="/login" state={state} onClick={remember} className="btn-ghost border border-line" data-invite-login>{t('I have an account')}</Link>
+                {registrationOpen && <Link to="/register" state={state} onClick={remember} className="btn-primary" data-invite-join>{t('Join the conversation')}</Link>}
+                <Link to="/login" state={state} onClick={remember} className={registrationOpen ? 'btn-ghost border border-line' : 'btn-primary'} data-invite-login>{registrationOpen ? t('I have an account') : t('Log in')}</Link>
               </div>
             )}
         </div>

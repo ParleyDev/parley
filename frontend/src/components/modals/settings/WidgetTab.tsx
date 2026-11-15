@@ -28,6 +28,9 @@ export default function WidgetTab({ guildId }: { guildId: string }) {
     const p = channelPerms({ guild, roles, member: probe }, '', c)
     return has(p, P.VIEW_CHANNEL) && has(p, P.READ_MESSAGE_HISTORY)
   }).sort((a, b) => a.position - b.position)
+  // The saved channel stopped being public (made private, age-restricted…): the server keeps the id and the peek resumes if it becomes public again, so show that state instead of "Off".
+  const savedId = guild.invite_preview_channel_id
+  const paused = savedId && !peekable.some((c) => c.id === savedId) ? channels[savedId] : undefined
   const base = publicOrigin()
   const embed = `<iframe src="${base}/widget/${guildId}" width="350" height="500" allowtransparency="true" frameborder="0" sandbox="allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"></iframe>`
   const copy = async (what: string, text: string) => { try { await navigator.clipboard.writeText(text); pushToast(t('{what} copied', { what })) } catch { pushToast(t('Clipboard unavailable'), 'error') } }
@@ -58,9 +61,10 @@ export default function WidgetTab({ guildId }: { guildId: string }) {
       </div>
       <div>
         <label className="label" htmlFor="invite-preview">{t('Invite page preview')}</label>
-        <Dropdown id="invite-preview" className="input w-auto max-w-full" value={peekable.some((c) => c.id === guild.invite_preview_channel_id) ? guild.invite_preview_channel_id! : ''} onChange={(e) => save({ invite_preview_channel_id: e.target.value || null }, e.target.value ? t('Invite preview on') : t('Invite preview off'))} data-invite-preview-select>
+        <Dropdown id="invite-preview" className="input w-auto max-w-full" value={guild.invite_preview_channel_id && (paused || peekable.some((c) => c.id === guild.invite_preview_channel_id)) ? guild.invite_preview_channel_id : ''} onChange={(e) => save({ invite_preview_channel_id: e.target.value || null }, e.target.value ? t('Invite preview on') : t('Invite preview off'))} data-invite-preview-select>
           <option value="">{t('Off')}</option>
           {peekable.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}
+          {paused && <option value={paused.id}>{t('#{name} (paused: not public)', { name: paused.name })}</option>}
         </Dropdown>
         <p className="mt-1 text-xs text-text-2">{t('Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.')}</p>
       </div>

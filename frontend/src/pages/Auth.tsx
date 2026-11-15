@@ -207,7 +207,7 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           <div>
             <label className="label">{t('Password')}</label>
             <input className="input" type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={8} {...f('password')} />
-            {mode === 'login' && mailEnabled && <Link to="/forgot" className="mt-1.5 inline-block text-xs text-sky-400 hover:underline" data-forgot-link>{t('Forgot your password?')}</Link>}
+            {mode === 'login' && mailEnabled && <Link to="/forgot" state={location.state} className="mt-1.5 inline-block text-xs text-sky-400 hover:underline" data-forgot-link>{t('Forgot your password?')}</Link>}
           </div>
         </div>
 
@@ -222,9 +222,9 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
 
         <p className="mt-4 text-sm text-text-2">
           {mode === 'login' ? (
-            registrationOpen ? <>{t('Need an account?')} <Link to="/register" className="text-sky-400 hover:underline">{t('Register')}</Link></> : <span data-registration-closed-note>{t('Registration is currently closed.')}</span>
+            registrationOpen ? <>{t('Need an account?')} <Link to="/register" state={location.state} className="text-sky-400 hover:underline">{t('Register')}</Link></> : <span data-registration-closed-note>{t('Registration is currently closed.')}</span>
           ) : (
-            <><Link to="/login" className="text-sky-400 hover:underline">{t('Already have an account?')}</Link></>
+            <><Link to="/login" state={location.state} className="text-sky-400 hover:underline">{t('Already have an account?')}</Link></>
           )}
         </p>
         {guests && (

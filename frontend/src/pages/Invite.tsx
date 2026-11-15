@@ -58,6 +58,7 @@ export default function InvitePage() {
       // Coming back from the landing's sign-up or sign-in: join without another click, unless something needs the visitor first.
       let want = false
       try { want = sessionStorage.getItem(AUTOJOIN_KEY) === code; sessionStorage.removeItem(AUTOJOIN_KEY) } catch { /* private mode */ }
+      if (want && pv.already_member) { navigate(`/channels/${pv.guild.id}`, { replace: true }); return }
       if (want && !pv.already_member && !pv.banned && !pv.paused && !pv.expired && !pv.guild.rules_required) void join()
     }).catch(fail)
     // Runs once per code and session: say/join are recreated every render and must not re-trigger the fetch (or a second autojoin).

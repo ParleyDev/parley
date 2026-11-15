@@ -3689,8 +3689,9 @@
 "Have an invite to a group chat?": "Есть приглашение в групповой чат?",
 "Log in to open it.": "Войдите, чтобы открыть.",
 "Invite page preview": "Предпросмотр на странице приглашения",
-"Invite page previews": "Предпросмотры страницы приглашения",
+"Invite page previews (per IP)": "Предпросмотры страницы приглашения (на IP)",
 "Invite preview off": "Предпросмотр приглашения выключен",
 "Invite preview on": "Предпросмотр приглашения включён",
-"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Показывайте последние сообщения одного канала на публичной странице приглашения. Их может прочитать любой, у кого есть ссылка-приглашение."
+"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Показывайте последние сообщения одного канала на публичной странице приглашения. Их может прочитать любой, у кого есть ссылка-приглашение.",
+"#{name} (paused: not public)": "#{name} (приостановлено: не публичный)"
 }

@@ -3689,8 +3689,9 @@
 "Have an invite to a group chat?": "Masz zaproszenie do czatu grupowego?",
 "Log in to open it.": "Zaloguj się, aby go otworzyć.",
 "Invite page preview": "Podgląd na stronie zaproszenia",
-"Invite page previews": "Podglądy strony zaproszenia",
+"Invite page previews (per IP)": "Podglądy strony zaproszenia (na IP)",
 "Invite preview off": "Podgląd zaproszenia wyłączony",
 "Invite preview on": "Podgląd zaproszenia włączony",
-"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Pokaż najnowsze wiadomości z jednego kanału na publicznej stronie zaproszenia. Każdy, kto ma link zaproszenia, może je przeczytać."
+"Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Pokaż najnowsze wiadomości z jednego kanału na publicznej stronie zaproszenia. Każdy, kto ma link zaproszenia, może je przeczytać.",
+"#{name} (paused: not public)": "#{name} (wstrzymane: nie jest publiczny)"
 }
