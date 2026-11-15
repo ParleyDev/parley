@@ -185,7 +185,8 @@ pub async fn invites_paused(db: &sqlx::PgPool, gid: Uuid, uid: Uuid) -> AppResul
 /// Whether `@everyone` alone may view and read the history of this channel (a text channel of a server, with the
 /// category's and its own overwrites applied): what a logged-out visitor may be shown.
 pub async fn everyone_can_read(db: &sqlx::PgPool, channel: &crate::models::Channel) -> AppResult<bool> {
-    let Some(gid) = channel.guild_id.filter(|_| channel.kind == "text") else { return Ok(false) };
+    // Age-restricted channels are never shown logged out, and an encrypted one would only serve ciphertext.
+    let Some(gid) = channel.guild_id.filter(|_| channel.kind == "text" && !channel.nsfw && !channel.e2ee) else { return Ok(false) };
     let ctx = perms::GuildCtx::load(db, gid).await?;
     let mut c = [channel.clone()];
     perms::attach_overwrites(db, &mut c).await?;
@@ -205,7 +206,7 @@ async fn preview_channel_json(db: &sqlx::PgPool, gid: Uuid) -> AppResult<Value> 
 }
 
 /// Up to five recent text messages of the invite's preview channel, oldest first, for the logged-out invite page.
-/// Display fields only: no attachments, embeds, reactions or user ids.
+/// Display fields only: no attachments, embeds, reactions or user ids (mentions are turned into names).
 async fn preview_messages(State(state): State<AppState>, Path(code): Path<String>) -> AppResult<impl IntoResponse> {
     let gid: Option<(Uuid,)> = sqlx::query_as(&format!("SELECT i.guild_id FROM invites i WHERE {MATCH} AND {LIVE} ORDER BY i.vanity LIMIT 1")).bind(&code).fetch_optional(&state.db).await?;
     let (gid,) = gid.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
@@ -215,7 +216,12 @@ async fn preview_messages(State(state): State<AppState>, Path(code): Path<String
          FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN guild_members gm ON gm.guild_id = $2 AND gm.user_id = m.author_id
          WHERE m.channel_id = $1 AND m.kind = 'default' AND btrim(m.content) <> '' ORDER BY m.id DESC LIMIT 5")
         .bind(chan.id).bind(gid).fetch_all(&state.db).await?;
-    let body: Vec<Value> = rows.into_iter().rev().map(|(id, content, at, name, avatar)| json!({ "id": id, "content": content, "created_at": at, "author": { "display_name": name, "avatar_url": avatar } })).collect();
+    let mut body = Vec::new();
+    for (id, content, at, name, avatar) in rows.into_iter().rev() {
+        // Mention tokens carry member, role and channel ids; show their names instead.
+        let content = crate::push::readable(&state, &content, Some(gid)).await;
+        body.push(json!({ "id": id, "content": content, "created_at": at, "author": { "display_name": name, "avatar_url": avatar } }));
+    }
     Ok(([(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"), (header::CACHE_CONTROL, "public, max-age=30")], Json(body)))
 }
 
