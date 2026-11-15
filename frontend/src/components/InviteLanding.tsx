@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import CropImg from './CropImg'
 import { api } from '../lib/api'
 import { colorFor, formatTime, initials } from '../lib/format'
+import { splashBackground } from '../lib/splash'
 import { useT } from '../lib/i18n'
 
 export interface AnonPreview {
@@ -17,9 +18,6 @@ interface PeekMessage { id: string; content: string; created_at: string; author:
 export const AUTOJOIN_KEY = 'parley.invite.autojoin'
 
 /** What a logged-out visitor sees at /invite/<code>: the server, its counts, two ways in, and (if the owner allows) a read-only peek. */
-/** CSS background for an invite page: the splash under a dark wash, URL quoted and encoded so it cannot break out of url(). */
-export const splashBackground = (url: string) => `linear-gradient(rgb(0 0 0 / .45), rgb(0 0 0 / .45)), url("${encodeURI(url).replace(/["()]/g, encodeURIComponent)}")`
-
 export default function InviteLanding({ code, preview: p, returnTo }: { code: string; preview: AnonPreview; returnTo: string }) {
   const t = useT()
   // A stale key (an abandoned sign-up) must not auto-join a later visit: only a click in this visit sets it.
