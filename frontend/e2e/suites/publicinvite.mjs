@@ -1,5 +1,5 @@
 // Logged-out invite preview: GET /invites/:code answers without a token (public fields only), still refuses bad tokens.
-import { B, H, S, reg, call, raw, ok, finish } from '../lib.mjs'
+import { B, H, S, WEB, PASSWORD, reg, call, raw, ok, finish, login, track, launchBrowser } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob')
 const g = await call(a.token, 'POST', '/guilds', { name: `Public Invite ${S}` })
 const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, { max_age: 0, max_uses: 0 })
@@ -55,4 +55,70 @@ for (const x of [b, c]) { await call(a.token, 'POST', '/users/@me/relationships'
 const grp = await call(a.token, 'POST', '/users/@me/channels', { recipient_ids: [b.user.id, c.user.id] })
 const gdm = await call(a.token, 'POST', `/channels/${grp.id}/group-invites`, {})
 ok('group invite code is still private', !!gdm.code && (await anon(`/group-invites/${gdm.code}`)).status === 401)
+
+// Landing page for logged-out visitors, and joining after sign-up or sign-in
+console.log('-- landing page')
+await raw(a.token, 'PUT', `/channels/${general.id}/permissions/${g.id}`, { kind: 'role', allow: 1024, deny: 0 })
+await raw(a.token, 'PATCH', `/guilds/${g.id}`, { invite_preview_channel_id: general.id })
+const browser = await launchBrowser(); const errors = []
+const fresh = async () => { const p = await (await browser.newContext()).newPage(); p.on('pageerror', (e) => errors.push(e.message)); return p }
+const apiUser = async (name) => { const u = await login(name); track(u.user); return u }
+const signUp = async (p, name) => {
+  await p.waitForSelector('input[type=email]')
+  await p.fill('input[type=email]', `${name}${S}@x.io`); await p.fill('input[autocomplete=username]', `${name}${S}`); await p.fill('input[type=password]', PASSWORD)
+  await p.click('form button.btn-primary')
+}
+const logIn = async (p, username) => { await p.fill('[data-login-input]', username); await p.fill('input[type=password]', PASSWORD); await p.click('form button.btn-primary') }
+
+let p = await fresh()
+await p.goto(`${WEB}/invite/${inv.code}?utm_source=partner-site&x=1`)
+await p.waitForSelector('[data-invite-landing]')
+ok('landing shows the server name', (await p.textContent('[data-invite-landing]')).includes(g.name))
+ok('landing shows counts', (await p.textContent('[data-invite-members]')).includes('2') && /\d/.test(await p.textContent('[data-invite-online]')))
+await p.waitForSelector('[data-invite-peek]')
+ok('peek names the channel and is labelled read-only', (await p.textContent('[data-invite-peek]')).includes(`# ${general.name}`) && (await p.textContent('[data-invite-peek]')).includes('read-only preview'))
+ok('peek is plain text', (await p.locator('[data-invite-peek] b').count()) === 0 && (await p.textContent('[data-invite-peek]')).includes('<b>six</b>'))
+await p.click('[data-invite-join]'); await p.waitForURL(/\/register/)
+await signUp(p, 'newbie')
+await p.waitForURL(new RegExp(`/channels/${g.id}/`), { timeout: 15000 })
+ok('new user is joined and in the first text channel', p.url().includes(general.id))
+ok('the new user is a member', (await call((await apiUser(`newbie${S}`)).token, 'GET', `/guilds/${g.id}`))?.id === g.id)
+await p.context().close()
+
+const dave = await reg('dave')
+p = await fresh()
+await p.goto(`${WEB}/invite/${inv.code}`); await p.waitForSelector('[data-invite-login]')
+await p.click('[data-invite-login]'); await p.waitForURL(/\/login/)
+await logIn(p, dave.user.username)
+await p.waitForURL(new RegExp(`/channels/${g.id}/`), { timeout: 15000 })
+ok('existing user joins after logging in from the landing', p.url().includes(`/channels/${g.id}/`))
+await p.context().close()
+
+const g2 = await call(a.token, 'POST', '/guilds', { name: `Rules Invite ${S}` })
+await raw(a.token, 'PATCH', `/guilds/${g2.id}`, { rules: `1. Be kind ${S}`, rules_required: true })
+const inv2 = await call(a.token, 'POST', `/guilds/${g2.id}/invites`, { max_age: 0, max_uses: 0 })
+p = await fresh()
+await p.goto(`${WEB}/invite/${inv2.code}`); await p.waitForSelector('[data-invite-join]')
+await p.click('[data-invite-join]'); await p.waitForURL(/\/register/)
+await signUp(p, 'ruley')
+await p.waitForSelector('[data-invite-rules]', { timeout: 15000 })
+const ruley = await apiUser(`ruley${S}`)
+ok('rules guild: the page shows the rules step and stays on the invite', p.url().includes('/invite/') && (await p.textContent('[data-invite-rules]')).includes('Be kind'))
+ok('rules guild: the user is not a member yet', [403, 404].includes((await raw(ruley.token, 'GET', `/guilds/${g2.id}`)).status))
+await p.context().close()
+
+const g3 = await call(a.token, 'POST', '/guilds', { name: `Ban Invite ${S}` })
+const inv3 = await call(a.token, 'POST', `/guilds/${g3.id}/invites`, { max_age: 0, max_uses: 0 })
+const erin = await reg('erin')
+await raw(a.token, 'PUT', `/guilds/${g3.id}/bans/${erin.user.id}`, { reason: 'x' })
+p = await fresh()
+await p.goto(`${WEB}/invite/${inv3.code}`); await p.waitForSelector('[data-invite-login]')
+await p.click('[data-invite-login]'); await p.waitForURL(/\/login/)
+await logIn(p, erin.user.username)
+await p.getByText('You are banned from this server.').waitFor({ timeout: 15000 })
+ok('banned user sees the banned message and stays on the invite', p.url().includes('/invite/'))
+await p.context().close()
+ok('no page errors on the landing', errors.length === 0, errors.join('|'))
+await browser.close()
+
 await finish()

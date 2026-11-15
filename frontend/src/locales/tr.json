@@ -3680,5 +3680,10 @@
 "is spilling the tea…": "dedikodu yapıyor…",
 "is thinking hard…": "derin düşünüyor…",
 "is typing…": "yazıyor…",
-"Announce as Parley": "Parley olarak duyur"
+"Announce as Parley": "Parley olarak duyur",
+"Join the conversation": "Sohbete katıl",
+"I have an account": "Hesabım var",
+"read-only preview": "salt okunur önizleme",
+"{n} online": "{n} çevrimiçi",
+"Too many requests. Try again in a minute.": "Çok fazla istek. Bir dakika sonra tekrar dene."
 }

@@ -3680,5 +3680,10 @@
 "is spilling the tea…": "が暴露中…",
 "is thinking hard…": "が考え中…",
 "is typing…": "が入力中…",
-"Announce as Parley": "Parleyとしてお知らせ"
+"Announce as Parley": "Parleyとしてお知らせ",
+"Join the conversation": "会話に参加する",
+"I have an account": "アカウントを持っています",
+"read-only preview": "読み取り専用プレビュー",
+"{n} online": "{n} 人オンライン",
+"Too many requests. Try again in a minute.": "リクエストが多すぎます。1分後にもう一度お試しください。"
 }

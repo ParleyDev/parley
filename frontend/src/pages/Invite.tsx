@@ -1,8 +1,9 @@
 import { APP_NAME } from '../lib/brand'
 import CropImg from '../components/CropImg'
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { api } from '../lib/api'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { api, ApiError } from '../lib/api'
+import InviteLanding, { AUTOJOIN_KEY, type AnonPreview } from '../components/InviteLanding'
 import { renderMarkdown } from '../lib/markdown'
 import { useStore } from '../store'
 import { nameOf } from '../lib/dm'
@@ -18,6 +19,8 @@ export default function InvitePage() {
   const t = useT()
   const { code = '' } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const token = useStore((s) => s.token)
   const upsertGuild = useStore((s) => s.upsertGuild)
   const notes = useStore((s) => s.notes)
   const [p, setP] = useState<Preview | null>(null)
@@ -26,10 +29,8 @@ export default function InvitePage() {
   const upsertChannel = useStore((s) => s.upsertChannel)
   const [busy, setBusy] = useState(false)
 
-  useEffect(() => {
-    // Server invites first; group DM invite links share the /invite/ path.
-    api.get<Preview>(`/invites/${code}`).then(setP).catch((e) => api.get<GroupPreview>(`/group-invites/${code}`).then(setGroup).catch(() => setErr((e as Error).message)))
-  }, [code])
+  const [anon, setAnon] = useState<AnonPreview | null>(null)
+  const returnTo = location.pathname + location.search
 
   const join = async () => {
     setBusy(true)
@@ -41,6 +42,28 @@ export default function InvitePage() {
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
+  useEffect(() => {
+    // Server invites first; group DM invite links share the /invite/ path (they need a session).
+    const fail = (e: unknown) => {
+      if (e instanceof ApiError && e.status === 429) { setErr(t('Too many requests. Try again in a minute.')); return }
+      api.get<GroupPreview>(`/group-invites/${code}`).then(setGroup).catch((g) => {
+        // A group link needs a session: send a logged-out visitor to sign in and back.
+        if (!token && g instanceof ApiError && g.status === 401) navigate('/login', { replace: true, state: { from: returnTo } })
+        else setErr((e as Error).message)
+      })
+    }
+    if (!token) { api.get<AnonPreview>(`/invites/${code}`).then(setAnon).catch(fail); return }
+    api.get<Preview>(`/invites/${code}`).then((pv) => {
+      setP(pv)
+      // Coming back from the landing's sign-up or sign-in: join without another click, unless something needs the visitor first.
+      let want = false
+      try { want = sessionStorage.getItem(AUTOJOIN_KEY) === code; sessionStorage.removeItem(AUTOJOIN_KEY) } catch { /* private mode */ }
+      if (want && !pv.already_member && !pv.banned && !pv.paused && !pv.expired && !pv.guild.rules_required) void join()
+    }).catch(fail)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code, token])
+
+  if (anon && !token) return <InviteLanding code={code} preview={anon} returnTo={returnTo} />
   return (
     <div className="relative h-full overflow-y-auto flex items-center-safe justify-center bg-bg-0 bg-cover bg-center p-4" style={p?.guild.splash_url ? { backgroundImage: `linear-gradient(rgb(0 0 0 / .45), rgb(0 0 0 / .45)), url(${p.guild.splash_url})` } : undefined} data-invite-splash={p?.guild.splash_url ? '1' : '0'}>
       <div className="pop w-full max-w-sm rounded-2xl bg-bg-1 border border-line p-8 text-center shadow-2xl">

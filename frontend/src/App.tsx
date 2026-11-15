@@ -50,8 +50,8 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/login" element={token ? <Navigate to="/channels/@me" replace /> : <AuthPage mode="login" />} />
-        <Route path="/register" element={token ? <Navigate to="/channels/@me" replace /> : <AuthPage mode="register" />} />
+        <Route path="/login" element={token ? <Navigate to={(location.state as { from?: string } | null)?.from ?? '/channels/@me'} replace /> : <AuthPage mode="login" />} />
+        <Route path="/register" element={token ? <Navigate to={(location.state as { from?: string } | null)?.from ?? '/channels/@me'} replace /> : <AuthPage mode="register" />} />
         <Route path="/try" element={<TryPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/confirm-email" element={<VerifyPage mode="change" />} />
@@ -64,7 +64,7 @@ export default function App() {
         {ChatSim && <Route path="/dev/chat-sim" element={token ? (ready ? <Suspense fallback={null}><ChatSim /></Suspense> : null) : <Navigate to="/login" replace state={{ from: location.pathname }} />} />}
         <Route path="/login/qr/:id" element={token ? <QrApprovePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
         <Route path="/template/:code" element={token ? <TemplatePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
-        <Route path="/invite/:code" element={token ? <InvitePage /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
+        <Route path="/invite/:code" element={<InvitePage />} />
         <Route path="/oauth2/authorize" element={token ? <OAuthPage /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />} />
         <Route path="/oauth2/mcp/authorize" element={token ? <McpAuthorizePage /> : <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />} />
         <Route
