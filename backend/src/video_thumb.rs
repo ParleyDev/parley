@@ -22,7 +22,9 @@ pub async fn make(src: &Path) -> Option<(i32, i32)> {
         let run = tokio::process::Command::new("ffmpeg")
             .args(["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-ss", at, "-i"])
             .arg(src)
-            .args(["-an", "-frames:v", "1", "-vf", &format!("scale='min({MAX},iw)':-2:flags=bicubic,format=yuvj420p"), "-c:v", "mjpeg", "-q:v", "4", "-f", "image2"])
+            // accurate_rnd: the image's minimal ffmpeg (no x86 assembly) scales with garbled stripes of colour
+            // without it, every video that is scaled down (anything wider than 640 px, so every phone video).
+            .args(["-an", "-frames:v", "1", "-vf", &format!("scale='min({MAX},iw)':-2:flags=bicubic+accurate_rnd+full_chroma_int,format=yuvj420p"), "-c:v", "mjpeg", "-q:v", "4", "-f", "image2"])
             .arg(&tmp)
             .kill_on_drop(true)
             .output();
@@ -46,18 +48,25 @@ async fn make_for(db: &PgPool, dir: &Path, id: Uuid) -> bool {
     sqlx::query("UPDATE attachments SET thumb_type = 'image/jpeg', width = $2, height = $3 WHERE id = $1").bind(id).bind(w).bind(h).execute(db).await.is_ok()
 }
 
-/// Once at start-up: posters for videos uploaded before there were any. Videos that can't be decoded are skipped
+/// Once at start-up: posters for videos that have none (uploaded before there were any, or whose poster was made
+/// again: migration 0163), newest first, in batches until none is left. Videos that can't be decoded are skipped
 /// for the rest of this run.
 pub async fn backfill(db: PgPool, dir: PathBuf) {
     tokio::time::sleep(std::time::Duration::from_secs(20)).await;
-    let ids: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM attachments WHERE thumb_type IS NULL AND content_type IN ('video/mp4', 'video/webm', 'video/quicktime') ORDER BY created_at DESC LIMIT 2000")
-        .fetch_all(&db).await.unwrap_or_default();
-    let mut made = 0;
-    for (id,) in &ids {
-        // Another backend may have got to it.
-        let pending: Option<bool> = sqlx::query_scalar("SELECT thumb_type IS NULL FROM attachments WHERE id = $1").bind(id).fetch_optional(&db).await.ok().flatten();
-        if pending != Some(true) { continue; }
-        if make_for(&db, &dir, *id).await { made += 1; }
+    let mut tried = std::collections::HashSet::new();
+    let (mut made, mut seen) = (0, 0);
+    loop {
+        let ids: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM attachments WHERE thumb_type IS NULL AND content_type IN ('video/mp4', 'video/webm', 'video/quicktime') ORDER BY created_at DESC LIMIT 500")
+            .fetch_all(&db).await.unwrap_or_default();
+        let fresh: Vec<Uuid> = ids.into_iter().map(|(id,)| id).filter(|id| tried.insert(*id)).collect();
+        if fresh.is_empty() { break; }
+        for id in fresh {
+            seen += 1;
+            // Another backend may have got to it.
+            let pending: Option<bool> = sqlx::query_scalar("SELECT thumb_type IS NULL FROM attachments WHERE id = $1").bind(id).fetch_optional(&db).await.ok().flatten();
+            if pending != Some(true) { continue; }
+            if make_for(&db, &dir, id).await { made += 1; }
+        }
     }
-    if !ids.is_empty() { tracing::info!(made, of = ids.len(), "video poster frames backfilled"); }
+    if seen > 0 { tracing::info!(made, of = seen, "video poster frames backfilled"); }
 }
