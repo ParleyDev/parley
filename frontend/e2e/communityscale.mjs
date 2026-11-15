@@ -4,7 +4,7 @@
 // Prints one JSON line { communities, connect_ms, connect_bytes, list_p95_ms, search_p95_ms, sidebar_ms, unread_ms }
 // and exits non-zero when a threshold is exceeded. Figures depend on the machine; creating the communities may need the
 // RL_* limits raised on the backend (see the README). The users it registers are purged at the end.
-import { B, WEB, S, IP, reg, call, raw, callS, launchBrowser, cleanup } from './lib.mjs'
+import { B, WEB, S, reg, call, raw, callS, launchBrowser, cleanup } from './lib.mjs'
 
 const N = Number(process.env.COMMUNITIES ?? 1000), CONC = 4, FOLLOWED = 10
 const LIMITS = { connect_ms: 2000, connect_bytes: 3 * 1024 * 1024, list_p95_ms: 300, search_p95_ms: 300, sidebar_ms: 3000, unread_ms: 5 }
