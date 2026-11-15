@@ -1,4 +1,4 @@
-import { Activity, Archive, Link2, CalendarClock, Mic, Disc3, Users, ArrowLeft, ChevronDown, Pencil, Copy, Download, Flag, FolderOpen, History, Keyboard, Layers, Lock, Magnet, MessageSquare, Metronome, Music, Piano, Plus, Redo2, Repeat, Rows3, Scissors, SkipBack, SlidersVertical, Square, Play, Trash2, Undo2, Upload, X, Cloud, CloudOff, CloudUpload, ZoomIn, ZoomOut, Gauge, Cable, Headphones, ArrowUp, ArrowDown, ListTree } from 'lucide-react'
+import { AlignStartVertical, ArrowRightToLine, Grid3x3, Maximize2, Activity, Archive, Link2, CalendarClock, Mic, Disc3, Users, ArrowLeft, ChevronDown, Pencil, Copy, Download, Flag, FolderOpen, History, Keyboard, Layers, Lock, Magnet, MessageSquare, Metronome, Music, Piano, Plus, Redo2, Repeat, Rows3, Scissors, SkipBack, SlidersVertical, Square, Play, Trash2, Undo2, Upload, X, Cloud, CloudOff, CloudUpload, ZoomIn, ZoomOut, Gauge, Cable, Headphones, ArrowUp, ArrowDown, ListTree } from 'lucide-react'
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent as RPointerEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
@@ -14,7 +14,8 @@ import { setStudioConfig, startTake, studio, takeTag, DEFAULT_STUDIO } from '../
 import { fromActivity } from '../lib/meters'
 import { useTakes } from '../lib/takestore'
 import { usePhone } from '../lib/swipe'
-import { barBeat, bars as barList, secAtBar, snapTo, tempoAt, type Snap, type TempoChange } from '../lib/tempo'
+import { autoSnap, PER_BEAT, barBeat, bars as barList, gridLines, gridStep, parsePos, posText, secAtBar, snapTo, timeText, type Snap, type TempoChange } from '../lib/tempo'
+import { alignedStarts, magnet, movedTo, nextStop, quantized, stops, targetsOf } from '../lib/dawalign'
 import type { Channel, StudioClip, StudioLane, StudioProject, StudioTrack, User } from '../lib/types'
 import { voice } from '../lib/voice'
 import { useStore, voiceParticipants } from '../store'
@@ -30,6 +31,15 @@ import FloatWindow from './FloatWindow'
 const VIEW_KEY = `${STORAGE_PREFIX}dawView`
 const ZOOM_KEY = `${STORAGE_PREFIX}dawZoom`
 const SNAP_KEY = `${STORAGE_PREFIX}dawSnap`
+const MAGNET_KEY = `${STORAGE_PREFIX}dawMagnet`
+/** The room the clip inspector takes in the toolbar, kept when nothing is selected so the toolbar never re-wraps. */
+const INSPECTOR_W = '37rem'
+/** Zoom, in pixels a second: at the most a pixel is half a millisecond (24 samples), so a transient can be placed. */
+const ZOOM_MIN = 4, ZOOM_MAX = 2000
+/** How near (pixels) a clip's edge has to come to another's, a marker, the playhead or the loop to be drawn to it. */
+const MAGNET_PX = 8
+/** How far (pixels) a clip has to be dragged before it moves: a click that wobbles leaves it where it was. */
+const DRAG_PX = 4
 const HEIGHT_KEY = `${STORAGE_PREFIX}dawLaneHeights`
 const LANE_H = 76
 const LANE_MIN = 60, LANE_MAX = 240
@@ -37,8 +47,8 @@ const AUTO_H = 56
 const TAKE_H = 24
 const PEER_COLORS = ['#f47fff', '#00d1b2', '#ffb02e', '#4fc3f7', '#ff6b6b', '#a3e635']
 
-/** 01:02.3 */
-const timecode = (sec: number) => `${String(Math.floor(sec / 60)).padStart(2, '0')}:${(sec % 60).toFixed(1).padStart(4, '0')}`
+/** 01:02.345 */
+const timecode = (sec: number) => { const ms = Math.max(0, Math.round(sec * 1000)); return `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}` }
 const dB = (g: number) => (g <= 0.0001 ? '-∞' : (20 * Math.log10(g)).toFixed(1))
 
 /** Re-render when the engine starts or stops. */
@@ -71,13 +81,19 @@ function useLatest<A extends unknown[], R>(f: (...a: A) => R) {
 /** Clips copied or cut, for pasting at the playhead (in this window). */
 let clipboard: StudioClip[] = []
 
-type Drag = { ids: string[]; mode: 'move' | 'trimL' | 'trimR' | 'fadeIn' | 'fadeOut'; x0: number; lane0: string; dms: number; lane: string | null; copy: boolean }
+// x0 is where the press was in the timeline's content (scroll included), cx on the screen; `started` once it has gone
+// DRAG_PX; `guide` is the place it was drawn to (ms as drawn), if any.
+type Drag = { ids: string[]; mode: 'move' | 'trimL' | 'trimR' | 'fadeIn' | 'fadeOut'; x0: number; cx: number; started: boolean; lane0: string; dms: number; lane: string | null; copy: boolean; guide: number | null }
+/** What the arrangement does for the toolbar and the keys: zoom about the playhead, fit a stretch of time in view. */
+type Nav = { zoomBy: (f: number) => void; fit: (fromMs: number, toMs: number) => void }
 type Panel = 'comments' | 'versions' | 'export' | 'tempo' | 'takes' | 'band' | 'sessions' | 'audio' | null
 
 /**
  * The studio's DAW, shared live by everyone in the band: an Arrangement of audio, MIDI and bus tracks on a timeline
- * with the song's tempo map (move, trim, split, duplicate, fades, clip gain, takes, snapping, zoom, a loop range,
- * markers, comments, automation lanes, a piano roll for MIDI clips, and where the others are), a Mixer (inserts,
+ * with the song's tempo map (move, trim, split, duplicate, fades, clip gain, takes, snapping to the grid and to other
+ * clips, markers, the playhead and the loop, a clip's start typed in, aligning a selection, zoom down to half a
+ * millisecond a pixel, a loop range, markers, comments, automation lanes, a piano roll for MIDI clips, and where the
+ * others are), a Mixer (inserts,
  * sends, routing, faders, the master with its loudness), the transport and recording (a take for the band or alone,
  * over the project from the playhead or the loop, punched into the range), imports, undo and redo, versions, and
  * exports. Phones get the lite version: play, record, levels, comments and the timeline to look at.
@@ -115,7 +131,12 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   const [view, setView] = useState<'arrange' | 'mixer'>(() => { try { return localStorage.getItem(VIEW_KEY) === 'mixer' || (phone && localStorage.getItem(VIEW_KEY) !== 'arrange') ? 'mixer' : 'arrange' } catch { return 'arrange' } })
   const changeView = (v: 'arrange' | 'mixer') => { setView(v); try { localStorage.setItem(VIEW_KEY, v) } catch { /* ignore */ } }
   const [pps, setPps] = useState(() => { try { return Number(localStorage.getItem(ZOOM_KEY)) || 40 } catch { return 40 } })
-  const zoom = useLatest((f: number) => setPps((z) => { const n = Math.min(400, Math.max(4, z * f)); try { localStorage.setItem(ZOOM_KEY, String(n)) } catch { /* ignore */ } return n }))
+  const zoom = useLatest((f: number) => setPps((z) => { const n = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z * f)); try { localStorage.setItem(ZOOM_KEY, String(n)) } catch { /* ignore */ } return n }))
+  const nav = useRef<Nav | null>(null)
+  const zoomBy = (f: number) => (nav.current ? nav.current.zoomBy(f) : zoom(f))
+  // Snapping to other clips, markers, the playhead and the loop, as well as to the grid (kept on the device).
+  const [magnetOn, setMagnetState] = useState(() => { try { return localStorage.getItem(MAGNET_KEY) !== '0' } catch { return true } })
+  const setMagnet = (on: boolean) => { setMagnetState(on); try { localStorage.setItem(MAGNET_KEY, on ? '1' : '0') } catch { /* ignore */ } }
   const [snap, setSnapState] = useState<Snap>(() => { try { return (localStorage.getItem(SNAP_KEY) as Snap) || 'beat' } catch { return 'beat' } })
   const setSnap = (s: Snap) => { setSnapState(s); try { localStorage.setItem(SNAP_KEY, s) } catch { /* ignore */ } }
   const [sel, setSel] = useState<string[]>([])
@@ -125,7 +146,9 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   useEffect(() => { setSel((s) => s.filter((id) => clips[id])); if (roll && !clips[roll]) setRoll(null) }, [clips]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const bpm = project?.bpm ?? cfg.bpm, beats = project?.beats ?? cfg.beats
-  const snapMs = (ms: number, free = false) => (free || !project ? ms : snapTo(project, ms, snap))
+  /** The grid in force at `ms`: `auto` follows the zoom. */
+  const gridAt = (ms: number): Exclude<Snap, 'auto'> => (snap !== 'auto' ? snap : project ? autoSnap(project, ms / 1000, pps) : 'beat')
+  const snapMs = (ms: number, free = false) => (free || !project ? ms : snapTo(project, ms, gridAt(ms)))
 
   // Keep the open project loaded (lib/daw also does while we are in the studio's voice).
   useEffect(() => { if (cfg.project_id && project?.id !== cfg.project_id) void loadProject(cfg.project_id) }, [cfg.project_id]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -196,14 +219,34 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
     if (!selected.length || !project) return
     const first = selected.reduce((a, c) => (c.start_ms < a.start_ms ? c : a))
     let to = first.start_ms + dir * (fine ? 1 : 10)
-    if (!fine && snap !== 'off') {
-      const { bpm, beats: n } = tempoAt(project, first.start_ms / 1000)
-      const step = (60000 / bpm) * (snap === 'bar' ? n : snap === 'beat' ? 1 : snap === 'half' ? 0.5 : 0.25)
-      const near = snapTo(project, first.start_ms, snap)
-      to = dir * (near - first.start_ms) > 0.5 ? near : snapTo(project, near + dir * step, snap)
+    const g = gridAt(first.start_ms)
+    if (!fine && g !== 'off') {
+      const near = snapTo(project, first.start_ms, g)
+      to = dir * (near - first.start_ms) > 0.5 ? near : snapTo(project, near + dir * gridStep(project, near, g), g)
     }
     const d = Math.max(-first.start_ms, Math.round(to) - first.start_ms)
     if (d) edit(selected.map((c): Op => ({ op: 'clip.put', clip: { id: c.id, start_ms: c.start_ms + d } })))
+  }
+  const moves = (list: { id: string; start_ms: number }[]) => { if (list.length) edit(list.map((m): Op => ({ op: 'clip.put', clip: m }))) }
+  /** Each selected clip onto the grid by its start (Q); with the grid off, to the beat. */
+  const quantize = () => project && moves(quantized(selected, (ms) => { const g = gridAt(ms); return snapTo(project, ms, g === 'off' ? 'beat' : g) }))
+  /** The selection, as it is laid out, to start at the playhead. */
+  const toPlayhead = () => moves(movedTo(selected, now() * 1000))
+  /** Every selected clip to start where the earliest of them does. */
+  const alignStarts = () => moves(alignedStarts(selected))
+  /** The playhead a grid step on (finely: 10 ms), onto the grid first when it is off it. */
+  const stepHead = (dir: 1 | -1, fine: boolean) => {
+    if (!project) return
+    const ms = now() * 1000, g = gridAt(ms), grid = g === 'off' ? 'beat' : g
+    if (fine) { seek((ms + dir * 10) / 1000); return }
+    const near = snapTo(project, ms, grid)
+    seek((dir * (near - ms) > 0.5 ? near : snapTo(project, near + dir * gridStep(project, near, grid), grid)) / 1000)
+  }
+  /** The playhead to the next (or previous) clip edge, marker or end of the loop. */
+  const jumpHead = (dir: 1 | -1) => {
+    if (!project) return
+    const to = nextStop(stops(targetsOf(project, lanes, clips, new Set(), null)), now() * 1000, dir)
+    if (to != null) seek(to / 1000)
   }
   const split = () => {
     const at = now() * 1000
@@ -258,13 +301,21 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
       if (mod && e.key.toLowerCase() === 'c') { if (sel.length) { e.preventDefault(); copy() } return }
       if (mod && e.key.toLowerCase() === 'x') { if (sel.length) { e.preventDefault(); copy(); del() } return }
       if (mod && e.key.toLowerCase() === 'v') { if (paste()) e.preventDefault(); return }
+      if (mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); jumpHead(e.key === 'ArrowLeft' ? -1 : 1); return }
       if (mod || e.altKey) return
+      // The computer keyboard is playing an instrument: its keys (and Z/X for the octave) are notes, not commands.
+      if (useMidi.getState().keys && e.key.length === 1 && 'awsedftgyhujkzx'.includes(e.key.toLowerCase())) return
       if (e.key === ' ') { e.preventDefault(); if (!live) play() }
       else if (e.key === 'Delete' || e.key === 'Backspace') { if (sel.length) { e.preventDefault(); del() } }
       else if (e.key.toLowerCase() === 's') { e.preventDefault(); split() }
       else if (e.key.toLowerCase() === 'l' && project?.loop_end_ms) { e.preventDefault(); edit([{ op: 'project', loop_on: !project.loop_on }]) }
       else if (e.key === 'Home') { e.preventDefault(); seek(0) }
-      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { if (sel.length) { e.preventDefault(); nudge(e.key === 'ArrowLeft' ? -1 : 1, e.shiftKey) } }
+      else if (e.key === 'End') { e.preventDefault(); seek(projectEnd(clips) / 1000) }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); const dir = e.key === 'ArrowLeft' ? -1 : 1; if (sel.length) nudge(dir, e.shiftKey); else stepHead(dir, e.shiftKey) }
+      else if (e.key === '=' || e.key === '+') { e.preventDefault(); zoomBy(1.5) }
+      else if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomBy(1 / 1.5) }
+      else if (e.key.toLowerCase() === 'z' && view === 'arrange') { e.preventDefault(); fitView() }
+      else if (e.key.toLowerCase() === 'q' && sel.length) { e.preventDefault(); quantize() }
       else if (e.key === 'Escape') { setSel([]); setRoll(null) }
       else if (e.key === 'Tab') { e.preventDefault(); changeView(view === 'arrange' ? 'mixer' : 'arrange') }
     }
@@ -272,8 +323,22 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  /** Zoom to the selection, or to the whole song when nothing is selected (Z). */
+  const fitView = () => {
+    const list = selected.length ? selected : Object.values(clips)
+    if (!list.length) { nav.current?.fit(0, 60000); return }
+    nav.current?.fit(Math.min(...list.map((c) => c.start_ms)), Math.max(...list.map(clipEnd)))
+  }
+  /** A place typed into the time: the playhead goes there. */
+  const [goto, setGoto] = useState<string | null>(null)
+  const commitGoto = () => {
+    const v = goto === null || !project ? null : parsePos(project, goto)
+    setGoto(null)
+    if (goto !== null && v === null) pushToast(t('Type a time (1:02.345, 62.3s) or a bar.beat (17.3, 17.3.480)'), 'error')
+    else if (v !== null) seek(v / 1000)
+  }
   // The time and the bar follow the playhead without a render.
-  const timeEl = useRef<HTMLSpanElement>(null), beatEl = useRef<HTMLSpanElement>(null)
+  const timeEl = useRef<HTMLButtonElement>(null), beatEl = useRef<HTMLSpanElement>(null)
   useFrame(() => {
     if (!project) return
     const h = now()
@@ -334,7 +399,9 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
           <button type="button" onClick={() => setFollow(!follow)} title={follow ? t('Shared playback: you hear what anyone plays, and they hear what you play') : t('Playing on your own: turn on to follow the shared playback')} aria-pressed={follow} className={`${tb} ${on(follow)}`} data-daw-follow><Link2 size={15} /></button>
           {hasLoop && <button type="button" onClick={clearLoop} title={t('Clear the loop range')} className={`${tb} hover:text-danger`} data-daw-loop-clear><X size={14} /></button>}
         </div>
-        <span className={`shrink-0 rounded-md bg-bg-0 px-2.5 py-1 font-mono text-lg tabular-nums ${live ? 'text-danger' : 'text-text-0'}`} data-daw-time ref={timeEl}>{timecode(stopped)}</span>
+        {goto !== null
+          ? <input autoFocus value={goto} onChange={(e) => setGoto(e.target.value)} onBlur={commitGoto} onKeyDown={(e) => { if (e.key === 'Enter') commitGoto(); else if (e.key === 'Escape') setGoto(null) }} aria-label={t('Go to')} placeholder="1:02.345 · 17.3" className="input h-9 w-36 shrink-0 px-2 font-mono text-base tabular-nums" data-daw-goto />
+          : <button type="button" onClick={() => !live && setGoto('')} title={t('Click to type a place to go to: a time (1:02.345) or a bar.beat (17.3)')} className={`shrink-0 rounded-md bg-bg-0 px-2.5 py-1 font-mono text-lg tabular-nums hover:bg-bg-3 ${live ? 'text-danger' : 'text-text-0'}`} data-daw-time ref={timeEl}>{timecode(stopped)}</button>}
         <span className="shrink-0 rounded-md bg-bg-0 px-2 py-1.5 font-mono text-sm tabular-nums text-text-1" title={t('Bar.beat ({bpm} BPM)', { bpm: bb.bpm })} data-daw-beat ref={beatEl}>{`${bb.bar}.${bb.beat}`}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {peerList.length > 0 && <span className="flex -space-x-1.5" data-daw-peers>{peerList.slice(0, 5).map(([uid]) => users[uid] && <span key={uid} className="rounded-full ring-2" style={{ ['--tw-ring-color' as string]: peerColor(uid) }} title={users[uid].display_name ?? users[uid].username}><Avatar user={users[uid]} size={20} /></span>)}</span>}
@@ -369,33 +436,39 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
         <input ref={file} type="file" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aac,.webm,.opus" multiple hidden onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; void importFiles(channel.id, fs, now() * 1000) }} data-daw-file />
         {!phone && view === 'arrange' && <>
           <span className="mx-1 h-5 w-px bg-line" />
-          <Magnet size={14} className={snap === 'off' ? 'text-text-2' : 'text-accent'} aria-hidden />
-          <Dropdown value={snap} onChange={(e) => setSnap(e.target.value as Snap)} title={t('Snap to grid (hold Alt to move freely, Ctrl to copy)')} aria-label={t('Snap')} className="input h-8 w-20 px-2 text-xs" data-daw-snap>
-            <option value="bar">{t('Bar')}</option><option value="beat">{t('Beat')}</option><option value="half">{t('½ beat')}</option><option value="sixteenth">{t('1/16')}</option><option value="off">{t('Off')}</option>
+          <Grid3x3 size={14} className={snap === 'off' ? 'text-text-2' : 'text-accent'} aria-hidden />
+          <Dropdown value={snap} onChange={(e) => setSnap(e.target.value as Snap)} title={t('Grid that clips, markers and the loop snap to (hold Alt to move freely, Ctrl to copy)')} aria-label={t('Snap')} className="input h-8 w-[5.5rem] px-2 text-xs" data-daw-snap>
+            <option value="auto">{t('Auto')}</option><option value="bar">{t('Bar')}</option><option value="beat">{t('Beat')}</option><option value="half">{t('½ beat')}</option><option value="triplet">{t('1/8 T')}</option><option value="sixteenth">{t('1/16')}</option><option value="thirtysecond">{t('1/32')}</option><option value="off">{t('Off')}</option>
           </Dropdown>
-          <button type="button" onClick={() => zoom(1 / 1.5)} title={t('Zoom out')} className={tb} data-daw-zoom-out><ZoomOut size={16} /></button>
-          <button type="button" onClick={() => zoom(1.5)} title={t('Zoom in')} className={tb} data-daw-zoom-in><ZoomIn size={16} /></button>
+          <button type="button" onClick={() => setMagnet(!magnetOn)} aria-pressed={magnetOn} title={magnetOn ? t('Snapping to other clips, markers, the playhead and the loop (on)') : t('Snap to other clips, markers, the playhead and the loop')} className={`${tb} ${on(magnetOn)}`} data-daw-magnet><Magnet size={15} /></button>
+          <button type="button" onClick={() => zoomBy(1 / 1.5)} title={t('Zoom out (−)')} className={tb} data-daw-zoom-out><ZoomOut size={16} /></button>
+          <button type="button" onClick={() => zoomBy(1.5)} title={t('Zoom in (+)')} className={tb} data-daw-zoom-in><ZoomIn size={16} /></button>
+          <button type="button" onClick={fitView} title={t('Zoom to the selection, or to the whole song (Z)')} className={tb} data-daw-zoom-fit><Maximize2 size={15} /></button>
           <button type="button" onClick={() => edit([{ op: 'project', markers: [...(project.markers ?? []), { id: newId().slice(0, 8), ms: Math.round(now() * 1000), name: t('Marker {n}', { n: (project.markers?.length ?? 0) + 1 }) }] }])} title={t('Add a marker at the playhead')} className={tb} data-daw-add-marker><Flag size={15} /></button>
           <button type="button" onClick={() => setPanel(panel === 'tempo' ? null : 'tempo')} title={t('Tempo changes')} className={`${tb} ${on(panel === 'tempo')}`} data-daw-tempo-open><Gauge size={15} /></button>
           <button type="button" onClick={() => useMidi.setState({ keys: !midi.keys })} title={midi.keys ? t('Computer keyboard plays the armed MIDI track (A–K, Z/X octave)') : t('Play the armed MIDI track from the computer keyboard')} aria-pressed={midi.keys} className={`${tb} ${on(midi.keys)}`} data-daw-keys><Keyboard size={15} /></button>
           <button type="button" onClick={() => void connectMidi().then((n) => pushToast(n.length ? t('MIDI: {names}', { names: n.join(', ') }) : t('No MIDI keyboard found'))).catch((e) => pushToast((e as Error).message, 'error'))} title={midi.devices.length ? midi.devices.join(', ') : t('Connect a MIDI keyboard')} className={`${tb} ${on(midi.devices.length > 0)}`} data-daw-midi-connect><Cable size={15} /></button>
         </>}
-        {!phone && selected.length > 0 && <>
+        {/* The selection's tools stay where they are, greyed out with nothing selected: the tracks below never move. */}
+        {!phone && view === 'arrange' && <>
           <span className="mx-1 h-5 w-px bg-line" />
           <button type="button" onClick={split} title={t('Split at the playhead (S)')} className={tb} data-daw-split><Scissors size={15} /></button>
-          <button type="button" onClick={duplicate} title={t('Duplicate (Ctrl+D)')} className={tb} data-daw-duplicate><Copy size={15} /></button>
-          <button type="button" onClick={del} title={t('Delete (Del)')} className={`${tb} hover:text-danger`} data-daw-delete><Trash2 size={15} /></button>
-          {selected.length === 1 && selected[0].notes && <button type="button" onClick={() => setRoll(selected[0].id)} title={t('Edit notes (double-click the clip)')} className={tb} data-daw-open-roll><Music size={15} /></button>}
+          <button type="button" onClick={duplicate} disabled={!selected.length} title={t('Duplicate (Ctrl+D)')} className={tb} data-daw-duplicate><Copy size={15} /></button>
+          <button type="button" onClick={del} disabled={!selected.length} title={t('Delete (Del)')} className={`${tb} hover:text-danger`} data-daw-delete><Trash2 size={15} /></button>
+          <button type="button" onClick={quantize} disabled={!selected.length} title={t('Snap to the grid (Q)')} className={tb} data-daw-quantize-clips><Grid3x3 size={15} /></button>
+          <button type="button" onClick={toPlayhead} disabled={!selected.length} title={t('Move to the playhead')} className={tb} data-daw-to-playhead><ArrowRightToLine size={15} /></button>
+          <button type="button" onClick={alignStarts} disabled={selected.length < 2} title={t('Start together, where the earliest starts')} className={tb} data-daw-align-starts><AlignStartVertical size={15} /></button>
+          <button type="button" onClick={() => setRoll(selected[0].id)} disabled={!(selected.length === 1 && selected[0].notes)} title={t('Edit notes (double-click the clip)')} className={tb} data-daw-open-roll><Music size={15} /></button>
           {group && group.length > 1 && <span className="flex items-center gap-1" data-daw-takes>
             <span className="text-text-2">{t('Take')}</span>
             {group.map((g, i) => <button key={g.id} type="button" onClick={() => edit(group.map((x): Op => ({ op: 'clip.put', clip: { id: x.id, muted: x.id !== g.id } })))} className={`h-6 w-6 rounded text-[11px] font-bold ${!g.muted ? 'bg-accent text-white' : 'bg-bg-3 text-text-2 hover:text-text-0'}`} data-daw-take={i + 1} aria-pressed={!g.muted}>{i + 1}</button>)}
           </span>}
-          {selected.length === 1 && <ClipInspector clip={selected[0]} />}
+          {selected.length === 1 ? <ClipInspector clip={selected[0]} project={project} /> : <span className="flex h-8 items-center text-text-2" style={{ minWidth: INSPECTOR_W }} data-daw-no-selection>{selected.length ? t('{n} clips selected', { n: selected.length }) : t('Select a clip to place it exactly')}</span>}
         </>}
       </div>
 
       {view === 'arrange'
-        ? <Arrangement {...{ channel, project, ordered, lanes, clips, audio, pps, zoom, now, stopped, running: !!playing, live: !!live, liveSince: live ? (live.position_ms ?? 0) / 1000 : 0, liveSolo: live?.solo ? live.started_by : null, sel, setSel, seek, snapMs, band: bandIds, crew, users, phone, autoOpen, setAutoOpen, newMidiClip, setRoll, midiLane: midi.lane, peers: peerList, peerColor, comments, openComments: () => setPanel('comments') }} />
+        ? <Arrangement {...{ channel, project, ordered, lanes, clips, audio, pps, zoom, nav, magnetOn, gridAt, now, stopped, running: !!playing, live: !!live, liveSince: live ? (live.position_ms ?? 0) / 1000 : 0, liveSolo: live?.solo ? live.started_by : null, sel, setSel, seek, snapMs, band: bandIds, crew, users, phone, autoOpen, setAutoOpen, newMidiClip, setRoll, midiLane: midi.lane, peers: peerList, peerColor, comments, openComments: () => setPanel('comments') }} />
         : <DawMixer ordered={ordered} lanes={lanes} project={project} channelId={channel.id} users={users} />}
       {rollClip && lanes[rollClip.lane_id] && <PianoRoll clip={rollClip} lane={lanes[rollClip.lane_id]} project={project} close={() => setRoll(null)} />}
       {!rights.edit && <p className="shrink-0 border-t border-line bg-bg-2 px-3 py-1.5 text-xs text-text-2" data-daw-readonly>{t('You are listening in: you can play the project, follow the band and comment. Only the band edits it.')}</p>}
@@ -486,11 +559,24 @@ function ProjectMenu({ channel, project }: { channel: Channel; project: StudioPr
 }
 
 /** The selected clip's gain and fades. */
-function ClipInspector({ clip }: { clip: StudioClip }) {
+function ClipInspector({ clip, project }: { clip: StudioClip; project: StudioProject }) {
   const t = useT()
   const num = 'input h-7 w-16 px-1 text-center font-mono text-xs tabular-nums'
+  // Where the clip starts, typed: a time or a bar.beat.tick.
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = () => {
+    const v = draft === null ? null : parsePos(project, draft)
+    setDraft(null)
+    if (draft !== null && v === null) useStore.getState().pushToast(t('Type a time (1:02.345, 62.3s) or a bar.beat (17.3, 17.3.480)'), 'error')
+    else if (v !== null && v !== clip.start_ms) edit([{ op: 'clip.put', clip: { id: clip.id, start_ms: v } }])
+  }
   return (
-    <span className="flex items-center gap-1.5" data-daw-inspector={clip.id}>
+    <span className="flex h-8 items-center gap-1.5" style={{ minWidth: INSPECTOR_W }} data-daw-inspector={clip.id}>
+      <label className="flex items-center gap-1 text-text-2" title={t('Where the clip starts: type a time (1:02.345) or a bar.beat.tick (17.3.480)')}>{t('Start')}
+        <input value={draft ?? timeText(clip.start_ms)} onFocus={(e) => { setDraft(timeText(clip.start_ms)); e.currentTarget.select() }} onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur() } }} className="input h-7 w-[5.5rem] px-1 text-center font-mono text-xs tabular-nums" data-daw-clip-start />
+        <span className="font-mono text-[10px] tabular-nums" data-daw-clip-pos>{posText(project, clip.start_ms)}</span>
+      </label>
       <label className="flex items-center gap-1 text-text-2" title={t('Clip gain')}>{t('Gain')}
         <input type="range" min={0} max={200} value={Math.round(clip.gain * 100)} onChange={(e) => editLive(`gain:${clip.id}`, [{ op: 'clip.put', clip: { id: clip.id, gain: Number(e.target.value) / 100 } }])} onDoubleClick={() => edit([{ op: 'clip.put', clip: { id: clip.id, gain: 1 } }])} className="w-20 accent-accent" data-daw-clip-gain />
         <span className="w-12 font-mono tabular-nums">{dB(clip.gain)} dB</span>
@@ -506,7 +592,8 @@ function ClipInspector({ clip }: { clip: StudioClip }) {
 
 type ArrProps = {
   channel: Channel; project: StudioProject; ordered: StudioLane[]; lanes: Record<string, StudioLane>; clips: Record<string, StudioClip>; audio: Record<string, StudioTrack>
-  pps: number; zoom: (f: number) => void; now: () => number; stopped: number; running: boolean
+  pps: number; zoom: (f: number) => void; nav: React.MutableRefObject<Nav | null>; magnetOn: boolean; gridAt: (ms: number) => Exclude<Snap, 'auto'>
+  now: () => number; stopped: number; running: boolean
   live: boolean; liveSince: number; liveSolo: string | null; sel: string[]; setSel: (s: string[] | ((s: string[]) => string[])) => void
   seek: (sec: number) => void; snapMs: (ms: number, free?: boolean) => number; band: string[]; crew: boolean
   users: Record<string, User>; phone: boolean; autoOpen: Record<string, string>; setAutoOpen: (f: (m: Record<string, string>) => Record<string, string>) => void
@@ -623,6 +710,65 @@ function Arrangement(p: ArrProps) {
     anchor.current = null
     if (a && s) s.scrollLeft = Math.max(0, a.sec * pps - a.off)
   }, [pps])
+  // The toolbar's and the keys' zoom keeps the playhead where it is on the screen (the middle when it is out of view).
+  p.nav.current = {
+    zoomBy: (f) => {
+      const s = scroller.current
+      if (!s) { p.zoom(f); return }
+      const x = now() * pps - s.scrollLeft
+      const off = x >= 0 && x <= s.clientWidth ? x : s.clientWidth / 2
+      anchor.current = { sec: (off + s.scrollLeft) / pps, off }
+      p.zoom(f)
+    },
+    fit: (a, b) => {
+      const s = scroller.current
+      if (!s) return
+      const margin = s.clientWidth * 0.05
+      const n = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, (s.clientWidth - 2 * margin) / Math.max(0.05, (b - a) / 1000)))
+      if (Math.abs(n - pps) < 1e-6) { s.scrollLeft = Math.max(0, (a / 1000) * pps - margin); return }
+      anchor.current = { sec: a / 1000, off: margin }
+      p.zoom(n / pps)
+    },
+  }
+
+  // The stretch of the timeline around the view (a view's width either side), for the lines of the grid: it is
+  // drawn again only when the view moves into another stretch, not on every scroll.
+  const [page, setPage] = useState({ i: 0, w: 1200 })
+  useEffect(() => {
+    const s = scroller.current
+    if (!s) return
+    const upd = () => { const w = Math.max(200, s.clientWidth), i = Math.floor(s.scrollLeft / w); setPage((v) => (v.i === i && v.w === w ? v : { i, w })) }
+    upd()
+    s.addEventListener('scroll', upd, { passive: true })
+    const ro = new ResizeObserver(upd); ro.observe(s)
+    return () => { s.removeEventListener('scroll', upd); ro.disconnect() }
+  }, [])
+  const viewFrom = Math.max(0, ((page.i - 1) * page.w) / pps), viewTo = Math.min(total, ((page.i + 2) * page.w) / pps)
+  const beatPx = (60 / project.bpm) * pps
+  const shownGrid = p.gridAt(viewFrom * 1000)
+  const perBeat = shownGrid in PER_BEAT ? PER_BEAT[shownGrid as keyof typeof PER_BEAT] : 1
+  // Beats where they are 6 px apart or more, and the grid's divisions of them where those are.
+  const lines = useMemo(() => {
+    const minBeat = (60 / Math.max(project.bpm, ...(project.tempo_map ?? []).map((c) => c.bpm))) * pps
+    if (minBeat < 6) return []
+    const div = minBeat / perBeat >= 6 ? perBeat : 1
+    return gridLines(project, viewFrom, viewTo, div).filter((l) => l.kind !== 'bar')
+  }, [project, viewFrom, viewTo, pps, perBeat])
+  // The ruler is ticked as finely as the zoom allows, whatever the grid, so there is always a scale to read.
+  const fine = autoSnap(project, viewFrom, pps)
+  const tickDiv = Math.max(perBeat, fine in PER_BEAT ? PER_BEAT[fine as keyof typeof PER_BEAT] : 1)
+  const ticks = useMemo(() => (tickDiv === perBeat ? lines : (60 / project.bpm) * pps < 6 ? [] : gridLines(project, viewFrom, viewTo, tickDiv).filter((l) => l.kind !== 'bar')), [lines, project, viewFrom, viewTo, pps, perBeat, tickDiv])
+
+  /** Where something dragged on the ruler or clicked in the tracks lands: drawn to a place near it, or onto the grid. */
+  const place = (ms: number, alt: boolean, skipMarker?: string, withHead = true) => {
+    if (alt) return ms
+    if (p.magnetOn) {
+      const pr = skipMarker ? { ...project, markers: (project.markers ?? []).filter((m) => m.id !== skipMarker) } : project
+      const m = magnet([ms], targetsOf(pr, lanes, clips, new Set(), withHead ? now() * 1000 : null), (MAGNET_PX / pps) * 1000)
+      if (m) return m.at
+    }
+    return snapMs(ms)
+  }
 
   /** What a drag would make of a clip. */
   const dragged = (c: StudioClip, drag = dragRef.current): StudioClip => {
@@ -646,26 +792,45 @@ function Arrangement(p: ArrProps) {
     const ids = mode === 'move' ? (sel.includes(c.id) ? sel : e.shiftKey ? [...sel, c.id] : [c.id]) : [c.id]
     shiftAdded.current = e.shiftKey && !sel.includes(c.id) ? c.id : null
     if (!sel.includes(c.id) || mode !== 'move') setSel(e.shiftKey && mode === 'move' ? ids : ids.length > 1 ? ids : [c.id])
-    setDrag({ ids, mode, x0: e.clientX + (scroller.current?.scrollLeft ?? 0), lane0: c.lane_id, dms: 0, lane: null, copy: (e.ctrlKey || e.metaKey) && mode === 'move' })
+    const copy = (e.ctrlKey || e.metaKey) && mode === 'move'
+    // What it can be drawn to: everything but the clips being dragged (their copies leave the clips themselves).
+    targets.current = targetsOf(project, lanes, clips, copy ? new Set() : new Set(ids), now() * 1000)
+    setDrag({ ids, mode, x0: e.clientX + (scroller.current?.scrollLeft ?? 0), cx: e.clientX, started: false, lane0: c.lane_id, dms: 0, lane: null, copy, guide: null })
   })
+  const targets = useRef<ReturnType<typeof targetsOf>>([])
   const last = useRef<{ x: number; y: number; alt: boolean } | null>(null)
   const moveDrag = (e: { clientX: number; clientY: number; altKey: boolean }) => {
     const drag = dragRef.current, sc = scroller.current
     if (!drag || !sc) return
     last.current = { x: e.clientX, y: e.clientY, alt: e.altKey }
-    const raw = ((e.clientX + sc.scrollLeft - drag.x0) / pps) * 1000
     const first = clips[drag.ids[0]]
     if (!first) { setDrag(null); return }
-    // Snap the clip's edge to the grid, not the distance moved.
-    const edge = drag.mode === 'trimR' ? clipEnd(first) : drag.mode === 'fadeIn' || drag.mode === 'fadeOut' ? 0 : first.start_ms
-    const dms = drag.mode === 'fadeIn' || drag.mode === 'fadeOut' ? raw : snapMs(edge + raw, e.altKey) - edge
-    setDrag({ ...drag, dms, lane: drag.mode === 'move' ? laneAt(e.clientY) ?? drag.lane : null })
+    const lane = drag.mode === 'move' ? laneAt(e.clientY) ?? drag.lane : null
+    // Until it has gone a few pixels (or to another track) a press is a click: the clip stays exactly where it was.
+    if (!drag.started && Math.abs(e.clientX - drag.cx) < DRAG_PX && (!lane || lane === drag.lane0)) return
+    const raw = ((e.clientX + sc.scrollLeft - drag.x0) / pps) * 1000
+    let dms = raw, guide: number | null = null
+    if (drag.mode !== 'fadeIn' && drag.mode !== 'fadeOut' && !e.altKey) {
+      // An edge near another clip's, a marker, the playhead or the loop goes onto it; otherwise the clip's edge (not
+      // the distance moved) goes onto the grid.
+      const nudgeOf = (c: StudioClip) => lanes[drag.ids.length === 1 && lane ? lane : c.lane_id]?.nudge_ms ?? 0
+      const edges = drag.ids.flatMap((id) => {
+        const c = clips[id]
+        if (!c) return []
+        const n = nudgeOf(c) + raw
+        return drag.mode === 'trimL' ? [c.start_ms + n] : drag.mode === 'trimR' ? [clipEnd(c) + n] : [c.start_ms + n, clipEnd(c) + n]
+      })
+      const m = p.magnetOn ? magnet(edges, targets.current, (MAGNET_PX / pps) * 1000) : null
+      if (m) { dms = raw + m.shift; guide = m.at }
+      else { const edge = drag.mode === 'trimR' ? clipEnd(first) : first.start_ms; dms = snapMs(edge + raw) - edge }
+    }
+    setDrag({ ...drag, started: true, dms, guide, lane })
   }
   const endDrag = (cancel = false) => {
     const d = dragRef.current
     if (!d) return
     setDrag(null); last.current = null
-    if (cancel || (Math.abs(d.dms) < 1 && (!d.lane || d.lane === d.lane0))) return
+    if (cancel || !d.started || (Math.abs(d.dms) < 1 && (!d.lane || d.lane === d.lane0))) return
     justDragged.current = true; setTimeout(() => { justDragged.current = false }, 0)
     const out = d.ids.map((id) => clips[id]).filter(Boolean).map((c) => dragged(c, d))
     if (d.copy) { const made = out.map((c) => ({ ...c, id: newId() })); edit(made.map((c): Op => ({ op: 'clip.put', clip: { ...c, group_id: '' as unknown as null } }))); setSel(made.map((c) => c.id)); return }
@@ -703,7 +868,7 @@ function Arrangement(p: ArrProps) {
   const shown = useRef<{ id: string; x0: number; x1: number; y0: number; y1: number }[]>([])
   const press = (e: RPointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 || !(e.target === e.currentTarget || (e.target as HTMLElement).dataset.dawLane)) return
-    const to = snapMs(msAt(e.clientX), e.altKey) / 1000
+    const to = place(msAt(e.clientX), e.altKey, undefined, false) / 1000
     if (phone) { setSel([]); p.seek(to); return }
     const el = lanesEl.current!
     const pt = (ev: { clientX: number; clientY: number }) => { const r = el.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top } }
@@ -738,10 +903,10 @@ function Arrangement(p: ArrProps) {
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     const end = (e.target as HTMLElement).dataset.dawLoopEdge
     if (end) { const a = project.loop_start_ms ?? 0, b = project.loop_end_ms ?? 0; setLoopDrag(end === 'start' ? { a: b, b: a, x0: e.clientX, edge: true } : { a, b, x0: e.clientX, edge: true }); return }
-    const ms = snapMs(msAt(e.clientX), e.altKey)
+    const ms = place(msAt(e.clientX), e.altKey, undefined, false)
     setLoopDrag({ a: ms, b: ms, x0: e.clientX })
   }
-  const rulerMove = (e: RPointerEvent<HTMLDivElement>) => { if (loopDrag && (!loopDrag.edge || Math.abs(e.clientX - loopDrag.x0) >= 3)) setLoopDrag({ ...loopDrag, b: snapMs(msAt(e.clientX), e.altKey) }) }
+  const rulerMove = (e: RPointerEvent<HTMLDivElement>) => { if (loopDrag && (!loopDrag.edge || Math.abs(e.clientX - loopDrag.x0) >= 3)) setLoopDrag({ ...loopDrag, b: place(msAt(e.clientX), e.altKey) }) }
   const rulerUp = (e: RPointerEvent<HTMLDivElement>) => {
     const l = loopDrag
     setLoopDrag(null)
@@ -771,14 +936,33 @@ function Arrangement(p: ArrProps) {
   // Where each clip is drawn, for the selection box.
   const boxes: typeof shown.current = []
   let top = 0
+  const tops: Record<string, { y: number; h: number }> = {}
   const rows = ordered.map((l, i) => {
     const y = top, h = laneH(l)
+    tops[l.id] = { y, h }
     top += rowH(l)
     const mine = Object.values(clips).filter((c) => dragged(c).lane_id === l.id && (!c.group_id || !c.muted)).map((c) => dragged(c))
     for (const c of mine) { const x0 = ((c.start_ms + (l.nudge_ms ?? 0)) / 1000) * pps; boxes.push({ id: c.id, x0, x1: x0 + Math.max(2, (c.length_ms / 1000) * pps), y0: y, y1: y + h }) }
     return { l, i, h, mine }
   })
   shown.current = boxes
+
+  // While a clip is dragged: where it goes, as bar.beat.tick and as a time, and how far it has moved (or its length).
+  const readout = (() => {
+    if (!drag?.started) return null
+    const c0 = clips[drag.ids[0]]
+    if (!c0) return null
+    const c = dragged(c0), l = lanes[c.lane_id], at = tops[c.lane_id]
+    if (!l || !at) return null
+    const n = l.nudge_ms ?? 0
+    const sign = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(Math.round(v))} ms`
+    const text = drag.mode === 'move' ? `${posText(project, c.start_ms)} · ${timeText(c.start_ms)} (${sign(c.start_ms - c0.start_ms)})`
+      : drag.mode === 'trimL' ? `${posText(project, c.start_ms)} · ${timeText(c.start_ms)} · ${t('length {t}', { t: timeText(c.length_ms) })}`
+        : drag.mode === 'trimR' ? `${posText(project, clipEnd(c))} · ${timeText(clipEnd(c))} · ${t('length {t}', { t: timeText(c.length_ms) })}`
+          : `${t('fade {ms} ms', { ms: drag.mode === 'fadeIn' ? c.fade_in_ms : c.fade_out_ms })}`
+    const x = ((drag.mode === 'trimR' ? clipEnd(c) : c.start_ms) + n) / 1000 * pps
+    return { text, x, y: at.y }
+  })()
 
   return (
     <div className="flex-1 min-h-0 overflow-y-auto" data-daw-arrangement>
@@ -806,17 +990,20 @@ function Arrangement(p: ArrProps) {
                 <span className="absolute inset-y-0 z-10 w-2 -translate-x-1/2 cursor-ew-resize hover:bg-accent/60" style={{ left: (loopB / 1000) * pps }} title={t('Drag to move the end of the loop')} data-daw-loop-edge="end" />
               </>}
               {barsAll.filter((b) => b.bar % every === 0).map((b) => <span key={b.bar} className="absolute top-0 h-full border-l border-line pl-1 leading-7" style={{ left: b.sec * pps }}>{b.bar + 1}</span>)}
+              {/* Beats (and the grid's divisions of them) as ticks, numbered bar.beat where there is room. */}
+              {ticks.map((g) => <span key={g.sec} className={`pointer-events-none absolute bottom-0 w-px ${g.kind === 'beat' ? 'h-2 bg-text-2/60' : 'h-1 bg-text-2/40'}`} style={{ left: g.sec * pps }} data-daw-tick={g.kind} />)}
+              {beatPx >= 48 && ticks.filter((g) => g.kind === 'beat').map((g) => { const b = barBeat(project, g.sec + 1e-6); return <span key={`b${g.sec}`} className="pointer-events-none absolute top-0 pl-1 leading-7 text-text-2/70" style={{ left: g.sec * pps }}>{`${b.bar}.${b.beat}`}</span> })}
               {(project.tempo_map ?? []).map((c) => <span key={`t${c.bar}`} className="absolute bottom-0 rounded-t bg-bg-4 px-1 text-[9px] font-bold text-text-1" style={{ left: secAtBar(project, c.bar) * pps + 2 }} title={t('{bpm} BPM, {beats}/4 from bar {bar}', { bpm: c.bpm, beats: c.beats, bar: c.bar + 1 })}>{c.bpm}{c.beats !== project.beats ? ` ${c.beats}/4` : ''}</span>)}
               {(project.markers ?? []).map((m) => (
                 <span key={m.id} className="absolute top-0 z-10 flex h-3.5 max-w-32 items-center gap-0.5 truncate rounded-br bg-warn px-1 text-[9px] font-bold text-black" style={{ left: ((markDrag?.id === m.id ? markDrag.ms : m.ms) / 1000) * pps }}
                   onPointerDown={(e) => { e.stopPropagation(); if (e.button !== 0 || phone) return; e.currentTarget.setPointerCapture(e.pointerId); markAt.current = { id: m.id, x: e.clientX, off: msAt(e.clientX) - m.ms, moved: false } }}
-                  onPointerMove={(e) => { const s = markAt.current; if (!s || s.id !== m.id || (!s.moved && Math.abs(e.clientX - s.x) < 4)) return; s.moved = true; setMarkDrag({ id: m.id, ms: snapMs(Math.max(0, msAt(e.clientX) - s.off), e.altKey) }) }}
+                  onPointerMove={(e) => { const s = markAt.current; if (!s || s.id !== m.id || (!s.moved && Math.abs(e.clientX - s.x) < 4)) return; s.moved = true; setMarkDrag({ id: m.id, ms: place(Math.max(0, msAt(e.clientX) - s.off), e.altKey, m.id) }) }}
                   onPointerUp={(e) => {
                     const s = markAt.current
                     markAt.current = null; setMarkDrag(null)
                     if (!s?.moved) return
                     markDragged.current = true; setTimeout(() => { markDragged.current = false }, 0)
-                    const ms = Math.round(snapMs(Math.max(0, msAt(e.clientX) - s.off), e.altKey))
+                    const ms = Math.round(place(Math.max(0, msAt(e.clientX) - s.off), e.altKey, m.id))
                     if (ms !== m.ms) edit([{ op: 'project', markers: (project.markers ?? []).map((x) => (x.id === m.id ? { ...x, ms } : x)) }])
                   }}
                   onPointerCancel={() => { markAt.current = null; setMarkDrag(null) }}
@@ -827,6 +1014,7 @@ function Arrangement(p: ArrProps) {
             </div>
             <div ref={lanesEl} className="relative select-none" onPointerDown={press} onDragStart={(e) => e.preventDefault()}>
               {barsAll.map((b) => <div key={b.bar} className={`pointer-events-none absolute top-0 bottom-0 w-px ${b.bar % every === 0 ? 'bg-line/70' : 'bg-line/25'}`} style={{ left: b.sec * pps }} />)}
+              {lines.map((g) => <div key={g.sec} className={`pointer-events-none absolute top-0 bottom-0 w-px ${g.kind === 'beat' ? 'bg-line/20' : 'bg-line/10'}`} style={{ left: g.sec * pps }} data-daw-grid={g.kind} />)}
               {showLoop && project.loop_on && <div className="pointer-events-none absolute top-0 bottom-0 bg-accent/5" style={{ left: (loopA / 1000) * pps, width: ((loopB - loopA) / 1000) * pps }} />}
               {rows.map(({ l, i, h, mine }) => {
                 const color = laneColor(l, i), tk = takesOpen[l.id] ? takes.get(l.id) : undefined
@@ -857,6 +1045,8 @@ function Arrangement(p: ArrProps) {
                 </div>
               ))}
               <div className={`h-16 ${dropLane === 'new' ? 'bg-accent/10' : ''}`} data-daw-lane-new>{dropLane === 'new' && <span className="block pt-5 text-center text-xs text-accent">{t('Drop to import onto a new track')}</span>}</div>
+              {drag?.guide != null && <div className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-accent shadow-[0_0_0_1px_rgba(0,0,0,.25)]" style={{ left: (drag.guide / 1000) * pps }} data-daw-guide={Math.round(drag.guide)} />}
+              {readout && <span className="pointer-events-none absolute z-30 whitespace-nowrap rounded bg-bg-0/95 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-text-0 shadow ring-1 ring-line" style={{ left: readout.x, top: readout.y, transform: readout.y > 20 ? 'translateY(-100%)' : 'translateY(2px)' }} data-daw-drag-readout>{readout.text}</span>}
               {box && <div className="pointer-events-none absolute z-20 border border-accent bg-accent/15" style={{ left: box.x0, top: box.y0, width: box.x1 - box.x0, height: box.y1 - box.y0 }} data-daw-select-box />}
               {p.peers.map(([uid, x]) => <div key={uid} className="pointer-events-none absolute -top-7 bottom-0 z-10 w-px opacity-80" style={{ left: (x.pos_ms / 1000) * pps, background: p.peerColor(uid) }} data-daw-peer-head={uid}><span className="absolute -top-0 left-0.5 whitespace-nowrap rounded px-1 text-[9px] font-bold text-black" style={{ background: p.peerColor(uid) }}>{p.users[uid]?.display_name ?? p.users[uid]?.username ?? ''}</span></div>)}
               <div ref={playhead} className={`pointer-events-none absolute -top-7 bottom-0 z-20 w-px ${p.live ? 'bg-danger' : 'bg-text-0'}`} style={{ left: p.stopped * pps }} data-daw-playhead />
@@ -1065,6 +1255,20 @@ function ClipWave({ c }: { c: StudioClip }) {
       g.fillStyle = getComputedStyle(cv).color
       const per = 20, a0 = c.in_ms / per, n = c.length_ms / per
       const scale = d.top > 0 ? (0.9 / d.top) * Math.min(2, c.gain) : 0
+      // Zoomed in past the peaks (20 ms each), the samples themselves: each pixel spans its lowest to its highest, so
+      // the wave's shape and the start of a note show where they are to the sample.
+      if (c.length_ms / w < per) {
+        const b = d.buffer, sr = b.sampleRate, ch = Array.from({ length: b.numberOfChannels }, (_, i) => b.getChannelData(i))
+        const s0 = (c.in_ms / 1000) * sr, per1 = (c.length_ms / 1000) * sr / w, mid = 12 + (h - 12) / 2, half = (h - 12) / 2
+        for (let x = x0; x < x1; x++) {
+          const a = Math.floor(s0 + x * per1), e = Math.max(a + 1, Math.floor(s0 + (x + 1) * per1))
+          let lo = 0, hi = 0
+          for (const cd of ch) for (let i = Math.max(0, a); i < e && i < cd.length; i++) { const v = cd[i]; if (v < lo) lo = v; if (v > hi) hi = v }
+          const top = Math.max(-1, Math.min(1, hi * scale)), bot = Math.max(-1, Math.min(1, lo * scale))
+          g.fillRect(x, mid - top * half, 1, Math.max(1, (top - bot) * half))
+        }
+        return
+      }
       for (let x = x0; x < x1; x++) {
         const a = Math.floor(a0 + (x / w) * n), b = Math.max(a + 1, Math.floor(a0 + ((x + 1) / w) * n))
         let m = 0
