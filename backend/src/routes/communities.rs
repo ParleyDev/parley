@@ -3,15 +3,18 @@
 //! are its channels and access is plain server permissions. Manage Channels creates, edits and deletes.
 
 use crate::{auth::AuthUser, error::{AppError, AppResult}, models::{Channel, Community}, perms, routes::guilds::{normalize_channel_name, require_member, CHANNEL_COLS}, state::AppState};
-use axum::{extract::{Path, State}, http::StatusCode, routing::get, Json, Router};
+use axum::{extract::{Path, Query, State}, http::StatusCode, routing::get, Json, Router};
+use base64::Engine;
+use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/guilds/:id/communities", axum::routing::post(create))
+        .route("/guilds/:id/communities", get(list).post(create))
         .route("/guilds/:id/communities/:slug", get(get_one).patch(update).delete(remove))
+        .route("/guilds/:id/communities/:slug/follow", axum::routing::put(follow).delete(unfollow))
 }
 
 const COLS: &str = "id, guild_id, slug, name, icon_url, description, external_ref, category_id, last_activity_at, created_at";
@@ -182,4 +185,118 @@ async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gi
     super::channels::remove_channel(&state, gid, c.category_id).await?;
     state.hub.emit(target, "COMMUNITY_DELETE", json!({ "id": c.id, "guild_id": gid }));
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// A new message under a community's category (directly, or in a thread of one of its channels) is activity.
+pub async fn touch_activity(db: &sqlx::PgPool, channel_id: Uuid) -> AppResult<()> {
+    sqlx::query(
+        "UPDATE communities SET last_activity_at = now() WHERE category_id IN (
+           SELECT parent_id FROM channels WHERE id = $1
+           UNION SELECT p.parent_id FROM channels c JOIN channels p ON p.id = c.parent_id WHERE c.id = $1)")
+        .bind(channel_id).execute(db).await?;
+    Ok(())
+}
+
+async fn set_follow(state: &AppState, gid: Uuid, uid: Uuid, slug: &str, on: bool) -> AppResult<StatusCode> {
+    require_member(&state.db, gid, uid).await?;
+    let c = by_slug(state, gid, slug).await?;
+    let visible = perms::visible_channels(&state.db, gid, uid).await?;
+    if !visible.iter().any(|v| v.id == c.category_id) { return Err(AppError::NotFound("Community not found".into())) }
+    if on {
+        sqlx::query("INSERT INTO community_follows (community_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING").bind(c.id).bind(uid).execute(&state.db).await?;
+    } else {
+        sqlx::query("DELETE FROM community_follows WHERE community_id = $1 AND user_id = $2").bind(c.id).bind(uid).execute(&state.db).await?;
+    }
+    state.hub.emit_users(vec![uid], "COMMUNITY_FOLLOW_UPDATE", json!({ "guild_id": gid, "community_id": c.id, "following": on }));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `PUT /guilds/:id/communities/:slug/follow`: idempotent. A sidebar preference, never access.
+async fn follow(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>) -> AppResult<StatusCode> {
+    set_follow(&state, gid, uid, &slug, true).await
+}
+
+/// `DELETE /guilds/:id/communities/:slug/follow`: idempotent.
+async fn unfollow(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>) -> AppResult<StatusCode> {
+    set_follow(&state, gid, uid, &slug, false).await
+}
+
+#[derive(Deserialize)]
+struct ListQuery { q: Option<String>, sort: Option<String>, limit: Option<i64>, after: Option<String>, external_ref: Option<String> }
+
+/// Opaque keyset cursor: the sort key of the last item (activity micros since the epoch, 0 for none; name; id).
+#[derive(Deserialize, serde::Serialize)]
+struct Cursor { s: String, t: i64, n: String, i: Uuid }
+
+fn bad_cursor() -> AppError { AppError::BadRequest("Invalid cursor".into()) }
+
+/// `GET /guilds/:id/communities`: `{ items, next }`. Communities whose category the caller cannot view are left out.
+/// Ordered by recent activity (nulls last) or name, with name then id as tie-breakers so paging is stable.
+async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>, Query(q): Query<ListQuery>) -> AppResult<Json<Value>> {
+    require_member(&state.db, gid, uid).await?;
+    let by_name = match q.sort.as_deref() { None | Some("activity") => false, Some("name") => true, _ => return Err(AppError::BadRequest("sort must be activity or name".into())) };
+    let sort = if by_name { "name" } else { "activity" };
+    let limit = q.limit.unwrap_or(50);
+    if !(1..=100).contains(&limit) { return Err(AppError::BadRequest("limit must be 1 to 100".into())) }
+    let cur = match q.after.as_deref().filter(|s| !s.is_empty()) {
+        None => None,
+        Some(a) => {
+            let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(a).map_err(|_| bad_cursor())?;
+            let c: Cursor = serde_json::from_slice(&raw).map_err(|_| bad_cursor())?;
+            if c.s != sort { return Err(bad_cursor()) }
+            Some(c)
+        }
+    };
+    let visible = perms::visible_channels(&state.db, gid, uid).await?;
+    let cats: Vec<Uuid> = visible.iter().filter(|v| v.kind == "category").map(|v| v.id).collect();
+    let key = "COALESCE(last_activity_at, 'epoch'::timestamptz)";
+    let (after, order) = if by_name {
+        ("($5::timestamptz IS NULL AND ($6::text IS NULL OR (name, id) > ($6::text, $7::uuid)))".to_string(), "name, id".to_string())
+    } else {
+        (format!("($5::timestamptz IS NULL OR {key} < $5 OR ({key} = $5 AND (name, id) > ($6::text, $7::uuid)))"), format!("{key} DESC, name, id"))
+    };
+    let at: Option<DateTime<Utc>> = match &cur { Some(c) if !by_name => Some(DateTime::from_timestamp_micros(c.t).ok_or_else(bad_cursor)?), _ => None };
+    let sql = format!(
+        "SELECT {COLS} FROM communities WHERE guild_id = $1 AND category_id = ANY($2)
+           AND ($3::text IS NULL OR position(lower($3) in lower(name)) > 0) AND ($4::text IS NULL OR external_ref = $4) AND {after}
+         ORDER BY {order} LIMIT $8");
+    let needle = q.q.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    let mut rows: Vec<Community> = sqlx::query_as(&sql)
+        .bind(gid).bind(&cats).bind(needle).bind(q.external_ref.as_deref().filter(|s| !s.is_empty())).bind(at)
+        .bind(cur.as_ref().map(|c| c.n.clone())).bind(cur.as_ref().map(|c| c.i)).bind(limit + 1)
+        .fetch_all(&state.db).await?;
+    let next = if rows.len() as i64 > limit {
+        rows.truncate(limit as usize);
+        let l = rows.last().unwrap();
+        let t = l.last_activity_at.map(|t| t.timestamp_micros()).unwrap_or(0);
+        Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serde_json::to_vec(&Cursor { s: sort.into(), t, n: l.name.clone(), i: l.id }).unwrap()))
+    } else { None };
+    let ids: Vec<Uuid> = rows.iter().map(|c| c.id).collect();
+    let online = crate::ws::bus::visible_online_users(&state.db).await;
+    let counts: Vec<(Uuid, i64, i64, bool)> = sqlx::query_as(
+        "SELECT community_id, COUNT(*), COUNT(*) FILTER (WHERE user_id = ANY($2)), COALESCE(bool_or(user_id = $3), false) FROM community_follows WHERE community_id = ANY($1) GROUP BY community_id")
+        .bind(&ids).bind(&online).bind(uid).fetch_all(&state.db).await?;
+    let counts: std::collections::HashMap<Uuid, (i64, i64, bool)> = counts.into_iter().map(|(id, f, o, m)| (id, (f, o, m))).collect();
+    let mut kids: std::collections::HashMap<Uuid, Vec<&Channel>> = std::collections::HashMap::new();
+    for v in &visible { if let Some(p) = v.parent_id { kids.entry(p).or_default().push(v) } }
+    for c in rows.iter_mut() {
+        (c.follower_count, c.online_count, c.following) = counts.get(&c.id).copied().unwrap_or((0, 0, false));
+        let mut k = kids.remove(&c.category_id).unwrap_or_default();
+        k.sort_by_key(|k| (k.position, k.created_at));
+        c.channel_ids = k.into_iter().map(|k| k.id).collect();
+    }
+    Ok(Json(json!({ "items": rows, "next": next })))
+}
+
+/// For the connect payload: slim forms of the communities the user can view across `guilds` (`visible` is every
+/// channel they can view there), and their follows per server, oldest first.
+pub async fn connect_payload(db: &sqlx::PgPool, uid: Uuid, guilds: &[Uuid], visible: &[Channel]) -> AppResult<(Vec<Value>, Vec<Value>)> {
+    let cats: Vec<Uuid> = visible.iter().filter(|v| v.kind == "category").map(|v| v.id).collect();
+    let rows: Vec<Community> = sqlx::query_as(&format!("SELECT {COLS} FROM communities WHERE guild_id = ANY($1) AND category_id = ANY($2) ORDER BY created_at, id"))
+        .bind(guilds).bind(&cats).fetch_all(db).await?;
+    let follows: Vec<(Uuid, Vec<Uuid>)> = sqlx::query_as(
+        "SELECT c.guild_id, array_agg(c.id ORDER BY f.created_at, c.id) FROM community_follows f JOIN communities c ON c.id = f.community_id
+         WHERE f.user_id = $1 AND c.guild_id = ANY($2) AND c.category_id = ANY($3) GROUP BY c.guild_id")
+        .bind(uid).bind(guilds).bind(&cats).fetch_all(db).await?;
+    Ok((rows.iter().map(slim).collect(), follows.into_iter().map(|(g, ids)| json!({ "guild_id": g, "community_ids": ids })).collect()))
 }
