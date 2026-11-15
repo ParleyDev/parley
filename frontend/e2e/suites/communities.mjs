@@ -1,6 +1,7 @@
 // Communities: a named group of channels in a server, backed by one ordinary category. Create, read, edit, delete,
 // the guard on deleting the backing category, and bots with Manage Channels.
 import { B, H, S, reg, call, raw, ok, finish } from '../lib.mjs'
+const WS = B.replace(/^http/, 'ws').replace(/\/api$/, '') + '/ws'
 
 const a = await reg('alice'), b = await reg('bob'), dev = await reg('dev')
 const g = await call(a.token, 'POST', '/guilds', { name: `Communities ${S}` })
@@ -29,6 +30,48 @@ ok('delete removes it', (await raw(a.token, 'DELETE', `${base}/metallica-band`))
 ok('delete removed the category', !(await call(a.token, 'GET', `/guilds/${g.id}/channels`)).some((c) => c.id === m.category_id))
 const pav = await call(a.token, 'GET', `${base}/pavement`)
 ok('delete removes its channels too', (await raw(a.token, 'DELETE', `${base}/pavement`)).status === 204 && !(await call(a.token, 'GET', `/guilds/${g.id}/channels`)).some((c) => pav.channel_ids.includes(c.id)))
+
+console.log('-- validation')
+ok('name of 101 chars refused', (await raw(a.token, 'POST', base, { slug: 'v1', name: 'n'.repeat(101) })).status === 400)
+ok('description of 301 chars refused', (await raw(a.token, 'POST', base, { slug: 'v2', name: 'X', description: 'd'.repeat(301) })).status === 400)
+ok('external_ref of 201 chars refused', (await raw(a.token, 'POST', base, { slug: 'v3', name: 'X', external_ref: 'e'.repeat(201) })).status === 400)
+ok('icon must be an image url', (await raw(a.token, 'POST', base, { slug: 'v4', name: 'X', icon_url: 'javascript:alert(1)' })).status === 400)
+const v = await (await raw(a.token, 'POST', base, { slug: 'visible', name: 'Visible', external_ref: 'ref:v' })).json()
+await raw(a.token, 'POST', base, { slug: 'taken', name: 'Taken' })
+ok('PATCH with an invalid slug refused', (await raw(a.token, 'PATCH', `${base}/visible`, { slug: 'Bad Slug' })).status === 400)
+ok('PATCH with a bad icon refused', (await raw(a.token, 'PATCH', `${base}/visible`, { icon_url: 'ftp://x/y.png' })).status === 400)
+r = await raw(a.token, 'PATCH', `${base}/visible`, { slug: 'taken' }); const rb = await r.json()
+ok('PATCH to a taken slug is 409 with the create message', r.status === 409 && JSON.stringify(rb).includes('A community with that address already exists'), JSON.stringify(rb))
+ok('PATCH by a member without Manage Channels is 403', (await raw(b.token, 'PATCH', `${base}/visible`, { name: 'Hacked' })).status === 403)
+ok('DELETE by a member without Manage Channels is 403', (await raw(b.token, 'DELETE', `${base}/visible`)).status === 403)
+
+console.log('-- hidden category')
+const hid = await (await raw(a.token, 'POST', base, { slug: 'hidden', name: 'Hidden' })).json()
+await call(a.token, 'PUT', `/channels/${hid.category_id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
+ok('a member who cannot view the category gets 404', (await raw(b.token, 'GET', `${base}/hidden`)).status === 404)
+ok('the owner still gets it', (await call(a.token, 'GET', `${base}/hidden`)).id === hid.id)
+const seen = []
+const ws = await new Promise((resolve) => { const w = new WebSocket(`${WS}?token=${b.token}`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'READY') resolve(w); else seen.push(m) } })
+await raw(a.token, 'PATCH', `${base}/hidden`, { name: 'Hidden Renamed' })
+await raw(a.token, 'PATCH', `${base}/visible`, { name: 'Visible Renamed' })
+await new Promise((r2) => setTimeout(r2, 1500))
+const about = (id) => seen.filter((m) => (m.t === 'COMMUNITY_UPDATE' || m.t === 'CHANNEL_UPDATE') && m.d?.id === id).map((m) => m.t)
+ok('a visible community update reaches a member', about(v.id).includes('COMMUNITY_UPDATE') && about(v.category_id).includes('CHANNEL_UPDATE'), JSON.stringify(seen.map((m) => m.t)))
+ok('a hidden community update does not', about(hid.id).length === 0 && about(hid.category_id).length === 0)
+const hidAfter = await raw(a.token, 'DELETE', `${base}/hidden`)
+await new Promise((r2) => setTimeout(r2, 800))
+ok('hidden delete is silent for the member too', hidAfter.status === 204 && !seen.some((m) => m.t === 'COMMUNITY_DELETE' && m.d?.id === hid.id))
+ws.close()
+// a writer who cannot view the category still gets their write back
+const mgr = await reg('mgr')
+await call(mgr.token, 'POST', `/invites/${inv.code}`)
+const role = await call(a.token, 'POST', `/guilds/${g.id}/roles`, { name: 'Maker', permissions: (1 << 4) | (1 << 10) })
+await call(a.token, 'PATCH', `/guilds/${g.id}/members/${mgr.user.id}`, { roles: [role.id] })
+const priv = await (await raw(mgr.token, 'POST', base, { slug: 'priv', name: 'Priv' })).json()
+await call(a.token, 'PUT', `/channels/${priv.category_id}/permissions/${role.id}`, { kind: 'role', allow: 0, deny: 1024 })
+await call(a.token, 'PUT', `/channels/${priv.category_id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
+r = await raw(mgr.token, 'PATCH', `${base}/priv`, { description: 'still mine' })
+ok('a manager who cannot view the category still gets their PATCH back', r.status === 200 && (await r.json()).description === 'still mine')
 
 console.log('-- bots')
 const botPost = (tok, body) => fetch(B + base, { method: 'POST', headers: { ...H, Authorization: 'Bot ' + tok }, body: JSON.stringify(body) })
