@@ -48,12 +48,26 @@ test('the derived lookups are computed once per array and answer like the plain 
 })
 test('a failed follow request puts the follow list back exactly as it was', async () => {
   const c = com('b', 'c2')
-  useStore.setState({ communities: { g: [com('a', 'c1'), c, com('d', 'c3')] }, communityFollows: { g: ['a', 'b', 'd'] }, pushToast: vi.fn() })
+  const before = ['a', 'b', 'd']
+  useStore.setState({ communities: { g: [com('a', 'c1'), c, com('d', 'c3')] }, communityFollows: { g: before }, pushToast: vi.fn() })
   vi.mocked(api.delete).mockRejectedValueOnce(new Error('nope'))
-  await useStore.getState().followCommunity('g', 'b', false)
+  expect(await useStore.getState().followCommunity('g', 'b', false)).toBe(false)
   expect(useStore.getState().communityFollows.g).toEqual(['a', 'b', 'd'])
   expect(useStore.getState().pushToast).toHaveBeenCalledWith('nope', 'error')
-  vi.mocked(api.put).mockResolvedValueOnce(undefined)
-  await useStore.getState().followCommunity('g', 'b', false)
+  // the other direction: a follow that fails leaves the list as it was, and one that works applies
+  useStore.setState({ communityFollows: { g: ['a', 'd'] } })
+  vi.mocked(api.put).mockRejectedValueOnce(new Error('gone'))
+  expect(await useStore.getState().followCommunity('g', 'b', true)).toBe(false)
   expect(useStore.getState().communityFollows.g).toEqual(['a', 'd'])
+  vi.mocked(api.put).mockResolvedValueOnce(undefined)
+  expect(await useStore.getState().followCommunity('g', 'b', true)).toBe(true)
+  expect(useStore.getState().communityFollows.g).toEqual(['a', 'd', 'b'])
+})
+
+test('slugFromName lower-cases, hyphenates and trims to a valid address', async () => {
+  const { slugFromName } = await import('../components/modals/settings/CommunitiesTab')
+  expect(slugFromName('Black Sabbath')).toBe('black-sabbath')
+  expect(slugFromName('  --Rock & Roll!! ')).toBe('rock-roll')
+  expect(slugFromName('a'.repeat(70) + ' b')).toBe('a'.repeat(63))
+  expect(slugFromName('***')).toBe('')
 })

@@ -3700,5 +3700,15 @@
 "No channels yet": "لا توجد قنوات بعد",
 "No communities match": "لا توجد مجتمعات مطابقة",
 "{online} online · {following} following": "{online} متصل · {following} متابع",
-"Follow {name}": "تابع {name}"
+"Follow {name}": "تابع {name}",
+"Communities": "المجتمعات",
+"Communities are named groups of channels. Members follow the ones they care about.": "المجتمعات مجموعات مسماة من القنوات. يتابع الأعضاء ما يهمهم منها.",
+"Couldn't load communities": "تعذر تحميل المجتمعات",
+"Create community": "إنشاء مجتمع",
+"Delete {name} and its {n} channels? Messages in them are deleted too.": "حذف {name} وقنواته الـ {n}؟ ستُحذف الرسائل فيها أيضًا.",
+"Edit community": "تعديل المجتمع",
+"Lower-case letters, digits and hyphens.": "أحرف صغيرة وأرقام وشرطات.",
+"New community": "مجتمع جديد",
+"No communities yet.": "لا توجد مجتمعات بعد.",
+"{n} followers": "{n} متابع"
 }

@@ -3700,5 +3700,15 @@
 "No channels yet": "チャンネルはまだありません",
 "No communities match": "一致するコミュニティはありません",
 "{online} online · {following} following": "{online}人オンライン · {following}人がフォロー中",
-"Follow {name}": "{name}をフォロー"
+"Follow {name}": "{name}をフォロー",
+"Communities": "コミュニティ",
+"Communities are named groups of channels. Members follow the ones they care about.": "コミュニティはチャンネルをまとめた名前付きのグループです。メンバーは気になるものをフォローできます。",
+"Couldn't load communities": "コミュニティを読み込めませんでした",
+"Create community": "コミュニティを作成",
+"Delete {name} and its {n} channels? Messages in them are deleted too.": "{name} と {n} 個のチャンネルを削除しますか？その中のメッセージも削除されます。",
+"Edit community": "コミュニティを編集",
+"Lower-case letters, digits and hyphens.": "小文字、数字、ハイフンが使えます。",
+"New community": "新しいコミュニティ",
+"No communities yet.": "コミュニティはまだありません。",
+"{n} followers": "フォロワー {n} 人"
 }

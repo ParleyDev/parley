@@ -3700,5 +3700,15 @@
 "No channels yet": "暂无频道",
 "No communities match": "没有匹配的社区",
 "{online} online · {following} following": "{online} 人在线 · {following} 人关注",
-"Follow {name}": "关注 {name}"
+"Follow {name}": "关注 {name}",
+"Communities": "社区",
+"Communities are named groups of channels. Members follow the ones they care about.": "社区是带名称的频道分组。成员可以关注自己感兴趣的社区。",
+"Couldn't load communities": "无法加载社区",
+"Create community": "创建社区",
+"Delete {name} and its {n} channels? Messages in them are deleted too.": "删除 {name} 及其 {n} 个频道？其中的消息也会被删除。",
+"Edit community": "编辑社区",
+"Lower-case letters, digits and hyphens.": "小写字母、数字和连字符。",
+"New community": "新建社区",
+"No communities yet.": "还没有社区。",
+"{n} followers": "{n} 位关注者"
 }

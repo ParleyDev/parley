@@ -3700,5 +3700,15 @@
 "No channels yet": "Noch keine Kanäle",
 "No communities match": "Keine passenden Communities",
 "{online} online · {following} following": "{online} online · {following} folgen",
-"Follow {name}": "{name} folgen"
+"Follow {name}": "{name} folgen",
+"Communities": "Communities",
+"Communities are named groups of channels. Members follow the ones they care about.": "Communities sind benannte Gruppen von Kanälen. Mitglieder folgen denen, die sie interessieren.",
+"Couldn't load communities": "Communities konnten nicht geladen werden",
+"Create community": "Community erstellen",
+"Delete {name} and its {n} channels? Messages in them are deleted too.": "{name} und die {n} Kanäle löschen? Nachrichten darin werden ebenfalls gelöscht.",
+"Edit community": "Community bearbeiten",
+"Lower-case letters, digits and hyphens.": "Kleinbuchstaben, Ziffern und Bindestriche.",
+"New community": "Neue Community",
+"No communities yet.": "Noch keine Communities.",
+"{n} followers": "{n} Follower"
 }

@@ -3700,5 +3700,15 @@
 "No channels yet": "Nog geen kanalen",
 "No communities match": "Geen communities gevonden",
 "{online} online · {following} following": "{online} online · {following} volgers",
-"Follow {name}": "Volg {name}"
+"Follow {name}": "Volg {name}",
+"Communities": "Community's",
+"Communities are named groups of channels. Members follow the ones they care about.": "Community's zijn benoemde groepen kanalen. Leden volgen de community's waar ze om geven.",
+"Couldn't load communities": "Community's laden mislukt",
+"Create community": "Community maken",
+"Delete {name} and its {n} channels? Messages in them are deleted too.": "{name} en de {n} kanalen verwijderen? Berichten erin worden ook verwijderd.",
+"Edit community": "Community bewerken",
+"Lower-case letters, digits and hyphens.": "Kleine letters, cijfers en streepjes.",
+"New community": "Nieuwe community",
+"No communities yet.": "Nog geen community's.",
+"{n} followers": "{n} volgers"
 }

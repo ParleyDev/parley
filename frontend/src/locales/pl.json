@@ -3700,5 +3700,15 @@
 "No channels yet": "Brak kanałów",
 "No communities match": "Brak pasujących społeczności",
 "{online} online · {following} following": "{online} online · {following} obserwujących",
-"Follow {name}": "Obserwuj {name}"
+"Follow {name}": "Obserwuj {name}",
+"Communities": "Społeczności",
+"Communities are named groups of channels. Members follow the ones they care about.": "Społeczności to nazwane grupy kanałów. Członkowie obserwują te, na których im zależy.",
+"Couldn't load communities": "Nie udało się wczytać społeczności",
+"Create community": "Utwórz społeczność",
+"Delete {name} and its {n} channels? Messages in them are deleted too.": "Usunąć {name} i jej kanały ({n})? Wiadomości w nich również zostaną usunięte.",
+"Edit community": "Edytuj społeczność",
+"Lower-case letters, digits and hyphens.": "Małe litery, cyfry i myślniki.",
+"New community": "Nowa społeczność",
+"No communities yet.": "Brak społeczności.",
+"{n} followers": "Obserwujących: {n}"
 }

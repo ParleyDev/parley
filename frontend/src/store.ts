@@ -182,7 +182,7 @@ interface State {
   upsertCommunity: (c: CommunitySlim) => void
   removeCommunity: (guildId: string, id: string) => void
   setCommunityFollow: (guildId: string, id: string, following: boolean) => void
-  followCommunity: (guildId: string, slug: string, following: boolean) => Promise<void>
+  followCommunity: (guildId: string, slug: string, following: boolean) => Promise<boolean>
   /** App commands usable in a channel (from the bots there); cleared when an app changes its commands. */
   appCommands: Record<string, AppCommand[]>
   /** Bumped when a directory channel's list changes (DIRECTORY_UPDATE), to refetch it. */
@@ -413,10 +413,12 @@ export const useStore = create<State>((set, get) => ({
     if (c) get().setCommunityFollow(guildId, c.id, following)
     try {
       if (following) await api.put(`/guilds/${guildId}/communities/${slug}/follow`, {}); else await api.delete(`/guilds/${guildId}/communities/${slug}/follow`)
+      return true
     } catch (e) {
       // Put the saved list back as it was, so the community keeps its place in the follow order.
       if (c) set((s) => ({ communityFollows: { ...s.communityFollows, [guildId]: before ?? [] } }))
       get().pushToast((e as Error).message, 'error')
+      return false
     }
   },
   appCommands: {},

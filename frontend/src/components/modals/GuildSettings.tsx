@@ -1,5 +1,5 @@
 import ServerThemeTab from './settings/ServerThemeTab'
-import { Award, Blocks, Bot, ChartColumn, ClipboardList, DoorOpen, LayoutTemplate, ListChecks, Flag, PanelsTopLeft, Compass, Crown, ShieldAlert, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Tag, Trash2, Users, Palette } from 'lucide-react'
+import { Award, Blocks, Bot, ChartColumn, ClipboardList, DoorOpen, LayoutTemplate, ListChecks, Flag, PanelsTopLeft, Compass, Crown, ShieldAlert, Gavel, Link2, Music2, ScrollText, Shield, SlidersHorizontal, Smile, Sticker, Tag, Trash2, Users, Palette, Layers } from 'lucide-react'
 import { useState } from 'react'
 import { myGuildPerms, useStore } from '../../store'
 import { has, P } from '../../lib/perms'
@@ -27,8 +27,9 @@ import MemberApplicationsTab from './settings/MemberApplicationsTab'
 import InsightsTab from './settings/InsightsTab'
 import IntegrationsTab from './settings/IntegrationsTab'
 import ServerTagTab from './settings/ServerTagTab'
+import CommunitiesTab from './settings/CommunitiesTab'
 
-type Tab = 'overview' | 'theme' | 'tag' | 'safety' | 'automod' | 'welcome' | 'onboarding' | 'template' | 'applications' | 'insights' | 'integrations' | 'widget' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
+type Tab = 'overview' | 'theme' | 'tag' | 'safety' | 'automod' | 'welcome' | 'onboarding' | 'template' | 'applications' | 'insights' | 'integrations' | 'widget' | 'communities' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
 
 export default function GuildSettingsModal({ onClose, guildId, tab: requested }: { onClose: () => void; guildId: string; tab?: Tab }) {
   const t = useT()
@@ -39,11 +40,12 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   const openModal = useStore((s) => s.openModal)
   const canOverview = has(perms, P.MANAGE_GUILD)
   const canBans = has(perms, P.BAN_MEMBERS)
+  const canChannels = has(perms, P.MANAGE_CHANNELS)
   const canAudit = canOverview || has(perms, P.VIEW_AUDIT_LOG)
   const canExpr = canOverview || has(perms, P.MANAGE_EXPRESSIONS)
   const canReview = canOverview || has(perms, P.KICK_MEMBERS)
   const canReports = canOverview || has(perms, P.MANAGE_MESSAGES) || has(perms, P.KICK_MEMBERS) || has(perms, P.BAN_MEMBERS) || has(perms, P.MODERATE_MEMBERS)
-  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'tag' || initial === 'safety' || initial === 'automod' || initial === 'welcome' || initial === 'onboarding' || initial === 'template' || initial === 'insights' || initial === 'integrations' || initial === 'widget' || initial === 'invites' || initial === 'badge' || initial === 'discovery') && !canOverview) || ((initial === 'emoji' || initial === 'stickers') && !canExpr) || (initial === 'audit' && !canAudit) || (initial === 'bans' && !canBans) ? 'roles' : initial)
+  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'tag' || initial === 'safety' || initial === 'automod' || initial === 'welcome' || initial === 'onboarding' || initial === 'template' || initial === 'insights' || initial === 'integrations' || initial === 'widget' || initial === 'invites' || initial === 'badge' || initial === 'discovery') && !canOverview) || ((initial === 'emoji' || initial === 'stickers') && !canExpr) || (initial === 'audit' && !canAudit) || (initial === 'bans' && !canBans) || (initial === 'communities' && !canChannels) ? 'roles' : initial)
   if (!guild) return null
   const isOwner = guild.owner_id === user?.id
 
@@ -58,7 +60,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
     sec('People', [{ id: 'members', label: 'Members', icon: <Users size={16} />, keywords: 'people prune kick ban timeout nickname filter' }, { id: 'roles', label: 'Roles', icon: <Shield size={16} />, keywords: 'permissions colour color icon hoist mention admin moderator' }, canOverview && { id: 'invites', label: 'Invites', icon: <Link2 size={16} />, keywords: 'invite link expire uses vanity' }, canReview && { id: 'applications', label: 'Access', icon: <ClipboardList size={16} />, keywords: 'apply application join requests questions membership screening rules' }]),
     sec('Apps', [canOverview && { id: 'integrations', label: 'Integrations', icon: <Blocks size={16} />, keywords: 'webhooks bots apps twitch youtube follow' }, canOverview && { id: 'widget', label: 'Widget', icon: <PanelsTopLeft size={16} />, keywords: 'embed html invite' }, canOverview && { id: 'badge', label: 'Badge', icon: <Award size={16} />, keywords: 'emblem' }]),
     sec('Moderation', [canOverview && { id: 'safety', label: 'Safety Setup', icon: <ShieldAlert size={16} />, keywords: 'verification level raid protection dm spam explicit image filter mfa 2fa security pause invites' }, canAudit && { id: 'audit', label: 'Audit Log', icon: <ScrollText size={16} />, keywords: 'log history actions changes' }, canBans && { id: 'bans', label: 'Bans', icon: <Gavel size={16} />, keywords: 'banned unban' }, canOverview && { id: 'automod', label: 'AutoMod', icon: <Bot size={16} />, keywords: 'filter words links mention spam regex keyword block rules' }, canReports && { id: 'reports', label: 'Reports', icon: <Flag size={16} />, keywords: 'reported messages moderation queue' }]),
-    sec('Community', [canOverview && { id: 'welcome', label: 'Welcome Screen', icon: <DoorOpen size={16} />, keywords: 'greeting new members' }, canOverview && { id: 'onboarding', label: 'Onboarding', icon: <ListChecks size={16} />, keywords: 'questions prompts default channels customize' }, canOverview && { id: 'discovery', label: 'Discovery', icon: <Compass size={16} />, keywords: 'public listing category explore' }]),
+    sec('Community', [canChannels && { id: 'communities', label: 'Communities', icon: <Layers size={16} />, keywords: 'groups categories channels follow browse' }, canOverview && { id: 'welcome', label: 'Welcome Screen', icon: <DoorOpen size={16} />, keywords: 'greeting new members' }, canOverview && { id: 'onboarding', label: 'Onboarding', icon: <ListChecks size={16} />, keywords: 'questions prompts default channels customize' }, canOverview && { id: 'discovery', label: 'Discovery', icon: <Compass size={16} />, keywords: 'public listing category explore' }]),
     sec(undefined, [canOverview && { id: 'template', label: 'Server Template', icon: <LayoutTemplate size={16} />, keywords: 'copy clone' }]),
   ].filter((x) => x.items.length)
 
@@ -85,6 +87,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
       {tab === 'integrations' && canOverview && <IntegrationsTab guildId={guildId} />}
       {tab === 'applications' && canReview && <MemberApplicationsTab guildId={guildId} />}
       {tab === 'widget' && canOverview && <WidgetTab guildId={guildId} />}
+      {tab === 'communities' && canChannels && <CommunitiesTab guildId={guildId} />}
       {tab === 'roles' && <RolesTab guildId={guildId} />}
       {tab === 'members' && <MembersTab guildId={guildId} />}
       {tab === 'invites' && canOverview && <InvitesTab guildId={guildId} onDiscovery={() => setTab('discovery')} onBadge={() => setTab('badge')} />}

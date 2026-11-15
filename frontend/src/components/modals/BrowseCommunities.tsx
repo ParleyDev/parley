@@ -26,6 +26,8 @@ export default function BrowseCommunitiesModal({ onClose, guildId }: { onClose: 
   const [next, setNext] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [retry, setRetry] = useState(0)
   // Bumped by every new search and on unmount: an answer for an older search never replaces a newer one.
   const seq = useRef(0)
 
@@ -34,13 +36,14 @@ export default function BrowseCommunitiesModal({ onClose, guildId }: { onClose: 
   const url = (after?: string | null) => `/guilds/${guildId}/communities?${new URLSearchParams({ sort: 'activity', limit: String(PAGE), ...(dq ? { q: dq } : {}), ...(after ? { after } : {}) })}`
   useEffect(() => {
     const id = ++seq.current
-    setBusy(true)
+    setBusy(true); setFailed(false)
     api.get<Page>(url())
       .then((r) => { if (id === seq.current) { setItems(r.items); setNext(r.next); setLoaded(true) } })
-      .catch((e) => { if (id === seq.current) pushToast((e as Error).message, 'error') })
+      // The cards on screen answer an older query: drop them rather than leave them under this one.
+      .catch(() => { if (id === seq.current) { setItems([]); setNext(null); setFailed(true) } })
       .finally(() => { if (id === seq.current) setBusy(false) })
     return () => { seq.current++ }
-  }, [guildId, dq]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [guildId, dq, retry]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const more = async () => {
     const id = seq.current
@@ -55,8 +58,10 @@ export default function BrowseCommunitiesModal({ onClose, guildId }: { onClose: 
   const toggle = (c: Community, following: boolean) => {
     const st = useStore.getState()
     // The store resolves a community by slug; make sure this one is known to it.
-    if (!st.communities[guildId]?.some((x) => x.id === c.id)) st.upsertCommunity({ id: c.id, guild_id: c.guild_id, slug: c.slug, name: c.name, icon_url: c.icon_url, description: c.description, category_id: c.category_id })
-    void st.followCommunity(guildId, c.slug, following)
+    const added = !st.communities[guildId]?.some((x) => x.id === c.id)
+    if (added) st.upsertCommunity({ id: c.id, guild_id: c.guild_id, slug: c.slug, name: c.name, icon_url: c.icon_url, description: c.description, category_id: c.category_id })
+    // A community that is gone (deleted meanwhile) must not stay in the store, or the sidebar's count is inflated.
+    void st.followCommunity(guildId, c.slug, following).then((ok) => { if (!ok && added) useStore.getState().removeCommunity(guildId, c.id) })
   }
   // The first viewable text channel, else whatever the member can view first.
   const firstChannel = (c: Community) => c.channel_ids.find((id) => channels[id]?.kind === 'text') ?? c.channel_ids[0]
@@ -71,7 +76,8 @@ export default function BrowseCommunitiesModal({ onClose, guildId }: { onClose: 
           <input className="input pl-9" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search communities')} aria-label={t('Search communities')} maxLength={100} data-community-search />
         </div>
         <div className="max-h-[60vh] overflow-y-auto">
-          {loaded && items.length === 0 && <p className="py-8 text-center text-sm text-text-2" data-community-empty>{t('No communities match')}</p>}
+          {failed && <p className="py-8 text-center text-sm text-text-2" data-community-load-failed>{t("Couldn't load communities")} <button type="button" className="btn-ghost" onClick={() => setRetry((n) => n + 1)} data-community-retry>{t('Try again')}</button></p>}
+          {loaded && !failed && items.length === 0 && <p className="py-8 text-center text-sm text-text-2" data-community-empty>{t('No communities match')}</p>}
           <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
             {items.map((c) => {
               const following = followed.includes(c.id)

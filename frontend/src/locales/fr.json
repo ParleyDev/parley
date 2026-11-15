@@ -3700,5 +3700,15 @@
 "No channels yet": "Aucun salon pour le moment",
 "No communities match": "Aucune communauté ne correspond",
 "{online} online · {following} following": "{online} en ligne · {following} abonnés",
-"Follow {name}": "Suivre {name}"
+"Follow {name}": "Suivre {name}",
+"Communities": "Communautés",
+"Communities are named groups of channels. Members follow the ones they care about.": "Les communautés sont des groupes de salons nommés. Les membres suivent celles qui les intéressent.",
+"Couldn't load communities": "Impossible de charger les communautés",
+"Create community": "Créer la communauté",
+"Delete {name} and its {n} channels? Messages in them are deleted too.": "Supprimer {name} et ses {n} salons ? Les messages qu'ils contiennent sont aussi supprimés.",
+"Edit community": "Modifier la communauté",
+"Lower-case letters, digits and hyphens.": "Lettres minuscules, chiffres et tirets.",
+"New community": "Nouvelle communauté",
+"No communities yet.": "Aucune communauté pour l'instant.",
+"{n} followers": "{n} abonnés"
 }

@@ -3700,5 +3700,15 @@
 "No channels yet": "Henüz kanal yok",
 "No communities match": "Eşleşen topluluk yok",
 "{online} online · {following} following": "{online} çevrimiçi · {following} takipçi",
-"Follow {name}": "{name} topluluğunu takip et"
+"Follow {name}": "{name} topluluğunu takip et",
+"Communities": "Topluluklar",
+"Communities are named groups of channels. Members follow the ones they care about.": "Topluluklar, adlandırılmış kanal gruplarıdır. Üyeler ilgilendiklerini takip eder.",
+"Couldn't load communities": "Topluluklar yüklenemedi",
+"Create community": "Topluluk oluştur",
+"Delete {name} and its {n} channels? Messages in them are deleted too.": "{name} ve {n} kanalı silinsin mi? İçindeki mesajlar da silinir.",
+"Edit community": "Topluluğu düzenle",
+"Lower-case letters, digits and hyphens.": "Küçük harfler, rakamlar ve tireler.",
+"New community": "Yeni topluluk",
+"No communities yet.": "Henüz topluluk yok.",
+"{n} followers": "{n} takipçi"
 }

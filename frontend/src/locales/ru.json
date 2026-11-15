@@ -3700,5 +3700,15 @@
 "No channels yet": "Каналов пока нет",
 "No communities match": "Подходящих сообществ нет",
 "{online} online · {following} following": "{online} в сети · {following} подписчиков",
-"Follow {name}": "Подписаться на {name}"
+"Follow {name}": "Подписаться на {name}",
+"Communities": "Сообщества",
+"Communities are named groups of channels. Members follow the ones they care about.": "Сообщества — это именованные группы каналов. Участники подписываются на те, что им интересны.",
+"Couldn't load communities": "Не удалось загрузить сообщества",
+"Create community": "Создать сообщество",
+"Delete {name} and its {n} channels? Messages in them are deleted too.": "Удалить {name} и её каналы ({n})? Сообщения в них тоже будут удалены.",
+"Edit community": "Изменить сообщество",
+"Lower-case letters, digits and hyphens.": "Строчные буквы, цифры и дефисы.",
+"New community": "Новое сообщество",
+"No communities yet.": "Сообществ пока нет.",
+"{n} followers": "Подписчиков: {n}"
 }
