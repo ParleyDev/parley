@@ -24,8 +24,9 @@ const writeLocal = (uid: string, channelId: string, rows: Message[]) => {
 /** The in-app "system app" that explains undelivered messages: a friendly frog. */
 const FROG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#57c26b"/><circle cx="20" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="44" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="20" cy="22" r="6" fill="#fff"/><circle cx="44" cy="22" r="6" fill="#fff"/><circle cx="21.5" cy="23" r="3" fill="#1f2937"/><circle cx="45.5" cy="23" r="3" fill="#1f2937"/><circle cx="22.5" cy="21.5" r="1" fill="#fff"/><circle cx="46.5" cy="21.5" r="1" fill="#fff"/><path d="M18 40q14 12 28 0" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/><circle cx="14" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/><circle cx="50" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/></svg>`)
 export const RIBBIT = { id: 'ribbit', username: 'ribbit', display_name: 'Ribbit', avatar_url: FROG, bio: '', status: '', created_at: new Date(0).toISOString(), banner_url: null, theme_primary: null, theme_accent: null, pronouns: '', name_primary: null } as unknown as User
+import { unfollowedCategoryIds } from './lib/communities'
 import type { Activity, Attachment, Poll, ThreadInfo, TypingIndicator } from './lib/types'
-import type { Ban, Channel, DmChannel, Draft, Emoji, Guild, GuildEvent, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sound, Sticker, StudioSession, User, UserNote, VoiceState } from './lib/types'
+import type { Ban, Channel, CommunitySlim, DmChannel, Draft, Emoji, Guild, GuildEvent, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sound, Sticker, StudioSession, User, UserNote, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
 import { effective, mutedTarget, type NotifSetting } from './lib/notify'
 import { channelPerms, guildPerms } from './lib/perms'
@@ -51,6 +52,7 @@ export type ModalKind =
   | { kind: 'safetyCenter' }
   | { kind: 'guildNotifications'; guildId: string }
   | { kind: 'browseChannels'; guildId: string; tab?: 'channels' | 'roles' }
+  | { kind: 'browseCommunities'; guildId: string }
   | { kind: 'onboarding'; guildId: string }
   | { kind: 'followChannel'; channelId: string }
   | { kind: 'serverProfile'; guildId: string }
@@ -111,6 +113,8 @@ export interface ReadyPayload {
   read_states: ReadState[]
   last_message_ids: { channel_id: string; message_id: string }[]
   hidden_channels?: { guild_id: string; channel_ids: string[] }[]
+  communities?: CommunitySlim[]
+  community_follows?: { guild_id: string; community_ids: string[] }[]
   voice_states: VoiceState[]
   ice_servers: RTCIceServer[]
 }
@@ -172,6 +176,13 @@ interface State {
   customize: Record<string, { hidden: string[]; onboarded: boolean }>
   /** Channels hidden from my list, per server, known from the start (customize only once a server is opened). */
   hiddenChannels: Record<string, string[]>
+  /** Communities (named groups of channels, each backed by a category) per server, and the ones I follow in follow order. */
+  communities: Record<string, CommunitySlim[]>
+  communityFollows: Record<string, string[]>
+  upsertCommunity: (c: CommunitySlim) => void
+  removeCommunity: (guildId: string, id: string) => void
+  setCommunityFollow: (guildId: string, id: string, following: boolean) => void
+  followCommunity: (guildId: string, slug: string, following: boolean) => Promise<void>
   /** App commands usable in a channel (from the bots there); cleared when an app changes its commands. */
   appCommands: Record<string, AppCommand[]>
   /** Bumped when a directory channel's list changes (DIRECTORY_UPDATE), to refetch it. */
@@ -391,6 +402,22 @@ export const useStore = create<State>((set, get) => ({
   myThreads: {},
   customize: {},
   hiddenChannels: {},
+  communities: {},
+  communityFollows: {},
+  upsertCommunity: (c) => set((s) => { const list = s.communities[c.guild_id] ?? []; const i = list.findIndex((x) => x.id === c.id); return { communities: { ...s.communities, [c.guild_id]: i < 0 ? [...list, c] : list.map((x) => (x.id === c.id ? c : x)) } } }),
+  removeCommunity: (guildId, id) => set((s) => ({ communities: { ...s.communities, [guildId]: (s.communities[guildId] ?? []).filter((x) => x.id !== id) }, communityFollows: { ...s.communityFollows, [guildId]: (s.communityFollows[guildId] ?? []).filter((x) => x !== id) } })),
+  setCommunityFollow: (guildId, id, following) => set((s) => { const cur = (s.communityFollows[guildId] ?? []).filter((x) => x !== id); return { communityFollows: { ...s.communityFollows, [guildId]: following ? [...cur, id] : cur } } }),
+  followCommunity: async (guildId, slug, following) => {
+    const c = get().communities[guildId]?.find((x) => x.slug === slug)
+    const was = !!c && !!get().communityFollows[guildId]?.includes(c.id)
+    if (c) get().setCommunityFollow(guildId, c.id, following)
+    try {
+      if (following) await api.put(`/guilds/${guildId}/communities/${slug}/follow`, {}); else await api.delete(`/guilds/${guildId}/communities/${slug}/follow`)
+    } catch (e) {
+      if (c) get().setCommunityFollow(guildId, c.id, was)
+      get().pushToast((e as Error).message, 'error')
+    }
+  },
   appCommands: {},
   directoryVersion: {},
   bumpDirectory: (channelId) => set((s) => ({ directoryVersion: { ...s.directoryVersion, [channelId]: (s.directoryVersion[channelId] ?? 0) + 1 } })),
@@ -488,6 +515,9 @@ export const useStore = create<State>((set, get) => ({
     const lastMessageId: Record<string, string> = {}
     r.last_message_ids.forEach((l) => (lastMessageId[l.channel_id] = l.message_id))
     const hiddenChannels = Object.fromEntries((r.hidden_channels ?? []).map((h) => [h.guild_id, h.channel_ids]))
+    const communities: Record<string, CommunitySlim[]> = {}
+    ;(r.communities ?? []).forEach((c) => (communities[c.guild_id] ??= []).push(c))
+    const communityFollows = Object.fromEntries((r.community_follows ?? []).map((f) => [f.guild_id, f.community_ids]))
     const voiceStates: Record<string, VoiceState> = {}
     r.voice_states.forEach((v) => (voiceStates[v.user_id] = v))
     const roles: Record<string, Record<string, Role>> = {}
@@ -511,7 +541,7 @@ export const useStore = create<State>((set, get) => ({
     set({
       voiceStates, iceServers: r.ice_servers ?? [],
       // READY is a snapshot taken when the socket connected; a verification that landed in between must not be undone.
-      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, platforms, idle, activities: r.activities ?? {}, users, readStates, lastMessageId, hiddenChannels, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
+      user: (() => { const cur = get().user; return cur?.id === r.user.id && cur.email_verified_at && !r.user.email_verified_at ? { ...r.user, email_verified_at: cur.email_verified_at } : r.user })(), guilds, guildOrder: r.guilds.map((g) => g.id), channels, dms, relationships, online, platforms, idle, activities: r.activities ?? {}, users, readStates, lastMessageId, hiddenChannels, communities, communityFollows, roles, emojis, stickers, bookmarks, guildLayout, mentionCounts, notifSettings,
       ready: true, connected: true,
       // Drop cached messages/members on (re)connect: we may have missed events. The channel on screen keeps its
       // rows so nothing goes blank; ChatPane refreshes it when readyCount changes.
@@ -1024,12 +1054,14 @@ export function showsMentions(s: Pick<State, 'channels' | 'dms' | 'notifSettings
   return effective(s.notifSettings, s.channels[channelId] ?? s.dms[channelId]).level !== 'nothing'
 }
 
-export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'> & Partial<Pick<State, 'hiddenChannels'>>, guildId: string): boolean {
+export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'> & Partial<Pick<State, 'hiddenChannels' | 'communities' | 'communityFollows'>>, guildId: string): boolean {
   if (mutedTarget(s.notifSettings, guildId)) return false
   // Threads only badge the server when they mention you (see guildMentions), not for every reply; channels hidden
   // from my list (Channels & Roles) don't either, since there is nowhere to see them.
   const hidden = s.hiddenChannels?.[guildId]
-  return Object.values(s.channels).some((c) => c.guild_id === guildId && c.kind !== 'thread' && !hidden?.includes(c.id) && showsUnread(s, c.id))
+  // Channels of communities I don't follow stay quiet too (mentions still count, see guildMentions).
+  const quiet = unfollowedCategoryIds(s.communities?.[guildId] ?? [], s.communityFollows?.[guildId] ?? [])
+  return Object.values(s.channels).some((c) => c.guild_id === guildId && c.kind !== 'thread' && !hidden?.includes(c.id) && !(c.parent_id && quiet.has(c.parent_id)) && showsUnread(s, c.id))
 }
 
 export function dmUnreadCount(s: Pick<State, 'readStates' | 'lastMessageId' | 'dms' | 'channels' | 'notifSettings'>): number {

@@ -3693,5 +3693,6 @@
 "Invite preview off": "Предпросмотр приглашения выключен",
 "Invite preview on": "Предпросмотр приглашения включён",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Показывайте последние сообщения одного канала на публичной странице приглашения. Их может прочитать любой, у кого есть ссылка-приглашение.",
-"#{name} (paused: not public)": "#{name} (приостановлено: не публичный)"
+"#{name} (paused: not public)": "#{name} (приостановлено: не публичный)",
+"Browse Communities": "Обзор сообществ"
 }

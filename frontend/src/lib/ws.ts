@@ -7,13 +7,14 @@ import { mentionsMe, useStore, type ReadyPayload } from '../store'
 import { effective, shouldNotify, type NotifSetting } from './notify'
 import type { VoiceInvite } from '../store'
 import { applyActivityUpdate, dispatchSessionEvent, type CallActivity } from './activities'
-import type { Activity, Ban, Channel, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, TypingIndicator, User, VoiceState } from './types'
+import type { Activity, Ban, Channel, CommunitySlim, DmChannel, Emoji, Guild, Member, Message, Poll, PrivateUser, Relationship, Role, Sound, Sticker, ThreadInfo, TypingIndicator, User, VoiceState } from './types'
 import { voice } from './voice'
 import type { E2eeSignal } from './e2ee'
 import { playSfx } from './sfx'
 import { getNotifPrefs } from './notifPrefs'
 import { getPrefs, streamerHides } from './prefs'
 import { log } from './log'
+import { communityOfChannel, communitySuppresses } from './communities'
 import { studio } from './studio'
 import { onComments as onDawComments, onPresence as onDawPresence, onReconnect as onDawReconnect, onRemote as onDawEdit, onTransport as onDawTransport, retrySync as retryDawSync, useDaw } from './daw'
 import { isNative, registerPush } from './native'
@@ -95,6 +96,10 @@ type Ev = { s?: number; i?: string } & (
   | { t: 'VOICE_ERROR'; d: { message: string } }
   | { t: 'VOICE_MOVE'; d: { guild_id: string; channel_id: string } }
   | { t: 'VOICE_DISCONNECT'; d: { guild_id: string } }
+  | { t: 'COMMUNITY_CREATE'; d: CommunitySlim }
+  | { t: 'COMMUNITY_UPDATE'; d: CommunitySlim }
+  | { t: 'COMMUNITY_DELETE'; d: { id: string; guild_id: string } }
+  | { t: 'COMMUNITY_FOLLOW_UPDATE'; d: { guild_id: string; community_id: string; following: boolean } }
   | { t: 'GUILD_CUSTOMIZE_UPDATE'; d: { guild_id: string; hidden_channels: string[] } }
   | { t: 'THREAD_MEMBER_UPDATE'; d: { thread_id: string; joined: boolean } }
   | { t: 'DIRECTORY_UPDATE'; d: { channel_id: string } }
@@ -254,7 +259,11 @@ function handle(ev: Ev) {
         if (dmReq && dmReq !== 'accepted') break // message requests wait quietly
         const mentioned = mentionsMe(s, ev.d.message)
         const hidden = document.visibilityState !== 'visible'
-        if (!streamerHides('notifications') && shouldNotify(effective(s.notifSettings, ch, s.guilds), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {
+        // A community I don't follow stays quiet unless the message mentions me or replies to me.
+        const gid = ch?.guild_id ?? ''
+        const com = ch ? communityOfChannel(ch, s.channels, s.communities[gid] ?? []) : null
+        const quiet = communitySuppresses(!!com && !(s.communityFollows[gid] ?? []).includes(com.id), mentioned, ev.d.message.referenced?.author.id === me)
+        if (!quiet && !streamerHides('notifications') && shouldNotify(effective(s.notifSettings, ch, s.guilds), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {
           if (hidden) notifyMessage(ev.d.message, ev.d.guild_id)
           // A sound unless you are looking right at that channel in a focused window.
           if (hidden || !document.hasFocus() || s.activeChannelId !== ev.d.message.channel_id) playSfx(mentioned ? 'mention' : 'message')
@@ -398,6 +407,9 @@ function handle(ev: Ev) {
       else if (s.myVoiceChannelId === ev.d.channel_id) s.pushToast(t('{name} declined the call', { name: nameIn(s, ev.d.user_id, s.channels[ev.d.channel_id]?.guild_id) || t('They') }))
       break
     }
+    case 'COMMUNITY_CREATE': case 'COMMUNITY_UPDATE': s.upsertCommunity(ev.d); break
+    case 'COMMUNITY_DELETE': s.removeCommunity(ev.d.guild_id, ev.d.id); break
+    case 'COMMUNITY_FOLLOW_UPDATE': s.setCommunityFollow(ev.d.guild_id, ev.d.community_id, ev.d.following); break
     case 'GUILD_CUSTOMIZE_UPDATE': s.setHidden(ev.d.guild_id, ev.d.hidden_channels); break
     case 'THREAD_MEMBER_UPDATE': s.setMyThread(ev.d.thread_id, ev.d.joined); break
     case 'APPLICATION_COMMANDS_UPDATE': s.clearAppCommands(); break

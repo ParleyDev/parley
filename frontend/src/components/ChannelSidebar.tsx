@@ -18,6 +18,7 @@ import { AudioLines, Bell, BellOff, BookOpenCheck, ListChecks, Tags, DoorOpen, F
 import { togglePinned } from '../lib/pins'
 
 const NO_PINS: string[] = []
+const NO_COMMUNITIES: CommunitySlim[] = []
 import { EMPTY_ROLES, has, P } from '../lib/perms'
 import StyledName from './StyledName'
 import { api } from '../lib/api'
@@ -26,6 +27,10 @@ import type { Channel } from '../lib/types'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useT, tn } from '../lib/i18n'
 import { shownName } from '../lib/names'
+import { splitCategories } from '../lib/communities'
+import { colorFor, initials } from '../lib/format'
+import type { CommunitySlim } from '../lib/types'
+import { Users } from 'lucide-react'
 
 
 /** Channel-list icon by kind; the server's rules channel gets a rulebook. */
@@ -110,6 +115,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const myThreads = useStore((s) => s.myThreads)
   const threadInfo = useStore((s) => s.threads)
   const allRoles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
+  const guildCommunities = useStore((s) => s.communities[guildId]) ?? NO_COMMUNITIES
+  const followedIds = useStore((s) => s.communityFollows[guildId]) ?? NO_PINS
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
   const canInvite = has(perms, P.CREATE_INVITE)
@@ -122,6 +129,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const categories = all.filter((c) => c.kind === 'category')
   const list = all.filter((c) => c.kind !== 'category' && c.kind !== 'thread' && c.kind !== 'project')
   const catIds = new Set(categories.map((c) => c.id))
+  // Categories backing a community show only for members who follow it; a followed one is a block after the rest.
+  const split = splitCategories(categories, guildCommunities, followedIds)
+  const ownCategories = split.own
   const uncategorized = list.filter((c) => !c.parent_id || !catIds.has(c.parent_id))
   const childrenOf = (id: string) => list.filter((c) => c.parent_id === id)
   // Unread and mentions, as the server icon counts them: a row says so for itself, a studio for its projects too
@@ -141,7 +151,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   /** A dragged category lands before `beforeCat` (null = last). Unchanged orders are not saved. */
   const dropCategory = (beforeCat: string | null) => {
     if (!drag || drag === beforeCat) return
-    const current = categories.map((c) => c.id)
+    const current = ownCategories.map((c) => c.id)
     const ids = current.filter((id) => id !== drag)
     const i = beforeCat ? ids.indexOf(beforeCat) : -1
     ids.splice(i < 0 ? ids.length : i, 0, drag)
@@ -329,12 +339,24 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
         <div className="space-y-0.5 min-h-2" data-channel-group="">
           {uncategorized.map(row)}
         </div>
-        {categories.map((cat) => (
+        {ownCategories.map((cat) => (
           <Category key={cat.id} label={cat.name} open={!collapsed[cat.id]} onToggle={() => toggleCollapsed(cat.id)} highlight={target?.kind === 'channel' && target.into === cat.id} dragging={drag === cat.id} dragProps={catDragProps(cat.id)} testid={cat.id}
             onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId, parentId: cat.id }) : undefined} onContextMenu={(e) => ctx.open(e, categoryMenu(cat))}>
             {childrenOf(cat.id).filter((c) => !collapsed[cat.id] || c.id === channelId || rowUnread(c) || mentionsOf(c.id) > 0).map(row)}
           </Category>
         ))}
+        {split.followed.map(({ community, category }) => (
+          <Category key={category.id} label={community.name} open={!collapsed[category.id]} onToggle={() => toggleCollapsed(category.id)} highlight={target?.kind === 'channel' && target.into === category.id} testid={category.id}
+            lead={<CommunityIcon community={community} />} communitySlug={community.slug}
+            onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId, parentId: category.id }) : undefined} onContextMenu={(e) => ctx.open(e, categoryMenu(category))}>
+            {childrenOf(category.id).filter((c) => !collapsed[category.id] || c.id === channelId || rowUnread(c) || mentionsOf(c.id) > 0).map(row)}
+          </Category>
+        ))}
+        {guildCommunities.length > 0 && (
+          <button type="button" onClick={() => openModal({ kind: 'browseCommunities', guildId })} data-browse-communities className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1">
+            <Users size={15} /> <span className="min-w-0 flex-1 truncate text-left">{t('Browse Communities')}</span> <span className="shrink-0 rounded-full bg-bg-3 px-1.5 text-[11px] font-semibold text-text-1">{guildCommunities.length}</span>
+          </button>
+        )}
         {canCreate && <div><button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title={t('Create Channel')} className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> {t('Create channel or category')}</button></div>}
       </div>
       </div>
@@ -357,7 +379,7 @@ function dropTarget(list: HTMLElement, y: number, dragId: string, dragCategory: 
   const top = list.getBoundingClientRect().top - list.scrollTop
   const at = (px: number) => Math.round(px - top)
   if (dragCategory) {
-    const blocks = [...list.querySelectorAll<HTMLElement>('[data-category]')].filter((b) => b.dataset.category !== dragId)
+    const blocks = [...list.querySelectorAll<HTMLElement>('[data-category]')].filter((b) => b.dataset.category !== dragId && !b.querySelector('[data-community]'))
     for (const b of blocks) {
       const h = (b.querySelector('[data-category-header]') ?? b).getBoundingClientRect()
       if (y < h.top + h.height / 2) return { kind: 'category', before: b.dataset.category!, line: at(b.getBoundingClientRect().top) - 6, key: `c:${b.dataset.category}` }
@@ -397,13 +419,19 @@ function MenuItem({ children, icon, onClick, danger, accent, checked }: { childr
   )
 }
 
-function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, dragging, dragProps, testid, children }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; dragging?: boolean; dragProps?: object; testid: string; children: React.ReactNode }) {
+function CommunityIcon({ community }: { community: CommunitySlim }) {
+  return community.icon_url
+    ? <img src={community.icon_url} alt="" className="h-4 w-4 shrink-0 rounded object-cover" />
+    : <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[8px] font-bold text-white" style={{ background: colorFor(community.id) }}>{initials(community.name)}</span>
+}
+
+function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, dragging, dragProps, testid, lead, communitySlug, children }: { lead?: React.ReactNode; communitySlug?: string; label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; dragging?: boolean; dragProps?: object; testid: string; children: React.ReactNode }) {
   const t = useT()
   return (
     <div data-category={testid} data-category-open={open ? '1' : '0'} className={dragging ? 'opacity-40' : ''}>
-      <div className={`group flex items-center justify-between rounded pr-1 ${highlight ? 'bg-accent/20 text-text-0 ring-1 ring-accent' : ''} text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1`} onContextMenu={onContextMenu} data-category-header {...dragProps}>
+      <div className={`group flex items-center justify-between rounded pr-1 ${highlight ? 'bg-accent/20 text-text-0 ring-1 ring-accent' : ''} text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1`} onContextMenu={onContextMenu} data-category-header data-community={communitySlug} {...dragProps}>
         <button onClick={onToggle} className="flex items-center gap-0.5 py-1 pl-0.5 min-w-0" data-category-toggle>
-          <ChevronDown size={12} className={`shrink-0 transition ${open ? '' : '-rotate-90'}`} /><span className="truncate">{label}</span>
+          <ChevronDown size={12} className={`shrink-0 transition ${open ? '' : '-rotate-90'}`} />{lead && <span className="ms-0.5 me-1 flex">{lead}</span>}<span className="truncate">{label}</span>
         </button>
         {onAdd && <button onClick={onAdd} title={t('Create Channel')} className="opacity-0 group-hover:opacity-100 phone:opacity-100 hover:text-text-0" data-category-add><Plus size={16} /></button>}
       </div>

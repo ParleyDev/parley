@@ -3693,5 +3693,6 @@
 "Invite preview off": "Vista previa de invitación desactivada",
 "Invite preview on": "Vista previa de invitación activada",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Muestra los últimos mensajes de un canal en tu página de invitación pública. Cualquiera con un enlace de invitación puede leerlos.",
-"#{name} (paused: not public)": "#{name} (en pausa: no es pública)"
+"#{name} (paused: not public)": "#{name} (en pausa: no es pública)",
+"Browse Communities": "Explorar comunidades"
 }

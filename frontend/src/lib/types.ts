@@ -191,6 +191,26 @@ export type LayoutItem =
   | { kind: 'guild'; id: string }
   | { kind: 'folder'; id: string; name: string; color: string | null; guilds: string[] }
 
+export interface CommunitySlim {
+  id: string
+  guild_id: string
+  slug: string
+  name: string
+  icon_url: string | null
+  description: string
+  category_id: string
+}
+
+export interface Community extends CommunitySlim {
+  external_ref: string | null
+  last_activity_at: string | null
+  created_at: string
+  follower_count: number
+  online_count: number
+  following: boolean
+  channel_ids: string[]
+}
+
 export interface Channel {
   id: string
   guild_id: string | null

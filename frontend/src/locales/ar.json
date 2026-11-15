@@ -3693,5 +3693,6 @@
 "Invite preview off": "تم إيقاف معاينة الدعوة",
 "Invite preview on": "تم تفعيل معاينة الدعوة",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "اعرض أحدث الرسائل من قناة واحدة على صفحة الدعوة العامة. يمكن لأي شخص لديه رابط الدعوة قراءتها.",
-"#{name} (paused: not public)": "#{name} (متوقفة: غير عامة)"
+"#{name} (paused: not public)": "#{name} (متوقفة: غير عامة)",
+"Browse Communities": "تصفح المجتمعات"
 }

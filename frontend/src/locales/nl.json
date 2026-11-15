@@ -3693,5 +3693,6 @@
 "Invite preview off": "Uitnodigingsvoorbeeld uit",
 "Invite preview on": "Uitnodigingsvoorbeeld aan",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Toon de nieuwste berichten van één kanaal op je openbare uitnodigingspagina. Iedereen met een uitnodigingslink kan ze lezen.",
-"#{name} (paused: not public)": "#{name} (gepauzeerd: niet openbaar)"
+"#{name} (paused: not public)": "#{name} (gepauzeerd: niet openbaar)",
+"Browse Communities": "Communities bekijken"
 }

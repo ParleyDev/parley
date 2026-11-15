@@ -3693,5 +3693,6 @@
 "Invite preview off": "초대 미리보기 꺼짐",
 "Invite preview on": "초대 미리보기 켜짐",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "공개 초대 페이지에 한 채널의 최신 메시지를 표시합니다. 초대 링크가 있는 누구나 읽을 수 있습니다.",
-"#{name} (paused: not public)": "#{name} (일시중지: 비공개)"
+"#{name} (paused: not public)": "#{name} (일시중지: 비공개)",
+"Browse Communities": "커뮤니티 둘러보기"
 }
