@@ -112,7 +112,7 @@ export default function InvitePage() {
               </div>
             )}
             {p.already_member ? (
-              <button className="btn-primary w-full" onClick={() => void landIn(p.guild.id)}>{t('Open server')}</button>
+              <button className="btn-primary w-full" disabled={busy} onClick={async () => { setBusy(true); try { await landIn(p.guild.id) } finally { setBusy(false) } }}>{busy ? t('Opening…') : t('Open server')}</button>
             ) : p.banned ? (
               <p className="text-danger text-sm">{t('You are banned from this server.')}</p>
             ) : p.expired ? (
