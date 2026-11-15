@@ -1,5 +1,5 @@
 use crate::{
-    auth::AuthUser,
+    auth::{AuthUser, MaybeUser},
     error::{AppError, AppResult},
     models::Guild,
     perms,
@@ -31,7 +31,7 @@ type AcceptRow = (Uuid, i32, Option<i32>, Option<chrono::DateTime<chrono::Utc>>,
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/invites/:code", get(preview).post(accept))
+        .route("/invites/:code", get(preview).route_layer(axum::middleware::from_fn(crate::ratelimit::rl_invite_preview)).post(accept))
         .route("/invites/:code/badge.svg", get(badge))
         .route("/guilds/:id/badge", put(save_badge_settings).get(badge_settings))
         .route("/guilds/:id/badge/preview.svg", get(badge_preview))
@@ -183,9 +183,9 @@ pub async fn invites_paused(db: &sqlx::PgPool, gid: Uuid, uid: Uuid) -> AppResul
 
 async fn preview(
     State(state): State<AppState>,
-    AuthUser(uid): AuthUser,
+    MaybeUser(uid): MaybeUser,
     Path(code): Path<String>,
-) -> AppResult<Json<Value>> {
+) -> AppResult<impl IntoResponse> {
     let row: Option<PreviewRow> = sqlx::query_as(&format!(
         "SELECT g.id, g.name, g.icon_url, (SELECT COUNT(*) FROM guild_members WHERE guild_id = g.id), {LIVE}, g.rules, g.rules_required, i.code, g.invite_splash_url, g.description
          FROM invites i JOIN guilds g ON g.id = i.guild_id WHERE {MATCH} ORDER BY i.vanity LIMIT 1"
@@ -194,13 +194,25 @@ async fn preview(
     .fetch_optional(&state.db)
     .await?;
     let (gid, name, icon, count, live, rules, rules_required, code, splash, description) = row.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
+    let online = crate::ws::bus::visible_online_users(&state.db).await;
+    let (online_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1 AND user_id = ANY($2)").bind(gid).bind(&online).fetch_one(&state.db).await?;
+    let Some(uid) = uid else {
+        // Logged out: only what the server already shows publicly, readable cross-origin and cacheable for a moment.
+        let (paused,): (bool,) = sqlx::query_as("SELECT invites_paused FROM guilds WHERE id = $1").bind(gid).fetch_one(&state.db).await?;
+        let body = json!({
+            "code": code,
+            "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count, "rules_required": rules_required, "splash_url": splash, "description": description },
+            "expired": !live,
+            "paused": paused,
+            "preview_channel": null,
+        });
+        return Ok(([(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"), (header::CACHE_CONTROL, "public, max-age=30")], Json(body)).into_response());
+    };
     let already: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2")
         .bind(gid)
         .bind(uid)
         .fetch_optional(&state.db)
         .await?;
-    let online = crate::ws::bus::visible_online_users(&state.db).await;
-    let (online_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM guild_members WHERE guild_id = $1 AND user_id = ANY($2)").bind(gid).bind(&online).fetch_one(&state.db).await?;
     Ok(Json(json!({
         "code": code,
         "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count, "rules": rules, "rules_required": rules_required, "splash_url": splash, "description": description },
@@ -208,7 +220,8 @@ async fn preview(
         "already_member": already.is_some(),
         "banned": is_banned(&state.db, gid, uid).await?,
         "paused": invites_paused(&state.db, gid, uid).await?,
-    })))
+        "preview_channel": null,
+    })).into_response())
 }
 
 async fn accept(

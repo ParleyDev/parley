@@ -28,7 +28,7 @@ pub struct Limit {
 }
 
 /// Buckets an admin may override from Instance Settings.
-pub const BUCKETS: [&str; 10] = ["register", "login", "login_fail", "messages", "uploads", "gifs", "search", "mail", "oauth", "webhooks"];
+pub const BUCKETS: [&str; 11] = ["register", "login", "login_fail", "messages", "uploads", "gifs", "search", "mail", "oauth", "webhooks", "invite_preview"];
 
 impl Limit {
     /// `count/seconds`, both positive.
@@ -60,6 +60,7 @@ pub struct Limits {
     pub mail: Limit,
     pub oauth: Limit,
     pub webhooks: Limit,
+    pub invite_preview: Limit,
 }
 
 struct Bucket {
@@ -86,6 +87,7 @@ pub static LIMITER: LazyLock<RateLimiter> = LazyLock::new(|| RateLimiter {
         mail: Limit::from_env("RL_MAIL", "3/600"),
         oauth: Limit::from_env("RL_OAUTH", "300/60"),
         webhooks: Limit::from_env("RL_WEBHOOKS", "30/60"),
+        invite_preview: Limit::from_env("RL_INVITE_PREVIEW", "60/60"),
     },
     overrides: std::sync::RwLock::new(std::collections::HashMap::new()),
     buckets: DashMap::new(),
@@ -103,6 +105,7 @@ impl RateLimiter {
             "search" => self.limits.search,
             "oauth" => self.limits.oauth,
             "webhooks" => self.limits.webhooks,
+            "invite_preview" => self.limits.invite_preview,
             _ => self.limits.mail,
         }
     }
@@ -206,6 +209,12 @@ pub async fn rl_webhooks(req: Request<Body>, next: Next) -> Response {
     if req.method() != axum::http::Method::POST { return next.run(req).await }
     let key = req.uri().path().trim_start_matches("/api").split('/').nth(2).unwrap_or("").to_string();
     limited("webhooks", LIMITER.limit("webhooks"), key, req, next).await
+}
+
+/// Per-IP: invite previews (`GET /invites/:code`), which anyone may call without an account.
+pub async fn rl_invite_preview(req: Request<Body>, next: Next) -> Response {
+    let key = client_ip(req.headers());
+    limited("invite_preview", LIMITER.limit("invite_preview"), key, req, next).await
 }
 
 /// Per-IP: registration.

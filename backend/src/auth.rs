@@ -201,6 +201,27 @@ where
     }
 }
 
+/// Extractor for routes anyone may call: `None` when there is no `Authorization` header. A header that is present is
+/// resolved exactly as `AuthUser` does, so a bad token is still refused.
+#[derive(Debug, Clone, Copy)]
+pub struct MaybeUser(pub Option<Uuid>);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for MaybeUser
+where
+    AppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        if !parts.headers.contains_key(header::AUTHORIZATION) {
+            return Ok(MaybeUser(None));
+        }
+        AuthUser::from_request_parts(parts, state).await.map(|AuthUser(uid)| MaybeUser(Some(uid)))
+    }
+}
+
 /// Extractor: the user, and their session when the caller has one (app and bot tokens have none). For routes any
 /// token may use that still care which session made the call (marking read clears notifications on the others).
 #[derive(Debug, Clone, Copy)]
