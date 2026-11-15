@@ -173,6 +173,8 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   const sync = useDaw((s) => s.sync), unsent = useDaw((s) => s.unsent)
   const fail = (e: unknown) => pushToast((e as Error).message, 'error')
   const play = () => {
+    // Within the tap: iOS hears nothing that starts after it (the audio loading, or the shared transport's answer).
+    engine.unlock()
     if (playing) { const pos = engine.position(); setStopped(pos); if (playing === 'shared' && canShare) void sharedTransport(false, pos * 1000).catch(fail); else engine.stop(); return }
     if (canShare) void sharedTransport(true, stopped * 1000).catch(fail)
     else void engine.preload().then(() => engine.play(stopped, { click: cfg.click }))
@@ -183,6 +185,7 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   useEffect(() => { if (sharedStop != null && follow) setStopped(sharedStop / 1000) }, [sharedStop]) // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState(false)
   const record = async (solo: boolean) => {
+    engine.unlock()
     setBusy(true)
     try {
       if (live) await api.post(`/channels/${channel.id}/studio/sessions/${live.id}/stop`)
@@ -373,7 +376,8 @@ export default function Daw({ channel, onClose }: { channel: Channel; onClose: (
   const peerColor = (uid: string) => PEER_COLORS[Math.abs([...uid].reduce((h, c) => h * 31 + c.charCodeAt(0), 7)) % PEER_COLORS.length]
   const recordable = crew || inBand
   return (
-    <div ref={root} tabIndex={-1} className="relative flex-1 min-h-0 flex flex-col rounded-xl border border-line bg-bg-1 overflow-hidden outline-none" data-daw data-daw-state={state} data-daw-view={view}>
+    // Any tap in the editor wakes its audio (iOS), so playback someone else starts is heard here too.
+    <div ref={root} tabIndex={-1} onPointerDown={() => engine.unlock()} className="relative flex-1 min-h-0 flex flex-col rounded-xl border border-line bg-bg-1 overflow-hidden outline-none" data-daw data-daw-state={state} data-daw-view={view}>
       {/* Control bar: project, tempo, transport, position, panels, view */}
       <div className="shrink-0 flex flex-wrap items-center gap-2 px-3 py-2 border-b border-line bg-bg-2">
         <ProjectMenu channel={channel} project={project} />
@@ -1045,11 +1049,13 @@ function Arrangement(p: ArrProps) {
                 </div>
               ))}
               <div className={`h-16 ${dropLane === 'new' ? 'bg-accent/10' : ''}`} data-daw-lane-new>{dropLane === 'new' && <span className="block pt-5 text-center text-xs text-accent">{t('Drop to import onto a new track')}</span>}</div>
-              {drag?.guide != null && <div className="pointer-events-none absolute top-0 bottom-0 z-20 w-px bg-accent shadow-[0_0_0_1px_rgba(0,0,0,.25)]" style={{ left: (drag.guide / 1000) * pps }} data-daw-guide={Math.round(drag.guide)} />}
-              {readout && <span className="pointer-events-none absolute z-30 whitespace-nowrap rounded bg-bg-0/95 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-text-0 shadow ring-1 ring-line" style={{ left: readout.x, top: readout.y, transform: readout.y > 20 ? 'translateY(-100%)' : 'translateY(2px)' }} data-daw-drag-readout>{readout.text}</span>}
-              {box && <div className="pointer-events-none absolute z-20 border border-accent bg-accent/15" style={{ left: box.x0, top: box.y0, width: box.x1 - box.x0, height: box.y1 - box.y0 }} data-daw-select-box />}
+              {drag?.guide != null && <div className="pointer-events-none absolute top-0 bottom-0 z-[15] w-px bg-accent shadow-[0_0_0_1px_rgba(0,0,0,.25)]" style={{ left: (drag.guide / 1000) * pps }} data-daw-guide={Math.round(drag.guide)} />}
+              {readout && <span className="pointer-events-none absolute z-[16] whitespace-nowrap rounded bg-bg-0/95 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-text-0 shadow ring-1 ring-line" style={{ left: readout.x, top: readout.y, transform: readout.y > 20 ? 'translateY(-100%)' : 'translateY(2px)' }} data-daw-drag-readout>{readout.text}</span>}
+              {box && <div className="pointer-events-none absolute z-[15] border border-accent bg-accent/15" style={{ left: box.x0, top: box.y0, width: box.x1 - box.x0, height: box.y1 - box.y0 }} data-daw-select-box />}
               {p.peers.map(([uid, x]) => <div key={uid} className="pointer-events-none absolute -top-7 bottom-0 z-10 w-px opacity-80" style={{ left: (x.pos_ms / 1000) * pps, background: p.peerColor(uid) }} data-daw-peer-head={uid}><span className="absolute -top-0 left-0.5 whitespace-nowrap rounded px-1 text-[9px] font-bold text-black" style={{ background: p.peerColor(uid) }}>{p.users[uid]?.display_name ?? p.users[uid]?.username ?? ''}</span></div>)}
-              <div ref={playhead} className={`pointer-events-none absolute -top-7 bottom-0 z-20 w-px ${p.live ? 'bg-danger' : 'bg-text-0'}`} style={{ left: p.stopped * pps }} data-daw-playhead />
+              {/* What is drawn over the tracks stays under z-20: on a phone the channel list (z-20) lies over the open channel,
+                  and the playhead, later on the page at z-20, was drawn across it. Over the ruler (z-10) still. */}
+              <div ref={playhead} className={`pointer-events-none absolute -top-7 bottom-0 z-[15] w-px ${p.live ? 'bg-danger' : 'bg-text-0'}`} style={{ left: p.stopped * pps }} data-daw-playhead />
             </div>
           </div>
         </div>

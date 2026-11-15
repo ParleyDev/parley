@@ -182,5 +182,42 @@ s = (await clip(CB)).start_ms
 ok('zoomed in, Auto snaps to 1/32 of a beat (62.5 ms here)', s > 8000 && s < 8100 && Math.abs(s - Math.round(s / 62.5) * 62.5) <= 0.5, String(s))
 await p.click('[data-daw-magnet]')
 
+console.log('-- playing on iOS')
+{
+  // iOS mutes the studio with the ringer on silent unless it asks for the playback session while it plays, where the
+  // browser has one (WebKit): asked for while it plays, given back when it stops.
+  const has = await p.evaluate(() => !!navigator.audioSession)
+  await p.keyboard.press('Home'); await p.click('[data-daw-play]'); await p.waitForSelector('[data-daw][data-daw-state="playing"]', { timeout: 8000 })
+  const during = await p.evaluate(() => navigator.audioSession?.type ?? null), running = await p.evaluate(() => window.__parleyDawTest?.ctxState?.() ?? null)
+  await p.click('[data-daw-play]'); await p.waitForSelector('[data-daw][data-daw-state="stopped"]', { timeout: 8000 })
+  const after = await p.evaluate(() => navigator.audioSession?.type ?? null)
+  if (has) ok('while it plays it asks for the playback audio session, and gives it back when it stops', during === 'playback' && after === 'auto', JSON.stringify({ during, after }))
+  else console.log('   (this browser has no audio session to ask for)')
+  ok('pressing play wakes the audio and it plays', running === 'running', String(running))
+}
+
+console.log('-- on a phone')
+{
+  // The channel list lies over the open channel on a phone: nothing of the DAW behind it may show through.
+  const pp = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); pp.on('pageerror', (e) => errors.push(e.message))
+  await pp.goto(`${WEB}/login`, { waitUntil: 'networkidle' }); await pp.evaluate((t) => { localStorage.setItem('parley.token', t); localStorage.setItem('parley.dawView', 'arrange') }, a.token)
+  await pp.goto(`${WEB}/channels/${g.id}/${P.channel_id}`); await pp.waitForSelector('[data-daw-playhead]', { timeout: 15000 })
+  await pp.click('main button[title="Channels"]'); await pp.waitForTimeout(500)
+  const hb = await pp.locator('[data-daw-playhead]').boundingBox()
+  const shot = await pp.screenshot()
+  // Rows where the playhead's column is far brighter than the pixels either side of it: the line, drawn over the list.
+  const seen = await pp.evaluate(async ([b64, x, y0, y1]) => {
+    const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode()
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0)
+    const k = img.width / innerWidth, lum = (xx, y) => { const d = g.getImageData(Math.floor(xx * k), Math.floor(y * k), 1, 1).data; return d[0] + d[1] + d[2] }
+    let line = 0, rows = 0
+    for (let y = Math.max(0, y0); y < Math.min(innerHeight, y1); y += 2) { rows++; if (lum(x, y) - Math.max(lum(x - 3, y), lum(x + 3, y)) > 150) line++ }
+    return { line, rows }
+  }, [shot.toString('base64'), hb.x + hb.width / 2, hb.y, hb.y + hb.height])
+  ok('the DAW’s playhead is not drawn over the channel list', seen.rows > 20 && seen.line <= seen.rows * 0.05, JSON.stringify(seen))
+  await pp.close()
+}
+
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await browser.close(); await finish()

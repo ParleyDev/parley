@@ -626,6 +626,31 @@ class Engine {
     }
     return this.ctx
   }
+  /**
+   * iOS starts a page's audio only within a tap: called from one, this wakes the context (with a moment of silence,
+   * which is what older iOS counts), so playback that starts later (once the audio has loaded, or when someone else
+   * presses play) is heard.
+   */
+  unlock() {
+    const ctx = this.audio()
+    if (ctx.state === 'running') return
+    ctx.resume().catch(() => {})
+    const src = ctx.createBufferSource()
+    src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate)
+    src.connect(ctx.destination); src.start()
+  }
+  /**
+   * While the studio plays, it is heard with the ringer switched to silent (the 'playback' audio session, where the
+   * browser has one: iOS mutes Web Audio otherwise). Not while a microphone may be open (a call, a take): that
+   * session has no input, so it is left to the browser then.
+   */
+  private session(on: boolean) {
+    const as = (navigator as Navigator & { audioSession?: { type: string } }).audioSession
+    if (!as) return
+    const mic = !!useStore.getState().myVoiceChannelId || studioRoom.keep() || this.playing === 'backing'
+    const want = on && !mic ? 'playback' : 'auto'
+    if (as.type !== want && (want === 'auto' ? as.type === 'playback' : true)) { try { as.type = want } catch { /* not allowed now */ } }
+  }
   /** Whether this browser can send the studio's sound to a chosen output. */
   get canSink() { return typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype }
   private sinkId = ''
@@ -873,6 +898,7 @@ class Engine {
       tick(); this.clickTimer = setInterval(tick, 25)
     }
     this.playing = opts.backing ? 'backing' : opts.shared ? 'shared' : 'local'
+    this.session(true)
     this.emit()
   }
   private loopAt: { a: number; b: number } | null = null
@@ -888,6 +914,7 @@ class Engine {
     if (this.loopTimer) clearInterval(this.loopTimer); this.loopTimer = null
     if (this.refreshTimer) clearTimeout(this.refreshTimer); this.refreshTimer = null
     this.loopAt = null
+    if (!quiet) this.session(false)
     if (this.playing) { this.playing = false; if (!quiet) this.emit() }
   }
 
@@ -1120,7 +1147,7 @@ class Engine {
 
 export const engine = new Engine()
 // For tests: the rendered project (or a stem) as samples and as the exported WAV, and what plays as a stream.
-if (typeof window !== 'undefined') (window as unknown as { __parleyDawTest?: unknown }).__parleyDawTest = { render: (only?: string[], heard?: boolean) => engine.renderBuffer(only, heard), wav: (bits?: 16 | 24) => engine.render(bits), meter: (id: string) => { const r = engine.meter(id); return r && { ...r, clip: isClipped(id) } }, clearClip, tap: () => engine.tap(), bus: () => engine.bus(), context: () => engine.audio(), clicks: clicksPlayed, edit, undo, remote: onRemote, state: () => get() }
+if (typeof window !== 'undefined') (window as unknown as { __parleyDawTest?: unknown }).__parleyDawTest = { ctxState: () => engine.audio().state, render: (only?: string[], heard?: boolean) => engine.renderBuffer(only, heard), wav: (bits?: 16 | 24) => engine.render(bits), meter: (id: string) => { const r = engine.meter(id); return r && { ...r, clip: isClipped(id) } }, clearClip, tap: () => engine.tap(), bus: () => engine.bus(), context: () => engine.audio(), clicks: clicksPlayed, edit, undo, remote: onRemote, state: () => get() }
 
 /**
  * Keep the open project of the studio we are in loaded, and play it as the backing while a take records into it:
