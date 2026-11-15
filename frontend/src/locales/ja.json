@@ -3710,5 +3710,6 @@
 "Lower-case letters, digits and hyphens.": "小文字、数字、ハイフンが使えます。",
 "New community": "新しいコミュニティ",
 "No communities yet.": "コミュニティはまだありません。",
-"{n} followers": "フォロワー {n} 人"
+"{n} followers": "フォロワー {n} 人",
+"This community was deleted": "このコミュニティは削除されました"
 }

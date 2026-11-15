@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../../../lib/api'
+import { slugFromName } from '../../../lib/communities'
 import { useT } from '../../../lib/i18n'
 import type { Community } from '../../../lib/types'
 import { useStore } from '../../../store'
@@ -8,9 +9,6 @@ import ImagePicker from '../ImagePicker'
 const PAGE = 50
 interface Page { items: Community[]; next: string | null }
 type Editing = 'new' | Community | null
-
-/** The address a community name suggests: lower-case, anything but letters and digits becomes a hyphen. */
-export const slugFromName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').slice(0, 63).replace(/-+$/, '')
 
 const byName = (a: Community, b: Community) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id)
 
@@ -32,6 +30,15 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
   const [error, setError] = useState('')
   const [confirming, setConfirming] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState('')
+  // A ref guards against a second submit before the first one's state update has rendered.
+  const inFlight = useRef(false)
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+  const editingRef = useRef(editing)
+  editingRef.current = editing
+  const stored = useStore((s) => s.communities[guildId])
+  const knownIds = useRef<Set<string> | null>(null)
   // Bumped on every reload and on unmount: an older answer never replaces a newer one.
   const seq = useRef(0)
 
@@ -56,8 +63,29 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
     if (id === seq.current) setBusy(false)
   }
 
+  // Keep the rows in step with the store (gateway events): renames and deletions apply to what is listed, and a
+  // community another admin creates is fetched on its own. Nothing here refetches the whole list.
+  useEffect(() => {
+    const list = stored ?? []
+    const prev = knownIds.current
+    knownIds.current = new Set(list.map((c) => c.id))
+    if (!prev) return
+    const gone = [...prev].filter((id) => !knownIds.current!.has(id))
+    if (gone.length) {
+      setItems((cur) => cur.filter((x) => !gone.includes(x.id)))
+      const e = editingRef.current
+      if (e && e !== 'new' && gone.includes(e.id)) { setEditing(null); setConfirming(false); setNotice(t('This community was deleted')) }
+    }
+    const byId = new Map(list.map((c) => [c.id, c]))
+    setItems((cur) => cur.map((x) => { const n = byId.get(x.id); return n && (n.name !== x.name || n.slug !== x.slug || n.description !== x.description || n.icon_url !== x.icon_url) ? { ...x, name: n.name, slug: n.slug, description: n.description, icon_url: n.icon_url } : x }).sort(byName))
+    for (const c of list) {
+      if (prev.has(c.id) || itemsRef.current.some((x) => x.id === c.id)) continue
+      api.get<Community>(`/guilds/${guildId}/communities/${c.slug}`).then((full) => setItems((cur) => (cur.some((x) => x.id === full.id) ? cur : [...cur, full].sort(byName)))).catch(() => { /* the next full load shows it */ })
+    }
+  }, [stored]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const open = (target: Editing) => {
-    setEditing(target); setError(''); setConfirming(false)
+    setEditing(target); setError(''); setNotice(''); setConfirming(false)
     const c = target && target !== 'new' ? target : null
     setName(c?.name ?? ''); setSlug(c?.slug ?? ''); setSlugTouched(!!c); setDescription(c?.description ?? ''); setIcon(c?.icon_url ?? null)
   }
@@ -69,8 +97,8 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
   }
 
   const save = async () => {
-    if (!editing || saving) return
-    setSaving(true); setError('')
+    if (!editing || inFlight.current) return
+    inFlight.current = true; setSaving(true); setError('')
     try {
       const body = { slug, name: name.trim(), description, icon_url: icon }
       if (editing === 'new') {
@@ -82,19 +110,19 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
       }
       pushToast(t('Saved'))
     } catch (e) { setError((e as Error).message) }
-    setSaving(false)
+    inFlight.current = false; setSaving(false)
   }
 
   const remove = async () => {
-    if (!editing || editing === 'new' || saving) return
-    setSaving(true)
+    if (!editing || editing === 'new' || inFlight.current) return
+    inFlight.current = true; setSaving(true)
     try {
       await api.delete(`/guilds/${guildId}/communities/${editing.slug}`)
       setItems((cur) => cur.filter((x) => x.id !== editing.id))
       useStore.getState().removeCommunity(guildId, editing.id)
       setEditing(null); setConfirming(false)
     } catch (e) { setError((e as Error).message) }
-    setSaving(false)
+    inFlight.current = false; setSaving(false)
   }
 
   const current = editing && editing !== 'new' ? editing : null
@@ -108,6 +136,7 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
         <button type="button" className="btn-primary shrink-0" onClick={() => open('new')} data-community-new>{t('New community')}</button>
       </div>
 
+      {notice && <p className="text-sm text-text-2" role="status" data-community-notice>{notice}</p>}
       {editing && (
         <form className="space-y-4 rounded-xl border border-line bg-bg-1 p-4" onSubmit={(e) => { e.preventDefault(); void save() }} data-community-form>
           <h2 className="font-semibold">{current ? t('Edit community') : t('New community')}</h2>

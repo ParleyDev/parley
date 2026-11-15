@@ -248,7 +248,7 @@ export function useGuildMenu() {
       { label: 'Mark As Read', icon: <MailCheck size={16} />, disabled: unreadChannels.length === 0, onClick: () => unreadChannels.forEach((c) => markRead(c.id)) },
       'sep',
       ...(has(perms, P.CREATE_INVITE) ? [{ label: 'Invite People', icon: <UserPlus size={16} />, accent: true, onClick: () => openModal({ kind: 'invite', guildId }) }] : []),
-      ...(has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_ROLES) ? [{ label: 'Server Settings', icon: <Settings size={16} />, onClick: () => openModal({ kind: 'guildSettings', guildId }) }] : []),
+      ...(has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_ROLES) || has(perms, P.MANAGE_CHANNELS) ? [{ label: 'Server Settings', icon: <Settings size={16} />, onClick: () => openModal({ kind: 'guildSettings', guildId }) }] : []),
       ...(has(perms, P.MANAGE_CHANNELS) ? [{ label: 'Create Channel', icon: <Plus size={16} />, onClick: () => openModal({ kind: 'createChannel', guildId }) }] : []),
       'sep',
       isOwner ? { label: 'Delete Server', icon: <Trash2 size={16} />, danger: true, onClick: del } : { label: 'Leave Server', icon: <LogOut size={16} />, danger: true, onClick: leave },

@@ -41,11 +41,14 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   const canOverview = has(perms, P.MANAGE_GUILD)
   const canBans = has(perms, P.BAN_MEMBERS)
   const canChannels = has(perms, P.MANAGE_CHANNELS)
+  // Members and Roles used to rely on the entry gate (Manage Server or Manage Roles); the modal is also reachable with Manage Channels alone.
+  const canPeople = canOverview || has(perms, P.MANAGE_ROLES)
   const canAudit = canOverview || has(perms, P.VIEW_AUDIT_LOG)
   const canExpr = canOverview || has(perms, P.MANAGE_EXPRESSIONS)
   const canReview = canOverview || has(perms, P.KICK_MEMBERS)
   const canReports = canOverview || has(perms, P.MANAGE_MESSAGES) || has(perms, P.KICK_MEMBERS) || has(perms, P.BAN_MEMBERS) || has(perms, P.MODERATE_MEMBERS)
-  const [tab, setTab] = useState<Tab>(((initial === 'overview' || initial === 'tag' || initial === 'safety' || initial === 'automod' || initial === 'welcome' || initial === 'onboarding' || initial === 'template' || initial === 'insights' || initial === 'integrations' || initial === 'widget' || initial === 'invites' || initial === 'badge' || initial === 'discovery') && !canOverview) || ((initial === 'emoji' || initial === 'stickers') && !canExpr) || (initial === 'audit' && !canAudit) || (initial === 'bans' && !canBans) || (initial === 'communities' && !canChannels) ? 'roles' : initial)
+  const allowed = (x: Tab) => !(((x === 'overview' || x === 'theme' || x === 'tag' || x === 'safety' || x === 'automod' || x === 'welcome' || x === 'onboarding' || x === 'template' || x === 'insights' || x === 'integrations' || x === 'widget' || x === 'invites' || x === 'badge' || x === 'discovery') && !canOverview) || ((x === 'emoji' || x === 'stickers' || x === 'soundboard') && !canExpr) || (x === 'audit' && !canAudit) || (x === 'bans' && !canBans) || (x === 'applications' && !canReview) || (x === 'reports' && !canReports) || ((x === 'roles' || x === 'members') && !canPeople) || (x === 'communities' && !canChannels))
+  const [tab, setTab] = useState<Tab>(allowed(initial) ? initial : (['roles', 'communities', 'members'] as Tab[]).find(allowed) ?? 'roles')
   if (!guild) return null
   const isOwner = guild.owner_id === user?.id
 
@@ -57,7 +60,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
   const sections = [
     sec(guild.name, [canOverview && { id: 'overview', label: 'Server Profile', icon: <SlidersHorizontal size={16} />, keywords: 'name icon description banner system messages welcome channel inactive afk timeout default notifications rules' }, canOverview && { id: 'theme', label: 'Server Theme', icon: <Palette size={16} />, keywords: 'colour color gradient appearance' }, canOverview && { id: 'tag', label: 'Server Tag', icon: <Tag size={16} />, keywords: 'clan badge guild tag' }, canOverview && { id: 'insights', label: 'Insights', icon: <ChartColumn size={16} />, keywords: 'analytics stats statistics growth engagement' }]),
     sec('Expression', [canExpr && { id: 'emoji', label: 'Emoji', icon: <Smile size={16} />, keywords: 'emojis upload custom expression' }, canExpr && { id: 'stickers', label: 'Stickers', icon: <Sticker size={16} />, keywords: 'sticker upload expression' }, canExpr && { id: 'soundboard', label: 'Soundboard', icon: <Music2 size={16} />, keywords: 'sounds audio clips' }]),
-    sec('People', [{ id: 'members', label: 'Members', icon: <Users size={16} />, keywords: 'people prune kick ban timeout nickname filter' }, { id: 'roles', label: 'Roles', icon: <Shield size={16} />, keywords: 'permissions colour color icon hoist mention admin moderator' }, canOverview && { id: 'invites', label: 'Invites', icon: <Link2 size={16} />, keywords: 'invite link expire uses vanity' }, canReview && { id: 'applications', label: 'Access', icon: <ClipboardList size={16} />, keywords: 'apply application join requests questions membership screening rules' }]),
+    sec('People', [canPeople && { id: 'members', label: 'Members', icon: <Users size={16} />, keywords: 'people prune kick ban timeout nickname filter' }, canPeople && { id: 'roles', label: 'Roles', icon: <Shield size={16} />, keywords: 'permissions colour color icon hoist mention admin moderator' }, canOverview && { id: 'invites', label: 'Invites', icon: <Link2 size={16} />, keywords: 'invite link expire uses vanity' }, canReview && { id: 'applications', label: 'Access', icon: <ClipboardList size={16} />, keywords: 'apply application join requests questions membership screening rules' }]),
     sec('Apps', [canOverview && { id: 'integrations', label: 'Integrations', icon: <Blocks size={16} />, keywords: 'webhooks bots apps twitch youtube follow' }, canOverview && { id: 'widget', label: 'Widget', icon: <PanelsTopLeft size={16} />, keywords: 'embed html invite' }, canOverview && { id: 'badge', label: 'Badge', icon: <Award size={16} />, keywords: 'emblem' }]),
     sec('Moderation', [canOverview && { id: 'safety', label: 'Safety Setup', icon: <ShieldAlert size={16} />, keywords: 'verification level raid protection dm spam explicit image filter mfa 2fa security pause invites' }, canAudit && { id: 'audit', label: 'Audit Log', icon: <ScrollText size={16} />, keywords: 'log history actions changes' }, canBans && { id: 'bans', label: 'Bans', icon: <Gavel size={16} />, keywords: 'banned unban' }, canOverview && { id: 'automod', label: 'AutoMod', icon: <Bot size={16} />, keywords: 'filter words links mention spam regex keyword block rules' }, canReports && { id: 'reports', label: 'Reports', icon: <Flag size={16} />, keywords: 'reported messages moderation queue' }]),
     sec('Community', [canChannels && { id: 'communities', label: 'Communities', icon: <Layers size={16} />, keywords: 'groups categories channels follow browse' }, canOverview && { id: 'welcome', label: 'Welcome Screen', icon: <DoorOpen size={16} />, keywords: 'greeting new members' }, canOverview && { id: 'onboarding', label: 'Onboarding', icon: <ListChecks size={16} />, keywords: 'questions prompts default channels customize' }, canOverview && { id: 'discovery', label: 'Discovery', icon: <Compass size={16} />, keywords: 'public listing category explore' }]),
@@ -88,8 +91,8 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
       {tab === 'applications' && canReview && <MemberApplicationsTab guildId={guildId} />}
       {tab === 'widget' && canOverview && <WidgetTab guildId={guildId} />}
       {tab === 'communities' && canChannels && <CommunitiesTab guildId={guildId} />}
-      {tab === 'roles' && <RolesTab guildId={guildId} />}
-      {tab === 'members' && <MembersTab guildId={guildId} />}
+      {tab === 'roles' && canPeople && <RolesTab guildId={guildId} />}
+      {tab === 'members' && canPeople && <MembersTab guildId={guildId} />}
       {tab === 'invites' && canOverview && <InvitesTab guildId={guildId} onDiscovery={() => setTab('discovery')} onBadge={() => setTab('badge')} />}
       {tab === 'badge' && canOverview && <BadgeTab guildId={guildId} onInvites={() => setTab('invites')} />}
       {tab === 'bans' && canBans && <BansTab guildId={guildId} />}

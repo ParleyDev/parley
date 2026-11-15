@@ -3710,5 +3710,6 @@
 "Lower-case letters, digits and hyphens.": "Строчные буквы, цифры и дефисы.",
 "New community": "Новое сообщество",
 "No communities yet.": "Сообществ пока нет.",
-"{n} followers": "Подписчиков: {n}"
+"{n} followers": "Подписчиков: {n}",
+"This community was deleted": "Это сообщество было удалено"
 }

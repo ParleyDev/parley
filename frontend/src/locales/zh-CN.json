@@ -3710,5 +3710,6 @@
 "Lower-case letters, digits and hyphens.": "小写字母、数字和连字符。",
 "New community": "新建社区",
 "No communities yet.": "还没有社区。",
-"{n} followers": "{n} 位关注者"
+"{n} followers": "{n} 位关注者",
+"This community was deleted": "此社区已被删除"
 }

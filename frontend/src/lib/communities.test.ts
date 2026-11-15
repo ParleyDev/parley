@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import { communityOfChannel, communitySuppresses, splitCategories, unfollowedCategoryIds } from './communities'
+import { communityOfChannel, communitySuppresses, slugFromName, splitCategories, unfollowedCategoryIds } from './communities'
 import { guildUnread, useStore } from '../store'
 import { api } from './api'
 vi.mock('./api', async (orig) => ({ ...(await orig<typeof import('./api')>()), api: { put: vi.fn(), delete: vi.fn() } }))
@@ -64,8 +64,7 @@ test('a failed follow request puts the follow list back exactly as it was', asyn
   expect(useStore.getState().communityFollows.g).toEqual(['a', 'd', 'b'])
 })
 
-test('slugFromName lower-cases, hyphenates and trims to a valid address', async () => {
-  const { slugFromName } = await import('../components/modals/settings/CommunitiesTab')
+test('slugFromName lower-cases, hyphenates and trims to a valid address', () => {
   expect(slugFromName('Black Sabbath')).toBe('black-sabbath')
   expect(slugFromName('  --Rock & Roll!! ')).toBe('rock-roll')
   expect(slugFromName('a'.repeat(70) + ' b')).toBe('a'.repeat(63))

@@ -3285,6 +3285,7 @@
 "This channel doesn't follow any announcement channels.",
 "This channel doesn't have any pinned messages yet.",
 "This code expired.",
+"This community was deleted",
 "This conversation",
 "This deletes all {n} messages {name} has ever sent, everywhere. This cannot be undone.",
 "This deletes the selected accounts now: the servers and apps they own are deleted, and the accounts are anonymized (their messages stay, as \"Deleted User\"). This cannot be undone.",

@@ -125,7 +125,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
   const canInvite = has(perms, P.CREATE_INVITE)
-  const canManageGuild = has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_ROLES)
+  const canManageGuild = has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_ROLES) || has(perms, P.MANAGE_CHANNELS)
   const canCreate = has(perms, P.MANAGE_CHANNELS)
   const canEditChannel = (id: string) => has(chanPerms[id] ?? 0, P.MANAGE_CHANNELS) || has(chanPerms[id] ?? 0, P.MANAGE_ROLES)
   // View Server as Role hides what those roles can't see (categories stay while something in them is visible).

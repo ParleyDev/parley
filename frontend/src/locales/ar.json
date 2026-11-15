@@ -3710,5 +3710,6 @@
 "Lower-case letters, digits and hyphens.": "أحرف صغيرة وأرقام وشرطات.",
 "New community": "مجتمع جديد",
 "No communities yet.": "لا توجد مجتمعات بعد.",
-"{n} followers": "{n} متابع"
+"{n} followers": "{n} متابع",
+"This community was deleted": "تم حذف هذا المجتمع"
 }

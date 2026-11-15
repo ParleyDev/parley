@@ -65,3 +65,6 @@ export function communityOfChannel(channel: Channel, channels: Record<string, Ch
 export function communitySuppresses(unfollowed: boolean, mentioned: boolean, repliesToMe: boolean): boolean {
   return unfollowed && !mentioned && !repliesToMe
 }
+
+/** The address a community name suggests: lower-case, anything but letters and digits becomes a hyphen. */
+export const slugFromName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').slice(0, 63).replace(/-+$/, '')
