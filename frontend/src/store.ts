@@ -1150,3 +1150,6 @@ export function mentionsMe(s: Pick<State, 'user' | 'members' | 'notifSettings' |
 export function guildMentions(s: Pick<State, 'mentionCounts' | 'channels' | 'dms' | 'notifSettings'>, guildId: string): number {
   return Object.entries(s.mentionCounts).reduce((n, [cid, c]) => (s.channels[cid]?.guild_id === guildId && showsMentions(s, cid) ? n + c : n), 0)
 }
+
+/** Lets the scale check (`e2e/communityscale.mjs`) time one `guildUnread` over the live state, as the server bar does on every change. */
+if (typeof window !== 'undefined') (window as unknown as { __parleyUnread?: unknown }).__parleyUnread = (guildId: string) => { const s = useStore.getState(); const t = performance.now(); guildUnread(s, guildId); return performance.now() - t }

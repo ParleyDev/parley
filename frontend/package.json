@@ -13,6 +13,7 @@
     "e2e": "node e2e/run.mjs",
     "e2e:webkit": "E2E_BROWSER=webkit node e2e/run.mjs mobile mobilepages appearance studiorender dawdrag dawproject",
     "perf:studio": "node e2e/studioperf.mjs",
+    "perf:communities": "node e2e/communityscale.mjs",
     "emoji:update": "node scripts/gen-emoji.mjs"
   },
   "dependencies": {
