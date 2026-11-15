@@ -3685,5 +3685,7 @@
 "I have an account": "アカウントを持っています",
 "read-only preview": "読み取り専用プレビュー",
 "{n} online": "{n} 人オンライン",
-"Too many requests. Try again in a minute.": "リクエストが多すぎます。1分後にもう一度お試しください。"
+"Too many requests. Try again in a minute.": "リクエストが多すぎます。1分後にもう一度お試しください。",
+"Have an invite to a group chat?": "グループチャットへの招待をお持ちですか？",
+"Log in to open it.": "ログインして開く。"
 }

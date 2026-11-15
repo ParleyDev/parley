@@ -3685,5 +3685,7 @@
 "I have an account": "계정이 있어요",
 "read-only preview": "읽기 전용 미리보기",
 "{n} online": "{n}명 온라인",
-"Too many requests. Try again in a minute.": "요청이 너무 많습니다. 1분 후에 다시 시도하세요."
+"Too many requests. Try again in a minute.": "요청이 너무 많습니다. 1분 후에 다시 시도하세요.",
+"Have an invite to a group chat?": "그룹 채팅 초대가 있나요?",
+"Log in to open it.": "로그인하여 열기."
 }

@@ -37,6 +37,7 @@ export default function App() {
   const token = useStore((s) => s.token)
   const ready = useStore((s) => s.ready)
   const location = useLocation()
+  const signedInTo = (location.state as { from?: string } | null)?.from ?? '/channels/@me'
 
   useEffect(() => {
     if (token) connectSocket()
@@ -50,8 +51,8 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/login" element={token ? <Navigate to={(location.state as { from?: string } | null)?.from ?? '/channels/@me'} replace /> : <AuthPage mode="login" />} />
-        <Route path="/register" element={token ? <Navigate to={(location.state as { from?: string } | null)?.from ?? '/channels/@me'} replace /> : <AuthPage mode="register" />} />
+        <Route path="/login" element={token ? <Navigate to={signedInTo} replace /> : <AuthPage mode="login" />} />
+        <Route path="/register" element={token ? <Navigate to={signedInTo} replace /> : <AuthPage mode="register" />} />
         <Route path="/try" element={<TryPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/confirm-email" element={<VerifyPage mode="change" />} />

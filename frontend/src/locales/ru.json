@@ -3685,5 +3685,7 @@
 "I have an account": "У меня есть аккаунт",
 "read-only preview": "предпросмотр только для чтения",
 "{n} online": "{n} в сети",
-"Too many requests. Try again in a minute.": "Слишком много запросов. Повторите через минуту."
+"Too many requests. Try again in a minute.": "Слишком много запросов. Повторите через минуту.",
+"Have an invite to a group chat?": "Есть приглашение в групповой чат?",
+"Log in to open it.": "Войдите, чтобы открыть."
 }

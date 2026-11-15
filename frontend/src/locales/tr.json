@@ -3685,5 +3685,7 @@
 "I have an account": "Hesabım var",
 "read-only preview": "salt okunur önizleme",
 "{n} online": "{n} çevrimiçi",
-"Too many requests. Try again in a minute.": "Çok fazla istek. Bir dakika sonra tekrar dene."
+"Too many requests. Try again in a minute.": "Çok fazla istek. Bir dakika sonra tekrar dene.",
+"Have an invite to a group chat?": "Bir grup sohbeti davetin mi var?",
+"Log in to open it.": "Açmak için giriş yap."
 }

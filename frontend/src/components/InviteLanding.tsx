@@ -19,6 +19,8 @@ export const AUTOJOIN_KEY = 'parley.invite.autojoin'
 /** What a logged-out visitor sees at /invite/<code>: the server, its counts, two ways in, and (if the owner allows) a read-only peek. */
 export default function InviteLanding({ code, preview: p, returnTo }: { code: string; preview: AnonPreview; returnTo: string }) {
   const t = useT()
+  // A stale key (an abandoned sign-up) must not auto-join a later visit: only a click in this visit sets it.
+  useEffect(() => { try { sessionStorage.removeItem(AUTOJOIN_KEY) } catch { /* private mode */ } }, [])
   const [peek, setPeek] = useState<PeekMessage[]>([])
   useEffect(() => {
     setPeek([])
@@ -30,7 +32,7 @@ export default function InviteLanding({ code, preview: p, returnTo }: { code: st
   const remember = () => { try { sessionStorage.setItem(AUTOJOIN_KEY, code) } catch { /* private mode */ } }
   const state = { from: returnTo }
   return (
-    <div className="relative h-full overflow-y-auto flex items-center-safe justify-center bg-bg-0 bg-cover bg-center p-4" style={p.guild.splash_url ? { backgroundImage: `linear-gradient(rgb(0 0 0 / .45), rgb(0 0 0 / .45)), url(${p.guild.splash_url})` } : undefined} data-invite-splash={p.guild.splash_url ? '1' : '0'}>
+    <div className="relative h-full overflow-y-auto flex items-center-safe justify-center bg-bg-0 bg-cover bg-center p-4" style={p.guild.splash_url ? { backgroundImage: `linear-gradient(rgb(0 0 0 / .45), rgb(0 0 0 / .45)), url("${encodeURI(p.guild.splash_url).replace(/["()]/g, encodeURIComponent)}")` } : undefined} data-invite-splash={p.guild.splash_url ? '1' : '0'}>
       <div className="pop w-full max-w-3xl rounded-2xl bg-bg-1 border border-line p-6 sm:p-8 shadow-2xl flex flex-col sm:flex-row gap-6 sm:items-start" data-invite-landing>
         <div className="flex-1 min-w-0 flex flex-col gap-3">
           <div className="h-14 w-14 rounded-2xl overflow-hidden flex items-center justify-center text-2xl font-bold text-white" style={{ background: p.guild.icon_url ? undefined : colorFor(p.guild.id) }}>

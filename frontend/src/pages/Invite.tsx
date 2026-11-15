@@ -1,7 +1,7 @@
 import { APP_NAME } from '../lib/brand'
 import CropImg from '../components/CropImg'
 import { useEffect, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import InviteLanding, { AUTOJOIN_KEY, type AnonPreview } from '../components/InviteLanding'
 import { renderMarkdown } from '../lib/markdown'
@@ -32,6 +32,8 @@ export default function InvitePage() {
   const [anon, setAnon] = useState<AnonPreview | null>(null)
   const returnTo = location.pathname + location.search
 
+  const say = (e: unknown) => e instanceof ApiError && e.status === 429 ? t('Too many requests. Try again in a minute.') : (e as Error).message
+
   const join = async () => {
     setBusy(true)
     try {
@@ -39,18 +41,15 @@ export default function InvitePage() {
       upsertGuild(g); markJoined(g.id)
       const first = g.channels.find((c) => c.kind === 'text')
       navigate(first ? `/channels/${g.id}/${first.id}` : `/channels/${g.id}`, { replace: true })
-    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+    } catch (e) { setErr(say(e)) } finally { setBusy(false) }
   }
 
   useEffect(() => {
-    // Server invites first; group DM invite links share the /invite/ path (they need a session).
+    // With a session: server invite first, then group DM invite (they share the /invite/ path). Logged out, a group
+    // code cannot be told from an unknown one, so a miss shows the not-found message with a way to log in.
     const fail = (e: unknown) => {
-      if (e instanceof ApiError && e.status === 429) { setErr(t('Too many requests. Try again in a minute.')); return }
-      api.get<GroupPreview>(`/group-invites/${code}`).then(setGroup).catch((g) => {
-        // A group link needs a session: send a logged-out visitor to sign in and back.
-        if (!token && g instanceof ApiError && g.status === 401) navigate('/login', { replace: true, state: { from: returnTo } })
-        else setErr((e as Error).message)
-      })
+      if (!token || (e instanceof ApiError && e.status === 429)) { setErr(say(e)); return }
+      api.get<GroupPreview>(`/group-invites/${code}`).then(setGroup).catch((g) => setErr(say(g instanceof ApiError && g.status === 429 ? g : e)))
     }
     if (!token) { api.get<AnonPreview>(`/invites/${code}`).then(setAnon).catch(fail); return }
     api.get<Preview>(`/invites/${code}`).then((pv) => {
@@ -60,6 +59,7 @@ export default function InvitePage() {
       try { want = sessionStorage.getItem(AUTOJOIN_KEY) === code; sessionStorage.removeItem(AUTOJOIN_KEY) } catch { /* private mode */ }
       if (want && !pv.already_member && !pv.banned && !pv.paused && !pv.expired && !pv.guild.rules_required) void join()
     }).catch(fail)
+    // Runs once per code and session: say/join are recreated every render and must not re-trigger the fetch (or a second autojoin).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, token])
 
@@ -84,7 +84,8 @@ export default function InvitePage() {
           <>
             <h1 className="text-xl font-bold mb-2">{t('Invite invalid')}</h1>
             <p className="text-text-2 text-sm mb-6">{err}</p>
-            <button className="btn-primary w-full" onClick={() => navigate('/channels/@me')}>{t('Continue to {app}', { app: APP_NAME })}</button>
+            <button className="btn-primary w-full" onClick={() => navigate(token ? '/channels/@me' : '/login', token ? undefined : { state: { from: returnTo } })}>{t('Continue to {app}', { app: APP_NAME })}</button>
+            {!token && <p className="mt-4 text-xs text-text-2">{t('Have an invite to a group chat?')} <Link to="/login" state={{ from: returnTo }} className="text-sky-400 hover:underline" data-invite-group-login>{t('Log in to open it.')}</Link></p>}
           </>
         ) : !p ? (
           <p className="text-text-2">{t('Loading…')}</p>
