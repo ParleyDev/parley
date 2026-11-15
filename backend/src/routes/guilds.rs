@@ -48,7 +48,7 @@ pub fn guild_payload(g: &Guild, extra: serde_json::Value) -> serde_json::Value {
     v
 }
 
-pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications, tag, tag_badge, tag_color, partnered, explicit_filter, summaries_enabled, theme, scheduled_off";
+pub const GUILD_COLS: &str = "id, name, icon_url, owner_id, created_at, banner_url, rules, rules_required, description, system_channel_id, join_notices, join_wave, default_notifications, verification_level, mfa_level, invites_paused, dms_paused_until, afk_channel_id, afk_timeout, rules_channel_id, welcome_screen, widget_enabled, widget_invite, invite_splash_url, raid_protection, raid_threshold, safety_alerts_channel_id, onboarding, applications, tag, tag_badge, tag_color, partnered, explicit_filter, summaries_enabled, theme, scheduled_off, invite_preview_channel_id";
 pub const CHANNEL_COLS: &str = "id, guild_id, name, kind, topic, position, created_at, owner_id, icon_url, parent_id, nsfw, audio_mode, audio_bitrate, audio_low_latency, e2ee, rate_limit_per_user, user_limit, voice_status, spoiler, video_quality, forum_layout, forum_sort, forum_require_tag, forum_default_reaction, news, media";
 
 pub async fn require_member(db: &PgPool, guild_id: Uuid, user_id: Uuid) -> AppResult<Guild> {
@@ -238,6 +238,9 @@ struct UpdateGuild {
     scheduled_off: Option<bool>,
     #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
     safety_alerts_channel_id: Option<Option<Uuid>>,
+    /// A text channel @everyone can read, peeked at on the logged-out invite page, or null for none.
+    #[serde(default, deserialize_with = "crate::routes::roles::deserialize_nullable_uuid")]
+    invite_preview_channel_id: Option<Option<Uuid>>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -345,6 +348,13 @@ async fn update_guild(
         let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind = 'text'").bind(cid).bind(id).fetch_optional(&state.db).await?;
         if ok.is_none() { return Err(AppError::BadRequest("Safety alerts go to a text channel in this server".into())) }
     }
+    if let Some(Some(cid)) = req.invite_preview_channel_id {
+        let ch: Option<Channel> = perms::guild_channels(&state.db, id).await?.into_iter().find(|c| c.id == cid);
+        if !match &ch { Some(c) => crate::routes::invites::everyone_can_read(&state.db, c).await?, None => false } { return Err(AppError::BadRequest("Pick a text channel everyone can read".into())) }
+    }
+    if let Some(cid) = req.invite_preview_channel_id {
+        sqlx::query("UPDATE guilds SET invite_preview_channel_id = $2 WHERE id = $1").bind(id).bind(cid).execute(&state.db).await?;
+    }
     if let Some(on) = req.summaries_enabled {
         sqlx::query("UPDATE guilds SET summaries_enabled = $2 WHERE id = $1").bind(id).bind(on).execute(&state.db).await?;
     }
@@ -415,6 +425,7 @@ async fn update_guild(
     if let Some(v) = req.join_wave { changed.insert("join_wave".into(), json!(v)); }
     if let Some(v) = &req.default_notifications { changed.insert("default_notifications".into(), json!(v)); }
     if let Some(v) = req.verification_level { changed.insert("verification_level".into(), json!(v)); }
+    if req.invite_preview_channel_id.is_some() { changed.insert("invite_preview_channel".into(), json!(g.invite_preview_channel_id)); }
     if req.afk_channel_id.is_some() { changed.insert("afk_channel".into(), json!(g.afk_channel_id)); }
     if let Some(v) = req.afk_timeout { changed.insert("afk_timeout".into(), json!(v)); }
     if req.rules_channel_id.is_some() { changed.insert("rules_channel".into(), json!(g.rules_channel_id)); }

@@ -19,6 +19,28 @@ const once = await call(a.token, 'POST', `/guilds/${g.id}/invites`, { max_uses: 
 await call(b.token, 'POST', `/invites/${once.code}`)
 ok('used-up invite shows expired to anonymous', (await (await anon(`/invites/${once.code}`)).json()).expired === true)
 
+// Preview channel and message peek
+ok('anonymous preview varies on Authorization', (r.headers.get('vary') || '').toLowerCase().includes('authorization'))
+const chans = await call(a.token, 'GET', `/guilds/${g.id}/channels`)
+const general = chans.find((c) => c.kind === 'text')
+ok('peek is 404 until a channel is chosen', (await anon(`/invites/${inv.code}/preview-messages`)).status === 404)
+ok('owner sets the preview channel', (await raw(a.token, 'PATCH', `/guilds/${g.id}`, { invite_preview_channel_id: general.id })).status === 200)
+for (const t of ['one', 'two', 'three', 'four', 'five', '<b>six</b>']) await call(a.token, 'POST', `/channels/${general.id}/messages`, { content: t })
+r = await anon(`/invites/${inv.code}/preview-messages`); j = await r.json()
+ok('peek returns the last five, oldest first', r.status === 200 && j.length === 5 && j[0].content === 'two' && j[4].content === '<b>six</b>')
+ok('peek carries only display fields', Object.keys(j[0]).sort().join() === 'author,content,created_at,id' && Object.keys(j[0].author).sort().join() === 'avatar_url,display_name')
+ok('peek is cacheable', r.headers.get('cache-control') === 'public, max-age=30')
+ok('preview names the channel', (await (await anon(`/invites/${inv.code}`)).json()).preview_channel?.id === general.id)
+ok('logged-in preview names it too', (await call(b.token, 'GET', `/invites/${inv.code}`)).preview_channel?.name === general.name)
+ok('bob cannot set it', (await raw(b.token, 'PATCH', `/guilds/${g.id}`, { invite_preview_channel_id: general.id })).status === 403)
+const priv = await call(a.token, 'POST', `/guilds/${g.id}/channels`, { name: 'staff-only' })
+await raw(a.token, 'PUT', `/channels/${priv.id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
+ok('a channel everyone cannot read is refused', (await raw(a.token, 'PATCH', `/guilds/${g.id}`, { invite_preview_channel_id: priv.id })).status === 400)
+await raw(a.token, 'PUT', `/channels/${general.id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
+ok('peek is 404 once everyone loses the channel', (await anon(`/invites/${inv.code}/preview-messages`)).status === 404)
+ok('preview_channel is null then', (await (await anon(`/invites/${inv.code}`)).json()).preview_channel === null)
+ok('the channel can be cleared', (await raw(a.token, 'PATCH', `/guilds/${g.id}`, { invite_preview_channel_id: null })).status === 200)
+
 const c = await reg('carol')
 for (const x of [b, c]) { await call(a.token, 'POST', '/users/@me/relationships', { user_id: x.user.id }); await call(x.token, 'PUT', `/users/@me/relationships/${a.user.id}`) }
 const grp = await call(a.token, 'POST', '/users/@me/channels', { recipient_ids: [b.user.id, c.user.id] })

@@ -368,6 +368,9 @@ pub struct Guild {
     pub raid_threshold: i32,
     #[sqlx(default)]
     pub safety_alerts_channel_id: Option<Uuid>,
+    /// Channel whose latest messages the logged-out invite page peeks at (only while @everyone can read it).
+    #[sqlx(default)]
+    pub invite_preview_channel_id: Option<Uuid>,
     /// Onboarding questions: {enabled, questions: [{id, title, multi, required, options: [{id, label, emoji, role_ids, channel_ids}]}]}.
     #[sqlx(default)]
     #[serde(default)]

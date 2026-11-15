@@ -32,6 +32,7 @@ type AcceptRow = (Uuid, i32, Option<i32>, Option<chrono::DateTime<chrono::Utc>>,
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/invites/:code", get(preview).route_layer(axum::middleware::from_fn(crate::ratelimit::rl_invite_preview)).post(accept))
+        .route("/invites/:code/preview-messages", get(preview_messages).route_layer(axum::middleware::from_fn(crate::ratelimit::rl_invite_preview)))
         .route("/invites/:code/badge.svg", get(badge))
         .route("/guilds/:id/badge", put(save_badge_settings).get(badge_settings))
         .route("/guilds/:id/badge/preview.svg", get(badge_preview))
@@ -181,6 +182,43 @@ pub async fn invites_paused(db: &sqlx::PgPool, gid: Uuid, uid: Uuid) -> AppResul
     Ok(paused)
 }
 
+/// Whether `@everyone` alone may view and read the history of this channel (a text channel of a server, with the
+/// category's and its own overwrites applied): what a logged-out visitor may be shown.
+pub async fn everyone_can_read(db: &sqlx::PgPool, channel: &crate::models::Channel) -> AppResult<bool> {
+    let Some(gid) = channel.guild_id.filter(|_| channel.kind == "text") else { return Ok(false) };
+    let ctx = perms::GuildCtx::load(db, gid).await?;
+    let mut c = [channel.clone()];
+    perms::attach_overwrites(db, &mut c).await?;
+    let p = crate::routes::discovery::everyone_perms(&ctx, &c[0]);
+    Ok(perms::has(p, perms::VIEW_CHANNEL) && perms::has(p, perms::READ_MESSAGE_HISTORY))
+}
+
+/// The server's invite preview channel, if one is set and still readable by everyone.
+async fn preview_channel(db: &sqlx::PgPool, gid: Uuid) -> AppResult<Option<crate::models::Channel>> {
+    let Some(cid) = sqlx::query_scalar::<_, Option<Uuid>>("SELECT invite_preview_channel_id FROM guilds WHERE id = $1").bind(gid).fetch_one(db).await? else { return Ok(None) };
+    let Some(c) = perms::guild_channels(db, gid).await?.into_iter().find(|c| c.id == cid) else { return Ok(None) };
+    Ok(if everyone_can_read(db, &c).await? { Some(c) } else { None })
+}
+
+async fn preview_channel_json(db: &sqlx::PgPool, gid: Uuid) -> AppResult<Value> {
+    Ok(preview_channel(db, gid).await?.map(|c| json!({ "id": c.id, "name": c.name })).unwrap_or(Value::Null))
+}
+
+/// Up to five recent text messages of the invite's preview channel, oldest first, for the logged-out invite page.
+/// Display fields only: no attachments, embeds, reactions or user ids.
+async fn preview_messages(State(state): State<AppState>, Path(code): Path<String>) -> AppResult<impl IntoResponse> {
+    let gid: Option<(Uuid,)> = sqlx::query_as(&format!("SELECT i.guild_id FROM invites i WHERE {MATCH} AND {LIVE} ORDER BY i.vanity LIMIT 1")).bind(&code).fetch_optional(&state.db).await?;
+    let (gid,) = gid.ok_or_else(|| AppError::NotFound("Invite not found or expired".into()))?;
+    let chan = preview_channel(&state.db, gid).await?.ok_or_else(|| AppError::NotFound("No preview for this invite".into()))?;
+    let rows: Vec<(Uuid, String, chrono::DateTime<chrono::Utc>, String, Option<String>)> = sqlx::query_as(
+        "SELECT m.id, m.content, m.created_at, COALESCE(NULLIF(gm.nickname, ''), u.display_name), u.avatar_url
+         FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN guild_members gm ON gm.guild_id = $2 AND gm.user_id = m.author_id
+         WHERE m.channel_id = $1 AND m.kind = 'default' AND btrim(m.content) <> '' ORDER BY m.id DESC LIMIT 5")
+        .bind(chan.id).bind(gid).fetch_all(&state.db).await?;
+    let body: Vec<Value> = rows.into_iter().rev().map(|(id, content, at, name, avatar)| json!({ "id": id, "content": content, "created_at": at, "author": { "display_name": name, "avatar_url": avatar } })).collect();
+    Ok(([(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"), (header::CACHE_CONTROL, "public, max-age=30")], Json(body)))
+}
+
 async fn preview(
     State(state): State<AppState>,
     MaybeUser(uid): MaybeUser,
@@ -204,24 +242,24 @@ async fn preview(
             "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count, "rules_required": rules_required, "splash_url": splash, "description": description },
             "expired": !live,
             "paused": paused,
-            "preview_channel": null,
+            "preview_channel": preview_channel_json(&state.db, gid).await?,
         });
-        return Ok(([(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"), (header::CACHE_CONTROL, "public, max-age=30")], Json(body)).into_response());
+        return Ok(([(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"), (header::CACHE_CONTROL, "public, max-age=30"), (header::VARY, "Authorization")], Json(body)).into_response());
     };
     let already: Option<(bool,)> = sqlx::query_as("SELECT true FROM guild_members WHERE guild_id = $1 AND user_id = $2")
         .bind(gid)
         .bind(uid)
         .fetch_optional(&state.db)
         .await?;
-    Ok(Json(json!({
+    Ok(([(header::VARY, "Authorization")], Json(json!({
         "code": code,
         "guild": { "id": gid, "name": name, "icon_url": icon, "member_count": count, "online_count": online_count, "rules": rules, "rules_required": rules_required, "splash_url": splash, "description": description },
         "expired": !live,
         "already_member": already.is_some(),
         "banned": is_banned(&state.db, gid, uid).await?,
         "paused": invites_paused(&state.db, gid, uid).await?,
-        "preview_channel": null,
-    })).into_response())
+        "preview_channel": preview_channel_json(&state.db, gid).await?,
+    }))).into_response())
 }
 
 async fn accept(

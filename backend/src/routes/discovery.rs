@@ -216,12 +216,17 @@ pub async fn public_channels(db: &PgPool, gid: Uuid) -> AppResult<(perms::GuildC
         return Err(AppError::NotFound("Server not found in Discover".into()));
     }
     let ctx = perms::GuildCtx::load(db, gid).await?;
-    let everyone = ctx.roles.get(&gid).map(|r| r.permissions as u64).unwrap_or(0);
     let channels = perms::guild_channels(db, gid).await?
         .into_iter()
-        .filter(|c| c.kind == "text" && perms::has(ctx.in_channel(Uuid::nil(), everyone, &c.overwrites), perms::VIEW_CHANNEL))
+        .filter(|c| c.kind == "text" && perms::has(everyone_perms(&ctx, c), perms::VIEW_CHANNEL))
         .collect();
     Ok((ctx, channels))
+}
+
+/// What the @everyone role alone may do in a channel (its overwrites, and the category's it inherits, applied).
+pub fn everyone_perms(ctx: &perms::GuildCtx, c: &crate::models::Channel) -> u64 {
+    let everyone = ctx.roles.get(&ctx.guild.id).map(|r| r.permissions as u64).unwrap_or(0);
+    ctx.in_channel(Uuid::nil(), everyone, &c.overwrites)
 }
 
 /// Discord-style preview for non-members: the server, its public text channels and the listing.

@@ -18,6 +18,7 @@ const ENDPOINTS: &[(&str, &str, &str, &str, &str)] = &[
     ("GET", "/users/@me/channels", "Users", "The user's DMs and groups", "user|bot"),
     ("POST", "/users/@me/channels", "Users", "Open a DM (recipient_id) or a group (recipient_ids)", "user|bot"),
     ("GET", "/invites/{code}", "Invites", "Server, member and online counts for an invite", "none"),
+    ("GET", "/invites/{code}/preview-messages", "Invites", "Up to five recent messages of the server's invite preview channel (404 when none is set)", "none"),
     ("GET", "/guilds/{guild_id}", "Servers", "A server you're in", "user|bot"),
     ("GET", "/guilds/{guild_id}/channels", "Servers", "Channels you can see", "user|bot"),
     ("POST", "/guilds/{guild_id}/channels", "Servers", "Create a channel (kind: text, voice, forum, stage, category, announcement, media)", "user|bot"),
