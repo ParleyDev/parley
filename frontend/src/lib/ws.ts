@@ -14,7 +14,7 @@ import { playSfx } from './sfx'
 import { getNotifPrefs } from './notifPrefs'
 import { getPrefs, streamerHides } from './prefs'
 import { log } from './log'
-import { communityOfChannel, communitySuppresses } from './communities'
+import { communityOfChannel, communitySuppresses, NO_COMMUNITIES, NO_FOLLOWS } from './communities'
 import { studio } from './studio'
 import { onComments as onDawComments, onPresence as onDawPresence, onReconnect as onDawReconnect, onRemote as onDawEdit, onTransport as onDawTransport, retrySync as retryDawSync, useDaw } from './daw'
 import { isNative, registerPush } from './native'
@@ -261,8 +261,8 @@ function handle(ev: Ev) {
         const hidden = document.visibilityState !== 'visible'
         // A community I don't follow stays quiet unless the message mentions me or replies to me.
         const gid = ch?.guild_id ?? ''
-        const com = ch ? communityOfChannel(ch, s.channels, s.communities[gid] ?? []) : null
-        const quiet = communitySuppresses(!!com && !(s.communityFollows[gid] ?? []).includes(com.id), mentioned, ev.d.message.referenced?.author.id === me)
+        const com = ch ? communityOfChannel(ch, s.channels, s.communities[gid] ?? NO_COMMUNITIES) : null
+        const quiet = communitySuppresses(!!com && !(s.communityFollows[gid] ?? NO_FOLLOWS).includes(com.id), mentioned, ev.d.message.referenced?.author.id === me)
         if (!quiet && !streamerHides('notifications') && shouldNotify(effective(s.notifSettings, ch, s.guilds), mentioned, ev.d.message, !!ch && ch.guild_id === null)) {
           if (hidden) notifyMessage(ev.d.message, ev.d.guild_id)
           // A sound unless you are looking right at that channel in a focused window.

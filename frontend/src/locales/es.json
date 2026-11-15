@@ -3694,5 +3694,11 @@
 "Invite preview on": "Vista previa de invitación activada",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Muestra los últimos mensajes de un canal en tu página de invitación pública. Cualquiera con un enlace de invitación puede leerlos.",
 "#{name} (paused: not public)": "#{name} (en pausa: no es pública)",
-"Browse Communities": "Explorar comunidades"
+"Browse Communities": "Explorar comunidades",
+"Following": "Siguiendo",
+"Search communities": "Buscar comunidades",
+"No channels yet": "Aún no hay canales",
+"No communities match": "Ninguna comunidad coincide",
+"{online} online · {following} following": "{online} en línea · {following} siguiendo",
+"Follow {name}": "Seguir {name}"
 }

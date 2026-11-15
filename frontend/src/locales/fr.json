@@ -3694,5 +3694,11 @@
 "Invite preview on": "Aperçu de l'invitation activé",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Affiche les derniers messages d'un salon sur ta page d'invitation publique. Toute personne ayant un lien d'invitation peut les lire.",
 "#{name} (paused: not public)": "#{name} (en pause : non publique)",
-"Browse Communities": "Parcourir les communautés"
+"Browse Communities": "Parcourir les communautés",
+"Following": "Suivi",
+"Search communities": "Rechercher des communautés",
+"No channels yet": "Aucun salon pour le moment",
+"No communities match": "Aucune communauté ne correspond",
+"{online} online · {following} following": "{online} en ligne · {following} abonnés",
+"Follow {name}": "Suivre {name}"
 }

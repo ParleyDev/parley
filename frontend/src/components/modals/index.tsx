@@ -45,6 +45,7 @@ import GuildNotificationsModal from './GuildNotifications'
 import AltTextModal from './AltText'
 import ScheduleMessageModal from './ScheduleMessage'
 import BrowseChannelsModal from './BrowseChannels'
+import BrowseCommunitiesModal from './BrowseCommunities'
 import OnboardingModal from './Onboarding'
 import FollowChannelModal from './FollowChannel'
 import ServerProfileModal from './ServerProfile'
@@ -118,6 +119,7 @@ export default function Modals() {
       </Modal>
     )
     case 'welcome': return <WelcomeModal onClose={close} guildId={modal!.guildId} />
+    case 'browseCommunities': return <BrowseCommunitiesModal onClose={close} guildId={modal!.guildId} />
     case 'browseChannels': return <BrowseChannelsModal onClose={close} guildId={modal!.guildId} tab={modal!.tab} />
     case 'onboarding': return <OnboardingModal onClose={close} guildId={modal!.guildId} />
     case 'appModal': return <AppModal onClose={close} interactionId={modal!.interactionId} modal={modal!.modal} />

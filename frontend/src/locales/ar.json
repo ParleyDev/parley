@@ -3694,5 +3694,11 @@
 "Invite preview on": "تم تفعيل معاينة الدعوة",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "اعرض أحدث الرسائل من قناة واحدة على صفحة الدعوة العامة. يمكن لأي شخص لديه رابط الدعوة قراءتها.",
 "#{name} (paused: not public)": "#{name} (متوقفة: غير عامة)",
-"Browse Communities": "تصفح المجتمعات"
+"Browse Communities": "تصفح المجتمعات",
+"Following": "تتابع",
+"Search communities": "ابحث في المجتمعات",
+"No channels yet": "لا توجد قنوات بعد",
+"No communities match": "لا توجد مجتمعات مطابقة",
+"{online} online · {following} following": "{online} متصل · {following} متابع",
+"Follow {name}": "تابع {name}"
 }

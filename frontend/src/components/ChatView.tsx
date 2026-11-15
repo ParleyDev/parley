@@ -27,6 +27,7 @@ import InboxButton from './InboxButton'
 import DmProfilePanel from './DmProfilePanel'
 import { MembersToggle, MobileBack } from './HeaderBits'
 import { useT } from '../lib/i18n'
+import { communityOfChannel, NO_COMMUNITIES, NO_FOLLOWS } from '../lib/communities'
 import { remindLabel, setReminder } from '../lib/reminders'
 import { applySuggestion, useSearchSuggestions } from './SearchSuggest'
 import DirectoryView from './DirectoryView'
@@ -105,6 +106,14 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
   const myAge = useStore((s) => (s.user as PrivateUser | null)?.age_group)
   const relKind = useStore((s) => (recipient ? s.relationships[recipient.id]?.kind : undefined))
   const openModal = useStore((s) => s.openModal)
+  // A channel of a community I don't follow offers to follow it (following only changes my sidebar, never access).
+  const followCommunity = useStore((s) => s.followCommunity)
+  const followPrompt = useStore((s) => {
+    const gid = channel.guild_id
+    if (!gid) return null
+    const com = communityOfChannel(channel as Channel, s.channels, s.communities[gid] ?? NO_COMMUNITIES)
+    return com && !(s.communityFollows[gid] ?? NO_FOLLOWS).includes(com.id) ? com : null
+  })
   const [renaming, setRenaming] = useState(false)
   const [datePick, setDatePick] = useState(false)
   const iconRef = useRef<HTMLInputElement>(null)
@@ -206,6 +215,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
                 <button onClick={toggleE2ee} title={channel.e2ee ? t('Calls here are end-to-end encrypted. Click to turn it off.') : t('Turn on end-to-end encryption for calls')} aria-pressed={!!channel.e2ee} className={`${btn(!!channel.e2ee)} phone:hidden`} data-dm-e2ee={channel.e2ee ? '1' : '0'}>{channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />}</button>
               </>
             )}
+            {followPrompt && <button onClick={() => followCommunity(followPrompt.guild_id, followPrompt.slug, true)} title={t('Follow {name}', { name: followPrompt.name })} className="flex max-w-[14rem] items-center gap-1 rounded-md bg-accent px-2 py-1 text-sm font-medium text-white hover:opacity-90 phone:max-w-[8rem]" data-community-follow-prompt><Users size={16} className="shrink-0" /><span className="truncate">{t('Follow {name}', { name: followPrompt.name })}</span></button>}
             {!isDm && channel.news && <button onClick={() => openModal({ kind: 'followChannel', channelId: channel.id })} title={t('Follow')} className="flex items-center gap-1 rounded-md bg-bg-3 px-2 py-1 text-sm font-medium hover:bg-bg-4 phone:hidden" data-follow-channel><Megaphone size={16} />{t('Follow')}</button>}
             {!isDm && channel.kind === 'text' && (
               <span className="relative">

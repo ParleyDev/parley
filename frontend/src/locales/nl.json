@@ -3694,5 +3694,11 @@
 "Invite preview on": "Uitnodigingsvoorbeeld aan",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Toon de nieuwste berichten van één kanaal op je openbare uitnodigingspagina. Iedereen met een uitnodigingslink kan ze lezen.",
 "#{name} (paused: not public)": "#{name} (gepauzeerd: niet openbaar)",
-"Browse Communities": "Communities bekijken"
+"Browse Communities": "Communities bekijken",
+"Following": "Volgend",
+"Search communities": "Communities zoeken",
+"No channels yet": "Nog geen kanalen",
+"No communities match": "Geen communities gevonden",
+"{online} online · {following} following": "{online} online · {following} volgers",
+"Follow {name}": "Volg {name}"
 }

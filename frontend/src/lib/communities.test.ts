@@ -1,6 +1,9 @@
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { communityOfChannel, communitySuppresses, splitCategories, unfollowedCategoryIds } from './communities'
-import { guildUnread } from '../store'
+import { guildUnread, useStore } from '../store'
+import { api } from './api'
+vi.mock('./api', async (orig) => ({ ...(await orig<typeof import('./api')>()), api: { put: vi.fn(), delete: vi.fn() } }))
+
 import type { Channel, CommunitySlim } from './types'
 
 const cat = (id: string) => ({ id, kind: 'category', guild_id: 'g' }) as Channel
@@ -31,4 +34,26 @@ test('guildUnread ignores unfollowed communities until followed', () => {
   const base = { channels, dms: {}, notifSettings: {}, readStates: { t: null }, lastMessageId: { t: 'm1' }, communities: { g: [com('m', 'c2')] } }
   expect(guildUnread({ ...base, communityFollows: {} }, 'g')).toBe(false)
   expect(guildUnread({ ...base, communityFollows: { g: ['m'] } }, 'g')).toBe(true)
+})
+
+test('the derived lookups are computed once per array and answer like the plain versions', () => {
+  const cs = [com('m', 'c2'), com('p', 'c3')], fs = ['p']
+  expect(unfollowedCategoryIds(cs, fs)).toBe(unfollowedCategoryIds(cs, fs))
+  expect([...unfollowedCategoryIds(cs, [])]).toEqual(['c2', 'c3'])
+  // a changed follow list is a new array and gets a fresh answer
+  expect([...unfollowedCategoryIds(cs, ['p', 'm'])]).toEqual([])
+  const channels = { c3: cat('c3'), t: { id: 't', kind: 'text', parent_id: 'c3' } } as unknown as Record<string, Channel>
+  expect(communityOfChannel(channels.t, channels, cs)).toBe(cs[1])
+  expect(communityOfChannel(channels.t, channels, [com('m', 'c2')])).toBeNull()
+})
+test('a failed follow request puts the follow list back exactly as it was', async () => {
+  const c = com('b', 'c2')
+  useStore.setState({ communities: { g: [com('a', 'c1'), c, com('d', 'c3')] }, communityFollows: { g: ['a', 'b', 'd'] }, pushToast: vi.fn() })
+  vi.mocked(api.delete).mockRejectedValueOnce(new Error('nope'))
+  await useStore.getState().followCommunity('g', 'b', false)
+  expect(useStore.getState().communityFollows.g).toEqual(['a', 'b', 'd'])
+  expect(useStore.getState().pushToast).toHaveBeenCalledWith('nope', 'error')
+  vi.mocked(api.put).mockResolvedValueOnce(undefined)
+  await useStore.getState().followCommunity('g', 'b', false)
+  expect(useStore.getState().communityFollows.g).toEqual(['a', 'd'])
 })

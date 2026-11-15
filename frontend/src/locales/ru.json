@@ -3694,5 +3694,11 @@
 "Invite preview on": "Предпросмотр приглашения включён",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Показывайте последние сообщения одного канала на публичной странице приглашения. Их может прочитать любой, у кого есть ссылка-приглашение.",
 "#{name} (paused: not public)": "#{name} (приостановлено: не публичный)",
-"Browse Communities": "Обзор сообществ"
+"Browse Communities": "Обзор сообществ",
+"Following": "Вы подписаны",
+"Search communities": "Поиск сообществ",
+"No channels yet": "Каналов пока нет",
+"No communities match": "Подходящих сообществ нет",
+"{online} online · {following} following": "{online} в сети · {following} подписчиков",
+"Follow {name}": "Подписаться на {name}"
 }

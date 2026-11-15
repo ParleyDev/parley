@@ -24,7 +24,7 @@ const writeLocal = (uid: string, channelId: string, rows: Message[]) => {
 /** The in-app "system app" that explains undelivered messages: a friendly frog. */
 const FROG = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="32" fill="#57c26b"/><circle cx="20" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="44" cy="22" r="9" fill="#57c26b" stroke="#3f9a52" stroke-width="2"/><circle cx="20" cy="22" r="6" fill="#fff"/><circle cx="44" cy="22" r="6" fill="#fff"/><circle cx="21.5" cy="23" r="3" fill="#1f2937"/><circle cx="45.5" cy="23" r="3" fill="#1f2937"/><circle cx="22.5" cy="21.5" r="1" fill="#fff"/><circle cx="46.5" cy="21.5" r="1" fill="#fff"/><path d="M18 40q14 12 28 0" fill="none" stroke="#1f2937" stroke-width="3" stroke-linecap="round"/><circle cx="14" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/><circle cx="50" cy="36" r="3.5" fill="#f28ba8" opacity="0.8"/></svg>`)
 export const RIBBIT = { id: 'ribbit', username: 'ribbit', display_name: 'Ribbit', avatar_url: FROG, bio: '', status: '', created_at: new Date(0).toISOString(), banner_url: null, theme_primary: null, theme_accent: null, pronouns: '', name_primary: null } as unknown as User
-import { unfollowedCategoryIds } from './lib/communities'
+import { NO_COMMUNITIES, NO_FOLLOWS, unfollowedCategoryIds } from './lib/communities'
 import type { Activity, Attachment, Poll, ThreadInfo, TypingIndicator } from './lib/types'
 import type { Ban, Channel, CommunitySlim, DmChannel, Draft, Emoji, Guild, GuildEvent, LayoutItem, Member, Message, PeerStatus, PrivateUser, ReadState, Relationship, RemoteMedia, Role, Sound, Sticker, StudioSession, User, UserNote, VoiceState } from './lib/types'
 import { reconcile } from './lib/layout'
@@ -409,12 +409,13 @@ export const useStore = create<State>((set, get) => ({
   setCommunityFollow: (guildId, id, following) => set((s) => { const cur = (s.communityFollows[guildId] ?? []).filter((x) => x !== id); return { communityFollows: { ...s.communityFollows, [guildId]: following ? [...cur, id] : cur } } }),
   followCommunity: async (guildId, slug, following) => {
     const c = get().communities[guildId]?.find((x) => x.slug === slug)
-    const was = !!c && !!get().communityFollows[guildId]?.includes(c.id)
+    const before = get().communityFollows[guildId]
     if (c) get().setCommunityFollow(guildId, c.id, following)
     try {
       if (following) await api.put(`/guilds/${guildId}/communities/${slug}/follow`, {}); else await api.delete(`/guilds/${guildId}/communities/${slug}/follow`)
     } catch (e) {
-      if (c) get().setCommunityFollow(guildId, c.id, was)
+      // Put the saved list back as it was, so the community keeps its place in the follow order.
+      if (c) set((s) => ({ communityFollows: { ...s.communityFollows, [guildId]: before ?? [] } }))
       get().pushToast((e as Error).message, 'error')
     }
   },
@@ -1060,7 +1061,7 @@ export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'cha
   // from my list (Channels & Roles) don't either, since there is nowhere to see them.
   const hidden = s.hiddenChannels?.[guildId]
   // Channels of communities I don't follow stay quiet too (mentions still count, see guildMentions).
-  const quiet = unfollowedCategoryIds(s.communities?.[guildId] ?? [], s.communityFollows?.[guildId] ?? [])
+  const quiet = unfollowedCategoryIds(s.communities?.[guildId] ?? NO_COMMUNITIES, s.communityFollows?.[guildId] ?? NO_FOLLOWS)
   return Object.values(s.channels).some((c) => c.guild_id === guildId && c.kind !== 'thread' && !hidden?.includes(c.id) && !(c.parent_id && quiet.has(c.parent_id)) && showsUnread(s, c.id))
 }
 

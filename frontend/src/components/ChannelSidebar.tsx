@@ -7,7 +7,7 @@ import { CalendarDays, Flame, Handshake, LayoutGrid, ChevronDown, ChevronsDownUp
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
-import { useRef, useState, type DragEvent, useEffect } from 'react'
+import { useRef, useState, type DragEvent, useEffect, useMemo } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import { isUnread, myChannelPerms, myGuildPerms, showsMentions, showsUnread, useStore, voiceParticipants } from '../store'
 import { notifEntries } from './NotifMenu'
@@ -18,7 +18,6 @@ import { AudioLines, Bell, BellOff, BookOpenCheck, ListChecks, Tags, DoorOpen, F
 import { togglePinned } from '../lib/pins'
 
 const NO_PINS: string[] = []
-const NO_COMMUNITIES: CommunitySlim[] = []
 import { EMPTY_ROLES, has, P } from '../lib/perms'
 import StyledName from './StyledName'
 import { api } from '../lib/api'
@@ -27,7 +26,7 @@ import type { Channel } from '../lib/types'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useT, tn } from '../lib/i18n'
 import { shownName } from '../lib/names'
-import { splitCategories } from '../lib/communities'
+import { NO_COMMUNITIES, NO_FOLLOWS, splitCategories } from '../lib/communities'
 import { colorFor, initials } from '../lib/format'
 import type { CommunitySlim } from '../lib/types'
 import { Users } from 'lucide-react'
@@ -116,7 +115,13 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const threadInfo = useStore((s) => s.threads)
   const allRoles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   const guildCommunities = useStore((s) => s.communities[guildId]) ?? NO_COMMUNITIES
-  const followedIds = useStore((s) => s.communityFollows[guildId]) ?? NO_PINS
+  const followedIds = useStore((s) => s.communityFollows[guildId]) ?? NO_FOLLOWS
+  // Categories backing a community show only for members who follow it; a followed one is a block after the rest.
+  // Memoised: with a thousand communities the split is too heavy to redo on every render.
+  const split = useMemo(() => {
+    const cats = Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'category').sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+    return splitCategories(cats, guildCommunities, followedIds)
+  }, [channels, guildId, guildCommunities, followedIds])
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
   const canInvite = has(perms, P.CREATE_INVITE)
@@ -129,9 +134,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const categories = all.filter((c) => c.kind === 'category')
   const list = all.filter((c) => c.kind !== 'category' && c.kind !== 'thread' && c.kind !== 'project')
   const catIds = new Set(categories.map((c) => c.id))
-  // Categories backing a community show only for members who follow it; a followed one is a block after the rest.
-  const split = splitCategories(categories, guildCommunities, followedIds)
-  const ownCategories = split.own
+  const ownCategories = split.own.filter((c) => !viewHidden(c))
+  const followedBlocks = split.followed.filter((f) => !viewHidden(f.category))
   const uncategorized = list.filter((c) => !c.parent_id || !catIds.has(c.parent_id))
   const childrenOf = (id: string) => list.filter((c) => c.parent_id === id)
   // Unread and mentions, as the server icon counts them: a row says so for itself, a studio for its projects too
@@ -345,7 +349,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             {childrenOf(cat.id).filter((c) => !collapsed[cat.id] || c.id === channelId || rowUnread(c) || mentionsOf(c.id) > 0).map(row)}
           </Category>
         ))}
-        {split.followed.map(({ community, category }) => (
+        {followedBlocks.map(({ community, category }) => (
           <Category key={category.id} label={community.name} open={!collapsed[category.id]} onToggle={() => toggleCollapsed(category.id)} highlight={target?.kind === 'channel' && target.into === category.id} testid={category.id}
             lead={<CommunityIcon community={community} />} communitySlug={community.slug}
             onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId, parentId: category.id }) : undefined} onContextMenu={(e) => ctx.open(e, categoryMenu(category))}>

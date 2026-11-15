@@ -3694,5 +3694,11 @@
 "Invite preview on": "招待プレビューをオンにしました",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "公開の招待ページに、1つのチャンネルの最新メッセージを表示します。招待リンクを持つ人なら誰でも読めます。",
 "#{name} (paused: not public)": "#{name}(一時停止中: 非公開)",
-"Browse Communities": "コミュニティを探す"
+"Browse Communities": "コミュニティを探す",
+"Following": "フォロー中",
+"Search communities": "コミュニティを検索",
+"No channels yet": "チャンネルはまだありません",
+"No communities match": "一致するコミュニティはありません",
+"{online} online · {following} following": "{online}人オンライン · {following}人がフォロー中",
+"Follow {name}": "{name}をフォロー"
 }

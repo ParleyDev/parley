@@ -3694,5 +3694,11 @@
 "Invite preview on": "Davet önizlemesi açık",
 "Show the latest messages from one channel on your public invite page. Anyone with an invite link can read them.": "Herkese açık davet sayfanızda bir kanalın en son mesajlarını gösterin. Davet bağlantısı olan herkes bunları okuyabilir.",
 "#{name} (paused: not public)": "#{name} (duraklatıldı: herkese açık değil)",
-"Browse Communities": "Topluluklara göz at"
+"Browse Communities": "Topluluklara göz at",
+"Following": "Takip ediliyor",
+"Search communities": "Topluluk ara",
+"No channels yet": "Henüz kanal yok",
+"No communities match": "Eşleşen topluluk yok",
+"{online} online · {following} following": "{online} çevrimiçi · {following} takipçi",
+"Follow {name}": "{name} topluluğunu takip et"
 }
