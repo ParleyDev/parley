@@ -1,6 +1,8 @@
 // Communities: a named group of channels in a server, backed by one ordinary category. Create, read, edit, delete,
 // the guard on deleting the backing category, and bots with Manage Channels.
-import { B, H, S, reg, call, raw, ok, finish } from '../lib.mjs'
+import { execSync } from 'node:child_process'
+import { B, H, S, reg, call, raw, ok, finish, testContainer } from '../lib.mjs'
+const sql = (q) => execSync(`docker exec ${testContainer('db')} psql -U parley -tAc "${q.replace(/"/g, '\\"')}"`, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim()
 const WS = B.replace(/^http/, 'ws').replace(/\/api$/, '') + '/ws'
 
 const a = await reg('alice'), b = await reg('bob'), dev = await reg('dev')
@@ -37,6 +39,31 @@ ok('activity paging covers nulls', await (async () => { const p1 = await call(b.
 ok('bad limit, sort and cursor refused', (await raw(b.token, 'GET', `${base}?limit=0`)).status === 400 && (await raw(b.token, 'GET', `${base}?sort=x`)).status === 400 && (await raw(b.token, 'GET', `${base}?after=zzz`)).status === 400)
 ok('unfollow', (await raw(b.token, 'DELETE', `${base}/pavement/follow`)).status === 204 && (await call(b.token, 'GET', `${base}/pavement`)).following === false)
 ok('unfollow is idempotent', (await raw(b.token, 'DELETE', `${base}/pavement/follow`)).status === 204)
+ok('limit 100 is accepted and 101 refused', (await raw(b.token, 'GET', `${base}?limit=100`)).status === 200 && (await raw(b.token, 'GET', `${base}?limit=101`)).status === 400)
+
+console.log('-- list: search wildcards and shared activity')
+const mk = async (slug, name) => call(a.token, 'POST', base, { slug, name })
+const extras = [await mk('pct', 'Pct%x'), await mk('pcty', 'PctYx'), await mk('under', 'un_der'), await mk('unxder', 'unXder')]
+const hits = async (qs) => (await call(b.token, 'GET', `${base}?q=${encodeURIComponent(qs)}`)).items.map((c) => c.slug).sort().join()
+ok('q with % matches literally', await hits('t%x') === 'pct' && await hits('%') === 'pct')
+ok('q with _ matches literally', await hits('n_d') === 'under' && await hits('_') === 'under')
+const ties = [await mk('tie-a', 'Tie B'), await mk('tie-b', 'Tie A'), await mk('tie-c', 'Tie C'), await mk('tie-d', 'Tie D')]
+sql(`UPDATE communities SET last_activity_at = '2030-01-01 00:00:00+00' WHERE guild_id = '${g.id}' AND slug LIKE 'tie-%'`)
+const seenTies = []
+for (let after = '', n = 0; n < 5; n++) { const pg = await call(b.token, 'GET', `${base}?q=tie&limit=3${after}`); seenTies.push(...pg.items.map((c) => c.slug)); if (!pg.next) break; after = `&after=${encodeURIComponent(pg.next)}` }
+ok('pages over a shared last_activity_at return each item once, in name order', seenTies.join() === 'tie-b,tie-a,tie-c,tie-d', seenTies.join())
+const hook = await call(a.token, 'POST', `/channels/${extras[0].channel_ids[0]}/webhooks`, { name: 'CI' })
+const actOf = async (slug) => (await call(a.token, 'GET', `${base}/${slug}`)).last_activity_at
+ok('a community with no messages has no activity', await actOf('pct') === null && await actOf('pcty') === null && await actOf('under') === null)
+ok('a webhook post bumps last_activity_at', (await fetch(`${B}/webhooks/${hook.webhook.id}/${hook.token}`, { method: 'POST', headers: H, body: JSON.stringify({ content: 'deployed' }) })).ok && await actOf('pct') !== null)
+const th = await call(a.token, 'POST', `/channels/${extras[1].channel_ids[0]}/threads`, { name: 'jam' })
+await call(a.token, 'POST', `/channels/${th.id}/messages`, { content: 'in a thread' })
+ok('a message in a thread under a community channel bumps it', await actOf('pcty') !== null)
+const src = await call(a.token, 'POST', `/channels/${extras[2].channel_ids[0]}/messages`, { content: 'to forward' })
+sql(`UPDATE communities SET last_activity_at = NULL WHERE id = '${extras[3].id}'`)
+await call(a.token, 'POST', `/channels/${extras[2].channel_ids[0]}/messages/${src.id}/forward`, { channel_id: extras[3].channel_ids[0] })
+ok('a forwarded message bumps the target community', await actOf('unxder') !== null)
+for (const c of [...extras, ...ties]) await raw(a.token, 'DELETE', `${base}/${c.slug}`)
 
 console.log('-- follow: hidden category')
 await call(a.token, 'PUT', `/channels/${one.category_id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
@@ -56,19 +83,20 @@ ok('rejoining follows nothing', back.following === false && back.follower_count 
 
 console.log('-- follow: connect payload and event')
 {
+  await raw(b.token, 'PUT', `${base}/pavement/follow`)
   const evs = []
   let first
   const sock = await new Promise((resolve) => { const w = new WebSocket(`${WS}?token=${b.token}`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'READY') { first = m.d; resolve(w) } else evs.push(m) } })
   const slimM = first.communities.find((c) => c.slug === 'metallica')
   ok('READY carries communities in slim form', slimM && slimM.guild_id === g.id && slimM.name === 'Metallica' && slimM.category_id && !('follower_count' in slimM), JSON.stringify(first.communities))
-  ok('READY carries community_follows for the guild', Array.isArray(first.community_follows) && (first.community_follows.length === 0 || first.community_follows.every((f) => f.guild_id && Array.isArray(f.community_ids))))
+  ok('READY carries community_follows for the guild', JSON.stringify(first.community_follows.find((f) => f.guild_id === g.id)?.community_ids) === JSON.stringify([one.id]), JSON.stringify(first.community_follows))
   await raw(b.token, 'PUT', `${base}/metallica/follow`)
   await new Promise((r2) => setTimeout(r2, 1000))
   ok('follow pushes COMMUNITY_FOLLOW_UPDATE to the caller', evs.some((m) => m.t === 'COMMUNITY_FOLLOW_UPDATE' && m.d.following === true && m.d.community_id === slimM.id && m.d.guild_id === g.id), JSON.stringify(evs.map((m) => m.t)))
   sock.close()
   const sock2 = await new Promise((resolve) => { let w = new WebSocket(`${WS}?token=${b.token}`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'READY') { first = m.d; resolve(w) } } })
   const f = first.community_follows.find((x) => x.guild_id === g.id)
-  ok('a later READY lists the follow', f && f.community_ids.length === 1 && f.community_ids[0] === slimM.id)
+  ok('a later READY lists the follow', f && JSON.stringify(f.community_ids) === JSON.stringify([one.id, slimM.id]))
   sock2.close()
 }
 

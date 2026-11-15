@@ -238,14 +238,19 @@ async fn global_sockets(db: &PgPool, user: Uuid) -> sqlx::Result<i64> {
 /// widgets, invite previews and online counts show; `online_users` (the truth) is only for deciding whether to push or
 /// mail someone.
 pub async fn visible_online_users(db: &PgPool) -> Vec<Uuid> {
-    sqlx::query_as::<_, (Uuid,)>("SELECT user_id FROM presence WHERE sockets > 0 AND updated_at > now() - make_interval(secs => $1)
-         AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')
-         UNION SELECT user_id FROM presence_linger WHERE until > now() AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')")
-        .bind(STALE_SECS as f64)
+    sqlx::query_as::<_, (Uuid,)>(&visible_online_sql())
         .fetch_all(db)
         .await
         .map(|r| r.into_iter().map(|x| x.0).collect())
         .unwrap_or_default()
+}
+
+/// The `visible_online_users` query as a `SELECT user_id` fragment, so other queries can join it instead of fetching
+/// the platform's online ids into the application.
+pub fn visible_online_sql() -> String {
+    format!("SELECT user_id FROM presence WHERE sockets > 0 AND updated_at > now() - make_interval(secs => {STALE_SECS})
+         AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')
+         UNION SELECT user_id FROM presence_linger WHERE until > now() AND user_id NOT IN (SELECT id FROM users WHERE status = 'invisible')")
 }
 
 /// Everyone with a live socket on any instance.

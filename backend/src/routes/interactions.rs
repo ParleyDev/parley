@@ -370,6 +370,7 @@ async fn respond(state: &AppState, l: &Live, interaction: Uuid, d: &ResponseData
     let (users, _, _) = crate::routes::channels::parse_mentions(&content);
     sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, mentions, embeds, interaction, components) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)")
         .bind(mid).bind(l.channel.id).bind(bot).bind(&content).bind(&users).bind(&embeds).bind(&m).bind(&components).execute(&state.db).await?;
+    crate::routes::communities::touch_activity(&state.db, l.channel.id).await;
     let msg: Message = fetch_message(&state.db, mid, bot).await?;
     state.hub.emit(target_for(&state.db, &l.channel).await?, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": l.channel.guild_id }));
     if !deferred { crate::push::after_message(state.clone(), msg, l.channel.clone()); }

@@ -65,10 +65,9 @@ async fn fill(state: &AppState, mut c: Community, uid: Uuid, visible: &[Channel]
     let mut kids: Vec<&Channel> = visible.iter().filter(|v| v.parent_id == Some(c.category_id)).collect();
     kids.sort_by_key(|k| (k.position, k.created_at));
     c.channel_ids = kids.into_iter().map(|k| k.id).collect();
-    let online = crate::ws::bus::visible_online_users(&state.db).await;
-    let (followers, on, me): (i64, i64, bool) = sqlx::query_as(
-        "SELECT COUNT(*), COUNT(*) FILTER (WHERE user_id = ANY($2)), COALESCE(bool_or(user_id = $3), false) FROM community_follows WHERE community_id = $1")
-        .bind(c.id).bind(&online).bind(uid).fetch_one(&state.db).await?;
+    let (followers, on, me): (i64, i64, bool) = sqlx::query_as(&format!(
+        "SELECT COUNT(*), COUNT(*) FILTER (WHERE user_id IN ({})), COALESCE(bool_or(user_id = $2), false) FROM community_follows WHERE community_id = $1", crate::ws::bus::visible_online_sql()))
+        .bind(c.id).bind(uid).fetch_one(&state.db).await?;
     (c.follower_count, c.online_count, c.following) = (followers, on, me);
     Ok(c)
 }
@@ -188,13 +187,14 @@ async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gi
 }
 
 /// A new message under a community's category (directly, or in a thread of one of its channels) is activity.
-pub async fn touch_activity(db: &sqlx::PgPool, channel_id: Uuid) -> AppResult<()> {
-    sqlx::query(
-        "UPDATE communities SET last_activity_at = now() WHERE category_id IN (
+/// Debounced in SQL: a busy channel rewrites the row at most every 10 seconds. Failures only warn; the message is sent.
+pub async fn touch_activity(db: &sqlx::PgPool, channel_id: Uuid) {
+    let r = sqlx::query(
+        "UPDATE communities SET last_activity_at = now() WHERE (last_activity_at IS NULL OR last_activity_at < now() - interval '10 seconds') AND category_id IN (
            SELECT parent_id FROM channels WHERE id = $1
            UNION SELECT p.parent_id FROM channels c JOIN channels p ON p.id = c.parent_id WHERE c.id = $1)")
-        .bind(channel_id).execute(db).await?;
-    Ok(())
+        .bind(channel_id).execute(db).await;
+    if let Err(e) = r { tracing::warn!(error = ?e, %channel_id, "community activity update failed") }
 }
 
 async fn set_follow(state: &AppState, gid: Uuid, uid: Uuid, slug: &str, on: bool) -> AppResult<StatusCode> {
@@ -250,21 +250,25 @@ async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
     let visible = perms::visible_channels(&state.db, gid, uid).await?;
     let cats: Vec<Uuid> = visible.iter().filter(|v| v.kind == "category").map(|v| v.id).collect();
     let key = "COALESCE(last_activity_at, 'epoch'::timestamptz)";
+    // One keyset comparison per sort; name then id break ties so pages never repeat or skip an item.
     let (after, order) = if by_name {
-        ("($5::timestamptz IS NULL AND ($6::text IS NULL OR (name, id) > ($6::text, $7::uuid)))".to_string(), "name, id".to_string())
+        ("($5::text IS NULL OR (name, id) > ($5, $6::uuid))".to_string(), "name, id".to_string())
     } else {
         (format!("($5::timestamptz IS NULL OR {key} < $5 OR ({key} = $5 AND (name, id) > ($6::text, $7::uuid)))"), format!("{key} DESC, name, id"))
     };
-    let at: Option<DateTime<Utc>> = match &cur { Some(c) if !by_name => Some(DateTime::from_timestamp_micros(c.t).ok_or_else(bad_cursor)?), _ => None };
     let sql = format!(
         "SELECT {COLS} FROM communities WHERE guild_id = $1 AND category_id = ANY($2)
            AND ($3::text IS NULL OR position(lower($3) in lower(name)) > 0) AND ($4::text IS NULL OR external_ref = $4) AND {after}
-         ORDER BY {order} LIMIT $8");
+         ORDER BY {order} LIMIT {}", limit + 1);
     let needle = q.q.as_deref().map(str::trim).filter(|s| !s.is_empty());
-    let mut rows: Vec<Community> = sqlx::query_as(&sql)
-        .bind(gid).bind(&cats).bind(needle).bind(q.external_ref.as_deref().filter(|s| !s.is_empty())).bind(at)
-        .bind(cur.as_ref().map(|c| c.n.clone())).bind(cur.as_ref().map(|c| c.i)).bind(limit + 1)
-        .fetch_all(&state.db).await?;
+    let query = sqlx::query_as::<_, Community>(&sql).bind(gid).bind(&cats).bind(needle).bind(q.external_ref.as_deref().filter(|s| !s.is_empty()));
+    let (n, i) = (cur.as_ref().map(|c| c.n.clone()), cur.as_ref().map(|c| c.i));
+    let mut rows: Vec<Community> = if by_name {
+        query.bind(n).bind(i).fetch_all(&state.db).await?
+    } else {
+        let at = match &cur { Some(c) => Some(DateTime::from_timestamp_micros(c.t).ok_or_else(bad_cursor)?), None => None };
+        query.bind(at).bind(n).bind(i).fetch_all(&state.db).await?
+    };
     let next = if rows.len() as i64 > limit {
         rows.truncate(limit as usize);
         let l = rows.last().unwrap();
@@ -272,10 +276,9 @@ async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
         Some(base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serde_json::to_vec(&Cursor { s: sort.into(), t, n: l.name.clone(), i: l.id }).unwrap()))
     } else { None };
     let ids: Vec<Uuid> = rows.iter().map(|c| c.id).collect();
-    let online = crate::ws::bus::visible_online_users(&state.db).await;
-    let counts: Vec<(Uuid, i64, i64, bool)> = sqlx::query_as(
-        "SELECT community_id, COUNT(*), COUNT(*) FILTER (WHERE user_id = ANY($2)), COALESCE(bool_or(user_id = $3), false) FROM community_follows WHERE community_id = ANY($1) GROUP BY community_id")
-        .bind(&ids).bind(&online).bind(uid).fetch_all(&state.db).await?;
+    let counts: Vec<(Uuid, i64, i64, bool)> = sqlx::query_as(&format!(
+        "SELECT community_id, COUNT(*), COUNT(*) FILTER (WHERE user_id IN ({})), COALESCE(bool_or(user_id = $2), false) FROM community_follows WHERE community_id = ANY($1) GROUP BY community_id", crate::ws::bus::visible_online_sql()))
+        .bind(&ids).bind(uid).fetch_all(&state.db).await?;
     let counts: std::collections::HashMap<Uuid, (i64, i64, bool)> = counts.into_iter().map(|(id, f, o, m)| (id, (f, o, m))).collect();
     let mut kids: std::collections::HashMap<Uuid, Vec<&Channel>> = std::collections::HashMap::new();
     for v in &visible { if let Some(p) = v.parent_id { kids.entry(p).or_default().push(v) } }

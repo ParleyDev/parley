@@ -215,7 +215,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Uuid, sessio
             .await
             .unwrap_or_default();
 
-    let (communities, community_follows) = crate::routes::communities::connect_payload(&state.db, user_id, &guild_ids, &channels).await.unwrap_or_default();
+    let (communities, community_follows) = crate::routes::communities::connect_payload(&state.db, user_id, &guild_ids, &channels).await.unwrap_or_else(|e| { tracing::warn!(error = ?e, "communities connect payload failed"); Default::default() });
 
     let mut all_channel_ids: Vec<Uuid> = channels.iter().map(|c| c.id).collect();
     all_channel_ids.extend(dms.iter().map(|d| d.channel.id));

@@ -649,7 +649,7 @@ pub(crate) async fn create_message(
     tx.commit().await?;
     if !req.attachment_descriptions.is_empty() { set_descriptions(&state.db, mid, &req.attachment_descriptions).await?; }
     crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let _ = crate::routes::communities::touch_activity(&state.db, id).await;
+    crate::routes::communities::touch_activity(&state.db, id).await;
     // Author has implicitly read their own message.
     sqlx::query(
         "INSERT INTO read_states (user_id, channel_id, last_read_msg) VALUES ($1, $2, $3)
@@ -1449,6 +1449,7 @@ async fn forward_message(
         .await?;
     }
     tx.commit().await?;
+    crate::routes::communities::touch_activity(&state.db, req.channel_id).await;
     sqlx::query(
         "INSERT INTO read_states (user_id, channel_id, last_read_msg) VALUES ($1, $2, $3)
          ON CONFLICT (user_id, channel_id) DO UPDATE SET last_read_msg = EXCLUDED.last_read_msg",

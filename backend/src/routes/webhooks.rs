@@ -167,6 +167,7 @@ async fn execute(State(state): State<AppState>, Path((id, token)): Path<(Uuid, S
         .bind(mid).bind(c.id).bind(author).bind(&content).bind(&users).bind(&roles).bind(everyone).bind(id).bind(&author_override).bind(&embeds)
         .execute(&state.db).await?;
     crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    crate::routes::communities::touch_activity(&state.db, c.id).await;
     let msg: Message = fetch_message(&state.db, mid, author).await?;
     state.hub.emit(target_for(&state.db, &c).await?, "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
     crate::push::after_message(state.clone(), msg.clone(), c.clone());

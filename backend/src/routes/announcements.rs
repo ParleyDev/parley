@@ -113,6 +113,7 @@ pub async fn publish(state: &AppState, src: &Channel, mid: Uuid, viewer: Uuid) -
                 .execute(&mut *tx).await?;
         }
         tx.commit().await?;
+        crate::routes::communities::touch_activity(&state.db, t.id).await;
         let copy = fetch_message(&state.db, new_id, uid).await?;
         state.hub.emit(target_for(&state.db, t).await?, "MESSAGE_CREATE", json!({ "message": copy, "guild_id": t.guild_id }));
         crate::push::after_message(state.clone(), copy, t.clone());

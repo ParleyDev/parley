@@ -222,7 +222,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id)
         sqlx::query("UPDATE attachments SET channel_id = $2 WHERE message_id = $1").bind(mid).bind(tid).execute(&mut *tx).await?;
         tx.commit().await?;
         crate::metrics::METRICS.messages_created.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let _ = crate::routes::communities::touch_activity(&state.db, tid).await;
+        crate::routes::communities::touch_activity(&state.db, tid).await;
         let msg = fetch_message(&state.db, mid, uid).await?;
         state.hub.emit(target.clone(), "MESSAGE_CREATE", json!({ "message": msg, "guild_id": c.guild_id }));
         state.hub.emit(target.clone(), "THREAD_UPDATE", json!(info(&state.db, tid).await?));
