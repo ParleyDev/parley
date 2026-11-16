@@ -261,6 +261,8 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gi
         .bind(cur.id).bind(&new_slug).bind(&name).bind(&description).bind(&icon).bind(&ext).bind(&banner).bind(&about).bind(&links).fetch_one(&mut *tx).await.map_err(taken)?;
     let mut category: Channel = sqlx::query_as(&format!("UPDATE channels SET name = $2 WHERE id = $1 RETURNING {CHANNEL_COLS}")).bind(cur.category_id).bind(&name).fetch_one(&mut *tx).await?;
     tx.commit().await?;
+    crate::routes::images::release_replaced(&state, cur.icon_url.as_deref(), c.icon_url.as_deref()).await;
+    crate::routes::images::release_replaced(&state, cur.banner_url.as_deref(), c.banner_url.as_deref()).await;
     let target = audience(&state, &mut category).await?;
     let out = written(&state, c.clone(), uid).await?;
     if name != cur.name { state.hub.emit(target.clone(), "CHANNEL_UPDATE", json!(category)); }
@@ -293,6 +295,9 @@ async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gi
     if outside == 0 && inside > 0 { return Err(AppError::BadRequest("A server must keep at least one text channel".into())) }
     for (id,) in &kids { super::channels::remove_channel(&state, gid, *id).await?; }
     super::channels::remove_channel(&state, gid, c.category_id).await?;
+    // Its pictures go too, unless something else still shows them.
+    crate::routes::images::release_replaced(&state, c.icon_url.as_deref(), None).await;
+    crate::routes::images::release_replaced(&state, c.banner_url.as_deref(), None).await;
     state.hub.emit(target, "COMMUNITY_DELETE", json!({ "id": c.id, "guild_id": gid }));
     crate::audit::guild(&state, gid, uid, "community.delete", "community", Some(c.id), &c.name, json!({ "slug": c.slug, "channels": kids.len() })).await;
     Ok(StatusCode::NO_CONTENT)

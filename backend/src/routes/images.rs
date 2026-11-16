@@ -266,7 +266,7 @@ pub async fn release_replaced(state: &AppState, old: Option<&str>, new: Option<&
 }
 
 /// Images nothing points at any more (a `#crop=…` on the reference still counts as pointing at it): not a user's avatar/banner, a server's icon/banner, a Discover
-/// listing's banner, an emoji or a sticker. `min_age_secs` keeps uploads that are still being attached.
+/// listing's banner, a community's icon/banner, an emoji or a sticker. `min_age_secs` keeps uploads that are still being attached.
 pub async fn orphan_image_ids(db: &sqlx::PgPool, min_age_secs: f64) -> Vec<Uuid> {
     orphan_query(db, min_age_secs, None).await
 }
@@ -277,6 +277,7 @@ async fn orphan_query(db: &sqlx::PgPool, min_age_secs: f64, only: Option<Uuid>) 
            AND NOT EXISTS (SELECT 1 FROM users u WHERE split_part(u.avatar_url, '#', 1) = '/api/images/' || i.id::text OR split_part(u.banner_url, '#', 1) = '/api/images/' || i.id::text OR EXISTS (SELECT 1 FROM unnest(u.avatar_history) h WHERE split_part(h, '#', 1) = '/api/images/' || i.id::text))
            AND NOT EXISTS (SELECT 1 FROM guilds g WHERE split_part(g.icon_url, '#', 1) = '/api/images/' || i.id::text OR split_part(g.banner_url, '#', 1) = '/api/images/' || i.id::text OR split_part(g.invite_splash_url, '#', 1) = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM guild_discovery d WHERE split_part(d.banner_url, '#', 1) = '/api/images/' || i.id::text)
+           AND NOT EXISTS (SELECT 1 FROM communities c WHERE split_part(c.icon_url, '#', 1) = '/api/images/' || i.id::text OR split_part(c.banner_url, '#', 1) = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM guild_members gm WHERE split_part(gm.guild_avatar, '#', 1) = '/api/images/' || i.id::text OR split_part(gm.guild_banner, '#', 1) = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM guild_events ev WHERE split_part(ev.cover_url, '#', 1) = '/api/images/' || i.id::text)
            AND NOT EXISTS (SELECT 1 FROM roles r WHERE r.icon = '/api/images/' || i.id::text)
@@ -303,7 +304,7 @@ pub async fn sweep_now(state: &AppState, min_age_secs: f64) -> usize {
     n
 }
 
-/// Periodic sweep: uploads that never got attached to a profile, server, listing, emoji or sticker.
+/// Periodic sweep: uploads that never got attached to a profile, server, listing, community, emoji or sticker.
 pub async fn sweep_orphans(state: AppState) {
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(900)).await;
