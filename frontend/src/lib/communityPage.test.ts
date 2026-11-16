@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { communityPath, linkHost, parseCommunityPath, pageChanges, safeLink, validatePage } from './communityPage'
+import { communityPath, linkHost, parseCommunityPath, moveChannel, pageChanges, safeLink, validatePage } from './communityPage'
 
 describe('community page helpers', () => {
   test('communityPath and parseCommunityPath round-trip', () => {
@@ -17,6 +17,12 @@ describe('community page helpers', () => {
   test('safeLink', () => {
     expect(safeLink('https://example.com/x')).toBe('https://example.com/x')
     for (const u of ['javascript:alert(1)', 'data:text/html,x', 'ftp://example.com', '', 'example.com']) expect(safeLink(u)).toBeNull()
+    // No `//` after the scheme: a browser on an https page resolves these as relative URLs.
+    for (const u of ['https:/invite/x', 'https:example.com', 'http:/x.example', 'https:\\example.com']) expect(safeLink(u)).toBeNull()
+    expect(safeLink('HTTPS://Example.com/a')).toBe('https://example.com/a')
+    expect(safeLink('  https://example.com  ')).toBe('https://example.com/')
+    expect(linkHost('HTTPS://www.Example.com/a')).toBe('example.com')
+    expect(linkHost('https:/invite/x')).toBe('')
   })
 })
 
@@ -69,4 +75,16 @@ describe('pageChanges', () => {
   test('clearing an image sends an empty string', () => { expect(pageChanges({ ...same, banner: null }, base)).toEqual({ banner_url: '' }) })
   test('trailing whitespace in about is not a change', () => { expect(pageChanges({ ...same, about: 'Hello \n\n' }, base)).toEqual({}) })
   test('a name with only surrounding spaces added is not a change', () => { expect(pageChanges({ ...same, name: ' Metal ' }, base)).toEqual({}) })
+
+  test('moveChannel', () => {
+    const rows = [{ id: 'a', position: 3 }, { id: 'b', position: 7 }, { id: 'c', position: 9 }]
+    expect(moveChannel(rows, 'b', -1)).toEqual({ order: ['b', 'a', 'c'], items: [{ id: 'b', position: 3 }, { id: 'a', position: 7 }] })
+    expect(moveChannel(rows, 'b', 1)?.order).toEqual(['a', 'c', 'b'])
+    expect(moveChannel(rows, 'a', -1)).toBeNull()
+    expect(moveChannel(rows, 'c', 1)).toBeNull()
+    expect(moveChannel(rows, 'x', 1)).toBeNull()
+    // Equal stored positions: the whole list is renumbered from the lowest one, only changed entries are sent.
+    const tied = [{ id: 'a', position: 5 }, { id: 'b', position: 5 }, { id: 'c', position: 5 }]
+    expect(moveChannel(tied, 'c', -1)).toEqual({ order: ['a', 'c', 'b'], items: [{ id: 'c', position: 6 }, { id: 'b', position: 7 }] })
+  })
 })

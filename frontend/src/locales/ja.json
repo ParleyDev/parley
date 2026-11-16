@@ -3743,5 +3743,11 @@
 "Use lower-case letters, digits and hyphens, up to 63 characters.": "小文字、数字、ハイフンを使い、63文字までにしてください。",
 "You can no longer edit this page.": "このページを編集できなくなりました。",
 "Your edits to this page have not been saved.": "このページへの変更は保存されていません。",
-"A place with its own page and channels": "専用のページとチャンネルを持つ場所"
+"A place with its own page and channels": "専用のページとチャンネルを持つ場所",
+"Delete {name} and its 1 channel? Messages in it are deleted too.": "{name} とその 1 個のチャンネルを削除しますか？その中のメッセージも削除されます。",
+"Delete {name}? It has no channels.": "{name} を削除しますか？チャンネルはありません。",
+"Move {name} down": "{name} を下に移動",
+"Move {name} up": "{name} を上に移動",
+"This community was deleted while you were editing.": "編集中にこのコミュニティが削除されました。",
+"This page was changed by someone else. Review before saving.": "このページは他の人によって変更されました。保存する前に確認してください。"
 }

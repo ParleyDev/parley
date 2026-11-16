@@ -3743,5 +3743,11 @@
 "Use lower-case letters, digits and hyphens, up to 63 characters.": "Küçük harf, rakam ve tire kullan, en fazla 63 karakter.",
 "You can no longer edit this page.": "Artık bu sayfayı düzenleyemezsin.",
 "Your edits to this page have not been saved.": "Bu sayfadaki değişikliklerin kaydedilmedi.",
-"A place with its own page and channels": "Kendi sayfası ve kanalları olan bir yer"
+"A place with its own page and channels": "Kendi sayfası ve kanalları olan bir yer",
+"Delete {name} and its 1 channel? Messages in it are deleted too.": "{name} ve 1 kanalı silinsin mi? İçindeki mesajlar da silinir.",
+"Delete {name}? It has no channels.": "{name} silinsin mi? Hiç kanalı yok.",
+"Move {name} down": "{name} öğesini aşağı taşı",
+"Move {name} up": "{name} öğesini yukarı taşı",
+"This community was deleted while you were editing.": "Bu topluluk, siz düzenlerken silindi.",
+"This page was changed by someone else. Review before saving.": "Bu sayfa başka biri tarafından değiştirildi. Kaydetmeden önce gözden geçirin."
 }

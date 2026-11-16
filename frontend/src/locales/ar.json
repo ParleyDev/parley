@@ -3743,5 +3743,11 @@
 "Use lower-case letters, digits and hyphens, up to 63 characters.": "استخدم أحرفًا صغيرة وأرقامًا وشرطات، حتى 63 حرفًا.",
 "You can no longer edit this page.": "لم يعد بإمكانك تحرير هذه الصفحة.",
 "Your edits to this page have not been saved.": "لم يتم حفظ تعديلاتك على هذه الصفحة.",
-"A place with its own page and channels": "مكان له صفحته وقنواته الخاصة"
+"A place with its own page and channels": "مكان له صفحته وقنواته الخاصة",
+"Delete {name} and its 1 channel? Messages in it are deleted too.": "حذف {name} وقناته الواحدة؟ ستُحذف الرسائل فيها أيضًا.",
+"Delete {name}? It has no channels.": "حذف {name}؟ لا توجد فيه قنوات.",
+"Move {name} down": "نقل {name} لأسفل",
+"Move {name} up": "نقل {name} لأعلى",
+"This community was deleted while you were editing.": "حُذف هذا المجتمع أثناء تعديلك.",
+"This page was changed by someone else. Review before saving.": "غيّر شخص آخر هذه الصفحة. راجعها قبل الحفظ."
 }

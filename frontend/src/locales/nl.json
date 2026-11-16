@@ -3743,5 +3743,11 @@
 "Use lower-case letters, digits and hyphens, up to 63 characters.": "Gebruik kleine letters, cijfers en koppeltekens, maximaal 63 tekens.",
 "You can no longer edit this page.": "Je kunt deze pagina niet meer bewerken.",
 "Your edits to this page have not been saved.": "Je wijzigingen aan deze pagina zijn niet opgeslagen.",
-"A place with its own page and channels": "Een plek met een eigen pagina en eigen kanalen"
+"A place with its own page and channels": "Een plek met een eigen pagina en eigen kanalen",
+"Delete {name} and its 1 channel? Messages in it are deleted too.": "{name} en het 1 kanaal verwijderen? Berichten erin worden ook verwijderd.",
+"Delete {name}? It has no channels.": "{name} verwijderen? Het heeft geen kanalen.",
+"Move {name} down": "{name} omlaag",
+"Move {name} up": "{name} omhoog",
+"This community was deleted while you were editing.": "Deze community is verwijderd terwijl je bezig was met bewerken.",
+"This page was changed by someone else. Review before saving.": "Deze pagina is door iemand anders gewijzigd. Controleer haar voordat je opslaat."
 }

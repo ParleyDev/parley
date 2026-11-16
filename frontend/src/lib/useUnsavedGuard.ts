@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useStore } from '../store'
 
 /** Asks whether to leave; calls `proceed` to go on or `cancel` to stay. */
 export type AskLeave = (proceed: () => void, cancel: () => void) => void
@@ -45,7 +46,7 @@ export function useUnsavedGuard(active: boolean, root: RefObject<HTMLElement | n
       e.preventDefault(); e.stopPropagation()
       if (asking) return
       asking = true
-      askRef.current(() => { asking = false; released = true; navigate(url.pathname + url.search + url.hash) }, () => { asking = false })
+      askRef.current(() => { asking = false; released = true; navigate(url.pathname + url.search + url.hash); useStore.getState().setMobilePane('content') }, () => { asking = false })
     }
 
     const pop = (e: PopStateEvent) => {

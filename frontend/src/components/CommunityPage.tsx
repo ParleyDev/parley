@@ -1,9 +1,9 @@
-import { ChevronRight, ExternalLink, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronUp, ExternalLink, Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { NO_FOLLOWS } from '../lib/communities'
-import { communityPath, linkHost, safeLink } from '../lib/communityPage'
+import { communityPath, linkHost, moveChannel, safeLink } from '../lib/communityPage'
 import { splashBackground } from '../lib/splash'
 import { splitCrop } from '../lib/crop'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
@@ -40,9 +40,12 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
   const [knownId, setKnownId] = useState<string | null>(null)
   const byId = useStore((s) => (knownId ? s.communities[guildId]?.find((c) => c.id === knownId) : undefined))
   const category = load?.state === 'ready' ? load.community.category_id : null
-  // A change to the category (permissions) or to what is in it (a channel added or removed) refetches too.
+  // A change to the category's own permission entries or to what is in it (a channel added or removed) refetches too.
+  // Compared by content: any permission change or reorder elsewhere in the server replaces the record without touching this page.
   const allChannels = useStore((s) => s.channels)
   const categoryRec = category ? allChannels[category] : undefined
+  const entriesSig = useMemo(() => JSON.stringify([...(categoryRec?.overwrites ?? [])].sort((a, b) => a.id.localeCompare(b.id)).map((o) => [o.id, o.kind, o.allow, o.deny])), [categoryRec?.overwrites])
+  const slimSig = JSON.stringify(slim ?? null)
   const kids = useMemo(() => (category ? Object.values(allChannels).filter((c) => c.parent_id === category).map((c) => c.id).sort().join() : ''), [allChannels, category])
   const [retry, setRetry] = useState(0)
   const seq = useRef(0)
@@ -58,7 +61,7 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
       // A failed refetch (a network blip) keeps showing the page that is already loaded; only a 404 replaces it.
       .catch((e) => { if (id === seq.current) setLoaded((cur) => (e instanceof ApiError && e.status === 404 ? { key, state: 'missing', wasEditing: editingRef.current } : cur && cur.key === key && cur.state === 'ready' ? cur : { key, state: 'failed' })) })
     return () => { seq.current++ }
-  }, [guildId, slug, key, slim, retry, categoryRec, kids])
+  }, [guildId, slug, key, slimSig, retry, entriesSig, kids]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Another address: forget the previous page's manager list and the editing state, unless this is the same community
   // moving to a new address (renamed), where the editor keeps their draft.
@@ -88,7 +91,7 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
     let live = true
     api.get<ManagersData>(`/guilds/${guildId}/communities/${slug}/managers`).then((m) => { if (live) setManagers(m) }).catch(() => { if (live) setManagers(null) })
     return () => { live = false }
-  }, [guildId, slug, loadedId, slim, categoryRec])
+  }, [guildId, slug, loadedId, slimSig, entriesSig]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // The member lost the right to edit while editing: leave edit mode and say why.
   const canEdit = load?.state === 'ready' && load.community.can_edit
@@ -127,7 +130,7 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
     void st.followCommunity(guildId, community.slug, !following).then((ok) => { if (!ok && added) useStore.getState().removeCommunity(guildId, community.id) })
   }
   const followers = Math.max(0, community.follower_count + (following ? 1 : 0) - (community.following ? 1 : 0))
-  const channelsNode = (guard?: (go: () => void) => void) => <Channels community={community} guildId={guildId} guard={guard} />
+  const channelsNode = (guard?: (go: () => void) => void) => <Channels community={community} guildId={guildId} guard={guard} reorder={editing && community.can_edit} />
   const managersBlock = <CommunityManagers community={community} guildId={guildId} managers={managers} onChanged={() => { void loadManagers() }} />
 
   if (editing && community.can_edit) {
@@ -232,32 +235,58 @@ function About({ text }: { text: string }) {
   )
 }
 
-function Channels({ community, guildId, guard }: { community: Community; guildId: string; guard?: (go: () => void) => void }) {
+function Channels({ community, guildId, guard, reorder }: { community: Community; guildId: string; guard?: (go: () => void) => void; reorder?: boolean }) {
   const t = useT()
   const channels = useStore((s) => s.channels)
   const messages = useStore((s) => s.messages)
   const setMobilePane = useStore((s) => s.setMobilePane)
+  const pushToast = useStore((s) => s.pushToast)
   const navigate = useNavigate()
   const openModal = useStore((s) => s.openModal)
+  // In stored order, so a move (ours or someone else's) shows as soon as the store has it.
   const rows = community.channel_ids.map((id) => channels[id]).filter((c): c is Channel => !!c)
+    .sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+  const moving = useRef(false)
+  // Immediate, not part of Save: applied locally at once and put back, with the server's message, when it is refused.
+  const move = async (id: string, dir: -1 | 1) => {
+    if (moving.current) return
+    const plan = moveChannel(rows.map((r) => ({ id: r.id, position: r.position })), id, dir)
+    if (!plan) return
+    moving.current = true
+    const stored = useStore.getState().channels
+    const before = Object.fromEntries(plan.items.map((i) => [i.id, stored[i.id]]))
+    useStore.setState((s) => ({ channels: { ...s.channels, ...Object.fromEntries(plan.items.map((i) => [i.id, { ...s.channels[i.id], position: i.position }])) } }))
+    try { await api.patch(`/guilds/${guildId}/channels/positions`, { items: plan.items }) } catch (e) {
+      useStore.setState((s) => ({ channels: { ...s.channels, ...before } }))
+      pushToast((e as Error).message, 'error')
+    } finally { moving.current = false }
+  }
   if (!rows.length && !community.can_edit) return null
   return (
     <section>
       <Label>{t('Channels')}</Label>
       <div className="overflow-hidden rounded-xl border border-line bg-bg-1">
-        {rows.map((c) => {
+        {rows.map((c, i) => {
           const last = messages[c.id]?.at(-1)
           const preview = last?.content.trim().replace(/\s+/g, ' ')
           return (
-            <button key={c.id} type="button" onClick={() => { const go = () => { setMobilePane('content'); navigate(`/channels/${guildId}/${c.id}`) }; if (guard) guard(go); else go() }}
-              className="flex w-full items-center gap-3 border-b border-line px-3 py-2.5 text-left last:border-b-0 hover:bg-bg-3" data-community-channel={c.id}>
-              <span className="shrink-0 text-text-2">{chanIcon(c)}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold">{c.name}</span>
-                {preview && <span className="block truncate text-xs text-text-2">{preview}</span>}
-              </span>
-              {last && <span className="shrink-0 text-xs text-text-2">{relativeTime(last.created_at)}</span>}
-            </button>
+            <div key={c.id} className="flex items-center border-b border-line last:border-b-0 hover:bg-bg-3">
+              <button type="button" onClick={() => { const go = () => { setMobilePane('content'); navigate(`/channels/${guildId}/${c.id}`) }; if (guard) guard(go); else go() }}
+                className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left" data-community-channel={c.id}>
+                <span className="shrink-0 text-text-2">{chanIcon(c)}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold">{c.name}</span>
+                  {preview && <span className="block truncate text-xs text-text-2">{preview}</span>}
+                </span>
+                {last && <span className="shrink-0 text-xs text-text-2">{relativeTime(last.created_at)}</span>}
+              </button>
+              {reorder && (
+                <span className="flex shrink-0 items-center pr-1">
+                  <button type="button" className="rounded p-1 text-text-2 hover:bg-bg-4 hover:text-text-0 disabled:opacity-30" disabled={i === 0} onClick={() => void move(c.id, -1)} aria-label={t('Move {name} up', { name: c.name })} title={t('Move up')} data-channel-up={c.id}><ChevronUp size={16} aria-hidden /></button>
+                  <button type="button" className="rounded p-1 text-text-2 hover:bg-bg-4 hover:text-text-0 disabled:opacity-30" disabled={i === rows.length - 1} onClick={() => void move(c.id, 1)} aria-label={t('Move {name} down', { name: c.name })} title={t('Move down')} data-channel-down={c.id}><ChevronDown size={16} aria-hidden /></button>
+                </span>
+              )}
+            </div>
           )
         })}
       </div>

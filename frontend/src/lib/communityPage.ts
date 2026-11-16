@@ -14,14 +14,18 @@ export function parseCommunityPath(pathname: string): { guildId: string; slug: s
   return m ? { guildId: m[1], slug: m[2] } : null
 }
 
-/** The host of a link without a leading `www.`; empty when the link does not parse. */
-export function linkHost(url: string): string {
-  try { return new URL(url).host.replace(/^www\./, '') } catch { return '' }
-}
-
 /** The link itself when it is a plain web address; anything else (script, data, other schemes) is not safe to render as a link. */
 export function safeLink(url: string): string | null {
-  try { const u = new URL(url); return u.protocol === 'http:' || u.protocol === 'https:' ? url : null } catch { return null }
+  // `https:/x` and `https:x` parse as web addresses but a browser on an https page resolves them as relative URLs.
+  if (!/^https?:\/\//i.test(url.trim())) return null
+  try { const u = new URL(url.trim()); return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null } catch { return null }
+}
+
+/** The host of a link (as `safeLink` normalises it) without a leading `www.`; empty when it is not a safe link. */
+export function linkHost(url: string): string {
+  const href = safeLink(url)
+  if (!href) return ''
+  try { return new URL(href).host.replace(/^www\./, '') } catch { return '' }
 }
 
 export interface PageDraft { name: string; slug: string; description: string; about: string; links: { label: string; url: string }[] }
@@ -72,4 +76,25 @@ export function pageChanges(d: PageEdits, base: PageBase): Record<string, unknow
   if ((d.icon ?? '') !== (base.icon_url ?? '')) body.icon_url = d.icon ?? ''
   if ((d.banner ?? '') !== (base.banner_url ?? '')) body.banner_url = d.banner ?? ''
   return body
+}
+
+/**
+ * Moving one channel of a community a step up or down. `rows` are the community's channels in display order with their
+ * stored positions. Returns the new order and the positions to save: just the two swapped channels when every stored
+ * position is distinct, otherwise the whole list renumbered from its lowest position so the order cannot depend on a
+ * tie-break. `null` at the ends or for an unknown channel.
+ */
+export function moveChannel(rows: { id: string; position: number }[], id: string, dir: -1 | 1): { order: string[]; items: { id: string; position: number }[] } | null {
+  const i = rows.findIndex((r) => r.id === id)
+  const j = i + dir
+  if (i < 0 || j < 0 || j >= rows.length) return null
+  const next = rows.slice()
+  ;[next[i], next[j]] = [next[j], next[i]]
+  const order = next.map((r) => r.id)
+  if (new Set(rows.map((r) => r.position)).size === rows.length) {
+    return { order, items: [{ id: rows[i].id, position: rows[j].position }, { id: rows[j].id, position: rows[i].position }] }
+  }
+  const base = Math.min(...rows.map((r) => r.position))
+  const stored = new Map(rows.map((r) => [r.id, r.position]))
+  return { order, items: order.map((rid, k) => ({ id: rid, position: base + k })).filter((it) => stored.get(it.id) !== it.position) }
 }

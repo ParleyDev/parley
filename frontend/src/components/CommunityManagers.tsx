@@ -93,20 +93,24 @@ function Picker({ guildId, managers, busy, onPick, onClose }: { guildId: string;
     const taken = new Set([...(managers?.members.map((m) => m.id) ?? []), ...(managers?.roles.map((r) => r.id) ?? [])])
     const ctx = { guild, roles, member: myMember }
     const needle = q.trim().toLowerCase()
-    const out: Option[] = []
+    const roleOpts: Option[] = []
+    const memberOpts: Option[] = []
     // Stop at the first matches: a server can hold many thousands of members.
     for (const r of Object.values(roles)) {
-      if (out.length >= MAX_OPTIONS) break
-      if (r.id !== guildId && !taken.has(r.id) && canManageRole(ctx, me.id, r) && (!needle || r.name.toLowerCase().includes(needle))) out.push({ id: r.id, kind: 'role', name: r.name, color: r.color })
+      if (roleOpts.length >= MAX_OPTIONS) break
+      if (r.id !== guildId && !taken.has(r.id) && canManageRole(ctx, me.id, r) && (!needle || r.name.toLowerCase().includes(needle))) roleOpts.push({ id: r.id, kind: 'role', name: r.name, color: r.color })
     }
     for (const id in members ?? {}) {
-      if (out.length >= MAX_OPTIONS) break
+      if (memberOpts.length >= MAX_OPTIONS) break
       const m = members![id]
       if (taken.has(m.user_id)) continue
       const name = m.nickname || m.display_name
       if (needle && !name.toLowerCase().includes(needle) && !m.username.toLowerCase().includes(needle)) continue
-      out.push({ id: m.user_id, kind: 'member', name, avatar_url: m.avatar_url })
+      memberOpts.push({ id: m.user_id, kind: 'member', name, avatar_url: m.avatar_url })
     }
+    // Both kinds stay on offer: up to half the slots each, the rest filled from whichever kind has more.
+    const roleTake = Math.min(roleOpts.length, Math.max(MAX_OPTIONS / 2, MAX_OPTIONS - memberOpts.length))
+    const out = [...roleOpts.slice(0, roleTake), ...memberOpts.slice(0, MAX_OPTIONS - roleTake)]
     return out.sort((a, b) => a.name.localeCompare(b.name))
   }, [guild, me, roles, members, myMember, managers, q, guildId])
 

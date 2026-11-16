@@ -3743,5 +3743,11 @@
 "Use lower-case letters, digits and hyphens, up to 63 characters.": "Use letras minúsculas, dígitos e hifens, até 63 caracteres.",
 "You can no longer edit this page.": "Você não pode mais editar esta página.",
 "Your edits to this page have not been saved.": "Suas alterações nesta página não foram salvas.",
-"A place with its own page and channels": "Um lugar com página e canais próprios"
+"A place with its own page and channels": "Um lugar com página e canais próprios",
+"Delete {name} and its 1 channel? Messages in it are deleted too.": "Excluir {name} e seu 1 canal? As mensagens nele também serão excluídas.",
+"Delete {name}? It has no channels.": "Excluir {name}? Ela não tem canais.",
+"Move {name} down": "Mover {name} para baixo",
+"Move {name} up": "Mover {name} para cima",
+"This community was deleted while you were editing.": "Esta comunidade foi excluída enquanto você a editava.",
+"This page was changed by someone else. Review before saving.": "Esta página foi alterada por outra pessoa. Revise antes de salvar."
 }

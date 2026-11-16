@@ -3743,5 +3743,11 @@
 "Use lower-case letters, digits and hyphens, up to 63 characters.": "소문자, 숫자, 하이픈을 사용하고 최대 63자까지 입력하세요.",
 "You can no longer edit this page.": "더 이상 이 페이지를 편집할 수 없습니다.",
 "Your edits to this page have not been saved.": "이 페이지의 변경 사항이 저장되지 않았습니다.",
-"A place with its own page and channels": "자체 페이지와 채널이 있는 공간"
+"A place with its own page and channels": "자체 페이지와 채널이 있는 공간",
+"Delete {name} and its 1 channel? Messages in it are deleted too.": "{name}과(와) 채널 1개를 삭제할까요? 채널 안의 메시지도 함께 삭제됩니다.",
+"Delete {name}? It has no channels.": "{name}을(를) 삭제할까요? 채널이 없습니다.",
+"Move {name} down": "{name} 아래로 이동",
+"Move {name} up": "{name} 위로 이동",
+"This community was deleted while you were editing.": "편집하는 동안 이 커뮤니티가 삭제되었습니다.",
+"This page was changed by someone else. Review before saving.": "다른 사람이 이 페이지를 변경했습니다. 저장하기 전에 확인하세요."
 }

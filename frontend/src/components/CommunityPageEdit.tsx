@@ -207,7 +207,7 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
                   ? <button type="button" className="btn-ghost text-danger" onClick={() => setConfirming(true)} ref={deleteRef} data-community-delete>{t('Delete community')}</button>
                   : (
                     <div className="space-y-2 rounded-lg border border-danger/40 bg-bg-0/50 p-3" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setConfirming(false); setTimeout(() => deleteRef.current?.focus(), 0) } }}>
-                      <p className="text-sm">{t('Delete {name} and its {n} channels? Messages in them are deleted too.', { name: base.name, n: community.channel_ids.length })}</p>
+                      <p className="text-sm">{community.channel_ids.length === 0 ? t('Delete {name}? It has no channels.', { name: base.name }) : community.channel_ids.length === 1 ? t('Delete {name} and its 1 channel? Messages in it are deleted too.', { name: base.name }) : t('Delete {name} and its {n} channels? Messages in them are deleted too.', { name: base.name, n: community.channel_ids.length })}</p>
                       <div className="flex gap-2">
                         <button type="button" className="btn-danger" ref={confirmRef} onClick={() => void remove()} disabled={saving} data-community-delete-confirm>{t('Delete')}</button>
                         <button type="button" className="btn-ghost" onClick={() => setConfirming(false)}>{t('Cancel')}</button>

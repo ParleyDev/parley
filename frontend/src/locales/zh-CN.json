@@ -3743,5 +3743,11 @@
 "Use lower-case letters, digits and hyphens, up to 63 characters.": "使用小写字母、数字和连字符,最多 63 个字符。",
 "You can no longer edit this page.": "你不能再编辑此页面了。",
 "Your edits to this page have not been saved.": "你对此页面的更改尚未保存。",
-"A place with its own page and channels": "拥有独立页面和频道的地方"
+"A place with its own page and channels": "拥有独立页面和频道的地方",
+"Delete {name} and its 1 channel? Messages in it are deleted too.": "删除 {name} 及其 1 个频道？其中的消息也会被删除。",
+"Delete {name}? It has no channels.": "删除 {name}？它没有频道。",
+"Move {name} down": "将 {name} 下移",
+"Move {name} up": "将 {name} 上移",
+"This community was deleted while you were editing.": "你编辑时，这个社区已被删除。",
+"This page was changed by someone else. Review before saving.": "此页面已被其他人更改。保存前请先查看。"
 }
