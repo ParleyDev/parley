@@ -64,9 +64,14 @@ fn clean_about(s: &str) -> AppResult<String> {
 #[derive(Deserialize)]
 struct LinkIn { #[serde(default)] label: String, #[serde(default)] url: String }
 
-/// http or https (any case), a host, no whitespace or control characters, at most 500 characters.
+/// http:// or https:// (any case), a host, no whitespace or control characters, at most 500 characters.
 fn valid_link(url: &str) -> bool {
-    url.chars().count() <= 500
+    // `://` right after the scheme: the parser also accepts `https:/x` and `https:x`, which a browser on an https page
+    // resolves as a relative URL on its own origin.
+    let b = url.as_bytes();
+    let slashes = (b.len() >= 7 && b[..7].eq_ignore_ascii_case(b"http://")) || (b.len() >= 8 && b[..8].eq_ignore_ascii_case(b"https://"));
+    slashes
+        && url.chars().count() <= 500
         && !url.chars().any(|c| c.is_whitespace() || c.is_control())
         && url::Url::parse(url).is_ok_and(|u| matches!(u.scheme(), "http" | "https") && u.host_str().is_some_and(|h| !h.is_empty()))
 }
@@ -90,6 +95,15 @@ fn taken(e: sqlx::Error) -> AppError {
 
 fn slim(c: &Community) -> Value {
     json!({ "id": c.id, "guild_id": c.guild_id, "slug": c.slug, "name": c.name, "icon_url": c.icon_url, "description": c.description, "banner_url": c.banner_url, "category_id": c.category_id })
+}
+
+/// The columns the slim form needs; `about` and `links` can be large and stay out of the bulk queries.
+const SLIM_COLS: &str = "id, guild_id, slug, name, icon_url, description, banner_url, category_id";
+type SlimRow = (Uuid, Uuid, String, String, Option<String>, String, Option<String>, Uuid);
+
+/// `slim` for a row of `SLIM_COLS`; the same keys.
+fn slim_row((id, guild_id, slug, name, icon_url, description, banner_url, category_id): SlimRow) -> Value {
+    json!({ "id": id, "guild_id": guild_id, "slug": slug, "name": name, "icon_url": icon_url, "description": description, "banner_url": banner_url, "category_id": category_id })
 }
 
 /// The community for the caller: counts, whether they follow it and the child channels they can view. `None` when the
@@ -237,6 +251,11 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gi
     let about = match &req.about { Some(a) => clean_about(a)?, None => cur.about.clone() };
     let links = match req.links { Some(l) => clean_links(l)?, None => cur.links.clone() };
     let ext = match req.external_ref { Some(e) => clean_opt(Some(e), 200, "External reference")?, None => cur.external_ref.clone() };
+    // The integration's lookup key, not page content: changing it takes server-level Manage Channels.
+    if ext != cur.external_ref {
+        let (_, p) = perms::guild_perms(&state.db, gid, uid).await?;
+        perms::check(p, perms::MANAGE_CHANNELS)?;
+    }
     let mut tx = state.db.begin().await?;
     let c: Community = sqlx::query_as(&format!("UPDATE communities SET slug = $2, name = $3, description = $4, icon_url = $5, external_ref = $6, banner_url = $7, about = $8, links = $9 WHERE id = $1 RETURNING {COLS}"))
         .bind(cur.id).bind(&new_slug).bind(&name).bind(&description).bind(&icon).bind(&ext).bind(&banner).bind(&about).bind(&links).fetch_one(&mut *tx).await.map_err(taken)?;
@@ -396,20 +415,20 @@ async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
 /// channel they can view there), and their follows per server, oldest first.
 pub async fn connect_payload(db: &sqlx::PgPool, uid: Uuid, guilds: &[Uuid], visible: &[Channel]) -> AppResult<(Vec<Value>, Vec<Value>)> {
     let cats: Vec<Uuid> = visible.iter().filter(|v| v.kind == "category").map(|v| v.id).collect();
-    let rows: Vec<Community> = sqlx::query_as(&format!("SELECT {COLS} FROM communities WHERE guild_id = ANY($1) AND category_id = ANY($2) ORDER BY created_at, id"))
+    let rows: Vec<SlimRow> = sqlx::query_as(&format!("SELECT {SLIM_COLS} FROM communities WHERE guild_id = ANY($1) AND category_id = ANY($2) ORDER BY created_at, id"))
         .bind(guilds).bind(&cats).fetch_all(db).await?;
     let follows: Vec<(Uuid, Vec<Uuid>)> = sqlx::query_as(
         "SELECT c.guild_id, array_agg(c.id ORDER BY f.created_at, c.id) FROM community_follows f JOIN communities c ON c.id = f.community_id
          WHERE f.user_id = $1 AND c.guild_id = ANY($2) AND c.category_id = ANY($3) GROUP BY c.guild_id")
         .bind(uid).bind(guilds).bind(&cats).fetch_all(db).await?;
-    Ok((rows.iter().map(slim).collect(), follows.into_iter().map(|(g, ids)| json!({ "guild_id": g, "community_ids": ids })).collect()))
+    Ok((rows.into_iter().map(slim_row).collect(), follows.into_iter().map(|(g, ids)| json!({ "guild_id": g, "community_ids": ids })).collect()))
 }
 
 /// The slim form of the community a category backs, if any (for visibility changes).
 pub async fn slim_for_categories(db: &sqlx::PgPool, category_ids: &[Uuid]) -> AppResult<std::collections::HashMap<Uuid, Value>> {
     if category_ids.is_empty() { return Ok(Default::default()) }
-    let cs: Vec<Community> = sqlx::query_as(&format!("SELECT {COLS} FROM communities WHERE category_id = ANY($1)")).bind(category_ids).fetch_all(db).await?;
-    Ok(cs.iter().map(|c| (c.category_id, slim(c))).collect())
+    let cs: Vec<SlimRow> = sqlx::query_as(&format!("SELECT {SLIM_COLS} FROM communities WHERE category_id = ANY($1)")).bind(category_ids).fetch_all(db).await?;
+    Ok(cs.into_iter().map(|c| (c.7, slim_row(c))).collect())
 }
 
 /// Which of `users` follow community `community_id`, in one query.
@@ -551,4 +570,15 @@ async fn remove_manager(State(state): State<AppState>, AuthUser(uid): AuthUser, 
     let changes = plan_entries(&v.ctx, uid, &v.all, c.category_id, kind, target, false, false, |(a, d)| (a & !MANAGER_BITS, d))?;
     write_entries(&state, gid, uid, kind, target, false, changes).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_link;
+
+    #[test]
+    fn links_need_the_slashes_after_the_scheme() {
+        for ok in ["https://example.com/a", "HTTPS://Example.com/a", "http://example.com"] { assert!(valid_link(ok), "{ok}") }
+        for bad in ["https:/invite/x", "https:example.com", "http:/x.example", "https:\\\\example.com", "javascript:alert(1)", "https://", "example.com", ""] { assert!(!valid_link(bad), "{bad}") }
+    }
 }
