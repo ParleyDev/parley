@@ -1070,6 +1070,9 @@ async fn list_audit(
     Ok(Json(rows))
 }
 
+/// Channel positions are 0..=MAX_POSITION; larger ones would overflow the next `MAX(position) + 1`.
+pub const MAX_POSITION: i32 = 100_000;
+
 #[derive(Deserialize)]
 struct PositionItem {
     id: Uuid,
@@ -1094,26 +1097,32 @@ async fn reorder_channels(
 ) -> AppResult<Json<Vec<Channel>>> {
     let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
     let server_level = perms::has(p, perms::MANAGE_CHANNELS);
-    if !server_level {
-        // Without server-level Manage Channels, only inside categories the caller manages: every item must be a channel
-        // they hold Manage Channels in and end under a category they may place channels in. All or nothing.
-        if req.items.is_empty() || req.items.len() > 500 { return Err(AppError::Forbidden) }
-        let base = ctx.base(uid).ok_or_else(|| AppError::NotFound("Server not found".into()))?;
-        let all = perms::guild_channels(&state.db, id).await?;
-        let mut placed: std::collections::HashSet<Option<Uuid>> = Default::default();
-        for it in &req.items {
-            let ch = all.iter().find(|c| c.id == it.id).ok_or(AppError::Forbidden)?;
-            if !perms::has(ctx.in_channel(uid, base, &ch.overwrites), perms::MANAGE_CHANNELS) { return Err(AppError::Forbidden) }
-            let dest = it.parent_id.unwrap_or(ch.parent_id);
-            if ch.kind == "category" { return Err(AppError::Forbidden) }
-            if placed.insert(dest) { require_placement(&state.db, &ctx, id, uid, &ch.kind, dest).await?; }
-        }
-    }
+    if req.items.iter().any(|it| !(0..=MAX_POSITION).contains(&it.position)) { return Err(AppError::BadRequest("Position out of range".into())) }
+    if !server_level && (req.items.is_empty() || req.items.len() > 500) { return Err(AppError::Forbidden) }
     if req.items.len() > 500 {
         return Err(AppError::BadRequest("Too many items".into()));
     }
     let before = perms::visibility(&state.db, id).await?;
     let mut tx = state.db.begin().await?;
+    if !server_level {
+        // Without server-level Manage Channels, only inside categories the caller manages: every item must be a channel
+        // they hold Manage Channels in and end under a category they may place channels in. All or nothing. The rows are
+        // read and locked here, in the transaction that writes, so validation and write see the same state.
+        let base = ctx.base(uid).ok_or_else(|| AppError::NotFound("Server not found".into()))?;
+        let ids: Vec<Uuid> = req.items.iter().map(|it| it.id).collect();
+        let locked: Vec<(Uuid, String, Option<Uuid>)> = sqlx::query_as("SELECT id, kind, parent_id FROM channels WHERE id = ANY($1) AND guild_id = $2 ORDER BY id FOR UPDATE").bind(&ids).bind(id).fetch_all(&mut *tx).await?;
+        // Overwrites are read after the lock; kind and parent come from the locked rows.
+        let all = perms::guild_channels(&state.db, id).await?;
+        let mut placed: std::collections::HashSet<Option<Uuid>> = Default::default();
+        for it in &req.items {
+            let ch = all.iter().find(|c| c.id == it.id).ok_or(AppError::Forbidden)?;
+            let (_, kind, parent) = locked.iter().find(|l| l.0 == it.id).ok_or(AppError::Forbidden)?;
+            if !perms::has(ctx.in_channel(uid, base, &ch.overwrites), perms::MANAGE_CHANNELS) { return Err(AppError::Forbidden) }
+            let dest = it.parent_id.unwrap_or(*parent);
+            if kind == "category" { return Err(AppError::Forbidden) }
+            if placed.insert(dest) { require_placement(&state.db, &ctx, id, uid, kind, dest).await?; }
+        }
+    }
     for it in &req.items {
         let kind: Option<(String,)> = sqlx::query_as("SELECT kind FROM channels WHERE id = $1 AND guild_id = $2").bind(it.id).bind(id).fetch_optional(&mut *tx).await?;
         let Some((kind,)) = kind else { return Err(AppError::NotFound("Channel not found".into())) };

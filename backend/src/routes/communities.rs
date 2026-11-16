@@ -507,6 +507,8 @@ async fn write_entries(state: &AppState, gid: Uuid, uid: Uuid, kind: &str, targe
                  ON CONFLICT (channel_id, target_id) DO UPDATE SET allow = channel_overwrites.allow | $4, deny = channel_overwrites.deny & ~$4")
                 .bind(ch.channel.id).bind(target).bind(kind).bind(bits).execute(&mut *tx).await?;
         } else {
+            // Serialise removals on one channel so each sees the other's row state before deciding to delete.
+            if ch.child { sqlx::query("SELECT target_id FROM channel_overwrites WHERE channel_id = $1 ORDER BY target_id FOR UPDATE").bind(ch.channel.id).fetch_all(&mut *tx).await?; }
             sqlx::query("UPDATE channel_overwrites SET allow = allow & ~$3 WHERE channel_id = $1 AND target_id = $2").bind(ch.channel.id).bind(target).bind(bits).execute(&mut *tx).await?;
             // A child keeps its last row (empty) so it does not start following its category.
             if ch.new.is_none() {

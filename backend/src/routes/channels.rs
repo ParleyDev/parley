@@ -239,6 +239,7 @@ async fn update_channel(
         let (backs,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM communities WHERE category_id = $1)").bind(id).fetch_one(&state.db).await?;
         if backs { return Err(AppError::BadRequest("This category belongs to a community. Rename the community instead.".into())) }
     }
+    if req.position.is_some_and(|p| !(0..=crate::routes::guilds::MAX_POSITION).contains(&p)) { return Err(AppError::BadRequest("Position out of range".into())) }
     if req.video_quality.as_deref().map(|q| q != "auto" && q != "full").unwrap_or(false) {
         return Err(AppError::BadRequest("video_quality must be 'auto' or 'full'".into()));
     }
