@@ -1,6 +1,6 @@
 import { ChevronRight, ExternalLink, Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { NO_FOLLOWS } from '../lib/communities'
 import { communityPath, linkHost, safeLink } from '../lib/communityPage'
@@ -24,6 +24,7 @@ type Loaded = { key: string } & ({ state: 'failed' } | { state: 'missing'; wasEd
 export default function CommunityPage({ guildId, slug }: { guildId: string; slug: string }) {
   const t = useT()
   const navigate = useNavigate()
+  const location = useLocation()
   const key = `${guildId}/${slug}`
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   // A page that moved to a new address (renamed) stays on screen while the new address loads.
@@ -92,6 +93,14 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
   // The member lost the right to edit while editing: leave edit mode and say why.
   const canEdit = load?.state === 'ready' && load.community.can_edit
   useEffect(() => { if (editing && load?.state === 'ready' && !canEdit) { setEditing(false); setNotice(t('You can no longer edit this page.')) } }, [editing, canEdit, load, t])
+
+  // A page just created opens in edit mode (`?edit=1`); the parameter is consumed so a reload shows the page itself.
+  const wantsEdit = new URLSearchParams(location.search).get('edit') === '1'
+  useEffect(() => {
+    if (!wantsEdit || load?.state !== 'ready') return
+    if (canEdit) setEditing(true)
+    navigate(communityPath(guildId, slug), { replace: true })
+  }, [wantsEdit, load?.state, canEdit, guildId, slug, navigate])
 
   // Leaving edit mode returns focus to the Edit button.
   useEffect(() => { if (wasEditing.current && !editing) editBtn.current?.focus(); wasEditing.current = editing }, [editing])

@@ -141,7 +141,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
   const canInvite = has(perms, P.CREATE_INVITE)
-  const canManageGuild = has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_ROLES) || has(perms, P.MANAGE_CHANNELS)
+  const canManageGuild = has(perms, P.MANAGE_GUILD) || has(perms, P.MANAGE_ROLES)
   const canCreate = has(perms, P.MANAGE_CHANNELS)
   const canEditChannel = (id: string) => has(chanPerms[id] ?? 0, P.MANAGE_CHANNELS) || has(chanPerms[id] ?? 0, P.MANAGE_ROLES)
   // View Server as Role hides what those roles can't see (categories stay while something in them is visible).
@@ -375,7 +375,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             <div className="flex items-center gap-1 px-1 text-[11px] font-bold uppercase tracking-wider text-text-2">
               <span className="min-w-0 flex-1 truncate">{t('Communities')}</span>
               {guildCommunities.length > 0 && <button type="button" onClick={() => openModal({ kind: 'browseCommunities', guildId })} data-browse-communities className="shrink-0 rounded px-1 py-1 font-semibold normal-case tracking-normal hover:text-text-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">{t('Browse')} · {guildCommunities.length}</button>}
-              {canCreate && <button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title={t('Create Channel')} aria-label={t('Create Channel')} data-community-create className="shrink-0 rounded p-0.5 hover:text-text-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"><Plus size={16} /></button>}
+              {canCreate && <button type="button" onClick={() => openModal({ kind: 'createChannel', guildId, initialKind: 'community' })} title={t('Create')} aria-label={t('Create')} data-community-create className="shrink-0 rounded p-0.5 hover:text-text-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"><Plus size={16} /></button>}
             </div>
             {followedBlocks.map(({ community, category }) => {
               const open = !commCollapsed.has(community.id)

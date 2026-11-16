@@ -38,7 +38,7 @@ export interface GalleryItem { url: string; name: string; alt?: string }
 export type ModalKind =
   | { kind: 'createGuild' }
   | { kind: 'joinGuild'; code?: string }
-  | { kind: 'createChannel'; guildId: string; parentId?: string | null; /** Stay on the current page instead of opening the new channel. */ stay?: boolean }
+  | { kind: 'createChannel'; guildId: string; parentId?: string | null; /** Stay on the current page instead of opening the new channel. */ stay?: boolean; /** Start on the Community type (needs server-level Manage Channels). */ initialKind?: 'community' }
   | { kind: 'invite'; guildId: string }
   | { kind: 'guildSettings'; guildId: string; tab?: 'overview' | 'tag' | 'welcome' | 'onboarding' | 'roles' | 'members' | 'invites' | 'bans' | 'emoji' | 'stickers' | 'discovery' | 'audit' }
   | { kind: 'channelSettings'; channelId: string; tab?: 'overview' | 'permissions' | 'integrations' }

@@ -74,7 +74,7 @@ export default function Modals() {
   switch (modal!.kind) {
     case 'createGuild': return <CreateGuildModal onClose={close} />
     case 'joinGuild': return <JoinGuildModal onClose={close} code={modal!.code} />
-    case 'createChannel': return <CreateChannelModal onClose={close} guildId={modal!.guildId} parentId={modal!.parentId ?? null} stay={modal!.stay} />
+    case 'createChannel': return <CreateChannelModal onClose={close} guildId={modal!.guildId} parentId={modal!.parentId ?? null} stay={modal!.stay} initialKind={modal!.initialKind} />
     case 'invite': return <InviteModal onClose={close} guildId={modal!.guildId} />
     case 'guildSettings': return <GuildSettingsModal onClose={close} guildId={modal!.guildId} tab={modal!.tab} />
     case 'channelSettings': return <ChannelSettingsModal onClose={close} channelId={modal!.channelId} tab={modal!.tab} />
