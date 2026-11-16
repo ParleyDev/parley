@@ -1,5 +1,5 @@
 import { ChevronRight, ExternalLink, Plus } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { NO_FOLLOWS } from '../lib/communities'
@@ -18,7 +18,7 @@ import CommunityPageEdit from './CommunityPageEdit'
 import { MobileBack } from './HeaderBits'
 
 /** What the last fetch found, for one address (`key`); an answer for another address counts as still loading. */
-type Loaded = { key: string } & ({ state: 'missing' | 'failed' } | { state: 'ready'; community: Community })
+type Loaded = { key: string } & ({ state: 'failed' } | { state: 'missing'; wasEditing: boolean } | { state: 'ready'; community: Community })
 
 /** A community's page in the main pane: who it is, what it is about, where to go in it and who looks after it. */
 export default function CommunityPage({ guildId, slug }: { guildId: string; slug: string }) {
@@ -26,7 +26,9 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
   const navigate = useNavigate()
   const key = `${guildId}/${slug}`
   const [loaded, setLoaded] = useState<Loaded | null>(null)
-  const load = loaded && loaded.key === key ? loaded : null
+  // A page that moved to a new address (renamed) stays on screen while the new address loads.
+  const renamed = useRef<{ from: string; to: string } | null>(null)
+  const load = loaded && (loaded.key === key || (loaded.state === 'ready' && renamed.current?.to === key && renamed.current.from === loaded.key)) ? loaded : null
   const [managers, setManagers] = useState<ManagersData | null>(null)
   const [editing, setEditing] = useState(false)
   const [notice, setNotice] = useState('')
@@ -38,31 +40,40 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
   const byId = useStore((s) => (knownId ? s.communities[guildId]?.find((c) => c.id === knownId) : undefined))
   const category = load?.state === 'ready' ? load.community.category_id : null
   // A change to the category (permissions) or to what is in it (a channel added or removed) refetches too.
-  const categoryRec = useStore((s) => (category ? s.channels[category] : undefined))
-  const kids = useStore((s) => (category ? Object.values(s.channels).filter((c) => c.parent_id === category).map((c) => c.id).sort().join() : ''))
+  const allChannels = useStore((s) => s.channels)
+  const categoryRec = category ? allChannels[category] : undefined
+  const kids = useMemo(() => (category ? Object.values(allChannels).filter((c) => c.parent_id === category).map((c) => c.id).sort().join() : ''), [allChannels, category])
   const [retry, setRetry] = useState(0)
   const seq = useRef(0)
+  const editingRef = useRef(false)
+  editingRef.current = editing
+  const editBtn = useRef<HTMLButtonElement>(null)
+  const wasEditing = useRef(false)
 
   useEffect(() => {
     const id = ++seq.current
     api.get<Community>(`/guilds/${guildId}/communities/${slug}`)
       .then((community) => { if (id === seq.current) setLoaded({ key, state: 'ready', community }) })
       // A failed refetch (a network blip) keeps showing the page that is already loaded; only a 404 replaces it.
-      .catch((e) => { if (id === seq.current) setLoaded((cur) => (e instanceof ApiError && e.status === 404 ? { key, state: 'missing' } : cur && cur.key === key && cur.state === 'ready' ? cur : { key, state: 'failed' })) })
+      .catch((e) => { if (id === seq.current) setLoaded((cur) => (e instanceof ApiError && e.status === 404 ? { key, state: 'missing', wasEditing: editingRef.current } : cur && cur.key === key && cur.state === 'ready' ? cur : { key, state: 'failed' })) })
     return () => { seq.current++ }
   }, [guildId, slug, key, slim, retry, categoryRec, kids])
 
-  // Another address: forget the previous page's manager list and the editing state.
-  useEffect(() => { setManagers(null); setEditing(false); setNotice('') }, [key])
+  // Another address: forget the previous page's manager list and the editing state, unless this is the same community
+  // moving to a new address (renamed), where the editor keeps their draft.
+  useEffect(() => {
+    if (load?.state === 'ready') return
+    setManagers(null); setEditing(false); setNotice(''); setKnownId(null)
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Deleted while open (the store drops it on COMMUNITY_DELETE); renamed elsewhere (follow it to the new address).
-  useEffect(() => { setKnownId(slim?.id ?? null) }, [slim?.id, key])
+  useEffect(() => { if (slim) setKnownId(slim.id) }, [slim?.id, key]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!knownId) return
-    if (!byId) { seq.current++; setLoaded({ key, state: 'missing' }) }
+    if (!byId) { seq.current++; setLoaded({ key, state: 'missing', wasEditing: editingRef.current }) }
     else if (byId.slug !== slug) {
-      setLoaded((cur) => (cur && cur.state === 'ready' ? { ...cur, key: `${guildId}/${byId.slug}` } : cur))
-      navigate(communityPath(guildId, byId.slug), { replace: true, state: { keepEdit: true } })
+      renamed.current = { from: key, to: `${guildId}/${byId.slug}` }
+      navigate(communityPath(guildId, byId.slug), { replace: true })
     }
   }, [knownId, byId, key, slug, guildId, navigate])
 
@@ -82,9 +93,12 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
   const canEdit = load?.state === 'ready' && load.community.can_edit
   useEffect(() => { if (editing && load?.state === 'ready' && !canEdit) { setEditing(false); setNotice(t('You can no longer edit this page.')) } }, [editing, canEdit, load, t])
 
+  // Leaving edit mode returns focus to the Edit button.
+  useEffect(() => { if (wasEditing.current && !editing) editBtn.current?.focus(); wasEditing.current = editing }, [editing])
+
   const goBack = useCallback(() => navigate(`/channels/${guildId}`), [guildId, navigate])
 
-  if (load?.state === 'missing') return <Missing onBack={goBack} />
+  if (load?.state === 'missing') return <Missing onBack={goBack} wasEditing={load.wasEditing} />
   if (load?.state === 'failed') return (
     <main className="flex flex-1 flex-col items-center justify-center gap-3 bg-bg-2 p-8 text-center" data-community-failed>
       <p className="text-sm text-text-2">{t('Could not load this community.')}</p>
@@ -104,32 +118,33 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
     void st.followCommunity(guildId, community.slug, !following).then((ok) => { if (!ok && added) useStore.getState().removeCommunity(guildId, community.id) })
   }
   const followers = Math.max(0, community.follower_count + (following ? 1 : 0) - (community.following ? 1 : 0))
-  const channels = <Channels community={community} guildId={guildId} />
+  const channelsNode = (guard?: (go: () => void) => void) => <Channels community={community} guildId={guildId} guard={guard} />
   const managersBlock = <CommunityManagers community={community} guildId={guildId} managers={managers} onChanged={() => { void loadManagers() }} />
 
   if (editing && community.can_edit) {
     return (
-      <CommunityPageEdit community={community} guildId={guildId} channels={channels} managers={managersBlock} onClose={() => setEditing(false)}
+      <CommunityPageEdit community={community} guildId={guildId} channels={channelsNode} managers={managersBlock} onClose={() => setEditing(false)}
         onSaved={(updated) => {
-          setLoaded({ key: `${guildId}/${updated.slug}`, state: 'ready', community: updated })
+          renamed.current = { from: key, to: `${guildId}/${updated.slug}` }
+          setLoaded({ key, state: 'ready', community: updated })
           setEditing(false)
           const st = useStore.getState()
           st.upsertCommunity({ id: updated.id, guild_id: updated.guild_id, slug: updated.slug, name: updated.name, icon_url: updated.icon_url, banner_url: updated.banner_url, description: updated.description, category_id: updated.category_id })
-          if (updated.slug !== slug) navigate(communityPath(guildId, updated.slug), { replace: true, state: { keepEdit: true } })
+          if (updated.slug !== slug) navigate(communityPath(guildId, updated.slug), { replace: true })
         }} />
     )
   }
 
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-bg-2" data-community-page={community.slug}>
-      <TopBar community={community} following={following} onFollow={toggleFollow} guildId={guildId} onEdit={community.can_edit ? () => { setNotice(''); setEditing(true) } : undefined} />
+      <TopBar editRef={editBtn} community={community} following={following} onFollow={toggleFollow} guildId={guildId} onEdit={community.can_edit ? () => { setNotice(''); setEditing(true) } : undefined} />
       {notice && <p className="border-b border-line bg-bg-1 px-4 py-2 text-sm text-text-1" role="status" data-community-notice>{notice}</p>}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Hero community={community} />
         <div className="mx-auto grid max-w-5xl gap-6 px-6 pb-10 pt-5 phone:px-4 wide:grid-cols-[minmax(0,1fr)_16rem]">
           <div className="flex min-w-0 flex-col gap-6">
             <About text={community.about} />
-            {channels}
+            {channelsNode()}
           </div>
           <div className="flex min-w-0 flex-col gap-6">
             <Counts online={community.online_count} following={followers} />
@@ -142,13 +157,14 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
   )
 }
 
-function Missing({ onBack }: { onBack: () => void }) {
+function Missing({ onBack, wasEditing }: { onBack: () => void; wasEditing: boolean }) {
   const t = useT()
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-bg-2" data-community-missing>
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line px-4 phone:px-2"><MobileBack /></header>
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
         <p className="max-w-sm text-sm text-text-1">{t("This community no longer exists or you can't see it.")}</p>
+        {wasEditing && <p className="max-w-sm text-sm text-text-2" role="status" data-community-missing-note>{t('This community was deleted while you were editing.')}</p>}
         <button type="button" className="btn-primary" onClick={onBack} data-community-missing-back>{t('Back to the server')}</button>
       </div>
     </main>
@@ -159,7 +175,7 @@ function Label({ children }: { children: string }) {
   return <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-text-2">{children}</h2>
 }
 
-function TopBar({ community, following, onFollow, guildId, onEdit }: { community: Community; following: boolean; onFollow: () => void; guildId: string; onEdit?: () => void }) {
+function TopBar({ community, following, onFollow, guildId, onEdit, editRef }: { editRef: React.RefObject<HTMLButtonElement | null>; community: Community; following: boolean; onFollow: () => void; guildId: string; onEdit?: () => void }) {
   const t = useT()
   const openModal = useStore((s) => s.openModal)
   return (
@@ -168,7 +184,7 @@ function TopBar({ community, following, onFollow, guildId, onEdit }: { community
       <button type="button" className="shrink-0 text-sm text-text-2 hover:text-text-0 phone:hidden" onClick={() => openModal({ kind: 'browseCommunities', guildId })}>{t('Communities')}</button>
       <ChevronRight size={14} className="shrink-0 text-text-2 phone:hidden" />
       <span className="min-w-0 flex-1 truncate font-bold">{community.name}</span>
-      {onEdit && <button type="button" className="btn-ghost border border-line" onClick={onEdit} data-community-edit>{t('Edit')}</button>}
+      {onEdit && <button type="button" className="btn-ghost border border-line" ref={editRef} onClick={onEdit} data-community-edit>{t('Edit')}</button>}
       <button type="button" onClick={onFollow} aria-pressed={following} className={following ? 'btn-ghost border border-line' : 'btn-primary'} data-community-follow>{following ? t('Following') : t('Follow')}</button>
     </header>
   )
@@ -207,7 +223,7 @@ function About({ text }: { text: string }) {
   )
 }
 
-function Channels({ community, guildId }: { community: Community; guildId: string }) {
+function Channels({ community, guildId, guard }: { community: Community; guildId: string; guard?: (go: () => void) => void }) {
   const t = useT()
   const channels = useStore((s) => s.channels)
   const messages = useStore((s) => s.messages)
@@ -224,7 +240,7 @@ function Channels({ community, guildId }: { community: Community; guildId: strin
           const last = messages[c.id]?.at(-1)
           const preview = last?.content.trim().replace(/\s+/g, ' ')
           return (
-            <button key={c.id} type="button" onClick={() => { setMobilePane('content'); navigate(`/channels/${guildId}/${c.id}`) }}
+            <button key={c.id} type="button" onClick={() => { const go = () => { setMobilePane('content'); navigate(`/channels/${guildId}/${c.id}`) }; if (guard) guard(go); else go() }}
               className="flex w-full items-center gap-3 border-b border-line px-3 py-2.5 text-left last:border-b-0 hover:bg-bg-3" data-community-channel={c.id}>
               <span className="shrink-0 text-text-2">{chanIcon(c)}</span>
               <span className="min-w-0 flex-1">

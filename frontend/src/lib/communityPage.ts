@@ -49,3 +49,27 @@ export function validatePage(d: PageDraft, t: (key: string) => string = (k) => k
   })
   return e
 }
+
+/** The editable fields of a page as the editor holds them (images by URL, `null` for none). */
+export interface PageEdits extends PageDraft { icon: string | null; banner: string | null }
+/** The same fields as the server last reported them. */
+export interface PageBase { name: string; slug: string; description: string; about: string; links: { label: string; url: string }[]; icon_url: string | null; banner_url: string | null }
+
+/** The links as they would be saved: labels trimmed. */
+export const savedLinks = (links: { label: string; url: string }[]) => links.map((l) => ({ label: l.label.trim(), url: l.url }))
+
+/**
+ * The PATCH body for an edit: only the fields that differ from the page as it was. Trailing whitespace in About does
+ * not count (the server trims it); a cleared image is sent as an empty string.
+ */
+export function pageChanges(d: PageEdits, base: PageBase): Record<string, unknown> {
+  const body: Record<string, unknown> = {}
+  if (d.name.trim() !== base.name) body.name = d.name.trim()
+  if (d.slug !== base.slug) body.slug = d.slug
+  if (d.description !== base.description) body.description = d.description
+  if (d.about.trimEnd() !== base.about.trimEnd()) body.about = d.about
+  if (JSON.stringify(savedLinks(d.links)) !== JSON.stringify(savedLinks(base.links))) body.links = savedLinks(d.links)
+  if ((d.icon ?? '') !== (base.icon_url ?? '')) body.icon_url = d.icon ?? ''
+  if ((d.banner ?? '') !== (base.banner_url ?? '')) body.banner_url = d.banner ?? ''
+  return body
+}

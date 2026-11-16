@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { communityPath, linkHost, parseCommunityPath, safeLink, validatePage } from './communityPage'
+import { communityPath, linkHost, parseCommunityPath, pageChanges, safeLink, validatePage } from './communityPage'
 
 describe('community page helpers', () => {
   test('communityPath and parseCommunityPath round-trip', () => {
@@ -58,4 +58,15 @@ describe('validatePage', () => {
     expect(validatePage({ ...ok, links: [link('x', 'http://example.com')] })).toEqual({})
     expect(validatePage({ ...ok, links: [ok.links[0], link('x', 'javascript:1')] })).toEqual({ 'links.1': expect.any(String) })
   })
+})
+
+describe('pageChanges', () => {
+  const base = { name: 'Metal', slug: 'metal', description: 'Loud', about: 'Hello', links: [{ label: 'A', url: 'https://a.example' }, { label: 'B', url: 'https://b.example' }], icon_url: '/i.png', banner_url: '/b.png' }
+  const same = { name: 'Metal', slug: 'metal', description: 'Loud', about: 'Hello', links: base.links, icon: '/i.png', banner: '/b.png' }
+  test('nothing changed sends nothing', () => { expect(pageChanges(same, base)).toEqual({}) })
+  test('only the changed field is sent', () => { expect(pageChanges({ ...same, about: 'Changed' }, base)).toEqual({ about: 'Changed' }) })
+  test('reordering links sends links', () => { expect(pageChanges({ ...same, links: [base.links[1], base.links[0]] }, base)).toEqual({ links: [base.links[1], base.links[0]] }) })
+  test('clearing an image sends an empty string', () => { expect(pageChanges({ ...same, banner: null }, base)).toEqual({ banner_url: '' }) })
+  test('trailing whitespace in about is not a change', () => { expect(pageChanges({ ...same, about: 'Hello \n\n' }, base)).toEqual({}) })
+  test('a name with only surrounding spaces added is not a change', () => { expect(pageChanges({ ...same, name: ' Metal ' }, base)).toEqual({}) })
 })

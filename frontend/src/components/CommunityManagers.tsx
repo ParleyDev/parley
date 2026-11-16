@@ -23,6 +23,8 @@ export default function CommunityManagers({ community, guildId, managers, onChan
   const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const inFlight = useRef(false)
+  const addBtn = useRef<HTMLButtonElement>(null)
+  const closePicker = () => { setPicking(false); addBtn.current?.focus() }
   const base = `/guilds/${guildId}/communities/${community.slug}/managers`
 
   const change = async (target: string, kind: 'member' | 'role' | null) => {
@@ -31,7 +33,7 @@ export default function CommunityManagers({ community, guildId, managers, onChan
     try {
       if (kind) await api.put(`${base}/${target}`, { kind }); else await api.delete(`${base}/${target}`)
       onChanged()
-      if (kind) setPicking(false)
+      if (kind) closePicker()
     } catch (e) { pushToast((e as Error).message, 'error') }
     inFlight.current = false; setBusy(null)
   }
@@ -42,9 +44,9 @@ export default function CommunityManagers({ community, guildId, managers, onChan
     <section data-community-managers>
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-[11px] font-bold uppercase tracking-wider text-text-2">{t('Looked after by')}</h2>
-        {editable && <button type="button" onClick={() => setPicking((v) => !v)} aria-expanded={picking} className="flex items-center gap-1 rounded px-1 py-0.5 text-xs font-semibold text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" data-manager-add><Plus size={12} aria-hidden />{t('Add')}</button>}
+        {editable && <button type="button" ref={addBtn} onClick={() => (picking ? closePicker() : setPicking(true))} aria-expanded={picking} className="flex items-center gap-1 rounded px-1 py-0.5 text-xs font-semibold text-accent hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent" data-manager-add><Plus size={12} aria-hidden />{t('Add')}</button>}
       </div>
-      {picking && editable && <Picker guildId={guildId} managers={managers} busy={busy !== null} onPick={(id, kind) => void change(id, kind)} onClose={() => setPicking(false)} />}
+      {picking && editable && <Picker guildId={guildId} managers={managers} busy={busy !== null} onPick={(id, kind) => void change(id, kind)} onClose={closePicker} />}
       <ul className="flex flex-col gap-1">
         {managers?.members.map((m) => (
           <li key={m.id} className="flex items-center gap-1">
@@ -90,12 +92,22 @@ function Picker({ guildId, managers, busy, onPick, onClose }: { guildId: string;
     if (!guild || !me) return []
     const taken = new Set([...(managers?.members.map((m) => m.id) ?? []), ...(managers?.roles.map((r) => r.id) ?? [])])
     const ctx = { guild, roles, member: myMember }
-    const out: Option[] = []
-    for (const r of Object.values(roles)) if (r.id !== guildId && !taken.has(r.id) && canManageRole(ctx, me.id, r)) out.push({ id: r.id, kind: 'role', name: r.name, color: r.color })
-    for (const m of Object.values(members ?? {})) if (!taken.has(m.user_id)) out.push({ id: m.user_id, kind: 'member', name: m.nickname || m.display_name, avatar_url: m.avatar_url })
     const needle = q.trim().toLowerCase()
-    const hay = (o: Option) => o.name.toLowerCase() + ' ' + (o.kind === 'member' ? members?.[o.id]?.username.toLowerCase() ?? '' : '')
-    return out.filter((o) => !needle || hay(o).includes(needle)).sort((a, b) => a.name.localeCompare(b.name)).slice(0, MAX_OPTIONS)
+    const out: Option[] = []
+    // Stop at the first matches: a server can hold many thousands of members.
+    for (const r of Object.values(roles)) {
+      if (out.length >= MAX_OPTIONS) break
+      if (r.id !== guildId && !taken.has(r.id) && canManageRole(ctx, me.id, r) && (!needle || r.name.toLowerCase().includes(needle))) out.push({ id: r.id, kind: 'role', name: r.name, color: r.color })
+    }
+    for (const id in members ?? {}) {
+      if (out.length >= MAX_OPTIONS) break
+      const m = members![id]
+      if (taken.has(m.user_id)) continue
+      const name = m.nickname || m.display_name
+      if (needle && !name.toLowerCase().includes(needle) && !m.username.toLowerCase().includes(needle)) continue
+      out.push({ id: m.user_id, kind: 'member', name, avatar_url: m.avatar_url })
+    }
+    return out.sort((a, b) => a.name.localeCompare(b.name))
   }, [guild, me, roles, members, myMember, managers, q, guildId])
 
   const idx = Math.min(active, Math.max(0, options.length - 1))
@@ -108,19 +120,17 @@ function Picker({ guildId, managers, busy, onPick, onClose }: { guildId: string;
   }
   return (
     <div className="mb-2 rounded-lg border border-line bg-bg-1 p-2" data-manager-picker>
-      <input className="input" autoFocus value={q} onChange={(e) => { setQ(e.target.value); setActive(0) }} onKeyDown={onKey} placeholder={t('Search members and roles')} aria-label={t('Search members and roles')} maxLength={100} role="combobox" aria-expanded aria-controls="manager-options" aria-activedescendant={options[idx] ? `manager-option-${options[idx].id}` : undefined} data-manager-pick />
-      <ul id="manager-options" role="listbox" className="mt-1 max-h-56 overflow-y-auto">
+      <input className="input" autoFocus value={q} onChange={(e) => { setQ(e.target.value); setActive(0) }} onKeyDown={onKey} placeholder={t('Search members and roles')} aria-label={t('Search members and roles')} maxLength={100} role="combobox" aria-autocomplete="list" aria-expanded={options.length > 0} aria-controls="manager-options" aria-activedescendant={options[idx] ? `manager-option-${options[idx].id}` : undefined} data-manager-pick />
+      <div id="manager-options" role="listbox" className="mt-1 max-h-56 overflow-y-auto">
         {options.map((o, i) => (
-          <li key={o.id} id={`manager-option-${o.id}`} role="option" aria-selected={i === idx}>
-            <button type="button" tabIndex={-1} disabled={busy} onClick={() => pick(o)} onMouseEnter={() => setActive(i)} className={`flex w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm ${i === idx ? 'bg-bg-3' : ''}`} data-manager-option={o.id}>
-              {o.kind === 'member' ? <Avatar user={{ id: o.id, display_name: o.name, avatar_url: o.avatar_url ?? null }} size={20} /> : <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-text-2" style={o.color ? { background: o.color } : undefined} aria-hidden />}
-              <span className="min-w-0 flex-1 truncate" style={o.kind === 'role' && o.color ? { color: o.color } : undefined}>{o.name}</span>
-              {o.kind === 'role' && <span className="shrink-0 text-[10px] uppercase text-text-2">{t('Role')}</span>}
-            </button>
-          </li>
+          <div key={o.id} id={`manager-option-${o.id}`} role="option" aria-selected={i === idx} aria-disabled={busy || undefined} onClick={() => pick(o)} onMouseEnter={() => setActive(i)} className={`flex w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm ${i === idx ? 'bg-bg-3' : ''}`} data-manager-option={o.id}>
+            {o.kind === 'member' ? <Avatar user={{ id: o.id, display_name: o.name, avatar_url: o.avatar_url ?? null }} size={20} /> : <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-text-2" style={o.color ? { background: o.color } : undefined} aria-hidden />}
+            <span className="min-w-0 flex-1 truncate" style={o.kind === 'role' && o.color ? { color: o.color } : undefined}>{o.name}</span>
+            {o.kind === 'role' && <span className="shrink-0 text-[10px] uppercase text-text-2">{t('Role')}</span>}
+          </div>
         ))}
-        {!options.length && <li className="px-1.5 py-2 text-xs text-text-2" role="presentation">{loaded ? t('No match') : t('Loading…')}</li>}
-      </ul>
+        {!options.length && <p className="px-1.5 py-2 text-xs text-text-2">{loaded ? t('No match') : t('Loading…')}</p>}
+      </div>
     </div>
   )
 }

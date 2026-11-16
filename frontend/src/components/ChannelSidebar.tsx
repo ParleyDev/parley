@@ -129,7 +129,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     if (!ids.delete(id)) ids.add(id)
     // Forget communities the member no longer follows, so the stored set does not grow without bound.
     const followedNow = new Set(followedIds)
-    for (const x of [...ids]) if (!followedNow.has(x)) ids.delete(x)
+    for (const x of ids) if (!followedNow.has(x)) ids.delete(x)
     saveCollapsed(guildId, ids); return { guildId, ids }
   })
   // Categories backing a community show only for members who follow it; a followed one is a block after the rest.

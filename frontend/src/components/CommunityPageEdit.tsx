@@ -1,11 +1,12 @@
 import { ArrowDown, ArrowUp, Plus, X } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { useBlocker, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { splitCrop } from '../lib/crop'
 import { colorFor } from '../lib/format'
 import { useT } from '../lib/i18n'
-import { MAX_LINKS, validatePage } from '../lib/communityPage'
+import { MAX_LINKS, pageChanges, savedLinks, validatePage } from '../lib/communityPage'
+import { useUnsavedGuard } from '../lib/useUnsavedGuard'
 import { splashBackground } from '../lib/splash'
 import type { Community } from '../lib/types'
 import { useStore } from '../store'
@@ -17,38 +18,33 @@ interface Draft { name: string; slug: string; description: string; about: string
 
 let linkKey = 0
 const toDraft = (c: Community): Draft => ({ name: c.name, slug: c.slug, description: c.description, about: c.about, links: c.links.map((l) => ({ key: ++linkKey, ...l })), icon: c.icon_url, banner: c.banner_url })
-const plainLinks = (d: Draft) => d.links.map((l) => ({ label: l.label.trim(), url: l.url }))
-
-/** The fields that differ from the page as it was when editing began (only these are sent). */
-function changes(d: Draft, base: Community): Record<string, unknown> {
-  const body: Record<string, unknown> = {}
-  if (d.name.trim() !== base.name) body.name = d.name.trim()
-  if (d.slug !== base.slug) body.slug = d.slug
-  if (d.description !== base.description) body.description = d.description
-  if (d.about.trimEnd() !== base.about.trimEnd()) body.about = d.about
-  if (JSON.stringify(plainLinks(d)) !== JSON.stringify(base.links.map((l) => ({ label: l.label, url: l.url })))) body.links = plainLinks(d)
-  if ((d.icon ?? '') !== (base.icon_url ?? '')) body.icon_url = d.icon ?? ''
-  if ((d.banner ?? '') !== (base.banner_url ?? '')) body.banner_url = d.banner ?? ''
-  return body
-}
+const plainLinks = (d: Draft) => savedLinks(d.links)
+const changes = (d: Draft, base: Community) => pageChanges(d, base)
+const linksKey = (links: { label: string; url: string }[]) => JSON.stringify(savedLinks(links))
 
 /**
  * A community's page with its content shown as fields in place. Save sends only what changed; leaving with unsaved
  * changes (Cancel, another page, Back, closing the tab) asks first. The server decides what is allowed and its message
  * is shown when it refuses.
  */
-export default function CommunityPageEdit({ community, guildId, channels, managers, onClose, onSaved }: { community: Community; guildId: string; channels: ReactNode; managers: ReactNode; onClose: () => void; onSaved: (c: Community) => void }) {
+export default function CommunityPageEdit({ community, guildId, channels, managers, onClose, onSaved }: { community: Community; guildId: string; channels: (guard: (go: () => void) => void) => ReactNode; managers: ReactNode; onClose: () => void; onSaved: (c: Community) => void }) {
   const t = useT()
   const navigate = useNavigate()
   const openModal = useStore((s) => s.openModal)
-  const modal = useStore((s) => s.modal)
-  const base = useRef(community).current
-  const [d, setD] = useState<Draft>(() => toDraft(base))
+  // The page as the server last reported it: the editor's starting point, moved forward when someone else changes it.
+  const baseRef = useRef(community)
+  const base = baseRef.current
+  const [d, setD] = useState<Draft>(() => toDraft(community))
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [serverError, setServerError] = useState('')
+  const [changedByOthers, setChangedByOthers] = useState(false)
   const [saving, setSaving] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const inFlight = useRef(false)
+  const root = useRef<HTMLElement>(null)
+  const nameRef = useRef<HTMLInputElement>(null)
+  const deleteRef = useRef<HTMLButtonElement>(null)
+  const confirmRef = useRef<HTMLButtonElement>(null)
   const dirty = Object.keys(changes(d, base)).length > 0
   const dirtyRef = useRef(dirty)
   dirtyRef.current = dirty
@@ -56,25 +52,50 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
   const setLink = (i: number, p: Partial<Draft['links'][number]>) => set({ links: d.links.map((l, j) => (j === i ? { ...l, ...p } : l)) })
   const move = (i: number, by: number) => { const to = i + by; if (to < 0 || to >= d.links.length) return; const next = [...d.links]; [next[i], next[to]] = [next[to], next[i]]; set({ links: next }) }
 
-  // Another page or the Back button while there are unsaved changes: ask, then go on or stay.
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => dirtyRef.current && currentLocation.pathname !== nextLocation.pathname && !(nextLocation.state as { keepEdit?: boolean } | null)?.keepEdit)
-  const asked = useRef(false)
+  useEffect(() => { nameRef.current?.focus() }, [])
+  useEffect(() => { if (confirming) confirmRef.current?.focus() }, [confirming])
+
+  // Someone else changed the page while it is being edited: fields the editor has not touched take the new value, the
+  // ones they changed keep their text, and the editor is told to review before saving.
   useEffect(() => {
-    if (blocker.state !== 'blocked') { asked.current = false; return }
-    if (!asked.current) {
-      asked.current = true
-      openModal({ kind: 'confirm', title: t('Discard your changes?'), body: t('Your edits to this page have not been saved.'), danger: true, confirmLabel: t('Discard'), action: () => blocker.proceed() })
-    } else if (!modal) blocker.reset()
-  }, [blocker, modal, openModal, t])
+    const prev = baseRef.current
+    if (community === prev) return
+    baseRef.current = community
+    const same = prev.name === community.name && prev.slug === community.slug && prev.description === community.description && prev.about === community.about && linksKey(prev.links) === linksKey(community.links) && prev.icon_url === community.icon_url && prev.banner_url === community.banner_url
+    if (same) return
+    const fresh = toDraft(community)
+    setD((cur) => ({
+      name: cur.name === prev.name ? community.name : cur.name,
+      slug: cur.slug === prev.slug ? community.slug : cur.slug,
+      description: cur.description === prev.description ? community.description : cur.description,
+      about: cur.about.trimEnd() === prev.about.trimEnd() ? community.about : cur.about,
+      links: linksKey(cur.links) === linksKey(prev.links) ? fresh.links : cur.links,
+      icon: cur.icon === prev.icon_url ? community.icon_url : cur.icon,
+      banner: cur.banner === prev.banner_url ? community.banner_url : cur.banner,
+    }))
+    setChangedByOthers(true)
+  }, [community])
+
+  // Asking whether to discard goes through the app's confirm dialog; closing it any other way means "stay".
+  const modal = useStore((s) => s.modal)
+  const pending = useRef<{ cancel: () => void; opened: boolean; done: boolean } | null>(null)
   useEffect(() => {
-    const h = (e: BeforeUnloadEvent) => { if (dirtyRef.current) { e.preventDefault(); e.returnValue = '' } }
-    window.addEventListener('beforeunload', h)
-    return () => window.removeEventListener('beforeunload', h)
-  }, [])
+    const p = pending.current
+    if (!p) return
+    if (modal) p.opened = true
+    else if (p.opened) { pending.current = null; if (!p.done) p.cancel() }
+  }, [modal])
+  const askDiscard = useCallback((proceed: () => void, cancelFn: () => void = () => {}) => {
+    pending.current = { cancel: cancelFn, opened: false, done: false }
+    openModal({ kind: 'confirm', title: t('Discard your changes?'), body: t('Your edits to this page have not been saved.'), danger: true, confirmLabel: t('Discard'), action: () => { if (pending.current) pending.current.done = true; proceed() } })
+  }, [openModal, t])
+  useUnsavedGuard(dirty, root, askDiscard)
+  /** For navigation the page starts itself (a channel row): ask first when there are unsaved changes. */
+  const guard = (go: () => void) => { if (dirtyRef.current) askDiscard(() => { dirtyRef.current = false; go() }); else go() }
 
   const cancel = () => {
     if (!dirtyRef.current) { onClose(); return }
-    openModal({ kind: 'confirm', title: t('Discard your changes?'), body: t('Your edits to this page have not been saved.'), danger: true, confirmLabel: t('Discard'), action: () => { dirtyRef.current = false; onClose() } })
+    askDiscard(() => { dirtyRef.current = false; onClose() })
   }
 
   const save = async () => {
@@ -86,7 +107,7 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
     if (!Object.keys(body).length) { onClose(); return }
     inFlight.current = true; setSaving(true); setServerError('')
     try {
-      const updated = await api.patch<Community>(`/guilds/${guildId}/communities/${base.slug}`, body)
+      const updated = await api.patch<Community>(`/guilds/${guildId}/communities/${baseRef.current.slug}`, body)
       dirtyRef.current = false
       onSaved(updated)
     } catch (e) { setServerError((e as Error).message) }
@@ -97,7 +118,7 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
     if (inFlight.current) return
     inFlight.current = true; setSaving(true); setServerError('')
     try {
-      await api.delete(`/guilds/${guildId}/communities/${base.slug}`)
+      await api.delete(`/guilds/${guildId}/communities/${baseRef.current.slug}`)
       dirtyRef.current = false
       navigate(`/channels/${guildId}`)
       useStore.getState().removeCommunity(guildId, base.id)
@@ -111,13 +132,14 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
   const a11y = (k: string) => ({ 'aria-invalid': errors[k] ? true : undefined, 'aria-describedby': errors[k] ? `err-${k}` : undefined })
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-bg-2" data-community-editing={base.slug}>
+    <main ref={root} className="flex min-w-0 flex-1 flex-col bg-bg-2" data-community-editing={base.slug}>
       <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-line bg-bg-1 px-4 py-1.5 phone:px-2">
         <MobileBack />
         <p className="min-w-0 flex-1 text-sm text-text-1">{t('Editing this page. Members see changes when you save.')}</p>
         <button type="button" className="btn-ghost border border-line" onClick={cancel} data-community-cancel>{t('Cancel')}</button>
         <button type="button" className="btn-primary" onClick={() => void save()} disabled={saving} data-community-save>{t('Save')}</button>
       </header>
+      {changedByOthers && <p className="border-b border-line bg-bg-1 px-4 py-2 text-sm text-text-1" role="status" data-community-notice>{t('This page was changed by someone else. Review before saving.')}</p>}
       {serverError && <p className="border-b border-danger/40 bg-danger/10 px-4 py-2 text-sm text-danger" role="alert" data-community-error>{serverError}</p>}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="relative isolate h-36 w-full bg-cover bg-center" style={d.banner && !bannerCrop ? { backgroundImage: splashBackground(d.banner) } : d.banner ? undefined : { background: `linear-gradient(135deg, ${tint}, ${tint}55)` }}>
@@ -132,7 +154,7 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
           </div>
           <div className="w-full min-w-0 flex-1 space-y-2 pt-2">
             <div>
-              <input className="input text-xl font-bold" value={d.name} maxLength={100} onChange={(e) => set({ name: e.target.value })} aria-label={t('Name')} placeholder={t('Name')} {...a11y('name')} data-edit-name />
+              <input ref={nameRef} className="input text-xl font-bold" value={d.name} maxLength={100} onChange={(e) => set({ name: e.target.value })} aria-label={t('Name')} placeholder={t('Name')} {...a11y('name')} data-edit-name />
               {err('name')}
             </div>
             <div>
@@ -156,7 +178,7 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
               <p className="mt-1 text-xs text-text-2" id="edit-about-hint">{t('Same formatting as messages.')}</p>
               {err('about')}
             </section>
-            {channels}
+            {channels(guard)}
           </div>
           <div className="flex min-w-0 flex-col gap-6">
             <section>
@@ -170,7 +192,7 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
                       <button type="button" onClick={() => move(i, 1)} disabled={i === d.links.length - 1} aria-label={t('Move down')} title={t('Move down')} className="shrink-0 rounded p-1 text-text-2 hover:text-text-0 disabled:opacity-30"><ArrowDown size={14} aria-hidden /></button>
                       <button type="button" onClick={() => set({ links: d.links.filter((_, j) => j !== i) })} aria-label={t('Remove link')} title={t('Remove link')} className="shrink-0 rounded p-1 text-text-2 hover:text-danger" data-edit-link-remove><X size={14} aria-hidden /></button>
                     </div>
-                    <input className="input mt-1 w-full" value={l.url} maxLength={600} onChange={(e) => setLink(i, { url: e.target.value })} aria-label={t('Link address')} placeholder="https://" inputMode="url" aria-invalid={errors[`links.${i}`] ? true : undefined} data-edit-link-url />
+                    <input className="input mt-1 w-full" value={l.url} maxLength={600} onChange={(e) => setLink(i, { url: e.target.value })} aria-label={t('Link address')} placeholder="https://" inputMode="url" {...a11y(`links.${i}`)} data-edit-link-url />
                     {err(`links.${i}`)}
                   </li>
                 ))}
@@ -182,12 +204,12 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
             {community.can_delete && (
               <section>
                 {!confirming
-                  ? <button type="button" className="btn-ghost text-danger" onClick={() => setConfirming(true)} data-community-delete>{t('Delete community')}</button>
+                  ? <button type="button" className="btn-ghost text-danger" onClick={() => setConfirming(true)} ref={deleteRef} data-community-delete>{t('Delete community')}</button>
                   : (
-                    <div className="space-y-2 rounded-lg border border-danger/40 bg-bg-0/50 p-3">
+                    <div className="space-y-2 rounded-lg border border-danger/40 bg-bg-0/50 p-3" onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setConfirming(false); setTimeout(() => deleteRef.current?.focus(), 0) } }}>
                       <p className="text-sm">{t('Delete {name} and its {n} channels? Messages in them are deleted too.', { name: base.name, n: community.channel_ids.length })}</p>
                       <div className="flex gap-2">
-                        <button type="button" className="btn-danger" onClick={() => void remove()} disabled={saving} data-community-delete-confirm>{t('Delete')}</button>
+                        <button type="button" className="btn-danger" ref={confirmRef} onClick={() => void remove()} disabled={saving} data-community-delete-confirm>{t('Delete')}</button>
                         <button type="button" className="btn-ghost" onClick={() => setConfirming(false)}>{t('Cancel')}</button>
                       </div>
                     </div>
