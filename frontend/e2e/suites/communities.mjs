@@ -157,6 +157,24 @@ console.log('-- page fields, flags, creator follow')
   const log = await call(a.token, 'GET', `/guilds/${g.id}/audit?action=community.update`)
   const upd = (Array.isArray(log) ? log : log.items ?? []).filter((e) => e.target_id === pg.id)
   ok('update audit names the page fields that changed, not their contents', upd.some((e) => (e.details?.changed ?? []).includes('links')) && !JSON.stringify(upd.map((e) => e.details)).includes('b.example'))
+  // plain data, and stricter link URLs
+  ok('html in about round-trips verbatim', (await call(a.token, 'PATCH', `${base}/pagey`, { about: '<script>alert(1)</script>' })).about === '<script>alert(1)</script>' && (await call(b.token, 'GET', `${base}/pagey`)).about === '<script>alert(1)</script>')
+  ok('html in a link label round-trips verbatim', (await call(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: '<img src=x onerror=1>', url: 'https://example.com' }] })).links[0].label === '<img src=x onerror=1>')
+  ok('about keeps leading indentation', (await call(a.token, 'PATCH', `${base}/pagey`, { about: '    code\n' })).about === '    code')
+  for (const url of ['JAVASCRIPT:alert(1)', '  javascript:alert(1)', 'https://', 'https://exa mple.com', 'https://example.com/a b', 'https://example.com/\u0001', 'https://' + 'a'.repeat(493)]) ok(`link url ${JSON.stringify(url).slice(0, 24)} refused`, (await raw(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'X', url }] })).status === 400)
+  ok('a 500-character https URL is accepted', (await raw(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'X', url: 'https://' + 'a'.repeat(492) }] })).status === 200)
+  ok('an upper-case scheme is accepted and stored as sent', (await call(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'X', url: ' HTTPS://Example.com/P ' }] })).links[0].url === 'HTTPS://Example.com/P')
+  // creator follow event
+  {
+    const evs = []
+    const sock = await new Promise((resolve) => { const w = new WebSocket(`${WS}?token=${a.token}`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'READY') resolve(w); else evs.push(m) } })
+    const ev = await call(a.token, 'POST', base, { slug: 'evt', name: 'Evt' })
+    await new Promise((r2) => setTimeout(r2, 1000))
+    const mine = evs.filter((m) => (m.t === 'COMMUNITY_CREATE' && m.d.id === ev.id) || (m.t === 'COMMUNITY_FOLLOW_UPDATE' && m.d.community_id === ev.id))
+    ok('creating pushes COMMUNITY_CREATE then COMMUNITY_FOLLOW_UPDATE to the creator', mine.map((m) => m.t).join() === 'COMMUNITY_CREATE,COMMUNITY_FOLLOW_UPDATE' && mine[1].d.following === true && mine[1].d.guild_id === g.id, JSON.stringify(mine.map((m) => m.t)))
+    sock.close()
+    await raw(a.token, 'DELETE', `${base}/evt`)
+  }
   // delete: only the owner or an Administrator
   const cm = await reg('carol'), ad = await reg('dave')
   for (const u of [cm, ad]) await call(u.token, 'POST', `/invites/${inv.code}`)
@@ -228,7 +246,7 @@ console.log('-- Manage Channels is checked in the category')
   r = await raw(cm.token, 'PATCH', `${base}/guarded`, { description: 'two' })
   ok('denied Manage Channels by an overwrite on the category: PATCH is 403', r.status === 403, String(r.status))
   r = await raw(cm.token, 'DELETE', `${base}/guarded`)
-  ok('and DELETE is 403, nothing removed', r.status === 403 && (await call(a.token, 'GET', `${base}/guarded`))?.channel_ids?.length === 1)
+  ok('and DELETE by a non-administrator is 403, nothing removed', r.status === 403 && (await call(a.token, 'GET', `${base}/guarded`))?.channel_ids?.length === 1)
   await call(a.token, 'DELETE', `/channels/${guarded.category_id}/permissions/${mrole.id}`)
   const kid = guarded.channel_ids[0]
   await call(a.token, 'PUT', `/channels/${kid}/permissions/${mrole.id}`, { kind: 'role', allow: 0, deny: MANAGE_CH })

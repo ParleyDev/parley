@@ -51,13 +51,21 @@ fn clean_image(v: Option<String>) -> AppResult<Option<String>> {
 }
 
 fn clean_about(s: &str) -> AppResult<String> {
-    let a = s.trim();
+    // Leading whitespace is kept: formatted text may start with an indented block.
+    let a = s.trim_end();
     if a.chars().count() > 4000 { return Err(AppError::BadRequest("About must be at most 4000 characters".into())) }
     Ok(a.to_string())
 }
 
 #[derive(Deserialize)]
 struct LinkIn { #[serde(default)] label: String, #[serde(default)] url: String }
+
+/// http or https (any case), a host, no whitespace or control characters, at most 500 characters.
+fn valid_link(url: &str) -> bool {
+    url.chars().count() <= 500
+        && !url.chars().any(|c| c.is_whitespace() || c.is_control())
+        && url::Url::parse(url).is_ok_and(|u| matches!(u.scheme(), "http" | "https") && u.host_str().is_some_and(|h| !h.is_empty()))
+}
 
 /// At most 10 links, each a label of 1-80 characters and an http(s) URL of up to 500; unknown keys are dropped.
 fn clean_links(links: Vec<LinkIn>) -> AppResult<Value> {
@@ -66,7 +74,7 @@ fn clean_links(links: Vec<LinkIn>) -> AppResult<Value> {
     for l in links {
         let (label, url) = (l.label.trim(), l.url.trim());
         if label.is_empty() || label.chars().count() > 80 { return Err(AppError::BadRequest("A link label must be 1-80 characters".into())) }
-        if !(url.starts_with("https://") || url.starts_with("http://")) || url.chars().count() > 500 { return Err(AppError::BadRequest("A link must be an http(s) URL of at most 500 characters".into())) }
+        if !valid_link(url) { return Err(AppError::BadRequest("A link must be an http(s) URL with a host, at most 500 characters, without spaces".into())) }
         out.push(json!({ "label": label, "url": url }));
     }
     Ok(Value::Array(out))
