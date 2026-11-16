@@ -2,6 +2,9 @@
 // the guard on deleting the backing category, and bots with Manage Channels.
 import { execSync } from 'node:child_process'
 import { B, H, S, reg, call, raw, ok, finish, testContainer } from '../lib.mjs'
+import { createHmac } from 'node:crypto'
+const b32 = (s) => { const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let bits = 0, val = 0; const out = []; for (const ch of s.toUpperCase()) { val = (val << 5) | A.indexOf(ch); bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8 } } return Buffer.from(out) }
+const totp = (secret) => { const msg = Buffer.alloc(8); msg.writeBigInt64BE(BigInt(Math.floor(Date.now() / 30000))); const h = createHmac('sha1', b32(secret)).update(msg).digest(); const o = h[19] & 15; return String((((h[o] & 127) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3]) % 1e6).padStart(6, '0') }
 const sql = (q) => execSync(`docker exec ${testContainer('db')} psql -U parley -tAc "${q.replace(/"/g, '\\"')}"`, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim()
 // Poll a read until it satisfies `pred` (up to ~2 s): message-send touches last_activity_at in a spawned task.
 const until = async (read, pred) => { let v; for (let i = 0; i < 20; i++) { v = await read(); if (pred(v)) return v; await new Promise((r) => setTimeout(r, 100)) } return v }
@@ -423,6 +426,84 @@ console.log('-- managers')
   ok('but not a role above his own', (await raw(d.token, 'PUT', `${mg('one')}/${chief.id}`, { kind: 'role' })).status === 403)
   ok('a role below his own', (await raw(d.token, 'PUT', `${mg('one')}/${helpers.id}`, { kind: 'role' })).status === 204)
   await raw(a.token, 'DELETE', `${mg('one')}/${c.user.id}`); await raw(a.token, 'DELETE', `${mg('one')}/${helpers.id}`)
+
+  console.log('-- managers: a channel cannot be moved out of its community by its manager')
+  const mkIn = async (tok, cat, name) => (await (await raw(tok, 'POST', `/guilds/${gm.id}/channels`, { name, kind: 'text', parent_id: cat })).json())
+  const mv = async (tok, id, parent_id) => (await raw(tok, 'PATCH', `/channels/${id}`, { parent_id })).status
+  const chanCount = async () => (await call(a.token, 'GET', `/guilds/${gm.id}/channels`)).length
+  await raw(a.token, 'PUT', `${mg('one')}/${b.user.id}`, { kind: 'member' })
+  const mvc = await mkIn(b.token, oneCat, 'movable')
+  ok('a manager creates a channel in their community', !!mvc.id && mvc.parent_id === oneCat)
+  ok('and renames and reorders it', (await raw(b.token, 'PATCH', `/channels/${mvc.id}`, { name: 'moved-name', position: 7 })).status === 200)
+  ok('keeping its parent in the body is not a move', (await mv(b.token, mvc.id, oneCat)) === 200)
+  ok('but cannot move it to the top level', (await mv(b.token, mvc.id, null)) === 403)
+  ok('nor into another community', (await mv(b.token, mvc.id, twoCat)) === 403)
+  ok('nor move an existing channel of theirs out', (await mv(b.token, one.channel_ids[0], null)) === 403 && (await mv(b.token, one.channel_ids[0], twoCat)) === 403)
+  ok('and it stayed where it was', (await call(a.token, 'GET', `/guilds/${gm.id}/channels`)).find((x) => x.id === mvc.id).parent_id === oneCat)
+  ok('the owner moves it between categories', (await mv(a.token, mvc.id, twoCat)) === 200 && (await mv(a.token, mvc.id, oneCat)) === 200)
+  await raw(a.token, 'DELETE', `${mg('one')}/${b.user.id}`)
+  await raw(a.token, 'PUT', `${mg('one')}/${c.user.id}`, { kind: 'member' }); await raw(a.token, 'PUT', `${mg('two')}/${c.user.id}`, { kind: 'member' })
+  ok('a member managing both categories moves a channel from one to the other', (await mv(c.token, mvc.id, twoCat)) === 200 && (await mv(c.token, mvc.id, oneCat)) === 200)
+  ok('but still not to the top level', (await mv(c.token, mvc.id, null)) === 403)
+  await raw(a.token, 'DELETE', `${mg('one')}/${c.user.id}`); await raw(a.token, 'DELETE', `${mg('two')}/${c.user.id}`)
+
+  console.log('-- managers: creating channels, refusals')
+  await raw(a.token, 'PUT', `${mg('one')}/${b.user.id}`, { kind: 'member' })
+  const hid = await (await raw(a.token, 'POST', base, { slug: 'hid', name: 'Hid' })).json()
+  await raw(a.token, 'PUT', `${mg('hid')}/${b.user.id}`, { kind: 'member' })
+  await call(a.token, 'PUT', `/channels/${hid.category_id}/permissions/${b.user.id}`, { kind: 'member', allow: MCH | MMSG | MTHR, deny: VIEWB })
+  const before = await chanCount()
+  const mk403 = async (parent_id) => (await raw(b.token, 'POST', `/guilds/${gm.id}/channels`, { name: 'nope', kind: 'text', parent_id })).status
+  ok('a category of another server is refused', (await mk403(m.category_id)) === 403)
+  ok('a category the caller cannot view is refused', (await mk403(hid.category_id)) === 403)
+  ok('a channel that is no category is refused', (await mk403(one.channel_ids[0])) === 403)
+  ok('an unknown id is refused', (await mk403(crypto.randomUUID())) === 403)
+  ok('and nothing was created', (await chanCount()) === before)
+  await raw(a.token, 'DELETE', `${mg('one')}/${b.user.id}`)
+
+  console.log('-- managers: @everyone, vanished targets, active accounts')
+  ok('@everyone cannot be a manager', await (async () => { const r2 = await raw(a.token, 'PUT', `${mg('one')}/${gm.id}`, { kind: 'role' }); return r2.status === 400 && (await r2.json()).error === "Everyone can't be a community manager" })())
+  const leon = await reg('leon'); await call(leon.token, 'POST', `/invites/${inv2.code}`)
+  await raw(a.token, 'PUT', `${mg('one')}/${leon.user.id}`, { kind: 'member' })
+  const temp = await call(a.token, 'POST', `/guilds/${gm.id}/roles`, { name: 'Temp' })
+  await raw(a.token, 'PUT', `${mg('one')}/${temp.id}`, { kind: 'role' })
+  ok('listed before they go', (await call(a.token, 'GET', mg('one'))).members.some((x) => x.id === leon.user.id) && (await call(a.token, 'GET', mg('one'))).roles.some((x) => x.id === temp.id))
+  await raw(leon.token, 'DELETE', `/guilds/${gm.id}/members/@me`); await raw(a.token, 'DELETE', `/guilds/${gm.id}/roles/${temp.id}`)
+  ok('a member who left and a deleted role can be removed', (await raw(a.token, 'DELETE', `${mg('one')}/${leon.user.id}`)).status === 204 && (await raw(a.token, 'DELETE', `${mg('one')}/${temp.id}`)).status === 204)
+  const gone = await call(a.token, 'GET', mg('one'))
+  ok('and are not listed', !gone.members.some((x) => x.id === leon.user.id) && !gone.roles.some((x) => x.id === temp.id))
+
+  console.log('-- managers: a child keeps following, or not following, its category')
+  const solo = await mkIn(a.token, oneCat, 'solo')
+  await call(a.token, 'PUT', `/channels/${solo.id}/permissions/${c.user.id}`, { kind: 'member', allow: MCH | MMSG | MTHR, deny: 0 })
+  const soloState = async () => { const x = (await call(a.token, 'GET', `/guilds/${gm.id}/channels`)).find((y) => y.id === solo.id); return x.permissions_synced }
+  const sees = async (tok) => (await call(tok, 'GET', `/guilds/${gm.id}/channels`)).some((y) => y.id === solo.id)
+  const s0 = await soloState(), v0 = await sees(b.token)
+  await raw(a.token, 'PUT', `${mg('one')}/${c.user.id}`, { kind: 'member' }); await raw(a.token, 'DELETE', `${mg('one')}/${c.user.id}`)
+  ok('a child with only the manager entry keeps its own-entries state', s0 === false && (await soloState()) === false)
+  ok('and who sees it does not change', (await sees(b.token)) === v0)
+
+  console.log('-- managers: the flag agrees with the write')
+  const priv = await mkIn(a.token, oneCat, 'private-bit')
+  await call(a.token, 'PUT', `/channels/${priv.id}/permissions/${deputy.id}`, { kind: 'role', allow: 0, deny: VIEWB })
+  ok('a hidden child with its own entries: no flag', (await call(d.token, 'GET', `${base}/one`)).can_manage_managers === false)
+  ok('and the write is refused too', (await raw(d.token, 'PUT', `${mg('one')}/${b.user.id}`, { kind: 'member' })).status === 403)
+  await call(a.token, 'DELETE', `/channels/${priv.id}/permissions/${deputy.id}`)
+  ok('visible again: flag and write agree', (await call(d.token, 'GET', `${base}/one`)).can_manage_managers === true && (await raw(d.token, 'PUT', `${mg('one')}/${b.user.id}`, { kind: 'member' })).status === 204)
+  await raw(a.token, 'DELETE', `${mg('one')}/${b.user.id}`)
+
+  console.log('-- managers: two-factor')
+  const o = await reg('olga'), pt = await reg('pete')
+  const og = await call(o.token, 'POST', '/guilds', { name: `Mfa ${S}` })
+  const oi = await call(o.token, 'POST', `/guilds/${og.id}/invites`, {}); await call(pt.token, 'POST', `/invites/${oi.code}`)
+  const oc = await (await raw(o.token, 'POST', `/guilds/${og.id}/communities`, { slug: 'x', name: 'X' })).json()
+  await raw(o.token, 'PUT', `/guilds/${og.id}/communities/x/managers/${pt.user.id}`, { kind: 'member' })
+  const mkx = (name) => raw(pt.token, 'POST', `/guilds/${og.id}/channels`, { name, kind: 'text', parent_id: oc.category_id })
+  ok('before the server asks for 2FA the manager creates a channel', (await mkx('before')).status === 201)
+  const en = await raw(o.token, 'POST', '/users/@me/mfa/enroll', { password: 'password1' }); const sec = (await en.json()).secret
+  await raw(o.token, 'POST', '/users/@me/mfa/confirm', { code: totp(sec) })
+  ok('the owner requires it', (await raw(o.token, 'PATCH', `/guilds/${og.id}`, { mfa_level: 1 })).status === 200)
+  ok('a manager without 2FA no longer can', (await mkx('after')).status === 403)
 
   console.log('-- managers: ordinary permission routes and hidden communities')
   ok('the ordinary overwrite routes still work', (await raw(a.token, 'PUT', `/channels/${twoCat}/permissions/${c.user.id}`, { kind: 'member', allow: SEND, deny: 0 })).status === 204 && (await raw(a.token, 'DELETE', `/channels/${twoCat}/permissions/${c.user.id}`)).status === 204)

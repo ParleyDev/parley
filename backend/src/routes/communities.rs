@@ -95,39 +95,47 @@ fn slim(c: &Community) -> Value {
 /// The community for the caller: counts, whether they follow it and the child channels they can view. `None` when the
 /// caller cannot view its category (the same decision channel listing makes).
 async fn hydrate(state: &AppState, c: Community, uid: Uuid) -> AppResult<Option<Community>> {
-    let visible = perms::visible_channels(&state.db, c.guild_id, uid).await?;
-    if !visible.iter().any(|v| v.id == c.category_id) { return Ok(None) }
-    Ok(Some(fill(state, c, uid, &visible).await?))
+    let v = view(state, c.guild_id, uid).await?;
+    if !v.visible.iter().any(|x| x.id == c.category_id) { return Ok(None) }
+    Ok(Some(fill(state, c, uid, &v).await?))
+}
+
+/// One load of a server for one caller: its permission context, every channel (with overwrites) and the ones they can view.
+struct View { ctx: perms::GuildCtx, all: Vec<Channel>, visible: Vec<Channel> }
+
+async fn view(state: &AppState, gid: Uuid, uid: Uuid) -> AppResult<View> {
+    let ctx = perms::GuildCtx::load(&state.db, gid).await?;
+    let all = perms::guild_channels(&state.db, gid).await?;
+    let visible = match ctx.base(uid) { Some(base) => all.iter().filter(|c| perms::has(ctx.in_channel(uid, base, &c.overwrites), perms::VIEW_CHANNEL)).cloned().collect(), None => vec![] };
+    Ok(View { ctx, all, visible })
 }
 
 /// `hydrate` without the visibility gate: what the caller who just wrote the community gets back.
-async fn fill(state: &AppState, mut c: Community, uid: Uuid, visible: &[Channel]) -> AppResult<Community> {
-    let mut kids: Vec<&Channel> = visible.iter().filter(|v| v.parent_id == Some(c.category_id)).collect();
+async fn fill(state: &AppState, mut c: Community, uid: Uuid, v: &View) -> AppResult<Community> {
+    let mut kids: Vec<&Channel> = v.visible.iter().filter(|v| v.parent_id == Some(c.category_id)).collect();
     kids.sort_by_key(|k| (k.position, k.created_at));
     c.channel_ids = kids.into_iter().map(|k| k.id).collect();
     let (followers, on, me): (i64, i64, bool) = sqlx::query_as(&format!(
         "SELECT COUNT(*), COUNT(*) FILTER (WHERE user_id IN ({})), COALESCE(bool_or(user_id = $2), false) FROM community_follows WHERE community_id = $1", crate::ws::bus::visible_online_sql()))
         .bind(c.id).bind(uid).fetch_one(&state.db).await?;
     (c.follower_count, c.online_count, c.following) = (followers, on, me);
-    let ctx = perms::GuildCtx::load(&state.db, c.guild_id).await?;
-    set_flags(&mut c, &ctx, uid, visible);
+    set_flags(&mut c, &v.ctx, uid, &v.all);
     Ok(c)
 }
 
 /// The caller's flags. Manage Channels is computed in the category's own overwrites, as `manage_in_category` does.
-/// `visible` carries overwrites; a category the caller cannot view is not in it, and then there is nothing to edit.
-fn set_flags(c: &mut Community, ctx: &perms::GuildCtx, uid: Uuid, visible: &[Channel]) {
+/// `all` is every channel with overwrites (`in_channel` gives nothing in one the caller cannot view).
+fn set_flags(c: &mut Community, ctx: &perms::GuildCtx, uid: Uuid, all: &[Channel]) {
     let Some(base) = ctx.base(uid) else { return };
     c.can_delete = perms::has(base, perms::ADMINISTRATOR);
-    c.can_edit = visible.iter().find(|v| v.id == c.category_id).is_some_and(|cat| perms::has(ctx.in_channel(uid, base, &cat.overwrites), perms::MANAGE_CHANNELS));
-    // The shared entry rule on the category for the manager bits, against the caller as a member target.
-    c.can_manage_managers = visible.iter().find(|v| v.id == c.category_id).is_some_and(|cat|
-        super::channels::check_overwrite_edit(ctx, uid, ctx.in_channel(uid, base, &cat.overwrites), None, "member", uid, Some((MANAGER_BITS, 0))).is_ok());
+    c.can_edit = all.iter().find(|v| v.id == c.category_id).is_some_and(|cat| perms::has(ctx.in_channel(uid, base, &cat.overwrites), perms::MANAGE_CHANNELS));
+    // The same plan an appointment runs (category and children with entries of their own), for a fresh member target.
+    c.can_manage_managers = c.can_edit && plan_entries(ctx, uid, all, c.category_id, "member", uid, true, true, |(a, d)| (a | MANAGER_BITS, d & !MANAGER_BITS)).is_ok();
 }
 
 async fn written(state: &AppState, c: Community, uid: Uuid) -> AppResult<Community> {
-    let visible = perms::visible_channels(&state.db, c.guild_id, uid).await?;
-    fill(state, c, uid, &visible).await
+    let v = view(state, c.guild_id, uid).await?;
+    fill(state, c, uid, &v).await
 }
 
 /// Manage Channels as computed in this channel (its overwrites apply), as `PATCH`/`DELETE /channels/:id` check it.
@@ -338,7 +346,8 @@ async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
             Some(c)
         }
     };
-    let visible = perms::visible_channels(&state.db, gid, uid).await?;
+    let vw = view(&state, gid, uid).await?;
+    let visible = &vw.visible;
     let cats: Vec<Uuid> = visible.iter().filter(|v| v.kind == "category").map(|v| v.id).collect();
     let key = "COALESCE(last_activity_at, 'epoch'::timestamptz)";
     // One keyset comparison per sort; name then id break ties so pages never repeat or skip an item.
@@ -372,10 +381,9 @@ async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
         .bind(&ids).bind(uid).fetch_all(&state.db).await?;
     let counts: std::collections::HashMap<Uuid, (i64, i64, bool)> = counts.into_iter().map(|(id, f, o, m)| (id, (f, o, m))).collect();
     let mut kids: std::collections::HashMap<Uuid, Vec<&Channel>> = std::collections::HashMap::new();
-    for v in &visible { if let Some(p) = v.parent_id { kids.entry(p).or_default().push(v) } }
-    let ctx = perms::GuildCtx::load(&state.db, gid).await?;
+    for v in visible { if let Some(p) = v.parent_id { kids.entry(p).or_default().push(v) } }
     for c in rows.iter_mut() {
-        set_flags(c, &ctx, uid, &visible);
+        set_flags(c, &vw.ctx, uid, &vw.all);
         (c.follower_count, c.online_count, c.following) = counts.get(&c.id).copied().unwrap_or((0, 0, false));
         let mut k = kids.remove(&c.category_id).unwrap_or_default();
         k.sort_by_key(|k| (k.position, k.created_at));
@@ -422,16 +430,26 @@ pub async fn with_communities(db: &sqlx::PgPool, uid: Uuid, gid: Uuid, visible: 
     extra
 }
 
+/// The community, for a caller who can view it: a community they cannot view is a 404 like an unknown one, while
+/// failures that are not about visibility (database, server unavailable) stay what they are.
+async fn viewable_community(state: &AppState, gid: Uuid, uid: Uuid, slug: &str) -> AppResult<Community> {
+    require_member(&state.db, gid, uid).await?;
+    let c = by_slug(state, gid, slug).await?;
+    match super::channels::require_channel_perms(&state.db, c.category_id, uid).await {
+        Ok(_) => Ok(c),
+        Err(AppError::NotFound(_) | AppError::Forbidden) => Err(AppError::NotFound("Community not found".into())),
+        Err(e) => Err(e),
+    }
+}
+
 /// `GET /guilds/:id/communities/:slug/managers`: the members and roles whose entry on the category allows Manage
 /// Channels. A community the caller cannot view is a 404.
 async fn list_managers(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>) -> AppResult<Json<Value>> {
-    require_member(&state.db, gid, uid).await?;
-    let c = by_slug(&state, gid, &slug).await?;
-    super::channels::require_channel_perms(&state.db, c.category_id, uid).await.map_err(|_| AppError::NotFound("Community not found".into()))?;
+    let c = viewable_community(&state, gid, uid, &slug).await?;
     let members: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
         "SELECT u.id, COALESCE(NULLIF(m.nickname, ''), u.display_name), u.avatar_url FROM channel_overwrites o
          JOIN guild_members m ON m.user_id = o.target_id AND m.guild_id = $2 JOIN users u ON u.id = m.user_id
-         WHERE o.channel_id = $1 AND o.target_kind = 'member' AND (o.allow & $3) <> 0 ORDER BY 2, u.id")
+         WHERE o.channel_id = $1 AND o.target_kind = 'member' AND (o.allow & $3) <> 0 AND u.account_state = 'active' ORDER BY 2, u.id")
         .bind(c.category_id).bind(gid).bind(perms::MANAGE_CHANNELS as i64).fetch_all(&state.db).await?;
     let roles: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
         "SELECT r.id, r.name, r.color FROM channel_overwrites o JOIN roles r ON r.id = o.target_id AND r.guild_id = $2
@@ -446,43 +464,49 @@ async fn list_managers(State(state): State<AppState>, AuthUser(uid): AuthUser, P
 #[derive(Deserialize)]
 struct ManagerIn { kind: String }
 
-/// One entry change: the channel, the target's entry before, and the entry after (`None` removes it).
-struct EntryChange { channel: Channel, old: (u64, u64), new: Option<(u64, u64)> }
+/// One entry change: the channel and the entry after (`None`: the row goes).
+struct EntryChange { channel: Channel, new: Option<(u64, u64)> }
 
 /// Plan `f` over the target's entry on the category and on each child with entries of its own, every one authorised by
-/// the shared entry rule with the caller's permissions in that channel. Nothing is written here.
-async fn plan_entries(state: &AppState, gid: Uuid, category_id: Uuid, uid: Uuid, kind: &str, target: Uuid, creating: bool, f: impl Fn((u64, u64)) -> (u64, u64)) -> AppResult<Vec<EntryChange>> {
-    let ctx = perms::GuildCtx::load(&state.db, gid).await?;
+/// the shared entry rule with the caller's permissions in that channel. `creating` also covers children where the
+/// target has no entry yet (appointing); otherwise only where it has one. `fresh` ignores the target's current entries
+/// (the question "could I appoint someone new"). A child never loses its own-entries state by this: clearing the
+/// last bits of its only entry keeps the row, empty, so it does not start following the category.
+/// Nothing is written here.
+fn plan_entries(ctx: &perms::GuildCtx, uid: Uuid, all: &[Channel], category_id: Uuid, kind: &str, target: Uuid, creating: bool, fresh: bool, f: impl Fn((u64, u64)) -> (u64, u64)) -> AppResult<Vec<EntryChange>> {
     let base = ctx.base(uid).ok_or_else(|| AppError::NotFound("Server not found".into()))?;
-    let channels = perms::guild_channels(&state.db, gid).await?;
     let mut out = vec![];
-    for ch in channels.into_iter().filter(|c| c.id == category_id || (c.parent_id == Some(category_id) && c.permissions_synced == Some(false))) {
+    for ch in all.iter().filter(|c| c.id == category_id || (c.parent_id == Some(category_id) && c.permissions_synced == Some(false))) {
         let is_category = ch.id == category_id;
-        let own = ch.overwrites.iter().find(|o| o.target_id == target).cloned();
-        // Children only change where the target already has an entry, unless appointing (every child with entries gets one).
+        let own = if fresh { None } else { ch.overwrites.iter().find(|o| o.target_id == target).cloned() };
         if !is_category && own.is_none() && !creating { continue }
         let old = own.as_ref().map(|o| (o.allow as u64, o.deny as u64)).unwrap_or((0, 0));
         let (allow, deny) = f(old);
-        let new = if allow == 0 && deny == 0 { None } else { Some((allow, deny)) };
+        let new = if (allow, deny) != (0, 0) { Some((allow, deny)) } else if is_category || ch.overwrites.iter().any(|o| o.target_id != target) { None } else { Some((0, 0)) };
         let p = ctx.in_channel(uid, base, &ch.overwrites);
-        // Clearing the last bits is still a write of the entry as far as the rule is concerned, so check it as one.
-        super::channels::check_overwrite_edit(&ctx, uid, p, own.as_ref(), kind, target, Some(new.unwrap_or((0, 0))))?;
-        if new != Some(old).filter(|o| *o != (0, 0)) { out.push(EntryChange { channel: ch, old, new }) }
+        super::channels::check_overwrite_edit(ctx, uid, p, own.as_ref(), kind, target, Some((allow, deny)), !creating)?;
+        let changed = match (&own, new) { (Some(_), None) => true, (None, None) => false, (_, Some(n)) => n != old };
+        if changed { out.push(EntryChange { channel: ch.clone(), new }) }
     }
     Ok(out)
 }
 
-async fn write_entries(state: &AppState, gid: Uuid, uid: Uuid, kind: &str, target: Uuid, changes: Vec<EntryChange>) -> AppResult<()> {
+/// Write the planned changes in one transaction, relative to what the rows hold at that moment (so a concurrent edit
+/// of other bits survives), then one visibility resync and one audit entry per channel changed.
+async fn write_entries(state: &AppState, gid: Uuid, uid: Uuid, kind: &str, target: Uuid, add: bool, changes: Vec<EntryChange>) -> AppResult<()> {
     if changes.is_empty() { return Ok(()) }
     let before = perms::visibility(&state.db, gid).await?;
+    let bits = MANAGER_BITS as i64;
     let mut tx = state.db.begin().await?;
     for ch in &changes {
-        match ch.new {
-            Some((allow, deny)) => { sqlx::query(
-                "INSERT INTO channel_overwrites (channel_id, target_id, target_kind, allow, deny) VALUES ($1, $2, $3, $4, $5)
-                 ON CONFLICT (channel_id, target_id) DO UPDATE SET target_kind = EXCLUDED.target_kind, allow = EXCLUDED.allow, deny = EXCLUDED.deny")
-                .bind(ch.channel.id).bind(target).bind(kind).bind(allow as i64).bind(deny as i64).execute(&mut *tx).await?; }
-            None => { sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_id = $2").bind(ch.channel.id).bind(target).execute(&mut *tx).await?; }
+        if add {
+            sqlx::query(
+                "INSERT INTO channel_overwrites (channel_id, target_id, target_kind, allow, deny) VALUES ($1, $2, $3, $4, 0)
+                 ON CONFLICT (channel_id, target_id) DO UPDATE SET allow = channel_overwrites.allow | $4, deny = channel_overwrites.deny & ~$4")
+                .bind(ch.channel.id).bind(target).bind(kind).bind(bits).execute(&mut *tx).await?;
+        } else {
+            sqlx::query("UPDATE channel_overwrites SET allow = allow & ~$3 WHERE channel_id = $1 AND target_id = $2").bind(ch.channel.id).bind(target).bind(bits).execute(&mut *tx).await?;
+            if ch.new.is_none() { sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_id = $2 AND allow = 0 AND deny = 0").bind(ch.channel.id).bind(target).execute(&mut *tx).await?; }
         }
     }
     tx.commit().await?;
@@ -499,23 +523,23 @@ async fn write_entries(state: &AppState, gid: Uuid, uid: Uuid, kind: &str, targe
 /// `PUT /guilds/:id/communities/:slug/managers/:target` `{ kind }`: the target gains the manager bits on the category
 /// and on each of its channels that has entries of its own (the others follow the category). Other bits are kept.
 async fn add_manager(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug, target)): Path<(Uuid, String, Uuid)>, Json(req): Json<ManagerIn>) -> AppResult<StatusCode> {
-    require_member(&state.db, gid, uid).await?;
-    let c = by_slug(&state, gid, &slug).await?;
-    super::channels::require_channel_perms(&state.db, c.category_id, uid).await.map_err(|_| AppError::NotFound("Community not found".into()))?;
-    let changes = plan_entries(&state, gid, c.category_id, uid, &req.kind, target, true, |(a, d)| (a | MANAGER_BITS, d & !MANAGER_BITS)).await?;
-    write_entries(&state, gid, uid, &req.kind, target, changes).await?;
+    let c = viewable_community(&state, gid, uid, &slug).await?;
+    // @everyone is the role with the server's id: appointing it would make every member a manager.
+    if target == gid { return Err(AppError::BadRequest("Everyone can't be a community manager".into())) }
+    let v = view(&state, gid, uid).await?;
+    let changes = plan_entries(&v.ctx, uid, &v.all, c.category_id, &req.kind, target, true, false, |(a, d)| (a | MANAGER_BITS, d & !MANAGER_BITS))?;
+    write_entries(&state, gid, uid, &req.kind, target, true, changes).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
 /// `DELETE /guilds/:id/communities/:slug/managers/:target`: the manager bits leave the allow of the same entries; an
-/// entry left empty is removed.
+/// entry left empty is removed (on a child only while it has other entries, so it keeps its own-entries state).
+/// Works for a target that is gone (a member who left, a deleted role) as long as an entry names it.
 async fn remove_manager(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug, target)): Path<(Uuid, String, Uuid)>) -> AppResult<StatusCode> {
-    require_member(&state.db, gid, uid).await?;
-    let c = by_slug(&state, gid, &slug).await?;
-    super::channels::require_channel_perms(&state.db, c.category_id, uid).await.map_err(|_| AppError::NotFound("Community not found".into()))?;
-    let ctx = perms::GuildCtx::load(&state.db, gid).await?;
-    let kind = if ctx.roles.contains_key(&target) { "role" } else { "member" };
-    let changes = plan_entries(&state, gid, c.category_id, uid, kind, target, false, |(a, d)| (a & !MANAGER_BITS, d)).await?;
-    write_entries(&state, gid, uid, kind, target, changes).await?;
+    let c = viewable_community(&state, gid, uid, &slug).await?;
+    let v = view(&state, gid, uid).await?;
+    let kind = if v.ctx.roles.contains_key(&target) { "role" } else { "member" };
+    let changes = plan_entries(&v.ctx, uid, &v.all, c.category_id, kind, target, false, false, |(a, d)| (a & !MANAGER_BITS, d))?;
+    write_entries(&state, gid, uid, kind, target, false, changes).await?;
     Ok(StatusCode::NO_CONTENT)
 }

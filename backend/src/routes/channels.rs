@@ -248,6 +248,10 @@ async fn update_channel(
     if req.news == Some(true) && c.kind != "text" { return Err(AppError::BadRequest("Only text channels can be announcement channels".into())) }
     if req.media == Some(true) && c.kind != "forum" { return Err(AppError::BadRequest("Only forums can be media channels".into())) }
     let reaction = req.forum_default_reaction.as_ref().map(|r| r.trim().chars().take(64).collect::<String>());
+    if let Some(dest) = req.parent_id.filter(|d| *d != c.parent_id) {
+        let ctx = perms::GuildCtx::load(&state.db, gid).await?;
+        crate::routes::guilds::require_placement(&state.db, &ctx, gid, uid, &c.kind, dest).await?;
+    }
     let parent = match req.parent_id {
         Some(p) => Some(crate::routes::guilds::check_parent(&state.db, gid, &c.kind, p).await?),
         None => None,
@@ -1156,10 +1160,12 @@ async fn sync_permissions(State(state): State<AppState>, AuthUser(uid): AuthUser
 /// community manager routes. `p` is the caller's permissions in that channel; `existing` the target's current entry
 /// there; `new` the entry after the change, `None` to remove it. Needs Manage Roles in the channel; a role target
 /// must be outranked by the caller and a member target must be a member; only bits the caller holds in the channel
-/// may change.
-pub fn check_overwrite_edit(ctx: &perms::GuildCtx, uid: Uuid, p: u64, existing: Option<&crate::models::Overwrite>, kind: &str, target: Uuid, new: Option<(u64, u64)>) -> AppResult<()> {
+/// may change. `lenient` is for clearing bits from an entry that exists: the target may be a role that is gone or
+/// a member who left.
+pub fn check_overwrite_edit(ctx: &perms::GuildCtx, uid: Uuid, p: u64, existing: Option<&crate::models::Overwrite>, kind: &str, target: Uuid, new: Option<(u64, u64)>, lenient: bool) -> AppResult<()> {
     perms::check(p, perms::MANAGE_ROLES)?;
     let removing = new.is_none();
+    let lenient = lenient || removing;
     let kind = match (removing, existing) {
         (true, None) => return Err(AppError::NotFound("Overwrite not found".into())),
         (true, Some(o)) => o.target_kind.as_str(),
@@ -1172,10 +1178,10 @@ pub fn check_overwrite_edit(ctx: &perms::GuildCtx, uid: Uuid, p: u64, existing: 
         match ctx.roles.get(&target) {
             Some(role) if !ctx.outranks_role(uid, role) => return Err(AppError::Forbidden),
             Some(_) => {}
-            None if removing => {}
+            None if lenient => {}
             None => return Err(AppError::NotFound("Role not found".into())),
         }
-    } else if !removing && !ctx.is_member(target) {
+    } else if !lenient && !ctx.is_member(target) {
         return Err(AppError::NotFound("Member not found".into()));
     }
     // Only touch bits you hold here yourself (admins hold all).
@@ -1199,7 +1205,7 @@ async fn set_overwrite(
     let allow = (req.allow as u64) & perms::ALL;
     let deny = (req.deny as u64) & perms::ALL & !allow;
     let existing = c.overwrites.iter().find(|o| o.target_id == target);
-    check_overwrite_edit(&ctx, uid, p, existing, &req.kind, target, Some((allow, deny)))?;
+    check_overwrite_edit(&ctx, uid, p, existing, &req.kind, target, Some((allow, deny)), false)?;
     let before = perms::visibility(&state.db, gid).await?;
     sqlx::query(
         "INSERT INTO channel_overwrites (channel_id, target_id, target_kind, allow, deny) VALUES ($1, $2, $3, $4, $5)
@@ -1225,7 +1231,7 @@ async fn delete_overwrite(
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("DM channels have no permissions".into()))?;
     let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
-    check_overwrite_edit(&ctx, uid, p, c.overwrites.iter().find(|o| o.target_id == target), "", target, None)?;
+    check_overwrite_edit(&ctx, uid, p, c.overwrites.iter().find(|o| o.target_id == target), "", target, None, false)?;
     let before = perms::visibility(&state.db, gid).await?;
     sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_id = $2").bind(id).bind(target).execute(&state.db).await?;
     perms::resync_visibility(&state, gid, &before).await?;
