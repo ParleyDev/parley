@@ -208,7 +208,7 @@ function Hero({ community }: { community: Community }) {
     <div>
       <CommunityBanner url={community.banner_url} tint={tint} className={BANNER_HEIGHT} {...{ 'data-community-banner': '' }} />
       <div className="mx-auto flex max-w-5xl items-end gap-4 px-6 phone:px-4">
-        <div className="-mt-10 shrink-0">
+        <div className="relative z-10 -mt-10 shrink-0" data-community-icon>
           {community.icon_url
             ? <CropImg src={community.icon_url} alt="" className="h-20 w-20 rounded-2xl border-4 border-bg-2 bg-bg-2 object-cover" />
             : <div className="flex h-20 w-20 items-center justify-center rounded-2xl border-4 border-bg-2 text-2xl font-bold text-white" style={{ background: tint }}>{initials(community.name)}</div>}

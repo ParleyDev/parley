@@ -20,6 +20,7 @@ const picture = async (w, h) => Buffer.from(await p.evaluate(([w, h]) => {
   return c.toDataURL('image/png').split(',')[1]
 }, [w, h]), 'base64')
 const pic = { name: 'vista.png', mimeType: 'image/png', buffer: await picture(1200, 600) }
+const onTop = async (pg, sel) => pg.evaluate((sel) => { const r = document.querySelector(sel).getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 6); return !!hit?.closest(sel) }, sel)
 const height = async (sel) => (await p.locator(sel).boundingBox()).height
 
 console.log('-- header')
@@ -52,6 +53,7 @@ await p.click('[data-banner-apply]'); await p.waitForSelector('[data-banner-dial
 await p.waitForSelector('[data-edit-banner-change]')
 ok('a set header has Change, Adjust and Remove', (await p.locator('[data-edit-banner-adjust]').count()) === 1 && (await p.locator('[data-edit-banner-remove]').count()) === 1)
 await p.screenshot({ path: 'community-banner-edit.png' })
+ok('in edit mode too', await p.evaluate(() => { const r = document.querySelector('[data-edit-icon]').getBoundingClientRect(); const top = document.querySelector('[data-edit-banner]').getBoundingClientRect().bottom; return r.top < top && !!document.elementFromPoint(r.left + r.width / 2, r.top + 6)?.closest('[data-edit-icon]') }))
 await p.click('[data-community-save]'); await p.waitForSelector('[data-community-editing]', { state: 'detached' })
 let c = await call(a.token, 'GET', `${base}/vista`)
 ok('it is saved as fitted, aligned left', /^\/api\/images\/[0-9a-f-]{36}#fit=0,50$/.test(c.banner_url), c.banner_url)
@@ -70,6 +72,8 @@ c = await call(a.token, 'GET', `${base}/vista`)
 ok('Fill with zoom and a corner focus is saved as #crop=', /#crop=2,100,0$/.test(c.banner_url), c.banner_url)
 ok('and adjusting kept the same picture', c.banner_url.split('#')[0] === (await call(a.token, 'GET', `${base}/vista`)).banner_url.split('#')[0])
 await p.screenshot({ path: 'community-banner-view.png' })
+// The icon overlaps the bottom of the header and must be drawn on top of it.
+ok('the icon is drawn over the header, not under it', await onTop(p, '[data-community-icon]'))
 
 console.log('-- phone')
 const ph = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }); ph.on('pageerror', (e) => errors.push(e.message))

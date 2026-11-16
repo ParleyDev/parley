@@ -157,7 +157,7 @@ export default function CommunityPageEdit({ community, guildId, channels, manage
       <div className="min-h-0 flex-1 overflow-y-auto">
         <BannerEditor value={d.banner} tint={tint} onChange={(v) => set({ banner: v })} />
         <div className="mx-auto flex max-w-5xl items-end gap-4 px-6 phone:flex-col phone:items-start phone:px-4">
-          <div className="-mt-12 shrink-0 rounded-2xl bg-bg-2 p-1" role="group" aria-label={t('Icon')} data-edit-icon>
+          <div className="relative z-10 -mt-12 shrink-0 self-start rounded-2xl bg-bg-2 p-1" role="group" aria-label={t('Icon')} data-edit-icon>
             <ImagePicker value={d.icon} onChange={(v) => set({ icon: v })} label={d.name} id={base.id} round={false} kind="icon" />
           </div>
           <div className="w-full min-w-0 flex-1 space-y-2 pt-2">
