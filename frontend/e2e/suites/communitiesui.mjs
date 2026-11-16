@@ -104,7 +104,7 @@ const badge = async () => Number((await p.locator('[data-community="pavement"] [
 const before = await badge() // the earlier mention, made while the community was not followed, still counts
 await call(a.token, 'POST', `/channels/${paveChan}/messages`, { content: `<@${b.user.id}> look` })
 await p.waitForFunction((n) => Number(document.querySelector('[data-community="pavement"] [data-mention-badge]')?.getAttribute('data-mention-badge') ?? 0) === n, before + 1)
-ok('a mention in a collapsed community raises the badge on the row', (await badge()) === before + 1 && before + 1 >= 1)
+ok('a mention in a collapsed community raises the badge on the row', (await badge()) === before + 1)
 await p.click('[data-community="pavement"] [data-community-name]'); await p.waitForURL(new RegExp(`/channels/${g.id}/c/pavement$`))
 await p.waitForSelector('[data-community-page="pavement"]').catch(() => {})
 ok('selecting the row opens the page', true === (await p.isVisible('[data-community-page="pavement"]')))

@@ -1,95 +1,140 @@
-import { ChevronRight, ExternalLink } from 'lucide-react'
+import { ChevronRight, ExternalLink, Plus } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { NO_FOLLOWS } from '../lib/communities'
-import { linkHost, safeLink } from '../lib/communityPage'
-import { anchorOf } from '../lib/anchor'
+import { communityPath, linkHost, safeLink } from '../lib/communityPage'
+import { splashBackground } from '../lib/splash'
+import { splitCrop } from '../lib/crop'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/ua'
-import type { Channel, Community, CommunityManagers } from '../lib/types'
+import type { Channel, Community, CommunityManagers as ManagersData } from '../lib/types'
 import { useStore } from '../store'
-import Avatar from './Avatar'
 import { chanIcon } from './ChannelSidebar'
+import { CropLayer } from './CropImg'
+import CommunityManagers from './CommunityManagers'
+import CommunityPageEdit from './CommunityPageEdit'
 import { MobileBack } from './HeaderBits'
 
-type Load = { state: 'loading' } | { state: 'missing' } | { state: 'failed' } | { state: 'ready'; community: Community }
+/** What the last fetch found, for one address (`key`); an answer for another address counts as still loading. */
+type Loaded = { key: string } & ({ state: 'missing' | 'failed' } | { state: 'ready'; community: Community })
 
 /** A community's page in the main pane: who it is, what it is about, where to go in it and who looks after it. */
 export default function CommunityPage({ guildId, slug }: { guildId: string; slug: string }) {
   const t = useT()
   const navigate = useNavigate()
-  const [load, setLoad] = useState<Load>({ state: 'loading' })
-  const [managers, setManagers] = useState<CommunityManagers | null>(null)
+  const key = `${guildId}/${slug}`
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
+  const load = loaded && loaded.key === key ? loaded : null
+  const [managers, setManagers] = useState<ManagersData | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [notice, setNotice] = useState('')
   const followed = useStore((s) => s.communityFollows[guildId]) ?? NO_FOLLOWS
   // The slim record the gateway keeps current: a change to it (rename, new description) refetches the full page, and
   // its removal means the community was deleted.
   const slim = useStore((s) => s.communities[guildId]?.find((c) => c.slug === slug))
+  const [knownId, setKnownId] = useState<string | null>(null)
+  const byId = useStore((s) => (knownId ? s.communities[guildId]?.find((c) => c.id === knownId) : undefined))
+  const category = load?.state === 'ready' ? load.community.category_id : null
+  // A change to the category (permissions) or to what is in it (a channel added or removed) refetches too.
+  const categoryRec = useStore((s) => (category ? s.channels[category] : undefined))
+  const kids = useStore((s) => (category ? Object.values(s.channels).filter((c) => c.parent_id === category).map((c) => c.id).sort().join() : ''))
   const [retry, setRetry] = useState(0)
   const seq = useRef(0)
-  const seen = useRef<string | null>(null)
 
   useEffect(() => {
     const id = ++seq.current
     api.get<Community>(`/guilds/${guildId}/communities/${slug}`)
-      .then((community) => { if (id === seq.current) setLoad({ state: 'ready', community }) })
-      .catch((e) => { if (id === seq.current) setLoad({ state: e instanceof ApiError && e.status === 404 ? 'missing' : 'failed' }) })
+      .then((community) => { if (id === seq.current) setLoaded({ key, state: 'ready', community }) })
+      // A failed refetch (a network blip) keeps showing the page that is already loaded; only a 404 replaces it.
+      .catch((e) => { if (id === seq.current) setLoaded((cur) => (e instanceof ApiError && e.status === 404 ? { key, state: 'missing' } : cur && cur.key === key && cur.state === 'ready' ? cur : { key, state: 'failed' })) })
     return () => { seq.current++ }
-  }, [guildId, slug, slim, retry])
+  }, [guildId, slug, key, slim, retry, categoryRec, kids])
 
-  // Another address: start over rather than showing the previous community while the next loads.
-  useEffect(() => { setLoad({ state: 'loading' }); setManagers(null); seen.current = null }, [guildId, slug])
+  // Another address: forget the previous page's manager list and the editing state.
+  useEffect(() => { setManagers(null); setEditing(false); setNotice('') }, [key])
 
-  // Deleted while open (the store drops it on COMMUNITY_DELETE).
+  // Deleted while open (the store drops it on COMMUNITY_DELETE); renamed elsewhere (follow it to the new address).
+  useEffect(() => { setKnownId(slim?.id ?? null) }, [slim?.id, key])
   useEffect(() => {
-    if (slim) seen.current = slim.id
-    else if (seen.current) { seq.current++; setLoad({ state: 'missing' }) }
-  }, [slim])
+    if (!knownId) return
+    if (!byId) { seq.current++; setLoaded({ key, state: 'missing' }) }
+    else if (byId.slug !== slug) {
+      setLoaded((cur) => (cur && cur.state === 'ready' ? { ...cur, key: `${guildId}/${byId.slug}` } : cur))
+      navigate(communityPath(guildId, byId.slug), { replace: true, state: { keepEdit: true } })
+    }
+  }, [knownId, byId, key, slug, guildId, navigate])
 
-  const loadedId = load.state === 'ready' ? load.community.id : null
+  const loadedId = load?.state === 'ready' ? load.community.id : null
+  const loadManagers = useCallback(() => {
+    const url = `/guilds/${guildId}/communities/${slug}/managers`
+    return api.get<ManagersData>(url).then(setManagers).catch(() => { /* keep what is shown */ })
+  }, [guildId, slug])
   useEffect(() => {
     if (!loadedId) return
     let live = true
-    api.get<CommunityManagers>(`/guilds/${guildId}/communities/${slug}/managers`).then((m) => { if (live) setManagers(m) }).catch(() => { if (live) setManagers(null) })
+    api.get<ManagersData>(`/guilds/${guildId}/communities/${slug}/managers`).then((m) => { if (live) setManagers(m) }).catch(() => { if (live) setManagers(null) })
     return () => { live = false }
-  }, [guildId, slug, loadedId, slim])
+  }, [guildId, slug, loadedId, slim, categoryRec])
+
+  // The member lost the right to edit while editing: leave edit mode and say why.
+  const canEdit = load?.state === 'ready' && load.community.can_edit
+  useEffect(() => { if (editing && load?.state === 'ready' && !canEdit) { setEditing(false); setNotice(t('You can no longer edit this page.')) } }, [editing, canEdit, load, t])
 
   const goBack = useCallback(() => navigate(`/channels/${guildId}`), [guildId, navigate])
 
-  if (load.state === 'missing') return <Missing onBack={goBack} />
-  if (load.state === 'failed') return (
+  if (load?.state === 'missing') return <Missing onBack={goBack} />
+  if (load?.state === 'failed') return (
     <main className="flex flex-1 flex-col items-center justify-center gap-3 bg-bg-2 p-8 text-center" data-community-failed>
       <p className="text-sm text-text-2">{t('Could not load this community.')}</p>
-      <button type="button" className="btn-ghost" onClick={() => { setLoad({ state: 'loading' }); setRetry((n) => n + 1) }}>{t('Try again')}</button>
+      <button type="button" className="btn-ghost" onClick={() => { setLoaded(null); setRetry((n) => n + 1) }}>{t('Try again')}</button>
     </main>
   )
-  if (load.state === 'loading') return <main className="flex-1 bg-bg-2" aria-busy="true" />
+  if (!load || load.state !== 'ready') return <main className="flex-1 bg-bg-2" aria-busy="true" />
   const community = load.community
   const following = followed.includes(community.id)
 
   const toggleFollow = () => {
     const st = useStore.getState()
     // The store resolves a community by slug; make sure this one is known to it.
-    if (!st.communities[guildId]?.some((x) => x.id === community.id)) st.upsertCommunity({ id: community.id, guild_id: community.guild_id, slug: community.slug, name: community.name, icon_url: community.icon_url, banner_url: community.banner_url, description: community.description, category_id: community.category_id })
-    void st.followCommunity(guildId, community.slug, !following)
+    const added = !st.communities[guildId]?.some((x) => x.id === community.id)
+    if (added) st.upsertCommunity({ id: community.id, guild_id: community.guild_id, slug: community.slug, name: community.name, icon_url: community.icon_url, banner_url: community.banner_url, description: community.description, category_id: community.category_id })
+    // A community that could not be followed (gone meanwhile) must not stay in the store.
+    void st.followCommunity(guildId, community.slug, !following).then((ok) => { if (!ok && added) useStore.getState().removeCommunity(guildId, community.id) })
   }
   const followers = Math.max(0, community.follower_count + (following ? 1 : 0) - (community.following ? 1 : 0))
+  const channels = <Channels community={community} guildId={guildId} />
+  const managersBlock = <CommunityManagers community={community} guildId={guildId} managers={managers} onChanged={() => { void loadManagers() }} />
+
+  if (editing && community.can_edit) {
+    return (
+      <CommunityPageEdit community={community} guildId={guildId} channels={channels} managers={managersBlock} onClose={() => setEditing(false)}
+        onSaved={(updated) => {
+          setLoaded({ key: `${guildId}/${updated.slug}`, state: 'ready', community: updated })
+          setEditing(false)
+          const st = useStore.getState()
+          st.upsertCommunity({ id: updated.id, guild_id: updated.guild_id, slug: updated.slug, name: updated.name, icon_url: updated.icon_url, banner_url: updated.banner_url, description: updated.description, category_id: updated.category_id })
+          if (updated.slug !== slug) navigate(communityPath(guildId, updated.slug), { replace: true, state: { keepEdit: true } })
+        }} />
+    )
+  }
 
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-bg-2" data-community-page={community.slug}>
-      <TopBar community={community} following={following} onFollow={toggleFollow} guildId={guildId} />
+      <TopBar community={community} following={following} onFollow={toggleFollow} guildId={guildId} onEdit={community.can_edit ? () => { setNotice(''); setEditing(true) } : undefined} />
+      {notice && <p className="border-b border-line bg-bg-1 px-4 py-2 text-sm text-text-1" role="status" data-community-notice>{notice}</p>}
       <div className="min-h-0 flex-1 overflow-y-auto">
         <Hero community={community} />
         <div className="mx-auto grid max-w-5xl gap-6 px-6 pb-10 pt-5 phone:px-4 wide:grid-cols-[minmax(0,1fr)_16rem]">
           <div className="flex min-w-0 flex-col gap-6">
             <About text={community.about} />
-            <Channels community={community} guildId={guildId} />
+            {channels}
           </div>
           <div className="flex min-w-0 flex-col gap-6">
             <Counts online={community.online_count} following={followers} />
             <Links links={community.links} />
-            <Managers managers={managers} />
+            {managersBlock}
           </div>
         </div>
       </div>
@@ -114,7 +159,7 @@ function Label({ children }: { children: string }) {
   return <h2 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-text-2">{children}</h2>
 }
 
-function TopBar({ community, following, onFollow, guildId }: { community: Community; following: boolean; onFollow: () => void; guildId: string }) {
+function TopBar({ community, following, onFollow, guildId, onEdit }: { community: Community; following: boolean; onFollow: () => void; guildId: string; onEdit?: () => void }) {
   const t = useT()
   const openModal = useStore((s) => s.openModal)
   return (
@@ -123,6 +168,7 @@ function TopBar({ community, following, onFollow, guildId }: { community: Commun
       <button type="button" className="shrink-0 text-sm text-text-2 hover:text-text-0 phone:hidden" onClick={() => openModal({ kind: 'browseCommunities', guildId })}>{t('Communities')}</button>
       <ChevronRight size={14} className="shrink-0 text-text-2 phone:hidden" />
       <span className="min-w-0 flex-1 truncate font-bold">{community.name}</span>
+      {onEdit && <button type="button" className="btn-ghost border border-line" onClick={onEdit} data-community-edit>{t('Edit')}</button>}
       <button type="button" onClick={onFollow} aria-pressed={following} className={following ? 'btn-ghost border border-line' : 'btn-primary'} data-community-follow>{following ? t('Following') : t('Follow')}</button>
     </header>
   )
@@ -132,7 +178,9 @@ function Hero({ community }: { community: Community }) {
   const tint = colorFor(community.id)
   return (
     <div>
-      <div className="h-24 w-full bg-cover bg-center" style={community.banner_url ? { backgroundImage: `url("${community.banner_url}")` } : { background: `linear-gradient(135deg, ${tint}, ${tint}55)` }} data-community-banner />
+      <div className="relative isolate h-24 w-full bg-cover bg-center" style={community.banner_url && !splitCrop(community.banner_url).crop ? { backgroundImage: splashBackground(community.banner_url) } : community.banner_url ? undefined : { background: `linear-gradient(135deg, ${tint}, ${tint}55)` }} data-community-banner>
+        <CropLayer url={community.banner_url} />
+      </div>
       <div className="mx-auto flex max-w-5xl items-end gap-4 px-6 phone:px-4">
         <div className="-mt-8 shrink-0">
           {community.icon_url
@@ -165,8 +213,9 @@ function Channels({ community, guildId }: { community: Community; guildId: strin
   const messages = useStore((s) => s.messages)
   const setMobilePane = useStore((s) => s.setMobilePane)
   const navigate = useNavigate()
+  const openModal = useStore((s) => s.openModal)
   const rows = community.channel_ids.map((id) => channels[id]).filter((c): c is Channel => !!c)
-  if (!rows.length) return null
+  if (!rows.length && !community.can_edit) return null
   return (
     <section>
       <Label>{t('Channels')}</Label>
@@ -187,6 +236,7 @@ function Channels({ community, guildId }: { community: Community; guildId: strin
           )
         })}
       </div>
+      {community.can_edit && <button type="button" onClick={() => openModal({ kind: 'createChannel', guildId, parentId: community.category_id, stay: true })} className="mt-2 flex items-center gap-1 text-sm font-medium text-accent hover:underline" data-community-add-channel><Plus size={14} aria-hidden />{t('Add channel')}</button>}
     </section>
   )
 }
@@ -217,30 +267,6 @@ function Links({ links }: { links: Community['links'] }) {
               <span className="truncate text-xs text-text-2">{linkHost(l.href)}</span>
             </a>
           </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-function Managers({ managers }: { managers: CommunityManagers | null }) {
-  const t = useT()
-  const openModal = useStore((s) => s.openModal)
-  if (!managers || (!managers.members.length && !managers.roles.length)) return null
-  return (
-    <section data-community-managers>
-      <Label>{t('Looked after by')}</Label>
-      <ul className="flex flex-col gap-1">
-        {managers.members.map((m) => (
-          <li key={m.id}>
-            <button type="button" data-motion-row onClick={(e) => openModal({ kind: 'profile', userId: m.id, anchor: anchorOf(e) })} className="flex w-full min-w-0 items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-bg-3" data-community-manager={m.id}>
-              <Avatar user={m} size={24} />
-              <span className="min-w-0 truncate text-sm font-medium">{m.display_name}</span>
-            </button>
-          </li>
-        ))}
-        {managers.roles.map((r) => (
-          <li key={r.id} className="truncate px-1 py-1 text-sm font-medium" style={r.color ? { color: r.color } : undefined} data-community-manager-role={r.id}>{r.name}</li>
         ))}
       </ul>
     </section>

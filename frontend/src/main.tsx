@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider } from 'react-router-dom'
 import './index.css'
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -55,14 +55,15 @@ window.addEventListener('vite:preloadError', (e) => {
   location.reload()
 })
 
+// A data router (one catch-all route; the app routes itself) so a page can block navigation while it holds unsaved edits.
+const router = createBrowserRouter([{ path: '*', element: <App /> }])
+
 // First paint waits (briefly) for the chosen language's catalogue, so a non-English UI doesn't flash English.
 // The outer boundary: a crash anywhere outside the app shell's own shows Reload, not an empty screen.
 const render = () => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </ErrorBoundary>
   </StrictMode>,
 )

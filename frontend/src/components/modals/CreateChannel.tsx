@@ -10,7 +10,7 @@ import type { Channel } from '../../lib/types'
 import { useT } from '../../lib/i18n'
 import Dropdown from '../Dropdown'
 
-export default function CreateChannelModal({ onClose, guildId, parentId = null }: { onClose: () => void; guildId: string; parentId?: string | null }) {
+export default function CreateChannelModal({ onClose, guildId, parentId = null, stay = false }: { onClose: () => void; guildId: string; parentId?: string | null; stay?: boolean }) {
   const t = useT()
   const [name, setName] = useState('')
   const [kind, setKind] = useState<'text' | 'announcement' | 'voice' | 'stage' | 'studio' | 'category' | 'forum' | 'media' | 'directory'>('text')
@@ -33,7 +33,7 @@ export default function CreateChannelModal({ onClose, guildId, parentId = null }
         await api.put(`/channels/${c.id}/permissions/${guildId}`, { kind: 'role', allow: 0, deny: P.VIEW_CHANNEL })
         if (me && guild?.owner_id !== me.id) await api.put(`/channels/${c.id}/permissions/${me.id}`, { kind: 'member', allow: P.VIEW_CHANNEL, deny: 0 })
       }
-      upsertChannel(c); onClose(); if (kind !== 'category') navigate(`/channels/${guildId}/${c.id}`)
+      upsertChannel(c); onClose(); if (kind !== 'category' && !stay) navigate(`/channels/${guildId}/${c.id}`)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 

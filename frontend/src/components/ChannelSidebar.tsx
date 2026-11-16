@@ -121,8 +121,17 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const followedIds = useStore((s) => s.communityFollows[guildId]) ?? NO_FOLLOWS
   // Communities start expanded; this device remembers the collapsed ones (separately from ordinary categories).
   const [collapsedComm, setCollapsedComm] = useState(() => ({ guildId, ids: loadCollapsed(guildId) }))
-  const commCollapsed = collapsedComm.guildId === guildId ? collapsedComm.ids : loadCollapsed(guildId)
-  const toggleCommunity = (id: string) => setCollapsedComm(() => { const ids = new Set(commCollapsed); if (!ids.delete(id)) ids.add(id); saveCollapsed(guildId, ids); return { guildId, ids } })
+  // Read from storage once per server (not on every render); a toggle then replaces it in state.
+  const storedCollapsed = useMemo(() => loadCollapsed(guildId), [guildId])
+  const commCollapsed = collapsedComm.guildId === guildId ? collapsedComm.ids : storedCollapsed
+  const toggleCommunity = (id: string) => setCollapsedComm(() => {
+    const ids = new Set(commCollapsed)
+    if (!ids.delete(id)) ids.add(id)
+    // Forget communities the member no longer follows, so the stored set does not grow without bound.
+    const followedNow = new Set(followedIds)
+    for (const x of [...ids]) if (!followedNow.has(x)) ids.delete(x)
+    saveCollapsed(guildId, ids); return { guildId, ids }
+  })
   // Categories backing a community show only for members who follow it; a followed one is a block after the rest.
   // Memoised: with a thousand communities the split is too heavy to redo on every render.
   const split = useMemo(() => {
@@ -377,13 +386,13 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
                 <div key={category.id} data-category={category.id} data-category-open={open ? '1' : '0'}>
                   <div data-category-header data-community={community.slug} data-community-open={open ? '1' : '0'} onContextMenu={(e) => ctx.open(e, categoryMenu(category, community))}
                     className={`group flex items-center gap-1 rounded-md pr-1 text-[15px] ${highlightInto(category.id) ? 'bg-accent/20 ring-1 ring-accent' : selected ? 'bg-bg-4 text-text-0' : quiet.unread || quiet.mentions > 0 ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
-                    <button type="button" onClick={() => toggleCommunity(community.id)} aria-expanded={open} aria-label={`${open ? t('Collapse') : t('Expand')} ${community.name}`} data-community-toggle className="shrink-0 rounded py-1.5 pl-1.5 pr-0.5 text-[11px] leading-none text-text-2 hover:text-text-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">{open ? '\u25BE' : '\u25B8'}</button>
+                    <button type="button" onClick={() => toggleCommunity(community.id)} aria-expanded={open} aria-label={`${open ? t('Collapse') : t('Expand')} ${community.name}`} data-community-toggle className="shrink-0 rounded py-1.5 pl-1.5 pr-0.5 text-[11px] leading-none text-text-2 hover:text-text-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"><ChevronDown size={12} className={`transition ${open ? '' : '-rotate-90'}`} aria-hidden /></button>
                     <Link to={communityPath(guildId, community.slug)} onClick={() => setMobilePane('content')} data-community-open-page className="flex min-w-0 flex-1 items-center gap-1.5 rounded py-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
                       <CommunityIcon community={community} />
                       <span className={`min-w-0 flex-1 truncate ${quiet.unread ? 'font-semibold' : ''}`} data-community-name>{community.name}</span>
                     </Link>
                     {quiet.mentions > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center" data-mention-badge={quiet.mentions}>{quiet.mentions}</span>}
-                    {quiet.unread && <span className="h-2 w-2 shrink-0 rounded-full bg-text-0" aria-label={t('Unread')} data-community-unread />}
+                    {quiet.unread && <span className="h-2 w-2 shrink-0 rounded-full bg-text-0" role="img" aria-label={t('Unread')} data-community-unread />}
                     {canCreate && open && <button type="button" onClick={() => openModal({ kind: 'createChannel', guildId, parentId: category.id })} title={t('Create Channel')} aria-label={t('Create Channel')} data-category-add className="shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 phone:opacity-100 text-text-2 hover:text-text-0"><Plus size={14} /></button>}
                   </div>
                   <div className="ml-3 mt-0.5 space-y-0.5 min-h-1">
