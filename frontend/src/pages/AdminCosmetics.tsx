@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { FolderPlus, ImagePlus, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
+import { FolderInput, FolderPlus, ImagePlus, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import { api, ApiError, getToken } from '../lib/api'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
@@ -13,6 +13,7 @@ import { FrameRoom, type FrameDraft } from '../components/ProfileFrame'
 import { decorationUrl } from '../lib/decorations'
 import type { EffectItem, FrameItem } from '../lib/assetCatalog'
 import { globalName } from '../lib/names'
+import CosmeticsImport from './AdminCosmeticsImport'
 
 type Source = 'builtin' | 'folder' | 'custom'
 interface EffectLayer { file: string; start_ms: number; duration_ms: number; loop: boolean; loop_delay_ms: number; z_index: number; random_variants?: string[] }
@@ -62,6 +63,7 @@ export default function CosmeticsPane() {
   const [editing, setEditing] = useState<Editing | null>(null)
   const [showDeleted, setShowDeleted] = useState(false)
   const [writable, setWritable] = useState<boolean | null>(null)
+  const [importing, setImporting] = useState(false)
   const load = (k = kind) => api.get<Item[]>(`/admin/cosmetics/${k}`).then((items) => setLoaded({ kind: k, items })).catch((e) => pushToast((e as Error).message, 'error'))
   useEffect(() => { setEditing(null); void load(kind) }, [kind]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api.get<{ writable: boolean }>('/admin/cosmetics-folder').then((r) => setWritable(r.writable)).catch(() => setWritable(null)) }, [])
@@ -87,6 +89,7 @@ export default function CosmeticsPane() {
         <div className="min-w-[16rem] flex-1"><h1 className="text-2xl font-bold">{t('Cosmetics')}</h1><p className="text-sm text-text-2 mt-1">{t('What everyone can put on their profile. Turning one off hides it on every profile until it is back on.')}</p></div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn-primary" onClick={() => setEditing({ mode: 'folder' })} disabled={writable === false} title={writable === false ? t('The assets folder is read-only') : undefined} data-cosmetic-new-folder><FolderPlus size={16} /> {t('Add to assets folder')}</button>
+          <button type="button" className="btn-ghost" onClick={() => setImporting(true)} disabled={writable === false} title={writable === false ? t('The assets folder is read-only') : t('Add the items a folder has that this server doesn\'t')} data-cosmetics-import-open><FolderInput size={16} /> {t('Import from folder')}</button>
           {kind !== 'decoration' && <button type="button" className="btn-ghost" onClick={() => setEditing({ mode: 'parley' })} data-cosmetic-new><Plus size={16} /> {kind === 'effect' ? t('Add emoji effect') : t('Add colours')}</button>}
         </div>
       </div>
@@ -96,6 +99,7 @@ export default function CosmeticsPane() {
         {deleted > 0 && <label className="ml-auto flex items-center gap-1.5 text-xs text-text-2"><input type="checkbox" className="h-4 w-4 accent-accent" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} data-cosmetic-show-deleted />{t('Show deleted ({n})', { n: deleted })}</label>}
       </div>
       {editing?.mode === 'parley' && <ParleyEditor kind={kind} item={editing.item} onDone={() => void saved()} onCancel={() => setEditing(null)} />}
+      {importing && <CosmeticsImport onClose={() => setImporting(false)} onImported={() => void load()} />}
       {editing?.mode === 'folder' && <FolderEditor kind={kind} item={editing.item} onDone={() => void saved()} onCancel={() => setEditing(null)} />}
       {!shown ? <p className="text-text-2">{t('Loading…')}</p> : shown.length === 0 ? <p className="text-text-2">{t('None yet.')}</p> : (
         <ul className="space-y-2" data-cosmetic-list={kind}>

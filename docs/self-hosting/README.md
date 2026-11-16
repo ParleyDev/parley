@@ -136,6 +136,8 @@ Besides the built-in frames, people can pick image decorations that you provide.
 
 The folder is mounted read-only. Still frames are cached under `uploads/asset-cache/`, which is safe to delete.
 
+**Importing from another folder.** With the assets folder mounted read-write, Admin Console → Cosmetics → **Import from folder** takes a folder laid out the same way (`avatar-decorations/`, `nameplates/`, `profile-effects/`, `profile-frames/`, each with its `metadata.json`), picked in the browser. It lists, per kind, how many items that folder has, how many this server already has (matched by file or folder name) and how many are new, then adds only the new ones: their files, and their `metadata.json` entries copied as they are. Items whose id clashes with one already here, whose names have characters other than letters, digits, `.`, `_` and `-`, whose files are missing, or with a file over 8 MB are listed and skipped. Nothing already in the folder is changed.
+
 ## AI assistants (MCP)
 
 People can connect Claude, ChatGPT, Cursor and other MCP clients to your server at `https://<your server>/mcp`; User Settings → Authorized Apps shows the address and lets them disconnect. It works with nothing extra to install, provided that:

@@ -5,6 +5,9 @@
 //! other field in an entry, and the file's other keys, are kept; `item_count` follows the list when the file has one.
 //! Turning items off and deleting them are Parley's alone (routes/cosmetics.rs). When the folder isn't writable
 //! (mounted read-only), adding and editing fail and say so.
+//!
+//! Importing copies items from another folder of the same layout (the admin picks it in the browser): only items
+//! whose file or folder this one doesn't have yet, each with its entry exactly as it was (shop fields and all).
 
 use axum::{
     extract::{DefaultBodyLimit, Multipart, Path, State},
@@ -33,6 +36,8 @@ pub fn router() -> Router<AppState> {
         .route("/admin/cosmetics-folder", get(status))
         .route("/admin/cosmetics/:kind/folder", post(add))
         .route("/admin/cosmetics/:kind/folder/:id", patch(edit))
+        .route("/admin/cosmetics/:kind/import/check", post(import_check))
+        .route("/admin/cosmetics/:kind/import", post(import))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
 }
 
@@ -353,6 +358,103 @@ async fn edit(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((kind
     Ok(Json(json!({ "value": value })))
 }
 
+/// A layered item's folder name as it may be written: letters, digits, '_' and '-'.
+fn clean_folder_name(name: &str) -> AppResult<String> {
+    let name = name.trim();
+    let ok = !name.is_empty() && name.len() <= 100 && name.chars().all(|c| c.is_ascii_alphanumeric() || "_-".contains(c));
+    if !ok { return Err(AppError::BadRequest(format!("{name}: folder names are letters, digits, '_' and '-'"))) }
+    Ok(name.to_string())
+}
+
+/// Where an item from elsewhere stands against this folder, by its file (decorations, nameplates) or folder
+/// (effects, frames): `present` when that name is already here (an item an admin deleted keeps its files, so it
+/// counts), `clash` when another name here makes the same id (`Foo Bar.png` and `foo_bar.webp`), else `missing`.
+async fn standing(state: &AppState, kind: &str, dir: &FsPath, meta: &Value, key: &str) -> &'static str {
+    let field = if layered(kind) { "folder" } else { "file" };
+    let items = meta["items"].as_array().map(Vec::as_slice).unwrap_or_default();
+    if items.iter().any(|i| i[field].as_str() == Some(key)) || tokio::fs::try_exists(dir.join(key)).await.unwrap_or(false) { return "present" }
+    let stem = if layered(kind) { key } else { key.rsplit_once('.').map(|(s, _)| s).unwrap_or(key) };
+    let id = assets::asset_id(stem);
+    let taken = if layered(kind) {
+        items.iter().filter_map(|i| i["folder"].as_str()).any(|f| assets::asset_id(f) == id)
+            || tokio::fs::try_exists(dir.join(&id)).await.unwrap_or(false)
+    } else {
+        let index = if kind == "nameplate" { assets::nameplates(&state.config).await } else { assets::decorations(&state.config).await };
+        index.get(&id).is_some() || items.iter().filter_map(|i| i["file"].as_str()).any(|f| assets::asset_id(f.rsplit_once('.').map(|(s, _)| s).unwrap_or(f)) == id)
+    };
+    if taken { "clash" } else { "missing" }
+}
+
+/// `POST /admin/cosmetics/:kind/import/check {keys}`: each key's standing (see `standing`), for the import's dry run.
+async fn import_check(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(kind): Path<String>, Json(body): Json<Value>) -> AppResult<Json<Value>> {
+    require_perm(&state, uid, Perm::InstanceManage).await?;
+    let dir: PathBuf = state.config.assets_dir.join(dir_name(&kind)?);
+    let keys = body["keys"].as_array().ok_or_else(|| AppError::BadRequest("keys must be a list".into()))?;
+    if keys.len() > 5000 { return Err(AppError::BadRequest("At most 5000 items at a time".into())) }
+    let meta = read_meta(&dir).await?;
+    let mut out = Map::new();
+    for k in keys.iter().filter_map(Value::as_str) {
+        out.insert(k.to_string(), standing(&state, &kind, &dir, &meta, k).await.into());
+    }
+    Ok(Json(json!({ "keys": out })))
+}
+
+/// `POST /admin/cosmetics/:kind/import`: one item from another folder, as `entry` (its metadata.json entry, kept as
+/// it is) and its files under their own names. Refused (409) unless it is missing here.
+async fn import(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(kind): Path<String>, mut form: Multipart) -> AppResult<(StatusCode, Json<Value>)> {
+    require_perm(&state, uid, Perm::InstanceManage).await?;
+    let dir: PathBuf = state.config.assets_dir.join(dir_name(&kind)?);
+    let mut entry: Option<Map<String, Value>> = None;
+    let mut files: Vec<(String, Vec<u8>)> = Vec::new();
+    while let Some(field) = form.next_field().await.map_err(|e| AppError::BadRequest(e.to_string()))? {
+        if field.name() == Some("entry") {
+            let text = field.text().await.map_err(|e| AppError::BadRequest(e.to_string()))?;
+            if text.len() > 64 * 1024 { return Err(AppError::BadRequest("The entry is too big".into())) }
+            entry = match serde_json::from_str(&text) { Ok(Value::Object(m)) => Some(m), _ => return Err(AppError::BadRequest("entry must be a JSON object".into())) };
+            continue;
+        }
+        let name = clean_file_name(&kind, field.file_name().unwrap_or_default())?;
+        let bytes = field.bytes().await.map_err(|e| AppError::BadRequest(e.to_string()))?;
+        if bytes.is_empty() || bytes.len() > MAX_FILE { return Err(AppError::BadRequest(format!("{name}: files are up to 8 MB"))) }
+        files.push((name, bytes.to_vec()));
+    }
+    let entry = entry.ok_or_else(|| AppError::BadRequest("Send its entry".into()))?;
+    let key = if layered(&kind) {
+        clean_folder_name(entry.get("folder").and_then(Value::as_str).unwrap_or_default())?
+    } else {
+        clean_file_name(&kind, entry.get("file").and_then(Value::as_str).unwrap_or_default())?
+    };
+    let label = entry.get("name").and_then(Value::as_str).unwrap_or(&key).to_string();
+    let _guard = LOCK.lock().await;
+    if !writable(&state.config.assets_dir).await { return Err(read_only()) }
+    tokio::fs::create_dir_all(&dir).await.map_err(io)?;
+    let mut meta = read_meta(&dir).await?;
+    match standing(&state, &kind, &dir, &meta, &key).await {
+        "missing" => {}
+        "present" => return Err(AppError::Conflict(format!("{key} is already in the assets folder"))),
+        _ => return Err(AppError::Conflict(format!("{key} has the same id as an item already in the assets folder"))),
+    }
+    let stem = if layered(&kind) {
+        let path = dir.join(&key);
+        tokio::fs::create_dir_all(&path).await.map_err(io)?;
+        let mut wrote = Ok(());
+        for (f, bytes) in &files { if let Err(e) = put_file(&path.join(f), bytes).await { wrote = Err(e); break } }
+        if let Err(e) = wrote.and(check_layer_files(&path, &entry).await) { let _ = tokio::fs::remove_dir_all(&path).await; return Err(e) }
+        key.clone()
+    } else {
+        let [(file, bytes)] = files.as_slice() else { return Err(AppError::BadRequest("Send its one file".into())) };
+        if *file != key { return Err(AppError::BadRequest(format!("The file sent is {file}, but its entry names {key}"))) }
+        put_file(&dir.join(&key), bytes).await?;
+        key.rsplit_once('.').map(|(s, _)| s.to_string()).unwrap_or_else(|| key.clone())
+    };
+    meta["items"].as_array_mut().unwrap().push(Value::Object(entry));
+    write_meta(&dir, meta).await?;
+    refresh(&kind);
+    let value = format!("{}{}", assets::ASSET_PREFIX, assets::asset_id(&stem));
+    crate::audit::record(&state, uid, "cosmetic.folder_import", "cosmetic", None, &label, json!({ "kind": kind, "value": value, "files": files.iter().map(|f| &f.0).collect::<Vec<_>>() })).await;
+    Ok((StatusCode::CREATED, Json(json!({ "value": value }))))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -364,6 +466,9 @@ mod tests {
         assert!(clean_file_name("effect", ".hidden.png").is_err());
         assert!(clean_file_name("effect", "clip.webm").is_err());
         assert!(clean_file_name("nameplate", "clip.webm").is_ok());
+        assert!(clean_folder_name("alt_raccoon").is_ok());
+        assert!(clean_folder_name("../up").is_err());
+        assert!(clean_folder_name("a b").is_err());
     }
 
     #[test]
