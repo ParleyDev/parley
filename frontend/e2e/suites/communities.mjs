@@ -1,6 +1,6 @@
 // Communities: a named group of channels in a server, backed by one ordinary category. Create, read, edit, delete,
 // the guard on deleting the backing category, and bots with Manage Channels.
-import { execSync } from 'node:child_process'
+import { execSync, spawn } from 'node:child_process'
 import { B, H, S, reg, call, raw, ok, finish, testContainer } from '../lib.mjs'
 import { createHmac } from 'node:crypto'
 const b32 = (s) => { const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let bits = 0, val = 0; const out = []; for (const ch of s.toUpperCase()) { val = (val << 5) | A.indexOf(ch); bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8 } } return Buffer.from(out) }
@@ -167,6 +167,8 @@ console.log('-- page fields, flags, creator follow')
   for (const url of ['JAVASCRIPT:alert(1)', '  javascript:alert(1)', 'https://', 'https://exa mple.com', 'https://example.com/a b', 'https://example.com/\u0001', 'https://' + 'a'.repeat(493)]) ok(`link url ${JSON.stringify(url).slice(0, 24)} refused`, (await raw(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'X', url }] })).status === 400)
   ok('a 500-character https URL is accepted', (await raw(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'X', url: 'https://' + 'a'.repeat(492) }] })).status === 200)
   ok('an upper-case scheme is accepted and stored as sent', (await call(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'X', url: ' HTTPS://Example.com/P ' }] })).links[0].url === 'HTTPS://Example.com/P')
+  for (const url of ['https:/invite/x', 'https:example.com', 'http:/x.example', 'https:\\example.com']) ok(`link url ${JSON.stringify(url)} refused: no // after the scheme`, (await raw(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'X', url }] })).status === 400)
+  ok('HTTPS://Example.com/a is still accepted', (await raw(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'X', url: 'HTTPS://Example.com/a' }] })).status === 200)
   // creator follow event
   {
     const evs = []
@@ -545,6 +547,44 @@ console.log('-- managers')
   const p0 = await parentOf()
   const pr = await raw(b.token, 'PATCH', `/channels/${post.id}`, { parent_id: twoCat })
   ok('moving it into another community is refused and it stays', !!post.id && pr.status === 403 && (await parentOf()) === p0 && p0 === forum.id, `${pr.status} ${p0}`)
+
+  console.log('-- managers: the drag endpoint authorises before it locks')
+  const plain = await reg('plainp'); await call(plain.token, 'POST', `/invites/${inv2.code}`)
+  const holdLock = (chan, secs) => new Promise((resolve) => {
+    const ch = spawn('docker', ['exec', testContainer('db'), 'psql', '-U', 'parley', '-c', `BEGIN; SELECT 1 FROM channels WHERE id = '${chan}' FOR UPDATE; SELECT pg_sleep(${secs}); COMMIT;`], { stdio: 'ignore' })
+    ch.on('close', resolve)
+  })
+  const timed = async (tok, items) => { const t0 = Date.now(); const rs = await raw(tok, 'PATCH', pos, { items }); return [rs.status, Date.now() - t0] }
+  const lockHeld = holdLock(r1.id, 4); await new Promise((rz) => setTimeout(rz, 800))
+  const [st1, ms1] = await timed(plain.token, [{ id: r1.id, position: 5 }])
+  const [st2, ms2] = await timed(b.token, Array.from({ length: 500 }, () => ({ id: o2.id, position: 5 })))
+  ok('a member with no rights sends one valid item: 403, without waiting on row locks', st1 === 403 && ms1 < 1500, `${st1} ${ms1}ms`)
+  ok('500 ids of channels they do not manage: 403, without waiting on row locks', st2 === 403 && ms2 < 1500, `${st2} ${ms2}ms`)
+  await lockHeld
+  ok('an empty request and 501 items from a member are refused', (await raw(plain.token, 'PATCH', pos, { items: [] })).status === 403 && (await raw(plain.token, 'PATCH', pos, { items: Array.from({ length: 501 }, () => ({ id: r1.id, position: 5 })) })).status === 403)
+  ok('the manager still reorders after that', (await put([{ id: r1.id, position: 40 }, { id: r2.id, position: 41 }])).status === 200)
+
+  console.log('-- managers: external_ref belongs to the server level')
+  const extOf = () => sql(`SELECT coalesce(external_ref, '<null>') || '|' || description FROM communities WHERE guild_id = '${gm.id}' AND slug = 'one'`)
+  const e0 = extOf()
+  const pr1 = await raw(b.token, 'PATCH', `${base}/one`, { external_ref: 'x:new', description: 'sneaky' })
+  ok('a manager cannot set it, nor change anything else in that request', pr1.status === 403 && extOf() === e0, `${pr1.status} ${extOf()}`)
+  ok('the owner sets it', (await raw(a.token, 'PATCH', `${base}/one`, { external_ref: 'x:own' })).status === 200 && extOf().startsWith('x:own|'))
+  ok('a manager cannot clear it with an empty string', (await raw(b.token, 'PATCH', `${base}/one`, { external_ref: '' })).status === 403 && extOf() === 'x:own|' + sql(`SELECT description FROM communities WHERE guild_id = '${gm.id}' AND slug = 'one'`))
+  ok('a manager sending the same value, with other fields, is fine', (await raw(b.token, 'PATCH', `${base}/one`, { external_ref: 'x:own', description: 'ok desc' })).status === 200 && extOf() === 'x:own|ok desc')
+  ok('a manager omitting it is fine', (await raw(b.token, 'PATCH', `${base}/one`, { description: 'ok desc 2' })).status === 200 && extOf() === 'x:own|ok desc 2')
+  ok('a manager cannot change it to another value', (await raw(b.token, 'PATCH', `${base}/one`, { external_ref: 'x:other' })).status === 403 && extOf() === 'x:own|ok desc 2')
+  ok('the owner clears it', (await raw(a.token, 'PATCH', `${base}/one`, { external_ref: '' })).status === 200 && extOf() === '<null>|ok desc 2')
+  ok('an empty value on a community without one is no change for a manager', (await raw(b.token, 'PATCH', `${base}/one`, { external_ref: '' })).status === 200)
+
+  console.log('-- managers: channels the server settings point at')
+  const pv = await mkIn(a.token, oneCat, 'preview-chan')
+  sql(`UPDATE guilds SET invite_preview_channel_id = '${pv.id}' WHERE id = '${gm.id}'`)
+  const pd = await raw(b.token, 'DELETE', `/channels/${pv.id}`)
+  ok('a manager cannot delete the invite-preview channel', pd.status === 403 && (await pd.text()).includes("used by the server's settings") && sql(`SELECT count(*) FROM channels WHERE id = '${pv.id}'`) === '1' && sql(`SELECT invite_preview_channel_id FROM guilds WHERE id = '${gm.id}'`) === pv.id)
+  ok('the owner can', (await raw(a.token, 'DELETE', `/channels/${pv.id}`)).status === 204)
+  const plainCh = await mkIn(a.token, oneCat, 'plain-chan')
+  ok('a manager still deletes an ordinary channel', (await raw(b.token, 'DELETE', `/channels/${plainCh.id}`)).status === 204)
   await raw(a.token, 'DELETE', `${mg('one')}/${b.user.id}`)
 
   console.log('-- managers: two-factor')

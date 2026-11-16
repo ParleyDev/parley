@@ -92,6 +92,11 @@ ok('a manager does not see Delete or Add for managers', (await cp.locator('[data
 const bp = await asUser(b)
 await bp.goto(`${WEB}/channels/${g.id}/c/forge`); await bp.waitForSelector('[data-community-page="forge"]')
 ok('a plain member sees no Edit and no Add channel', (await bp.locator('[data-community-edit]').count()) === 0 && (await bp.locator('[data-community-add-channel]').count()) === 0)
+const bq = await asUser(b)
+await bq.goto(`${WEB}/channels/${g.id}/c/forge?edit=1`); await bq.waitForSelector('[data-community-page="forge"]')
+await bq.waitForFunction(() => !location.search.includes('edit'), null, { timeout: 5000 }).catch(() => {})
+ok('a plain member opening ?edit=1 sees the page in view mode and the parameter is removed', (await bq.locator('[data-community-editing]').count()) === 0 && (await bq.locator('[data-community-page="forge"]').count()) === 1 && !new URL(bq.url()).search.includes('edit') && (await bq.locator('[data-channel-up]').count()) === 0)
+await bq.close()
 await bp.close()
 
 await cp.click('[data-community-edit]'); await cp.waitForSelector('[data-community-editing]')
@@ -182,6 +187,42 @@ await cp.click('[data-community-add-channel]'); await cp.waitForSelector('[data-
 await cp.fill('[data-channel-name]', 'new-forge-chat'); await cp.click('[role=dialog] button:has-text("Create Channel")')
 await cp.waitForFunction((n) => document.querySelectorAll('[data-community-channel]').length === n + 1, rowsBefore, { timeout: 8000 }).catch(() => {})
 ok('a channel added from the page appears in its list and the page stays', (await cp.locator('[data-community-channel]').count()) === rowsBefore + 1 && cp.url().endsWith('/c/heavy'))
+
+console.log('-- reordering channels from the page')
+await call(c.token, 'PUT', `${base}/heavy/follow`)
+const heavy0 = await call(c.token, 'GET', `${base}/heavy`)
+const order0 = heavy0.channel_ids
+const sidebarOrder = () => cp.$$eval('[data-channel-item]', (els, cat) => els.filter((e) => e.dataset.channelParent === cat).map((e) => e.dataset.channelItem), heavy0.category_id)
+ok('view mode has no move buttons', order0.length >= 2 && (await cp.locator('[data-channel-up], [data-channel-down]').count()) === 0)
+await cp.click('[data-community-edit]'); await cp.waitForSelector('[data-community-editing]')
+ok('edit mode has them, disabled at the ends', (await cp.locator('[data-channel-up]').count()) === order0.length && await cp.isDisabled(`[data-channel-up="${order0[0]}"]`) && await cp.isDisabled(`[data-channel-down="${order0.at(-1)}"]`) && !(await cp.isDisabled(`[data-channel-up="${order0[1]}"]`)) && (await cp.getAttribute(`[data-channel-up="${order0[1]}"]`, 'aria-label')).length > 0)
+const moved = []
+cp.on('request', (r) => { if (r.method() === 'PATCH' && r.url().endsWith('/channels/positions')) moved.push(JSON.parse(r.postData()).items) })
+await cp.click(`[data-channel-up="${order0[1]}"]`)
+await cp.waitForFunction((id) => document.querySelector('[data-community-channel]')?.dataset.communityChannel === id, order0[1], { timeout: 8000 }).catch(() => {})
+const pageOrder = () => cp.$$eval('[data-community-channel]', (els) => els.map((e) => e.dataset.communityChannel))
+ok('the page list order changes at once', (await pageOrder())[0] === order0[1] && (await pageOrder())[1] === order0[0])
+ok('only the two channels are sent', moved.length === 1 && moved[0].length === 2 && moved[0].every((it) => [order0[0], order0[1]].includes(it.id)), JSON.stringify(moved))
+let want = [order0[1], order0[0], ...order0.slice(2)]
+let srv = []
+for (let i = 0; i < 30 && srv.join() !== want.join(); i++) { srv = (await call(c.token, 'GET', `${base}/heavy`)).channel_ids; if (srv.join() !== want.join()) await cp.waitForTimeout(100) }
+ok('the server has the new order', srv.join() === want.join(), srv.join())
+let sidebarNow = []
+for (let i = 0; i < 30 && sidebarNow.join() !== want.join(); i++) { sidebarNow = await sidebarOrder(); if (sidebarNow.join() !== want.join()) await cp.waitForTimeout(100) }
+ok('the sidebar order of that community matches', sidebarNow.join() === want.join(), sidebarNow.join())
+await cp.click('[data-channel-down="' + order0[1] + '"]')
+await cp.waitForFunction((id) => document.querySelector('[data-community-channel]')?.dataset.communityChannel === id, order0[0], { timeout: 8000 }).catch(() => {})
+ok('and moves back down', (await pageOrder()).join() === order0.join())
+await cp.click('[data-community-cancel]'); await cp.waitForTimeout(300)
+ok('moving does not mark the page as edited', (await cp.locator('[role=dialog]').count()) === 0 && (await cp.locator('[data-community-editing]').count()) === 0)
+// A refused move puts the old order back and says why.
+await cp.click('[data-community-edit]'); await cp.waitForSelector('[data-community-editing]')
+await cp.route((u) => u.pathname.endsWith('/channels/positions'), (route) => route.fulfill({ status: 403, contentType: 'application/json', body: '{"error":"Nope, not today"}' }))
+await cp.click(`[data-channel-up="${order0[1]}"]`)
+await cp.waitForFunction((t) => document.body.textContent.includes(t), 'Nope, not today', { timeout: 8000 }).catch(() => {})
+ok('a refused move is rolled back with the server message', (await pageOrder()).join() === order0.join() && (await cp.textContent('body')).includes('Nope, not today'))
+await cp.unroute('**/*')
+await cp.click('[data-community-cancel]')
 
 console.log('-- managers')
 const ap = await asUser(a)
