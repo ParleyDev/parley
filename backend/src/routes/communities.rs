@@ -1,6 +1,6 @@
 //! Communities: a named group of channels inside one server. A community is identity data (slug, name, icon,
 //! description, an optional external reference) pointing at one ordinary category; the channels under that category
-//! are its channels and access is plain server permissions. Manage Channels creates, edits and deletes.
+//! are its channels and access is plain server permissions. Manage Channels creates and edits; the owner or an Administrator deletes.
 
 use crate::{auth::AuthUser, error::{AppError, AppResult}, models::{Channel, Community}, perms, routes::guilds::{normalize_channel_name, require_member, CHANNEL_COLS}, state::AppState};
 use axum::{extract::{Path, Query, State}, http::StatusCode, routing::get, Json, Router};
@@ -17,7 +17,7 @@ pub fn router() -> Router<AppState> {
         .route("/guilds/:id/communities/:slug/follow", axum::routing::put(follow).delete(unfollow))
 }
 
-const COLS: &str = "id, guild_id, slug, name, icon_url, description, external_ref, category_id, last_activity_at, created_at";
+const COLS: &str = "id, guild_id, slug, name, icon_url, description, banner_url, about, links, external_ref, category_id, last_activity_at, created_at";
 const TAKEN: &str = "A community with that address already exists";
 
 fn valid_slug(s: &str) -> bool {
@@ -44,12 +44,40 @@ fn clean_opt(s: Option<String>, max: usize, what: &str) -> AppResult<Option<Stri
     Ok(Some(s))
 }
 
+/// Empty clears; otherwise an image the same way `icon_url` is checked.
+fn clean_image(v: Option<String>) -> AppResult<Option<String>> {
+    crate::routes::users::validate_image(&v)?;
+    Ok(v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
+}
+
+fn clean_about(s: &str) -> AppResult<String> {
+    let a = s.trim();
+    if a.chars().count() > 4000 { return Err(AppError::BadRequest("About must be at most 4000 characters".into())) }
+    Ok(a.to_string())
+}
+
+#[derive(Deserialize)]
+struct LinkIn { #[serde(default)] label: String, #[serde(default)] url: String }
+
+/// At most 10 links, each a label of 1-80 characters and an http(s) URL of up to 500; unknown keys are dropped.
+fn clean_links(links: Vec<LinkIn>) -> AppResult<Value> {
+    if links.len() > 10 { return Err(AppError::BadRequest("At most 10 links".into())) }
+    let mut out = vec![];
+    for l in links {
+        let (label, url) = (l.label.trim(), l.url.trim());
+        if label.is_empty() || label.chars().count() > 80 { return Err(AppError::BadRequest("A link label must be 1-80 characters".into())) }
+        if !(url.starts_with("https://") || url.starts_with("http://")) || url.chars().count() > 500 { return Err(AppError::BadRequest("A link must be an http(s) URL of at most 500 characters".into())) }
+        out.push(json!({ "label": label, "url": url }));
+    }
+    Ok(Value::Array(out))
+}
+
 fn taken(e: sqlx::Error) -> AppError {
     match e { sqlx::Error::Database(d) if d.is_unique_violation() => AppError::Conflict(TAKEN.into()), e => e.into() }
 }
 
 fn slim(c: &Community) -> Value {
-    json!({ "id": c.id, "guild_id": c.guild_id, "slug": c.slug, "name": c.name, "icon_url": c.icon_url, "description": c.description, "category_id": c.category_id })
+    json!({ "id": c.id, "guild_id": c.guild_id, "slug": c.slug, "name": c.name, "icon_url": c.icon_url, "description": c.description, "banner_url": c.banner_url, "category_id": c.category_id })
 }
 
 /// The community for the caller: counts, whether they follow it and the child channels they can view. `None` when the
@@ -69,7 +97,18 @@ async fn fill(state: &AppState, mut c: Community, uid: Uuid, visible: &[Channel]
         "SELECT COUNT(*), COUNT(*) FILTER (WHERE user_id IN ({})), COALESCE(bool_or(user_id = $2), false) FROM community_follows WHERE community_id = $1", crate::ws::bus::visible_online_sql()))
         .bind(c.id).bind(uid).fetch_one(&state.db).await?;
     (c.follower_count, c.online_count, c.following) = (followers, on, me);
+    let ctx = perms::GuildCtx::load(&state.db, c.guild_id).await?;
+    set_flags(&mut c, &ctx, uid, visible);
     Ok(c)
+}
+
+/// The caller's flags. Manage Channels is computed in the category's own overwrites, as `manage_in_category` does.
+/// `visible` carries overwrites; a category the caller cannot view is not in it, and then there is nothing to edit.
+fn set_flags(c: &mut Community, ctx: &perms::GuildCtx, uid: Uuid, visible: &[Channel]) {
+    let Some(base) = ctx.base(uid) else { return };
+    c.can_delete = perms::has(base, perms::ADMINISTRATOR);
+    c.can_edit = visible.iter().find(|v| v.id == c.category_id).is_some_and(|cat| perms::has(ctx.in_channel(uid, base, &cat.overwrites), perms::MANAGE_CHANNELS));
+    c.can_manage_managers = false;
 }
 
 async fn written(state: &AppState, c: Community, uid: Uuid) -> AppResult<Community> {
@@ -99,7 +138,7 @@ async fn by_slug(state: &AppState, gid: Uuid, slug: &str) -> AppResult<Community
 struct NewChannel { name: String, kind: String }
 
 #[derive(Deserialize)]
-struct CreateIn { slug: String, name: String, #[serde(default)] description: String, icon_url: Option<String>, external_ref: Option<String>, channels: Option<Vec<NewChannel>> }
+struct CreateIn { slug: String, name: String, #[serde(default)] description: String, icon_url: Option<String>, banner_url: Option<String>, #[serde(default)] about: String, #[serde(default)] links: Vec<LinkIn>, external_ref: Option<String>, channels: Option<Vec<NewChannel>> }
 
 /// `POST /guilds/:id/communities`: a category named `name`, positioned last, with the listed channels (or one text
 /// channel `chat`) under it, in one transaction.
@@ -111,6 +150,9 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid
     let description = clean_description(&req.description)?;
     crate::routes::users::validate_image(&req.icon_url)?;
     let icon = req.icon_url.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let banner = clean_image(req.banner_url)?;
+    let about = clean_about(&req.about)?;
+    let links = clean_links(req.links)?;
     let ext = clean_opt(req.external_ref, 200, "External reference")?;
     let chans = req.channels.unwrap_or_else(|| vec![NewChannel { name: "chat".into(), kind: "text".into() }]);
     if chans.len() > 25 { return Err(AppError::BadRequest("At most 25 channels".into())) }
@@ -131,9 +173,12 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid
         created.push(ch);
     }
     let c: Community = sqlx::query_as(&format!(
-        "INSERT INTO communities (id, guild_id, slug, name, icon_url, description, external_ref, category_id, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING {COLS}"))
-        .bind(Uuid::now_v7()).bind(gid).bind(&req.slug).bind(&name).bind(&icon).bind(&description).bind(&ext).bind(category.id).bind(uid)
+        "INSERT INTO communities (id, guild_id, slug, name, icon_url, description, banner_url, about, links, external_ref, category_id, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING {COLS}"))
+        .bind(Uuid::now_v7()).bind(gid).bind(&req.slug).bind(&name).bind(&icon).bind(&description).bind(&banner).bind(&about).bind(&links).bind(&ext).bind(category.id).bind(uid)
         .fetch_one(&mut *tx).await.map_err(taken)?;
+    // The creator follows it, unless they are a bot (which has no sidebar to put it in).
+    let is_bot: bool = sqlx::query_scalar("SELECT bot FROM users WHERE id = $1").bind(uid).fetch_one(&mut *tx).await?;
+    if !is_bot { sqlx::query("INSERT INTO community_follows (community_id, user_id) VALUES ($1, $2)").bind(c.id).bind(uid).execute(&mut *tx).await?; }
     tx.commit().await?;
     let mut category = category;
     let target = audience(&state, &mut category).await?;
@@ -141,6 +186,7 @@ async fn create(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid
     state.hub.emit(target.clone(), "CHANNEL_CREATE", json!(category));
     for ch in &created { state.hub.emit(target.clone(), "CHANNEL_CREATE", json!(ch)); }
     state.hub.emit(target, "COMMUNITY_CREATE", slim(&c));
+    if !is_bot { state.hub.emit_users(vec![uid], "COMMUNITY_FOLLOW_UPDATE", json!({ "guild_id": gid, "community_id": c.id, "following": true })); }
     crate::audit::guild(&state, gid, uid, "community.create", "community", Some(c.id), &c.name, json!({ "slug": c.slug, "channels": created.len() })).await;
     Ok((StatusCode::CREATED, Json(out)))
 }
@@ -153,10 +199,10 @@ async fn get_one(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((g
 }
 
 #[derive(Deserialize)]
-struct PatchIn { slug: Option<String>, name: Option<String>, description: Option<String>, icon_url: Option<String>, external_ref: Option<String> }
+struct PatchIn { slug: Option<String>, name: Option<String>, description: Option<String>, icon_url: Option<String>, banner_url: Option<String>, about: Option<String>, links: Option<Vec<LinkIn>>, external_ref: Option<String> }
 
 /// `PATCH /guilds/:id/communities/:slug`: any of slug, name (renames the category too), description, icon_url,
-/// external_ref. Empty icon_url or external_ref clears it.
+/// banner_url, about, links (replaced as a whole), external_ref. Empty icon_url, banner_url or external_ref clears it.
 async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>, Json(req): Json<PatchIn>) -> AppResult<Json<Community>> {
     let cur = by_slug(&state, gid, &slug).await?;
     manage_in_category(&state, cur.category_id, uid).await?;
@@ -165,10 +211,13 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gi
     let description = match &req.description { Some(d) => clean_description(d)?, None => cur.description.clone() };
     crate::routes::users::validate_image(&req.icon_url)?;
     let icon = match req.icon_url { Some(i) => Some(i.trim().to_string()).filter(|s| !s.is_empty()), None => cur.icon_url.clone() };
+    let banner = match req.banner_url { Some(b) => clean_image(Some(b))?, None => cur.banner_url.clone() };
+    let about = match &req.about { Some(a) => clean_about(a)?, None => cur.about.clone() };
+    let links = match req.links { Some(l) => clean_links(l)?, None => cur.links.clone() };
     let ext = match req.external_ref { Some(e) => clean_opt(Some(e), 200, "External reference")?, None => cur.external_ref.clone() };
     let mut tx = state.db.begin().await?;
-    let c: Community = sqlx::query_as(&format!("UPDATE communities SET slug = $2, name = $3, description = $4, icon_url = $5, external_ref = $6 WHERE id = $1 RETURNING {COLS}"))
-        .bind(cur.id).bind(&new_slug).bind(&name).bind(&description).bind(&icon).bind(&ext).fetch_one(&mut *tx).await.map_err(taken)?;
+    let c: Community = sqlx::query_as(&format!("UPDATE communities SET slug = $2, name = $3, description = $4, icon_url = $5, external_ref = $6, banner_url = $7, about = $8, links = $9 WHERE id = $1 RETURNING {COLS}"))
+        .bind(cur.id).bind(&new_slug).bind(&name).bind(&description).bind(&icon).bind(&ext).bind(&banner).bind(&about).bind(&links).fetch_one(&mut *tx).await.map_err(taken)?;
     let mut category: Channel = sqlx::query_as(&format!("UPDATE channels SET name = $2 WHERE id = $1 RETURNING {CHANNEL_COLS}")).bind(cur.category_id).bind(&name).fetch_one(&mut *tx).await?;
     tx.commit().await?;
     let target = audience(&state, &mut category).await?;
@@ -178,6 +227,8 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gi
     let mut details = json!({ "slug": c.slug });
     if c.name != cur.name { details["old_name"] = json!(cur.name) }
     if c.slug != cur.slug { details["old_slug"] = json!(cur.slug) }
+    let changed: Vec<&str> = [("banner_url", c.banner_url != cur.banner_url), ("about", c.about != cur.about), ("links", c.links != cur.links)].into_iter().filter(|(_, d)| *d).map(|(n, _)| n).collect();
+    if !changed.is_empty() { details["changed"] = json!(changed) }
     crate::audit::guild(&state, gid, uid, "community.update", "community", Some(c.id), &c.name, details).await;
     Ok(Json(out))
 }
@@ -186,12 +237,16 @@ async fn update(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gi
 /// events), then the category, which takes the community row with it.
 async fn remove(State(state): State<AppState>, AuthUser(uid): AuthUser, Path((gid, slug)): Path<(Uuid, String)>) -> AppResult<StatusCode> {
     let c = by_slug(&state, gid, &slug).await?;
-    manage_in_category(&state, c.category_id, uid).await?;
+    let (_, p) = perms::guild_perms(&state.db, gid, uid).await?;
+    if !perms::has(p, perms::ADMINISTRATOR) {
+        // A community the caller cannot view is a 404, not a 403.
+        super::channels::require_channel_perms(&state.db, c.category_id, uid).await?;
+        return Err(AppError::Forbidden);
+    }
     let mut category: Channel = sqlx::query_as(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1")).bind(c.category_id).fetch_one(&state.db).await?;
     let target = audience(&state, &mut category).await?;
     let kids: Vec<(Uuid,)> = sqlx::query_as("SELECT id FROM channels WHERE parent_id = $1 ORDER BY position, created_at").bind(c.category_id).fetch_all(&state.db).await?;
-    // Every channel that goes must be one the caller may manage, and the server keeps a text channel, as for DELETE /channels/:id.
-    for (id,) in &kids { manage_in_category(&state, *id, uid).await?; }
+    // The server keeps a text channel, as for DELETE /channels/:id.
     let (outside, inside): (i64, i64) = sqlx::query_as("SELECT COUNT(*) FILTER (WHERE parent_id IS DISTINCT FROM $2), COUNT(*) FILTER (WHERE parent_id = $2) FROM channels WHERE guild_id = $1 AND kind = 'text'")
         .bind(gid).bind(c.category_id).fetch_one(&state.db).await?;
     if outside == 0 && inside > 0 { return Err(AppError::BadRequest("A server must keep at least one text channel".into())) }
@@ -304,7 +359,9 @@ async fn list(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid):
     let counts: std::collections::HashMap<Uuid, (i64, i64, bool)> = counts.into_iter().map(|(id, f, o, m)| (id, (f, o, m))).collect();
     let mut kids: std::collections::HashMap<Uuid, Vec<&Channel>> = std::collections::HashMap::new();
     for v in &visible { if let Some(p) = v.parent_id { kids.entry(p).or_default().push(v) } }
+    let ctx = perms::GuildCtx::load(&state.db, gid).await?;
     for c in rows.iter_mut() {
+        set_flags(c, &ctx, uid, &visible);
         (c.follower_count, c.online_count, c.following) = counts.get(&c.id).copied().unwrap_or((0, 0, false));
         let mut k = kids.remove(&c.category_id).unwrap_or_default();
         k.sort_by_key(|k| (k.position, k.created_at));

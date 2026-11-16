@@ -13,7 +13,7 @@ const inv = await call(a.token, 'POST', `/guilds/${g.id}/invites`, {}); await ca
 const base = `/guilds/${g.id}/communities`
 
 let r = await raw(a.token, 'POST', base, { slug: 'metallica', name: 'Metallica', description: 'Thrash', external_ref: 'mb:65f4f0c5' }); let m = await r.json()
-ok('created with a chat channel', r.status === 201 && m.slug === 'metallica' && m.channel_ids.length === 1 && m.follower_count === 0 && m.following === false)
+ok('created with a chat channel', r.status === 201 && m.slug === 'metallica' && m.channel_ids.length === 1 && m.follower_count === 1 && m.following === true)
 const chans = await call(a.token, 'GET', `/guilds/${g.id}/channels`)
 ok('backed by a category', chans.find((c) => c.id === m.category_id)?.kind === 'category' && chans.find((c) => c.id === m.channel_ids[0])?.parent_id === m.category_id)
 ok('duplicate slug refused', (await raw(a.token, 'POST', base, { slug: 'metallica', name: 'X' })).status === 409)
@@ -28,12 +28,12 @@ ok('unsupported channel kind refused', (await raw(a.token, 'POST', base, { slug:
 console.log('-- follow, list, activity')
 ok('follow', (await raw(b.token, 'PUT', `${base}/pavement/follow`)).status === 204 && (await raw(b.token, 'PUT', `${base}/pavement/follow`)).status === 204)
 let one = await call(b.token, 'GET', `${base}/pavement`)
-ok('follow is reflected', one.following === true && one.follower_count === 1)
-ok('other members unaffected', (await call(a.token, 'GET', `${base}/pavement`)).following === false)
+ok('follow is reflected', one.following === true && one.follower_count === 2)
+ok('the creator still follows, independently of bob', (await call(a.token, 'GET', `${base}/pavement`)).following === true)
 await call(a.token, 'POST', `/channels/${one.channel_ids[0]}/messages`, { content: 'hello' })
 let list = await until(() => call(b.token, 'GET', base), (l) => l.items[0]?.last_activity_at != null)
 ok('list sorts by recent activity', list.items[0].slug === 'pavement' && list.items[0].last_activity_at !== null && list.items[1].last_activity_at === null && list.next === null)
-ok('list carries counts and channels', list.items[0].follower_count === 1 && list.items[0].following === true && list.items[0].channel_ids.length === 2 && list.items[1].following === false)
+ok('list carries counts and channels', list.items[0].follower_count === 2 && list.items[0].following === true && list.items[0].channel_ids.length === 2 && list.items[1].following === false)
 ok('search', (await call(b.token, 'GET', `${base}?q=PAVE`)).items.length === 1 && (await call(b.token, 'GET', `${base}?q=zzz`)).items.length === 0)
 ok('lookup by external_ref', (await call(b.token, 'GET', `${base}?external_ref=${encodeURIComponent('mb:65f4f0c5')}`)).items[0].slug === 'metallica')
 ok('name sort and paging', await (async () => { const p1 = await call(b.token, 'GET', `${base}?sort=name&limit=1`); const p2 = await call(b.token, 'GET', `${base}?sort=name&limit=1&after=${encodeURIComponent(p1.next)}`); return p1.items[0].slug === 'metallica' && p2.items[0].slug === 'pavement' && p2.next === null })())
@@ -77,11 +77,11 @@ await call(a.token, 'DELETE', `/channels/${one.category_id}/permissions/${g.id}`
 ok('visible again once the overwrite is gone', (await raw(b.token, 'GET', `${base}/pavement`)).status === 200)
 
 console.log('-- follow: leave and rejoin')
-ok('bob follows metallica', (await raw(b.token, 'PUT', `${base}/metallica/follow`)).status === 204 && (await call(a.token, 'GET', `${base}/metallica`)).follower_count === 1)
+ok('bob follows metallica', (await raw(b.token, 'PUT', `${base}/metallica/follow`)).status === 204 && (await call(a.token, 'GET', `${base}/metallica`)).follower_count === 2)
 ok('bob leaves', (await raw(b.token, 'DELETE', `/guilds/${g.id}/members/@me`)).status === 204)
 await call(b.token, 'POST', `/invites/${inv.code}`)
 const back = await call(b.token, 'GET', `${base}/metallica`)
-ok('rejoining follows nothing', back.following === false && back.follower_count === 0)
+ok('rejoining follows nothing', back.following === false && back.follower_count === 1)
 
 console.log('-- follow: connect payload and event')
 {
@@ -124,6 +124,55 @@ ok('delete removed the category', !(await call(a.token, 'GET', `/guilds/${g.id}/
 const pav = await call(a.token, 'GET', `${base}/pavement`)
 ok('delete removes its channels too', (await raw(a.token, 'DELETE', `${base}/pavement`)).status === 204 && !(await call(a.token, 'GET', `/guilds/${g.id}/channels`)).some((c) => pav.channel_ids.includes(c.id)))
 
+console.log('-- page fields, flags, creator follow')
+{
+  let pg = await call(a.token, 'POST', base, { slug: 'pagey', name: 'Pagey', about: 'Hello **there**', links: [{ label: 'Site', url: 'https://example.com/x', junk: 1 }] })
+  ok('create carries page fields', pg.about === 'Hello **there**' && pg.links.length === 1 && pg.links[0].label === 'Site' && !('junk' in pg.links[0]) && pg.banner_url === null)
+  ok('creator follows automatically', pg.following === true && pg.follower_count === 1)
+  ok('creator flags', pg.can_edit === true && pg.can_delete === true && pg.can_manage_managers === false)
+  let asBob = await call(b.token, 'GET', `${base}/pagey`)
+  ok('member flags', asBob.can_edit === false && asBob.can_delete === false && asBob.following === false)
+  const inList = (await call(a.token, 'GET', `${base}?q=pagey`)).items[0]
+  ok('list items carry the flags', inList.can_edit === true && inList.can_delete === true && inList.about === 'Hello **there**')
+  ok('about too long refused', (await raw(a.token, 'PATCH', `${base}/pagey`, { about: 'x'.repeat(4001) })).status === 400)
+  ok('about at the limit accepted', (await raw(a.token, 'PATCH', `${base}/pagey`, { about: 'x'.repeat(4000) })).status === 200)
+  ok('eleven links refused', (await raw(a.token, 'PATCH', `${base}/pagey`, { links: Array.from({ length: 11 }, (_, i) => ({ label: `L${i}`, url: 'https://example.com' })) })).status === 400)
+  for (const url of ['javascript:alert(1)', 'ftp://example.com', 'example.com', 'https://' + 'a'.repeat(500)]) ok(`link url ${url.slice(0, 20)} refused`, (await raw(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'X', url }] })).status === 400)
+  for (const label of ['', 'x'.repeat(81)]) ok(`link label length ${label.length} refused`, (await raw(a.token, 'PATCH', `${base}/pagey`, { links: [{ label, url: 'https://example.com' }] })).status === 400)
+  ok('links replace as a whole and keep order', (await call(a.token, 'PATCH', `${base}/pagey`, { links: [{ label: 'B', url: 'https://b.example' }, { label: 'A', url: 'https://a.example' }] })).links.map((l) => l.label).join() === 'B,A')
+  ok('banner must be an image', (await raw(a.token, 'PATCH', `${base}/pagey`, { banner_url: 'javascript:alert(1)' })).status === 400)
+  ok('banner is set and cleared', (await call(a.token, 'PATCH', `${base}/pagey`, { banner_url: 'https://example.com/b.png' })).banner_url === 'https://example.com/b.png' && (await call(a.token, 'PATCH', `${base}/pagey`, { banner_url: '' })).banner_url === null)
+  {
+    const evs = []
+    const sock = await new Promise((resolve) => { const w = new WebSocket(`${WS}?token=${b.token}`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'READY') resolve(w); else evs.push(m) } })
+    await call(a.token, 'PATCH', `${base}/pagey`, { banner_url: 'https://example.com/c.png' })
+    await new Promise((r2) => setTimeout(r2, 800))
+    const up = evs.find((m) => m.t === 'COMMUNITY_UPDATE' && m.d.slug === 'pagey')?.d
+    ok('the slim form has banner_url and neither about nor links', up?.banner_url === 'https://example.com/c.png' && !('about' in up) && !('links' in up), JSON.stringify(up))
+    sock.close()
+    const first = await new Promise((resolve) => { const w = new WebSocket(`${WS}?token=${b.token}`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'READY') { w.close(); resolve(m.d) } } })
+    const sl = first.communities.find((c) => c.slug === 'pagey')
+    ok('the connect payload slim form likewise', sl && 'banner_url' in sl && !('about' in sl) && !('links' in sl), JSON.stringify(sl))
+  }
+  const log = await call(a.token, 'GET', `/guilds/${g.id}/audit?action=community.update`)
+  const upd = (Array.isArray(log) ? log : log.items ?? []).filter((e) => e.target_id === pg.id)
+  ok('update audit names the page fields that changed, not their contents', upd.some((e) => (e.details?.changed ?? []).includes('links')) && !JSON.stringify(upd.map((e) => e.details)).includes('b.example'))
+  // delete: only the owner or an Administrator
+  const cm = await reg('carol'), ad = await reg('dave')
+  for (const u of [cm, ad]) await call(u.token, 'POST', `/invites/${inv.code}`)
+  const mr = await call(a.token, 'POST', `/guilds/${g.id}/roles`, { name: 'Chan', permissions: (1 << 4) | (1 << 10) })
+  const ar = await call(a.token, 'POST', `/guilds/${g.id}/roles`, { name: 'Boss', permissions: (1 << 3) | (1 << 10) })
+  await call(a.token, 'PATCH', `/guilds/${g.id}/members/${cm.user.id}`, { roles: [mr.id] })
+  await call(a.token, 'PATCH', `/guilds/${g.id}/members/${ad.user.id}`, { roles: [ar.id] })
+  const asCarol = await call(cm.token, 'GET', `${base}/pagey`)
+  ok('a Manage Channels holder can edit but not delete', asCarol.can_edit === true && asCarol.can_delete === false)
+  ok('Manage Channels does not delete a community', (await raw(cm.token, 'DELETE', `${base}/pagey`)).status === 403 && (await raw(a.token, 'GET', `${base}/pagey`)).status === 200)
+  ok('an Administrator sees can_delete', (await call(ad.token, 'GET', `${base}/pagey`)).can_delete === true)
+  ok('an Administrator deletes it', (await raw(ad.token, 'DELETE', `${base}/pagey`)).status === 204)
+  await call(a.token, 'POST', base, { slug: 'pagey2', name: 'Pagey Two' })
+  ok('the owner deletes it', (await raw(a.token, 'DELETE', `${base}/pagey2`)).status === 204)
+}
+
 console.log('-- validation')
 ok('name of 101 chars refused', (await raw(a.token, 'POST', base, { slug: 'v1', name: 'n'.repeat(101) })).status === 400)
 ok('description of 301 chars refused', (await raw(a.token, 'POST', base, { slug: 'v2', name: 'X', description: 'd'.repeat(301) })).status === 400)
@@ -136,7 +185,7 @@ ok('PATCH with a bad icon refused', (await raw(a.token, 'PATCH', `${base}/visibl
 r = await raw(a.token, 'PATCH', `${base}/visible`, { slug: 'taken' }); const rb = await r.json()
 ok('PATCH to a taken slug is 409 with the create message', r.status === 409 && JSON.stringify(rb).includes('A community with that address already exists'), JSON.stringify(rb))
 ok('PATCH by a member without Manage Channels is 403', (await raw(b.token, 'PATCH', `${base}/visible`, { name: 'Hacked' })).status === 403)
-ok('DELETE by a member without Manage Channels is 403', (await raw(b.token, 'DELETE', `${base}/visible`)).status === 403)
+ok('DELETE by a plain member is 403', (await raw(b.token, 'DELETE', `${base}/visible`)).status === 403)
 
 console.log('-- hidden category')
 const hid = await (await raw(a.token, 'POST', base, { slug: 'hidden', name: 'Hidden' })).json()
@@ -165,7 +214,7 @@ await call(a.token, 'PUT', `/channels/${priv.category_id}/permissions/${role.id}
 await call(a.token, 'PUT', `/channels/${priv.category_id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
 r = await raw(mgr.token, 'PATCH', `${base}/priv`, { description: 'still mine' })
 ok('a manager who can no longer view the category cannot edit its community (as for the channel itself)', r.status === 404, String(r.status))
-ok('nor delete it', (await raw(mgr.token, 'DELETE', `${base}/priv`)).status === 404 && (await call(a.token, 'GET', `${base}/priv`))?.slug === 'priv')
+ok('nor delete it (404: not visible to them)', (await raw(mgr.token, 'DELETE', `${base}/priv`)).status === 404 && (await call(a.token, 'GET', `${base}/priv`))?.slug === 'priv')
 
 console.log('-- Manage Channels is checked in the category')
 {
@@ -183,10 +232,8 @@ console.log('-- Manage Channels is checked in the category')
   await call(a.token, 'DELETE', `/channels/${guarded.category_id}/permissions/${mrole.id}`)
   const kid = guarded.channel_ids[0]
   await call(a.token, 'PUT', `/channels/${kid}/permissions/${mrole.id}`, { kind: 'role', allow: 0, deny: MANAGE_CH })
-  r = await raw(cm.token, 'DELETE', `${base}/guarded`)
-  ok('denied in one child channel: DELETE is 403 before anything is deleted', r.status === 403 && (await call(a.token, 'GET', `${base}/guarded`))?.channel_ids?.length === 1, String(r.status))
   await call(a.token, 'DELETE', `/channels/${kid}/permissions/${mrole.id}`)
-  ok('with the overwrites gone the member can delete it', (await raw(cm.token, 'DELETE', `${base}/guarded`)).status === 204)
+  ok('with the overwrites gone the member still cannot delete it, only the owner can', (await raw(cm.token, 'DELETE', `${base}/guarded`)).status === 403 && (await raw(a.token, 'DELETE', `${base}/guarded`)).status === 204)
 }
 
 console.log('-- renaming the backing category')
@@ -279,6 +326,7 @@ const addBot = async (name, perms) => {
 const VIEW = 1 << 10, MANAGE = 1 << 4
 const strong = await addBot('Maker', VIEW | MANAGE), weak = await addBot('Reader', VIEW)
 r = await botPost(strong, { slug: 'by-bot', name: 'By Bot' })
-ok('a bot with Manage Channels can create a community', r.status === 201 && (await r.json()).slug === 'by-bot')
+const byBot = await r.json()
+ok('a bot with Manage Channels can create a community, without following it', r.status === 201 && byBot.slug === 'by-bot' && byBot.following === false && byBot.follower_count === 0, JSON.stringify(byBot))
 ok('a bot without Manage Channels gets 403', (await botPost(weak, { slug: 'nope', name: 'Nope' })).status === 403)
 await finish()

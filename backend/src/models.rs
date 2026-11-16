@@ -1122,6 +1122,10 @@ pub struct Community {
     pub name: String,
     pub icon_url: Option<String>,
     pub description: String,
+    pub banner_url: Option<String>,
+    pub about: String,
+    /// `[{ label, url }]`, at most 10.
+    pub links: serde_json::Value,
     pub external_ref: Option<String>,
     pub category_id: Uuid,
     pub last_activity_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -1134,4 +1138,11 @@ pub struct Community {
     pub following: bool,
     #[sqlx(skip)]
     pub channel_ids: Vec<Uuid>,
+    /// What the caller may do: Manage Channels in the category, owner or Administrator, and (later) managing managers.
+    #[sqlx(skip)]
+    pub can_edit: bool,
+    #[sqlx(skip)]
+    pub can_delete: bool,
+    #[sqlx(skip)]
+    pub can_manage_managers: bool,
 }
