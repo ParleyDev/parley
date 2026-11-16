@@ -478,9 +478,19 @@ async fn create_channel(
     Path(id): Path<Uuid>,
     Json(req): Json<CreateChannel>,
 ) -> AppResult<(StatusCode, Json<Channel>)> {
-    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_CHANNELS)?;
+    let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
     let kind = req.kind.unwrap_or_else(|| "text".into());
+    if !perms::has(p, perms::MANAGE_CHANNELS) {
+        // Inside a category, Manage Channels as computed there is enough (a community manager adds channels to their
+        // community). A parent that is not a category of this server, or that the caller cannot view, is a plain refusal.
+        let parent = match (req.parent_id, kind.as_str()) { (Some(pid), k) if k != "category" => Some(pid), _ => None };
+        let Some(pid) = parent else { return Err(AppError::Forbidden) };
+        let cat = sqlx::query_as::<_, Channel>(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = $1 AND guild_id = $2 AND kind = 'category'"))
+            .bind(pid).bind(id).fetch_optional(&state.db).await?;
+        let Some(mut cat) = cat else { return Err(AppError::Forbidden) };
+        perms::attach_overwrites(&state.db, std::slice::from_mut(&mut cat)).await?;
+        if !perms::has(ctx.in_channel(uid, p, &cat.overwrites), perms::MANAGE_CHANNELS) { return Err(AppError::Forbidden) }
+    }
     // Announcement and media channels are text channels and forums with a flag.
     let (kind, news, media) = match kind.as_str() { "announcement" => ("text".to_string(), true, false), "media" => ("forum".to_string(), false, true), _ => (kind, false, false) };
     if !["text", "voice", "stage", "studio", "category", "forum", "directory"].contains(&kind.as_str()) {

@@ -1152,6 +1152,41 @@ async fn sync_permissions(State(state): State<AppState>, AuthUser(uid): AuthUser
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// The one rule for editing a permission entry (an overwrite) on a channel, shared by the overwrite routes and the
+/// community manager routes. `p` is the caller's permissions in that channel; `existing` the target's current entry
+/// there; `new` the entry after the change, `None` to remove it. Needs Manage Roles in the channel; a role target
+/// must be outranked by the caller and a member target must be a member; only bits the caller holds in the channel
+/// may change.
+pub fn check_overwrite_edit(ctx: &perms::GuildCtx, uid: Uuid, p: u64, existing: Option<&crate::models::Overwrite>, kind: &str, target: Uuid, new: Option<(u64, u64)>) -> AppResult<()> {
+    perms::check(p, perms::MANAGE_ROLES)?;
+    let removing = new.is_none();
+    let kind = match (removing, existing) {
+        (true, None) => return Err(AppError::NotFound("Overwrite not found".into())),
+        (true, Some(o)) => o.target_kind.as_str(),
+        (false, _) => {
+            if !["role", "member"].contains(&kind) { return Err(AppError::BadRequest("kind must be role or member".into())) }
+            kind
+        }
+    };
+    if kind == "role" {
+        match ctx.roles.get(&target) {
+            Some(role) if !ctx.outranks_role(uid, role) => return Err(AppError::Forbidden),
+            Some(_) => {}
+            None if removing => {}
+            None => return Err(AppError::NotFound("Role not found".into())),
+        }
+    } else if !removing && !ctx.is_member(target) {
+        return Err(AppError::NotFound("Member not found".into()));
+    }
+    // Only touch bits you hold here yourself (admins hold all).
+    let (old_allow, old_deny) = existing.map(|o| (o.allow as u64, o.deny as u64)).unwrap_or((0, 0));
+    let (allow, deny) = new.unwrap_or((0, 0));
+    if ((old_allow ^ allow) | (old_deny ^ deny)) & !p != 0 {
+        return Err(AppError::Forbidden);
+    }
+    Ok(())
+}
+
 async fn set_overwrite(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
@@ -1160,27 +1195,11 @@ async fn set_overwrite(
 ) -> AppResult<StatusCode> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("DM channels have no permissions".into()))?;
-    perms::check(p, perms::MANAGE_ROLES)?;
-    if !["role", "member"].contains(&req.kind.as_str()) {
-        return Err(AppError::BadRequest("kind must be role or member".into()));
-    }
     let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
-    if req.kind == "role" {
-        let role = ctx.roles.get(&target).ok_or_else(|| AppError::NotFound("Role not found".into()))?;
-        if !ctx.outranks_role(uid, role) {
-            return Err(AppError::Forbidden);
-        }
-    } else if !ctx.is_member(target) {
-        return Err(AppError::NotFound("Member not found".into()));
-    }
     let allow = (req.allow as u64) & perms::ALL;
     let deny = (req.deny as u64) & perms::ALL & !allow;
-    // Only touch bits you hold here yourself (admins hold all).
     let existing = c.overwrites.iter().find(|o| o.target_id == target);
-    let (old_allow, old_deny) = existing.map(|o| (o.allow as u64, o.deny as u64)).unwrap_or((0, 0));
-    if ((old_allow ^ allow) | (old_deny ^ deny)) & !p != 0 {
-        return Err(AppError::Forbidden);
-    }
+    check_overwrite_edit(&ctx, uid, p, existing, &req.kind, target, Some((allow, deny)))?;
     let before = perms::visibility(&state.db, gid).await?;
     sqlx::query(
         "INSERT INTO channel_overwrites (channel_id, target_id, target_kind, allow, deny) VALUES ($1, $2, $3, $4, $5)
@@ -1205,19 +1224,8 @@ async fn delete_overwrite(
 ) -> AppResult<StatusCode> {
     let (c, p) = require_channel_perms(&state.db, id, uid).await?;
     let gid = c.guild_id.ok_or_else(|| AppError::BadRequest("DM channels have no permissions".into()))?;
-    perms::check(p, perms::MANAGE_ROLES)?;
-    let existing = c.overwrites.iter().find(|o| o.target_id == target).ok_or_else(|| AppError::NotFound("Overwrite not found".into()))?;
-    if ((existing.allow as u64) | (existing.deny as u64)) & !p != 0 {
-        return Err(AppError::Forbidden);
-    }
-    if existing.target_kind == "role" {
-        let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
-        if let Some(role) = ctx.roles.get(&target) {
-            if !ctx.outranks_role(uid, role) {
-                return Err(AppError::Forbidden);
-            }
-        }
-    }
+    let (ctx, _) = perms::guild_perms(&state.db, gid, uid).await?;
+    check_overwrite_edit(&ctx, uid, p, c.overwrites.iter().find(|o| o.target_id == target), "", target, None)?;
     let before = perms::visibility(&state.db, gid).await?;
     sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_id = $2").bind(id).bind(target).execute(&state.db).await?;
     perms::resync_visibility(&state, gid, &before).await?;
