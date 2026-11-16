@@ -37,7 +37,12 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
   // The slim record the gateway keeps current: a change to it (rename, new description) refetches the full page, and
   // its removal means the community was deleted.
   const slim = useStore((s) => s.communities[guildId]?.find((c) => c.slug === slug))
-  const [knownId, setKnownId] = useState<string | null>(null)
+  // Which community this address showed, remembered together with the address: going straight from one community's
+  // page to another's keeps this component mounted, and for one render the id still belongs to the page being left.
+  // Read without the address, that looked like "this community moved" and sent the member back, and the two pages
+  // then redirected to each other without end.
+  const [known, setKnown] = useState<{ key: string; id: string } | null>(null)
+  const knownId = known?.key === key ? known.id : null
   const byId = useStore((s) => (knownId ? s.communities[guildId]?.find((c) => c.id === knownId) : undefined))
   const category = load?.state === 'ready' ? load.community.category_id : null
   // A change to the category's own permission entries or to what is in it (a channel added or removed) refetches too.
@@ -67,11 +72,11 @@ export default function CommunityPage({ guildId, slug }: { guildId: string; slug
   // moving to a new address (renamed), where the editor keeps their draft.
   useEffect(() => {
     if (load?.state === 'ready') return
-    setManagers(null); setEditing(false); setNotice(''); setKnownId(null)
+    setManagers(null); setEditing(false); setNotice(''); setKnown(null)
   }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Deleted while open (the store drops it on COMMUNITY_DELETE); renamed elsewhere (follow it to the new address).
-  useEffect(() => { if (slim) setKnownId(slim.id) }, [slim?.id, key]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (slim) setKnown({ key, id: slim.id }) }, [slim?.id, key]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!knownId) return
     if (!byId) { seq.current++; setLoaded({ key, state: 'missing', wasEditing: editingRef.current }) }
