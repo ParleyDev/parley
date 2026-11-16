@@ -4,15 +4,15 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../lib/api'
 import { NO_FOLLOWS } from '../lib/communities'
 import { communityPath, linkHost, moveChannel, safeLink } from '../lib/communityPage'
-import { splashBackground } from '../lib/splash'
-import { splitCrop } from '../lib/crop'
+import { BANNER_HEIGHT } from '../lib/bannerFormat'
 import { colorFor, initials, renderMarkdown } from '../lib/format'
 import { useT } from '../lib/i18n'
 import { relativeTime } from '../lib/ua'
 import type { Channel, Community, CommunityManagers as ManagersData } from '../lib/types'
 import { useStore } from '../store'
 import { chanIcon } from './ChannelSidebar'
-import { CropLayer } from './CropImg'
+import CropImg from './CropImg'
+import CommunityBanner from './CommunityBanner'
 import CommunityManagers from './CommunityManagers'
 import CommunityPageEdit from './CommunityPageEdit'
 import { MobileBack } from './HeaderBits'
@@ -206,14 +206,12 @@ function Hero({ community }: { community: Community }) {
   const tint = colorFor(community.id)
   return (
     <div>
-      <div className="relative isolate h-24 w-full bg-cover bg-center" style={community.banner_url && !splitCrop(community.banner_url).crop ? { backgroundImage: splashBackground(community.banner_url) } : community.banner_url ? undefined : { background: `linear-gradient(135deg, ${tint}, ${tint}55)` }} data-community-banner>
-        <CropLayer url={community.banner_url} />
-      </div>
+      <CommunityBanner url={community.banner_url} tint={tint} className={BANNER_HEIGHT} {...{ 'data-community-banner': '' }} />
       <div className="mx-auto flex max-w-5xl items-end gap-4 px-6 phone:px-4">
-        <div className="-mt-8 shrink-0">
+        <div className="-mt-10 shrink-0">
           {community.icon_url
-            ? <img src={community.icon_url} alt="" className="h-16 w-16 rounded-2xl border-4 border-bg-2 object-cover" />
-            : <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-bg-2 text-xl font-bold text-white" style={{ background: tint }}>{initials(community.name)}</div>}
+            ? <CropImg src={community.icon_url} alt="" className="h-20 w-20 rounded-2xl border-4 border-bg-2 bg-bg-2 object-cover" />
+            : <div className="flex h-20 w-20 items-center justify-center rounded-2xl border-4 border-bg-2 text-2xl font-bold text-white" style={{ background: tint }}>{initials(community.name)}</div>}
         </div>
         <div className="min-w-0 pt-2">
           <h1 className="truncate text-2xl font-bold leading-tight">{community.name}</h1>
