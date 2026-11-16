@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { FolderInput, FolderPlus, ImagePlus, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
+import { Eye, FolderInput, FolderPlus, ImagePlus, Pencil, Plus, RotateCcw, Search, Trash2, X } from 'lucide-react'
 import { api, ApiError, getToken } from '../lib/api'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
@@ -14,6 +14,8 @@ import { decorationUrl } from '../lib/decorations'
 import type { EffectItem, FrameItem } from '../lib/assetCatalog'
 import { globalName } from '../lib/names'
 import CosmeticsImport from './AdminCosmeticsImport'
+import { CosmeticPreview } from '../components/profile/CosmeticPicker'
+import { useLazySlice } from '../lib/useLazySlice'
 
 type Source = 'builtin' | 'folder' | 'custom'
 interface EffectLayer { file: string; start_ms: number; duration_ms: number; loop: boolean; loop_delay_ms: number; z_index: number; random_variants?: string[] }
@@ -64,8 +66,10 @@ export default function CosmeticsPane() {
   const [showDeleted, setShowDeleted] = useState(false)
   const [writable, setWritable] = useState<boolean | null>(null)
   const [importing, setImporting] = useState(false)
+  const [q, setQ] = useState('')
+  const [previewing, setPreviewing] = useState<Item | null>(null)
   const load = (k = kind) => api.get<Item[]>(`/admin/cosmetics/${k}`).then((items) => setLoaded({ kind: k, items })).catch((e) => pushToast((e as Error).message, 'error'))
-  useEffect(() => { setEditing(null); void load(kind) }, [kind]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setEditing(null); setQ(''); void load(kind) }, [kind]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api.get<{ writable: boolean }>('/admin/cosmetics-folder').then((r) => setWritable(r.writable)).catch(() => setWritable(null)) }, [])
   const act = async (fn: () => Promise<unknown>, done?: string) => { try { await fn(); await load(); if (done) pushToast(done); return true } catch (e) { pushToast((e as Error).message, 'error'); return false } }
   const KINDS: [CosmeticKind, string][] = [['decoration', t('Avatar decorations')], ['nameplate', t('Nameplates')], ['effect', t('Profile effects')], ['frame', t('Profile frames')]]
@@ -80,7 +84,10 @@ export default function CosmeticsPane() {
     if (confirm([t('Delete {name}?', { name: nameOf(it) }), who, what].filter(Boolean).join(' '))) void act(() => api.delete(`/admin/cosmetics/${kind}/${enc(it.value)}`), t('Deleted'))
   }
   const deleted = list?.filter((it) => it.deleted).length ?? 0
-  const shown = list?.filter((it) => showDeleted || !it.deleted)
+  const needle = q.trim().toLowerCase()
+  const shown = useMemo(() => list?.filter((it) => (showDeleted || !it.deleted) && (!needle || [it.name, it.description, it.value, BUILTIN_LABELS[kind][it.value]].some((f) => f?.toLowerCase().includes(needle)))), [list, showDeleted, needle, kind])
+  // Hundreds of folder items are drawn a page at a time as the list scrolls.
+  const { visible, more, sentinel } = useLazySlice(shown ?? [], { step: 40, key: `${kind}|${needle}|${showDeleted}` })
   const saved = async () => { setEditing(null); await load() }
 
   return (
@@ -96,16 +103,25 @@ export default function CosmeticsPane() {
       {writable === false && <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3 text-sm" data-cosmetics-read-only>{t('The assets folder is mounted read-only, so items with pictures can\'t be added or edited here. Mount it read-write to manage them from the console. Turning items on and off and deleting them still work.')}</div>}
       <div className="flex flex-wrap items-center gap-2">
         {KINDS.map(([k, label]) => <button key={k} type="button" onClick={() => setKind(k)} className={`rounded-full px-3 py-1 text-sm font-semibold ${kind === k ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} aria-pressed={kind === k} data-cosmetic-kind={k}>{label}</button>)}
-        {deleted > 0 && <label className="ml-auto flex items-center gap-1.5 text-xs text-text-2"><input type="checkbox" className="h-4 w-4 accent-accent" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} data-cosmetic-show-deleted />{t('Show deleted ({n})', { n: deleted })}</label>}
+        <div className="relative ml-auto w-56 max-w-full">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-2" aria-hidden />
+          <input className="input h-8 pl-8 text-sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder={list ? t('Search {n}', { n: list.length }) : t('Search')} aria-label={t('Search')} data-cosmetic-search />
+        </div>
+        {deleted > 0 && <label className="flex items-center gap-1.5 text-xs text-text-2"><input type="checkbox" className="h-4 w-4 accent-accent" checked={showDeleted} onChange={(e) => setShowDeleted(e.target.checked)} data-cosmetic-show-deleted />{t('Show deleted ({n})', { n: deleted })}</label>}
       </div>
       {editing?.mode === 'parley' && <ParleyEditor kind={kind} item={editing.item} onDone={() => void saved()} onCancel={() => setEditing(null)} />}
       {importing && <CosmeticsImport onClose={() => setImporting(false)} onImported={() => void load()} />}
       {editing?.mode === 'folder' && <FolderEditor kind={kind} item={editing.item} onDone={() => void saved()} onCancel={() => setEditing(null)} />}
-      {!shown ? <p className="text-text-2">{t('Loading…')}</p> : shown.length === 0 ? <p className="text-text-2">{t('None yet.')}</p> : (
+      {!shown ? <p className="text-text-2">{t('Loading…')}</p> : shown.length === 0 ? <p className="text-text-2" data-cosmetic-empty>{needle ? t('Nothing matches “{q}”.', { q }) : t('None yet.')}</p> : (
+        <>
+        {needle && <p className="text-xs text-text-2" data-cosmetic-matches>{t('{n} of {total}', { n: shown.length, total: list?.length ?? 0 })}</p>}
         <ul className="space-y-2" data-cosmetic-list={kind}>
-          {shown.map((it) => (
+          {visible.map((it) => (
             <li key={it.value} className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-bg-1 p-3 ${it.enabled && !it.deleted ? '' : 'opacity-60'}`} data-cosmetic-row={it.value} data-cosmetic-enabled={it.enabled ? '1' : '0'} data-cosmetic-deleted={it.deleted ? '1' : '0'}>
-              <Preview kind={kind} item={it} name={nameOf(it)} />
+              <button type="button" onClick={() => setPreviewing(it)} className="group relative shrink-0 rounded-lg" title={t('Preview on a profile')} aria-label={t('Preview {name} on a profile', { name: nameOf(it) })} data-cosmetic-preview-open={it.value}>
+                <Preview kind={kind} item={it} name={nameOf(it)} />
+                <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/50 text-white opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"><Eye size={18} aria-hidden /></span>
+              </button>
               <div className="min-w-0 flex-1 basis-32">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="truncate font-semibold" data-cosmetic-name>{nameOf(it)}</span>
@@ -126,8 +142,30 @@ export default function CosmeticsPane() {
             </li>
           ))}
         </ul>
+        {more && <div ref={sentinel} className="h-10" aria-hidden data-cosmetic-more />}
+        </>
       )}
+      {previewing && <PreviewDialog kind={kind} item={previewing} name={nameOf(previewing)} onClose={() => setPreviewing(null)} onEdit={previewing.deleted || (previewing.source === 'folder' && writable === false) ? undefined : () => { const it = previewing; setPreviewing(null); setEditing({ mode: it.source === 'folder' ? 'folder' : 'parley', item: it }) }} />}
     </div>
+  )
+}
+
+/** One item on the admin's own profile, the way the profile editor's picker shows it (also while it is off). */
+function PreviewDialog({ kind, item, name, onClose, onEdit }: { kind: CosmeticKind; item: Item; name: string; onClose: () => void; onEdit?: () => void }) {
+  const t = useT()
+  const me = useStore((s) => s.user)
+  if (!me) return null
+  return (
+    <Sheet title={t('Preview: {name}', { name })} onClose={onClose} data-cosmetic-preview-dialog={item.value}
+      preview={<div className="w-full" data-cosmetic-preview><CosmeticPreview kind={kind} value={item.value} user={{ ...me, nameplate: kind === 'nameplate' ? item.value : me.nameplate }} /></div>}
+      footer={<>{onEdit && <button type="button" className="btn-ghost mr-auto" onClick={onEdit} data-cosmetic-preview-edit><Pencil size={15} /> {t('Edit')}</button>}<button type="button" className="btn-primary" onClick={onClose}>{t('Close')}</button></>}>
+      <div className="space-y-2 text-sm">
+        <p className="text-lg font-bold">{name}</p>
+        {item.description && <p className="text-text-1">{item.description}</p>}
+        <p className="text-text-2">{[{ builtin: t('Built-in'), folder: t('Assets folder'), custom: t('Parley') }[item.source], !item.enabled ? t('Off') : '', item.deleted ? t('Deleted') : '', item.users === 1 ? t('1 person uses it') : item.users ? t('{n} people use it', { n: item.users }) : t('Nobody uses it yet')].filter(Boolean).join(' · ')}</p>
+        <p className="text-xs text-text-2">{t('Shown on your own profile; it is not saved.')}</p>
+      </div>
+    </Sheet>
   )
 }
 

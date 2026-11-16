@@ -11,6 +11,12 @@ export type FrameItem = LayeredItem<FrameLayer>
 
 export const isAssetValue = (v?: string | null): v is string => !!v && v.startsWith('asset:')
 export const assetFile = (kind: LayeredKind, id: string, file: string) => `/api/assets/${kind}/${encodeURIComponent(id)}/${encodeURIComponent(file)}`
+/** The picture shown for a catalogue entry: an effect's thumbnail (else its still), or a frame's composed preview. */
+export const layeredThumb = (kind: LayeredKind, item: LayeredItem) => {
+  if (kind === 'profile-frames') return `/api/assets/profile-frames/${encodeURIComponent(item.id)}/preview`
+  const f = item.thumbnail ?? item.still
+  return f ? assetFile(kind, item.id, f) : null
+}
 
 const lists = new Map<LayeredKind, Promise<LayeredItem[]>>()
 const loaded = new Map<LayeredKind, LayeredItem[]>()

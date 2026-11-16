@@ -2,25 +2,24 @@ import { useShallow } from 'zustand/react/shallow'
 import { Camera, ChevronDown, Pipette, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { api } from '../../lib/api'
-import { NAMEPLATES, PROFILE_EFFECTS, PROFILE_FRAMES, nameplateClass, useOptions } from '../../lib/cosmetics'
+import { PROFILE_EFFECTS, PROFILE_FRAMES, nameplateClass, useOptions, type CosmeticKind } from '../../lib/cosmetics'
 import { FORMATS, toggleWrap } from '../../lib/editor'
 import { colorFor } from '../../lib/format'
 import { useT } from '../../lib/i18n'
 import { colorsOf, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../lib/nameStyle'
 import { prepareImage, uploadImage } from '../../lib/upload'
 import { frameImage, withCrop } from '../../lib/crop'
-import { DECORATIONS, type ManualActivity, type PanelItem, type PrivateUser } from '../../lib/types'
+import { type ManualActivity, type PanelItem, type PrivateUser } from '../../lib/types'
 import { useStore } from '../../store'
 import Avatar from '../Avatar'
 import { badgeIcon, HOUSES } from '../Flair'
-import { AssetNameplatePicker, isAssetNameplate, NameplateVideo } from '../Nameplate'
-import LayeredPicker, { layeredThumb } from './LayeredPicker'
-import { useAssetItem, type EffectItem, type FrameItem } from '../../lib/assetCatalog'
+import { isAssetNameplate, NameplateVideo } from '../Nameplate'
+import CosmeticPicker from './CosmeticPicker'
+import { layeredThumb, useAssetItem, type EffectItem, type FrameItem } from '../../lib/assetCatalog'
 import ProfileCard, { type ProfileEdit } from '../ProfileCard'
 import { WearServerTag } from '../ServerTag'
 import ImagePicker from '../modals/ImagePicker'
 import NameStyleModal from '../modals/NameStyle'
-import DecorationGallery from '../modals/settings/DecorationGallery'
 import Dropdown from '../Dropdown'
 import { globalName } from '../../lib/names'
 
@@ -75,6 +74,10 @@ function useProfileDraft(user: PrivateUser) {
 }
 
 type Section = 'nameplate' | 'avatar' | 'decoration' | 'theme' | 'banner' | 'effect' | 'frame' | 'tag' | 'badges'
+/** Sections that open the full picker (CosmeticPicker), and the draft field and kind each one sets. */
+type PickerSection = 'nameplate' | 'decoration' | 'effect' | 'frame'
+const PICKERS: Record<PickerSection, { field: 'plate' | 'decoration' | 'effect' | 'frame'; kind: CosmeticKind }> = { nameplate: { field: 'plate', kind: 'nameplate' }, decoration: { field: 'decoration', kind: 'decoration' }, effect: { field: 'effect', kind: 'effect' }, frame: { field: 'frame', kind: 'frame' } }
+const isPicker = (s: Section | null): s is PickerSection => !!s && s in PICKERS
 
 /** A tile in the left column: a little preview of the setting that opens its picker. */
 function Tile({ section, open, onOpen, label, children, className = '' }: { section: Section; open: Section | null; onOpen: (s: Section) => void; label: string; children: ReactNode; className?: string }) {
@@ -119,23 +122,12 @@ export default function ProfileEditor() {
     onAvatarFile: (f) => void upload('avatar', f), onAvatarRemove: () => set('avatar')(null), onBannerFile: (f) => void upload('banner', f), onBannerRemove: () => set('banner')(null),
     status: presence, onStatus: (v) => { api.patch('/users/@me', { status: v }).catch((e) => pushToast((e as Error).message, 'error')) }, busy: uploading,
   }
-  // Built-in options as admins left them (some turned off or renamed), then the ones they made.
-  const plates = useOptions('nameplate', NAMEPLATES), decorations = useOptions('decoration', DECORATIONS)
+  // Built-in options as admins left them (some turned off or renamed), then the ones they made: for the tiles.
   const effects = useOptions('effect', PROFILE_EFFECTS), frames = useOptions('frame', PROFILE_FRAMES)
   const pickedEffect = effects.find((e) => e.id && e.id === d.effect)
   const effectBit = !pickedEffect ? undefined : 'data' in pickedEffect ? pickedEffect.data.glyph : pickedEffect.glyph
-  const chip = (on: boolean) => `rounded-lg border px-2.5 py-1 text-sm ${on ? 'border-accent bg-accent/15' : 'border-line hover:border-text-2'}`
 
-  const panel: Record<Section, { title: string; body: ReactNode }> = {
-    nameplate: { title: t('Nameplate'), body: (
-      <>
-        <div className="flex flex-wrap gap-2">
-          {[{ id: '', label: t('None') }, ...plates].map((n) => <button key={n.id || 'none'} type="button" onClick={() => set('plate')(n.id)} className={`rounded-lg border px-2.5 py-1 text-sm ${nameplateClass(n.id)} ${d.plate === n.id ? 'border-accent' : 'border-line hover:border-text-2'}`} data-nameplate-option={n.id || 'none'} aria-pressed={d.plate === n.id}>{n.label}</button>)}
-        </div>
-        <AssetNameplatePicker value={d.plate} onPick={set('plate')} />
-        <p className="mt-2 text-xs text-text-2">{t('Shown behind your name in member lists and DMs.')}</p>
-      </>
-    ) },
+  const panel: Record<Exclude<Section, PickerSection>, { title: string; body: ReactNode }> = {
     avatar: { title: t('Avatar'), body: (
       <>
         <ImagePicker value={d.avatar} onChange={set('avatar')} label={d.display} id={user.id} kind="avatar" />
@@ -148,18 +140,6 @@ export default function ProfileEditor() {
           </div>
         )}
         <p className="text-xs text-text-2 mt-2">{t('PNG, JPEG, GIF or WebP up to 8 MB. Animated GIF, APNG and WebP stay animated.')}</p>
-      </>
-    ) },
-    decoration: { title: t('Avatar decoration'), body: (
-      <>
-        <div className="flex flex-wrap gap-2" data-decoration-options>
-          {decorations.map((x) => (
-            <button key={x.id} type="button" onClick={() => set('decoration')(x.id)} className={`flex items-center gap-2 ${chip(d.decoration === x.id)} py-1.5`} data-decoration-option={x.id} aria-pressed={d.decoration === x.id}>
-              <Avatar user={{ ...user, avatar_url: d.avatar }} decoration={x.id} size={28} />{x.label}
-            </button>
-          ))}
-        </div>
-        <DecorationGallery user={{ ...user, avatar_url: d.avatar }} value={d.decoration} onChange={set('decoration')} />
       </>
     ) },
     theme: { title: t('Profile theme'), body: (
@@ -186,18 +166,6 @@ export default function ProfileEditor() {
         </div>
         <p className="text-xs text-text-2 mt-2">{t('Without a banner the card shows your theme colour. Still images are resized to 1200×480; animated ones are kept as uploaded.')}</p>
       </>
-    ) },
-    effect: { title: t('Profile effect'), body: (
-      <div className="flex flex-wrap gap-2">
-        {[{ id: '', label: t('None'), glyph: '' }, ...effects].map((e) => <button key={e.id || 'none'} type="button" onClick={() => set('effect')(e.id)} className={chip(d.effect === e.id)} data-effect-option={e.id || 'none'} aria-pressed={d.effect === e.id}>{'data' in e ? e.data.glyph : e.glyph} {e.label}</button>)}
-        <div className="w-full"><LayeredPicker kind="profile-effects" value={d.effect} onPick={set('effect')} /></div>
-      </div>
-    ) },
-    frame: { title: t('Profile frame'), body: (
-      <div className="flex flex-wrap gap-2">
-        {[{ id: '', label: t('None') }, ...frames].map((f) => <button key={f.id || 'none'} type="button" onClick={() => set('frame')(f.id)} className={chip(d.frame === f.id)} data-frame-option={f.id || 'none'} aria-pressed={d.frame === f.id}>{f.label}</button>)}
-        <div className="w-full"><LayeredPicker kind="profile-frames" value={d.frame} onPick={set('frame')} /></div>
-      </div>
     ) },
     tag: { title: t('Clan tag'), body: (
       <div className="space-y-3">
@@ -304,7 +272,8 @@ export default function ProfileEditor() {
         )}
       </section>
 
-      {section && (
+      {isPicker(section) && <CosmeticPicker kind={PICKERS[section].kind} section={section} value={d[PICKERS[section].field]} user={{ ...draftUser, nameplate: d.plate }} onApply={set(PICKERS[section].field)} onClose={() => setSection(null)} />}
+      {section && !isPicker(section) && (
         <div className="absolute inset-y-0 left-72 right-0 z-10 flex items-start justify-center bg-black/40 p-6 max-lg:fixed max-lg:inset-0 max-lg:left-0 max-lg:items-end max-lg:p-0" onMouseDown={(e) => { if (e.target === e.currentTarget) setSection(null) }}>
           <div className="pop w-full max-w-xl max-h-full overflow-y-auto rounded-2xl bg-bg-1 border border-line shadow-2xl p-5 max-lg:max-h-[80vh] max-lg:rounded-b-none" role="dialog" data-editor-panel={section}>
             <div className="flex items-center mb-3"><h3 className="text-lg font-bold flex-1">{panel[section].title}</h3><button type="button" onClick={() => setSection(null)} className="rounded-md p-1 text-text-2 hover:text-text-0 hover:bg-bg-3" aria-label={t('Close')} data-editor-panel-close><X size={18} /></button></div>

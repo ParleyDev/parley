@@ -179,10 +179,10 @@ ok('back on: shown again', (await shadow(pb, cls(frame.value))).includes('rgb(0,
 
 console.log('-- the profile editor')
 await openProfileEditor(pb, { section: 'frame' })
-await pb.waitForSelector('[data-layered-picker="profile-frames"] [data-layered-option]', { timeout: 5000 }).catch(() => {})
+await pb.waitForSelector('[data-cosmetic-picker="frame"] [data-layered-option]', { timeout: 5000 }).catch(() => {})
 const options = await pb.locator('[data-frame-option]').evaluateAll((els) => els.map((e) => [e.getAttribute('data-frame-option'), e.textContent.trim()]))
 ok('the frame picker offers the custom one and the renamed one, not the one that is off', options.some(([v, l]) => v === frame.value && l === `E2E Ring ${S}`) && options.some(([v, l]) => v === 'neon' && l === 'Electric') && !options.some(([v]) => v === 'gold'), JSON.stringify(options))
-ok('and the frame just added to the folder', await pb.locator(`[data-layered-picker="profile-frames"] [data-layered-option="${vines}"]`).count() === 1, await pb.locator('[data-layered-option]').evaluateAll((els) => els.map((e) => e.getAttribute('data-layered-option')).join()))
+ok('and the frame just added to the folder', await pb.locator(`[data-cosmetic-picker="frame"] [data-layered-option="${vines}"]`).count() === 1, await pb.locator('[data-layered-option]').evaluateAll((els) => els.map((e) => e.getAttribute('data-layered-option')).join()))
 await pb.screenshot({ path: 'cosmetics-editor.png' })
 
 console.log('-- the admin console')

@@ -126,5 +126,8 @@ export async function openProfileEditor(p, { section, tab } = {}) {
   if (tab) await p.click(`[data-editor-tab="${tab}"]`)
   if (section) { await p.click(`[data-editor-section="${section}"]`); await p.waitForSelector(`[data-editor-panel="${section}"]`) }
 }
-/** Close the editor's open picker panel, if any. */
-export async function closeEditorPanel(p) { if (await p.locator('[data-editor-panel-close]').count()) await p.click('[data-editor-panel-close]') }
+/** Close the editor's open picker panel, if any, keeping what was picked in it (the cosmetic pickers' Apply). */
+export async function closeEditorPanel(p) {
+  if (await p.locator('[data-cosmetic-apply]:not([disabled])').count()) { await p.click('[data-cosmetic-apply]'); return }
+  if (await p.locator('[data-editor-panel-close]').count()) await p.click('[data-editor-panel-close]')
+}

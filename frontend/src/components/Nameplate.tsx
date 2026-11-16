@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { useT } from '../lib/i18n'
 import { useFolderVersion } from '../lib/assetCatalog'
 
 /** A nameplate from the instance's assets folder (`asset:<id>`): a short video loop. Built-in ones are CSS classes. */
@@ -34,38 +33,24 @@ export function NameplateVideo({ value, hoverRoot, always = false }: { value?: s
   return <video key={value} ref={ref} className="np-video np-fit pointer-events-none absolute inset-y-0 right-0 -z-10 h-full w-auto max-w-none" src={nameplateSrc(value)} muted loop playsInline preload="metadata" aria-hidden data-nameplate-video={value.slice(6)} />
 }
 
-interface AssetNameplate { id: string; name: string; description?: string }
+export interface AssetNameplate { id: string; name: string; description?: string }
 
-/** Settings: the instance's nameplates (assets folder), as previews that play on hover. Loads them as they scroll in. */
-export function AssetNameplatePicker({ value, onPick }: { value: string; onPick: (v: string) => void }) {
-  const t = useT()
+let plates: { at: number; p: Promise<AssetNameplate[]> } | null = null
+/** The instance's nameplates (assets folder), fetched once per page load and again after a change. */
+export function useAssetNameplates(): AssetNameplate[] | null {
   const [list, setList] = useState<AssetNameplate[] | null>(null)
-  const [q, setQ] = useState('')
   const v = useFolderVersion()
-  useEffect(() => { fetch(`/api/assets/nameplates${v ? `?v=${v}` : ''}`).then((r) => r.json()).then(setList).catch(() => setList([])) }, [v])
-  if (!list || list.length === 0) return null
-  const shown = list.filter((n) => !q || n.name.toLowerCase().includes(q.toLowerCase()) || !!n.description?.toLowerCase().includes(q.toLowerCase()))
-  return (
-    <div className="mt-2 space-y-2" data-asset-nameplates={list.length}>
-      <input className="input h-8 text-sm" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Search {n} nameplates', { n: list.length })} data-asset-nameplate-search />
-      <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
-        {shown.map((n) => {
-          const v = `asset:${n.id}`
-          return (
-            <button key={n.id} type="button" onClick={() => onPick(v)} aria-pressed={value === v} title={n.description ? `${n.name}: ${n.description}` : n.name}
-              className={`relative isolate overflow-hidden h-11 rounded-lg border text-left px-2.5 text-sm font-semibold ${value === v ? 'border-accent ring-2 ring-accent/40' : 'border-line hover:border-text-2'}`} data-nameplate-option={v}>
-              <LazyVideo src={nameplateSrc(v)} />
-              <span className="relative truncate block" style={{ textShadow: '0 1px 2px rgba(0,0,0,.8)' }}>{n.name}</span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
+  useEffect(() => {
+    if (!plates || plates.at !== v) plates = { at: v, p: fetch(`/api/assets/nameplates${v ? `?v=${v}` : ''}`).then((r) => (r.ok ? r.json() : [])).catch(() => []) }
+    let live = true
+    void plates.p.then((l) => { if (live) setList(l) })
+    return () => { live = false }
+  }, [v])
+  return list
 }
 
 /** A preview video that only loads once it scrolls into view, and plays while hovered. */
-function LazyVideo({ src }: { src: string }) {
+export function LazyVideo({ src }: { src: string }) {
   const ref = useRef<HTMLVideoElement>(null)
   const [seen, setSeen] = useState(false)
   useEffect(() => {

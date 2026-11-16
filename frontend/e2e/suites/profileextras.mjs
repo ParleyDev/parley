@@ -42,7 +42,7 @@ const mk = async (tok, path) => {
 const pb = await mk(b.token, `/channels/${g.id}/${general.id}`)
 await openProfileEditor(pb, { section: 'avatar' })
 ok('recent avatars are offered', await pb.locator('[data-avatar-history-item]').count() === 2)
-await openProfileEditor(pb, { section: 'frame' }); await pb.click('[data-frame-option="neon"]'); await openProfileEditor(pb, { section: 'nameplate' }); await pb.click('[data-nameplate-option="ocean"]'); await openProfileEditor(pb, { section: 'effect' }); await pb.click('[data-effect-option="sparkles"]'); await closeEditorPanel(pb)
+await closeEditorPanel(pb); await openProfileEditor(pb, { section: 'frame' }); await pb.click('[data-frame-option="neon"]'); await closeEditorPanel(pb); await openProfileEditor(pb, { section: 'nameplate' }); await pb.click('[data-nameplate-option="ocean"]'); await closeEditorPanel(pb); await openProfileEditor(pb, { section: 'effect' }); await pb.click('[data-effect-option="sparkles"]'); await closeEditorPanel(pb)
 ok('the preview shows the frame and effect', await pb.locator('[data-profile-card][data-profile-frame="neon"] [data-profile-effect="sparkles"]').count() === 1)
 await pb.fill('[data-bio-input]', 'make this bold'); await pb.evaluate(() => { const t = document.querySelector('[data-bio-input]'); t.focus(); t.setSelectionRange(10, 14) })
 await pb.click('[data-bio-format="bold"]'); await pb.waitForTimeout(100)
