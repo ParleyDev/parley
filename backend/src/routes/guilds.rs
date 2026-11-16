@@ -1084,15 +1084,31 @@ struct Positions {
     items: Vec<PositionItem>,
 }
 
-/// Bulk reorder / re-parent (drag and drop). Needs Manage Channels; categories keep parent NULL.
+/// Bulk reorder / re-parent (drag and drop). Needs Manage Channels; categories keep parent NULL. Without it, only for
+/// channels the caller manages, staying in or moving between categories they may place channels in.
 async fn reorder_channels(
     State(state): State<AppState>,
     AuthUser(uid): AuthUser,
     Path(id): Path<Uuid>,
     Json(req): Json<Positions>,
 ) -> AppResult<Json<Vec<Channel>>> {
-    let (_, p) = perms::guild_perms(&state.db, id, uid).await?;
-    perms::check(p, perms::MANAGE_CHANNELS)?;
+    let (ctx, p) = perms::guild_perms(&state.db, id, uid).await?;
+    let server_level = perms::has(p, perms::MANAGE_CHANNELS);
+    if !server_level {
+        // Without server-level Manage Channels, only inside categories the caller manages: every item must be a channel
+        // they hold Manage Channels in and end under a category they may place channels in. All or nothing.
+        if req.items.is_empty() || req.items.len() > 500 { return Err(AppError::Forbidden) }
+        let base = ctx.base(uid).ok_or_else(|| AppError::NotFound("Server not found".into()))?;
+        let all = perms::guild_channels(&state.db, id).await?;
+        let mut placed: std::collections::HashSet<Option<Uuid>> = Default::default();
+        for it in &req.items {
+            let ch = all.iter().find(|c| c.id == it.id).ok_or(AppError::Forbidden)?;
+            if !perms::has(ctx.in_channel(uid, base, &ch.overwrites), perms::MANAGE_CHANNELS) { return Err(AppError::Forbidden) }
+            let dest = it.parent_id.unwrap_or(ch.parent_id);
+            if ch.kind == "category" { return Err(AppError::Forbidden) }
+            if placed.insert(dest) { require_placement(&state.db, &ctx, id, uid, &ch.kind, dest).await?; }
+        }
+    }
     if req.items.len() > 500 {
         return Err(AppError::BadRequest("Too many items".into()));
     }
@@ -1115,7 +1131,8 @@ async fn reorder_channels(
     // Parent changes can change inherited overwrites; this also pushes CHANNEL_UPDATE (new positions) to everyone.
     perms::resync_visibility(&state, id, &before).await?;
     crate::audit::guild(&state, id, uid, "channel.reorder", "guild", Some(id), "", json!({ "count": req.items.len() })).await;
-    Ok(Json(perms::guild_channels(&state.db, id).await?))
+    // Whoever could not reorder server-wide only sees the channels they can view.
+    Ok(Json(if server_level { perms::guild_channels(&state.db, id).await? } else { perms::visible_channels(&state.db, id, uid).await? }))
 }
 
 /// Absent = None (unchanged), null = Some(None) (cleared), a value = Some(Some(value)).

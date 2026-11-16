@@ -465,7 +465,7 @@ async fn list_managers(State(state): State<AppState>, AuthUser(uid): AuthUser, P
 struct ManagerIn { kind: String }
 
 /// One entry change: the channel and the entry after (`None`: the row goes).
-struct EntryChange { channel: Channel, new: Option<(u64, u64)> }
+struct EntryChange { channel: Channel, new: Option<(u64, u64)>, child: bool }
 
 /// Plan `f` over the target's entry on the category and on each child with entries of its own, every one authorised by
 /// the shared entry rule with the caller's permissions in that channel. `creating` also covers children where the
@@ -485,8 +485,10 @@ fn plan_entries(ctx: &perms::GuildCtx, uid: Uuid, all: &[Channel], category_id: 
         let new = if (allow, deny) != (0, 0) { Some((allow, deny)) } else if is_category || ch.overwrites.iter().any(|o| o.target_id != target) { None } else { Some((0, 0)) };
         let p = ctx.in_channel(uid, base, &ch.overwrites);
         super::channels::check_overwrite_edit(ctx, uid, p, own.as_ref(), kind, target, Some((allow, deny)), !creating)?;
+        // Appointing writes every manager bit whatever the entry holds now, so the appointer must hold all of them here.
+        if creating && MANAGER_BITS & !p != 0 { return Err(AppError::Forbidden) }
         let changed = match (&own, new) { (Some(_), None) => true, (None, None) => false, (_, Some(n)) => n != old };
-        if changed { out.push(EntryChange { channel: ch.clone(), new }) }
+        if changed { out.push(EntryChange { channel: ch.clone(), new, child: !is_category }) }
     }
     Ok(out)
 }
@@ -506,7 +508,12 @@ async fn write_entries(state: &AppState, gid: Uuid, uid: Uuid, kind: &str, targe
                 .bind(ch.channel.id).bind(target).bind(kind).bind(bits).execute(&mut *tx).await?;
         } else {
             sqlx::query("UPDATE channel_overwrites SET allow = allow & ~$3 WHERE channel_id = $1 AND target_id = $2").bind(ch.channel.id).bind(target).bind(bits).execute(&mut *tx).await?;
-            if ch.new.is_none() { sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_id = $2 AND allow = 0 AND deny = 0").bind(ch.channel.id).bind(target).execute(&mut *tx).await?; }
+            // A child keeps its last row (empty) so it does not start following its category.
+            if ch.new.is_none() {
+                sqlx::query("DELETE FROM channel_overwrites WHERE channel_id = $1 AND target_id = $2 AND allow = 0 AND deny = 0
+                             AND (NOT $3 OR EXISTS (SELECT 1 FROM channel_overwrites o WHERE o.channel_id = $1 AND o.target_id <> $2))")
+                    .bind(ch.channel.id).bind(target).bind(ch.child).execute(&mut *tx).await?;
+            }
         }
     }
     tx.commit().await?;
