@@ -327,9 +327,15 @@ pub async fn connect_payload(db: &sqlx::PgPool, uid: Uuid, guilds: &[Uuid], visi
 }
 
 /// The slim form of the community a category backs, if any (for visibility changes).
-pub async fn slim_for_category(db: &sqlx::PgPool, category_id: Uuid) -> AppResult<Option<Value>> {
-    let c: Option<Community> = sqlx::query_as(&format!("SELECT {COLS} FROM communities WHERE category_id = $1")).bind(category_id).fetch_optional(db).await?;
-    Ok(c.as_ref().map(slim))
+pub async fn slim_for_categories(db: &sqlx::PgPool, category_ids: &[Uuid]) -> AppResult<std::collections::HashMap<Uuid, Value>> {
+    if category_ids.is_empty() { return Ok(Default::default()) }
+    let cs: Vec<Community> = sqlx::query_as(&format!("SELECT {COLS} FROM communities WHERE category_id = ANY($1)")).bind(category_ids).fetch_all(db).await?;
+    Ok(cs.iter().map(|c| (c.category_id, slim(c))).collect())
+}
+
+/// Which of `users` follow community `community_id`, in one query.
+pub async fn followers_among(db: &sqlx::PgPool, community_id: Uuid, users: &[Uuid]) -> AppResult<Vec<Uuid>> {
+    Ok(sqlx::query_scalar("SELECT user_id FROM community_follows WHERE community_id = $1 AND user_id = ANY($2)").bind(community_id).bind(users).fetch_all(db).await?)
 }
 
 /// A server payload (GUILD_CREATE, the join responses) plus the communities `uid` can see there and the ones they

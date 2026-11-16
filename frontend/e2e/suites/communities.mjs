@@ -3,6 +3,8 @@
 import { execSync } from 'node:child_process'
 import { B, H, S, reg, call, raw, ok, finish, testContainer } from '../lib.mjs'
 const sql = (q) => execSync(`docker exec ${testContainer('db')} psql -U parley -tAc "${q.replace(/"/g, '\\"')}"`, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim()
+// Poll a read until it satisfies `pred` (up to ~2 s): message-send touches last_activity_at in a spawned task.
+const until = async (read, pred) => { let v; for (let i = 0; i < 20; i++) { v = await read(); if (pred(v)) return v; await new Promise((r) => setTimeout(r, 100)) } return v }
 const WS = B.replace(/^http/, 'ws').replace(/\/api$/, '') + '/ws'
 
 const a = await reg('alice'), b = await reg('bob'), dev = await reg('dev')
@@ -29,7 +31,7 @@ let one = await call(b.token, 'GET', `${base}/pavement`)
 ok('follow is reflected', one.following === true && one.follower_count === 1)
 ok('other members unaffected', (await call(a.token, 'GET', `${base}/pavement`)).following === false)
 await call(a.token, 'POST', `/channels/${one.channel_ids[0]}/messages`, { content: 'hello' })
-let list = await call(b.token, 'GET', base)
+let list = await until(() => call(b.token, 'GET', base), (l) => l.items[0]?.last_activity_at != null)
 ok('list sorts by recent activity', list.items[0].slug === 'pavement' && list.items[0].last_activity_at !== null && list.items[1].last_activity_at === null && list.next === null)
 ok('list carries counts and channels', list.items[0].follower_count === 1 && list.items[0].following === true && list.items[0].channel_ids.length === 2 && list.items[1].following === false)
 ok('search', (await call(b.token, 'GET', `${base}?q=PAVE`)).items.length === 1 && (await call(b.token, 'GET', `${base}?q=zzz`)).items.length === 0)
@@ -58,11 +60,11 @@ ok('a community with no messages has no activity', await actOf('pct') === null &
 ok('a webhook post bumps last_activity_at', (await fetch(`${B}/webhooks/${hook.webhook.id}/${hook.token}`, { method: 'POST', headers: H, body: JSON.stringify({ content: 'deployed' }) })).ok && await actOf('pct') !== null)
 const th = await call(a.token, 'POST', `/channels/${extras[1].channel_ids[0]}/threads`, { name: 'jam' })
 await call(a.token, 'POST', `/channels/${th.id}/messages`, { content: 'in a thread' })
-ok('a message in a thread under a community channel bumps it', await actOf('pcty') !== null)
+ok('a message in a thread under a community channel bumps it', await until(() => actOf('pcty'), (x) => x !== null) !== null)
 const src = await call(a.token, 'POST', `/channels/${extras[2].channel_ids[0]}/messages`, { content: 'to forward' })
 sql(`UPDATE communities SET last_activity_at = NULL WHERE id = '${extras[3].id}'`)
 await call(a.token, 'POST', `/channels/${extras[2].channel_ids[0]}/messages/${src.id}/forward`, { channel_id: extras[3].channel_ids[0] })
-ok('a forwarded message bumps the target community', await actOf('unxder') !== null)
+ok('a forwarded message bumps the target community', await until(() => actOf('unxder'), (x) => x !== null) !== null)
 for (const c of [...extras, ...ties]) await raw(a.token, 'DELETE', `${base}/${c.slug}`)
 
 console.log('-- follow: hidden category')
@@ -98,6 +100,18 @@ console.log('-- follow: connect payload and event')
   const f = first.community_follows.find((x) => x.guild_id === g.id)
   ok('a later READY lists the follow', f && JSON.stringify(f.community_ids) === JSON.stringify([one.id, slimM.id]))
   sock2.close()
+}
+
+console.log('-- follow survives losing and regaining view')
+{
+  const evs = []
+  const sock = await new Promise((resolve) => { const w = new WebSocket(`${WS}?token=${b.token}`); w.onmessage = (e) => { const m = JSON.parse(e.data); if (m.t === 'READY') resolve(w); else evs.push(m) } })
+  await call(a.token, 'PUT', `/channels/${one.category_id}/permissions/${g.id}`, { kind: 'role', allow: 0, deny: 1024 })
+  await call(a.token, 'DELETE', `/channels/${one.category_id}/permissions/${g.id}`)
+  await new Promise((r2) => setTimeout(r2, 1500))
+  const ours = evs.filter((m) => (m.t === 'COMMUNITY_DELETE' || m.t === 'COMMUNITY_CREATE') && m.d.id === one.id || m.t === 'COMMUNITY_FOLLOW_UPDATE' && m.d.community_id === one.id).map((m) => m.t + (m.t === 'COMMUNITY_FOLLOW_UPDATE' ? `:${m.d.following}` : ''))
+  ok('regaining view re-sends the follow after the community', ours.join() === 'COMMUNITY_DELETE,COMMUNITY_CREATE,COMMUNITY_FOLLOW_UPDATE:true', ours.join())
+  sock.close()
 }
 
 r = await raw(a.token, 'PATCH', `${base}/metallica`, { name: 'Metallica!', slug: 'metallica-band' }); m = await r.json()

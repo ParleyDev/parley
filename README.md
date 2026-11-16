@@ -465,7 +465,7 @@ A community is a named group of channels inside one server, for servers that hol
 - **Creating communities from a bot** (one per artist, say):
   1. Authenticate as a bot with Manage Channels (`Authorization: Bot <token>`). User sessions work too; OAuth user tokens (`oa_…`) cannot call the community routes, as with the other server-management routes.
   2. Look the artist up first: `GET /api/guilds/:gid/communities?external_ref=<your id>`. If `items` is empty, `POST` it with `external_ref` set.
-  3. On `409` (another worker created it, or the slug is taken) look it up again by `external_ref` and use what is there rather than retrying the `POST`.
+  3. On `409` (another worker created it, or the slug is taken) look it up again by `external_ref` and use what is there rather than retrying the `POST`. If that lookup is still empty, the community exists in a category the bot cannot view: stop and report it instead of retrying, and give the bot's role View Channel on community categories so it can see them.
   4. Keep concurrency modest; the scale script uses 4 requests at a time. If a deployment answers `429`, back off and retry.
   5. Expect three gateway events per created community with the default single channel (`CHANNEL_CREATE` for the category, `CHANNEL_CREATE` for the channel, `COMMUNITY_CREATE`), plus one more per extra channel, to every member who can view it.
   - The slug must start with a lower-case letter or digit, then letters, digits and dashes (up to 63 characters). `GET` lists default to `sort=activity` and `limit=50` (up to 100). `PATCH` clears `external_ref` and `icon_url` when you send an empty string; leave a field out to keep it.

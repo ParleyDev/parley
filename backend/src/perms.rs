@@ -428,6 +428,11 @@ pub async fn visibility(db: &PgPool, guild_id: Uuid) -> AppResult<Visibility> {
 pub async fn resync_visibility(state: &AppState, guild_id: Uuid, before: &Visibility) -> AppResult<()> {
     let after = visibility(&state.db, guild_id).await?;
     refresh_voice(state, guild_id, &after).await?;
+    // Communities behind the categories whose audience changed, in one query.
+    let changed: Vec<Uuid> = after.iter()
+        .filter(|(cid, (channel, now))| channel.kind == "category" && before.get(*cid).map_or(!now.is_empty(), |(_, was)| was != now))
+        .map(|(cid, _)| *cid).collect();
+    let communities = crate::routes::communities::slim_for_categories(&state.db, &changed).await?;
     for (cid, (channel, now)) in &after {
         let was: HashSet<Uuid> = before.get(cid).map(|(_, s)| s.clone()).unwrap_or_default();
         let gained: Vec<Uuid> = now.difference(&was).copied().collect();
@@ -435,15 +440,20 @@ pub async fn resync_visibility(state: &AppState, guild_id: Uuid, before: &Visibi
         let kept: Vec<Uuid> = now.intersection(&was).copied().collect();
         // A category that backs a community is also a community: whoever gains view of it learns the community,
         // whoever loses it drops it, so the sidebar and Browse stay right.
-        let community = if channel.kind == "category" && (!gained.is_empty() || !lost.is_empty()) { crate::routes::communities::slim_for_category(&state.db, *cid).await? } else { None };
+        let community = communities.get(cid);
         if !gained.is_empty() {
             state.hub.emit_users(gained.clone(), "CHANNEL_CREATE", json!(channel));
-            if let Some(c) = &community { state.hub.emit_users(gained, "COMMUNITY_CREATE", c.clone()); }
+            if let Some(c) = community {
+                // The slim create carries no follow state: tell the ones who follow it, after the create.
+                let following = match c["id"].as_str().and_then(|s| s.parse::<Uuid>().ok()) { Some(id) => crate::routes::communities::followers_among(&state.db, id, &gained).await?, None => vec![] };
+                state.hub.emit_users(gained, "COMMUNITY_CREATE", c.clone());
+                if !following.is_empty() { state.hub.emit_users(following, "COMMUNITY_FOLLOW_UPDATE", json!({ "guild_id": guild_id, "community_id": c["id"], "following": true })); }
+            }
         }
         if !lost.is_empty() {
             state.hub.voice_evict(|v| v.channel_id == *cid && lost.contains(&v.user_id));
             state.hub.emit_users(lost.clone(), "CHANNEL_DELETE", json!({ "id": cid, "guild_id": guild_id }));
-            if let Some(c) = &community { state.hub.emit_users(lost, "COMMUNITY_DELETE", json!({ "id": c["id"], "guild_id": guild_id })); }
+            if let Some(c) = community { state.hub.emit_users(lost, "COMMUNITY_DELETE", json!({ "id": c["id"], "guild_id": guild_id })); }
         }
         if !kept.is_empty() {
             state.hub.emit_users(kept, "CHANNEL_UPDATE", json!(channel));
