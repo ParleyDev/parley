@@ -344,6 +344,12 @@ async fn delete_channel(
     perms::check(p, perms::MANAGE_CHANNELS)?;
     let (backs,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM communities WHERE category_id = $1)").bind(id).fetch_one(&state.db).await?;
     if backs { return Err(AppError::BadRequest("This category belongs to a community. Delete the community instead.".into())) }
+    // Deleting clears the server's setting that points here (ON DELETE SET NULL); that is a server-level decision.
+    let (used,): (bool,) = sqlx::query_as("SELECT EXISTS (SELECT 1 FROM guilds WHERE id = $2 AND $1 IN (system_channel_id, rules_channel_id, afk_channel_id, safety_alerts_channel_id, invite_preview_channel_id))").bind(id).bind(gid).fetch_one(&state.db).await?;
+    if used {
+        let (_, gp) = perms::guild_perms(&state.db, gid, uid).await?;
+        if !perms::has(gp, perms::MANAGE_CHANNELS) { return Err(AppError::ForbiddenWith("This channel is used by the server's settings. Ask an administrator to delete it.".into())) }
+    }
     let (count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM channels WHERE guild_id = $1 AND kind = 'text'")
         .bind(gid)
         .fetch_one(&state.db)

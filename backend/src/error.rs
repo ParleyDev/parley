@@ -9,6 +9,9 @@ pub enum AppError {
     Unauthorized,
     #[error("forbidden")]
     Forbidden,
+    /// 403 with a reason the person can act on.
+    #[error("{0}")]
+    ForbiddenWith(String),
     /// A DM that cannot reach its recipient (blocked either way). 403 with `code: "undeliverable"` so the client can
     /// keep the message as "not delivered" instead of showing a bare error.
     #[error("undeliverable")]
@@ -51,6 +54,7 @@ impl IntoResponse for AppError {
             AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m.clone()),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "Unauthorized".into()),
             AppError::Forbidden => (StatusCode::FORBIDDEN, "Forbidden".into()),
+            AppError::ForbiddenWith(m) => (StatusCode::FORBIDDEN, m.clone()),
             AppError::RulesRequired => {
                 return (StatusCode::FORBIDDEN, Json(json!({ "error": "Accept the server rules before chatting.", "code": "rules_required" }))).into_response();
             }

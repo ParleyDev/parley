@@ -1102,26 +1102,34 @@ async fn reorder_channels(
     if req.items.len() > 500 {
         return Err(AppError::BadRequest("Too many items".into()));
     }
+    // What authorisation saw per item: (id, kind, current parent). Re-checked against the locked rows below.
+    let mut seen: Vec<(Uuid, String, Option<Uuid>)> = vec![];
+    if !server_level {
+        // Without server-level Manage Channels, only inside categories the caller manages: every item must be a channel
+        // they hold Manage Channels in and end under a category they may place channels in. All or nothing. Decided from
+        // plain reads, before any snapshot, transaction or lock, so a refused caller costs a few queries and blocks nothing.
+        let base = ctx.base(uid).ok_or_else(|| AppError::NotFound("Server not found".into()))?;
+        let ids: Vec<Uuid> = req.items.iter().map(|it| it.id).collect();
+        let mut chans: Vec<Channel> = sqlx::query_as(&format!("SELECT {CHANNEL_COLS} FROM channels WHERE id = ANY($1) AND guild_id = $2")).bind(&ids).bind(id).fetch_all(&state.db).await?;
+        perms::attach_overwrites(&state.db, &mut chans).await?;
+        let mut placed: std::collections::HashSet<Option<Uuid>> = Default::default();
+        for it in &req.items {
+            let ch = chans.iter().find(|c| c.id == it.id).ok_or(AppError::Forbidden)?;
+            if ch.kind == "category" { return Err(AppError::Forbidden) }
+            if !perms::has(ctx.in_channel(uid, base, &ch.overwrites), perms::MANAGE_CHANNELS) { return Err(AppError::Forbidden) }
+            let dest = it.parent_id.unwrap_or(ch.parent_id);
+            if placed.insert(dest) { require_placement(&state.db, &ctx, id, uid, &ch.kind, dest).await?; }
+            if !seen.iter().any(|s| s.0 == ch.id) { seen.push((ch.id, ch.kind.clone(), ch.parent_id)); }
+        }
+    }
     let before = perms::visibility(&state.db, id).await?;
     let mut tx = state.db.begin().await?;
     if !server_level {
-        // Without server-level Manage Channels, only inside categories the caller manages: every item must be a channel
-        // they hold Manage Channels in and end under a category they may place channels in. All or nothing. The rows are
-        // read and locked here, in the transaction that writes, so validation and write see the same state.
-        let base = ctx.base(uid).ok_or_else(|| AppError::NotFound("Server not found".into()))?;
-        let ids: Vec<Uuid> = req.items.iter().map(|it| it.id).collect();
-        let locked: Vec<(Uuid, String, Option<Uuid>)> = sqlx::query_as("SELECT id, kind, parent_id FROM channels WHERE id = ANY($1) AND guild_id = $2 ORDER BY id FOR UPDATE").bind(&ids).bind(id).fetch_all(&mut *tx).await?;
-        // Overwrites are read after the lock; kind and parent come from the locked rows.
-        let all = perms::guild_channels(&state.db, id).await?;
-        let mut placed: std::collections::HashSet<Option<Uuid>> = Default::default();
-        for it in &req.items {
-            let ch = all.iter().find(|c| c.id == it.id).ok_or(AppError::Forbidden)?;
-            let (_, kind, parent) = locked.iter().find(|l| l.0 == it.id).ok_or(AppError::Forbidden)?;
-            if !perms::has(ctx.in_channel(uid, base, &ch.overwrites), perms::MANAGE_CHANNELS) { return Err(AppError::Forbidden) }
-            let dest = it.parent_id.unwrap_or(*parent);
-            if kind == "category" { return Err(AppError::Forbidden) }
-            if placed.insert(dest) { require_placement(&state.db, &ctx, id, uid, kind, dest).await?; }
-        }
+        // The rows are locked in the transaction that writes (no key-share conflict with message inserts); they must
+        // still be what authorisation saw.
+        let ids: Vec<Uuid> = seen.iter().map(|s| s.0).collect();
+        let locked: Vec<(Uuid, String, Option<Uuid>)> = sqlx::query_as("SELECT id, kind, parent_id FROM channels WHERE id = ANY($1) AND guild_id = $2 ORDER BY id FOR NO KEY UPDATE").bind(&ids).bind(id).fetch_all(&mut *tx).await?;
+        if locked.len() != seen.len() || seen.iter().any(|s| !locked.contains(s)) { return Err(AppError::Conflict("Channels changed, try again".into())) }
     }
     for it in &req.items {
         let kind: Option<(String,)> = sqlx::query_as("SELECT kind FROM channels WHERE id = $1 AND guild_id = $2").bind(it.id).bind(id).fetch_optional(&mut *tx).await?;
