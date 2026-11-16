@@ -68,3 +68,27 @@ export function communitySuppresses(unfollowed: boolean, mentioned: boolean, rep
 
 /** The address a community name suggests: lower-case, anything but letters and digits becomes a hyphen. */
 export const slugFromName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+/, '').slice(0, 63).replace(/-+$/, '')
+
+/** One dot and one badge for a community's channels (shown on its row while it is collapsed). */
+export function communityUnread(channelIds: string[], isUnread: (id: string) => boolean, mentions: (id: string) => number): { unread: boolean; mentions: number } {
+  let unread = false, n = 0
+  for (const id of channelIds) { if (isUnread(id)) unread = true; n += mentions(id) }
+  return { unread, mentions: n }
+}
+
+/** The sidebar's Communities section shows when there is something to browse, follow or create. */
+export const showCommunitiesSection = (viewableCount: number, followedCount: number, canCreate: boolean) => viewableCount > 0 || followedCount > 0 || canCreate
+
+const collapsedKey = (guildId: string) => `parley.communities.collapsed.${guildId}`
+
+/** The communities this device has collapsed in a server (empty when nothing is stored or storage is unusable). */
+export function loadCollapsed(guildId: string): Set<string> {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(collapsedKey(guildId)) || '[]')
+    return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+  } catch { return new Set() }
+}
+
+export function saveCollapsed(guildId: string, ids: Set<string>): void {
+  try { localStorage.setItem(collapsedKey(guildId), JSON.stringify([...ids])) } catch { /* storage unavailable: not remembered */ }
+}

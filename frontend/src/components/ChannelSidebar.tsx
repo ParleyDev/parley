@@ -8,7 +8,7 @@ import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import { useUserMenu } from './UserContextMenu'
 import Avatar from './Avatar'
 import { useRef, useState, type DragEvent, useEffect, useMemo } from 'react'
-import { NavLink, useNavigate, useParams } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { isUnread, myChannelPerms, myGuildPerms, showsMentions, showsUnread, useStore, voiceParticipants } from '../store'
 import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
@@ -27,10 +27,10 @@ import type { Channel } from '../lib/types'
 import { STORAGE_PREFIX } from '../lib/brand'
 import { useT, tn } from '../lib/i18n'
 import { shownName } from '../lib/names'
-import { NO_COMMUNITIES, NO_FOLLOWS, splitCategories } from '../lib/communities'
+import { NO_COMMUNITIES, NO_FOLLOWS, communityOfChannel, communityUnread, loadCollapsed, saveCollapsed, showCommunitiesSection, splitCategories } from '../lib/communities'
+import { communityPath, parseCommunityPath } from '../lib/communityPage'
 import { colorFor, initials } from '../lib/format'
 import type { CommunitySlim } from '../lib/types'
-import { Users } from 'lucide-react'
 
 
 /** Channel-list icon by kind; the server's rules channel gets a rulebook. */
@@ -50,7 +50,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const removeGuild = useStore((s) => s.removeGuild)
   const setMobilePane = useStore((s) => s.setMobilePane)
   const navigate = useNavigate()
-  const { channelId } = useParams()
+  const { pathname } = useLocation()
+  // The sidebar sits under a `:guildId/*` route, so the open channel comes from the path (a community page is not one).
+  const channelId = /^\/channels\/[^/]+\/([^/]+)\/?$/.exec(pathname)?.[1]
   const [menu, setMenu] = useState(false)
   const markRead = useStore((s) => s.markRead)
   const allGuilds = useStore((s) => s.guilds)
@@ -117,6 +119,10 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const allRoles = useStore((s) => s.roles[guildId] ?? EMPTY_ROLES)
   const guildCommunities = useStore((s) => s.communities[guildId]) ?? NO_COMMUNITIES
   const followedIds = useStore((s) => s.communityFollows[guildId]) ?? NO_FOLLOWS
+  // Communities start expanded; this device remembers the collapsed ones (separately from ordinary categories).
+  const [collapsedComm, setCollapsedComm] = useState(() => ({ guildId, ids: loadCollapsed(guildId) }))
+  const commCollapsed = collapsedComm.guildId === guildId ? collapsedComm.ids : loadCollapsed(guildId)
+  const toggleCommunity = (id: string) => setCollapsedComm(() => { const ids = new Set(commCollapsed); if (!ids.delete(id)) ids.add(id); saveCollapsed(guildId, ids); return { guildId, ids } })
   // Categories backing a community show only for members who follow it; a followed one is a block after the rest.
   // Memoised: with a thousand communities the split is too heavy to redo on every render.
   const split = useMemo(() => {
@@ -137,6 +143,9 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const catIds = new Set(categories.map((c) => c.id))
   const ownCategories = split.own.filter((c) => !viewHidden(c))
   const followedBlocks = split.followed.filter((f) => !viewHidden(f.category))
+  const pagePath = parseCommunityPath(pathname)
+  const shownCommunity = channelId && channels[channelId] ? communityOfChannel(channels[channelId], channels, guildCommunities) : null
+  const highlightInto = (id: string) => target?.kind === 'channel' && target.into === id
   const uncategorized = list.filter((c) => !c.parent_id || !catIds.has(c.parent_id))
   const childrenOf = (id: string) => list.filter((c) => c.parent_id === id)
   // Unread and mentions, as the server icon counts them: a row says so for itself, a studio for its projects too
@@ -202,17 +211,18 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     },
   } : {}
   // Collapse or expand every category at once (remembered per server, like single toggles).
-  const setAllCollapsed = (on: boolean) => setCollapsed(() => {
+  const setAllCollapsed = (on: boolean) => { setAllCommunities(on); setCollapsed(() => {
     const n = Object.fromEntries(categories.map((c) => [c.id, on]))
     try { localStorage.setItem(`${STORAGE_PREFIX}collapsed.${guildId}`, JSON.stringify(n)) } catch { /* ignore */ }
     return n
-  })
-  const categoryMenu = (c: Channel): MenuEntry[] => {
+  }) }
+  const setAllCommunities = (on: boolean) => setCollapsedComm(() => { const ids = new Set(on ? followedBlocks.map((f) => f.community.id) : []); saveCollapsed(guildId, ids); return { guildId, ids } })
+  const categoryMenu = (c: Channel, community?: CommunitySlim): MenuEntry[] => {
     const unreadKids = childrenOf(c.id).filter((k) => isUnread({ readStates, lastMessageId }, k.id))
     return [
     { label: t('Mark As Read'), icon: <MailCheck size={16} />, disabled: !unreadKids.length, onClick: () => { unreadKids.forEach((k) => markRead(k.id)) } },
     'sep',
-    { label: collapsed[c.id] ? t('Expand Category') : t('Collapse Category'), icon: <ChevronDown size={16} />, onClick: () => toggleCollapsed(c.id) },
+    community ? { label: commCollapsed.has(community.id) ? t('Expand Category') : t('Collapse Category'), icon: <ChevronDown size={16} />, onClick: () => toggleCommunity(community.id) } : { label: collapsed[c.id] ? t('Expand Category') : t('Collapse Category'), icon: <ChevronDown size={16} />, onClick: () => toggleCollapsed(c.id) },
     { label: t('Collapse All Categories'), icon: <ChevronsDownUp size={16} />, onClick: () => setAllCollapsed(true) },
     { label: t('Expand All Categories'), icon: <ChevronsUpDown size={16} />, onClick: () => setAllCollapsed(false) },
     'sep',
@@ -351,17 +361,38 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
             {childrenOf(cat.id).filter((c) => !collapsed[cat.id] || c.id === channelId || rowUnread(c) || mentionsOf(c.id) > 0).map(row)}
           </Category>
         ))}
-        {followedBlocks.map(({ community, category }) => (
-          <Category key={category.id} label={community.name} open={!collapsed[category.id]} onToggle={() => toggleCollapsed(category.id)} highlight={target?.kind === 'channel' && target.into === category.id} testid={category.id}
-            lead={<CommunityIcon community={community} />} communitySlug={community.slug}
-            onAdd={canCreate ? () => openModal({ kind: 'createChannel', guildId, parentId: category.id }) : undefined} onContextMenu={(e) => ctx.open(e, categoryMenu(category))}>
-            {childrenOf(category.id).filter((c) => !collapsed[category.id] || c.id === channelId || rowUnread(c) || mentionsOf(c.id) > 0).map(row)}
-          </Category>
-        ))}
-        {guildCommunities.length > 0 && (
-          <button type="button" onClick={() => openModal({ kind: 'browseCommunities', guildId })} data-browse-communities className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1">
-            <Users size={15} /> <span className="min-w-0 flex-1 truncate text-left">{t('Browse Communities')}</span> <span className="shrink-0 rounded-full bg-bg-3 px-1.5 text-[11px] font-semibold text-text-1">{guildCommunities.length}</span>
-          </button>
+        {showCommunitiesSection(guildCommunities.length, followedBlocks.length, canCreate) && (
+          <div className="space-y-0.5" data-communities-section>
+            <div className="flex items-center gap-1 px-1 text-[11px] font-bold uppercase tracking-wider text-text-2">
+              <span className="min-w-0 flex-1 truncate">{t('Communities')}</span>
+              {guildCommunities.length > 0 && <button type="button" onClick={() => openModal({ kind: 'browseCommunities', guildId })} data-browse-communities className="shrink-0 rounded px-1 py-1 font-semibold normal-case tracking-normal hover:text-text-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">{t('Browse')} · {guildCommunities.length}</button>}
+              {canCreate && <button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title={t('Create Channel')} aria-label={t('Create Channel')} data-community-create className="shrink-0 rounded p-0.5 hover:text-text-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"><Plus size={16} /></button>}
+            </div>
+            {followedBlocks.map(({ community, category }) => {
+              const open = !commCollapsed.has(community.id)
+              const kids = childrenOf(category.id)
+              const quiet = open ? { unread: false, mentions: 0 } : communityUnread(kids.map((k) => k.id), (id) => rowUnread(channels[id]), mentionsOf)
+              const selected = shownCommunity?.id === community.id || (!!community.slug && pagePath?.slug === community.slug && pagePath.guildId === guildId)
+              return (
+                <div key={category.id} data-category={category.id} data-category-open={open ? '1' : '0'}>
+                  <div data-category-header data-community={community.slug} data-community-open={open ? '1' : '0'} onContextMenu={(e) => ctx.open(e, categoryMenu(category, community))}
+                    className={`group flex items-center gap-1 rounded-md pr-1 text-[15px] ${highlightInto(category.id) ? 'bg-accent/20 ring-1 ring-accent' : selected ? 'bg-bg-4 text-text-0' : quiet.unread || quiet.mentions > 0 ? 'text-text-0 hover:bg-bg-3' : 'text-text-2 hover:bg-bg-3 hover:text-text-1'}`}>
+                    <button type="button" onClick={() => toggleCommunity(community.id)} aria-expanded={open} aria-label={`${open ? t('Collapse') : t('Expand')} ${community.name}`} data-community-toggle className="shrink-0 rounded py-1.5 pl-1.5 pr-0.5 text-[11px] leading-none text-text-2 hover:text-text-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">{open ? '\u25BE' : '\u25B8'}</button>
+                    <Link to={communityPath(guildId, community.slug)} onClick={() => setMobilePane('content')} data-community-open-page className="flex min-w-0 flex-1 items-center gap-1.5 rounded py-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
+                      <CommunityIcon community={community} />
+                      <span className={`min-w-0 flex-1 truncate ${quiet.unread ? 'font-semibold' : ''}`} data-community-name>{community.name}</span>
+                    </Link>
+                    {quiet.mentions > 0 && <span className="min-w-4 h-4 px-1 rounded-full bg-danger text-white text-[10px] font-bold flex items-center justify-center" data-mention-badge={quiet.mentions}>{quiet.mentions}</span>}
+                    {quiet.unread && <span className="h-2 w-2 shrink-0 rounded-full bg-text-0" aria-label={t('Unread')} data-community-unread />}
+                    {canCreate && open && <button type="button" onClick={() => openModal({ kind: 'createChannel', guildId, parentId: category.id })} title={t('Create Channel')} aria-label={t('Create Channel')} data-category-add className="shrink-0 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 phone:opacity-100 text-text-2 hover:text-text-0"><Plus size={14} /></button>}
+                  </div>
+                  <div className="ml-3 mt-0.5 space-y-0.5 min-h-1">
+                    {kids.filter((c) => open || c.id === channelId).map(row)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
         {canCreate && <div><button type="button" onClick={() => openModal({ kind: 'createChannel', guildId })} title={t('Create Channel')} className="w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[13px] text-text-2 hover:bg-bg-3 hover:text-text-1" data-create-category-hint><FolderPlus size={15} /> {t('Create channel or category')}</button></div>}
       </div>
@@ -427,17 +458,17 @@ function MenuItem({ children, icon, onClick, danger, accent, checked }: { childr
 
 function CommunityIcon({ community }: { community: CommunitySlim }) {
   return community.icon_url
-    ? <img src={community.icon_url} alt="" className="h-4 w-4 shrink-0 rounded object-cover" />
-    : <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[8px] font-bold text-white" style={{ background: colorFor(community.id) }}>{initials(community.name)}</span>
+    ? <img src={community.icon_url} alt="" className="h-5 w-5 shrink-0 rounded object-cover" />
+    : <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white" style={{ background: colorFor(community.id) }}>{initials(community.name)}</span>
 }
 
-function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, dragging, dragProps, testid, lead, communitySlug, children }: { lead?: React.ReactNode; communitySlug?: string; label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; dragging?: boolean; dragProps?: object; testid: string; children: React.ReactNode }) {
+function Category({ label, open, onToggle, onAdd, onContextMenu, highlight, dragging, dragProps, testid, children }: { label: string; open: boolean; onToggle: () => void; onAdd?: () => void; onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void; highlight?: boolean; dragging?: boolean; dragProps?: object; testid: string; children: React.ReactNode }) {
   const t = useT()
   return (
     <div data-category={testid} data-category-open={open ? '1' : '0'} className={dragging ? 'opacity-40' : ''}>
-      <div className={`group flex items-center justify-between rounded pr-1 ${highlight ? 'bg-accent/20 text-text-0 ring-1 ring-accent' : ''} text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1`} onContextMenu={onContextMenu} data-category-header data-community={communitySlug} {...dragProps}>
+      <div className={`group flex items-center justify-between rounded pr-1 ${highlight ? 'bg-accent/20 text-text-0 ring-1 ring-accent' : ''} text-[11px] font-bold uppercase tracking-wider text-text-2 hover:text-text-1`} onContextMenu={onContextMenu} data-category-header {...dragProps}>
         <button onClick={onToggle} className="flex items-center gap-0.5 py-1 pl-0.5 min-w-0" data-category-toggle>
-          <ChevronDown size={12} className={`shrink-0 transition ${open ? '' : '-rotate-90'}`} />{lead && <span className="ms-0.5 me-1 flex">{lead}</span>}<span className="truncate">{label}</span>
+          <ChevronDown size={12} className={`shrink-0 transition ${open ? '' : '-rotate-90'}`} /><span className="truncate">{label}</span>
         </button>
         {onAdd && <button onClick={onAdd} title={t('Create Channel')} className="opacity-0 group-hover:opacity-100 phone:opacity-100 hover:text-text-0" data-category-add><Plus size={16} /></button>}
       </div>

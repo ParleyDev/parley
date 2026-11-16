@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import { communityOfChannel, communitySuppresses, slugFromName, splitCategories, unfollowedCategoryIds } from './communities'
+import { communityOfChannel, communitySuppresses, communityUnread, loadCollapsed, saveCollapsed, showCommunitiesSection, slugFromName, splitCategories, unfollowedCategoryIds } from './communities'
 import { guildUnread, useStore } from '../store'
 import { api } from './api'
 vi.mock('./api', async (orig) => ({ ...(await orig<typeof import('./api')>()), api: { put: vi.fn(), delete: vi.fn() } }))
@@ -69,4 +69,38 @@ test('slugFromName lower-cases, hyphenates and trims to a valid address', () => 
   expect(slugFromName('  --Rock & Roll!! ')).toBe('rock-roll')
   expect(slugFromName('a'.repeat(70) + ' b')).toBe('a'.repeat(63))
   expect(slugFromName('***')).toBe('')
+})
+
+test('communityUnread folds a community\'s channels into one dot and one count', () => {
+  const unread = new Set(['b']); const mentions: Record<string, number> = { b: 2, c: 3 }
+  const m = (id: string) => mentions[id] ?? 0
+  expect(communityUnread([], (id) => unread.has(id), m)).toEqual({ unread: false, mentions: 0 })
+  expect(communityUnread(['a', 'b'], (id) => unread.has(id), () => 0)).toEqual({ unread: true, mentions: 0 })
+  expect(communityUnread(['a', 'b', 'c'], () => false, m)).toEqual({ unread: false, mentions: 5 })
+  expect(communityUnread(['a'], (id) => unread.has(id), m)).toEqual({ unread: false, mentions: 0 })
+})
+
+test('showCommunitiesSection is on when anything is viewable, followed, or creatable', () => {
+  for (const v of [0, 4]) for (const f of [0, 2]) for (const c of [false, true]) {
+    expect(showCommunitiesSection(v, f, c)).toBe(v > 0 || f > 0 || c)
+  }
+})
+
+test('the collapsed set round-trips per server and survives bad storage', () => {
+  const data = new Map<string, string>()
+  const store = { getItem: (k: string) => data.get(k) ?? null, setItem: (k: string, v: string) => { data.set(k, v) } }
+  vi.stubGlobal('localStorage', store)
+  expect(loadCollapsed('g1').size).toBe(0)
+  saveCollapsed('g1', new Set(['x', 'y']))
+  expect([...loadCollapsed('g1')].sort()).toEqual(['x', 'y'])
+  expect(loadCollapsed('g2').size).toBe(0)
+  data.set('parley.communities.collapsed.g3', '{not json')
+  expect(loadCollapsed('g3').size).toBe(0)
+  data.set('parley.communities.collapsed.g3', '{"a":1}')
+  expect(loadCollapsed('g3').size).toBe(0)
+  const boom = () => { throw new Error('denied') }
+  vi.stubGlobal('localStorage', { getItem: boom, setItem: boom })
+  expect(loadCollapsed('g1').size).toBe(0)
+  expect(() => saveCollapsed('g1', new Set(['x']))).not.toThrow()
+  vi.unstubAllGlobals()
 })
