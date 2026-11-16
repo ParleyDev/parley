@@ -98,7 +98,7 @@ export default function CommunitiesTab({ guildId }: { guildId: string }) {
   /** Put a saved community in the list (by id, so the gateway event and this answer never double it) and in the store. */
   const apply = (c: Community) => {
     setItems((cur) => (cur.some((x) => x.id === c.id) ? cur.map((x) => (x.id === c.id ? c : x)) : [...cur, c]).sort(byName))
-    useStore.getState().upsertCommunity({ id: c.id, guild_id: c.guild_id, slug: c.slug, name: c.name, icon_url: c.icon_url, description: c.description, category_id: c.category_id })
+    useStore.getState().upsertCommunity({ id: c.id, guild_id: c.guild_id, slug: c.slug, name: c.name, icon_url: c.icon_url, banner_url: c.banner_url, description: c.description, category_id: c.category_id })
   }
 
   const save = async () => {

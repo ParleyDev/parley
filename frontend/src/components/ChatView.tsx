@@ -2,13 +2,14 @@ import { nameplateClass } from '../lib/cosmetics'
 import { previewText } from '../lib/desktopNotify'
 import { isAssetNameplate, NameplateVideo } from './Nameplate'
 import SummariesButton from './Summaries'
-import { AlarmClock, Disc3, Megaphone, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, MoreVertical, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
+import { AlarmClock, Disc3, Megaphone, Bookmark, EyeOff, BookmarkMinus, CalendarDays, ChevronRight, CircleUserRound, Crown, Hash, Info, Lock, LockOpen, LogOut, MessageSquareText, MessagesSquare, MoreVertical, Phone, Pin, PinOff, Search, UserPlus, Users, Video, X } from 'lucide-react'
 import ContextMenu, { useContextMenu, type MenuEntry } from './ContextMenu'
 import GroupIcon from './GroupIcon'
 import { dmName, isGroup, nameOf } from '../lib/dm'
 import { uploadImage } from '../lib/upload'
 import { anchorOf } from '../lib/anchor'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { communityPath } from '../lib/communityPage'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { Channel, DmChannel, Message, PrivateUser } from '../lib/types'
 import { BirthdateForm, TeenDmNotice } from './AgeSafety'
@@ -215,6 +216,7 @@ export default function ChatView({ channel, members }: { channel: Channel | DmCh
                 <button onClick={toggleE2ee} title={channel.e2ee ? t('Calls here are end-to-end encrypted. Click to turn it off.') : t('Turn on end-to-end encryption for calls')} aria-pressed={!!channel.e2ee} className={`${btn(!!channel.e2ee)} phone:hidden`} data-dm-e2ee={channel.e2ee ? '1' : '0'}>{channel.e2ee ? <Lock size={18} className="text-success" /> : <LockOpen size={18} />}</button>
               </>
             )}
+            {followPrompt && <Link to={communityPath(followPrompt.guild_id, followPrompt.slug)} title={t('About this community')} className="flex items-center gap-1 rounded-md px-2 py-1 text-sm text-text-1 hover:bg-bg-3 hover:text-text-0 phone:hidden" data-community-about-link><Info size={16} className="shrink-0" /><span className="truncate">{t('About this community')}</span></Link>}
             {followPrompt && <button onClick={() => followCommunity(followPrompt.guild_id, followPrompt.slug, true)} title={t('Follow {name}', { name: followPrompt.name })} className="flex max-w-[14rem] items-center gap-1 rounded-md bg-accent px-2 py-1 text-sm font-medium text-white hover:opacity-90 phone:max-w-[8rem]" data-community-follow-prompt><Users size={16} className="shrink-0" /><span className="truncate">{t('Follow {name}', { name: followPrompt.name })}</span></button>}
             {!isDm && channel.news && <button onClick={() => openModal({ kind: 'followChannel', channelId: channel.id })} title={t('Follow')} className="flex items-center gap-1 rounded-md bg-bg-3 px-2 py-1 text-sm font-medium hover:bg-bg-4 phone:hidden" data-follow-channel><Megaphone size={16} />{t('Follow')}</button>}
             {!isDm && channel.kind === 'text' && (

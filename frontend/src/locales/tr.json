@@ -3718,5 +3718,12 @@
 "1 channel removed": "1 kanal kaldırıldı",
 "{n} channels removed": "{n} kanal kaldırıldı",
 "Opening…": "Açılıyor…",
-"New communities were added": "Yeni topluluklar eklendi"
+"New communities were added": "Yeni topluluklar eklendi",
+"About": "Hakkında",
+"About this community": "Bu topluluk hakkında",
+"Back to the server": "Sunucuya dön",
+"Could not load this community.": "Bu topluluk yüklenemedi.",
+"Links": "Bağlantılar",
+"Looked after by": "Yöneticiler",
+"This community no longer exists or you can't see it.": "Bu topluluk artık yok veya göremiyorsun."
 }

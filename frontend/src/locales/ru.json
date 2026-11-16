@@ -3718,5 +3718,12 @@
 "1 channel removed": "удалён 1 канал",
 "{n} channels removed": "удалено каналов: {n}",
 "Opening…": "Открывается…",
-"New communities were added": "Добавлены новые сообщества"
+"New communities were added": "Добавлены новые сообщества",
+"About": "О сообществе",
+"About this community": "Об этом сообществе",
+"Back to the server": "Назад к серверу",
+"Could not load this community.": "Не удалось загрузить это сообщество.",
+"Links": "Ссылки",
+"Looked after by": "Под присмотром",
+"This community no longer exists or you can't see it.": "Это сообщество больше не существует или вам недоступно."
 }

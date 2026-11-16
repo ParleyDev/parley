@@ -3718,5 +3718,12 @@
 "1 channel removed": "1 kanaal verwijderd",
 "{n} channels removed": "{n} kanalen verwijderd",
 "Opening…": "Openen…",
-"New communities were added": "Er zijn nieuwe communities toegevoegd"
+"New communities were added": "Er zijn nieuwe communities toegevoegd",
+"About": "Over",
+"About this community": "Over deze community",
+"Back to the server": "Terug naar de server",
+"Could not load this community.": "Deze community kon niet worden geladen.",
+"Links": "Links",
+"Looked after by": "Beheerd door",
+"This community no longer exists or you can't see it.": "Deze community bestaat niet meer of je kunt hem niet zien."
 }

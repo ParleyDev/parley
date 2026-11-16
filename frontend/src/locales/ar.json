@@ -3718,5 +3718,12 @@
 "1 channel removed": "أُزيلت قناة واحدة",
 "{n} channels removed": "أُزيلت {n} قنوات",
 "Opening…": "جارٍ الفتح…",
-"New communities were added": "تمت إضافة مجتمعات جديدة"
+"New communities were added": "تمت إضافة مجتمعات جديدة",
+"About": "حول",
+"About this community": "عن هذا المجتمع",
+"Back to the server": "العودة إلى الخادم",
+"Could not load this community.": "تعذر تحميل هذا المجتمع.",
+"Links": "الروابط",
+"Looked after by": "يشرف عليه",
+"This community no longer exists or you can't see it.": "لم يعد هذا المجتمع موجودًا أو لا يمكنك رؤيته."
 }

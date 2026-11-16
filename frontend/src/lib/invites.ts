@@ -92,7 +92,7 @@ export async function resolveInviteLanding(guildId: string, to: string | null, f
     const c = await api.get<Community>(`/guilds/${guildId}/communities/${to}`)
     if (!c.channel_ids.length) return fallback
     const st = useStore.getState()
-    st.upsertCommunity({ id: c.id, guild_id: c.guild_id, slug: c.slug, name: c.name, icon_url: c.icon_url, description: c.description, category_id: c.category_id })
+    st.upsertCommunity({ id: c.id, guild_id: c.guild_id, slug: c.slug, name: c.name, icon_url: c.icon_url, banner_url: c.banner_url, description: c.description, category_id: c.category_id })
     void st.followCommunity(guildId, c.slug, true)
     return landingPath(guildId, c.channel_ids, (id) => useStore.getState().channels[id]?.kind, firstTextChannelId)
   } catch { return fallback }

@@ -197,6 +197,7 @@ export interface CommunitySlim {
   slug: string
   name: string
   icon_url: string | null
+  banner_url: string | null
   description: string
   category_id: string
 }
@@ -209,6 +210,16 @@ export interface Community extends CommunitySlim {
   online_count: number
   following: boolean
   channel_ids: string[]
+  about: string
+  links: { label: string; url: string }[]
+  can_edit: boolean
+  can_delete: boolean
+  can_manage_managers: boolean
+}
+
+export interface CommunityManagers {
+  members: { id: string; display_name: string; avatar_url: string | null }[]
+  roles: { id: string; name: string; color: string | null }[]
 }
 
 export interface Channel {

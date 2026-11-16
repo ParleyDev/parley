@@ -40,6 +40,8 @@ import { useMemo } from 'react'
 import { t, useT } from '../lib/i18n'
 import TitleBar from '../components/TitleBar'
 import { initShareIn } from '../lib/shareIn'
+import type { Guild } from '../lib/types'
+import CommunityPage from '../components/CommunityPage'
 import { defaultChannel } from '../lib/channelOrder'
 import { NO_COMMUNITIES, NO_FOLLOWS, unfollowedCategoryIds } from '../lib/communities'
 
@@ -136,6 +138,7 @@ export default function AppShell() {
         <Route path="@me/requests" element={<RequestsView />} />
         <Route path="@me/:channelId" element={<DmChat />} />
         <Route path=":guildId" element={<GuildRedirect />} />
+        <Route path=":guildId/c/:slug" element={<CommunityMain />} />
         <Route path=":guildId/:channelId" element={<GuildMain />} />
         <Route path="*" element={<Navigate to="/channels/@me" replace />} />
       </Routes>
@@ -188,6 +191,25 @@ function GuildRedirect() {
   return <GuildMain channelOverride={targetId} />
 }
 
+/** The server's colour theme while you're in it (Appearance decides whether it beats your own). */
+function useGuildLook(guild: Pick<Guild, 'theme'> | undefined) {
+  const themeList = useColorThemes()
+  const guildTheme = JSON.stringify(guild?.theme ?? null)
+  useEffect(() => { setGuildLook(lookOf(guild?.theme)); return () => setGuildLook(null) }, [guildTheme, themeList]) // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** `/channels/:guildId/c/:slug`: a community's page in place of a channel (no member list; the sidebar is the server's as usual). */
+function CommunityMain() {
+  const { guildId = '', slug = '' } = useParams()
+  const guild = useStore((s) => s.guilds[guildId])
+  const setMobilePane = useStore((s) => s.setMobilePane)
+  useGuildLook(guild)
+  // Landing on a page (link, prompt, browse) reveals it on phones.
+  useEffect(() => { setMobilePane('content') }, [guildId, slug, setMobilePane])
+  if (!guild) return <MissingGuild guildId={guildId} />
+  return <CommunityPage guildId={guildId} slug={slug} />
+}
+
 function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
   const params = useParams()
   const guildId = params.guildId ?? ''
@@ -201,9 +223,7 @@ function GuildMain({ channelOverride }: { channelOverride?: string } = {}) {
 
   useEffect(() => { if (guild && !hasMembers) loadMembers(guildId) }, [guild, guildId, hasMembers, loadMembers])
   // The server's colour theme while you're in it (Appearance decides whether it beats your own).
-  const themeList = useColorThemes()
-  const guildTheme = JSON.stringify(guild?.theme ?? null)
-  useEffect(() => { setGuildLook(lookOf(guild?.theme)); return () => setGuildLook(null) }, [guildTheme, themeList]) // eslint-disable-line react-hooks/exhaustive-deps
+  useGuildLook(guild)
   useEffect(() => { if (guild && !channel && !channelOverride) navigate(`/channels/${guildId}`, { replace: true }) }, [guild, channel, guildId, navigate, channelOverride])
 
   if (!guild) return <MissingGuild guildId={guildId} />

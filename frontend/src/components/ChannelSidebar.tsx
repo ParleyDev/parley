@@ -34,7 +34,7 @@ import { Users } from 'lucide-react'
 
 
 /** Channel-list icon by kind; the server's rules channel gets a rulebook. */
-function chanIcon(c: Channel, rulesId?: string | null) {
+export function chanIcon(c: Channel, rulesId?: string | null) {
   if (c.id === rulesId) return <BookOpenCheck size={18} data-rules-icon />
   return c.kind === 'voice' ? <Volume2 size={18} /> : c.kind === 'stage' ? <Radio size={18} /> : c.kind === 'studio' ? <Disc3 size={18} /> : c.kind === 'project' ? <AudioLines size={18} /> : c.kind === 'forum' ? (c.media ? <ImageIcon size={18} /> : <MessageSquareText size={18} />) : c.kind === 'directory' ? <LayoutGrid size={18} /> : c.news ? <Megaphone size={18} /> : <Hash size={18} />
 }

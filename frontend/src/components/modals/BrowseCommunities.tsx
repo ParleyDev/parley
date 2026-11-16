@@ -59,7 +59,7 @@ export default function BrowseCommunitiesModal({ onClose, guildId }: { onClose: 
     const st = useStore.getState()
     // The store resolves a community by slug; make sure this one is known to it.
     const added = !st.communities[guildId]?.some((x) => x.id === c.id)
-    if (added) st.upsertCommunity({ id: c.id, guild_id: c.guild_id, slug: c.slug, name: c.name, icon_url: c.icon_url, description: c.description, category_id: c.category_id })
+    if (added) st.upsertCommunity({ id: c.id, guild_id: c.guild_id, slug: c.slug, name: c.name, icon_url: c.icon_url, banner_url: c.banner_url, description: c.description, category_id: c.category_id })
     // A community that is gone (deleted meanwhile) must not stay in the store, or the sidebar's count is inflated.
     void st.followCommunity(guildId, c.slug, following).then((ok) => { if (!ok && added) useStore.getState().removeCommunity(guildId, c.id) })
   }

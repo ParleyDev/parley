@@ -3718,5 +3718,12 @@
 "1 channel removed": "チャンネル1件を削除",
 "{n} channels removed": "チャンネル{n}件を削除",
 "Opening…": "開いています…",
-"New communities were added": "新しいコミュニティが追加されました"
+"New communities were added": "新しいコミュニティが追加されました",
+"About": "概要",
+"About this community": "このコミュニティについて",
+"Back to the server": "サーバーに戻る",
+"Could not load this community.": "このコミュニティを読み込めませんでした。",
+"Links": "リンク",
+"Looked after by": "運営メンバー",
+"This community no longer exists or you can't see it.": "このコミュニティは存在しないか、表示できません。"
 }

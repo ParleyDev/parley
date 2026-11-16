@@ -3718,5 +3718,12 @@
 "1 channel removed": "채널 1개 삭제됨",
 "{n} channels removed": "채널 {n}개 삭제됨",
 "Opening…": "여는 중…",
-"New communities were added": "새 커뮤니티가 추가되었습니다"
+"New communities were added": "새 커뮤니티가 추가되었습니다",
+"About": "소개",
+"About this community": "이 커뮤니티 정보",
+"Back to the server": "서버로 돌아가기",
+"Could not load this community.": "이 커뮤니티를 불러오지 못했습니다.",
+"Links": "링크",
+"Looked after by": "관리자",
+"This community no longer exists or you can't see it.": "이 커뮤니티가 더 이상 존재하지 않거나 볼 수 없습니다."
 }

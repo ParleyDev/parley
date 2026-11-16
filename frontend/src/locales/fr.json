@@ -3718,5 +3718,12 @@
 "1 channel removed": "1 salon supprimé",
 "{n} channels removed": "{n} salons supprimés",
 "Opening…": "Ouverture…",
-"New communities were added": "De nouvelles communautés ont été ajoutées"
+"New communities were added": "De nouvelles communautés ont été ajoutées",
+"About": "À propos",
+"About this community": "À propos de cette communauté",
+"Back to the server": "Retour au serveur",
+"Could not load this community.": "Impossible de charger cette communauté.",
+"Links": "Liens",
+"Looked after by": "Animée par",
+"This community no longer exists or you can't see it.": "Cette communauté n'existe plus ou vous ne pouvez pas la voir."
 }
