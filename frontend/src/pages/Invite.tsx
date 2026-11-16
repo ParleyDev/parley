@@ -7,12 +7,14 @@ import InviteLanding, { AUTOJOIN_KEY, type AnonPreview } from '../components/Inv
 import { renderMarkdown } from '../lib/markdown'
 import { useStore } from '../store'
 import { nameOf } from '../lib/dm'
-import type { Channel, DmChannel, Guild } from '../lib/types'
+import type { Channel, CommunitySlim, DmChannel, Guild } from '../lib/types'
 import { colorFor, initials } from '../lib/format'
 import { markJoined } from '../lib/welcome'
 import { splashBackground } from '../lib/splash'
 import { useT } from '../lib/i18n'
 import { inviteTarget, resolveInviteLanding } from '../lib/invites'
+import { defaultChannel } from '../lib/channelOrder'
+import { NO_COMMUNITIES, NO_FOLLOWS, unfollowedCategoryIds } from '../lib/communities'
 
 interface GroupPreview { code: string; channel_id: string; name: string; icon_url: string | null; already_member: boolean; full: boolean; members: { id: string; display_name: string; avatar_url: string | null }[] }
 interface Preview { code: string; guild: { id: string; name: string; icon_url: string | null; member_count: number; rules?: string; rules_required?: boolean; splash_url?: string | null; description?: string }; expired: boolean; already_member: boolean; banned: boolean; paused?: boolean }
@@ -45,9 +47,10 @@ export default function InvitePage() {
   const join = async () => {
     setBusy(true)
     try {
-      const g = await api.post<Guild & { channels: Channel[] }>(`/invites/${code}`)
+      const g = await api.post<Guild & { channels: Channel[]; communities?: CommunitySlim[]; community_follows?: string[] }>(`/invites/${code}`)
       upsertGuild(g); markJoined(g.id)
-      navigate(await resolveInviteLanding(g.id, inviteTarget(location.search), g.channels.find((c) => c.kind === 'text')?.id ?? null), { replace: true })
+      const first = defaultChannel(g.channels, unfollowedCategoryIds(g.communities ?? NO_COMMUNITIES, g.community_follows ?? NO_FOLLOWS))
+      navigate(await resolveInviteLanding(g.id, inviteTarget(location.search), first?.id ?? null), { replace: true })
     } catch (e) { setErr(say(e)) } finally { setBusy(false) }
   }
 

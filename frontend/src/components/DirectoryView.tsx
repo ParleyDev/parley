@@ -5,12 +5,14 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { colorFor, initials } from '../lib/format'
 import { has, P } from '../lib/perms'
-import type { Channel, Guild } from '../lib/types'
+import type { Channel, CommunitySlim, Guild } from '../lib/types'
 import { markJoined } from '../lib/welcome'
 import { myChannelPerms, myGuildPerms, useStore } from '../store'
 import Modal from './Modal'
 import { t as tr, useT } from '../lib/i18n'
 import Dropdown from './Dropdown'
+import { defaultChannel } from '../lib/channelOrder'
+import { NO_COMMUNITIES, NO_FOLLOWS, unfollowedCategoryIds } from '../lib/communities'
 
 interface Entry { guild_id: string; name: string; icon_url: string | null; description: string; category: string; invite_code: string; member_count: number; joined: boolean; partnered: boolean }
 const CATEGORIES = ['gaming', 'music', 'education', 'science', 'entertainment', 'creative', 'community', 'other']
@@ -32,7 +34,7 @@ export default function DirectoryView({ channel }: { channel: Channel }) {
   useEffect(() => { const h = setTimeout(() => api.get<Entry[]>(`/channels/${channel.id}/directory?q=${encodeURIComponent(q)}${cat ? `&category=${cat}` : ''}`).then(setList).catch(() => setList([])), q ? 250 : 0); return () => clearTimeout(h) }, [channel.id, q, cat, version])
   const join = async (e: Entry) => {
     if (e.joined) { navigate(`/channels/${e.guild_id}`); return }
-    try { const g = await api.post<Guild & { channels: Channel[] }>(`/invites/${e.invite_code}`); upsertGuild(g); markJoined(g.id); const first = g.channels.find((c) => c.kind === 'text'); navigate(first ? `/channels/${g.id}/${first.id}` : `/channels/${g.id}`) } catch (err) { pushToast((err as Error).message, 'error') }
+    try { const g = await api.post<Guild & { channels: Channel[]; communities?: CommunitySlim[]; community_follows?: string[] }>(`/invites/${e.invite_code}`); upsertGuild(g); markJoined(g.id); const first = defaultChannel(g.channels, unfollowedCategoryIds(g.communities ?? NO_COMMUNITIES, g.community_follows ?? NO_FOLLOWS)); navigate(first ? `/channels/${g.id}/${first.id}` : `/channels/${g.id}`) } catch (err) { pushToast((err as Error).message, 'error') }
   }
   const remove = async (e: Entry) => { try { await api.delete(`/channels/${channel.id}/directory/${e.guild_id}`); setList((l) => l?.filter((x) => x.guild_id !== e.guild_id) ?? null) } catch (err) { pushToast((err as Error).message, 'error') } }
   const canRemove = (e: Entry) => has(perms, P.MANAGE_CHANNELS) || (guilds[e.guild_id] && has(myGuildPerms(useStore.getState(), e.guild_id), P.MANAGE_GUILD))

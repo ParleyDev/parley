@@ -6,6 +6,7 @@ import { APP_NAME } from '../lib/brand'
 import type { Channel, Guild, Role } from '../lib/types'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
+import { firstTextChannel } from '../lib/channelOrder'
 
 interface TChannel { name: string; kind: string; parent: number | null }
 interface TRole { name: string; color: string | null }
@@ -27,7 +28,7 @@ export default function TemplatePage() {
     try {
       const g = await api.post<Guild & { channels: Channel[]; roles: Role[] }>(`/templates/${code}`, { name })
       upsertGuild(g)
-      const first = g.channels.find((c) => c.kind === 'text')
+      const first = firstTextChannel(g.channels)
       navigate(first ? `/channels/${g.id}/${first.id}` : `/channels/${g.id}`, { replace: true })
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }

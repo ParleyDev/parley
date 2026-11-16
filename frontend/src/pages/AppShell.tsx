@@ -40,6 +40,8 @@ import { useMemo } from 'react'
 import { t, useT } from '../lib/i18n'
 import TitleBar from '../components/TitleBar'
 import { initShareIn } from '../lib/shareIn'
+import { defaultChannel } from '../lib/channelOrder'
+import { NO_COMMUNITIES, NO_FOLLOWS, unfollowedCategoryIds } from '../lib/communities'
 
 /**
  * Two route trees share the URL: one picks the sidebar, one picks the main content.
@@ -171,10 +173,13 @@ function GuildRedirect() {
   const { guildId = '' } = useParams()
   const channels = useStore((s) => s.channels)
   const guild = useStore((s) => s.guilds[guildId])
+  const communities = useStore((s) => s.communities[guildId] ?? NO_COMMUNITIES)
+  const follows = useStore((s) => s.communityFollows[guildId] ?? NO_FOLLOWS)
   const navigate = useNavigate()
   const remembered = lastChannel(guildId)
+  // Without a remembered channel: the first text channel in sidebar order, never inside a community the member does not follow.
   const target = (remembered && channels[remembered]?.guild_id === guildId ? channels[remembered] : undefined)
-    ?? Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'text').sort((a, b) => a.position - b.position)[0]
+    ?? defaultChannel(Object.values(channels).filter((c) => c.guild_id === guildId), unfollowedCategoryIds(communities, follows))
   const targetId = target?.id
   // Rendering never waits for the navigation: the URL is fixed up for bookmarks/reloads, but the view is already there.
   useEffect(() => { if (guild && targetId) navigate(`/channels/${guildId}/${targetId}`, { replace: true }) }, [guild, guildId, targetId, navigate])

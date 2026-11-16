@@ -248,6 +248,47 @@ console.log('-- a member who joins during the session (no reload)')
   await pt.close()
 }
 
+console.log('-- losing and regaining view of a followed community (no reload)')
+{
+  const gr = await call(a.token, 'POST', '/guilds', { name: `Regain ${S}` })
+  const ir = await call(a.token, 'POST', `/guilds/${gr.id}/invites`, {}); await call(b.token, 'POST', `/invites/${ir.code}`)
+  const rc = await call(a.token, 'POST', `/guilds/${gr.id}/communities`, { slug: 'regain', name: 'Regain' })
+  await call(b.token, 'PUT', `/guilds/${gr.id}/communities/regain/follow`)
+  const pr = await browser.newPage({ viewport: { width: 1440, height: 900 } }); pr.on('pageerror', (e) => errors.push(e.message))
+  await pr.goto(`${WEB}/login`); await pr.evaluate((t) => localStorage.setItem('parley.token', t), b.token)
+  await pr.goto(`${WEB}/channels/${gr.id}`)
+  await pr.waitForSelector('[data-community="regain"]')
+  await call(a.token, 'PUT', `/channels/${rc.category_id}/permissions/${gr.id}`, { kind: 'role', allow: 0, deny: 1024 })
+  await pr.waitForSelector('[data-community="regain"]', { state: 'detached' })
+  await call(a.token, 'DELETE', `/channels/${rc.category_id}/permissions/${gr.id}`)
+  await pr.waitForSelector('[data-community="regain"]', { timeout: 5000 }).catch(() => {})
+  ok('the followed block is back once view returns', (await pr.locator('[data-community="regain"]').count()) === 1)
+  await pr.close()
+}
+
+console.log('-- default landing follows sidebar order, not flat positions')
+{
+  const gl = await call(a.token, 'POST', '/guilds', { name: `Landing ${S}` })
+  const il = await call(a.token, 'POST', `/guilds/${gl.id}/invites`, {}); await call(b.token, 'POST', `/invites/${il.code}`)
+  for (const c of gl.channels) await call(a.token, 'DELETE', `/channels/${c.id}`).catch(() => {})
+  const mk = (name, extra = {}) => call(a.token, 'POST', `/guilds/${gl.id}/channels`, { name, kind: 'text', ...extra })
+  // The server keeps a guild's last default channel; it is moved into Top below so it does not stay uncategorised.
+  const com = await call(a.token, 'POST', `/guilds/${gl.id}/communities`, { slug: 'zed', name: 'Zed' })
+  const low = await mk('Low', { kind: 'category' }), top = await mk('Top', { kind: 'category' })
+  const lowChat = await mk('low-chat', { parent_id: low.id }), topChat = await mk('top-chat', { parent_id: top.id })
+  // Every group numbers from 0, as saved positions do after a drag: Top is first in the sidebar, then Zed, then Low.
+  await call(a.token, 'PATCH', `/guilds/${gl.id}/channels/positions`, { items: [
+    { id: top.id, position: 0 }, { id: com.category_id, position: 1 }, { id: low.id, position: 2 },
+    ...(await call(a.token, 'GET', `/guilds/${gl.id}/channels`)).filter((c) => c.kind === 'text' && !c.parent_id).map((c) => ({ id: c.id, position: 1, parent_id: top.id })),
+    { id: topChat.id, position: 0, parent_id: top.id }, { id: lowChat.id, position: 0, parent_id: low.id }, { id: com.channel_ids[0], position: 0, parent_id: com.category_id }] })
+  const pl = await browser.newPage({ viewport: { width: 1440, height: 900 } }); pl.on('pageerror', (e) => errors.push(e.message))
+  await pl.goto(`${WEB}/login`); await pl.evaluate((t) => localStorage.setItem('parley.token', t), b.token)
+  await pl.goto(`${WEB}/channels/${gl.id}`)
+  await pl.waitForFunction((gid) => location.pathname.split('/').length >= 4 && location.pathname.includes(gid), gl.id, { timeout: 8000 }).catch(() => {})
+  ok('lands in the top category first text channel', pl.url().endsWith(`/channels/${gl.id}/${topChat.id}`), pl.url())
+  await pl.close()
+}
+
 console.log('-- dragging a channel sends only the channels that move')
 {
   const mkc = (name, extra = {}) => call(a.token, 'POST', `/guilds/${g.id}/channels`, { name, kind: 'text', ...extra })

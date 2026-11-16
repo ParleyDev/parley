@@ -9,6 +9,7 @@ import { useStore } from '../../store'
 import type { Channel, Guild } from '../../lib/types'
 import { useT } from '../../lib/i18n'
 import { globalName } from '../../lib/names'
+import { firstTextChannel } from '../../lib/channelOrder'
 
 /**
  * Discord's two-step "Create Your Server": pick Create My Own or a template, then name it.
@@ -39,7 +40,7 @@ export default function CreateGuildModal({ onClose }: { onClose: () => void }) {
       }
       upsertGuild(g)
       onClose()
-      navigate(`/channels/${g.id}/${g.channels.find((c) => c.kind === 'text')?.id ?? ''}`)
+      navigate(`/channels/${g.id}/${firstTextChannel(g.channels)?.id ?? ''}`)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -113,7 +114,7 @@ function DiscordImport({ onBack, onClose }: { onBack: () => void; onClose: () =>
     try {
       const g = await api.post<Guild & { channels: Channel[] }>('/templates/discord/import', { source, name, icon_url: icon })
       upsertGuild(g); onClose()
-      navigate(`/channels/${g.id}/${g.channels.find((c) => c.kind === 'text')?.id ?? ''}`)
+      navigate(`/channels/${g.id}/${firstTextChannel(g.channels)?.id ?? ''}`)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
   const chans = preview?.snapshot.channels ?? []
