@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { myGuildPerms, useStore } from '../../store'
 import { has, P } from '../../lib/perms'
 import SettingsShell from './SettingsShell'
+import { guideTopic } from '../../lib/guide'
 import { useT } from '../../lib/i18n'
 import GuildOverviewTab from './settings/GuildOverviewTab'
 import RolesTab from './settings/RolesTab'
@@ -29,6 +30,17 @@ import IntegrationsTab from './settings/IntegrationsTab'
 import ServerTagTab from './settings/ServerTagTab'
 
 type Tab = 'overview' | 'theme' | 'tag' | 'safety' | 'automod' | 'welcome' | 'onboarding' | 'template' | 'applications' | 'insights' | 'integrations' | 'widget' | 'reports' | 'roles' | 'members' | 'invites' | 'badge' | 'bans' | 'emoji' | 'stickers' | 'soundboard' | 'discovery' | 'audit'
+/** The guide's page about each section, for its Help button. */
+const HELP: Record<Tab, string> = {
+  overview: guideTopic('server-settings#name-icon-and-banner'), theme: guideTopic('server-settings#name-icon-and-banner'), tag: guideTopic('server-settings#name-icon-and-banner'),
+  insights: guideTopic('server-settings#name-icon-and-banner'), emoji: guideTopic('server-settings#emoji-stickers-and-sounds'), stickers: guideTopic('server-settings#emoji-stickers-and-sounds'),
+  soundboard: guideTopic('server-settings#emoji-stickers-and-sounds'), members: guideTopic('roles-and-permissions#the-member-list'), roles: guideTopic('roles-and-permissions'),
+  invites: guideTopic('server-settings#inviting-people'), applications: guideTopic('server-settings#inviting-people'), integrations: guideTopic('apps-and-bots#adding-a-bot-to-your-server'),
+  widget: guideTopic('server-settings#getting-found'), badge: guideTopic('server-settings#getting-found'), discovery: guideTopic('server-settings#getting-found'),
+  template: guideTopic('server-settings#getting-found'), safety: guideTopic('moderation#safety-setup'), audit: guideTopic('moderation#the-audit-log'),
+  bans: guideTopic('moderation#dealing-with-someone'), automod: guideTopic('moderation#automod'), reports: guideTopic('moderation#reports'),
+  welcome: guideTopic('server-settings#welcoming-new-members'), onboarding: guideTopic('server-settings#welcoming-new-members'),
+}
 
 export default function GuildSettingsModal({ onClose, guildId, tab: requested }: { onClose: () => void; guildId: string; tab?: Tab }) {
   const t = useT()
@@ -67,7 +79,7 @@ export default function GuildSettingsModal({ onClose, guildId, tab: requested }:
 
   return (
     <SettingsShell<Tab>
-      tab={tab} onTab={setTab} onClose={onClose} wide={tab !== 'overview'} title="Server Settings" startOnMenu={!requested}
+      tab={tab} onTab={setTab} onClose={onClose} wide={tab !== 'overview'} title="Server Settings" startOnMenu={!requested} help={HELP[tab]}
       sections={sections}
       footer={isOwner ? (
         <div className="flex flex-col phone:flex-row gap-0.5">

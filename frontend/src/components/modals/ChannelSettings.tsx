@@ -7,6 +7,7 @@ import { SLOWMODE } from '../../lib/slowmode'
 import type { Channel } from '../../lib/types'
 import { has, P } from '../../lib/perms'
 import SettingsShell from './SettingsShell'
+import { guideTopic } from '../../lib/guide'
 import ChannelPermissionsTab from './settings/ChannelPermissionsTab'
 import ForumTagsTab from './settings/ForumTagsTab'
 import FollowersTab from './settings/FollowersTab'
@@ -16,6 +17,8 @@ import { useT } from '../../lib/i18n'
 import Dropdown from '../Dropdown'
 
 type Tab = 'overview' | 'permissions' | 'tags' | 'integrations' | 'stageMods'
+/** The guide's page about each section, for its Help button. */
+const HELP: Record<Tab, string> = { overview: guideTopic('server-settings#channels-and-categories'), tags: guideTopic('channels#forums'), integrations: guideTopic('channels#announcement-channels'), permissions: guideTopic('roles-and-permissions#channel-permissions'), stageMods: guideTopic('voice-and-video#stages') }
 
 export default function ChannelSettingsModal({ onClose, channelId, tab: requested }: { onClose: () => void; channelId: string; tab?: Tab }) {
   const initial: Tab = requested ?? 'overview'
@@ -48,7 +51,7 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
 
   return (
     <SettingsShell<Tab>
-      tab={tab} onTab={setTab} onClose={onClose} wide={tab === 'permissions'} title={t('Channel Settings')} startOnMenu={!requested}
+      tab={tab} onTab={setTab} onClose={onClose} wide={tab === 'permissions'} title={t('Channel Settings')} startOnMenu={!requested} help={HELP[tab]}
       sections={[{ title: `${prefix}${channel.name}`, items }]}
       footer={canEdit ? <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title={t('Delete Channel')}><span>{t('Delete Channel')}</span><Trash2 size={16} /></button> : undefined}
     >

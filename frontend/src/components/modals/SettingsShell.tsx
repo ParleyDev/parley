@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, X, Check, Search } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSwipeBack } from '../../lib/paneDrag'
 import { usePhone } from '../../lib/swipe'
+import HelpLink from '../HelpLink'
 
 /** `keywords`: words that find a section from the search box besides its label. */
 export interface NavSection<T extends string> { title?: string; items: { id: T; label: string; icon?: ReactNode; keywords?: string }[] }
@@ -20,6 +21,8 @@ interface Props<T extends string> {
   title?: string
   /** Phones: open on the section list (true) or straight into `tab` (false, when a link asked for a section). */
   startOnMenu?: boolean
+  /** The user guide's page about the open section ('page' or 'page#heading'), for its Help button. */
+  help?: string
 }
 
 /**
@@ -27,7 +30,7 @@ interface Props<T extends string> {
  * beside the content. Phones: a list of sections first; picking one opens it full screen with a back button.
  * Kept clear of the phone's system bars.
  */
-export default function SettingsShell<T extends string>({ sections, tab, onTab, onClose, footer, children, wide, title = 'Settings', startOnMenu = true }: Props<T>) {
+export default function SettingsShell<T extends string>({ sections, tab, onTab, onClose, footer, children, wide, title = 'Settings', startOnMenu = true, help }: Props<T>) {
   const [menu, setMenu] = useState(startOnMenu)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -85,10 +88,11 @@ export default function SettingsShell<T extends string>({ sections, tab, onTab, 
         <div className="wide:hidden h-12 shrink-0 flex items-center gap-1 pl-1 pr-3 border-b border-line">
           <button onClick={() => setMenu(true)} className="h-9 flex items-center gap-0.5 rounded-md pl-1 pr-2 text-text-1 hover:bg-bg-3 hover:text-text-0" data-settings-back><ChevronLeft size={22} /><span className="text-[15px]">{t(title)}</span></button>
           <span className="min-w-0 flex-1 truncate text-center font-semibold" data-settings-title>{current?.label ? t(current.label) : ''}</span>
+          {help && <HelpLink topic={help} label="" />}
           {closeBtn}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className={`${wide ? 'max-w-[960px]' : 'max-w-[740px]'} px-10 py-14 phone:px-4 phone:py-5 relative`}>{children}</div>
+          <div className={`${wide ? 'max-w-[960px]' : 'max-w-[740px]'} px-10 py-14 phone:px-4 phone:py-5 relative`}>{help && <div className="absolute right-10 top-4 phone:hidden"><HelpLink topic={help} /></div>}{children}</div>
         </div>
       </div>
       <div className="w-[60px] shrink-0 pt-14 pr-6 hidden wide:block">

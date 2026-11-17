@@ -1,4 +1,4 @@
-import { Award, ChevronRight, IdCard, Pencil, Plus, ShieldCheck, UserCircle } from 'lucide-react'
+import { Award, BookOpen, ChevronRight, IdCard, Pencil, Plus, ShieldCheck, UserCircle } from 'lucide-react'
 import { CropLayer } from './CropImg'
 import { bgUrl } from '../lib/crop'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
@@ -18,6 +18,7 @@ import ProfileEffect from './ProfileEffect'
 import { FrameRoom } from './ProfileFrame'
 import StyledName from './StyledName'
 import { globalName } from '../lib/names'
+import { openGuide } from '../lib/guide'
 
 export const statusDurations = () => [
   { label: tr('For 15 minutes'), secs: 15 * 60 }, { label: tr('For 1 hour'), secs: 3600 }, { label: tr('For 8 hours'), secs: 8 * 3600 },
@@ -172,6 +173,7 @@ export default function UserMenu({ onClose }: { onClose: () => void }) {
         <Group>
           <Row icon={<UserCircle size={18} />} label={t('Switch Accounts')} open={fly === 'accounts'} onOpen={(o) => setFly(o ? 'accounts' : null)} data-switch-accounts=""
             flyout={<><AccountSwitcher /><div className="h-px bg-white/10 my-1" /><button type="button" onClick={() => { onClose(); openModal({ kind: 'userSettings', tab: 'account' }) }} className="w-full rounded-md px-2 py-1.5 text-left text-sm font-semibold hover:bg-white/[.06]" data-manage-accounts>{t('Manage Accounts')}</button></>} />
+          <Row icon={<BookOpen size={18} />} label={t('Help & Guide')} onClick={() => { onClose(); openGuide() }} data-user-menu-help="" />
           <Row icon={<IdCard size={18} />} label={t('Copy User ID')} onClick={() => { onClose(); void navigator.clipboard.writeText(user.id).then(() => pushToast(t('{label} copied', { label: t('User ID') }))).catch(() => {}) }} data-copy-user-id="" />
         </Group>
       </div>

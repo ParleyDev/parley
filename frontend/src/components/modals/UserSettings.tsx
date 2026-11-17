@@ -1,4 +1,4 @@
-import { Accessibility, Bell, Download, Blocks, Globe, Keyboard, KeyRound, Link2, Lock, LogOut, MessageSquareText, Mic, Radio, Wrench, MonitorSmartphone, ShieldCheck, Server, Palette, Paintbrush, Pencil, Scissors, Sparkles, Users, User as UserIcon } from 'lucide-react'
+import { Accessibility, Bell, BookOpen, Download, Blocks, Globe, Keyboard, KeyRound, Link2, Lock, LogOut, MessageSquareText, Mic, Radio, Wrench, MonitorSmartphone, ShieldCheck, Server, Palette, Paintbrush, Pencil, Scissors, Sparkles, Users, User as UserIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useStore } from '../../store'
 import AccountTab, { accountSections } from './settings/AccountTab'
@@ -27,8 +27,18 @@ import { desktopVersion, isDesktop, isNative, switchServer, unregisterPush } fro
 import { APP_NAME, APP_VERSION } from '../../lib/brand'
 import { promptInstall, useInstallable } from '../../lib/webpush'
 import { globalName } from '../../lib/names'
+import { guideTopic, openGuide } from '../../lib/guide'
 
 type Tab = 'account' | 'profile' | 'social' | 'privacy' | 'devices' | 'connections' | 'apps' | 'applications' | 'voice' | 'appearance' | 'accessibility' | 'chat' | 'keybinds' | 'notifications' | 'streamer' | 'advanced' | 'language' | 'clips' | 'family'
+/** The guide's page about each section, for its Help button. */
+const HELP: Record<Tab, string> = {
+  account: guideTopic('settings#account'), profile: guideTopic('profile'), social: guideTopic('settings#content-and-social'), privacy: guideTopic('settings#data-and-privacy'),
+  devices: guideTopic('settings#devices-and-connections'), connections: guideTopic('settings#devices-and-connections'), apps: guideTopic('apps-and-bots#ai-assistants'),
+  applications: guideTopic('apps-and-bots#making-your-own'), voice: guideTopic('voice-and-video#sounding-your-best'), appearance: guideTopic('settings#appearance'),
+  accessibility: guideTopic('settings#accessibility'), chat: guideTopic('settings#voice-chat-and-notifications'), keybinds: guideTopic('keyboard-shortcuts'),
+  notifications: guideTopic('notifications#desktop-phone-and-email-notifications'), streamer: guideTopic('settings#streamer-mode'), advanced: guideTopic('settings#advanced'),
+  language: guideTopic('settings#language'), clips: guideTopic('voice-and-video#clips'), family: guideTopic('settings#family-center'),
+}
 
 export default function UserSettingsModal({ onClose, tab: requested }: { onClose: () => void; tab?: Tab }) {
   const initial: Tab = requested ?? 'account'
@@ -79,6 +89,7 @@ export default function UserSettingsModal({ onClose, tab: requested }: { onClose
   const footer = (
     <>
       <button onClick={() => { onClose(); openModal({ kind: 'whatsNew' }) }} className={`${foot} text-text-1`} data-whats-new-link><span>{t("What's New")}</span><Sparkles size={16} /></button>
+      <button onClick={() => openGuide()} className={`${foot} text-text-1`} data-help-guide><span>{t('Help & Guide')}</span><BookOpen size={16} /></button>
       {installable && <button onClick={() => void promptInstall()} className={`${foot} text-text-1`} data-install-app><span>{t('Install app')}</span><Download size={16} /></button>}
       {(isNative() || isDesktop()) && <button onClick={switchServer} className={`${foot} text-text-1`} title={t('Switch server')} data-switch-server><span>{t('Switch server')}</span><Server size={16} /></button>}
       <button onClick={() => { void unregisterPush().finally(() => { onClose(); logout() }) }} className={`${foot} text-danger`} title={t('Log Out')}><span>{t('Log Out')}</span><LogOut size={16} /></button>
@@ -86,7 +97,7 @@ export default function UserSettingsModal({ onClose, tab: requested }: { onClose
     </>
   )
   return (
-    <SettingsWindow<Tab> groups={groups} tab={tab} onTab={setTab} onClose={onClose} title={t('User Settings')} startOnMenu={!requested} header={header} footer={footer}>
+    <SettingsWindow<Tab> groups={groups} tab={tab} onTab={setTab} onClose={onClose} title={t('User Settings')} startOnMenu={!requested} header={header} footer={footer} help={HELP[tab]}>
       {tab === 'account' ? <AccountTab onDevices={() => setTab('devices')} /> : tab === 'profile' ? <ProfilesTab /> : tab === 'appearance' ? <AppearanceTab /> : tab === 'keybinds' ? <KeybindsTab /> : tab === 'notifications' ? <NotificationsTab /> : tab === 'social' ? <ContentSocialTab /> : tab === 'devices' ? <DevicesTab /> : tab === 'privacy' ? <DataPrivacyTab /> : tab === 'accessibility' ? <AccessibilityTab /> : tab === 'chat' ? <ChatTab /> : tab === 'streamer' ? <StreamerTab /> : tab === 'family' ? <FamilyTab /> : tab === 'clips' ? <ClipsTab /> : tab === 'advanced' ? <AdvancedTab /> : tab === 'language' ? <LanguageTab /> : tab === 'connections' ? <ConnectionsTab /> : tab === 'apps' ? <AuthorizedAppsTab /> : tab === 'applications' ? <ApplicationsTab /> : <VoiceVideoTab />}
     </SettingsWindow>
   )

@@ -4,6 +4,7 @@ import { isDesktop } from '../../lib/native'
 import { FORMATS } from '../../lib/editor'
 import { useStore } from '../../store'
 import { t, useT } from '../../lib/i18n'
+import { openGuide } from '../../lib/guide'
 
 /** Keys that always do the same thing (only the ones in Settings › Keybinds can be changed). */
 const fixed = (): { group: string; rows: [string, string][] }[] => [
@@ -30,7 +31,7 @@ export default function ShortcutsModal({ onClose }: { onClose: () => void }) {
     </div>
   )
   return (
-    <Modal title="Keyboard shortcuts" onClose={onClose} footer={<button type="button" className="btn-ghost" onClick={() => openModal({ kind: 'userSettings', tab: 'keybinds' })} data-shortcuts-edit>{t('Change keybinds')}</button>}>
+    <Modal title="Keyboard shortcuts" onClose={onClose} width="max-w-2xl" footer={<><button type="button" className="btn-ghost" onClick={() => openGuide('keyboard-shortcuts')} data-shortcuts-guide>{t('Open the guide')}</button><button type="button" className="btn-ghost" onClick={() => openModal({ kind: 'userSettings', tab: 'keybinds' })} data-shortcuts-edit>{t('Change keybinds')}</button></>}>
       <div className="grid gap-6 sm:grid-cols-2" data-shortcuts>
         <section>
           <h3 className="mb-1 text-xs font-bold uppercase tracking-wider text-text-2">{t('Your keybinds')}</h3>

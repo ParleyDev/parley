@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSwipeBack } from '../../lib/paneDrag'
 import { usePhone } from '../../lib/swipe'
 import { t } from '../../lib/i18n'
+import HelpLink from '../HelpLink'
 
 export interface WindowItem<T extends string> {
   id: T
@@ -29,6 +30,8 @@ interface Props<T extends string> {
   startOnMenu?: boolean
   /** Scroll to this section of the page once it renders. */
   scrollTo?: string | null
+  /** The user guide's page about the open section ('page' or 'page#heading'), for its Help button. */
+  help?: string
 }
 
 /** A page section the sidebar can list and jump to: a big heading over its rows, divided from the next one. */
@@ -62,7 +65,7 @@ export const windowButton = 'h-10 shrink-0 rounded-lg bg-bg-3 hover:bg-bg-4 px-5
  * page's sections underneath it) beside the page with a title bar. Phones get the list first, then the page with a
  * back button, clear of the system bars.
  */
-export default function SettingsWindow<T extends string>({ groups, tab, onTab, onClose, header, footer, children, title = 'Settings', startOnMenu = true, scrollTo }: Props<T>) {
+export default function SettingsWindow<T extends string>({ groups, tab, onTab, onClose, header, footer, children, title = 'Settings', startOnMenu = true, scrollTo, help }: Props<T>) {
   const [menu, setMenu] = useState(startOnMenu)
   // Phones: swipe a section right to go back to the list.
   const sectionRef = useRef<HTMLDivElement>(null)
@@ -159,6 +162,7 @@ export default function SettingsWindow<T extends string>({ groups, tab, onTab, o
           <div className="h-14 shrink-0 flex items-center gap-2 px-6 border-b border-line/60 phone:h-12 phone:px-2">
             <button onClick={() => setMenu(true)} className="wide:hidden h-9 flex items-center gap-0.5 rounded-md pl-1 pr-2 text-text-1 hover:bg-bg-3 hover:text-text-0" data-settings-back><ChevronLeft size={22} /><span className="text-[15px]">{t(title)}</span></button>
             <span className="min-w-0 flex-1 truncate font-semibold text-[15px] phone:text-center" data-settings-title>{current?.label ? t(current.label) : ''}</span>
+            {help && <HelpLink topic={help} />}
             <button onClick={onClose} title={t('Close')} aria-label={t('Close')} className="h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-settings-close><X size={20} /></button>
           </div>
           <div ref={body} className="relative flex-1 min-h-0 overflow-y-auto" data-settings-body>

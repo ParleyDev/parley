@@ -1,0 +1,6 @@
+# New files under frontend/src/components or frontend/src/pages that no user guide page needs to cover
+# (developer tools, admin console screens, invisible plumbing). One glob per line; see docs/guide/README.md.
+frontend/src/components/dev/**
+frontend/src/pages/Admin*.tsx
+frontend/src/pages/Developers.tsx
+frontend/src/components/ErrorBoundary.tsx
