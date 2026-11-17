@@ -1,8 +1,9 @@
-//! Server templates: snapshot a server's roles, channels, permission overwrites and a few settings, share the link,
-//! and create new servers from it. Messages, members, emoji and member overwrites are never copied.
+//! Server templates: snapshot a server's roles, channels, permission overwrites and a few settings, share the link or
+//! download it as a file, and create new servers from a link, a code or a file (Parley's or Discord's). Messages,
+//! members, emoji and member overwrites are never copied.
 
 use crate::{auth::AuthUser, error::{AppError, AppResult}, models::{Channel, Guild}, perms, state::AppState};
-use axum::{extract::{Path, State}, http::StatusCode, routing::{get, put}, Json, Router};
+use axum::{extract::{Path, State}, http::{header, StatusCode}, response::{IntoResponse, Response}, routing::{get, post, put}, Json, Router};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -18,6 +19,10 @@ pub fn router() -> Router<AppState> {
         .route("/templates/:code/guild", put(use_template))
         .route("/templates/discord/preview", axum::routing::post(discord_preview))
         .route("/templates/discord/import", axum::routing::post(discord_import))
+        .route("/guilds/:id/template/export", get(export_guild))
+        .route("/templates/:code/export", get(export_code))
+        .route("/templates/import/preview", post(import_preview))
+        .route("/templates/import", post(import))
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -217,6 +222,119 @@ async fn build_guild(state: &AppState, uid: Uuid, name: &str, icon_url: Option<S
     Ok(payload)
 }
 
+// ---- Template files and imports ------------------------------------------------------------------------------------
+
+/// The version of the downloadable template file. A file from a newer Parley says so instead of half-importing.
+const FILE_VERSION: i64 = 1;
+
+/// A downloadable template: `{ "parley_template": 1, "name", "description", "exported_at", "snapshot" }`.
+fn template_file(name: &str, description: &str, snap: &Value) -> Value {
+    json!({ "parley_template": FILE_VERSION, "name": name, "description": description, "exported_at": chrono::Utc::now(), "snapshot": snap })
+}
+
+/// The file as a download, named after the template (`Weekend Hikers.parley-template.json`).
+fn as_download(name: &str, file: &Value) -> Response {
+    let safe: String = name.chars().map(|c| if c.is_alphanumeric() || " -_".contains(c) { c } else { '_' }).collect::<String>().trim().chars().take(80).collect();
+    let safe = if safe.is_empty() { "server".to_string() } else { safe };
+    let disposition = format!("attachment; filename=\"{}.parley-template.json\"", safe.replace('"', ""));
+    ([(header::CONTENT_TYPE, "application/json".to_string()), (header::CONTENT_DISPOSITION, disposition)], serde_json::to_string_pretty(file).unwrap_or_default()).into_response()
+}
+
+/// `GET /guilds/:id/template/export` (Manage Server): the server as it is now, as a template file. Needs no link.
+async fn export_guild(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(gid): Path<Uuid>) -> AppResult<Response> {
+    manage(&state, gid, uid).await?;
+    let g = sqlx::query_as::<_, Guild>(&format!("SELECT {GUILD_COLS} FROM guilds WHERE id = $1")).bind(gid).fetch_one(&state.db).await?;
+    let snap = json!(snapshot(&state, gid).await?);
+    Ok(as_download(&g.name, &template_file(&g.name, &g.description, &snap)))
+}
+
+/// `GET /templates/:code/export`: a shared template as a file. Public like the link itself (and Discord's template
+/// API), so another Parley server's app can read it to make a server there.
+async fn export_code(State(state): State<AppState>, Path(code): Path<String>) -> AppResult<Response> {
+    let (name, description, snap): (String, String, Value) = sqlx::query_as("SELECT name, description, snapshot FROM guild_templates WHERE code = $1")
+        .bind(&code).fetch_optional(&state.db).await?.ok_or(AppError::NotFound("Template not found".into()))?;
+    Ok(as_download(&name, &template_file(&name, &description, &snap)))
+}
+
+/// A Parley template file's name, description and snapshot.
+fn from_file(v: &Value) -> AppResult<(String, String, Snapshot)> {
+    let version = v["parley_template"].as_i64().unwrap_or(0);
+    if version < 1 { return Err(AppError::BadRequest("That isn't a Parley template file".into())) }
+    if version > FILE_VERSION { return Err(AppError::BadRequest("This template was made by a newer version of Parley. Update this server to use it.".into())) }
+    let snap: Snapshot = serde_json::from_value(v["snapshot"].clone()).map_err(|_| AppError::BadRequest("This template file is damaged".into()))?;
+    if snap.channels.is_empty() && snap.roles.is_empty() { return Err(AppError::BadRequest("That template has no channels or roles".into())) }
+    Ok((text(v, "name"), text(v, "description"), snap))
+}
+
+/// The code from a Parley template link (`…/template/CODE`), or None for anything else.
+fn parley_code(s: &str) -> Option<String> {
+    let u = url::Url::parse(s.trim()).ok()?;
+    let segs: Vec<&str> = u.path_segments()?.filter(|p| !p.is_empty()).collect();
+    let i = segs.iter().position(|p| *p == "template")?;
+    let code = segs.get(i + 1)?;
+    (code.len() >= 4 && code.len() <= 64 && code.chars().all(|c| c.is_ascii_alphanumeric())).then(|| code.to_string())
+}
+
+fn is_discord_link(s: &str) -> bool {
+    url::Url::parse(s.trim()).ok().and_then(|u| u.host_str().map(|h| h.to_lowercase())).is_some_and(|h| h == "discord.new" || h.ends_with("discord.com") || h.ends_with("discordapp.com"))
+        || s.trim().starts_with("discord.new/") || s.trim().starts_with("discord.com/")
+}
+
+struct Resolved { name: String, description: String, snap: Snapshot, notes: Vec<String>, kind: &'static str, code: Option<String> }
+
+async fn local_template(state: &AppState, code: &str) -> AppResult<Option<Resolved>> {
+    let row: Option<(String, String, Value)> = sqlx::query_as("SELECT name, description, snapshot FROM guild_templates WHERE code = $1").bind(code).fetch_optional(&state.db).await?;
+    let Some((name, description, snap)) = row else { return Ok(None) };
+    let snap: Snapshot = serde_json::from_value(snap).map_err(|_| AppError::BadRequest("This template is damaged".into()))?;
+    Ok(Some(Resolved { name, description, snap, notes: vec![], kind: "parley", code: Some(code.to_string()) }))
+}
+
+/// What the person gave: a template file's contents (Parley's or Discord's), a Parley template link or code on this
+/// server, or a Discord link or code. (A link to another Parley server is read by the app, which sends the file.)
+async fn resolve(state: &AppState, source: &str) -> AppResult<Resolved> {
+    let src = source.trim();
+    if src.is_empty() { return Err(AppError::BadRequest("Paste a template link or code, or choose a template file".into())) }
+    if src.starts_with('{') {
+        let v: Value = serde_json::from_str(src).map_err(|_| AppError::BadRequest("That file couldn't be read".into()))?;
+        if v.get("parley_template").is_some() {
+            let (name, description, snap) = from_file(&v)?;
+            return Ok(Resolved { name, description, snap, notes: vec![], kind: "parley", code: None });
+        }
+        let (name, description, snap, notes) = from_discord(&v)?;
+        return Ok(Resolved { name, description, snap, notes, kind: "discord", code: None });
+    }
+    if !is_discord_link(src) {
+        if let Some(code) = parley_code(src) {
+            return local_template(state, &code).await?.ok_or(AppError::NotFound("There's no template with that link on this server".into()));
+        }
+        if let Some(found) = local_template(state, src).await? { return Ok(found) }
+    }
+    let (name, description, snap, notes) = from_discord(&discord_source(src).await?)?;
+    Ok(Resolved { name, description, snap, notes, kind: "discord", code: None })
+}
+
+#[derive(Deserialize)]
+struct ImportIn { source: String, #[serde(default)] name: Option<String>, #[serde(default)] icon_url: Option<String> }
+
+/// `POST /templates/import/preview`: what a template (link, code or file contents) would create.
+async fn import_preview(State(state): State<AppState>, AuthUser(_): AuthUser, Json(req): Json<ImportIn>) -> AppResult<Json<Value>> {
+    let r = resolve(&state, &req.source).await?;
+    Ok(Json(json!({ "name": r.name, "description": r.description, "snapshot": r.snap, "notes": r.notes, "kind": r.kind })))
+}
+
+/// `POST /templates/import`: create a server you own from a template (link, code or file contents).
+async fn import(State(state): State<AppState>, AuthUser(uid): AuthUser, Json(req): Json<ImportIn>) -> AppResult<(StatusCode, Json<Value>)> {
+    crate::routes::guests::deny(&state, uid, "Guests stay in the demo server. Claim your account to join or create others.").await?;
+    crate::routes::users::validate_image(&req.icon_url)?;
+    crate::routes::users::require_verified(&state, uid).await?;
+    let r = resolve(&state, &req.source).await?;
+    let name: String = req.name.map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).unwrap_or(r.name).chars().take(100).collect();
+    if name.trim().is_empty() { return Err(AppError::BadRequest("Server name must be 1-100 characters".into())) }
+    let payload = build_guild(&state, uid, &name, req.icon_url, &r.snap).await?;
+    if let Some(code) = r.code { sqlx::query("UPDATE guild_templates SET usage_count = usage_count + 1 WHERE code = $1").bind(&code).execute(&state.db).await?; }
+    Ok((StatusCode::CREATED, Json(payload)))
+}
+
 // ---- Discord server templates -------------------------------------------------------------------------------------
 
 /// Discord permission bits → Parley's. Most share a position; threads, events and timeouts sit elsewhere, and
@@ -352,6 +470,28 @@ mod tests {
         assert_eq!(discord_perms(&d(&[40])), perms::MODERATE_MEMBERS as i64);
         assert_eq!(discord_perms(&d(&[19, 25, 29, 31])), 0);
         assert_eq!(discord_perms(&json!(8)), perms::ADMINISTRATOR as i64);
+    }
+
+    #[test]
+    fn template_files_round_trip_and_refuse_the_future() {
+        let snap = Snapshot { roles: vec![TRole { name: "Mods".into(), ..Default::default() }], ..Default::default() };
+        let file = template_file("Hikers", "Trails", &json!(snap));
+        let (name, desc, back) = from_file(&file).unwrap();
+        assert_eq!((name.as_str(), desc.as_str(), back.roles.len()), ("Hikers", "Trails", 1));
+        let mut newer = file.clone(); newer["parley_template"] = json!(FILE_VERSION + 1);
+        assert!(from_file(&newer).is_err());
+        assert!(from_file(&json!({ "parley_template": 1, "snapshot": { "nonsense": true } })).is_err());
+        assert!(from_file(&json!({ "name": "x" })).is_err());
+    }
+
+    #[test]
+    fn parley_links_and_discord_links_are_told_apart() {
+        assert_eq!(parley_code("https://app.runparley.com/template/AbC123xyz789").as_deref(), Some("AbC123xyz789"));
+        assert_eq!(parley_code("http://localhost:5199/template/AbC123xyz789/").as_deref(), Some("AbC123xyz789"));
+        assert_eq!(parley_code("https://example.com/other/AbC123"), None);
+        assert!(is_discord_link("https://discord.new/hgM48av5Q69A"));
+        assert!(is_discord_link("discord.com/template/hgM48av5Q69A"));
+        assert!(!is_discord_link("https://app.runparley.com/template/AbC123xyz789"));
     }
 
     #[test]

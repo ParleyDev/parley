@@ -1,12 +1,16 @@
-import { Copy, RefreshCw, Trash2 } from 'lucide-react'
+import { Copy, Download, RefreshCw, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../../../lib/api'
 import { useStore } from '../../../store'
 import { useT } from '../../../lib/i18n'
+import { downloadTemplate } from '../../../lib/templates'
 
 interface Template { code: string; name: string; description: string; usage_count: number; updated_at: string }
 
-/** Server Settings › Server Template: snapshot this server's channels, roles and permissions as a shareable link. */
+/**
+ * Server Settings › Server Template: this server's channels, roles, permissions and settings as a shareable link (kept
+ * in sync on request) or a downloadable file, either of which Create Server → Use a Template turns into a new server.
+ */
 export default function TemplateTab({ guildId }: { guildId: string }) {
   const guild = useStore((s) => s.guilds[guildId])
   const pushToast = useStore((s) => s.pushToast)
@@ -23,7 +27,17 @@ export default function TemplateTab({ guildId }: { guildId: string }) {
     <div className="space-y-6" data-template-tab>
       <div>
         <h1 className="text-xl font-bold">{t('Server Template')}</h1>
-        <p className="mt-1 text-sm text-text-2">{t('Share a link that creates a new server with this server\'s channels, roles, permissions and settings. Messages, members, emoji and member-specific permissions are never copied.')}</p>
+        <p className="mt-1 text-sm text-text-2">{t('Share a link or a file that creates a new server with this server\'s channels, roles, permissions and settings. Messages, members, emoji and member-specific permissions are never copied.')}</p>
+      </div>
+      <section className="rounded-xl border border-line bg-bg-0/40 p-4 space-y-2" data-template-file>
+        <h2 className="font-semibold">{t('Download as a file')}</h2>
+        <p className="text-sm text-text-2">{t('A template file of the server as it is right now, to keep as a backup or to share. Anyone can create a server from it with Create Server → Use a Template, on this Parley server or another one.')}</p>
+        <button type="button" className="btn-ghost bg-bg-3 inline-flex items-center gap-1" disabled={busy} onClick={() => run(async () => { await downloadTemplate(`/guilds/${guildId}/template/export`, guild.name) })} data-template-download><Download size={14} />{t('Download template file')}</button>
+      </section>
+      <section className="rounded-xl border border-line bg-bg-0/40 p-4 space-y-4" data-template-share>
+      <div>
+        <h2 className="font-semibold">{t('Share a link')}</h2>
+        <p className="mt-1 text-sm text-text-2">{t('A link that stays the same while you sync it with the server. People with it can preview the template, create a server from it, or download it as a file.')}</p>
       </div>
       <div className="space-y-3">
         <div><label className="label" htmlFor="tpl-title">{t('Template title')}</label><input id="tpl-title" className="input" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} data-template-title /></div>
@@ -45,6 +59,7 @@ export default function TemplateTab({ guildId }: { guildId: string }) {
           </div>
         </>
       )}
+      </section>
     </div>
   )
 }

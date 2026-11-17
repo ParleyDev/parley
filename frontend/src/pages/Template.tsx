@@ -1,4 +1,4 @@
-import { Hash, LayoutTemplate, Shield, Volume2 } from 'lucide-react'
+import { Download, Hash, LayoutTemplate, Shield, Volume2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
@@ -7,6 +7,7 @@ import type { Channel, Guild, Role } from '../lib/types'
 import { useStore } from '../store'
 import { useT } from '../lib/i18n'
 import { firstTextChannel } from '../lib/channelOrder'
+import { downloadTemplate } from '../lib/templates'
 
 interface TChannel { name: string; kind: string; parent: number | null }
 interface TRole { name: string; color: string | null }
@@ -71,6 +72,7 @@ export default function TemplatePage() {
             {err && <p className="mt-2 text-sm text-danger">{err}</p>}
             <button className="btn-primary mt-4 w-full" disabled={busy || !name.trim()} onClick={create} data-template-create>{busy ? t('Creating…') : t('Create Server')}</button>
             <p className="mt-2 text-center text-xs text-text-2">{t('Copies channels, roles and permissions. No messages or members.')}</p>
+            <button type="button" className="mt-3 w-full flex items-center justify-center gap-1 text-sm text-text-2 hover:text-text-0" onClick={() => void downloadTemplate(`/templates/${code}/export`, tpl.name).catch((e) => setErr((e as Error).message))} data-template-file-download><Download size={14} />{t('Download template file')}</button>
           </>
         )}
       </div>

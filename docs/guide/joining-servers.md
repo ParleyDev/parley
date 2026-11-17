@@ -13,6 +13,7 @@ covers:
   - frontend/src/pages/Template.tsx
   - frontend/src/components/modals/JoinGuild.tsx
   - frontend/src/components/modals/CreateGuild.tsx
+  - frontend/src/lib/templates.ts
   - frontend/src/components/modals/Onboarding.tsx
   - frontend/src/components/modals/Welcome.tsx
   - frontend/src/components/modals/Rules.tsx
@@ -56,11 +57,27 @@ Servers can ask a few things of new members:
 1. Click **Add a Server** (+) at the bottom of the server list.
 2. Choose how to start:
    - **Create My Own**: an empty server.
+   - **Use a Template**: copy the setup of an existing server, from Parley or Discord. See [Starting from a template](#starting-from-a-template).
    - **Start from a template**: Gaming, Friends, Study Group, School Club, Local Community or Artists & Creators. Each comes with sensible text and voice channels.
-   - **Import a Discord Template**: paste a Discord template link or code, or upload its file. Roles, categories, channels and permissions come across, but messages and members don't.
 3. Give it a name and an icon, then click **Create**.
 
 Now invite people. Click the server name, then **Invite People**. To set it up properly, see [Server settings](server-settings).
+
+## Starting from a template
+
+A **server template** copies a server's setup into a new server of your own: its roles, categories, channels, permissions and a few settings. Messages, members and emoji never come along.
+
+Click **Add a Server** (+), then **Use a Template**, and give it any of these:
+
+- **A Parley template link**, like `app.runparley.com/template/…`. It can be from this Parley server or from another one.
+- **A template file** (`.json`): click **Choose a file**, or drop the file onto the dialog.
+- **A Discord template link** (`discord.new/…`), or its code.
+
+Parley shows what the template brings first: its channels and roles. Name your server, pick an icon and click **Create Server**.
+
+> Tip: Moving a community from Discord? In Discord, open **Server Settings → Server Template**, click **Generate Template** and copy the link. Paste it here.
+
+To share your own server's setup, see [Server templates](server-settings#server-templates).
 
 ## Leaving a server
 

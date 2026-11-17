@@ -121,7 +121,17 @@ In a big server, group channels into [communities](channels#communities). Each g
 - **Discovery**: list the server in Discover with a category, a description and a banner. An admin reviews it first.
 - **Widget**: an embeddable box for your website, showing who's online with a **Join** button.
 - **Badge**: a live "Join us" badge for a README or website.
-- **Server Template**: save the server's channels, roles and settings as a link others can use to start their own server. Messages and members are never copied. **Sync Template** updates it after you make changes.
+
+## Server templates
+
+**Server Settings → Server Template** shares your server's setup (its roles, categories, channels, permissions and a few settings) so others can start a server just like it. Messages, members and emoji are never copied.
+
+- **Download template file** saves the server as it is right now as a `.json` file. Keep it as a backup of your setup, or send it to someone. No link needed.
+- **Share a link**: give the template a title and description, then **Generate Template**. The link stays the same; click **Sync Template** after changing your server so the link gives the new setup. **Delete Template** turns the link off.
+
+Anyone can create a server from a template file or link with **Add a Server → Use a Template**, on any Parley server. See [Starting from a template](joining-servers#starting-from-a-template).
+
+People who open a template link see what it sets up, and can create a server from it or download it as a file.
 
 ## Handing over or closing down
 

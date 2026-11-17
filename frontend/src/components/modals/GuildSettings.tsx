@@ -37,7 +37,7 @@ const HELP: Record<Tab, string> = {
   soundboard: guideTopic('server-settings#emoji-stickers-and-sounds'), members: guideTopic('roles-and-permissions#the-member-list'), roles: guideTopic('roles-and-permissions'),
   invites: guideTopic('server-settings#inviting-people'), applications: guideTopic('server-settings#inviting-people'), integrations: guideTopic('apps-and-bots#adding-a-bot-to-your-server'),
   widget: guideTopic('server-settings#getting-found'), badge: guideTopic('server-settings#getting-found'), discovery: guideTopic('server-settings#getting-found'),
-  template: guideTopic('server-settings#getting-found'), safety: guideTopic('moderation#safety-setup'), audit: guideTopic('moderation#the-audit-log'),
+  template: guideTopic('server-settings#server-templates'), safety: guideTopic('moderation#safety-setup'), audit: guideTopic('moderation#the-audit-log'),
   bans: guideTopic('moderation#dealing-with-someone'), automod: guideTopic('moderation#automod'), reports: guideTopic('moderation#reports'),
   welcome: guideTopic('server-settings#welcoming-new-members'), onboarding: guideTopic('server-settings#welcoming-new-members'),
 }
