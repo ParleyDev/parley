@@ -96,7 +96,7 @@ await pa.fill('[data-emoji-search]', 'party'); await pa.waitForTimeout(200); awa
 ok('custom pick inserts the token', (await pa.inputValue('textarea')).includes(tok))
 await pa.keyboard.press('Escape'); await pa.waitForTimeout(200); ok('Escape closes the picker', await pa.locator('[data-expression-picker]').count()===0)
 await pa.fill('textarea', `😀 ${tok}`); await pa.keyboard.press('Enter'); await pa.waitForTimeout(600)
-ok('emoji-only message is jumbo', await pa.locator('.msg-content.jumbo img.emoji').count()===1 && await pb.locator('.msg-content.jumbo').count()===1)
+ok('emoji-only message is jumbo', await pa.locator('.msg-content.jumbo img.emoji[data-custom-emoji]').count()===1 && await pa.locator('.msg-content.jumbo img.uemoji[alt="😀"]').count()===1 && await pb.locator('.msg-content.jumbo').count()===1)
 
 console.log('-- sticker + gif tabs')
 await pa.click('[data-sticker-button]'); await pa.waitForTimeout(400)

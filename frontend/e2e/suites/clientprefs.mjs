@@ -43,7 +43,7 @@ ok('reactions hidden, spoilers open, embeds off', await p.locator(`[data-msg-id=
 await setPrefs({ showReactions: true, spoilers: 'moderate' })
 ok('"on servers I moderate": bob (not a moderator) still sees it hidden', await p.locator(`[data-msg-id="${m1.id}"] .spoiler:not(.open)`).count() === 1)
 await setPrefs({ spoilers: 'click', embeds: true, emoticons: true })
-await p.fill('textarea[placeholder^="Message"]', 'hello :) <3'); await p.keyboard.press('Enter'); await p.waitForSelector('[data-msg-id]:has-text("hello 🙂 ❤️")')
+await p.fill('textarea[placeholder^="Message"]', 'hello :) <3'); await p.keyboard.press('Enter'); await p.waitForSelector('[data-msg-id]:has-text("hello"):has(img[alt="🙂"]):has(img[alt="❤️"])')
 ok('emoticons convert on send', true)
 await setPrefs({ emoticons: false })
 await p.fill('textarea[placeholder^="Message"]', 'raw :)'); await p.keyboard.press('Enter'); await p.waitForSelector('[data-msg-id]:has-text("raw :)")')

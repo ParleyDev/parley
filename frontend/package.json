@@ -5,7 +5,9 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/twemoji-assets.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/twemoji-assets.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",

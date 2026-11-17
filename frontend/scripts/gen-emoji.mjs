@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // Regenerate src/data/emoji.json (groups → [emoji, slug, tone?]) and src/data/emojiAliases.json (emoji → gemoji aliases)
 // from Unicode's emoji-test.txt and GitHub's gemoji database. One command keeps the bundled set current:
-//   npm run emoji:update            # latest Unicode release
+//   npm run emoji:update            # the Unicode release Parley's Twemoji pictures cover (src/data/twemoji.json)
 //   npm run emoji:update -- 16.0    # a specific release
+// Emoji newer than the pictures would show as empty boxes on most devices, so keep the two in step.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const version = process.argv[2] ?? 'latest'
-const TEST_URL = `https://unicode.org/Public/emoji/${version}/emoji-test.txt`
+const version = process.argv[2] ?? JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'data', 'twemoji.json'), 'utf8')).unicode
+// From Unicode 17 the file lives under the full version (/Public/17.0.0/emoji/); older ones under /Public/emoji/16.0/.
+const TEST_URLS = version === 'latest' ? ['https://unicode.org/Public/emoji/latest/emoji-test.txt'] : [`https://www.unicode.org/Public/${version}.0/emoji/emoji-test.txt`, `https://unicode.org/Public/emoji/${version}/emoji-test.txt`]
 const GEMOJI_URL = 'https://raw.githubusercontent.com/github/gemoji/master/db/emoji.json'
 const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'data')
 
@@ -20,7 +22,8 @@ const slugify = (name) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').
 const TONE_RE = /[\u{1F3FB}-\u{1F3FF}]/u
 const strip = (s) => s.replace(/\uFE0F/g, '')
 
-const text = await fetchText(TEST_URL)
+let text = null
+for (const url of TEST_URLS) { try { text = await fetchText(url); break } catch (e) { if (url === TEST_URLS.at(-1)) throw e } }
 const groups = []
 let group = null
 const toneBases = new Set()

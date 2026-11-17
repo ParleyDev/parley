@@ -32,7 +32,7 @@ ok('no popup for times like 12:30', await p.locator('[data-shortcode-suggest]').
 await ta.fill(''); await ta.type(':zzzzzz'); await p.waitForTimeout(300)
 ok('no popup when nothing matches', await p.locator('[data-shortcode-suggest]').count()===0)
 await ta.fill(''); await ta.type('go :rocket'); await p.waitForTimeout(300); await p.keyboard.press('Enter'); await p.waitForTimeout(100); await p.keyboard.press('Enter'); await p.waitForTimeout(600)
-ok('pick then Enter sends the message with the emoji', await p.locator('.msg-content:has-text("go 🚀")').count()===1)
+ok('pick then Enter sends the message with the emoji', await p.locator('.msg-content:has-text("go") img.uemoji[alt="🚀"]').count()===1)
 await ta.fill(''); await ta.type(':smile:'); await p.waitForTimeout(300)
 ok('Discord alias :smile: converts to 😄', (await ta.inputValue())==='😄 ', JSON.stringify(await ta.inputValue()))
 await ta.type(':joy'); await p.waitForTimeout(300)

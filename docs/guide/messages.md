@@ -14,6 +14,9 @@ covers:
   - frontend/src/components/ShortcodeSuggest.tsx
   - frontend/src/components/ExpressionPicker.tsx
   - frontend/src/components/Emoji.tsx
+  - frontend/src/components/Twemoji.tsx
+  - frontend/src/lib/twemoji.ts
+  - frontend/src/lib/emoji.ts
   - frontend/src/components/EmojiHover.tsx
   - frontend/src/components/Attachments.tsx
   - frontend/src/components/FilePreview.tsx
@@ -80,6 +83,7 @@ Use <kbd>↑</kbd> and <kbd>↓</kbd> to pick from the suggestions, and <kbd>Ent
 The three buttons at the right of the message box open the **GIF**, **Sticker** and **Emoji** pickers.
 
 - **Emoji:** search, your frequently used ones, every server's custom emoji, and a skin tone choice. Or type `:` and a name, like `:tada`, and pick from the list.
+- Parley draws emoji in one style on every device, so everyone sees the same thing, flags included, even where the computer's own emoji are out of date.
 - **Custom emoji** from any of your servers work everywhere you can post. Click one in a message to see where it's from.
 - **Stickers** come from your servers.
 - **GIFs:** search, trending and categories. Hover a GIF and click the star to keep it in **Favorites**.

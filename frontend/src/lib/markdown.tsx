@@ -4,6 +4,7 @@ import FrozenGif from '../components/FrozenGif'
 import { Check, Copy } from 'lucide-react'
 import hljs from 'highlight.js/lib/core'
 import { CUSTOM_TOKEN_SRC, PICTO_SRC, customUrl, parseCustom } from './emoji'
+import Twemoji from '../components/Twemoji'
 import { ChannelMention, EveryoneMention, RoleMention, UserMention } from '../components/Mentions'
 import Timestamp, { TIMESTAMP_SRC } from '../components/Timestamp'
 import javascript from 'highlight.js/lib/languages/javascript'
@@ -24,6 +25,9 @@ import yaml from 'highlight.js/lib/languages/yaml'
 import markdown from 'highlight.js/lib/languages/markdown'
 import diff from 'highlight.js/lib/languages/diff'
 import { useT } from './i18n'
+
+/** A single text-default symbol below the emoji blocks (©, ®, ™, ‼, arrows, ▶) without FE0F asking for the emoji look. */
+const TEXT_SYMBOL_RE = /^(?![\p{Emoji_Presentation}])[\u0000-\u25FF]$/u
 
 /**
  * Discord-flavoured markdown → React. Supported:
@@ -262,7 +266,9 @@ export function renderInline(text: string, opts: { noLinks?: boolean } = {}): Re
       const url = t.slice(1, -1)
       nodes.push(<a key={k} href={url} target="_blank" rel="noopener noreferrer">{url}</a>)
     } else if (!/^https?:/.test(t)) {
-      nodes.push(<span key={k} className="uemoji" data-emoji={t}>{t}</span>)
+      // Symbols that are text unless asked otherwise (©, ™, arrows, ▶ without FE0F) stay text, as they look in any font.
+      if (TEXT_SYMBOL_RE.test(t)) nodes.push(<span key={k} className="uemoji" data-emoji={t}>{t}</span>)
+      else nodes.push(<Twemoji key={k} emoji={t} className="uemoji emoji" data-emoji={t} />)
     } else {
       // Trailing punctuation is rarely part of a pasted URL.
       const trimmed = t.replace(/[.,;:!?'"]+$/, '').replace(/\)+$/, (p) => (t.includes('(') ? p : ''))

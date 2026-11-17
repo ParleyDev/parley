@@ -14,14 +14,22 @@ export function getSkinTone(): number { try { return Math.min(5, Math.max(0, Num
 export function setSkinTone(t: number) { try { localStorage.setItem(TONE_KEY, String(t)) } catch { /* ignore */ } }
 const TONE_RE = /[\u{1F3FB}-\u{1F3FF}]/gu
 
-/** Apply a skin tone to a tone-capable emoji: the modifier goes right after the first code point (before any ZWJ part), replacing a FE0F there. */
+const MODIFIER_BASE_RE = /\p{Emoji_Modifier_Base}/u
+/**
+ * Apply a skin tone to a tone-capable emoji: the modifier follows every person in it (both people holding hands or
+ * kissing, as Unicode lists them; the handshake between them stays plain), replacing a FE0F there.
+ */
 export function applyTone(emoji: string, tone: number): string {
   const base = emoji.replace(TONE_RE, '')
   if (!tone) return base
-  const cps = Array.from(base)
-  const rest = cps.slice(1)
-  if (rest[0] === '\uFE0F') rest.shift()
-  return cps[0] + SKIN_TONES[tone] + rest.join('')
+  const mod = SKIN_TONES[tone]
+  const out: string[] = []
+  Array.from(base).forEach((c, i) => {
+    if (c === '\uFE0F' && out[out.length - 1] === mod) return
+    out.push(c)
+    if (MODIFIER_BASE_RE.test(c) && (i === 0 || c !== '\u{1F91D}')) out.push(mod)
+  })
+  return out.join('')
 }
 /** The tone-free form, for matching reactions and recent-emoji keys. */
 export const stripTone = (emoji: string) => emoji.replace(TONE_RE, '')
@@ -73,7 +81,9 @@ export function parseCustom(token: string): { animated: boolean; name: string; i
 export const customToken = (e: Pick<Emoji, 'id' | 'name' | 'animated'>) => `<${e.animated ? 'a' : ''}:${e.name}:${e.id}>`
 export const customUrl = (id: string) => `/api/images/${id}`
 
-export const PICTO_SRC = '(?:\\p{Extended_Pictographic}|\\p{Regional_Indicator})(?:\\uFE0F|\\u20E3|\\p{Emoji_Modifier}|\\u200D(?:\\p{Extended_Pictographic}|\\p{Regional_Indicator}))*'
+// One emoji: a flag (two regional indicators), or a pictograph with its FE0F, keycap, skin tone, subdivision tags
+// (🏴󠁧󠁢󠁳󠁣󠁴󠁿) and ZWJ-joined parts.
+export const PICTO_SRC = '(?:\\p{Regional_Indicator}{2}|(?:\\p{Extended_Pictographic}|\\p{Regional_Indicator})(?:\\uFE0F|\\u20E3|\\p{Emoji_Modifier}|[\\u{E0020}-\\u{E007E}]+\\u{E007F}|\\u200D(?:\\p{Extended_Pictographic}|\\p{Regional_Indicator}))*)'
 const ONLY_EMOJI_RE = new RegExp(`^(?:\\s|${PICTO_SRC}|${CUSTOM_TOKEN_SRC})+$`, 'u')
 const COUNT_RE = new RegExp(`${PICTO_SRC}|${CUSTOM_TOKEN_SRC}`, 'gu')
 

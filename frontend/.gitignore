@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Twemoji pictures, fetched by scripts/twemoji-assets.mjs
+public/assets/twemoji/

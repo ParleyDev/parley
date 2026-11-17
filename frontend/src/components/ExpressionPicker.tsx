@@ -134,10 +134,10 @@ function EmojiTab({ guildId, onPick }: { guildId?: string | null; onPick: (token
           {q ? <button type="button" onClick={() => setQ('')} className="text-text-2 hover:text-text-0"><X size={16} /></button> : <Search size={16} className="text-text-2" />}
         </div>
         <div className="relative shrink-0">
-          <button type="button" onClick={() => setToneOpen((o) => !o)} title={t('Skin tone: {name}', { name: SKIN_TONE_NAMES[tone] })} data-skin-tone={tone} className="h-9 w-9 rounded-md hover:bg-white/10 flex items-center justify-center text-[22px] leading-none">{applyTone('✋', tone)}</button>
+          <button type="button" onClick={() => setToneOpen((o) => !o)} title={t('Skin tone: {name}', { name: SKIN_TONE_NAMES[tone] })} data-skin-tone={tone} className="h-9 w-9 rounded-md hover:bg-white/10 flex items-center justify-center text-[22px] leading-none"><Emoji value={applyTone('✋', tone)} size={26} /></button>
           {toneOpen && (
             <div className="pop absolute right-0 top-full mt-1 z-20 flex gap-0.5 rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1" data-skin-tone-menu>
-              {SKIN_TONES.map((_, i) => <button key={i} type="button" onClick={() => pickTone(i)} title={SKIN_TONE_NAMES[i]} data-tone-option={i} className={`h-9 w-9 rounded-md flex items-center justify-center text-[22px] leading-none hover:bg-white/10 ${i === tone ? 'bg-white/10' : ''}`}>{applyTone('✋', i)}</button>)}
+              {SKIN_TONES.map((_, i) => <button key={i} type="button" onClick={() => pickTone(i)} title={SKIN_TONE_NAMES[i]} data-tone-option={i} className={`h-9 w-9 rounded-md flex items-center justify-center text-[22px] leading-none hover:bg-white/10 ${i === tone ? 'bg-white/10' : ''}`}><Emoji value={applyTone('✋', i)} size={26} /></button>)}
             </div>
           )}
         </div>
