@@ -47,6 +47,27 @@ Double-click a MIDI clip to open the **piano roll**. There are also a metronome 
 
 In the **mixer**, every track has volume, pan, solo, mute, effects and sends.
 
+## Effects
+
+Each track, bus and the master has an effects rack: EQ, filter, compressor, gate, limiter, reverb, delay, drive and chorus. Click **+ Effect** to add one. Effects play top to bottom; hover one to move it or remove it.
+
+Click an effect to open its window. You can open as many windows as you like and drag them anywhere; click a window to bring it to the front. Each window shows what the effect does:
+
+- **EQ** and **filter**: the frequency curve over the sound's spectrum. Drag the dots on the curve to shape it. On the filter, drag up or down for more or less resonance, or use the mouse wheel.
+- **Compressor**, **gate** and **limiter**: how loud goes in versus how loud comes out, a dot showing where your sound is now, the last few seconds of level, and how much is being turned down.
+- **Reverb**: the shape of the tail. **Delay**: each echo fading away. **Drive**: the distortion curve, with the sound before and after. **Chorus**: the sweep.
+
+While the song plays, the views and the **In** and **Out** meters move with the sound.
+
+To change a setting:
+
+- Drag a knob up or down. Hold <kbd>Shift</kbd> for fine control.
+- Use the mouse wheel or the arrow keys.
+- Type a value under the knob, such as `2.5k` or `25%`.
+- Double-click a knob to put it back to its default.
+
+The power button in the window's title bar turns the effect off and on. The arrow resets all its settings.
+
 ## Working as a band
 
 - **Band**: everyone is an **Engineer** (can change anything) or an **Artist** (records their own parts). **Protect this track** stops others editing your part.

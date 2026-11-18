@@ -3752,5 +3752,14 @@
 "This page was changed by someone else. Review before saving.": "此页面已被其他人更改。保存前请先查看。",
 "Manage cosmetics": "管理装扮",
 "wants to connect to your {app} account": "想要连接到你的 {app} 账号",
-"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "它可以向实例添加装扮，并为所有人更改现有装扮。只允许你信任的工具。"
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "它可以向实例添加装扮，并为所有人更改现有装扮。只允许你信任的工具。",
+"Low-pass": "低通",
+"High-pass": "高通",
+"Band-pass": "带通",
+"Filter type": "滤波器类型",
+"Bypassed": "已旁通",
+"Play to see it live": "播放即可实时查看",
+"Reset to the defaults": "恢复默认设置",
+"Open its window": "打开其窗口",
+"Close its window": "关闭其窗口"
 }

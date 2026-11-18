@@ -3752,5 +3752,14 @@
 "This page was changed by someone else. Review before saving.": "Diese Seite wurde von jemand anderem geändert. Prüfe sie vor dem Speichern.",
 "Manage cosmetics": "Kosmetik verwalten",
 "wants to connect to your {app} account": "möchte sich mit deinem {app}-Konto verbinden",
-"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Es könnte der Instanz Kosmetik hinzufügen und vorhandene für alle ändern. Erlaube das nur Tools, denen du vertraust."
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Es könnte der Instanz Kosmetik hinzufügen und vorhandene für alle ändern. Erlaube das nur Tools, denen du vertraust.",
+"Low-pass": "Tiefpass",
+"High-pass": "Hochpass",
+"Band-pass": "Bandpass",
+"Filter type": "Filtertyp",
+"Bypassed": "Umgangen",
+"Play to see it live": "Abspielen, um es live zu sehen",
+"Reset to the defaults": "Auf Standardwerte zurücksetzen",
+"Open its window": "Fenster öffnen",
+"Close its window": "Fenster schließen"
 }

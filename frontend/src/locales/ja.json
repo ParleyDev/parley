@@ -3752,5 +3752,14 @@
 "This page was changed by someone else. Review before saving.": "このページは他の人によって変更されました。保存する前に確認してください。",
 "Manage cosmetics": "コスメティックを管理",
 "wants to connect to your {app} account": "{app} アカウントへの接続を求めています",
-"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "インスタンスにコスメティックを追加したり、既存のものを全員に対して変更したりできます。信頼できるツールにのみ許可してください。"
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "インスタンスにコスメティックを追加したり、既存のものを全員に対して変更したりできます。信頼できるツールにのみ許可してください。",
+"Low-pass": "ローパス",
+"High-pass": "ハイパス",
+"Band-pass": "バンドパス",
+"Filter type": "フィルタータイプ",
+"Bypassed": "バイパス中",
+"Play to see it live": "再生するとライブで表示されます",
+"Reset to the defaults": "デフォルトに戻す",
+"Open its window": "ウィンドウを開く",
+"Close its window": "ウィンドウを閉じる"
 }

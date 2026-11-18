@@ -3752,5 +3752,14 @@
 "This page was changed by someone else. Review before saving.": "Эту страницу изменил кто-то другой. Проверьте её перед сохранением.",
 "Manage cosmetics": "Управлять косметикой",
 "wants to connect to your {app} account": "хочет подключиться к вашему аккаунту {app}",
-"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Оно сможет добавлять косметику на сервер и менять существующую для всех. Разрешайте это только инструментам, которым доверяете."
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Оно сможет добавлять косметику на сервер и менять существующую для всех. Разрешайте это только инструментам, которым доверяете.",
+"Low-pass": "ФНЧ",
+"High-pass": "ФВЧ",
+"Band-pass": "Полосовой",
+"Filter type": "Тип фильтра",
+"Bypassed": "Обход",
+"Play to see it live": "Включите воспроизведение, чтобы видеть вживую",
+"Reset to the defaults": "Сбросить по умолчанию",
+"Open its window": "Открыть окно",
+"Close its window": "Закрыть окно"
 }

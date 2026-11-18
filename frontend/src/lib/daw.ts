@@ -999,6 +999,15 @@ class Engine {
     }).catch(() => {})
   }
 
+  /**
+   * An effect as built in the graph that plays (or the strips built for playing an instrument by hand while stopped),
+   * for the effect windows' live views; null when it isn't built (stopped, or bypassed).
+   */
+  fxNode(owner: string, fxId: string): FxNode | null {
+    const g = this.graph ?? this.idle
+    return (owner === 'master' ? g?.master.fx : g?.lanes.get(owner)?.fx)?.get(fxId) ?? null
+  }
+
   /** The level of a lane or 'master' while playing (null when stopped): peak and RMS, 1 being full scale. */
   meter(id: string): Reading | null {
     if (!this.graph) return null

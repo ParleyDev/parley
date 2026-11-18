@@ -10,69 +10,37 @@ import Avatar from './Avatar'
 import Dropdown from './Dropdown'
 import { Fader } from './StudioConsole'
 import InstrumentPanel from './DawInstrument'
-import FloatWindow from './FloatWindow'
+import { FX_COLOR, FxWindow, setChain, type Owner } from './DawFx'
 
 const COLORS = ['#5865f2', '#3ba55d', '#faa61a', '#ed4245', '#eb459e', '#00b0f4', '#9b59b6', '#1abc9c']
 export const laneColor = (l: StudioLane, i: number) => l.color ?? (l.kind === 'bus' ? '#8e9297' : COLORS[i % COLORS.length])
 const panLabel = (p: number) => (Math.abs(p) < 0.01 ? 'C' : `${p < 0 ? 'L' : 'R'}${Math.round(Math.abs(p) * 50)}`)
 export const fmtParam = (v: number, unit?: string) => `${Math.abs(v) >= 100 ? Math.round(v) : Number(v.toFixed(2))}${unit ? ` ${unit}` : ''}`
 
-type Owner = string | 'master'
-/** Change an effect chain: a lane's, or the master's. */
-function setChain(owner: Owner, list: Effect[], liveKey?: string) {
-  const op = owner === 'master' ? { op: 'project' as const, master_effects: list } : { op: 'lane.put' as const, lane: { id: owner, effects: list } }
-  if (liveKey) editLive(liveKey, [op]); else edit([op])
-}
-
-/** An insert rack: the effects in order, each with on/off, move, remove, and its editor when picked. */
-export function FxRack({ owner, list, picked, pick }: { owner: Owner; list: Effect[]; picked: string | null; pick: (id: string | null) => void }) {
+/** An insert rack: the effects in order, each with on/off, move, remove, and its window (open or closed by clicking). */
+export function FxRack({ owner, list, picked, pick }: { owner: Owner; list: Effect[]; picked: string[]; pick: (id: string, open?: boolean) => void }) {
   const t = useT()
   const swap = (i: number, j: number) => { const n = [...list]; [n[i], n[j]] = [n[j], n[i]]; setChain(owner, n) }
   return (
     <div className="flex flex-col gap-0.5" data-daw-fx={owner}>
       {list.map((e, i) => (
-        <div key={e.id} className={`group flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] ${picked === e.id ? 'bg-accent/25' : 'bg-bg-3'}`} data-daw-fx-slot={e.type}>
+        <div key={e.id} className={`group flex items-center gap-0.5 rounded border-l-2 px-1 py-0.5 text-[10px] ${picked.includes(e.id) ? 'bg-accent/25' : 'bg-bg-3'}`} style={{ borderLeftColor: e.on ? FX_COLOR[e.type] : 'transparent' }} data-daw-fx-slot={e.type}>
           <button type="button" onClick={() => setChain(owner, list.map((x) => (x.id === e.id ? { ...x, on: !x.on } : x)))} title={e.on ? t('Bypass') : t('Turn on')} aria-pressed={e.on} className={e.on ? 'text-success' : 'text-text-2'} data-daw-fx-power><Power size={10} /></button>
-          <button type="button" onClick={() => pick(picked === e.id ? null : e.id)} className={`min-w-0 flex-1 truncate text-left font-semibold ${e.on ? 'text-text-0' : 'text-text-2 line-through'}`} data-daw-fx-open>{FX[e.type]?.name ?? e.type}</button>
+          <button type="button" onClick={() => pick(e.id)} aria-pressed={picked.includes(e.id)} title={picked.includes(e.id) ? t('Close its window') : t('Open its window')} className={`min-w-0 flex-1 truncate text-left font-semibold ${e.on ? 'text-text-0' : 'text-text-2 line-through'}`} data-daw-fx-open>{FX[e.type]?.name ?? e.type}</button>
           <span className="hidden shrink-0 group-hover:flex">
             {i > 0 && <button type="button" onClick={() => swap(i, i - 1)} title={t('Move up')} className="text-text-2 hover:text-text-0"><ArrowUp size={10} /></button>}
             {i < list.length - 1 && <button type="button" onClick={() => swap(i, i + 1)} title={t('Move down')} className="text-text-2 hover:text-text-0"><ArrowDown size={10} /></button>}
-            <button type="button" onClick={() => { setChain(owner, list.filter((x) => x.id !== e.id)); if (picked === e.id) pick(null) }} title={t('Remove')} className="text-text-2 hover:text-danger" data-daw-fx-remove><X size={10} /></button>
+            <button type="button" onClick={() => { setChain(owner, list.filter((x) => x.id !== e.id)); if (picked.includes(e.id)) pick(e.id, false) }} title={t('Remove')} className="text-text-2 hover:text-danger" data-daw-fx-remove><X size={10} /></button>
           </span>
         </div>
       ))}
       {list.length < 16 && (
-        <Dropdown value="" onChange={(e) => { const ty = e.target.value as FxType; if (!ty) return; const n = newEffect(ty); setChain(owner, [...list, n]); pick(n.id) }} className="input h-6 px-1 text-[10px]" aria-label={t('Add effect')} title={t('Add effect')} data-daw-fx-add>
+        <Dropdown value="" onChange={(e) => { const ty = e.target.value as FxType; if (!ty) return; const n = newEffect(ty); setChain(owner, [...list, n]); pick(n.id, true) }} className="input h-6 px-1 text-[10px]" aria-label={t('Add effect')} title={t('Add effect')} data-daw-fx-add>
           <option value="">{t('+ Effect')}</option>
           {Object.values(FX).map((f) => <option key={f.type} value={f.type}>{f.name}</option>)}
         </Dropdown>
       )}
     </div>
-  )
-}
-
-/** The picked effect's controls. */
-export function FxEditor({ owner, list, id, close, title }: { owner: Owner; list: Effect[]; id: string; close: () => void; title: string }) {
-  const e = list.find((x) => x.id === id)
-  if (!e) return null
-  const def = FX[e.type]
-  const set = (key: string, v: number) => setChain(owner, list.map((x) => (x.id === id ? { ...x, params: { ...x.params, [key]: v } } : x)), `fx:${owner}:${id}:${key}`)
-  return (
-    <FloatWindow id={`fx-${e.type}`} title={<>{def.name} <span className="font-normal text-text-2">· {title}</span></>} width={288} onClose={close} data-daw-fx-editor={e.type}>
-      {def.params.map((p) => {
-        const v = e.params[p.key] ?? p.def
-        // Frequencies move on a log scale, like real knobs.
-        const toPos = (x: number) => (p.log ? Math.log(x / p.min) / Math.log(p.max / p.min) : (x - p.min) / (p.max - p.min)) * 1000
-        const fromPos = (pos: number) => { const f = pos / 1000; const x = p.log ? p.min * Math.pow(p.max / p.min, f) : p.min + f * (p.max - p.min); return p.step ? Math.round(x / p.step) * p.step : Math.round(x) }
-        return (
-          <label key={p.key} className="mb-1.5 flex items-center gap-2 text-xs">
-            <span className="w-20 shrink-0 text-text-2">{p.label}</span>
-            <input type="range" min={0} max={1000} value={Math.round(toPos(v))} onChange={(ev) => set(p.key, fromPos(Number(ev.target.value)))} onDoubleClick={() => set(p.key, p.def)} className="min-w-0 flex-1 accent-accent" data-daw-fx-param={p.key} />
-            <span className="w-16 shrink-0 text-right font-mono tabular-nums">{fmtParam(v, p.unit)}</span>
-          </label>
-        )
-      })}
-    </FloatWindow>
   )
 }
 
@@ -124,9 +92,10 @@ export function Knob({ value, min, max, def, onChange, label, show, size = 30, c
 
 const dbOf = (g: number) => (g <= 0.0001 ? '-∞' : (20 * Math.log10(g)).toFixed(1))
 const sec = 'text-[10px] font-bold text-text-1'
+type Win = { owner: Owner; id: string }
 
 /** One track's channel strip, laid out like Ableton Live's mixer. */
-function Strip({ l, i, lanes, buses, channelId, users, open, setOpen, instFor, setInstFor }: { l: StudioLane; i: number; lanes: Record<string, StudioLane>; buses: StudioLane[]; channelId: string; users: Record<string, User>; open: { owner: Owner; id: string } | null; setOpen: (o: { owner: Owner; id: string } | null) => void; instFor: string | null; setInstFor: (id: string | null) => void }) {
+function Strip({ l, i, lanes, buses, channelId, users, open, toggle, instFor, setInstFor }: { l: StudioLane; i: number; lanes: Record<string, StudioLane>; buses: StudioLane[]; channelId: string; users: Record<string, User>; open: Win[]; toggle: (owner: Owner, id: string, want?: boolean) => void; instFor: string | null; setInstFor: (id: string | null) => void }) {
   const t = useT()
   const me = useStore((s) => s.user)
   const room = useStore((s) => s.channels[channelId])
@@ -176,7 +145,7 @@ function Strip({ l, i, lanes, buses, channelId, users, open, setOpen, instFor, s
           </Dropdown>
         </>}
       </div>
-      <div className="px-1.5"><FxRack owner={l.id} list={l.effects ?? []} picked={open?.owner === l.id ? open.id : null} pick={(id) => setOpen(id ? { owner: l.id, id } : null)} /></div>
+      <div className="px-1.5"><FxRack owner={l.id} list={l.effects ?? []} picked={open.filter((w) => w.owner === l.id).map((w) => w.id)} pick={(id, want) => toggle(l.id, id, want)} /></div>
       {l.kind !== 'bus' && buses.length > 0 && (
         <div className="border-y border-line/60 px-1.5 py-1" data-daw-sends={l.id}>
           <span className={sec}>{t('Sends')}</span>
@@ -218,22 +187,28 @@ function Strip({ l, i, lanes, buses, channelId, users, open, setOpen, instFor, s
 /** A strip per track, laid out like Ableton Live's mixer, then the master. */
 export default function DawMixer({ ordered, lanes, project, channelId, users }: { ordered: StudioLane[]; lanes: Record<string, StudioLane>; project: StudioProject; channelId: string; users: Record<string, User> }) {
   const t = useT()
-  const [open, setOpen] = useState<{ owner: Owner; id: string } | null>(null)
+  // Effect windows: as many open at once as you like, in the order they were opened.
+  const [open, setOpen] = useState<Win[]>([])
+  const toggle = (owner: Owner, id: string, want?: boolean) => setOpen((o) => {
+    const has = o.some((w) => w.id === id)
+    if (want ?? !has) return has ? o : [...o, { owner, id }]
+    return o.filter((w) => w.id !== id)
+  })
   const [instFor, setInstFor] = useState<string | null>(null)
   const buses = ordered.filter((l) => l.kind === 'bus')
   const chainOf = (o: Owner) => (o === 'master' ? project.master_effects ?? [] : lanes[o]?.effects ?? [])
   return (
     <div className="relative flex-1 min-h-0 overflow-x-auto overflow-y-auto" data-daw-mixer>
       <div className="flex h-full min-h-[34rem] gap-1.5 p-2">
-        {ordered.map((l, i) => <Strip key={l.id} {...{ l, i, lanes, buses, channelId, users, open, setOpen, instFor, setInstFor }} />)}
+        {ordered.map((l, i) => <Strip key={l.id} {...{ l, i, lanes, buses, channelId, users, open, toggle, instFor, setInstFor }} />)}
         <div className="ml-auto flex w-28 shrink-0 flex-col items-stretch gap-1.5 rounded-lg border border-accent/50 bg-bg-2 p-1.5" data-daw-strip="master">
           <span className="text-xs font-bold uppercase tracking-wide text-text-1">{t('Master')}</span>
-          <FxRack owner="master" list={project.master_effects ?? []} picked={open?.owner === 'master' ? open.id : null} pick={(id) => setOpen(id ? { owner: 'master', id } : null)} />
+          <FxRack owner="master" list={project.master_effects ?? []} picked={open.filter((w) => w.owner === 'master').map((w) => w.id)} pick={(id, want) => toggle('master', id, want)} />
           <Loudness />
           <Fader value={project.master_gain} onChange={(v) => editLive('master', [{ op: 'project', master_gain: v }])} get={() => engine.meter('master')} id="master" label={t('Master')} />
         </div>
       </div>
-      {open && <FxEditor owner={open.owner} list={chainOf(open.owner)} id={open.id} close={() => setOpen(null)} title={open.owner === 'master' ? t('Master') : lanes[open.owner]?.name ?? ''} />}
+      {open.map((w, n) => (w.owner === 'master' || lanes[w.owner]) && <FxWindow key={w.id} owner={w.owner} list={chainOf(w.owner)} id={w.id} cascade={n} close={() => toggle(w.owner, w.id, false)} title={w.owner === 'master' ? t('Master') : lanes[w.owner]?.name ?? ''} />)}
       {instFor && lanes[instFor] && <InstrumentPanel lane={lanes[instFor]} close={() => setInstFor(null)} />}
     </div>
   )

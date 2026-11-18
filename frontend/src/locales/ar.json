@@ -3752,5 +3752,14 @@
 "This page was changed by someone else. Review before saving.": "غيّر شخص آخر هذه الصفحة. راجعها قبل الحفظ.",
 "Manage cosmetics": "إدارة مستحضرات التجميل الشخصية",
 "wants to connect to your {app} account": "يريد الاتصال بحسابك على {app}",
-"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "قد يضيف عناصر تجميلية إلى الخادم ويغيّر الموجودة منها للجميع. اسمح بذلك للأدوات التي تثق بها فقط."
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "قد يضيف عناصر تجميلية إلى الخادم ويغيّر الموجودة منها للجميع. اسمح بذلك للأدوات التي تثق بها فقط.",
+"Low-pass": "تمرير منخفض",
+"High-pass": "تمرير عالٍ",
+"Band-pass": "تمرير نطاقي",
+"Filter type": "نوع المرشّح",
+"Bypassed": "متجاوَز",
+"Play to see it live": "شغّل لتراه مباشرةً",
+"Reset to the defaults": "إعادة الضبط إلى الافتراضي",
+"Open its window": "فتح نافذته",
+"Close its window": "إغلاق نافذته"
 }

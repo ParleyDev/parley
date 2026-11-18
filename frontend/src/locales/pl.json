@@ -3752,5 +3752,14 @@
 "This page was changed by someone else. Review before saving.": "Ta strona została zmieniona przez kogoś innego. Sprawdź ją przed zapisaniem.",
 "Manage cosmetics": "Zarządzaj kosmetykami",
 "wants to connect to your {app} account": "chce połączyć się z Twoim kontem {app}",
-"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Może dodawać kosmetyki do instancji i zmieniać istniejące dla wszystkich. Zezwalaj tylko narzędziom, którym ufasz."
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Może dodawać kosmetyki do instancji i zmieniać istniejące dla wszystkich. Zezwalaj tylko narzędziom, którym ufasz.",
+"Low-pass": "Dolnoprzepustowy",
+"High-pass": "Górnoprzepustowy",
+"Band-pass": "Pasmowoprzepustowy",
+"Filter type": "Typ filtra",
+"Bypassed": "Pominięty",
+"Play to see it live": "Odtwórz, aby zobaczyć na żywo",
+"Reset to the defaults": "Przywróć ustawienia domyślne",
+"Open its window": "Otwórz okno",
+"Close its window": "Zamknij okno"
 }

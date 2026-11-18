@@ -72,7 +72,12 @@ export const dbToGain = (db: number) => Math.pow(10, db / 20)
 
 /** An automatable parameter: the AudioParam and how a value in the parameter's unit becomes its value. */
 export type Target = { param: AudioParam; to?: (v: number) => number }
-export interface FxNode { input: AudioNode; output: AudioNode; set: (e: Effect) => void; targets: Record<string, Target>; stop: () => void; /** Its processor was not loaded: the signal passes unchanged. */ missing?: boolean }
+export interface FxNode {
+  input: AudioNode; output: AudioNode; set: (e: Effect) => void; targets: Record<string, Target>; stop: () => void
+  /** Its processor was not loaded: the signal passes unchanged. */ missing?: boolean
+  /** What feeds it in its chain (set by buildChain), where an effect window listens to the signal going in. */ feed?: AudioNode
+  /** The compressor's gain reduction right now (dB, 0 or below). */ reduction?: () => number
+}
 
 /** The effects that are processors of the worklet module, and the delay the limiter's look-ahead adds (frames). */
 export const WORKLET_FX: FxType[] = ['limiter', 'gate']
@@ -91,7 +96,7 @@ function processor(ctx: BaseAudioContext, e: Effect): FxNode {
   return { input: node, output: node, set, targets, stop: () => { node.port.postMessage('stop') } }
 }
 
-/** A reverb's impulse: decaying stereo noise `size` seconds long. */
+/** A reverb's impulse: decaying stereo noise `size` seconds long, its level falling as (1 - t / size)³. */
 function impulse(ctx: BaseAudioContext, size: number) {
   const len = Math.max(1, Math.floor(ctx.sampleRate * size))
   const buf = ctx.createBuffer(2, len, ctx.sampleRate)
@@ -102,7 +107,8 @@ function impulse(ctx: BaseAudioContext, size: number) {
   }
   return buf
 }
-function curve(amount: number) {
+/** The drive's waveshaper curve: soft clipping that gets harder as `amount` (0–100) goes up. */
+export function curve(amount: number) {
   const k = amount * 2, n = 2048, c = new Float32Array(n)
   for (let i = 0; i < n; i++) { const x = (i * 2) / n - 1; c[i] = k ? ((1 + k) * x) / (1 + k * Math.abs(x)) : x }
   return c
@@ -133,7 +139,7 @@ export function buildEffect(ctx: BaseAudioContext, e: Effect): FxNode {
       c.knee.value = 6; c.connect(g)
       const set = (x: Effect) => { c.threshold.value = val(x, 'threshold'); c.ratio.value = val(x, 'ratio'); c.attack.value = ms(val(x, 'attack')); c.release.value = ms(val(x, 'release')); g.gain.value = dbToGain(val(x, 'makeup')) }
       set(e)
-      return { input: c, output: g, set, targets: { threshold: { param: c.threshold }, ratio: { param: c.ratio }, makeup: { param: g.gain, to: dbToGain } }, stop: () => {} }
+      return { input: c, output: g, set, targets: { threshold: { param: c.threshold }, ratio: { param: c.ratio }, makeup: { param: g.gain, to: dbToGain } }, stop: () => {}, reduction: () => c.reduction }
     }
     case 'reverb': {
       const dw = dryWet(ctx), conv = ctx.createConvolver(), tone = ctx.createBiquadFilter()
@@ -189,6 +195,7 @@ export function buildChain(ctx: BaseAudioContext, list: Effect[], input: AudioNo
   for (const e of list) {
     if (!e.on || !FX[e.type]) continue
     const n = buildEffect(ctx, e)
+    n.feed = at
     at.connect(n.input); at = n.output
     nodes.set(e.id, n)
   }

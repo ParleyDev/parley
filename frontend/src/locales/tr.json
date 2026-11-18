@@ -3752,5 +3752,14 @@
 "This page was changed by someone else. Review before saving.": "Bu sayfa başka biri tarafından değiştirildi. Kaydetmeden önce gözden geçirin.",
 "Manage cosmetics": "Kozmetikleri yönet",
 "wants to connect to your {app} account": "{app} hesabına bağlanmak istiyor",
-"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Sunucuya kozmetik ekleyebilir ve mevcut olanları herkes için değiştirebilir. Yalnızca güvendiğin araçlara izin ver."
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Sunucuya kozmetik ekleyebilir ve mevcut olanları herkes için değiştirebilir. Yalnızca güvendiğin araçlara izin ver.",
+"Low-pass": "Alçak geçiren",
+"High-pass": "Yüksek geçiren",
+"Band-pass": "Bant geçiren",
+"Filter type": "Filtre türü",
+"Bypassed": "Devre dışı",
+"Play to see it live": "Canlı görmek için çalın",
+"Reset to the defaults": "Varsayılanlara sıfırla",
+"Open its window": "Penceresini aç",
+"Close its window": "Penceresini kapat"
 }
