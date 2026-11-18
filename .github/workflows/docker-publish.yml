@@ -4,6 +4,7 @@ name: Publish Docker images
 # publish: GitHub does not apply path filters to tag pushes. Run by hand to republish.
 # A release pushes its "chore(release): X.Y.Z" commit ("Release X.Y.Z" before Conventional Commits) to main and then tags that same commit, which would build it twice: the
 # main push skips release commits and the tag build publishes them, including `latest` when the tag is main's head.
+# Each platform builds natively (amd64 on ubuntu-latest, arm64 on GitHub's arm runner), then `merge` tags both as one image.
 on:
   push:
     branches: [main]
@@ -22,11 +23,16 @@ permissions:
   contents: read
 
 jobs:
-  check-token:
+  # Whether publishing is set up, and the version and tags every build of this commit shares.
+  prepare:
     if: "github.ref_type == 'tag' || !(startsWith(github.event.head_commit.message, 'Release ') || startsWith(github.event.head_commit.message, 'chore(release): '))"
     runs-on: ubuntu-latest
     outputs:
       configured: ${{ steps.check.outputs.configured }}
+      display: ${{ steps.ver.outputs.display }}
+      version: ${{ steps.ver.outputs.version }}
+      channel: ${{ steps.ver.outputs.channel }}
+      latest: ${{ steps.head.outputs.latest }}
     steps:
       - name: Check Docker Hub token
         id: check
@@ -39,20 +45,6 @@ jobs:
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Add the DOCKERHUB_TOKEN repository secret to publish Docker images."
           fi
-
-  publish:
-    needs: check-token
-    if: needs.check-token.outputs.configured == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - image: parleydev/parley
-            context: backend
-          - image: parleydev/frontend
-            context: frontend
-    steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - name: Compute version
@@ -66,34 +58,106 @@ jobs:
       - name: Is this main's head
         id: head
         run: echo "latest=$([ "$GITHUB_REF" = refs/heads/main ] || [ "$(git rev-parse origin/main)" = "$(git rev-parse HEAD)" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-qemu-action@v4
+
+  # Each image for each platform on a runner of that platform (no emulation), pushed by digest only; `merge` tags them.
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.configured == 'true'
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [parleydev/parley, parleydev/frontend]
+        arch: [amd64, arm64]
+        include:
+          - image: parleydev/parley
+            context: backend
+          - image: parleydev/frontend
+            context: frontend
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v4
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
         with:
           username: parleydev
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Generate image tags and labels
+      - name: Image labels
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ matrix.image }}
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ./${{ matrix.context }}
+          file: ./${{ matrix.context }}/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          build-args: PARLEY_VERSION=${{ needs.prepare.outputs.display }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.context }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.context }}-${{ matrix.arch }},mode=max
+      - name: Keep the digest
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.context }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # One multi-platform tag set per image from the platform builds.
+  merge:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: parleydev/parley
+            context: backend
+          - image: parleydev/frontend
+            context: frontend
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.context }}-*
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v4
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: parleydev
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Generate image tags
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ matrix.image }}
           tags: |
-            type=raw,value=latest,enable=${{ steps.ver.outputs.channel == 'release' && steps.head.outputs.latest == 'true' }}
-            type=raw,value=pre,enable=${{ steps.ver.outputs.channel == 'prerelease' }}
+            type=raw,value=latest,enable=${{ needs.prepare.outputs.channel == 'release' && needs.prepare.outputs.latest == 'true' }}
+            type=raw,value=pre,enable=${{ needs.prepare.outputs.channel == 'prerelease' }}
             type=ref,event=tag
             type=sha,prefix=sha-
             # Every build's own version: 0.21.0 for a release, 0.21.0-pre.11 between releases.
-            type=raw,value=${{ steps.ver.outputs.version }}
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          context: ./${{ matrix.context }}
-          file: ./${{ matrix.context }}/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          build-args: PARLEY_VERSION=${{ steps.ver.outputs.display }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.context }}
-          cache-to: type=gha,scope=${{ matrix.context }},mode=max
+            type=raw,value=${{ needs.prepare.outputs.version }}
+      - name: Tag the platform images as one
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ matrix.image }}@sha256:%s ' *)
+      - name: Check both platforms are there
+        run: |
+          docker buildx imagetools inspect "${{ matrix.image }}:${{ needs.prepare.outputs.version }}" | tee /tmp/inspect
+          grep -q 'linux/amd64' /tmp/inspect && grep -q 'linux/arm64' /tmp/inspect
