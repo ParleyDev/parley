@@ -5,6 +5,7 @@ order: 150
 summary: Record, arrange and mix songs together in a Recording Studio channel, live or in your own time.
 covers:
   - frontend/src/components/StudioView.tsx
+  - frontend/src/components/StudioNow.tsx
   - frontend/src/components/StudioConsole.tsx
   - frontend/src/components/ProjectSession.tsx
   - frontend/src/components/Daw*.tsx
@@ -99,6 +100,15 @@ These start from an effect's defaults. Play the song while you work, ideally wit
 Listeners who aren't in the band can still play the song, follow along and comment.
 
 Lost your connection? Keep working. Your changes are saved and sent when you're back online.
+
+## Working somewhere else
+
+A project keeps playing, and a take keeps recording, when you go to a chat or another channel. While it does, a card above your name at the bottom left shows the project, whether it's **Playing** or **Recording**, and the time. It also shows while you're in the project's voice room. Its row in the channel list shows moving bars while it plays and a red dot while it records.
+
+- Click the project's name on the card to go back to it.
+- Stop or play from the card. Play carries on from where you stopped.
+- Stop the take from the card, if you could stop it in the project.
+- Done with it? Stop it, then click **✕** to close the card.
 
 ## Sharing the result
 

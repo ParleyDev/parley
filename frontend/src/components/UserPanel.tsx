@@ -9,6 +9,7 @@ import Avatar from './Avatar'
 import DeviceMenu from './DeviceMenu'
 import VoiceConnected from './VoiceConnected'
 import NowPlaying from './NowPlaying'
+import StudioNow from './StudioNow'
 import StyledName from './StyledName'
 import UserMenu, { statuses } from './UserMenu'
 import { useT } from '../lib/i18n'
@@ -39,6 +40,7 @@ export default function UserPanel() {
   return (
     <div className="shrink-0 w-full min-w-0 p-2 pt-0" style={{ background: 'linear-gradient(90deg, var(--color-bg-0) 72px, var(--color-bg-1) 72px)' }} data-user-panel-bar>
       <NowPlaying />
+      <StudioNow />
       <VoiceConnected />
       <BuildInfo />
       <div className="relative h-[var(--dock-h)] rounded-lg border shadow-lg pl-2 pr-1.5 flex items-center gap-0.5" style={cardStyle} data-user-panel>

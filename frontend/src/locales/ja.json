@@ -3761,5 +3761,7 @@
 "Play to see it live": "再生するとライブで表示されます",
 "Reset to the defaults": "デフォルトに戻す",
 "Open its window": "ウィンドウを開く",
-"Close its window": "ウィンドウを閉じる"
+"Close its window": "ウィンドウを閉じる",
+"Back to the project": "プロジェクトに戻る",
+"Stopped": "停止中"
 }

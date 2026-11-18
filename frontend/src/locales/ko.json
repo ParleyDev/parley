@@ -3761,5 +3761,7 @@
 "Play to see it live": "재생하면 실시간으로 볼 수 있어요",
 "Reset to the defaults": "기본값으로 재설정",
 "Open its window": "창 열기",
-"Close its window": "창 닫기"
+"Close its window": "창 닫기",
+"Back to the project": "프로젝트로 돌아가기",
+"Stopped": "정지됨"
 }

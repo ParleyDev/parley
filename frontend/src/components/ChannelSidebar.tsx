@@ -14,6 +14,7 @@ import { notifEntries } from './NotifMenu'
 import { mutedTarget } from '../lib/notify'
 import { takeWelcome } from '../lib/welcome'
 import { VoiceTimer } from './CallExtras'
+import { StudioActiveMark, useStudioActive } from './StudioNow'
 import { AudioLines, Bell, BellOff, BookOpenCheck, ListChecks, Tags, DoorOpen, Flag, EyeOff, Pin, PinOff, Check } from 'lucide-react'
 import { togglePinned } from '../lib/pins'
 
@@ -138,6 +139,8 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
     const cats = Object.values(channels).filter((c) => c.guild_id === guildId && c.kind === 'category').sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
     return splitCategories(cats, guildCommunities, followedIds)
   }, [channels, guildId, guildCommunities, followedIds])
+  // The project playing or recording on this device: marked on its row, and listed under its studio while it does.
+  const active = useStudioActive()
   if (!guild) return null
   const isOwner = user?.id === guild.owner_id
   const canInvite = has(perms, P.CREATE_INVITE)
@@ -162,6 +165,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
   const unreadOf = (id: string) => showsUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds: allGuilds }, id)
   const mentionsOf = (id: string) => showsMentions({ channels, dms, notifSettings }, id) ? mentionCounts[id] ?? 0 : 0
   const projectsOf = (id: string) => all.filter((x) => x.kind === 'project' && x.parent_id === id)
+  const projectExtra = (id: string) => <>{active?.channelId === id && <StudioActiveMark state={active.state} />}<VoiceTimer channelId={id} /></>
   const rowUnread = (c: Channel) => unreadOf(c.id) || (c.kind === 'studio' && projectsOf(c.id).some((x) => unreadOf(x.id) || mentionsOf(x.id) > 0))
   /** Apply the new places locally and save only the channels that moved; if saving fails, the old places come back. */
   const saveOrder = async (groups: { parent_id: string | null; ids: string[] }[], withParent = true) => {
@@ -247,7 +251,7 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
       <ChannelRow to={`/channels/${guildId}/${c.id}`} icon={chanIcon(c, guild?.rules_channel_id)} name={c.name} locked={!!c.e2ee} mentions={mentionsOf(c.id)} muted={mutedTarget(notifSettings, c.id) || (!!c.parent_id && mutedTarget(notifSettings, c.parent_id))} onContextMenu={(e) => ctx.open(e, channelMenu(c))}
         unread={channelId !== c.id && rowUnread(c)} onClick={() => setMobilePane('content')}
         count={c.user_limit ? `${Object.values(voiceStates).filter((v) => v.channel_id === c.id).length}/${c.user_limit}` : undefined}
-        extra={c.kind === 'voice' || c.kind === 'stage' || c.kind === 'project' ? <VoiceTimer channelId={c.id} /> : undefined}
+        extra={c.kind === 'project' ? projectExtra(c.id) : c.kind === 'voice' || c.kind === 'stage' ? <VoiceTimer channelId={c.id} /> : undefined}
         onSettings={canEditChannel(c.id) ? () => openModal({ kind: 'channelSettings', channelId: c.id }) : undefined} />
       {c.voice_status && <div className="ml-8 mr-2 -mt-0.5 mb-0.5 truncate text-xs text-text-2" title={c.voice_status} data-voice-status={c.id}>{c.voice_status}</div>}
       {/* Threads I'm in, and any that mention me (else a thread mention badges the server with nowhere to find it). */}
@@ -259,10 +263,10 @@ export default function ChannelSidebar({ guildId }: { guildId: string }) {
         </button>
       ))}
       {(c.kind === 'voice' || c.kind === 'stage') && <VoiceParticipants channelId={c.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />}
-      {/* A studio's projects that matter now: the open one, ones with a session on, and ones I'm in the band of. */}
-      {c.kind === 'studio' && projectsOf(c.id).filter((x) => (x.id === channelId || unreadOf(x.id) || mentionsOf(x.id) > 0 || Object.values(voiceStates).some((v) => v.channel_id === x.id) || (!!user && (x.engineer_ids?.includes(user.id) || x.artist_ids?.includes(user.id))))).map((x) => (
+      {/* A studio's projects that matter now: the open one, the one playing here, ones with a session on, and ones I'm in the band of. */}
+      {c.kind === 'studio' && projectsOf(c.id).filter((x) => (x.id === channelId || x.id === active?.channelId || unreadOf(x.id) || mentionsOf(x.id) > 0 || Object.values(voiceStates).some((v) => v.channel_id === x.id) || (!!user && (x.engineer_ids?.includes(user.id) || x.artist_ids?.includes(user.id))))).map((x) => (
         <div key={x.id} className="ml-4" data-sidebar-project={x.id}>
-          <ChannelRow to={`/channels/${guildId}/${x.id}`} icon={<AudioLines size={16} />} name={x.name} unread={channelId !== x.id && unreadOf(x.id)} mentions={mentionsOf(x.id)} onClick={() => setMobilePane('content')} extra={<VoiceTimer channelId={x.id} />} />
+          <ChannelRow to={`/channels/${guildId}/${x.id}`} icon={<AudioLines size={16} />} name={x.name} unread={channelId !== x.id && unreadOf(x.id)} mentions={mentionsOf(x.id)} onClick={() => setMobilePane('content')} extra={projectExtra(x.id)} />
           <VoiceParticipants channelId={x.id} onUserMenu={(e, u) => ctx.open(e, userMenu(u, e.currentTarget.getBoundingClientRect()))} />
         </div>
       ))}
