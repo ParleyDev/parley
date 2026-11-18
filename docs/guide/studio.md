@@ -51,6 +51,8 @@ In the **mixer**, every track has volume, pan, solo, mute, effects and sends.
 
 Each track, bus and the master has an effects rack: EQ, filter, compressor, gate, limiter, reverb, delay, drive and chorus. Click **+ Effect** to add one. Effects play top to bottom; hover one to move it or remove it.
 
+![Effect windows for a guitar's EQ and compressor and a bass filter, open side by side while the song plays](shot:studio-effects)
+
 Click an effect to open its window. You can open as many windows as you like and drag them anywhere; click a window to bring it to the front. Each window shows what the effect does:
 
 - **EQ** and **filter**: the frequency curve over the sound's spectrum. Drag the dots on the curve to shape it. On the filter, drag up or down for more or less resonance, or use the mouse wheel.
@@ -67,6 +69,24 @@ To change a setting:
 - Double-click a knob to put it back to its default.
 
 The power button in the window's title bar turns the effect off and on. The arrow resets all its settings.
+
+> Tip: Open the same effect on two tracks side by side, like the guitar's EQ and the bass's filter, and play the song. You can see where each one sits and make room for the other.
+
+### Examples
+
+These start from an effect's defaults. Play the song while you work, ideally with **Loop** on, so the windows show your sound.
+
+**Clean up the low end of a guitar or vocal.** Add an **EQ**. Drag the **C** dot on the curve to the right until **Low cut** reads about `90 Hz`; the rumble below it goes, and the spectrum behind the curve shows what you took away. Drag the **M** dot to about `2.5k` and up a few dB to bring the part forward.
+
+**Even out a vocal.** Add a **Compressor**. Set **Ratio** to `4:1`, then turn **Threshold** down while you watch the dot on the curve: when the loud words cross the bend, the **GR** meter shows how much they are turned down. Aim for about 3 to 6 dB on the loudest words, then raise **Makeup** by about the same amount so the part is as loud as before.
+
+**Sweep a filter.** Add a **Filter** to a synth or drum track and pick **Low-pass**. Drag the dot on the curve slowly from right to left while the song plays: the sound gets darker as the cutoff moves down. Drag the dot up or down, or scroll the mouse wheel over it, to change **Resonance**: more gives a sharper, ringing peak at the cutoff. To make the sweep part of the song, record it with an [automation lane](#arranging-and-editing).
+
+**Stop a noisy track hissing between notes.** Add a **Gate** first in the rack. Watch the lamp: it says **OPEN** while the part plays and **CLOSED** in the gaps. Raise **Threshold** until it closes in the gaps but stays open on the quietest notes you want to keep.
+
+**Put a part in a room.** Add a **Reverb** and set **Mix** to about `20%`. A longer **Decay** gives a bigger space; a lower **Tone** makes the tail darker, so it sits behind the dry sound.
+
+**Catch peaks on the whole mix.** Add a **Limiter** to the **Master** and leave **Ceiling** at `-1 dB`. The window shows how often the loudest moments are held down; if it is working all the time, turn the tracks down instead.
 
 ## Working as a band
 
