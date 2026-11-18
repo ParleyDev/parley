@@ -50,6 +50,14 @@ You can let an AI assistant, such as Claude, ChatGPT or Cursor, read and send me
 
 To stop it, click **Disconnect** next to the assistant in **Authorized Apps**.
 
+## Tools for admins
+
+Some tools that work on your instance, such as Profile Studio for making profile cosmetics, sign in the same way. When you sign in from the tool, Parley opens a page asking to let it **Manage cosmetics**: add cosmetics to the instance and change existing ones. It only works if your account can manage the instance, and the tool never sees your password.
+
+> Heads up: Anything it adds or changes shows for everyone at once. Only allow tools you trust.
+
+To stop it, click **Disconnect** next to the tool in **Authorized Apps**.
+
 ## Making your own
 
 Want to build a bot? Create an app in **User Settings → Applications**, and read [the developer docs](https://app.runparley.com/developers).

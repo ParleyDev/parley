@@ -12,13 +12,14 @@ import { globalName } from '../lib/names'
 interface Info { client: { name: string; client_uri: string | null }; redirect_uri: string; redirect_host: string; scopes: { id: string; description: string; requested: boolean }[] }
 
 /**
- * /oauth2/mcp/authorize: the consent screen for an AI assistant connecting over MCP (Claude, ChatGPT, Cursor…).
+ * /oauth2/mcp/authorize: the consent screen for an AI assistant connecting over MCP (Claude, ChatGPT, Cursor…), and for
+ * tools that ask for a tool scope only (Profile Studio's `cosmetics.manage`), which aren't called assistants.
  * The backend's /oauth/authorize sends clients here with the OAuth query intact; approving posts it back with the
  * permissions the user left ticked and follows the redirect to the client.
  */
 export default function McpAuthorizePage() {
   const t = useT()
-  const LABEL: Record<string, string> = { 'mcp.read': t('Read'), 'mcp.notifications': t('Notifications'), 'mcp.send': t('Send messages'), 'mcp.manage': t('Manage servers'), 'mcp.admin': t('Announce as Parley') }
+  const LABEL: Record<string, string> = { 'mcp.read': t('Read'), 'mcp.notifications': t('Notifications'), 'mcp.send': t('Send messages'), 'mcp.manage': t('Manage servers'), 'mcp.admin': t('Announce as Parley'), 'cosmetics.manage': t('Manage cosmetics') }
   const [params] = useSearchParams()
   const me = useStore((s) => s.user)
   const [info, setInfo] = useState<Info | null>(null)
@@ -46,7 +47,7 @@ export default function McpAuthorizePage() {
         {info && (
           <>
             <h1 className="mt-5 text-center text-lg font-bold" data-mcp-client>{info.client.name}</h1>
-            <p className="text-center text-sm text-text-2">{t('wants to connect to your {app} account as an AI assistant', { app: APP_NAME })}</p>
+            <p className="text-center text-sm text-text-2">{info.scopes.some((s) => s.id.startsWith('mcp.')) ? t('wants to connect to your {app} account as an AI assistant', { app: APP_NAME }) : t('wants to connect to your {app} account', { app: APP_NAME })}</p>
             {me && <div className="mt-4 flex items-center justify-center gap-2 text-sm"><Avatar user={me} size={24} /><span>{tn('Signed in as {name}', { name: <b>{globalName(me)}</b> })}</span></div>}
             <div className="mt-5 rounded-xl border border-line bg-bg-0/60 p-3">
               <div className="text-[11px] font-bold uppercase tracking-wider text-text-2 mb-2">{t('Allow it to')}</div>
@@ -62,6 +63,7 @@ export default function McpAuthorizePage() {
               </ul>
             </div>
             {picked.includes('mcp.manage') && <p className="mt-3 flex items-start gap-2 text-xs text-warn" data-mcp-manage-warning><ShieldAlert size={14} className="mt-0.5 shrink-0" />{t('It could delete messages and remove people wherever your account is allowed to. Only allow this for an assistant you trust.')}</p>}
+            {picked.includes('cosmetics.manage') && <p className="mt-3 flex items-start gap-2 text-xs text-warn" data-mcp-cosmetics-warning><ShieldAlert size={14} className="mt-0.5 shrink-0" />{t('It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.')}</p>}
             <p className="mt-3 text-xs text-text-2">{t('Anything it sends appears under your name. It never sees your password, and you can disconnect it any time in User Settings → Authorized Apps.')}</p>
             {err && <p className="mt-3 text-sm text-danger" data-mcp-error>{err}</p>}
             <p className="mt-3 text-[11px] text-text-2">{t('You will return to')} <span className="break-all font-medium" data-mcp-redirect-host>{info.redirect_host}</span>.</p>

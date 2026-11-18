@@ -3749,5 +3749,8 @@
 "Move {name} down": "Переместить {name} вниз",
 "Move {name} up": "Переместить {name} вверх",
 "This community was deleted while you were editing.": "Это сообщество было удалено, пока вы его редактировали.",
-"This page was changed by someone else. Review before saving.": "Эту страницу изменил кто-то другой. Проверьте её перед сохранением."
+"This page was changed by someone else. Review before saving.": "Эту страницу изменил кто-то другой. Проверьте её перед сохранением.",
+"Manage cosmetics": "Управлять косметикой",
+"wants to connect to your {app} account": "хочет подключиться к вашему аккаунту {app}",
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Оно сможет добавлять косметику на сервер и менять существующую для всех. Разрешайте это только инструментам, которым доверяете."
 }

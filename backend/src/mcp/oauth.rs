@@ -2,6 +2,9 @@
 //! Authorization Server Metadata (RFC 8414) under `/.well-known/`, Dynamic Client Registration (RFC 7591), the
 //! authorization code flow with PKCE (S256 only), resource indicators (RFC 8707) and rotating refresh tokens.
 //! Clients are public (no secret). The consent page is the web client's `/oauth2/mcp/authorize`.
+//!
+//! The same flow serves other tools that act for an admin, such as Profile Studio (it adds and edits the instance's
+//! cosmetics): their scope is offered only to a client that asks for it, and an AI assistant never sees it.
 use crate::{
     auth::AuthUser,
     error::{AppError, AppResult},
@@ -20,14 +23,24 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-/// What an MCP client may be allowed to do, with the wording the consent page shows.
-pub const SCOPES: [(&str, &str); 5] = [
+/// What a client may be allowed to do, with the wording the consent page shows.
+pub const SCOPES: [(&str, &str); 6] = [
     ("mcp.read", "Read your servers, channels, DMs and messages, and search them"),
     ("mcp.notifications", "See your unread messages and mentions, and mark channels as read"),
     ("mcp.send", "Send, edit and react to messages and DMs as you"),
     ("mcp.manage", "Manage servers as you: create and edit channels, pin and delete messages, time out, kick and ban (only where you already have permission)"),
     ("mcp.admin", "Post announcements as the Parley account (only if you are an instance admin)"),
+    ("cosmetics.manage", "Add and edit the instance's profile cosmetics (only if you can manage the instance)"),
 ];
+/// Scopes offered only to a client that asks for them by name: tools, not assistants.
+const ASK_ONLY: [&str; 1] = ["cosmetics.manage"];
+
+/// The scopes the consent page offers for a request: what was asked for when it asks for a tool's scope, otherwise
+/// every assistant scope (the user may tick more than the client asked for).
+fn offered(wanted: &[String]) -> Vec<&'static str> {
+    let tool = wanted.iter().any(|w| ASK_ONLY.contains(&w.as_str()));
+    SCOPES.iter().map(|s| s.0).filter(|id| if tool { wanted.iter().any(|w| w == id) } else { !ASK_ONLY.contains(id) }).collect()
+}
 /// Granted when a client asks for no particular scope. Managing is opt-in.
 pub const DEFAULT_SCOPES: [&str; 3] = ["mcp.read", "mcp.notifications", "mcp.send"];
 const ACCESS_TTL_SECS: i64 = 3600;
@@ -85,14 +98,20 @@ pub struct RegisterReq {
     client_uri: Option<String>,
 }
 
-/// https anywhere; plain http only to this machine (desktop clients listen on a loopback port); app schemes such
-/// as `cursor://` are fine. Never script-ish schemes or fragments.
+/// https anywhere; plain http only to this machine (desktop clients listen on a loopback port) or a private network
+/// address (a tool served on the LAN, such as Profile Studio); app schemes such as `cursor://` are fine. Never
+/// script-ish schemes or fragments.
 pub fn redirect_ok(uri: &str) -> bool {
     let Ok(u) = url::Url::parse(uri) else { return false };
     if u.fragment().is_some() || uri.len() > 500 { return false; }
     match u.scheme() {
         "https" => u.host_str().is_some(),
-        "http" => matches!(u.host_str(), Some("localhost" | "127.0.0.1" | "[::1]")),
+        "http" => match u.host() {
+            Some(url::Host::Domain(d)) => d == "localhost",
+            Some(url::Host::Ipv4(ip)) => ip.is_loopback() || ip.is_private(),
+            Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+            None => false,
+        },
         "javascript" | "data" | "file" | "blob" | "about" | "vbscript" | "ftp" | "ws" | "wss" => false,
         s => s.contains('.') || s.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-'),
     }
@@ -195,7 +214,7 @@ pub async fn consent_info(State(state): State<AppState>, AuthUser(_uid): AuthUse
     Ok(Json(json!({
         "client": { "name": c.name, "client_uri": c.client_uri },
         "redirect_uri": redirect, "redirect_host": host,
-        "scopes": SCOPES.iter().map(|(id, d)| json!({ "id": id, "description": d, "requested": wanted.iter().any(|w| w == id) })).collect::<Vec<_>>(),
+        "scopes": SCOPES.iter().filter(|(id, _)| offered(&wanted).contains(id)).map(|(id, d)| json!({ "id": id, "description": d, "requested": wanted.iter().any(|w| w == id) })).collect::<Vec<_>>(),
     })))
 }
 
@@ -217,7 +236,8 @@ pub async fn consent(State(state): State<AppState>, AuthUser(uid): AuthUser, Jso
     if !req.approve {
         u.query_pairs_mut().append_pair("error", "access_denied");
     } else {
-        let scopes: Vec<String> = SCOPES.iter().map(|s| s.0.to_string()).filter(|s| req.scopes.contains(s)).collect();
+        let offer = offered(&parse_scopes(req.q.scope.as_deref())?);
+        let scopes: Vec<String> = offer.iter().map(|s| s.to_string()).filter(|s| req.scopes.contains(s)).collect();
         if scopes.is_empty() { return Err(AppError::BadRequest("Pick at least one permission".into())); }
         let code = crate::mail::new_token();
         sqlx::query("INSERT INTO mcp_codes (code_hash, client_id, user_id, scopes, redirect_uri, code_challenge, resource, expires_at) VALUES ($1, $2, $3, $4, $5, $6, $7, now() + interval '5 minutes')")
@@ -354,12 +374,21 @@ mod tests {
     #[test]
     fn redirect_uris() {
         for ok in ["https://claude.ai/api/mcp/auth_callback", "http://localhost:6274/oauth/callback", "http://127.0.0.1:33418/cb", "cursor://anysphere.cursor-retrieval/oauth/callback", "vscode://x/y"] { assert!(redirect_ok(ok), "{ok}"); }
-        for bad in ["http://evil.example/cb", "javascript:alert(1)", "data:text/html,x", "https://ok.example/cb#frag", "file:///etc/passwd", "not a url"] { assert!(!redirect_ok(bad), "{bad}"); }
+        for ok in ["http://10.198.2.3:5310/", "http://192.168.1.20/studio/", "http://172.16.0.9:8080/cb"] { assert!(redirect_ok(ok), "{ok}"); }
+        for bad in ["http://evil.example/cb", "http://8.8.8.8/cb", "http://172.32.0.1/cb", "javascript:alert(1)", "data:text/html,x", "https://ok.example/cb#frag", "file:///etc/passwd", "not a url"] { assert!(!redirect_ok(bad), "{bad}"); }
     }
 
     #[test]
     fn scopes_default_and_filter() {
         assert_eq!(parse_scopes(None).unwrap(), DEFAULT_SCOPES);
         assert_eq!(parse_scopes(Some("openid mcp.manage mcp.read mcp.read")).unwrap(), ["mcp.manage", "mcp.read"]);
+    }
+
+    #[test]
+    fn tool_scopes_are_offered_only_when_asked_for() {
+        let ask = |s: &str| offered(&parse_scopes(Some(s)).unwrap());
+        assert_eq!(ask("mcp.read"), ["mcp.read", "mcp.notifications", "mcp.send", "mcp.manage", "mcp.admin"]);
+        assert_eq!(ask("cosmetics.manage"), ["cosmetics.manage"]);
+        assert_eq!(ask("cosmetics.manage mcp.read"), ["mcp.read", "cosmetics.manage"]);
     }
 }

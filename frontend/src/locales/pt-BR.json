@@ -3749,5 +3749,8 @@
 "Move {name} down": "Mover {name} para baixo",
 "Move {name} up": "Mover {name} para cima",
 "This community was deleted while you were editing.": "Esta comunidade foi excluída enquanto você a editava.",
-"This page was changed by someone else. Review before saving.": "Esta página foi alterada por outra pessoa. Revise antes de salvar."
+"This page was changed by someone else. Review before saving.": "Esta página foi alterada por outra pessoa. Revise antes de salvar.",
+"Manage cosmetics": "Gerenciar cosméticos",
+"wants to connect to your {app} account": "quer se conectar à sua conta do {app}",
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Ele poderia adicionar cosméticos à instância e alterar os existentes para todos. Permita apenas ferramentas em que você confia."
 }

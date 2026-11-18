@@ -102,6 +102,12 @@ const REST_ALLOW: &[(&str, &str, &str)] = &[
     // Server settings; deleting the server or handing it to someone else stays in the app.
     ("PATCH", "/guilds/*", "mcp.manage"),
     ("POST", "/admin/announce", "mcp.admin"),
+    // Profile Studio: the assets folder's cosmetics (the routes still check the user can manage the instance).
+    ("GET", "/admin/cosmetics-folder", "cosmetics.manage"),
+    ("GET", "/admin/cosmetics/*", "cosmetics.manage"),
+    ("POST", "/admin/cosmetics/*/import/check", "cosmetics.manage"),
+    ("POST", "/admin/cosmetics/*/import", "cosmetics.manage"),
+    ("PATCH", "/admin/cosmetics/*/folder/*", "cosmetics.manage"),
 ];
 
 /// Whether an MCP token with `scopes` may make this REST call. Paths with or without the `/api` prefix.
@@ -289,5 +295,16 @@ mod tests {
         let admin = s(&["mcp.admin"]);
         assert!(rest_allows(&admin, &Method::POST, "/api/admin/announce"));
         assert!(!rest_allows(&admin, &Method::GET, "/admin/users") && !rest_allows(&admin, &Method::POST, &format!("/channels/{id}/messages")));
+        // The cosmetics scope reaches the assets folder's admin calls only: not deleting or turning items off, and nothing else.
+        let cos = s(&["cosmetics.manage"]);
+        for (m, p) in [(Method::GET, "/api/admin/cosmetics-folder"), (Method::GET, "/admin/cosmetics/effect"), (Method::POST, "/admin/cosmetics/frame/import/check"),
+                       (Method::POST, "/admin/cosmetics/decoration/import"), (Method::PATCH, "/admin/cosmetics/nameplate/folder/snowy_roof")] {
+            assert!(rest_allows(&cos, &m, p), "{m} {p}");
+        }
+        for (m, p) in [(Method::DELETE, "/admin/cosmetics/effect/asset:snow"), (Method::PATCH, "/admin/cosmetics/effect/asset:snow"), (Method::POST, "/admin/cosmetics/effect"),
+                       (Method::GET, "/users/@me"), (Method::GET, "/admin/users"), (Method::POST, "/admin/announce")] {
+            assert!(!rest_allows(&cos, &m, p), "{m} {p}");
+        }
+        assert!(!rest_allows(&all, &Method::GET, "/admin/cosmetics/effect"));
     }
 }

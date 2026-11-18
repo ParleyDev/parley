@@ -3749,5 +3749,8 @@
 "Move {name} down": "将 {name} 下移",
 "Move {name} up": "将 {name} 上移",
 "This community was deleted while you were editing.": "你编辑时，这个社区已被删除。",
-"This page was changed by someone else. Review before saving.": "此页面已被其他人更改。保存前请先查看。"
+"This page was changed by someone else. Review before saving.": "此页面已被其他人更改。保存前请先查看。",
+"Manage cosmetics": "管理装扮",
+"wants to connect to your {app} account": "想要连接到你的 {app} 账号",
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "它可以向实例添加装扮，并为所有人更改现有装扮。只允许你信任的工具。"
 }

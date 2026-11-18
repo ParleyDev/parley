@@ -3749,5 +3749,8 @@
 "Move {name} down": "{name} öğesini aşağı taşı",
 "Move {name} up": "{name} öğesini yukarı taşı",
 "This community was deleted while you were editing.": "Bu topluluk, siz düzenlerken silindi.",
-"This page was changed by someone else. Review before saving.": "Bu sayfa başka biri tarafından değiştirildi. Kaydetmeden önce gözden geçirin."
+"This page was changed by someone else. Review before saving.": "Bu sayfa başka biri tarafından değiştirildi. Kaydetmeden önce gözden geçirin.",
+"Manage cosmetics": "Kozmetikleri yönet",
+"wants to connect to your {app} account": "{app} hesabına bağlanmak istiyor",
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Sunucuya kozmetik ekleyebilir ve mevcut olanları herkes için değiştirebilir. Yalnızca güvendiğin araçlara izin ver."
 }

@@ -3749,5 +3749,8 @@
 "Move {name} down": "{name} を下に移動",
 "Move {name} up": "{name} を上に移動",
 "This community was deleted while you were editing.": "編集中にこのコミュニティが削除されました。",
-"This page was changed by someone else. Review before saving.": "このページは他の人によって変更されました。保存する前に確認してください。"
+"This page was changed by someone else. Review before saving.": "このページは他の人によって変更されました。保存する前に確認してください。",
+"Manage cosmetics": "コスメティックを管理",
+"wants to connect to your {app} account": "{app} アカウントへの接続を求めています",
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "インスタンスにコスメティックを追加したり、既存のものを全員に対して変更したりできます。信頼できるツールにのみ許可してください。"
 }

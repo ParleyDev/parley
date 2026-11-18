@@ -3749,5 +3749,8 @@
 "Move {name} down": "{name} omlaag",
 "Move {name} up": "{name} omhoog",
 "This community was deleted while you were editing.": "Deze community is verwijderd terwijl je bezig was met bewerken.",
-"This page was changed by someone else. Review before saving.": "Deze pagina is door iemand anders gewijzigd. Controleer haar voordat je opslaat."
+"This page was changed by someone else. Review before saving.": "Deze pagina is door iemand anders gewijzigd. Controleer haar voordat je opslaat.",
+"Manage cosmetics": "Cosmetica beheren",
+"wants to connect to your {app} account": "wil verbinding maken met je {app}-account",
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "Het kan cosmetica aan de instantie toevoegen en bestaande voor iedereen wijzigen. Sta dit alleen toe voor tools die je vertrouwt."
 }

@@ -3749,5 +3749,8 @@
 "Move {name} down": "{name} 아래로 이동",
 "Move {name} up": "{name} 위로 이동",
 "This community was deleted while you were editing.": "편집하는 동안 이 커뮤니티가 삭제되었습니다.",
-"This page was changed by someone else. Review before saving.": "다른 사람이 이 페이지를 변경했습니다. 저장하기 전에 확인하세요."
+"This page was changed by someone else. Review before saving.": "다른 사람이 이 페이지를 변경했습니다. 저장하기 전에 확인하세요.",
+"Manage cosmetics": "꾸미기 아이템 관리",
+"wants to connect to your {app} account": "{app} 계정에 연결하려고 합니다",
+"It could add cosmetics to the instance and change existing ones, for everyone. Only allow tools you trust.": "인스턴스에 꾸미기 아이템을 추가하고 기존 아이템을 모두에게 변경할 수 있습니다. 신뢰하는 도구에만 허용하세요."
 }
