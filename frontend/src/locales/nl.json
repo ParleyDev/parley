@@ -3763,5 +3763,12 @@
 "Open its window": "Venster openen",
 "Close its window": "Venster sluiten",
 "Back to the project": "Terug naar het project",
-"Stopped": "Gestopt"
+"Stopped": "Gestopt",
+"Add a passkey or turn on 2FA": "Voeg een passkey toe of zet 2FA aan",
+"Protect your sign-in": "Beveilig je aanmelding",
+"Your sign-in is protected": "Je aanmelding is beveiligd",
+"With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "Met een passkey of tweestapsverificatie komt iemand met alleen een gestolen wachtwoord niet in je account.",
+"Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "Zet tweestapsverificatie aan of voeg een passkey toe aan je eigen account (Gebruikersinstellingen › Mijn account) om het hier te vereisen.",
+"Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "Leden zonder tweestapsverificatie of passkey verliezen rechten zoals kicken, bannen, berichten verwijderen en kanalen of rollen beheren totdat ze er een instellen. Met alleen een gestolen wachtwoord kan de server niet worden verwoest.",
+"Communities, the Studio and a lot more": "Community's, de Studio en nog veel meer"
 }

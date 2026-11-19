@@ -3763,5 +3763,12 @@
 "Open its window": "Abrir a janela",
 "Close its window": "Fechar a janela",
 "Back to the project": "Voltar ao projeto",
-"Stopped": "Parado"
+"Stopped": "Parado",
+"Add a passkey or turn on 2FA": "Adicione uma chave de acesso ou ative a 2FA",
+"Protect your sign-in": "Proteja seu login",
+"Your sign-in is protected": "Seu login está protegido",
+"With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "Com uma chave de acesso ou autenticação em duas etapas, uma senha roubada sozinha não entra na sua conta.",
+"Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "Ative a autenticação em duas etapas ou adicione uma chave de acesso à sua própria conta (Configurações de usuário › Minha conta) para exigi-la aqui.",
+"Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "Membros sem autenticação em duas etapas ou chave de acesso perdem poderes como expulsar, banir, apagar mensagens e gerenciar canais ou cargos até configurarem uma. Uma senha roubada sozinha não pode ser usada para destruir o servidor.",
+"Communities, the Studio and a lot more": "Comunidades, o Estúdio e muito mais"
 }

@@ -3763,5 +3763,12 @@
 "Open its window": "打开其窗口",
 "Close its window": "关闭其窗口",
 "Back to the project": "返回项目",
-"Stopped": "已停止"
+"Stopped": "已停止",
+"Add a passkey or turn on 2FA": "添加通行密钥或开启双重验证",
+"Protect your sign-in": "保护你的登录",
+"Your sign-in is protected": "你的登录已受保护",
+"With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "有了通行密钥或双重验证，仅凭被盗的密码无法进入你的账号。",
+"Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "在你自己的账号中开启双重验证或添加通行密钥（用户设置 › 我的账号），即可在此要求它。",
+"Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "没有双重验证或通行密钥的成员会失去踢出、封禁、删除消息以及管理频道或身份组等权限，直到他们设置其中之一。仅凭被盗的密码无法破坏服务器。",
+"Communities, the Studio and a lot more": "社区、工作室，还有更多"
 }

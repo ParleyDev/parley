@@ -19,7 +19,7 @@ export default function GettingStarted({ onAddFriend }: { onAddFriend: () => voi
     { id: 'friend', label: t('Add a friend'), done: hasFriend, go: onAddFriend },
     { id: 'server', label: t('Join or create a server'), done: hasServer, go: () => openModal({ kind: 'createGuild' }) },
     { id: 'status', label: t('Set a custom status'), done: !!user.custom_status, go: () => openModal({ kind: 'customStatus' }) },
-    { id: 'mfa', label: t('Turn on two-factor authentication'), done: !!user.mfa_enabled, go: () => openModal({ kind: 'userSettings', tab: 'account' }) },
+    { id: 'mfa', label: t('Add a passkey or turn on 2FA'), done: !!(user.mfa_enabled || user.has_passkey), go: () => openModal({ kind: 'userSettings', tab: 'account' }) },
   ]
   const left = steps.filter((s) => !s.done).length
   if (left === 0) return null

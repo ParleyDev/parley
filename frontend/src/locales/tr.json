@@ -3763,5 +3763,12 @@
 "Open its window": "Penceresini aç",
 "Close its window": "Penceresini kapat",
 "Back to the project": "Projeye dön",
-"Stopped": "Durduruldu"
+"Stopped": "Durduruldu",
+"Add a passkey or turn on 2FA": "Geçiş anahtarı ekle veya 2FA’yı aç",
+"Protect your sign-in": "Girişini koru",
+"Your sign-in is protected": "Girişin korunuyor",
+"With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "Geçiş anahtarı veya iki adımlı doğrulamayla, çalınan bir şifre tek başına hesabına girmeye yetmez.",
+"Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "Burada zorunlu kılmak için kendi hesabında iki adımlı doğrulamayı aç veya bir geçiş anahtarı ekle (Kullanıcı Ayarları › Hesabım).",
+"Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "İki adımlı doğrulaması veya geçiş anahtarı olmayan üyeler, birini ayarlayana kadar atma, yasaklama, mesaj silme ve kanal ya da rol yönetme gibi yetkilerini kaybeder. Çalınan bir şifre tek başına sunucuyu mahvetmek için kullanılamaz.",
+"Communities, the Studio and a lot more": "Topluluklar, Stüdyo ve çok daha fazlası"
 }

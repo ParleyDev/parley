@@ -100,7 +100,7 @@ Parley on a phone shows one thing at a time:
 
 ## The getting started checklist
 
-New accounts see a short checklist: add a profile picture, add a friend, join or create a server, set a custom status and turn on two-factor authentication. Each item takes you to the right place. Dismiss it whenever you like.
+New accounts see a short checklist: add a profile picture, add a friend, join or create a server, set a custom status, and add a passkey or turn on two-factor authentication (either one ticks it off). Each item takes you to the right place. Dismiss it whenever you like.
 
 ## Getting help
 

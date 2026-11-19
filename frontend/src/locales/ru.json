@@ -3763,5 +3763,12 @@
 "Open its window": "Открыть окно",
 "Close its window": "Закрыть окно",
 "Back to the project": "Вернуться к проекту",
-"Stopped": "Остановлено"
+"Stopped": "Остановлено",
+"Add a passkey or turn on 2FA": "Добавьте ключ доступа или включите 2FA",
+"Protect your sign-in": "Защитите вход",
+"Your sign-in is protected": "Ваш вход защищён",
+"With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "С ключом доступа или двухфакторной аутентификацией одного украденного пароля недостаточно, чтобы войти в ваш аккаунт.",
+"Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "Включите двухфакторную аутентификацию или добавьте ключ доступа в свой аккаунт (Настройки пользователя › Мой аккаунт), чтобы требовать её здесь.",
+"Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "Участники без двухфакторной аутентификации или ключа доступа теряют права — выгонять, банить, удалять сообщения, управлять каналами и ролями, — пока не настроят что-то одно. Одним украденным паролем сервер не разрушить.",
+"Communities, the Studio and a lot more": "Сообщества, Студия и многое другое"
 }

@@ -3763,5 +3763,12 @@
 "Open its window": "창 열기",
 "Close its window": "창 닫기",
 "Back to the project": "프로젝트로 돌아가기",
-"Stopped": "정지됨"
+"Stopped": "정지됨",
+"Add a passkey or turn on 2FA": "패스키를 추가하거나 2FA 켜기",
+"Protect your sign-in": "로그인 보호",
+"Your sign-in is protected": "로그인이 보호되고 있어요",
+"With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "패스키나 2단계 인증이 있으면 도난당한 비밀번호만으로는 계정에 들어갈 수 없어요.",
+"Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "여기서 요구하려면 내 계정에서 2단계 인증을 켜거나 패스키를 추가하세요(사용자 설정 › 내 계정).",
+"Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "2단계 인증이나 패스키가 없는 멤버는 둘 중 하나를 설정할 때까지 추방, 차단, 메시지 삭제, 채널이나 역할 관리 같은 권한을 잃어요. 도난당한 비밀번호만으로는 서버를 망칠 수 없어요.",
+"Communities, the Studio and a lot more": "커뮤니티, 스튜디오 그리고 더 많은 것"
 }
