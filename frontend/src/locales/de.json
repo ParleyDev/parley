@@ -3770,5 +3770,17 @@
 "With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "Mit einem Passkey oder Zwei-Faktor-Authentifizierung reicht ein gestohlenes Passwort allein nicht, um in dein Konto zu kommen.",
 "Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "Schalte die Zwei-Faktor-Authentifizierung ein oder füge deinem eigenen Konto einen Passkey hinzu (Benutzereinstellungen › Mein Konto), um sie hier zu verlangen.",
 "Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "Mitglieder ohne Zwei-Faktor-Authentifizierung oder Passkey verlieren Rechte wie Kicken, Bannen, Nachrichten löschen und Kanäle oder Rollen verwalten, bis sie eines davon einrichten. Ein gestohlenes Passwort allein kann nicht benutzt werden, um den Server zu ruinieren.",
-"Communities, the Studio and a lot more": "Communities, das Studio und vieles mehr"
+"Communities, the Studio and a lot more": "Communities, das Studio und vieles mehr",
+"Bubbly": "Blubbernd",
+"Retro": "Retro",
+"Modern": "Modern",
+"Medieval": "Mittelalter",
+"Vampire": "Vampir",
+"Playful": "Verspielt",
+"Tech": "Tech",
+"Metal": "Metal",
+"Handwritten": "Handschrift",
+"Poster": "Plakat",
+"Typewriter": "Schreibmaschine",
+"Chrome": "Chrom"
 }

@@ -3770,5 +3770,17 @@
 "With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "Met een passkey of tweestapsverificatie komt iemand met alleen een gestolen wachtwoord niet in je account.",
 "Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "Zet tweestapsverificatie aan of voeg een passkey toe aan je eigen account (Gebruikersinstellingen › Mijn account) om het hier te vereisen.",
 "Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "Leden zonder tweestapsverificatie of passkey verliezen rechten zoals kicken, bannen, berichten verwijderen en kanalen of rollen beheren totdat ze er een instellen. Met alleen een gestolen wachtwoord kan de server niet worden verwoest.",
-"Communities, the Studio and a lot more": "Community's, de Studio en nog veel meer"
+"Communities, the Studio and a lot more": "Community's, de Studio en nog veel meer",
+"Bubbly": "Bubbelig",
+"Retro": "Retro",
+"Modern": "Modern",
+"Medieval": "Middeleeuws",
+"Vampire": "Vampier",
+"Playful": "Speels",
+"Tech": "Tech",
+"Metal": "Metal",
+"Handwritten": "Handgeschreven",
+"Poster": "Poster",
+"Typewriter": "Typemachine",
+"Chrome": "Chroom"
 }

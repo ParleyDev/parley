@@ -30,7 +30,7 @@ export default function Modal({ title, subtitle, onClose, children, width = 'max
   )
   return (
     <div className={`fixed inset-0 ${layer} flex items-center justify-center bg-black/70 backdrop-blur-sm safe-pad`} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className={`pop w-full ${width} max-h-full flex flex-col rounded-2xl bg-bg-1 border border-line shadow-2xl overflow-hidden`} role="dialog" aria-modal>
+      <div className={`pop w-full ${width} max-h-full flex flex-col rounded-2xl bg-bg-1 text-text-0 border border-line shadow-2xl overflow-hidden`} role="dialog" aria-modal>
         {(title || subtitle) && (
           <div className="px-6 pt-6 pb-2 relative shrink-0">
             {title && <h2 className="text-xl font-bold">{t(title)}</h2>}

@@ -3770,5 +3770,17 @@
 "With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "パスキーまたは二要素認証があれば、盗まれたパスワードだけではアカウントに入れません。",
 "Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "ここで必須にするには、自分のアカウントで二要素認証をオンにするか、パスキーを追加してください（ユーザー設定 › マイアカウント）。",
 "Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "二要素認証もパスキーもないメンバーは、どちらかを設定するまでキック、BAN、メッセージ削除、チャンネルやロールの管理などの権限を失います。盗まれたパスワードだけではサーバーを荒らせません。",
-"Communities, the Studio and a lot more": "コミュニティ、スタジオ、そのほか多数"
+"Communities, the Studio and a lot more": "コミュニティ、スタジオ、そのほか多数",
+"Bubbly": "バブリー",
+"Retro": "レトロ",
+"Modern": "モダン",
+"Medieval": "中世",
+"Vampire": "ヴァンパイア",
+"Playful": "ポップ",
+"Tech": "テック",
+"Metal": "メタル",
+"Handwritten": "手書き",
+"Poster": "ポスター",
+"Typewriter": "タイプライター",
+"Chrome": "クローム"
 }

@@ -337,8 +337,11 @@ pub fn validate_typing_indicator(v: &serde_json::Value) -> AppResult<serde_json:
 /// Check a {font, effect, colors} style; returns the cleaned style plus (first colour, second colour for gradients).
 pub fn validate_name_style(v: &serde_json::Value) -> AppResult<(serde_json::Value, Option<String>, Option<String>)> {
     let o = v.as_object().ok_or_else(|| AppError::BadRequest("name_style must be an object".into()))?;
+    // Ids from before the 2026-11 rework (older clients, templates) map to their replacements (migration 0168).
     let font = o.get("font").and_then(|x| x.as_str()).unwrap_or("default");
-    let effect = o.get("effect").and_then(|x| x.as_str()).unwrap_or("solid");
+    let font = LEGACY_NAME_FONTS.iter().find(|(old, _)| *old == font).map_or(font, |(_, new)| *new);
+    let effect_in = o.get("effect").and_then(|x| x.as_str()).unwrap_or("solid");
+    let effect = match effect_in { "prism" | "holographic" => "rainbow", e => e };
     if !NAME_FONTS.contains(&font) { return Err(AppError::BadRequest(format!("Unknown font {font}"))); }
     if !NAME_EFFECTS.contains(&effect) { return Err(AppError::BadRequest(format!("Unknown effect {effect}"))); }
     let mut colors: Vec<String> = Vec::new();
@@ -347,14 +350,19 @@ pub fn validate_name_style(v: &serde_json::Value) -> AppResult<(serde_json::Valu
         if c.len() != 7 || !c.starts_with('#') || !c[1..].chars().all(|ch| ch.is_ascii_hexdigit()) { return Err(AppError::BadRequest(format!("Bad colour {c}"))); }
         colors.push(c);
     }
+    if effect_in == "holographic" { colors = HOLO_COLORS.iter().map(|c| c.to_string()).collect(); }
     if colors.len() > 6 { return Err(AppError::BadRequest("At most 6 colours".into())); }
     let primary = colors.first().cloned();
     let accent = if effect == "gradient" { colors.get(1).cloned() } else { None };
     Ok((serde_json::json!({ "font": font, "effect": effect, "colors": colors }), primary, accent))
 }
 
-pub const NAME_FONTS: [&str; 12] = ["default", "serif", "mono", "rounded", "display", "script", "smallcaps", "condensed", "wide", "italic", "slab", "pixel"];
-pub const NAME_EFFECTS: [&str; 10] = ["solid", "gradient", "neon", "toon", "pop", "gummy", "prism", "glitch", "wave", "holographic"];
+pub const NAME_FONTS: [&str; 14] = ["default", "slab", "bubbly", "retro", "modern", "medieval", "pixel", "vampire", "playful", "tech", "metal", "handwritten", "poster", "typewriter"];
+pub const NAME_EFFECTS: [&str; 10] = ["solid", "gradient", "neon", "toon", "pop", "gummy", "rainbow", "glitch", "wave", "chrome"];
+/// Fonts retired in the 2026-11 rework and what replaced them (frontend lib/nameStyle.ts LEGACY_FONTS).
+pub const LEGACY_NAME_FONTS: [(&str, &str); 9] = [("serif", "slab"), ("mono", "typewriter"), ("rounded", "bubbly"), ("display", "poster"), ("script", "retro"), ("smallcaps", "default"), ("condensed", "poster"), ("wide", "default"), ("italic", "default")];
+/// The Rainbow palette Holographic names became (frontend HOLO_COLORS).
+pub const HOLO_COLORS: [&str; 5] = ["#8fb8ff", "#ffa8e4", "#d9c8ff", "#a8f0d4", "#8fb8ff"];
 
 pub const DECORATIONS: [&str; 7] = ["", "gold", "rainbow", "glow", "ice", "dashed", "ember"];
 

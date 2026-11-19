@@ -1,6 +1,6 @@
 // Role tools: icons (emoji or image) next to names in chat and the member list, the "Allow anyone to @mention this
 // role" switch (role mentions only ping when it's on, or for members who can mention everyone), Duplicate Role, member
-// counts per role, clicking a @role to see who has it, and the holographic name style.
+// counts per role, clicking a @role to see who has it, and a legacy holographic name style.
 import { chromium } from 'playwright'
 import { WEB, S, reg, call, raw, ok, finish } from '../lib.mjs'
 const a = await reg('alice'), b = await reg('bob')
@@ -55,9 +55,9 @@ ok('so does their message', await p.locator(`[data-msg-id="${m.id}"] [data-role-
 
 console.log('-- holographic')
 const holo = await raw(a.token, 'PATCH', `/guilds/${g.id}/roles/${helper.id}`, { name_style: { font: 'default', effect: 'holographic', colors: ['#a9c9ff', '#ffbbec', '#c6f7e2'] } })
-ok('the holographic style is accepted', holo.status === 200 && (await holo.json()).name_style.effect === 'holographic')
+ok('a holographic style from an older client is saved as Rainbow', holo.status === 200 && (await holo.json()).name_style.effect === 'rainbow')
 await p.waitForTimeout(500)
-ok('and names render with it', await p.locator(`[data-member-row="${b.user.id}"] .ne-holographic`).count() >= 1)
+ok('and names render with it', await p.locator(`[data-member-row="${b.user.id}"] .ne-rainbow`).count() >= 1)
 ok('no page errors', errors.length === 0, errors.join(' | '))
 await call(a.token, 'DELETE', `/guilds/${g.id}`, { password: 'password1', name: g.name })
 await browser.close(); await finish()

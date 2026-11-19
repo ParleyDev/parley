@@ -3770,5 +3770,17 @@
 "With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "Dzięki kluczowi dostępu lub uwierzytelnianiu dwuskładnikowemu samo skradzione hasło nie wystarczy, by wejść na twoje konto.",
 "Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "Włącz uwierzytelnianie dwuskładnikowe lub dodaj klucz dostępu do własnego konta (Ustawienia użytkownika › Moje konto), aby wymagać go tutaj.",
 "Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "Członkowie bez uwierzytelniania dwuskładnikowego lub klucza dostępu tracą uprawnienia, takie jak wyrzucanie, banowanie, usuwanie wiadomości i zarządzanie kanałami lub rolami, dopóki ich nie skonfigurują. Samym skradzionym hasłem nie da się zniszczyć serwera.",
-"Communities, the Studio and a lot more": "Społeczności, Studio i wiele więcej"
+"Communities, the Studio and a lot more": "Społeczności, Studio i wiele więcej",
+"Bubbly": "Bąbelkowy",
+"Retro": "Retro",
+"Modern": "Nowoczesny",
+"Medieval": "Średniowieczny",
+"Vampire": "Wampir",
+"Playful": "Zabawny",
+"Tech": "Techniczny",
+"Metal": "Metal",
+"Handwritten": "Odręczny",
+"Poster": "Plakat",
+"Typewriter": "Maszyna do pisania",
+"Chrome": "Chrom"
 }

@@ -27,7 +27,7 @@ const nameIn = (scope) => p.locator(`${scope} [data-profile-name]`).first().eval
 const shows = (n, want) => n.text === want && n.w > 0 && n.h > 0
 
 const bad = []
-for (const [font, effect] of [...FONTS.map((f) => [f, 'holographic']), ...EFFECTS.map((e) => ['script', e])]) {
+for (const [font, effect] of [...FONTS.map((f) => [f, 'rainbow']), ...EFFECTS.map((e) => ['retro', e])]) {
   await call(b.token, 'PATCH', '/users/@me', { name_style: { font, effect, colors: ['#57f287', '#3b9bff', '#c94bff', '#f04172', '#ff5c3b'] } })
   await p.goto(`${WEB}/channels/@me/${dm.id}`); await p.waitForSelector('[data-dm-profile] [data-profile-name]', { state: 'attached' })
   const n = await nameIn('[data-dm-profile]')

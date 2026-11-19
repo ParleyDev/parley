@@ -3,6 +3,7 @@ import { bgUrl } from '../lib/crop'
 import CropImg, { CropLayer } from './CropImg'
 import { Check, Clock, MessageSquare, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX, User as UserIcon } from 'lucide-react'
 import { nameLook } from '../lib/nameStyle'
+import NameText from './NameText'
 import { roleLook } from './StyledName'
 import { locale, useT } from '../lib/i18n'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
@@ -261,7 +262,7 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
               <input autoFocus value={nickEdit} maxLength={32} onChange={(e) => setNickEdit(e.target.value)} onBlur={saveNick} onKeyDown={(e) => { if (e.key === 'Enter') saveNick(); if (e.key === 'Escape') setNickEdit(null) }} placeholder={globalName(user)}
                 className="h-7 w-48 rounded-md bg-black/30 border border-white/20 px-2 text-sm font-bold outline-none" data-friend-nick-input />
             ) : (
-              <span className={look.className} style={nameStyle} data-profile-name>{shownName(user, member, friendNote?.nickname)}</span>
+              <span className={look.className} style={nameStyle} data-profile-name><NameText look={look}>{shownName(user, member, friendNote?.nickname)}</NameText></span>
             )}
             <ClanTag userId={user.id} tag={user.clan_tag} />
             <Badges badges={user.badges} />

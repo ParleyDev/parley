@@ -6,6 +6,7 @@ import { assetFile, layeredThumb, useCatalog, type LayeredItem } from '../../lib
 import { ASSET_PREFIX, useAssetDecorations } from '../../lib/decorations'
 import { useT } from '../../lib/i18n'
 import { nameLook } from '../../lib/nameStyle'
+import NameText from '../NameText'
 import { DECORATIONS } from '../../lib/types'
 import { useLazySlice } from '../../lib/useLazySlice'
 import Avatar from '../Avatar'
@@ -73,7 +74,7 @@ export function CosmeticPreview({ kind, value, user }: { kind: CosmeticKind; val
         <div className={`relative isolate flex items-center gap-3 overflow-hidden rounded-md px-2 py-1.5 ${nameplateClass(value)}`}>
           <NameplateVideo value={value} always />
           <Avatar user={{ ...user, status: 'online' }} size={32} presence />
-          <span className={`min-w-0 truncate font-semibold ${look.className}`} style={{ ...look.style, textShadow: value ? '0 1px 2px rgba(0,0,0,.8)' : undefined }}>{user.display_name}</span>
+          <span className={`min-w-0 truncate font-semibold ${look.className}`} style={{ ...look.style, textShadow: value ? '0 1px 2px rgba(0,0,0,.8)' : undefined }}><NameText look={look}>{user.display_name}</NameText></span>
         </div>
         {ghost('w-24')}{ghost('w-32')}
       </div>

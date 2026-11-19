@@ -8,12 +8,13 @@ import type { Role } from '../../../lib/types'
 import { canManageRole, has, P, PERMS, sortedRoles, EMPTY_ROLES, bor, bclear } from '../../../lib/perms'
 import { Toggle } from '../SettingsShell'
 import { roleLook } from '../../StyledName'
-import { colorsOf, EFFECTS, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../../lib/nameStyle'
+import { colorsOf, effectOf, fontOf, EFFECTS, nameLook, type NameStyle } from '../../../lib/nameStyle'
 import { RequirementsEditor } from '../../LinkedRoles'
 import NameStyleModal from '../NameStyle'
+import NameText from '../../NameText'
 import { useT } from '../../../lib/i18n'
 
-const styleOfRole = (r: Role): NameStyle => ({ font: (r.name_style?.font as NameFont) ?? 'default', effect: (r.name_style?.effect as NameEffect) ?? (r.color_accent ? 'gradient' : 'solid'), colors: colorsOf({ name_primary: r.color, name_accent: r.color_accent, name_style: r.name_style }) })
+const styleOfRole = (r: Role): NameStyle => ({ font: fontOf(r.name_style?.font), effect: effectOf(r.name_style?.effect) ?? (r.color_accent ? 'gradient' : 'solid'), colors: colorsOf({ name_primary: r.color, name_accent: r.color_accent, name_style: r.name_style }) })
 const roleDot = (r: Role): string => { const c = colorsOf({ name_primary: r.color, name_accent: r.color_accent, name_style: r.name_style }); return c.length === 0 ? '#7d8394' : c.length === 1 ? c[0] : `linear-gradient(90deg, ${c.join(', ')})` }
 
 export default function RolesTab({ guildId }: { guildId: string }) {
@@ -140,7 +141,7 @@ export default function RolesTab({ guildId }: { guildId: string }) {
                 <div className="space-y-2 rounded-xl bg-bg-0/40 border border-line p-3" data-role-style-card>
                   <label className="label">{t('Role name style')}</label>
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className={`text-[15px] font-semibold ${nameLook({ name_style: draft.name_style }).className}`} style={nameLook({ name_style: draft.name_style }).style} data-role-name-preview>{draft.name || t('role name')}</span>
+                    <span className={`text-[15px] font-semibold ${nameLook({ name_style: draft.name_style }).className}`} style={nameLook({ name_style: draft.name_style }).style} data-role-name-preview><NameText look={nameLook({ name_style: draft.name_style })}>{draft.name || t('role name')}</NameText></span>
                     <span className="text-xs text-text-2">{draft.name_style.colors?.length ? t(EFFECTS.find((e) => e.id === draft.name_style.effect)?.label ?? 'Solid') : t('No colour')}</span>
                     <button type="button" className="btn-ghost bg-bg-3 hover:bg-bg-4 ml-auto" disabled={!editable} onClick={() => setStyleOpen(true)} data-role-style-open>{t('Change Name Style')}</button>
                   </div>

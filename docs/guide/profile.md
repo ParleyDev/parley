@@ -8,6 +8,7 @@ covers:
   - frontend/src/components/modals/EditProfile.tsx
   - frontend/src/components/modals/ServerProfile.tsx
   - frontend/src/components/modals/NameStyle.tsx
+  - frontend/src/components/NameText.tsx
   - frontend/src/components/modals/CustomStatus.tsx
   - frontend/src/components/modals/Nickname.tsx
   - frontend/src/components/modals/Profile.tsx
@@ -67,7 +68,11 @@ The grid keeps loading as you scroll, so you'll see everything. **Built in** opt
 
 ## Display name style
 
-**Display Name Style** sets the font, an effect (like a gradient or glow) and colours for your name. Not sure? Try **Surprise Me**. In servers, a coloured role takes over your name colour.
+**Display Name Style** sets the font, an effect and colours for your name. Not sure? Try **Surprise Me**. In servers, a coloured role takes over your name colour.
+
+- **Fonts**: 14 typefaces, from **Slab**, **Bubbly** and **Retro** to **Pixel**, **Medieval**, **Handwritten** and **Typewriter**. They look the same on every device. Letters a font doesn't have, such as Japanese or Arabic, show in Parley's normal font.
+- **Effects**: **Solid**, **Gradient**, **Neon**, **Toon**, **Pop**, **Gummy**, **Rainbow**, **Glitch**, **Wave** and **Chrome**. Gradient and Pop take two colours, Gummy colours its letters in turn with three, and Rainbow uses five (pick a palette such as Holo, or your own).
+- Effects stand still until you point at the name, and play all the time on profile cards. Change that, or turn them off, in **Settings → Accessibility**.
 
 ## Tags and badges
 

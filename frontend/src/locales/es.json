@@ -3770,5 +3770,17 @@
 "With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "Con una llave de acceso o la autenticación en dos pasos, una contraseña robada no basta para entrar en tu cuenta.",
 "Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "Activa la autenticación en dos pasos o añade una llave de acceso a tu propia cuenta (Ajustes de usuario › Mi cuenta) para exigirla aquí.",
 "Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "Los miembros sin autenticación en dos pasos ni llave de acceso pierden poderes como expulsar, banear, borrar mensajes y gestionar canales o roles hasta que configuren una. Una contraseña robada no basta para destrozar el servidor.",
-"Communities, the Studio and a lot more": "Comunidades, el Estudio y mucho más"
+"Communities, the Studio and a lot more": "Comunidades, el Estudio y mucho más",
+"Bubbly": "Burbujeante",
+"Retro": "Retro",
+"Modern": "Moderno",
+"Medieval": "Medieval",
+"Vampire": "Vampiro",
+"Playful": "Divertido",
+"Tech": "Tecno",
+"Metal": "Metal",
+"Handwritten": "Manuscrita",
+"Poster": "Cartel",
+"Typewriter": "Máquina de escribir",
+"Chrome": "Cromado"
 }

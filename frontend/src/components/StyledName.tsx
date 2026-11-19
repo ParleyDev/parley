@@ -4,6 +4,7 @@ import { useStore } from '../store'
 import { usePrefs } from '../lib/prefs'
 import { nameLook, type NameLook } from '../lib/nameStyle'
 import { globalName } from '../lib/names'
+import NameText from './NameText'
 
 /** A role's name look (its style, or its classic colour / gradient). */
 export const roleLook = (r: Pick<Role, 'color' | 'color_accent' | 'name_style'>): NameLook => nameLook({ name_primary: r.color, name_accent: r.color_accent, name_style: r.name_style })
@@ -65,5 +66,5 @@ export default function StyledName({ userId, guildId, children, className, style
   const look = useRole ? roleLook(role) : nameLook(src)
   // Like Discord: their server nickname here, else your friend nickname for them, else the name given, else their global name.
   const label = member?.nickname?.trim() || nick || children || globalName(user ?? member) || 'Unknown'
-  return <span className={`${className ?? ''} ${look.className}`.trim()} style={{ ...style, ...look.style }} data-role-colors={mode} data-name-effect={useRole ? (role.name_style?.effect ?? (role.color_accent ? 'gradient' : 'solid')) : (src?.name_style?.effect ?? (src?.name_accent ? 'gradient' : src?.name_primary ? 'solid' : undefined))}>{label}{mode === 'next' && role && <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: role.color ?? undefined }} title={role.name} data-role-dot />}</span>
+  return <span className={`${className ?? ''} ${look.className}`.trim()} style={{ ...style, ...look.style }} data-role-colors={mode} data-name-effect={useRole ? (role.name_style?.effect ?? (role.color_accent ? 'gradient' : 'solid')) : (src?.name_style?.effect ?? (src?.name_accent ? 'gradient' : src?.name_primary ? 'solid' : undefined))}><NameText look={look}>{label}</NameText>{mode === 'next' && role && <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: role.color ?? undefined }} title={role.name} data-role-dot />}</span>
 }

@@ -3770,5 +3770,17 @@
 "With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "مع مفتاح مرور أو المصادقة الثنائية، لا تكفي كلمة مرور مسروقة وحدها للدخول إلى حسابك.",
 "Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "فعّل المصادقة الثنائية أو أضف مفتاح مرور إلى حسابك (إعدادات المستخدم › حسابي) لتشترطها هنا.",
 "Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "يفقد الأعضاء الذين ليس لديهم مصادقة ثنائية أو مفتاح مرور صلاحيات مثل الطرد والحظر وحذف الرسائل وإدارة القنوات أو الأدوار حتى يُعدّوا أحدهما. لا يمكن استخدام كلمة مرور مسروقة وحدها لتخريب الخادم.",
-"Communities, the Studio and a lot more": "المجتمعات والاستوديو والكثير غيرها"
+"Communities, the Studio and a lot more": "المجتمعات والاستوديو والكثير غيرها",
+"Bubbly": "فقاعي",
+"Retro": "كلاسيكي",
+"Modern": "عصري",
+"Medieval": "قروسطي",
+"Vampire": "مصاص دماء",
+"Playful": "مرح",
+"Tech": "تقني",
+"Metal": "ميتال",
+"Handwritten": "خط يد",
+"Poster": "ملصق",
+"Typewriter": "آلة كاتبة",
+"Chrome": "كروم"
 }

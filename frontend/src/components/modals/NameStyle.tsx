@@ -1,9 +1,10 @@
 import { Pipette, Sparkles } from 'lucide-react'
 import { useState } from 'react'
 import Modal from '../Modal'
-import { colourCount, defaultColors, EFFECTS, FONTS, GRADIENT_PRESETS, GUMMY_PRESETS, gradientFor, modeOf, NAME_COLORS, nameLook, PRISM_PRESETS, surpriseStyle, type NameEffect, type NameFont, type NameStyle } from '../../lib/nameStyle'
+import { colourCount, defaultColors, effectOf, EFFECTS, fontOf, FONTS, GRADIENT_PRESETS, GUMMY_PRESETS, gradientFor, modeOf, NAME_COLORS, nameLook, RAINBOW_PRESETS, surpriseStyle, type NameEffect, type NameFont, type NameStyle } from '../../lib/nameStyle'
 import { useStore } from '../../store'
 import Avatar from '../Avatar'
+import NameText from '../NameText'
 import { useT } from '../../lib/i18n'
 
 /** Eyedropper over a colour stop. A module-level component: defining it inside the modal would remount the
@@ -30,9 +31,9 @@ export default function NameStyleModal({ onClose, name, value, onApply, title: t
   const t = useT()
   const title = titleProp ?? t('Change Display Name Style')
   const me = useStore((s) => s.user)
-  const [font, setFont] = useState<NameFont>(value.font ?? 'default')
-  const [effect, setEffect] = useState<NameEffect>(value.effect ?? 'solid')
-  const [colors, setColors] = useState<string[]>(value.colors?.length ? value.colors : defaultColors(value.effect ?? 'solid', []))
+  const [font, setFont] = useState<NameFont>(fontOf(value.font))
+  const [effect, setEffect] = useState<NameEffect>(effectOf(value.effect) ?? 'solid')
+  const [colors, setColors] = useState<string[]>(value.colors?.length ? value.colors : defaultColors(effectOf(value.effect) ?? 'solid', []))
   const [none, setNone] = useState(!(value.colors?.length))
   const mode = modeOf(effect)
   const n = colourCount(mode)
@@ -50,13 +51,13 @@ export default function NameStyleModal({ onClose, name, value, onApply, title: t
           <section>
             <h3 className="label">{t('Choose font')}</h3>
             <div className="grid grid-cols-4 phone:grid-cols-3 gap-2" data-font-options>
-              {FONTS.map((f) => <button key={f.id} type="button" onClick={() => setFont(f.id)} title={f.label} className={`h-14 rounded-lg border text-xl font-semibold ${font === f.id ? 'border-accent bg-accent/15' : 'border-line bg-bg-1 hover:border-text-2'} ${f.id !== 'default' ? `nf-${f.id}` : ''}`} data-font={f.id} aria-pressed={font === f.id}>Gg</button>)}
+              {FONTS.map((f) => <button key={f.id} type="button" onClick={() => setFont(f.id)} title={f.label} className={`h-14 rounded-lg border text-base font-semibold ${font === f.id ? 'border-accent bg-accent/15' : 'border-line bg-bg-1 hover:border-text-2'} ${f.id !== 'default' ? `nf-${f.id}` : ''}`} data-font={f.id} aria-pressed={font === f.id}><span className="block truncate px-1">{f.label}</span></button>)}
             </div>
           </section>
           <section>
             <h3 className="label">{t('Choose effect')}</h3>
             <div className="grid grid-cols-4 phone:grid-cols-3 gap-2" data-effect-options>
-              {EFFECTS.map((e) => { const l = sample(e.id); return <button key={e.id} type="button" onClick={() => pickEffect(e.id)} className={`h-14 rounded-lg border text-[15px] font-semibold ${effect === e.id ? 'border-accent bg-accent/15' : 'border-line bg-bg-1 hover:border-text-2'}`} data-effect={e.id} aria-pressed={effect === e.id}><span className={l.className} style={l.style}>{e.label}</span></button> })}
+              {EFFECTS.map((e) => { const l = sample(e.id); return <button key={e.id} type="button" onClick={() => pickEffect(e.id)} className={`h-14 rounded-lg border text-[15px] font-semibold ${effect === e.id ? 'border-accent bg-accent/15' : 'border-line bg-bg-1 hover:border-text-2'}`} data-effect={e.id} aria-pressed={effect === e.id}><span className={l.className} style={l.style}><NameText look={l}>{e.label}</NameText></span></button> })}
             </div>
           </section>
           <section className="space-y-2">
@@ -74,7 +75,7 @@ export default function NameStyleModal({ onClose, name, value, onApply, title: t
                 {GUMMY_PRESETS.map((p) => { const on = p.join() === cur.join(); return <button key={p.join()} type="button" onClick={() => { setColors(p); setNone(false) }} className={`h-10 w-12 rounded-lg border-2 ${on ? 'border-white' : 'border-transparent'}`} style={{ background: gradientFor('gummy', p) }} title={p.join(', ')} data-name-preset={p.join(',')} /> })}
               </div>
             )}
-            {mode === 'five' && <div className="flex items-center gap-3 flex-wrap"><Bar stops={5} colors={cur} onPick={setAt} /><Presets list={PRISM_PRESETS} effect={effect} current={cur} onPick={(p) => { setColors(p); setNone(false) }} /></div>}
+            {mode === 'five' && <div className="flex items-center gap-3 flex-wrap"><Bar stops={5} colors={cur} onPick={setAt} /><Presets list={RAINBOW_PRESETS} effect={effect} current={cur} onPick={(p) => { setColors(p); setNone(false) }} /></div>}
             {!none && subject === 'you' && <button type="button" className="text-xs text-text-2 hover:text-text-0" onClick={() => setNone(true)} data-name-color-clear>{t('No colour (plain name)')}</button>}
             {!none && subject === 'role' && <button type="button" className="text-xs text-text-2 hover:text-text-0" onClick={() => setNone(true)} data-name-color-clear>{t('No colour (role does not colour names)')}</button>}
           </section>
@@ -84,13 +85,13 @@ export default function NameStyleModal({ onClose, name, value, onApply, title: t
             <div className="flex gap-3">
               {me && <Avatar user={me} size={40} />}
               <div className="min-w-0">
-                <div className="flex items-baseline gap-2"><span className={`font-semibold ${look.className}`} style={look.style} data-name-preview-text>{name}</span><span className="text-[11px] text-text-2">{t('Today at 9:41')}</span></div>
+                <div className="flex items-baseline gap-2"><span className={`font-semibold ${look.className}`} style={look.style} data-name-preview-text><NameText look={look}>{name}</NameText></span><span className="text-[11px] text-text-2">{t('Today at 9:41')}</span></div>
                 <div className="text-[15px]">{t('does anyone read this?')}</div>
               </div>
             </div>
           </div>
           <div className="rounded-xl border border-line bg-bg-0 p-3 flex items-center gap-3">
-            {me && <Avatar user={me} size={32} />}<span className={`text-lg font-bold ${look.className}`} style={look.style}>{name}</span>
+            {me && <Avatar user={me} size={32} />}<span className={`text-lg font-bold ${look.className}`} style={look.style}><NameText look={look}>{name}</NameText></span>
           </div>
           <p className="text-xs text-text-2">{subject === 'role' ? t('Members with this role get this name style in the server; it beats their own style.') : t('Inside a server a coloured role takes over. Animated effects pause with "Reduced motion".')}</p>
         </div>

@@ -6,7 +6,7 @@ import { PROFILE_EFFECTS, PROFILE_FRAMES, nameplateClass, useOptions, type Cosme
 import { FORMATS, toggleWrap } from '../../lib/editor'
 import { colorFor } from '../../lib/format'
 import { useT } from '../../lib/i18n'
-import { colorsOf, nameLook, type NameEffect, type NameFont, type NameStyle } from '../../lib/nameStyle'
+import { colorsOf, effectOf, fontOf, nameLook, type NameStyle } from '../../lib/nameStyle'
 import { prepareImage, uploadImage } from '../../lib/upload'
 import { frameImage, withCrop } from '../../lib/crop'
 import { type ManualActivity, type PanelItem, type PrivateUser } from '../../lib/types'
@@ -20,13 +20,14 @@ import ProfileCard, { type ProfileEdit } from '../ProfileCard'
 import { WearServerTag } from '../ServerTag'
 import ImagePicker from '../modals/ImagePicker'
 import NameStyleModal from '../modals/NameStyle'
+import NameText from '../NameText'
 import Dropdown from '../Dropdown'
 import { globalName } from '../../lib/names'
 
 const MAX_BIO = 400
 
 /** The user's saved style as the editor's draft (colours fall back to the classic fields). */
-const styleOfUser = (u: PrivateUser | null | undefined): NameStyle => ({ font: (u?.name_style?.font as NameFont) ?? 'default', effect: (u?.name_style?.effect as NameEffect) ?? (u?.name_accent ? 'gradient' : 'solid'), colors: colorsOf(u ?? undefined) })
+const styleOfUser = (u: PrivateUser | null | undefined): NameStyle => ({ font: fontOf(u?.name_style?.font), effect: effectOf(u?.name_style?.effect) ?? (u?.name_accent ? 'gradient' : 'solid'), colors: colorsOf(u ?? undefined) })
 const toLines = (items?: PanelItem[]) => (items ?? []).map((i) => (i.url ? `${i.title} | ${i.url}` : i.title)).join('\n')
 const fromLines = (text: string): PanelItem[] => text.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => { const [title, url] = l.split('|').map((x) => x.trim()); return url ? { title, url } : { title } })
 
@@ -207,7 +208,7 @@ export default function ProfileEditor() {
         <div>
           <Heading>{t('Display Name Style')}</Heading>
           <button type="button" onClick={() => setStyleOpen(true)} className="w-full h-14 rounded-xl bg-black/25 border-2 border-transparent hover:border-white/40 px-3 text-left text-xl font-bold truncate" data-name-style-open data-name-style-card>
-            <span className={look.className} style={look.style} data-name-preview>{d.display || globalName(user)}</span>
+            <span className={look.className} style={look.style} data-name-preview><NameText look={look}>{d.display || globalName(user)}</NameText></span>
           </button>
         </div>
         <div>

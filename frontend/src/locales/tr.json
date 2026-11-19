@@ -3770,5 +3770,17 @@
 "With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "Geçiş anahtarı veya iki adımlı doğrulamayla, çalınan bir şifre tek başına hesabına girmeye yetmez.",
 "Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "Burada zorunlu kılmak için kendi hesabında iki adımlı doğrulamayı aç veya bir geçiş anahtarı ekle (Kullanıcı Ayarları › Hesabım).",
 "Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "İki adımlı doğrulaması veya geçiş anahtarı olmayan üyeler, birini ayarlayana kadar atma, yasaklama, mesaj silme ve kanal ya da rol yönetme gibi yetkilerini kaybeder. Çalınan bir şifre tek başına sunucuyu mahvetmek için kullanılamaz.",
-"Communities, the Studio and a lot more": "Topluluklar, Stüdyo ve çok daha fazlası"
+"Communities, the Studio and a lot more": "Topluluklar, Stüdyo ve çok daha fazlası",
+"Bubbly": "Köpüklü",
+"Retro": "Retro",
+"Modern": "Modern",
+"Medieval": "Orta Çağ",
+"Vampire": "Vampir",
+"Playful": "Eğlenceli",
+"Tech": "Teknoloji",
+"Metal": "Metal",
+"Handwritten": "El yazısı",
+"Poster": "Afiş",
+"Typewriter": "Daktilo",
+"Chrome": "Krom"
 }

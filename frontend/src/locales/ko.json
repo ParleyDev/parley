@@ -3770,5 +3770,17 @@
 "With a passkey or two-factor authentication, a stolen password alone can’t get into your account.": "패스키나 2단계 인증이 있으면 도난당한 비밀번호만으로는 계정에 들어갈 수 없어요.",
 "Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.": "여기서 요구하려면 내 계정에서 2단계 인증을 켜거나 패스키를 추가하세요(사용자 설정 › 내 계정).",
 "Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.": "2단계 인증이나 패스키가 없는 멤버는 둘 중 하나를 설정할 때까지 추방, 차단, 메시지 삭제, 채널이나 역할 관리 같은 권한을 잃어요. 도난당한 비밀번호만으로는 서버를 망칠 수 없어요.",
-"Communities, the Studio and a lot more": "커뮤니티, 스튜디오 그리고 더 많은 것"
+"Communities, the Studio and a lot more": "커뮤니티, 스튜디오 그리고 더 많은 것",
+"Bubbly": "버블",
+"Retro": "레트로",
+"Modern": "모던",
+"Medieval": "중세",
+"Vampire": "뱀파이어",
+"Playful": "장난스러운",
+"Tech": "테크",
+"Metal": "메탈",
+"Handwritten": "손글씨",
+"Poster": "포스터",
+"Typewriter": "타자기",
+"Chrome": "크롬"
 }
