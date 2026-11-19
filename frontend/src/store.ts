@@ -1050,11 +1050,11 @@ export function isUnread(s: Pick<State, 'readStates' | 'lastMessageId'>, channel
   return !read || read < last
 }
 
-/** Unread AND allowed to show as such: not muted, and the level is "all messages". */
+/** Unread AND allowed to show as such: anything but muted. The notification level ("Only @mentions", "Nothing")
+ *  decides what notifies you, not what is marked unread (as in Discord, and as the guide says). */
 export function showsUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'> & Partial<Pick<State, 'guilds'>>, channelId: string): boolean {
   if (!isUnread(s, channelId)) return false
-  const e = effective(s.notifSettings, s.channels[channelId] ?? s.dms[channelId], s.guilds)
-  return !e.muted && e.level === 'all'
+  return !effective(s.notifSettings, s.channels[channelId] ?? s.dms[channelId], s.guilds).muted
 }
 
 /** Mention badges show unless the place is set to "nothing" (muted places still badge mentions, like Discord). */
@@ -1062,10 +1062,8 @@ export function showsMentions(s: Pick<State, 'channels' | 'dms' | 'notifSettings
   return effective(s.notifSettings, s.channels[channelId] ?? s.dms[channelId]).level !== 'nothing'
 }
 
-export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings' | 'guilds'> & Partial<Pick<State, 'hiddenChannels' | 'communities' | 'communityFollows'>>, guildId: string): boolean {
+export function guildUnread(s: Pick<State, 'readStates' | 'lastMessageId' | 'channels' | 'dms' | 'notifSettings'> & Partial<Pick<State, 'guilds' | 'hiddenChannels' | 'communities' | 'communityFollows'>>, guildId: string): boolean {
   if (mutedTarget(s.notifSettings, guildId)) return false
-  // `guilds` is required: without it the server's default notification level ("Only @mentions") is ignored and the
-  // icon shows unread for channels the channel list (which honours it) doesn't mark.
   // Threads only badge the server when they mention you (see guildMentions), not for every reply; channels hidden
   // from my list (Channels & Roles) don't either, since there is nowhere to see them.
   const hidden = s.hiddenChannels?.[guildId]

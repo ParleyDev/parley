@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest'
 import { communityOfChannel, communitySuppresses, communityUnread, loadCollapsed, saveCollapsed, showCommunitiesSection, slugFromName, splitCategories, unfollowedCategoryIds } from './communities'
-import { guildUnread, useStore } from '../store'
+import { guildUnread, showsUnread, useStore } from '../store'
 import { api } from './api'
 vi.mock('./api', async (orig) => ({ ...(await orig<typeof import('./api')>()), api: { put: vi.fn(), delete: vi.fn() } }))
 
@@ -31,18 +31,24 @@ test('communitySuppresses is true only when unfollowed and not about me', () => 
 })
 test('guildUnread ignores unfollowed communities until followed', () => {
   const channels = { c2: cat('c2'), t: { id: 't', kind: 'text', guild_id: 'g', parent_id: 'c2' } } as unknown as Record<string, Channel>
-  const base = { channels, dms: {}, notifSettings: {}, guilds: {}, readStates: { t: null }, lastMessageId: { t: 'm1' }, communities: { g: [com('m', 'c2')] } }
+  const base = { channels, dms: {}, notifSettings: {}, readStates: { t: null }, lastMessageId: { t: 'm1' }, communities: { g: [com('m', 'c2')] } }
   expect(guildUnread({ ...base, communityFollows: {} }, 'g')).toBe(false)
   expect(guildUnread({ ...base, communityFollows: { g: ['m'] } }, 'g')).toBe(true)
 })
-test('guildUnread follows the server default notification level, like the channel list', () => {
+test('unread marks follow mute, not the notification level', () => {
   const channels = { t: { id: 't', kind: 'text', guild_id: 'g', parent_id: null } } as unknown as Record<string, Channel>
   const base = { channels, dms: {}, notifSettings: {}, readStates: { t: null }, lastMessageId: { t: 'm1' } }
   const guilds = (level: string) => ({ g: { id: 'g', default_notifications: level } }) as unknown as Parameters<typeof guildUnread>[0]['guilds']
-  expect(guildUnread({ ...base, guilds: guilds('all') }, 'g')).toBe(true)
-  expect(guildUnread({ ...base, guilds: guilds('mentions') }, 'g')).toBe(false)
-  // A member who picked "All Messages" for the server sees it again.
-  expect(guildUnread({ ...base, guilds: guilds('mentions'), notifSettings: { g: { target_id: 'g', level: 'all' } } as never }, 'g')).toBe(true)
+  // A server defaulting to "Only @mentions" (or a member choosing "Nothing") still shows where the new messages are.
+  for (const level of ['all', 'mentions', 'nothing']) {
+    expect(guildUnread({ ...base, guilds: guilds(level) }, 'g'), level).toBe(true)
+    expect(showsUnread({ ...base, guilds: guilds(level) }, 't'), level).toBe(true)
+  }
+  expect(showsUnread({ ...base, notifSettings: { t: { target_id: 't', level: 'nothing' } } as never }, 't')).toBe(true)
+  // Muting hides them.
+  const muted = { g: { target_id: 'g', level: 'default', muted_until: '9999-01-01T00:00:00Z' } } as never
+  expect(guildUnread({ ...base, notifSettings: muted }, 'g')).toBe(false)
+  expect(showsUnread({ ...base, notifSettings: muted }, 't')).toBe(false)
 })
 
 test('the derived lookups are computed once per array and answer like the plain versions', () => {
