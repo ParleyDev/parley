@@ -83,7 +83,6 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   // Announcement channels: publish a post to the channels following this one (your own, or anyone's with Manage Messages).
   const canPublish = chanNews && (!m.kind || m.kind === 'default') && !m.crosspost?.published && !m.local && (isOwn || has(perms, P.MANAGE_MESSAGES))
   const publish = async () => { try { const r = await api.post<{ channels: number }>(`/channels/${m.channel_id}/messages/${m.id}/crosspost`); pushToast(r.channels ? (r.channels === 1 ? t('Published to 1 channel') : t('Published to {n} channels', { n: r.channels })) : t('Published')) } catch (e) { pushToast((e as Error).message, 'error') } }
-  const [more, setMore] = useState(false)
   const frequent = useMemo(() => suggestReactions(m, 3, 1), [m])
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(m.content)
@@ -91,7 +90,6 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   // The full emoji picker is portalled beside the hover bar so the scrolling list never clips it.
   const [picker, setPicker] = useState<DOMRect | null>(null)
   const [superPicker, setSuperPicker] = useState<DOMRect | null>(null)
-  const [pickerUp, setPickerUp] = useState(true)
   const pickerAnchor = useRef<HTMLDivElement>(null)
   const togglePicker = () => setPicker((p) => (p ? null : pickerAnchor.current?.getBoundingClientRect() ?? null))
   // Phones have no hover: tapping the message body toggles the action bar. Only one message is selected at a time, and
@@ -112,13 +110,13 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   useEffect(() => {
     if (!tapped) return
     const outside = (e: PointerEvent) => {
-      // The emoji picker and the More menu handle their own dismissal.
-      if (picker || more || rowRef.current?.contains(e.target as Node)) return
+      // The emoji picker handles its own dismissal; a tap in the menu the bar's More button opened keeps the bar.
+      if (picker || rowRef.current?.contains(e.target as Node) || (e.target as Element | null)?.closest?.('[data-context-menu]')) return
       setTappedMessage(null)
     }
     document.addEventListener('pointerdown', outside, true)
     return () => document.removeEventListener('pointerdown', outside, true)
-  }, [tapped, picker, more, setTappedMessage])
+  }, [tapped, picker, setTappedMessage])
   // Leaving the channel (or the message being deleted) drops the selection with it.
   useEffect(() => () => { if (useStore.getState().tappedMessage === m.id) useStore.getState().setTappedMessage(null) }, [m.id])
   const motion = hovering || flash || (tapped && !canHover())
@@ -543,20 +541,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
           {canPublish && <Tool label={t('Publish')} onClick={publish}><span data-publish><Megaphone size={16} /></span></Tool>}
           <Tool label={t('Reply')} onClick={onReply}><Reply size={16} /></Tool>
           {isOwn && <Tool label={t('Edit')} onClick={() => { setDraft(m.content); setEditing(true) }}><Pencil size={16} /></Tool>}
-          <div className="relative">
-            <Tool label={t('More')} onClick={() => { const top = pickerAnchor.current?.getBoundingClientRect().top ?? 999; setPickerUp(top > 220); setMore((o) => !o) }}><MoreHorizontal size={16} /></Tool>
-            {more && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setMore(false)} />
-                <div className={`pop absolute right-0 z-40 min-w-[190px] rounded-md bg-[#111214] border border-white/5 shadow-2xl p-1.5 ${pickerUp ? 'bottom-full mb-1' : 'top-full mt-1'}`} role="menu" data-msg-menu>
-                  {canPin && <MenuBtn onClick={() => { setMore(false); togglePin() }} icon={m.pinned_at ? <PinOff size={16} /> : <Pin size={16} />}>{m.pinned_at ? t('Unpin Message') : t('Pin Message')}</MenuBtn>}
-                  <MenuBtn onClick={() => { setMore(false); copy(t('Text'), m.content) }} icon={<Copy size={16} />}>{t('Copy Text')}</MenuBtn>
-                  <MenuBtn onClick={() => { setMore(false); copy(t('Message ID'), m.id) }} icon={<Hash size={16} />}>{t('Copy Message ID')}</MenuBtn>
-                  {canDelete && <><div className="my-1 h-px bg-white/10" /><MenuBtn danger onClick={() => { setMore(false); del() }} icon={<Trash2 size={16} />}>{t('Delete Message')}</MenuBtn></>}
-                </div>
-              </>
-            )}
-          </div>
+          {/* The full message menu (the one right-click and long-press open), anchored under the button. */}
+          <Tool label={t('More')} onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); const at = { clientX: r.right, clientY: r.bottom }; ctx.open(at, contextItems(at)) }}><MoreHorizontal size={16} /></Tool>
         </div>
       )}
     </div>
@@ -564,11 +550,7 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   )
 }
 
-function MenuBtn({ children, icon, onClick, danger }: { children: React.ReactNode; icon: React.ReactNode; onClick: () => void; danger?: boolean }) {
-  return <button type="button" role="menuitem" onClick={onClick} className={`w-full flex items-center gap-2 rounded px-2 py-1.5 text-sm font-medium text-left ${danger ? 'text-[#f23f43] hover:bg-[#f23f43] hover:text-white' : 'text-[#dbdee1] hover:bg-accent hover:text-white'}`}>{icon}{children}</button>
-}
-
-function Tool({ children, label, onClick, danger }: { children: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+function Tool({ children, label, onClick, danger }: { children: React.ReactNode; label: string; onClick: (e: React.MouseEvent<HTMLButtonElement>) => void; danger?: boolean }) {
   return <button title={label} onClick={onClick} className={`h-8 w-8 flex items-center justify-center hover:bg-bg-3 first:rounded-l-lg last:rounded-r-lg ${danger ? 'text-danger' : 'text-text-1 hover:text-text-0'}`}>{children}</button>
 }
 
