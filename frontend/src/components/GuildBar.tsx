@@ -61,7 +61,7 @@ export default function GuildBar() {
   const toggleFolder = (id: string) => setOpen((o) => { const n = { ...o, [id]: !o[id] }; try { localStorage.setItem(OPEN_KEY, JSON.stringify(n)) } catch { /* ignore */ } return n })
   const [drag, setDrag] = useState<string | null>(null)
   const [over, setOver] = useState<{ key: string; zone: 'top' | 'mid' | 'bottom' } | null>(null)
-  const unreadOf = (id: string) => guildId !== id && guildUnread({ readStates, lastMessageId, channels, dms, notifSettings, hiddenChannels, communities, communityFollows }, id)
+  const unreadOf = (id: string) => guildId !== id && guildUnread({ readStates, lastMessageId, channels, dms, notifSettings, guilds, hiddenChannels, communities, communityFollows }, id)
   const mentionCounts = useStore((s) => s.mentionCounts)
   const dmList = unreadDms({ mentionCounts, readStates, lastMessageId, dms, channels, notifSettings })
   const mentionsOf = (id: string) => guildMentions({ mentionCounts, channels, dms, notifSettings }, id)

@@ -31,9 +31,18 @@ test('communitySuppresses is true only when unfollowed and not about me', () => 
 })
 test('guildUnread ignores unfollowed communities until followed', () => {
   const channels = { c2: cat('c2'), t: { id: 't', kind: 'text', guild_id: 'g', parent_id: 'c2' } } as unknown as Record<string, Channel>
-  const base = { channels, dms: {}, notifSettings: {}, readStates: { t: null }, lastMessageId: { t: 'm1' }, communities: { g: [com('m', 'c2')] } }
+  const base = { channels, dms: {}, notifSettings: {}, guilds: {}, readStates: { t: null }, lastMessageId: { t: 'm1' }, communities: { g: [com('m', 'c2')] } }
   expect(guildUnread({ ...base, communityFollows: {} }, 'g')).toBe(false)
   expect(guildUnread({ ...base, communityFollows: { g: ['m'] } }, 'g')).toBe(true)
+})
+test('guildUnread follows the server default notification level, like the channel list', () => {
+  const channels = { t: { id: 't', kind: 'text', guild_id: 'g', parent_id: null } } as unknown as Record<string, Channel>
+  const base = { channels, dms: {}, notifSettings: {}, readStates: { t: null }, lastMessageId: { t: 'm1' } }
+  const guilds = (level: string) => ({ g: { id: 'g', default_notifications: level } }) as unknown as Parameters<typeof guildUnread>[0]['guilds']
+  expect(guildUnread({ ...base, guilds: guilds('all') }, 'g')).toBe(true)
+  expect(guildUnread({ ...base, guilds: guilds('mentions') }, 'g')).toBe(false)
+  // A member who picked "All Messages" for the server sees it again.
+  expect(guildUnread({ ...base, guilds: guilds('mentions'), notifSettings: { g: { target_id: 'g', level: 'all' } } as never }, 'g')).toBe(true)
 })
 
 test('the derived lookups are computed once per array and answer like the plain versions', () => {
