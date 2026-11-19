@@ -38,7 +38,7 @@ covers:
   - frontend/src/components/StreamerBanner.tsx
 ---
 
-Open **User Settings** with the cog beside your name in the bottom-left corner, or press <kbd>Ctrl</kbd>+<kbd>,</kbd>. Can't find something? Type in the search box at the top of the list.
+Open **User Settings** with the cog beside your name in the bottom-left corner, or press <kbd>Ctrl</kbd>+<kbd>,</kbd>. Can't find something? Type in the search box at the top of the list. Instance admins also find **Admin Console** at the bottom of the list.
 
 ![User Settings, on the Appearance page](shot:settings)
 

@@ -54,7 +54,7 @@ ok('audited as discovery.update', (await call(admin.token, 'GET', '/admin/audit'
 r = await callS(admin.token, 'PATCH', `/admin/discovery/${g.id}`, { featured_order: null }); ok('null un-features', r.status === 200 && r.body.featured_order === null)
 const pc = await mk(c.token, `${WEB}/discover`); await pc.waitForSelector(`[data-server-card="${g.id}"]`)
 ok('the card shows the verified badge only for verified servers', await pc.locator(`[data-server-card="${g.id}"] [data-verified]`).count() === 1 && await pc.locator(`[data-server-card="${g2.id}"] [data-verified]`).count() === 0)
-const pa = await mk(admin.token, `${WEB}/discover/review`); await pa.click('[data-review-tab="approved"]'); await pa.waitForSelector(`[data-review-item="${g.id}"] [data-review-featured]`)
+const pa = await mk(admin.token, `${WEB}/admin/discovery`); await pa.click('[data-review-tab="approved"]'); await pa.waitForSelector(`[data-review-item="${g.id}"] [data-review-featured]`)
 await pa.locator(`[data-review-item="${g.id}"] [data-review-featured]`).click(); await pa.waitForSelector(`[data-review-item="${g.id}"] [data-review-featured-order]`)
 ok('admin features from the review queue', (await call(c.token, 'GET', `/discover?q=${S}`))[0].guild_id === g.id)
 await pc.reload(); await pc.waitForSelector(`[data-server-card="${g.id}"] [data-featured]`); ok('featured ribbon on the card', true)

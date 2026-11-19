@@ -13,6 +13,8 @@ export interface WindowItem<T extends string> {
   keywords?: string
   /** Sections on the page, listed under the item while it is open; picking one scrolls to it. */
   subs?: { id: string; label: string }[]
+  /** Shown at the end of the item, e.g. a count of things waiting. */
+  badge?: ReactNode
   /** Extra data attributes for the item's button (test hooks). */
   data?: Record<`data-${string}`, string>
 }
@@ -130,7 +132,7 @@ export default function SettingsWindow<T extends string>({ groups, tab, onTab, o
       <div key={it.id}>
         <button type="button" onClick={() => pick(it.id)} data-settings-tab={it.id} {...it.data} aria-current={on ? 'page' : undefined}
           className={`w-full flex items-center gap-3 rounded-lg px-2.5 py-2 text-[15px] font-medium text-left phone:py-3 ${on ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>
-          <span className="w-5 shrink-0 flex justify-center text-text-2">{it.icon}</span><span className="flex-1 truncate">{t(it.label)}</span><ChevronRight size={16} className="wide:hidden text-text-2" />
+          <span className="w-5 shrink-0 flex justify-center text-text-2">{it.icon}</span><span className="flex-1 truncate">{t(it.label)}</span>{it.badge}<ChevronRight size={16} className="wide:hidden text-text-2" />
         </button>
         {on && it.subs && it.subs.length > 0 && (
           <div className="ml-5 mt-0.5 mb-1 border-l border-line pl-0 phone:hidden" data-settings-subs>

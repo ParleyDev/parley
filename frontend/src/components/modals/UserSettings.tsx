@@ -1,5 +1,6 @@
 import { Accessibility, Bell, BookOpen, Download, Blocks, Globe, Keyboard, KeyRound, Link2, Lock, LogOut, MessageSquareText, Mic, Radio, Wrench, MonitorSmartphone, ShieldCheck, Server, Palette, Paintbrush, Pencil, Scissors, Sparkles, Users, User as UserIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '../../store'
 import AccountTab, { accountSections } from './settings/AccountTab'
 import VoiceVideoTab from './settings/VoiceVideoTab'
@@ -49,6 +50,7 @@ export default function UserSettingsModal({ onClose, tab: requested }: { onClose
   const openModal = useStore((s) => s.openModal)
   const serverVersion = useStore((s) => s.instance.version)
   const installable = useInstallable()
+  const navigate = useNavigate()
   const foot = 'w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-[15px] font-medium hover:bg-bg-3 whitespace-nowrap'
   // Grouped by what you'd go looking for: your account and what others see and can do, how the app looks and
   // behaves, then building on Parley.
@@ -88,6 +90,7 @@ export default function UserSettingsModal({ onClose, tab: requested }: { onClose
   )
   const footer = (
     <>
+      {user?.is_admin && <button onClick={() => { onClose(); navigate('/admin') }} className={`${foot} text-success`} data-settings-admin-console><span>{t('Admin Console')}</span><ShieldCheck size={16} /></button>}
       <button onClick={() => { onClose(); openModal({ kind: 'whatsNew' }) }} className={`${foot} text-text-1`} data-whats-new-link><span>{t("What's New")}</span><Sparkles size={16} /></button>
       <button onClick={() => openGuide()} className={`${foot} text-text-1`} data-help-guide><span>{t('Help & Guide')}</span><BookOpen size={16} /></button>
       {installable && <button onClick={() => void promptInstall()} className={`${foot} text-text-1`} data-install-app><span>{t('Install app')}</span><Download size={16} /></button>}

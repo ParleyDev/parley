@@ -4,6 +4,7 @@ import BlockedLinksPane from './AdminBlockedLinks'
 import AppsPane from './AdminApps'
 import UserDetailPane from './AdminUser'
 import CosmeticsPane from './AdminCosmetics'
+import ReviewQueue from './AdminDiscovery'
 import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
@@ -30,19 +31,22 @@ export default function AdminPage() {
   const [access, setAccess] = useState<AdminAccess | null>(null)
   useEffect(() => { api.get<AdminAccess>('/admin/access').then(setAccess).catch(() => setAccess({ roles: [], perms: [], all_roles: [] })) }, [])
   const a = access
+  // Submissions waiting for review, shown on the Discovery Queue item.
+  const [pending, setPending] = useState<number | null>(null)
+  useEffect(() => { if (can(a, 'instance_manage')) api.get<unknown[]>('/admin/discovery?status=pending').then((l) => setPending(l.length)).catch(() => {}) }, [a])
   // The page a route belongs to: /admin/users/:id stays under Users, /admin/cases/:id under Cases.
   const tab = (pathname.replace(/^\/admin\/?/, '').split('/')[0] || 'overview') as AdminTab
   // A link to one user, case or other page opens it on a phone; /admin itself starts on the menu.
   const deep = /^\/admin\/[^/]+/.test(pathname)
   type Item = WindowItem<AdminTab>
-  const it = (id: AdminTab, label: string, icon: React.ReactNode, show: boolean, keywords?: string): Item | false => show && { id, label, icon, keywords, data: { 'data-admin-nav': id } }
+  const it = (id: AdminTab, label: string, icon: React.ReactNode, show: boolean, keywords?: string): Item | false => show && { id, label, icon, keywords, data: { 'data-admin-nav': id }, badge: id === 'discovery' && pending ? <span className="min-w-5 h-5 px-1 rounded-full bg-danger text-white text-[11px] font-bold flex items-center justify-center" data-review-count>{pending}</span> : undefined }
   const group = (title: string | undefined, list: (Item | false)[]): WindowGroup<AdminTab> => ({ title, items: list.filter((x): x is Item => !!x) })
   const groups = [
     group(undefined, [it('overview', 'Overview', <LayoutDashboard size={18} />, true, 'stats dashboard')]),
     group('People & Servers', [
       it('users', 'Users', <Users size={18} />, can(a, 'account_metadata_read'), 'accounts suspend ban roles bots'),
       it('servers', 'Servers', <Server size={18} />, can(a, 'conversation_metadata_read'), 'guilds takedown'),
-      it('discovery', 'Discovery Queue', <Compass size={18} />, can(a, 'instance_manage'), 'review approve reject'),
+      it('discovery', 'Discovery Queue', <Compass size={18} />, can(a, 'instance_manage'), 'review queue approve reject submissions'),
     ]),
     group('Instance', [
       it('settings', 'Instance Settings', <Megaphone size={18} />, can(a, 'instance_manage'), 'announcement rate limits registration verification'),
@@ -59,7 +63,7 @@ export default function AdminPage() {
       it('audit', 'Audit Log', <ScrollText size={18} />, can(a, 'audit_read_own', 'audit_read_team', 'audit_read_all'), 'history actions'),
     ]),
   ].filter((g) => g.items.length)
-  const pick = (id: AdminTab) => navigate(id === 'discovery' ? '/discover/review' : id === 'overview' ? '/admin' : `/admin/${id}`)
+  const pick = (id: AdminTab) => navigate(id === 'overview' ? '/admin' : `/admin/${id}`)
   const header = (
     <div className="flex items-center gap-3 px-1.5 py-1.5"><span className="h-10 w-10 rounded-full bg-bg-3 flex items-center justify-center"><ShieldCheck size={22} className="text-success" /></span><span className="font-semibold text-text-0">{t('Admin Console')}</span></div>
   )
@@ -73,6 +77,7 @@ export default function AdminPage() {
             <Route path="users" element={<UsersPane />} />
             <Route path="servers" element={<ServersPane />} />
             <Route path="settings" element={<SettingsPane />} />
+            <Route path="discovery" element={<ReviewQueue onChange={setPending} />} />
             <Route path="themes" element={<ThemesPane />} />
             <Route path="cosmetics" element={<CosmeticsPane />} />
             <Route path="audit" element={<AuditPane />} />
