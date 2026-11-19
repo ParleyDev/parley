@@ -34,7 +34,11 @@ export default function PasskeysSection() {
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const supported = passkeysSupported()
-  const load = () => api.get<{ available: boolean; passkeys: Passkey[] }>('/users/@me/passkeys').then((r) => { setList(r.passkeys); setServerOk(r.available) }).catch(() => setList([]))
+  const load = () => api.get<{ available: boolean; passkeys: Passkey[] }>('/users/@me/passkeys').then((r) => {
+    setList(r.passkeys); setServerOk(r.available)
+    // A passkey meets a server's "require 2FA for moderator actions", so the permission checks need to know.
+    useStore.setState((s) => (s.user && !!s.user.has_passkey !== r.passkeys.length > 0 ? { user: { ...s.user, has_passkey: r.passkeys.length > 0 } } : {}))
+  }).catch(() => setList([]))
   useEffect(() => { load() }, [])
 
   const run = async (fn: () => Promise<void>) => {

@@ -235,6 +235,11 @@ pub struct PrivateUser {
     #[sqlx(default)]
     #[serde(default)]
     pub mfa_enabled: bool,
+    /// At least one passkey or security key is registered. With `mfa_enabled`, either one meets a server's
+    /// "require 2FA for moderator actions".
+    #[sqlx(default)]
+    #[serde(default)]
+    pub has_passkey: bool,
     /// When the chosen status reverts to Online, and when the custom status clears (None: they don't).
     #[sqlx(default)]
     pub status_expires_at: Option<DateTime<Utc>>,

@@ -292,9 +292,9 @@ async fn update_guild(
     if let Some(level) = req.mfa_level {
         if !(0..=1).contains(&level) { return Err(AppError::BadRequest("mfa_level must be 0 or 1".into())) }
         // Like Discord: only the owner, and only with 2FA on their own account.
-        let (owner, mfa): (bool, bool) = sqlx::query_as("SELECT g.owner_id = $2, u.totp_secret IS NOT NULL FROM guilds g, users u WHERE g.id = $1 AND u.id = $2").bind(id).bind(uid).fetch_one(&state.db).await?;
+        let (owner, mfa): (bool, bool) = sqlx::query_as(&format!("SELECT g.owner_id = $2, {} FROM guilds g, users u WHERE g.id = $1 AND u.id = $2", crate::perms::MFA_SATISFIED)).bind(id).bind(uid).fetch_one(&state.db).await?;
         if !owner { return Err(AppError::Forbidden) }
-        if level == 1 && !mfa { return Err(AppError::BadRequest("Turn on two-factor authentication for your own account first".into())) }
+        if level == 1 && !mfa { return Err(AppError::BadRequest("Turn on two-factor authentication or add a passkey to your own account first".into())) }
     }
     if let Some(Some(cid)) = req.system_channel_id {
         let ok: Option<(bool,)> = sqlx::query_as("SELECT true FROM channels WHERE id = $1 AND guild_id = $2 AND kind = 'text'").bind(cid).bind(id).fetch_optional(&state.db).await?;

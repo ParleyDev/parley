@@ -1117,7 +1117,7 @@ function myCtx(s: PermState, guildId: string) {
   const member = s.members[guildId]?.[s.user.id]
   const va = s.viewAs?.guildId === guildId ? s.viewAs : null
   if (va) return { guild: { ...guild, owner_id: '' }, roles: s.roles[guildId] ?? {}, member: member ? { ...member, roles: va.roleIds, timeout_until: null } : ({ user_id: s.user.id, roles: va.roleIds } as unknown as Member), mfa: undefined }
-  return { guild, roles: s.roles[guildId] ?? {}, member, mfa: !!s.user.mfa_enabled, guest: !!s.user.guest }
+  return { guild, roles: s.roles[guildId] ?? {}, member, mfa: !!(s.user.mfa_enabled || s.user.has_passkey), guest: !!s.user.guest }
 }
 
 /** My guild-wide permissions (0 when not a member or not loaded). */

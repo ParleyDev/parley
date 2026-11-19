@@ -20,6 +20,8 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
   useT()
   const guild = useStore((s) => s.guilds[guildId])
   const me = useStore((s) => s.user)
+  // An authenticator app or a passkey meets "require 2FA for moderator actions".
+  const secured = !!(me?.mfa_enabled || me?.has_passkey)
   const upsertGuild = useStore((s) => s.upsertGuild)
   const pushToast = useStore((s) => s.pushToast)
   const [pauseFor, setPauseFor] = useState(24)
@@ -114,12 +116,12 @@ export default function SafetyTab({ guildId }: { guildId: string }) {
       <section data-mfa-requirement>
         <h2 className="text-xs font-bold uppercase tracking-wider text-text-2 mb-2">{t('Two-factor authentication for moderators')}</h2>
         <div className="rounded-xl border border-line bg-bg-1 p-3">
-          <div className={!owner || (!me?.mfa_enabled && guild.mfa_level !== 1) ? 'opacity-60 pointer-events-none' : ''} data-mfa-toggle>
+          <div className={!owner || (!secured && guild.mfa_level !== 1) ? 'opacity-60 pointer-events-none' : ''} data-mfa-toggle>
             <Toggle label="Require 2FA for moderator actions" checked={guild.mfa_level === 1} onChange={(v) => save({ mfa_level: v ? 1 : 0 }, v ? t('Moderators now need 2FA') : t('2FA is no longer required'))} />
           </div>
-          <p className="mt-2 text-xs text-text-2">{t("Members without two-factor authentication lose powers like kicking, banning, deleting messages and managing channels or roles until they turn it on. A stolen password alone can't be used to wreck the server.")}</p>
+          <p className="mt-2 text-xs text-text-2">{t("Members without two-factor authentication or a passkey lose powers like kicking, banning, deleting messages and managing channels or roles until they set one up. A stolen password alone can't be used to wreck the server.")}</p>
           {!owner && <p className="mt-2 flex items-center gap-1.5 text-xs text-text-2"><ShieldCheck size={14} /> {t('Only the server owner can change this.')}</p>}
-          {owner && !me?.mfa_enabled && guild.mfa_level !== 1 && <p className="mt-2 flex items-center gap-1.5 text-xs text-warn" data-mfa-needed><MailWarning size={14} /> {t('Turn on two-factor authentication for your own account (User Settings › My Account) to require it here.')}</p>}
+          {owner && !secured && guild.mfa_level !== 1 && <p className="mt-2 flex items-center gap-1.5 text-xs text-warn" data-mfa-needed><MailWarning size={14} /> {t('Turn on two-factor authentication or add a passkey to your own account (User Settings › My Account) to require it here.')}</p>}
         </div>
       </section>
     </div>

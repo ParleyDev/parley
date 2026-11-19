@@ -153,6 +153,9 @@ pub struct GuildCtx {
 }
 
 /// Powers that need two-factor authentication when a server requires it (Discord's list, as far as Parley has them).
+/// SQL over `users u`: the account meets a server's "require 2FA for moderator actions", with an authenticator app
+/// (TOTP) or at least one passkey or security key.
+pub const MFA_SATISFIED: &str = "(u.totp_secret IS NOT NULL OR EXISTS (SELECT 1 FROM passkeys pk WHERE pk.user_id = u.id))";
 pub const MFA_GATED: u64 = ADMINISTRATOR | KICK_MEMBERS | BAN_MEMBERS | MANAGE_CHANNELS | MANAGE_GUILD | MANAGE_MESSAGES | MANAGE_ROLES | MODERATE_MEMBERS;
 
 impl GuildCtx {
@@ -189,7 +192,7 @@ impl GuildCtx {
             .map(|r| r.0)
             .collect();
         let mfa_missing: HashSet<Uuid> = if guild.mfa_level >= 1 {
-            sqlx::query_as::<_, (Uuid,)>("SELECT m.user_id FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND u.totp_secret IS NULL")
+            sqlx::query_as::<_, (Uuid,)>(&format!("SELECT m.user_id FROM guild_members m JOIN users u ON u.id = m.user_id WHERE m.guild_id = $1 AND NOT {MFA_SATISFIED}"))
                 .bind(guild_id).fetch_all(db).await?.into_iter().map(|r| r.0).collect()
         } else { HashSet::new() };
         Ok(Self { guild, roles, member_roles, members, timed_out, mfa_missing, guests })

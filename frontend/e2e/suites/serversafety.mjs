@@ -3,7 +3,8 @@
 // 2FA required for moderators (server and client), pausing invites (invite page too) and pausing DMs between members.
 import { chromium } from 'playwright'
 import { createHmac } from 'node:crypto'
-import { WEB, S, PASSWORD, reg, call, raw, callS, ok, finish } from '../lib.mjs'
+import { execSync } from 'node:child_process'
+import { WEB, S, PASSWORD, reg, call, raw, callS, ok, finish, testContainer } from '../lib.mjs'
 const b32 = (s) => { const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; let bits = 0, val = 0; const out = []; for (const ch of s.toUpperCase()) { val = (val << 5) | A.indexOf(ch); bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8 } } return Buffer.from(out) }
 const totp = (secret) => { const msg = Buffer.alloc(8); msg.writeBigInt64BE(BigInt(Math.floor(Date.now() / 30000))); const h = createHmac('sha1', b32(secret)).update(msg).digest(); const o = h[19] & 15; const n = ((h[o] & 127) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3]; return String(n % 1e6).padStart(6, '0') }
 const a = await reg('alice'), b = await reg('bob')
@@ -81,6 +82,20 @@ ok('their menus drop the moderator actions too', await pb.locator('[data-context
 await pb.keyboard.press('Escape')
 await patch(a.token, { mfa_level: 0 })
 ok('back to normal once it is off', (await raw(b.token, 'POST', `/channels/${general.id}/messages/bulk-delete`, { limit: 1 })).status === 200)
+
+console.log('-- a passkey counts as 2FA')
+// Registering a real passkey needs an authenticator; a stored credential is all the requirement looks at.
+const sql = (q) => execSync(`docker exec ${testContainer('db')} psql -U parley -tAc "${q.replace(/"/g, '\\"')}"`, { stdio: ['pipe', 'pipe', 'pipe'] }).toString().trim()
+const addPasskey = (uid) => sql(`INSERT INTO passkeys (id, user_id, name, cred_id, passkey) VALUES (gen_random_uuid(), '${uid}', 'e2e key', gen_random_bytes(16), '{}')`)
+addPasskey(b.user.id)
+ok('your own user says you have a passkey', (await call(b.token, 'GET', '/users/@me')).has_passkey === true)
+await patch(a.token, { mfa_level: 1 })
+ok('a moderator with a passkey and no authenticator app keeps their powers', (await raw(b.token, 'POST', `/channels/${general.id}/messages/bulk-delete`, { limit: 1 })).status === 200)
+await patch(a.token, { mfa_level: 0 })
+const own = await call(c.token, 'POST', '/guilds', { name: `Keyed ${S}` })
+ok('an owner without a passkey or app still cannot require it', (await raw(c.token, 'PATCH', `/guilds/${own.id}`, { mfa_level: 1 })).status === 400)
+addPasskey(c.user.id)
+ok('with just a passkey, the owner can require it', (await raw(c.token, 'PATCH', `/guilds/${own.id}`, { mfa_level: 1 })).status === 200)
 
 console.log('-- pause invites')
 await patch(a.token, { invites_paused: true })

@@ -48,7 +48,7 @@ Open **User Settings** with the cog beside your name in the bottom-left corner, 
 - **Password**: change it, and optionally log out everywhere else at the same time.
 - **Two-Factor Authentication**: strongly recommended. Click **Enable Two-Factor Auth**, scan the code with an authenticator app, and type the 6-digit code to switch it on.
   - Save your **backup codes** somewhere safe. They get you in if you lose your phone.
-- **Passkeys**: sign in with your fingerprint, face or device PIN. Click **Add a passkey**.
+- **Passkeys**: sign in with your fingerprint, face or device PIN. Click **Add a passkey**. A passkey also counts as two-factor authentication for servers that require it of moderators.
 - **Account Standing**: whether you've broken any rules recently. Normally it says *All good*.
 - **Server Bans**: servers that have banned you, with **Appeal this ban** where the server allows it.
 - **Storage**: how much of your upload space you've used.

@@ -59,7 +59,7 @@ You can also exempt roles or channels, like a channel where your moderators disc
 - **Raid protection**: notices a sudden rush of new accounts and alerts your moderators.
 - **Pause invites** and **Pause DMs between members**: emergency brakes during a raid.
 - **Explicit image filter**: scans pictures posted in the server.
-- **Two-factor authentication for moderators**: moderators must have 2FA turned on, so a stolen password can't be used against the server.
+- **Two-factor authentication for moderators**: moderators must have 2FA turned on or a passkey added, so a stolen password can't be used against the server. Either one counts, and you need one yourself to switch this on.
 - **AI summaries**: turn the Summaries button on or off.
 
 ## Reports

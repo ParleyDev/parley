@@ -49,7 +49,7 @@ export type FriendRequestSource = 'everyone' | 'friends_of_friends' | 'server_me
 export interface PrivateUser extends User {
   /** A "Try Parley" guest: removed an hour after it was last active unless claimed (Sign up to keep it). */
   guest?: boolean
-  email: string; is_admin?: boolean; email_verified_at?: string | null; mfa_enabled?: boolean
+  email: string; is_admin?: boolean; email_verified_at?: string | null; mfa_enabled?: boolean; has_passkey?: boolean
   /** Set once; 'teen' (13-17) gets safety defaults and no 18+ channels. */
   birthdate?: string | null; age_group?: 'unknown' | 'teen' | 'adult'
   /** When the chosen status reverts to Online, and when the custom status clears (null: they don't). */
