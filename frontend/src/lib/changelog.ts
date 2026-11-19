@@ -1,10 +1,29 @@
 /**
  * What's New: release notes shown once when a new entry lands (Settings → What's New shows them any time). Newest
  * first; `id` only has to change for a new entry. Notes are written in English.
+ * Every release adds one: `node scripts/changelog-draft.mjs` drafts it from the commits since the last entry, and the
+ * commit-msg hook (scripts/changelog-check.mjs) refuses a `chore(release)` commit without one.
  */
 export interface ChangelogEntry { id: string; date: string; title: string; items: string[] }
 
 export const CHANGELOG: ChangelogEntry[] = [
+  {
+    id: '2026-11-19', date: '2026-11-19', title: 'Communities, the Studio and a lot more',
+    items: [
+      'Communities: group a server\'s channels into communities, each with its own page. Follow the ones you like and find them in your sidebar.',
+      'The Studio: make music together in a project channel, with a DAW the whole band edits live. Record takes, play MIDI, add effects in plug-in style windows, mix and export.',
+      'Videos play right in the chat, and audio files get a player with live visualisers that keeps playing when you leave the channel.',
+      'Schedule a message and Parley sends it for you later.',
+      'Invite links open a proper page showing the server, its members and online count, even before you log in. Owners can add a peek at a channel.',
+      'Try Parley as a guest, no account needed.',
+      'Zoom and position your profile picture, banner and server icons, and pick profile cosmetics with a live preview.',
+      'Download a server as a template file, and create a server from any template.',
+      'On phones, share to Parley from other apps, and menus are sheets you swipe away.',
+      'Calls that can\'t connect directly now go through a relay, and emoji, flags included, look the same everywhere.',
+      'Server and channel settings open in the same window as your own settings, and a new user guide sits behind every Help button.',
+      'The desktop app lets you choose the stable or development update channel.',
+    ],
+  },
   {
     id: '2026-10-27', date: '2026-10-27', title: 'Play, listen and talk your way',
     items: [
