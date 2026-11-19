@@ -5,3 +5,5 @@
 "$(git rev-parse --show-toplevel)/scripts/commit-lint.sh" "$1" || exit 1
 # User guide: feat/fix/perf commits that change what docs/guide describes must update it (scripts/guide-check.mjs).
 node "$(git rev-parse --show-toplevel)/scripts/guide-check.mjs" "$1" || exit 1
+# What's New: a release commit must come with a changelog entry (scripts/changelog-check.mjs).
+node "$(git rev-parse --show-toplevel)/scripts/changelog-check.mjs" "$1" || exit 1
