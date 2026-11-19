@@ -38,7 +38,7 @@ covers:
   - frontend/src/pages/Widget.tsx
 ---
 
-Open the server menu by clicking the server's name, then **Server Settings**. You only see the pages you have permission to change. The owner sees everything.
+Open the server menu by clicking the server's name, then **Server Settings**. You only see the pages you have permission to change. The owner sees everything. It opens in the same window as User Settings; type in the search box at the top of the list to find a page.
 
 ![Server Settings, on the Server Profile page](shot:server-settings)
 

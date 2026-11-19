@@ -43,17 +43,17 @@ export default function ChannelSettingsModal({ onClose, channelId, tab: requeste
   })
 
   const items: { id: Tab; label: string; icon: React.ReactNode; keywords?: string }[] = []
-  if (canEdit) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={16} />, keywords: 'name topic slowmode nsfw age-restricted bitrate video quality user limit region' })
-  if (canEdit && channel.kind === 'forum') items.push({ id: 'tags', label: 'Tags', icon: <Tag size={16} />, keywords: 'forum post tags' })
-  if (canEdit && channel.kind === 'text') items.push({ id: 'integrations', label: 'Integrations', icon: <Blocks size={16} />, keywords: 'webhooks follow' })
-  if (canPerms) items.push({ id: 'permissions', label: 'Permissions', icon: <Lock size={16} />, keywords: 'roles members access private overwrites' })
-  if (canPerms && channel.kind === 'stage') items.push({ id: 'stageMods', label: 'Stage Moderators', icon: <Shield size={16} />, keywords: 'stage speakers moderators' })
+  if (canEdit) items.push({ id: 'overview', label: 'Overview', icon: <SlidersHorizontal size={18} />, keywords: 'name topic slowmode nsfw age-restricted bitrate video quality user limit region' })
+  if (canEdit && channel.kind === 'forum') items.push({ id: 'tags', label: 'Tags', icon: <Tag size={18} />, keywords: 'forum post tags' })
+  if (canEdit && channel.kind === 'text') items.push({ id: 'integrations', label: 'Integrations', icon: <Blocks size={18} />, keywords: 'webhooks follow' })
+  if (canPerms) items.push({ id: 'permissions', label: 'Permissions', icon: <Lock size={18} />, keywords: 'roles members access private overwrites' })
+  if (canPerms && channel.kind === 'stage') items.push({ id: 'stageMods', label: 'Stage Moderators', icon: <Shield size={18} />, keywords: 'stage speakers moderators' })
 
   return (
     <SettingsShell<Tab>
       tab={tab} onTab={setTab} onClose={onClose} wide={tab === 'permissions'} title={t('Channel Settings')} startOnMenu={!requested} help={HELP[tab]}
       sections={[{ title: `${prefix}${channel.name}`, items }]}
-      footer={canEdit ? <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 text-[15px] text-danger hover:bg-bg-3 whitespace-nowrap" title={t('Delete Channel')}><span>{t('Delete Channel')}</span><Trash2 size={16} /></button> : undefined}
+      footer={canEdit ? <button onClick={del} className="w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-[15px] font-medium text-danger hover:bg-bg-3 whitespace-nowrap" title={t('Delete Channel')}><span>{t('Delete Channel')}</span><Trash2 size={16} /></button> : undefined}
     >
       {tab === 'overview' && canEdit && <Overview channel={channel} />}
       {tab === 'tags' && canEdit && <ForumTagsTab channelId={channelId} />}

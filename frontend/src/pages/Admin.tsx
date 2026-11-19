@@ -10,8 +10,8 @@ import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
 import { MetaRow, type MetaHit, type OpenedMsg } from './AdminCases'
 import CasesPane, { CasePane } from './AdminCases'
 import { NavLink, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import SplitLayout, { useShowContent } from '../components/SplitLayout'
-import { MobileBack } from '../components/HeaderBits'
+import SettingsWindow, { type WindowGroup, type WindowItem } from '../components/modals/SettingsWindow'
+import SplitLayout from '../components/SplitLayout'
 import { api } from '../lib/api'
 import { formatBytes } from '../lib/upload'
 import { colorFor, initials } from '../lib/format'
@@ -20,61 +20,74 @@ import { useT, t as tr, tn } from '../lib/i18n'
 import Dropdown from '../components/Dropdown'
 import { globalName } from '../lib/names'
 
-/** Root console for Parley admins: stats, users, servers, instance settings. */
+type AdminTab = 'overview' | 'users' | 'servers' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail'
+
+/** Root console for Parley admins: stats, users, servers, instance settings. Shown in the settings window, one route per page. */
 export default function AdminPage() {
   const t = useT()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [access, setAccess] = useState<AdminAccess | null>(null)
   useEffect(() => { api.get<AdminAccess>('/admin/access').then(setAccess).catch(() => setAccess({ roles: [], perms: [], all_roles: [] })) }, [])
   const a = access
-  const item = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2.5 text-[15px] font-medium ${active ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`
-  const showContent = useShowContent()
+  // The page a route belongs to: /admin/users/:id stays under Users, /admin/cases/:id under Cases.
+  const tab = (pathname.replace(/^\/admin\/?/, '').split('/')[0] || 'overview') as AdminTab
   // A link to one user, case or other page opens it on a phone; /admin itself starts on the menu.
-  const deep = /^\/admin\/[^/]+\/./.test(useLocation().pathname)
+  const deep = /^\/admin\/[^/]+/.test(pathname)
+  type Item = WindowItem<AdminTab>
+  const it = (id: AdminTab, label: string, icon: React.ReactNode, show: boolean, keywords?: string): Item | false => show && { id, label, icon, keywords, data: { 'data-admin-nav': id } }
+  const group = (title: string | undefined, list: (Item | false)[]): WindowGroup<AdminTab> => ({ title, items: list.filter((x): x is Item => !!x) })
+  const groups = [
+    group(undefined, [it('overview', 'Overview', <LayoutDashboard size={18} />, true, 'stats dashboard')]),
+    group('People & Servers', [
+      it('users', 'Users', <Users size={18} />, can(a, 'account_metadata_read'), 'accounts suspend ban roles bots'),
+      it('servers', 'Servers', <Server size={18} />, can(a, 'conversation_metadata_read'), 'guilds takedown'),
+      it('discovery', 'Discovery Queue', <Compass size={18} />, can(a, 'instance_manage'), 'review approve reject'),
+    ]),
+    group('Instance', [
+      it('settings', 'Instance Settings', <Megaphone size={18} />, can(a, 'instance_manage'), 'announcement rate limits registration verification'),
+      it('themes', 'Themes', <Palette size={18} />, can(a, 'instance_manage'), 'colours colors'),
+      it('cosmetics', 'Cosmetics', <Sparkles size={18} />, can(a, 'instance_manage'), 'decorations nameplates effects frames'),
+      it('apps', 'Apps', <Bot size={18} />, can(a, 'instance_manage'), 'bots oauth applications'),
+      it('mail', 'Mail', <Mail size={18} />, can(a, 'account_pii_reveal'), 'email smtp sent'),
+    ]),
+    group('Moderation', [
+      it('messages', 'Search', <FileSearch size={18} />, can(a, 'content_search_public'), 'messages content'),
+      it('cases', 'Cases', <Briefcase size={18} />, can(a, 'report_context_read', 'case_approve'), 'investigation'),
+      it('reports', 'Reports', <Flag size={18} />, can(a, 'report_context_read'), 'reported'),
+      it('blocked-links', 'Blocked Links', <Ban size={18} />, can(a, 'instance_manage'), 'urls domains'),
+      it('audit', 'Audit Log', <ScrollText size={18} />, can(a, 'audit_read_own', 'audit_read_team', 'audit_read_all'), 'history actions'),
+    ]),
+  ].filter((g) => g.items.length)
+  const pick = (id: AdminTab) => navigate(id === 'discovery' ? '/discover/review' : id === 'overview' ? '/admin' : `/admin/${id}`)
+  const header = (
+    <div className="flex items-center gap-3 px-1.5 py-1.5"><span className="h-10 w-10 rounded-full bg-bg-3 flex items-center justify-center"><ShieldCheck size={22} className="text-success" /></span><span className="font-semibold text-text-0">{t('Admin Console')}</span></div>
+  )
   return (
     <AccessCtx.Provider value={access}>
-    <SplitLayout defaultPane={deep ? 'content' : 'nav'} testid={{ 'data-admin': '' }} sidebar={
-          <aside className="w-[var(--sidebar-w)] tab:w-[224px] phone:flex-1 shrink-0 bg-bg-1 flex flex-col">
-            <div className="h-12 px-4 flex items-center gap-2 font-bold text-lg border-b border-line"><ShieldCheck size={20} className="text-success" /> {t('Admin Console')}</div>
-            <nav className="p-2 space-y-0.5">
-              <NavLink to="/admin" end onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="overview"><LayoutDashboard size={20} /> {t('Overview')}</NavLink>
-              {can(a, 'account_metadata_read') && <NavLink to="/admin/users" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="users"><Users size={20} /> {t('Users')}</NavLink>}
-              {can(a, 'conversation_metadata_read') && <NavLink to="/admin/servers" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="servers"><Server size={20} /> {t('Servers')}</NavLink>}
-              {can(a, 'instance_manage') && <NavLink to="/discover/review" onClick={showContent} className={() => item(false)} data-admin-nav="discovery"><Compass size={20} /> {t('Discovery Queue')}</NavLink>}
-              {can(a, 'instance_manage') && <NavLink to="/admin/settings" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="settings"><Megaphone size={20} /> {t('Instance Settings')}</NavLink>}
-              {can(a, 'instance_manage') && <NavLink to="/admin/themes" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="themes"><Palette size={20} /> {t('Themes')}</NavLink>}
-              {can(a, 'instance_manage') && <NavLink to="/admin/cosmetics" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="cosmetics"><Sparkles size={20} /> {t('Cosmetics')}</NavLink>}
-              {can(a, 'content_search_public') && <NavLink to="/admin/messages" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="messages"><FileSearch size={20} /> {t('Search')}</NavLink>}
-              {can(a, 'report_context_read', 'case_approve') && <NavLink to="/admin/cases" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="cases"><Briefcase size={20} /> {t('Cases')}</NavLink>}
-              {can(a, 'report_context_read') && <NavLink to="/admin/reports" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="reports"><Flag size={20} /> {t('Reports')}</NavLink>}
-              {can(a, 'instance_manage') && <NavLink to="/admin/blocked-links" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="blocked-links"><Ban size={20} /> {t('Blocked Links')}</NavLink>}
-              {can(a, 'instance_manage') && <NavLink to="/admin/apps" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="apps"><Bot size={20} /> {t('Apps')}</NavLink>}
-              {can(a, 'audit_read_own', 'audit_read_team', 'audit_read_all') && <NavLink to="/admin/audit" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="audit"><ScrollText size={20} /> {t('Audit Log')}</NavLink>}
-              {can(a, 'account_pii_reveal') && <NavLink to="/admin/mail" onClick={showContent} className={({ isActive }) => item(isActive)} data-admin-nav="mail"><Mail size={20} /> {t('Mail')}</NavLink>}
-            </nav>
-          </aside>
-    }>
-      <div className="wide:hidden h-12 shrink-0 px-2 flex items-center gap-1 border-b border-line"><MobileBack /><span className="font-bold">{t('Admin Console')}</span></div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-10 py-8 phone:px-4 phone:py-5">
-        <Routes>
-          <Route index element={<Overview />} />
-          <Route path="users" element={<UsersPane />} />
-          <Route path="servers" element={<ServersPane />} />
-          <Route path="settings" element={<SettingsPane />} />
-          <Route path="themes" element={<ThemesPane />} />
-          <Route path="cosmetics" element={<CosmeticsPane />} />
-          <Route path="audit" element={<AuditPane />} />
-          <Route path="mail" element={<MailPane />} />
-          <Route path="reports" element={<ReportsPane />} />
-          <Route path="cases" element={<CasesPane />} />
-          <Route path="cases/:id" element={<CasePane />} />
-          <Route path="blocked-links" element={<BlockedLinksPane />} />
-          <Route path="apps" element={<AppsPane />} />
-          <Route path="messages" element={<MessagesPane />} />
-          <Route path="users/:id" element={<UserDetailPane />} />
-          <Route path="users/:id/content" element={<UserContentPane />} />
-        </Routes>
-      </div>
-    </SplitLayout>
+      {/* The app's frame (title bar, server bar, your panel, dialogs) stays behind the window, like User Settings over the chat. */}
+      <SplitLayout defaultPane="content" testid={{ 'data-admin': '' }} sidebar={<aside className="w-[var(--sidebar-w)] tab:w-[224px] phone:hidden shrink-0 bg-bg-1" />}>
+        <SettingsWindow<AdminTab> groups={groups} tab={tab} onTab={pick} onClose={() => navigate('/channels/@me')} title={t('Admin Console')} startOnMenu={!deep} header={header} wide="full" page>
+          <Routes>
+            <Route index element={<Overview />} />
+            <Route path="users" element={<UsersPane />} />
+            <Route path="servers" element={<ServersPane />} />
+            <Route path="settings" element={<SettingsPane />} />
+            <Route path="themes" element={<ThemesPane />} />
+            <Route path="cosmetics" element={<CosmeticsPane />} />
+            <Route path="audit" element={<AuditPane />} />
+            <Route path="mail" element={<MailPane />} />
+            <Route path="reports" element={<ReportsPane />} />
+            <Route path="cases" element={<CasesPane />} />
+            <Route path="cases/:id" element={<CasePane />} />
+            <Route path="blocked-links" element={<BlockedLinksPane />} />
+            <Route path="apps" element={<AppsPane />} />
+            <Route path="messages" element={<MessagesPane />} />
+            <Route path="users/:id" element={<UserDetailPane />} />
+            <Route path="users/:id/content" element={<UserContentPane />} />
+          </Routes>
+        </SettingsWindow>
+      </SplitLayout>
     </AccessCtx.Provider>
   )
 }

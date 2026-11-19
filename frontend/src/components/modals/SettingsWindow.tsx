@@ -13,6 +13,8 @@ export interface WindowItem<T extends string> {
   keywords?: string
   /** Sections on the page, listed under the item while it is open; picking one scrolls to it. */
   subs?: { id: string; label: string }[]
+  /** Extra data attributes for the item's button (test hooks). */
+  data?: Record<`data-${string}`, string>
 }
 export interface WindowGroup<T extends string> { title?: string; items: WindowItem<T>[] }
 
@@ -32,6 +34,11 @@ interface Props<T extends string> {
   scrollTo?: string | null
   /** The user guide's page about the open section ('page' or 'page#heading'), for its Help button. */
   help?: string
+  /** Wider page column for tables (roles, members, permissions); 'full' uses the whole pane (admin console). */
+  wide?: boolean | 'full'
+  /** A page rather than a dialog (admin console): fills its positioned parent, under the app's title bar, and
+   *  Escape leaves it alone. */
+  page?: boolean
 }
 
 /** A page section the sidebar can list and jump to: a big heading over its rows, divided from the next one. */
@@ -65,7 +72,7 @@ export const windowButton = 'h-10 shrink-0 rounded-lg bg-bg-3 hover:bg-bg-4 px-5
  * page's sections underneath it) beside the page with a title bar. Phones get the list first, then the page with a
  * back button, clear of the system bars.
  */
-export default function SettingsWindow<T extends string>({ groups, tab, onTab, onClose, header, footer, children, title = 'Settings', startOnMenu = true, scrollTo, help }: Props<T>) {
+export default function SettingsWindow<T extends string>({ groups, tab, onTab, onClose, header, footer, children, title = 'Settings', startOnMenu = true, scrollTo, help, wide, page }: Props<T>) {
   const [menu, setMenu] = useState(startOnMenu)
   // Phones: swipe a section right to go back to the list.
   const sectionRef = useRef<HTMLDivElement>(null)
@@ -74,10 +81,11 @@ export default function SettingsWindow<T extends string>({ groups, tab, onTab, o
   const [active, setActive] = useState<string | null>(null)
   const body = useRef<HTMLDivElement>(null)
   useEffect(() => {
+    if (page) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('[data-context-menu], [data-account-dialog], [role=dialog] [role=dialog]')) onClose() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, page])
   const items = groups.flatMap((g) => g.items)
   const current = items.find((it) => it.id === tab)
   const pick = (id: T, sub?: string) => {
@@ -107,13 +115,20 @@ export default function SettingsWindow<T extends string>({ groups, tab, onTab, o
     return () => el.removeEventListener('scroll', onScroll)
   }, [tab, current?.subs])
 
-  const needle = q.trim().toLowerCase()
-  const found = useMemo(() => !needle ? [] : items.filter((it) => `${it.label} ${it.keywords ?? ''} ${(it.subs ?? []).map((s) => s.label).join(' ')}`.toLowerCase().includes(needle)), [needle, items])
+  // A short list needs no search box.
+  const searchable = items.length > 6
+  const needle = searchable ? q.trim().toLowerCase() : ''
+  // Every word must match the label, the keywords, a section on the page or the group's title (so "mod" finds the
+  // Moderation pages).
+  const found = useMemo(() => !needle ? [] : groups.flatMap((g) => g.items.filter((it) => {
+    const hay = `${t(it.label)} ${it.label} ${it.keywords ?? ''} ${(it.subs ?? []).map((s) => `${t(s.label)} ${s.label}`).join(' ')} ${g.title ?? ''}`.toLowerCase()
+    return needle.split(/\s+/).every((w) => hay.includes(w))
+  })), [needle, groups])
   const navItem = (it: WindowItem<T>) => {
     const on = tab === it.id
     return (
       <div key={it.id}>
-        <button type="button" onClick={() => pick(it.id)} data-settings-tab={it.id} aria-current={on ? 'page' : undefined}
+        <button type="button" onClick={() => pick(it.id)} data-settings-tab={it.id} {...it.data} aria-current={on ? 'page' : undefined}
           className={`w-full flex items-center gap-3 rounded-lg px-2.5 py-2 text-[15px] font-medium text-left phone:py-3 ${on ? 'bg-bg-4 text-text-0' : 'text-text-1 hover:bg-bg-3 hover:text-text-0'}`}>
           <span className="w-5 shrink-0 flex justify-center text-text-2">{it.icon}</span><span className="flex-1 truncate">{t(it.label)}</span><ChevronRight size={16} className="wide:hidden text-text-2" />
         </button>
@@ -130,7 +145,7 @@ export default function SettingsWindow<T extends string>({ groups, tab, onTab, o
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex pop safe-area phone:bg-bg-1 phone:backdrop-blur-none" role="dialog" aria-modal data-settings-view={menu ? 'menu' : 'section'} data-settings-window>
+    <div className={`${page ? 'absolute z-40' : 'fixed z-50 safe-area'} inset-0 bg-black/70 backdrop-blur-sm flex pop phone:bg-bg-1 phone:backdrop-blur-none`} role={page ? undefined : 'dialog'} aria-modal={page ? undefined : true} data-settings-view={menu ? 'menu' : 'section'} data-settings-window>
       {/* The margin around the window lives here: the safe-area padding on the overlay would override it. */}
       {/* Centred with room above and below, like Discord's, rather than running edge to edge. */}
       <div className="flex-1 min-w-0 flex items-center justify-center wide:px-6 wide:py-10 lg:px-10 lg:py-14" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
@@ -140,12 +155,12 @@ export default function SettingsWindow<T extends string>({ groups, tab, onTab, o
             <button onClick={onClose} title={t('Close')} className="h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-settings-close><X size={22} /></button></div>
           <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-1">
             {header}
-            <label className="flex items-center gap-2 h-10 rounded-lg bg-bg-1 border border-line px-3 my-2 focus-within:border-accent phone:bg-bg-0">
+            {searchable && <label className="flex items-center gap-2 h-10 rounded-lg bg-bg-1 border border-line px-3 my-2 focus-within:border-accent phone:bg-bg-0">
               <Search size={16} className="text-text-2 shrink-0" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && found[0]) pick(found[0].id) }} placeholder={t('Search')} aria-label={t('Search settings')}
+              <input value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && found[0]) pick(found[0].id); if (e.key === 'Escape' && q) { e.stopPropagation(); e.nativeEvent.stopImmediatePropagation(); setQ('') } }} placeholder={t('Search')} aria-label={t('Search settings')}
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-text-2" data-settings-search />
               {q && <button type="button" onClick={() => setQ('')} aria-label={t('Clear')} className="text-text-2 hover:text-text-0"><X size={14} /></button>}
-            </label>
+            </label>}
             {needle ? (
               found.length ? found.map(navItem) : <p className="px-2.5 py-2 text-sm text-text-2" data-settings-no-results>{t('Nothing matches.')}</p>
             ) : groups.map((g, i) => (
@@ -166,7 +181,7 @@ export default function SettingsWindow<T extends string>({ groups, tab, onTab, o
             <button onClick={onClose} title={t('Close')} aria-label={t('Close')} className="h-9 w-9 rounded-md flex items-center justify-center text-text-2 hover:bg-bg-3 hover:text-text-0" data-settings-close><X size={20} /></button>
           </div>
           <div ref={body} className="relative flex-1 min-h-0 overflow-y-auto" data-settings-body>
-            <div className="max-w-[740px] mx-auto px-10 py-10 phone:px-4 phone:py-5">{children}</div>
+            <div className={`${wide === 'full' ? '' : wide ? 'max-w-[960px]' : 'max-w-[740px]'} mx-auto px-10 py-10 phone:px-4 phone:py-5`}>{children}</div>
           </div>
         </div>
       </div>
