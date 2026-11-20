@@ -56,7 +56,7 @@ async fn count(state: &AppState, sql: &str, id: Uuid) -> AppResult<i64> {
 
 /// `GET /admin/users/:id/overview`: the account, its activity and its standing. No PII: the email is masked unless
 /// the admin's role sees it unmasked, and addresses are only counted.
-async fn overview(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(id): Path<Uuid>) -> AppResult<Json<Value>> {
+async fn overview(State(state): State<AppState>, AuthUser(uid): AuthUser, headers: HeaderMap, Path(id): Path<Uuid>) -> AppResult<Json<Value>> {
     let a = admin_access::require_perm(&state, uid, Perm::AccountMetadataRead).await?;
     type Row = (String, String, Option<String>, Option<String>, DateTime<Utc>, String, Option<DateTime<Utc>>, Option<DateTime<Utc>>, bool, bool, bool, Option<DateTime<Utc>>, bool, String, Option<DateTime<Utc>>, String);
     let row: Option<Row> = sqlx::query_as(
@@ -88,11 +88,28 @@ async fn overview(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(i
          FROM generate_series(date_trunc('day', now()) - interval '29 days', date_trunc('day', now()), interval '1 day') d ORDER BY d",
     ).bind(id).fetch_all(&state.db).await?;
 
-    let servers = if a.has(Perm::ConversationMetadataRead) {
-        let rows: Vec<(Uuid, String, Option<String>, bool, DateTime<Utc>)> = sqlx::query_as(
-            "SELECT g.id, g.name, g.icon_url, g.owner_id = $1, m.joined_at FROM guild_members m JOIN guilds g ON g.id = m.guild_id WHERE m.user_id = $1 ORDER BY m.joined_at DESC LIMIT 100",
+    // Friend lists are network data: super admins only, and every look is logged.
+    let net = a.has(Perm::NetworkRead);
+    let servers = if a.has(Perm::ConversationMetadataRead) || net {
+        let rows: Vec<(Uuid, String, Option<String>, bool, DateTime<Utc>, i64, Option<i64>)> = sqlx::query_as(
+            "SELECT g.id, g.name, g.icon_url, g.owner_id = $1, m.joined_at, (SELECT COUNT(*) FROM guild_members x WHERE x.guild_id = g.id),
+                    CASE WHEN $2 THEN (SELECT COUNT(*) FROM relationships r JOIN guild_members x ON x.user_id = r.target_id AND x.guild_id = g.id WHERE r.user_id = $1 AND r.kind = 'friend') END
+             FROM guild_members m JOIN guilds g ON g.id = m.guild_id WHERE m.user_id = $1 ORDER BY m.joined_at DESC LIMIT 200",
+        ).bind(id).bind(net).fetch_all(&state.db).await?;
+        Some(rows.into_iter().map(|(gid, name, icon, owner, joined, members, friends_here)| json!({ "id": gid, "name": name, "icon_url": icon, "owner": owner, "joined_at": joined, "members": members, "friends_here": friends_here })).collect::<Vec<_>>())
+    } else { None };
+    let friends = if net {
+        let rows: Vec<(Uuid, String, String, Option<String>, bool, Option<DateTime<Utc>>, DateTime<Utc>, i64, i64)> = sqlx::query_as(
+            "SELECT u.id, u.username, u.display_name, u.avatar_url, u.bot, u.suspended_at, r.created_at,
+                    (SELECT COUNT(*) FROM relationships x JOIN relationships y ON y.user_id = $1 AND y.target_id = x.target_id AND y.kind = 'friend' WHERE x.user_id = u.id AND x.kind = 'friend'),
+                    (SELECT COUNT(*) FROM guild_members p JOIN guild_members q ON q.guild_id = p.guild_id AND q.user_id = $1 WHERE p.user_id = u.id)
+             FROM relationships r JOIN users u ON u.id = r.target_id WHERE r.user_id = $1 AND r.kind = 'friend' ORDER BY r.created_at DESC LIMIT 500",
         ).bind(id).fetch_all(&state.db).await?;
-        Some(rows.into_iter().map(|(gid, name, icon, owner, joined)| json!({ "id": gid, "name": name, "icon_url": icon, "owner": owner, "joined_at": joined })).collect::<Vec<_>>())
+        admin_access::log(&state, uid, &a.roles, &headers, Entry { action: "network.friends", query: "", filters: json!({}), justification: "", targets: &[id] }).await?;
+        Some(rows.into_iter().map(|(fid, username, display_name, avatar_url, bot, suspended, since, mutual, shared)| json!({
+            "id": fid, "username": username, "display_name": display_name, "avatar_url": avatar_url, "bot": bot, "suspended": suspended.is_some(),
+            "since": since, "mutual_friends": mutual, "shared_servers": shared,
+        })).collect::<Vec<_>>())
     } else { None };
     // What admins did to (or looked up about) this account, from the audit log: only for those who may read all of it.
     let audit: Vec<(String, String, Value, DateTime<Utc>)> = if a.has(Perm::AuditReadAll) {
@@ -123,6 +140,7 @@ async fn overview(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(i
             "blocked_by": count(&state, "SELECT COUNT(*) FROM relationships WHERE target_id = $1 AND kind = 'blocked'", id).await?,
             "apps_owned": count(&state, "SELECT COUNT(*) FROM applications WHERE owner_id = $1", id).await?,
             "server_list": servers,
+            "friend_list": friends,
         },
         "standing": {
             "reports_against": count(&state, "SELECT COUNT(*) FROM reports WHERE target_user_id = $1", id).await?,
@@ -147,6 +165,7 @@ async fn overview(State(state): State<AppState>, AuthUser(uid): AuthUser, Path(i
             "push": push.into_iter().map(|(p, n, at)| json!({ "platform": p, "count": n, "seen_at": at })).collect::<Vec<_>>(),
         },
         "can_reveal": a.has(Perm::AccountPiiReveal),
+        "can_network": net,
     })))
 }
 

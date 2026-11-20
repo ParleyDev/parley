@@ -64,6 +64,9 @@ pub enum Perm {
     AuditReadAll,
     /// Instance settings, mail settings, Discover review, app verification, maintenance, blocked domains, stats.
     InstanceManage,
+    /// The Network view: who is friends with whom and who is in which server, and friend lists on account pages.
+    /// Super admins only; every look is logged.
+    NetworkRead,
 }
 
 use Perm::*;
@@ -75,7 +78,7 @@ pub fn perms_for(role: &str) -> &'static [Perm] {
         "MODERATOR" => &[AccountMetadataRead, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentAction, AuditReadOwn],
         "TS_LEAD" => &[AccountMetadataRead, AccountPiiReveal, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentSearchPrivate, ContentAction, CaseApprove, AuditReadTeam],
         "LEGAL" => &[AccountMetadataRead, AccountPiiReveal, ConversationMetadataRead, ReportContextRead, ReportContextExpand, ContentSearchPublic, ContentSearchPrivate, ContentExport, AuditReadAll],
-        "SUPER_ADMIN" => &[AccountMetadataRead, AdminRolesManage, AuditReadAll, InstanceManage],
+        "SUPER_ADMIN" => &[AccountMetadataRead, AdminRolesManage, AuditReadAll, InstanceManage, NetworkRead],
         "AUDITOR" => &[AuditReadAll],
         _ => &[],
     }
@@ -249,6 +252,7 @@ mod tests {
         assert_eq!(perms_for("AUDITOR"), &[AuditReadAll]);
         assert!(ROLES.iter().all(|r| !perms_for(r).is_empty()));
         assert!(!ROLES.iter().any(|r| perms_for(r).contains(&ContentExport) && *r != "LEGAL"), "only legal exports");
+        assert!(!ROLES.iter().any(|r| perms_for(r).contains(&NetworkRead) && *r != "SUPER_ADMIN"), "only super admins see the network");
     }
 
     #[test]

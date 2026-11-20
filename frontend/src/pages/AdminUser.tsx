@@ -1,4 +1,4 @@
-import { Eye, FolderOpen, LogOut, UserCheck, UserX } from 'lucide-react'
+import { Eye, FolderOpen, LogOut, Network, UserCheck, UserX } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router-dom'
 import CropImg from '../components/CropImg'
@@ -9,6 +9,7 @@ import { formatBytes } from '../lib/upload'
 import { useStore } from '../store'
 import { can, useAccess } from './adminAccess'
 import { globalName } from '../lib/names'
+import { NetAvatar, networkLink } from './AdminNetwork'
 
 const MIN_WHY = 10
 
@@ -19,11 +20,16 @@ interface Overview {
     mfa_enabled: boolean; status: string; custom_status: string; age_group: string; online: boolean; platforms: string[]; last_seen_at: string | null
   }
   messages: { total: number; in_servers: number; in_dms: number; last_day: number; last_week: number; last_month: number; first_at: string | null; last_at: string | null; daily: { day: string; count: number }[]; reactions: number }
-  social: { servers: number; servers_owned: number; friends: number; blocked: number; blocked_by: number; apps_owned: number; server_list: { id: string; name: string; icon_url: string | null; owner: boolean; joined_at: string }[] | null }
+  social: {
+    servers: number; servers_owned: number; friends: number; blocked: number; blocked_by: number; apps_owned: number
+    server_list: { id: string; name: string; icon_url: string | null; owner: boolean; joined_at: string; members: number; friends_here: number | null }[] | null
+    friend_list: { id: string; username: string; display_name: string; avatar_url: string | null; bot: boolean; suspended: boolean; since: string; mutual_friends: number; shared_servers: number }[] | null
+  }
   standing: { reports_against: number; reports_open: number; reports_filed: number; server_bans: number; audit: { action: string; actor: string; details: Record<string, unknown>; at: string }[] }
   storage: { attachments: number; attachment_bytes: number; images: number; image_bytes: number }
   devices: { active_sessions: number; addresses: number; clients: number; passkeys: number; connections: number; authorized_apps: number; push: { platform: string; count: number; seen_at: string | null }[] }
   can_reveal: boolean
+  can_network?: boolean
 }
 interface Signals {
   email: string | null; email_domain: string | null; retention_days: number
@@ -53,8 +59,12 @@ const ago = (d: string | null | undefined) => {
   return s < 60 ? 'just now' : s < 3600 ? `${Math.floor(s / 60)} min ago` : s < 86400 ? `${Math.floor(s / 3600)} h ago` : `${Math.floor(s / 86400)} d ago`
 }
 
-function Card({ title, children, testid }: { title: string; children: ReactNode; testid: string }) {
-  return <section className="rounded-xl border border-line bg-bg-1 p-4" data-admin-card={testid}><h2 className="mb-3 text-xs font-bold uppercase tracking-wider text-text-2">{title}</h2>{children}</section>
+function Card({ title, children, testid, wide, action }: { title: string; children: ReactNode; testid: string; wide?: boolean; action?: ReactNode }) {
+  return (
+    <section className={`min-w-0 rounded-xl border border-line bg-bg-1 p-4 ${wide ? 'md:col-span-2 xl:col-span-3' : ''}`} data-admin-card={testid}>
+      <h2 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-2">{title}{action && <span className="ml-auto normal-case tracking-normal">{action}</span>}</h2>{children}
+    </section>
+  )
 }
 function Stat({ label, value, sub, testid }: { label: string; value: ReactNode; sub?: ReactNode; testid?: string }) {
   return <div className="min-w-0"><div className="text-xl font-bold tabular-nums text-text-0" data-admin-stat={testid}>{value}</div><div className="text-xs text-text-2">{label}</div>{sub && <div className="text-[11px] text-text-2">{sub}</div>}</div>
@@ -117,6 +127,7 @@ export default function UserDetailPane() {
         <div className="flex flex-wrap gap-2">
           {act && u.id !== me?.id && u.account_state !== 'deleted' && <button type="button" className={u.suspended_at ? 'btn-ghost py-1.5 text-sm' : 'btn-danger py-1.5 text-sm'} onClick={suspend} data-admin-detail-suspend>{u.suspended_at ? <><UserCheck size={14} /> {t('Unsuspend')}</> : <><UserX size={14} /> {t('Suspend')}</>}</button>}
           {act && <button type="button" className="btn-ghost py-1.5 text-sm" onClick={logoutAll} data-admin-detail-logout><LogOut size={14} /> {t('Log out everywhere')}</button>}
+          {can(a, 'network_read') && <NavLink to={networkLink(u.id)} className="btn-ghost py-1.5 text-sm" data-admin-network-link={u.id}><Network size={14} /> {t('View in Network')}</NavLink>}
           <button type="button" className="btn-ghost py-1.5 text-sm" onClick={() => navigate(`/admin/users/${u.id}/content`)} data-admin-detail-content><FolderOpen size={14} /> {t('Uploads and sessions')}</button>
         </div>
       </div>
@@ -157,18 +168,7 @@ export default function UserDetailPane() {
           </div>
         </Card>
 
-        <Card title={t('Social')} testid="social">
-          <div className="grid grid-cols-3 gap-3">
-            <Stat label={t('servers')} value={o.social.servers} sub={o.social.servers_owned ? t('{n} owned', { n: o.social.servers_owned }) : undefined} testid="servers" />
-            <Stat label={t('friends')} value={o.social.friends} />
-            <Stat label={t('blocked')} value={o.social.blocked} />
-          </div>
-          {o.social.server_list && o.social.server_list.length > 0 && (
-            <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto text-sm" data-admin-detail-servers>
-              {o.social.server_list.map((g) => <li key={g.id} className="flex items-center gap-2"><span className="h-5 w-5 shrink-0 overflow-hidden rounded-md text-[9px] font-bold text-white flex items-center justify-center" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>{g.icon_url ? <CropImg src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name)}</span><span className="truncate">{g.name}</span>{g.owner && <span className="text-[10px] font-bold text-warn">{t('OWNER')}</span>}<span className="ml-auto shrink-0 text-xs text-text-2">{new Date(g.joined_at).toLocaleDateString()}</span></li>)}
-            </ul>
-          )}
-        </Card>
+        <Connections o={o} />
 
         <Card title={t('Devices and sign-in')} testid="devices">
           <div className="grid grid-cols-3 gap-3">
@@ -240,5 +240,68 @@ export default function UserDetailPane() {
         </Card>
       )}
     </div>
+  )
+}
+
+/** Who they are friends with (super admins only) and which servers they are in, with links to each and to the Network view. */
+function Connections({ o }: { o: Overview }) {
+  const t = useT()
+  const a = useAccess()
+  const navigate = useNavigate()
+  const friends = o.social.friend_list, servers = o.social.server_list
+  const [tab, setTab] = useState<'friends' | 'servers'>(friends ? 'friends' : 'servers')
+  const [filter, setFilter] = useState('')
+  const net = can(a, 'network_read')
+  const f = filter.trim().toLowerCase()
+  const link = 'text-xs text-sky-400 hover:underline whitespace-nowrap'
+  const row = 'grid grid-cols-[28px_minmax(0,1fr)_auto] md:grid-cols-[28px_minmax(0,1fr)_auto_auto] items-center gap-x-3 border-b border-line px-3 py-2 text-sm last:border-b-0 hover:bg-bg-3/40'
+  return (
+    <Card title={t('Connections')} testid="connections" wide>
+      <div className="grid grid-cols-3 gap-3 sm:max-w-md">
+        <Stat label={t('servers')} value={o.social.servers} sub={o.social.servers_owned ? t('{n} owned', { n: o.social.servers_owned }) : undefined} testid="servers" />
+        <Stat label={t('friends')} value={o.social.friends} testid="friends" />
+        <Stat label={t('blocked')} value={o.social.blocked} />
+      </div>
+      {(friends || servers) && (
+        <>
+          <div className="mt-4 mb-2 flex flex-wrap items-center gap-1.5">
+            {friends && <button type="button" aria-pressed={tab === 'friends'} onClick={() => setTab('friends')} data-admin-conn-tab="friends" className={`rounded-full px-3 py-1 text-xs font-semibold ${tab === 'friends' ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`}>{t('Friends · {n}', { n: friends.length })}</button>}
+            {servers && <button type="button" aria-pressed={tab === 'servers'} onClick={() => setTab('servers')} data-admin-conn-tab="servers" className={`rounded-full px-3 py-1 text-xs font-semibold ${tab === 'servers' ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`}>{t('Servers · {n}', { n: servers.length })}</button>}
+            <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t('Filter')} aria-label={t('Filter')} className="input ml-auto h-8 w-44 max-w-full text-xs" />
+          </div>
+          <div className="max-h-80 overflow-y-auto rounded-lg border border-line" data-admin-conn-list={tab}>
+            {tab === 'friends' && friends?.filter((x) => !f || globalName(x).toLowerCase().includes(f) || x.username.toLowerCase().includes(f)).map((x) => (
+              <div key={x.id} className={row} data-admin-friend={x.id}>
+                <NetAvatar id={x.id} name={globalName(x)} url={x.avatar_url} />
+                <div className="min-w-0">
+                  <b className="block truncate font-semibold">{globalName(x)}{x.suspended && <span className="ml-1.5 rounded bg-danger/20 px-1 py-px text-[10px] font-bold text-danger">{t('SUSPENDED')}</span>}</b>
+                  <small className="text-[11px] text-text-2">{t('{friends} mutual friends · {servers} shared servers', { friends: x.mutual_friends, servers: x.shared_servers })}</small>
+                </div>
+                <span className="whitespace-nowrap text-xs tabular-nums text-text-2 max-md:hidden">{t('since {date}', { date: new Date(x.since).toLocaleDateString() })}</span>
+                <span className="flex gap-2.5">
+                  <button type="button" className={link} onClick={() => navigate(`/admin/users/${x.id}`)} data-admin-open-user={x.id}>{t('Details')}</button>
+                  {net && <NavLink to={networkLink(x.id)} className={link}>{t('Network')}</NavLink>}
+                </span>
+              </div>
+            ))}
+            {tab === 'servers' && servers?.filter((g) => !f || g.name.toLowerCase().includes(f)).map((g) => (
+              <div key={g.id} className={row} data-admin-detail-server={g.id}>
+                <NetAvatar id={g.id} name={g.name} url={g.icon_url} server />
+                <div className="min-w-0">
+                  <b className="block truncate font-semibold">{g.name}{g.owner && <span className="ml-1.5 rounded bg-warn/20 px-1 py-px text-[10px] font-bold text-warn">{t('OWNER')}</span>}</b>
+                  <small className="text-[11px] text-text-2">{g.friends_here !== null ? t('{n} members · {friends} of their friends are here', { n: g.members, friends: g.friends_here }) : t('{n} members', { n: g.members })}</small>
+                </div>
+                <span className="whitespace-nowrap text-xs tabular-nums text-text-2 max-md:hidden">{t('joined {date}', { date: new Date(g.joined_at).toLocaleDateString() })}</span>
+                <span className="flex gap-2.5">
+                  {can(a, 'conversation_metadata_read') && <button type="button" className={link} onClick={() => navigate(`/admin/servers/${g.id}`)} data-admin-open-server={g.id}>{t('Details')}</button>}
+                  {net && <NavLink to={networkLink(g.id)} className={link}>{t('Network')}</NavLink>}
+                </span>
+              </div>
+            ))}
+            {((tab === 'friends' && !friends?.length) || (tab === 'servers' && !servers?.length)) && <p className="px-3 py-3 text-xs text-text-2">{t('None.')}</p>}
+          </div>
+        </>
+      )}
+    </Card>
   )
 }

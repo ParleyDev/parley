@@ -3,9 +3,11 @@ import CropImg from '../components/CropImg'
 import BlockedLinksPane from './AdminBlockedLinks'
 import AppsPane from './AdminApps'
 import UserDetailPane from './AdminUser'
+import NetworkPane from './AdminNetwork'
+import ServerDetailPane from './AdminServer'
 import CosmeticsPane from './AdminCosmetics'
 import ReviewQueue from './AdminDiscovery'
-import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles } from 'lucide-react'
+import { Ban, Bot, Compass, Eraser, FileSearch, Flag, FolderOpen, Gavel, KeyRound, LayoutDashboard, LogOut, Mail, RefreshCw, ScrollText, Megaphone, Eye, UserCog, Briefcase, Server, Share2, ShieldCheck, ShieldOff, Trash2, UserCheck, Users, UserX, HardDrive, Upload, Palette, Sparkles } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccessCtx, can, useAccess, type AdminAccess } from './adminAccess'
 import { MetaRow, type MetaHit, type OpenedMsg } from './AdminCases'
@@ -21,7 +23,7 @@ import { useT, t as tr, tn } from '../lib/i18n'
 import Dropdown from '../components/Dropdown'
 import { globalName } from '../lib/names'
 
-type AdminTab = 'overview' | 'users' | 'servers' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail'
+type AdminTab = 'overview' | 'users' | 'servers' | 'network' | 'discovery' | 'settings' | 'themes' | 'cosmetics' | 'messages' | 'cases' | 'reports' | 'blocked-links' | 'apps' | 'audit' | 'mail'
 
 /** Root console for Parley admins: stats, users, servers, instance settings. Shown in the settings window, one route per page. */
 export default function AdminPage() {
@@ -46,6 +48,7 @@ export default function AdminPage() {
     group('People & Servers', [
       it('users', 'Users', <Users size={18} />, can(a, 'account_metadata_read'), 'accounts suspend ban roles bots'),
       it('servers', 'Servers', <Server size={18} />, can(a, 'conversation_metadata_read'), 'guilds takedown'),
+      it('network', 'Network', <Share2 size={18} />, can(a, 'network_read'), 'graph friends connections relationships map'),
       it('discovery', 'Discovery Queue', <Compass size={18} />, can(a, 'instance_manage'), 'review queue approve reject submissions'),
     ]),
     group('Instance', [
@@ -76,6 +79,8 @@ export default function AdminPage() {
             <Route index element={<Overview />} />
             <Route path="users" element={<UsersPane />} />
             <Route path="servers" element={<ServersPane />} />
+            <Route path="servers/:id" element={<ServerDetailPane />} />
+            <Route path="network" element={<NetworkPane />} />
             <Route path="settings" element={<SettingsPane />} />
             <Route path="discovery" element={<ReviewQueue onChange={setPending} />} />
             <Route path="themes" element={<ThemesPane />} />
@@ -427,7 +432,7 @@ function ServersPane() {
           <div key={g.id} className="grid grid-cols-[1fr_160px_100px_110px_120px_60px] phone:grid-cols-1 gap-3 items-center px-3 py-2 border-t border-line hover:bg-bg-3/40" data-admin-guild={g.name}>
             <div className="min-w-0 flex items-center gap-2">
               <span className="h-8 w-8 rounded-xl overflow-hidden flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: g.icon_url ? undefined : colorFor(g.id) }}>{g.icon_url ? <CropImg src={g.icon_url} alt="" className="h-full w-full object-cover" /> : initials(g.name)}</span>
-              <span className="min-w-0"><span className="block truncate font-semibold">{g.name}</span><span className="block truncate text-xs text-text-2">{new Date(g.created_at).toLocaleDateString()}</span></span>
+              <span className="min-w-0"><NavLink to={`/admin/servers/${g.id}`} className="block truncate font-semibold hover:underline" data-admin-guild-open={g.id}>{g.name}</NavLink><span className="block truncate text-xs text-text-2">{new Date(g.created_at).toLocaleDateString()}</span></span>
               {g.state === 'pending_deletion' && <span className="rounded bg-warn/20 text-warn px-1.5 py-0.5 text-[10px] font-bold" data-badge="pending-deletion">{t('DELETING {date}', { date: g.deletion_scheduled_for ? new Date(g.deletion_scheduled_for).toLocaleDateString() : '' })}</span>}
               {g.state === 'taken_down' && <span className="rounded bg-danger/20 text-danger px-1.5 py-0.5 text-[10px] font-bold" data-badge="taken-down">{t('TAKEN DOWN')}</span>}
             </div>

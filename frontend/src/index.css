@@ -495,3 +495,9 @@ button:not(:disabled), [role="button"], [role="menuitem"], [role="option"], a[hr
 @keyframes burst-fly { from { transform: rotate(var(--a)) translateY(0) scale(.6); opacity: 1; } to { transform: rotate(var(--a)) translateY(-26px) scale(1.1); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .burst-fx { display: none; } }
 :root[data-motion="reduced"] .burst-fx { display: none; }
+
+/* Admin Network view: names drop out when zoomed far out, except for the focus, the selection and what's under the pointer. */
+.net-graph .net-label { paint-order: stroke; stroke: var(--color-bg-1); stroke-width: 3px; stroke-linejoin: round; }
+.net-graph.net-far g:not(.net-keep) > .net-label { display: none; }
+.net-graph [data-net-node]:focus { outline: none; }
+.net-graph [data-net-node]:focus-visible > :first-child { opacity: 1; stroke-dasharray: 4 3; }
