@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="de" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Parley</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Parley ist eine Open-Source-Alternative zu Discord ohne Bezahlschranke: Text, Sprache, Video, Stages und ein Aufnahmestudio, mit jeder Funktion kostenlos für alle. Starte auf app.runparley.com oder betreib es auf deinem eigenen Server.">
+<meta name="theme-color" content="#07070c">
+<link rel="canonical" href="https://runparley.com/de/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Parley">
+<meta property="og:locale" content="de">
+<meta property="og:url" content="https://runparley.com/de/">
+<meta property="og:title" content="Parley: Redet drüber, auf eurem Server">
+<meta property="og:description" content="Eine Open-Source-Chat-App für Communities: Text, Sprache, Video, Stages und ein Aufnahmestudio. Kostenlos auf app.runparley.com oder auf einem Server, der dir gehört.">
+<meta property="og:image" content="https://runparley.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Redet drüber. Auf eurem Server. Parley, runparley.com">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%22123 110 820 820%22%3E%3Cpath fill=%22%237b6cff%22 d=%22M151.117 803.03 C151.227 654.363 151.556 505.696 151.775 357.03 L151.869 293.828 C151.89 279.09 151.138 264.07 152.757 249.395 C156.589 214.649 174.048 181.703 199.572 158.102 C220.046 139.17 247.219 126.343 275.067 123.23 C294.408 121.069 314.408 122.408 333.849 122.408 L449.088 122.408 L577.285 122.408 C606.639 122.408 636.516 120.817 665.781 123.208 C705.245 126.433 744.522 138.754 778.606 158.872 C800.606 171.858 823.593 190.019 840.476 209.332 C845.995 215.646 851.791 222.121 856.761 228.889 C858.91 231.816 860.501 235.321 862.89 238.056 C866.527 242.219 868.979 247.05 871.911 251.689 C884.817 272.104 894.233 293.944 901.862 316.83 C913.33 351.233 915.333 386.555 915.069 422.497 C914.909 444.32 910.279 466.744 904.598 487.705 C875.148 596.358 782.571 682.167 668.33 691.039 C646.48 692.735 624.478 692.6 602.574 692.718 L520.034 693.162 C479.384 693.381 446.982 691.823 410.433 713.073 C385.778 727.408 366.596 748.27 345.954 767.668 C325.976 786.443 306.274 805.99 286.87 825.16 C273.658 838.213 259.236 850.413 246.077 863.572 C233.944 875.705 221.442 887.296 209.041 899.025 C202.696 905.026 196.836 912.591 188.789 916.36 C183.842 918.678 178.332 918.517 172.975 918.243 C162.05 917.686 153.045 905.602 151.965 895.528 C150.992 886.461 151.609 876.945 151.46 867.824 C151.106 846.225 151.101 824.632 151.117 803.03 Z M313.836 359.652 C312.332 380.816 313.796 402.623 313.796 423.846 L313.796 554.833 L313.796 600.489 C313.796 604.432 312.097 613.859 317.986 614.398 C324.326 614.977 341.025 594.046 346.54 589.309 C363.918 574.382 379.903 557.852 397.423 543.115 C407.996 534.222 419.246 525.068 432.144 519.612 C462.048 506.963 482.719 507.552 514.288 507.379 L590.646 506.959 C607.318 506.868 624.271 507.675 640.8 505.104 C686.937 497.927 722.978 458.171 726.816 411.787 C731.162 359.269 701.662 309.035 649.615 294.593 C625.439 287.885 598.861 290.67 574.021 290.67 L444.231 290.67 L405.553 290.67 C373.845 290.67 352.772 293.328 330.928 318.553 C321.269 329.707 314.891 344.811 313.836 359.652 Z%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a broadcast console. Left-set display type over a live stereo waveform; every section is a "channel"
+   with a mono call-sign; product UI is drawn, never screenshotted. One committed dark look, like the app itself. */
+:root {
+  --ink: #07070c;        /* page ground, violet-biased black */
+  --panel: #10101a;      /* raised surfaces, app chrome */
+  --panel-2: #171726;
+  --rule: #24233a;
+  --text: #ecebff;
+  --muted: #9a98b8;
+  --faint: #5f5d7d;
+  --violet: #7b6cff;     /* Parley accent, lifted for dark ground */
+  --violet-deep: #4a3dd1;
+  --signal: #3ccf7d;     /* speaking ring / on air */
+  --hot: #f0506e;        /* hang up, REC */
+  --display: "Unbounded", "Arial Black", Impact, system-ui, sans-serif;
+  --body: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --step--1: 0.8125rem; --step-0: 1rem; --step-1: 1.25rem; --step-2: 1.75rem; --step-3: clamp(2rem, 5vw, 3.25rem);
+  --step-hero: clamp(3.1rem, 11.5vw, 10.5rem);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--ink); color: var(--text); font: 400 var(--step-0)/1.6 var(--body); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 30; background: var(--ink); }
+a { color: inherit; }
+img, canvas { max-width: 100%; }
+::selection { background: var(--violet); color: #fff; }
+:focus-visible { outline: 2px solid var(--violet); outline-offset: 3px; border-radius: 4px; }
+.wrap { max-width: 1240px; margin-inline: auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+@media (min-width: 720px) { .wrap { padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); } }
+.callsign { font: 500 var(--step--1)/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--violet); display: flex; align-items: center; gap: .6rem; }
+.callsign::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 22%, transparent); }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; }
+h2 { font-size: var(--step-3); font-weight: 700; line-height: 1.04; letter-spacing: -.02em; }
+h3 { font-size: var(--step-1); font-weight: 700; line-height: 1.2; letter-spacing: -.01em; }
+p { margin: 0; }
+.lede { color: var(--muted); font-size: var(--step-1); line-height: 1.5; max-width: 38ch; }
+.btn { display: inline-flex; align-items: center; gap: .55rem; height: 3rem; padding-inline: 1.35rem; border-radius: 999px; font: 600 var(--step-0)/1 var(--body); text-decoration: none; border: 1px solid transparent; transition: transform .15s ease, background .15s ease, border-color .15s ease; }
+.btn:hover { transform: translateY(-1px); }
+.btn-primary { background: var(--violet); color: #fff; box-shadow: 0 10px 40px -12px color-mix(in srgb, var(--violet) 80%, transparent); }
+.btn-primary:hover { background: #8d80ff; }
+.btn-ghost { border-color: var(--rule); color: var(--text); background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.btn-ghost:hover { border-color: var(--faint); }
+section { padding-block: clamp(4.5rem, 10vw, 8rem); }
+
+/* ---- nav ---- */
+.nav { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; backdrop-filter: blur(14px); background: color-mix(in srgb, var(--ink) 72%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--rule) 60%, transparent); }
+.nav .wrap { display: flex; align-items: center; gap: 1.5rem; height: 64px; }
+.brand { display: flex; align-items: center; gap: .6rem; font: 900 1.05rem/1 var(--display); text-decoration: none; letter-spacing: .02em; }
+.mark { width: 30px; height: 30px; display: grid; place-items: center; color: var(--violet); filter: drop-shadow(0 0 10px color-mix(in srgb, var(--violet) 55%, transparent)); }
+.mark svg { width: 100%; height: 100%; }
+.nav nav { display: flex; gap: 1.6rem; margin-left: auto; }
+.nav nav a { color: var(--muted); text-decoration: none; font-size: .9375rem; white-space: nowrap; }
+.nav nav a:hover { color: var(--text); }
+.nav .gh { height: 2.4rem; padding-inline: 1rem; font-size: .875rem; }
+.nav .open { height: 2.4rem; padding-inline: 1.1rem; font-size: .875rem; white-space: nowrap; }
+/* Longer translated labels: drop the GitHub button before the links run out of room. */
+@media (max-width: 1280px) { .nav .gh { display: none; } .nav nav { gap: 1.2rem; } }
+@media (max-width: 1000px) { .nav nav { gap: .9rem; } .nav nav a { font-size: .875rem; } }
+/* Whatever the language, the buttons stay put and the links scroll if they still don't fit. */
+.nav nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav nav::-webkit-scrollbar { display: none; }
+.nav .wrap > :not(nav) { flex-shrink: 0; }
+/* Phones: section links drop to their own row under the brand instead of disappearing. */
+@media (max-width: 900px) {
+  html { scroll-padding-top: 112px; }
+  .nav .wrap { flex-wrap: wrap; height: auto; gap: 0 1rem; padding-top: 10px; }
+  .nav .gh { display: none; }
+  .nav .open { margin-left: auto; }
+  .nav nav { order: 3; flex-basis: 100%; margin-left: 0; gap: 1.4rem; padding-block: .7rem .75rem; overflow-x: auto; scrollbar-width: none; }
+  .nav nav::-webkit-scrollbar { display: none; }
+  .nav nav a { white-space: nowrap; }
+}
+
+/* ---- hero ---- */
+.hero { position: relative; padding-block: clamp(3rem, 8vw, 6rem) 0; overflow: hidden; isolation: isolate; }
+.hero::before { content: ""; position: absolute; inset: -20% -10% auto; height: 120%; z-index: -2; background: radial-gradient(60% 50% at 70% 30%, color-mix(in srgb, var(--violet) 28%, transparent), transparent 70%), radial-gradient(40% 40% at 10% 80%, color-mix(in srgb, var(--violet-deep) 22%, transparent), transparent 70%); }
+#wave { position: absolute; left: 0; right: 0; top: clamp(4rem, 12vw, 9rem); width: 100%; height: clamp(240px, 34vw, 440px); z-index: -1; opacity: .9; }
+.eyebrow-row { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; align-items: center; }
+.pill { font: 500 .75rem/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: .45rem .7rem; border: 1px solid var(--rule); border-radius: 999px; color: var(--muted); background: color-mix(in srgb, var(--panel) 80%, transparent); text-decoration: none; }
+.pill b { color: var(--signal); font-weight: 500; }
+.pill-try { color: var(--text); border-color: color-mix(in srgb, var(--violet) 55%, var(--rule)); background: color-mix(in srgb, var(--violet) 18%, var(--panel)); }
+.pill-try b { color: #cfc9ff; }
+.pill-try:hover { border-color: var(--violet); }
+.live-badge { display: inline-flex; line-height: 0; border-radius: 4px; }
+.live-badge img { height: 20px; width: auto; }
+.live-badge:hover { filter: brightness(1.12); }
+.hero h1 { font-size: var(--step-hero); font-weight: 900; line-height: .86; letter-spacing: -.045em; margin-top: 1.6rem; text-transform: uppercase; }
+.hero h1 .line2 { display: block; color: var(--violet); }
+.hero-copy { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2rem 3rem; align-items: end; margin-top: clamp(1.75rem, 4vw, 2.75rem); }
+.hero-copy .lede { max-width: 44ch; }
+.hero-copy .lede strong { color: var(--text); font-weight: 500; }
+.ctas { display: flex; flex-wrap: wrap; gap: .75rem; }
+@media (max-width: 820px) { .hero-copy { grid-template-columns: 1fr; } }
+
+/* ---- app window mock ---- */
+.stage-wrap { margin-top: clamp(3rem, 7vw, 5rem); position: relative; }
+.stage-wrap::after { content: ""; position: absolute; left: 8%; right: 8%; bottom: -40px; height: 80px; background: var(--violet); filter: blur(70px); opacity: .35; z-index: -1; }
+.app { border: 1px solid var(--rule); border-bottom: 0; border-radius: 18px 18px 0 0; background: var(--panel); overflow: hidden; display: grid; grid-template-columns: 64px 220px minmax(0, 1fr); height: clamp(360px, 46vw, 560px); box-shadow: 0 -1px 0 color-mix(in srgb, var(--text) 8%, transparent) inset; }
+.rail { background: #0a0a12; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 14px; }
+.rail span { width: 40px; height: 40px; border-radius: 14px; display: grid; place-items: center; font: 700 13px/1 var(--display); color: #fff; }
+.rail .home { background: var(--panel-2); color: var(--violet); }
+.rail .home svg { width: 22px; height: 22px; }
+.rail .on { border-radius: 12px; background: var(--violet); position: relative; }
+.rail .on::before { content: ""; position: absolute; left: -12px; width: 4px; height: 26px; border-radius: 0 4px 4px 0; background: #fff; }
+.rail hr { width: 26px; border: 0; height: 2px; background: var(--rule); margin: 2px 0; }
+.chans { background: #0e0e17; border-right: 1px solid var(--rule); padding: 14px 10px; font-size: 13.5px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chans .srv { font: 700 13px/1 var(--display); padding: 4px 8px 14px; border-bottom: 1px solid var(--rule); margin-bottom: 10px; }
+.chans .cat { font: 600 10.5px/1 var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); padding: 10px 8px 6px; }
+.chans .ch { padding: 6px 8px; border-radius: 7px; color: var(--muted); display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+.chans .ch.active { background: var(--panel-2); color: var(--text); }
+.chans .ch i { font-style: normal; color: var(--faint); width: 14px; text-align: center; }
+.chans .who { padding: 3px 8px 3px 30px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12.5px; }
+.chans .who .av { width: 20px; height: 20px; font-size: 9px; }
+.call { position: relative; display: flex; flex-direction: column; min-width: 0; background: #0b0b13; }
+.call header { height: 46px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--rule); font-weight: 600; font-size: 14px; }
+.call header small { color: var(--faint); font-weight: 400; font-size: 12px; }
+.call header .rec { margin-left: auto; font: 500 11px/1 var(--mono); letter-spacing: .08em; color: var(--hot); background: color-mix(in srgb, var(--hot) 16%, transparent); padding: 5px 8px; border-radius: 999px; display: flex; gap: 6px; align-items: center; }
+.call header .rec::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--hot); animation: blink 1.4s infinite; }
+.tiles { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 14px; }
+.tile { border-radius: 14px; background: var(--panel-2); border: 2px solid var(--rule); display: grid; place-items: center; position: relative; min-height: 0; overflow: hidden; }
+.tile .name { position: absolute; left: 10px; bottom: 10px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--ink) 80%, transparent); padding: 3px 8px; border-radius: 7px; }
+.tile .role { position: absolute; left: 10px; top: 10px; font: 600 9.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 4px 6px; border-radius: 5px; background: var(--violet); color: #fff; }
+.tile .role.eng { background: #f6b53d; color: #1a1300; }
+.tile.speaking { border-color: var(--signal); }
+.tile.speaking .av { box-shadow: 0 0 0 4px color-mix(in srgb, var(--signal) 70%, transparent); animation: talk 1.1s ease-in-out infinite; }
+.tile.screen { background: linear-gradient(135deg, #1b1840, #0f2a2a); }
+.tile.screen .live { position: absolute; right: 10px; top: 10px; font: 700 9.5px/1 var(--mono); letter-spacing: .1em; background: var(--hot); color: #fff; padding: 4px 6px; border-radius: 5px; }
+.daw { width: 78%; display: grid; gap: 6px; }
+.daw span { height: 14px; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--violet) 70%, transparent), color-mix(in srgb, var(--signal) 55%, transparent)); }
+.av { width: clamp(44px, 6vw, 72px); height: clamp(44px, 6vw, 72px); border-radius: 50%; display: grid; place-items: center; font: 700 clamp(15px, 2vw, 24px)/1 var(--display); color: #fff; flex: none; }
+.c1 { background: #e0609a; } .c2 { background: #3aa6d8; } .c3 { background: #e39a3b; } .c4 { background: #5fbf8a; } .c5 { background: #8d79ff; }
+.bar { flex: none; display: flex; justify-content: center; gap: 8px; padding: 10px 12px 14px; border-top: 1px solid var(--rule); flex-wrap: wrap; }
+.grp { display: flex; gap: 2px; padding: 5px; border-radius: 12px; border: 1px solid var(--rule); background: var(--panel); }
+.grp b { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--text); }
+.grp b.chev { width: 18px; color: var(--faint); }
+.grp b svg { width: 17px; height: 17px; }
+.hang { width: 52px; height: 46px; border-radius: 12px; background: var(--hot); display: grid; place-items: center; color: #fff; }
+.hang svg { width: 19px; height: 19px; }
+@media (max-width: 900px) { .app { grid-template-columns: 56px minmax(0, 1fr); } .chans { display: none; } }
+@media (max-width: 520px) { .app { grid-template-columns: minmax(0, 1fr); height: 420px; } .rail { display: none; } .tiles { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 10px; } .grp b.chev { display: none; } }
+
+/* ---- spec strip ---- */
+.strip { border-block: 1px solid var(--rule); background: var(--panel); padding-block: 0; }
+.strip .wrap { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.strip div.cell { padding: 1.6rem 1.25rem 1.6rem 0; border-right: 1px solid var(--rule); display: grid; gap: .35rem; }
+.strip div.cell + div.cell { padding-left: 1.25rem; }
+.strip div.cell:last-child { border-right: 0; }
+.strip .v { font: 700 clamp(1.4rem, 3vw, 2.1rem)/1 var(--display); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.strip .k { color: var(--muted); font-size: var(--step--1); }
+@media (max-width: 760px) { .strip .wrap { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip div.cell:nth-child(2) { border-right: 0; } .strip div.cell:nth-child(3) { padding-left: 0; } .strip div.cell:nth-child(n+3) { border-top: 1px solid var(--rule); } }
+
+/* ---- why Parley: a side-by-side against Discord's free tier, then the reasons ---- */
+.vs { border: 1px solid var(--rule); border-radius: 22px; overflow: hidden; background: var(--panel); }
+.vs .row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1.15fr); border-top: 1px solid var(--rule); }
+.vs .row:first-child { border-top: 0; }
+.vs .row > * { padding: .95rem 1.25rem; min-width: 0; }
+.vs .th { font: 500 .6875rem/1.2 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); background: var(--panel-2); }
+.vs .th.us { color: var(--violet); }
+.vs .what { font-weight: 600; }
+.vs .them { color: var(--muted); }
+.vs .us { color: var(--text); background: color-mix(in srgb, var(--violet) 9%, transparent); }
+.vs .us::before { content: "✓ "; color: var(--signal); font-weight: 700; }
+.vs .th.us::before { content: none; }
+.vs .them small, .vs .us small { display: block; color: var(--faint); font-size: var(--step--1); margin-top: .15rem; }
+@media (max-width: 680px) {
+  .vs .row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .vs .row .what { grid-column: 1 / -1; padding-bottom: 0; }
+  .vs .row.head-row .what { display: none; }
+  .vs .row > * { padding: .7rem 1rem; }
+}
+.vs-note { margin-top: .8rem; color: var(--faint); font-size: var(--step--1); }
+.only { margin-top: 3rem; }
+.only-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem 1rem; margin-bottom: 1rem; }
+.only-head h3 { margin: 0; font-size: var(--step-2); }
+.only-head p { margin: 0; color: var(--muted); }
+.only ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--rule); border-radius: 22px; overflow: hidden; background: var(--panel); }
+.only li { padding: 1.1rem 1.25rem; border-top: 1px solid var(--rule); border-left: 1px solid var(--rule); margin: -1px 0 0 -1px; min-width: 0; display: grid; gap: .3rem; align-content: start; }
+.only li b { font-weight: 600; }
+.only li b::before { content: "✓ "; color: var(--signal); }
+.only li span { color: var(--muted); font-size: .9375rem; }
+@media (max-width: 980px) { .only ul { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .only ul { grid-template-columns: minmax(0, 1fr); } }
+.reasons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.25rem; margin-top: 2.5rem; }
+@media (max-width: 980px) { .reasons { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .reasons { grid-template-columns: minmax(0, 1fr); } }
+.reasons article { border: 1px solid var(--rule); border-radius: 18px; padding: 1.4rem; background: var(--panel); display: grid; gap: .55rem; align-content: start; min-width: 0; }
+.reasons .k { font: 500 var(--step--1)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--violet); }
+.reasons h3 { margin: 0; font-size: var(--step-1); }
+.reasons p { margin: 0; color: var(--muted); font-size: .9375rem; }
+.why-cta { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+
+/* ---- two ways ---- */
+.ways { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1.25rem; }
+@media (max-width: 820px) { .ways { grid-template-columns: 1fr; } }
+.way { border: 1px solid var(--rule); border-radius: 22px; padding: clamp(1.5rem, 3.5vw, 2.4rem); display: flex; flex-direction: column; gap: 1rem; background: var(--panel); min-width: 0; }
+.way.hosted { border-color: color-mix(in srgb, var(--violet) 60%, var(--rule)); background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--violet) 22%, transparent), transparent 60%), var(--panel); box-shadow: 0 30px 80px -50px color-mix(in srgb, var(--violet) 90%, transparent); }
+.way .tag { font: 500 .6875rem/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.way.hosted .tag { color: var(--violet); }
+.way h3 { font-size: clamp(1.4rem, 3vw, 2rem); }
+.way .addr { font: 500 clamp(1rem, 2.2vw, 1.25rem)/1.2 var(--mono); color: var(--text); overflow-wrap: anywhere; }
+.way p { color: var(--muted); max-width: 46ch; }
+.way ol { margin: 0; padding: 0; list-style: none; display: grid; gap: .5rem; counter-reset: step; }
+.way ol li { counter-increment: step; display: flex; gap: .7rem; align-items: baseline; color: var(--text); font-size: .9375rem; }
+.way ol li::before { content: counter(step); font: 500 .75rem/1 var(--mono); color: var(--violet); border: 1px solid color-mix(in srgb, var(--violet) 50%, transparent); border-radius: 50%; width: 1.5rem; height: 1.5rem; display: grid; place-items: center; flex: none; transform: translateY(.15rem); }
+.way .ctas { margin-top: auto; padding-top: .5rem; }
+
+/* ---- features ---- */
+.head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1.5rem 4rem; align-items: end; margin-bottom: clamp(2.5rem, 5vw, 4rem); }
+.head .callsign { grid-column: 1 / -1; }
+@media (max-width: 820px) { .head { grid-template-columns: 1fr; } }
+.grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 22px; overflow: hidden; }
+.f { background: var(--ink); padding: clamp(1.4rem, 3vw, 2.1rem); display: flex; flex-direction: column; gap: .8rem; min-width: 0; position: relative; }
+.f.w3 { grid-column: span 3; } .f.w2 { grid-column: span 2; } .f.w4 { grid-column: span 4; }
+.f p { color: var(--muted); max-width: 52ch; }
+.f .tag { font: 500 .6875rem/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.f ul { list-style: none; padding: 0; margin: .25rem 0 0; display: flex; flex-wrap: wrap; gap: .4rem; }
+.f li { font-size: .8125rem; color: var(--text); border: 1px solid var(--rule); border-radius: 999px; padding: .3rem .65rem; background: var(--panel); }
+.f:hover { background: #0b0b13; }
+@media (max-width: 980px) { .f.w2, .f.w3, .f.w4 { grid-column: span 3; } }
+@media (max-width: 640px) { .grid { grid-template-columns: minmax(0, 1fr); } .f.w2, .f.w3, .f.w4 { grid-column: auto; } }
+/* mini illustrations inside feature cells */
+.mini { margin-top: auto; padding-top: 1rem; }
+.msg { display: flex; gap: .7rem; align-items: flex-start; font-size: .875rem; }
+.msg .av { width: 30px; height: 30px; font-size: 12px; }
+.msg b { font-weight: 600; }
+.msg small { color: var(--faint); font-family: var(--mono); font-size: .6875rem; margin-left: .4rem; }
+.msg .body { color: var(--muted); }
+.msg .mention { color: #cfc9ff; background: color-mix(in srgb, var(--violet) 25%, transparent); padding: 0 .3rem; border-radius: 4px; }
+.reacts { display: flex; gap: .4rem; margin-top: .45rem; }
+.reacts span { font-size: .75rem; border: 1px solid var(--rule); background: var(--panel); border-radius: 7px; padding: .15rem .45rem; }
+.reacts span.me { border-color: var(--violet); background: color-mix(in srgb, var(--violet) 16%, transparent); }
+.poll { border: 1px solid var(--rule); background: var(--panel); border-radius: 12px; padding: .9rem; display: grid; gap: .5rem; font-size: .8125rem; }
+.poll .q { font-weight: 600; font-size: .875rem; }
+.poll .opt { position: relative; border-radius: 7px; padding: .4rem .6rem; background: var(--panel-2); overflow: hidden; display: flex; justify-content: space-between; }
+.poll .opt i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--violet) 32%, transparent); z-index: 0; }
+.poll .opt span { position: relative; font-variant-numeric: tabular-nums; }
+.vm { display: flex; align-items: center; gap: .7rem; border: 1px solid var(--rule); background: var(--panel); border-radius: 999px; padding: .45rem .9rem .45rem .45rem; }
+.vm .play { width: 30px; height: 30px; border-radius: 50%; background: var(--violet); display: grid; place-items: center; color: #fff; flex: none; }
+.vm canvas { flex: 1; height: 26px; width: 100%; min-width: 0; }
+.vm small { font: 500 .75rem/1 var(--mono); color: var(--muted); }
+.transcript { font-size: .8125rem; color: var(--muted); margin-top: .5rem; padding-left: .8rem; border-left: 2px solid var(--rule); }
+.hand { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.hand .chip { display: flex; flex-direction: column; align-items: center; gap: .3rem; font-size: .6875rem; color: var(--muted); }
+.hand .chip .av { width: 38px; height: 38px; font-size: 13px; position: relative; }
+.hand .chip .av em { position: absolute; right: -4px; top: -4px; width: 16px; height: 16px; border-radius: 50%; background: #f6b53d; font-style: normal; font-size: 9px; display: grid; place-items: center; color: #1a1300; }
+.roles { display: flex; flex-wrap: wrap; gap: .45rem; }
+.decor { display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; }
+.decor .av { width: 40px; height: 40px; font-size: 14px; position: relative; }
+.decor .av::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; pointer-events: none; }
+.decor .d1::after { border: 2px solid #f6b53d; box-shadow: 0 0 10px rgba(246,181,61,.5); }
+.decor .d2::after { background: conic-gradient(#f0506e, #f6b53d, #3ccf7d, #38bdf8, #7b6cff, #f0506e); -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%); mask: radial-gradient(circle, transparent 62%, #000 64%); animation: spin 6s linear infinite; }
+.decor .d3::after { border: 2px dashed #7dd3fc; animation: spin 10s linear infinite; }
+.decor .tag-chip { font: 600 .6875rem/1 var(--mono); letter-spacing: .06em; padding: .3rem .45rem; border-radius: 6px; background: color-mix(in srgb, var(--violet) 22%, transparent); color: #cfc9ff; }
+.decor .styled { font: 900 1rem/1 var(--display); background: linear-gradient(90deg, #f0506e, #f6b53d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@keyframes spin { to { transform: rotate(1turn); } }
+.acct { display: grid; gap: .35rem; max-width: 300px; }
+.acct .row { display: flex; align-items: center; gap: .6rem; padding: .45rem .6rem; border-radius: 10px; font-size: .8125rem; }
+.acct .row.on { background: color-mix(in srgb, var(--panel-2) 90%, transparent); }
+.acct .av { width: 26px; height: 26px; font-size: 10px; }
+.acct .who { flex: 1; min-width: 0; } .acct .who small { display: block; color: var(--faint); font-family: var(--mono); font-size: .6875rem; }
+.acct .ok { color: var(--signal); } .acct .add { color: var(--muted); }
+.acct .add .av { background: var(--panel-2); color: var(--muted); }
+.f.w6 { grid-column: 1 / -1; }
+.player { border: 1px solid color-mix(in srgb, var(--violet) 45%, var(--rule)); background: radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--violet) 16%, transparent), transparent 55%), var(--panel); border-radius: 14px; padding: .75rem .85rem .6rem; max-width: 420px; }
+.player .top { display: flex; align-items: center; gap: .7rem; }
+.player .play { width: 34px; height: 34px; border-radius: 50%; background: var(--violet); color: #fff; display: grid; place-items: center; flex: none; font-size: .7rem; box-shadow: 0 6px 20px -6px var(--violet); }
+.player .t { font-size: .875rem; font-weight: 600; } .player .t small { display: block; font: 500 .6875rem/1.4 var(--mono); color: var(--faint); font-weight: 400; }
+.player .bars { display: flex; align-items: center; gap: 3px; height: 40px; margin: .6rem 0 .45rem; }
+.player .bars i { flex: 1; border-radius: 3px; background: linear-gradient(var(--violet), color-mix(in srgb, var(--violet) 35%, transparent)); height: 30%; animation: eq 1.1s ease-in-out infinite alternate; }
+.player .seek { height: 4px; border-radius: 4px; background: var(--rule); position: relative; } .player .seek b { position: absolute; inset: 0 62% 0 0; border-radius: 4px; background: var(--violet); }
+@keyframes eq { 0% { height: 18%; } 50% { height: 85%; } 100% { height: 35%; } }
+@media (prefers-reduced-motion: reduce) { .player .bars i { animation: none; } }
+.winbar { display: flex; align-items: center; gap: .5rem; border: 1px solid var(--rule); background: var(--panel); border-radius: 10px; padding: .35rem 0 .35rem .6rem; font-size: .75rem; color: var(--muted); max-width: 420px; }
+.winbar .place { flex: 1; text-align: center; color: var(--text); font-weight: 600; }
+.winbar .upd { color: var(--signal); font-weight: 700; padding: 0 .35rem; }
+.winbar .ctl { display: flex; } .winbar .ctl span { width: 30px; text-align: center; color: var(--muted); }
+.upd-note { margin-top: .5rem; font: 500 .6875rem/1.4 var(--mono); color: var(--faint); }
+.f.w6.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: clamp(1.4rem, 4vw, 3rem); align-content: start; }
+.f.w6.split > .mini { grid-column: 2; grid-row: 1 / span 4; margin: 0; padding: 0; align-self: center; }
+@media (max-width: 820px) { .f.w6.split { display: flex; } .f.w6.split > .mini { padding-top: 1rem; } }
+.f code { font: 500 .85em/1 var(--mono); color: var(--text); background: var(--panel); border: 1px solid var(--rule); border-radius: 5px; padding: .1rem .35rem; }
+.ai { display: grid; gap: .55rem; font-size: .8125rem; width: 100%; max-width: 440px; justify-self: center; }
+.ai .ask, .ai .say { padding: .55rem .75rem; border-radius: 12px; max-width: 34ch; }
+.ai .ask { justify-self: end; background: color-mix(in srgb, var(--violet) 28%, transparent); color: #e6e3ff; }
+.ai .say { background: var(--panel); border: 1px solid var(--rule); color: var(--muted); }
+.ai .tool { font: 500 .6875rem/1.4 var(--mono); color: var(--faint); }
+.ai .tool b { color: var(--signal); font-weight: 500; }
+.roles span { font-size: .8125rem; font-weight: 600; padding: .3rem .6rem; border-radius: 7px; background: var(--panel); border: 1px solid var(--rule); }
+.platforms-mini { display: flex; flex-wrap: wrap; gap: .45rem; }
+.platforms-mini span { font: 500 .75rem/1 var(--mono); padding: .45rem .6rem; border-radius: 7px; border: 1px solid var(--rule); background: var(--panel); color: var(--muted); }
+
+/* ---- studio ---- */
+.studio { background: linear-gradient(180deg, var(--ink), #0b0a16 30%, var(--ink)); }
+.console { margin-top: clamp(2.5rem, 5vw, 4rem); border: 1px solid var(--rule); border-radius: 22px; background: var(--panel); overflow: hidden; }
+.console .top { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1.25rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--rule); }
+.console .top strong { font: 700 1rem/1.2 var(--display); }
+.console .top .rec { font: 500 .75rem/1 var(--mono); color: var(--hot); display: flex; align-items: center; gap: .45rem; letter-spacing: .06em; }
+.console .top .rec::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--hot); animation: blink 1.4s infinite; }
+.console .top .time { margin-left: auto; font: 500 1.05rem/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.console .export { font: 600 .8125rem/1 var(--body); color: var(--text); border: 1px solid var(--rule); border-radius: 8px; padding: .55rem .8rem; background: var(--panel-2); }
+.console .tempo { display: flex; flex-wrap: wrap; gap: .35rem; }
+.console .tempo span { font: 500 .75rem/1 var(--mono); color: var(--muted); border: 1px solid var(--rule); border-radius: 7px; padding: .4rem .55rem; background: var(--panel-2); }
+.console .tempo span.on { background: #f6b53d; border-color: #f6b53d; color: #1a1300; }
+.console .top .bb { font: 500 .8125rem/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); border: 1px solid var(--rule); border-radius: 7px; padding: .4rem .55rem; }
+.console .views { display: flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--rule); }
+.console .views span { font: 600 .75rem/1 var(--body); padding: .45rem .65rem; border-radius: 6px; color: var(--faint); }
+.console .views span.on { background: var(--rule); color: var(--text); }
+.tracks { position: relative; }
+.track { display: grid; grid-template-columns: 290px minmax(0, 1fr); border-bottom: 1px solid var(--rule); }
+.track:last-child { border-bottom: 0; }
+.track .meta { padding: .9rem 1.25rem; display: flex; align-items: center; gap: .75rem; border-right: 1px solid var(--rule); min-width: 0; }
+.track .meta .av { width: 34px; height: 34px; font-size: 12px; }
+.track .meta div { min-width: 0; }
+.track .meta b { display: block; font-size: .9375rem; }
+.track .meta small { display: block; color: var(--faint); font: 400 .6875rem/1.4 var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track .ms { display: flex; gap: 4px; margin-left: auto; }
+.track .ms i { font: 700 .6875rem/1 var(--mono); font-style: normal; width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; background: var(--panel-2); color: var(--faint); border: 1px solid var(--rule); }
+.track .ms i.solo { background: #f6b53d; color: #1a1300; border-color: #f6b53d; }
+.track .ms i.arm { background: var(--hot); color: #fff; border-color: var(--hot); }
+.track .vu { display: block; height: 6px; margin-top: .45rem; border-radius: 2px; background: #06060a; box-shadow: inset 0 0 0 1px var(--rule); overflow: hidden; }
+.track .vu i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #3ccf7d 0 72%, #f6b53d 72% 90%, var(--hot) 90%); clip-path: inset(0 calc(100% - var(--l, .5) * 100%) 0 0); transition: clip-path .12s linear; }
+.track canvas { width: 100%; height: 76px; display: block; }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); left: calc(290px + 38%); box-shadow: 0 0 12px var(--text); pointer-events: none; }
+@media (max-width: 720px) { .track { grid-template-columns: minmax(0, 1fr); } .track .meta { border-right: 0; border-bottom: 1px solid var(--rule); } .playhead { display: none; } }
+.studio-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem 2.5rem; margin-top: 2.5rem; }
+.studio-notes div { display: grid; gap: .5rem; align-content: start; }
+.studio-notes p { color: var(--muted); }
+.studio-notes .k { font: 500 .75rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--violet); }
+@media (max-width: 820px) { .studio-notes { grid-template-columns: 1fr; gap: 1.5rem; } }
+
+/* ---- self-host ---- */
+.host { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 3rem 4rem; align-items: start; }
+@media (max-width: 900px) { .host { grid-template-columns: 1fr; } }
+.host > div { min-width: 0; }
+.host .lede { margin-top: 1.25rem; }
+.term { border: 1px solid var(--rule); border-radius: 18px; background: #06060a; overflow: hidden; min-width: 0; box-shadow: 0 30px 80px -40px color-mix(in srgb, var(--violet) 60%, transparent); }
+.term .tb { display: flex; align-items: center; gap: .5rem; padding: .8rem 1rem; border-bottom: 1px solid var(--rule); background: var(--panel); }
+.term .tb i { width: 11px; height: 11px; border-radius: 50%; background: var(--rule); }
+.term .tb span { font: 500 .75rem/1 var(--mono); color: var(--faint); margin-left: .5rem; }
+.term .tb button { margin-left: auto; font: 600 .75rem/1 var(--body); color: var(--text); background: var(--panel-2); border: 1px solid var(--rule); border-radius: 7px; padding: .45rem .7rem; cursor: pointer; }
+.term .tb button:hover { border-color: var(--faint); }
+.term pre { margin: 0; padding: 1.25rem 1.25rem 1.5rem; overflow-x: auto; font: 400 .875rem/1.8 var(--mono); color: var(--text); }
+.term .c { color: var(--faint); }
+.term .p { color: var(--violet); user-select: none; }
+.term .ok { color: var(--signal); }
+.plats { margin-top: 2rem; display: grid; gap: .5rem; }
+.plats .k { font: 500 .75rem/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--faint); margin-bottom: .25rem; }
+.plats div { display: flex; flex-wrap: wrap; gap: .45rem; }
+.plats a { text-decoration: none; font-size: .875rem; padding: .45rem .75rem; border-radius: 8px; border: 1px solid var(--rule); background: var(--panel); color: var(--text); }
+.plats a:hover { border-color: var(--violet); }
+.checks { list-style: none; padding: 0; margin: 2rem 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem 1.5rem; }
+.checks li { display: flex; gap: .6rem; color: var(--muted); font-size: .9375rem; }
+.checks li::before { content: ""; flex: none; width: 16px; height: 16px; margin-top: .25rem; border-radius: 5px; background: color-mix(in srgb, var(--signal) 22%, transparent); box-shadow: inset 0 0 0 1px var(--signal); }
+.checks b { color: var(--text); font-weight: 500; }
+@media (max-width: 520px) { .checks { grid-template-columns: 1fr; } }
+
+/* ---- download ---- */
+.dl { border: 1px solid var(--rule); border-radius: 22px; overflow: hidden; margin-top: clamp(2.5rem, 5vw, 3.5rem); }
+.dl .row { display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 1rem 2rem; align-items: center; padding: 1.35rem clamp(1.1rem, 3vw, 2rem); border-bottom: 1px solid var(--rule); transition: background .15s ease; }
+.dl .row:last-child { border-bottom: 0; }
+.dl .row:hover { background: var(--panel); }
+.dl .go { text-decoration: none; }
+.dl .go:hover { color: var(--violet); transform: translateX(3px); }
+.dl .os { font: 700 var(--step-1)/1.1 var(--display); }
+.dl .files { display: flex; flex-wrap: wrap; gap: .4rem; }
+.dl .files a, .dl .files span { font: 400 .75rem/1 var(--mono); color: var(--muted); border: 1px solid var(--rule); border-radius: 6px; padding: .45rem .6rem; background: var(--panel); overflow-wrap: anywhere; text-decoration: none; }
+.dl .files a { color: var(--text); }
+.dl .files a:hover { border-color: var(--violet); color: #fff; }
+.dl .go { font: 600 .875rem/1 var(--body); color: var(--muted); transition: transform .15s ease, color .15s ease; white-space: nowrap; }
+@media (max-width: 720px) { .dl .row { grid-template-columns: minmax(0, 1fr) auto; } .dl .files { grid-column: 1 / -1; grid-row: 2; } }
+.note { margin-top: 1.25rem; color: var(--faint); font-size: .875rem; }
+/* Stable / Development switch above the downloads. */
+.channels { display: inline-flex; gap: .25rem; margin-top: clamp(2rem, 4vw, 2.75rem); padding: .25rem; border: 1px solid var(--rule); border-radius: 999px; background: var(--panel); }
+.channels button { font: 600 .875rem/1 var(--body); color: var(--muted); background: none; border: 0; border-radius: 999px; padding: .6rem 1.1rem; cursor: pointer; }
+.channels button[aria-selected="true"] { background: var(--violet); color: #fff; }
+.channels button:not([aria-selected="true"]):hover { color: var(--text); }
+.channels + .dl { margin-top: 1rem; }
+.devnote { display: none; margin-top: 1rem; color: var(--muted); font-size: .9375rem; }
+#download[data-channel="dev"] .devnote { display: block; }
+#download[data-channel="dev"] .stable-only { display: none; }
+
+/* ---- finale ---- */
+.finale { text-align: left; overflow: hidden; position: relative; isolation: isolate; border-top: 1px solid var(--rule); }
+.finale::before { content: ""; position: absolute; inset: auto -10% -60% -10%; height: 120%; background: radial-gradient(50% 50% at 50% 50%, color-mix(in srgb, var(--violet) 35%, transparent), transparent 70%); z-index: -1; }
+.finale h2 { font-size: clamp(2.6rem, 9vw, 7.5rem); font-weight: 900; line-height: .9; letter-spacing: -.04em; text-transform: uppercase; }
+.finale .ctas { margin-top: 2.25rem; }
+footer { border-top: 1px solid var(--rule); padding-block: 2rem calc(2rem + env(safe-area-inset-bottom, 0px)); color: var(--faint); font-size: .875rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: center; }
+footer nav { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-left: auto; }
+footer a { color: var(--muted); text-decoration: none; }
+footer a:hover { color: var(--text); }
+
+@keyframes blink { 50% { opacity: .25; } }
+@keyframes talk { 0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 70%, transparent); } 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--signal) 45%, transparent); } }
+/* Profiles showcase: a profile card in a frame, an effect drifting over it, server roles and an In voice card. */
+.you { background: linear-gradient(180deg, var(--ink), #120b1d 35%, var(--ink)); }
+.you-stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(2rem, 5vw, 4.5rem); align-items: center; }
+@media (max-width: 900px) { .you-stage { grid-template-columns: 1fr; } }
+.pcard-wrap { position: relative; width: min(340px, 100%); margin: 3.2rem auto 2.4rem; }
+.pcard { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid #6b3fa0; background: linear-gradient(rgba(17,18,20,.8), rgba(17,18,20,.8)), linear-gradient(135deg, #6b1f5a, #2a3f8a); box-shadow: 0 30px 80px -30px rgba(123,108,255,.55); }
+.pcard .banner { height: 96px; background: linear-gradient(120deg, #e0609a, #8d79ff 55%, #3aa6d8); }
+.pcard .body { padding: 0 1.1rem 1.1rem; display: grid; gap: .7rem; }
+.pcard .avwrap { margin-top: -42px; width: 84px; height: 84px; border-radius: 50%; padding: 5px; background: #1b1626; position: relative; }
+.pcard .avwrap .av { width: 74px; height: 74px; font-size: 26px; }
+.pcard .avwrap::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px dashed #f6b53d; animation: spin 14s linear infinite; }
+.pcard .dot { position: absolute; right: 4px; bottom: 6px; width: 18px; height: 18px; border-radius: 50%; background: var(--signal); border: 4px solid #1b1626; }
+.pcard .nm { display: flex; align-items: center; gap: .45rem; font: 900 1.25rem/1 var(--display); }
+.pcard .nm .styled { background: linear-gradient(90deg, #f0506e, #f6b53d); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.pcard .nm .tag-chip { font: 700 .625rem/1 var(--mono); letter-spacing: .06em; padding: .28rem .4rem; border-radius: 5px; background: color-mix(in srgb, #3aa6d8 55%, #111214); box-shadow: inset 0 0 0 1px #3aa6d8; color: #fff; }
+.pcard .user { color: var(--muted); font-size: .8125rem; margin-top: -.35rem; }
+.pcard .btns { display: flex; gap: .4rem; }
+.pcard .btns b { font-size: .8125rem; font-weight: 600; padding: .45rem .8rem; border-radius: 8px; background: var(--violet); }
+.pcard .btns i { width: 32px; border-radius: 8px; background: rgba(0,0,0,.3); display: grid; place-items: center; font-style: normal; font-size: .8125rem; }
+.pcard h4 { margin: 0 0 .3rem; font-size: .75rem; color: var(--text); }
+.pcard .since { font-size: .8125rem; color: var(--muted); }
+.pcard .roles { display: flex; flex-wrap: wrap; gap: .3rem; }
+.pcard .roles span { font-size: .6875rem; padding: .22rem .5rem; border-radius: 6px; background: rgba(255,255,255,.06); display: inline-flex; align-items: center; gap: .3rem; }
+.pcard .roles span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.pcard .voice { border-radius: 10px; background: rgba(0,0,0,.35); padding: .7rem; display: grid; gap: .5rem; font-size: .8125rem; }
+.pcard .voice .faces { display: flex; align-items: center; gap: .6rem; }
+.pcard .voice .faces .av { width: 26px; height: 26px; font-size: 10px; margin-right: -12px; box-shadow: 0 0 0 2px #1b1626; }
+.pcard .voice .join { text-align: center; padding: .4rem; border-radius: 7px; background: rgba(255,255,255,.1); font-weight: 600; }
+/* The frame: vines along the sides, a crown of stars over the top edge, a band below. */
+.pframe { position: absolute; inset: -14px -14px -18px; pointer-events: none; border-radius: 22px; }
+.pframe::before { content: ""; position: absolute; inset: 0; border-radius: 22px; border: 3px solid transparent; background: linear-gradient(140deg, #f6b53d, #e0609a, #8d79ff, #3aa6d8) border-box; -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.pframe .crown { position: absolute; left: 50%; top: -38px; transform: translateX(-50%); font-size: 34px; filter: drop-shadow(0 4px 10px rgba(246,181,61,.5)); }
+.pframe .tail { position: absolute; right: -6px; bottom: -22px; font-size: 30px; transform: rotate(-12deg); }
+/* The effect: sparkles drifting down over the card. */
+.pfx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.pfx span { position: absolute; top: -10%; font-size: 14px; animation: drift 6s linear infinite; opacity: 0; }
+.pfx span:nth-child(1) { left: 12%; animation-delay: 0s; } .pfx span:nth-child(2) { left: 34%; animation-delay: 1.6s; font-size: 10px; } .pfx span:nth-child(3) { left: 58%; animation-delay: 3.1s; }
+.pfx span:nth-child(4) { left: 78%; animation-delay: .8s; font-size: 18px; } .pfx span:nth-child(5) { left: 90%; animation-delay: 4.2s; font-size: 11px; }
+@keyframes drift { 0% { transform: translateY(0) rotate(0); opacity: 0 } 12% { opacity: .95 } 85% { opacity: .8 } 100% { transform: translateY(560px) rotate(200deg); opacity: 0 } }
+@keyframes spin { to { transform: rotate(360deg) } }
+.you-notes { display: grid; gap: 1.6rem; }
+.you-notes div { display: grid; gap: .4rem; }
+.you-notes .k { font: 500 var(--step--1)/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--violet); }
+.you-notes h3 { margin: 0; }
+.you-notes p { margin: 0; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+</style>
+<link rel="alternate" hreflang="en" href="https://runparley.com/">
+<link rel="alternate" hreflang="es" href="https://runparley.com/es/">
+<link rel="alternate" hreflang="de" href="https://runparley.com/de/">
+<link rel="alternate" hreflang="fr" href="https://runparley.com/fr/">
+<link rel="alternate" hreflang="it" href="https://runparley.com/it/">
+<link rel="alternate" hreflang="nl" href="https://runparley.com/nl/">
+<link rel="alternate" hreflang="pl" href="https://runparley.com/pl/">
+<link rel="alternate" hreflang="pt-BR" href="https://runparley.com/pt-br/">
+<link rel="alternate" hreflang="ru" href="https://runparley.com/ru/">
+<link rel="alternate" hreflang="tr" href="https://runparley.com/tr/">
+<link rel="alternate" hreflang="ar" href="https://runparley.com/ar/">
+<link rel="alternate" hreflang="ja" href="https://runparley.com/ja/">
+<link rel="alternate" hreflang="ko" href="https://runparley.com/ko/">
+<link rel="alternate" hreflang="zh-CN" href="https://runparley.com/zh-cn/">
+<link rel="alternate" hreflang="x-default" href="https://runparley.com/">
+<style>
+:lang(ja) { word-break: auto-phrase; line-break: strict; }
+:lang(ko) { word-break: keep-all; }
+.langs { position:relative; }
+.langs summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; height:2.4rem; padding-inline:.75rem; border:1px solid var(--rule); border-radius:999px; color:var(--muted); font-size:.875rem; white-space:nowrap; }
+.langs summary::-webkit-details-marker { display:none; }
+.langs summary:hover, .langs[open] summary { color:var(--text); border-color:var(--faint); }
+.langs summary svg { width:16px; height:16px; }
+@media (max-width: 1100px) { .nav .langs summary .name { display:none; } }
+.langs .list { position:absolute; inset-inline-end:0; top:calc(100% + 8px); z-index:40; min-width:190px; max-height:min(70vh, 460px); overflow:auto; padding:6px; background:var(--panel); border:1px solid var(--rule); border-radius:12px; box-shadow:0 20px 50px #0009; display:grid; }
+footer .langs .list { top:auto; bottom:calc(100% + 8px); }
+.langs .list a { padding:.45rem .7rem; border-radius:8px; color:var(--text); text-decoration:none; font-size:.92rem; }
+.langs .list a:hover { background:var(--panel-2); }
+.langs .list a[aria-current] { color:var(--violet); }
+.lang-offer { position:fixed; inset-inline:max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); bottom:max(16px, env(safe-area-inset-bottom, 0px)); z-index:50; margin-inline:auto; width:fit-content; max-width:calc(100% - 32px); display:flex; align-items:center; gap:.75rem; padding:.6rem .6rem .6rem 1rem; background:var(--panel-2); border:1px solid var(--rule); border-radius:999px; box-shadow:0 20px 50px #000a; font-size:.92rem; }
+.lang-offer a { color:#fff; font-weight:600; text-decoration:none; background:var(--violet); border-radius:999px; padding:.35rem .9rem; }
+.lang-offer button { background:none; border:0; color:var(--muted); cursor:pointer; font:inherit; font-size:1.1rem; line-height:1; padding:.2rem .45rem; }
+
+.nav .langs summary { height:2.4rem; } footer .langs { margin-inline-start:auto; } @media (max-width:900px) { .nav .langs { margin-inline-start:auto; } .nav .langs ~ .open { margin-left:0; } }</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Parley-Startseite"><span class="mark" aria-hidden="true"><svg viewBox="123 110 820 820" fill="currentColor"><path d="M151.117 803.03 C151.227 654.363 151.556 505.696 151.775 357.03 L151.869 293.828 C151.89 279.09 151.138 264.07 152.757 249.395 C156.589 214.649 174.048 181.703 199.572 158.102 C220.046 139.17 247.219 126.343 275.067 123.23 C294.408 121.069 314.408 122.408 333.849 122.408 L449.088 122.408 L577.285 122.408 C606.639 122.408 636.516 120.817 665.781 123.208 C705.245 126.433 744.522 138.754 778.606 158.872 C800.606 171.858 823.593 190.019 840.476 209.332 C845.995 215.646 851.791 222.121 856.761 228.889 C858.91 231.816 860.501 235.321 862.89 238.056 C866.527 242.219 868.979 247.05 871.911 251.689 C884.817 272.104 894.233 293.944 901.862 316.83 C913.33 351.233 915.333 386.555 915.069 422.497 C914.909 444.32 910.279 466.744 904.598 487.705 C875.148 596.358 782.571 682.167 668.33 691.039 C646.48 692.735 624.478 692.6 602.574 692.718 L520.034 693.162 C479.384 693.381 446.982 691.823 410.433 713.073 C385.778 727.408 366.596 748.27 345.954 767.668 C325.976 786.443 306.274 805.99 286.87 825.16 C273.658 838.213 259.236 850.413 246.077 863.572 C233.944 875.705 221.442 887.296 209.041 899.025 C202.696 905.026 196.836 912.591 188.789 916.36 C183.842 918.678 178.332 918.517 172.975 918.243 C162.05 917.686 153.045 905.602 151.965 895.528 C150.992 886.461 151.609 876.945 151.46 867.824 C151.106 846.225 151.101 824.632 151.117 803.03 Z M313.836 359.652 C312.332 380.816 313.796 402.623 313.796 423.846 L313.796 554.833 L313.796 600.489 C313.796 604.432 312.097 613.859 317.986 614.398 C324.326 614.977 341.025 594.046 346.54 589.309 C363.918 574.382 379.903 557.852 397.423 543.115 C407.996 534.222 419.246 525.068 432.144 519.612 C462.048 506.963 482.719 507.552 514.288 507.379 L590.646 506.959 C607.318 506.868 624.271 507.675 640.8 505.104 C686.937 497.927 722.978 458.171 726.816 411.787 C731.162 359.269 701.662 309.035 649.615 294.593 C625.439 287.885 598.861 290.67 574.021 290.67 L444.231 290.67 L405.553 290.67 C373.845 290.67 352.772 293.328 330.928 318.553 C321.269 329.707 314.891 344.811 313.836 359.652 Z"/></svg></span>Parley</a>
+    <nav aria-label="Bereiche">
+      <a href="#why">Warum Parley</a>
+      <a href="#features">Funktionen</a>
+      <a href="#profiles">Profile</a>
+      <a href="#studio">Studio</a>
+      <a href="#self-host">Selbst hosten</a>
+      <a href="#download">Download</a>
+      <a href="/de/guide/">Anleitung</a>
+    </nav>
+    <details class="langs"><summary aria-label="Sprache"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span class="name">Deutsch</span></summary><div class="list"><a href="/" hreflang="en" lang="en" data-lang="en">English</a><a href="/es/" hreflang="es" lang="es" data-lang="es">Español</a><a href="/de/" hreflang="de" lang="de" data-lang="de" aria-current="true">Deutsch</a><a href="/fr/" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/it/" hreflang="it" lang="it" data-lang="it">Italiano</a><a href="/nl/" hreflang="nl" lang="nl" data-lang="nl">Nederlands</a><a href="/pl/" hreflang="pl" lang="pl" data-lang="pl">Polski</a><a href="/pt-br/" hreflang="pt-BR" lang="pt-BR" data-lang="pt-BR">Português (Brasil)</a><a href="/ru/" hreflang="ru" lang="ru" data-lang="ru">Русский</a><a href="/tr/" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/ar/" hreflang="ar" lang="ar" data-lang="ar">العربية</a><a href="/ja/" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/ko/" hreflang="ko" lang="ko" data-lang="ko">한국어</a><a href="/zh-cn/" hreflang="zh-CN" lang="zh-CN" data-lang="zh-CN">简体中文</a></div></details>
+    <a class="btn btn-ghost gh" href="https://github.com/ParleyDev/parley">GitHub</a>
+    <a class="btn btn-primary open" href="https://app.runparley.com">Parley öffnen</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" aria-labelledby="hero-title">
+    <canvas id="wave" aria-hidden="true"></canvas>
+    <div class="wrap">
+      <div class="eyebrow-row">
+        <a class="pill" href="https://github.com/ParleyDev/parley/releases/latest" id="release-pill"><b>●</b> <span id="release-tag">v0.24.0</span> ist da</a>
+        <span class="pill">Open Source · Apache-2.0</span>
+        <a class="pill pill-try" href="https://app.runparley.com/register">Kostenlos ausprobieren: <b>app.runparley.com</b> →</a>
+        <a class="live-badge" href="https://app.runparley.com/invite/parley" title="Dem Parley-Server beitreten"><img src="https://app.runparley.com/api/invites/parley/badge.svg" alt="Dem Parley-Server beitreten" height="20"></a>
+      </div>
+      <h1 id="hero-title">Redet drüber.<span class="line2">Auf eurem Server.</span></h1>
+      <div class="hero-copy">
+        <p class="lede">Parley ist eine Open-Source-Chat-App für Communities: Server, Kanäle, DMs, <strong>Sprache, Video, Stages und ein Aufnahmestudio</strong>. Leg sofort kostenlos auf <strong>app.runparley.com</strong> los oder betreib es auf deinem eigenen Server und behalte jedes Byte.</p>
+        <div class="ctas">
+          <a class="btn btn-primary" href="https://app.runparley.com/register">Jetzt loschatten</a>
+          <a class="btn btn-ghost" href="https://app.runparley.com/try">Ausprobieren, ohne Konto</a>
+          <a class="btn btn-ghost" href="#self-host">Selbst hosten</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap stage-wrap">
+      <div class="app" role="img" aria-label="Parley-Desktop-App: ein Sprachkanal namens Jam Room mit vier Leuten, einer spricht, einer teilt seinen Bildschirm, dazu die Anrufleiste.">
+        <div class="rail" aria-hidden="true">
+          <span class="home"><svg viewBox="123 110 820 820" fill="currentColor"><path d="M151.117 803.03 C151.227 654.363 151.556 505.696 151.775 357.03 L151.869 293.828 C151.89 279.09 151.138 264.07 152.757 249.395 C156.589 214.649 174.048 181.703 199.572 158.102 C220.046 139.17 247.219 126.343 275.067 123.23 C294.408 121.069 314.408 122.408 333.849 122.408 L449.088 122.408 L577.285 122.408 C606.639 122.408 636.516 120.817 665.781 123.208 C705.245 126.433 744.522 138.754 778.606 158.872 C800.606 171.858 823.593 190.019 840.476 209.332 C845.995 215.646 851.791 222.121 856.761 228.889 C858.91 231.816 860.501 235.321 862.89 238.056 C866.527 242.219 868.979 247.05 871.911 251.689 C884.817 272.104 894.233 293.944 901.862 316.83 C913.33 351.233 915.333 386.555 915.069 422.497 C914.909 444.32 910.279 466.744 904.598 487.705 C875.148 596.358 782.571 682.167 668.33 691.039 C646.48 692.735 624.478 692.6 602.574 692.718 L520.034 693.162 C479.384 693.381 446.982 691.823 410.433 713.073 C385.778 727.408 366.596 748.27 345.954 767.668 C325.976 786.443 306.274 805.99 286.87 825.16 C273.658 838.213 259.236 850.413 246.077 863.572 C233.944 875.705 221.442 887.296 209.041 899.025 C202.696 905.026 196.836 912.591 188.789 916.36 C183.842 918.678 178.332 918.517 172.975 918.243 C162.05 917.686 153.045 905.602 151.965 895.528 C150.992 886.461 151.609 876.945 151.46 867.824 C151.106 846.225 151.101 824.632 151.117 803.03 Z M313.836 359.652 C312.332 380.816 313.796 402.623 313.796 423.846 L313.796 554.833 L313.796 600.489 C313.796 604.432 312.097 613.859 317.986 614.398 C324.326 614.977 341.025 594.046 346.54 589.309 C363.918 574.382 379.903 557.852 397.423 543.115 C407.996 534.222 419.246 525.068 432.144 519.612 C462.048 506.963 482.719 507.552 514.288 507.379 L590.646 506.959 C607.318 506.868 624.271 507.675 640.8 505.104 C686.937 497.927 722.978 458.171 726.816 411.787 C731.162 359.269 701.662 309.035 649.615 294.593 C625.439 287.885 598.861 290.67 574.021 290.67 L444.231 290.67 L405.553 290.67 C373.845 290.67 352.772 293.328 330.928 318.553 C321.269 329.707 314.891 344.811 313.836 359.652 Z"/></svg></span><hr>
+          <span class="on">LO</span><span class="c2">SQ</span><span class="c3">RF</span><span class="c4">+</span>
+        </div>
+        <div class="chans" aria-hidden="true">
+          <div class="srv">Late Night Lo-fi</div>
+          <div class="cat">Text</div>
+          <div class="ch"><i>#</i>general</div>
+          <div class="ch"><i>#</i>stems-and-samples</div>
+          <div class="ch"><i>#</i>show-your-gear</div>
+          <div class="cat">Sprache</div>
+          <div class="ch active"><i>◖</i>Jam Room</div>
+          <div class="who"><span class="av c1">M</span>Mara</div>
+          <div class="who"><span class="av c2">T</span>Theo</div>
+          <div class="who"><span class="av c3">I</span>Ivy</div>
+          <div class="who"><span class="av c4">J</span>Jonah</div>
+          <div class="ch"><i>◉</i>Listening Party</div>
+          <div class="ch"><i>◎</i>Studio A</div>
+        </div>
+        <div class="call" aria-hidden="true">
+          <header>◖ Jam Room <small>4 verbunden</small><span class="rec">REC · Take 3</span></header>
+          <div class="tiles">
+            <div class="tile speaking"><span class="role">Künstler</span><span class="av c1">M</span><span class="name">Mara</span></div>
+            <div class="tile screen"><span class="live">LIVE</span><div class="daw"><span style="width:92%"></span><span style="width:64%;margin-left:12%"></span><span style="width:80%;margin-left:4%"></span><span style="width:48%;margin-left:30%"></span></div><span class="name">Theos Bildschirm</span></div>
+            <div class="tile"><span class="role eng">Techniker</span><span class="av c3">I</span><span class="name">Ivy</span></div>
+            <div class="tile"><span class="av c4">J</span><span class="name">Jonah</span></div>
+          </div>
+          <div class="bar">
+            <div class="grp"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg></b><b class="chev">⌄</b><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></svg></b><b class="chev">⌄</b></div>
+            <div class="grp"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4M9 10l3-3 3 3M12 7v7"/></svg></b><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></b><b>⋯</b></div>
+            <span class="hang"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 15c5-5 13-5 18 0l-2.5 2.5-3-1.5v-3a10 10 0 0 0-7 0v3l-3 1.5Z"/></svg></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="strip" aria-label="Parley in Zahlen">
+    <div class="wrap">
+      <div class="cell"><span class="v">48 kHz</span><span class="k">Stereo-Opus in Hi-Fi-Kanälen</span></div>
+      <div class="cell"><span class="v">510 kbps</span><span class="k">maximale Bitrate für Musik</span></div>
+      <div class="cell"><span class="v">10 ms</span><span class="k">Frames im Low-Latency-Modus</span></div>
+      <div class="cell"><span class="v">1 Befehl</span><span class="k">zum Starten: <code>docker compose up -d</code></span></div>
+    </div>
+  </section>
+
+  <section id="start" aria-labelledby="start-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Kanal 00 · Loslegen</span>
+        <h2 id="start-title">Zwei Wege zu Parley.</h2>
+        <p class="lede">Steig noch heute auf unserem Server ein. Wenn deine Community einen eigenen will, zieht ihr auf einen selbst betriebenen Server um, sobald ihr bereit seid.</p>
+      </div>
+      <div class="ways">
+        <article class="way hosted">
+          <span class="tag">Gehostet von Parley · kostenlos</span>
+          <h3>Unseren Server nutzen</h3>
+          <span class="addr">app.runparley.com</span>
+          <p>Kostenlos, ohne etwas zu installieren oder einzurichten. Erstelle ein Konto, starte einen Server für deine Gruppe und verschick den Einladungslink.</p>
+          <ol><li>Kostenloses Konto erstellen</li><li>Server starten oder per Einladung beitreten</li><li>Reden, anrufen, Bildschirm teilen</li></ol>
+          <div class="ctas"><a class="btn btn-primary" href="https://app.runparley.com/register">Kostenloses Konto erstellen</a><a class="btn btn-ghost" href="https://app.runparley.com/login">Anmelden</a></div>
+        </article>
+        <article class="way">
+          <span class="tag">Selbst gehostet · deine Regeln</span>
+          <h3>Eigenen betreiben</h3>
+          <span class="addr">chat.deine-domain.de</span>
+          <p>Zwei Docker-Images und Postgres auf deinem PC, Raspberry Pi, NAS oder VPS. Deine Daten bleiben auf deiner Hardware, und du entscheidest, wer reinkommt.</p>
+          <ol><li>Compose-Datei holen</li><li>Zwei Secrets festlegen</li><li>docker compose up -d</li></ol>
+          <div class="ctas"><a class="btn btn-ghost" href="#self-host">Zur Einrichtung in 5 Minuten</a></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="why" aria-labelledby="why-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Kanal 01 · Warum Parley</span>
+        <h2 id="why-title">Kein Nitro. Kein Haken.</h2>
+        <p class="lede">Discord stellt seine besten Funktionen hinter ein Abo für 9,99 $ im Monat und verkauft dir dein eigenes Profil im Shop zurück. Bei Parley bekommen alle die höchste Stufe, der Code ist für jeden offen lesbar, und deine Community kann jederzeit auf einen Server umziehen, der dir gehört.</p>
+      </div>
+
+      <div class="vs" role="table" aria-label="Der kostenlose Discord-Tarif im Vergleich mit Parley">
+        <div class="row head-row" role="row"><span class="th what" role="columnheader">Was du bekommst</span><span class="th them" role="columnheader">Discord, kostenlos</span><span class="th us" role="columnheader">Parley, für alle</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Bildschirmfreigabe</span><span class="them" role="cell">720p mit 30 fps<small>1080p mit 60 fps braucht Nitro</small></span><span class="us" role="cell">Bis zur Originalauflösung mit 60 fps</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Sprachqualität</span><span class="them" role="cell">Bis zu 96 kbps<small>Mehr nur mit Server-Boosts</small></span><span class="us" role="cell">Bis zu 510 kbps Stereo in Hi-Fi-Kanälen</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Eigene Emojis von anderen Servern</span><span class="them" role="cell">Nur mit Nitro</span><span class="us" role="cell">Alle<small>Jeder Server entscheidet selbst</small></span></div>
+        <div class="row" role="row"><span class="what" role="cell">Banner, Effekte, Dekorationen, Namensschilder</span><span class="them" role="cell">Nitro oder der Shop</span><span class="us" role="cell">Kostenlos, und Server-Admins können eigene hinzufügen</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Geplante Nachrichten</span><span class="them" role="cell">Ein paar auf einmal<small>30 mit Nitro</small></span><span class="us" role="cell">30 in der Warteschlange, für alle</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Datei-Uploads</span><span class="them" role="cell">Kleines Limit<small>Größere Dateien brauchen Nitro</small></span><span class="us" role="cell">25 MB hier<small>Bis zu 4 GB pro Datei auf deinem eigenen Server</small></span></div>
+        <div class="row" role="row"><span class="what" role="cell">Werbung</span><span class="them" role="cell">Gesponserte Quests und Promotions</span><span class="us" role="cell">Keine</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Wo deine Nachrichten liegen</span><span class="them" role="cell">Auf den Servern von Discord</span><span class="us" role="cell">Auf unseren oder auf Hardware, die dir gehört</span></div>
+        <div class="row" role="row"><span class="what" role="cell">Quellcode</span><span class="them" role="cell">Geschlossen</span><span class="us" role="cell">Offen, Apache-2.0</span></div>
+      </div>
+      <p class="vs-note">Discords Limits laut öffentlicher Angabe im November 2026. Discord ändert seine Tarife oft.</p>
+
+      <div class="only" aria-labelledby="only-title">
+        <div class="only-head"><h3 id="only-title">Nur bei Parley</h3><p>Dinge, die Discord in keinem Tarif bietet.</p></div>
+        <ul>
+          <li><b>Lesebestätigungen</b><span>„Gesehen“ in DMs und in Gruppen und Kanälen die Avatare derer, die bis zu jeder Nachricht gelesen haben.</span></li>
+          <li><b>Bearbeitungsverlauf</b><span>Klicke auf „(bearbeitet)“, um jede frühere Version einer Nachricht zu sehen, nicht nur die letzte.</span></li>
+          <li><b>Aufnahmestudio</b><span>Eine saubere Spur pro Musiker, eine Arrangement-Ansicht, ein Mixer und ein Metronom, dazu ein WAV-Export des Mixes.</span></li>
+          <li><b>Ein echter Musikplayer</b><span>Visualisierung, eine Wiedergabeleiste, die dir zwischen Kanälen folgt, und Wiedergabezähler.</span></li>
+          <li><b>Nutzerbewertungen</b><span>Hinterlass eine kurze Notiz auf dem Profil von jemandem. Notizen, die sie nicht wollen, können sie löschen.</span></li>
+          <li><b>Deine eigene Instanz</b><span>Betreib es selbst, mit eigener Admin-Konsole, Discover-Warteschlange und eigenem Dekorationsordner.</span></li>
+          <li><b>Connector für KI-Assistenten</b><span>Lass Claude oder einen anderen MCP-Client in deinem Namen lesen und posten, nur mit den Berechtigungen, die du erteilst.</span></li>
+          <li><b>Mods steuern das Planen</b><span>Schalte geplante Nachrichten für einen ganzen Server oder für ausgewählte Kanäle ab.</span></li>
+        </ul>
+      </div>
+
+      <div class="reasons">
+        <article>
+          <span class="k">Keine Bezahlschranke</span>
+          <h3>Jede Funktion, für alle</h3>
+          <p>Kein Nitro, keine Boosts, kein Shop. Hi-Fi-Sprache, Streams mit 60 fps, Profilschmuck und die höheren Limits gibt es mit einem kostenlosen Konto. Parley hält nichts zurück, um es dir später zu verkaufen.</p>
+        </article>
+        <article>
+          <span class="k">Gehört dir</span>
+          <h3>Nimm deine Community mit nach Hause</h3>
+          <p>Starte auf app.runparley.com und zieh dann mit einem einzigen Docker-Befehl auf deinen eigenen PC, dein NAS oder deinen VPS um. Dort kann niemand sonst deine Community löschen, dir die Regeln ändern oder die App abschalten.</p>
+        </article>
+        <article>
+          <span class="k">Privat durch Design</span>
+          <h3>Keine Ausweisfotos, keine Werbung</h3>
+          <p>Altersprüfungen nutzen ein Geburtsdatum, keinen Scan deines Reisepasses. 2025 sind Ausweisfotos, die Leute für Discords Altersprüfung eingeschickt hatten, bei einem seiner Support-Dienstleister geleakt. Parley fragt nie danach, und es gibt keine Werbetracker oder gesponserten Beiträge.</p>
+        </article>
+        <article>
+          <span class="k">Offen</span>
+          <h3>Lies jede Zeile</h3>
+          <p>Die ganze App ist Open Source: Prüf sie, forke sie, ändere sie. Ende-zu-Ende-verschlüsselte Anrufe, ein MCP-Connector für deinen KI-Assistenten und ein Aufnahmestudio sind eingebaut, nicht angeflanscht.</p>
+        </article>
+      </div>
+      <div class="why-cta">
+        <a class="btn btn-primary" href="https://app.runparley.com/register">Kostenloses Konto erstellen</a>
+        <a class="btn btn-ghost" href="https://app.runparley.com/try">Nur mal schauen? Probier es als Gast aus</a>
+        <a class="btn btn-ghost" href="#features">Du ziehst mit einem Discord-Server um? Importiere seine Vorlage</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="features" aria-labelledby="features-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Kanal 02 · Alles an einem Ort</span>
+        <h2 id="features-title">Der ganze Treffpunkt, nicht nur der Chat.</h2>
+        <p class="lede">Text, wenn du lesen willst, Sprache, wenn du reden willst, eine Stage, wenn du Publikum willst. Alles lebt auf einem Server, den du kontrollierst.</p>
+      </div>
+
+      <div class="grid">
+        <article class="f w3">
+          <span class="tag">Text</span>
+          <h3>Unterhaltungen, die übersichtlich bleiben</h3>
+          <p>Threads, Forumkanäle, Umfragen, angeheftete Nachrichten, Lesezeichen, Antworten und volles Markdown. Schreib jetzt eine Nachricht und plane sie für später: Sie geht pünktlich raus, auch wenn dein Gerät aus ist, und du kannst sie in deinem Posteingang früher senden, bearbeiten oder abbrechen. Erwähnungen markieren den Server, auf dem sie passiert sind, „Gesehen“ zeigt, wann deine DM gelesen wurde, und wenn du in einen Kanal zurückkehrst, siehst du, wie viele Nachrichten neu sind und wo du aufgehört hast.</p>
+          <div class="mini">
+            <div class="msg"><span class="av c2">T</span><div><b>Theo</b><small>21:41</small><div class="body"><span class="mention">@Mara</span> die Bridge in Take 3 ist es. Ich bounce gerade die Stems.</div><div class="reacts"><span class="me">🔥 4</span><span>🎛️ 2</span><span>+</span></div></div></div>
+          </div>
+        </article>
+        <article class="f w3">
+          <span class="tag">Umfragen</span>
+          <h3>In einer Minute entschieden</h3>
+          <p>Zwei bis zehn Antworten, Einfach- oder Mehrfachauswahl und ein Timer von einer Stunde bis zu einer Woche. Die Ergebnisse aktualisieren sich live für alle.</p>
+          <div class="mini">
+            <div class="poll"><span class="q">Nächste Listening Party?</span>
+              <div class="opt"><i style="width:62%"></i><span>Freitag 21 Uhr</span><span>62%</span></div>
+              <div class="opt"><i style="width:27%"></i><span>Samstag 20 Uhr</span><span>27%</span></div>
+              <div class="opt"><i style="width:11%"></i><span>Sonntagnachmittag</span><span>11%</span></div>
+            </div>
+          </div>
+        </article>
+        <article class="f w2">
+          <span class="tag">Sprache &amp; Video</span>
+          <h3>Reinkommen, reden, Bildschirm teilen</h3>
+          <p>Peer-to-Peer-Anrufe, die für Räume mit etwa sechs bis acht Leuten passen. Für größere Räume verbindest du Parley mit einem LiveKit-Server. Bildschirmfreigaben starten erst, wenn du auf „Stream ansehen“ klickst, damit niemand einen Stream lädt, den er gar nicht anschaut. Schalte Ende-zu-Ende-Verschlüsselung für einen Kanal oder eine DM ein, und nur die Leute im Anruf können ihn sehen und hören, nicht einmal der Server, mit einem Sicherheitscode, den ihr laut vergleichen könnt. Push-to-Talk, Rauschunterdrückung und Einstellungen pro Gerät wirken sofort.</p>
+          <ul><li>Bildschirmfreigabe</li><li>Stream ansehen</li><li>Ende-zu-Ende-Verschlüsselung</li><li>Kamera</li><li>Push-to-Talk</li><li>Soundboard</li></ul>
+        </article>
+        <article class="f w2">
+          <span class="tag">Stages &amp; Events</span>
+          <h3>Gib jemandem das Mikro</h3>
+          <p>Sprecher auf der Bühne, alle anderen hören zu. Heb die Hand, um ums Wort zu bitten; Moderatoren holen dich nach vorne. Plane Events mit Zusagen und einer Erinnerung zehn Minuten vorher.</p>
+          <div class="mini hand">
+            <span class="chip"><span class="av c4">J<em>✋</em></span>Jonah</span>
+            <span class="chip"><span class="av c5">R</span>Rae</span>
+            <span class="chip"><span class="av c3">N</span>Noor</span>
+            <span class="chip"><span class="av c1">E</span>Eli</span>
+          </div>
+        </article>
+        <article class="f w2">
+          <span class="tag">Sprachnachrichten</span>
+          <h3>Sag es, statt es zu tippen</h3>
+          <p>Nimm direkt im Nachrichtenfeld einen Clip auf. Ist die Transkription eingeschaltet, schreibt ein lokaler Whisper-Server auf, was gesagt wurde.</p>
+          <div class="mini">
+            <div class="vm"><span class="play" aria-hidden="true">▶</span><canvas id="vm" aria-hidden="true"></canvas><small>0:14</small></div>
+            <p class="transcript">„Okay, ich hab die Gitarre re-ampt, schau mal in den Stems-Kanal.“</p>
+          </div>
+        </article>
+        <article class="f w4">
+          <span class="tag">Deine Community, deine Regeln</span>
+          <h3>Rollen, Berechtigungen und die Werkzeuge, um den Laden zu führen</h3>
+          <p>Du kommst von Discord? Importiere eine Servervorlage, und deine Kategorien, Kanäle, Rollen und Berechtigungen kommen mit. Farbige Rollen und Rollen mit Farbverlauf mit echter Hierarchie, Überschreibungen pro Kanal, private Kanäle, Timeouts, Banns, Mitgliederprüfung und ein Audit-Log. Eigene Emojis und Sticker pro Server. Einladungslinks, die ablaufen, wann du willst, von 30 Minuten bis nie, mit optionalem Nutzungslimit. Trag deinen Server in Discover ein, wenn neue Leute ihn finden sollen, und sichere dir bis zu drei Wunschlinks wie /invite/dein-name. Setz ein Live-Badge in deine README oder auf deine Website, wie das oben auf dieser Seite: Es zeigt, wer online ist, und öffnet deine Einladung.</p>
+          <div class="mini roles"><span style="color:#f6b53d">Techniker</span><span style="color:#b6abff">Künstler</span><span style="color:#5fbf8a">Stammgast</span><span style="color:#e0609a">Mod</span><span style="color:var(--muted)">@everyone</span></div>
+        </article>
+        <article class="f w2">
+          <span class="tag">Sicherheit</span>
+          <h3>Standardmäßig abgesichert</h3>
+          <p>Melde dich mit einem Passkey oder mit Passwort plus Zwei-Faktor-Codes an. Eine Geräteliste, über die du dich aus der Ferne abmelden kannst, Ratenbegrenzung, Meldungen und optional ein ClamAV-Scan jedes Uploads, bevor er gespeichert wird.</p>
+          <ul><li>Passkeys</li><li>2FA</li><li>Geräteliste</li></ul>
+        </article>
+        <article class="f w3">
+          <span class="tag">Musik &amp; Clips</span>
+          <h3>Track reinziehen, auf Play drücken</h3>
+          <p>Audiodateien bekommen einen richtigen Player mit Live-Visualisierung (Balken, Welle oder pulsierende Kugel, in der Farbe deines Designs), Spulen, Geschwindigkeit und Lautstärke. Die Wiedergabe folgt dir: Wechsle den Kanal, und eine Wiedergabeleiste behält die Steuerung, sogar auf einem gesperrten Handy. Tracks zählen ihre Wiedergaben wie Streamingdienste, Videos öffnen sich im Vollbild statt in einem winzigen Kasten, und auf dem Handy kannst du jede Datei mit einem Tipp speichern oder teilen.</p>
+          <div class="mini">
+            <div class="player" aria-hidden="true">
+              <div class="top"><span class="play">❚❚</span><span class="t">Bridge, Take 3<small>WAV · 38 MB · 3:42</small></span></div>
+              <div class="bars"><i style="animation-delay:-0.00s;height:22%"></i><i style="animation-delay:-0.13s;height:48%"></i><i style="animation-delay:-0.26s;height:70%"></i><i style="animation-delay:-0.39s;height:40%"></i><i style="animation-delay:-0.52s;height:86%"></i><i style="animation-delay:-0.65s;height:60%"></i><i style="animation-delay:-0.78s;height:34%"></i><i style="animation-delay:-0.91s;height:74%"></i><i style="animation-delay:-1.04s;height:52%"></i><i style="animation-delay:-0.07s;height:90%"></i><i style="animation-delay:-0.20s;height:44%"></i><i style="animation-delay:-0.33s;height:66%"></i><i style="animation-delay:-0.46s;height:30%"></i><i style="animation-delay:-0.59s;height:80%"></i><i style="animation-delay:-0.72s;height:56%"></i><i style="animation-delay:-0.85s;height:38%"></i><i style="animation-delay:-0.98s;height:72%"></i><i style="animation-delay:-0.01s;height:46%"></i><i style="animation-delay:-0.14s;height:62%"></i><i style="animation-delay:-0.27s;height:28%"></i><i style="animation-delay:-0.40s;height:58%"></i><i style="animation-delay:-0.53s;height:84%"></i><i style="animation-delay:-0.66s;height:36%"></i><i style="animation-delay:-0.79s;height:50%"></i></div>
+              <div class="seek"><b></b></div>
+            </div>
+          </div>
+        </article>
+        <article class="f w3">
+          <span class="tag">Desktop</span>
+          <h3>Eine App, die sich selbst aktuell hält</h3>
+          <p>Die Apps für Windows, macOS und Linux zeichnen ihre eigene Titelleiste mit Zurück und Vor, deinem aktuellen Ort und deinem Posteingang. Neue Versionen laden im Hintergrund herunter, und ein grüner Pfeil startet dich direkt hinein. Willst du die neuesten Änderungen zuerst? Stell den Update-Kanal auf Entwicklung.</p>
+          <div class="mini">
+            <div class="winbar" aria-hidden="true"><span>← →</span><span class="place">Studio B</span><span class="upd" title="Neu starten zum Aktualisieren">⤓</span><span class="ctl"><span>—</span><span>▢</span><span>✕</span></span></div>
+            <p class="upd-note">Neu starten zum Aktualisieren · Stabil / Entwicklung</p>
+          </div>
+        </article>
+        <article class="f w3">
+          <span class="tag">Überall</span>
+          <h3>Dasselbe Parley auf jedem Bildschirm</h3>
+          <p>Eine vollständige Web-App plus Apps für Windows, macOS, Linux und Android, die app.runparley.com mit einem Tipp öffnen oder sich mit jedem Parley-Server deiner Wahl verbinden. Auf Handys gibt es eine einspaltige Ansicht, und die Oberfläche spricht 14 Sprachen.</p>
+          <div class="mini platforms-mini"><span>Web</span><span>Windows</span><span>macOS</span><span>Linux</span><span>Android</span></div>
+        </article>
+        <article class="f w3">
+          <span class="tag">Gebaut, um zu laufen</span>
+          <h3>Betrieb ohne Babysitting</h3>
+          <p>Nächtliche Backups mit Wiederherstellungsskript, Prometheus-Metriken, JSON-Logs, Sentry-Fehler, ein Mail-Log in der Admin-Konsole und mehrere Backends hinter einem Load Balancer, wenn ihr wachst.</p>
+          <ul><li>Backups</li><li>/metrics</li><li>Mail-Log</li><li>Let's Encrypt</li><li>Cluster-Modus</li></ul>
+        </article>
+        <article class="f w3">
+          <span class="tag">Mach es zu deinem</span>
+          <h3>Profile mit Persönlichkeit</h3>
+          <p>Profilrahmen, animierte Effekte, Namensschilder, Avatar-Dekorationen, gestaltete Namen, Server-Tags, Banner und Profil-Panels, alles in einem Editor mit Live-Vorschau. Du hostest selbst? Erstelle Dekorationen, Namensschilder, Effekte und Rahmen in der Admin-Konsole aus einem Bild, zwei Farben oder einem Emoji, oder leg sie in einen Ordner, und alle auf deinem Server können sie sofort auswählen.</p>
+          <div class="mini decor" aria-hidden="true">
+            <span class="av c1 d1">M</span><span class="av c3 d2">T</span><span class="av c5 d3">R</span>
+            <span class="styled">Mara</span><span class="tag-chip">STU</span>
+          </div>
+        </article>
+        <article class="f w3">
+          <span class="tag">Konten</span>
+          <h3>Ein Gerät, mehrere Konten</h3>
+          <p>Bleib mit einem privaten und einem beruflichen Konto gleichzeitig angemeldet und wechsle über dein Profilmenü zwischen ihnen. Keine Passwortabfragen, kein Abmelden.</p>
+          <div class="mini acct" aria-hidden="true">
+            <div class="row on"><span class="av c2">T</span><span class="who">Theo<small>@theo</small></span><span class="ok">✓</span></div>
+            <div class="row"><span class="av c4">T</span><span class="who">Theo (Label)<small>@theo.label</small></span></div>
+            <div class="row add"><span class="av">+</span><span class="who">Konto hinzufügen</span></div>
+          </div>
+        </article>
+        <article class="f w6 split">
+          <span class="tag">KI-Assistenten</span>
+          <h3>Bring deinen Assistenten mit</h3>
+          <p>Parley spricht MCP, also können Claude, ChatGPT, Cursor und andere Assistenten dich über Ungelesenes und Erwähnungen auf den neuesten Stand bringen, suchen, antworten und reagieren. Füge die Adresse <code>/mcp</code> deines Servers als Connector hinzu, melde dich an und hak an, was er darf. Die Serververwaltung bleibt aus, solange du sie nicht erlaubst, und du kannst ihn jederzeit trennen.</p>
+          <ul><li>Lesen</li><li>Benachrichtigungen</li><li>Senden</li><li>Verwalten</li><li>OAuth-Anmeldung</li></ul>
+          <div class="mini ai" aria-hidden="true">
+            <div class="ask">Was habe ich in #mixing verpasst?</div>
+            <div class="tool"><b>✓</b> get_unreads · read_messages</div>
+            <div class="say">Jonah hat neue Stems gepostet und dich gebeten, dir den Vocal-Bus anzuhören. Rae hat dich wegen der Session am Freitag erwähnt. Soll ich antworten?</div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="profiles" class="you" aria-labelledby="you-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Kanal 03 · Du</span>
+        <h2 id="you-title">Zeig dich, wie du bist.</h2>
+        <p class="lede">Rahmen, die über deine Karte hinausragen, Effekte, die abspielen, wenn jemand dein Profil öffnet, Namensschilder hinter deinem Namen, und ein Editor mit Live-Vorschau für alles.</p>
+      </div>
+      <div class="you-stage">
+        <div class="pcard-wrap" role="img" aria-label="Eine Profilkarte für Mara mit Farbverlaufsrahmen, einem Stern oben, darüber schwebendem Glitzer, einem gestalteten Namen mit Server-Tag, den Schaltflächen „Freund hinzufügen“ und „Nachricht“, Rollen und einer „Im Voice“-Karte mit „Sprachkanal beitreten“.">
+          <div class="pcard" aria-hidden="true">
+            <div class="banner"></div>
+            <div class="body">
+              <div class="avwrap"><span class="av c1">M</span><span class="dot"></span></div>
+              <div class="nm"><span class="styled">Mara</span><span class="tag-chip">⚔️ STU</span></div>
+              <div class="user">mara · sie/ihr</div>
+              <div class="btns"><b>Freund hinzufügen</b><i>💬</i><i>⋯</i></div>
+              <div><h4>Mitglied seit</h4><div class="since">2. März 2025 · 28. Juni 2026 bei Night Owls</div></div>
+              <div><h4>Rollen</h4><div class="roles"><span style="--c:#3ccf7d">Produzentin</span><span style="--c:#8d79ff">Keys</span><span style="--c:#e39a3b">Nachteule</span></div></div>
+              <div class="voice"><b>Im Voice</b><div class="faces"><span class="av c1">M</span><span class="av c2">T</span><span class="av c3">I</span><span style="margin-left:16px">🔊 late-night-jam</span></div><div class="join">Sprachkanal beitreten</div></div>
+            </div>
+            <div class="pfx"><span>✨</span><span>⭐</span><span>✨</span><span>💫</span><span>⭐</span></div>
+          </div>
+          <div class="pframe" aria-hidden="true"><span class="crown">🌟</span><span class="tail">🍂</span></div>
+        </div>
+        <div class="you-notes">
+          <div><span class="k">Rahmen &amp; Effekte</span><h3>Eine Karte, die wirklich deine ist</h3><p>Rahmen ragen über den Rand deiner Karte hinaus, und Effekte spielen ihre volle Animation darüber ab. Fahr in der Auswahl mit der Maus über einen Effekt, um ihn vorher anzusehen. Du hostest deinen eigenen Server? Leg Dekorationen, Namensschilder, Effekte und Rahmen mit einer <code>metadata.json</code> in deinen Assets-Ordner, ganz ohne Neustart.</p></div>
+          <div><span class="k">Ein Editor</span><h3>Alles an einem Ort</h3><p>Avatar, Dekoration, Banner, Design, Namensstil, Namensschild, Effekt, Rahmen, Tags und Abzeichen, und deine Karte aktualisiert sich dabei. Nichts ändert sich, bis du auf Speichern drückst.</p></div>
+          <div><span class="k">Weiß, wo du bist</span><h3>Profile im Kontext</h3><p>Öffnest du jemanden auf einem Server, siehst du die Rollen dort und wann die Person beigetreten ist, und wenn sie im Sprachkanal ist, eine Schaltfläche „Sprachkanal beitreten“. Das vollständige Profil zeigt zusätzlich Aktivität, gemeinsame Freunde und Server, Wunschliste, Spiele und Bewertungen.</p></div>
+          <div><span class="k">Server-Tags</span><h3>Trag deinen Server</h3><p>Server gestalten einen Tag mit Abzeichen und Farbe, und Mitglieder tragen ihn neben ihrem Namen. Klick auf den Tag von jemandem, um den Server dahinter zu sehen und eine Beitrittsanfrage zu stellen.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="studio" class="studio" aria-labelledby="studio-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Kanal 04 · Aufnahmestudio</span>
+        <h2 id="studio-title">Live jammen. Mit dem Multitrack nach Hause gehen.</h2>
+        <p class="lede">Ein Studio ist ein Sprachkanal für Musik, mit einem Pult für den Techniker. Jeder in der Band nimmt die eigene Spur in voller Qualität auf, damit eine schlechte Verbindung nie einen Take ruiniert.</p>
+      </div>
+
+      <div class="console" role="img" aria-label="Das Pult des Technikers nimmt Take 3 mit 120 BPM im 4/4-Takt mit eingeschaltetem Metronom auf: drei scharf geschaltete Spuren, Keys, Gesang und Bass, jede mit Pegelanzeige, und der Bass steigt mitten im Take per Punch-in ein.">
+        <div class="top" aria-hidden="true"><strong>Take 3</strong><span class="rec">AUFNAHME</span><span class="tempo"><span>120 BPM</span><span>4/4</span><span class="on">Klick</span><span>1 Takt Einzähler</span></span><span class="time" id="clock">00:02:47.30</span><span class="bb" id="beat">84.3</span><span class="views"><span class="on">Arrangement</span><span>Mixer</span></span></div>
+        <div class="tracks" aria-hidden="true">
+          <div class="track"><div class="meta"><span class="av c1">M</span><div><b>Mara</b><small>Keys · Stereo</small><span class="vu"><i style="--l:.55"></i></span></div><span class="ms"><i class="arm">R</i><i>M</i><i>S</i></span></div><canvas data-seed="3" data-hue="#7b6cff"></canvas></div>
+          <div class="track"><div class="meta"><span class="av c2">T</span><div><b>Theo</b><small>Gesang · Stereo</small><span class="vu"><i style="--l:.78"></i></span></div><span class="ms"><i class="arm">R</i><i>M</i><i class="solo">S</i></span></div><canvas data-seed="11" data-hue="#3ccf7d"></canvas></div>
+          <div class="track"><div class="meta"><span class="av c3">I</span><div><b>Ivy</b><small>Bass · Punch-in</small><span class="vu"><i style="--l:.4"></i></span></div><span class="ms"><i class="arm">R</i><i>M</i><i>S</i></span></div><canvas data-seed="27" data-hue="#e39a3b" data-start="0.2"></canvas></div>
+          <span class="playhead"></span>
+        </div>
+      </div>
+
+      <div class="studio-notes">
+        <div><span class="k">Das Pult des Technikers</span><h3>Arrangement und Mixer</h3><p>Der Techniker bekommt eine kleine DAW: Spuren auf einer Zeitleiste, die wachsen, während die Band spielt, und einen Mixer mit einem Kanalzug pro Künstler für Panorama, Fader, Stumm, Solo und Scharfschalten. Tab wechselt die Ansicht, wie in Ableton Live.</p></div>
+        <div><span class="k">Scharf schalten &amp; Punch-in</span><h3>Nimm auf, wen du brauchst, wann du ihn brauchst</h3><p>Schalte nur die Musiker scharf, die ein Take braucht. Schaltest du jemanden mitten im Take scharf, steigt er sofort per Punch-in ein; entschärfst du ihn, steigt er per Punch-out aus. Wer später zur Band kommt, ist automatisch im Take dabei.</p></div>
+        <div><span class="k">Metronom</span><h3>Alle auf demselben Klick</h3><p>Leg Tempo und Taktart fest, schalte den Klick ein und füge einen Einzähler von ein bis vier Takten hinzu. Jeder Musiker hört ihn im eigenen Ohr, synchron zum Take, und er landet nie in der Aufnahme.</p></div>
+        <div><span class="k">Techniker &amp; Band</span><h3>Rollen für Sessions</h3><p>Techniker starten und stoppen Takes. Künstler werden gehört und aufgenommen. Alle anderen hören im Publikum zu, bis ein Techniker sie dazuholt.</p></div>
+        <div><span class="k">Hi-Fi-Audio</span><h3>Musik wird nicht wie Sprache behandelt</h3><p>Hi-Fi-Kanäle schalten Rauschunterdrückung und Echounterdrückung ab, senden Stereo-Opus mit bis zu 510 kbps und können für ein engeres Timing auf 10-ms-Frames gehen.</p></div>
+        <div><span class="k">Mischen im Browser</span><h3>Abspielen, solo hören, exportieren</h3><p>Jeder Take öffnet sich mit automatisch ausgerichteten Wellenformen, Live-Pegelanzeigen, Gain, Panorama, Stumm und Solo pro Spur und einem Master-Fader. Der Export rendert eine WAV-Datei des Mixes mit 48 kHz und 16 Bit.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="self-host" aria-labelledby="host-title">
+    <div class="wrap host">
+      <div>
+        <span class="callsign">Kanal 05 · Selbst hosten</span>
+        <h2 id="host-title" style="margin-top:1.25rem">Dein Server. Fünf Minuten.</h2>
+        <p class="lede">Parley kommt als zwei Docker-Images und eine Postgres-Datenbank. Wenn auf deinem Rechner Docker läuft, läuft dort auch Parley: ein alter PC, ein Raspberry Pi, ein NAS oder ein VPS.</p>
+        <div class="plats">
+          <span class="k">Schritt-für-Schritt-Anleitungen</span>
+          <div>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/linux.md">Linux</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/raspberry-pi.md">Raspberry Pi</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/windows.md">Windows</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/macos.md">macOS</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/proxmox.md">Proxmox</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/synology.md">Synology</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/unraid.md">Unraid</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/truenas.md">TrueNAS</a>
+            <a href="https://github.com/ParleyDev/parley/blob/main/docs/self-hosting/portainer.md">Portainer</a>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="term">
+          <div class="tb"><i></i><i></i><i></i><span>~/parley</span><button type="button" id="copy" data-l10n-copied="Kopiert" data-l10n-press="Drück Strg+C">Befehle kopieren</button></div>
+<pre id="cmds"><span class="c"># grab the compose file and settings</span>
+<span class="p">$ </span>curl -fsSLO https://raw.githubusercontent.com/ParleyDev/parley/main/docs/self-hosting/compose.yaml
+<span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/ParleyDev/parley/main/docs/self-hosting/example.env -o .env
+
+<span class="c"># set two secrets, then your address and admin email in .env</span>
+<span class="p">$ </span>sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 32)/" .env
+<span class="p">$ </span>sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 32)/" .env
+
+<span class="p">$ </span>docker compose up -d
+<span class="ok"> ✔ Container parley-db-1        Healthy</span>
+<span class="ok"> ✔ Container parley-backend-1   Started</span>
+<span class="ok"> ✔ Container parley-frontend-1  Started</span></pre>
+        </div>
+        <ul class="checks">
+          <li><span><b>HTTPS, wie du willst:</b> eingebautes Let's Encrypt, Caddy, Traefik oder Nginx Proxy Manager</span></li>
+          <li><span><b>Keine offenen Ports:</b> Cloudflare Tunnel oder Tailscale</span></li>
+          <li><span><b>Backups:</b> ein Befehl oder jede Nacht, mit Wiederherstellungsskript</span></li>
+          <li><span><b>Upgrades:</b> pullen, neu starten, Migrationen laufen von selbst</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="download" aria-labelledby="dl-title">
+    <div class="wrap">
+      <div class="head">
+        <span class="callsign">Kanal 06 · Apps</span>
+        <h2 id="dl-title">Nimm Parley mit.</h2>
+        <p class="lede">Die Apps funktionieren mit app.runparley.com oder jedem Parley-Server. Gib die Adresse einmal ein und du bist drin, und die Desktop-App hält sich von da an selbst aktuell.</p>
+      </div>
+      <div class="channels" role="tablist" aria-label="Release-Kanal">
+        <button type="button" role="tab" aria-selected="true" data-channel="stable">Stabil</button>
+        <button type="button" role="tab" aria-selected="false" data-channel="dev">Entwicklung</button>
+      </div>
+      <p class="devnote" id="devnote" data-l10n-latest="Neuester Build" data-l10n-built="erstellt am {date}" data-l10n-none="Gerade ist kein Entwicklungs-Build veröffentlicht.">Entwicklungs-Builds entstehen bei jeder Änderung, sobald sie gemacht ist, also rechne mit Ecken und Kanten. Wähle in der Desktop-App unter Einstellungen → Erweitert → Update-Kanal <b>Entwicklung</b>, um sie weiter zu bekommen.</p>
+      <div class="dl" id="downloads">
+        <div class="row"><span class="os">Windows</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="x64-setup\.exe$">Parley_0.24.0_x64-setup.exe</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.msi$">Parley_0.24.0_x64_en-US.msi</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">Alle Dateien →</a></div>
+        <div class="row"><span class="os">macOS</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.dmg$">Parley_0.24.0_aarch64.dmg</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">Alle Dateien →</a></div>
+        <div class="row"><span class="os">Linux</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.deb$">Parley_0.24.0_amd64.deb</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.rpm$">Parley-0.24.0-1.x86_64.rpm</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.AppImage$">Parley_0.24.0_amd64.AppImage</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">Alle Dateien →</a></div>
+        <div class="row"><span class="os">Android</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.apk$">Parley_0.24.0_android.apk</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">Alle Dateien →</a></div>
+        <div class="row"><span class="os">Web</span><span class="files"><span>Jeder moderne Browser, unter der Adresse deines Servers</span></span><a class="go" href="#self-host">Einrichten →</a></div>
+      </div>
+      <p class="note"><span class="stable-only">Downloads kommen direkt vom <a href="https://github.com/ParleyDev/parley/releases/latest">neuesten GitHub-Release</a>.</span> Der Mac-Build ist für Apple Silicon. iOS wird vorerst aus dem Quellcode gebaut.</p>
+    </div>
+  </section>
+
+  <section class="finale" aria-labelledby="finale-title">
+    <div class="wrap">
+      <h2 id="finale-title">Deine Community.<br>Deine Entscheidung.</h2>
+      <div class="ctas">
+        <a class="btn btn-primary" href="https://app.runparley.com/register">Kostenlos auf app.runparley.com starten</a>
+        <a class="btn btn-ghost" href="#self-host">Eigenes Parley hosten</a>
+        <a class="btn btn-ghost" href="https://github.com/ParleyDev/parley">Auf GitHub einen Stern geben</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><span class="mark" aria-hidden="true"><svg viewBox="123 110 820 820" fill="currentColor"><path d="M151.117 803.03 C151.227 654.363 151.556 505.696 151.775 357.03 L151.869 293.828 C151.89 279.09 151.138 264.07 152.757 249.395 C156.589 214.649 174.048 181.703 199.572 158.102 C220.046 139.17 247.219 126.343 275.067 123.23 C294.408 121.069 314.408 122.408 333.849 122.408 L449.088 122.408 L577.285 122.408 C606.639 122.408 636.516 120.817 665.781 123.208 C705.245 126.433 744.522 138.754 778.606 158.872 C800.606 171.858 823.593 190.019 840.476 209.332 C845.995 215.646 851.791 222.121 856.761 228.889 C858.91 231.816 860.501 235.321 862.89 238.056 C866.527 242.219 868.979 247.05 871.911 251.689 C884.817 272.104 894.233 293.944 901.862 316.83 C913.33 351.233 915.333 386.555 915.069 422.497 C914.909 444.32 910.279 466.744 904.598 487.705 C875.148 596.358 782.571 682.167 668.33 691.039 C646.48 692.735 624.478 692.6 602.574 692.718 L520.034 693.162 C479.384 693.381 446.982 691.823 410.433 713.073 C385.778 727.408 366.596 748.27 345.954 767.668 C325.976 786.443 306.274 805.99 286.87 825.16 C273.658 838.213 259.236 850.413 246.077 863.572 C233.944 875.705 221.442 887.296 209.041 899.025 C202.696 905.026 196.836 912.591 188.789 916.36 C183.842 918.678 178.332 918.517 172.975 918.243 C162.05 917.686 153.045 905.602 151.965 895.528 C150.992 886.461 151.609 876.945 151.46 867.824 C151.106 846.225 151.101 824.632 151.117 803.03 Z M313.836 359.652 C312.332 380.816 313.796 402.623 313.796 423.846 L313.796 554.833 L313.796 600.489 C313.796 604.432 312.097 613.859 317.986 614.398 C324.326 614.977 341.025 594.046 346.54 589.309 C363.918 574.382 379.903 557.852 397.423 543.115 C407.996 534.222 419.246 525.068 432.144 519.612 C462.048 506.963 482.719 507.552 514.288 507.379 L590.646 506.959 C607.318 506.868 624.271 507.675 640.8 505.104 C686.937 497.927 722.978 458.171 726.816 411.787 C731.162 359.269 701.662 309.035 649.615 294.593 C625.439 287.885 598.861 290.67 574.021 290.67 L444.231 290.67 L405.553 290.67 C373.845 290.67 352.772 293.328 330.928 318.553 C321.269 329.707 314.891 344.811 313.836 359.652 Z"/></svg></span>Parley</a>
+    <span>Redet drüber. Open Source unter <a href="https://github.com/ParleyDev/parley/blob/main/LICENSE">Apache-2.0</a>.</span>
+    <nav aria-label="Fußzeile">
+      <a href="/de/guide/">Benutzerhandbuch</a>
+      <a href="https://github.com/ParleyDev/parley">GitHub</a>
+      <a href="https://github.com/ParleyDev/parley/releases">Releases</a>
+      <a href="https://github.com/ParleyDev/parley/tree/main/docs/self-hosting">Doku zum Selbsthosten</a>
+      <a href="https://hub.docker.com/r/parleydev/parley">Docker Hub</a>
+      <a href="https://app.runparley.com/delete-account">Konto löschen</a>
+    </nav>
+    <details class="langs"><summary aria-label="Sprache"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span class="name">Deutsch</span></summary><div class="list"><a href="/" hreflang="en" lang="en" data-lang="en">English</a><a href="/es/" hreflang="es" lang="es" data-lang="es">Español</a><a href="/de/" hreflang="de" lang="de" data-lang="de" aria-current="true">Deutsch</a><a href="/fr/" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/it/" hreflang="it" lang="it" data-lang="it">Italiano</a><a href="/nl/" hreflang="nl" lang="nl" data-lang="nl">Nederlands</a><a href="/pl/" hreflang="pl" lang="pl" data-lang="pl">Polski</a><a href="/pt-br/" hreflang="pt-BR" lang="pt-BR" data-lang="pt-BR">Português (Brasil)</a><a href="/ru/" hreflang="ru" lang="ru" data-lang="ru">Русский</a><a href="/tr/" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/ar/" hreflang="ar" lang="ar" data-lang="ar">العربية</a><a href="/ja/" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/ko/" hreflang="ko" lang="ko" data-lang="ko">한국어</a><a href="/zh-cn/" hreflang="zh-CN" lang="zh-CN" data-lang="zh-CN">简体中文</a></div></details>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const dpr = Math.min(window.devicePixelRatio || 1, 2)
+  const fit = (c) => { const r = c.getBoundingClientRect(); c.width = Math.max(1, r.width * dpr); c.height = Math.max(1, r.height * dpr); return c.getContext('2d') }
+  const rand = (seed) => () => (seed = (seed * 16807) % 2147483647) / 2147483647
+
+  // Hero: a stereo waveform, left channel above the axis and right below, drifting like a live signal. The pointer
+  // is a second voice that swells the wave where it passes.
+  const wave = document.getElementById('wave')
+  let ctx = fit(wave), t = 0, px = -1
+  const draw = () => {
+    const w = wave.width, h = wave.height, mid = h / 2
+    ctx.clearRect(0, 0, w, h)
+    const lines = 26
+    for (let k = 0; k < lines; k++) {
+      const f = k / lines
+      ctx.beginPath()
+      for (let x = 0; x <= w; x += 4 * dpr) {
+        const u = x / w
+        const env = Math.sin(Math.PI * u) ** 1.6
+        const near = px < 0 ? 0 : Math.exp(-(((x - px) / (w * 0.12)) ** 2))
+        const amp = h * (0.42 + 0.25 * near) * env
+        const y = Math.sin(u * 9 + t * 1.3 + f * 2.2) * Math.cos(u * 23 - t * 0.9 + f) * amp * (0.35 + f * 0.65)
+        const yy = mid + (k % 2 ? -1 : 1) * Math.abs(y) * (0.6 + 0.4 * Math.sin(t + f * 6))
+        x === 0 ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy)
+      }
+      const a = 0.14 + f * 0.5
+      ctx.strokeStyle = k % 2 ? `rgba(123,108,255,${a})` : `rgba(60,207,125,${a * 0.55})`
+      ctx.lineWidth = dpr
+      ctx.stroke()
+    }
+    ctx.fillStyle = 'rgba(236,235,255,0.12)'
+    ctx.fillRect(0, mid, w, dpr)
+  }
+  const loop = () => { t += 0.012; draw(); raf = requestAnimationFrame(loop) }
+  let raf = 0
+  draw()
+  if (!still) raf = requestAnimationFrame(loop)
+  window.addEventListener('pointermove', (e) => { const r = wave.getBoundingClientRect(); px = e.clientY > r.top - 200 && e.clientY < r.bottom + 200 ? (e.clientX - r.left) * dpr : -1 }, { passive: true })
+  document.addEventListener('visibilitychange', () => { cancelAnimationFrame(raf); if (!document.hidden && !still) raf = requestAnimationFrame(loop) })
+
+  // Studio tracks: deterministic stereo waveforms (left up, right down) with quiet gaps, like real takes.
+  const tracks = [...document.querySelectorAll('.track canvas')]
+  const drawTracks = () => tracks.forEach((c) => {
+    const g = fit(c), w = c.width, h = c.height, mid = h / 2, r = rand(Number(c.dataset.seed) * 7919)
+    g.clearRect(0, 0, w, h)
+    const bw = 3 * dpr, gap = 2 * dpr
+    let level = 0.4
+    const start = Number(c.dataset.start ?? 0) * w
+    for (let x = 0, i = 0; x < w; x += bw + gap, i++) {
+      level += (r() - 0.5) * 0.25; level = Math.max(0.05, Math.min(1, level))
+      if (x < start) continue   // punched in later in the take
+      const silent = Math.sin(i / 23 + Number(c.dataset.seed)) > 0.82
+      const l = silent ? 0.04 : level * (0.55 + r() * 0.45), rr = silent ? 0.04 : level * (0.55 + r() * 0.45)
+      g.fillStyle = c.dataset.hue
+      g.globalAlpha = x / w < 0.38 ? 0.95 : 0.4
+      g.fillRect(x, mid - l * (mid - 4 * dpr), bw, l * (mid - 4 * dpr))
+      g.fillRect(x, mid + dpr, bw, rr * (mid - 4 * dpr))
+    }
+    g.globalAlpha = 1
+  })
+  drawTracks()
+
+  // Voice message bars.
+  const vm = document.getElementById('vm')
+  const drawVm = () => { const g = fit(vm), w = vm.width, h = vm.height, r = rand(42); g.clearRect(0, 0, w, h); for (let x = 0, i = 0; x < w; x += 4 * dpr, i++) { const v = 0.2 + Math.abs(Math.sin(i / 3)) * 0.5 + r() * 0.3; g.fillStyle = i < 18 ? '#7b6cff' : '#5f5d7d'; g.fillRect(x, (h - v * h) / 2, 2 * dpr, v * h) } }
+  drawVm()
+
+  let resize = 0
+  window.addEventListener('resize', () => { clearTimeout(resize); resize = setTimeout(() => { ctx = fit(wave); draw(); drawTracks(); drawVm() }, 120) })
+
+  // Session clock.
+  const clock = document.getElementById('clock'); let cs = 16730
+  // Bar.beat at 120 BPM in 4/4 (two beats a second), and the lanes' meters bouncing with the music.
+  const beat = document.getElementById('beat'), meters = [...document.querySelectorAll('.track .vu i')], mr = rand(99)
+  const tickClock = () => { const s = Math.floor(cs / 100); clock.textContent = `00:${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}.${String(cs % 100).padStart(2, '0')}`; const b = Math.floor(cs / 50); beat.textContent = `${Math.floor(b / 4) + 1}.${(b % 4) + 1}` }
+  tickClock()
+  if (!still) setInterval(() => { cs += 7; tickClock(); meters.forEach((m, i) => m.style.setProperty('--l', (0.25 + mr() * 0.5 + (i === 1 ? 0.15 : 0)).toFixed(2))) }, 70)
+
+  // Downloads: ask GitHub for the latest release (Stable) or the rolling `dev` prerelease (Development, rebuilt on
+  // every change) and link each file directly. The static names above stay if this fails (offline, rate limited),
+  // and their links still lead to the release page.
+  const api = (path) => fetch(`https://api.github.com/repos/ParleyDev/parley/releases/${path}`, { headers: { Accept: 'application/vnd.github+json' } }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+  const feeds = { stable: api('latest'), dev: null }
+  const section = document.getElementById('download'), devnote = document.getElementById('devnote'), devText = devnote.innerHTML
+  const show = (rel, channel) => {
+    if (section.dataset.channel !== channel) return
+    document.querySelectorAll('#downloads .go[href*="releases"]').forEach((a) => (a.href = rel.html_url || 'https://github.com/ParleyDev/parley/releases'))
+    document.querySelectorAll('#downloads [data-asset]').forEach((a) => {
+      const asset = (rel.assets || []).find((x) => new RegExp(a.dataset.asset).test(x.name))
+      a.hidden = channel === 'dev' && !asset
+      if (asset) { a.textContent = asset.name; a.href = asset.browser_download_url }
+    })
+    // The dev prerelease is titled "Development build (0.21.0-pre.16)".
+    if (channel === 'dev') devnote.innerHTML = `<b>${(/\(([^)]+)\)/.exec(rel.name || '') || [])[1] || devnote.dataset.l10nLatest}</b>, ${devnote.dataset.l10nBuilt.replace('{date}', new Date(rel.published_at || rel.created_at).toLocaleDateString(document.documentElement.lang))}. ${devText}`
+  }
+  feeds.stable.then((rel) => {
+    const tag = document.getElementById('release-tag'), pill = document.getElementById('release-pill')
+    if (rel.tag_name) tag.textContent = rel.tag_name
+    if (rel.html_url) pill.href = rel.html_url
+    show(rel, 'stable')
+  }).catch(() => {})
+  section.dataset.channel = 'stable'
+  document.querySelectorAll('.channels [data-channel]').forEach((b) => b.addEventListener('click', () => {
+    const channel = b.dataset.channel
+    section.dataset.channel = channel
+    document.querySelectorAll('.channels [data-channel]').forEach((x) => x.setAttribute('aria-selected', String(x === b)))
+    if (channel === 'dev' && !feeds.dev) feeds.dev = api('tags/dev')
+    feeds[channel].then((rel) => show(rel, channel)).catch(() => { if (channel === 'dev') devnote.innerHTML = `${devnote.dataset.l10nNone} ${devText}` })
+  }))
+
+  // Copy the self-host commands (only the lines that start with $).
+  const btn = document.getElementById('copy'), copyLabel = btn.textContent
+  btn.addEventListener('click', () => {
+    const text = document.getElementById('cmds').innerText.split('\n').filter((l) => l.startsWith('$ ')).map((l) => l.slice(2)).join('\n')
+    const done = () => { btn.textContent = btn.dataset.l10nCopied; setTimeout(() => (btn.textContent = copyLabel), 1600) }
+    const fallback = () => { const sel = window.getSelection(), range = document.createRange(); range.selectNodeContents(document.getElementById('cmds')); sel.removeAllRanges(); sel.addRange(range); btn.textContent = btn.dataset.l10nPress }
+    try { navigator.clipboard.writeText(text).then(done, fallback) } catch { fallback() }
+  })
+})()
+</script>
+<script>(() => {
+  const KEY = 'parley.site-lang', here = "de", paths = {"en":"/","es":"/es/","de":"/de/","fr":"/fr/","it":"/it/","nl":"/nl/","pl":"/pl/","pt-BR":"/pt-br/","ru":"/ru/","tr":"/tr/","ar":"/ar/","ja":"/ja/","ko":"/ko/","zh-CN":"/zh-cn/"}, offers = {"en":["Read this page in English","Dismiss"],"es":["Leer esta página en Español","Descartar"],"de":["Diese Seite auf Deutsch lesen","Schließen"],"fr":["Lire cette page en Français","Ignorer"],"it":["Leggi questa pagina in Italiano","Chiudi"],"nl":["Lees deze pagina in het Nederlands","Sluiten"],"pl":["Przeczytaj tę stronę w języku: Polski","Zamknij"],"pt-BR":["Leia esta página em Português (Brasil)","Dispensar"],"ru":["Читать эту страницу на языке: Русский","Закрыть"],"tr":["Bu sayfayı Türkçe oku","Kapat"],"ar":["اقرأ هذه الصفحة باللغة العربية","إغلاق"],"ja":["このページを日本語で読む","閉じる"],"ko":["이 페이지를 한국어로 읽기","닫기"],"zh-CN":["用简体中文阅读本页","关闭"]}
+  const get = () => { try { return localStorage.getItem(KEY) } catch { return null } }
+  const set = (v) => { try { localStorage.setItem(KEY, v) } catch {} }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('.langs a[data-lang]'); if (a) set(a.dataset.lang)
+    document.querySelectorAll('.langs[open]').forEach((d) => { if (!d.contains(e.target)) d.open = false })
+  })
+  if (get()) return
+  const ids = Object.keys(paths)
+  const want = (navigator.languages || [navigator.language]).map((x) => { x = (x || '').toLowerCase(); return ids.find((id) => id.toLowerCase() === x) || ids.find((id) => x.split('-')[0] === id.toLowerCase().split('-')[0]) }).find(Boolean)
+  if (!want || want === here || !offers[want]) return
+  const bar = document.createElement('div'); bar.className = 'lang-offer'; bar.lang = want; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', offers[want][0])
+  const go = document.createElement('a'); go.href = paths[want]; go.textContent = offers[want][0]; go.addEventListener('click', () => set(want))
+  const no = document.createElement('button'); no.type = 'button'; no.textContent = '\u00d7'; no.title = no.ariaLabel = offers[want][1]; no.addEventListener('click', () => { set(here); bar.remove() })
+  bar.append(go, no); document.body.append(bar)
+})()</script>
+</body>
+</html>

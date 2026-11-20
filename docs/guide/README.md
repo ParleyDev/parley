@@ -38,11 +38,34 @@ Style:
 ## Building
 
 ```bash
-node scripts/guide-build.mjs            # docs/guide → website/guide (commit both)
+node scripts/guide-build.mjs            # docs/guide, docs/site and docs/i18n → website/ (commit both)
 node scripts/guide-build.mjs --check    # what the commit hook runs
 ```
 
-The website (`website/`) is published as it is, so commit the built pages as well.
+The website (`website/`) is published as it is, so commit the built pages as well. Its landing page is written in
+`docs/site/index.html`; never edit `website/index.html` or anything under `website/<lang>/`, they are built.
+
+## Every language
+
+The website and the guide exist in every language the app speaks (the list in `frontend/src/lib/i18n.ts`):
+`runparley.com/` and `runparley.com/guide/` in English, `runparley.com/de/`, `runparley.com/de/guide/` and so on for
+the rest. **Every language is kept current**: the check fails while any page or string is missing or out of date in any
+language, so a commit that changes an English page also updates its translations.
+
+- **Guide pages**: `docs/guide/<lang>/<page>.md` (for example `docs/guide/pt-BR/messages.md`) translates
+  `docs/guide/<page>.md`. Its front matter has only `title`, `section`, `summary` (translated) and `source`, the English
+  page's version it was translated from: `node scripts/guide-build.mjs --sources` lists the current ones. Keep:
+  - the same `##` and `###` headings, translated, in the same order and at the same levels (the build gives each one
+    the English heading's anchor by position, so links work everywhere);
+  - every link exactly as in English (`[translated text](page#heading)`), every `![translated caption](shot:name)`;
+  - callouts with the English keyword: `> Tip: translated text`;
+  - `<kbd>` keys, `code` and product names (Parley, Discord, Spotify, Docker) as they are.
+  - Labels the app shows, in bold, must match the app in that language: look them up in
+    `frontend/src/locales/<lang>.json` (keys are the English labels) and use exactly that translation.
+- **The landing page and the guide's own words**: `docs/i18n/<lang>.json` maps each English string to its translation.
+  `docs/i18n/keys.json` (built) lists every string. Keep the inline markup (`<strong>`, `<a href="…">`, `<code>`…) and
+  `{placeholders}` exactly; translate the text around and inside them.
+- `node scripts/guide-build.mjs --check --lang de` reports only one language's problems.
 
 ## Refreshing the screenshots
 

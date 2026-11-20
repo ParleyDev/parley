@@ -76,12 +76,19 @@ section { padding-block: clamp(4.5rem, 10vw, 8rem); }
 .mark { width: 30px; height: 30px; display: grid; place-items: center; color: var(--violet); filter: drop-shadow(0 0 10px color-mix(in srgb, var(--violet) 55%, transparent)); }
 .mark svg { width: 100%; height: 100%; }
 .nav nav { display: flex; gap: 1.6rem; margin-left: auto; }
-.nav nav a { color: var(--muted); text-decoration: none; font-size: .9375rem; }
+.nav nav a { color: var(--muted); text-decoration: none; font-size: .9375rem; white-space: nowrap; }
 .nav nav a:hover { color: var(--text); }
 .nav .gh { height: 2.4rem; padding-inline: 1rem; font-size: .875rem; }
-.nav .open { height: 2.4rem; padding-inline: 1.1rem; font-size: .875rem; }
+.nav .open { height: 2.4rem; padding-inline: 1.1rem; font-size: .875rem; white-space: nowrap; }
+/* Longer translated labels: drop the GitHub button before the links run out of room. */
+@media (max-width: 1280px) { .nav .gh { display: none; } .nav nav { gap: 1.2rem; } }
+@media (max-width: 1000px) { .nav nav { gap: .9rem; } .nav nav a { font-size: .875rem; } }
+/* Whatever the language, the buttons stay put and the links scroll if they still don't fit. */
+.nav nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav nav::-webkit-scrollbar { display: none; }
+.nav .wrap > :not(nav) { flex-shrink: 0; }
 /* Phones: section links drop to their own row under the brand instead of disappearing. */
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   html { scroll-padding-top: 112px; }
   .nav .wrap { flex-wrap: wrap; height: auto; gap: 0 1rem; padding-top: 10px; }
   .nav .gh { display: none; }
@@ -459,6 +466,40 @@ footer a:hover { color: var(--text); }
 .you-notes p { margin: 0; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
 </style>
+<link rel="alternate" hreflang="en" href="https://runparley.com/">
+<link rel="alternate" hreflang="es" href="https://runparley.com/es/">
+<link rel="alternate" hreflang="de" href="https://runparley.com/de/">
+<link rel="alternate" hreflang="fr" href="https://runparley.com/fr/">
+<link rel="alternate" hreflang="it" href="https://runparley.com/it/">
+<link rel="alternate" hreflang="nl" href="https://runparley.com/nl/">
+<link rel="alternate" hreflang="pl" href="https://runparley.com/pl/">
+<link rel="alternate" hreflang="pt-BR" href="https://runparley.com/pt-br/">
+<link rel="alternate" hreflang="ru" href="https://runparley.com/ru/">
+<link rel="alternate" hreflang="tr" href="https://runparley.com/tr/">
+<link rel="alternate" hreflang="ar" href="https://runparley.com/ar/">
+<link rel="alternate" hreflang="ja" href="https://runparley.com/ja/">
+<link rel="alternate" hreflang="ko" href="https://runparley.com/ko/">
+<link rel="alternate" hreflang="zh-CN" href="https://runparley.com/zh-cn/">
+<link rel="alternate" hreflang="x-default" href="https://runparley.com/">
+<style>
+:lang(ja) { word-break: auto-phrase; line-break: strict; }
+:lang(ko) { word-break: keep-all; }
+.langs { position:relative; }
+.langs summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; gap:.4rem; height:2.4rem; padding-inline:.75rem; border:1px solid var(--rule); border-radius:999px; color:var(--muted); font-size:.875rem; white-space:nowrap; }
+.langs summary::-webkit-details-marker { display:none; }
+.langs summary:hover, .langs[open] summary { color:var(--text); border-color:var(--faint); }
+.langs summary svg { width:16px; height:16px; }
+@media (max-width: 1100px) { .nav .langs summary .name { display:none; } }
+.langs .list { position:absolute; inset-inline-end:0; top:calc(100% + 8px); z-index:40; min-width:190px; max-height:min(70vh, 460px); overflow:auto; padding:6px; background:var(--panel); border:1px solid var(--rule); border-radius:12px; box-shadow:0 20px 50px #0009; display:grid; }
+footer .langs .list { top:auto; bottom:calc(100% + 8px); }
+.langs .list a { padding:.45rem .7rem; border-radius:8px; color:var(--text); text-decoration:none; font-size:.92rem; }
+.langs .list a:hover { background:var(--panel-2); }
+.langs .list a[aria-current] { color:var(--violet); }
+.lang-offer { position:fixed; inset-inline:max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px)); bottom:max(16px, env(safe-area-inset-bottom, 0px)); z-index:50; margin-inline:auto; width:fit-content; max-width:calc(100% - 32px); display:flex; align-items:center; gap:.75rem; padding:.6rem .6rem .6rem 1rem; background:var(--panel-2); border:1px solid var(--rule); border-radius:999px; box-shadow:0 20px 50px #000a; font-size:.92rem; }
+.lang-offer a { color:#fff; font-weight:600; text-decoration:none; background:var(--violet); border-radius:999px; padding:.35rem .9rem; }
+.lang-offer button { background:none; border:0; color:var(--muted); cursor:pointer; font:inherit; font-size:1.1rem; line-height:1; padding:.2rem .45rem; }
+
+.nav .langs summary { height:2.4rem; } footer .langs { margin-inline-start:auto; } @media (max-width:900px) { .nav .langs { margin-inline-start:auto; } .nav .langs ~ .open { margin-left:0; } }</style>
 </head>
 <body>
 
@@ -474,6 +515,7 @@ footer a:hover { color: var(--text); }
       <a href="#download">Download</a>
       <a href="/guide/">Guide</a>
     </nav>
+    <details class="langs"><summary aria-label="Language"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span class="name">English</span></summary><div class="list"><a href="/" hreflang="en" lang="en" data-lang="en" aria-current="true">English</a><a href="/es/" hreflang="es" lang="es" data-lang="es">Español</a><a href="/de/" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/fr/" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/it/" hreflang="it" lang="it" data-lang="it">Italiano</a><a href="/nl/" hreflang="nl" lang="nl" data-lang="nl">Nederlands</a><a href="/pl/" hreflang="pl" lang="pl" data-lang="pl">Polski</a><a href="/pt-br/" hreflang="pt-BR" lang="pt-BR" data-lang="pt-BR">Português (Brasil)</a><a href="/ru/" hreflang="ru" lang="ru" data-lang="ru">Русский</a><a href="/tr/" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/ar/" hreflang="ar" lang="ar" data-lang="ar">العربية</a><a href="/ja/" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/ko/" hreflang="ko" lang="ko" data-lang="ko">한국어</a><a href="/zh-cn/" hreflang="zh-CN" lang="zh-CN" data-lang="zh-CN">简体中文</a></div></details>
     <a class="btn btn-ghost gh" href="https://github.com/ParleyDev/parley">GitHub</a>
     <a class="btn btn-primary open" href="https://app.runparley.com">Open Parley</a>
   </div>
@@ -733,7 +775,7 @@ footer a:hover { color: var(--text); }
         <article class="f w3">
           <span class="tag">Everywhere</span>
           <h3>Same Parley on every screen</h3>
-          <p>A full web app plus Windows, macOS, Linux and Android apps that open app.runparley.com in one tap or connect to any Parley server you choose. Phones get a one-pane layout, and the interface speaks English, Español and Deutsch.</p>
+          <p>A full web app plus Windows, macOS, Linux and Android apps that open app.runparley.com in one tap or connect to any Parley server you choose. Phones get a one-pane layout, and the interface speaks 14 languages.</p>
           <div class="mini platforms-mini"><span>Web</span><span>Windows</span><span>macOS</span><span>Linux</span><span>Android</span></div>
         </article>
         <article class="f w3">
@@ -862,7 +904,7 @@ footer a:hover { color: var(--text); }
       </div>
       <div>
         <div class="term">
-          <div class="tb"><i></i><i></i><i></i><span>~/parley</span><button type="button" id="copy">Copy commands</button></div>
+          <div class="tb"><i></i><i></i><i></i><span>~/parley</span><button type="button" id="copy" data-l10n-copied="Copied" data-l10n-press="Press Ctrl+C">Copy commands</button></div>
 <pre id="cmds"><span class="c"># grab the compose file and settings</span>
 <span class="p">$ </span>curl -fsSLO https://raw.githubusercontent.com/ParleyDev/parley/main/docs/self-hosting/compose.yaml
 <span class="p">$ </span>curl -fsSL https://raw.githubusercontent.com/ParleyDev/parley/main/docs/self-hosting/example.env -o .env
@@ -897,7 +939,7 @@ footer a:hover { color: var(--text); }
         <button type="button" role="tab" aria-selected="true" data-channel="stable">Stable</button>
         <button type="button" role="tab" aria-selected="false" data-channel="dev">Development</button>
       </div>
-      <p class="devnote" id="devnote">Development builds come from every change, as soon as it's made, so expect rough edges. Pick <b>Development</b> under Settings → Advanced → Update channel in the desktop app to keep getting them.</p>
+      <p class="devnote" id="devnote" data-l10n-latest="Latest build" data-l10n-built="built {date}" data-l10n-none="No development build is published right now.">Development builds come from every change, as soon as it's made, so expect rough edges. Pick <b>Development</b> under Settings → Advanced → Update channel in the desktop app to keep getting them.</p>
       <div class="dl" id="downloads">
         <div class="row"><span class="os">Windows</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="x64-setup\.exe$">Parley_0.24.0_x64-setup.exe</a><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.msi$">Parley_0.24.0_x64_en-US.msi</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
         <div class="row"><span class="os">macOS</span><span class="files"><a href="https://github.com/ParleyDev/parley/releases/latest" data-asset="\.dmg$">Parley_0.24.0_aarch64.dmg</a></span><a class="go" href="https://github.com/ParleyDev/parley/releases/latest">All files →</a></div>
@@ -933,6 +975,7 @@ footer a:hover { color: var(--text); }
       <a href="https://hub.docker.com/r/parleydev/parley">Docker Hub</a>
       <a href="https://app.runparley.com/delete-account">Delete your account</a>
     </nav>
+    <details class="langs"><summary aria-label="Language"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span class="name">English</span></summary><div class="list"><a href="/" hreflang="en" lang="en" data-lang="en" aria-current="true">English</a><a href="/es/" hreflang="es" lang="es" data-lang="es">Español</a><a href="/de/" hreflang="de" lang="de" data-lang="de">Deutsch</a><a href="/fr/" hreflang="fr" lang="fr" data-lang="fr">Français</a><a href="/it/" hreflang="it" lang="it" data-lang="it">Italiano</a><a href="/nl/" hreflang="nl" lang="nl" data-lang="nl">Nederlands</a><a href="/pl/" hreflang="pl" lang="pl" data-lang="pl">Polski</a><a href="/pt-br/" hreflang="pt-BR" lang="pt-BR" data-lang="pt-BR">Português (Brasil)</a><a href="/ru/" hreflang="ru" lang="ru" data-lang="ru">Русский</a><a href="/tr/" hreflang="tr" lang="tr" data-lang="tr">Türkçe</a><a href="/ar/" hreflang="ar" lang="ar" data-lang="ar">العربية</a><a href="/ja/" hreflang="ja" lang="ja" data-lang="ja">日本語</a><a href="/ko/" hreflang="ko" lang="ko" data-lang="ko">한국어</a><a href="/zh-cn/" hreflang="zh-CN" lang="zh-CN" data-lang="zh-CN">简体中文</a></div></details>
   </div>
 </footer>
 
@@ -1031,7 +1074,7 @@ footer a:hover { color: var(--text); }
       if (asset) { a.textContent = asset.name; a.href = asset.browser_download_url }
     })
     // The dev prerelease is titled "Development build (0.21.0-pre.16)".
-    if (channel === 'dev') devnote.innerHTML = `<b>${(/\(([^)]+)\)/.exec(rel.name || '') || [])[1] || 'Latest build'}</b>, built ${new Date(rel.published_at || rel.created_at).toLocaleDateString()}. ${devText}`
+    if (channel === 'dev') devnote.innerHTML = `<b>${(/\(([^)]+)\)/.exec(rel.name || '') || [])[1] || devnote.dataset.l10nLatest}</b>, ${devnote.dataset.l10nBuilt.replace('{date}', new Date(rel.published_at || rel.created_at).toLocaleDateString(document.documentElement.lang))}. ${devText}`
   }
   feeds.stable.then((rel) => {
     const tag = document.getElementById('release-tag'), pill = document.getElementById('release-pill')
@@ -1045,18 +1088,35 @@ footer a:hover { color: var(--text); }
     section.dataset.channel = channel
     document.querySelectorAll('.channels [data-channel]').forEach((x) => x.setAttribute('aria-selected', String(x === b)))
     if (channel === 'dev' && !feeds.dev) feeds.dev = api('tags/dev')
-    feeds[channel].then((rel) => show(rel, channel)).catch(() => { if (channel === 'dev') devnote.innerHTML = `No development build is published right now. ${devText}` })
+    feeds[channel].then((rel) => show(rel, channel)).catch(() => { if (channel === 'dev') devnote.innerHTML = `${devnote.dataset.l10nNone} ${devText}` })
   }))
 
   // Copy the self-host commands (only the lines that start with $).
-  const btn = document.getElementById('copy')
+  const btn = document.getElementById('copy'), copyLabel = btn.textContent
   btn.addEventListener('click', () => {
     const text = document.getElementById('cmds').innerText.split('\n').filter((l) => l.startsWith('$ ')).map((l) => l.slice(2)).join('\n')
-    const done = () => { btn.textContent = 'Copied'; setTimeout(() => (btn.textContent = 'Copy commands'), 1600) }
-    const fallback = () => { const sel = window.getSelection(), range = document.createRange(); range.selectNodeContents(document.getElementById('cmds')); sel.removeAllRanges(); sel.addRange(range); btn.textContent = 'Press Ctrl+C' }
+    const done = () => { btn.textContent = btn.dataset.l10nCopied; setTimeout(() => (btn.textContent = copyLabel), 1600) }
+    const fallback = () => { const sel = window.getSelection(), range = document.createRange(); range.selectNodeContents(document.getElementById('cmds')); sel.removeAllRanges(); sel.addRange(range); btn.textContent = btn.dataset.l10nPress }
     try { navigator.clipboard.writeText(text).then(done, fallback) } catch { fallback() }
   })
 })()
 </script>
+<script>(() => {
+  const KEY = 'parley.site-lang', here = "en", paths = {"en":"/","es":"/es/","de":"/de/","fr":"/fr/","it":"/it/","nl":"/nl/","pl":"/pl/","pt-BR":"/pt-br/","ru":"/ru/","tr":"/tr/","ar":"/ar/","ja":"/ja/","ko":"/ko/","zh-CN":"/zh-cn/"}, offers = {"en":["Read this page in English","Dismiss"],"es":["Leer esta página en Español","Descartar"],"de":["Diese Seite auf Deutsch lesen","Schließen"],"fr":["Lire cette page en Français","Ignorer"],"it":["Leggi questa pagina in Italiano","Chiudi"],"nl":["Lees deze pagina in het Nederlands","Sluiten"],"pl":["Przeczytaj tę stronę w języku: Polski","Zamknij"],"pt-BR":["Leia esta página em Português (Brasil)","Dispensar"],"ru":["Читать эту страницу на языке: Русский","Закрыть"],"tr":["Bu sayfayı Türkçe oku","Kapat"],"ar":["اقرأ هذه الصفحة باللغة العربية","إغلاق"],"ja":["このページを日本語で読む","閉じる"],"ko":["이 페이지를 한국어로 읽기","닫기"],"zh-CN":["用简体中文阅读本页","关闭"]}
+  const get = () => { try { return localStorage.getItem(KEY) } catch { return null } }
+  const set = (v) => { try { localStorage.setItem(KEY, v) } catch {} }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('.langs a[data-lang]'); if (a) set(a.dataset.lang)
+    document.querySelectorAll('.langs[open]').forEach((d) => { if (!d.contains(e.target)) d.open = false })
+  })
+  if (get()) return
+  const ids = Object.keys(paths)
+  const want = (navigator.languages || [navigator.language]).map((x) => { x = (x || '').toLowerCase(); return ids.find((id) => id.toLowerCase() === x) || ids.find((id) => x.split('-')[0] === id.toLowerCase().split('-')[0]) }).find(Boolean)
+  if (!want || want === here || !offers[want]) return
+  const bar = document.createElement('div'); bar.className = 'lang-offer'; bar.lang = want; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', offers[want][0])
+  const go = document.createElement('a'); go.href = paths[want]; go.textContent = offers[want][0]; go.addEventListener('click', () => set(want))
+  const no = document.createElement('button'); no.type = 'button'; no.textContent = '\u00d7'; no.title = no.ariaLabel = offers[want][1]; no.addEventListener('click', () => { set(here); bar.remove() })
+  bar.append(go, no); document.body.append(bar)
+})()</script>
 </body>
 </html>

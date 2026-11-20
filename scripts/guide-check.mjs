@@ -4,8 +4,8 @@
 //    or say why not with a `Guide: not affected` line in the message;
 //  - a feat/fix/perf commit adding a component or page that no guide page covers (and docs/guide/uncovered.txt
 //    doesn't list) must map it, so new features can't slip past the guide;
-//  - whenever docs/guide, website/guide or the app's Help links change, website/guide must be built and in step
-//    (scripts/guide-build.mjs --check).
+//  - whenever the guide, the website or the app's Help links change, website/ must be built and in step, with every
+//    translated guide page and landing page string current in every language (scripts/guide-build.mjs --check).
 //
 //   scripts/guide-check.mjs <message file>
 import { execFileSync } from 'node:child_process'
@@ -52,6 +52,6 @@ Add them to the covers: list of the guide page that describes them (or write one
   }
 }
 
-if (staged.some((f) => f.startsWith('docs/guide/') || f.startsWith('website/guide/') || f === 'scripts/guide-build.mjs' || /^frontend\/src\/.*\.tsx?$/.test(f))) {
+if (staged.some((f) => /^(docs\/(guide|site|i18n)|website)\//.test(f) || /^scripts\/(guide-build|site-i18n)\.mjs$/.test(f) || /^frontend\/src\/.*\.tsx?$/.test(f))) {
   try { execFileSync('node', [join(ROOT, 'scripts/guide-build.mjs'), '--check'], { cwd: ROOT, stdio: ['ignore', 'inherit', 'inherit'] }) } catch { fail('the guide build check failed (see above)') }
 }

@@ -1,4 +1,5 @@
 import { openExternal } from './native'
+import { resolvedLanguage } from './i18n'
 
 /** The user guide (docs/guide in the repo, built to runparley.com/guide). */
 export const GUIDE_ORIGIN = 'https://runparley.com'
@@ -9,7 +10,9 @@ export const GUIDE_ORIGIN = 'https://runparley.com'
  */
 export function guideUrl(topic = ''): string {
   const [page, hash] = topic.split('#')
-  return `${GUIDE_ORIGIN}/guide/${page ? `${page}/` : ''}${hash ? `#${hash}` : ''}`
+  // In the app's language: runparley.com/de/guide/… (English has no prefix). Every page exists in every language.
+  const lang = resolvedLanguage()
+  return `${GUIDE_ORIGIN}${lang === 'en' ? '' : `/${lang.toLowerCase()}`}/guide/${page ? `${page}/` : ''}${hash ? `#${hash}` : ''}`
 }
 
 /** Open the guide outside the app (our own site, so without the "Leaving Parley" check). */
