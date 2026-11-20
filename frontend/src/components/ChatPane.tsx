@@ -173,7 +173,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   const rows = list.map((m, i) => {
     const prev = list[i - 1]
     const newDay = !prev || !sameDay(prev.created_at, m.created_at)
-    const grouped = !!prev && !newDay && firstUnreadId !== m.id && prev.author.id === m.author.id && !m.reply_to && !m.interaction && !m.webhook_id && (!prev.kind || prev.kind === 'default')
+    const grouped = !!prev && !newDay && firstUnreadId !== m.id && prev.author.id === m.author.id && !m.reply_to && !m.status_reply && !m.interaction && !m.webhook_id && (!prev.kind || prev.kind === 'default')
       && new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 7 * 60 * 1000
     return { m, newDay, grouped }
   }).map((r, i, all) => ({ ...r, endsRun: !all[i + 1]?.grouped, dividerNext: !!all[i + 1] && (all[i + 1].newDay || all[i + 1].m.id === firstUnreadId) }))

@@ -283,6 +283,10 @@ body {
 @keyframes msg-flash { from { background: rgba(109,93,252,0.35) } to { background: transparent } }
 .msg-flash { animation: msg-flash 1.8s ease-out both; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
+/* The card that drops in under a status bubble to reply to it. */
+@keyframes status-reply-drop { from { opacity: 0; transform: translateY(-8px) scale(.96) } to { opacity: 1; transform: none } }
+.status-reply-card { animation: status-reply-drop .18s cubic-bezier(.2,.9,.3,1.2); transform-origin: 30% 0 }
+@media (prefers-reduced-motion: reduce) { .status-reply-card { animation: none } }
 .fade-in { animation: fade-in .15s ease-out both; }
 @keyframes call-react { 0% { opacity: 0; transform: translateY(0) scale(.6) } 15% { opacity: 1; transform: translateY(-20px) scale(1.1) } 100% { opacity: 0; transform: translateY(-160px) scale(1) } }
 .call-react { animation: call-react 2.5s ease-out forwards }

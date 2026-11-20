@@ -3782,5 +3782,13 @@
 "Handwritten": "خط يد",
 "Poster": "ملصق",
 "Typewriter": "آلة كاتبة",
-"Chrome": "كروم"
+"Chrome": "كروم",
+"Reaction sent": "تم إرسال التفاعل",
+"Send Reaction": "إرسال تفاعل",
+"Reply to {name}'s status": "الرد على حالة {name}",
+"Reacted to your status": "تفاعل مع حالتك",
+"Reacted to {name}'s status": "تفاعل مع حالة {name}",
+"Replied to your status": "رد على حالتك",
+"Replied to {name}'s status": "رد على حالة {name}",
+"Reply sent": "تم إرسال الرد"
 }

@@ -702,6 +702,8 @@ pub struct MessageRow {
     #[sqlx(default)]
     pub components: Option<serde_json::Value>,
     #[sqlx(default)]
+    pub status_reply: Option<serde_json::Value>,
+    #[sqlx(default)]
     pub author_verified_bot: bool,
     #[sqlx(default)]
     pub author_system: bool,
@@ -809,6 +811,9 @@ pub struct Message {
     /// Buttons and select menus (action rows) on a bot's message.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub components: Option<serde_json::Value>,
+    /// A DM replying or reacting to the other person's custom status: {user_id, text, reaction}.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_reply: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub poll: Option<Poll>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -949,6 +954,7 @@ impl MessageRow {
             embeds: self.embeds,
             interaction: self.interaction,
             components: self.components,
+            status_reply: self.status_reply,
             poll: None,
             thread: None,
             referenced: None,

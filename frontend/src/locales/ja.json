@@ -3782,5 +3782,13 @@
 "Handwritten": "手書き",
 "Poster": "ポスター",
 "Typewriter": "タイプライター",
-"Chrome": "クローム"
+"Chrome": "クローム",
+"Reaction sent": "リアクションを送信しました",
+"Send Reaction": "リアクションを送信",
+"Reply to {name}'s status": "{name}さんのステータスに返信",
+"Reacted to your status": "あなたのステータスにリアクションしました",
+"Reacted to {name}'s status": "{name}さんのステータスにリアクションしました",
+"Replied to your status": "あなたのステータスに返信しました",
+"Replied to {name}'s status": "{name}さんのステータスに返信しました",
+"Reply sent": "返信を送信しました"
 }

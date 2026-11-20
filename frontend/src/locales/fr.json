@@ -3782,5 +3782,13 @@
 "Handwritten": "Manuscrit",
 "Poster": "Affiche",
 "Typewriter": "Machine à écrire",
-"Chrome": "Chrome"
+"Chrome": "Chrome",
+"Reaction sent": "Réaction envoyée",
+"Send Reaction": "Envoyer une réaction",
+"Reply to {name}'s status": "Répondre au statut de {name}",
+"Reacted to your status": "A réagi à ton statut",
+"Reacted to {name}'s status": "A réagi au statut de {name}",
+"Replied to your status": "A répondu à ton statut",
+"Replied to {name}'s status": "A répondu au statut de {name}",
+"Reply sent": "Réponse envoyée"
 }

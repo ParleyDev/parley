@@ -3782,5 +3782,13 @@
 "Handwritten": "El yazısı",
 "Poster": "Afiş",
 "Typewriter": "Daktilo",
-"Chrome": "Krom"
+"Chrome": "Krom",
+"Reaction sent": "Tepki gönderildi",
+"Send Reaction": "Tepki gönder",
+"Reply to {name}'s status": "{name} adlı kişinin durumuna yanıt ver",
+"Reacted to your status": "Durumuna tepki verdi",
+"Reacted to {name}'s status": "{name} adlı kişinin durumuna tepki verdi",
+"Replied to your status": "Durumuna yanıt verdi",
+"Replied to {name}'s status": "{name} adlı kişinin durumuna yanıt verdi",
+"Reply sent": "Yanıt gönderildi"
 }

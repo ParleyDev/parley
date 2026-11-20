@@ -3782,5 +3782,13 @@
 "Handwritten": "手写",
 "Poster": "海报",
 "Typewriter": "打字机",
-"Chrome": "镀铬"
+"Chrome": "镀铬",
+"Reaction sent": "已发送回应",
+"Send Reaction": "发送回应",
+"Reply to {name}'s status": "回复 {name} 的状态",
+"Reacted to your status": "回应了你的状态",
+"Reacted to {name}'s status": "回应了 {name} 的状态",
+"Replied to your status": "回复了你的状态",
+"Replied to {name}'s status": "回复了 {name} 的状态",
+"Reply sent": "已发送回复"
 }

@@ -43,6 +43,7 @@ import { shortcutFormat, toggleWrap } from '../lib/editor'
 import FormatToolbar from './FormatToolbar'
 import { useParams } from 'react-router-dom'
 import { globalName, shownName } from '../lib/names'
+import { StatusEmojiText } from './StatusText'
 
 interface Props { message: Message; grouped: boolean; isOwn: boolean; onReply: () => void; replyTarget: ReplyRef | null
   /** Reply header click: scroll to (and if needed load) the original message. */
@@ -67,6 +68,8 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
   const serverAvatar = useStore((s) => (guildId ? s.members[guildId]?.[m.author.id]?.guild_avatar : undefined))
   // In a server, people show under their server nickname (like the member list).
   const authorName = useStore((s) => shownName(m.author, guildId ? s.members[guildId]?.[m.author.id] : undefined, s.notes[m.author.id]?.nickname))
+  // Whose status this DM answers: "your" when it was yours, else their name (as it is now, falling back to their username).
+  const statusOwner = useStore((s) => { const sr = m.status_reply; if (!sr) return ''; if (sr.user_id === s.user?.id) return null; const u = s.users[sr.user_id]; return u ? shownName(u, undefined, s.notes[sr.user_id]?.nickname) : '?' })
   const replyName = useStore((s) => (replyTarget ? shownName(replyTarget.author, guildId ? s.members[guildId]?.[replyTarget.author.id] : undefined, s.notes[replyTarget.author.id]?.nickname) : ''))
   const interactionName = useStore((s) => (m.interaction ? shownName(m.interaction.user, guildId ? s.members[guildId]?.[m.interaction.user.id] : undefined, s.notes[m.interaction.user.id]?.nickname) : ''))
   const authorShown = serverAvatar ? { ...m.author, avatar_url: serverAvatar } : m.author
@@ -457,6 +460,14 @@ export default function MessageItem({ message: m, grouped, isOwn, onReply, reply
             </div>
           ) : (
             <>
+              {m.status_reply && (
+                <div className="mt-0.5 mb-1 max-w-[520px] rounded border-l-4 border-bg-4 bg-bg-0/20 py-1 pl-3 pr-2" data-status-reply-quote={m.status_reply.reaction ? 'reaction' : 'reply'}>
+                  <div className="text-xs text-text-2">{m.status_reply.reaction
+                    ? (statusOwner === null ? t('Reacted to your status') : tn('Reacted to {name}\'s status', { name: <span className="font-semibold text-text-1">{statusOwner}</span> }))
+                    : (statusOwner === null ? t('Replied to your status') : tn('Replied to {name}\'s status', { name: <span className="font-semibold text-text-1">{statusOwner}</span> }))}</div>
+                  <div className="text-sm text-text-1 break-words whitespace-pre-wrap"><StatusEmojiText text={m.status_reply.text} /></div>
+                </div>
+              )}
               {m.forwarded_from && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded><Forward size={13} /> {t('Forwarded')}</div>}
               {m.forwarded_unavailable && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-forwarded="unavailable"><Forward size={13} /> {t("Forwarded from a server that's no longer available")}</div>}
               {m.crosspost?.channel_name && <div className="flex items-center gap-1 text-xs text-text-2 mt-0.5" data-crosspost-from={m.crosspost.channel_id}><Megaphone size={13} /><span className="rounded bg-accent/80 px-1 text-[10px] font-bold uppercase text-white">{t('Server')}</span> {m.crosspost.guild_name} · #{m.crosspost.channel_name}</div>}

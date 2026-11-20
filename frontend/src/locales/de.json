@@ -3782,5 +3782,13 @@
 "Handwritten": "Handschrift",
 "Poster": "Plakat",
 "Typewriter": "Schreibmaschine",
-"Chrome": "Chrom"
+"Chrome": "Chrom",
+"Reaction sent": "Reaktion gesendet",
+"Send Reaction": "Reaktion senden",
+"Reply to {name}'s status": "Auf den Status von {name} antworten",
+"Reacted to your status": "Hat auf deinen Status reagiert",
+"Reacted to {name}'s status": "Hat auf den Status von {name} reagiert",
+"Replied to your status": "Hat auf deinen Status geantwortet",
+"Replied to {name}'s status": "Hat auf den Status von {name} geantwortet",
+"Reply sent": "Antwort gesendet"
 }

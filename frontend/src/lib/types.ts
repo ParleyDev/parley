@@ -464,6 +464,8 @@ export interface Message {
   thread?: ThreadRef | null
   /** Preview of the message this replies to; absent when there is no reply or the original was deleted. */
   referenced?: ReplyRef | null
+  /** A DM answering the other person's custom status (the text as it was then); `reaction` when it's an emoji reaction. */
+  status_reply?: { user_id: string; text: string; reaction?: boolean } | null
   /** Client-only rows: 'failed' = your message the server refused to deliver (red, Retry / Delete);
    *  'notice' = the Ribbit explanation under it (kind 'ribbit'). Never sent by the server; gone on reload. */
   local?: 'failed' | 'notice'

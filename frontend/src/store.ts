@@ -359,7 +359,7 @@ interface State {
   loadMessages: (channelId: string, before?: string) => Promise<void>
   loadMembers: (guildId: string) => Promise<void>
   loadBans: (guildId: string) => Promise<void>
-  sendMessage: (channelId: string, content: string, replyTo?: string | null, attachmentIds?: string[], stickerId?: string | null, descriptions?: Record<string, string>, opts?: { tts?: boolean }) => Promise<void>
+  sendMessage: (channelId: string, content: string, replyTo?: string | null, attachmentIds?: string[], stickerId?: string | null, descriptions?: Record<string, string>, opts?: { tts?: boolean; statusReply?: { user_id: string; reaction?: boolean } }) => Promise<void>
   markRead: (channelId: string) => Promise<void>
 }
 
@@ -1015,7 +1015,7 @@ export const useStore = create<State>((set, get) => ({
     } catch { /* ignore */ }
   },
   sendMessage: async (channelId, content, replyTo, attachmentIds = [], stickerId = null, descriptions, opts) => {
-    const m = await api.post<Message>(`/channels/${channelId}/messages`, { content, reply_to: replyTo ?? null, attachment_ids: attachmentIds, sticker_id: stickerId, ...(descriptions && Object.keys(descriptions).length ? { attachment_descriptions: descriptions } : {}), ...(opts?.tts ? { tts: true } : {}) })
+    const m = await api.post<Message>(`/channels/${channelId}/messages`, { content, reply_to: replyTo ?? null, attachment_ids: attachmentIds, sticker_id: stickerId, ...(descriptions && Object.keys(descriptions).length ? { attachment_descriptions: descriptions } : {}), ...(opts?.tts ? { tts: true } : {}), ...(opts?.statusReply ? { status_reply: opts.statusReply } : {}) })
     get().addMessage(m)
     get().setReadState(channelId, m.id)
   },

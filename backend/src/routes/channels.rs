@@ -364,7 +364,7 @@ async fn delete_channel(
 
 pub const MESSAGE_SELECT: &str = "SELECT m.id, m.channel_id, m.author_id, m.content, m.reply_to, m.created_at, m.edited_at, m.pinned_at,
     u.username, u.display_name, u.avatar_url, m.sticker_id, s.name AS sticker_name, s.animated AS sticker_animated, m.forwarded_from, m.forwarded_unavailable,
-    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, m.suppress_embeds, m.tts, m.crosspost, m.webhook_id, m.author_override, m.embeds, m.interaction, m.components, u.avatar_decoration, u.clan_tag, u.clan_tag_guild AS author_clan_tag_guild, u.bot AS author_bot, u.verified_bot AS author_verified_bot, u.system AS author_system, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
+    m.mentions, m.mention_roles, m.mention_everyone, m.kind, m.ref_id, m.suppress_embeds, m.tts, m.crosspost, m.webhook_id, m.author_override, m.embeds, m.interaction, m.components, m.status_reply, u.avatar_decoration, u.clan_tag, u.clan_tag_guild AS author_clan_tag_guild, u.bot AS author_bot, u.verified_bot AS author_verified_bot, u.system AS author_system, u.name_primary AS author_name_primary, u.name_accent AS author_name_accent, u.name_style AS author_name_style
     FROM messages m JOIN users u ON u.id = m.author_id LEFT JOIN stickers s ON s.id = m.sticker_id";
 
 async fn reactions_for(db: &PgPool, ids: &[Uuid], me: Uuid) -> AppResult<HashMap<Uuid, Vec<Reaction>>> {
@@ -541,6 +541,15 @@ pub(crate) struct CreateMessage {
     embeds: Option<serde_json::Value>,
     /// Bots only: buttons and select menus (see `interactions::clean_components`).
     components: Option<serde_json::Value>,
+    /// In a 1:1 DM: this message replies (or, with `reaction`, reacts) to the other person's custom status.
+    status_reply: Option<StatusReplyInput>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct StatusReplyInput {
+    user_id: Uuid,
+    #[serde(default)]
+    reaction: bool,
 }
 
 pub(crate) async fn create_message(
@@ -620,6 +629,20 @@ pub(crate) async fn create_message(
             return Err(AppError::BadRequest("Reply target not in this channel".into()));
         }
     }
+    // The status is read here, not taken from the client, so a reply always quotes what they really had up.
+    let status_reply = match &req.status_reply {
+        Some(sr) => {
+            if c.guild_id.is_some() || c.kind != "dm" || sr.user_id == uid {
+                return Err(AppError::BadRequest("Statuses can only be answered in a DM with their owner".into()));
+            }
+            let row: Option<(String,)> = sqlx::query_as("SELECT u.custom_status FROM channel_members cm JOIN users u ON u.id = cm.user_id WHERE cm.channel_id = $1 AND cm.user_id = $2")
+                .bind(id).bind(sr.user_id).fetch_optional(&state.db).await?;
+            let Some((text,)) = row else { return Err(AppError::BadRequest("Statuses can only be answered in a DM with their owner".into())) };
+            if text.trim().is_empty() { return Err(AppError::BadRequest("They no longer have a status".into())) }
+            Some(json!({ "user_id": sr.user_id, "text": text, "reaction": sr.reaction }))
+        }
+        None => None,
+    };
     let mid = Uuid::now_v7();
     let (m_users, m_roles, m_everyone) = parse_mentions(&content);
     // @everyone only counts inside a server for members allowed to use it (it still renders as text otherwise).
@@ -641,7 +664,7 @@ pub(crate) async fn create_message(
             }
         }
     }
-    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone, tts, suppress_embeds, embeds, components) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)")
+    sqlx::query("INSERT INTO messages (id, channel_id, author_id, content, reply_to, sticker_id, mentions, mention_roles, mention_everyone, tts, suppress_embeds, embeds, components, status_reply) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)")
         .bind(mid)
         .bind(id)
         .bind(uid)
@@ -655,6 +678,7 @@ pub(crate) async fn create_message(
         .bind(no_embeds)
         .bind(&embeds)
         .bind(&components)
+        .bind(&status_reply)
         .execute(&mut *tx)
         .await?;
     link(&mut tx, mid, id, uid, &req.attachment_ids).await?;

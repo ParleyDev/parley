@@ -87,6 +87,13 @@ Click your picture in the bottom-left corner:
 - **Online**, **Idle**, **Do Not Disturb** (no notification pop-ups or sounds) or **Invisible** (you look offline, but can still use everything). You can pick one for a while, and Parley switches back afterwards.
 - **Set a custom status**: an emoji and up to 128 characters, cleared after a set time or kept until you clear it.
 
+Your custom status shows in full in a thought bubble beside your picture on your profile card. On someone else's card, hover over their bubble to answer it:
+
+- **Send Reaction** opens the emoji panel; the emoji you pick is sent to them.
+- **Reply** opens a box under their status. Type your reply and press <kbd>Enter</kbd>, or press <kbd>Esc</kbd> to close it.
+
+Both arrive in your direct messages with them, under a "Replied to *name*'s status" or "Reacted to *name*'s status" line that quotes the status as it was then. When someone answers yours, it says "your status".
+
 If you connect Spotify (**User Settings → Connections**), people can see what you're listening to.
 
 ## A different profile per server

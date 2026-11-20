@@ -3782,5 +3782,13 @@
 "Handwritten": "손글씨",
 "Poster": "포스터",
 "Typewriter": "타자기",
-"Chrome": "크롬"
+"Chrome": "크롬",
+"Reaction sent": "반응을 보냈어요",
+"Send Reaction": "반응 보내기",
+"Reply to {name}'s status": "{name}님의 상태에 답장하기",
+"Reacted to your status": "내 상태에 반응함",
+"Reacted to {name}'s status": "{name}님의 상태에 반응함",
+"Replied to your status": "내 상태에 답장함",
+"Replied to {name}'s status": "{name}님의 상태에 답장함",
+"Reply sent": "답장을 보냈어요"
 }

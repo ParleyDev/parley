@@ -1,12 +1,13 @@
 import { usePrefs } from '../lib/prefs'
 import { bgUrl } from '../lib/crop'
 import CropImg, { CropLayer } from './CropImg'
-import { Check, Clock, MessageSquare, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Smile, UserMinus, UserPlus, UserX, User as UserIcon } from 'lucide-react'
+import { Check, Clock, MessageSquare, Crown, Lock, UserCheck, Gavel, MoreHorizontal, Pencil, Reply, Smile, UserMinus, UserPlus, UserX, User as UserIcon } from 'lucide-react'
+import { StatusEmojiText } from './StatusText'
 import { nameLook } from '../lib/nameStyle'
 import NameText from './NameText'
 import { roleLook } from './StyledName'
 import { locale, useT } from '../lib/i18n'
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { api } from '../lib/api'
@@ -82,6 +83,10 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
   const [quick, setQuick] = useState('')
   const [sending, setSending] = useState(false)
   const [emoji, setEmoji] = useState<DOMRect | null>(null)
+  // Their custom status: the quick message answers it while replying; the reaction picker opens from the bubble.
+  const [statusReply, setStatusReply] = useState(false)
+  const statusRef = useRef<HTMLDivElement>(null)
+  const [statusEmoji, setStatusEmoji] = useState<DOMRect | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [friendMenu, setFriendMenu] = useState<MenuState | null>(null)
   const [viewAvatar, setViewAvatar] = useState(false)
@@ -120,6 +125,10 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
     setSending(true)
     try { const c = await openDm(); await sendMessage(c.id, text); onClose(); navigate(`/channels/@me/${c.id}`) } catch (e) { pushToast((e as Error).message, 'error') } finally { setSending(false) }
   }
+  const replyToStatus = async (text: string) => {
+    try { const c = await openDm(); await sendMessage(c.id, text, null, [], null, undefined, { statusReply: { user_id: user.id } }); setStatusReply(false); pushToast(t('Reply sent')); return true } catch (e) { pushToast((e as Error).message, 'error'); return false }
+  }
+  const reactToStatus = (em: string) => { setStatusEmoji(null); void act(async () => { const c = await openDm(); await sendMessage(c.id, em, null, [], null, undefined, { statusReply: { user_id: user.id, reaction: true } }); pushToast(t('Reaction sent')) }) }
   const onQuickKey = (e: KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') { e.preventDefault(); sendQuick() } }
   const copy = (label: string, text: string) => act(async () => { await navigator.clipboard.writeText(text); pushToast(t('{label} copied', { label })) })
   const fullProfile = (tab?: 'friends' | 'servers' | 'reviews') => { onClose(); openModal({ kind: 'profile', userId: user.id, tab }) }
@@ -242,7 +251,22 @@ export default function ProfilePopout({ user, guildId, onClose, variant = 'popou
           </div>
         </div>}
         {user.custom_status && (
-          <div className={`absolute ${full ? 'left-[156px] max-w-[260px]' : 'left-[104px] max-w-[180px]'} bottom-[-14px] rounded-xl px-3 py-1.5 text-sm shadow-lg truncate`} style={{ background: themed ? '#1a1527' : surface }} data-custom-status title={user.custom_status}>{user.custom_status}</div>
+          // A thought bubble beside the avatar, from just under the banner's edge down, with two puffs rising to the
+          // avatar. Someone else's has Send Reaction and Reply on hover (always shown on touch screens, and kept while
+          // replying): Reply drops a card in under the bubble, Send Reaction opens the emoji panel.
+          <div ref={statusRef} className={`group/status absolute z-10 ${full ? 'left-[164px] max-w-[280px]' : 'left-[112px] max-w-[176px]'} top-[calc(100%-6px)]`} data-custom-status-wrap>
+            <span aria-hidden className="absolute -left-[6px] -top-[5px] h-[11px] w-[11px] rounded-full shadow-lg" style={{ background: themed ? '#1a1527' : surface }} />
+            <span aria-hidden className="absolute -left-[13px] -top-[13px] h-[6px] w-[6px] rounded-full shadow-lg" style={{ background: themed ? '#1a1527' : surface }} />
+            <div className="relative rounded-2xl px-3 py-1.5 text-sm leading-[18px] shadow-lg break-words whitespace-pre-wrap line-clamp-6" style={{ background: themed ? '#1a1527' : surface }} data-custom-status title={user.custom_status}><StatusEmojiText text={user.custom_status} /></div>
+            {!isMe && rel !== 'blocked' && !user.bot && (
+              <div className={`absolute -top-4 right-1.5 flex gap-1 transition-opacity group-hover/status:opacity-100 group-focus-within/status:opacity-100 [@media(hover:none)]:opacity-100 ${statusReply || statusEmoji ? 'opacity-100' : 'opacity-0'}`} data-status-actions>
+                <button type="button" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setStatusEmoji((cur) => (cur ? null : r)) }} title={t('Send Reaction')} aria-label={t('Send Reaction')} className="h-7 w-7 rounded-full bg-[#111214] text-[#dbdee1] shadow-lg flex items-center justify-center hover:text-white" data-status-react><Smile size={16} /></button>
+                <button type="button" onClick={() => { setStatusEmoji(null); setStatusReply((o) => !o) }} title={t('Reply')} aria-label={t('Reply')} aria-expanded={statusReply} className="h-7 w-7 rounded-full bg-[#111214] text-[#dbdee1] shadow-lg flex items-center justify-center hover:text-white" data-status-reply><Reply size={16} /></button>
+              </div>
+            )}
+            {statusEmoji && <ExpressionPicker tabs={['emoji']} anchor={statusEmoji} onClose={() => setStatusEmoji(null)} onEmoji={reactToStatus} />}
+            {statusReply && <StatusReplyCard name={shownName(user, member, friendNote?.nickname)} full={full} within={statusRef} onSend={replyToStatus} onClose={() => setStatusReply(false)} />}
+          </div>
         )}
       </div>
       {/* Avatar */}
@@ -441,3 +465,35 @@ function GuildDot({ g, ring }: { g: Pick<Guild, 'id' | 'name' | 'icon_url'>; rin
     : <span title={g.name} className={`${cls} text-white text-[8px] font-bold flex items-center justify-center`} style={{ background: colorFor(g.id) }}>{initials(g.name)}</span>
 }
 
+
+/** The card that drops in under someone's status bubble to reply to it: Enter sends (as a DM quoting the status),
+ *  Escape or a click outside the bubble closes it. */
+function StatusReplyCard({ name, full, within, onSend, onClose }: { name: string; full: boolean; within: RefObject<HTMLDivElement | null>; onSend: (text: string) => Promise<boolean>; onClose: () => void }) {
+  const t = useT()
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [emoji, setEmoji] = useState<DOMRect | null>(null)
+  const ref = useRef<HTMLInputElement>(null)
+  useEffect(() => { ref.current?.focus() }, [])
+  useEffect(() => {
+    if (emoji) return
+    // Escape closes this card, not the popout under it; so does a click anywhere outside the status.
+    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); onClose() } }
+    const onDown = (e: PointerEvent) => { if (!within.current?.contains(e.target as Node)) onClose() }
+    window.addEventListener('keydown', onKey, true)
+    document.addEventListener('pointerdown', onDown, true)
+    return () => { window.removeEventListener('keydown', onKey, true); document.removeEventListener('pointerdown', onDown, true) }
+  }, [emoji, onClose, within])
+  const send = async () => { const v = text.trim(); if (!v || busy) return; setBusy(true); if (!(await onSend(v))) setBusy(false) }
+  return (
+    <div className={`status-reply-card absolute top-[calc(100%+10px)] ${full ? '-left-[144px] w-[400px]' : '-left-[100px] w-[276px]'} rounded-[10px] border border-white/10 bg-[#2b2d31] p-3 shadow-2xl`} data-status-reply-card>
+      <div className="relative">
+        <input ref={ref} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void send() } }} disabled={busy} maxLength={2000}
+          placeholder={t("Reply to {name}'s status", { name })} aria-label={t("Reply to {name}'s status", { name })} data-status-reply-input
+          className="h-12 w-full rounded-lg bg-[#1e1f22] pl-3.5 pr-10 text-sm text-[#dbdee1] placeholder:text-[#87898c] outline-none" />
+        <button type="button" onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setEmoji((cur) => (cur ? null : r)) }} title={t('Emoji')} aria-label={t('Emoji')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#b5bac1] hover:text-[#dbdee1]"><Smile size={20} /></button>
+      </div>
+      {emoji && <ExpressionPicker tabs={['emoji']} anchor={emoji} onClose={() => { setEmoji(null); ref.current?.focus() }} onEmoji={(em) => setText((v) => (v && !/\s$/.test(v) ? v + ' ' : v) + em + ' ')} />}
+    </div>
+  )
+}

@@ -3782,5 +3782,13 @@
 "Handwritten": "Рукописный",
 "Poster": "Плакат",
 "Typewriter": "Пишущая машинка",
-"Chrome": "Хром"
+"Chrome": "Хром",
+"Reaction sent": "Реакция отправлена",
+"Send Reaction": "Отправить реакцию",
+"Reply to {name}'s status": "Ответить на статус {name}",
+"Reacted to your status": "Отреагировал(а) на ваш статус",
+"Reacted to {name}'s status": "Отреагировал(а) на статус {name}",
+"Replied to your status": "Ответил(а) на ваш статус",
+"Replied to {name}'s status": "Ответил(а) на статус {name}",
+"Reply sent": "Ответ отправлен"
 }

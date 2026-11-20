@@ -3782,5 +3782,13 @@
 "Handwritten": "Manuscrita",
 "Poster": "Cartel",
 "Typewriter": "Máquina de escribir",
-"Chrome": "Cromado"
+"Chrome": "Cromado",
+"Reaction sent": "Reacción enviada",
+"Send Reaction": "Enviar reacción",
+"Reply to {name}'s status": "Responder al estado de {name}",
+"Reacted to your status": "Reaccionó a tu estado",
+"Reacted to {name}'s status": "Reaccionó al estado de {name}",
+"Replied to your status": "Respondió a tu estado",
+"Replied to {name}'s status": "Respondió al estado de {name}",
+"Reply sent": "Respuesta enviada"
 }

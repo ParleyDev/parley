@@ -3782,5 +3782,13 @@
 "Handwritten": "Handgeschreven",
 "Poster": "Poster",
 "Typewriter": "Typemachine",
-"Chrome": "Chroom"
+"Chrome": "Chroom",
+"Reaction sent": "Reactie verstuurd",
+"Send Reaction": "Reactie sturen",
+"Reply to {name}'s status": "Antwoorden op de status van {name}",
+"Reacted to your status": "Reageerde op je status",
+"Reacted to {name}'s status": "Reageerde op de status van {name}",
+"Replied to your status": "Antwoordde op je status",
+"Replied to {name}'s status": "Antwoordde op de status van {name}",
+"Reply sent": "Antwoord verstuurd"
 }
