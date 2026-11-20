@@ -1,0 +1,5 @@
+# runparley.com: the landing page and the user guide are public. The app itself lives on app.runparley.com.
+User-agent: *
+Allow: /
+
+Sitemap: https://runparley.com/sitemap.xml

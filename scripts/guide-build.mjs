@@ -15,7 +15,7 @@
 // `code`, [links](other-page#anchor) to guide pages or full URLs, <kbd>Ctrl</kbd>, tables, > Tip:/Note:/Admins: callouts,
 // and screenshots as ![alt](shot:name) taken by frontend/e2e/guide-shots.mjs into website/guide/shots/name.png.
 //
-//   node scripts/guide-build.mjs           write website/guide
+//   node scripts/guide-build.mjs           write website/guide and website/sitemap.xml
 //   node scripts/guide-build.mjs --check   exit 1 if website/guide is out of date, a link or shot is missing, or the
 //                                          app links to a guide page or heading that doesn't exist
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -361,6 +361,9 @@ export function build() {
 ${groups.map((g) => `<div class="group">${esc(g.name)}</div><div class="cards">${g.pages.map((p) => `<a href="/guide/${p.slug}/">${esc(p.title)}<span>${esc(p.summary.replace(/[*`]/g, ''))}</span></a>`).join('')}</div>`).join('\n')}</article>`
   files.set('index.html', shell({ title: 'Parley Guide', description: 'How to use Parley: servers, channels, messages, voice and video, your profile, settings and running a community.', path: '/guide/', side: sidebar(pages, ''), main: home, toc: '<span></span>' }))
   files.set('search.json', JSON.stringify(search) + '\n')
+  // website/sitemap.xml (next to the guide, at the site root) for search engines: the landing page and every guide page.
+  const urls = ['/', '/guide/', ...pages.map((p) => `/guide/${p.slug}/`)]
+  files.set('../sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>https://runparley.com${u}</loc></url>`).join('\n')}\n</urlset>\n`)
   return { pages, files, ids }
 }
 

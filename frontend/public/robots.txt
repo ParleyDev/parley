@@ -1,0 +1,3 @@
+# A Parley server's web app: everything behind it is private to signed-in members, so search engines stay out.
+User-agent: *
+Disallow: /
