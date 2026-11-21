@@ -67,13 +67,21 @@ self.addEventListener('push', (e) => {
   let p = {}
   try { p = e.data ? e.data.json() : {} } catch { p = { title: 'Parley', body: e.data ? e.data.text() : '' } }
   // Read on another device: close this channel's notifications here and show nothing.
+  // (The server only sends these to browsers that allow a push without a notification: not Safari or Firefox.)
   if (p.clear) { e.waitUntil(closeChannel(p.clear).then(badge)); return }
   const d = p.data || {}
   const actions = p.action_token ? [{ action: 'reply', title: 'Reply', type: 'text', placeholder: 'Reply…' }, { action: 'read', title: 'Mark as Read' }] : []
   e.waitUntil((async () => {
-    // A tab looking at this channel right now already shows the message.
+    // A tab looking at this channel right now already shows the message. Every push must still show a notification
+    // (Safari revokes the subscription and the notification permission after a few that don't), so show a silent
+    // one and close it at once.
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    if (d.channel_id && wins.some((w) => w.visibilityState === 'visible' && w.focused && w.url.includes(d.channel_id))) return
+    if (d.channel_id && wins.some((w) => w.visibilityState === 'visible' && w.focused && w.url.includes(d.channel_id))) {
+      const tag = `parley-seen-${d.channel_id}`
+      await self.registration.showNotification(p.title || 'Parley', { body: p.body || '', tag, silent: true, icon: '/icons/icon-192.png' })
+      for (const n of await self.registration.getNotifications({ tag })) n.close()
+      return
+    }
     await self.registration.showNotification(p.title || 'Parley', {
       body: p.body || '', tag: p.tag || undefined, renotify: !!p.tag, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
       timestamp: Date.now(), data: { ...d, action_token: p.action_token }, actions,

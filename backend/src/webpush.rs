@@ -157,6 +157,14 @@ pub async fn notify(state: &AppState, users: &[Uuid], title: &str, body: &str, d
     }
 }
 
+/// Can this push service take a push that shows no notification? Safari (Apple) revokes a subscription, and with it
+/// the web app's notification permission, after a few of them; Firefox drops it once its quota of silent pushes runs
+/// out. Chromium browsers tolerate the occasional one.
+fn silent_ok(url: &url::Url) -> bool {
+    let h = url.host_str().unwrap_or("");
+    !(h == "web.push.apple.com" || h.ends_with(".push.apple.com") || h.ends_with("push.services.mozilla.com"))
+}
+
 /// The user read `cid` (on session `except`, if known): close its notifications on their other browsers. Only
 /// sessions that were sent one for it in the last two days get a push; it carries the same Topic, so a notification
 /// still waiting at the push service is replaced rather than delivered.
@@ -172,14 +180,16 @@ pub fn clear_elsewhere(state: &AppState, uid: Uuid, except: Option<Uuid>, cid: U
         let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(10)).redirect(reqwest::redirect::Policy::none()).build().unwrap_or_default();
         for (endpoint, p256dh, auth) in rows {
             let Ok(url) = url::Url::parse(&endpoint) else { continue };
+            if !silent_ok(&url) { continue; }
             let aud = url.origin().ascii_serialization();
             let sub = if st.config.app_url.starts_with("https://") { st.config.app_url.clone() } else { "mailto:admin@localhost".to_string() };
             let Ok(jwt) = jsonwebtoken::encode(&jsonwebtoken::Header::new(jsonwebtoken::Algorithm::ES256), &VapidClaims { aud: &aud, exp: chrono::Utc::now().timestamp() + 12 * 3600, sub: &sub }, &v.key) else { continue };
             let (Ok(k), Ok(a)) = (B64.decode(p256dh.trim_end_matches('=')), B64.decode(auth.trim_end_matches('='))) else { continue };
             let Ok(enc) = encrypt(&k, &a, json!({ "clear": cid }).to_string().as_bytes()) else { continue };
-            let _ = client.post(url).header("Content-Encoding", "aes128gcm").header("Content-Type", "application/octet-stream")
+            let r = client.post(url).header("Content-Encoding", "aes128gcm").header("Content-Type", "application/octet-stream")
                 .header("TTL", "86400").header("Urgency", "normal").header("Topic", cid.simple().to_string())
                 .header("Authorization", format!("vapid t={jwt}, k={}", v.public)).body(enc).send().await;
+            if let Ok(r) = r { if matches!(r.status().as_u16(), 404 | 410) { let _ = sqlx::query("DELETE FROM web_push_subs WHERE endpoint = $1").bind(&endpoint).execute(&st.db).await; } }
         }
     });
 }
@@ -187,6 +197,14 @@ pub fn clear_elsewhere(state: &AppState, uid: Uuid, except: Option<Uuid>, cid: U
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn silent_push_hosts() {
+        let ok = |u: &str| silent_ok(&url::Url::parse(u).unwrap());
+        assert!(!ok("https://web.push.apple.com/QGx"));
+        assert!(!ok("https://updates.push.services.mozilla.com/wpush/v2/x"));
+        assert!(ok("https://fcm.googleapis.com/fcm/send/x"));
+    }
 
     #[test]
     fn encrypt_layout() {

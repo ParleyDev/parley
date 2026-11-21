@@ -44,6 +44,8 @@ async fn subscribe(State(state): State<AppState>, AuthSession(uid, sid): AuthSes
         "INSERT INTO web_push_subs (endpoint, user_id, session_id, p256dh, auth) VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (endpoint) DO UPDATE SET user_id = EXCLUDED.user_id, session_id = EXCLUDED.session_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth",
     ).bind(&endpoint).bind(uid).bind(sid).bind(req.keys.p256dh.trim()).bind(req.keys.auth.trim()).execute(&state.db).await?;
+    // One subscription per session: a browser that subscribed again (its old one revoked or replaced) drops the old.
+    sqlx::query("DELETE FROM web_push_subs WHERE session_id = $1 AND endpoint <> $2").bind(sid).bind(&endpoint).execute(&state.db).await?;
     // At most 10 browsers per account: the oldest go.
     sqlx::query("DELETE FROM web_push_subs WHERE user_id = $1 AND endpoint NOT IN (SELECT endpoint FROM web_push_subs WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10)").bind(uid).execute(&state.db).await?;
     Ok(StatusCode::NO_CONTENT)
