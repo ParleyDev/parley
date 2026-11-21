@@ -2,7 +2,7 @@
 title: Mesajlar
 section: Konuşmak
 summary: Mesaj yaz, biçimlendir, birinden bahset, tepki ver, yanıtla, dosya ekle, anket yap, mesajları zamanla ve yer imlerine ekle.
-source: 1319b6c7e881
+source: 4148b065dc0e
 ---
 
 ![Yanıt, tepkiler ve anket içeren bir sohbet](shot:messages)
@@ -66,6 +66,8 @@ Seninkini eklemek için mesajın altındaki bir tepkiye tıkla, geri almak için
 - **Yanıtla**, orijinal mesajı seninkinin üstünde alıntılar ve yazarına bildirim gönderir. İptal etmek için <kbd>Esc</kbd>'ye bas.
 - **Mesajı Düzenle** yazdığını değiştirir. Düzenlenen mesajlarda **(düzenlendi)** yazar. Önceki sürümleri görmek için ona tıkla.
 - **Mesajı Sil** mesajı herkes için kaldırır.
+
+Yanıtladığı mesajı görmek için bir yanıtın üstündeki alıntı satırına tıkla. Alttaki çubukta **Geri** ya da <kbd>Esc</kbd> seni bulunduğun yere geri götürür.
 
 ## Mesaj menüsü
 

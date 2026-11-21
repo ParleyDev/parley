@@ -2,7 +2,7 @@
 title: Yolunu bulmak
 section: Başlarken
 summary: Parley penceresinin bölümleri, sunucu klasörleri, hızlı geçiş ve arama.
-source: 738774a7463f
+source: c643cec470d7
 ---
 
 ![Parley penceresi: solda sunucular, sonra kanallar, sohbet ve üye listesi](shot:layout)
@@ -74,6 +74,8 @@ Sağ üstteki arama kutusuna yaz ve <kbd>Enter</kbd>'a bas. Sonuçlar sohbetin y
 | `pinned:true` | sabitlenmiş olan |
 
 Belirli bir güne dönmek için üst çubuktaki takvim düğmesini ya da <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>'yi kullan. Çok geriye kaydırdığında **Şimdiye Atla** seni en yeni mesajlara geri getirir.
+
+Aradığın kelimeler her sonuçta işaretlenir. Bir arama yapılamazsa panel bunu söyler ve **Tekrar dene** seçeneğini sunar. Telefonda sonuçlar ekranı doldurur.
 
 ## Telefonda
 

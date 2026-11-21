@@ -282,6 +282,8 @@ body {
 
 @keyframes msg-flash { from { background: rgba(109,93,252,0.35) } to { background: transparent } }
 .msg-flash { animation: msg-flash 1.8s ease-out both; }
+/* The words a search matched, marked in its results (lib/searchHighlight.ts). */
+::highlight(search-hit) { background-color: color-mix(in srgb, var(--color-warn) 45%, transparent); color: inherit; }
 @keyframes fade-in { from { opacity: 0; transform: translateY(4px) } to { opacity: 1; transform: none } }
 /* The card that drops in under a status bubble to reply to it. */
 @keyframes status-reply-drop { from { opacity: 0; transform: translateY(-8px) scale(.96) } to { opacity: 1; transform: none } }

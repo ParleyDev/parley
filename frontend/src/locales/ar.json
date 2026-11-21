@@ -4590,5 +4590,8 @@
 "The sound of a shared tab, or of the whole screen where the browser offers it. It applies the next time you pick what to share.": "صوت علامة التبويب المشارَكة، أو صوت الشاشة كلها حيث يتيح المتصفح ذلك. يُطبَّق في المرة القادمة التي تختار فيها ما تشاركه.",
 "This Parley has no relay server, so this call connects directly and the people in it can see your IP address.": "لا يملك هذا Parley خادم ترحيل، لذا تتصل هذه المكالمة مباشرة ويستطيع من فيها رؤية عنوان IP الخاص بك.",
 "Your screen": "شاشتك",
-"Jump to the call you are in": "الذهاب إلى المكالمة التي أنت فيها"
+"Jump to the call you are in": "الذهاب إلى المكالمة التي أنت فيها",
+"Back to where you were": "العودة إلى حيث كنت",
+"Messages failed to load": "تعذّر تحميل الرسائل",
+"The search couldn't be run.": "تعذّر تنفيذ البحث."
 }

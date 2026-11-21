@@ -2,7 +2,7 @@
 title: Mensagens
 section: Conversando
 summary: Escreva, formate, mencione, reaja, responda, anexe arquivos, crie enquetes, agende e salve mensagens.
-source: 1319b6c7e881
+source: 4148b065dc0e
 ---
 
 ![Uma conversa com uma resposta, reações e uma enquete](shot:messages)
@@ -66,6 +66,8 @@ Clique em uma reação embaixo de uma mensagem para adicionar a sua, e clique de
 - **Responder** cita a mensagem original acima da sua e notifica quem a escreveu. Pressione <kbd>Esc</kbd> para cancelar.
 - **Editar mensagem** muda o que você escreveu. Mensagens editadas mostram **(editado)**. Clique ali para ver as versões anteriores.
 - **Excluir mensagem** remove a mensagem para todos.
+
+Clique na linha citada acima de uma resposta para ver a mensagem que ela responde. **Voltar** na barra de baixo, ou <kbd>Esc</kbd>, leva você de volta para onde estava.
 
 ## O menu da mensagem
 

@@ -4590,5 +4590,8 @@
 "The sound of a shared tab, or of the whole screen where the browser offers it. It applies the next time you pick what to share.": "Paylaşılan bir sekmenin ya da tarayıcının sunduğu yerlerde tüm ekranın sesi. Bir dahaki sefere neyi paylaşacağını seçtiğinde uygulanır.",
 "This Parley has no relay server, so this call connects directly and the people in it can see your IP address.": "Bu Parley'nin aktarma sunucusu yok, bu yüzden bu arama doğrudan bağlanıyor ve içindeki kişiler IP adresini görebilir.",
 "Your screen": "Ekranın",
-"Jump to the call you are in": "İçinde olduğun aramaya git"
+"Jump to the call you are in": "İçinde olduğun aramaya git",
+"Back to where you were": "Bulunduğun yere dön",
+"Messages failed to load": "Mesajlar yüklenemedi",
+"The search couldn't be run.": "Arama yapılamadı."
 }

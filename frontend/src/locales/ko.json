@@ -4590,5 +4590,8 @@
 "The sound of a shared tab, or of the whole screen where the browser offers it. It applies the next time you pick what to share.": "공유한 탭의 소리, 또는 브라우저가 지원하는 경우 전체 화면의 소리입니다. 다음에 공유할 대상을 고를 때부터 적용됩니다.",
 "This Parley has no relay server, so this call connects directly and the people in it can see your IP address.": "이 Parley에는 릴레이 서버가 없어 이 통화는 직접 연결되며, 참여자가 내 IP 주소를 볼 수 있습니다.",
 "Your screen": "내 화면",
-"Jump to the call you are in": "참여 중인 통화로 이동"
+"Jump to the call you are in": "참여 중인 통화로 이동",
+"Back to where you were": "원래 있던 곳으로 돌아가기",
+"Messages failed to load": "메시지를 불러오지 못했습니다",
+"The search couldn't be run.": "검색을 실행할 수 없습니다."
 }

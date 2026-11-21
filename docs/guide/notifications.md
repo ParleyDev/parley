@@ -27,6 +27,8 @@ To clear unread marks:
 
 To come back to something later, use **Mark Unread** on a message.
 
+In a channel with new messages, click the bar to go to the first one, or **Mark As Read** to go to the newest message and clear the **New** line. <kbd>Shift</kbd>+<kbd>Page Up</kbd> goes to the oldest unread message.
+
 ## Choosing what notifies you
 
 Right-click a server, category, channel or DM (or use the server menu) for two choices:

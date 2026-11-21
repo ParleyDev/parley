@@ -100,6 +100,8 @@ Click a reaction under a message to add yours, and click again to take it back. 
 - **Edit Message** changes what you wrote. Edited messages say **(edited)**. Click that to see earlier versions.
 - **Delete Message** removes it for everyone.
 
+Click the quoted line above a reply to see the message it answers. **Back** in the bar at the bottom, or <kbd>Esc</kbd>, returns you to where you were.
+
 ## The message menu
 
 Right-click a message, click its **⋯** button, or press and hold it on a phone. You'll find:

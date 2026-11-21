@@ -2,7 +2,7 @@
 title: Se repérer
 section: Premiers pas
 summary: Les parties de la fenêtre Parley, les dossiers de serveurs, le sélecteur rapide et la recherche.
-source: 738774a7463f
+source: c643cec470d7
 ---
 
 ![La fenêtre Parley : les serveurs à gauche, puis les salons, la conversation et la liste des membres](shot:layout)
@@ -74,6 +74,8 @@ Tape dans la zone de recherche en haut à droite et appuie sur <kbd>Enter</kbd>.
 | `pinned:true` | qui sont épinglés |
 
 Pour revenir à un jour précis, utilise le bouton calendrier dans la barre du haut, ou <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>. Quand tu as remonté loin dans l'historique, **Aller au présent** te ramène aux messages les plus récents.
+
+Les mots recherchés sont mis en évidence dans chaque résultat. Si une recherche ne peut pas être effectuée, le panneau l’indique et propose **Réessayer**. Sur un téléphone, les résultats occupent tout l’écran.
 
 ## Sur téléphone
 

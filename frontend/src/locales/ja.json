@@ -4590,5 +4590,8 @@
 "The sound of a shared tab, or of the whole screen where the browser offers it. It applies the next time you pick what to share.": "共有したタブの音声、またはブラウザが対応している場合は画面全体の音声です。次に共有するものを選ぶときから適用されます。",
 "This Parley has no relay server, so this call connects directly and the people in it can see your IP address.": "この Parley にはリレーサーバーがないため、この通話は直接接続され、参加者にあなたの IP アドレスが見えます。",
 "Your screen": "あなたの画面",
-"Jump to the call you are in": "参加中の通話へ移動"
+"Jump to the call you are in": "参加中の通話へ移動",
+"Back to where you were": "元の場所に戻る",
+"Messages failed to load": "メッセージを読み込めませんでした",
+"The search couldn't be run.": "検索を実行できませんでした。"
 }

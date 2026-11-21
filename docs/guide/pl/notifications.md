@@ -2,7 +2,7 @@
 title: Powiadomienia i skrzynka odbiorcza
 section: Rozmowy
 summary: Decyduj, co cię powiadamia, i nadrabiaj nieprzeczytane, wzmianki, zakładki i przypomnienia.
-source: 61d7b82ab30d
+source: 86d448f5a017
 ---
 
 ## Nieprzeczytane wiadomości
@@ -19,6 +19,8 @@ Aby usunąć oznaczenia nieprzeczytanych:
 - Albo kliknij prawym przyciskiem kanał, serwer lub wiadomość prywatną i wybierz **Oznacz jako przeczytane**.
 
 Aby wrócić do czegoś później, użyj opcji **Oznacz jako nieprzeczytane** przy wiadomości.
+
+Na kanale z nowymi wiadomościami kliknij pasek, aby przejść do pierwszej z nich, albo **Oznacz jako przeczytane**, aby przejść do najnowszej wiadomości i usunąć linię **Nowe**. <kbd>Shift</kbd>+<kbd>Page Up</kbd> przechodzi do najstarszej nieprzeczytanej wiadomości.
 
 ## Wybieranie, o czym dostajesz powiadomienia
 

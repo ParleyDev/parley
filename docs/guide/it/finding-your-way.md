@@ -2,7 +2,7 @@
 title: Orientarsi
 section: Per iniziare
 summary: Le parti della finestra di Parley, le cartelle dei server, il selettore rapido e la ricerca.
-source: 738774a7463f
+source: c643cec470d7
 ---
 
 ![La finestra di Parley: i server a sinistra, poi i canali, la conversazione e l'elenco dei membri](shot:layout)
@@ -74,6 +74,8 @@ Scrivi nella casella di ricerca in alto a destra e premi <kbd>Enter</kbd>. I ris
 | `pinned:true` | fissati |
 
 Per tornare a un giorno preciso, usa il pulsante del calendario nella barra in alto, oppure <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>. Quando hai scorso molto indietro, **Vai al presente** ti riporta ai messaggi più recenti.
+
+Le parole cercate sono evidenziate in ogni risultato. Se una ricerca non può essere eseguita, il pannello lo dice e offre **Riprova**. Su un telefono i risultati occupano tutto lo schermo.
 
 ## Sul telefono
 

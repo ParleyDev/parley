@@ -2,7 +2,7 @@
 title: Messaggi
 section: Conversare
 summary: Scrivi, formatta, menziona, reagisci, rispondi, allega file, crea sondaggi, programma messaggi e salvali nei segnalibri.
-source: 1319b6c7e881
+source: 4148b065dc0e
 ---
 
 ![Una conversazione con una risposta, delle reazioni e un sondaggio](shot:messages)
@@ -66,6 +66,8 @@ Fai clic su una reazione sotto un messaggio per aggiungere la tua, e di nuovo pe
 - **Rispondi** cita l'originale sopra il tuo messaggio e avvisa chi l'ha scritto. Premi <kbd>Esc</kbd> per annullare.
 - **Modifica messaggio** cambia quello che hai scritto. I messaggi modificati riportano **(modificato)**. Facci clic per vedere le versioni precedenti.
 - **Elimina messaggio** lo rimuove per tutti.
+
+Fai clic sulla riga citata sopra una risposta per vedere il messaggio a cui risponde. **Indietro** nella barra in basso, oppure <kbd>Esc</kbd>, ti riporta dov’eri.
 
 ## Il menu del messaggio
 

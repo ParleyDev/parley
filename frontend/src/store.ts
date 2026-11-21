@@ -9,8 +9,9 @@ import { forgetToken, rememberAccount } from './lib/accounts'
 import { loadSettings, saveSettings, type VoiceSettings } from './lib/settings'
 import type { Anchor } from './lib/anchor'
 
-/** Most messages kept per channel; beyond this the list becomes a window and pages in either direction. */
-const MAX_LOADED = 400
+/** Most messages kept (and rendered: the list shows every one) per channel; beyond this the list is a window that
+ *  pages in either direction, dropping the side the reader is moving away from. */
+const MAX_LOADED = 200
 let localSeq = Date.now()
 /** Undelivered rows survive channel switches, reconnects and reloads: they live in localStorage until Retry succeeds, Delete or Dismiss. */
 const localKey = (uid: string) => `parley.undelivered.${uid}`
@@ -211,6 +212,8 @@ interface State {
   loadNewer: (channelId: string) => Promise<void>
   loadLatest: (channelId: string) => Promise<void>
   loadingMessages: Record<string, boolean>
+  /** The last request for a channel's messages failed: the list says so in place, with Try again. */
+  messageLoadError: Record<string, boolean>
   online: Record<string, true>
   /** Platforms each online user has a connection on: web / desktop / mobile / vr. */
   platforms: Record<string, string[]>
@@ -451,6 +454,7 @@ export const useStore = create<State>((set, get) => ({
   hasMore: {},
   hasNewer: {},
   loadingMessages: {},
+  messageLoadError: {},
   online: {},
   platforms: {},
   activities: {},
@@ -748,7 +752,8 @@ export const useStore = create<State>((set, get) => ({
     }
     return { messages: { ...s.messages, [channelId]: merged }, hasMore: { ...s.hasMore, [channelId]: hasMore }, hasNewer: { ...s.hasNewer, [channelId]: hasNewer } }
   }),
-  setLoadingMessages: (channelId, v) => set((s) => ({ loadingMessages: { ...s.loadingMessages, [channelId]: v } })),
+  // Starting a load clears the last failure; a failure is set by the loaders below.
+  setLoadingMessages: (channelId, v) => set((s) => ({ loadingMessages: { ...s.loadingMessages, [channelId]: v }, ...(v && s.messageLoadError[channelId] ? { messageLoadError: { ...s.messageLoadError, [channelId]: false } } : {}) })),
   openThread: null,
   setOpenThread: (id) => set({ openThread: id }),
   threads: {},
@@ -960,8 +965,8 @@ export const useStore = create<State>((set, get) => ({
       const older = ms.filter((m) => m.id <= anchor).length, newer = ms.length - older
       const local = (get().messages[channelId] ?? []).filter((m) => m.local)
       set((st) => ({ messages: { ...st.messages, [channelId]: [...ms, ...local] }, hasMore: { ...st.hasMore, [channelId]: older >= 25 }, hasNewer: { ...st.hasNewer, [channelId]: newer >= 25 } }))
-    } catch (e) {
-      get().pushToast((e as Error).message, 'error')
+    } catch {
+      set((st) => ({ messageLoadError: { ...st.messageLoadError, [channelId]: true } }))
     } finally {
       get().setLoadingMessages(channelId, false)
     }
@@ -983,8 +988,8 @@ export const useStore = create<State>((set, get) => ({
         if (real.length > MAX_LOADED) { real = real.slice(real.length - MAX_LOADED); hasMore = true }
         return { messages: { ...st.messages, [channelId]: [...real, ...local] }, hasNewer: { ...st.hasNewer, [channelId]: ms.length === 50 }, hasMore: { ...st.hasMore, [channelId]: hasMore } }
       })
-    } catch (e) {
-      get().pushToast((e as Error).message, 'error')
+    } catch {
+      set((st) => ({ messageLoadError: { ...st.messageLoadError, [channelId]: true } }))
     } finally {
       get().setLoadingMessages(channelId, false)
     }
@@ -998,8 +1003,8 @@ export const useStore = create<State>((set, get) => ({
       const local = (get().messages[channelId] ?? []).filter((m) => m.local)
       set((st) => ({ messages: { ...st.messages, [channelId]: [...ms, ...local] }, hasMore: { ...st.hasMore, [channelId]: ms.length === 50 }, hasNewer: { ...st.hasNewer, [channelId]: false } }))
       fixGoneLast(channelId, ms)
-    } catch (e) {
-      get().pushToast((e as Error).message, 'error')
+    } catch {
+      set((st) => ({ messageLoadError: { ...st.messageLoadError, [channelId]: true } }))
     } finally {
       get().setLoadingMessages(channelId, false)
     }
@@ -1014,8 +1019,8 @@ export const useStore = create<State>((set, get) => ({
       const ms = await api.get<Message[]>(`/channels/${channelId}/messages${q}`)
       get().prependMessages(channelId, ms, ms.length === 50)
       if (!before) fixGoneLast(channelId, ms)
-    } catch (e) {
-      get().pushToast((e as Error).message, 'error')
+    } catch {
+      set((st) => ({ messageLoadError: { ...st.messageLoadError, [channelId]: true } }))
     } finally {
       get().setLoadingMessages(channelId, false)
     }

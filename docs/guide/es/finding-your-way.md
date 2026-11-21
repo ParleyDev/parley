@@ -2,7 +2,7 @@
 title: Cómo moverte por Parley
 section: Primeros pasos
 summary: Las partes de la ventana de Parley, las carpetas de servidores, el selector rápido y la búsqueda.
-source: 738774a7463f
+source: c643cec470d7
 ---
 
 ![La ventana de Parley: los servidores a la izquierda, luego los canales, la conversación y la lista de miembros](shot:layout)
@@ -74,6 +74,8 @@ Escribe en el cuadro de búsqueda de arriba a la derecha y pulsa <kbd>Enter</kbd
 | `pinned:true` | que están fijados |
 
 Para volver a un día concreto, usa el botón del calendario de la barra superior o <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>. Cuando te hayas desplazado muy atrás, **Ir al presente** te devuelve a los mensajes más recientes.
+
+Las palabras que buscaste aparecen marcadas en cada resultado. Si una búsqueda no se puede realizar, el panel lo indica y ofrece **Intentar de nuevo**. En un teléfono, los resultados ocupan toda la pantalla.
 
 ## En el móvil
 

@@ -2,7 +2,7 @@
 title: Je weg vinden
 section: Aan de slag
 summary: De onderdelen van het Parley-venster, servermappen, de snelkiezer en zoeken.
-source: 738774a7463f
+source: c643cec470d7
 ---
 
 ![Het Parley-venster: servers links, dan kanalen, het gesprek en de ledenlijst](shot:layout)
@@ -74,6 +74,8 @@ Typ in het zoekvak rechtsboven en druk op <kbd>Enter</kbd>. De resultaten openen
 | `pinned:true` | die zijn vastgezet |
 
 Om naar een bepaalde dag terug te gaan, gebruik je de kalenderknop in de bovenste balk, of <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>. Ben je ver teruggescrold, dan brengt **Naar het heden springen** je terug naar de nieuwste berichten.
+
+De woorden waarop je zocht zijn in elk resultaat gemarkeerd. Kan een zoekopdracht niet worden uitgevoerd, dan zegt het paneel dat en biedt het **Opnieuw proberen** aan. Op een telefoon vullen de resultaten het scherm.
 
 ## Op een telefoon
 

@@ -4590,5 +4590,8 @@
 "The sound of a shared tab, or of the whole screen where the browser offers it. It applies the next time you pick what to share.": "Der Ton eines geteilten Tabs oder des ganzen Bildschirms, wo der Browser das anbietet. Gilt, wenn du das nächste Mal auswählst, was du teilst.",
 "This Parley has no relay server, so this call connects directly and the people in it can see your IP address.": "Dieses Parley hat keinen Relay-Server, daher verbindet sich dieser Anruf direkt und die Personen darin können deine IP-Adresse sehen.",
 "Your screen": "Dein Bildschirm",
-"Jump to the call you are in": "Zum laufenden Anruf springen"
+"Jump to the call you are in": "Zum laufenden Anruf springen",
+"Back to where you were": "Zurück zur vorherigen Stelle",
+"Messages failed to load": "Nachrichten konnten nicht geladen werden",
+"The search couldn't be run.": "Die Suche konnte nicht ausgeführt werden."
 }

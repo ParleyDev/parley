@@ -4590,5 +4590,8 @@
 "The sound of a shared tab, or of the whole screen where the browser offers it. It applies the next time you pick what to share.": "所共享标签页的声音,或在浏览器支持时整个屏幕的声音。下次选择共享内容时生效。",
 "This Parley has no relay server, so this call connects directly and the people in it can see your IP address.": "此 Parley 没有中继服务器,所以这次通话是直接连接的,通话中的人可以看到你的 IP 地址。",
 "Your screen": "你的屏幕",
-"Jump to the call you are in": "前往你所在的通话"
+"Jump to the call you are in": "前往你所在的通话",
+"Back to where you were": "回到之前的位置",
+"Messages failed to load": "消息加载失败",
+"The search couldn't be run.": "无法执行搜索。"
 }

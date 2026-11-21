@@ -2,7 +2,7 @@
 title: Conhecendo o Parley
 section: Primeiros passos
 summary: As partes da janela do Parley, as pastas de servidores, o seletor rápido e a busca.
-source: 738774a7463f
+source: c643cec470d7
 ---
 
 ![A janela do Parley: servidores à esquerda, depois os canais, a conversa e a lista de membros](shot:layout)
@@ -74,6 +74,8 @@ Digite na caixa de busca no canto superior direito e pressione <kbd>Enter</kbd>.
 | `pinned:true` | que estão fixadas |
 
 Para voltar a um dia específico, use o botão de calendário na barra do topo, ou <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>. Quando você rolou muito para trás, **Ir para o presente** leva de volta às mensagens mais novas.
+
+As palavras que você buscou ficam destacadas em cada resultado. Se uma busca não puder ser feita, o painel avisa e oferece **Tentar de novo**. No celular, os resultados ocupam a tela inteira.
 
 ## No celular
 

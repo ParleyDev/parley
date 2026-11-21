@@ -474,11 +474,11 @@ export default function Composer({ channel, reply, onCancelReply, onSent, onResi
     }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); return }
     if (e.key === 'Escape' && reply) onCancelReply()
-    // Escape marks this channel read; Shift+Escape every channel in the server (Discord's keys).
-    else if (e.key === 'Escape' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // Shift+Escape marks every channel in the server read (Discord's key). Plain Escape, which marks this channel read
+    // and returns to the newest message, belongs to the message list (ChatPane), wherever the focus is.
+    else if (e.key === 'Escape' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && channel.guild_id) {
       const st = useStore.getState()
-      if (e.shiftKey && channel.guild_id) Object.values(st.channels).filter((c) => c.guild_id === channel.guild_id && isUnread(st, c.id)).forEach((c) => st.markRead(c.id))
-      else st.markRead(channel.id)
+      Object.values(st.channels).filter((c) => c.guild_id === channel.guild_id && isUnread(st, c.id)).forEach((c) => st.markRead(c.id))
     }
     const f = shortcutFormat(e)
     if (f && ref.current) { e.preventDefault(); setValue(toggleWrap(ref.current, f)) }

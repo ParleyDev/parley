@@ -2,7 +2,7 @@
 title: Bildirimler ve gelen kutun
 section: Konuşmak
 summary: Neyin sana bildirim göndereceğini belirle; okunmamışlara, bahsetmelere, yer imlerine ve hatırlatıcılara yetiş.
-source: 61d7b82ab30d
+source: 86d448f5a017
 ---
 
 ## Okunmamış mesajlar
@@ -19,6 +19,8 @@ Okunmamış işaretlerini temizlemek için:
 - Ya da bir kanala, sunucuya veya DM'ye sağ tıklayıp **Okundu Olarak İşaretle**'yi seç.
 
 Bir şeye sonra geri dönmek için bir mesajda **Okunmadı Olarak İşaretle**'yi kullan.
+
+Yeni mesajların olduğu bir kanalda ilkine gitmek için çubuğa tıkla ya da en yeni mesaja gidip **Yeni** çizgisini kaldırmak için **Okundu Olarak İşaretle** düğmesine tıkla. <kbd>Shift</kbd>+<kbd>Page Up</kbd> en eski okunmamış mesaja gider.
 
 ## Neyin bildirim göndereceğini seçmek
 

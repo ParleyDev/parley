@@ -2,7 +2,7 @@
 title: Zurechtfinden
 section: Erste Schritte
 summary: Die Bereiche des Parley-Fensters, Serverordner, der Schnellwechsler und die Suche.
-source: 738774a7463f
+source: c643cec470d7
 ---
 
 ![Das Parley-Fenster: links die Server, dann die Kanäle, die Unterhaltung und die Mitgliederliste](shot:layout)
@@ -74,6 +74,8 @@ Tippe in das Suchfeld oben rechts und drück <kbd>Enter</kbd>. Die Ergebnisse ö
 | `pinned:true` | die angeheftet sind |
 
 Um zu einem bestimmten Tag zurückzugehen, nutze die Kalender-Schaltfläche in der oberen Leiste oder <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>. Wenn du weit zurückgescrollt hast, bringt dich **Zur aktuellen Nachricht springen** zu den neuesten Nachrichten zurück.
+
+Die gesuchten Wörter sind in jedem Ergebnis markiert. Kann eine Suche nicht ausgeführt werden, sagt das Panel das und bietet **Erneut versuchen** an. Auf dem Handy füllen die Ergebnisse den Bildschirm.
 
 ## Auf dem Handy
 

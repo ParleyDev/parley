@@ -4590,5 +4590,8 @@
 "The sound of a shared tab, or of the whole screen where the browser offers it. It applies the next time you pick what to share.": "Het geluid van een gedeeld tabblad, of van het hele scherm waar de browser dat aanbiedt. Geldt de volgende keer dat je kiest wat je deelt.",
 "This Parley has no relay server, so this call connects directly and the people in it can see your IP address.": "Deze Parley heeft geen relayserver, dus dit gesprek verbindt rechtstreeks en de mensen erin kunnen je IP-adres zien.",
 "Your screen": "Jouw scherm",
-"Jump to the call you are in": "Naar het gesprek waarin je zit"
+"Jump to the call you are in": "Naar het gesprek waarin je zit",
+"Back to where you were": "Terug naar waar je was",
+"Messages failed to load": "Berichten konden niet worden geladen",
+"The search couldn't be run.": "De zoekopdracht kon niet worden uitgevoerd."
 }

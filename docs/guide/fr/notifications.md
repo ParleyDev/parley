@@ -2,7 +2,7 @@
 title: Notifications et boîte de réception
 section: Discuter
 summary: Choisis ce qui te notifie, rattrape tes non-lus, tes mentions, tes favoris et tes rappels.
-source: 61d7b82ab30d
+source: 86d448f5a017
 ---
 
 ## Messages non lus
@@ -19,6 +19,8 @@ Pour effacer les marques de non-lu :
 - Ou fais un clic droit sur un salon, un serveur ou un MP et choisis **Marquer comme lu**.
 
 Pour revenir plus tard sur quelque chose, utilise **Marquer comme non lu** sur un message.
+
+Dans un salon avec de nouveaux messages, cliquez sur la barre pour aller au premier, ou sur **Marquer comme lu** pour aller au message le plus récent et retirer la ligne **Nouveau**. <kbd>Shift</kbd>+<kbd>Page Up</kbd> va au plus ancien message non lu.
 
 ## Choisir ce qui te notifie
 

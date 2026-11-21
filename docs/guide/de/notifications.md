@@ -2,7 +2,7 @@
 title: Benachrichtigungen und dein Posteingang
 section: Reden
 summary: Lege fest, was dich anpingt, und hol Ungelesenes, Erwähnungen, Lesezeichen und Erinnerungen nach.
-source: 61d7b82ab30d
+source: 86d448f5a017
 ---
 
 ## Ungelesene Nachrichten
@@ -19,6 +19,8 @@ So entfernst du Ungelesen-Markierungen:
 - Oder klicke mit der rechten Maustaste auf einen Kanal, Server oder eine DM und wähle **Als gelesen markieren**.
 
 Um später auf etwas zurückzukommen, nutze bei einer Nachricht **Als ungelesen markieren**.
+
+Klicke in einem Kanal mit neuen Nachrichten auf die Leiste, um zur ersten zu gelangen, oder auf **Als gelesen markieren**, um zur neuesten Nachricht zu springen und die Linie **Neu** zu entfernen. <kbd>Shift</kbd>+<kbd>Page Up</kbd> springt zur ältesten ungelesenen Nachricht.
 
 ## Auswählen, was dich benachrichtigt
 

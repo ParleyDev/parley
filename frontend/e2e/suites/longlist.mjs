@@ -1,5 +1,5 @@
-// Long channels: the loaded list is a bounded window (400 rows); paging back past it drops the newest and the pane pages
-// forward again on the way down. On screen only the rows near the viewport are rendered (ChatPane windowing).
+// Long channels: the loaded list is a bounded window (200 rows, every one rendered: no stand-ins with guessed heights);
+// paging back past it drops the newest and the pane pages forward again on the way down.
 import { chromium } from 'playwright'
 import { WEB, S, reg, call, ok, finish } from '../lib.mjs'
 const users = []; for (const n of ['alice', 'bob', 'carol', 'dave', 'erin', 'fay', 'gus', 'hal', 'ivy', 'jo']) users.push(await reg(n))
@@ -17,12 +17,13 @@ const scroller = () => p.evaluate(() => { const el = document.querySelector('[da
 for (let i = 0; i < 25 && !(await p.locator(`[data-msg-id="${ids[0]}"]`).count()); i++) { await p.evaluate(() => { const el = document.querySelector('[data-msg-id]').closest('.overflow-y-auto'); el.scrollTop = 0 }); await p.waitForTimeout(400) }
 ok('the first message is reachable by scrolling up', await p.locator(`[data-msg-id="${ids[0]}"]`).count() === 1)
 const n = await p.locator('[data-msg-id]').count()
-ok('the DOM holds only the rows near the viewport, not the whole loaded window', n <= 120 && n >= 10 && await p.locator('[data-virtual-pad]').count() >= 1, String(n))
+ok('the list holds a bounded window of the channel, every row of it rendered', n <= 200 && n >= 100 && await p.locator('[data-virtual-pad]').count() === 0, String(n))
 ok('the newest message was dropped from the window and the older-messages pill shows', await p.locator(`[data-msg-id="${ids[479]}"]`).count() === 0 && await p.locator('[data-older-bar]').count() === 1)
 await p.screenshot({ path: '149-long-window.png' })
-await p.evaluate(() => { const el = document.querySelector('[data-msg-id]').closest('.overflow-y-auto'); el.scrollTop = el.scrollHeight })
+// The window is 200 rows, so the way down takes several pages: keep going to the end of what is loaded.
+for (let i = 0; i < 20 && !(await p.locator(`[data-msg-id="${ids[420]}"]`).count()); i++) { await p.evaluate(() => { const el = document.querySelector('[data-msg-id]').closest('.overflow-y-auto'); el.scrollTop = el.scrollHeight }); await p.waitForTimeout(400) }
 await p.waitForFunction((id) => !!document.querySelector(`[data-msg-id="${id}"]`), ids[420], { timeout: 15000 })
-ok('scrolling down pages forward again', (await p.locator('[data-msg-id]').count()) <= 410)
+ok('scrolling down pages forward again', (await p.locator('[data-msg-id]').count()) <= 210)
 await p.click('[data-jump-present]')
 await p.waitForFunction((id) => !!document.querySelector(`[data-msg-id="${id}"]`), ids[479], { timeout: 15000 })
 await p.waitForFunction(() => !document.querySelector('[data-older-bar]'))

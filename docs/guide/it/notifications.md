@@ -2,7 +2,7 @@
 title: Notifiche e posta in arrivo
 section: Conversare
 summary: Decidi cosa ti avvisa e recupera non letti, menzioni, segnalibri e promemoria.
-source: 61d7b82ab30d
+source: 86d448f5a017
 ---
 
 ## Messaggi non letti
@@ -19,6 +19,8 @@ Per togliere i segni di non letto:
 - Oppure fai clic destro su un canale, un server o un DM e scegli **Segna come letto**.
 
 Per tornare su qualcosa più tardi, usa **Segna come non letto** su un messaggio.
+
+In un canale con nuovi messaggi, fai clic sulla barra per andare al primo, oppure su **Segna come letto** per andare al messaggio più recente e togliere la linea **Nuovo**. <kbd>Shift</kbd>+<kbd>Page Up</kbd> va al messaggio non letto più vecchio.
 
 ## Scegliere cosa ti notifica
 

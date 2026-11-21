@@ -47,7 +47,9 @@ await p.evaluate((list) => { window.__fling = true; const el = document.querySel
 await p.waitForTimeout(2500)
 ok('one page of older messages loads, not several in a row', pages === 1, `${pages} pages`)
 const at = await topOf(oldest)
-ok('and the message that was at the top stays on screen where it was', at !== null && Math.abs(at) < 80, String(at))
+// Above the oldest loaded message there are now placeholder rows for the history still to come (about 430 px), so
+// at the very top that message sits below them; it must still be on screen, not pushed away by the page that loaded.
+ok('and the message that was at the top stays on screen where it was', at !== null && at > -80 && at < 520, String(at))
 ok('the list is no longer at the very top', await p.evaluate((list) => document.querySelector(list).scrollTop > 400, list))
 
 console.log('-- scrolling up page by page')

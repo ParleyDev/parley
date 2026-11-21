@@ -89,6 +89,8 @@ Type in the search box at the top right and press <kbd>Enter</kbd>. Results open
 
 To go back to a particular day, use the calendar button in the top bar, or <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>. When you've scrolled far back, **Jump to Present** brings you back to the newest messages.
 
+The words you searched for are marked in each result. If a search can't be run, the panel says so and offers **Try again**. On a phone the results fill the screen.
+
 ## On a phone
 
 Parley on a phone shows one thing at a time:

@@ -2,7 +2,7 @@
 title: Mensajes
 section: Conversar
 summary: Escribe, da formato, menciona, reacciona, responde, adjunta archivos, haz encuestas, programa mensajes y guárdalos en marcadores.
-source: 1319b6c7e881
+source: 4148b065dc0e
 ---
 
 ![Una conversación con una respuesta, reacciones y una encuesta](shot:messages)
@@ -66,6 +66,8 @@ Haz clic en una reacción bajo un mensaje para añadir la tuya, y vuelve a hacer
 - **Responder** cita el mensaje original encima del tuyo y avisa a su autor. Pulsa <kbd>Esc</kbd> para cancelar.
 - **Editar mensaje** cambia lo que escribiste. Los mensajes editados indican **(editado)**. Haz clic ahí para ver las versiones anteriores.
 - **Eliminar mensaje** lo borra para todos.
+
+Haz clic en la línea citada encima de una respuesta para ver el mensaje al que responde. **Atrás** en la barra inferior, o <kbd>Esc</kbd>, te devuelve a donde estabas.
 
 ## El menú del mensaje
 

@@ -2,7 +2,7 @@
 title: Berichten
 section: Praten
 summary: Berichten schrijven, opmaken, iemand vermelden, reageren, antwoorden, bestanden toevoegen, peilingen houden, berichten inplannen en als bladwijzer opslaan.
-source: 1319b6c7e881
+source: 4148b065dc0e
 ---
 
 ![Een gesprek met een antwoord, reacties en een peiling](shot:messages)
@@ -66,6 +66,8 @@ Klik op een reactie onder een bericht om de jouwe toe te voegen, en klik nog een
 - **Beantwoorden** citeert het origineel boven je bericht en stuurt de schrijver een melding. Druk op <kbd>Esc</kbd> om te annuleren.
 - **Bericht bewerken** verandert wat je schreef. Bewerkte berichten tonen **(bewerkt)**. Klik daarop om eerdere versies te zien.
 - **Bericht verwijderen** verwijdert het voor iedereen.
+
+Klik op de geciteerde regel boven een antwoord om het bericht te zien waarop het reageert. **Terug** in de balk onderaan, of <kbd>Esc</kbd>, brengt je terug naar waar je was.
 
 ## Het berichtmenu
 

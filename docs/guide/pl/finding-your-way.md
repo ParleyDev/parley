@@ -2,7 +2,7 @@
 title: Jak się poruszać
 section: Pierwsze kroki
 summary: Części okna Parley, foldery serwerów, szybki przełącznik i wyszukiwanie.
-source: 738774a7463f
+source: c643cec470d7
 ---
 
 ![Okno Parley: serwery po lewej, potem kanały, rozmowa i lista członków](shot:layout)
@@ -74,6 +74,8 @@ Wpisz tekst w polu wyszukiwania w prawym górnym rogu i naciśnij <kbd>Enter</kb
 | `pinned:true` | przypięte |
 
 Aby wrócić do konkretnego dnia, użyj przycisku kalendarza na górnym pasku albo skrótu <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>J</kbd>. Gdy przewiniesz daleko wstecz, **Przejdź do teraźniejszości** zabierze cię z powrotem do najnowszych wiadomości.
+
+Szukane słowa są zaznaczone w każdym wyniku. Jeśli wyszukiwania nie da się wykonać, panel o tym informuje i proponuje **Spróbuj ponownie**. Na telefonie wyniki zajmują cały ekran.
 
 ## Na telefonie
 

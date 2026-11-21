@@ -2,7 +2,7 @@
 title: Nachrichten
 section: Reden
 summary: Nachrichten schreiben, formatieren, jemanden erwähnen, reagieren, antworten, Dateien anhängen, Umfragen starten, Nachrichten planen und als Lesezeichen speichern.
-source: 1319b6c7e881
+source: 4148b065dc0e
 ---
 
 ![Eine Unterhaltung mit einer Antwort, Reaktionen und einer Umfrage](shot:messages)
@@ -66,6 +66,8 @@ Klicke auf eine Reaktion unter einer Nachricht, um deine hinzuzufügen, und noch
 - **Antworten** zitiert das Original über deiner Nachricht und benachrichtigt den Autor. Mit <kbd>Esc</kbd> brichst du ab.
 - **Nachricht bearbeiten** ändert, was du geschrieben hast. Bearbeitete Nachrichten zeigen **(bearbeitet)**. Klicke darauf, um frühere Versionen zu sehen.
 - **Nachricht löschen** entfernt sie für alle.
+
+Klicke auf die zitierte Zeile über einer Antwort, um die Nachricht zu sehen, auf die sie antwortet. **Zurück** in der Leiste unten oder <kbd>Esc</kbd> bringt dich dorthin zurück, wo du warst.
 
 ## Das Nachrichtenmenü
 

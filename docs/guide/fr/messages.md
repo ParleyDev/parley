@@ -2,7 +2,7 @@
 title: Messages
 section: Discuter
 summary: Écrire, mettre en forme, mentionner, réagir, répondre, joindre des fichiers, lancer des sondages, programmer des messages et les ajouter aux favoris.
-source: 1319b6c7e881
+source: 4148b065dc0e
 ---
 
 ![Une conversation avec une réponse, des réactions et un sondage](shot:messages)
@@ -66,6 +66,8 @@ Clique sur une réaction sous un message pour ajouter la tienne, et clique à no
 - **Répondre** cite l'original au-dessus de ton message et prévient son auteur. Appuie sur <kbd>Esc</kbd> pour annuler.
 - **Modifier le message** change ce que tu as écrit. Les messages modifiés indiquent **(modifié)**. Clique dessus pour voir les versions précédentes.
 - **Supprimer le message** le supprime pour tout le monde.
+
+Cliquez sur la ligne citée au-dessus d’une réponse pour voir le message auquel elle répond. **Retour** dans la barre du bas, ou <kbd>Esc</kbd>, vous ramène là où vous étiez.
 
 ## Le menu du message
 

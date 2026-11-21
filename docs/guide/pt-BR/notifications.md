@@ -2,7 +2,7 @@
 title: Notificações e caixa de entrada
 section: Conversando
 summary: Controle o que avisa você e acompanhe as mensagens não lidas, menções, favoritos e lembretes.
-source: 61d7b82ab30d
+source: 86d448f5a017
 ---
 
 ## Mensagens não lidas
@@ -19,6 +19,8 @@ Para limpar as marcas de não lido:
 - Ou clique com o botão direito em um canal, servidor ou DM e escolha **Marcar como lida**.
 
 Para voltar a algo depois, use **Marcar como não lida** em uma mensagem.
+
+Em um canal com mensagens novas, clique na barra para ir à primeira, ou em **Marcar como lida** para ir à mensagem mais recente e tirar a linha **Novo**. <kbd>Shift</kbd>+<kbd>Page Up</kbd> vai para a mensagem não lida mais antiga.
 
 ## Escolhendo o que notifica você
 

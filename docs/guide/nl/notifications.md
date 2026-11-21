@@ -2,7 +2,7 @@
 title: Meldingen en je inbox
 section: Praten
 summary: Bepaal wat je een seintje geeft, en haal ongelezen berichten, vermeldingen, bladwijzers en herinneringen in.
-source: 61d7b82ab30d
+source: 86d448f5a017
 ---
 
 ## Ongelezen berichten
@@ -19,6 +19,8 @@ Ongelezen-markeringen wissen:
 - Of klik met rechts op een kanaal, server of DM en kies **Markeren als gelezen**.
 
 Wil je later ergens op terugkomen, gebruik dan **Markeren als ongelezen** op een bericht.
+
+Klik in een kanaal met nieuwe berichten op de balk om naar het eerste te gaan, of op **Markeren als gelezen** om naar het nieuwste bericht te gaan en de lijn **Nieuw** weg te halen. <kbd>Shift</kbd>+<kbd>Page Up</kbd> gaat naar het oudste ongelezen bericht.
 
 ## Kiezen waarvan je een melding krijgt
 

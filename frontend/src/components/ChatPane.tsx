@@ -1,8 +1,7 @@
-import { ArrowDown, CheckCheck, Hash, Volume2, X } from 'lucide-react'
+import { ArrowDown, CheckCheck, CornerUpLeft, Hash, RotateCw, Volume2 } from 'lucide-react'
 import { previewText } from '../lib/desktopNotify'
 import { usePhone } from '../lib/swipe'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { flushSync } from 'react-dom'
 import { useStore } from '../store'
 import { api } from '../lib/api'
 import { isLooking } from '../lib/ws'
@@ -20,12 +19,9 @@ import { dmName, isGroup } from '../lib/dm'
 import { t as tr, useT, tn } from '../lib/i18n'
 import { globalName, nameIn, shownName } from '../lib/names'
 
-/** Longer histories than this render only the rows near the viewport. */
-const VIRTUALIZE_AT = 120
-/** How far above and below the viewport (px) rows stay in the DOM. */
-const OVERSCAN = 1200
-/** Measured row heights by message id (ids are unique everywhere), kept across channel switches. */
-const rowHeights = new Map<string, number>()
+/** How near the top or the bottom of what is loaded (px) the next page of history is asked for: well before the edge
+ *  is on screen, so a steady scroll rarely reaches it. */
+const LOAD_AHEAD = 600
 /** Where the reader left each channel when reading back through history (half a screen or more up): the topmost visible row,
  *  its offset from the top, and when. Coming back soon after returns there, unless something new arrived meanwhile
  *  (then the NEW line wins); otherwise the channel opens at the newest message, as on Discord. */
@@ -83,6 +79,8 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   const loadNewer = useStore((s) => s.loadNewer)
   const loadLatest = useStore((s) => s.loadLatest)
   const loading = useStore((s) => !!s.loadingMessages[channel.id])
+  const loadError = useStore((s) => !!s.messageLoadError[channel.id])
+  const loadAround = useStore((s) => s.loadAround)
   const readyCount = useStore((s) => s.readyCount)
   const loadMessages = useStore((s) => s.loadMessages)
   const markRead = useStore((s) => s.markRead)
@@ -167,8 +165,9 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   const toDivider = () => scrollRef.current?.querySelector<HTMLElement>('[data-unread-divider]')?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 
 
-  // Rows on screen: every message in short histories; past VIRTUALIZE_AT only those within OVERSCAN of the viewport,
-  // with spacers (measured heights, or estimates for rows never shown) standing in for the rest.
+  // Every loaded message is rendered: the store keeps the loaded window bounded (MAX_LOADED in store.ts, trimming the
+  // side the reader is moving away from), so the list never stands in for rows with guessed heights. Guesses made the
+  // scrollbar jump and, at trackpad speeds, lost the reader's place.
   const list = messages ?? []
   const rows = list.map((m, i) => {
     const prev = list[i - 1]
@@ -179,25 +178,6 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   }).map((r, i, all) => ({ ...r, endsRun: !all[i + 1]?.grouped, dividerNext: !!all[i + 1] && (all[i + 1].newDay || all[i + 1].m.id === firstUnreadId) }))
   const rowsRef = useRef(rows)
   rowsRef.current = rows
-  const virtual = rows.length > VIRTUALIZE_AT
-  const [range, setRange] = useState<{ ch: string; start: string; end: string } | null>(null)
-  const indexOf = (id: string | undefined) => (id ? rows.findIndex((r) => r.m.id === id) : -1)
-  let first = 0, last = rows.length - 1
-  if (virtual) {
-    if (range?.ch === channel.id && indexOf(range.start) >= 0) {
-      first = indexOf(range.start)
-      const e = indexOf(range.end)
-      last = e >= first ? e : rows.length - 1
-    } else {
-      // Before the first measurement: around where the channel opens (a remembered spot, the NEW line, or the end).
-      const at = Math.max(indexOf(firstUnreadId ?? undefined), indexOf(savedSpot(channel.id)?.id))
-      first = Math.max(0, (at >= 0 ? at : rows.length) - 30)
-      last = at >= 0 ? Math.min(rows.length - 1, at + 30) : rows.length - 1
-    }
-  }
-  const heightOf = (i: number) => rowHeights.get(rows[i].m.id) ?? (rows[i].grouped ? 26 : 62) + (rows[i].newDay ? 40 : 0)
-  let topPad = 0, bottomPad = 0
-  if (virtual) { for (let i = 0; i < first; i++) topPad += heightOf(i); for (let i = last + 1; i < rows.length; i++) bottomPad += heightOf(i) }
 
   const listRef = useRef<HTMLDivElement>(null)
   /** The row the reader is looking at (topmost visible) and where it sits: kept in place whenever anything changes. */
@@ -227,41 +207,11 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     const a = anchor.current
     if (!a) return
     const node = el.querySelector<HTMLElement>(`[data-row-id="${a.id}"]`)
-    // The anchored row left the DOM (the rendered range moved past it): anchor on what is there now.
+    // The anchored row is gone (deleted, or trimmed from the far end of the loaded window): anchor on what is there now.
     if (!node) { recordAnchor(); return }
     const d = node.getBoundingClientRect().top - a.top
     if (Math.abs(d) >= 0.5) shiftBy(el, d)
   }, [recordAnchor])
-  /** Which rows should be in the DOM for the current scroll position. The rendered rows are kept while they still
-   *  cover at least half the overscan on both sides (and aren't far too many), so measuring them can't make the range
-   *  flip back and forth. */
-  const updateRange = useCallback(() => {
-    const el = scrollRef.current, lst = listRef.current, rs = rowsRef.current
-    if (!el || !lst || rs.length <= VIRTUALIZE_AT) return
-    const shown = lst.querySelectorAll<HTMLElement>('[data-row-id]')
-    const view = el.getBoundingClientRect()
-    if (shown.length) {
-      const top = shown[0].getBoundingClientRect().top, bottom = shown[shown.length - 1].getBoundingClientRect().bottom
-      const atStart = shown[0].dataset.rowId === rs[0].m.id, atEnd = shown[shown.length - 1].dataset.rowId === rs[rs.length - 1].m.id
-      const covered = (atStart || top <= view.top - OVERSCAN / 2) && (atEnd || bottom >= view.bottom + OVERSCAN / 2)
-      if (covered && bottom - top <= view.height + OVERSCAN * 4 && (atEnd || !stickBottom.current)) return
-    }
-    const lstTop = lst.getBoundingClientRect().top - view.top + el.scrollTop // the list's offset inside the scroller
-    const viewTop = el.scrollTop - lstTop - OVERSCAN, viewBottom = el.scrollTop - lstTop + el.clientHeight + OVERSCAN
-    let y = 0, s = -1, e = rs.length - 1
-    for (let i = 0; i < rs.length; i++) {
-      const h = rowHeights.get(rs[i].m.id) ?? (rs[i].grouped ? 26 : 62) + (rs[i].newDay ? 40 : 0)
-      if (s < 0 && y + h > viewTop) s = i
-      if (y > viewBottom) { e = i - 1; break }
-      y += h
-    }
-    if (s < 0) s = Math.max(0, rs.length - 1)
-    if (stickBottom.current) e = rs.length - 1
-    const next = { ch: channelRef.current, start: rs[s].m.id, end: rs[Math.max(s, e)].m.id }
-    setRange((r) => (r && r.ch === next.ch && r.start === next.start && r.end === next.end ? r : next))
-  }, [])
-  const channelRef = useRef(channel.id)
-  channelRef.current = channel.id
   const landedOn = useRef<string | null>(null)
 
   // First paint of a channel: land where the reader left it, on the first unread message (Discord's "NEW" line), or
@@ -289,6 +239,7 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
         // Measured on screen: offsetTop is relative to the nearest positioned wrapper, not to the scrolling list.
         el.scrollTop += divider.getBoundingClientRect().top - el.getBoundingClientRect().top - 24
         stickBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+        setLandedAtUnread(!stickBottom.current)
       } else {
         el.scrollTop = el.scrollHeight
         stickBottom.current = true
@@ -300,44 +251,39 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     if (stickBottom.current && messages?.length) setSeenAtBottom(messages[messages.length - 1].id)
     // Landed (or settled) at the newest message: that counts as seeing it.
     if (initialScrollDone.current) markIfSeen()
-    const f = requestAnimationFrame(updateRange)
-    return () => cancelAnimationFrame(f)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channel.id, messages, firstUnreadId, readAtOpen, hasNewer, hasMore, loading, first, last, topPad, bottomPad])
+  }, [channel.id, messages, firstUnreadId, readAtOpen, hasNewer, hasMore, loading])
 
   // Late-loading content (images, link cards, poll results), rows measured for the first time, the message box
   // growing and the on-screen keyboard all change sizes after the paint: settle again each time, before the frame.
-  const ro = useRef<ResizeObserver | null>(null)
   useEffect(() => {
     const el = scrollRef.current, content = contentRef.current
     if (!el || !content || typeof ResizeObserver === 'undefined') return
-    const obs = new ResizeObserver((entries) => {
-      for (const e of entries) {
-        const id = (e.target as HTMLElement).dataset?.rowId
-        if (id) rowHeights.set(id, (e.target as HTMLElement).offsetHeight)
-      }
-      settle()
-      requestAnimationFrame(updateRange)
-    })
-    ro.current = obs
+    const obs = new ResizeObserver(() => settle())
     obs.observe(content)
     obs.observe(el)
-    el.querySelectorAll<HTMLElement>('[data-row-id]').forEach((r) => obs.observe(r))
-    return () => { obs.disconnect(); ro.current = null }
-  }, [channel.id, settle, updateRange])
-  const observeRow = useCallback((node: HTMLDivElement | null) => { if (node) { rowHeights.set(node.dataset.rowId!, node.offsetHeight); ro.current?.observe(node) } }, [])
+    return () => obs.disconnect()
+  }, [channel.id, settle])
 
   // "You're viewing older messages" once the reader is well up the history: about a screen and a half above the newest
   // message, not as soon as they nudge the list. Messages arriving while scrolled up are counted instead of scrolled to.
   const [away, setAway] = useState(false)
   const [seenAtBottom, setSeenAtBottom] = useState<string | null>(null)
   const phone = usePhone()
-  useEffect(() => { setAway(false); setSeenAtBottom(null) }, [channel.id])
+  // A new visit starts clean: in particular a bar dismissed last time shows again for what is new this time.
+  useEffect(() => { setAway(false); setSeenAtBottom(null); setLandedAtUnread(false); setOrigin(null); setBannerOff(null) }, [channel.id])
   useEffect(() => { if (hasNewer) stickBottom.current = false }, [hasNewer])
   const unseen = seenAtBottom === null || !messages ? 0 : messages.filter((m) => m.id > seenAtBottom && !m.local && m.author.id !== myId).length
   // The "N new messages" banner goes once the reader has reached the newest message, as on Discord: soon after they
   // scroll down to it, or after a few seconds when everything new already fit on screen (time to notice it).
   const readerScrolled = useRef(false)
+  /** When the reader last moved the list themselves (wheel, touch, key): for a moment after, the list is theirs. */
+  const lastInput = useRef(0)
+  /** Landed on the NEW line and not moved since: the top bar says what is new, so the "older messages" bar stays away. */
+  const [landedAtUnread, setLandedAtUnread] = useState(false)
+  const noteInput = useCallback(() => { readerScrolled.current = true; lastInput.current = performance.now(); setLandedAtUnread(false) }, [])
+  /** Where the reader was before following a reply to its original: Escape or Back returns there. */
+  const [origin, setOrigin] = useState<{ id: string | null; offset: number; pinned: boolean } | null>(null)
   const bannerTimer = useRef(0)
   useEffect(() => { readerScrolled.current = false; return () => { clearTimeout(bannerTimer.current); bannerTimer.current = 0 } }, [channel.id])
   const showingBanner = !!unread
@@ -368,13 +314,14 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     window.addEventListener('parley:present', markIfSeen)
     return () => { document.removeEventListener('visibilitychange', markIfSeen); window.removeEventListener('focus', markIfSeen); window.removeEventListener('parley:present', markIfSeen) }
   }, [lastId, messages, hasNewer, markIfSeen])
-  const frame = useRef(0)
   const onScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     // Scroll events are dispatched before resize observers run: when the content just changed height, put things back
     // first instead of reading the browser's clamped position as the reader scrolling.
-    if (el.scrollHeight !== seenHeight.current || el.clientHeight !== seenClient.current) settle()
+    // Not while the reader is moving the list: this scroll is theirs, and settling first (on what was true before it)
+    // would undo it.
+    if ((el.scrollHeight !== seenHeight.current || el.clientHeight !== seenClient.current) && performance.now() - lastInput.current > 150) settle()
     const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     stickBottom.current = !hasNewer && fromBottom < 40
     recordAnchor()
@@ -387,30 +334,28 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
     if (stickBottom.current && messages?.length) setSeenAtBottom(messages[messages.length - 1].id)
     if (stickBottom.current) markIfSeen()
     setAway(fromBottom > Math.max(600, el.clientHeight * 1.5))
-    cancelAnimationFrame(frame.current); frame.current = requestAnimationFrame(updateRange)
-    if (el.scrollTop < 120 && hasMore !== false && !loading && messages?.length) loadMessages(channel.id, messages[0].id)
-    if (hasNewer && fromBottom < 160 && !loading) loadNewer(channel.id)
-  }, [channel.id, hasMore, hasNewer, loading, messages, loadMessages, loadNewer, recordAnchor, updateRange, markIfSeen])
+    // The next page is asked for while its edge is still LOAD_AHEAD away from the screen (measured to the rows, so the
+    // placeholder rows above and below them don't count). Not after a failure: that waits for Try again.
+    const lst = listRef.current?.getBoundingClientRect(), view = el.getBoundingClientRect()
+    if (lst && !loading && !loadError && messages?.length) {
+      if (hasMore !== false && view.top - lst.top < LOAD_AHEAD) loadMessages(channel.id, messages[0].id)
+      else if (hasNewer && lst.bottom - view.bottom < LOAD_AHEAD) loadNewer(channel.id)
+    }
+  }, [channel.id, hasMore, hasNewer, loading, loadError, messages, loadMessages, loadNewer, recordAnchor, markIfSeen])
 
   // Still at the top when a page finishes loading (the reader got there while it was in flight, so no scroll event
   // is coming): load the next one.
   useEffect(() => {
     const el = scrollRef.current
-    if (loading || !el || !initialScrollDone.current || hasMore === false || !messages?.length) return
-    if (el.scrollTop < 120 && el.scrollHeight > el.clientHeight) loadMessages(channel.id, messages[0].id)
+    const lst = listRef.current
+    if (loading || loadError || !el || !lst || !initialScrollDone.current || hasMore === false || !messages?.length) return
+    if (el.getBoundingClientRect().top - lst.getBoundingClientRect().top < LOAD_AHEAD && el.scrollHeight > el.clientHeight) loadMessages(channel.id, messages[0].id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading])
 
-  // Jumping to a message that is loaded but not on screen (virtualized away): show the rows around it first.
+  // Jumping to a message in this list: the reader is no longer following the newest messages.
   useEffect(() => {
-    const on = (e: Event) => {
-      const id = (e as CustomEvent<string>).detail
-      const i = rowsRef.current.findIndex((r) => r.m.id === id)
-      if (i < 0) return
-      const rs = rowsRef.current
-      stickBottom.current = false
-      flushSync(() => setRange({ ch: channel.id, start: rs[Math.max(0, i - 20)].m.id, end: rs[Math.min(rs.length - 1, i + 20)].m.id }))
-    }
+    const on = (e: Event) => { if (rowsRef.current.some((r) => r.m.id === (e as CustomEvent<string>).detail)) stickBottom.current = false }
     window.addEventListener('parley:reveal', on)
     return () => window.removeEventListener('parley:reveal', on)
   }, [channel.id])
@@ -427,9 +372,32 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   const scrollToBottom = () => { stickBottom.current = true; const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }
   /** Reply header click: scroll to the original, loading older history if needed. */
   const jumpTo = async (id: string) => {
-    if (jumpToMessage(id)) return
+    // Remember where the reader is, so they can come back after looking at the original.
+    const el = scrollRef.current
+    recordAnchor()
+    const from = { id: anchor.current?.id ?? null, offset: anchor.current && el ? anchor.current.top - el.getBoundingClientRect().top : 0, pinned: stickBottom.current }
+    if (jumpToMessage(id)) { setOrigin((o) => o ?? from); return }
     stickBottom.current = false
-    if (!(await jumpToMessageAsync(channel.id, id))) pushToast(t('The original message could not be found'), 'error')
+    if (await jumpToMessageAsync(channel.id, id)) setOrigin((o) => o ?? from)
+    else pushToast(t('The original message could not be found'), 'error')
+  }
+  /** Back to where the reader was before the jump (loading that part of the history again if it has gone). */
+  const returnToOrigin = async () => {
+    const o = origin
+    setOrigin(null)
+    if (!o) return
+    if (o.pinned || !o.id) { await jumpToPresent(); return }
+    const place = () => {
+      const el = scrollRef.current, node = el?.querySelector<HTMLElement>(`[data-row-id="${o.id}"]`)
+      if (!el || !node) return false
+      stickBottom.current = false
+      el.scrollTop += node.getBoundingClientRect().top - el.getBoundingClientRect().top - o.offset
+      recordAnchor()
+      return true
+    }
+    if (place()) return
+    await loadAround(channel.id, o.id)
+    for (let i = 0; i < 20; i++) { if (place()) return; await new Promise((r) => setTimeout(r, 50)) }
   }
   // Read receipts: each reader's marker sits under the last of your runs they have read up to. Their receipt is often a
   // later message (their own reply, or someone else's), so this can't be an exact id match.
@@ -448,11 +416,54 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
   const isDm = channel.guild_id === null && !('recipients' in channel && (channel as DmChannel).recipients.length > 1)
 
   const jumpToPresent = async () => {
+    setOrigin(null)
     if (hasNewer) { await loadLatest(channel.id); stickBottom.current = true; requestAnimationFrame(() => { const el = scrollRef.current; if (el) el.scrollTop = el.scrollHeight }); return }
     const el = scrollRef.current
     stickBottom.current = true
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: unseen > 0 && !away ? 'smooth' : 'auto' })
   }
+  /** Mark As Read (the top bar's button, Escape): go to the newest message, mark the channel read, and take the NEW line away. */
+  const markAllRead = async () => {
+    setBannerOff(channel.id)
+    await jumpToPresent()
+    await markRead(channel.id)
+    const st = useStore.getState()
+    setOpenedAt({ ch: channel.id, read: st.readStates[channel.id] ?? st.lastMessageId[channel.id] ?? null })
+  }
+  /** The oldest unread message: the NEW line when it is loaded, otherwise the part of the history where the reader stopped. */
+  const jumpToOldestUnread = () => {
+    if (scrollRef.current?.querySelector('[data-unread-divider]')) { stickBottom.current = false; toDivider(); return }
+    if (readAtOpen && messages?.length && readAtOpen < messages[0].id) { stickBottom.current = false; void jumpToMessageAsync(channel.id, readAtOpen) }
+  }
+  // Keys, as on Discord: Escape goes back from a jump, or else marks the channel read and returns to the newest
+  // message; Shift+PageUp goes to the oldest unread message; End, while newer messages aren't loaded, goes to the present.
+  // Escape belongs to whatever else is open first: a dialog or menu, an edit or a search with text in it, a reply being
+  // written. (Shift+Escape, the whole server, is the message box's: Composer.)
+  const keys = useRef({ markAllRead, returnToOrigin, jumpToOldestUnread, jumpToPresent, origin, reply, hasNewer })
+  keys.current = { markAllRead, returnToOrigin, jumpToOldestUnread, jumpToPresent, origin, reply, hasNewer }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const col = scrollRef.current?.closest('[data-chat-column]')
+      if (!col || e.ctrlKey || e.metaKey || e.altKey) return
+      const target = e.target as HTMLElement | null
+      const inPane = !!target && col.contains(target)
+      // With nothing focused the keys go to the main conversation, not to a thread or second pane beside it.
+      if (!inPane && !((!target || target === document.body) && document.querySelector('[data-chat-column]') === col)) return
+      const k = keys.current
+      if (e.key === 'PageUp' && e.shiftKey) { e.preventDefault(); k.jumpToOldestUnread(); return }
+      if (e.key === 'End' && !e.shiftKey && k.hasNewer && target?.tagName !== 'TEXTAREA' && target?.tagName !== 'INPUT') { e.preventDefault(); void k.jumpToPresent(); return }
+      if (e.key !== 'Escape' || e.shiftKey || e.defaultPrevented) return
+      if (useStore.getState().modal || document.querySelector('[data-context-menu], [data-call-menu], [role="dialog"], [role="menu"], [role="listbox"]')) return
+      // A field with something in it keeps its Escape (an edit under way, a search), except the message box: marking
+      // read from there loses nothing that was typed.
+      const field = !!target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable)
+      if (field && !target.closest('[data-chat-bottom]') && ((target as HTMLTextAreaElement).value ?? target.textContent ?? '').length) return
+      if (k.reply) return
+      if (k.origin) void k.returnToOrigin(); else void k.markAllRead()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [channel.id])
 
   return (
     <>
@@ -465,23 +476,24 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
             {unread.n === 1 && !unread.more ? t('1 new message since {time}', { time: unread.since }) : t('{n} new messages since {time}', { n: `${unread.n}${unread.more ? '+' : ''}`, time: unread.since })}
           </button>
           {phone
-            ? <button type="button" onClick={() => setBannerOff(channel.id)} aria-label={t('Dismiss')} className="h-11 w-11 shrink-0 flex items-center justify-center" data-unread-dismiss><X size={22} /></button>
-            : <button type="button" onClick={() => setBannerOff(channel.id)} className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold hover:underline" data-unread-dismiss>{t('Mark As Read')}<CheckCheck size={16} /></button>}
+            ? <button type="button" onClick={() => { void markAllRead() }} aria-label={t('Mark As Read')} title={t('Mark As Read')} className="h-11 w-11 shrink-0 flex items-center justify-center" data-unread-dismiss><CheckCheck size={22} /></button>
+            : <button type="button" onClick={() => { void markAllRead() }} className="shrink-0 flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold hover:underline" data-unread-dismiss>{t('Mark As Read')}<CheckCheck size={16} /></button>}
         </div>
       )}
-      <div ref={scrollRef} onScroll={onScroll} onWheel={() => { readerScrolled.current = true }} onTouchMove={() => { readerScrolled.current = true }} onKeyDown={() => { readerScrolled.current = true }} role="log" aria-label={t('Messages in {name}', { name: channel.name || t('this conversation') })} tabIndex={0} className="scroller-auto flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>
+      <div ref={scrollRef} onScroll={onScroll} onWheel={noteInput} onTouchMove={noteInput} onKeyDown={noteInput} onPointerDown={(e) => { if (e.target === e.currentTarget) noteInput() /* the scrollbar */ }} role="log" aria-label={t('Messages in {name}', { name: channel.name || t('this conversation') })} tabIndex={0} className="scroller-auto flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60" data-message-list={channel.id}>
         <div ref={contentRef} className="relative min-h-full flex flex-col justify-end">
+          {/* Above the oldest loaded message: the channel's beginning, or rows standing in for the history still to
+              load, so scrolling towards it never shows an empty gap. A channel not loaded yet is all such rows. */}
           {hasMore === false || (messages && messages.length < 50 && !loading) ? (
             <ChannelIntro channel={channel} />
-          ) : loading ? (
-            <div className="py-4 text-center text-xs text-text-2">{t('Loading history…')}</div>
-          ) : null}
-          <div ref={listRef} className="pb-8" data-virtual={virtual ? `${first}-${last}` : undefined}>
-            {topPad > 0 && <div style={{ height: topPad }} aria-hidden data-virtual-pad="top" />}
-            {rows.slice(first, last + 1).map(({ m, newDay, grouped, endsRun, dividerNext }) => {
+          ) : loadError && !messages ? null : (
+            <HistoryPlaceholder rows={messages ? 6 : 14} label={t('Loading history…')} where="older" />
+          )}
+          <div ref={listRef} className="pb-8" data-rows={rows.length}>
+            {rows.map(({ m, newDay, grouped, endsRun, dividerNext }) => {
               const sys = !!m.kind && m.kind !== 'default'
               return (
-                <div key={m.id} ref={observeRow} className="msg-row relative" data-row-id={m.id} data-sys-row={sys ? '' : undefined}>
+                <div key={m.id} className="msg-row relative" data-row-id={m.id} data-sys-row={sys ? '' : undefined}>
                   {newDay && (
                     <div className="relative my-4 mx-4 flex items-center">
                       <div className="h-px flex-1 bg-line" /><span className="px-2 text-[11px] font-semibold text-text-2">{formatDateDivider(m.created_at)}</span><div className="h-px flex-1 bg-line" />
@@ -507,23 +519,41 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
                 </div>
               )
             })}
-            {bottomPad > 0 && <div style={{ height: bottomPad }} aria-hidden data-virtual-pad="bottom" />}
           </div>
+          {/* Below the newest loaded message when the present is not loaded: more rows standing in. */}
+          {hasNewer && messages && !loadError && <HistoryPlaceholder rows={4} label={t('Loading history…')} where="newer" />}
         </div>
       </div>
-      {(away || hasNewer || unseen > 0) && (phone ? (
+      {loadError && (
+        <div className={`absolute inset-x-0 z-20 flex justify-center ${messages ? 'top-12' : 'top-1/3'}`} role="alert" data-load-failed>
+          <div className="pop flex items-center gap-3 rounded-xl border border-line bg-bg-1 py-1.5 pl-4 pr-1.5 shadow-xl">
+            <span className="text-sm font-semibold text-text-1">{t('Messages failed to load')}</span>
+            <button type="button" disabled={loading} onClick={() => { const el = scrollRef.current; const nearEnd = !!el && el.scrollHeight - el.scrollTop - el.clientHeight < el.scrollTop; if (!messages?.length) void loadMessages(channel.id); else if (hasNewer && nearEnd) void loadNewer(channel.id); else void loadMessages(channel.id, messages[0].id) }}
+              className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-50" data-load-retry><RotateCw size={14} />{t('Try again')}</button>
+          </div>
+        </div>
+      )}
+      {/* The bar over the bottom of the chat: away from the newest messages, new ones arrived, or a way back from a jump.
+          Not while the reader sits on the NEW line they just landed on: the bar at the top is saying what is new. */}
+      {(away || hasNewer || unseen > 0 || origin) && !(landedAtUnread && !!unread && !hasNewer && unseen === 0 && !origin) && (phone ? (
         // Phones: a small round button at the right instead of the bar across the chat.
-        <button type="button" onClick={jumpToPresent} title={t('Jump to Present')} aria-label={t('Jump to Present')}
-          className="pop absolute right-3 bottom-3 z-20 h-10 w-10 rounded-full border border-line bg-bg-1/95 text-text-0 shadow-lg flex items-center justify-center" data-older-bar data-jump-present>
-          <ArrowDown size={18} />
-          {unseen > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 rounded-full bg-danger px-1 text-[11px] font-bold leading-5 text-white text-center" data-new-count={unseen}>{unseen > 99 ? '99+' : unseen}</span>}
-        </button>
+        <div className="absolute right-3 bottom-3 z-20 flex flex-col items-end gap-2" data-older-bar>
+          {origin && <button type="button" onClick={() => { void returnToOrigin() }} title={t('Back to where you were')} aria-label={t('Back to where you were')} className="pop h-10 w-10 rounded-full border border-line bg-bg-1/95 text-text-0 shadow-lg flex items-center justify-center" data-jump-back><CornerUpLeft size={18} /></button>}
+          <button type="button" onClick={jumpToPresent} title={t('Jump to Present')} aria-label={t('Jump to Present')}
+            className="pop relative h-10 w-10 rounded-full border border-line bg-bg-1/95 text-text-0 shadow-lg flex items-center justify-center" data-jump-present>
+            <ArrowDown size={18} />
+            {unseen > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 rounded-full bg-danger px-1 text-[11px] font-bold leading-5 text-white text-center" data-new-count={unseen}>{unseen > 99 ? '99+' : unseen}</span>}
+          </button>
+        </div>
       ) : (
         // Discord's bar: a dark strip floating over the chat, what you're looking at on the left, the jump on the right.
         <div className="pointer-events-none absolute inset-x-4 bottom-2 z-20 flex justify-center" data-older-bar>
           <div className="pointer-events-auto pop flex items-center gap-4 rounded-xl border border-line bg-bg-1/95 py-1.5 pl-4 pr-1.5 shadow-xl backdrop-blur-sm">
             <span className="text-sm font-semibold text-text-1" data-new-count={unseen || undefined}>{unseen > 0 ? (unseen === 1 ? t('1 New Message') : t('{n} New Messages', { n: unseen > 99 ? '99+' : unseen })) : t("You're Viewing Older Messages")}</span>
-            <button type="button" onClick={jumpToPresent} className="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover" data-jump-present>{t('Jump To Present')}</button>
+            <span className="flex items-center gap-1.5">
+              {origin && <button type="button" onClick={() => { void returnToOrigin() }} title={t('Back to where you were')} className="flex items-center gap-1.5 rounded-lg bg-bg-3 px-3 py-1.5 text-sm font-semibold text-text-0 hover:bg-bg-4" data-jump-back><CornerUpLeft size={14} />{t('Back')}</button>}
+              <button type="button" onClick={jumpToPresent} className="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover" data-jump-present>{t('Jump To Present')}</button>
+            </span>
           </div>
         </div>
       ))}
@@ -533,6 +563,29 @@ export default function ChatPane({ channel, readOnly: lockedNote }: { channel: C
       </div>
       </div>
     </>
+  )
+}
+
+/**
+ * Rows shaped like messages, standing in for history that is not loaded yet (above the oldest message, below the
+ * newest one of a window that stops short of the present, or the whole list before its first page arrives). Widths
+ * vary by position so the block does not look like a table; it is still while motion is reduced.
+ */
+function HistoryPlaceholder({ rows, label, where }: { rows: number; label: string; where: 'older' | 'newer' }) {
+  const widths = [72, 46, 88, 60, 34, 80, 52, 68]
+  return (
+    <div className="px-4 py-2 phone:px-3" role="status" aria-label={label} data-history-placeholder={where}>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex gap-4 py-2.5 animate-pulse" aria-hidden>
+          <span className="h-10 w-10 shrink-0 rounded-full bg-bg-3" />
+          <span className="min-w-0 flex-1 space-y-2 pt-0.5">
+            <span className="block h-3.5 rounded bg-bg-3" style={{ width: `${18 + (i * 7) % 14}%` }} />
+            <span className="block h-3.5 rounded bg-bg-3/70" style={{ width: `${widths[i % widths.length]}%` }} />
+            {i % 3 === 1 && <span className="block h-3.5 rounded bg-bg-3/70" style={{ width: `${widths[(i + 3) % widths.length]}%` }} />}
+          </span>
+        </div>
+      ))}
+    </div>
   )
 }
 

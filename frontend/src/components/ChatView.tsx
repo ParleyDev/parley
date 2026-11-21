@@ -11,6 +11,8 @@ import { anchorOf } from '../lib/anchor'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { communityPath } from '../lib/communityPage'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { clearHighlights, highlightTerms, searchTerms } from '../lib/searchHighlight'
+import { usePhone } from '../lib/swipe'
 import type { Channel, DmChannel, Message, PrivateUser } from '../lib/types'
 import { BirthdateForm, TeenDmNotice } from './AgeSafety'
 import { api } from '../lib/api'
@@ -390,7 +392,7 @@ function MessageCard({ m, onJump, action }: { m: Message; onJump: () => void; ac
           <button onClick={onJump} className="rounded bg-bg-3 px-2 py-0.5 text-[11px] font-semibold text-text-1 hover:bg-bg-4 hover:text-text-0" data-jump>{t('Jump')}</button>
         </span>
       </div>
-      <div className="msg-content text-sm whitespace-pre-wrap break-words line-clamp-4">{renderMarkdown(m.content)}</div>
+      <div className="msg-content text-sm whitespace-pre-wrap break-words line-clamp-4" data-card-body>{renderMarkdown(m.content)}</div>
       {m.attachments?.length > 0 && <div className="mt-1 text-xs text-text-2">📎 {m.attachments.map((a) => a.filename.replace(/^SPOILER_/, '')).join(', ')}</div>}
     </div>
   )
@@ -566,19 +568,29 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
   const [context, setContext] = useState(false)
   const t = useT()
   const url = (offset: number) => `/search?q=${encodeURIComponent(query)}&offset=${offset}&sort=${sort}${context ? '&context=true' : ''}${scope === 'channel' ? `&channel_id=${channel.id}` : scope === 'guild' ? `&guild_id=${channel.guild_id}` : ''}`
-  useEffect(() => { setRes(null); api.get<SearchResult>(url(0)).then(setRes).catch(() => setRes({ total: 0, offset: 0, results: [] })) }, [channel.id, query, scope, sort, context]) // eslint-disable-line react-hooks/exhaustive-deps
+  // A search that could not be run says so, with Try again: it is not the same as finding nothing.
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => { setRes(null); setFailed(false); api.get<SearchResult>(url(0)).then(setRes).catch(() => setFailed(true)) }, [channel.id, query, scope, sort, context, attempt]) // eslint-disable-line react-hooks/exhaustive-deps
   const more = async () => {
     if (!res) return
     setBusy(true)
     try { const next = await api.get<SearchResult>(url(res.results.length)); setRes({ ...next, results: [...res.results, ...next.results] }) } catch { /* keep */ } finally { setBusy(false) }
   }
+  const phone = usePhone()
   const jump = (m: SearchHit) => {
     if (m.channel_id !== channel.id) navigate(`/channels/${m.guild_id ?? '@me'}/${m.channel_id}`)
     void jumpToMessageAsync(m.channel_id, m.id).then((found) => { if (!found) onMiss() })
+    // On a phone the results cover the chat: get out of the way of the message they asked for.
+    if (phone) onClose()
   }
+  // Mark the matched words in the results (lib/searchHighlight.ts); taken away again with the panel.
+  const listRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { highlightTerms(listRef.current, '[data-card-body]', searchTerms(query)) }, [res, query])
+  useEffect(() => clearHighlights, [])
   const chip = (id: SearchScope, label: string) => <button key={id} type="button" onClick={() => setScope(id)} className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${scope === id ? 'bg-accent text-white' : 'bg-bg-3 text-text-1 hover:text-text-0'}`} data-search-scope={id} aria-pressed={scope === id}>{label}</button>
   return (
-    <aside className="w-[420px] shrink-0 bg-bg-1 border-l border-line flex flex-col phone:hidden" data-search-panel>
+    <aside className="w-[420px] shrink-0 bg-bg-1 border-l border-line flex flex-col phone:fixed phone:inset-0 phone:z-40 phone:w-auto phone:border-l-0 phone:pt-[var(--sat,0px)]" data-search-panel>
       <div className="h-12 shrink-0 flex items-center gap-2 px-4 border-b border-line">
         <Search size={16} className="text-text-2" /><span className="font-bold truncate">{t('Results for "{query}"', { query })}</span>
         {res && <span className="text-xs text-text-2" data-search-total>{res.total}</span>}
@@ -593,8 +605,14 @@ function SearchPanel({ channel, query, onClose, onMiss }: { channel: Channel | D
         </Dropdown>
         <label className="flex items-center gap-1 text-xs text-text-2 cursor-pointer" title={t('Show the message before and after each result')}><input type="checkbox" className="h-3.5 w-3.5 accent-accent" checked={context} onChange={(e) => setContext(e.target.checked)} data-search-context /> {t('Context')}</label>
       </div>
-      <div className="overflow-y-auto p-3 space-y-2">
-        {res === null && <p className="text-sm text-text-2 p-3">{t('Searching…')}</p>}
+      <div ref={listRef} className="overflow-y-auto p-3 space-y-2" data-search-list>
+        {res === null && !failed && <p className="text-sm text-text-2 p-3" data-search-busy>{t('Searching…')}</p>}
+        {failed && (
+          <div className="p-6 text-center text-sm text-text-2" role="alert" data-search-failed>
+            {t("The search couldn't be run.")}
+            <div className="mt-3"><button type="button" className="btn-primary py-1.5 text-sm" onClick={() => setAttempt((n) => n + 1)} data-search-retry>{t('Try again')}</button></div>
+          </div>
+        )}
         {res?.results.length === 0 && (
           <div className="p-6 text-center text-sm text-text-2" data-search-empty>
             {t('No results found.')}

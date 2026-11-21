@@ -4590,5 +4590,8 @@
 "The sound of a shared tab, or of the whole screen where the browser offers it. It applies the next time you pick what to share.": "Звук вкладки, которую вы показываете, или всего экрана, если браузер это позволяет. Применяется в следующий раз, когда вы выберете, что показывать.",
 "This Parley has no relay server, so this call connects directly and the people in it can see your IP address.": "На этом Parley нет сервера-ретранслятора, поэтому этот звонок соединяется напрямую и его участники могут видеть ваш IP-адрес.",
 "Your screen": "Ваш экран",
-"Jump to the call you are in": "Перейти к текущему звонку"
+"Jump to the call you are in": "Перейти к текущему звонку",
+"Back to where you were": "Вернуться туда, где вы были",
+"Messages failed to load": "Не удалось загрузить сообщения",
+"The search couldn't be run.": "Не удалось выполнить поиск."
 }

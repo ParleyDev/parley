@@ -2,7 +2,7 @@
 title: Wiadomości
 section: Rozmowy
 summary: Pisz, formatuj, wzmiankuj, reaguj, odpowiadaj, dołączaj pliki, twórz ankiety, planuj wiadomości i dodawaj je do zakładek.
-source: 1319b6c7e881
+source: 4148b065dc0e
 ---
 
 ![Rozmowa z odpowiedzią, reakcjami i ankietą](shot:messages)
@@ -66,6 +66,8 @@ Kliknij reakcję pod wiadomością, aby dodać swoją, i kliknij ponownie, aby j
 - **Odpowiedz** cytuje oryginał nad twoją wiadomością i powiadamia jego autora. Naciśnij <kbd>Esc</kbd>, aby anulować.
 - **Edytuj wiadomość** zmienia to, co napisałeś. Edytowane wiadomości mają dopisek **(edytowano)**. Kliknij go, aby zobaczyć wcześniejsze wersje.
 - **Usuń wiadomość** usuwa ją dla wszystkich.
+
+Kliknij cytowany wiersz nad odpowiedzią, aby zobaczyć wiadomość, na którą odpowiada. **Wstecz** na pasku u dołu albo <kbd>Esc</kbd> wraca tam, gdzie byłeś.
 
 ## Menu wiadomości
 

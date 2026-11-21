@@ -2,7 +2,7 @@
 title: Notificaciones y tu bandeja de entrada
 section: Conversar
 summary: Controla qué te avisa y ponte al día con lo no leído, las menciones, los marcadores y los recordatorios.
-source: 61d7b82ab30d
+source: 86d448f5a017
 ---
 
 ## Mensajes no leídos
@@ -19,6 +19,8 @@ Para quitar las marcas de no leído:
 - O haz clic derecho en un canal, un servidor o un MD y elige **Marcar como leído**.
 
 Para volver a algo más tarde, usa **Marcar como no leído** en un mensaje.
+
+En un canal con mensajes nuevos, haz clic en la barra para ir al primero, o en **Marcar como leído** para ir al mensaje más reciente y quitar la línea **Nuevo**. <kbd>Shift</kbd>+<kbd>Page Up</kbd> va al mensaje no leído más antiguo.
 
 ## Elegir qué te avisa
 
